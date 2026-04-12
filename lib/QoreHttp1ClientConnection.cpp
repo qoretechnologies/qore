@@ -340,7 +340,8 @@ QoreHashNode* Http1ClientConnection::submitRequest(const char* method, const cha
     // failure; on success it stores the action internally.  max_streams=1
     // for HTTP/1.1.
     int64_t stream_id = poll_op_priv->submitRequest(method, path, headers,
-        body, body_len, /* streaming */ false, action, /* max_streams */ 1, xsink);
+        body, body_len, /* streaming */ false, action, /* max_streams */ 1,
+        /* streaming_send */ false, xsink);
     if (*xsink || stream_id < 0) {
         // Action was deref'd by submitRequest on failure.  The caller
         // (manager) is responsible for releasing any prior stream
@@ -412,7 +413,8 @@ int64_t Http1ClientConnection::submitRequestStreaming(const char* method, const 
     // Submit with streaming=true so the poll op uses
     // dispatchStreamingHeaders/Data/End instead of dispatchResponse.
     int64_t stream_id = poll_op_priv->submitRequest(method, path, headers,
-        body, body_len, /* streaming */ true, action, /* max_streams */ 1, xsink);
+        body, body_len, /* streaming */ true, action, /* max_streams */ 1,
+        /* streaming_send */ false, xsink);
     if (*xsink || stream_id < 0) {
         return -1;
     }
@@ -441,6 +443,119 @@ int64_t Http1ClientConnection::submitRequestStreaming(const char* method, const 
     ch->ref();
     channel_out = ch;
     return stream_id;
+}
+
+QoreHashNode* Http1ClientConnection::submitRequestStreamingSend(const char* method,
+        const char* path, const QoreHashNode* headers, bool streaming_recv,
+        QoreChannel*& channel_out, ExceptionSink* xsink) {
+    if (!poll_op_priv || isClosed()) {
+        xsink->raiseException("HTTPCLIENT-STATE-ERROR",
+            "cannot submit streaming send request: connection is closed");
+        return nullptr;
+    }
+    if (!isReady()) {
+        xsink->raiseException("HTTPCLIENT-STATE-ERROR",
+            "cannot submit streaming send request: connection is not ready");
+        return nullptr;
+    }
+
+    AbstractAsyncAction* action = nullptr;
+    ReferenceHolder<QoreObject> future_obj(xsink);
+    ReferenceHolder<QoreChannel> ch_holder(xsink);
+
+    if (streaming_recv) {
+        // Streaming receive via Channel
+        ch_holder = new QoreChannel(-1);
+        action = new ChannelAction(*ch_holder);
+    } else {
+        // Non-streaming receive via Promise/Future
+        ReferenceHolder<QorePromise> promise_holder(new QorePromise(), xsink);
+        QorePromise* promise_raw = *promise_holder;
+        ReferenceHolder<QoreFuture> future_holder(promise_holder->getFuture(xsink), xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+        QoreProgram* pgm = getProgram();
+        future_obj = new QoreObject(QC_FUTUREIMPL, pgm, future_holder.release());
+        action = new PromiseAction(promise_raw, nullptr);
+        promise_holder.release()->deref(xsink);
+    }
+
+    // Submit with streaming_send=true
+    int64_t stream_id = poll_op_priv->submitRequest(method, path, headers,
+        nullptr, 0, /* streaming */ streaming_recv, action, /* max_streams */ 1,
+        /* streaming_send */ true, xsink);
+    if (*xsink || stream_id < 0) {
+        return nullptr;
+    }
+
+    releaseStreamReservation();
+
+    // Wake the I/O controller
+    if (sock_obj) {
+        ExceptionSink wake_xsink;
+        ReferenceHolder<QoreObject> ctl_obj_holder(
+            qore_get_async_io_controller_obj(&wake_xsink), &wake_xsink);
+        if (ctl_obj_holder) {
+            ReferenceHolder<AsyncIoControllerPriv> ctl_priv_holder(
+                static_cast<AsyncIoControllerPriv*>(
+                    ctl_obj_holder->getReferencedPrivateData(
+                        CID_ASYNCIOCONTROLLER, &wake_xsink)),
+                &wake_xsink);
+            if (ctl_priv_holder) {
+                ctl_priv_holder->wakeSocketByObject(sock_obj, &wake_xsink);
+            }
+        }
+        wake_xsink.clear();
+    }
+
+    // Build result
+    ReferenceHolder<QoreHashNode> result(new QoreHashNode(autoTypeInfo), xsink);
+    result->setKeyValue("stream_id", QoreValue((int64)stream_id), xsink);
+    if (streaming_recv) {
+        QoreChannel* ch = *ch_holder;
+        ch->ref();
+        channel_out = ch;
+    } else {
+        result->setKeyValue("future", future_obj.release(), xsink);
+    }
+    return result.release();
+}
+
+void Http1ClientConnection::pushSendData(const QoreStringNode* data, ExceptionSink* xsink) {
+    if (!poll_op_priv) {
+        xsink->raiseException("HTTPCLIENT-STATE-ERROR",
+            "cannot push data: connection has no poll operation");
+        return;
+    }
+    poll_op_priv->pushSendData(data, xsink);
+
+    // Wake the I/O controller so it processes the queued data
+    if (sock_obj) {
+        ExceptionSink wake_xsink;
+        ReferenceHolder<QoreObject> ctl_obj_holder(
+            qore_get_async_io_controller_obj(&wake_xsink), &wake_xsink);
+        if (ctl_obj_holder) {
+            ReferenceHolder<AsyncIoControllerPriv> ctl_priv_holder(
+                static_cast<AsyncIoControllerPriv*>(
+                    ctl_obj_holder->getReferencedPrivateData(
+                        CID_ASYNCIOCONTROLLER, &wake_xsink)),
+                &wake_xsink);
+            if (ctl_priv_holder) {
+                ctl_priv_holder->wakeSocketByObject(sock_obj, &wake_xsink);
+            }
+        }
+        wake_xsink.clear();
+    }
+}
+
+void Http1ClientConnection::setTrailers(const QoreHashNode* trailers, ExceptionSink* xsink) {
+    if (!poll_op_priv) {
+        xsink->raiseException("HTTPCLIENT-STATE-ERROR",
+            "cannot set trailers: connection has no poll operation");
+        return;
+    }
+    poll_op_priv->setTrailers(trailers, xsink);
 }
 
 void Http1ClientConnection::closeConnection(ExceptionSink* xsink) {

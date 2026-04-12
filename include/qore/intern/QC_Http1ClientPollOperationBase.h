@@ -39,6 +39,7 @@
 #include "qore/intern/QC_AbstractHttpPollConnection.h"
 
 #include <atomic>
+#include <deque>
 #include <string>
 
 //! C++ base for Http1ClientPollOperation providing SocketPollOperationBase fast path
@@ -75,6 +76,7 @@ public:
     enum class ReqState {
         IDLE,
         SENDING,
+        SEND_STREAMING_BODY,  //!< waiting for / sending chunked TE body data from app thread
         RECV_HEADER,
         RECV_BODY_LENGTH,
         RECV_CHUNK_SIZE,
@@ -108,10 +110,27 @@ public:
     // --- Stream management (called from Qore app thread) ---
 
     //! Submits an HTTP/1.1 request with headers and optional body
+    /** @param streaming_send if true, the request uses chunked TE and the
+        body is pushed incrementally via pushSendData(); body/body_len are
+        ignored in this mode
+    */
     DLLLOCAL int64_t submitRequest(const char* method, const char* path,
         const QoreHashNode* user_headers, const void* body, size_t body_len,
         bool streaming, AbstractAsyncAction* action, int max_streams,
-        ExceptionSink* xsink);
+        bool streaming_send, ExceptionSink* xsink);
+
+    //! Queues body data for incremental chunked TE send (app thread)
+    /** @param data body chunk to send; nullptr signals end-of-body
+        @param xsink exception sink
+    */
+    DLLLOCAL void pushSendData(const QoreStringNode* data, ExceptionSink* xsink);
+
+    //! Sets HTTP trailers to be sent with the final chunk (app thread)
+    /** Must be called before pushing the end sentinel (nullptr) via pushSendData().
+        @param trailers hash of trailer key-value pairs (ref'd internally)
+        @param xsink exception sink
+    */
+    DLLLOCAL void setTrailers(const QoreHashNode* trailers, ExceptionSink* xsink);
 
     //! Cancel a stream
     DLLLOCAL bool cancelStream(int64_t stream_id, ExceptionSink* xsink);
@@ -254,6 +273,9 @@ private:
     //! Whether the current request is in streaming mode (copied from shared state)
     bool streaming_active_io = false;
 
+    //! Whether the current request uses streaming send (I/O thread copy)
+    bool streaming_send_io = false;
+
     //! True after a 101 Switching Protocols response has been received
     bool protocol_switched = false;
 
@@ -305,6 +327,15 @@ private:
     //! Whether the current request uses streaming mode
     bool streaming_active = false;
 
+    //! Whether the current request uses streaming send (chunked TE, app pushes body)
+    bool streaming_send = false;
+
+    //! Queue of body chunks for streaming send (nullptr = end sentinel)
+    std::deque<QoreStringNode*> send_body_queue;
+
+    //! Trailers to send with the final chunk (ref'd or nullptr)
+    QoreHashNode* send_trailers = nullptr;
+
     //! Error info (ref'd or nullptr)
     QoreHashNode* error_info = nullptr;
 
@@ -340,6 +371,7 @@ private:
     // Request sub-state handlers
     DLLLOCAL QoreHashNode* handleIdle(ExceptionSink* xsink);
     DLLLOCAL QoreHashNode* handleSending(ExceptionSink* xsink);
+    DLLLOCAL QoreHashNode* handleStreamingSendBody(ExceptionSink* xsink);
     DLLLOCAL QoreHashNode* handleRecvHeader(ExceptionSink* xsink);
     DLLLOCAL QoreHashNode* handleRecvBodyLength(ExceptionSink* xsink);
     DLLLOCAL QoreHashNode* handleRecvChunkSize(ExceptionSink* xsink);

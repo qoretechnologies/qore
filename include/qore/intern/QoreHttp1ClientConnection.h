@@ -173,6 +173,32 @@ public:
         const QoreHashNode* headers, const void* body, size_t body_len,
         QoreChannel*& channel_out, ExceptionSink* xsink) override;
 
+    //! Submits a request with streaming send (chunked TE); body pushed via pushSendData()
+    /** @param method HTTP method
+        @param path request path
+        @param headers request headers (user-provided)
+        @param streaming_recv if true, response is delivered via channel (streaming receive)
+        @param channel_out if streaming_recv, receives the response channel
+        @param xsink exception sink
+        @return result hash with stream_id and future (if not streaming_recv)
+    */
+    DLLEXPORT QoreHashNode* submitRequestStreamingSend(const char* method, const char* path,
+        const QoreHashNode* headers, bool streaming_recv,
+        QoreChannel*& channel_out, ExceptionSink* xsink);
+
+    //! Pushes body data for a streaming send request
+    /** @param data body chunk; nullptr signals end-of-body
+        @param xsink exception sink
+    */
+    DLLEXPORT void pushSendData(const QoreStringNode* data, ExceptionSink* xsink);
+
+    //! Sets HTTP trailers for a streaming send request
+    /** Must be called before pushSendData(nullptr).
+        @param trailers hash of trailer key-value pairs
+        @param xsink exception sink
+    */
+    DLLEXPORT void setTrailers(const QoreHashNode* trailers, ExceptionSink* xsink);
+
     DLLEXPORT void closeConnection(ExceptionSink* xsink) override;
 
 protected:

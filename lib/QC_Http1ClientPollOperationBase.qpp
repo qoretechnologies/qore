@@ -87,6 +87,17 @@ void Http1ClientPollOperationPriv::cleanup(ExceptionSink* xsink) {
             pending_request_data->deref(xsink);
             pending_request_data = nullptr;
         }
+        // Clean up streaming send queue
+        for (auto* s : send_body_queue) {
+            if (s) {
+                s->deref(xsink);
+            }
+        }
+        send_body_queue.clear();
+        if (send_trailers) {
+            send_trailers->deref(xsink);
+            send_trailers = nullptr;
+        }
     }
 
     if (error_info) {
@@ -439,6 +450,8 @@ QoreHashNode* Http1ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
             return handleIdle(xsink);
         case ReqState::SENDING:
             return handleSending(xsink);
+        case ReqState::SEND_STREAMING_BODY:
+            return handleStreamingSendBody(xsink);
         case ReqState::RECV_HEADER:
             return handleRecvHeader(xsink);
         case ReqState::RECV_BODY_LENGTH:
@@ -464,11 +477,13 @@ QoreHashNode* Http1ClientPollOperationPriv::handleIdle(ExceptionSink* xsink) {
     // Check for pending request under stream_lock
     BinaryNode* req_data = nullptr;
     bool is_streaming = false;
+    bool is_streaming_send = false;
     {
         AutoLocker al(stream_lock);
         req_data = pending_request_data;
         pending_request_data = nullptr;
         is_streaming = streaming_active;
+        is_streaming_send = streaming_send;
     }
 
     if (req_data) {
@@ -503,11 +518,13 @@ QoreHashNode* Http1ClientPollOperationPriv::handleIdle(ExceptionSink* xsink) {
         }
 
         // Connection is alive — start sending the request
-        ASYNC_IO_TRACE("H1 handleIdle: start send (%lu bytes) fd=%d\n",
-            (unsigned long)req_data->size(), sock_obj ? sock_obj->getSocket() : -1);
+        ASYNC_IO_TRACE("H1 handleIdle: start send (%lu bytes) fd=%d streaming_send=%d\n",
+            (unsigned long)req_data->size(), sock_obj ? sock_obj->getSocket() : -1,
+            (int)is_streaming_send);
         releaseCurrentOp(xsink);
         sock_obj->ref();
         streaming_active_io = is_streaming;
+        streaming_send_io = is_streaming_send;
         current_op = new SocketSendPollOperation(xsink, req_data, sock_obj);
         if (*xsink) {
             current_op->deref(xsink);
@@ -598,6 +615,23 @@ QoreHashNode* Http1ClientPollOperationPriv::handleSending(ExceptionSink* xsink) 
     }
 
     if (current_op->goalReached()) {
+        // If this was a streaming send and we just finished sending headers
+        // (or a chunk), check if there's more body to send.
+        if (streaming_send_io && req_state == ReqState::SEND_STREAMING_BODY) {
+            // A chunk was sent — check for more queued data
+            releaseCurrentOp(xsink);
+            return handleStreamingSendBody(xsink);
+        }
+
+        if (streaming_send_io && req_state == ReqState::SENDING) {
+            // Headers sent — transition to streaming body state
+            printd(5, "Http1ClientPollOperationPriv::handleSending() headers sent, "
+                "waiting for streaming body data\n");
+            releaseCurrentOp(xsink);
+            req_state = ReqState::SEND_STREAMING_BODY;
+            return handleStreamingSendBody(xsink);
+        }
+
         printd(5, "Http1ClientPollOperationPriv::handleSending() request sent, reading response header\n");
 
         // Stale keep-alive detection (curl Curl_retry_request pattern):
@@ -641,6 +675,131 @@ QoreHashNode* Http1ClientPollOperationPriv::handleSending(ExceptionSink* xsink) 
 
     setError("HTTP1-SEND-ERROR", "send failed", xsink);
     return nullptr;
+}
+
+QoreHashNode* Http1ClientPollOperationPriv::handleStreamingSendBody(ExceptionSink* xsink) {
+    // If there's an active send operation, continue polling it
+    if (current_op) {
+        ExceptionSink poll_xsink;
+        QoreHashNode* poll_info = current_op->continuePoll(&poll_xsink);
+        if (poll_xsink) {
+            const QoreStringNode* err_str = poll_xsink.getExceptionErr().get<const QoreStringNode>();
+            const QoreStringNode* desc_str = poll_xsink.getExceptionDesc().get<const QoreStringNode>();
+            setError(err_str ? err_str->c_str() : "HTTP1-SEND-ERROR",
+                desc_str ? desc_str->c_str() : "streaming send failed", xsink);
+            poll_xsink.clear();
+            return nullptr;
+        }
+        if (poll_info) {
+            return poll_info;
+        }
+        if (current_op->goalReached()) {
+            releaseCurrentOp(xsink);
+            // Fall through to check for more data
+        } else {
+            setError("HTTP1-SEND-ERROR", "streaming chunk send failed", xsink);
+            return nullptr;
+        }
+    }
+
+    // Check the send queue for data
+    QoreStringNode* chunk = nullptr;
+    bool have_data = false;
+    {
+        AutoLocker al(stream_lock);
+        if (!send_body_queue.empty()) {
+            chunk = send_body_queue.front();
+            send_body_queue.pop_front();
+            have_data = true;
+        }
+    }
+
+    if (!have_data) {
+        // No data queued yet — wait for wake from pushSendData()
+        ASYNC_IO_TRACE("H1 handleStreamingSendBody: no data queued, waiting for wake fd=%d\n",
+            sock_obj ? sock_obj->getSocket() : -1);
+        return getSocketPollInfoHash(xsink, SOCK_POLLIN);
+    }
+
+    if (!chunk) {
+        // End sentinel — send final chunk with optional trailers
+        ASYNC_IO_TRACE("H1 handleStreamingSendBody: end sentinel, sending final chunk fd=%d\n",
+            sock_obj ? sock_obj->getSocket() : -1);
+        SimpleRefHolder<BinaryNode> final_chunk(new BinaryNode());
+        final_chunk->append("0\r\n", 3);
+
+        // Append trailers if set
+        QoreHashNode* trailers = nullptr;
+        {
+            AutoLocker al(stream_lock);
+            trailers = send_trailers;
+            send_trailers = nullptr;
+        }
+        if (trailers) {
+            ConstHashIterator hi(trailers);
+            while (hi.next()) {
+                QoreStringValueHelper sv(hi.get());
+                QoreString trailer_line;
+                trailer_line.sprintf("%s: %s\r\n", hi.getKey(), sv->c_str());
+                final_chunk->append(trailer_line.c_str(), trailer_line.size());
+            }
+            trailers->deref(xsink);
+        }
+        final_chunk->append("\r\n", 2);
+        sock_obj->ref();
+        current_op = new SocketSendPollOperation(xsink, final_chunk.release(), sock_obj);
+        if (*xsink) {
+            current_op->deref(xsink);
+            current_op = nullptr;
+            return nullptr;
+        }
+        current_op->setSelf(*self);
+        streaming_send_io = false;
+        // After this send completes, handleSending will transition to RECV_HEADER
+        // since streaming_send_io is now false
+        req_state = ReqState::SENDING;
+        return handleSending(xsink);
+    }
+
+    // Format the chunk in HTTP/1.1 chunked TE format: size\r\ndata\r\n
+    ASYNC_IO_TRACE("H1 handleStreamingSendBody: sending chunk (%lu bytes) fd=%d\n",
+        (unsigned long)chunk->size(), sock_obj ? sock_obj->getSocket() : -1);
+    SimpleRefHolder<BinaryNode> chunk_data(new BinaryNode());
+    QoreString size_line;
+    size_line.sprintf("%lx\r\n", (unsigned long)chunk->size());
+    chunk_data->append(size_line.c_str(), size_line.size());
+    chunk_data->append(chunk->c_str(), chunk->size());
+    chunk_data->append("\r\n", 2);
+    chunk->deref(xsink);
+
+    sock_obj->ref();
+    current_op = new SocketSendPollOperation(xsink, chunk_data.release(), sock_obj);
+    if (*xsink) {
+        current_op->deref(xsink);
+        current_op = nullptr;
+        return nullptr;
+    }
+    current_op->setSelf(*self);
+    // Stay in SEND_STREAMING_BODY — handleSending knows to come back here
+    return handleSending(xsink);
+}
+
+void Http1ClientPollOperationPriv::pushSendData(const QoreStringNode* data, ExceptionSink* xsink) {
+    AutoLocker al(stream_lock);
+    if (data) {
+        send_body_queue.push_back(data->stringRefSelf());
+    } else {
+        // End sentinel
+        send_body_queue.push_back(nullptr);
+    }
+}
+
+void Http1ClientPollOperationPriv::setTrailers(const QoreHashNode* trailers, ExceptionSink* xsink) {
+    AutoLocker al(stream_lock);
+    if (send_trailers) {
+        send_trailers->deref(xsink);
+    }
+    send_trailers = trailers ? trailers->hashRefSelf() : nullptr;
 }
 
 QoreHashNode* Http1ClientPollOperationPriv::handleRecvHeader(ExceptionSink* xsink) {
@@ -1656,6 +1815,17 @@ void Http1ClientPollOperationPriv::notifyPendingStreams(const char* err, const c
         action = stream_action;
         stream_action = nullptr;
         active_stream_count = 0;
+        // Clean up streaming send queue
+        for (auto* s : send_body_queue) {
+            if (s) {
+                s->deref(xsink);
+            }
+        }
+        send_body_queue.clear();
+        if (send_trailers) {
+            send_trailers->deref(xsink);
+            send_trailers = nullptr;
+        }
     }
 
     if (action) {
@@ -1675,7 +1845,7 @@ void Http1ClientPollOperationPriv::fireReadyCallback(ExceptionSink* xsink) {
 int64_t Http1ClientPollOperationPriv::submitRequest(const char* method, const char* path,
         const QoreHashNode* user_headers, const void* body, size_t body_len,
         bool streaming, AbstractAsyncAction* action, int max_streams,
-        ExceptionSink* xsink) {
+        bool streaming_send_flag, ExceptionSink* xsink) {
     // State check
     H1State cur_state = h1_state.load(std::memory_order_acquire);
     if (cur_state != H1State::READING && cur_state != H1State::WAIT_READ) {
@@ -1742,16 +1912,19 @@ int64_t Http1ClientPollOperationPriv::submitRequest(const char* method, const ch
         }
     }
 
-    // Add Content-Length if body present and not already in headers
-    if (body_len > 0 && !has_content_length) {
+    // Add Content-Length or Transfer-Encoding: chunked
+    if (streaming_send_flag) {
+        // Streaming send: use chunked TE — body will be pushed via pushSendData()
+        req->concat("Transfer-Encoding: chunked\r\n");
+    } else if (body_len > 0 && !has_content_length) {
         req->sprintf("Content-Length: %lu\r\n", (unsigned long)body_len);
     }
     req->concat("\r\n");
 
-    // Convert to binary and append body
+    // Convert to binary and append body (not for streaming send)
     BinaryNode* bin = new BinaryNode();
     bin->append(req->c_str(), req->size());
-    if (body_len > 0 && body) {
+    if (!streaming_send_flag && body_len > 0 && body) {
         bin->append(body, body_len);
     }
 
@@ -1774,6 +1947,7 @@ int64_t Http1ClientPollOperationPriv::submitRequest(const char* method, const ch
     active_sid = (int)stream_id;
     active_method = method;
     streaming_active = streaming;
+    streaming_send = streaming_send_flag;
     if (pending_request_data) {
         pending_request_data->deref(xsink);
     }
@@ -2061,7 +2235,7 @@ int Http1ClientPollOperationBase::submitRequest(string method, string path,
     // priv->submitRequest takes ownership (stores or derefs on failure)
     PromiseAction* action = new PromiseAction(*promise, promise_obj);
     return (int)priv->submitRequest(method->c_str(), path->c_str(), headers,
-        body_ptr, body_len, false, action, (int)max_streams, xsink);
+        body_ptr, body_len, false, action, (int)max_streams, false, xsink);
 }
 
 //! Submits an HTTP/1.1 request with Promise + EventNotifier for poll-based delivery
@@ -2121,7 +2295,7 @@ int Http1ClientPollOperationBase::submitRequestWithNotifier(string method, strin
         return -1;
     }
     return (int)priv->submitRequest(method->c_str(), path->c_str(), headers,
-        body_ptr, body_len, false, action, (int)max_streams, xsink);
+        body_ptr, body_len, false, action, (int)max_streams, false, xsink);
 }
 
 //! Submits an HTTP/1.1 streaming request with Channel-based response delivery
@@ -2175,7 +2349,7 @@ int Http1ClientPollOperationBase::submitRequestStreaming(string method, string p
     // Create ChannelAction — priv takes ownership
     ChannelAction* action = new ChannelAction(ch);
     return (int)priv->submitRequest(method->c_str(), path->c_str(), headers,
-        body_ptr, body_len, streaming, action, (int)max_streams, xsink);
+        body_ptr, body_len, streaming, action, (int)max_streams, false, xsink);
 }
 
 //! Cancel a stream
