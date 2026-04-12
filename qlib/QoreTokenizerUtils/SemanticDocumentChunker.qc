@@ -236,22 +236,9 @@ public class SemanticDocumentChunker inherits StructuredDocumentChunker {
     }
 
     #! Computes cosine similarity between two vectors
+    #! Computes cosine similarity using the C++ ml module for performance
     private static float cosineSimilarity(list<float> a, list<float> b) {
-        float dot = 0.0;
-        float norm_a = 0.0;
-        float norm_b = 0.0;
-
-        for (int i = 0; i < a.size(); ++i) {
-            dot += a[i] * b[i];
-            norm_a += a[i] * a[i];
-            norm_b += b[i] * b[i];
-        }
-
-        float denom = sqrt(norm_a) * sqrt(norm_b);
-        if (denom == 0.0) {
-            return 0.0;
-        }
-        return dot / denom;
+        return ML::ml_cosine_similarity(a, b);
     }
 }
 

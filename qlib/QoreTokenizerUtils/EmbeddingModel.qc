@@ -251,47 +251,17 @@ public class EmbeddingModel {
             # Get the last hidden state (typically the first output)
             auto hidden_states = result.last_hidden_state ?? result{result.firstKey()};
 
-            # Mean-pool over sequence dimension, weighted by attention mask
+            # Mean-pool and L2-normalize using C++ vector math from ml module
             for (int i = 0; i < batch_input_ids.size(); ++i) {
-                list<int> mask = batch_attention_mask[i];
-                auto token_embeddings = hidden_states[i];
-                int embed_dim = token_embeddings[0].size();
-
-                list<float> pooled = (map 0.0, range(embed_dim));
-                float mask_sum = 0.0;
-
-                for (int j = 0; j < mask.size(); ++j) {
-                    if (mask[j]) {
-                        mask_sum += 1.0;
-                        for (int k = 0; k < embed_dim; ++k) {
-                            pooled[k] += token_embeddings[j][k].toFloat();
-                        }
-                    }
-                }
-
-                if (mask_sum > 0.0) {
-                    for (int k = 0; k < embed_dim; ++k) {
-                        pooled[k] /= mask_sum;
-                    }
-                }
-
-                # L2-normalize
-                float norm = 0.0;
-                foreach float v in (pooled) {
-                    norm += v * v;
-                }
-                norm = sqrt(norm);
-                if (norm > 0.0) {
-                    for (int k = 0; k < pooled.size(); ++k) {
-                        pooled[k] /= norm;
-                    }
-                }
+                list<float> pooled = ML::ml_mean_pool(
+                    hidden_states[i], batch_attention_mask[i]);
+                list<float> normalized = ML::ml_l2_normalize(pooled);
 
                 if (!dimension) {
-                    dimension = embed_dim;
+                    dimension = normalized.size();
                 }
 
-                push all_embeddings, pooled;
+                push all_embeddings, normalized;
             }
 
             offset = end;
