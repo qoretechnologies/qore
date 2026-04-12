@@ -4293,6 +4293,21 @@ static void registerAOTFunctionsFromSlotMaps(
             printd(5, "AOT slot-reg: function '%s' uvb=%p\n", fname_str.c_str(), (void*)uvb);
         }
 
+        // If the variant already has a cached AOT context (e.g., registered during
+        // initial module loading and shared via qore_class_private), skip building a
+        // duplicate context — the existing one is already correct and the variant is
+        // shared between module and target programs.
+        bool is_init_func = (strncmp(func_name, "__const_init::", 14) == 0
+            || strncmp(func_name, "__svar_init::", 13) == 0
+            || strncmp(func_name, "__module_init::", 15) == 0);
+        if (uvb && uvb->hasCachedFunction() && !is_init_func) {
+            ++registered;
+            func_map.erase(func_name);
+            printd(2, "AOT slot-reg: '%s' already registered (shared variant), skipping\n", func_name);
+            ptr = entry_end;
+            continue;
+        }
+
         // Build context from slot map
         QoreAOTContext* ctx = buildContextFromSlotMap(reader, ptr, end, uvb, pgm, *aot_func, func_name, entry_end);
         // Debug: trace init function context building
@@ -4300,8 +4315,6 @@ static void registerAOTFunctionsFromSlotMaps(
                 || strncmp(func_name, "__svar_init::", 13) == 0)) {
             printd(5, "  buildContextFromSlotMap('%s'): ctx=%p uvb=%p\n",
                 func_name, (void*)ctx, (void*)uvb);
-        }
-        if (strncmp(func_name, "__const_init::", 14) == 0) {
         }
         if (ctx && uvb) {
             uvb->registerPrecompiledAOTFunction(aot_func->fn_ptr, ctx);
@@ -7024,6 +7037,12 @@ static void executeInitFunctions(
                     ++failed;
                     break;
                 }
+                // The target program may have copied the static var from the
+                // module program with an already-initialized value.  Clean up
+                // the old value before re-assigning so assignInit finds a
+                // clean QoreLValue (avoids assert in debug builds / leak in
+                // release builds).
+                vi->val.removeValue(true).discard(&xsink);
                 vi->assignInit(result);
                 vi->eval_init = true;
                 ++executed;
