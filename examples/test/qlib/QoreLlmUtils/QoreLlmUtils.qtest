@@ -20,10 +20,10 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             \configAnthropicNoUrlTest());
         addTestCase("LlmBackend config - valid http mode", \configValidHttpTest());
         addTestCase("LlmBackend config - valid anthropic mode", \configValidAnthropicTest());
-        addTestCase("LlmBackend config - valid qorus mode", \configValidQorusTest());
+        addTestCase("LlmBackend config - valid callback mode", \configValidCallbackTest());
         addTestCase("LlmBackend config - defaults", \configDefaultsTest());
         addTestCase("LlmBackend getMode/getModel", \gettersTest());
-        addTestCase("LlmBackend qorus mode - no Qorus context", \qorusNoContextTest());
+        addTestCase("LlmBackend callback mode - missing callback", \callbackNoCallbackTest());
         addTestCase("LlmBackendConfig hashdecl defaults", \hashdeclDefaultsTest());
         set_return_value(main());
     }
@@ -76,19 +76,19 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
         assertEq("claude-sonnet-4-20250514", llm.getModel());
     }
 
-    configValidQorusTest() {
+    configValidCallbackTest() {
         LlmBackend llm(<LlmBackendConfig>{
-            "mode": "qorus",
+            "mode": "callback", "api_callback": hash<auto> sub (string m, string p, hash<auto> b) { return {}; },
             "model": "my-model",
         });
-        assertEq("qorus", llm.getMode());
+        assertEq("callback", llm.getMode());
         assertEq("my-model", llm.getModel());
     }
 
     configDefaultsTest() {
-        # Qorus mode doesn't need url, so we can test defaults
-        LlmBackend llm(<LlmBackendConfig>{"mode": "qorus"});
-        assertEq("qorus", llm.getMode());
+        # Callback mode doesn't need url, so we can test defaults
+        LlmBackend llm(<LlmBackendConfig>{"mode": "callback", "api_callback": hash<auto> sub (string m, string p, hash<auto> b) { return {}; }});
+        assertEq("callback", llm.getMode());
         assertEq(NOTHING, llm.getModel());
     }
 
@@ -109,12 +109,11 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
         assertEq(NOTHING, llm2.getModel());
     }
 
-    qorusNoContextTest() {
-        LlmBackend llm(<LlmBackendConfig>{"mode": "qorus"});
-        # Calling complete in qorus mode outside of Qorus should fail
-        assertThrows("LLM-ERROR", "Qorus runtime context",
+    callbackNoCallbackTest() {
+        # Callback mode without api_callback should fail at construction
+        assertThrows("LLM-CONFIG-ERROR", "api_callback is required",
             sub () {
-                llm.complete("system", "user");
+                new LlmBackend(<LlmBackendConfig>{"mode": "callback"});
             }
         );
     }

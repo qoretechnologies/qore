@@ -26,10 +26,12 @@ public namespace QoreLlmUtils {
 
 #! Configuration for the LLM backend
 /** Specifies how to connect to the LLM — via an OpenAI-compatible HTTP
-    endpoint, the Anthropic Messages API, or the Qorus AI Gateway.
+    endpoint, the Anthropic Messages API, or a custom callback (e.g., for
+    routing through an API gateway).
 */
 public hashdecl LlmBackendConfig {
-    #! Mode: "http" for OpenAI-compatible, "anthropic" for Anthropic Messages API, "qorus" for Qorus AI Gateway
+    #! Mode: "http" for OpenAI-compatible, "anthropic" for Anthropic Messages API,
+    #! "callback" for a custom API call function
     string mode;
     #! Base URL of the LLM service (required for "http" and "anthropic" modes)
     *string url;
@@ -50,6 +52,9 @@ public hashdecl LlmBackendConfig {
     #! Maximum retry attempts for transient errors (429, 5xx); default 3;
     #! set to 0 to disable retries
     int max_retries = 3;
+    #! Callback mode: a callable that performs the API call and returns
+    #! the response hash in OpenAI-compatible format
+    *code<hash<auto>(string, string, hash<auto>)> api_callback;
     #! Initial retry delay in milliseconds for exponential backoff; default 1000
     int retry_delay_ms = 1000;
 }
@@ -144,7 +149,7 @@ public hashdecl ChatStreamEvent {
       \c response_format for JSON schema enforcement.
     - \b anthropic: Anthropic Messages API (\c /v1/messages) with tool-use-based
       structured extraction when an output schema is provided.
-    - \b qorus: Qorus AI Gateway — delegates to \c UserApi::callRestApi().
+    - \b callback: Custom API dispatch via a user-provided callable.
 
     Thread-safe: the underlying REST client is lazily initialized behind a mutex.
 
@@ -190,6 +195,8 @@ public class LlmBackend {
         #! Retry config
         int max_retries;
         int retry_delay_ms;
+        #! Callback for custom API dispatch
+        *code<hash<auto>(string, string, hash<auto>)> api_callback;
         #! REST client for HTTP/Anthropic modes (lazy-initialized)
         *RestClientIo::RestClientIo rest_client;
         #! Mutex for thread-safe lazy initialization
@@ -204,9 +211,10 @@ public class LlmBackend {
     */
     constructor(hash<LlmBackendConfig> config) {
         mode = config.mode;
-        if (mode != "http" && mode != "anthropic" && mode != "qorus") {
+        if (mode != "http" && mode != "anthropic" && mode != "callback") {
             throw "LLM-CONFIG-ERROR",
-                sprintf("invalid mode %y; expected \"http\", \"anthropic\", or \"qorus\"", mode);
+                sprintf("invalid mode %y; expected \"http\", \"anthropic\", or \"callback\"",
+                    mode);
         }
 
         if (mode == "http" || mode == "anthropic") {
@@ -230,6 +238,11 @@ public class LlmBackend {
         anthropic_version = config.anthropic_version;
         max_retries = config.max_retries;
         retry_delay_ms = config.retry_delay_ms;
+        api_callback = config.api_callback;
+        if (mode == "callback" && !api_callback) {
+            throw "LLM-CONFIG-ERROR",
+                "api_callback is required for callback mode";
+        }
     }
 
     #! Makes a chat completion call and returns the result
@@ -249,14 +262,14 @@ public class LlmBackend {
                 return completeHttp(system_prompt, user_prompt, output_schema);
             case "anthropic":
                 return completeAnthropic(system_prompt, user_prompt, output_schema);
-            case "qorus":
-                return completeQorus(system_prompt, user_prompt, output_schema);
+            case "callback":
+                return completeCallback(system_prompt, user_prompt, output_schema);
         }
         # unreachable — mode validated in constructor
         throw "LLM-ERROR", sprintf("unsupported mode %y", mode);
     }
 
-    /** @return the configured backend mode ("http", "anthropic", or "qorus") */
+    /** @return the configured backend mode ("http", "anthropic", or "callback") */
     string getMode() {
         return mode;
     }
@@ -288,7 +301,7 @@ public class LlmBackend {
             *list<hash<ToolDefinition>> tools) {
         switch (mode) {
             case "http":
-            case "qorus":
+            case "callback":
                 return chatHttp(messages, tools);
             case "anthropic":
                 return chatAnthropic(messages, tools);
@@ -334,9 +347,9 @@ llm.chatStream(
     */
     chatStream(list<hash<ChatMessage>> messages, code callback,
             *list<hash<ToolDefinition>> tools) {
-        if (mode == "qorus") {
+        if (mode == "callback") {
             throw "LLM-ERROR",
-                "streaming is not supported in Qorus mode; use chat() instead";
+                "streaming is not supported in callback mode; use chat() instead";
         }
         ensureRestClient();
 
@@ -586,14 +599,15 @@ llm.chatStream(
         };
     }
 
-    #! Completes via Qorus AI Gateway
-    /** Calls \c UserApi::callRestApi() to route through the Qorus AI Gateway.
-        Requires running inside a Qorus context where \c UserApi is available.
+    #! Completes via the configured callback function
+    /** Calls the user-provided \c api_callback to dispatch the request.
+        The callback must accept (string method, string path, hash body)
+        and return the response in OpenAI-compatible format.
 
-        @throw LLM-ERROR if the Qorus API call fails
+        @throw LLM-ERROR if the callback fails
     */
-    private hash<LlmCompletionResult> completeQorus(string system_prompt, string user_prompt,
-            *hash<auto> output_schema) {
+    private hash<LlmCompletionResult> completeCallback(string system_prompt,
+            string user_prompt, *hash<auto> output_schema) {
         hash<auto> body = {
             "messages": (
                 {"role": "system", "content": system_prompt},
@@ -618,15 +632,9 @@ llm.chatStream(
 
         hash<auto> resp;
         try {
-            # Use dynamic dispatch — UserApi is only available in Qorus context
-            resp = call_static_method("UserApi", "callRestApi", "PUT",
-                "ai/v1/chat/completions", body);
+            resp = api_callback("PUT", "ai/v1/chat/completions", body);
         } catch (hash<ExceptionInfo> ex) {
-            if (ex.err == "UNKNOWN-CLASS") {
-                throw "LLM-ERROR",
-                    "Qorus mode requires a Qorus runtime context (UserApi not available)";
-            }
-            throw "LLM-ERROR", sprintf("Qorus AI Gateway call failed: %s", ex.desc), ex;
+            throw "LLM-ERROR", sprintf("callback API call failed: %s", ex.desc), ex;
         }
 
         string content = resp.choices[0].message.content ?? "";
@@ -640,7 +648,7 @@ llm.chatStream(
     #! Chat via OpenAI-compatible endpoint (also used for Qorus mode)
     private hash<ChatResponse> chatHttp(list<hash<ChatMessage>> messages,
             *list<hash<ToolDefinition>> tools) {
-        if (mode != "qorus") {
+        if (mode != "callback") {
             ensureRestClient();
         }
 
@@ -728,27 +736,22 @@ llm.chatStream(
         }
 
         hash<auto> resp;
-        string endpoint = (mode == "qorus") ? "ai/v1/chat/completions"
+        string endpoint = (mode == "callback") ? "ai/v1/chat/completions"
             : "/v1/chat/completions";
         try {
-            if (mode == "qorus") {
-                resp = call_static_method("UserApi", "callRestApi", "PUT",
-                    endpoint, body);
+            if (mode == "callback") {
+                resp = api_callback("PUT", endpoint, body);
             } else {
                 resp = withRetry(hash<auto> sub () {
                     return rest_client.restPost(endpoint, body, hdr);
                 });
             }
         } catch (hash<ExceptionInfo> ex) {
-            if (ex.err == "UNKNOWN-CLASS") {
-                throw "LLM-ERROR",
-                    "Qorus mode requires a Qorus runtime context (UserApi not available)";
-            }
             throw "LLM-ERROR", sprintf("chat request failed: %s", ex.desc), ex;
         }
 
-        # For Qorus mode, resp IS the body (no .body wrapper)
-        hash<auto> response_data = mode == "qorus" ? resp : resp.body;
+        # For callback mode, resp IS the body (no .body wrapper from RestClientIo)
+        hash<auto> response_data = mode == "callback" ? resp : resp.body;
 
         hash<auto> choice = response_data.choices[0];
         hash<auto> msg = choice.message;

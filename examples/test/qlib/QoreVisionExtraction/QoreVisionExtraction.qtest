@@ -71,7 +71,7 @@ public class QoreVisionExtractionTest inherits QUnit::Test {
     visionQorusModeTest() {
         # Qorus mode should construct without error (fails at call time)
         VisionLlmClient client(<VisionLlmConfig>{
-            "mode": "qorus",
+            "mode": "callback", "api_callback": hash<auto> sub (string m, string p, hash<auto> b) { return {}; },
             "model": "gpt-4o",
         });
         assertTrue(True);
@@ -79,7 +79,7 @@ public class QoreVisionExtractionTest inherits QUnit::Test {
 
     visionCustomPromptTest() {
         VisionLlmClient client(<VisionLlmConfig>{
-            "mode": "qorus",
+            "mode": "callback", "api_callback": hash<auto> sub (string m, string p, hash<auto> b) { return {}; },
             "model": "gpt-4o",
             "system_prompt": "You are a medical image analyst.",
         });

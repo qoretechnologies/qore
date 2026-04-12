@@ -27,13 +27,13 @@ public namespace QoreVisionExtraction {
 #! Configuration for VisionLlmClient
 /** Specifies how to connect to the vision LLM. Supports all modes from
     @ref QoreLlmUtils::LlmBackend "LlmBackend": HTTP/OpenAI, Anthropic,
-    and Qorus AI Gateway.
+    and custom API gateways via callback.
 
     For backward compatibility, \c "openai" is accepted as an alias for \c "http".
 */
 public hashdecl VisionLlmConfig {
     #! Mode: "http"/"openai" for OpenAI-compatible, "anthropic" for Anthropic,
-    #! "qorus" for Qorus AI Gateway
+    #! "callback" for a custom API dispatch function
     string mode;
     #! Base URL of the LLM service (required for "http" and "anthropic" modes)
     *string url;
@@ -51,6 +51,8 @@ public hashdecl VisionLlmConfig {
     string anthropic_version = "2023-06-01";
     #! Custom system prompt — overrides the default prompt for each operation
     *string system_prompt;
+    #! Callback mode: a callable for custom API dispatch
+    *code<hash<auto>(string, string, hash<auto>)> api_callback;
 }
 
 #! Result from a vision extraction operation
@@ -70,15 +72,15 @@ public hashdecl VisionExtractionResult {
     tables, or structured data.  Built on
     @ref QoreLlmUtils::LlmBackend "LlmBackend" — supports all backend modes
     including HTTP/OpenAI-compatible endpoints, Anthropic Messages API, and
-    the Qorus AI Gateway.
+    custom API gateways.
 
-    @par Example: Describe an image using Qorus AI Gateway
+    @par Example: Describe an image using a callback API
     @code{.py}
 %modern
 %requires QoreVisionExtraction
 
 VisionLlmClient client(<VisionLlmConfig>{
-    "mode": "qorus",
+    "mode": "callback",
     "model": "gpt-4o",
 });
 binary img = ReadOnlyFile::readBinaryFile("photo.jpg");
@@ -139,13 +141,13 @@ public class VisionLlmClient {
         }
 
         if (backend_mode != "http" && backend_mode != "anthropic"
-                && backend_mode != "qorus") {
+                && backend_mode != "callback") {
             throw "VISION-CONFIG-ERROR",
                 sprintf("invalid mode %y; expected \"http\", \"openai\", "
-                    "\"anthropic\", or \"qorus\"", config.mode);
+                    "\"anthropic\", or \"callback\"", config.mode);
         }
 
-        llm = new QoreLlmUtils::LlmBackend(<QoreLlmUtils::LlmBackendConfig>{
+        hash<QoreLlmUtils::LlmBackendConfig> llm_config(<QoreLlmUtils::LlmBackendConfig>{
             "mode": backend_mode,
             "url": config.url,
             "model": config.model,
@@ -155,6 +157,10 @@ public class VisionLlmClient {
             "timeout_ms": config.timeout_ms,
             "anthropic_version": config.anthropic_version,
         });
+        if (config.api_callback) {
+            llm_config.api_callback = config.api_callback;
+        }
+        llm = new QoreLlmUtils::LlmBackend(llm_config);
 
         custom_system_prompt = config.system_prompt;
     }

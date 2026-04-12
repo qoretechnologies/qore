@@ -22,7 +22,7 @@ class MockChatLlm inherits QoreLlmUtils::LlmBackend {
     }
 
     constructor(list<auto> resp_list)
-            : LlmBackend(<LlmBackendConfig>{"mode": "qorus"}) {
+            : LlmBackend(<LlmBackendConfig>{"mode": "callback", "api_callback": hash<auto> sub (string m, string p, hash<auto> b) { return {}; }}) {
         responses = resp_list;
     }
 

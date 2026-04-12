@@ -28,12 +28,12 @@ class MockLlmBackend inherits QoreLlmUtils::LlmBackend {
         *list<string> sequential_responses;
     }
 
-    constructor(string response) : LlmBackend(<LlmBackendConfig>{"mode": "qorus"}) {
+    constructor(string response) : LlmBackend(<LlmBackendConfig>{"mode": "callback", "api_callback": hash<auto> sub (string m, string p, hash<auto> b) { return {}; }}) {
         mock_response = response;
     }
 
     constructor(list<string> responses)
-            : LlmBackend(<LlmBackendConfig>{"mode": "qorus"}) {
+            : LlmBackend(<LlmBackendConfig>{"mode": "callback", "api_callback": hash<auto> sub (string m, string p, hash<auto> b) { return {}; }}) {
         sequential_responses = responses;
         mock_response = responses[0];
     }
@@ -567,7 +567,7 @@ public class QoreStructuredExtractionTest inherits QUnit::Test {
         assertThrows("CONSTRUCTOR-ERROR", "text_field",
             sub () {
                 new DataProviderML::QoreExtractionProcessor({
-                    "llm_mode": "qorus",
+                    "llm_mode": "http", "llm_url": "http://localhost:1",
                     "schema_template": "ner",
                 });
             }
@@ -578,7 +578,7 @@ public class QoreStructuredExtractionTest inherits QUnit::Test {
             sub () {
                 new DataProviderML::QoreExtractionProcessor({
                     "text_field": "body",
-                    "llm_mode": "qorus",
+                    "llm_mode": "http", "llm_url": "http://localhost:1",
                 });
             }
         );
@@ -597,7 +597,7 @@ public class QoreStructuredExtractionTest inherits QUnit::Test {
         DataProviderML::QoreExtractionProcessor proc({
             "text_field": "body",
             "schema_template": "ner",
-            "llm_mode": "qorus",
+            "llm_mode": "http", "llm_url": "http://localhost:1",
         });
         assertEq("extract-structured", proc.getName());
     }

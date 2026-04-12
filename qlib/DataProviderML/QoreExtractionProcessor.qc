@@ -113,8 +113,7 @@ public class QoreExtractionProcessor inherits DataProvider::AbstractDataProvider
                 "short_desc": "How to connect to the LLM",
                 "desc": "The LLM backend mode:\n"
                     "- `http` — OpenAI-compatible endpoint (SGLang, vLLM, OpenAI)\n"
-                    "- `anthropic` — Anthropic Messages API\n"
-                    "- `qorus` — Qorus AI Gateway",
+                    "- `anthropic` — Anthropic Messages API",
                 "type": AbstractDataProviderTypeMap."string",
                 "required": True,
                 "allowed_values": (
@@ -127,11 +126,6 @@ public class QoreExtractionProcessor inherits DataProvider::AbstractDataProvider
                         "value": "anthropic",
                         "display_name": "Anthropic",
                         "desc": "Connect to the Anthropic Messages API",
-                    },
-                    <AllowedValueInfo>{
-                        "value": "qorus",
-                        "display_name": "Qorus AI Gateway",
-                        "desc": "Route through the Qorus AI Gateway",
                     },
                 ),
             },

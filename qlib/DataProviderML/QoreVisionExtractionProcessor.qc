@@ -104,8 +104,7 @@ public class QoreVisionExtractionProcessor inherits DataProvider::AbstractDataPr
                 "short_desc": "Which vision LLM API to use",
                 "desc": "The vision LLM backend:\n"
                     "- `http` / `openai` — OpenAI-compatible vision API (GPT-4o, etc.)\n"
-                    "- `anthropic` — Anthropic Messages API with vision\n"
-                    "- `qorus` — Qorus AI Gateway",
+                    "- `anthropic` — Anthropic Messages API with vision",
                 "type": AbstractDataProviderTypeMap."string",
                 "required": True,
                 "allowed_values": (
@@ -113,11 +112,6 @@ public class QoreVisionExtractionProcessor inherits DataProvider::AbstractDataPr
                         "value": "openai",
                         "display_name": "OpenAI (GPT-4o)",
                         "desc": "Use an OpenAI-compatible vision endpoint",
-                    },
-                    <AllowedValueInfo>{
-                        "value": "qorus",
-                        "display_name": "Qorus AI Gateway",
-                        "desc": "Route through the Qorus AI Gateway",
                     },
                     <AllowedValueInfo>{
                         "value": "anthropic",
