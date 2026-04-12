@@ -122,6 +122,9 @@ class AOTSmokeTest inherits QUnit::Test {
         addTestCase("AOT operator keys", \testOperatorKeys());
         addTestCase("AOT operator instanceof", \testOperatorInstanceof());
         addTestCase("AOT operator map optimized", \testOperatorMapOptimized());
+        # Closure exception safety tests
+        addTestCase("AOT closure exception safety", \testClosureExceptionSafety());
+        addTestCase("AOT closure exception outer", \testClosureExceptionOuter());
         set_return_value(main());
     }
 
@@ -3083,5 +3086,60 @@ exit(0);
         hash<auto> result = compileCheckAndRun(code);
         string interp_out = runInterpreted(code);
         assertEq(interp_out, result.run_out, "map operator output matches interpreter");
+    }
+
+    testClosureExceptionSafety() {
+        # Test that closure-captured locals are properly cleaned up
+        # when an exception is thrown inside a closure in AOT mode
+        string code = "%modern
+string sub test_closure_throw() {
+    string result = \"initial\";
+    code c = sub() {
+        result = \"in-exception\";
+        throw \"TEST-EX\", \"test\";
+    };
+    try {
+        c();
+    } catch (hash<ExceptionInfo> ex) {
+        return sprintf(\"%s:%s\", result, ex.err);
+    }
+    return \"FAIL\";
+}
+
+printf(\"%s\\n\", test_closure_throw());
+exit(0);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "closure-exception: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out, "closure-exception output matches interpreter");
+    }
+
+    testClosureExceptionOuter() {
+        # Test that closure-captured locals survive exceptions thrown
+        # in the outer function and the closure still reads the correct value
+        string code = "%modern
+string sub test_outer_throw() {
+    string val = \"initial\";
+    code reader = string sub() { return val; };
+    try {
+        val = \"updated\";
+        throw \"OUTER-EX\", \"outer\";
+    } catch (hash<ExceptionInfo> ex) {
+        return sprintf(\"%s:%s:%s\", ex.err, val, reader());
+    }
+    return \"FAIL\";
+}
+
+printf(\"%s\\n\", test_outer_throw());
+exit(0);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "closure-exception-outer: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out,
+            "closure-exception-outer output matches interpreter");
     }
 }
