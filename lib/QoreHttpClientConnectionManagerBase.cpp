@@ -202,16 +202,6 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnection(
     // All three protocols (H1, H2, H3) are supported as of Phase P5.
 
     bool ssl_required = (strcmp(scheme, "https") == 0);
-    if (proxy_info_ && ssl_required) {
-        // CONNECT-tunneled HTTPS through proxy is not yet implemented in
-        // the C++ Http1ClientConnection (Phase P2's two-phase connect
-        // ladder is missing).  Phase P3 raises so callers know to fall
-        // back to the Qore manager for now.
-        xsink->raiseException("HTTPCLIENT-PROXY-ERROR",
-            "HTTPS through HTTP proxy is not yet implemented in the C++ "
-            "manager; use the Qore HttpClientConnectionManager for now");
-        return nullptr;
-    }
 
     std::string key = poolKey(host, port);
 
@@ -350,13 +340,34 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::createConnection(
     HttpClientConnectionBase* conn = nullptr;
     switch (opts_.protocol) {
         case HttpClientProtocol::H1:
-            conn = new Http1ClientConnection(host, port, ssl_required, xsink, this);
+            if (proxy_info_) {
+                conn = new Http1ClientConnection(host, port, ssl_required,
+                    proxy_info_->host.c_str(), proxy_info_->port,
+                    xsink, this);
+            } else {
+                conn = new Http1ClientConnection(host, port, ssl_required, xsink, this);
+            }
             break;
         case HttpClientProtocol::H2:
+            // H2 proxy support requires a CONNECT tunnel established via
+            // H1, then upgrading to H2 inside the tunnel — the Qore-level
+            // HttpClientConnectionManager handles this; C++ support is a
+            // future phase.
+            if (proxy_info_ && ssl_required) {
+                xsink->raiseException("HTTPCLIENT-PROXY-ERROR",
+                    "HTTPS through HTTP proxy is not yet implemented for "
+                    "HTTP/2 connections");
+                return nullptr;
+            }
             conn = new Http2ClientConnection(host, port, ssl_required,
                 opts_.max_streams_per_connection, xsink, this);
             break;
         case HttpClientProtocol::H3:
+            if (proxy_info_) {
+                xsink->raiseException("HTTPCLIENT-PROXY-ERROR",
+                    "HTTP/3 (QUIC) connections cannot use HTTP proxies");
+                return nullptr;
+            }
             conn = new Http3ClientConnection(host, port,
                 opts_.max_streams_per_connection, xsink, this);
             break;

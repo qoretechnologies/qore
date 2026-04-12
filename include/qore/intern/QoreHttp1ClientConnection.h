@@ -52,7 +52,7 @@ class Http1ClientPollOperationPriv;
 */
 class Http1ClientConnection : public HttpClientConnectionBase {
 public:
-    //! Creates a new HTTP/1.1 client connection
+    //! Creates a new HTTP/1.1 client connection (direct, no proxy)
     /** Creates a socket, a @ref SocketConnectPollOperation, and a
         @ref Http1ClientPollOperationPriv wrapping the two, submits the
         poll op to the global AsyncIoController, and returns.  The
@@ -71,6 +71,28 @@ public:
     DLLLOCAL Http1ClientConnection(const char* target_host, int target_port,
         bool ssl_required, ExceptionSink* xsink,
         HttpClientConnectionManagerBase* mgr = nullptr);
+
+    //! Creates a new HTTP/1.1 client connection via an HTTP proxy
+    /** TCP connects to the proxy.  For HTTPS targets (@a ssl_required is
+        true), a CONNECT tunnel is established through the proxy before
+        upgrading to SSL.  For plain HTTP targets, requests use absolute
+        URIs through the proxy.
+
+        @param target_host target hostname (used for the Host header and
+            the CONNECT target)
+        @param target_port target TCP port
+        @param ssl_required if @c true, SSL/TLS is required (HTTPS) — the
+            proxy tunnel will be established via CONNECT before SSL upgrade
+        @param proxy_host proxy hostname to connect to
+        @param proxy_port proxy TCP port to connect to
+        @param xsink exception sink — set on construction failure
+        @param mgr optional owning manager
+
+        @since %Qore 2.3
+    */
+    DLLLOCAL Http1ClientConnection(const char* target_host, int target_port,
+        bool ssl_required, const char* proxy_host, int proxy_port,
+        ExceptionSink* xsink, HttpClientConnectionManagerBase* mgr = nullptr);
 
     DLLLOCAL virtual ~Http1ClientConnection();
 
@@ -144,6 +166,12 @@ private:
         protocol without per-protocol overrides.
     */
     std::string owner_str;
+
+    //! Proxy hostname (empty = direct connection, no proxy)
+    std::string proxy_host;
+
+    //! Proxy TCP port (only used when @ref proxy_host is non-empty)
+    int proxy_port = 0;
 
     //! Builds the C++ pieces and submits to the controller.  Called from
     //! the constructor.

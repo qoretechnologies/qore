@@ -66,6 +66,19 @@ Http1ClientConnection::Http1ClientConnection(const char* target_host, int target
     }
 }
 
+Http1ClientConnection::Http1ClientConnection(const char* target_host, int target_port,
+        bool ssl_required, const char* proxy_host, int proxy_port,
+        ExceptionSink* xsink, HttpClientConnectionManagerBase* mgr)
+    : HttpClientConnectionBase(target_host, target_port, ssl_required),
+      proxy_host(proxy_host), proxy_port(proxy_port) {
+    if (mgr) {
+        setManager(mgr);
+    }
+    if (buildAndSubmit(xsink)) {
+        return;
+    }
+}
+
 Http1ClientConnection::~Http1ClientConnection() {
     ExceptionSink xsink;
     closeConnection(&xsink);
@@ -100,12 +113,20 @@ int Http1ClientConnection::buildAndSubmit(ExceptionSink* xsink) {
         new QoreObject(QC_SOCKET, pgm, sock_priv_holder.release()), xsink);
 
     // 2. Build the TCP connect target string "host:port".
+    //    When a proxy is configured, we connect to the proxy, not the target.
+    bool use_proxy = !proxy_host.empty();
+    bool use_proxy_tunnel = use_proxy && ssl_required;
+    bool use_proxy_plain = use_proxy && !ssl_required;
+
+    const char* connect_host = use_proxy ? proxy_host.c_str() : target_host.c_str();
+    int connect_port = use_proxy ? proxy_port : target_port;
+
     char target_str[256];
-    int n = snprintf(target_str, sizeof(target_str), "%s:%d", target_host.c_str(), target_port);
+    int n = snprintf(target_str, sizeof(target_str), "%s:%d", connect_host, connect_port);
     if (n <= 0 || (size_t)n >= sizeof(target_str)) {
         xsink->raiseException("HTTPCLIENT-CONNECT-ERROR",
-            "target host:port string too long: host='%s' port=%d",
-            target_host.c_str(), target_port);
+            "connect target host:port string too long: host='%s' port=%d",
+            connect_host, connect_port);
         return -1;
     }
 
@@ -121,6 +142,8 @@ int Http1ClientConnection::buildAndSubmit(ExceptionSink* xsink) {
     // 4. Create the Http1ClientPollOperationPriv (no self yet — set later).
     //    The priv takes ownership of one ref on sock_priv_raw and one ref on
     //    connect_op.
+    //    proxy_tunnel=true when HTTPS through proxy (triggers CONNECT ladder)
+    //    is_proxy_plain=true when plain HTTP through proxy (uses absolute URIs)
     sock_priv_raw->ref();
     SocketConnectPollOperation* connect_ptr = connect_op.release();
     ReferenceHolder<Http1ClientPollOperationPriv> priv_holder(
@@ -129,8 +152,8 @@ int Http1ClientConnection::buildAndSubmit(ExceptionSink* xsink) {
             /* sock */ sock_priv_raw,
             /* connect_op */ connect_ptr,
             /* ssl_required */ ssl_required,
-            /* proxy_tunnel */ false,
-            /* is_proxy_plain */ false,
+            /* proxy_tunnel */ use_proxy_tunnel,
+            /* is_proxy_plain */ use_proxy_plain,
             /* target_host */ target_host,
             /* target_port */ target_port,
             /* conn_priv */ this),

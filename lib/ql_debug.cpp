@@ -1442,6 +1442,84 @@ static void ut_manager_proxy_url_parse(UnitTestCounters& c) {
     }
 }
 
+//! Test that manager with proxy creates connections that connect to the proxy
+static void ut_manager_proxy_h1_connect(UnitTestCounters& c) {
+    ExceptionSink xsink;
+
+    // Reserve an ephemeral port to use as the "proxy" address.  It's closed
+    // immediately so the connect will fail — but the error message should
+    // reference this port, proving the H1 connection targets the proxy.
+    int sfd = socket(AF_INET, SOCK_STREAM, 0);
+    if (sfd < 0) { UT_ASSERT(c, false, "reserve proxy port"); return; }
+    sockaddr_in addr{};
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    addr.sin_port = 0;
+    bind(sfd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
+    socklen_t alen = sizeof(addr);
+    getsockname(sfd, reinterpret_cast<sockaddr*>(&addr), &alen);
+    int proxy_port = ntohs(addr.sin_port);
+    ::close(sfd);
+
+    // Create manager with proxy pointing to the dead port
+    char proxy_url[128];
+    snprintf(proxy_url, sizeof(proxy_url), "http://127.0.0.1:%d", proxy_port);
+
+    HttpClientConnectionManagerBase::Options opts;
+    opts.protocol = HttpClientProtocol::H1;
+    opts.proxy_url = proxy_url;
+    opts.connect_timeout_ms = 2000;
+    ReferenceHolder<HttpClientConnectionManagerBase> mgr(
+        new HttpClientConnectionManagerBase(opts, &xsink), &xsink);
+    UT_ASSERT(c, !xsink, "manager(proxy) construction succeeds");
+    if (xsink) { xsink.clear(); return; }
+
+    // HTTPS through proxy: should attempt the connect (not raise
+    // HTTPCLIENT-PROXY-ERROR anymore)
+    HttpClientConnectionBase* conn = mgr->acquireConnection(
+        "https", "target.example.com", 443, &xsink);
+    UT_ASSERT(c, !conn, "acquireConnection(https via proxy) returns nullptr (connect refused)");
+    UT_ASSERT(c, xsink.isException(),
+        "acquireConnection(https via proxy) raises exception");
+    const QoreStringNode* err = xsink.getExceptionErr().get<const QoreStringNode>();
+    UT_ASSERT(c, err && strcmp(err->c_str(), "HTTPCLIENT-PROXY-ERROR") != 0,
+        "exception is NOT HTTPCLIENT-PROXY-ERROR (proxy CONNECT is attempted)");
+    xsink.clear();
+
+    // Plain HTTP through proxy: also should attempt connect
+    conn = mgr->acquireConnection("http", "target.example.com", 80, &xsink);
+    UT_ASSERT(c, !conn, "acquireConnection(http via proxy) returns nullptr");
+    UT_ASSERT(c, xsink.isException(),
+        "acquireConnection(http via proxy) raises exception");
+    xsink.clear();
+
+    mgr->closeAll(&xsink);
+    xsink.clear();
+}
+
+//! Test that H3 through proxy is correctly rejected
+static void ut_manager_proxy_h3_rejected(UnitTestCounters& c) {
+    ExceptionSink xsink;
+
+    HttpClientConnectionManagerBase::Options opts;
+    opts.protocol = HttpClientProtocol::H3;
+    opts.proxy_url = "http://127.0.0.1:8080";
+    opts.connect_timeout_ms = 1000;
+    ReferenceHolder<HttpClientConnectionManagerBase> mgr(
+        new HttpClientConnectionManagerBase(opts, &xsink), &xsink);
+    UT_ASSERT(c, !xsink, "manager(H3+proxy) construction succeeds");
+    if (xsink) { xsink.clear(); return; }
+
+    HttpClientConnectionBase* conn = mgr->acquireConnection(
+        "https", "target.example.com", 443, &xsink);
+    UT_ASSERT(c, !conn, "H3+proxy acquireConnection returns nullptr");
+    UT_ASSERT(c, xsink.isException(), "H3+proxy raises exception");
+    const QoreStringNode* err = xsink.getExceptionErr().get<const QoreStringNode>();
+    UT_ASSERT(c, err && strcmp(err->c_str(), "HTTPCLIENT-PROXY-ERROR") == 0,
+        "H3+proxy raises HTTPCLIENT-PROXY-ERROR");
+    xsink.clear();
+}
+
 // --- P10 tests: HTTPClient via conn_mgr ---
 
 static void ut_httpclient_conn_mgr_get(UnitTestCounters& c) {
@@ -1900,6 +1978,8 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_socket_iomode_sync_blocks_async(c);
     ut_socket_iomode_unclaimed_allows_both(c);
     ut_socket_iomode_async_lifecycle(c);
+    ut_manager_proxy_h1_connect(c);
+    ut_manager_proxy_h3_rejected(c);
 
     QoreHashNode* result = new QoreHashNode(autoTypeInfo);
     result->setKeyValue("test_count", c.test_count, xsink);
