@@ -86,10 +86,8 @@ public class EmbeddingModel {
         #! Mutex for thread-safe lazy initialization of rest_client
         Mutex rest_mutex();
 %endif
-%ifndef NoMl
         #! ONNX model for local inference
         *ML::OnnxModel onnx_model;
-%endif
         #! HuggingFace tokenizer for ONNX mode
         *Tokenizer::HFTokenizer onnx_tokenizer;
     }
@@ -125,10 +123,6 @@ public class EmbeddingModel {
             connect_timeout_ms = config.connect_timeout_ms;
             timeout_ms = config.timeout_ms;
         } else if (mode == "onnx") {
-%ifdef NoMl
-            throw "EMBEDDING-DEPENDENCY-ERROR",
-                "ml module is required for ONNX mode but is not available";
-%endif
             if (!config.model_path.val()) {
                 throw "EMBEDDING-CONFIG-ERROR", "model_path is required for ONNX mode";
             }
@@ -137,9 +131,7 @@ public class EmbeddingModel {
                     "tokenizer_config is required for ONNX mode";
             }
             max_tokens = config.max_tokens;
-%ifndef NoMl
             onnx_model = new ML::OnnxModel(config.model_path);
-%endif
             onnx_tokenizer = new Tokenizer::HFTokenizer(config.tokenizer_config);
         }
     }
@@ -210,7 +202,6 @@ public class EmbeddingModel {
         @return list of float vectors, one per input text
     */
     private list<list<float>> embedBatchOnnx(list<string> texts) {
-%ifndef NoMl
         int batch_size = 32;
         list<list<float>> all_embeddings = ();
         int total = texts.size();
@@ -268,8 +259,6 @@ public class EmbeddingModel {
         }
 
         return all_embeddings;
-%endif
-        throw "EMBEDDING-ERROR", "ml module not available for ONNX inference";
     }
 
     #! Embeds texts via HTTP endpoint

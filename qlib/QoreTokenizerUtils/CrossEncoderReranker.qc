@@ -90,10 +90,8 @@ public class CrossEncoderReranker {
         #! Mutex for thread-safe lazy initialization of rest_client
         Mutex rest_mutex();
 %endif
-%ifndef NoMl
         #! ONNX model for local inference
         *ML::OnnxModel onnx_model;
-%endif
         #! HuggingFace tokenizer for ONNX mode
         *Tokenizer::HFTokenizer onnx_tokenizer;
     }
@@ -124,10 +122,6 @@ public class CrossEncoderReranker {
             connect_timeout_ms = config.connect_timeout_ms;
             timeout_ms = config.timeout_ms;
         } else if (mode == "onnx") {
-%ifdef NoMl
-            throw "RERANKER-DEPENDENCY-ERROR",
-                "ml module is required for ONNX mode but is not available";
-%endif
             if (!config.model_path.val()) {
                 throw "RERANKER-CONFIG-ERROR", "model_path is required for ONNX mode";
             }
@@ -136,9 +130,7 @@ public class CrossEncoderReranker {
                     "tokenizer_config is required for ONNX mode";
             }
             max_length = config.max_length;
-%ifndef NoMl
             onnx_model = new ML::OnnxModel(config.model_path);
-%endif
             onnx_tokenizer = new Tokenizer::HFTokenizer(config.tokenizer_config);
         }
     }
@@ -203,7 +195,6 @@ public class CrossEncoderReranker {
         @return list of float relevance scores (0.0 to 1.0)
     */
     private list<float> scoreOnnx(string query, list<string> passages) {
-%ifndef NoMl
         # Tokenize all query-passage pairs
         list<hash<auto>> encodings = ();
         foreach string passage in (passages) {
@@ -293,8 +284,6 @@ public class CrossEncoderReranker {
         }
 
         return all_scores;
-%endif
-        throw "RERANKER-ERROR", "ml module not available for ONNX inference";
     }
 
     #! Scores via HTTP endpoint

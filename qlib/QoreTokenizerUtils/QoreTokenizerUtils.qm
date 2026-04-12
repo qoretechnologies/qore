@@ -36,9 +36,7 @@
 %define NoJson
 %endtry
 
-%try-module ml
-%define NoMl
-%endtry
+%requires ml
 
 module QoreTokenizerUtils {
     version = "1.1.0";
