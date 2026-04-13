@@ -382,14 +382,70 @@ QoreValue SelfFunctionCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, E
         // When the method pointer is resolved to a non-abstract multi-variant method AND the
         // runtime class differs from the declaring class (a derived class overrides some
         // variants), name-based dispatch via exec() finds only the overriding class's
-        // variants, hiding inherited overloads.  Use the method pointer directly for correct
-        // cross-hierarchy overload resolution.  Only applies when the declaring method has
-        // multiple variants (no hiding possible with a single variant) and is not abstract
-        // (abstract methods must use virtual dispatch to reach the concrete implementation).
-        // Do NOT pass an explicit class context — let CodeEvaluationHelper use
-        // runtime_get_class() for correct access control (same as ns.size() > 1 path).
+        // variants, hiding inherited overloads.  In that case fall back to the parse-time
+        // method pointer so cross-hierarchy overload resolution still works.
+        // Only applies when the declaring method has multiple variants (no hiding possible
+        // with a single variant) and is not abstract (abstract methods must use virtual
+        // dispatch to reach the concrete implementation).
         if (method && !is_abstract && self->getClass() != method->getClass()
                 && qore_method_private::get(*method)->getFunction()->numVariants() > 1) {
+            // First try virtual dispatch: if self's class (or any ancestor between it and
+            // method's class) overrides this method, prefer the override.  Without this,
+            // calls to a base-class method from another base-class method statically bind to
+            // the base implementation even when the derived class has overridden it.
+            //
+            // Use parse-time variant signature when available to verify the override has
+            // a matching variant (covers the case where the derived class only overrides
+            // some variants of a multi-variant method).  When no parse-time variant was
+            // resolved (e.g. the call-site argument types couldn't disambiguate at parse),
+            // fall back to runtime name-based dispatch via exec(), which finds and calls
+            // the most-derived QoreMethod by name.
+            const qore_class_private* obj_priv = qore_class_private::get(*self->getClass());
+            const QoreMethod* derived = obj_priv->getMethodForEval(ns.ostr, self->getProgram(),
+                class_ctx ? class_ctx : runtime_cls, xsink);
+            if (*xsink) {
+                return QoreValue();
+            }
+            if (derived && derived != method) {
+                if (variant) {
+                    const AbstractFunctionSignature* sig = variant->getSignature();
+                    if (sig) {
+                        unsigned np = sig->numParams();
+                        const QoreFunction* dfunc = qore_method_private::get(*derived)->getFunction();
+                        QoreFunctionIterator it(*dfunc);
+                        while (it.next()) {
+                            const AbstractQoreFunctionVariant* dv = it.getVariant();
+                            const AbstractFunctionSignature* dsig = dv->getSignature();
+                            if (!dsig || dsig->numParams() != np) {
+                                continue;
+                            }
+                            bool match = true;
+                            for (unsigned i = 0; i < np; ++i) {
+                                if (!QoreTypeInfo::isInputIdentical(sig->getParamTypeInfo(i),
+                                        dsig->getParamTypeInfo(i))) {
+                                    match = false;
+                                    break;
+                                }
+                            }
+                            if (match) {
+                                return tmp_args
+                                    ? qore_method_private::evalTmpArgs(*derived, xsink, rc, self, args)
+                                    : qore_method_private::eval(*derived, xsink, rc, self, args);
+                            }
+                        }
+                    }
+                } else {
+                    // No parse-time variant — let runtime virtual dispatch resolve via the
+                    // derived QoreMethod.  If the derived QoreMethod has no variant matching
+                    // the runtime args, an exception will be raised — that's the same as
+                    // calling the method by name from outside the class.
+                    return exec(self, ns.ostr, class_ctx ? class_ctx : runtime_cls, xsink);
+                }
+            }
+            // No matching override on self's class — use the parse-time method pointer
+            // so the caller can reach inherited overloads.  Do NOT pass an explicit class
+            // context — let CodeEvaluationHelper use runtime_get_class() for correct access
+            // control (same as ns.size() > 1 path).
             return tmp_args
                 ? qore_method_private::evalTmpArgs(*method, xsink, rc, self, args)
                 : qore_method_private::eval(*method, xsink, rc, self, args);
