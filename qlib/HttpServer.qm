@@ -1624,6 +1624,28 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         });
     }
 
+    #! removes a request handler registered via @ref setHandler() by name
+    /** @param name the name the handler was registered under
+
+        @throw INVALID-HANDLER-ERROR no handler with the given name exists
+
+        @since HttpServer 1.6
+    */
+    removeHandler(string name) {
+        handlers.removeHandler(name);
+    }
+
+    #! removes a request handler registered via @ref setHandler() by reference
+    /** @param handler the handler instance to remove
+
+        @throw INVALID-HANDLER-ERROR the handler is not registered
+
+        @since HttpServer 1.6
+    */
+    removeHandler(HttpServer::AbstractHttpRequestHandler handler) {
+        handlers.removeHandler(handler);
+    }
+
     #! sets a dynamic request handler according to the arguments given
     setDynamicHandler(string name, HttpServer::AbstractUrlHandler obj) {
         dhandlers.setHandler(name, <HttpHandlerConfigInfo>{
