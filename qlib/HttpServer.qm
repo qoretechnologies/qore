@@ -584,18 +584,20 @@ public hashdecl HttpServerOptionInfo {
         or @ref Qore::Socket::waitForQuicStreamDrain() "waitForQuicStreamDrain()"
         when the buffer is full.
 
-        When @ref False "False" (the default), such streams are materialized
-        into a @ref Qore::BinaryInputStream "BinaryInputStream" on the handler
-        worker thread — safe but buffers the entire body in memory, which is
-        unsuitable for multi-GB or long-running streaming responses.
+        When @ref False "False", such streams are materialized into a
+        @ref Qore::BinaryInputStream "BinaryInputStream" on the handler
+        worker thread — safe but buffers the entire body in memory, which
+        is unsuitable for multi-GB or long-running streaming responses.
 
-        The producer path is required for enterprise integration workloads
-        (DataStream over HTTP/2 or HTTP/3, gRPC-over-Connect, any large or
-        open-ended streaming response).
+        The producer path is the default because materialization is
+        unacceptable for enterprise integration workloads (DataStream over
+        HTTP/2 or HTTP/3, gRPC-over-Connect, any large or open-ended
+        streaming response).  Set to @ref False only to force the legacy
+        path during migration / debugging.
 
         @since HttpServer 1.6
     */
-    bool use_stream_producer = False;
+    bool use_stream_producer = True;
 }
 
 #! The HttpServer class implements a multithreaded HTTP server

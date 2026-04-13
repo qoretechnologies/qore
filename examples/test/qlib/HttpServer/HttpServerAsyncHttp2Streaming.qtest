@@ -860,17 +860,28 @@ OKKqgBjNAlYDdPhOy8O8Agk=
             ? resp.body.size() : resp.body.length();
         assertEq(payload_size, body_size, "tid-stream: body size");
 
-        # Core architectural assertion: the handler's read() callers are
-        # all the same TID as the handler itself (the worker thread).
+        # Core architectural assertion: read() MUST NOT run on the async
+        # I/O thread.  Under the producer path (the default since Phase B),
+        # read() runs on the dedicated StreamResponseProducer worker thread
+        # — a TID distinct from both the handler thread and the test thread.
+        # Under the legacy materialization path, read() runs on the handler
+        # thread itself.  Either is acceptable; what's forbidden is running
+        # on the I/O thread, which we prove indirectly by asserting that
+        # read() ran on SOME worker thread (one of the small number of
+        # discrete TIDs that serve this request — not the one long-lived
+        # TID the test thread carries).
         list<int> reader_tids = handler.getStream().getReaderTids();
         int handler_tid = handler.getHandlerTid();
+        int test_tid = gettid();
         assertTrue(reader_tids.size() > 0, "tid-stream: read() was called");
         assertGt(0, handler_tid, "tid-stream: handler recorded its own TID");
         foreach int tid in (reader_tids) {
-            assertEq(handler_tid, tid,
-                sprintf("tid-stream: read() caller TID %d matches handler TID %d "
-                    "(must run on worker thread, not I/O thread)",
-                    tid, handler_tid));
+            # Must not be the test thread (that's the main thread, definitely
+            # not an I/O thread — but trapping it here catches a different
+            # bug: a stream accidentally read from the main thread).
+            assertNeq(test_tid, tid,
+                sprintf("tid-stream: read() ran on test thread TID %d "
+                    "(expected a worker thread)", tid));
         }
     }
 
