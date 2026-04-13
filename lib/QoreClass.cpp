@@ -1387,6 +1387,17 @@ QoreObject* qore_class_private::execConstructor(ExceptionSink* xsink, RuntimeCon
         return nullptr;
     }
 
+    // Guard the recursion-prone construction path before any object work.
+    // Member init expressions can instantiate the same class (see Test3 in
+    // examples/test/qore/misc/classes.qtest), and the QoreObject ctor itself
+    // does non-trivial work; a later check in initMembers lets that cost
+    // accumulate per frame and blow past the stack guard.
+#ifdef QORE_MANAGE_STACK
+    if (check_stack(xsink)) {
+        return nullptr;
+    }
+#endif
+
     // create new object
     QoreObject* self = new QoreObject(obj_cls ? obj_cls : cls, getProgram());
 

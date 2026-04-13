@@ -31,9 +31,10 @@ public namespace QoreLlmUtils {
 */
 public hashdecl LlmBackendConfig {
     #! Mode: "http" for OpenAI-compatible, "anthropic" for Anthropic Messages API,
+    #! "sglang" for SGLang servers (OpenAI-compatible + local defaults),
     #! "callback" for a custom API call function
     string mode;
-    #! Base URL of the LLM service (required for "http" and "anthropic" modes)
+    #! Base URL of the LLM service (required for "http", "anthropic", and "sglang" modes)
     *string url;
     #! Model name to pass in the request
     *string model;
@@ -211,20 +212,20 @@ public class LlmBackend {
     */
     constructor(hash<LlmBackendConfig> config) {
         mode = config.mode;
-        if (mode != "http" && mode != "anthropic" && mode != "callback") {
+        if (mode != "http" && mode != "anthropic" && mode != "sglang" && mode != "callback") {
             throw "LLM-CONFIG-ERROR",
-                sprintf("invalid mode %y; expected \"http\", \"anthropic\", or \"callback\"",
-                    mode);
+                sprintf("invalid mode %y; expected \"http\", \"anthropic\", \"sglang\", "
+                    "or \"callback\"", mode);
         }
 
-        if (mode == "http" || mode == "anthropic") {
+        if (mode == "http" || mode == "anthropic" || mode == "sglang") {
             if (!config.url.val()) {
                 throw "LLM-CONFIG-ERROR",
                     sprintf("url is required for %y mode", mode);
             }
 %ifdef NoJson
             throw "LLM-DEPENDENCY-ERROR",
-                "json module is required for HTTP/Anthropic mode but is not available";
+                "json module is required for HTTP/Anthropic/SGLang mode but is not available";
 %endif
             url = config.url;
         }
@@ -259,6 +260,7 @@ public class LlmBackend {
             *hash<auto> output_schema) {
         switch (mode) {
             case "http":
+            case "sglang":
                 return completeHttp(system_prompt, user_prompt, output_schema);
             case "anthropic":
                 return completeAnthropic(system_prompt, user_prompt, output_schema);
@@ -269,7 +271,7 @@ public class LlmBackend {
         throw "LLM-ERROR", sprintf("unsupported mode %y", mode);
     }
 
-    /** @return the configured backend mode ("http", "anthropic", or "callback") */
+    /** @return the configured backend mode ("http", "anthropic", "sglang", or "callback") */
     string getMode() {
         return mode;
     }
@@ -301,6 +303,7 @@ public class LlmBackend {
             *list<hash<ToolDefinition>> tools) {
         switch (mode) {
             case "http":
+            case "sglang":
             case "callback":
                 return chatHttp(messages, tools);
             case "anthropic":
