@@ -4445,6 +4445,8 @@ load_local_done:
                     cleanupLocalCaches();
                     return false;
                 }
+                // Constructor may call closures that modify captured variables
+                invalidateExternalCaches();
                 QoreValue out = fromBits(rv);
                 setValueSlot(values, no_inst->result.id, out, xsink);
                 if (out.hasNode()) {
