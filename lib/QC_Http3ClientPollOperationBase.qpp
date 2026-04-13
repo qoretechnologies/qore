@@ -362,6 +362,14 @@ QoreHashNode* Http3ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
                 } else {
                     action->execute(resp.release(), xsink);
                 }
+                // On end_stream for a streaming consumer (ChannelAction),
+                // close the channel so readers that call readData() again
+                // see CHANNEL-CLOSED instead of blocking forever.  H2 does
+                // this via action->complete() at the equivalent site
+                // (QC_Http2ClientPollOperationBase.qpp around line 506).
+                if (is_end && action->isStreaming()) {
+                    action->complete(xsink);
+                }
                 action->deref(xsink);
 
                 // Signal stream data ready for registered stream listeners

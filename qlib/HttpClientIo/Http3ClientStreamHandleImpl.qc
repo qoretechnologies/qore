@@ -76,6 +76,10 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
 
         #! Whether this stream is in streaming mode
         bool streaming = False;
+
+        #! Deferred end_stream sentinel: set when a channel event carries
+        #! body + end_stream together, cleared on next readData() call
+        bool pending_end_stream = False;
     }
 
     #! Creates a new stream handle
@@ -325,6 +329,14 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
                     && data_channel.empty()) {
                 throw "HTTPCLIENT-STREAM-CLOSED", "stream is closed";
             }
+            # Deliver a deferred end_stream sentinel when the previous call
+            # consumed a body+end_stream coalesced event: the body was
+            # returned then and end_stream must surface now so streaming
+            # readers see a clean completion signal.
+            if (pending_end_stream) {
+                pending_end_stream = False;
+                return {"end_stream": True};
+            }
             # NOTE: do NOT check Complete state here — the C++ ChannelAction
             # may have set Complete before all data is delivered to the channel.
             # Completion is detected via CHANNEL-CLOSED from the recv() below.
@@ -345,19 +357,26 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
                     }
                     return {"error": rv};
                 }
-                # Capture response metadata (status, headers, protocol) and
-                # end_stream completion under a single lock so getResponse()
-                # always observes a consistent state — end_stream events on
-                # H3 typically don't carry headers, so merge rather than
-                # replace to preserve earlier metadata.
-                if (rv.status_code || rv.headers || rv.end_stream) {
+                # Capture response metadata (status_code, headers, protocol)
+                # for getResponse() — H2 does this in its own readData, and
+                # DataStreamClientIo calls getResponse() to recover headers
+                # that arrive coalesced with body bytes. Do NOT merge into
+                # the response on end_stream events — H3 end_stream events
+                # carry no headers and merging wedges response delivery.
+                if ((rv.status_code || rv.headers) && !exists response) {
                     AutoLock al(lock);
-                    if (rv.status_code || rv.headers) {
-                        response = rv;
-                    }
-                    if (rv.end_stream) {
-                        state = HttpClientStreamState::Complete;
-                        response = exists response ? response + rv : rv;
+                    response = rv;
+                }
+                if (rv.end_stream) {
+                    AutoLock al(lock);
+                    state = HttpClientStreamState::Complete;
+                    # If body is coalesced with end_stream, we return the
+                    # body now and defer the end_stream sentinel to the
+                    # next call — otherwise the caller never sees the
+                    # completion signal and blocks forever on the next
+                    # readData().
+                    if (rv.body) {
+                        pending_end_stream = True;
                     }
                 }
                 # For initial response headers (no body) — return the full hash
