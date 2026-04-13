@@ -9267,21 +9267,23 @@ extern QoreClass* QC_EVENTNOTIFIER;
 //! Poll operation that delegates to the conn_mgr for startPollSendRecv/Connect
 class HttpClientConnMgrPollOp : public SocketPollOperationBase {
 public:
-    //! Constructor for sendRecv mode (or connect-waiting mode with future=nullptr)
-    //! @param priv_ref HTTPClient priv back-reference for user-disconnect detection
-    //! @param was_connecting true if the connection was still CONNECTING when
-    //!        submitted (fresh connection) — used to report initial state as
-    //!        "connecting" until first continuePoll.  false for reused pool
-    //!        connections which report "sending" immediately.
-    //! @param client_obj HTTPClient QoreObject (ref'd) — used to detect
-    //!        OBJECT-ALREADY-DELETED when the client is destroyed during poll.
+    //! Two-phase async state for sendRecv mode.
+    /** A fresh (CONNECTING) connection starts in WAITING_CONNECT; when the
+        notifier signals READY, the request is submitted and the op moves
+        to WAITING_RESPONSE.  A reused pool connection (already READY) skips
+        WAITING_CONNECT and starts in WAITING_RESPONSE.  Connect-only mode
+        (@ref connect_mode) does not use this enum — it uses the legacy
+        done/notifier path.
+    */
+    enum class Phase { WAITING_CONNECT, WAITING_RESPONSE, DONE };
+
+    //! Constructor for sendRecv mode — fast path (connection already READY)
     HttpClientConnMgrPollOp(QoreFuture* future, QoreEventNotifier* notifier,
             qore_httpclient_priv* priv_ref = nullptr,
-            bool was_connecting = false,
             QoreObject* client_obj = nullptr)
         : future(future), notifier(notifier), priv_ref(priv_ref),
-          was_connecting_at_submit(was_connecting),
-          client_obj(client_obj) {
+          client_obj(client_obj),
+          phase(Phase::WAITING_RESPONSE) {
         assert(notifier);
         if (future) {
             future->ref();
@@ -9290,6 +9292,62 @@ public:
         if (client_obj) {
             client_obj->ref();
         }
+    }
+
+    //! Constructor for sendRecv mode — async path (connection still CONNECTING)
+    /** All pending_* refs are CONSUMED (the constructor takes ownership):
+        the caller passes already-ref'd pointers and does NOT deref on
+        failure-after-this-call.  If construction itself fails (xsink only),
+        the destructor cleans up everything.
+
+        @param pending_conn connection in CONNECTING state — borrowed from
+            @a pending_mgr's pool; the poll op releases its stream reservation
+            if the op is destroyed before the request is submitted
+        @param pending_mgr back-ref for stream-reservation release
+        @param method request method (copied)
+        @param path request path (copied)
+        @param pending_headers request headers — ref CONSUMED (may be nullptr)
+        @param pending_body request body as BinaryNode — ref CONSUMED (may be
+            nullptr if no body); must own its backing buffer
+        @param pending_promise promise paired with @a future — ref CONSUMED
+        @param future future that resolves on response — poll op takes its
+            own ref
+        @param notifier event notifier used both for connection-ready wake
+            and for response completion — poll op takes its own ref
+        @param priv_ref HTTPClient priv back-reference
+        @param client_obj HTTPClient QoreObject — poll op takes its own ref
+    */
+    HttpClientConnMgrPollOp(HttpClientConnectionBase* pending_conn,
+            HttpClientConnectionManagerBase* pending_mgr,
+            std::string method, std::string path,
+            QoreHashNode* pending_headers,
+            BinaryNode* pending_body,
+            QorePromise* pending_promise,
+            QoreFuture* future, QoreEventNotifier* notifier,
+            qore_httpclient_priv* priv_ref,
+            QoreObject* client_obj)
+        : future(future), notifier(notifier), priv_ref(priv_ref),
+          client_obj(client_obj),
+          phase(Phase::WAITING_CONNECT),
+          pending_conn(pending_conn),
+          pending_mgr(pending_mgr),
+          pending_method(std::move(method)),
+          pending_path(std::move(path)),
+          pending_headers(pending_headers),
+          pending_body(pending_body),
+          pending_promise(pending_promise) {
+        assert(notifier);
+        assert(pending_conn);
+        assert(pending_mgr);
+        assert(pending_promise);
+        assert(future);
+        future->ref();
+        notifier->ref();
+        if (client_obj) {
+            client_obj->ref();
+        }
+        // pending_headers, pending_body, pending_promise refs were already
+        // consumed by the caller — no ref() here.
     }
 
     //! Constructor for connect mode (already ready — signals immediately)
@@ -9315,6 +9373,7 @@ public:
 
     ~HttpClientConnMgrPollOp() override {
         ExceptionSink xsink;
+        clearPending(&xsink);
         if (future) {
             future->deref(&xsink);
             future = nullptr;
@@ -9329,6 +9388,39 @@ public:
         }
     }
 
+    //! Releases pending-state refs and the stream reservation.
+    /** Called when the poll op is destroyed, aborted, or has successfully
+        transitioned out of WAITING_CONNECT.  After a successful submit in
+        WAITING_CONNECT → WAITING_RESPONSE, the caller nulls @ref pending_conn
+        and @ref pending_mgr because @c submitRequestWithAction releases the
+        stream reservation internally; if those pointers are still set here
+        the reservation is released.
+
+        @par Ownership contract
+        pending_headers, pending_body, pending_promise refs were consumed by
+        the WAITING_CONNECT constructor; they are owned by the poll op until
+        cleared here.
+    */
+    void clearPending(ExceptionSink* xsink) {
+        if (pending_conn && pending_mgr) {
+            pending_mgr->releaseConnection(pending_conn);
+        }
+        pending_conn = nullptr;
+        pending_mgr = nullptr;
+        if (pending_headers) {
+            pending_headers->deref(xsink);
+            pending_headers = nullptr;
+        }
+        if (pending_body) {
+            pending_body->deref();
+            pending_body = nullptr;
+        }
+        if (pending_promise) {
+            pending_promise->deref(xsink);
+            pending_promise = nullptr;
+        }
+    }
+
     void setConnectMode() { connect_mode = true; }
 
     bool goalReached() const override {
@@ -9336,16 +9428,18 @@ public:
     }
 
     QoreHashNode* continuePoll(ExceptionSink* xsink) override {
-        // First poll transitions state from "connecting" to "sending" for
-        // fresh connections (matches legacy poll op semantics).
-        first_poll_done = true;
-
         // Check if HTTPClient has been deleted (matches legacy semantics
         // where continuePoll on a poll op with a deleted client throws).
         if (client_obj && !client_obj->isValid()) {
             xsink->raiseException("OBJECT-ALREADY-DELETED",
                 "HTTPClient has been deleted; poll operation aborted");
             done = true;
+            phase = Phase::DONE;
+            // The manager and connection are owned by the HTTPClient that
+            // was just destroyed — don't dereference them.
+            pending_conn = nullptr;
+            pending_mgr = nullptr;
+            clearPending(xsink);
             return nullptr;
         }
 
@@ -9359,8 +9453,15 @@ public:
             return nullptr;
         }
 
+        // Phase 1: WAITING_CONNECT — wait for pending_conn to transition
+        // READY (then submit the request) or CLOSED (surface error).
+        if (phase == Phase::WAITING_CONNECT) {
+            return continueWaitingConnect(xsink);
+        }
+
         if (future && future->isDone()) {
             done = true;
+            phase = Phase::DONE;
             if (notifier) {
                 notifier->acknowledge(xsink);
             }
@@ -9415,8 +9516,108 @@ public:
         return getSocketPollInfoHash(xsink, SOCK_POLLIN);
     }
 
+    //! Handles WAITING_CONNECT phase.  Peeks the notifier fd; on signal,
+    //! submits the request and transitions to WAITING_RESPONSE.
+    DLLLOCAL QoreHashNode* continueWaitingConnect(ExceptionSink* xsink) {
+        // Non-blocking peek on the notifier fd.  If not yet signaled, stay
+        // in WAITING_CONNECT.
+        int fd = notifier->fd();
+        if (fd >= 0) {
+            struct pollfd pfd = {fd, POLLIN, 0};
+            int rc = ::poll(&pfd, 1, 0);
+            if (!(rc > 0 && (pfd.revents & POLLIN))) {
+                return getSocketPollInfoHash(xsink, SOCK_POLLIN);
+            }
+        }
+        notifier->acknowledge(xsink);
+
+        // Connection reached a decided state (READY or CLOSED).
+        if (pending_conn->isClosed()) {
+            // Surface the connection's error, if any.
+            ReferenceHolder<QoreHashNode> err_info(
+                pending_conn->getReferencedErrorInfo(), xsink);
+            const char* err_str = "HTTP-CLIENT-CONNECT-ERROR";
+            const char* desc_str = "connection closed before READY during poll";
+            if (err_info) {
+                QoreValue ev = err_info->getKeyValue("err");
+                QoreValue dv = err_info->getKeyValue("desc");
+                if (ev.getType() == NT_STRING) {
+                    err_str = ev.get<const QoreStringNode>()->c_str();
+                }
+                if (dv.getType() == NT_STRING) {
+                    desc_str = dv.get<const QoreStringNode>()->c_str();
+                }
+            }
+            xsink->raiseException(err_str, "%s", desc_str);
+            done = true;
+            phase = Phase::DONE;
+            clearPending(xsink);
+            return nullptr;
+        }
+
+        if (!pending_conn->isReady()) {
+            // Spurious wake (state still CONNECTING) — extremely unlikely
+            // because onConnectionReady signals only on transition.  Treat
+            // as an internal error rather than spinning.
+            xsink->raiseException("HTTPCLIENT-INTERNAL-ERROR",
+                "connection-ready notifier signaled but connection is not "
+                "in a decided state");
+            done = true;
+            phase = Phase::DONE;
+            clearPending(xsink);
+            return nullptr;
+        }
+
+        // READY: submit the request now.
+        Http1ClientConnection* h1 =
+            dynamic_cast<Http1ClientConnection*>(pending_conn);
+        if (!h1) {
+            xsink->raiseException("HTTPCLIENT-INTERNAL-ERROR",
+                "poll send/recv not supported on non-H1 connections");
+            done = true;
+            phase = Phase::DONE;
+            clearPending(xsink);
+            return nullptr;
+        }
+
+        // PromiseNotifierAction refs both promise and notifier; we still
+        // hold our own refs, which are deref'd via clearPending / ~dtor.
+        PromiseNotifierAction* action =
+            new PromiseNotifierAction(pending_promise, notifier);
+        const void* body_ptr = nullptr;
+        size_t body_len = 0;
+        if (pending_body) {
+            body_ptr = pending_body->getPtr();
+            body_len = pending_body->size();
+        }
+        int64_t stream_id = h1->submitRequestWithAction(pending_method.c_str(),
+            pending_path.c_str(), pending_headers, body_ptr, body_len,
+            action, xsink);
+        if (*xsink || stream_id < 0) {
+            // submitRequestWithAction deref'd the action on failure but did
+            // NOT release the stream reservation — clearPending does that.
+            done = true;
+            phase = Phase::DONE;
+            clearPending(xsink);
+            return nullptr;
+        }
+
+        // Successful submit: the connection has consumed its reservation
+        // (submitRequestWithAction called releaseStreamReservation
+        // internally).  Null pending_conn/mgr so clearPending does NOT
+        // double-release.  Drop the other pending refs — the future +
+        // notifier remain and will be used by WAITING_RESPONSE logic.
+        pending_conn = nullptr;
+        pending_mgr = nullptr;
+        clearPending(xsink);
+        phase = Phase::WAITING_RESPONSE;
+        return getSocketPollInfoHash(xsink, SOCK_POLLIN);
+    }
+
     void abort(ExceptionSink* xsink) override {
         done = true;
+        phase = Phase::DONE;
+        clearPending(xsink);
         cleanup(xsink);
     }
 
@@ -9526,15 +9727,15 @@ public:
         if (done) {
             return connect_mode ? "connected" : "received";
         }
-        // Report "connecting" for fresh connections until first continuePoll.
-        // This matches legacy poll op semantics where a new connection starts
-        // in "connecting" state and transitions to "sending" after the first
-        // poll iteration.  Reused pool connections skip this and go straight
-        // to "sending".
-        if (was_connecting_at_submit && !first_poll_done && !connect_mode) {
+        if (connect_mode) {
             return "connecting";
         }
-        return connect_mode ? "connecting" : "sending";
+        switch (phase) {
+            case Phase::WAITING_CONNECT:  return "connecting";
+            case Phase::WAITING_RESPONSE: return "sending";
+            case Phase::DONE:             return "received";
+        }
+        return "sending";
     }
 
     void cleanup(ExceptionSink* xsink) {
@@ -9554,18 +9755,28 @@ private:
     qore_httpclient_priv* priv_ref = nullptr;  // back-ref for user-disconnect detection
     mutable bool done = false;
     bool connect_mode = false;
-    //! True if the connection was CONNECTING when the request was submitted.
-    //! Used by getStateImpl to report "connecting" instead of "sending"
-    //! until first continuePoll call (matches legacy poll op semantics).
-    mutable bool was_connecting_at_submit = false;
-    //! True after first continuePoll — transitions state from "connecting"
-    //! to normal state reporting.
-    mutable bool first_poll_done = false;
     //! HTTPClient QoreObject (ref'd) — used to detect OBJECT-ALREADY-DELETED
     //! when the client is destroyed while the poll op is still active.
     QoreObject* client_obj = nullptr;
     std::string deferred_err;
     std::string deferred_desc;
+
+    //! Phase tracks sendRecv mode progress (WAITING_CONNECT →
+    //! WAITING_RESPONSE → DONE).  Unused for @ref connect_mode.
+    Phase phase = Phase::WAITING_RESPONSE;
+
+    //! Fields valid only while @ref phase == WAITING_CONNECT.  Cleared by
+    //! @ref clearPending when the request is submitted (or the op aborts).
+    //! pending_conn is a borrowed pool pointer (not ref'd); pending_mgr is
+    //! the back-reference used to release the stream reservation if the
+    //! request is never submitted.  headers/body/promise hold their own refs.
+    HttpClientConnectionBase* pending_conn = nullptr;
+    HttpClientConnectionManagerBase* pending_mgr = nullptr;
+    std::string pending_method;
+    std::string pending_path;
+    QoreHashNode* pending_headers = nullptr;
+    BinaryNode* pending_body = nullptr;
+    QorePromise* pending_promise = nullptr;
 };
 
 QoreObject* qore_httpclient_priv::startPollSendRecvConnMgr(ExceptionSink* xsink, QoreObject* self,
@@ -9594,22 +9805,33 @@ QoreObject* qore_httpclient_priv::startPollSendRecvConnMgr(ExceptionSink* xsink,
         return nullptr;
     }
 
-    // Acquire connection
+    // Acquire connection without waiting — a fresh connection is returned
+    // in CONNECTING state so the poll op can report "connecting" until the
+    // I/O thread finishes TCP/SSL setup.
     HttpClientConnectionManagerBase& mgr = getConnMgr(xsink);
     if (*xsink) {
         return nullptr;
     }
-    // Check pool size BEFORE acquire — if empty, acquireConnection will
-    // create a fresh connection (CONNECTING state).  Used below for state
-    // reporting (matches legacy "connecting" vs "sending" semantics).
-    int pool_size_before = mgr.getPoolSize();
-    HttpClientConnectionBase* conn = mgr.acquireConnection(scheme,
+    HttpClientConnectionBase* conn = mgr.acquireConnectionAsync(scheme,
         this_connection.host.c_str(), this_connection.port, xsink);
     if (!conn || *xsink) {
         return nullptr;
     }
 
-    // Create EventNotifier + Promise + Future
+    // H1-only for now (mirrors the old code path).  We check protocol
+    // before going any further so we don't leak a reservation on a
+    // connection type we can't drive from this code path.
+    Http1ClientConnection* h1_conn = dynamic_cast<Http1ClientConnection*>(conn);
+    if (!h1_conn) {
+        xsink->raiseException("HTTPCLIENT-INTERNAL-ERROR",
+            "poll send/recv not supported on non-H1 connections");
+        mgr.releaseConnection(conn);
+        return nullptr;
+    }
+
+    // Create EventNotifier + Promise + Future.  The notifier is used for
+    // BOTH connection-ready signaling (WAITING_CONNECT phase) and response
+    // completion (WAITING_RESPONSE phase, via PromiseNotifierAction).
     ReferenceHolder<QoreEventNotifier> notifier_holder(
         new QoreEventNotifier(xsink), xsink);
     if (*xsink || !notifier_holder->isValid()) {
@@ -9635,46 +9857,106 @@ QoreObject* qore_httpclient_priv::startPollSendRecvConnMgr(ExceptionSink* xsink,
     QoreFuture* future_raw = *future_holder;
     QoreEventNotifier* notifier_for_op = *notifier_holder;
 
-    // Fresh-connection detection: if the pool size was 0 when we acquired,
-    // acquireConnection created a new connection (which starts in CONNECTING
-    // state).  Report state as "connecting" for these fresh connections to
-    // match legacy poll op semantics.  For reused pool connections (size>0),
-    // report "sending" since the connection is already established.
-    bool was_connecting = (pool_size_before == 0);
-
-    // Wait for connection to be ready
-    conn->waitForReadyOrError(timeout, xsink);
-    if (*xsink || conn->isClosed()) {
-        if (!*xsink) {
-            xsink->raiseException("HTTP-CLIENT-CONNECT-ERROR",
-                "connection closed before poll send/recv request");
+    if (conn->isClosed()) {
+        // Rare: the connection transitioned to CLOSED between async acquire
+        // and here.  Surface the protocol error if available.
+        ReferenceHolder<QoreHashNode> err_info(
+            conn->getReferencedErrorInfo(), xsink);
+        const char* err_str = "HTTP-CLIENT-CONNECT-ERROR";
+        const char* desc_str = "connection closed before poll send/recv request";
+        if (err_info) {
+            QoreValue ev = err_info->getKeyValue("err");
+            QoreValue dv = err_info->getKeyValue("desc");
+            if (ev.getType() == NT_STRING) {
+                err_str = ev.get<const QoreStringNode>()->c_str();
+            }
+            if (dv.getType() == NT_STRING) {
+                desc_str = dv.get<const QoreStringNode>()->c_str();
+            }
         }
+        xsink->raiseException(err_str, "%s", desc_str);
         mgr.closeAndEvict(conn, xsink);
         return nullptr;
     }
 
-    Http1ClientConnection* h1_conn = dynamic_cast<Http1ClientConnection*>(conn);
-    if (!h1_conn) {
-        xsink->raiseException("HTTPCLIENT-INTERNAL-ERROR",
-            "poll send/recv not supported on non-H1 connections");
-        mgr.releaseConnection(conn);
-        return nullptr;
-    }
+    if (conn->isReady()) {
+        // Fast path: pool hit (or the controller finished the handshake
+        // between async acquire and here).  Submit synchronously, just
+        // like the pre-async implementation.
+        PromiseNotifierAction* action = new PromiseNotifierAction(
+            promise_raw, notifier_raw);
+        int64_t stream_id = h1_conn->submitRequestWithAction(method, msgpath,
+            *nh, data, size, action, xsink);
+        if (*xsink || stream_id < 0) {
+            mgr.releaseConnection(conn);
+            return nullptr;
+        }
+        poller = new HttpClientConnMgrPollOp(future_raw, notifier_for_op,
+            this, self);
 
-    PromiseNotifierAction* action = new PromiseNotifierAction(
-        promise_raw, notifier_raw);
-    int64_t stream_id = h1_conn->submitRequestWithAction(method, msgpath, *nh,
-        data, size, action, xsink);
-    if (*xsink || stream_id < 0) {
-        mgr.releaseConnection(conn);
-        return nullptr;
+        // Drop our local promise ref — the action owns one now.
+        promise_holder.release()->deref(xsink);
+    } else {
+        // Slow path: the connection is still CONNECTING.  Register the
+        // notifier for the READY/CLOSED transition and store the request
+        // parameters in the poll op for deferred submission.
+        notifier_raw->ref();
+        notifier_obj->ref();
+        bool queued = conn->registerReadyNotifier(notifier_raw, *notifier_obj);
+        if (!queued) {
+            // Race: the connection decided state between our check and the
+            // register call.  Drop our extra refs and retry the decision.
+            notifier_raw->deref(xsink);
+            notifier_obj->deref(xsink);
+            if (conn->isClosed()) {
+                ReferenceHolder<QoreHashNode> err_info(
+                    conn->getReferencedErrorInfo(), xsink);
+                const char* err_str = "HTTP-CLIENT-CONNECT-ERROR";
+                const char* desc_str = "connection closed before poll send/recv request";
+                if (err_info) {
+                    QoreValue ev = err_info->getKeyValue("err");
+                    QoreValue dv = err_info->getKeyValue("desc");
+                    if (ev.getType() == NT_STRING) {
+                        err_str = ev.get<const QoreStringNode>()->c_str();
+                    }
+                    if (dv.getType() == NT_STRING) {
+                        desc_str = dv.get<const QoreStringNode>()->c_str();
+                    }
+                }
+                xsink->raiseException(err_str, "%s", desc_str);
+                mgr.closeAndEvict(conn, xsink);
+                return nullptr;
+            }
+            // READY now — fall into the fast-path synchronous submit.
+            PromiseNotifierAction* action = new PromiseNotifierAction(
+                promise_raw, notifier_raw);
+            int64_t stream_id = h1_conn->submitRequestWithAction(method,
+                msgpath, *nh, data, size, action, xsink);
+            if (*xsink || stream_id < 0) {
+                mgr.releaseConnection(conn);
+                return nullptr;
+            }
+            poller = new HttpClientConnMgrPollOp(future_raw, notifier_for_op,
+                this, self);
+            promise_holder.release()->deref(xsink);
+        } else {
+            // Queued: build a WAITING_CONNECT poll op that will submit
+            // the request once the notifier fires.  All pending_* refs
+            // are CONSUMED by the constructor.
+            SimpleRefHolder<BinaryNode> body_holder;
+            if (data && size) {
+                body_holder = new BinaryNode();
+                body_holder->append(data, size);
+            }
+            QoreHashNode* headers_raw = nh.release();  // ref consumed
+            BinaryNode* body_raw = body_holder.release();  // nullable, ref consumed
+            QorePromise* promise_raw_consumed = promise_holder.release();
+            poller = new HttpClientConnMgrPollOp(conn, &mgr,
+                std::string(method), std::string(msgpath),
+                headers_raw, body_raw, promise_raw_consumed,
+                future_raw, notifier_for_op, this, self);
+        }
     }
-    poller = new HttpClientConnMgrPollOp(future_raw, notifier_for_op, this,
-        was_connecting, self);
-
-    // Drop our local refs — poll op constructor took its own refs
-    // Promise: action's ref (or deferred's ref) keeps it alive; drop ours
-    promise_holder.release()->deref(xsink);
 
     // Wrap in SocketPollOperation QoreObject
     SocketPollOperationBase* p = *poller;

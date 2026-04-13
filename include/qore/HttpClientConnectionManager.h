@@ -173,6 +173,32 @@ public:
         const char* scheme, const char* host, int port,
         ExceptionSink* xsink);
 
+    //! Acquires a connection without blocking for it to become READY.
+    /** Like @ref acquireConnection but, on a pool miss, returns the newly
+        created connection while it is still in CONNECTING state.  The
+        caller must wait asynchronously for the connection to become
+        READY (typically via
+        @ref AbstractHttpPollConnectionPriv::registerReadyNotifier) before
+        submitting a request.
+
+        On a pool hit, behaves identically to @ref acquireConnection — the
+        returned connection is already READY.
+
+        @param scheme URL scheme ("http" or "https")
+        @param host target hostname
+        @param port target TCP port
+        @param xsink exception sink
+
+        @return a borrowed connection pointer (do NOT @c deref); the
+            connection may be in CONNECTING or READY state.  @c nullptr
+            on error (@a xsink set).
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT virtual HttpClientConnectionBase* acquireConnectionAsync(
+        const char* scheme, const char* host, int port,
+        ExceptionSink* xsink);
+
     //! Releases a stream slot back to the pool.
     /** Decrements the connection's pending stream count.  Does NOT close
         the connection — the connection stays in the pool for reuse.
@@ -341,17 +367,31 @@ protected:
         @param host target host
         @param port target port
         @param ssl_required True for HTTPS
+        @param wait_for_ready if @c true (default), block until the new
+            connection transitions out of CONNECTING (the historical
+            behavior).  If @c false, return as soon as the connection is
+            constructed and submitted to the I/O controller — the caller
+            must wait asynchronously for the READY transition.
         @param xsink exception sink
 
         @return a new connection (caller owns one ref); @c nullptr on error
+
+        @since %Qore 2.3 @c wait_for_ready parameter
     */
     DLLLOCAL virtual HttpClientConnectionBase* createConnection(
         const std::string& key, const char* host, int port,
-        bool ssl_required, ExceptionSink* xsink);
+        bool ssl_required, ExceptionSink* xsink, bool wait_for_ready = true);
 
 private:
     HttpClientConnectionManagerBase(const HttpClientConnectionManagerBase&) = delete;
     HttpClientConnectionManagerBase& operator=(const HttpClientConnectionManagerBase&) = delete;
+
+    //! Internal: shared implementation for @ref acquireConnection and
+    //! @ref acquireConnectionAsync.  When @a wait_for_ready is @c false,
+    //! newly-created connections are returned in CONNECTING state.
+    DLLLOCAL HttpClientConnectionBase* acquireConnectionImpl(
+        const char* scheme, const char* host, int port,
+        bool wait_for_ready, ExceptionSink* xsink);
 
     //! Internal: scans the pool for a reusable connection (caller must
     //! hold a shared or unique lock).  Returns @c nullptr if no live

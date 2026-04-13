@@ -257,22 +257,25 @@ public:
     */
     DLLEXPORT HttpClientConnectionBase() = default;
 
+    //! Returns the referenced protocol-specific error hash (if any)
+    /** The returned hash has @c err (string) and @c desc (string) keys;
+        caller owns the returned ref (or nullptr if no error info is
+        available).  Called internally by @ref waitForReadyOrError, and
+        externally by async poll wrappers when the connection transitions
+        to CLOSED.
+
+        @since %Qore 2.3 made public
+    */
+    DLLLOCAL virtual QoreHashNode* getReferencedErrorInfo() {
+        return nullptr;
+    }
+
 protected:
     DLLLOCAL HttpClientConnectionBase(std::string target_host, int target_port,
             bool ssl_required)
         : target_host(std::move(target_host)),
           target_port(target_port),
           ssl_required(ssl_required) {
-    }
-
-    //! Returns the referenced protocol-specific error hash (if any)
-    /** Called by @ref waitForReadyOrError when the state transitioned to
-        CLOSED during the wait.  The returned hash has @c err (string) and
-        @c desc (string) keys; caller owns the returned ref (or nullptr if
-        no error info is available).
-    */
-    DLLLOCAL virtual QoreHashNode* getReferencedErrorInfo() {
-        return nullptr;
     }
 
     std::string target_host;

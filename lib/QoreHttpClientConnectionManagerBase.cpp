@@ -199,6 +199,17 @@ void HttpClientConnectionManagerBase::evictDeadLocked(const std::string& key) {
 
 HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnection(
         const char* scheme, const char* host, int port, ExceptionSink* xsink) {
+    return acquireConnectionImpl(scheme, host, port, /*wait_for_ready=*/true, xsink);
+}
+
+HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnectionAsync(
+        const char* scheme, const char* host, int port, ExceptionSink* xsink) {
+    return acquireConnectionImpl(scheme, host, port, /*wait_for_ready=*/false, xsink);
+}
+
+HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnectionImpl(
+        const char* scheme, const char* host, int port,
+        bool wait_for_ready, ExceptionSink* xsink) {
     // All three protocols (H1, H2, H3) are supported as of Phase P5.
 
     bool ssl_required = (strcmp(scheme, "https") == 0);
@@ -285,7 +296,8 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnection(
         // does DNS resolution + controller submission, both of which
         // can block.
         ReferenceHolder<HttpClientConnectionBase> conn(
-            createConnection(key, host, port, ssl_required, xsink), xsink);
+            createConnection(key, host, port, ssl_required, xsink,
+                wait_for_ready), xsink);
         if (*xsink || !conn) {
             return nullptr;
         }
@@ -331,7 +343,7 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnection(
 
 HttpClientConnectionBase* HttpClientConnectionManagerBase::createConnection(
         const std::string& /*key*/, const char* host, int port,
-        bool ssl_required, ExceptionSink* xsink) {
+        bool ssl_required, ExceptionSink* xsink, bool wait_for_ready) {
     // Phase P3: H1 only.  Phase P4 added H2 dispatch.  Phase P5 will
     // add H3 (Http3ClientConnection) here.
     // Pass `this` as the manager so the back-pointer is set BEFORE the
@@ -386,23 +398,28 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::createConnection(
         return nullptr;
     }
 
-    // Wait for the connection to become ready (or fail) within the
-    // configured connect timeout.
-    bool ready = conn->waitForReadyOrError(opts_.connect_timeout_ms, xsink);
-    if (!ready || *xsink) {
-        // Either timeout (no exception) or error (xsink set).  Either
-        // way, evict and return failure.
-        if (!*xsink) {
-            xsink->raiseException("HTTPCLIENT-CONNECT-ERROR",
-                "connection to %s:%d timed out after %d ms",
-                host, port, opts_.connect_timeout_ms);
+    // If the caller wants a synchronous, already-READY connection (the
+    // historical behavior), wait here.  Otherwise return immediately —
+    // the connection is already submitted to the I/O controller and the
+    // caller will wait asynchronously (typically via
+    // AbstractHttpPollConnectionPriv::registerReadyNotifier).
+    if (wait_for_ready) {
+        bool ready = conn->waitForReadyOrError(opts_.connect_timeout_ms, xsink);
+        if (!ready || *xsink) {
+            // Either timeout (no exception) or error (xsink set).  Either
+            // way, evict and return failure.
+            if (!*xsink) {
+                xsink->raiseException("HTTPCLIENT-CONNECT-ERROR",
+                    "connection to %s:%d timed out after %d ms",
+                    host, port, opts_.connect_timeout_ms);
+            }
+            conn->setManager(nullptr);
+            ExceptionSink dx;
+            conn->closeConnection(&dx);
+            conn->deref(&dx);
+            dx.clear();
+            return nullptr;
         }
-        conn->setManager(nullptr);
-        ExceptionSink dx;
-        conn->closeConnection(&dx);
-        conn->deref(&dx);
-        dx.clear();
-        return nullptr;
     }
 
     return conn;
