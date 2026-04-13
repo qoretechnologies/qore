@@ -224,6 +224,50 @@ class ExactStreamHandler inherits AbstractHttpRequestHandler {
 }
 
 #! Handler that returns a small in-memory response
+#! Handler that writes a temp file and returns a pollable FileInputStream
+/** Exercises the "pollable InputStream" delivery path: the FD is
+    registered with the async I/O controller's event loop and read
+    on-demand via non-blocking read() calls driven by readiness events.
+    Distinct from the non-I/O-thread-safe (Qore-defined) path, which uses
+    the StreamResponseProducer.
+*/
+class FileStreamHandler inherits AbstractHttpRequestHandler {
+    private {
+        string dir;
+    }
+
+    constructor(string dir) {
+        self.dir = dir;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        int size = 8192;
+        *list<*string> m = (hdr.path =~ x/file-stream\/(\d+)/);
+        if (m) {
+            size = int(m[0]);
+        }
+        string path = sprintf("%s/ioresp-%d-%d.dat", dir, gettid(), size);
+        {
+            FileOutputStream fos(path);
+            string chunk = strmul("F", min(size, 4096));
+            int written = 0;
+            while (written < size) {
+                int to_write = min(chunk.length(), size - written);
+                if (to_write < chunk.length()) {
+                    fos.write(binary(substr(chunk, 0, to_write)));
+                } else {
+                    fos.write(binary(chunk));
+                }
+                written += to_write;
+            }
+            fos.close();
+        }
+        return makeResponse(200, new FileInputStream(path), {
+            "Content-Type": "application/octet-stream",
+        });
+    }
+}
+
 class SmallHandler inherits AbstractHttpRequestHandler {
     private {
         binary payload;
@@ -248,6 +292,9 @@ class HttpServerAsyncStreamingResponseTest inherits Test {
         # Pre-generated payloads
         binary mLargePayload;
         binary mSmallPayload;
+
+        # Temporary directory for FileInputStream test fixtures
+        string mTmpDir;
 
         # Time taken for a single 3MB transfer; used to skip concurrent tests
         # that would exceed protocol timeouts under valgrind
@@ -330,6 +377,13 @@ l50Xb2GWQesIt9k5jF5IOw==
         addTestCase("HTTP/2 lying isIoThreadSafe() override rejected by C++ gate", \testH2LyingStream());
         addTestCase("HTTP/3 lying isIoThreadSafe() override rejected by C++ gate", \testH3LyingStream());
 
+        # Pollable FileInputStream streaming — exercises the I/O-thread
+        # event-loop-driven read path for each protocol
+        addTestCase("HTTP/1.x pollable FileInputStream streaming",
+            \testH1FileInputStream());
+        addTestCase("HTTP/3 pollable FileInputStream streaming",
+            \testH3FileInputStream());
+
         set_return_value(main());
     }
 
@@ -337,6 +391,20 @@ l50Xb2GWQesIt9k5jF5IOw==
         mLogger = new Logger("async-streaming-test", LoggerLevel::getLevelInfo());
         if (m_options.verbose > 2) {
             mLogger.addAppender(new StdoutAppender());
+        }
+        mTmpDir = tmp_location() + "/async-streaming-test-" + getpid();
+        mkdir(mTmpDir);
+    }
+
+    globalTearDown() {
+        if (mTmpDir) {
+            Dir d();
+            if (d.chdir(mTmpDir) == 0) {
+                foreach string f in (d.listFiles()) {
+                    try { unlink(mTmpDir + "/" + f); } catch () {}
+                }
+            }
+            try { rmdir(mTmpDir); } catch () {}
         }
     }
 
@@ -352,6 +420,7 @@ l50Xb2GWQesIt9k5jF5IOw==
         server.setHandler("short-stream", "/short-stream", NOTHING, new ShortStreamHandler());
         server.setHandler("exact-stream", "/exact-stream", NOTHING, new ExactStreamHandler(mSmallPayload));
         server.setHandler("lying-stream", "/lying-stream", NOTHING, new LyingStreamHandler(mLargePayload));
+        server.setHandler("file-stream", "/file-stream", NOTHING, new FileStreamHandler(mTmpDir));
         server.waitForAsyncIo();
 
         # Add H2-only TLS listener
@@ -783,5 +852,54 @@ l50Xb2GWQesIt9k5jF5IOw==
             ? resp.body : binary(resp.body);
         assertEq(LargePayloadSize, resp_body.size(), "H3 lying stream response body size");
         assertEq(mLargePayload, resp_body, "H3 lying stream response body matches");
+    }
+
+    #! HTTP/1.x: pollable FileInputStream streaming — the I/O thread drives
+    #! non-blocking reads from the file FD via event-loop registration.
+    /** Complements the pre-existing HTTP/2 `testFileInputStreamStreaming`
+        coverage in HttpServerAsyncHttp2Streaming.qtest; previously there
+        was no H1.x FileInputStream test.  Important for Phase E (H1.x
+        streaming response path in handleRequestResult) regression.
+    */
+    testH1FileInputStream() {
+        hash<auto> setup = createServer();
+        HttpServer server = setup.server;
+        on_exit delete server;
+
+        HTTPClient client = createH2Client(setup.port);
+        client.setHTTPVersion("1.1");
+        on_exit client.disconnect();
+
+        int size = 32768;
+        hash<auto> resp = client.send(NOTHING, "GET", "/file-stream/" + size);
+        assertEq(200, resp.status_code, "H1 file stream: status");
+        binary body = resp.body.typeCode() == NT_BINARY
+            ? resp.body : binary(resp.body);
+        assertEq(size, body.size(), "H1 file stream: body size");
+        assertEq(binary(strmul("F", size)), body, "H1 file stream: body content");
+    }
+
+    #! HTTP/3: pollable FileInputStream streaming over QUIC.
+    /** Verifies that the pollable-FD code path in the QUIC send-response
+        pipeline correctly reads file data via non-blocking I/O driven by
+        the event loop.  Complements the HTTP/2 coverage; previously no
+        H3 FileInputStream test existed.
+    */
+    testH3FileInputStream() {
+        hash<auto> setup = createServer({"enable_h3": True});
+        HttpServer server = setup.server;
+        on_exit delete server;
+
+        HttpClientIo::HttpClientConnectionManager mgr = createH3Manager();
+        on_exit delete mgr;
+
+        string url = sprintf("https://127.0.0.1:%d", setup.port);
+        int size = 32768;
+        hash<auto> resp = mgr.request(url, "GET", "/file-stream/" + size);
+        assertEq(200, resp.status_code, "H3 file stream: status");
+        binary body = resp.body.typeCode() == NT_BINARY
+            ? resp.body : binary(resp.body);
+        assertEq(size, body.size(), "H3 file stream: body size");
+        assertEq(binary(strmul("F", size)), body, "H3 file stream: body content");
     }
 }
