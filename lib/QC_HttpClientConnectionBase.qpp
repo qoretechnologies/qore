@@ -32,6 +32,10 @@
 #include "qore/Qore.h"
 #include <qore/HttpClientConnection.h>
 
+// vparent: referenced by qpp-generated addBuiltinVirtualBaseClass() call — must
+// be declared here so non-SCU builds can resolve the symbol across TUs.
+extern QoreClass* QC_ABSTRACTHTTPPOLLCONNECTION;
+
 /** @cond INTERNAL */
 
 //! C++ base for HTTP client connections — Phase P6 of the porting plan

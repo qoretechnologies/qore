@@ -60,6 +60,11 @@ class QoreObject;
 class QoreSocketObject;
 class SocketPollOperationBase;
 
+// AsyncIoController class id, defined in QC_AsyncIoController.cpp; declared here
+// so connection TUs can use getReferencedPrivateData(CID_ASYNCIOCONTROLLER, ...)
+// in non-SCU builds.
+extern qore_classid_t CID_ASYNCIOCONTROLLER;
+
 //! Lightweight async dispatcher for executing user callbacks and Qore abort() off the I/O thread
 /** Manages a small pool of Qore worker threads (with full interpreter stack) that
     execute user callbacks and Qore-language abort() calls on behalf of the I/O thread
