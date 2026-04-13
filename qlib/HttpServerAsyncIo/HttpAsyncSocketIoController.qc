@@ -2407,28 +2407,44 @@ public class HttpAsyncSocketIoController {
         # correctly.  For H2/H3 multiplexed paths, the conversion happens in
         # handleHttp2MultiplexedResult / handleHttp3MultiplexedResult.
 
-        # Materialize non-I/O-safe InputStreams into memory on the handler thread.
-        # These InputStreams (CallbackInputStream, StringInputStream etc.) cannot
-        # be read on the I/O thread because their read() calls evalMethod().
-        # Replace with BinaryInputStream (I/O-safe) so the fused paths below
-        # can handle them — preserving chunked encoding semantics.
+        # Non-I/O-thread-safe InputStream response body: sync-stream it on
+        # this handler pool thread via sendHTTPResponseWithCallback.  H1.x
+        # is one-connection-per-handler while in-flight, so the async I/O
+        # controller doesn't touch this socket until we hand it back via
+        # addIdleConnection() (keep-alive) or close it.  read() runs on
+        # this handler pool worker — never on the async I/O thread —
+        # preserving the architectural rule.
+        #
+        # This replaces the previous "materialize on handler thread, then
+        # submit I/O-thread streaming poll op" pattern, which buffered the
+        # whole body in memory.  True streaming with bounded memory.
         if (result.input_stream && !result.input_stream.isIoThreadSafe()) {
+            string status_msg = result.status_message ?? "Unknown";
+            timeout send_timeout = result.send_timeout ?? 30s;
             InputStream is = result.input_stream;
-            is.reassignThread();
-            binary buf;
-            while (*binary chunk = is.read(65536)) {
-                buf += chunk;
+            try {
+                is.reassignThread();
+                sock.sendHTTPResponseWithCallback(
+                    auto sub () { return is.read(65536); },
+                    result.code, status_msg, "1.1", result.hdr ?? {}, send_timeout);
+            } catch (hash<ExceptionInfo> ex) {
+                log(LoggerLevel::ERROR,
+                    "HTTP/1.x stream send error for %y: %s: %s", uh, ex.err, ex.desc);
+                try { is.unassignThread(); } catch () {}
+                try { sock.close(); } catch () {}
+                return;
             }
-            is.unassignThread();
-            if (buf.size() > 0) {
-                result.input_stream = new BinaryInputStream(buf);
-            } else {
-                # Empty stream — remove InputStream and Transfer-Encoding so
-                # the plain body path sends a response (empty body → 200/204)
-                remove result.input_stream;
-                remove result.hdr."Transfer-Encoding";
-                remove result.chunked;
+            try { is.unassignThread(); } catch () {}
+            remove result.input_stream;
+
+            # Response fully sent.  Either keep-alive or close.
+            if (result.close || !result.return_to_idle || !sock.isOpen()) {
+                try { sock.shutdown(); sock.close(); } catch () {}
+                return;
             }
+            timeout ttl = result.ttl ?? DefaultIdleTimeout;
+            addIdleConnection(sock, linfo.listener, cx, target, ttl);
+            return;
         }
 
         # Opt #3a: InputStream + keep-alive → fused stream send + idle + read header
