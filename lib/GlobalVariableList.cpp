@@ -71,9 +71,14 @@ Var* GlobalVariableList::import(Var* v, ExceptionSink* xsink, bool readonly, con
     }
 
     Var* var = new Var(v, readonly, false, import_as);
-    vmap[name] = var;
+    // vmap keys are raw const char*, so they must outlive every entry.  The
+    // new Var's name is a std::string copied from import_as/v->getName() and
+    // lives as long as the Var itself — use var->getName() instead of the
+    // caller-supplied `import_as` pointer (which is typically a transient
+    // TempEncodingHelper buffer that becomes dangling after the call).
+    vmap[var->getName()] = var;
 
-    printd(5, "GlobalVariableList::import(): reference to %s (%p) added\n", name, var);
+    printd(5, "GlobalVariableList::import(): reference to %s (%p) added\n", var->getName(), var);
     return var;
 }
 
