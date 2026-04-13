@@ -212,6 +212,10 @@ public:
 
     QoreObject* obj;
 
+    //! Unique hash computed once at construction — stable for the object's
+    //! lifetime and globally unique even when malloc reuses addresses.
+    QoreStringNode* unique_hash;
+
     DLLLOCAL qore_object_private(QoreObject* n_obj, const QoreClass *oc, QoreProgram* p, QoreHashNode* n_data);
 
     DLLLOCAL ~qore_object_private();

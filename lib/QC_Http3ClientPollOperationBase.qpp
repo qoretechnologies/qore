@@ -345,7 +345,31 @@ QoreHashNode* Http3ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
                 // Copy before modifying — output may be referenced elsewhere
                 ReferenceHolder<QoreHashNode> resp(output->copy(), xsink);
                 resp->setKeyValue("protocol", new QoreStringNode("h3"), xsink);
-                action->execute(resp.release(), xsink);
+
+                // Check for stream-level error (e.g. peer RESET_STREAM) and
+                // dispatch as executeError() so the Promise resolves to an
+                // exception rather than an empty "successful" response.
+                // Without this, callers cannot distinguish peer-reset from
+                // empty response — leading to silent data loss.
+                const QoreStringNode* err_str =
+                    resp->getKeyValue("err").get<const QoreStringNode>();
+                const QoreStringNode* desc_str =
+                    resp->getKeyValue("desc").get<const QoreStringNode>();
+                if (err_str) {
+                    std::string err_copy = err_str->c_str();
+                    std::string desc_copy = desc_str ? desc_str->c_str() : "";
+                    action->executeError(err_copy.c_str(), desc_copy.c_str(), xsink);
+                } else {
+                    action->execute(resp.release(), xsink);
+                }
+                // On end_stream for a streaming consumer (ChannelAction),
+                // close the channel so readers that call readData() again
+                // see CHANNEL-CLOSED instead of blocking forever.  H2 does
+                // this via action->complete() at the equivalent site
+                // (QC_Http2ClientPollOperationBase.qpp around line 506).
+                if (is_end && action->isStreaming()) {
+                    action->complete(xsink);
+                }
                 action->deref(xsink);
 
                 // Signal stream data ready for registered stream listeners

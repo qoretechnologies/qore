@@ -59,6 +59,10 @@ public class Http2ClientStreamHandle inherits HttpClientStreamHandle {
 
         #! Typed reference to the H2 connection (for streaming methods)
         Http2ClientConnection h2conn;
+
+        #! Deferred end_stream sentinel: set when a channel event carries
+        #! body + end_stream together, cleared on next readData() call
+        bool pending_end_stream = False;
     }
 
     #! Creates a new stream handle
@@ -175,6 +179,14 @@ public class Http2ClientStreamHandle inherits HttpClientStreamHandle {
                     && data_channel.empty()) {
                 throw "HTTPCLIENT-STREAM-CLOSED", "stream is closed";
             }
+            # Deliver a deferred end_stream sentinel when the previous call
+            # consumed a body+end_stream coalesced event: the body was
+            # returned then and end_stream must surface now so streaming
+            # readers see a clean completion signal.
+            if (pending_end_stream) {
+                pending_end_stream = False;
+                return {"end_stream": True};
+            }
         }
         # For Complete, state is set before end_stream is enqueued; use isClosed()
         # to detect when all data (including end_stream) has been delivered to the
@@ -189,13 +201,19 @@ public class Http2ClientStreamHandle inherits HttpClientStreamHandle {
             # The poll operation pushes raw output hashes to the channel.
             # Extract body data and detect end_stream/error for the caller.
             if (rv.typeCode() == NT_HASH) {
-                if (rv.error) {
+                # ChannelAction::executeError pushes {err, desc} (no nested
+                # "error" key), so match on `rv.err` — the same check H3
+                # uses in its readData().  Previously the code looked for
+                # rv.error which never exists on cancel-pushed errors, so
+                # cancel-generated hashes fell through to the
+                # "unrecognized metadata" path and state stayed non-Error.
+                if (rv.err) {
                     {
                         AutoLock al(lock);
-                        error_info = rv.error;
+                        error_info = rv;
                         state = HttpClientStreamState::Error;
                     }
-                    return {"error": rv.error};
+                    return {"error": rv};
                 }
                 # State transitions (monotonically forward)
                 {
@@ -210,6 +228,12 @@ public class Http2ClientStreamHandle inherits HttpClientStreamHandle {
                     if (rv.end_stream && state < HttpClientStreamState::Complete) {
                         state = HttpClientStreamState::Complete;
                         response = rv;
+                        # If body is coalesced with end_stream, return body
+                        # now and defer the end_stream sentinel so the
+                        # caller doesn't lose the completion signal.
+                        if (rv.body) {
+                            pending_end_stream = True;
+                        }
                     }
                 }
                 # Return body data extracted from the hash

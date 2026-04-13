@@ -140,9 +140,21 @@ static int64 get_epoch_us() {
     return secs * 1000000LL + us;
 }
 
+// --- SocketPollOperationBase::wakeIoThread ---
+
+void SocketPollOperationBase::wakeIoThread(ExceptionSink* xsink) {
+    if (io_controller && io_sock_obj) {
+        io_controller->wakeSocketByObject(io_sock_obj, xsink);
+    }
+}
+
 // --- PollInfo implementation ---
 
 void AsyncIoControllerPriv::PollInfo::cleanup(ExceptionSink* xsink) {
+    // Clear controller back-reference before dereffing
+    if (spop_base) {
+        spop_base->setIoController(nullptr, nullptr);
+    }
     if (sock_obj) {
         sock_obj->deref(xsink);
         sock_obj = nullptr;
@@ -526,6 +538,14 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
         if (async_item.args) {
             async_item.args->deref(xsink);
         }
+
+        // Clear all thread-local data (program tld hash + thread_local vars + thread
+        // resources) to prevent data from leaking between unrelated tasks on the same
+        // worker thread.  This is the async I/O equivalent of the HTTP server's
+        // clearContextInfo() call after each request.
+        // NOTE: must be after all object derefs above, because destructors may run
+        // Qore code that accesses thread-local data.
+        clear_all_program_thread_local_data();
 
         // Decrement per-program and per-dispatcher counters BEFORE the final
         // program deref.  If this worker is holding the last reference to
@@ -1050,6 +1070,7 @@ bool AsyncIoControllerPriv::cancelByKey(const QoreStringNode* key, ExceptionSink
 
 int AsyncIoControllerPriv::cancelByOwner(const QoreStringNode* owner, ExceptionSink* xsink) {
     std::string owner_str(owner->c_str());
+
     bool do_signal = false;
     int count = 0;
     std::vector<PollInfo> direct_pinfos;
@@ -1868,11 +1889,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
 
         // Merge deferred SSL hashes into ready set — these were posted by the
         // previous iteration's Phase 3 when continuePoll left SSL-buffered data.
-        // Track which hashes were deferred to avoid re-deferring the same socket
-        // (which would cause a busy loop for partial SSL/TLS records)
-        std::unordered_set<std::string> already_deferred;
         if (!ssl_deferred_hashes.empty()) {
-            already_deferred = ssl_deferred_hashes;
             ready_socket_hashes.insert(ssl_deferred_hashes.begin(), ssl_deferred_hashes.end());
             ssl_deferred_hashes.clear();
         }
@@ -2383,9 +2400,24 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                             sock_hash = pinfo.cached_sock_hash;
                         }
 
-                        // Defer SSL pending check to next iteration (nginx pattern)
-                        if (pinfo.sock && pinfo.sock->hasPendingData()
-                                && !already_deferred.count(sock_hash)) {
+                        // Defer SSL pending check to next iteration (nginx pattern).
+                        // We always re-defer when hasPendingData() is true — the
+                        // previous `already_deferred` guard was too aggressive:
+                        // it blocked re-deferring after a single extra iteration,
+                        // but HTTP/2 sessions can have pending protocol work
+                        // (WINDOW_UPDATE, SETTINGS_ACK via wantWrite()) that
+                        // requires multiple iterations to flush.  Without re-
+                        // deferring, the peer stalls waiting for flow control
+                        // credits and the connection deadlocks.
+                        //
+                        // Busy-loop prevention: ssl_deferred_hashes triggers
+                        // poll(timeout_ms=0), but hasPendingData() returns false
+                        // as soon as the pending work is flushed, so the loop is
+                        // self-terminating.  For true partial-TLS-record scenarios
+                        // (SSL_pending>0 but not enough for a complete H2 frame),
+                        // continuePoll will read the remaining bytes, clearing
+                        // SSL_pending, and subsequent iterations won't re-defer.
+                        if (pinfo.sock && pinfo.sock->hasPendingData()) {
                             ssl_deferred_hashes.insert(sock_hash);
                         }
 
@@ -2423,7 +2455,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
             }
 
             // Re-queue ready sockets that returned poll_info (try again).
-            // On macOS, kqueue's EVFILT_WRITE for non-blocking connect is
+            // On macOS/BSD, kqueue's EVFILT_WRITE for non-blocking connect is
             // effectively edge-triggered: the event fires once when the
             // connect completes, then won't re-fire.  The poll operation's
             // internal check (asyncIoWait with a separate kqueue instance +
@@ -2434,16 +2466,26 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
             // (not ssl_deferred_hashes) to bypass the already_deferred
             // guard — the connect will succeed within a few iterations,
             // making this self-terminating.
+            //
+            // On Linux (epoll level-triggered), this re-queue is
+            // counterproductive: epoll reliably fires again whenever the fd
+            // is still writable, so manually re-queuing just causes a busy
+            // loop.  Concretely: QUIC server ops routinely return
+            // events=POLLIN|POLLOUT because they always want to try sending
+            // queued packets; re-queuing them every iteration tight-spins
+            // until the packet batch drains.  Level-triggered epoll already
+            // does the right thing for POLLOUT on Linux, so skip the
+            // workaround there.
+#if defined(__APPLE__) || defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__) || defined(__DragonFly__)
             for (auto& result : poll_results) {
                 if (result.was_ready && result.new_poll_info && !result.completed
                         && !result.ex_hash) {
-                    // Only re-queue for POLLOUT (non-blocking connect completion).
-                    // POLLIN operations (reading on established connections) work
-                    // correctly with level-triggered kqueue and must NOT be
-                    // re-queued — doing so creates a busy loop that starves other
-                    // operations (e.g., WebSocket message delivery).
+                    // Only re-queue for POLLOUT-only (non-blocking connect
+                    // completion).  Ops that also want POLLIN will be
+                    // re-triggered by the POLLIN side; re-queuing them here
+                    // starves other operations.
                     int events = (int)result.new_poll_info->getKeyValue("events").getAsBigInt();
-                    if (events & SOCK_POLLOUT) {
+                    if ((events & SOCK_POLLOUT) && !(events & SOCK_POLLIN)) {
                         auto it = t.cache.find(result.key);
                         if (it != t.cache.end() && !it->second.cached_sock_hash.empty()) {
                             t.wake_socket_hashes.insert(it->second.cached_sock_hash);
@@ -2451,6 +2493,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                     }
                 }
             }
+#endif
 
             // Check autostop (only if no deliveries pending — recheck after delivery)
             // cache and cmdq are I/O-thread-only; timer_info_map/autostop_flag need lock.
@@ -2587,10 +2630,24 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                 timeout_ms = 0;
             } else {
                 timeout_ms = (int)(remaining_us / 1000);
-                // When remaining_us < 1000, timeout_ms truncates to 0.
-                // This is correct: the deadline is sub-millisecond away,
-                // so poll immediately rather than oversleeping by up to 1ms.
-                // Not a busy loop — only triggers with a real pending deadline.
+                if (timeout_ms == 0) {
+                    timeout_ms = 1;
+                }
+            }
+        }
+
+        // Catch up processed_seq before blocking in poll.  Worker-thread submit()
+        // increments submit_seq AFTER pushing the command and notifying, so the
+        // Phase 1 snapshot (processed_seq = submit_seq) can read a stale value
+        // if the I/O thread processes the command before the worker increments.
+        // Without this re-check, poll(-1) would block indefinitely and
+        // waitForProcessing() would time out.
+        {
+            AutoLocker al(m);
+            int current_submit = submit_seq.load(std::memory_order_acquire);
+            if (processed_seq < current_submit && t.cmdq.empty()) {
+                processed_seq = current_submit;
+                processed_cond.broadcast();
             }
         }
 
@@ -3034,7 +3091,9 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                         }
                     }
 
-                    // Cancel each one
+                    // Cancel each one and record cancelled keys so SubmitOp can
+                    // reject stale re-submissions from callbacks that raced with
+                    // this cancel.  Entries auto-expire after 2 idle cycles.
                     int local_count = 0;
                     for (auto& key : keys) {
                         PollInfo pinfo_copy;
@@ -3064,6 +3123,7 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                         }
 
                         if (found) {
+                            t.cancelled_keys[key] = 2;
                             doCancelIntern(pinfo_copy, xsink);
                             pinfo_copy.cleanup(xsink);
                         }
@@ -3072,6 +3132,15 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                             delete cond;
                         }
                     }
+
+                    // Always record this owner as recently cancelled, even when no
+                    // matching entries were in the cache.  This covers the race where
+                    // cancelByOwner() runs BEFORE submitConnectionOp() inserts the
+                    // entry: SubmitOp will detect the cancelled owner and dispatch
+                    // onComplete(canceled=true) immediately instead of silently
+                    // inserting an operation that will never be cancelled.
+                    // I/O-thread-only — no locking needed.
+                    t.cancelled_owners[cmd.owner] = 2;
 
                     // Report actual cancel count
                     if (cmd.cancel_count) {
@@ -3202,6 +3271,59 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                 }
 
                 case IoCommand::SubmitOp: {
+                    // Reject stale re-submissions for recently-cancelled keys
+                    auto ck_it = t.cancelled_keys.find(cmd.key);
+                    if (ck_it != t.cancelled_keys.end()) {
+                        ck_it->second = 2;
+                        if (cmd.submit_sock) { cmd.submit_sock->deref(xsink); }
+                        if (cmd.submit_sock_obj) { cmd.submit_sock_obj->deref(xsink); }
+                        if (cmd.submit_spop_obj) { cmd.submit_spop_obj->deref(xsink); }
+                        if (cmd.submit_spop_base) { cmd.submit_spop_base->deref(xsink); }
+                        if (cmd.submit_poll_info) { cmd.submit_poll_info->deref(xsink); }
+                        if (cmd.submit_other) { cmd.submit_other->deref(xsink); }
+                        if (cmd.submit_queue) { cmd.submit_queue->deref(xsink); }
+                        break;
+                    }
+                    // Detect the cancelByOwner-before-submit race: if this owner
+                    // was cancelled (even when the cache was empty at cancel time),
+                    // dispatch onComplete(canceled=true) immediately instead of
+                    // inserting an entry that will never be cancelled.
+                    {
+                        auto co_it = t.cancelled_owners.find(cmd.owner);
+                        if (co_it != t.cancelled_owners.end()) {
+                            // Reset TTL — keep blocking further submits for this owner
+                            co_it->second = 2;
+                            // Also block key-based re-submissions
+                            t.cancelled_keys[cmd.key] = 2;
+                            // Build a PollInfo from the submit payload so
+                            // doCancelIntern() can fire the action's abort and
+                            // dispatch onComplete(canceled=true) to the caller.
+                            PollInfo pinfo;
+                            pinfo.sock_obj = cmd.submit_sock_obj;
+                            pinfo.sock = cmd.submit_sock;
+                            pinfo.spop_obj = cmd.submit_spop_obj;
+                            pinfo.spop_base = cmd.submit_spop_base;
+                            pinfo.poll_info = cmd.submit_poll_info;
+                            pinfo.other = cmd.submit_other;
+                            pinfo.queue = cmd.submit_queue;
+                            pinfo.timeout_us = cmd.submit_timeout_us;
+                            pinfo.owner = cmd.owner;
+                            pinfo.has_qore_abort = cmd.submit_has_qore_abort;
+                            pinfo.has_qore_on_complete = cmd.submit_has_qore_on_complete;
+                            // Null command fields to prevent double-deref on
+                            // command destruction — pinfo.cleanup() owns them now.
+                            cmd.submit_sock_obj = nullptr;
+                            cmd.submit_sock = nullptr;
+                            cmd.submit_spop_obj = nullptr;
+                            cmd.submit_spop_base = nullptr;
+                            cmd.submit_poll_info = nullptr;
+                            cmd.submit_other = nullptr;
+                            cmd.submit_queue = nullptr;
+                            doCancelIntern(pinfo, xsink);
+                            pinfo.cleanup(xsink);
+                            break;
+                        }
+                    }
                     // Worker thread submitted an operation — insert into cache
                     // (cache is I/O-thread-only, no lock needed)
                     if (cmd.submit_replace) {
@@ -3241,6 +3363,11 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                     pinfo.timeout_date_us = 0;
                     pinfo.has_qore_abort = cmd.submit_has_qore_abort;
                     pinfo.has_qore_on_complete = cmd.submit_has_qore_on_complete;
+
+                    // Set controller back-reference so wakeIoThread() works
+                    if (pinfo.spop_base) {
+                        pinfo.spop_base->setIoController(this, pinfo.sock_obj);
+                    }
 
                     // Queue for first continuePoll in Phase 1
                     t.new_entry_keys.push_back(cmd.key);
@@ -3403,6 +3530,30 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
         // Check if new commands arrived during processing/acknowledge
         if (t.cmdq.empty()) {
             break;
+        }
+    }
+
+    // Age out cancelled_keys — decrement TTL and erase expired entries
+    if (!t.cancelled_keys.empty()) {
+        auto it = t.cancelled_keys.begin();
+        while (it != t.cancelled_keys.end()) {
+            if (--(it->second) <= 0) {
+                it = t.cancelled_keys.erase(it);
+            } else {
+                ++it;
+            }
+        }
+    }
+
+    // Age out cancelled_owners — same TTL semantics as cancelled_keys
+    if (!t.cancelled_owners.empty()) {
+        auto it = t.cancelled_owners.begin();
+        while (it != t.cancelled_owners.end()) {
+            if (--(it->second) <= 0) {
+                it = t.cancelled_owners.erase(it);
+            } else {
+                ++it;
+            }
         }
     }
 
@@ -3912,9 +4063,7 @@ void AsyncIoControllerPriv::log(int level, const char* fmt, ...) const {
 }
 
 std::string AsyncIoControllerPriv::getSocketHash(AbstractPollableIoObjectBase* sock) {
-    QoreString str;
-    qore_get_ptr_hash(str, sock);
-    return std::string(str.c_str());
+    return sock->getUniqueHash();
 }
 
 QoreObject* AsyncIoControllerPriv::getSocketFromPollInfo(QoreHashNode* poll_info,

@@ -83,6 +83,15 @@ public class MLProcessorsDataProvider inherits DataProvider::AbstractDataProvide
         Children."tokenize" = "QoreTokenizeProcessor";
         Children."chunk-text" = "QoreChunkTextProcessor";
         Children."embed-text" = "QoreEmbedTextProcessor";
+        Children."extract-structured" = "QoreExtractionProcessor";
+        Children."rerank-text" = "QoreRerankerProcessor";
+        Children."semantic-chunk-text" = "QoreSemanticChunkProcessor";
+        Children."guardrail-filter" = "QoreGuardrailFilterProcessor";
+        Children."guardrail-transform" = "QoreGuardrailTransformProcessor";
+        Children."ocr" = "QoreOcrProcessor";
+        Children."pdf-ocr" = "QorePdfOcrProcessor";
+        Children."document-ocr" = "QoreDocumentOcrProcessor";
+        Children."vision-extraction" = "QoreVisionExtractionProcessor";
     }
 
     #! Returns the name of this data provider
@@ -180,6 +189,24 @@ public class MLProcessorsDataProvider inherits DataProvider::AbstractDataProvide
                 return new QoreChunkTextProcessor();
             case "embed-text":
                 return new QoreEmbedTextProcessor();
+            case "extract-structured":
+                return new QoreExtractionProcessor();
+            case "rerank-text":
+                return new QoreRerankerProcessor();
+            case "semantic-chunk-text":
+                return new QoreSemanticChunkProcessor();
+            case "guardrail-filter":
+                return new QoreGuardrailFilterProcessor();
+            case "guardrail-transform":
+                return new QoreGuardrailTransformProcessor();
+            case "ocr":
+                return new QoreOcrProcessor();
+            case "pdf-ocr":
+                return new QorePdfOcrProcessor();
+            case "document-ocr":
+                return new QoreDocumentOcrProcessor();
+            case "vision-extraction":
+                return new QoreVisionExtractionProcessor();
         }
     }
 }

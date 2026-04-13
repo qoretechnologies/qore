@@ -201,3 +201,111 @@ hash<auto> HFTokenizer::encodePreTokenized(list<string> words, *hash<auto> optio
 int HFTokenizer::addTokens(list<auto> tokens) {
     return tok->addTokens(tokens, xsink);
 }
+
+//! Returns the EOS (end of sequence) token ID
+/** @return the EOS token ID, or -1 if not found
+
+    @since tokenizer 1.0
+*/
+int HFTokenizer::getEosTokenId() [flags=CONSTANT] {
+    return tok->getEosTokenId();
+}
+
+//! Returns the BOS (beginning of sequence) token ID
+/** @return the BOS token ID, or -1 if not found
+
+    @since tokenizer 1.0
+*/
+int HFTokenizer::getBosTokenId() [flags=CONSTANT] {
+    return tok->getBosTokenId();
+}
+
+//! Returns the CLS (classification) token ID
+/** @return the CLS token ID, or -1 if not found (typically used by BERT models)
+
+    @since tokenizer 1.0
+*/
+int HFTokenizer::getClsTokenId() [flags=CONSTANT] {
+    return tok->getClsTokenId();
+}
+
+//! Returns the SEP (separator) token ID
+/** @return the SEP token ID, or -1 if not found (typically used by BERT models)
+
+    @since tokenizer 1.0
+*/
+int HFTokenizer::getSepTokenId() [flags=CONSTANT] {
+    return tok->getSepTokenId();
+}
+
+//! Returns the UNK (unknown) token ID
+/** @return the UNK token ID, or -1 if not found
+
+    @since tokenizer 1.0
+*/
+int HFTokenizer::getUnkTokenId() [flags=CONSTANT] {
+    return tok->getUnkTokenId();
+}
+
+//! Returns the model's maximum sequence length
+/** @return the max sequence length from tokenizer_config.json, or -1 if not loaded
+
+    @since tokenizer 1.0
+*/
+int HFTokenizer::getModelMaxLength() [flags=CONSTANT] {
+    return tok->getModelMaxLength();
+}
+
+//! Decodes a batch of token ID sequences back to text
+/** @param batch list of token ID lists to decode
+    @param skip_special_tokens whether to skip special tokens (default False)
+    @return list of decoded text strings
+
+    @since tokenizer 1.0
+*/
+list<string> HFTokenizer::decodeBatch(list<auto> batch, softbool skip_special_tokens = False) {
+    return tok->decodeBatch(batch, (bool)skip_special_tokens, xsink);
+}
+
+//! Loads additional configuration from a parsed tokenizer_config.json
+/** Extracts special token overrides (eos_token, bos_token, etc.),
+    model_max_length, and chat_template from the config hash.
+
+    @param config a parsed tokenizer_config.json hash
+
+    @par Example:
+    @code{.py}
+    hash<auto> tc = parse_json(ReadOnlyFile::readTextFile("tokenizer_config.json"));
+    tok.loadConfig(tc);
+    printf("Max length: %d\n", tok.getModelMaxLength());
+    @endcode
+
+    @since tokenizer 1.0
+*/
+nothing HFTokenizer::loadConfig(hash<auto> config) {
+    tok->loadConfig(config, xsink);
+}
+
+//! Applies the chat template to format messages for the model
+/** Uses the chat_template from tokenizer_config.json to format a list of
+    role/content message pairs into the prompt format expected by the model.
+
+    @param messages list of hashes with \c role and \c content keys
+    @return the formatted prompt string ready for tokenization
+
+    @throw TOKENIZER-ERROR if no chat_template is configured
+
+    @par Example:
+    @code{.py}
+    string prompt = tok.applyChatTemplate((
+        {"role": "system", "content": "You are helpful."},
+        {"role": "user", "content": "Hello!"},
+    ));
+    hash<auto> enc = tok.encode(prompt);
+    @endcode
+
+    @since tokenizer 1.0
+*/
+string HFTokenizer::applyChatTemplate(list<auto> messages) {
+    return tok->applyChatTemplate(messages, xsink);
+}

@@ -1434,44 +1434,34 @@ public class HttpAsyncSocketIoController {
                     remove result.hdr."Transfer-Encoding";
                 }
 
-                # Materialize non-I/O-thread-safe InputStreams into memory.
-                # Handler threads must NEVER do blocking socket I/O on multiplexed
-                # connections — the I/O thread needs the socket/session mutex to
-                # process incoming data, and blocking sends cause deadlock.
-                if (result.input_stream && !result.input_stream.isIoThreadSafe()) {
-                    result.input_stream.reassignThread();
-                    binary buf;
-                    while (*binary chunk = result.input_stream.read(65536)) {
-                        buf += chunk;
-                    }
-                    result.input_stream.unassignThread();
-                    if (buf.size() > 0) {
-                        result.input_stream = new BinaryInputStream(buf);
-                    } else {
-                        remove result.input_stream;
-                        result.body = NOTHING;
-                    }
-                }
-
+                # InputStream response body: try the fast path
+                # (submit*StreamingResponseWithStream), which delegates to
+                # the C++ vtable's isIoThreadSafe() check — that gate is the
+                # authoritative one (Qore subclass overrides of
+                # isIoThreadSafe() do NOT propagate to the C++ vtable).  If
+                # the gate rejects (rv=1), the stream is truly unsafe for
+                # the I/O thread — spawn a StreamResponseProducer to drain
+                # it on a worker thread without materialization.
                 if (result.input_stream) {
                     hash<auto> resp_hdr = result.hdr ?? {};
                     remove resp_hdr."Transfer-Encoding";
                     int rv = cinfo.sock.submitQuicStreamingResponseWithStream(
                         session_id, stream_id, result.code, resp_hdr, result.input_stream);
                     if (!rv) {
+                        # Memory-backed stream — I/O thread drives it.
                         controller.wakeSocket(cinfo.sock);
                     } else {
-                        # C++ gate rejected — materialize and fall through to body path
-                        log(LoggerLevel::DEBUG, "HTTP/3 stream %d: InputStream submit "
-                            "rejected (rv=%d), materializing", stream_id, rv);
-                        result.input_stream.reassignThread();
-                        binary buf;
-                        while (*binary chunk = result.input_stream.read(65536)) {
-                            buf += chunk;
-                        }
+                        # C++ gate rejected: non-I/O-thread-safe stream.
+                        # Spawn a producer worker to push DATA frames.
+                        cinfo.sock.submitQuicResponseStreaming(session_id, stream_id,
+                            result.code, resp_hdr);
                         result.input_stream.unassignThread();
-                        cinfo.sock.submitQuicResponse(session_id, stream_id, result.code,
-                            result.hdr, buf);
+                        code<nothing()> wake_fn = sub () {
+                            controller.wakeSocket(cinfo.sock);
+                        };
+                        HttpServer::StreamResponseProducer producer(cinfo.sock,
+                            stream_id, session_id, result.input_stream, wake_fn);
+                        producer.start();
                         controller.wakeSocket(cinfo.sock);
                     }
                 } else {
@@ -1718,6 +1708,14 @@ public class HttpAsyncSocketIoController {
                 if (cinfo.state != HttpConnectionState::Http3
                         && cinfo.state != HttpConnectionState::Http3Sending) {
                     try { cinfo.sock.close(); } catch () {}
+                }
+                # Signal the stream_op as completed so any handler thread
+                # waiting in done.waitForZero() can unblock.
+                # setCompletionContext() has not been called yet (only called
+                # inside submitConnectionOpIntern), so onComplete() will NOT
+                # trigger handleConnectionResult() — it just signals done.
+                if (cinfo.stream_op) {
+                    cinfo.stream_op.onComplete(<SocketPollResultInfo>{});
                 }
                 return;
             }
@@ -2417,28 +2415,44 @@ public class HttpAsyncSocketIoController {
         # correctly.  For H2/H3 multiplexed paths, the conversion happens in
         # handleHttp2MultiplexedResult / handleHttp3MultiplexedResult.
 
-        # Materialize non-I/O-safe InputStreams into memory on the handler thread.
-        # These InputStreams (CallbackInputStream, StringInputStream etc.) cannot
-        # be read on the I/O thread because their read() calls evalMethod().
-        # Replace with BinaryInputStream (I/O-safe) so the fused paths below
-        # can handle them — preserving chunked encoding semantics.
+        # Non-I/O-thread-safe InputStream response body: sync-stream it on
+        # this handler pool thread via sendHTTPResponseWithCallback.  H1.x
+        # is one-connection-per-handler while in-flight, so the async I/O
+        # controller doesn't touch this socket until we hand it back via
+        # addIdleConnection() (keep-alive) or close it.  read() runs on
+        # this handler pool worker — never on the async I/O thread —
+        # preserving the architectural rule.
+        #
+        # This replaces the previous "materialize on handler thread, then
+        # submit I/O-thread streaming poll op" pattern, which buffered the
+        # whole body in memory.  True streaming with bounded memory.
         if (result.input_stream && !result.input_stream.isIoThreadSafe()) {
+            string status_msg = result.status_message ?? "Unknown";
+            timeout send_timeout = result.send_timeout ?? 30s;
             InputStream is = result.input_stream;
-            is.reassignThread();
-            binary buf;
-            while (*binary chunk = is.read(65536)) {
-                buf += chunk;
+            try {
+                is.reassignThread();
+                sock.sendHTTPResponseWithCallback(
+                    auto sub () { return is.read(65536); },
+                    result.code, status_msg, "1.1", result.hdr ?? {}, send_timeout);
+            } catch (hash<ExceptionInfo> ex) {
+                log(LoggerLevel::ERROR,
+                    "HTTP/1.x stream send error for %y: %s: %s", uh, ex.err, ex.desc);
+                try { is.unassignThread(); } catch () {}
+                try { sock.close(); } catch () {}
+                return;
             }
-            is.unassignThread();
-            if (buf.size() > 0) {
-                result.input_stream = new BinaryInputStream(buf);
-            } else {
-                # Empty stream — remove InputStream and Transfer-Encoding so
-                # the plain body path sends a response (empty body → 200/204)
-                remove result.input_stream;
-                remove result.hdr."Transfer-Encoding";
-                remove result.chunked;
+            try { is.unassignThread(); } catch () {}
+            remove result.input_stream;
+
+            # Response fully sent.  Either keep-alive or close.
+            if (result.close || !result.return_to_idle || !sock.isOpen()) {
+                try { sock.shutdown(); sock.close(); } catch () {}
+                return;
             }
+            timeout ttl = result.ttl ?? DefaultIdleTimeout;
+            addIdleConnection(sock, linfo.listener, cx, target, ttl);
+            return;
         }
 
         # Opt #3a: InputStream + keep-alive → fused stream send + idle + read header
@@ -3291,55 +3305,35 @@ public class HttpAsyncSocketIoController {
                     remove result.hdr."Transfer-Encoding";
                 }
 
-                # Materialize non-I/O-thread-safe InputStreams into memory.
-                # Handler threads must NEVER do blocking socket I/O on multiplexed
-                # connections — the I/O thread needs the socket/session mutex to
-                # process incoming ACKs, and blocking sends cause deadlock.
-                # Read the full body here (on the handler thread), wrap in
-                # BinaryInputStream (I/O-thread-safe), then the submit path below
-                # hands it to the I/O thread for non-blocking send.
-                if (result.input_stream && !result.input_stream.isIoThreadSafe()) {
-                    result.input_stream.reassignThread();
-                    binary buf;
-                    while (*binary chunk = result.input_stream.read(65536)) {
-                        buf += chunk;
-                    }
-                    result.input_stream.unassignThread();
-                    if (buf.size() > 0) {
-                        result.input_stream = new BinaryInputStream(buf);
-                    } else {
-                        remove result.input_stream;
-                        result.body = NOTHING;
-                    }
-                }
-
-                # Submit InputStream to I/O thread for non-blocking streaming
+                # InputStream response body: try the fast path; if the
+                # C++ gate rejects (non-I/O-thread-safe), spawn a producer.
+                # See the H3 branch above for detail on why the gate
+                # (not the Qore-level isIoThreadSafe()) is authoritative.
                 if (result.input_stream) {
                     hash<auto> resp_hdr = result.hdr ?? {};
                     remove resp_hdr."Transfer-Encoding";
                     int rv = cinfo.sock.submitHttp2StreamingResponseWithStream(
                         stream_id, result.code, resp_hdr, result.input_stream);
                     if (!rv) {
+                        # Memory-backed stream — I/O thread drives it.
                         log(LoggerLevel::DEBUG, "HTTP/2 stream %d: submitting "
                             "InputStream response (CL=%y)",
                             stream_id, result.hdr."Content-Length");
                         controller.wakeSocket(cinfo.sock);
                         return;
                     }
-                    # C++ gate rejected the stream (e.g., lying isIoThreadSafe).
-                    # Materialize to binary on the handler thread and fall through
-                    # to the in-memory body path.
-                    log(LoggerLevel::DEBUG, "HTTP/2 stream %d: InputStream submit "
-                        "rejected (rv=%d), materializing on handler thread",
-                        stream_id, rv);
-                    result.input_stream.reassignThread();
-                    binary buf;
-                    while (*binary chunk = result.input_stream.read(65536)) {
-                        buf += chunk;
-                    }
+                    # C++ gate rejected: spawn a producer worker.
+                    cinfo.sock.submitHttp2StreamingResponseHeaders(stream_id,
+                        result.code, resp_hdr);
                     result.input_stream.unassignThread();
-                    result.body = buf;
-                    remove result.input_stream;
+                    code<nothing()> wake_fn = sub () {
+                        controller.wakeSocket(cinfo.sock);
+                    };
+                    HttpServer::StreamResponseProducer producer(cinfo.sock,
+                        stream_id, NOTHING, result.input_stream, wake_fn);
+                    producer.start();
+                    controller.wakeSocket(cinfo.sock);
+                    return;
                 }
 
                 # In-memory response body

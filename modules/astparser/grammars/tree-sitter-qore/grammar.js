@@ -1073,9 +1073,16 @@ module.exports = grammar({
       /0b[01]+/,
     )),
 
-    float: $ => token(/[0-9]+\.[0-9]+([eE][+-]?[0-9]+)?/),
+    float: $ => token(choice(
+      /[0-9]+\.[0-9]+([eE][+-]?[0-9]+)?/,
+      /[0-9]+[eE][+-]?[0-9]+/,
+    )),
 
-    number: $ => token(/[0-9]+(\.[0-9]+)?n/),
+    number: $ => token(choice(
+      /[0-9]+(\.[0-9]+)?n/,
+      /[0-9]+[eE][+-]?[0-9]+n/,
+      /[0-9]+\.[0-9]+[eE][+-]?[0-9]+n/,
+    )),
 
     // Relative date literals: 30s, 5m, 1h, 500ms, 100us, P1DT2H3M
     relative_date: $ => token(prec(1, choice(
