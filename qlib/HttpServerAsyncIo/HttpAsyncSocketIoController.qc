@@ -1454,9 +1454,11 @@ public class HttpAsyncSocketIoController {
                         cinfo.sock.submitQuicResponseStreaming(session_id, stream_id,
                             result.code, resp_hdr);
                         result.input_stream.unassignThread();
+                        code<nothing()> wake_fn = sub () {
+                            controller.wakeSocket(cinfo.sock);
+                        };
                         HttpServer::StreamResponseProducer producer(cinfo.sock,
-                            stream_id, session_id, result.input_stream,
-                            sub () { controller.wakeSocket(cinfo.sock); });
+                            stream_id, session_id, result.input_stream, wake_fn);
                         producer.start();
                         remove result.input_stream;
                         stream_producer_active = True;
@@ -3339,9 +3341,11 @@ public class HttpAsyncSocketIoController {
                         cinfo.sock.submitHttp2StreamingResponseHeaders(stream_id,
                             result.code, resp_hdr);
                         result.input_stream.unassignThread();
+                        code<nothing()> wake_fn = sub () {
+                            controller.wakeSocket(cinfo.sock);
+                        };
                         HttpServer::StreamResponseProducer producer(cinfo.sock,
-                            stream_id, NOTHING, result.input_stream,
-                            sub () { controller.wakeSocket(cinfo.sock); });
+                            stream_id, NOTHING, result.input_stream, wake_fn);
                         producer.start();
                         remove result.input_stream;
                         stream_producer_active = True;

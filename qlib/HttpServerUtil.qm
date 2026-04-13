@@ -1960,7 +1960,7 @@ public class StreamResponseProducer {
         int stream_id;
         *int session_id;   # HTTP/3: non-null; HTTP/2: NOTHING
         InputStream is;
-        *code io_wake;
+        *code<nothing()> io_wake;
         *hash<ExceptionInfo> error_info;
 
         #! Size of each chunk pulled from the InputStream
@@ -1982,7 +1982,7 @@ public class StreamResponseProducer {
         the async I/O controller can flush pending frames to the wire
     */
     constructor(Socket sock, int stream_id, *int session_id, InputStream is,
-            *code io_wake) {
+            *code<nothing()> io_wake) {
         self.sock = sock;
         self.stream_id = stream_id;
         self.session_id = session_id;

@@ -5137,7 +5137,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
     private sendMultiplexedResponse(Socket s, hash<auto> header_info,
             hash<HttpAsyncResponseInfo> response) {
         int stream_id = header_info.stream_id;
-        code io_wake = header_info.io_wake;
+        code<nothing()> io_wake = header_info.io_wake;
         hash<auto> hdr = response.hdr ?? {};
         remove hdr."Transfer-Encoding";
 
