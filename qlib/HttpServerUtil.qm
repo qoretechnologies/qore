@@ -1972,6 +1972,15 @@ public class StreamResponseProducer {
     }
 
     #! Creates the producer; call @ref start() to dispatch the background worker
+    /** @param sock the socket hosting the HTTP/2 or HTTP/3 stream
+        @param stream_id the HTTP/2 or HTTP/3 stream ID to send data on
+        @param session_id the QUIC session ID for HTTP/3; pass @ref nothing
+        for HTTP/2
+        @param is the response body @ref Qore::InputStream "InputStream";
+        must be unassigned from any thread (the producer will claim it)
+        @param io_wake optional callback invoked after every chunk send so
+        the async I/O controller can flush pending frames to the wire
+    */
     constructor(Socket sock, int stream_id, *int session_id, InputStream is,
             *code io_wake) {
         self.sock = sock;
@@ -1982,6 +1991,9 @@ public class StreamResponseProducer {
     }
 
     #! Spawns the producer on a background thread
+    /** The producer begins reading from the @c InputStream and pushing
+        frames immediately after this call returns.
+    */
     start() {
         # Capture `self` in a closure reference so the object stays alive
         # for the duration of the background task.
@@ -1990,6 +2002,12 @@ public class StreamResponseProducer {
     }
 
     #! Blocks the caller until the producer has finished; returns any error
+    /** @param t maximum time to wait for the producer to finish
+        @return the exception hash if the producer failed (EOF path succeeded
+        but a @c read() error or send error was observed) or @ref nothing
+        if the producer completed cleanly
+        @throw COUNTER-TIMEOUT if the producer does not finish within @a t
+    */
     *hash<ExceptionInfo> waitForDone(timeout t = 120s) {
         done.waitForZero(t);
         return error_info;
