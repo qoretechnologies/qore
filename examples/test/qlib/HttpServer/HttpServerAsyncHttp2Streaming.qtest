@@ -2,6 +2,8 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 
 /*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
     HTTP/2 streaming response tests - exercises InputStream-based streaming
     responses through the async I/O controller with HTTP/2.
 */
