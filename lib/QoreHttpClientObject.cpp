@@ -1126,8 +1126,9 @@ struct qore_httpclient_priv {
         ;
 
     // HTTP/2 mode (HTTP2_MODE_DISABLED, HTTP2_MODE_AUTO, HTTP2_MODE_REQUIRED, HTTP2_MODE_H2C_*)
-    int http2_mode = HTTP2_MODE_AUTO
-        ;
+    // Atomic: may be read from send_internal without priv->m while set
+    // by setHTTPVersion / setHttp2Mode under priv->m
+    std::atomic<int> http2_mode{HTTP2_MODE_AUTO};
 
     // HTTP/3 mode (HTTP3_MODE_DISABLED, HTTP3_MODE_AUTO, HTTP3_MODE_REQUIRED)
     // Atomic: may be read from I/O thread while set from API thread
@@ -1225,11 +1226,28 @@ struct qore_httpclient_priv {
 
     //! Returns the connection manager, creating it lazily if needed.
     DLLLOCAL HttpClientConnectionManagerBase& getConnMgr(ExceptionSink* xsink) {
-        // Check if SSL settings changed since the conn_mgr was created.
-        // If so, reset so a fresh connection is established with the new settings.
+        // Check if SSL settings or the effective protocol changed since
+        // the conn_mgr was created.  If so, reset so a fresh connection
+        // is established with the new settings.  The global H2 mode can
+        // change at runtime via set_global_http2_mode(); re-evaluate it.
         if (conn_mgr) {
             const auto& opts = conn_mgr->getOptions();
-            if (opts.ssl_verify_mode != msock->socket->priv->ssl_verify_mode
+            // Recompute the effective protocol
+            int gm = qore_global_http2_mode.load(std::memory_order_relaxed);
+            bool ld = qore_check_option(QLO_DISABLE_HTTP2);
+            bool h2e = (http2_mode == HTTP2_MODE_REQUIRED)
+                && gm != HTTP2_MODE_DISABLED && !ld;
+            HttpClientProtocol want_proto;
+            if (http3_mode.load(std::memory_order_relaxed)
+                    == HTTP3_MODE_REQUIRED) {
+                want_proto = HttpClientProtocol::H3;
+            } else if (h2e) {
+                want_proto = HttpClientProtocol::H2;
+            } else {
+                want_proto = HttpClientProtocol::H1;
+            }
+            if (opts.protocol != want_proto
+                    || opts.ssl_verify_mode != msock->socket->priv->ssl_verify_mode
                     || opts.accept_all_certs != msock->socket->priv->ssl_accept_all_certs
                     || opts.client_cert != msock->cert
                     || opts.client_key != msock->pk) {
@@ -1238,13 +1256,28 @@ struct qore_httpclient_priv {
         }
         if (!conn_mgr) {
             HttpClientConnectionManagerBase::Options opts;
-            // Derive protocol from the HTTPClient's mode settings
-            if (http3_mode.load(std::memory_order_relaxed) == HTTP3_MODE_REQUIRED) {
-                opts.protocol = HttpClientProtocol::H3;
-            } else if (http2_mode == HTTP2_MODE_REQUIRED) {
-                opts.protocol = HttpClientProtocol::H2;
-            } else {
-                opts.protocol = HttpClientProtocol::H1;
+            // Derive protocol from the HTTPClient's mode settings.
+            // HTTP2_MODE_AUTO + SSL is handled by the legacy path
+            // (which does ALPN-based protocol selection per-socket) —
+            // see the needs_legacy_h2 bypass in send_internal.
+            // The global mode override must be checked here so that
+            // set_global_http2_mode("disabled") prevents H2 connections
+            // even for REQUIRED-mode clients (matches legacy connect).
+            {
+                int global_mode = qore_global_http2_mode.load(
+                    std::memory_order_relaxed);
+                bool lib_disabled = qore_check_option(QLO_DISABLE_HTTP2);
+                bool h2_effective = (http2_mode == HTTP2_MODE_REQUIRED)
+                    && global_mode != HTTP2_MODE_DISABLED && !lib_disabled;
+
+                if (http3_mode.load(std::memory_order_relaxed)
+                        == HTTP3_MODE_REQUIRED) {
+                    opts.protocol = HttpClientProtocol::H3;
+                } else if (h2_effective) {
+                    opts.protocol = HttpClientProtocol::H2;
+                } else {
+                    opts.protocol = HttpClientProtocol::H1;
+                }
             }
             opts.connect_timeout_ms = connect_timeout_ms;
             opts.request_timeout_ms = timeout;
@@ -1617,10 +1650,10 @@ struct qore_httpclient_priv {
             } else if (global_mode == HTTP2_MODE_REQUIRED) {
                 // Global required overrides object setting (unless object explicitly uses h2c modes)
                 effective_http2_mode = (http2_mode == HTTP2_MODE_H2C_DIRECT || http2_mode == HTTP2_MODE_H2C_UPGRADE)
-                    ? http2_mode : HTTP2_MODE_REQUIRED;
+                    ? http2_mode.load(std::memory_order_relaxed) : HTTP2_MODE_REQUIRED;
             } else {
                 // Global auto: use object's setting
-                effective_http2_mode = http2_mode;
+                effective_http2_mode = http2_mode.load(std::memory_order_relaxed);
             }
             // Handle h2c (HTTP/2 cleartext) modes
             if (effective_http2_mode == HTTP2_MODE_H2C_DIRECT && !connect_ssl) {
@@ -8669,10 +8702,23 @@ QoreHashNode* qore_httpclient_priv::send_internal(ExceptionSink* xsink, const ch
         timeout_ms = timeout;
 
     // Delegate to conn_mgr when enabled.
-    if (use_conn_mgr) {
-        return send_internal_conn_mgr(xsink, mname, meth, mpath, headers,
-            msg_body, data, size, send_callback, getbody, info, timeout_ms,
-            recv_callback, obj, os, is, max_chunk_size, trailer_callback, streaming);
+    // Exception: HTTP2_MODE_AUTO over SSL requires ALPN-based per-socket
+    // protocol selection (h2 vs http/1.1), which the conn_mgr's fixed
+    // per-manager protocol can't support.  Use the legacy path for this
+    // case — it handles ALPN negotiation and H2 session creation on a
+    // single socket.
+    {
+        int global_mode = qore_global_http2_mode.load(std::memory_order_relaxed);
+        bool lib_disabled = qore_check_option(QLO_DISABLE_HTTP2);
+        bool needs_legacy_h2 = (http2_mode == HTTP2_MODE_AUTO
+                || http2_mode == HTTP2_MODE_REQUIRED)
+            && global_mode != HTTP2_MODE_DISABLED && !lib_disabled
+            && connection.ssl;
+        if (use_conn_mgr && !needs_legacy_h2) {
+            return send_internal_conn_mgr(xsink, mname, meth, mpath, headers,
+                msg_body, data, size, send_callback, getbody, info, timeout_ms,
+                recv_callback, obj, os, is, max_chunk_size, trailer_callback, streaming);
+        }
     }
 
     SafeLocker sl(msock->m);

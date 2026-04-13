@@ -351,7 +351,8 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::createConnection(
     // window where the I/O thread fires onClosedHook before setManager.
     HttpClientConnectionBase* conn = nullptr;
     switch (opts_.protocol) {
-        case HttpClientProtocol::H1: {
+        case HttpClientProtocol::H1:
+        create_h1: {
             Http1SslConfig ssl_cfg;
             ssl_cfg.verify_mode = opts_.ssl_verify_mode;
             ssl_cfg.accept_all = opts_.accept_all_certs;
@@ -390,11 +391,18 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::createConnection(
             conn = new Http3ClientConnection(host, port,
                 opts_.max_streams_per_connection, xsink, this);
             break;
+        case HttpClientProtocol::AUTO:
+            // AUTO mode is handled at the HTTPClient level: AUTO+SSL
+            // bypasses the conn_mgr and uses the legacy ALPN path.
+            // If we get here, treat AUTO as H1 (non-SSL case).
+            goto create_h1;
     }
     if (*xsink) {
-        ExceptionSink dx;
-        conn->deref(&dx);
-        dx.clear();
+        if (conn) {
+            ExceptionSink dx;
+            conn->deref(&dx);
+            dx.clear();
+        }
         return nullptr;
     }
 
@@ -406,8 +414,6 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::createConnection(
     if (wait_for_ready) {
         bool ready = conn->waitForReadyOrError(opts_.connect_timeout_ms, xsink);
         if (!ready || *xsink) {
-            // Either timeout (no exception) or error (xsink set).  Either
-            // way, evict and return failure.
             if (!*xsink) {
                 xsink->raiseException("HTTPCLIENT-CONNECT-ERROR",
                     "connection to %s:%d timed out after %d ms",
