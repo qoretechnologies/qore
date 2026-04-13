@@ -2939,7 +2939,7 @@ class MyObserver inherits Observer {
         }
         log("<", msg);
         if (info.connection_event == event_id) {
-            string protocol = data_.http2 ? "HTTP/2" : "HTTP/1.1";
+            string protocol = data_.http3 ? "HTTP/3" : (data_.http2 ? "HTTP/2" : "HTTP/1.1");
             log("<", "%s (WebSocket over %s)", QdpCmd::color.success("connected to server"),
                 QdpCmd::color.info(protocol));
         } else if (info.disconnection_event == event_id) {

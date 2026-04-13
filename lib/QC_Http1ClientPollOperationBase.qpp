@@ -1553,6 +1553,13 @@ QoreHashNode* Http1ClientPollOperationPriv::dispatchResponse(ExceptionSink* xsin
     if (close) {
         printd(5, "Http1ClientPollOperationPriv::dispatchResponse() connection close\n");
         h1_state.store(H1State::CLOSED, std::memory_order_release);
+        // Notify the connection base (and via it, the manager) that this
+        // connection is closed so findReusableLocked skips it and
+        // onClosedHook evicts it from the pool.
+        if (connection_priv) {
+            connection_priv->setClosed();
+        }
+        connection_priv = nullptr;
         return nullptr;
     }
 
@@ -1647,6 +1654,11 @@ QoreHashNode* Http1ClientPollOperationPriv::dispatchStreamingEnd(ExceptionSink* 
     if (close) {
         printd(5, "Http1ClientPollOperationPriv::dispatchStreamingEnd() connection close\n");
         h1_state.store(H1State::CLOSED, std::memory_order_release);
+        // Notify connection base so manager evicts from pool
+        if (connection_priv) {
+            connection_priv->setClosed();
+        }
+        connection_priv = nullptr;
         return nullptr;
     }
 

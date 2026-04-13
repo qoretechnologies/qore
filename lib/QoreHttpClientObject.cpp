@@ -1021,6 +1021,47 @@ static QoreHashNode* transformConnMgrResponse(QoreHashNode* src, ExceptionSink* 
     return result.release();
 }
 
+// Set info["response-uri"] from the conn_mgr response hash (which has keys
+// status_code, status_message, protocol).  Matches legacy HTTP/1.x/2/3
+// behavior: `HTTP/<version> <code> <message>`.
+static void setConnMgrResponseUri(QoreHashNode* info, const QoreHashNode* src,
+        ExceptionSink* xsink) {
+    if (!info || !src) {
+        return;
+    }
+    QoreValue sc = src->getKeyValue("status_code");
+    if (sc.isNullOrNothing()) {
+        return;
+    }
+    QoreValue msg = src->getKeyValue("status_message");
+    const char* msg_str = msg.getType() == NT_STRING
+        ? msg.get<const QoreStringNode>()->c_str() : "";
+    QoreValue proto = src->getKeyValue("protocol");
+    const char* proto_str = proto.getType() == NT_STRING
+        ? proto.get<const QoreStringNode>()->c_str() : "h1";
+    // Map protocol token (h1/h2/h3) to HTTP version label
+    const char* ver;
+    if (!strcmp(proto_str, "h2")) {
+        ver = "HTTP/2";
+    } else if (!strcmp(proto_str, "h3")) {
+        ver = "HTTP/3";
+    } else {
+        // For h1, prefer the http_version field if present
+        QoreValue hv = src->getKeyValue("http_version");
+        if (hv.getType() == NT_STRING) {
+            QoreStringNode* rv = new QoreStringNodeMaker("HTTP/%s %d %s",
+                hv.get<const QoreStringNode>()->c_str(), (int)sc.getAsBigInt(),
+                msg_str);
+            info->setKeyValue("response-uri", rv, xsink);
+            return;
+        }
+        ver = "HTTP/1.1";
+    }
+    QoreStringNode* rv = new QoreStringNodeMaker("%s %d %s", ver,
+        (int)sc.getAsBigInt(), msg_str);
+    info->setKeyValue("response-uri", rv, xsink);
+}
+
 void do_content_length_event(Queue* event_queue, qore_socket_private* priv, size_t len) {
     if (event_queue) {
         QoreHashNode* h = priv->getEvent(QORE_EVENT_HTTP_CONTENT_LENGTH, QORE_SOURCE_HTTPCLIENT);
@@ -7874,6 +7915,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                                 info->setKeyValue("response-headers-raw",
                                     raw_hdrs.refSelf(), xsink);
                             }
+                            setConnMgrResponseUri(info, h, xsink);
                         }
 
                         if (recv_callback) {
@@ -8043,6 +8085,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                             return nullptr;
                         }
                     }
+                    setConnMgrResponseUri(info, *raw_resp, xsink);
                 }
 
                 if (!ans->is_unique()) {
@@ -8064,6 +8107,11 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
 
             // Channel read loop: process streaming response
             bool got_headers = false;
+            // Body accumulation for non-chunked + content-encoding case
+            // (matches legacy: read full body, decompress, single callback)
+            bool is_chunked_response = false;
+            std::string resp_content_encoding;
+            SimpleRefHolder<BinaryNode> accumulated_body;
             while (true) {
                 bool timed_out = false;
                 bool has_value = false;
@@ -8129,6 +8177,33 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                         if (raw_hdrs.getType() == NT_HASH) {
                             info->setKeyValue("response-headers-raw", raw_hdrs.refSelf(), xsink);
                         }
+                        setConnMgrResponseUri(info, h, xsink);
+                    }
+
+                    // Determine response transfer-encoding and content-encoding
+                    // for body delivery decisions
+                    {
+                        const char* te = get_string_header(xsink, **ans, "transfer-encoding");
+                        if (te && strcasestr(te, "chunked")) {
+                            is_chunked_response = true;
+                        }
+                        if (*xsink) {
+                            xsink->clear();
+                        }
+                        const char* ce = get_string_header(xsink, **ans, "content-encoding");
+                        if (ce && *ce && strcasecmp(ce, "identity")) {
+                            resp_content_encoding = ce;
+                        }
+                        if (*xsink) {
+                            xsink->clear();
+                        }
+                        // For non-chunked + content-encoding + recv_callback,
+                        // accumulate body to decompress at end (matches
+                        // legacy send_internal behavior — see line ~9070)
+                        if (recv_callback && !is_chunked_response
+                                && !resp_content_encoding.empty()) {
+                            accumulated_body = new BinaryNode();
+                        }
                     }
 
                     // Invoke recv_callback with header hash (matching
@@ -8178,18 +8253,40 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                             return nullptr;
                         }
                     } else if (recv_callback) {
-                        // Invoke recv_callback with body data (matching
-                        // runDataCallback format: single hash arg with keys
-                        // data, chunked)
-                        ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), xsink);
-                        QoreHashNode* cb_arg = new QoreHashNode(autoTypeInfo);
-                        cb_arg->setKeyValue("data", body_val.refSelf(), xsink);
-                        cb_arg->setKeyValue("chunked", true, xsink);
-                        args->push(cb_arg, xsink);
-                        rv = recv_callback->execValue(*args, xsink);
-                        if (*xsink) {
-                            channel->close();
-                            return nullptr;
+                        if (accumulated_body) {
+                            // Buffer for decompression at end_stream
+                            if (body_val.getType() == NT_BINARY) {
+                                const BinaryNode* bin = body_val.get<const BinaryNode>();
+                                accumulated_body->append(bin->getPtr(), bin->size());
+                            } else if (body_val.getType() == NT_STRING) {
+                                const QoreStringNode* str = body_val.get<const QoreStringNode>();
+                                accumulated_body->append(str->c_str(), str->size());
+                            }
+                        } else {
+                            // Per-chunk callback.  Convert binary→string
+                            // when no content-encoding (matches legacy
+                            // readHttpChunkedBody behavior).
+                            QoreValue cb_data;
+                            if (resp_content_encoding.empty()
+                                    && body_val.getType() == NT_BINARY) {
+                                const BinaryNode* bin = body_val.get<const BinaryNode>();
+                                cb_data = new QoreStringNode(
+                                    (const char*)bin->getPtr(), bin->size(),
+                                    QCS_UTF8);
+                            } else {
+                                cb_data = body_val.refSelf();
+                            }
+                            ReferenceHolder<QoreListNode> args(
+                                new QoreListNode(autoTypeInfo), xsink);
+                            QoreHashNode* cb_arg = new QoreHashNode(autoTypeInfo);
+                            cb_arg->setKeyValue("data", cb_data, xsink);
+                            cb_arg->setKeyValue("chunked", true, xsink);
+                            args->push(cb_arg, xsink);
+                            rv = recv_callback->execValue(*args, xsink);
+                            if (*xsink) {
+                                channel->close();
+                                return nullptr;
+                            }
                         }
                     }
                     continue;
@@ -8198,6 +8295,39 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                 // Check for end_stream
                 QoreValue end_val = h->getKeyValue("end_stream");
                 if (!end_val.isNullOrNothing()) {
+                    // For non-chunked + content-encoding case, decompress
+                    // accumulated body and deliver as single data callback
+                    // (matches legacy send_internal behavior at line ~9070)
+                    if (recv_callback && accumulated_body) {
+                        bool ignore_encoding = false;
+                        qore_uncompress_to_string_t dec =
+                            get_decoder_for_content_encoding(
+                                resp_content_encoding.c_str(), ignore_encoding);
+                        QoreValue cb_data;
+                        if (dec && !ignore_encoding && accumulated_body->size()) {
+                            QoreStringNode* decoded = dec(*accumulated_body,
+                                QCS_UTF8, xsink);
+                            if (*xsink) {
+                                channel->close();
+                                return nullptr;
+                            }
+                            cb_data = decoded;
+                        } else {
+                            // Unknown encoding or empty body — pass raw binary
+                            cb_data = accumulated_body.release();
+                        }
+                        ReferenceHolder<QoreListNode> args(
+                            new QoreListNode(autoTypeInfo), xsink);
+                        QoreHashNode* cb_arg = new QoreHashNode(autoTypeInfo);
+                        cb_arg->setKeyValue("data", cb_data, xsink);
+                        cb_arg->setKeyValue("chunked", false, xsink);
+                        args->push(cb_arg, xsink);
+                        rv = recv_callback->execValue(*args, xsink);
+                        if (*xsink) {
+                            channel->close();
+                            return nullptr;
+                        }
+                    }
                     // Final callback only for chunked responses (matching
                     // legacy readHttpChunkedBody[Binary] which calls
                     // runHeaderCallback at end).  Content-length responses
@@ -8323,6 +8453,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                             info->setKeyValue("response-headers-raw",
                                 raw_hdrs.refSelf(), xsink);
                         }
+                        setConnMgrResponseUri(info, h, xsink);
                     }
 
                     // Check for redirect
@@ -8383,6 +8514,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                         return nullptr;
                     }
                 }
+                setConnMgrResponseUri(info, *raw_resp, xsink);
             }
 
             if (!ans->is_unique()) {
