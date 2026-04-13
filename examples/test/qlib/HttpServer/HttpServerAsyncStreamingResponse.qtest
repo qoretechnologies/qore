@@ -223,7 +223,6 @@ class ExactStreamHandler inherits AbstractHttpRequestHandler {
     }
 }
 
-#! Handler that returns a small in-memory response
 #! Handler that writes a temp file and returns a pollable FileInputStream
 /** Exercises the "pollable InputStream" delivery path: the FD is
     registered with the async I/O controller's event loop and read

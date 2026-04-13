@@ -534,12 +534,6 @@ private:
         std::atomic<int> cache_size{0};   //!< Atomic cache size for lock-free getCacheSize()
         std::unordered_map<std::string, int> socket_refcounts;
 
-        //! Recently-cancelled keys on this I/O thread — set by CancelOwner,
-        //! checked by SubmitOp to reject stale re-submissions from callbacks
-        //! that raced with the cancel.  Entries auto-expire after 2 idle cycles.
-        //! Key: operation key, Value: idle_cycles_remaining
-        std::unordered_map<std::string, int> cancelled_keys;
-
         //! Socket hashes that need re-polling
         std::unordered_set<std::string> wake_socket_hashes;
 
@@ -567,6 +561,23 @@ private:
         std::unordered_map<std::string, std::unordered_set<std::string>> sock_hash_to_keys;
         std::unordered_map<int, std::string> fd_to_sock_hash;
         std::unordered_map<std::string, std::unordered_set<int>> key_extra_fds;
+
+        //! Recently-cancelled operation keys — prevents re-submission of stale ops
+        /** I/O-thread-only. Value is a TTL counter decremented each processCommands()
+            cycle; entry is erased when it reaches zero.
+            @since %Qore 2.3
+        */
+        std::unordered_map<std::string, int> cancelled_keys;
+
+        //! Recently-cancelled owners on this I/O thread — set by CancelOwner
+        //! regardless of whether any cache entries were found.  Fixes the race
+        //! where cancelByOwner() runs before submitConnectionOp() actually
+        //! submits the operation: when SubmitOp later arrives, it detects the
+        //! cancelled owner and dispatches onComplete(canceled=true) immediately
+        //! instead of inserting into the cache (which would never be cancelled).
+        //! Entries auto-expire after 2 idle cycles.
+        //! Key: owner string, Value: idle_cycles_remaining
+        std::unordered_map<std::string, int> cancelled_owners;
     };
 
     //! Get the I/O thread index for a given operation key (hash-based affinity)

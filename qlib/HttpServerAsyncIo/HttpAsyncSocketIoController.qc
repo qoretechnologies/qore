@@ -1709,6 +1709,14 @@ public class HttpAsyncSocketIoController {
                         && cinfo.state != HttpConnectionState::Http3Sending) {
                     try { cinfo.sock.close(); } catch () {}
                 }
+                # Signal the stream_op as completed so any handler thread
+                # waiting in done.waitForZero() can unblock.
+                # setCompletionContext() has not been called yet (only called
+                # inside submitConnectionOpIntern), so onComplete() will NOT
+                # trigger handleConnectionResult() — it just signals done.
+                if (cinfo.stream_op) {
+                    cinfo.stream_op.onComplete(<SocketPollResultInfo>{});
+                }
                 return;
             }
         }

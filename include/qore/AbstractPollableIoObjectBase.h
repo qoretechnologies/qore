@@ -35,8 +35,13 @@
 
 #include "qore/AbstractPrivateData.h"
 
+#include <string>
+
 class AbstractPollableIoObjectBase : public AbstractPrivateData {
 public:
+    //! Default constructor — assigns a unique hash for stable identity
+    DLLLOCAL AbstractPollableIoObjectBase();
+
     virtual int getPollableDescriptor() const = 0;
 
     //! Closes the I/O object, releasing the underlying file descriptor
@@ -75,6 +80,19 @@ public:
         @since %Qore 2.3
     */
     DLLEXPORT virtual bool hasPendingData() const { return false; }
+
+    //! Returns the unique hash for this I/O object
+    /** Computed once at construction from an atomic sequence + pointer,
+        so it remains stable even if malloc reuses the same address.
+
+        @return unique hash string
+
+        @since %Qore 2.3
+    */
+    DLLLOCAL const std::string& getUniqueHash() const { return io_unique_hash; }
+
+private:
+    std::string io_unique_hash;   //!< Stable unique identity (address reuse safe)
 };
 
 #endif

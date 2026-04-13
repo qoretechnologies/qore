@@ -45,12 +45,23 @@
 #include "qore/intern/qore_type_safe_ref_helper_priv.h"
 #include "qore/intern/qore_program_private.h"
 
+// Monotonic counter for globally unique object hashes.  Pointer addresses
+// alone are not unique because malloc reuses freed addresses; the counter
+// ensures every object gets a distinct hash even when allocated at a
+// previously-used address.
+static std::atomic<uint64_t> object_id_seq{0};
+
 qore_object_private::qore_object_private(QoreObject* n_obj, const QoreClass* oc, QoreProgram* p, QoreHashNode* n_data) :
         RObject(n_obj->references, true),
         theclass(oc), data(n_data), pgm(p), system_object(!p),
         in_destructor(false),
         recursive_ref_found(false),
         obj(n_obj) {
+    // Compute unique hash once — includes pointer for locality and a
+    // monotonic ID to prevent collisions from address reuse.
+    unique_hash = new QoreStringNode;
+    qore_get_object_hash(*unique_hash, n_obj,
+        object_id_seq.fetch_add(1, std::memory_order_relaxed));
     //printd(5, "qore_object_private::qore_object_private() this: %p obj: %p '%s'\n", this, obj, oc->getName());
 #ifdef QORE_DEBUG_OBJ_REFS
     printd(QORE_DEBUG_OBJ_REFS, "qore_object_private::qore_object_private() this: %p obj: %p pgm: %p class: %s "
@@ -77,12 +88,18 @@ qore_object_private::qore_object_private(QoreObject* n_obj, const QoreClass* oc,
     qore_class_private::get(*oc)->ref();
 }
 
+QoreStringNode* QoreObject::getUniqueHash() const {
+    priv->unique_hash->ref();
+    return priv->unique_hash;
+}
+
 qore_object_private::~qore_object_private() {
     //printd(5, "qore_object_private::~qore_object_private() this: %p obj: %p '%s' pgm: %p\n", this, obj, theclass ? theclass->getName() : "<n/a>", pgm);
     assert(!cdmap);
     assert(!data);
     assert(!privateData);
     assert(!rset);
+    unique_hash->deref();
     qore_class_private::get(*const_cast<QoreClass*>(theclass))->deref(false, false);
     // release weak reference
     if (pgm) {

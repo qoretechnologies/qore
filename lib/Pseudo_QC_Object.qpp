@@ -329,9 +329,7 @@ bool <object>::sizep() [flags=CONSTANT] {
     @since %Qore 0.8.12
  */
 string <object>::uniqueHash() [flags=CONSTANT] {
-    QoreStringNode* rv = new QoreStringNode;
-    qore_get_ptr_hash(*rv, obj);
-    return rv;
+    return obj->getUniqueHash();
 }
 
 //! resolve the string as a call reference

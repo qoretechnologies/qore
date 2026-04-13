@@ -3123,7 +3123,6 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                         }
 
                         if (found) {
-                            // Record this key as recently cancelled (I/O-thread-only, no lock)
                             t.cancelled_keys[key] = 2;
                             doCancelIntern(pinfo_copy, xsink);
                             pinfo_copy.cleanup(xsink);
@@ -3133,6 +3132,15 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                             delete cond;
                         }
                     }
+
+                    // Always record this owner as recently cancelled, even when no
+                    // matching entries were in the cache.  This covers the race where
+                    // cancelByOwner() runs BEFORE submitConnectionOp() inserts the
+                    // entry: SubmitOp will detect the cancelled owner and dispatch
+                    // onComplete(canceled=true) immediately instead of silently
+                    // inserting an operation that will never be cancelled.
+                    // I/O-thread-only — no locking needed.
+                    t.cancelled_owners[cmd.owner] = 2;
 
                     // Report actual cancel count
                     if (cmd.cancel_count) {
@@ -3263,23 +3271,56 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                 }
 
                 case IoCommand::SubmitOp: {
-                    // Reject stale re-submissions: if this key was recently
-                    // cancelled, the submit is from a callback that raced with
-                    // cancelByOwner().  A new object creates a new socket with
-                    // a different key, so it won't match — no false positives.
+                    // Reject stale re-submissions for recently-cancelled keys
+                    auto ck_it = t.cancelled_keys.find(cmd.key);
+                    if (ck_it != t.cancelled_keys.end()) {
+                        ck_it->second = 2;
+                        if (cmd.submit_sock) { cmd.submit_sock->deref(xsink); }
+                        if (cmd.submit_sock_obj) { cmd.submit_sock_obj->deref(xsink); }
+                        if (cmd.submit_spop_obj) { cmd.submit_spop_obj->deref(xsink); }
+                        if (cmd.submit_spop_base) { cmd.submit_spop_base->deref(xsink); }
+                        if (cmd.submit_poll_info) { cmd.submit_poll_info->deref(xsink); }
+                        if (cmd.submit_other) { cmd.submit_other->deref(xsink); }
+                        if (cmd.submit_queue) { cmd.submit_queue->deref(xsink); }
+                        break;
+                    }
+                    // Detect the cancelByOwner-before-submit race: if this owner
+                    // was cancelled (even when the cache was empty at cancel time),
+                    // dispatch onComplete(canceled=true) immediately instead of
+                    // inserting an entry that will never be cancelled.
                     {
-                        auto ck_it = t.cancelled_keys.find(cmd.key);
-                        if (ck_it != t.cancelled_keys.end()) {
-                            // Reset idle counter — still seeing stale submissions
-                            ck_it->second = 2;
-                            // Clean up the command's refcounted resources
-                            if (cmd.submit_sock) cmd.submit_sock->deref(xsink);
-                            if (cmd.submit_sock_obj) cmd.submit_sock_obj->deref(xsink);
-                            if (cmd.submit_spop_obj) cmd.submit_spop_obj->deref(xsink);
-                            if (cmd.submit_spop_base) cmd.submit_spop_base->deref(xsink);
-                            if (cmd.submit_poll_info) cmd.submit_poll_info->deref(xsink);
-                            if (cmd.submit_other) cmd.submit_other->deref(xsink);
-                            if (cmd.submit_queue) cmd.submit_queue->deref(xsink);
+                        auto co_it = t.cancelled_owners.find(cmd.owner);
+                        if (co_it != t.cancelled_owners.end()) {
+                            // Reset TTL — keep blocking further submits for this owner
+                            co_it->second = 2;
+                            // Also block key-based re-submissions
+                            t.cancelled_keys[cmd.key] = 2;
+                            // Build a PollInfo from the submit payload so
+                            // doCancelIntern() can fire the action's abort and
+                            // dispatch onComplete(canceled=true) to the caller.
+                            PollInfo pinfo;
+                            pinfo.sock_obj = cmd.submit_sock_obj;
+                            pinfo.sock = cmd.submit_sock;
+                            pinfo.spop_obj = cmd.submit_spop_obj;
+                            pinfo.spop_base = cmd.submit_spop_base;
+                            pinfo.poll_info = cmd.submit_poll_info;
+                            pinfo.other = cmd.submit_other;
+                            pinfo.queue = cmd.submit_queue;
+                            pinfo.timeout_us = cmd.submit_timeout_us;
+                            pinfo.owner = cmd.owner;
+                            pinfo.has_qore_abort = cmd.submit_has_qore_abort;
+                            pinfo.has_qore_on_complete = cmd.submit_has_qore_on_complete;
+                            // Null command fields to prevent double-deref on
+                            // command destruction — pinfo.cleanup() owns them now.
+                            cmd.submit_sock_obj = nullptr;
+                            cmd.submit_sock = nullptr;
+                            cmd.submit_spop_obj = nullptr;
+                            cmd.submit_spop_base = nullptr;
+                            cmd.submit_poll_info = nullptr;
+                            cmd.submit_other = nullptr;
+                            cmd.submit_queue = nullptr;
+                            doCancelIntern(pinfo, xsink);
+                            pinfo.cleanup(xsink);
                             break;
                         }
                     }
@@ -3492,15 +3533,24 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
         }
     }
 
-    // Age out cancelled_keys entries.  Each entry starts with 2 idle cycles.
-    // Stale SubmitOp rejection resets to 2.  When an entry reaches 0, all
-    // racing callbacks have drained and the entry is removed.
-    // I/O-thread-only — no locking needed.
+    // Age out cancelled_keys — decrement TTL and erase expired entries
     if (!t.cancelled_keys.empty()) {
         auto it = t.cancelled_keys.begin();
         while (it != t.cancelled_keys.end()) {
             if (--(it->second) <= 0) {
                 it = t.cancelled_keys.erase(it);
+            } else {
+                ++it;
+            }
+        }
+    }
+
+    // Age out cancelled_owners — same TTL semantics as cancelled_keys
+    if (!t.cancelled_owners.empty()) {
+        auto it = t.cancelled_owners.begin();
+        while (it != t.cancelled_owners.end()) {
+            if (--(it->second) <= 0) {
+                it = t.cancelled_owners.erase(it);
             } else {
                 ++it;
             }
@@ -4013,9 +4063,7 @@ void AsyncIoControllerPriv::log(int level, const char* fmt, ...) const {
 }
 
 std::string AsyncIoControllerPriv::getSocketHash(AbstractPollableIoObjectBase* sock) {
-    QoreString str;
-    qore_get_ptr_hash(str, sock);
-    return std::string(str.c_str());
+    return sock->getUniqueHash();
 }
 
 QoreObject* AsyncIoControllerPriv::getSocketFromPollInfo(QoreHashNode* poll_info,

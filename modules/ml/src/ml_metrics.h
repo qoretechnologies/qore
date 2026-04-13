@@ -41,8 +41,7 @@ DLLLOCAL double mlAccuracy(const VectorXd& y_true, const VectorXd& y_pred, Excep
 DLLLOCAL QoreHashNode* mlConfusionMatrix(const VectorXd& y_true, const VectorXd& y_pred,
     ExceptionSink* xsink);
 
-// Note: per-class precision/recall/f1 are available via mlClassificationReport()
-// The standalone functions are static in ml_metrics.cpp (implementation helpers only)
+// Per-class precision/recall/f1 are available via mlClassificationReport().
 
 //! Compute full classification report (ClassificationReport hashdecl)
 DLLLOCAL QoreHashNode* mlClassificationReport(const VectorXd& y_true, const VectorXd& y_pred,
