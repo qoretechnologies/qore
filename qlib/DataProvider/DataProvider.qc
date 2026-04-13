@@ -247,6 +247,8 @@ public class DataProvider {
             "tableau": "TableauDataProvider",
             "tally": "TallyDataProvider",
 
+            "onedrive": "OneDriveDataProvider",
+
             # provided by the ssh2 module
             "sftpclient": "SftpClientDataProvider",
             "sftppoller": "SftpPoller",

@@ -1,0 +1,847 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/** OneDriveDataProvider.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/DataProvider
+%requires RestClient
+%requires RestClientIo
+%requires ../../../../qlib/OneDriveDataProvider
+
+%try-module json
+%define NoJson
+%endtry
+
+%exec-class OneDriveDataProviderTest
+
+class FakeOneDriveRestClientIo inherits RestClientIo::RestClientIo {
+    public {
+        auto last_request;
+        string last_method;
+        string last_path;
+        *hash<auto> last_headers;
+        hash<auto> response_body;
+        hash<auto> response_headers = {};
+    }
+
+    constructor() : RestClientIo({
+        "url": "https://graph.microsoft.com",
+        "oauth2_client_id": "test",
+        "oauth2_client_secret": "test",
+        "data": "json",
+    }) {
+    }
+
+    private hash<RestClient::RestResponseInfo> doRequest(string method, string path, auto body,
+            *hash<auto> hdr) {
+        last_method = method;
+        last_path = path;
+        last_request = body;
+        last_headers = hdr;
+        return <RestClient::RestResponseInfo>{
+            "body": response_body,
+            "headers": response_headers,
+        };
+    }
+
+    hash<RestClient::RestResponseInfo> restGet(string path, *hash<auto> hdr) {
+        return doRequest("GET", path, NOTHING, hdr);
+    }
+
+    hash<RestClient::RestResponseInfo> restPost(string path, auto body, *hash<auto> hdr) {
+        return doRequest("POST", path, body, hdr);
+    }
+
+    hash<RestClient::RestResponseInfo> restPut(string path, auto body, *hash<auto> hdr) {
+        return doRequest("PUT", path, body, hdr);
+    }
+
+    hash<RestClient::RestResponseInfo> restPatch(string path, auto body, *hash<auto> hdr) {
+        return doRequest("PATCH", path, body, hdr);
+    }
+
+    hash<RestClient::RestResponseInfo> restDel(string path, auto body, *hash<auto> hdr) {
+        return doRequest("DELETE", path, body, hdr);
+    }
+
+    hash<RestClient::RestResponseInfo> restDoRequest(string method, string path, auto body,
+            *hash<auto> hdr) {
+        return doRequest(method, path, body, hdr);
+    }
+}
+
+public class OneDriveDataProviderTest inherits QUnit::Test {
+    public {
+        Logger logger;
+
+        # command-line options
+        const MyOpts = Opts + {
+            "conn": "c,connection=s",
+        };
+    }
+
+    constructor() : Test("OneDriveDataProvider Test", "1.0", \ARGV, MyOpts) {
+        addTestCase("sanity test", \sanityTest());
+        addTestCase("action catalog", \actionCatalogTest());
+        addTestCase("data types", \dataTypesTest());
+        addTestCase("get drive info", \getDriveInfoTest());
+        addTestCase("get item", \getItemTest());
+        addTestCase("get item by path", \getItemByPathTest());
+        addTestCase("create folder", \createFolderTest());
+        addTestCase("upload file", \uploadFileTest());
+        addTestCase("create upload session", \createUploadSessionTest());
+        addTestCase("download file", \downloadFileTest());
+        addTestCase("delete item", \deleteItemTest());
+        addTestCase("create sharing link", \createSharingLinkTest());
+        addTestCase("update item", \updateItemTest());
+        addTestCase("copy item", \copyItemTest());
+        addTestCase("search items", \searchItemsTest());
+        addTestCase("reference data", \referenceDataTest());
+        addTestCase("connection scheme", \connectionSchemeTest());
+        addTestCase("live connection ping", \liveConnectionPingTest());
+        addTestCase("live get drive info", \liveGetDriveInfoTest());
+        addTestCase("live list items", \liveListItemsTest());
+        addTestCase("live folder CRUD lifecycle", \liveFolderCrudTest());
+
+        set_return_value(main());
+    }
+
+    checkModule() {
+%ifdef NoJson
+        testSkip("no json module");
+%endif
+    }
+
+    sanityTest() {
+        checkModule();
+%ifndef NoJson
+        FakeOneDriveRestClientIo rest();
+        OneDriveDataProvider::OneDriveDataProvider prov(rest);
+        assertEq("onedrive", prov.getName());
+
+        *list<string> children = prov.getChildProviderNames();
+        assertTrue(children.size() > 0, "has child providers");
+        assertTrue(inlist("items", children), "has items child");
+        assertTrue(inlist("get-drive-info", children), "has get-drive-info child");
+        assertTrue(inlist("get-item", children), "has get-item child");
+        assertTrue(inlist("create-folder", children), "has create-folder child");
+        assertTrue(inlist("upload-file", children), "has upload-file child");
+        assertTrue(inlist("create-upload-session", children), "has create-upload-session child");
+        assertTrue(inlist("download-file", children), "has download-file child");
+        assertTrue(inlist("delete-item", children), "has delete-item child");
+        assertTrue(inlist("update-item", children), "has update-item child");
+        assertTrue(inlist("create-sharing-link", children), "has create-sharing-link child");
+        assertTrue(inlist("copy-item", children), "has copy-item child");
+        assertTrue(inlist("events", children), "has events child");
+%endif
+    }
+
+    actionCatalogTest() {
+        # test get-drive-info action
+        hash<DataProviderActionInfo> action = DataProviderActionCatalog::getAppAction(
+            OneDriveDataProvider::OneDriveDataProvider::AppName, "get-drive-info"
+        );
+        assertEq("/get-drive-info", action.path);
+        assertEq(DPAT_API, action.action_code);
+        assertEq(("Drive",), action.groups);
+        assertTrue(action.output_type instanceof OneDriveDataProvider::OneDriveDriveInfoDataType);
+
+        # test search-items action
+        action = DataProviderActionCatalog::getAppAction(
+            OneDriveDataProvider::OneDriveDataProvider::AppName, "search-items"
+        );
+        assertEq("/items", action.path);
+        assertEq(DPAT_FIND, action.action_code);
+        assertEq(("Files",), action.groups);
+        assertTrue(action.options.hasKey("folder_id"));
+        assertTrue(action.options.hasKey("search_query"));
+        assertTrue(action.options.folder_id.preselected);
+
+        # test create-folder action
+        action = DataProviderActionCatalog::getAppAction(
+            OneDriveDataProvider::OneDriveDataProvider::AppName, "create-folder"
+        );
+        assertEq(DPAT_API, action.action_code);
+        assertEq(True, action.options.name.required);
+        assertTrue(action.options.hasKey("description"), "create-folder has description option");
+        assertTrue(action.options.description.preselected, "description is preselected");
+
+        # test upload-file action
+        action = DataProviderActionCatalog::getAppAction(
+            OneDriveDataProvider::OneDriveDataProvider::AppName, "upload-file"
+        );
+        assertEq(DPAT_API, action.action_code);
+        assertEq(True, action.options.file.required);
+
+        # test delete-item action
+        action = DataProviderActionCatalog::getAppAction(
+            OneDriveDataProvider::OneDriveDataProvider::AppName, "delete-item"
+        );
+        assertEq(DPAT_API, action.action_code);
+        assertEq(True, action.options.id.required);
+
+        # test update-item action
+        action = DataProviderActionCatalog::getAppAction(
+            OneDriveDataProvider::OneDriveDataProvider::AppName, "update-item"
+        );
+        assertEq(DPAT_API, action.action_code);
+        assertEq(True, action.options.id.required);
+        assertTrue(action.options.hasKey("name"));
+        assertTrue(action.options.hasKey("parent_id"));
+
+        # test copy-item action
+        action = DataProviderActionCatalog::getAppAction(
+            OneDriveDataProvider::OneDriveDataProvider::AppName, "copy-item"
+        );
+        assertEq(DPAT_API, action.action_code);
+        assertEq(True, action.options.id.required);
+        assertTrue(action.options.hasKey("name"), "copy-item has name option");
+        assertTrue(action.options.hasKey("parent_id"), "copy-item has parent_id option");
+        assertTrue(action.options.hasKey("conflict_behavior"), "copy-item has conflict_behavior option");
+
+        # test create-sharing-link action
+        action = DataProviderActionCatalog::getAppAction(
+            OneDriveDataProvider::OneDriveDataProvider::AppName, "create-sharing-link"
+        );
+        assertEq(DPAT_API, action.action_code);
+        assertEq(True, action.options.id.required);
+        assertEq(True, action.options.type.required);
+
+        # test file-change event
+        action = DataProviderActionCatalog::getAppAction(
+            OneDriveDataProvider::OneDriveDataProvider::AppName, OneDriveDataProvider::EVENT_FILE_CHANGE
+        );
+        assertEq(DPAT_EVENT, action.action_code);
+
+        # test example event data
+        FakeOneDriveRestClientIo evrest();
+        evrest.response_body = {"value": ()};
+        OneDriveDataProvider::OneDriveDataProvider evprov(evrest);
+        AbstractDataProvider events_dp = evprov.getChildProvider("events");
+        AbstractDataProvider watch_dp = events_dp.getChildProvider(OneDriveDataProvider::EVENT_FILE_CHANGE);
+        auto example = watch_dp.getExampleEventData(OneDriveDataProvider::EVENT_FILE_CHANGE);
+        assertTrue(example.hasKey("id"), "example has id field");
+        assertTrue(example.hasKey("name"), "example has name field");
+    }
+
+    dataTypesTest() {
+        # drive item data type
+        auto item_type = new OneDriveDataProvider::OneDriveDriveItemDataType();
+        hash<string, AbstractDataField> fields = item_type.getFields();
+        assertTrue(fields.hasKey("id"), "item has id field");
+        assertTrue(fields.hasKey("name"), "item has name field");
+        assertTrue(fields.hasKey("size"), "item has size field");
+        assertTrue(fields.hasKey("webUrl"), "item has webUrl field");
+        assertTrue(fields.hasKey("createdDateTime"), "item has createdDateTime field");
+        assertTrue(fields.hasKey("lastModifiedDateTime"), "item has lastModifiedDateTime field");
+        assertTrue(fields.hasKey("parentReference"), "item has parentReference field");
+        assertTrue(fields.hasKey("file"), "item has file field");
+        assertTrue(fields.hasKey("folder"), "item has folder field");
+
+        # drive info data type
+        auto drive_type = new OneDriveDataProvider::OneDriveDriveInfoDataType();
+        fields = drive_type.getFields();
+        assertTrue(fields.hasKey("id"), "drive has id field");
+        assertTrue(fields.hasKey("driveType"), "drive has driveType field");
+        assertTrue(fields.hasKey("quota"), "drive has quota field");
+
+        # upload session data type
+        auto session_type = new OneDriveDataProvider::OneDriveUploadSessionDataType();
+        fields = session_type.getFields();
+        assertTrue(fields.hasKey("uploadUrl"), "session has uploadUrl field");
+        assertTrue(fields.hasKey("expirationDateTime"), "session has expirationDateTime field");
+        assertTrue(fields.hasKey("nextExpectedRanges"), "session has nextExpectedRanges field");
+
+        # sharing link data type
+        auto link_type = new OneDriveDataProvider::OneDriveSharingLinkDataType();
+        fields = link_type.getFields();
+        assertTrue(fields.hasKey("id"), "link has id field");
+        assertTrue(fields.hasKey("link"), "link has link field");
+        assertTrue(fields.hasKey("roles"), "link has roles field");
+
+        # hashes data type
+        auto hashes_type = new OneDriveDataProvider::OneDriveHashesDataType();
+        fields = hashes_type.getFields();
+        assertTrue(fields.hasKey("crc32Hash"), "hashes has crc32Hash field");
+        assertTrue(fields.hasKey("sha1Hash"), "hashes has sha1Hash field");
+        assertTrue(fields.hasKey("sha256Hash"), "hashes has sha256Hash field");
+        assertTrue(fields.hasKey("quickXorHash"), "hashes has quickXorHash field");
+    }
+
+    getDriveInfoTest() {
+        checkModule();
+%ifndef NoJson
+        FakeOneDriveRestClientIo rest();
+        rest.response_body = {
+            "id": "drive123",
+            "driveType": "personal",
+            "name": "OneDrive",
+            "quota": {
+                "total": 5368709120,
+                "used": 1073741824,
+                "remaining": 4294967296,
+                "state": "normal",
+            },
+        };
+        OneDriveDataProvider::OneDriveDataProvider prov(rest);
+        AbstractDataProvider dp = prov.getChildProvider("get-drive-info");
+        hash<auto> resp = dp.doRequest();
+
+        assertEq("GET", rest.last_method);
+        assertEq("me/drive", rest.last_path);
+        assertEq("drive123", resp.id);
+        assertEq("personal", resp.driveType);
+%endif
+    }
+
+    getItemTest() {
+        checkModule();
+%ifndef NoJson
+        FakeOneDriveRestClientIo rest();
+        rest.response_body = {
+            "id": "item123",
+            "name": "document.pdf",
+            "size": 1024,
+            "file": {"mimeType": "application/pdf"},
+        };
+        OneDriveDataProvider::OneDriveDataProvider prov(rest);
+        AbstractDataProvider dp = prov.getChildProvider("get-item");
+        hash<auto> resp = dp.doRequest({"id": "item123"});
+
+        assertEq("GET", rest.last_method);
+        assertEq("me/drive/items/item123", rest.last_path);
+        assertEq("item123", resp.id);
+        assertEq("document.pdf", resp.name);
+%endif
+    }
+
+    getItemByPathTest() {
+        checkModule();
+%ifndef NoJson
+        FakeOneDriveRestClientIo rest();
+        rest.response_body = {
+            "id": "item456",
+            "name": "report.docx",
+        };
+        OneDriveDataProvider::OneDriveDataProvider prov(rest);
+        AbstractDataProvider dp = prov.getChildProvider("get-item");
+        hash<auto> resp = dp.doRequest({"path": "/Documents/report.docx"});
+
+        assertEq("GET", rest.last_method);
+        assertEq("me/drive/root:/Documents/report.docx", rest.last_path);
+        assertEq("item456", resp.id);
+%endif
+    }
+
+    createFolderTest() {
+        checkModule();
+%ifndef NoJson
+        FakeOneDriveRestClientIo rest();
+        rest.response_body = {
+            "id": "folder789",
+            "name": "New Folder",
+            "folder": {"childCount": 0},
+        };
+        OneDriveDataProvider::OneDriveDataProvider prov(rest);
+        AbstractDataProvider dp = prov.getChildProvider("create-folder");
+        hash<auto> resp = dp.doRequest({"name": "New Folder"});
+
+        assertEq("POST", rest.last_method);
+        assertEq("me/drive/root/children", rest.last_path);
+        assertEq("New Folder", rest.last_request.name);
+        assertTrue(rest.last_request.hasKey("folder"));
+        assertEq("folder789", resp.id);
+
+        # test with parent_id
+        resp = dp.doRequest({"name": "Sub Folder", "parent_id": "parent123"});
+        assertEq("me/drive/items/parent123/children", rest.last_path);
+
+        # test with conflict_behavior
+        resp = dp.doRequest({"name": "Test", "conflict_behavior": "rename"});
+        assertEq("rename", rest.last_request."@microsoft.graph.conflictBehavior");
+
+        # test with description
+        resp = dp.doRequest({"name": "Described Folder", "description": "A test description"});
+        assertEq("A test description", rest.last_request.description);
+%endif
+    }
+
+    uploadFileTest() {
+        checkModule();
+%ifndef NoJson
+        FakeOneDriveRestClientIo rest();
+        rest.response_body = {
+            "id": "file123",
+            "name": "test.txt",
+            "size": 11,
+        };
+        OneDriveDataProvider::OneDriveDataProvider prov(rest);
+        AbstractDataProvider dp = prov.getChildProvider("upload-file");
+        hash<auto> resp = dp.doRequest({
+            "file": {
+                "name": "test.txt",
+                "content": make_base64_string("hello world"),
+                "mime_type": "text/plain",
+            },
+        });
+
+        assertEq("PUT", rest.last_method);
+        assertRegex("me/drive/root:/test.txt:/content", rest.last_path);
+        assertEq("file123", resp.id);
+
+        # test with parent_id
+        resp = dp.doRequest({
+            "file": {
+                "name": "test.txt",
+                "content": make_base64_string("hello"),
+                "mime_type": "text/plain",
+            },
+            "parent_id": "folder789",
+        });
+        assertRegex("me/drive/items/folder789:/test.txt:/content", rest.last_path);
+%endif
+    }
+
+    createUploadSessionTest() {
+        checkModule();
+%ifndef NoJson
+        FakeOneDriveRestClientIo rest();
+        rest.response_body = {
+            "uploadUrl": "https://sn3302.up.1drv.com/up/fe6987415ace7X4811...",
+            "expirationDateTime": "2026-04-10T12:00:00Z",
+            "nextExpectedRanges": ("0-"),
+        };
+        OneDriveDataProvider::OneDriveDataProvider prov(rest);
+        AbstractDataProvider dp = prov.getChildProvider("create-upload-session");
+        hash<auto> resp = dp.doRequest({"filename": "large-file.zip"});
+
+        assertEq("POST", rest.last_method);
+        assertRegex("createUploadSession", rest.last_path);
+        assertEq("large-file.zip", rest.last_request.item.name);
+        assertTrue(resp.uploadUrl.val());
+%endif
+    }
+
+    downloadFileTest() {
+        checkModule();
+%ifndef NoJson
+        FakeOneDriveRestClientIo rest();
+        rest.response_body = {
+            "id": "file123",
+            "name": "document.pdf",
+            "size": 2048,
+            "file": {"mimeType": "application/pdf"},
+            "@microsoft.graph.downloadUrl": "https://download.example.com/file123",
+        };
+        OneDriveDataProvider::OneDriveDataProvider prov(rest);
+        AbstractDataProvider dp = prov.getChildProvider("download-file");
+        hash<auto> resp = dp.doRequest({"id": "file123"});
+
+        assertEq("GET", rest.last_method);
+        assertEq("me/drive/items/file123", rest.last_path);
+        assertEq("document.pdf", resp.name);
+        assertEq(2048, resp.size);
+        assertEq("application/pdf", resp.content_type);
+        assertTrue(resp.download_url.val());
+%endif
+    }
+
+    deleteItemTest() {
+        checkModule();
+%ifndef NoJson
+        FakeOneDriveRestClientIo rest();
+        rest.response_body = {};
+        OneDriveDataProvider::OneDriveDataProvider prov(rest);
+        AbstractDataProvider dp = prov.getChildProvider("delete-item");
+        hash<auto> resp = dp.doRequest({"id": "item123"});
+
+        assertEq("DELETE", rest.last_method);
+        assertEq("me/drive/items/item123", rest.last_path);
+        assertEq("deleted", resp.status);
+        assertEq("item123", resp.id);
+%endif
+    }
+
+    createSharingLinkTest() {
+        checkModule();
+%ifndef NoJson
+        FakeOneDriveRestClientIo rest();
+        rest.response_body = {
+            "id": "perm123",
+            "link": {
+                "webUrl": "https://1drv.ms/...",
+                "type": "view",
+                "scope": "anonymous",
+            },
+            "roles": ("read",),
+        };
+        OneDriveDataProvider::OneDriveDataProvider prov(rest);
+        AbstractDataProvider dp = prov.getChildProvider("create-sharing-link");
+        hash<auto> resp = dp.doRequest({"id": "item123", "type": "view"});
+
+        assertEq("POST", rest.last_method);
+        assertEq("me/drive/items/item123/createLink", rest.last_path);
+        assertEq("view", rest.last_request.type);
+        assertEq("perm123", resp.id);
+
+        # test with scope and password
+        resp = dp.doRequest({
+            "id": "item456",
+            "type": "edit",
+            "scope": "organization",
+            "password": "secret123",
+        });
+        assertEq("edit", rest.last_request.type);
+        assertEq("organization", rest.last_request.scope);
+        assertEq("secret123", rest.last_request.password);
+%endif
+    }
+
+    updateItemTest() {
+        checkModule();
+%ifndef NoJson
+        FakeOneDriveRestClientIo rest();
+        rest.response_body = {
+            "id": "item123",
+            "name": "renamed-file.txt",
+            "description": "Updated description",
+        };
+        OneDriveDataProvider::OneDriveDataProvider prov(rest);
+        AbstractDataProvider dp = prov.getChildProvider("update-item");
+
+        # test rename
+        hash<auto> resp = dp.doRequest({"id": "item123", "name": "renamed-file.txt"});
+        assertEq("PATCH", rest.last_method);
+        assertEq("me/drive/items/item123", rest.last_path);
+        assertEq("renamed-file.txt", rest.last_request.name);
+        assertEq("renamed-file.txt", resp.name);
+
+        # test move
+        resp = dp.doRequest({"id": "item123", "parent_id": "folder456"});
+        assertEq("folder456", rest.last_request.parentReference.id);
+
+        # test update description
+        resp = dp.doRequest({"id": "item123", "description": "Updated description"});
+        assertEq("Updated description", rest.last_request.description);
+%endif
+    }
+
+    copyItemTest() {
+        checkModule();
+%ifndef NoJson
+        FakeOneDriveRestClientIo rest();
+        rest.response_body = {};
+        rest.response_headers = {
+            "location": "https://contoso.sharepoint.com/_api/v2.0/monitor/4A3407B5-88FC-4504-8B21",
+        };
+        OneDriveDataProvider::OneDriveDataProvider prov(rest);
+        AbstractDataProvider dp = prov.getChildProvider("copy-item");
+
+        # test basic copy
+        hash<auto> resp = dp.doRequest({"id": "item123"});
+        assertEq("POST", rest.last_method);
+        assertEq("me/drive/items/item123/copy", rest.last_path);
+        assertEq("accepted", resp.status);
+        assertTrue(resp.monitor_url.val(), "monitor URL returned");
+
+        # test copy with name
+        resp = dp.doRequest({"id": "item123", "name": "copy of file.txt"});
+        assertEq("copy of file.txt", rest.last_request.name);
+
+        # test copy with destination folder
+        resp = dp.doRequest({"id": "item123", "parent_id": "folder456", "parent_drive_id": "drive789"});
+        assertEq("folder456", rest.last_request.parentReference.id);
+        assertEq("drive789", rest.last_request.parentReference.driveId);
+
+        # test copy with conflict behavior
+        resp = dp.doRequest({"id": "item123", "conflict_behavior": "rename"});
+        assertRegex("conflictBehavior=rename", rest.last_path);
+%endif
+    }
+
+    searchItemsTest() {
+        checkModule();
+%ifndef NoJson
+        FakeOneDriveRestClientIo rest();
+        rest.response_body = {
+            "value": (
+                {"id": "item1", "name": "file1.txt"},
+                {"id": "item2", "name": "file2.txt"},
+            ),
+        };
+        OneDriveDataProvider::OneDriveDataProvider prov(rest);
+        AbstractDataProvider dp = prov.getChildProvider("items");
+        AbstractDataProviderRecordIterator iter = dp.searchRecords();
+
+        int count = 0;
+        while (iter.next()) {
+            ++count;
+        }
+        assertEq(2, count, "got 2 items");
+
+        # test root children path
+        assertEq("GET", rest.last_method);
+        assertEq("me/drive/root/children", rest.last_path);
+
+        # test with folder_id
+        rest.response_body = {"value": ()};
+        dp.searchRecords(NOTHING, {"folder_id": "folder123"});
+        assertRegex("me/drive/items/folder123/children", rest.last_path);
+
+        # test with search_query
+        dp.searchRecords(NOTHING, {"search_query": "budget"});
+        assertRegex("me/drive/root/search", rest.last_path);
+%endif
+    }
+
+    referenceDataTest() {
+        checkModule();
+%ifndef NoJson
+        # verify getSupportedReferenceData returns expected types
+        FakeOneDriveRestClientIo rest();
+        OneDriveDataProvider::OneDriveDataProvider prov(rest);
+        *hash<string, bool> ref_types = prov.getSupportedReferenceData();
+        assertTrue(ref_types.folders, "supports folders reference data");
+        assertTrue(ref_types.drives, "supports drives reference data");
+        assertTrue(ref_types.items, "supports items reference data");
+
+        # test folders reference data with mock response
+        rest.response_body = {
+            "value": (
+                {"id": "folder1", "name": "Documents", "parentReference": {"driveId": "d1"}},
+                {"id": "folder2", "name": "Photos", "parentReference": {"driveId": "d1"}},
+            ),
+        };
+        *list<hash<AllowedValueInfo>> folders = prov.getReferenceData("folders");
+        assertEq(2, folders.size(), "got 2 folders");
+        assertEq("Documents", folders[0].display_name);
+        assertEq("folder1", folders[0].value);
+        assertEq("Photos", folders[1].display_name);
+        assertEq("folder2", folders[1].value);
+
+        # test drives reference data with mock response
+        rest.response_body = {
+            "value": (
+                {"id": "drive1", "name": "OneDrive", "driveType": "personal"},
+            ),
+        };
+        *list<hash<AllowedValueInfo>> drives = prov.getReferenceData("drives");
+        assertEq(1, drives.size(), "got 1 drive");
+        assertEq("OneDrive", drives[0].display_name);
+        assertEq("drive1", drives[0].value);
+
+        # test items reference data with mock response
+        rest.response_body = {
+            "value": (
+                {"id": "item1", "name": "report.pdf"},
+                {"id": "item2", "name": "Projects", "folder": {"childCount": 5}},
+            ),
+        };
+        *list<hash<AllowedValueInfo>> items = prov.getReferenceData("items");
+        assertEq(2, items.size(), "got 2 items");
+        assertEq("report.pdf", items[0].display_name);
+        assertEq("item1", items[0].value);
+        assertEq("Projects", items[1].display_name);
+        assertEq("item2", items[1].value);
+        assertTrue(items[0].short_desc.regex("file"), "file item shows type");
+        assertTrue(items[1].short_desc.regex("folder"), "folder item shows type");
+
+        # verify ref_data attributes on action options
+        hash<DataProviderActionInfo> action = DataProviderActionCatalog::getAppAction(
+            OneDriveDataProvider::OneDriveDataProvider::AppName, "create-folder"
+        );
+        assertEq("folders", action.options.parent_id.ref_data, "create-folder parent_id has ref_data");
+
+        action = DataProviderActionCatalog::getAppAction(
+            OneDriveDataProvider::OneDriveDataProvider::AppName, "copy-item"
+        );
+        assertEq("folders", action.options.parent_id.ref_data, "copy-item parent_id has ref_data");
+        assertEq("drives", action.options.parent_drive_id.ref_data, "copy-item parent_drive_id has ref_data");
+
+        action = DataProviderActionCatalog::getAppAction(
+            OneDriveDataProvider::OneDriveDataProvider::AppName, "search-items"
+        );
+        assertEq("folders", action.options.folder_id.ref_data, "search-items folder_id has ref_data");
+
+        # verify ref_data on item ID fields
+        action = DataProviderActionCatalog::getAppAction(
+            OneDriveDataProvider::OneDriveDataProvider::AppName, "get-item"
+        );
+        assertEq("items", action.options.id.ref_data, "get-item id has ref_data");
+
+        action = DataProviderActionCatalog::getAppAction(
+            OneDriveDataProvider::OneDriveDataProvider::AppName, "download-file"
+        );
+        assertEq("items", action.options.id.ref_data, "download-file id has ref_data");
+
+        action = DataProviderActionCatalog::getAppAction(
+            OneDriveDataProvider::OneDriveDataProvider::AppName, "delete-item"
+        );
+        assertEq("items", action.options.id.ref_data, "delete-item id has ref_data");
+
+        action = DataProviderActionCatalog::getAppAction(
+            OneDriveDataProvider::OneDriveDataProvider::AppName, "update-item"
+        );
+        assertEq("items", action.options.id.ref_data, "update-item id has ref_data");
+
+        action = DataProviderActionCatalog::getAppAction(
+            OneDriveDataProvider::OneDriveDataProvider::AppName, "copy-item"
+        );
+        assertEq("items", action.options.id.ref_data, "copy-item id has ref_data");
+
+        action = DataProviderActionCatalog::getAppAction(
+            OneDriveDataProvider::OneDriveDataProvider::AppName, "create-sharing-link"
+        );
+        assertEq("items", action.options.id.ref_data, "create-sharing-link id has ref_data");
+%endif
+    }
+
+    connectionSchemeTest() {
+        auto scheme = ConnectionSchemeCache::getScheme("onedrive");
+        assertTrue(scheme instanceof hash, "scheme is a hash");
+        assertEq("Microsoft OneDrive", scheme.display_name);
+    }
+
+    # --- Live Tests (require -c connection option) ---
+
+    private *AbstractConnection getConnection() {
+        *string conn_name = m_options.conn;
+        if (!conn_name) {
+            testSkip("no connection specified; use -c <connection_name>");
+            return;
+        }
+        return get_connection(conn_name);
+    }
+
+    liveConnectionPingTest() {
+        *AbstractConnection conn = getConnection();
+        if (!conn) return;
+
+        hash<auto> info = conn.ping(True);
+        assertEq(True, info.ok, "ping succeeded");
+    }
+
+    liveGetDriveInfoTest() {
+        *AbstractConnection conn = getConnection();
+        if (!conn) return;
+
+        AbstractDataProvider prov = conn.getDataProvider();
+        AbstractDataProvider dp = prov.getChildProvider("get-drive-info");
+        hash<auto> resp = dp.doRequest();
+
+        assertTrue(resp.id.val(), "drive has an ID");
+        assertTrue(resp.driveType.val(), "drive has a type");
+        if (m_options.verbose > 0) {
+            printf("Drive info: id=%y type=%y name=%y\n", resp.id, resp.driveType, resp.name);
+            if (resp.quota) {
+                printf("Quota: total=%d used=%d remaining=%d state=%y\n",
+                    resp.quota.total, resp.quota.used, resp.quota.remaining, resp.quota.state);
+            }
+        }
+    }
+
+    liveListItemsTest() {
+        *AbstractConnection conn = getConnection();
+        if (!conn) return;
+
+        AbstractDataProvider prov = conn.getDataProvider();
+        AbstractDataProvider dp = prov.getChildProvider("items");
+        AbstractDataProviderRecordIterator iter = dp.searchRecords(NOTHING, {"top": 5});
+
+        int count = 0;
+        while (iter.next()) {
+            hash<auto> item = iter.getValue();
+            ++count;
+            if (m_options.verbose > 0) {
+                printf("Item: name=%y id=%y size=%y type=%y\n",
+                    item.name, item.id, item.size,
+                    item.folder ? "folder" : (item.file.mimeType ?? "unknown"));
+            }
+        }
+        assertTrue(count >= 0, "search completed");
+        if (m_options.verbose > 0) {
+            printf("Listed %d items from drive root\n", count);
+        }
+    }
+
+    liveFolderCrudTest() {
+        *AbstractConnection conn = getConnection();
+        if (!conn) return;
+
+        AbstractDataProvider prov = conn.getDataProvider();
+
+        # Create a test folder
+        string folder_name = "QoreTest_" + now_us().toString();
+        AbstractDataProvider create_dp = prov.getChildProvider("create-folder");
+        hash<auto> folder = create_dp.doRequest({
+            "name": folder_name,
+            "conflict_behavior": "rename",
+        });
+        assertTrue(folder.id.val(), "folder created with ID");
+        assertEq(folder_name, folder.name, "folder has correct name");
+        if (m_options.verbose > 0) {
+            printf("Created folder: name=%y id=%y\n", folder.name, folder.id);
+        }
+
+        # Get the folder metadata
+        AbstractDataProvider get_dp = prov.getChildProvider("get-item");
+        hash<auto> item = get_dp.doRequest({"id": folder.id});
+        assertEq(folder.id, item.id, "got same folder by ID");
+        assertTrue(item.folder != NOTHING, "item is a folder");
+
+        # Rename the folder
+        string new_name = folder_name + "_renamed";
+        AbstractDataProvider update_dp = prov.getChildProvider("update-item");
+        hash<auto> updated = update_dp.doRequest({"id": folder.id, "name": new_name});
+        assertEq(new_name, updated.name, "folder renamed");
+        if (m_options.verbose > 0) {
+            printf("Renamed folder: %y -> %y\n", folder_name, updated.name);
+        }
+
+        # Verify rename persisted
+        item = get_dp.doRequest({"id": folder.id});
+        assertEq(new_name, item.name, "rename persisted");
+
+        # Delete the test folder
+        AbstractDataProvider del_dp = prov.getChildProvider("delete-item");
+        hash<auto> del_resp = del_dp.doRequest({"id": folder.id});
+        assertEq("deleted", del_resp.status, "folder deleted");
+        if (m_options.verbose > 0) {
+            printf("Deleted folder: id=%y\n", folder.id);
+        }
+
+        # Verify deletion (should return 404)
+        try {
+            get_dp.doRequest({"id": folder.id});
+            fail("expected error getting deleted folder");
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose > 0) {
+                printf("Verified deletion: %s\n", ex.err);
+            }
+        }
+    }
+}
