@@ -1,0 +1,805 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  FirecrawlDataProvider.qtest Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/ConnectionProvider
+%requires ../../../../qlib/RestClient.qm
+%requires ../../../../qlib/Mime.qm
+
+%try-module json
+%define NoJson
+%endtry
+
+%requires ../../../../qlib/FirecrawlRestClient.qm
+%requires ../../../../qlib/FirecrawlDataProvider
+
+%exec-class FirecrawlDataProviderTest
+
+public class FirecrawlDataProviderTest inherits QUnit::Test {
+    private {
+        #! Firecrawl REST client for connection/ping tests
+        *FirecrawlRestClient::FirecrawlRestClient client;
+
+        #! API key for integration tests
+        *string apikey;
+
+        #! Logger for verbose output
+        Logger logger;
+
+        #! Custom command-line options
+        const MyOpts = Opts + {
+            "apikey": "k,apikey=s",
+            "conn": "c,connection=s",
+        };
+
+        #! All expected child provider names
+        const ExpectedChildren = (
+            "scrape",
+            "crawl",
+            "get-crawl-status",
+            "cancel-crawl",
+            "batch-scrape",
+            "get-batch-scrape-status",
+            "cancel-batch-scrape",
+            "map",
+            "search",
+            "extract",
+            "get-extract-status",
+            "agent",
+            "get-agent-status",
+            "cancel-agent",
+        );
+    }
+
+    constructor() : Test("FirecrawlDataProvider Test", "1.0", \ARGV, MyOpts) {
+        logger = new Logger("test", LoggerLevel::getLevelInfo());
+
+        # Unit tests (always run, no credentials needed)
+        addTestCase("sanity tests", \sanityTests());
+        addTestCase("factory tests", \factoryTests());
+        addTestCase("metadata tests", \metadataTests());
+        addTestCase("child provider tests", \childProviderTests());
+        addTestCase("data type tests", \dataTypeTests());
+        addTestCase("connection tests", \connectionTests());
+        addTestCase("action catalog tests", \actionCatalogTests());
+        addTestCase("negative tests", \negativeTests());
+
+        # Integration tests (require FIRECRAWL_API_KEY or connection)
+        addTestCase("integration tests", \integrationTests());
+
+        # Try to set up connection for integration tests
+        try {
+            setupConnection();
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose) {
+                printf("Connection setup failed: %s: %s\n", ex.err, ex.desc);
+            }
+        }
+
+        set_return_value(main());
+    }
+
+    #! Sets up the Firecrawl client for integration tests
+    private setupConnection() {
+        *string conn_name = m_options.conn;
+        if (conn_name) {
+            AbstractConnection conn = get_connection(conn_name);
+            client = conn.get();
+            return;
+        }
+        apikey = m_options.apikey ?? ENV.FIRECRAWL_API_KEY;
+        if (!apikey) {
+            if (m_options.verbose) {
+                printf("No API key provided (use -k option or FIRECRAWL_API_KEY env var)\n");
+            }
+            return;
+        }
+        client = new FirecrawlRestClient::FirecrawlRestClient({"apikey": apikey});
+    }
+
+    #! Check if json module is available
+    private checkJson() {
+%ifdef NoJson
+        testSkip("no json module present");
+%endif
+    }
+
+    #! Creates a FirecrawlDataProvider for unit tests (fake key)
+    private *FirecrawlDataProvider::FirecrawlDataProvider tryCreateProvider() {
+        try {
+            return new FirecrawlDataProvider::FirecrawlDataProvider({
+                "apikey": "fake-test-key-for-unit-tests",
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR"
+                    || ex.err == "QOREADDRINFO-GETINFO-ERROR") {
+                testSkip(sprintf("cannot connect to Firecrawl API: %s", ex.desc));
+            }
+            rethrow;
+        }
+    }
+
+    #! Creates a provider using the real credentials (integration tests only)
+    private *FirecrawlDataProvider::FirecrawlDataProvider createRealProvider() {
+        if (apikey) {
+            return new FirecrawlDataProvider::FirecrawlDataProvider({"apikey": apikey});
+        }
+        if (!client) {
+            testSkip("No Firecrawl connection; set FIRECRAWL_API_KEY, use -k, or -c option");
+        }
+        return new FirecrawlDataProvider::FirecrawlDataProvider({"restclient": client});
+    }
+
+    #! Basic sanity tests - provider instantiation
+    sanityTests() {
+        checkJson();
+        *FirecrawlDataProvider::FirecrawlDataProvider prov = tryCreateProvider();
+        if (!prov) {
+            return;
+        }
+        assertEq("firecrawl", prov.getName());
+        assertTrue(prov.getDesc().val());
+    }
+
+    #! Factory tests - verify factory registration
+    factoryTests() {
+        checkJson();
+        AbstractDataProviderFactory factory = DataProvider::getFactory("firecrawl");
+        assertEq("firecrawl", factory.getInfo().name);
+        assertTrue(factory.getInfo().children_can_support_apis);
+
+        # Verify constructor options
+        hash<auto> factoryOpts = factory.getInfo().provider_info.constructor_options;
+        assertTrue(factoryOpts.hasKey("apikey"));
+        assertTrue(factoryOpts.hasKey("restclient"));
+        assertTrue(factoryOpts.hasKey("restclient_options"));
+    }
+
+    #! Metadata tests - verify provider info structure
+    metadataTests() {
+        checkJson();
+        *FirecrawlDataProvider::FirecrawlDataProvider prov = tryCreateProvider();
+        if (!prov) {
+            return;
+        }
+        hash<DataProviderInfo> info = prov.getInfo();
+
+        assertTrue(info.supports_children);
+        assertTrue(info.children_can_support_apis);
+        assertEq("FirecrawlDataProvider", info.type);
+
+        # Check constructor options include REST client options
+        assertTrue(info.constructor_options.hasKey("restclient"));
+    }
+
+    #! Child provider tests - verify hierarchy
+    childProviderTests() {
+        checkJson();
+        *FirecrawlDataProvider::FirecrawlDataProvider prov = tryCreateProvider();
+        if (!prov) {
+            return;
+        }
+
+        # Check all expected child providers exist
+        list<string> children = prov.getChildProviderNames();
+        assertEq(14, children.size());
+
+        foreach string childName in (ExpectedChildren) {
+            assertTrue(inlist(childName, children),
+                sprintf("expected child provider '%s' not found", childName));
+        }
+
+        # Verify each child that supports requests
+        foreach string childName in (ExpectedChildren) {
+            AbstractDataProvider child = prov.getChildProvider(childName);
+            assertEq(childName, child.getName());
+            hash<DataProviderInfo> childInfo = child.getInfo();
+            assertTrue(childInfo.supports_request,
+                sprintf("child '%s' should support requests", childName));
+        }
+    }
+
+    #! Data type tests - verify response type field definitions
+    dataTypeTests() {
+        checkJson();
+
+        # Test scrape response type
+        FirecrawlDataProvider::FirecrawlScrapeResponseDataType scrapeType();
+        hash<string, AbstractDataField> scrapeFields = scrapeType.getFields();
+        assertTrue(scrapeFields.hasKey("success"));
+        assertTrue(scrapeFields.hasKey("data"));
+        assertTrue(scrapeFields.hasKey("warning"));
+
+        # Test crawl response type
+        FirecrawlDataProvider::FirecrawlCrawlResponseDataType crawlType();
+        hash<string, AbstractDataField> crawlFields = crawlType.getFields();
+        assertTrue(crawlFields.hasKey("success"));
+        assertTrue(crawlFields.hasKey("status"));
+        assertTrue(crawlFields.hasKey("total"));
+        assertTrue(crawlFields.hasKey("completed"));
+        assertTrue(crawlFields.hasKey("creditsUsed"));
+        assertTrue(crawlFields.hasKey("data"));
+        assertTrue(crawlFields.hasKey("next"));
+
+        # Test map response type
+        FirecrawlDataProvider::FirecrawlMapResponseDataType mapType();
+        hash<string, AbstractDataField> mapFields = mapType.getFields();
+        assertTrue(mapFields.hasKey("success"));
+        assertTrue(mapFields.hasKey("links"));
+
+        # Test search response type
+        FirecrawlDataProvider::FirecrawlSearchResponseDataType searchType();
+        hash<string, AbstractDataField> searchFields = searchType.getFields();
+        assertTrue(searchFields.hasKey("success"));
+        assertTrue(searchFields.hasKey("data"));
+        assertTrue(searchFields.hasKey("warning"));
+
+        # Test scrape request type
+        FirecrawlDataProvider::FirecrawlScrapeRequestDataType scrapeReqType();
+        hash<string, AbstractDataField> scrapeReqFields = scrapeReqType.getFields();
+        assertTrue(scrapeReqFields.hasKey("url"));
+        assertTrue(scrapeReqFields.hasKey("formats"));
+        assertTrue(scrapeReqFields.hasKey("onlyMainContent"));
+
+        # Test crawl request type
+        FirecrawlDataProvider::FirecrawlCrawlRequestDataType crawlReqType();
+        hash<string, AbstractDataField> crawlReqFields = crawlReqType.getFields();
+        assertTrue(crawlReqFields.hasKey("url"));
+        assertTrue(crawlReqFields.hasKey("excludePaths"));
+        assertTrue(crawlReqFields.hasKey("includePaths"));
+        assertTrue(crawlReqFields.hasKey("regexOnFullURL"));
+
+        # Test map request type
+        FirecrawlDataProvider::FirecrawlMapRequestDataType mapReqType();
+        hash<string, AbstractDataField> mapReqFields = mapReqType.getFields();
+        assertTrue(mapReqFields.hasKey("url"));
+        assertTrue(mapReqFields.hasKey("search"));
+        assertTrue(mapReqFields.hasKey("limit"));
+
+        # Test search request type
+        FirecrawlDataProvider::FirecrawlSearchRequestDataType searchReqType();
+        hash<string, AbstractDataField> searchReqFields = searchReqType.getFields();
+        assertTrue(searchReqFields.hasKey("query"));
+        assertTrue(searchReqFields.hasKey("limit"));
+        assertTrue(searchReqFields.hasKey("sources"));
+        assertTrue(searchReqFields.hasKey("categories"));
+        assertTrue(searchReqFields.hasKey("enterprise"));
+
+        # Test get-crawl-status request type
+        FirecrawlDataProvider::FirecrawlGetCrawlStatusRequestDataType getCrawlReqType();
+        hash<string, AbstractDataField> getCrawlReqFields = getCrawlReqType.getFields();
+        assertTrue(getCrawlReqFields.hasKey("id"));
+
+        # Test batch-scrape request type has scrape sub-options
+        FirecrawlDataProvider::FirecrawlBatchScrapeRequestDataType batchReqType();
+        hash<string, AbstractDataField> batchReqFields = batchReqType.getFields();
+        assertTrue(batchReqFields.hasKey("urls"));
+        assertTrue(batchReqFields.hasKey("formats"));
+        assertTrue(batchReqFields.hasKey("includeTags"));
+        assertTrue(batchReqFields.hasKey("excludeTags"));
+        assertTrue(batchReqFields.hasKey("waitFor"));
+        assertTrue(batchReqFields.hasKey("timeout"));
+        assertTrue(batchReqFields.hasKey("mobile"));
+        assertTrue(batchReqFields.hasKey("proxy"));
+        assertTrue(batchReqFields.hasKey("location"));
+        assertTrue(batchReqFields.hasKey("headers"));
+        assertTrue(batchReqFields.hasKey("actions"));
+        assertTrue(batchReqFields.hasKey("maxAge"));
+        assertTrue(batchReqFields.hasKey("webhook"));
+        assertTrue(batchReqFields.hasKey("parsers"));
+
+        # Test location sub-type
+        FirecrawlDataProvider::FirecrawlLocationDataType locType();
+        hash<string, AbstractDataField> locFields = locType.getFields();
+        assertTrue(locFields.hasKey("country"));
+        assertTrue(locFields.hasKey("languages"));
+
+        # Test webhook sub-type
+        FirecrawlDataProvider::FirecrawlWebhookDataType webhookType();
+        hash<string, AbstractDataField> webhookFields = webhookType.getFields();
+        assertTrue(webhookFields.hasKey("url"));
+        assertTrue(webhookFields.hasKey("headers"));
+        assertTrue(webhookFields.hasKey("metadata"));
+        assertTrue(webhookFields.hasKey("events"));
+
+        # Test cancel request types
+        FirecrawlDataProvider::FirecrawlCancelBatchScrapeRequestDataType cancelBatchType();
+        assertTrue(cancelBatchType.getFields().hasKey("id"));
+
+        FirecrawlDataProvider::FirecrawlCancelAgentRequestDataType cancelAgentType();
+        assertTrue(cancelAgentType.getFields().hasKey("id"));
+
+        # Test scrape options sub-type
+        FirecrawlDataProvider::FirecrawlScrapeOptionsDataType scrapeOptsType();
+        hash<string, AbstractDataField> scrapeOptsFields = scrapeOptsType.getFields();
+        assertTrue(scrapeOptsFields.hasKey("formats"));
+        assertTrue(scrapeOptsFields.hasKey("onlyMainContent"));
+        assertTrue(scrapeOptsFields.hasKey("includeTags"));
+        assertTrue(scrapeOptsFields.hasKey("excludeTags"));
+        assertTrue(scrapeOptsFields.hasKey("headers"));
+        assertTrue(scrapeOptsFields.hasKey("waitFor"));
+        assertTrue(scrapeOptsFields.hasKey("mobile"));
+        assertTrue(scrapeOptsFields.hasKey("timeout"));
+        assertTrue(scrapeOptsFields.hasKey("removeBase64Images"));
+        assertTrue(scrapeOptsFields.hasKey("blockAds"));
+        assertTrue(scrapeOptsFields.hasKey("proxy"));
+        assertTrue(scrapeOptsFields.hasKey("maxAge"));
+        assertTrue(scrapeOptsFields.hasKey("parsers"));
+
+        # Test scrape data item sub-type
+        FirecrawlDataProvider::FirecrawlScrapeDataItemDataType dataItemType();
+        hash<string, AbstractDataField> dataItemFields = dataItemType.getFields();
+        assertTrue(dataItemFields.hasKey("markdown"));
+        assertTrue(dataItemFields.hasKey("html"));
+        assertTrue(dataItemFields.hasKey("rawHtml"));
+        assertTrue(dataItemFields.hasKey("screenshot"));
+        assertTrue(dataItemFields.hasKey("audio"));
+        assertTrue(dataItemFields.hasKey("links"));
+        assertTrue(dataItemFields.hasKey("images"));
+        assertTrue(dataItemFields.hasKey("metadata"));
+        assertTrue(dataItemFields.hasKey("actions"));
+        assertTrue(dataItemFields.hasKey("summary"));
+        assertTrue(dataItemFields.hasKey("changeTracking"));
+        assertTrue(dataItemFields.hasKey("branding"));
+        assertTrue(dataItemFields.hasKey("warning"));
+
+        # Test action sub-type
+        FirecrawlDataProvider::FirecrawlActionDataType actionType();
+        hash<string, AbstractDataField> actionFields = actionType.getFields();
+        assertTrue(actionFields.hasKey("type"));
+        assertTrue(actionFields.hasKey("selector"));
+        assertTrue(actionFields.hasKey("milliseconds"));
+        assertTrue(actionFields.hasKey("text"));
+        assertTrue(actionFields.hasKey("key"));
+        assertTrue(actionFields.hasKey("script"));
+        assertTrue(actionFields.hasKey("direction"));
+        assertTrue(actionFields.hasKey("fullPage"));
+
+        # Test scrape request type has parsers field
+        assertTrue(scrapeReqFields.hasKey("parsers"));
+
+        # Test extract request type
+        FirecrawlDataProvider::FirecrawlExtractRequestDataType extractReqType();
+        hash<string, AbstractDataField> extractReqFields = extractReqType.getFields();
+        assertTrue(extractReqFields.hasKey("urls"));
+        assertTrue(extractReqFields.hasKey("prompt"));
+        assertTrue(extractReqFields.hasKey("schema"));
+
+        # Test agent request type
+        FirecrawlDataProvider::FirecrawlAgentRequestDataType agentReqType();
+        hash<string, AbstractDataField> agentReqFields = agentReqType.getFields();
+        assertTrue(agentReqFields.hasKey("prompt"));
+        assertTrue(agentReqFields.hasKey("urls"));
+        assertTrue(agentReqFields.hasKey("model"));
+
+        # Test new response sub-types
+        FirecrawlDataProvider::FirecrawlMetadataDataType metadataType();
+        hash<string, AbstractDataField> metadataFields = metadataType.getFields();
+        assertTrue(metadataFields.hasKey("title"));
+        assertTrue(metadataFields.hasKey("description"));
+        assertTrue(metadataFields.hasKey("language"));
+        assertTrue(metadataFields.hasKey("sourceURL"));
+        assertTrue(metadataFields.hasKey("url"));
+        assertTrue(metadataFields.hasKey("statusCode"));
+        assertTrue(metadataFields.hasKey("ogTitle"));
+        assertTrue(metadataFields.hasKey("ogImage"));
+
+        FirecrawlDataProvider::FirecrawlActionsResultDataType actionsResultType();
+        hash<string, AbstractDataField> actionsResultFields = actionsResultType.getFields();
+        assertTrue(actionsResultFields.hasKey("screenshots"));
+        assertTrue(actionsResultFields.hasKey("scrapes"));
+        assertTrue(actionsResultFields.hasKey("javascriptReturns"));
+        assertTrue(actionsResultFields.hasKey("pdfs"));
+
+        FirecrawlDataProvider::FirecrawlChangeTrackingDataType changeTrackingType();
+        hash<string, AbstractDataField> changeTrackingFields = changeTrackingType.getFields();
+        assertTrue(changeTrackingFields.hasKey("previousScrapeAt"));
+        assertTrue(changeTrackingFields.hasKey("changeStatus"));
+        assertTrue(changeTrackingFields.hasKey("visibility"));
+        assertTrue(changeTrackingFields.hasKey("diff"));
+        assertTrue(changeTrackingFields.hasKey("json"));
+
+        FirecrawlDataProvider::FirecrawlBrandingColorsDataType colorsType();
+        hash<string, AbstractDataField> colorsFields = colorsType.getFields();
+        assertTrue(colorsFields.hasKey("primary"));
+        assertTrue(colorsFields.hasKey("secondary"));
+        assertTrue(colorsFields.hasKey("accent"));
+        assertTrue(colorsFields.hasKey("background"));
+        assertTrue(colorsFields.hasKey("textPrimary"));
+        assertTrue(colorsFields.hasKey("link"));
+        assertTrue(colorsFields.hasKey("success"));
+        assertTrue(colorsFields.hasKey("warning"));
+        assertTrue(colorsFields.hasKey("error"));
+
+        FirecrawlDataProvider::FirecrawlBrandingTypographyDataType typographyType();
+        hash<string, AbstractDataField> typographyFields = typographyType.getFields();
+        assertTrue(typographyFields.hasKey("fontFamilies"));
+        assertTrue(typographyFields.hasKey("fontSizes"));
+        assertTrue(typographyFields.hasKey("fontWeights"));
+        assertTrue(typographyFields.hasKey("lineHeights"));
+
+        FirecrawlDataProvider::FirecrawlBrandingSpacingDataType spacingType();
+        hash<string, AbstractDataField> spacingFields = spacingType.getFields();
+        assertTrue(spacingFields.hasKey("baseUnit"));
+        assertTrue(spacingFields.hasKey("borderRadius"));
+        assertTrue(spacingFields.hasKey("padding"));
+        assertTrue(spacingFields.hasKey("margins"));
+
+        FirecrawlDataProvider::FirecrawlBrandingComponentsDataType componentsType();
+        hash<string, AbstractDataField> componentsFields = componentsType.getFields();
+        assertTrue(componentsFields.hasKey("buttonPrimary"));
+        assertTrue(componentsFields.hasKey("buttonSecondary"));
+        assertTrue(componentsFields.hasKey("input"));
+
+        FirecrawlDataProvider::FirecrawlBrandingImagesDataType imagesType();
+        hash<string, AbstractDataField> imagesFields = imagesType.getFields();
+        assertTrue(imagesFields.hasKey("logo"));
+        assertTrue(imagesFields.hasKey("favicon"));
+        assertTrue(imagesFields.hasKey("ogImage"));
+
+        FirecrawlDataProvider::FirecrawlBrandingDataType brandingType();
+        hash<string, AbstractDataField> brandingFields = brandingType.getFields();
+        assertTrue(brandingFields.hasKey("colorScheme"));
+        assertTrue(brandingFields.hasKey("logo"));
+        assertTrue(brandingFields.hasKey("colors"));
+        assertTrue(brandingFields.hasKey("fonts"));
+        assertTrue(brandingFields.hasKey("typography"));
+        assertTrue(brandingFields.hasKey("spacing"));
+
+        FirecrawlDataProvider::FirecrawlParsersDataType parsersType();
+        hash<string, AbstractDataField> parsersFields = parsersType.getFields();
+        assertTrue(parsersFields.hasKey("type"));
+        assertTrue(parsersFields.hasKey("mode"));
+        assertTrue(parsersFields.hasKey("maxPages"));
+    }
+
+    #! Connection tests - verify connection scheme registration
+    connectionTests() {
+        # Verify the firecrawlrest:// scheme is registered
+        hash<ConnectionSchemeInfo> scheme = ConnectionSchemeCache::getScheme("firecrawlrest");
+
+        assertTrue(scheme.options.hasKey("apikey"));
+
+        # Verify apikey option is sensitive
+        assertTrue(scheme.options.apikey.sensitive ?? False);
+
+        # Verify connection class can be instantiated and has data provider support
+        FirecrawlRestClient::FirecrawlRestConnection conn("test", "test connection",
+            "firecrawlrest://api.firecrawl.dev", {},
+            {"apikey": "fake-key-for-test"});
+        assertTrue(conn.hasDataProvider());
+        assertEq("firecrawlrest", conn.getType());
+    }
+
+    #! Action catalog tests - verify all actions are registered
+    actionCatalogTests() {
+        checkJson();
+        # Verify app is registered
+        *hash<DataProviderAppInfo> appInfo = DataProviderActionCatalog::getApp("Firecrawl");
+        assertEq("Firecrawl", appInfo.name);
+        assertEq("firecrawlrest", appInfo.scheme);
+
+        # Verify all 14 actions are registered
+        *list<hash<DataProviderActionInfo>> actions = DataProviderActionCatalog::getActions("Firecrawl");
+        hash<string, bool> actionMap;
+        map actionMap{$1.action} = True, actions;
+
+        # Scraping actions
+        assertTrue(actionMap{"scrape"} ?? False);
+        assertTrue(actionMap{"batch-scrape"} ?? False);
+        assertTrue(actionMap{"get-batch-scrape-status"} ?? False);
+        assertTrue(actionMap{"cancel-batch-scrape"} ?? False);
+
+        # Crawling actions
+        assertTrue(actionMap{"crawl"} ?? False);
+        assertTrue(actionMap{"get-crawl-status"} ?? False);
+        assertTrue(actionMap{"cancel-crawl"} ?? False);
+
+        # Discovery & Search actions
+        assertTrue(actionMap{"map"} ?? False);
+        assertTrue(actionMap{"search"} ?? False);
+
+        # Extraction actions
+        assertTrue(actionMap{"extract"} ?? False);
+        assertTrue(actionMap{"get-extract-status"} ?? False);
+
+        # Agent actions
+        assertTrue(actionMap{"agent"} ?? False);
+        assertTrue(actionMap{"get-agent-status"} ?? False);
+        assertTrue(actionMap{"cancel-agent"} ?? False);
+
+        # Verify total count
+        assertEq(14, actions.size());
+
+        # Verify all actions have DPAT_API action_code
+        foreach hash<DataProviderActionInfo> action in (actions) {
+            assertEq(DPAT_API, action.action_code,
+                sprintf("action '%s' should have DPAT_API code", action.action));
+        }
+
+        # Verify all actions have output_type
+        foreach hash<DataProviderActionInfo> action in (actions) {
+            assertTrue(action.output_type instanceof AbstractDataProviderType,
+                sprintf("action '%s' should have output_type", action.action));
+        }
+
+        # Verify all actions have options populated
+        foreach hash<DataProviderActionInfo> action in (actions) {
+            assertTrue(action.options.size() > 0,
+                sprintf("action '%s' should have options", action.action));
+        }
+
+        # Verify action groups
+        hash<string, list<string>> groupMap;
+        foreach hash<DataProviderActionInfo> action in (actions) {
+            foreach string group in (action.groups) {
+                if (!groupMap{group}) {
+                    groupMap{group} = ();
+                }
+                push groupMap{group}, action.action;
+            }
+        }
+        assertTrue(groupMap.hasKey("Scraping"));
+        assertTrue(groupMap.hasKey("Crawling"));
+        assertTrue(groupMap.hasKey("Discovery & Search"));
+        assertTrue(groupMap.hasKey("Extraction"));
+        assertTrue(groupMap.hasKey("Agent"));
+    }
+
+    #! Negative tests - verify error handling
+    negativeTests() {
+        checkJson();
+
+        # Test non-existent child provider returns NOTHING
+        *FirecrawlDataProvider::FirecrawlDataProvider prov = tryCreateProvider();
+        if (!prov) {
+            return;
+        }
+        assertNothing(prov.getChildProvider("nonexistent-provider"));
+
+        # Test getChildProviderEx throws for non-existent child
+        assertThrows("INVALID-CHILD-PROVIDER", sub () {
+            prov.getChildProviderEx("nonexistent-provider");
+        });
+
+        # Test missing apikey throws
+        assertThrows("CONSTRUCTOR-ERROR", sub () {
+            new FirecrawlDataProvider::FirecrawlDataProvider({});
+        });
+    }
+
+    #! Integration tests - require a real Firecrawl API key or connection
+    integrationTests() {
+        checkJson();
+        if (!apikey && !client) {
+            testSkip("No Firecrawl connection; set FIRECRAWL_API_KEY, use -k, or -c option");
+        }
+
+        testConnectionPing();
+        testScrape();
+        testMap();
+        testSearch();
+        testCrawlAndGetStatus();
+        testExtract();
+    }
+
+    #! Test connection ping
+    private testConnectionPing() {
+        if (!apikey) {
+            if (m_options.verbose) {
+                printf("Skipping ping test - no API key available (connection-based setup)\n");
+            }
+            return;
+        }
+        if (m_options.verbose) {
+            printf("Testing connection ping...\n");
+        }
+        # Create a connection and verify ping succeeds
+        FirecrawlRestClient::FirecrawlRestConnection conn("test-ping", "ping test",
+            "firecrawlrest://api.firecrawl.dev", {},
+            {"apikey": apikey});
+        hash<auto> pingResult = conn.ping(True);
+        assertTrue(pingResult.ok, "connection ping should succeed");
+        if (m_options.verbose) {
+            printf("Connection ping: %s (time: %s)\n", pingResult.ok ? "OK" : "FAIL",
+                pingResult.time);
+        }
+    }
+
+    #! Test scrape action - scrape a single page
+    private testScrape() {
+        if (m_options.verbose) {
+            printf("Testing scrape action...\n");
+        }
+        FirecrawlDataProvider::FirecrawlDataProvider prov({"apikey": apikey});
+        AbstractDataProvider scrape = prov.getChildProvider("scrape");
+
+        hash<auto> result;
+        try {
+            result = scrape.doRequest({
+                "url": "https://example.com",
+                "formats": ("markdown",),
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "REST-RESPONSE-ERROR" && ex.arg.status_code == 402) {
+                if (m_options.verbose) {
+                    printf("NOTE: Skipping scrape - out of credits (402)\n");
+                }
+                return;
+            }
+            rethrow;
+        }
+        assertTrue(result.success, "scrape should succeed");
+        assertTrue(result.hasKey("data"), "scrape response should have 'data' field");
+        assertTrue(result.data.typeCode() == NT_HASH, "scrape data should be a hash");
+        assertTrue(result.data.hasKey("markdown"), "scrape data should contain markdown");
+        assertTrue(result.data.markdown.val(), "markdown content should not be empty");
+        if (m_options.verbose) {
+            printf("Scraped %d bytes of markdown from example.com\n",
+                result.data.markdown.size());
+        }
+    }
+
+    #! Test map action - discover URLs on a website
+    private testMap() {
+        if (m_options.verbose) {
+            printf("Testing map action...\n");
+        }
+        FirecrawlDataProvider::FirecrawlDataProvider prov({"apikey": apikey});
+        AbstractDataProvider mapProv = prov.getChildProvider("map");
+
+        hash<auto> result;
+        try {
+            result = mapProv.doRequest({
+                "url": "https://example.com",
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "REST-RESPONSE-ERROR" && ex.arg.status_code == 402) {
+                if (m_options.verbose) {
+                    printf("NOTE: Skipping map - out of credits (402)\n");
+                }
+                return;
+            }
+            rethrow;
+        }
+        assertTrue(result.success, "map should succeed");
+        assertTrue(result.hasKey("links"), "map response should have 'links' field");
+        assertTrue(result.links.size() > 0, "map should discover at least one URL");
+        if (m_options.verbose) {
+            printf("Discovered %d URLs on example.com\n", result.links.size());
+        }
+    }
+
+    #! Test search action - search the web
+    private testSearch() {
+        if (m_options.verbose) {
+            printf("Testing search action...\n");
+        }
+        FirecrawlDataProvider::FirecrawlDataProvider prov({"apikey": apikey});
+        AbstractDataProvider searchProv = prov.getChildProvider("search");
+
+        hash<auto> result;
+        try {
+            result = searchProv.doRequest({
+                "query": "Qore programming language site:qore.org",
+                "limit": 3,
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "REST-RESPONSE-ERROR" && ex.arg.status_code == 402) {
+                if (m_options.verbose) {
+                    printf("NOTE: Skipping search - out of credits (402)\n");
+                }
+                return;
+            }
+            rethrow;
+        }
+        assertTrue(result.success, "search should succeed");
+        assertTrue(result.hasKey("data"), "search response should have 'data' field");
+        assertTrue(result.data.size() > 0, "search should return at least one result");
+        if (m_options.verbose) {
+            printf("Search returned %d results\n", result.data.size());
+        }
+    }
+
+    #! Test extract action - extract structured data from web pages
+    private testExtract() {
+        if (m_options.verbose) {
+            printf("Testing extract action...\n");
+        }
+        FirecrawlDataProvider::FirecrawlDataProvider prov({"apikey": apikey});
+        AbstractDataProvider extractProv = prov.getChildProvider("extract");
+
+        hash<auto> result;
+        try {
+            result = extractProv.doRequest({
+                "urls": ("https://example.com",),
+                "prompt": "Extract the page title and main heading",
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "REST-RESPONSE-ERROR" && ex.arg.status_code == 402) {
+                if (m_options.verbose) {
+                    printf("NOTE: Skipping extract - out of credits (402)\n");
+                }
+                return;
+            }
+            rethrow;
+        }
+        assertTrue(result.success, "extract should succeed");
+        assertTrue(result.hasKey("data"), "extract response should have 'data' field");
+        assertTrue(result.data.val(), "extract data should not be empty");
+        if (result.data.typeCode() == NT_HASH) {
+            assertTrue(result.data.size() > 0, "extract data hash should have at least one key");
+        }
+        if (m_options.verbose) {
+            printf("Extract returned data: %y\n", result.data);
+        }
+    }
+
+    #! Test crawl + get-crawl-status async flow
+    private testCrawlAndGetStatus() {
+        if (m_options.verbose) {
+            printf("Testing crawl + get-crawl-status async flow...\n");
+        }
+        FirecrawlDataProvider::FirecrawlDataProvider prov({"apikey": apikey});
+
+        # Start a crawl directly via the REST client to get the job ID
+        # (the crawl child provider auto-polls to completion)
+        hash<auto> startResp;
+        try {
+            startResp = client.post("v2/crawl", {"url": "https://example.com", "limit": 1});
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "REST-RESPONSE-ERROR" && ex.arg.status_code == 402) {
+                if (m_options.verbose) {
+                    printf("NOTE: Skipping crawl - out of credits (402)\n");
+                }
+                return;
+            }
+            rethrow;
+        }
+        assertTrue(startResp.body.success ?? startResp.body.id.val(),
+            "crawl start should succeed or return a job ID");
+        string jobId = startResp.body.id;
+        assertTrue(jobId.val(), "crawl should return a job ID");
+        if (m_options.verbose) {
+            printf("Started crawl job: %s\n", jobId);
+        }
+
+        # Now use get-crawl-status provider to check the job
+        AbstractDataProvider getStatus = prov.getChildProvider("get-crawl-status");
+        hash<auto> statusResp = getStatus.doRequest({"id": jobId});
+        assertTrue(statusResp.hasKey("status"),
+            "get-crawl-status should return a status field");
+        assertTrue(inlist(statusResp.status, ("scraping", "completed", "waiting", "processing")),
+            sprintf("crawl status should be a valid state, got: %y", statusResp.status));
+        if (m_options.verbose) {
+            printf("Crawl job %s status: %s (completed: %y, total: %y)\n",
+                jobId, statusResp.status, statusResp.completed, statusResp.total);
+        }
+    }
+}

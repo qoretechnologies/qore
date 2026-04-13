@@ -1,0 +1,461 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore FirecrawlDataProvider module definition
+
+/*  FirecrawlDataProvider.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 2.0
+# assume local scope for variables, do not use "$" signs
+%modern
+# require type definitions everywhere
+# strict argument handling
+# enable all warnings
+
+%requires(reexport) DataProvider
+%requires(reexport) RestClientIo
+%requires json
+
+module FirecrawlDataProvider {
+    version = "1.0";
+    desc = "User module providing a data provider API for Firecrawl web scraping and crawling";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        # Register the data provider factory
+        DataProvider::registerFactory(new FirecrawlDataProviderFactory());
+
+        # Register the application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": FirecrawlDataProvider::AppName,
+            "display_name": "Firecrawl",
+            "short_desc": "Firecrawl web scraping and crawling platform",
+            "desc": "Firecrawl provides APIs for web scraping, crawling, URL mapping, "
+                "web search, structured data extraction, and AI agent tasks.\n\n"
+                "This integration supports 14 actions covering single-page scraping, "
+                "multi-page crawling, batch scraping, URL discovery, web search, "
+                "AI-powered extraction, and autonomous agent tasks.",
+            "scheme": "firecrawlrest",
+            "logo": FirecrawlDataProvider::FirecrawlLogo,
+            "logo_file_name": "firecrawl-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::WebAutomation,),
+        });
+
+        # ============================================================
+        # Scraping Actions
+        # ============================================================
+
+        # scrape
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AppName,
+            "path": "/scrape",
+            "action": "scrape",
+            "display_name": "Scrape a Web Page",
+            "short_desc": "Scrape a single web page and return its content",
+            "desc": "Scrapes a single web page at the given URL and returns its content "
+                "in the requested formats (markdown, HTML, links, images, etc.).\n\n"
+                "Supports browser actions, geolocation, proxy configuration, and "
+                "content filtering via include/exclude tags.",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                FirecrawlScrapeRequestDataType::Fields{"url",}, {
+                    "required": True,
+                },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                FirecrawlScrapeRequestDataType::Fields{"formats",}, {
+                    "preselected": True,
+                },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                FirecrawlScrapeRequestDataType::Fields - ("url", "formats"),
+            ),
+            "get_output_type": AbstractDataProviderType sub () {
+                return new FirecrawlScrapeResponseDataType();
+            },
+            "groups": ("Scraping",),
+        });
+
+        # batch-scrape
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AppName,
+            "path": "/batch-scrape",
+            "action": "batch-scrape",
+            "display_name": "Batch Scrape Web Pages",
+            "short_desc": "Scrape multiple web pages in batch",
+            "desc": "Scrapes multiple web pages in batch and returns their content. "
+                "Supports the same scrape options as the single scrape action.\n\n"
+                "The operation runs asynchronously and automatically polls until all "
+                "pages are scraped.",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                FirecrawlBatchScrapeRequestDataType::Fields{"urls",}, {
+                    "required": True,
+                },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                FirecrawlBatchScrapeRequestDataType::Fields{"formats",}, {
+                    "preselected": True,
+                },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                FirecrawlBatchScrapeRequestDataType::Fields
+                    - ("urls", "formats"),
+            ),
+            "get_output_type": AbstractDataProviderType sub () {
+                return new FirecrawlBatchScrapeResponseDataType();
+            },
+            "groups": ("Scraping",),
+        });
+
+        # cancel-batch-scrape
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AppName,
+            "path": "/cancel-batch-scrape",
+            "action": "cancel-batch-scrape",
+            "display_name": "Cancel a Batch Scrape",
+            "short_desc": "Cancel an in-progress batch scrape job",
+            "desc": "Cancels an in-progress batch scrape job by its ID.",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                FirecrawlCancelBatchScrapeRequestDataType::Fields{"id",}, {
+                    "required": True,
+                },
+            ),
+            "get_output_type": AbstractDataProviderType sub () {
+                return new FirecrawlCancelResponseDataType();
+            },
+            "groups": ("Scraping",),
+        });
+
+        # get-batch-scrape-status
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AppName,
+            "path": "/get-batch-scrape-status",
+            "action": "get-batch-scrape-status",
+            "display_name": "Get Batch Scrape Status",
+            "short_desc": "Get the status and results of a batch scrape job",
+            "desc": "Gets the current status and results of a batch scrape job by its ID.",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                FirecrawlGetBatchScrapeStatusRequestDataType::Fields{"id",}, {
+                    "required": True,
+                },
+            ),
+            "get_output_type": AbstractDataProviderType sub () {
+                return new FirecrawlBatchScrapeResponseDataType();
+            },
+            "groups": ("Scraping",),
+        });
+
+        # ============================================================
+        # Crawling Actions
+        # ============================================================
+
+        # crawl
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AppName,
+            "path": "/crawl",
+            "action": "crawl",
+            "display_name": "Crawl a Website",
+            "short_desc": "Crawl a website and return scraped data for all pages",
+            "desc": "Crawls a website starting from the given URL and returns scraped "
+                "data for all discovered pages.\n\n"
+                "The operation runs asynchronously and automatically polls until the "
+                "crawl completes. Supports path filtering, depth control, sitemap "
+                "handling, and webhook notifications.",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                FirecrawlCrawlRequestDataType::Fields{"url",}, {
+                    "required": True,
+                },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                FirecrawlCrawlRequestDataType::Fields{"limit", "excludePaths", "includePaths"}, {
+                    "preselected": True,
+                },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                FirecrawlCrawlRequestDataType::Fields
+                    - ("url", "limit", "excludePaths", "includePaths"),
+            ),
+            "get_output_type": AbstractDataProviderType sub () {
+                return new FirecrawlCrawlResponseDataType();
+            },
+            "groups": ("Crawling",),
+        });
+
+        # get-crawl-status
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AppName,
+            "path": "/get-crawl-status",
+            "action": "get-crawl-status",
+            "display_name": "Get Crawl Status",
+            "short_desc": "Get the status and results of a crawl job",
+            "desc": "Gets the current status and results of a crawl job by its ID.",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                FirecrawlGetCrawlStatusRequestDataType::Fields{"id",}, {
+                    "required": True,
+                },
+            ),
+            "get_output_type": AbstractDataProviderType sub () {
+                return new FirecrawlCrawlResponseDataType();
+            },
+            "groups": ("Crawling",),
+        });
+
+        # cancel-crawl
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AppName,
+            "path": "/cancel-crawl",
+            "action": "cancel-crawl",
+            "display_name": "Cancel a Crawl",
+            "short_desc": "Cancel an in-progress crawl job",
+            "desc": "Cancels an in-progress crawl job by its ID.",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                FirecrawlCancelCrawlRequestDataType::Fields{"id",}, {
+                    "required": True,
+                },
+            ),
+            "get_output_type": AbstractDataProviderType sub () {
+                return new FirecrawlCancelResponseDataType();
+            },
+            "groups": ("Crawling",),
+        });
+
+        # ============================================================
+        # Discovery & Search Actions
+        # ============================================================
+
+        # map
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AppName,
+            "path": "/map",
+            "action": "map",
+            "display_name": "Map a Website",
+            "short_desc": "Discover all URLs on a website without scraping content",
+            "desc": "Maps a website to discover all URLs without scraping page content. "
+                "Returns a list of discovered links.\n\n"
+                "Supports search filtering, subdomain inclusion, sitemap usage, and "
+                "geolocation settings.",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                FirecrawlMapRequestDataType::Fields{"url",}, {
+                    "required": True,
+                },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                FirecrawlMapRequestDataType::Fields{"search",}, {
+                    "preselected": True,
+                },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                FirecrawlMapRequestDataType::Fields - ("url", "search"),
+            ),
+            "get_output_type": AbstractDataProviderType sub () {
+                return new FirecrawlMapResponseDataType();
+            },
+            "groups": ("Discovery & Search",),
+        });
+
+        # search
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AppName,
+            "path": "/search",
+            "action": "search",
+            "display_name": "Search the Web",
+            "short_desc": "Search the web and return scraped results",
+            "desc": "Searches the web for the given query and returns scraped results "
+                "for matching pages.\n\n"
+                "Supports time filtering, geographic location, country codes, and "
+                "scrape options for result pages.",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                FirecrawlSearchRequestDataType::Fields{"query",}, {
+                    "required": True,
+                },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                FirecrawlSearchRequestDataType::Fields{"limit",}, {
+                    "preselected": True,
+                },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                FirecrawlSearchRequestDataType::Fields - ("query", "limit"),
+            ),
+            "get_output_type": AbstractDataProviderType sub () {
+                return new FirecrawlSearchResponseDataType();
+            },
+            "groups": ("Discovery & Search",),
+        });
+
+        # ============================================================
+        # Extraction Actions
+        # ============================================================
+
+        # extract
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AppName,
+            "path": "/extract",
+            "action": "extract",
+            "display_name": "Extract Structured Data",
+            "short_desc": "Extract structured data from web pages using AI",
+            "desc": "Extracts structured data from one or more web pages using AI.\n\n"
+                "Provide a natural language prompt and/or a JSON Schema to guide the "
+                "extraction. The operation runs asynchronously and automatically polls "
+                "until the extraction completes.",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                FirecrawlExtractRequestDataType::Fields{"urls",}, {
+                    "required": True,
+                },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                FirecrawlExtractRequestDataType::Fields{"prompt",}, {
+                    "preselected": True,
+                },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                FirecrawlExtractRequestDataType::Fields - ("urls", "prompt"),
+            ),
+            "get_output_type": AbstractDataProviderType sub () {
+                return new FirecrawlExtractResponseDataType();
+            },
+            "groups": ("Extraction",),
+        });
+
+        # get-extract-status
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AppName,
+            "path": "/get-extract-status",
+            "action": "get-extract-status",
+            "display_name": "Get Extraction Status",
+            "short_desc": "Get the status and results of an extraction job",
+            "desc": "Gets the current status and results of an extraction job by its ID.",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                FirecrawlGetExtractStatusRequestDataType::Fields{"id",}, {
+                    "required": True,
+                },
+            ),
+            "get_output_type": AbstractDataProviderType sub () {
+                return new FirecrawlExtractResponseDataType();
+            },
+            "groups": ("Extraction",),
+        });
+
+        # ============================================================
+        # Agent Actions
+        # ============================================================
+
+        # agent
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AppName,
+            "path": "/agent",
+            "action": "agent",
+            "display_name": "Run AI Agent",
+            "short_desc": "Use an AI agent to find and extract data from the web",
+            "desc": "Uses an AI agent to find and extract data from the web based on a "
+                "natural language prompt.\n\n"
+                "The agent autonomously browses web pages, follows links, and extracts "
+                "data matching the prompt. The operation runs asynchronously and "
+                "automatically polls until the agent completes.",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                FirecrawlAgentRequestDataType::Fields{"prompt",}, {
+                    "required": True,
+                },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                FirecrawlAgentRequestDataType::Fields{"urls",}, {
+                    "preselected": True,
+                },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                FirecrawlAgentRequestDataType::Fields - ("prompt", "urls"),
+            ),
+            "get_output_type": AbstractDataProviderType sub () {
+                return new FirecrawlAgentResponseDataType();
+            },
+            "groups": ("Agent",),
+        });
+
+        # cancel-agent
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AppName,
+            "path": "/cancel-agent",
+            "action": "cancel-agent",
+            "display_name": "Cancel an Agent Job",
+            "short_desc": "Cancel an in-progress agent job",
+            "desc": "Cancels an in-progress agent job by its ID.",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                FirecrawlCancelAgentRequestDataType::Fields{"id",}, {
+                    "required": True,
+                },
+            ),
+            "get_output_type": AbstractDataProviderType sub () {
+                return new FirecrawlCancelResponseDataType();
+            },
+            "groups": ("Agent",),
+        });
+
+        # get-agent-status
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AppName,
+            "path": "/get-agent-status",
+            "action": "get-agent-status",
+            "display_name": "Get Agent Status",
+            "short_desc": "Get the status and results of an agent job",
+            "desc": "Gets the current status and results of an agent job by its ID.",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                FirecrawlGetAgentStatusRequestDataType::Fields{"id",}, {
+                    "required": True,
+                },
+            ),
+            "get_output_type": AbstractDataProviderType sub () {
+                return new FirecrawlAgentResponseDataType();
+            },
+            "groups": ("Agent",),
+        });
+
+    };
+}
+
+/** @mainpage FirecrawlDataProvider Module
+
+    @tableofcontents
+
+    @section firecrawldataproviderintro FirecrawlDataProvider Introduction
+
+    The %FirecrawlDataProvider module provides a data provider API for the Firecrawl
+    web scraping and crawling platform.
+
+    To use this module, use \c "%requires FirecrawlDataProvider" in your code.
+
+    All the public symbols in the module are defined in the FirecrawlDataProvider namespace.
+
+    The main classes are:
+    - @ref FirecrawlDataProvider::FirecrawlDataProvider "FirecrawlDataProvider":
+      the root data provider for Firecrawl
+    - @ref FirecrawlDataProvider::FirecrawlDataProviderFactory "FirecrawlDataProviderFactory":
+      the data provider factory for Firecrawl
+
+    @section firecrawldataproviderrelnotes Release Notes
+
+    @subsection firecrawldataproviderv1_0 FirecrawlDataProvider v1.0
+    - the initial version of the %FirecrawlDataProvider module
+*/
+
+#! Contains all public definitions in the FirecrawlDataProvider module
+public namespace FirecrawlDataProvider {
+}
