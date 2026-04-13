@@ -506,7 +506,11 @@ public:
 #ifdef HAVE_GETRLIMIT
                 // use rlimit to determine the main thread\s stack size
                 rlimit rl;
-                if (!getrlimit(RLIMIT_STACK, &rl) && rl.rlim_cur) {
+                // RLIM_INFINITY means "no limit" (common in containers with
+                // `ulimit -s unlimited`). Using it as a size would underflow
+                // stack_limit below, so fall through to the 8MB default.
+                if (!getrlimit(RLIMIT_STACK, &rl) && rl.rlim_cur
+                        && rl.rlim_cur != RLIM_INFINITY) {
                     stack_size = rl.rlim_cur;
                     printd(5, "rlimit: stack size: %lld bytes\n", rl.rlim_cur);
                 } else

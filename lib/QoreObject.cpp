@@ -57,11 +57,6 @@ qore_object_private::qore_object_private(QoreObject* n_obj, const QoreClass* oc,
         in_destructor(false),
         recursive_ref_found(false),
         obj(n_obj) {
-    // Compute unique hash once — includes pointer for locality and a
-    // monotonic ID to prevent collisions from address reuse.
-    unique_hash = new QoreStringNode;
-    qore_get_object_hash(*unique_hash, n_obj,
-        object_id_seq.fetch_add(1, std::memory_order_relaxed));
     //printd(5, "qore_object_private::qore_object_private() this: %p obj: %p '%s'\n", this, obj, oc->getName());
 #ifdef QORE_DEBUG_OBJ_REFS
     printd(QORE_DEBUG_OBJ_REFS, "qore_object_private::qore_object_private() this: %p obj: %p pgm: %p class: %s "
@@ -89,8 +84,22 @@ qore_object_private::qore_object_private(QoreObject* n_obj, const QoreClass* oc,
 }
 
 QoreStringNode* QoreObject::getUniqueHash() const {
-    priv->unique_hash->ref();
-    return priv->unique_hash;
+    // Lazy init: compute the hash on first call. Multiple threads may race
+    // here; losers deref their extra string and use the winner's value.
+    QoreStringNode* h = priv->unique_hash.load(std::memory_order_acquire);
+    if (!h) {
+        QoreStringNode* fresh = new QoreStringNode;
+        qore_get_object_hash(*fresh, this,
+            object_id_seq.fetch_add(1, std::memory_order_relaxed));
+        if (priv->unique_hash.compare_exchange_strong(h, fresh,
+                std::memory_order_acq_rel, std::memory_order_acquire)) {
+            h = fresh;
+        } else {
+            fresh->deref();
+        }
+    }
+    h->ref();
+    return h;
 }
 
 qore_object_private::~qore_object_private() {
@@ -99,7 +108,9 @@ qore_object_private::~qore_object_private() {
     assert(!data);
     assert(!privateData);
     assert(!rset);
-    unique_hash->deref();
+    if (QoreStringNode* h = unique_hash.load(std::memory_order_relaxed)) {
+        h->deref();
+    }
     qore_class_private::get(*const_cast<QoreClass*>(theclass))->deref(false, false);
     // release weak reference
     if (pgm) {
