@@ -6702,17 +6702,39 @@ load_local_done:
                         return false;
                     }
                     if (path_inst->unary_op == LVUnaryOp::Remove) {
+                        // `remove self` on a static_assignment lvalue (borrowed ref)
+                        // must not propagate the borrowed value — discard it and return
+                        // NOTHING.  Matches LValueRemoveHelper::deleteLValue's clearTemp
+                        // behaviour when static_assignment is set.
                         bool static_assignment = false;
                         res = lvh.remove(static_assignment);
+                        if (static_assignment) {
+                            res = QoreValue();
+                        }
                     } else {
-                        // Delete: remove the value and call doDelete on objects
-                        res = lvh.removeValue(true);
+                        // Delete: use remove(static_assignment) instead of removeValue(true)
+                        // so `delete self` correctly handles the borrowed-ref case (self is
+                        // instantiated via instantiateSelf with static_assignment=true —
+                        // removeValue asserts !static_assignment and, with assertions off,
+                        // would return the borrowed value and cause a double-free via the
+                        // subsequent res.discard).  Mirrors LValueRemoveHelper::deleteLValue.
+                        bool static_assignment = false;
+                        res = lvh.remove(static_assignment);
                         if (res.getType() == NT_OBJECT) {
                             QoreObject* o = res.get<QoreObject>();
                             if (!o->isSystemObject()) {
                                 o->doDelete(xsink);
                             }
-                            res.discard(xsink);
+                            // Only deref non-borrowed refs.  static_assignment means the
+                            // LocalVarValue didn't own the +1 (e.g. `self`); the caller's
+                            // ref covers the object lifetime until the method frame unwinds.
+                            if (!static_assignment) {
+                                res.discard(xsink);
+                            }
+                            res = QoreValue();
+                        } else if (static_assignment) {
+                            // Non-object with static_assignment (shouldn't occur for self
+                            // but handle defensively) — borrowed ref, don't discard below.
                             res = QoreValue();
                         }
                     }
