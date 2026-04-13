@@ -4321,8 +4321,16 @@ public class WebSocketClientDataProviderBase inherits DataProvider::AbstractData
                 return;
             }
             switch (message_id) {
+                case MESSAGE_WS_COMPLEX_DATA:
+                    client.sendData(msg.data);
+                    break;
+
                 case MESSAGE_WS_DATA:
                     client.sendData(msg);
+                    break;
+
+                case MESSAGE_WS_COMPLEX_RAW:
+                    client.send(msg.data);
                     break;
 
                 case MESSAGE_WS_RAW:
@@ -4339,7 +4347,7 @@ public class WebSocketClientDataProviderBase inherits DataProvider::AbstractData
 
                 default:
                     throw "UNSUPPORTED-MESSAGE", sprintf("message_id %y is unsupported; supported messages: %y",
-                        keys getMessageTypesImpl());
+                        message_id, keys getMessageTypesImpl());
             }
         } catch (hash<ExceptionInfo> ex) {
             error_msg = sprintf("%s: %s", ex.err, ex.desc);

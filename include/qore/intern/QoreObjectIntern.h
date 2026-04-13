@@ -212,9 +212,11 @@ public:
 
     QoreObject* obj;
 
-    //! Unique hash computed once at construction — stable for the object's
-    //! lifetime and globally unique even when malloc reuses addresses.
-    QoreStringNode* unique_hash;
+    //! Unique hash computed lazily on first getUniqueHash() call — stable for
+    //! the object's lifetime and globally unique even when malloc reuses
+    //! addresses. Deferred to keep the constructor cheap (the SHA1+sprintf
+    //! chain consumes stack that can push deep recursion past the stack guard).
+    mutable std::atomic<QoreStringNode*> unique_hash{nullptr};
 
     DLLLOCAL qore_object_private(QoreObject* n_obj, const QoreClass *oc, QoreProgram* p, QoreHashNode* n_data);
 
