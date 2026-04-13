@@ -667,10 +667,50 @@ cargo install tree-sitter-cli@0.26.5
         - non-pollable InputStreams are read by the handler thread with backpressure-aware retry
         - \c Content-Length mismatch detection raises \c HTTP-STREAM-ERROR if the InputStream provides fewer
           bytes than declared
+      - true incremental streaming for non-I/O-thread-safe \c InputStream response bodies on HTTP/2 and HTTP/3
+        - handlers returning a Qore-defined \c InputStream subclass (including \c CallbackInputStream)
+          are now streamed chunk-by-chunk by a dedicated
+\if QORE_LANG_FINAL
+          @ref HttpServer::StreamResponseProducer "StreamResponseProducer"
+\else
+          \c HttpServer::StreamResponseProducer
+\endif
+          worker thread — no materialization, memory bounded by the peer's flow-control window,
+          time-to-first-byte ≈ one RTT after the handler produces its first chunk
+        - resolves the previous behavior where such streams were fully buffered in memory before any
+          bytes reached the wire — unsuitable for multi-GB or open-ended responses typical of enterprise
+          integration workloads (DataStream over Connect protocol, gRPC-over-Connect, chunked uploads,
+          live event feeds)
+        - architectural invariant: \c read() never executes on the async I/O thread; the producer worker
+          handles blocking reads and uses CV-based
+\if QORE_LANG_FINAL
+          @ref Qore::Socket::waitForHttp2StreamDrain() "waitForHttp2StreamDrain()" /
+          @ref Qore::Socket::waitForQuicStreamDrain() "waitForQuicStreamDrain()"
+\else
+          \c waitForHttp2StreamDrain() / \c waitForQuicStreamDrain()
+\endif
+          for backpressure; read errors are surfaced as a clean \c RST_STREAM / \c cancelQuicStream to
+          the peer rather than a silent hang
+      - new
+\if QORE_LANG_FINAL
+        @ref HttpServer::HttpServer::removeHandler(string) "HttpServer::removeHandler()"
+\else
+        \c HttpServer::removeHandler()
+\endif
+        method (with name and handler-reference overloads) to complement \c setHandler() for dynamic
+        handler registration
     - @ref httpserverutilintro "HttpServerUtil" module
       - added functionality to support setting cookies
       - refactored authentication methods to provide a more extensible and clear design
       - new \c http_version option in \c HttpListenerOptionInfo for HTTP/2 and HTTP/3 mode control
+      - new
+\if QORE_LANG_FINAL
+        @ref HttpServer::StreamResponseProducer "StreamResponseProducer"
+\else
+        \c HttpServer::StreamResponseProducer
+\endif
+        class: worker-thread response-body streamer used by the \c HttpServer / \c HttpServerAsyncIo
+        pipeline for non-I/O-thread-safe \c InputStream response bodies on HTTP/2 and HTTP/3
     - @ref loggerintro "Logger" module
 \if QORE_LANG_FINAL
       - added memory-based backpressure support to @ref Qore::Logger::LoggerAppenderQueue "Qore::Logger::LoggerAppenderQueue"
