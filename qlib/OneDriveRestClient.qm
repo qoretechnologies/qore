@@ -129,8 +129,10 @@ public class OneDriveRestClientBase {
         );
 
         #! Default OAuth2 auth args
+        /** @note Microsoft does not support \c "access_type"; use the \c "offline_access" scope instead
+            (already included in @ref DefaultOAuth2Scopes)
+        */
         const DefaultAuthArgs = {
-            "access_type": "offline",
             "prompt": "consent",
         };
 
@@ -152,6 +154,7 @@ public class OneDriveRestClientBase {
             "oauth2_auth_args": DefaultAuthArgs,
             "oauth2_auth_url": DefaultAuthUrl,
             "oauth2_grant_type": DefaultGrantType,
+            "oauth2_scopes": DefaultOAuth2Scopes,
             "oauth2_token_url": DefaultTokenUrl,
             "url": DefaultUrl,
         };
@@ -162,10 +165,6 @@ public class OneDriveRestClientBase {
         hash<auto> opts += opts0;
         # set defaults for options not already set
         map opts{$1.key} = $1.value, DefaultOptions.pairIterator(), !opts.hasKey($1.key);
-        # handle OAuth2 scopes
-        if (!opts.hasKey("oauth2_scopes")) {
-            opts.oauth2_scopes = DefaultOAuth2Scopes;
-        }
         # resolve tenant-aware OAuth2 URLs
         *string tenant = opts.tenant;
         if (tenant && tenant != "common") {
@@ -295,6 +294,10 @@ public class OneDriveRestConnection inherits RestClient::RestConnection {
                         + <ConnectionOptionInfo>{
                     "default_value": OneDriveRestClientBase::DefaultGrantType,
                 },
+                "oauth2_scopes": RestConnection::ConnectionScheme.options.oauth2_scopes
+                        + <ConnectionOptionInfo>{
+                    "default_value": OneDriveRestClientBase::DefaultOAuth2Scopes,
+                },
                 "oauth2_token_url": RestConnection::ConnectionScheme.options.oauth2_token_url + <ConnectionOptionInfo>{
                     "default_value": "auto",
                 },
@@ -332,22 +335,6 @@ public class OneDriveRestConnection inherits RestClient::RestConnection {
                 },
             },
             "required_options": "oauth2_client_id,oauth2_client_secret",
-            "messages": (
-                <UiMessageInfo>{
-                    "title": "How to Set Up OneDrive API Access",
-                    "intent": "info",
-                    "content": "To connect to OneDrive, you need Azure app credentials:\n\n"
-                        "1. Go to the [Azure Portal](https://portal.azure.com/) and navigate to "
-                        "**Azure Active Directory** → **App registrations**\n"
-                        "2. Click **New registration** and configure your app\n"
-                        "3. Under **API permissions**, add **Microsoft Graph** → **Files.ReadWrite.All** and "
-                        "**User.Read**\n"
-                        "4. Under **Certificates & secrets**, create a new client secret\n"
-                        "5. Copy the **Application (client) ID** as `oauth2_client_id`\n"
-                        "6. Copy the **Client secret value** as `oauth2_client_secret`\n\n"
-                        "Set the `tenant` option to `common` for multi-tenant apps or your specific tenant ID",
-                },
-            ),
         };
 
         #! options required to support the OAuth2 authorization code grant flow
@@ -368,7 +355,15 @@ public class OneDriveRestConnection inherits RestClient::RestConnection {
 
     #! creates the OneDriveRestConnection object
     constructor(hash<auto> config, *hash<auto> attr)
-            : RestConnection(config + (exists config.url ? {} : {"url": DefaultUrl}), attr) {
+            : RestConnection(OneDriveRestConnection::getConfig(config), attr) {
+    }
+
+    #! returns config with the correct URL
+    private static hash<auto> getConfig(hash<auto> config) {
+        if (!config.url || config.url != DefaultUrl) {
+            config.url = DefaultUrl;
+        }
+        return config;
     }
 
     #! returns \c "onedrive"
@@ -379,6 +374,11 @@ public class OneDriveRestConnection inherits RestClient::RestConnection {
     #! returns @ref True as this connection returns a data provider with the \c getDataProvider() method
     bool hasDataProvider() {
         return True;
+    }
+
+    #! Returns the data provider application name this connection serves, if any
+    *string getAppName() {
+        return "OneDrive";
     }
 
     #! returns a data provider object for this connection
@@ -436,15 +436,12 @@ public class OneDriveRestConnection inherits RestClient::RestConnection {
     }
 
     #! Returns @ref True if the response was related to an authorization token error
+    /** Any 401 from the Microsoft Graph API indicates an expired or invalid token
+        that should trigger a refresh
+    */
     bool isAuthTokenError(int status_code, hash<auto> headers, bool body_deserialized, *string body_content_type,
             auto body) {
-        if (status_code != 401) {
-            return False;
-        }
-        if (!body_deserialized) {
-            return body =~ /invalid_grant/;
-        }
-        return body.error == "invalid_grant";
+        return status_code == 401;
     }
 
     setUpdateOptionsCode(*code update_options) {
@@ -503,6 +500,14 @@ public class OneDriveRestClientIo inherits RestClientIo::RestClientIo, OneDriveR
     */
     constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
             : RestClientIo(OneDriveRestClientBase::getOptions(opts), shared_mgr) {
+        # resolve "auto" OAuth2 URLs from tenant
+        string tenant = opts.tenant ?? "common";
+        if (oauth2_token_url == "auto") {
+            oauth2_token_url = OAuth2BaseUrl + tenant + OAuth2TokenUriPathSuffix;
+        }
+        if (oauth2_auth_url == "auto") {
+            oauth2_auth_url = OAuth2BaseUrl + tenant + OAuth2AuthUriPathSuffix;
+        }
     }
 }
 }

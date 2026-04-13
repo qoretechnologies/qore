@@ -47,11 +47,11 @@ public class OneDriveUploadSessionDataType inherits HashDataType {
                 "short_desc": "Byte ranges the server is missing",
                 "desc": "A collection of byte ranges that the server is missing for the file. These ranges "
                     "are zero-indexed and in the format `start-end`",
-                "type": AbstractDataProviderType::get(SoftListOrNothingType),
+                "type": new ListDataType("*list<string>", StringType, True),
             },
         };
     }
-    constructor() { addQoreFields(Fields); }
+    constructor(*Type base_type) : HashDataType(base_type ?? AutoHashType) { addQoreFields(Fields); }
 }
 
 public const OneDriveUploadSessionDataType = new OneDriveUploadSessionDataType();

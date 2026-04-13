@@ -87,31 +87,31 @@ public class OneDriveDriveItemDataType inherits HashDataType {
                 "display_name": "Parent Reference",
                 "short_desc": "Parent folder reference",
                 "desc": "Parent information, if the item has a parent",
-                "type": new OneDriveItemReferenceDataType(),
+                "type": new OneDriveItemReferenceDataType(AutoHashOrNothingType),
             },
             "file": {
                 "display_name": "File Facet",
                 "short_desc": "File metadata (present for files only)",
                 "desc": "File metadata, if the item is a file. Read-only",
-                "type": new OneDriveFileFacetDataType(),
+                "type": new OneDriveFileFacetDataType(AutoHashOrNothingType),
             },
             "folder": {
                 "display_name": "Folder Facet",
                 "short_desc": "Folder metadata (present for folders only)",
                 "desc": "Folder metadata, if the item is a folder. Read-only",
-                "type": new OneDriveFolderFacetDataType(),
+                "type": new OneDriveFolderFacetDataType(AutoHashOrNothingType),
             },
             "createdBy": {
                 "display_name": "Created By",
                 "short_desc": "Identity of the creator",
                 "desc": "Identity of the user, device, or application that created the item",
-                "type": new OneDriveIdentitySetDataType(),
+                "type": new OneDriveIdentitySetDataType(AutoHashOrNothingType),
             },
             "lastModifiedBy": {
                 "display_name": "Last Modified By",
                 "short_desc": "Identity of the last modifier",
                 "desc": "Identity of the user, device, or application that last modified the item",
-                "type": new OneDriveIdentitySetDataType(),
+                "type": new OneDriveIdentitySetDataType(AutoHashOrNothingType),
             },
             "@microsoft.graph.downloadUrl": {
                 "display_name": "Download URL",
@@ -122,7 +122,7 @@ public class OneDriveDriveItemDataType inherits HashDataType {
             },
         };
     }
-    constructor() { addQoreFields(Fields); }
+    constructor(*Type base_type) : HashDataType(base_type ?? AutoHashType) { addQoreFields(Fields); }
 }
 
 public const OneDriveDriveItemDataType = new OneDriveDriveItemDataType();

@@ -44,7 +44,7 @@ public class OneDriveSharingLinkDataType inherits HashDataType {
                 "display_name": "Roles",
                 "short_desc": "The permission roles",
                 "desc": "The type of permission: `read`, `write`, `owner`",
-                "type": AbstractDataProviderType::get(SoftListOrNothingType),
+                "type": new ListDataType("*list<string>", StringType, True),
             },
             "shareId": {
                 "display_name": "Share ID",
@@ -55,8 +55,8 @@ public class OneDriveSharingLinkDataType inherits HashDataType {
             "expirationDateTime": {
                 "display_name": "Expiration Date",
                 "short_desc": "When the link expires",
-                "desc": "Date and time when the sharing link expires (ISO 8601 format)",
-                "type": AbstractDataProviderTypeMap."*string",
+                "desc": "Date and time when the sharing link expires",
+                "type": DateOrNothingType,
             },
             "hasPassword": {
                 "display_name": "Has Password",
@@ -66,7 +66,7 @@ public class OneDriveSharingLinkDataType inherits HashDataType {
             },
         };
     }
-    constructor() { addQoreFields(Fields); }
+    constructor(*Type base_type) : HashDataType(base_type ?? AutoHashType) { addQoreFields(Fields); }
 }
 
 public const OneDriveSharingLinkDataType = new OneDriveSharingLinkDataType();

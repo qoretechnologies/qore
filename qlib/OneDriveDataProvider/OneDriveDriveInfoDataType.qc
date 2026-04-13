@@ -55,13 +55,13 @@ public class OneDriveDriveInfoDataType inherits HashDataType {
                 "display_name": "Owner",
                 "short_desc": "The owner of the drive",
                 "desc": "Information about the owner of the drive",
-                "type": new OneDriveIdentitySetDataType(),
+                "type": new OneDriveIdentitySetDataType(AutoHashOrNothingType),
             },
             "quota": {
                 "display_name": "Quota",
                 "short_desc": "Storage quota information",
                 "desc": "Information about the drive's storage quota",
-                "type": new OneDriveQuotaDataType(),
+                "type": new OneDriveQuotaDataType(AutoHashOrNothingType),
             },
             "webUrl": {
                 "display_name": "Web URL",
@@ -83,7 +83,7 @@ public class OneDriveDriveInfoDataType inherits HashDataType {
             },
         };
     }
-    constructor() { addQoreFields(Fields); }
+    constructor(*Type base_type) : HashDataType(base_type ?? AutoHashType) { addQoreFields(Fields); }
 }
 
 public const OneDriveDriveInfoDataType = new OneDriveDriveInfoDataType();

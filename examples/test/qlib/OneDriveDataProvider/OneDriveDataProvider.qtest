@@ -195,8 +195,7 @@ public class OneDriveDataProviderTest inherits QUnit::Test {
             OneDriveDataProvider::OneDriveDataProvider::AppName, "upload-file"
         );
         assertEq(DPAT_API, action.action_code);
-        assertEq(True, action.options.filename.required);
-        assertEq(True, action.options.content.required);
+        assertEq(True, action.options.file.required);
 
         # test delete-item action
         action = DataProviderActionCatalog::getAppAction(
@@ -403,8 +402,11 @@ public class OneDriveDataProviderTest inherits QUnit::Test {
         OneDriveDataProvider::OneDriveDataProvider prov(rest);
         AbstractDataProvider dp = prov.getChildProvider("upload-file");
         hash<auto> resp = dp.doRequest({
-            "filename": "test.txt",
-            "content": binary("hello world"),
+            "file": {
+                "name": "test.txt",
+                "content": make_base64_string("hello world"),
+                "mime_type": "text/plain",
+            },
         });
 
         assertEq("PUT", rest.last_method);
@@ -413,8 +415,11 @@ public class OneDriveDataProviderTest inherits QUnit::Test {
 
         # test with parent_id
         resp = dp.doRequest({
-            "filename": "test.txt",
-            "content": binary("hello"),
+            "file": {
+                "name": "test.txt",
+                "content": make_base64_string("hello"),
+                "mime_type": "text/plain",
+            },
             "parent_id": "folder789",
         });
         assertRegex("me/drive/items/folder789:/test.txt:/content", rest.last_path);
@@ -622,6 +627,7 @@ public class OneDriveDataProviderTest inherits QUnit::Test {
         *hash<string, bool> ref_types = prov.getSupportedReferenceData();
         assertTrue(ref_types.folders, "supports folders reference data");
         assertTrue(ref_types.drives, "supports drives reference data");
+        assertTrue(ref_types.items, "supports items reference data");
 
         # test folders reference data with mock response
         rest.response_body = {
@@ -648,6 +654,22 @@ public class OneDriveDataProviderTest inherits QUnit::Test {
         assertEq("OneDrive", drives[0].display_name);
         assertEq("drive1", drives[0].value);
 
+        # test items reference data with mock response
+        rest.response_body = {
+            "value": (
+                {"id": "item1", "name": "report.pdf"},
+                {"id": "item2", "name": "Projects", "folder": {"childCount": 5}},
+            ),
+        };
+        *list<hash<AllowedValueInfo>> items = prov.getReferenceData("items");
+        assertEq(2, items.size(), "got 2 items");
+        assertEq("report.pdf", items[0].display_name);
+        assertEq("item1", items[0].value);
+        assertEq("Projects", items[1].display_name);
+        assertEq("item2", items[1].value);
+        assertTrue(items[0].short_desc.regex("file"), "file item shows type");
+        assertTrue(items[1].short_desc.regex("folder"), "folder item shows type");
+
         # verify ref_data attributes on action options
         hash<DataProviderActionInfo> action = DataProviderActionCatalog::getAppAction(
             OneDriveDataProvider::OneDriveDataProvider::AppName, "create-folder"
@@ -664,6 +686,37 @@ public class OneDriveDataProviderTest inherits QUnit::Test {
             OneDriveDataProvider::OneDriveDataProvider::AppName, "search-items"
         );
         assertEq("folders", action.options.folder_id.ref_data, "search-items folder_id has ref_data");
+
+        # verify ref_data on item ID fields
+        action = DataProviderActionCatalog::getAppAction(
+            OneDriveDataProvider::OneDriveDataProvider::AppName, "get-item"
+        );
+        assertEq("items", action.options.id.ref_data, "get-item id has ref_data");
+
+        action = DataProviderActionCatalog::getAppAction(
+            OneDriveDataProvider::OneDriveDataProvider::AppName, "download-file"
+        );
+        assertEq("items", action.options.id.ref_data, "download-file id has ref_data");
+
+        action = DataProviderActionCatalog::getAppAction(
+            OneDriveDataProvider::OneDriveDataProvider::AppName, "delete-item"
+        );
+        assertEq("items", action.options.id.ref_data, "delete-item id has ref_data");
+
+        action = DataProviderActionCatalog::getAppAction(
+            OneDriveDataProvider::OneDriveDataProvider::AppName, "update-item"
+        );
+        assertEq("items", action.options.id.ref_data, "update-item id has ref_data");
+
+        action = DataProviderActionCatalog::getAppAction(
+            OneDriveDataProvider::OneDriveDataProvider::AppName, "copy-item"
+        );
+        assertEq("items", action.options.id.ref_data, "copy-item id has ref_data");
+
+        action = DataProviderActionCatalog::getAppAction(
+            OneDriveDataProvider::OneDriveDataProvider::AppName, "create-sharing-link"
+        );
+        assertEq("items", action.options.id.ref_data, "create-sharing-link id has ref_data");
 %endif
     }
 

@@ -28,20 +28,12 @@ public namespace OneDriveDataProvider {
 public class OneDriveUploadFileRequestDataType inherits HashDataType {
     public {
         const Fields = {
-            "filename": {
-                "display_name": "File Name",
-                "short_desc": "The name of the file to upload",
-                "desc": "The name of the file to upload (e.g., `document.pdf`)",
-                "type": AbstractDataProviderTypeMap."string",
-                "required": True,
-                "example_value": "document.pdf",
-            },
-            "content": {
-                "display_name": "File Content",
-                "short_desc": "The file content to upload",
-                "desc": "The binary content of the file to upload. For files larger than 4 MB, use the "
-                    "`create-upload-session` action instead",
-                "type": AbstractDataProviderTypeMap."data",
+            "file": {
+                "display_name": "File",
+                "short_desc": "The file to upload",
+                "desc": "The file to upload to OneDrive, including file name, content, and MIME type. "
+                    "For files larger than 4 MB, use the `create-upload-session` action instead",
+                "type": FileDataType,
                 "required": True,
             },
             "parent_id": {
@@ -50,13 +42,6 @@ public class OneDriveUploadFileRequestDataType inherits HashDataType {
                 "desc": "The ID of the parent folder. If omitted, the file is uploaded to the drive root",
                 "type": AbstractDataProviderTypeMap."*string",
                 "ref_data": "folders",
-            },
-            "content_type": {
-                "display_name": "Content Type",
-                "short_desc": "The MIME type of the file",
-                "desc": "The MIME type of the file content (e.g., `application/pdf`). Defaults to "
-                    "`application/octet-stream` if not specified",
-                "type": AbstractDataProviderTypeMap."*string",
             },
         };
     }
@@ -91,15 +76,19 @@ public class OneDriveUploadFileDataProvider inherits OneDriveDataProviderBase {
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }
 
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
+        hash<auto> file = req.file;
+        string filename = file.name;
+        string ct = file.mime_type ?? "application/octet-stream";
+        binary content = parse_base64_string(file.content);
+
         string path;
         if (req.parent_id) {
-            path = "me/drive/items/" + req.parent_id + ":/" + encode_url(req.filename, True) + ":/content";
+            path = "me/drive/items/" + req.parent_id + ":/" + encode_url(filename, True) + ":/content";
         } else {
-            path = "me/drive/root:/" + encode_url(req.filename, True) + ":/content";
+            path = "me/drive/root:/" + encode_url(filename, True) + ":/content";
         }
 
-        string ct = req.content_type ?? "application/octet-stream";
-        return rest.restDoRequest("PUT", path, req.content, {"Content-Type": ct}).body;
+        return rest.restDoRequest("PUT", path, content, {"Content-Type": ct}).body;
     }
 }
 }

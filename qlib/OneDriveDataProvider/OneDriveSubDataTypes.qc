@@ -48,7 +48,7 @@ public class OneDriveIdentityDataType inherits HashDataType {
             },
         };
     }
-    constructor() { addQoreFields(Fields); }
+    constructor(*Type base_type) : HashDataType(base_type ?? AutoHashType) { addQoreFields(Fields); }
 }
 
 #! Identity set data type (createdBy, lastModifiedBy, owner)
@@ -59,28 +59,29 @@ public class OneDriveIdentitySetDataType inherits HashDataType {
                 "display_name": "User",
                 "short_desc": "The user identity",
                 "desc": "The user identity associated with this action",
-                "type": new OneDriveIdentityDataType(),
+                "type": new OneDriveIdentityDataType(AutoHashOrNothingType),
             },
             "application": {
                 "display_name": "Application",
                 "short_desc": "The application identity",
                 "desc": "The application identity associated with this action",
-                "type": new OneDriveIdentityDataType(),
+                "type": new OneDriveIdentityDataType(AutoHashOrNothingType),
             },
             "device": {
                 "display_name": "Device",
                 "short_desc": "The device identity",
                 "desc": "The device identity associated with this action",
-                "type": new OneDriveIdentityDataType(),
+                "type": new OneDriveIdentityDataType(AutoHashOrNothingType),
             },
         };
     }
-    constructor() { addQoreFields(Fields); }
+    constructor(*Type base_type) : HashDataType(base_type ?? AutoHashType) { addQoreFields(Fields); }
 }
 
 #! Item reference data type (parentReference)
 public class OneDriveItemReferenceDataType inherits HashDataType {
     public {
+        #! Field definitions
         const Fields = {
             "driveId": {
                 "display_name": "Drive ID",
@@ -126,7 +127,7 @@ public class OneDriveItemReferenceDataType inherits HashDataType {
             },
         };
     }
-    constructor() { addQoreFields(Fields); }
+    constructor(*Type base_type) : HashDataType(base_type ?? AutoHashType) { addQoreFields(Fields); }
 }
 
 #! Hashes data type for file content verification
@@ -162,7 +163,7 @@ public class OneDriveHashesDataType inherits HashDataType {
             },
         };
     }
-    constructor() { addQoreFields(Fields); }
+    constructor(*Type base_type) : HashDataType(base_type ?? AutoHashType) { addQoreFields(Fields); }
 }
 
 #! File facet data type
@@ -180,11 +181,11 @@ public class OneDriveFileFacetDataType inherits HashDataType {
                 "short_desc": "Hash values for the file content",
                 "desc": "Hashes of the file's binary content, including `crc32Hash`, `sha1Hash`, and "
                     "`quickXorHash` fields",
-                "type": new OneDriveHashesDataType(),
+                "type": new OneDriveHashesDataType(AutoHashOrNothingType),
             },
         };
     }
-    constructor() { addQoreFields(Fields); }
+    constructor(*Type base_type) : HashDataType(base_type ?? AutoHashType) { addQoreFields(Fields); }
 }
 
 #! Folder facet data type
@@ -199,12 +200,13 @@ public class OneDriveFolderFacetDataType inherits HashDataType {
             },
         };
     }
-    constructor() { addQoreFields(Fields); }
+    constructor(*Type base_type) : HashDataType(base_type ?? AutoHashType) { addQoreFields(Fields); }
 }
 
 #! Quota data type
 public class OneDriveQuotaDataType inherits HashDataType {
     public {
+        #! Field definitions
         const Fields = {
             "total": {
                 "display_name": "Total",
@@ -244,7 +246,7 @@ public class OneDriveQuotaDataType inherits HashDataType {
             },
         };
     }
-    constructor() { addQoreFields(Fields); }
+    constructor(*Type base_type) : HashDataType(base_type ?? AutoHashType) { addQoreFields(Fields); }
 }
 
 #! Sharing link detail data type
@@ -289,10 +291,10 @@ public class OneDriveSharingLinkDetailDataType inherits HashDataType {
                 "display_name": "Application",
                 "short_desc": "The application the link is associated with",
                 "desc": "The application the link is associated with",
-                "type": new OneDriveIdentityDataType(),
+                "type": new OneDriveIdentityDataType(AutoHashOrNothingType),
             },
         };
     }
-    constructor() { addQoreFields(Fields); }
+    constructor(*Type base_type) : HashDataType(base_type ?? AutoHashType) { addQoreFields(Fields); }
 }
 }

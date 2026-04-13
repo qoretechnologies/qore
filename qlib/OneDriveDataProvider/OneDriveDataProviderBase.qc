@@ -131,6 +131,7 @@ public class OneDriveDataProviderBase inherits DataProvider::AbstractDataProvide
         return {
             "folders": True,
             "drives": True,
+            "items": True,
         };
     }
 
@@ -139,6 +140,7 @@ public class OneDriveDataProviderBase inherits DataProvider::AbstractDataProvide
         switch (type) {
             case "folders": return getReferenceFolders();
             case "drives": return getReferenceDrives();
+            case "items": return getReferenceItems();
         }
     }
 
@@ -159,6 +161,27 @@ public class OneDriveDataProviderBase inherits DataProvider::AbstractDataProvide
             }
         } catch (hash<ExceptionInfo> ex) {
             log(LoggerLevel::DEBUG, "getReferenceFolders: error: %s: %s", ex.err, ex.desc);
+        }
+        return rv;
+    }
+
+    #! Returns reference data for items (files and folders from root)
+    private *list<hash<AllowedValueInfo>> getReferenceItems() {
+        list<hash<AllowedValueInfo>> rv = ();
+        try {
+            string path = "me/drive/root/children?$top=200&$select=id,name,folder";
+            hash<auto> response = doRestCommand("GET", path);
+            foreach hash<auto> item in (response.body.value) {
+                string type_label = item.folder ? "folder" : "file";
+                rv += <AllowedValueInfo>{
+                    "display_name": item.name,
+                    "short_desc": sprintf("%s (%s)", item.name, type_label),
+                    "desc": sprintf("%s (%s)", item.name, type_label),
+                    "value": string(item.id),
+                };
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            log(LoggerLevel::DEBUG, "getReferenceItems: error: %s: %s", ex.err, ex.desc);
         }
         return rv;
     }

@@ -181,11 +181,11 @@ module OneDriveDataProvider {
             "action_code": DPAT_API,
             "groups": ("Files",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
-                OneDriveUploadFileRequestDataType::Fields{"filename", "content"}, {
+                OneDriveUploadFileRequestDataType::Fields{"file",}, {
                     "required": True,
                 }
             ) + DataProviderActionCatalog::getActionOptionFromFields(
-                OneDriveUploadFileRequestDataType::Fields{"parent_id", "content_type"}, {
+                OneDriveUploadFileRequestDataType::Fields{"parent_id",}, {
                     "preselected": True,
                 }
             ),

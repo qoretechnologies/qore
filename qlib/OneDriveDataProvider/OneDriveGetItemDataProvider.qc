@@ -34,6 +34,7 @@ public class OneDriveGetItemRequestDataType inherits HashDataType {
                 "desc": "The unique identifier of the item to retrieve. Provide either `id` or `path`",
                 "type": AbstractDataProviderTypeMap."*string",
                 "example_value": "01BYE5RZ6QN3ZWBTUFOFD3GSPGOHDJD36K",
+                "ref_data": "items",
             },
             "path": {
                 "display_name": "Item Path",

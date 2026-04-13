@@ -35,6 +35,7 @@ public class OneDriveCreateSharingLinkRequestDataType inherits HashDataType {
                 "type": AbstractDataProviderTypeMap."string",
                 "required": True,
                 "example_value": "01BYE5RZ6QN3ZWBTUFOFD3GSPGOHDJD36K",
+                "ref_data": "items",
             },
             "type": {
                 "display_name": "Link Type",
