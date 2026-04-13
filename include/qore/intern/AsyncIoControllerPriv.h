@@ -285,6 +285,7 @@ public:
     */
     DLLLOCAL int cancelByOwner(const QoreStringNode* owner, ExceptionSink* xsink);
 
+
     //! Wake the I/O thread for a specific socket that has pending data
     /** @param sock_hash the socket hash identifying the target operation
     */
@@ -532,6 +533,12 @@ private:
         std::unordered_map<std::string, PollInfo> cache;
         std::atomic<int> cache_size{0};   //!< Atomic cache size for lock-free getCacheSize()
         std::unordered_map<std::string, int> socket_refcounts;
+
+        //! Recently-cancelled keys on this I/O thread — set by CancelOwner,
+        //! checked by SubmitOp to reject stale re-submissions from callbacks
+        //! that raced with the cancel.  Entries auto-expire after 2 idle cycles.
+        //! Key: operation key, Value: idle_cycles_remaining
+        std::unordered_map<std::string, int> cancelled_keys;
 
         //! Socket hashes that need re-polling
         std::unordered_set<std::string> wake_socket_hashes;

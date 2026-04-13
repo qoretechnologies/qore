@@ -1070,6 +1070,7 @@ bool AsyncIoControllerPriv::cancelByKey(const QoreStringNode* key, ExceptionSink
 
 int AsyncIoControllerPriv::cancelByOwner(const QoreStringNode* owner, ExceptionSink* xsink) {
     std::string owner_str(owner->c_str());
+
     bool do_signal = false;
     int count = 0;
     std::vector<PollInfo> direct_pinfos;
@@ -3090,7 +3091,9 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                         }
                     }
 
-                    // Cancel each one
+                    // Cancel each one and record cancelled keys so SubmitOp can
+                    // reject stale re-submissions from callbacks that raced with
+                    // this cancel.  Entries auto-expire after 2 idle cycles.
                     int local_count = 0;
                     for (auto& key : keys) {
                         PollInfo pinfo_copy;
@@ -3120,6 +3123,8 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                         }
 
                         if (found) {
+                            // Record this key as recently cancelled (I/O-thread-only, no lock)
+                            t.cancelled_keys[key] = 2;
                             doCancelIntern(pinfo_copy, xsink);
                             pinfo_copy.cleanup(xsink);
                         }
@@ -3258,6 +3263,26 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                 }
 
                 case IoCommand::SubmitOp: {
+                    // Reject stale re-submissions: if this key was recently
+                    // cancelled, the submit is from a callback that raced with
+                    // cancelByOwner().  A new object creates a new socket with
+                    // a different key, so it won't match — no false positives.
+                    {
+                        auto ck_it = t.cancelled_keys.find(cmd.key);
+                        if (ck_it != t.cancelled_keys.end()) {
+                            // Reset idle counter — still seeing stale submissions
+                            ck_it->second = 2;
+                            // Clean up the command's refcounted resources
+                            if (cmd.submit_sock) cmd.submit_sock->deref(xsink);
+                            if (cmd.submit_sock_obj) cmd.submit_sock_obj->deref(xsink);
+                            if (cmd.submit_spop_obj) cmd.submit_spop_obj->deref(xsink);
+                            if (cmd.submit_spop_base) cmd.submit_spop_base->deref(xsink);
+                            if (cmd.submit_poll_info) cmd.submit_poll_info->deref(xsink);
+                            if (cmd.submit_other) cmd.submit_other->deref(xsink);
+                            if (cmd.submit_queue) cmd.submit_queue->deref(xsink);
+                            break;
+                        }
+                    }
                     // Worker thread submitted an operation — insert into cache
                     // (cache is I/O-thread-only, no lock needed)
                     if (cmd.submit_replace) {
@@ -3464,6 +3489,21 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
         // Check if new commands arrived during processing/acknowledge
         if (t.cmdq.empty()) {
             break;
+        }
+    }
+
+    // Age out cancelled_keys entries.  Each entry starts with 2 idle cycles.
+    // Stale SubmitOp rejection resets to 2.  When an entry reaches 0, all
+    // racing callbacks have drained and the entry is removed.
+    // I/O-thread-only — no locking needed.
+    if (!t.cancelled_keys.empty()) {
+        auto it = t.cancelled_keys.begin();
+        while (it != t.cancelled_keys.end()) {
+            if (--(it->second) <= 0) {
+                it = t.cancelled_keys.erase(it);
+            } else {
+                ++it;
+            }
         }
     }
 
