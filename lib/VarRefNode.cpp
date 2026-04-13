@@ -469,10 +469,14 @@ int VarRefNewObjectNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_c
     }
 
     int err = 0;
+    // parseAssigned is only valid for local variables - ref.id/ref.var share a union,
+    // so calling parseAssigned on a global Var* (cast to LocalVar*) would write into
+    // Var::name's std::string pointer field at the LocalVar::parse_assigned offset
+    const bool is_local_type = (type == VT_LOCAL || type == VT_CLOSURE || type == VT_LOCAL_TS);
     const QoreClass* qc = QoreTypeInfo::getUniqueReturnClass(typeInfo);
     if (qc) {
         err = parseInitConstructorCall(loc, parse_context, qc);
-        if (!err && ref.id) {
+        if (!err && is_local_type && ref.id) {
             // Mark the variable as assigned after successful constructor call
             ref.id->parseAssigned();
         }
@@ -488,7 +492,7 @@ int VarRefNewObjectNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_c
             parse_context.typeInfo = ti;
             err = parseInitComplexHashInitialization(loc, parse_context);
             vrn_type = VRN_COMPLEXHASH;
-            if (!err && ref.id) {
+            if (!err && is_local_type && ref.id) {
                 ref.id->parseAssigned();
             }
         } else {
@@ -497,7 +501,7 @@ int VarRefNewObjectNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_c
                 parse_context.typeInfo = ti;
                 err = parseInitComplexListInitialization(loc, parse_context);
                 vrn_type = VRN_COMPLEXLIST;
-                if (!err && ref.id) {
+                if (!err && is_local_type && ref.id) {
                     ref.id->parseAssigned();
                 }
             } else {
@@ -505,7 +509,7 @@ int VarRefNewObjectNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_c
                 if (hd) {
                     err = parseInitHashDeclInitialization(loc, parse_context, hd);
                     vrn_type = VRN_HASHDECL;
-                    if (!err && ref.id) {
+                    if (!err && is_local_type && ref.id) {
                         ref.id->parseAssigned();
                     }
                 } else {
