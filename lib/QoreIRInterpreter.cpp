@@ -68,7 +68,7 @@
 // Compile-time guard: forces review of interpreter dispatch when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 357,
+static_assert(QORE_IR_MAX_OPCODE == 359,
     "New IR opcode added — review QoreIRInterpreter.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRToLLVM.cpp.");
 #include <qore/intern/QoreJIT.h>
@@ -5767,6 +5767,51 @@ load_local_done:
                 ++ip;
                 break;
             }
+            case QoreIROpcode::PushTempMark: {
+                // Push sentinel marking the start of the current statement's
+                // temp cleanup region.  UINT32_MAX is not a valid values[] index
+                // (cleanup entries store instruction result slot ids bounded by
+                // the per-function value pool size), and cleanupValues already
+                // skips such out-of-range ids safely on exception unwind.
+                cleanup.push_back(UINT32_MAX);
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::DiscardTemps: {
+                // Drain cleanup back to (and including) the nearest PushTempMark
+                // sentinel so expression temps are destructed at end of
+                // statement — matching AST-mode ValueEvalRefHolder destructor
+                // timing.  Stops at the sentinel to preserve OUTER-scope temps
+                // (e.g. a foreach list expression's iterator temp, which must
+                // outlive the loop body).  Uses xsink (no_throw=false) so
+                // destructor-raised exceptions propagate.  If no sentinel is
+                // present (malformed IR), falls back to a full drain rather
+                // than looping forever.
+                while (!cleanup.empty()) {
+                    uint32_t id = cleanup.back();
+                    cleanup.pop_back();
+                    if (id == UINT32_MAX) {
+                        break;  // matching mark popped
+                    }
+                    if (id < values.size()) {
+                        QoreValue& slot = values[id];
+                        if (cleanup_log && slot.hasNode()) {
+                            if (slot.getType() == NT_STRING) {
+                                auto* str = slot.get<QoreStringNode>();
+                                if (str) {
+                                    cleanup_log->push_back(str->getBuffer());
+                                }
+                            } else {
+                                cleanup_log->push_back(slot.getTypeName());
+                            }
+                        }
+                        slot.discard(xsink);
+                        slot = QoreValue();
+                    }
+                }
+                ++ip;
+                break;
+            }
             case QoreIROpcode::ScopeExit: {
                 auto* scope_inst = static_cast<QoreIRScopeExitInstruction*>(inst);
                 // Execute handlers registered since matching ScopeEnter (only if not inline-lowered)
@@ -8881,8 +8926,14 @@ QoreValue QoreIRInterpreter::evalUnary(QoreIROpcode op, const QoreValue& value, 
         case QoreIROpcode::IsNullOrNothing:
             return QoreValue(value.isNullOrNothing());
         case QoreIROpcode::UnaryPlusAny: {
-            bool needs_deref = true;
-            QoreUnaryPlusOperatorNode node(nullptr, value);
+            // QoreSingleExpressionOperatorNode's destructor derefs its stored
+            // exp unconditionally, so we must refSelf when passing a borrowed
+            // value — otherwise the destructor steals a reference that the IR
+            // interpreter owns elsewhere (cache + values[rid] for LoadLocal
+            // results), causing a UAF when cache/values later deref.  Binary
+            // ops in evalBinary already refSelf for the same reason.
+            QoreUnaryPlusOperatorNode node(nullptr,
+                value.hasNode() ? value.refSelf() : value);
             return evalAndRef(&node, xsink);
         }
         case QoreIROpcode::UnaryMinusInt:
@@ -8890,8 +8941,9 @@ QoreValue QoreIRInterpreter::evalUnary(QoreIROpcode op, const QoreValue& value, 
         case QoreIROpcode::UnaryMinusFloat:
             return QoreValue(-value.getAsFloat());
         case QoreIROpcode::UnaryMinusAny: {
-            bool needs_deref = true;
-            QoreUnaryMinusOperatorNode node(nullptr, value);
+            // See UnaryPlusAny — refSelf balances the operator node's dtor.
+            QoreUnaryMinusOperatorNode node(nullptr,
+                value.hasNode() ? value.refSelf() : value);
             return evalAndRef(&node, xsink);
         }
         case QoreIROpcode::ExistsAny:

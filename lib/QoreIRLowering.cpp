@@ -1807,6 +1807,17 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
         if (!*it) {
             continue;
         }
+        // Bracket each statement with PushTempMark / DiscardTemps so expression
+        // temps created during the statement destruct at end of statement —
+        // matching AST-mode ValueEvalRefHolder destructor timing (fixes
+        // pipe.qtest pattern: `InputStream is = new StreamPipe().getInputStream();`
+        // where the temp StreamPipe must destruct at statement end so its
+        // internal PipeOutputStream dtor sets pipe->broken).  The marker lets
+        // DiscardTemps stop at the statement's cleanup boundary rather than
+        // draining the entire cleanup vector, preserving OUTER-scope temps —
+        // critical for e.g. a `foreach` list expression's iterator temp, which
+        // lives in the cleanup vector across every body-statement boundary.
+        builder.createPushTempMark((*it)->loc);
         if (!lowerStatement(*it, error)) {
             if (has_on_block_exit) {
                 scope_stack.pop_back();
@@ -1818,9 +1829,12 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
             return false;
         }
         if (blockHasTerminator(builder.getBlock())) {
+            // Terminator (Return/Throw/Branch) handles full cleanup including
+            // any markers; skip DiscardTemps emission.
             terminated = true;
             break;
         }
+        builder.createDiscardTemps((*it)->loc);
     }
 
     // Pop handler stack

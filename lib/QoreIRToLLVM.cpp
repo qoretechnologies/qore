@@ -39,7 +39,7 @@
 // Compile-time guard: forces review of LLVM lowering when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 357,
+static_assert(QORE_IR_MAX_OPCODE == 359,
     "New IR opcode added — review QoreIRToLLVM.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRInterpreter.cpp.");
 #include "qore/intern/QoreLibIntern.h"
@@ -10026,6 +10026,15 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             if (inst->result.isValid()) {
                 values[inst->result.id] = guard_pass;
             }
+            return true;
+        }
+
+        // DiscardTemps / PushTempMark are no-ops in LLVM mode.  The IR
+        // interpreter manages a runtime cleanup vector; LLVM mode doesn't use
+        // that vector — temps are released through generated cleanup pads
+        // (allocas with RAII-style destruction), so nothing to do here.
+        case QoreIROpcode::DiscardTemps:
+        case QoreIROpcode::PushTempMark: {
             return true;
         }
 

@@ -939,6 +939,18 @@ QoreIRInstruction* QoreIRBuilder::createCatchCleanup(const QoreProgramLocation* 
     return inst;
 }
 
+QoreIRInstruction* QoreIRBuilder::createDiscardTemps(const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::DiscardTemps);
+    inst->loc = loc;
+    return inst;
+}
+
+QoreIRInstruction* QoreIRBuilder::createPushTempMark(const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::PushTempMark);
+    inst->loc = loc;
+    return inst;
+}
+
 QoreIRGuardInstruction* QoreIRBuilder::createGuardInt(QoreIRValue value, QoreIRBasicBlock* exception_target,
         const QoreProgramLocation* loc) {
     auto inst = block->appendInstruction<QoreIRGuardInstruction>(QoreIROpcode::GuardInt);

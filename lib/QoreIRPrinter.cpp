@@ -372,6 +372,8 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::DecrefNoThrow: return "decref.nothrow";
         case QoreIROpcode::ScopeEnter: return "scope.enter";
         case QoreIROpcode::ScopeExit: return "scope.exit";
+        case QoreIROpcode::DiscardTemps: return "discard.temps";
+        case QoreIROpcode::PushTempMark: return "push.temp.mark";
         case QoreIROpcode::RefForeachInit: return "ref.foreach.init";
         case QoreIROpcode::RefForeachSize: return "ref.foreach.size";
         case QoreIROpcode::RefForeachGetEntry: return "ref.foreach.get.entry";

@@ -40,7 +40,7 @@ struct OpcodeInfo {
 #define OPCODE_MIN_OPERANDS(n) (-(static_cast<int>(n) + 2))
 
 //! Registry of all IR opcodes (in enum ID order)
-constexpr OpcodeInfo OPCODE_REGISTRY[358] = {
+constexpr OpcodeInfo OPCODE_REGISTRY[360] = {
     { "ConstInt"                      , false, false, false,  0, "Load constant value", false, false, "ConstantNode", true , false, false, false }, // 0
     { "ConstFloat"                    , false, false, false,  0, "Load constant value", false, false, "ConstantNode", true , false, false, false }, // 1
     { "ConstBool"                     , false, false, false,  0, "Load constant value", false, false, "ConstantNode", true , false, false, false }, // 2
@@ -399,12 +399,14 @@ constexpr OpcodeInfo OPCODE_REGISTRY[358] = {
     { "LValuePathUnary"               , false, false, false, OPCODE_MIN_OPERANDS(0), "LValuePathUnary", true , true , "ParseNode", true , false, false, false }, // 355
     { "LValuePathBinaryMut"           , false, false, false, OPCODE_MIN_OPERANDS(0), "LValuePathBinaryMut", true , true , "ParseNode", true , false, false, false }, // 356
     { "LValuePathTernary"             , false, false, false, OPCODE_MIN_OPERANDS(3), "LValuePathTernary", true , true , "ParseNode", true , false, false, false }, // 357
+    { "DiscardTemps"                  , false, false, false,  0, "Drain cleanup back to nearest PushTempMark", false, false, "ParseNode", false, false, false, false }, // 358
+    { "PushTempMark"                  , false, false, false,  0, "Push sentinel marking start of statement-scoped cleanup region", false, false, "ParseNode", false, false, false, false }, // 359
 };
 
 //! Static assertion to verify registry completeness
 static_assert(
-    sizeof(OPCODE_REGISTRY) / sizeof(OPCODE_REGISTRY[0]) == 358,
-    "OPCODE_REGISTRY has incorrect entry count - should be exactly 358"
+    sizeof(OPCODE_REGISTRY) / sizeof(OPCODE_REGISTRY[0]) == 360,
+    "OPCODE_REGISTRY has incorrect entry count - should be exactly 360"
 );
 
 //! ============================================================================

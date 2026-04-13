@@ -575,7 +575,22 @@ enum class QoreIROpcode : uint16_t {
     LValuePathBinaryMut = 356,  //!< binary mutation: push, unshift, regex subst, transliterate
     LValuePathTernary   = 357,  //!< ternary: splice, extract
 
-    // NOTE: When adding new opcodes, assign the next sequential ID (358, 359, ...)
+    //! Statement-scoped temp cleanup: marker + drain pair.
+    //!
+    //! `PushTempMark` pushes a sentinel (UINT32_MAX) onto the runtime cleanup
+    //! vector.  `DiscardTemps` drains cleanup entries back to (and including)
+    //! the nearest sentinel, so expression temps created during a statement
+    //! are destructed at statement end — matching AST-mode ValueEvalRefHolder
+    //! destructor timing.  Using a marker (rather than draining the entire
+    //! cleanup vector) preserves OUTER-scope temps such as a `foreach` list
+    //! expression's iterator temp, which must outlive the loop body.
+    //!
+    //! No operands, no result.  Both opcodes are no-ops in LLVM mode (LLVM
+    //! releases temps via generated cleanup pads, not a runtime vector).
+    DiscardTemps        = 358,  //!< drain cleanup back to nearest PushTempMark
+    PushTempMark        = 359,  //!< push UINT32_MAX sentinel onto cleanup
+
+    // NOTE: When adding new opcodes, assign the next sequential ID (360, 361, ...)
     // QORE_IR_MAX_OPCODE is derived automatically from the last enum value below.
 };
 
@@ -583,8 +598,8 @@ enum class QoreIROpcode : uint16_t {
 //! NOTE: Both QoreIRInterpreter.cpp and QoreIRToLLVM.cpp have matching
 //! static_assert guards that will break when this value changes, forcing
 //! review of their dispatch switches.
-constexpr uint16_t QORE_IR_MAX_OPCODE = static_cast<uint16_t>(QoreIROpcode::LValuePathTernary);
-static_assert(QORE_IR_MAX_OPCODE == 357, "QORE_IR_MAX_OPCODE changed — update this assertion and "
+constexpr uint16_t QORE_IR_MAX_OPCODE = static_cast<uint16_t>(QoreIROpcode::PushTempMark);
+static_assert(QORE_IR_MAX_OPCODE == 359, "QORE_IR_MAX_OPCODE changed — update this assertion and "
     "verify binary format compatibility");
 
 //! Include the central opcode registry (must come after QoreIROpcode enum definition)

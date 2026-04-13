@@ -241,6 +241,15 @@ public:
         const QoreProgramLocation* loc = nullptr);
     QoreIRInstruction* createCatchException(const QoreProgramLocation* loc = nullptr);
     QoreIRInstruction* createCatchCleanup(const QoreProgramLocation* loc = nullptr);
+    //! Emit DiscardTemps to drain cleanup back to the nearest PushTempMark.
+    //! No-op in LLVM mode (LLVM releases temps via generated cleanup pads); in
+    //! the IR interpreter, drains the runtime cleanup vector so statement-scoped
+    //! temps destruct at statement end (matching AST-mode ValueEvalRefHolder
+    //! destructor timing).  Must be paired with a prior PushTempMark.
+    QoreIRInstruction* createDiscardTemps(const QoreProgramLocation* loc = nullptr);
+    //! Emit PushTempMark to start a statement-scoped cleanup region.  Pairs
+    //! with a later DiscardTemps that drains back to this mark.
+    QoreIRInstruction* createPushTempMark(const QoreProgramLocation* loc = nullptr);
     QoreIRGuardInstruction* createGuardInt(QoreIRValue value, QoreIRBasicBlock* exception_target,
         const QoreProgramLocation* loc = nullptr);
     QoreIRGuardInstruction* createGuardFloat(QoreIRValue value, QoreIRBasicBlock* exception_target,
