@@ -1012,6 +1012,18 @@ cargo install tree-sitter-cli@0.26.5
       - new module providing a data provider API for <a href="https://voyageai.com/">Voyage AI</a> embedding and reranking services
       - supports text embeddings with flexible dimensions and quantization
       - supports document reranking with relevance scoring
+    - @ref sglangrestclientintro "SGLangRestClient" module
+      - new module providing a REST client for <a href="https://github.com/sgl-project/sglang">SGLang</a> model servers
+      - exposes both OpenAI-compatible endpoints (<tt>/v1/chat/completions</tt>, <tt>/v1/embeddings</tt>) and SGLang-native endpoints (<tt>/generate</tt> with constrained decoding, <tt>/get_server_info</tt>, <tt>/flush_cache</tt>)
+      - serves a single model per instance; the \c model option is required and captured by the connection
+      - provides SGLangRestConnection for connection management with \c sglang:// URL scheme
+    - @ref sglangdataproviderintro "SGLangDataProvider" module
+      - new module providing a data provider API for SGLang services
+      - exposes chat completions, embeddings, constrained generation (JSON schema/regex/EBNF), server info, and KV cache flush as DPC actions
+    - @ref qoreragutilsintro "QoreRagUtils" module
+      - new module providing a composable abstraction layer for retrieval-augmented generation (RAG)
+      - defines abstract embedder, vector store, reranker, and chunker building blocks plus a \c RagPipeline orchestrator
+      - ships built-in concrete backends: \c LocalOnnxEmbedder, \c OpenAiEmbedder, \c VoyageEmbedder, \c SGLangEmbedder, \c LocalOnnxReranker, \c VoyageReranker, \c HttpGatewayReranker, \c StructuredChunker, \c FixedChunker
     - @ref huggingfacerestclientintro "HuggingFaceRestClient" module
       - new module providing a REST client for the <a href="https://huggingface.co/">Hugging Face</a> Hub API
       - supports Bearer token authentication

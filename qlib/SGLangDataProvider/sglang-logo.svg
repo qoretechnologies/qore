@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <rect x="0" y="0" width="256" height="256" rx="32" ry="32" fill="#1F2937"/>
+  <text x="128" y="148" font-family="Helvetica, Arial, sans-serif" font-size="96" font-weight="700" fill="#F9FAFB" text-anchor="middle">SGL</text>
+</svg>

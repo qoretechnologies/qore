@@ -1,0 +1,233 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore SGLangDataProvider module definition
+
+/*  SGLangDataProvider.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 2.0
+# assume local scope for variables, do not use "$" signs
+%modern
+
+%requires(reexport) DataProvider
+%requires(reexport) SGLangRestClient
+%requires RestClientIo
+
+module SGLangDataProvider {
+    version = "1.0";
+    desc = "user module providing a data provider API for SGLang model servers";
+    author = "David Nichols <david@qore.org>";
+    url = "http://qore.org";
+    license = "MIT";
+    init = sub () {
+        # register the data provider factory
+        DataProvider::registerFactory(new SGLangDataProviderFactory());
+
+        # register the data provider application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": SGLangDataProvider::AppName,
+            "display_name": "SGLang",
+            "short_desc": "SGLang model server for local LLM inference with constrained decoding",
+            "desc": "Provides access to [SGLang](https://github.com/sgl-project/sglang) — a fast serving "
+                "framework for large language models and vision language models.\n\n"
+                "SGLang exposes both OpenAI-compatible endpoints (`/v1/chat/completions`, "
+                "`/v1/embeddings`) and SGLang-native endpoints including `/generate` with "
+                "constrained decoding (JSON schema, regex, EBNF grammars) for reliable "
+                "structured extraction without retry loops.\n\n"
+                "**Common use cases**:\n"
+                "- **Local LLM chat and completions** with no per-token cost and data residency control\n"
+                "- **Structured extraction** using constrained decoding — the model is guaranteed to "
+                "emit output matching a JSON schema, regex, or grammar, eliminating output-parsing retries\n"
+                "- **Embeddings generation** for RAG pipelines using the same backend that serves chat\n"
+                "- **Edge / on-prem inference** where data must not leave the organization",
+            "scheme": "sglang",
+            "logo": SGLangLogo,
+            "logo_file_name": "sglang-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::AiLlm,),
+        });
+
+        # register chat-completion action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SGLangDataProvider::AppName,
+            "path": "/chat-completion",
+            "action": "chat-completion",
+            "display_name": "Chat Completion",
+            "short_desc": "Generate a chat completion from a local SGLang model server",
+            "desc": "Sends a list of chat messages to a local SGLang model server using the "
+                "OpenAI-compatible `/v1/chat/completions` endpoint and returns the generated response.\n\n"
+                "**Example use cases**:\n"
+                "- Local chat assistants with data residency guarantees\n"
+                "- Bulk text generation on internal infrastructure without per-token billing\n"
+                "- Tool-calling agents (pass `tools` and `tool_choice` in the request)\n\n"
+                "The `model` is taken from the connection by default; override per-request with "
+                "the `model` field.",
+            "action_code": DPAT_API,
+            "groups": ("Chat",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                SGLangChatCompletionRequestDataType::Fields{"messages",}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                SGLangChatCompletionRequestDataType::Fields{"model", "temperature", "max_tokens",}, {
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                SGLangChatCompletionRequestDataType::Fields - (
+                    "messages", "model", "temperature", "max_tokens",
+                )
+            ),
+            "output_type": SGLangChatCompletionDataProvider::ResponseType,
+        });
+
+        # register create-embeddings action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SGLangDataProvider::AppName,
+            "path": "/create-embeddings",
+            "action": "create-embeddings",
+            "display_name": "Create Embeddings",
+            "short_desc": "Generate embedding vectors from a local SGLang model server",
+            "desc": "Converts text inputs into embedding vectors using the local SGLang model via the "
+                "OpenAI-compatible `/v1/embeddings` endpoint.\n\n"
+                "The SGLang server must be configured with an embedding model (e.g. `bge-m3`).\n\n"
+                "**Example use cases**:\n"
+                "- RAG vector index population using local inference\n"
+                "- On-prem semantic search without cloud dependency",
+            "action_code": DPAT_API,
+            "groups": ("Embeddings",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                SGLangEmbeddingsRequestDataType::Fields{"input",}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                SGLangEmbeddingsRequestDataType::Fields{"model", "encoding_format",}, {
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                SGLangEmbeddingsRequestDataType::Fields - (
+                    "input", "model", "encoding_format",
+                )
+            ),
+            "output_type": SGLangEmbeddingsDataProvider::ResponseType,
+        });
+
+        # register native generate action (constrained decoding)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SGLangDataProvider::AppName,
+            "path": "/generate",
+            "action": "generate",
+            "display_name": "Constrained Generation",
+            "short_desc": "Generate text with schema/regex/grammar-enforced output structure",
+            "desc": "Uses SGLang's native `/generate` endpoint with constrained decoding — the model "
+                "is guaranteed to emit output matching a JSON schema, regex pattern, or EBNF grammar.\n\n"
+                "This eliminates the retry loops common to OpenAI-style schema enforcement because "
+                "constraints are applied at the token-sampling step, not post-hoc.\n\n"
+                "**Example use cases**:\n"
+                "- Typed field extraction (invoices, receipts, contracts) with guaranteed schema conformance\n"
+                "- Classification tasks where the output must be exactly one of N labels\n"
+                "- Tool-call argument generation where the arguments must match a precise shape\n\n"
+                "Supply exactly one of `json_schema`, `regex`, or `ebnf` to constrain the output.",
+            "action_code": DPAT_API,
+            "groups": ("Generation",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                SGLangGenerateRequestDataType::Fields{"text",}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                SGLangGenerateRequestDataType::Fields{
+                    "json_schema", "regex", "ebnf", "temperature", "max_new_tokens",
+                }, {
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                SGLangGenerateRequestDataType::Fields - (
+                    "text", "json_schema", "regex", "ebnf", "temperature", "max_new_tokens",
+                )
+            ),
+            "output_type": SGLangGenerateDataProvider::ResponseType,
+        });
+
+        # register server-info action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SGLangDataProvider::AppName,
+            "path": "/server-info",
+            "action": "server-info",
+            "display_name": "Get Server Info",
+            "short_desc": "Retrieve SGLang server configuration and runtime metadata",
+            "desc": "Returns the SGLang server's configuration (model name, tokenizer path, "
+                "max_total_tokens, chat_template, etc.) and runtime state (version, CUDA device, "
+                "number of GPUs).  Useful for health checks and configuration validation.",
+            "action_code": DPAT_API,
+            "groups": ("Admin",),
+            "options": {},
+            "output_type": SGLangServerInfoDataProvider::ResponseType,
+        });
+
+        # register flush-cache action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SGLangDataProvider::AppName,
+            "path": "/flush-cache",
+            "action": "flush-cache",
+            "display_name": "Flush KV Cache",
+            "short_desc": "Flush the SGLang server's KV cache",
+            "desc": "Instructs the SGLang server to flush its KV cache.  Useful after switching "
+                "workloads or for freeing memory.  Safe to call at any time; does not interrupt "
+                "in-flight requests.",
+            "action_code": DPAT_API,
+            "groups": ("Admin",),
+            "options": {},
+            "output_type": SGLangFlushCacheDataProvider::ResponseType,
+        });
+    };
+}
+
+/** @mainpage SGLangDataProvider Module
+
+    @tableofcontents
+
+    @section sglangdataproviderintro SGLangDataProvider Introduction
+
+    The %SGLangDataProvider module provides a data provider API for
+    [SGLang](https://github.com/sgl-project/sglang) model servers — fast
+    serving infrastructure for large language models.
+
+    The following data providers are exposed:
+    - @ref SGLangDataProvider::SGLangDataProvider "SGLangDataProvider" — the root provider
+    - @ref SGLangDataProvider::SGLangChatCompletionDataProvider "SGLangChatCompletionDataProvider" — OpenAI-compatible chat
+    - @ref SGLangDataProvider::SGLangEmbeddingsDataProvider "SGLangEmbeddingsDataProvider" — OpenAI-compatible embeddings
+    - @ref SGLangDataProvider::SGLangGenerateDataProvider "SGLangGenerateDataProvider" — native generate with constrained decoding
+    - @ref SGLangDataProvider::SGLangServerInfoDataProvider "SGLangServerInfoDataProvider" — server introspection
+    - @ref SGLangDataProvider::SGLangFlushCacheDataProvider "SGLangFlushCacheDataProvider" — KV cache management
+
+    SGLang serves a single model per instance; the \c model option is required on the
+    underlying \c SGLangRestConnection.
+
+    @section SGLangDataProviderRelnotes Release Notes
+
+    @subsection SGLangDataProviderv1_0 SGLangDataProvider v1.0
+    - the initial version of the %SGLangDataProvider module
+*/
+
+#! App logo loaded from file
+public const SGLangLogo = File::readTextFile(get_script_dir() + "/sglang-logo.svg");

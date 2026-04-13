@@ -1,0 +1,417 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file QoreRagUtils.qm Qore user module providing a composable RAG (retrieval-augmented generation) abstraction layer
+
+/*  QoreRagUtils.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 2.0
+# assume local scope for variables, do not use "$" signs
+%modern
+
+%requires Mime
+%requires(reexport) RestClient
+%requires(reexport) RestClientIo
+%requires(reexport) QoreTokenizerUtils
+%requires(reexport) OpenAiRestClient
+%requires(reexport) VoyageRestClient
+%requires(reexport) SGLangRestClient
+
+module QoreRagUtils {
+    version = "1.0";
+    desc = "user module providing a composable RAG abstraction layer";
+    author = "David Nichols <david@qore.org>";
+    url = "http://qore.org";
+    license = "MIT";
+}
+
+/** @mainpage QoreRagUtils Module
+
+    @tableofcontents
+
+    @section qoreragutilsintro QoreRagUtils Introduction
+
+    The %QoreRagUtils module provides a composable abstraction layer for
+    retrieval-augmented generation (RAG) pipelines.  It defines four
+    abstract building blocks — embedder, vector store, reranker, chunker —
+    and a @ref QoreRagUtils::RagPipeline "RagPipeline" orchestrator that
+    composes them declaratively from a @ref QoreRagUtils::RagConfig "RagConfig" hash.
+
+    Concrete backends are pluggable: callers can use a built-in
+    implementation, register their own subclass, or pass a fully-constructed
+    object directly into @ref RagPipeline.
+
+    @par Design rationale
+
+    Without this abstraction, every consumer of the underlying primitives
+    (@ref QoreTokenizerUtils for ONNX embeddings/rerankers, @ref OpenAiRestClient,
+    @ref VoyageRestClient, @ref SGLangRestClient, Qdrant, pgvector, etc.)
+    has to write its own backend-selection ladder and orchestration logic.
+    %QoreRagUtils centralises that pattern so multiple consumers — Qorus
+    instances, the AI Gateway, standalone tools — converge on the same
+    pluggable composition.
+
+    @par Abstract building blocks
+
+    - @ref QoreRagUtils::AbstractEmbedder "AbstractEmbedder" — converts text into vectors
+    - @ref QoreRagUtils::AbstractVectorStore "AbstractVectorStore" — persists vectors and searches by similarity
+    - @ref QoreRagUtils::AbstractReranker "AbstractReranker" — re-orders candidate documents by relevance
+    - @ref QoreRagUtils::AbstractChunker "AbstractChunker" — splits documents into retrievable units
+
+    @par Built-in concrete implementations
+
+    - Embedders: @ref QoreRagUtils::LocalOnnxEmbedder "LocalOnnxEmbedder",
+      @ref QoreRagUtils::OpenAiEmbedder "OpenAiEmbedder",
+      @ref QoreRagUtils::VoyageEmbedder "VoyageEmbedder",
+      @ref QoreRagUtils::SGLangEmbedder "SGLangEmbedder"
+    - Rerankers: @ref QoreRagUtils::LocalOnnxReranker "LocalOnnxReranker",
+      @ref QoreRagUtils::VoyageReranker "VoyageReranker",
+      @ref QoreRagUtils::HttpGatewayReranker "HttpGatewayReranker"
+    - Chunkers: @ref QoreRagUtils::StructuredChunker "StructuredChunker",
+      @ref QoreRagUtils::FixedChunker "FixedChunker"
+    - Vector stores are not bundled here — use the abstract interface and
+      provide a concrete impl that wraps your backend (Qdrant, pgvector,
+      etc.); callers typically construct stores directly with the appropriate
+      external module.
+
+    @par Example: end-to-end RAG flow
+
+    @code{.py}
+%modern
+%requires QoreRagUtils
+%requires QoreTokenizerUtils
+
+# Build a pipeline from concrete components
+RagPipeline pipe(
+    new LocalOnnxEmbedder(<EmbedderConfig>{"model_path": "/models/bge-m3"}),
+    my_vector_store_obj,
+    new LocalOnnxReranker(<RerankerConfig>{"model_path": "/models/ms-marco"}),
+    new StructuredChunker(<ChunkerConfig>{"target_tokens": 512}),
+);
+
+# Ingest a document
+pipe.ingest("doc-1", "Long document content here...", {"source": "manual.pdf"});
+
+# Retrieve relevant chunks for a query
+list<hash<RetrievalHit>> hits = pipe.retrieve("How do I reset my password?", 5);
+foreach hash<RetrievalHit> hit in (hits) {
+    printf("[%.3f] %s\n", hit.score, hit.content);
+}
+    @endcode
+
+    @section QoreRagUtilsRelnotes Release Notes
+
+    @subsection QoreRagUtilsv1_0 QoreRagUtils v1.0
+    - the initial version of the %QoreRagUtils module
+*/
+
+#! Public namespace for QoreRagUtils
+public namespace QoreRagUtils {
+#! Configuration for an embedder backend
+public hashdecl EmbedderConfig {
+    #! Backend identifier — implementation-specific (e.g. "local-onnx", "openai", "voyage", "sglang")
+    *string backend;
+    #! Path to a local model file (used by ONNX embedder)
+    *string model_path;
+    #! REST URL for HTTP-based embedders
+    *string url;
+    #! Model name to send in API requests
+    *string model;
+    #! API key for HTTP-based embedders
+    *string api_key;
+    #! Output embedding dimension (where the backend supports it)
+    *int dimension;
+    #! Batch size for bulk encoding
+    int batch_size = 32;
+    #! Free-form backend-specific options
+    *hash<auto> options;
+}
+
+#! Configuration for a vector-store backend
+public hashdecl VectorStoreConfig {
+    #! Backend identifier (e.g. "qdrant", "pgvector")
+    *string backend;
+    #! Collection or table name
+    *string collection;
+    #! Connection URL or DSN
+    *string url;
+    #! Free-form backend-specific options (filters, payload schema, etc.)
+    *hash<auto> options;
+}
+
+#! Configuration for a reranker backend
+public hashdecl RerankerConfig {
+    #! Backend identifier (e.g. "local-onnx", "voyage", "http-gateway")
+    *string backend;
+    #! Path to a local model file (ONNX reranker)
+    *string model_path;
+    #! REST URL for HTTP rerankers
+    *string url;
+    #! Model name to send
+    *string model;
+    #! API key
+    *string api_key;
+    #! Free-form backend-specific options
+    *hash<auto> options;
+}
+
+#! Configuration for a chunker backend
+public hashdecl ChunkerConfig {
+    #! Strategy name: "structured" (default), "semantic", "fixed"
+    string strategy = "structured";
+    #! Target token count per chunk
+    int target_tokens = 512;
+    #! Overlap tokens between consecutive chunks (for "fixed" strategy)
+    int overlap_tokens = 50;
+    #! Similarity threshold (used by "semantic" chunker)
+    float similarity_threshold = 0.7;
+    #! Free-form backend-specific options
+    *hash<auto> options;
+}
+
+#! Top-level RAG pipeline configuration
+public hashdecl RagConfig {
+    #! Embedder configuration
+    hash<EmbedderConfig> embedder;
+    #! Vector store configuration
+    hash<VectorStoreConfig> vector_store;
+    #! Reranker configuration (optional — when omitted, retrieval returns vector-search ordering)
+    *hash<RerankerConfig> reranker;
+    #! Chunker configuration (used by ingest)
+    hash<ChunkerConfig> chunker;
+    #! Default top-K for retrieval (final returned count)
+    int top_k = 10;
+    #! Initial vector-search top-K before reranking (only when reranker is configured)
+    int initial_retrieval_k = 50;
+}
+
+#! A single chunk produced by a chunker
+public hashdecl ChunkInfo {
+    #! Sequential index of this chunk in the source document
+    int index;
+    #! The chunk text content
+    string content;
+    #! Approximate token count
+    int token_count;
+    #! Free-form metadata inherited from the source (page, heading, slide, etc.)
+    *hash<auto> metadata;
+}
+
+#! A vector record stored in a vector store
+public hashdecl VectorRecord {
+    #! Unique record id
+    string id;
+    #! The dense vector
+    list<float> vector;
+    #! Free-form payload (stored alongside the vector for retrieval-time access)
+    *hash<auto> payload;
+}
+
+#! A search hit returned by a vector store
+public hashdecl VectorSearchResult {
+    #! Record id
+    string id;
+    #! Similarity score (backend-defined; typically cosine in [0,1])
+    float score;
+    #! Stored payload
+    *hash<auto> payload;
+}
+
+#! A reranker result
+public hashdecl RerankResult {
+    #! Original index in the input documents list
+    int index;
+    #! Relevance score (higher = more relevant)
+    float score;
+    #! The document text (echoed back for caller convenience)
+    string document;
+}
+
+#! A retrieval hit returned by RagPipeline::retrieve()
+public hashdecl RetrievalHit {
+    #! Stored chunk id
+    string id;
+    #! Final relevance score (post-reranking when a reranker is configured)
+    float score;
+    #! Chunk content
+    string content;
+    #! Free-form payload (typically the chunk's metadata)
+    *hash<auto> payload;
+}
+
+#! Composes an embedder, vector store, optional reranker, and chunker into an end-to-end RAG flow
+/** Construct a pipeline from already-built component objects, then call
+    @ref ingest() to add documents and @ref retrieve() to query.
+
+    @par Composition
+
+    The pipeline does not own its components — callers may share embedders
+    / vector stores / rerankers across multiple pipelines or wire them
+    differently for different collections.
+
+    @par Threading
+
+    Each component is responsible for its own thread-safety; this class
+    holds only references and dispatches calls — it adds no locking.
+
+    @since QoreRagUtils 1.0
+*/
+public class RagPipeline {
+    private {
+        AbstractEmbedder embedder;
+        AbstractVectorStore vector_store;
+        *AbstractReranker reranker;
+        AbstractChunker chunker;
+        int top_k = 10;
+        int initial_retrieval_k = 50;
+    }
+
+    #! Constructs a RagPipeline from concrete components
+    /** @param embedder the embedder to use
+        @param vector_store the vector store to use
+        @param reranker optional reranker; when omitted, retrieve() returns vector-search ordering
+        @param chunker the chunker to use for ingest()
+        @param top_k default top-K for retrieve() — final returned count
+        @param initial_retrieval_k initial vector-search top-K before reranking
+            (only relevant when a reranker is configured); typically 5x top_k
+    */
+    constructor(AbstractEmbedder embedder, AbstractVectorStore vector_store,
+            *AbstractReranker reranker, AbstractChunker chunker,
+            int top_k = 10, int initial_retrieval_k = 50) {
+        self.embedder = embedder;
+        self.vector_store = vector_store;
+        self.reranker = reranker;
+        self.chunker = chunker;
+        self.top_k = top_k;
+        self.initial_retrieval_k = initial_retrieval_k;
+    }
+
+    #! Ingests a document — chunks, embeds, and stores it
+    /** @param doc_id stable identifier for the source document
+        @param content the document text
+        @param metadata optional metadata to attach to every chunk
+
+        @return list of chunk ids that were stored
+    */
+    list<string> ingest(string doc_id, string content, *hash<auto> metadata) {
+        list<hash<ChunkInfo>> chunks = chunker.chunk(content, metadata);
+        if (!chunks) {
+            return ();
+        }
+        list<string> texts = map $1.content, chunks;
+        list<list<float>> vectors = embedder.encodeBatch(texts);
+        list<hash<VectorRecord>> records = ();
+        list<string> ids = ();
+        for (int i = 0; i < chunks.size(); ++i) {
+            string id = sprintf("%s:%d", doc_id, chunks[i].index);
+            push ids, id;
+            hash<auto> payload = {
+                "doc_id": doc_id,
+                "chunk_index": chunks[i].index,
+                "content": chunks[i].content,
+                "token_count": chunks[i].token_count,
+            };
+            if (chunks[i].metadata) {
+                payload += chunks[i].metadata;
+            }
+            push records, <VectorRecord>{
+                "id": id,
+                "vector": vectors[i],
+                "payload": payload,
+            };
+        }
+        vector_store.upsert(records);
+        return ids;
+    }
+
+    #! Retrieves the top-K most relevant chunks for a query
+    /** @param query the user's query text
+        @param k optional override for the final top-K; defaults to the constructor's \c top_k
+        @param filter optional vector-store filter (backend-specific)
+
+        @return list of @ref RetrievalHit hashes, ordered by descending relevance
+    */
+    list<hash<RetrievalHit>> retrieve(string query, *int k, *hash<auto> filter) {
+        int final_k = k ?? top_k;
+        int search_k = exists reranker ? initial_retrieval_k : final_k;
+
+        list<float> query_vec = embedder.encode(query);
+        list<hash<VectorSearchResult>> hits = vector_store.search(query_vec, search_k, filter);
+
+        if (!exists reranker || hits.size() <= 1) {
+            list<hash<RetrievalHit>> rv = ();
+            int upper = hits.size() < final_k ? hits.size() : final_k;
+            for (int i = 0; i < upper; ++i) {
+                push rv, <RetrievalHit>{
+                    "id": hits[i].id,
+                    "score": hits[i].score,
+                    "content": hits[i].payload.content,
+                    "payload": hits[i].payload,
+                };
+            }
+            return rv;
+        }
+
+        # rerank phase
+        list<string> docs = map $1.payload.content, hits;
+        list<hash<RerankResult>> reranked = reranker.rerank(query, docs, final_k);
+        list<hash<RetrievalHit>> rv = ();
+        foreach hash<RerankResult> r in (reranked) {
+            hash<VectorSearchResult> vh = hits[r.index];
+            push rv, <RetrievalHit>{
+                "id": vh.id,
+                "score": r.score,
+                "content": vh.payload.content,
+                "payload": vh.payload,
+            };
+        }
+        return rv;
+    }
+
+    #! Re-rank an arbitrary list of documents using the configured reranker
+    /** @param query the query text
+        @param documents the candidate documents to score
+        @param k optional top-K (defaults to the configured \c top_k)
+
+        @return reranked results in descending score order
+
+        @throw RAG-PIPELINE-ERROR if no reranker is configured
+    */
+    list<hash<RerankResult>> rerank(string query, list<string> documents, *int k) {
+        if (!exists reranker) {
+            throw "RAG-PIPELINE-ERROR", "no reranker is configured on this pipeline";
+        }
+        return reranker.rerank(query, documents, k ?? top_k);
+    }
+
+    #! Returns the embedder
+    AbstractEmbedder getEmbedder() { return embedder; }
+
+    #! Returns the vector store
+    AbstractVectorStore getVectorStore() { return vector_store; }
+
+    #! Returns the reranker, if configured
+    *AbstractReranker getReranker() { return reranker; }
+
+    #! Returns the chunker
+    AbstractChunker getChunker() { return chunker; }
+}
+}
