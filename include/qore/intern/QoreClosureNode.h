@@ -38,6 +38,31 @@
 
 #include <map>
 
+//! Ensures the calling thread has a ThreadLocalProgramData before CVecInstantiator runs.
+/** Closures may be invoked on threads that have no program context — for example,
+    AsyncIoController's ioThread or a ThreadPool worker that has not yet entered any
+    Qore program. CVecInstantiator pushes captured vars onto the cvstack via
+    thread_instantiate_closure_var(), which dereferences td->tlpd; if td->tlpd is null
+    the dispatch crashes (lib/thread.cpp:1218 NULL deref).
+
+    This helper conditionally installs a ProgramThreadCountContextHelper only when the
+    current thread has no tlpd. When a tlpd already exists the helper is a no-op so the
+    caller's existing TLPD/lvstack semantics remain intact — unconditional installation
+    breaks DataProvider's child-program module-init flow because switching tlpd changes
+    the active lvstack.
+*/
+class ClosureTlpdEnsureHelper {
+protected:
+    ProgramThreadCountContextHelper ptcch;
+
+public:
+    DLLLOCAL ClosureTlpdEnsureHelper(ExceptionSink* xsink, QoreProgram* pgm) {
+        if (pgm && !get_thread_local_program_data()) {
+            ptcch.set(xsink, pgm, true);
+        }
+    }
+};
+
 class CVecInstantiator {
 protected:
     cvv_vec_t* cvec;

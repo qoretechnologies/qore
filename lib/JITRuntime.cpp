@@ -4206,6 +4206,13 @@ static uint64_t execClosureDirect(const QoreClosureBase* cb, const UserVariantBa
     const UserSignature* sig = uvb->getUserSignature();
     unsigned num_params = sig->numParams();
 
+    // Closures may be invoked on threads with no program context (e.g., AsyncIoController's
+    // ioThread, ThreadPool workers). Ensure tlpd is set before CVecInstantiator runs —
+    // otherwise thread_instantiate_closure_var() null-derefs td->tlpd at lib/thread.cpp:1218.
+    // The conditional install (tlpd==null only) preserves DataProvider's child-program
+    // module-init flow, which depends on lvstack continuity across closure invocations.
+    ClosureTlpdEnsureHelper tlpd_helper(xsink, uvb->pgm);
+
     // Push captured vars onto cvstack
     CVecInstantiator cvi(cb->getCvec(), xsink);
 

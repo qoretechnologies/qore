@@ -104,6 +104,10 @@ bool QoreClosureNode::derefImpl(ExceptionSink* xsink) {
 }
 
 QoreValue QoreClosureNode::execValue(const QoreListNode* args, ExceptionSink* xsink) const {
+    // Closures can be invoked on threads with no program context (e.g., AsyncIoController's
+    // ioThread, ThreadPool workers). Ensure tlpd is set before CVecInstantiator pushes onto
+    // the cvstack — otherwise thread_instantiate_closure_var() null-derefs td->tlpd.
+    ClosureTlpdEnsureHelper tlpd_helper(xsink, pgm);
     CVecInstantiator cvi(cvec, xsink);
     return closure->exec(*this, pgm, args, 0, class_ctx, xsink);
 }
@@ -126,6 +130,10 @@ bool QoreObjectClosureNode::derefImpl(ExceptionSink* xsink) {
 }
 
 QoreValue QoreObjectClosureNode::execValue(const QoreListNode* args, ExceptionSink* xsink) const {
+    // See QoreClosureNode::execValue above — ensure tlpd is set on threads without
+    // program context (the typical crash signature is AsyncIoController::ioThread →
+    // QoreObjectClosureNode::execValue → null tlpd at lib/thread.cpp:1218).
+    ClosureTlpdEnsureHelper tlpd_helper(xsink, obj->getProgram());
     CVecInstantiator cvi(cvec, xsink);
     return closure->exec(*this, 0, args, obj, class_ctx, xsink);
 }
