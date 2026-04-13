@@ -2551,53 +2551,6 @@ ws.setEventQueue();
         logArgs(LoggerLevel::ERROR, fmt, argv);
     }
 
-    #! Sends raw WebSocket frame data (handles HTTP/2 vs HTTP/1.1)
-    /** @since WebSocketClient 2.4
-    */
-    private sendWsFrame(binary data) {
-        AutoLock al(send_lock);
-        sendWsFrameUnlocked(data);
-    }
-
-    #! Sends a WebSocket frame without acquiring the send lock
-    /** @since WebSocketClient 2.4
-    */
-    private sendWsFrameUnlocked(binary data) {
-        if (http3_websocket && h3_stream_id >= 0) {
-            # HTTP/3: Send data through the QUIC stream
-            hc.sendHttp3StreamData(h3_stream_id, data, False, timeout_ms);
-        } else if (http2_websocket && h2_stream_id > 0) {
-            # HTTP/2: Send data through the HTTP/2 stream
-            hc.sendHttp2StreamData(h2_stream_id, data, False);
-        } else {
-            # HTTP/1.1: Send data directly over the socket
-            hc.send2(data, timeout_ms);
-        }
-    }
-
-    #! Reads a WebSocket message (handles HTTP/2, HTTP/3, and HTTP/1.1)
-    /** @return WebSocket message info hash
-        @since WebSocketClient 2.4
-    */
-    private hash<WsMsgInfo> readWsMessage() {
-        if (http3_websocket && h3_stream_id >= 0) {
-            return readWsMessageFromStream(\h3_frame_buf,
-                *binary sub (int read_timeout_ms) {
-                    return hc.readHttp3StreamData(h3_stream_id, read_timeout_ms);
-                },
-                "HTTP/3");
-        }
-        if (http2_websocket && h2_stream_id > 0) {
-            return readWsMessageFromStream(\h2_frame_buf,
-                *binary sub (int read_timeout_ms) {
-                    return hc.readHttp2StreamData(h2_stream_id, read_timeout_ms);
-                },
-                "HTTP/2");
-        }
-        # HTTP/1.1: Read WebSocket message directly from socket
-        return ws_read_message(hc, timeout_ms);
-    }
-
     #! Reads a WebSocket message from a stream (HTTP/2 or HTTP/3)
     /** Large WebSocket frames may be split across multiple protocol DATA frames,
         so data is accumulated until a complete WebSocket frame is available.
