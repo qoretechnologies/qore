@@ -345,9 +345,20 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
                     }
                     return {"error": rv};
                 }
-                if (rv.end_stream) {
+                # Capture response metadata (status, headers, protocol) and
+                # end_stream completion under a single lock so getResponse()
+                # always observes a consistent state — end_stream events on
+                # H3 typically don't carry headers, so merge rather than
+                # replace to preserve earlier metadata.
+                if (rv.status_code || rv.headers || rv.end_stream) {
                     AutoLock al(lock);
-                    state = HttpClientStreamState::Complete;
+                    if (rv.status_code || rv.headers) {
+                        response = rv;
+                    }
+                    if (rv.end_stream) {
+                        state = HttpClientStreamState::Complete;
+                        response = exists response ? response + rv : rv;
+                    }
                 }
                 # For initial response headers (no body) — return the full hash
                 # so callers can inspect the response (CONNECT 200, etc.)
