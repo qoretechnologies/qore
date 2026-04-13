@@ -88,7 +88,7 @@ public class OneDriveUploadFileDataProvider inherits OneDriveDataProviderBase {
             path = "me/drive/root:/" + encode_url(filename, True) + ":/content";
         }
 
-        return rest.restDoRequest("PUT", path, content, {"Content-Type": ct}).body;
+        return doRestCommand("PUT", path, content, {"Content-Type": ct}).body;
     }
 }
 }

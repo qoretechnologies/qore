@@ -99,6 +99,9 @@ public class OneDriveWatchChangesDataProvider inherits OneDriveDataProviderBase,
             # Fetch all pages of changes
             list<hash<auto>> changes = ();
             while (True) {
+                if (isStopping()) {
+                    break;
+                }
                 hash<auto> response = doRestCommand("GET", path);
                 if (response.body.value) {
                     changes += response.body.value;
@@ -121,6 +124,9 @@ public class OneDriveWatchChangesDataProvider inherits OneDriveDataProviderBase,
 
             # Notify observers for each change
             foreach hash<auto> item in (changes) {
+                if (isStopping()) {
+                    break;
+                }
                 notifyObservers(EVENT_FILE_CHANGE, item);
             }
         } catch (hash<ExceptionInfo> ex) {
