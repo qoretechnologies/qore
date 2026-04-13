@@ -570,9 +570,14 @@ struct IRCallFrame {
     // IMPORTANT: QoreValue has no destructor that calls discard(), so we must
     // explicitly discard all reference-counted values before clearing vectors.
     void reset(size_t reserve_size, size_t local_slot_count) {
-        for (auto& val : values) {
-            val.discard(nullptr);
-        }
+        // Do NOT iterate values[] and discard — slots may hold borrowed (non-owning)
+        // references intentionally stored by opcodes like ListGetInt/HashGetKey. These
+        // are not added to `cleanup` because the caller doesn't own them; the container
+        // (list/hash) owns them. Discarding borrowed references here UAFs when the
+        // container has been freed between function exit and pool reuse.
+        // Owned references are tracked in `cleanup` and drained by cleanupValues() at
+        // every execute() return path; by the time we reach reset(), all owned slots
+        // are already NOTHING.
         values.clear();
         values.resize(reserve_size);
         cleanup.clear();
@@ -2538,13 +2543,25 @@ next_instruction:
         switch (inst->opcode) {
             case QoreIROpcode::ConstInt: {
                 auto* cinst = static_cast<QoreIRConstInstruction*>(inst);
-                setValueSlotDirect(values, cinst->result.id, QoreValue(cinst->constant.int_value));
+                // Large ints (outside 48-bit inline range) are boxed as QoreBigIntNode
+                // via setLargeInt() — those allocations must be tracked in cleanup.
+                QoreValue v(cinst->constant.int_value);
+                setValueSlotDirect(values, cinst->result.id, v);
+                if (v.hasNode()) {
+                    cleanup.push_back(cinst->result.id);
+                }
                 ++ip;
                 break;
             }
             case QoreIROpcode::ConstFloat: {
                 auto* cinst = static_cast<QoreIRConstInstruction*>(inst);
-                setValueSlotDirect(values, cinst->result.id, QoreValue(cinst->constant.float_value));
+                // Problematic doubles (negative NaN, etc.) are boxed as QoreBigFloatNode
+                // via setLargeFloat() — those allocations must be tracked in cleanup.
+                QoreValue v(cinst->constant.float_value);
+                setValueSlotDirect(values, cinst->result.id, v);
+                if (v.hasNode()) {
+                    cleanup.push_back(cinst->result.id);
+                }
                 ++ip;
                 break;
             }
