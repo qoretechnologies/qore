@@ -1748,10 +1748,17 @@ void AsyncIoControllerPriv::startIntern(ExceptionSink* xsink) {
         io_waiting = false;
     }
 
-    // Another thread may have already restarted the I/O thread while we were waiting
+    // Another thread may have already restarted all I/O threads while we were waiting
     // in the while(io_exiting) loop above (both threads released the lock via io_cond.wait,
-    // and the first one to re-acquire it after the broadcast restarted the thread).
-    if (ctx().tid) {
+    // and the first one to re-acquire it after the broadcast restarted the threads).
+    bool all_threads_running = true;
+    for (auto& tp : io_threads) {
+        if (!tp->tid) {
+            all_threads_running = false;
+            break;
+        }
+    }
+    if (all_threads_running) {
         return;
     }
 
@@ -2825,6 +2832,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
 
     // Cleanup on exit — cancel results are collected under lock and delivered outside
     std::vector<PollInfo> exit_cancel_pinfos;
+    bool restart_after_exit = false;
     {
         AutoLocker al(m);
 
@@ -2884,6 +2892,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                 if (pending_cmd.cmd == IoCommand::SubmitOp) {
                     // Re-queue for the next I/O thread to process
                     t.cmdq.push(std::move(pending_cmd));
+                    restart_after_exit = true;
                     continue;
                 }
                 if (pending_cmd.cmd == IoCommand::Cancel) {
@@ -2970,9 +2979,22 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
         t.tid = 0;
         io_exiting = false;
         ready_flag = false;
-        processed_seq = 0;
-        submit_seq = 0;
         t.autostop_idle_since = 0;
+
+        bool restart_preserved_commands = false;
+        if (restart_after_exit && !shutting_down) {
+            // SubmitOp commands can arrive after the autostop idle check but
+            // before running=false is visible to the submitting worker. They
+            // were re-queued above; restart now so waitForProcessing() does not
+            // time out with commands stranded in cmdq.
+            startIntern(xsink);
+            restart_preserved_commands = !*xsink && anyThreadRunning();
+        }
+
+        if (!restart_preserved_commands) {
+            processed_seq = 0;
+            submit_seq = 0;
+        }
         processed_cond.broadcast();
         if (io_waiting) {
             io_cond.broadcast();
@@ -4196,4 +4218,3 @@ QoreHashNode* AsyncIoControllerPriv::buildResultHash(PollInfo& pinfo, bool cance
     }
     return result.release();
 }
-

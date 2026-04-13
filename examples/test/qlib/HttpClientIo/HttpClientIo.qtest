@@ -1393,8 +1393,13 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             \h2stream.sendData(), ("data",),
             "sendData before streaming should throw");
 
-        # startStreaming and read to completion so we don't leave an orphaned stream
         h2stream.startStreaming("GET", "/streaming");
+        assertThrows("HTTPCLIENT-STATE-ERROR", "request write side is closed",
+            \h2stream.sendData(), (binary("data"),),
+            "sendData should reject response-only streaming requests");
+        h2stream.writesDone();
+
+        # startStreaming and read to completion so we don't leave an orphaned stream
         date end_time = now_us() + 10s;
         while (now_us() < end_time && !h2stream.isDone()) {
             auto data = h2stream.readData(1s);
@@ -2294,6 +2299,20 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         assertThrows("HTTPCLIENT-STATE-ERROR", sub() { h3stream.readData(1s); });
         # sendData before startStreaming should throw
         assertThrows("HTTPCLIENT-STATE-ERROR", sub() { h3stream.sendData(binary("test")); });
+
+        h3stream.startStreaming("GET", "/streaming");
+        assertThrows("HTTPCLIENT-STATE-ERROR", "request write side is closed",
+            \h3stream.sendData(), (binary("data"),),
+            "sendData should reject response-only streaming requests");
+        h3stream.writesDone();
+
+        date end_time = now_us() + 10s;
+        while (now_us() < end_time && !h3stream.isDone()) {
+            auto data = h3stream.readData(1s);
+            if (exists data && data.typeCode() == NT_HASH && data.end_stream) {
+                break;
+            }
+        }
     }
 
     testH3CallbackOrdering() {

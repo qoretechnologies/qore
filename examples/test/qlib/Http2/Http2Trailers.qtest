@@ -872,8 +872,8 @@ class Http2TrailersTest inherits QUnit::Test {
 
                 # Use streaming mode
                 stream.startStreaming("POST", "/test.Service/StreamMethod",
-                    {"content-type": "application/grpc+proto", "te": "trailers"}, False);
-                stream.sendData(binary("request-data"), True);
+                    {"content-type": "application/grpc+proto", "te": "trailers"}, False,
+                    binary("request-data"));
 
                 # Read all data via readData()
                 *binary body;
