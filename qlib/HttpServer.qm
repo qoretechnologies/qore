@@ -4643,9 +4643,16 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 header_info.resume_body_streaming();
             }
             on_exit deregister_fn(sock_key);
-            # Send initial response via HTTP/2 submit
+            # Send initial response — use inline streaming for
+            # send_callback/input_stream responses to preserve thread
+            # affinity (DSP reservations are thread-local)
             if (async_response.code) {
-                sendMultiplexedResponse(s, header_info, async_response);
+                if (async_response.send_callback || async_response.input_stream) {
+                    sendMultiplexedStreamingResponseInline(s, header_info,
+                        async_response);
+                } else {
+                    sendMultiplexedResponse(s, header_info, async_response);
+                }
             }
             # Enter dedicated persistent loop
             handleMultiplexedPersistentSync(request_helper, pq, s, \cx, phi, info,
@@ -5158,6 +5165,140 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         logResponse(response.cx, response);
     }
 
+    #! Sends a streaming response inline on the current thread
+    /** Used by \c handleMultiplexedPersistentSync() to drive \c send_callback
+        or \c input_stream responses on the dedicated handler thread, preserving
+        thread affinity for thread-local resources (e.g. DatasourcePool
+        reservations).
+
+        The response headers are sent first, then the body is produced by
+        calling the callback (or reading the stream) in a loop on the current
+        thread, sending each chunk as an HTTP/2 or HTTP/3 DATA frame with
+        backpressure handling.
+
+        @param s the socket
+        @param header_info the request header info (contains stream_id, session_id, io_wake, etc.)
+        @param response the response to send
+
+        @since HttpServer 1.x
+    */
+    private sendMultiplexedStreamingResponseInline(Socket s, hash<auto> header_info,
+            hash<HttpAsyncResponseInfo> response) {
+        int stream_id = header_info.stream_id;
+        code<nothing()> io_wake = header_info.io_wake;
+        hash<auto> hdr = response.hdr ?? {};
+        remove hdr."Transfer-Encoding";
+
+        # Build the data-producing callback: either from send_callback
+        # directly, or by wrapping an InputStream
+        code<*binary()> producer;
+        if (response.send_callback) {
+            auto cb = response.send_callback;
+            producer = *binary sub () {
+                auto d = cb();
+                if (!exists d) {
+                    return;
+                }
+                return d.typeCode() == NT_BINARY ? d : binary(d);
+            };
+        } else {
+            InputStream is = response.input_stream;
+            producer = *binary sub () {
+                return is.read(65536);
+            };
+        }
+
+        # Send response headers (no body, no end_stream)
+        if (header_info.http3) {
+            int session_id = header_info.session_id;
+            s.submitQuicResponseStreaming(session_id, stream_id, response.code, hdr);
+            io_wake();
+
+            # Drive the producer loop inline
+            while (True) {
+                *binary chunk = producer();
+                if (!exists chunk) {
+                    sendQuicDataWithBackpressure(s, session_id, stream_id,
+                        binary(), True, io_wake);
+                    break;
+                }
+                sendQuicDataWithBackpressure(s, session_id, stream_id,
+                    chunk, False, io_wake);
+            }
+        } else {
+            # HTTP/2
+            s.submitHttp2StreamingResponseHeaders(stream_id, response.code, hdr);
+            io_wake();
+
+            while (True) {
+                *binary chunk = producer();
+                if (!exists chunk) {
+                    sendHttp2DataWithBackpressure(s, stream_id, binary(),
+                        True, io_wake);
+                    break;
+                }
+                sendHttp2DataWithBackpressure(s, stream_id, chunk, False,
+                    io_wake);
+            }
+        }
+        logResponse(response.cx, response);
+    }
+
+    #! Sends HTTP/2 DATA with backpressure handling
+    private sendHttp2DataWithBackpressure(Socket s, int stream_id, binary data,
+            bool end_stream, code<nothing()> io_wake) {
+        int retries = 0;
+        while (True) {
+            bool backpressure = False;
+            try {
+                s.sendHttp2StreamData(stream_id, data, end_stream);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "HTTP2-FLOW-CONTROL") {
+                    backpressure = True;
+                } else {
+                    rethrow;
+                }
+            }
+            io_wake();
+            if (!backpressure) {
+                return;
+            }
+            if (++retries > 60) {
+                throw "STREAM-BACKPRESSURE-TIMEOUT",
+                    sprintf("stream %d buffer still full after %d drain attempts",
+                        stream_id, retries);
+            }
+            s.waitForHttp2StreamDrain(stream_id, 30000);
+        }
+    }
+
+    #! Sends HTTP/3 (QUIC) DATA with backpressure handling
+    private sendQuicDataWithBackpressure(Socket s, int session_id, int stream_id,
+            binary data, bool end_stream, code<nothing()> io_wake) {
+        int retries = 0;
+        while (True) {
+            int rv = s.submitQuicStreamData(session_id, stream_id, data,
+                end_stream);
+            if (rv == 1) {
+                io_wake();
+                if (++retries > 60) {
+                    throw "STREAM-BACKPRESSURE-TIMEOUT",
+                        sprintf("stream %d buffer still full after %d drain "
+                            "attempts", stream_id, retries);
+                }
+                s.waitForQuicStreamDrain(session_id, stream_id, 30000);
+                continue;
+            }
+            if (rv != 0) {
+                throw "STREAM-SEND-ERROR",
+                    sprintf("unexpected rv=%d from submitQuicStreamData on "
+                        "stream %d", rv, stream_id);
+            }
+            io_wake();
+            return;
+        }
+    }
+
     #! Handles persistent multiplexed connections via a dedicated handler pool thread
     /** This method is called when a handler opts into persistence for an HTTP/2 or HTTP/3
         multiplexed connection.  It enters a loop reading subsequent requests from a Queue
@@ -5341,9 +5482,18 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                     return;
                 }
 
-                # Send response via HTTP/2 submit
+                # Send response via HTTP/2 submit.  For send_callback
+                # responses, drive the callback inline on the current
+                # (dedicated) thread to preserve thread affinity for
+                # thread-local resources (e.g. DSP reservations).
                 if (async_response && async_response.code) {
-                    sendMultiplexedResponse(s, conn_info.header_info, async_response);
+                    if (async_response.send_callback || async_response.input_stream) {
+                        sendMultiplexedStreamingResponseInline(s,
+                            conn_info.header_info, async_response);
+                    } else {
+                        sendMultiplexedResponse(s, conn_info.header_info,
+                            async_response);
+                    }
                 }
 
                 # For body_streaming requests where the handler returned early
