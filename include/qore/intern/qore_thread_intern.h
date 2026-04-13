@@ -305,6 +305,23 @@ DLLLOCAL QoreException* catch_get_exception();
 DLLLOCAL VLock* getVLock();
 DLLLOCAL void end_signal_thread(ExceptionSink* xsink);
 DLLLOCAL void delete_thread_local_data();
+
+//! Clears all Qore program-level thread-local data on the calling thread without
+//! destroying thread registration
+/** Called by worker pool threads (ThreadPool, AsyncIoController) between tasks to
+    prevent thread-local data from leaking between unrelated operations on the same
+    worker thread.
+
+    Clears (for the calling thread only):
+    - The thread-local hash (tld) for all QorePrograms this thread has data in
+    - All global thread_local variable values (ThreadData::tlvmap)
+    - Thread resources
+
+    Unlike delete_thread_local_data(), this does not unregister the thread from any
+    QoreProgram or set the finalizing flag — the thread continues to be available for
+    new tasks.
+*/
+DLLLOCAL void clear_all_program_thread_local_data();
 DLLLOCAL void parse_cond_push(bool mark = false);
 DLLLOCAL bool parse_cond_else();
 DLLLOCAL bool parse_cond_can_else(const QoreProgramLocation* loc);
@@ -1116,6 +1133,13 @@ public:
    DLLLOCAL void delProgram(QoreProgram* pgm);
    DLLLOCAL bool saveProgram(bool runtime, ExceptionSink* xsink);
    DLLLOCAL void del(ExceptionSink* xsink);
+
+   //! Clears thread-local data in all referenced programs without unregistering the thread
+   /** Clears the thread-local hash (tld) for each program this thread has data in.
+       Unlike del(), this does not remove the thread from programs or destroy the
+       ThreadProgramData — the thread continues to be available for new tasks.
+   */
+   DLLLOCAL void clearAllProgramThreadData(ExceptionSink* xsink);
 
    DLLLOCAL void deref() {
       if (ROdereference())

@@ -156,15 +156,31 @@ public class BigCommerceDataProviderTest inherits QUnit::Test {
 %endif
     }
 
+    #! Creates a BigCommerceDataProvider for unit tests; skips on network errors
+    private *BigCommerceDataProvider::BigCommerceDataProvider tryCreateProvider() {
+        try {
+            return new BigCommerceDataProvider::BigCommerceDataProvider({
+                "bigcommercerestclient_options": {
+                    "token": "fake-token",
+                    "store_hash": "fake-hash",
+                },
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR"
+                    || ex.err == "QOREADDRINFO-GETINFO-ERROR") {
+                testSkip(sprintf("cannot connect to BigCommerce API: %s", ex.desc));
+            }
+            rethrow;
+        }
+    }
+
     #! Basic sanity tests - provider instantiation
     sanityTests() {
         checkJson();
-        BigCommerceDataProvider::BigCommerceDataProvider prov({
-            "bigcommercerestclient_options": {
-                "token": "fake-token",
-                "store_hash": "fake-hash",
-            },
-        });
+        *BigCommerceDataProvider::BigCommerceDataProvider prov = tryCreateProvider();
+        if (!prov) {
+            return;
+        }
         assertEq("bigcommerce", prov.getName());
         assertTrue(prov.getDesc().val());
     }
@@ -186,12 +202,10 @@ public class BigCommerceDataProviderTest inherits QUnit::Test {
     #! Metadata tests - verify provider info structure
     metadataTests() {
         checkJson();
-        BigCommerceDataProvider::BigCommerceDataProvider prov({
-            "bigcommercerestclient_options": {
-                "token": "fake-token",
-                "store_hash": "fake-hash",
-            },
-        });
+        *BigCommerceDataProvider::BigCommerceDataProvider prov = tryCreateProvider();
+        if (!prov) {
+            return;
+        }
         hash<DataProviderInfo> info = prov.getInfo();
 
         assertTrue(info.supports_children);
@@ -207,12 +221,10 @@ public class BigCommerceDataProviderTest inherits QUnit::Test {
     #! Child provider tests - verify hierarchy
     childProviderTests() {
         checkJson();
-        BigCommerceDataProvider::BigCommerceDataProvider prov({
-            "bigcommercerestclient_options": {
-                "token": "fake-token",
-                "store_hash": "fake-hash",
-            },
-        });
+        *BigCommerceDataProvider::BigCommerceDataProvider prov = tryCreateProvider();
+        if (!prov) {
+            return;
+        }
 
         # Check child provider names
         list<string> children = prov.getChildProviderNames();
@@ -429,12 +441,10 @@ public class BigCommerceDataProviderTest inherits QUnit::Test {
     #! Trigger example data tests
     triggerExampleDataTests() {
         checkJson();
-        BigCommerceDataProvider::BigCommerceDataProvider prov({
-            "bigcommercerestclient_options": {
-                "token": "fake-token",
-                "store_hash": "fake-hash",
-            },
-        });
+        *BigCommerceDataProvider::BigCommerceDataProvider prov = tryCreateProvider();
+        if (!prov) {
+            return;
+        }
 
         AbstractDataProvider events = prov.getChildProvider("events");
         list<string> triggerNames = (
@@ -475,12 +485,10 @@ public class BigCommerceDataProviderTest inherits QUnit::Test {
     #! Negative tests - test error handling and invalid inputs
     negativeTests() {
         checkJson();
-        BigCommerceDataProvider::BigCommerceDataProvider prov({
-            "bigcommercerestclient_options": {
-                "token": "fake-token",
-                "store_hash": "fake-hash",
-            },
-        });
+        *BigCommerceDataProvider::BigCommerceDataProvider prov = tryCreateProvider();
+        if (!prov) {
+            return;
+        }
 
         # Test getting non-existent child provider
         assertThrows("INVALID-CHILD-PROVIDER", sub() {

@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore ElasticSearchDataProvider module definition
 
-/** ElasticSearchDocumentDataProvider.qc Copyright 2023 - 2024 Qore Technologies, s.r.o.
+/** ElasticSearchDocumentDataProvider.qc Copyright 2023 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -62,7 +62,7 @@ public class ElasticSearchDocumentDataProvider inherits ElasticSearchDataProvide
     }
 
     #! Creates the object from a REST connection
-    constructor(RestClient::RestClient rest) : ElasticSearchDataProviderBase(rest) {
+    constructor(RestClient::AbstractRestClient rest) : ElasticSearchDataProviderBase(rest) {
     }
 
     #! Returns the data provider name
@@ -72,7 +72,7 @@ public class ElasticSearchDocumentDataProvider inherits ElasticSearchDataProvide
 
     #! Returns the data provider description
     *string getDesc() {
-        return sprintf("ElasticSearch data %s provider for `%s`", ProviderInfo.name, rest.getSafeURL());
+        return sprintf("ElasticSearch data %s provider for `%s`", ProviderInfo.name, rest.getSafeUrl());
     }
 
     #! Return data provider summary info

@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore EmpathicBuildingDataProvider module definition
 
-/** EmpathicBuildingDataProvider.qc Copyright 2023 - 2024 Qore Technologies, s.r.o.
+/** EmpathicBuildingDataProvider.qc Copyright 2023 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -50,8 +50,10 @@ public class EmpathicBuildingDataProvider inherits EmpathicBuildingDataProviderB
             "restclient": <DataProviderOptionInfo>{
                 "display_name": "REST Client",
                 "short_desc": "The REST client to use",
-                "type": AbstractDataProviderType::get(new Type("RestClient")),
-                "desc": "The REST client to use to communicate with the EmpathicBuilding server",
+                "type": AbstractDataProviderType::get(new Type("AbstractRestClient")),
+                "desc": "The REST client to use to communicate with the EmpathicBuilding server; must be an "
+                    "`AbstractRestClient` subclass — typically a `RestClientIo` (async, multiplexed "
+                    "HTTP/1.1/2/3) or a `RestClient` (sync HTTP/1.x)",
             },
             "url": <DataProviderOptionInfo>{
                 "display_name": "EmpathicBuilding URL",
@@ -92,16 +94,18 @@ public class EmpathicBuildingDataProvider inherits EmpathicBuildingDataProviderB
     }
 
     #! Create the object from the REST connection
-    constructor(RestClient::RestClient rest, *Logger::LoggerInterface logger)
+    constructor(RestClient::AbstractRestClient rest, *Logger::LoggerInterface logger)
             : EmpathicBuildingDataProviderBase(rest, logger) {
     }
 
-    static RestClient::RestClient getRestConnection(*hash<auto> options) {
-        RestClient rest;
+    static RestClient::AbstractRestClient getRestConnection(*hash<auto> options) {
+        RestClient::AbstractRestClient rest;
         if (options.restclient) {
             rest = options.restclient;
             if (options.url) {
-                rest.setURL(options.url);
+                # Non-mutating URL override: build a sibling client via copyWithUrl()
+                # — works for both sync RestClient and async RestClientIo
+                rest = rest.copyWithUrl(options.url);
             }
         } else {
             if (!options.url && !options.restclient_options) {
@@ -118,7 +122,8 @@ public class EmpathicBuildingDataProvider inherits EmpathicBuildingDataProviderB
             if (options.url) {
                 opts.url = options.url;
             }
-            rest = new RestClient(opts);
+            # Default to the async multiplexed RestClientIo transport (HTTP/1.1/2/3)
+            rest = new RestClientIo(opts);
         }
         # add the gateway token
         if (options.token) {
@@ -134,7 +139,7 @@ public class EmpathicBuildingDataProvider inherits EmpathicBuildingDataProviderB
 
     #! Returns the data provider description
     *string getDesc() {
-        return sprintf("EmpathicBuilding data provider for `%s`", rest.getSafeURL());
+        return sprintf("EmpathicBuilding data provider for `%s`", rest.getSafeUrl());
     }
 
     #! Return data provider summary info

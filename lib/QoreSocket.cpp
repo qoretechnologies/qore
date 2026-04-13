@@ -567,29 +567,29 @@ int SSLSocketHelper::connect(const char* mname, int timeout_ms, ExceptionSink* x
 
     int rc;
 
-    if (timeout_ms >= 0) {
-        if (qs.set_non_blocking(true, xsink))
-            return qs.close_and_exit();
+    // Always run the non-blocking retry loop.  Sockets are born non-blocking since the
+    // AsyncIoController redesign, so SSL_connect can return WANT_READ/WANT_WRITE even
+    // when the caller passed timeout_ms < 0.  doSSLUpgradeNonBlockingIO uses
+    // isSocketDataAvailable(timeout_ms, ...) which treats negative timeouts as
+    // infinite wait.
+    if (qs.set_non_blocking(true, xsink))
+        return qs.close_and_exit();
 
-        while (true) {
-            ERR_clear_error();
-            rc = SSL_connect(ssl);
-
-            if (rc == -1 && !(rc = doSSLUpgradeNonBlockingIO(rc, mname, timeout_ms, "SSL_connect", xsink))) {
-                if (!qs.isOpen())
-                    break;
-                continue;
-            }
-
-            break;
-        }
-
-        if (qs.isOpen() && qs.set_non_blocking(false, xsink))
-            return qs.close_and_exit();
-    } else {
+    while (true) {
         ERR_clear_error();
         rc = SSL_connect(ssl);
+
+        if (rc == -1 && !(rc = doSSLUpgradeNonBlockingIO(rc, mname, timeout_ms, "SSL_connect", xsink))) {
+            if (!qs.isOpen())
+                break;
+            continue;
+        }
+
+        break;
     }
+
+    if (qs.isOpen() && qs.set_non_blocking(false, xsink))
+        return qs.close_and_exit();
 
     if (rc <= 0) {
         if (!*xsink)
@@ -606,29 +606,29 @@ int SSLSocketHelper::accept(const char* mname, int timeout_ms, ExceptionSink* xs
 
     int rc;
 
-    if (timeout_ms >= 0) {
-        if (qs.set_non_blocking(true, xsink))
-            return qs.close_and_exit();
+    // Always run the non-blocking retry loop.  Sockets are born non-blocking since the
+    // AsyncIoController redesign, so SSL_accept can return WANT_READ/WANT_WRITE even
+    // when the caller passed timeout_ms < 0.  doSSLUpgradeNonBlockingIO uses
+    // isSocketDataAvailable(timeout_ms, ...) which treats negative timeouts as
+    // infinite wait.
+    if (qs.set_non_blocking(true, xsink))
+        return qs.close_and_exit();
 
-        while (true) {
-            ERR_clear_error();
-            rc = SSL_accept(ssl);
-
-            if (rc == -1 && !(rc = doSSLUpgradeNonBlockingIO(rc, mname, timeout_ms, "SSL_accept", xsink))) {
-                if (!qs.isOpen())
-                    break;
-                continue;
-            }
-
-            break;
-        }
-
-        if (qs.isOpen() && qs.set_non_blocking(false, xsink))
-            return qs.close_and_exit();
-    } else {
+    while (true) {
         ERR_clear_error();
         rc = SSL_accept(ssl);
+
+        if (rc == -1 && !(rc = doSSLUpgradeNonBlockingIO(rc, mname, timeout_ms, "SSL_accept", xsink))) {
+            if (!qs.isOpen())
+                break;
+            continue;
+        }
+
+        break;
     }
+
+    if (qs.isOpen() && qs.set_non_blocking(false, xsink))
+        return qs.close_and_exit();
 
     if (rc <= 0) {
         //printd(5, "SSLSocketHelper::accept() rc: %d\n", rc);
@@ -785,6 +785,17 @@ long SSLSocketHelper::verifyPeerCertificate() const {
     long rc = SSL_get_verify_result(ssl);
     X509_free(cert);
     return rc;
+}
+
+my_socket_priv::my_socket_priv(QoreSocket* s, QoreSSLCertificate* c, QoreSSLPrivateKey* p)
+        : socket(s), cert(c), pk(p) {
+    // Wire the back-pointer so sync I/O helpers can release this
+    // mutex during their poll-wait phase.  See qore_socket_private::outer_lock.
+    socket->priv->outer_lock = &m;
+}
+
+my_socket_priv::my_socket_priv() : socket(new QoreSocket) {
+    socket->priv->outer_lock = &m;
 }
 
 int my_socket_priv::checkOpen(ExceptionSink* xsink) {
@@ -1145,34 +1156,6 @@ int SocketConnectInetPollState::next(ExceptionSink* xsink) {
     return nextIntern(xsink);
 }
 
-//! Creates a socket and immediately sets it to non-blocking mode.
-/** Returns the socket descriptor, or QORE_INVALID_SOCKET on error (errno set).
-    This ensures sockets are born non-blocking for async I/O; synchronous code
-    paths use SyncBlockingHelper to temporarily restore blocking mode.
-*/
-static int create_nonblocking_socket(int family, int type, int protocol) {
-    int fd = socket(family, type, protocol);
-    if (fd == QORE_INVALID_SOCKET) {
-        return QORE_INVALID_SOCKET;
-    }
-#ifdef _Q_WINDOWS
-    u_long mode = 1;
-    if (ioctlsocket(fd, FIONBIO, &mode) != 0) {
-        closesocket(fd);
-        return QORE_INVALID_SOCKET;
-    }
-#else
-    int flags = fcntl(fd, F_GETFL, 0);
-    if (flags < 0 || fcntl(fd, F_SETFL, flags | O_NONBLOCK) < 0) {
-        int saved_errno = errno;
-        ::close(fd);
-        errno = saved_errno;
-        return QORE_INVALID_SOCKET;
-    }
-#endif
-    return fd;
-}
-
 //! Setup socket with next address
 int SocketConnectInetPollState::nextIntern(ExceptionSink* xsink) {
     assert(p);
@@ -1197,6 +1180,296 @@ int SocketConnectInetPollState::nextIntern(ExceptionSink* xsink) {
         return -1;
     }
     return 0;
+}
+
+// --- Happy Eyeballs (RFC 8305) async poll state ---
+
+SocketConnectInetHappyEyeballsPollState::SocketConnectInetHappyEyeballsPollState(ExceptionSink* xsink,
+        qore_socket_private* sock, const char* host, const char* service, int family, int type, int protocol)
+        : sock(sock), host(host), service(service) {
+    assert(xsink);
+
+    family = q_get_af(family);
+    type = q_get_sock_type(type);
+
+    // close socket if already open
+    sock->close();
+
+    sock->do_resolve_event(host, service);
+
+    if (ai.getInfo(xsink, host, service, family, 0, type, protocol)) {
+        assert(*xsink);
+        return;
+    }
+
+    struct addrinfo* aip = ai.getAddrInfo();
+
+    // emit all "resolved" events
+    if (sock->event_queue) {
+        for (struct addrinfo* p = aip; p; p = p->ai_next) {
+            sock->do_resolved_event(p->ai_addr);
+        }
+    }
+
+    prt = q_get_port_from_addr(aip->ai_addr);
+
+    // Sort addresses: interleave IPv6 and IPv4
+    qore_socket_private::sortAddressesHappyEyeballs(aip, sorted_addrs, multi_family);
+
+    printd(5, "SocketConnectInetHappyEyeballsPollState::ctor() host: %s service: %s addrs: %zu multi_family: %d\n",
+        host, service, sorted_addrs.size(), (int)multi_family);
+
+    // Start first connection attempt
+    int rc = startNextConnect(xsink);
+    if (rc < 0 && !*xsink) {
+        qore_socket_error(xsink, "SOCKET-CONNECT-ERROR", "error in connect()", nullptr, host, service);
+    }
+    if (rc == 0) {
+        // Immediate connection — done
+        he_state = HEBS_CONNECTED;
+        assignWinner(xsink);
+    }
+}
+
+SocketConnectInetHappyEyeballsPollState::~SocketConnectInetHappyEyeballsPollState() {
+    closeAllFds();
+}
+
+int SocketConnectInetHappyEyeballsPollState::continuePoll(ExceptionSink* xsink) {
+    if (he_state == HEBS_CONNECTED) {
+        return 0;
+    }
+
+    // Check all active attempts for completion
+    for (size_t i = 0; i < active_attempts.size(); ++i) {
+        if (active_attempts[i].fd == QORE_INVALID_SOCKET) {
+            continue;
+        }
+        int rc = checkAttempt(i);
+        if (rc == 0) {
+            // Connected!
+            winning_idx = (int)i;
+            he_state = HEBS_CONNECTED;
+            assignWinner(xsink);
+            return *xsink ? -1 : 0;
+        }
+        if (rc < 0) {
+            // Failed — close this fd
+            bool was_primary = (active_attempts[i].fd == sock->sock);
+#ifdef _Q_WINDOWS
+            closesocket(active_attempts[i].fd);
+#else
+            ::close(active_attempts[i].fd);
+#endif
+            active_attempts[i].fd = QORE_INVALID_SOCKET;
+            if (was_primary) {
+                // Assign another active fd as primary so isOpen() remains true
+                sock->sock = QORE_INVALID_SOCKET;
+                for (auto& a : active_attempts) {
+                    if (a.fd != QORE_INVALID_SOCKET) {
+                        sock->sock = a.fd;
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    // Check if any attempts are still in progress
+    bool any_active = false;
+    for (auto& a : active_attempts) {
+        if (a.fd != QORE_INVALID_SOCKET) {
+            any_active = true;
+            break;
+        }
+    }
+
+    // Start next connection attempt when:
+    // 1. The 250ms timer has fired (he_state == HEBS_RACING), OR
+    // 2. All current attempts have already failed (need to try next immediately)
+    // On the first call (HEBS_FIRST_CONNECT) with an attempt still in progress,
+    // we return SOCK_POLLOUT to honor the 250ms stagger before starting the next address.
+    if (next_addr_idx < sorted_addrs.size() && (he_state == HEBS_RACING || !any_active)) {
+        int rc = startNextConnect(xsink);
+        if (*xsink) {
+            closeAllFds();
+            sock->sock = QORE_INVALID_SOCKET;
+            return -1;
+        }
+        if (rc == 0) {
+            // Immediate connection
+            he_state = HEBS_CONNECTED;
+            assignWinner(xsink);
+            return *xsink ? -1 : 0;
+        }
+    }
+
+    // Recheck if any attempts are still active (startNextConnect may have added new ones)
+    any_active = false;
+    for (auto& a : active_attempts) {
+        if (a.fd != QORE_INVALID_SOCKET) {
+            any_active = true;
+            break;
+        }
+    }
+
+    if (!any_active) {
+        sock->sock = QORE_INVALID_SOCKET;
+        qore_socket_error(xsink, "SOCKET-CONNECT-ERROR", "error in connect()", nullptr, host.c_str(), service.c_str());
+        return -1;
+    }
+
+    he_state = HEBS_RACING;
+    return SOCK_POLLOUT;
+}
+
+void SocketConnectInetHappyEyeballsPollState::getExtraFds(std::vector<std::pair<int, int>>& fds) const {
+    // Return all active fds that are NOT the primary sock->sock fd
+    for (auto& a : active_attempts) {
+        if (a.fd != QORE_INVALID_SOCKET && a.fd != sock->sock) {
+            fds.push_back({a.fd, SOCK_POLLOUT});
+        }
+    }
+}
+
+int SocketConnectInetHappyEyeballsPollState::startNextConnect(ExceptionSink* xsink) {
+    while (next_addr_idx < sorted_addrs.size()) {
+        struct addrinfo* p = sorted_addrs[next_addr_idx];
+
+        // Check sandbox network security restrictions
+        QoreSandboxManagerHelper smh;
+        if (smh) {
+            int proto = (p->ai_socktype == SOCK_STREAM) ? QSEC_NET_TCP :
+                        (p->ai_socktype == SOCK_DGRAM) ? QSEC_NET_UDP : QSEC_NET_ALL;
+            if (!smh->checkNetworkAccess(p->ai_addr, p->ai_addrlen, proto, xsink)) {
+                return -1;
+            }
+        }
+
+        sock->do_connect_event(p->ai_family, p->ai_addr, host.c_str(), service.c_str(), prt);
+
+        int fd = create_nonblocking_socket(p->ai_family, p->ai_socktype, p->ai_protocol);
+        if (fd == QORE_INVALID_SOCKET) {
+            ++next_addr_idx;
+            continue;
+        }
+
+        int rc;
+        while (true) {
+            rc = ::connect(fd, p->ai_addr, p->ai_addrlen);
+            if (!rc || sock_get_error() != EINTR) {
+                break;
+            }
+        }
+        if (rc == 0) {
+            // Immediate connection
+            ConnAttempt a;
+            a.fd = fd;
+            a.addr_idx = next_addr_idx;
+            active_attempts.push_back(a);
+            winning_idx = (int)(active_attempts.size() - 1);
+            ++next_addr_idx;
+            return 0;
+        }
+
+#ifdef _Q_WINDOWS
+        if (sock_get_error() != EAGAIN) {
+            closesocket(fd);
+            ++next_addr_idx;
+            continue;
+        }
+#else
+        if (errno != EINPROGRESS && errno != EAGAIN) {
+            ::close(fd);
+            ++next_addr_idx;
+            continue;
+        }
+#endif
+
+        ConnAttempt a;
+        a.fd = fd;
+        a.addr_idx = next_addr_idx;
+        active_attempts.push_back(a);
+        ++next_addr_idx;
+
+        // Assign first racing fd to sock->sock so isOpen() returns true
+        if (sock->sock == QORE_INVALID_SOCKET) {
+            sock->sock = fd;
+        }
+
+        return 1; // in progress
+    }
+
+    return -1; // no more addresses
+}
+
+int SocketConnectInetHappyEyeballsPollState::checkAttempt(size_t idx) {
+    assert(idx < active_attempts.size());
+    int fd = active_attempts[idx].fd;
+    assert(fd != QORE_INVALID_SOCKET);
+
+    // Check SO_ERROR
+    int val = 0;
+    socklen_t lon = sizeof(val);
+    if (getsockopt(fd, SOL_SOCKET, SO_ERROR, (GETSOCKOPT_ARG_4)(&val), &lon) != 0) {
+        return -1;
+    }
+    if (val != 0) {
+        errno = val;
+        return -1;
+    }
+
+    // Try a zero-byte send to confirm connection (needed on macOS)
+    int rc = send(fd, nullptr, 0, 0);
+    if (rc != 0) {
+        if (errno == EINPROGRESS || errno == EAGAIN || errno == ENOTCONN) {
+            return 1; // still in progress
+        }
+        return -1;
+    }
+
+    return 0; // connected
+}
+
+void SocketConnectInetHappyEyeballsPollState::assignWinner(ExceptionSink* xsink) {
+    assert(winning_idx >= 0 && winning_idx < (int)active_attempts.size());
+    auto& winner = active_attempts[winning_idx];
+    assert(winner.fd != QORE_INVALID_SOCKET);
+
+    struct addrinfo* wp = sorted_addrs[winner.addr_idx];
+
+    // Assign winning fd to socket (may already be sock->sock if first attempt won)
+    sock->sock = winner.fd;
+    winner.fd = QORE_INVALID_SOCKET;
+    sock->sfamily = wp->ai_family;
+    sock->stype = wp->ai_socktype;
+    sock->sprot = wp->ai_protocol;
+    sock->port = prt;
+
+    // Close all other fds
+    closeAllFds();
+
+    sock->confirmConnected(host.c_str());
+
+    printd(5, "SocketConnectInetHappyEyeballsPollState::assignWinner() host: %s family: %s\n",
+        host.c_str(), q_af_to_str(wp->ai_family));
+}
+
+void SocketConnectInetHappyEyeballsPollState::closeAllFds() {
+    for (auto& a : active_attempts) {
+        if (a.fd != QORE_INVALID_SOCKET) {
+            // Don't close the fd if it's currently assigned to sock->sock
+            // (that will be handled by sock->close() or by assignWinner)
+            if (a.fd != sock->sock) {
+#ifdef _Q_WINDOWS
+                closesocket(a.fd);
+#else
+                ::close(a.fd);
+#endif
+            }
+            a.fd = QORE_INVALID_SOCKET;
+        }
+    }
 }
 
 #ifndef _Q_WINDOWS
@@ -3026,31 +3299,11 @@ int SSLSocketHelper::doSSLRW(ExceptionSink* xsink, const char* mname, void* buf,
     assert(size);
     SSLSocketReferenceHelper ssrh(this);
 
-    if (timeout_ms < 0) {
-        while (true) {
-            int rc;
-            ERR_clear_error();
-            switch (action) {
-                case READ:
-                    rc = SSL_read(ssl, buf, size);
-                    break;
-                case WRITE:
-                    rc = SSL_write(ssl, buf, size);
-                    break;
-                case PEEK:
-                    rc = SSL_peek(ssl, buf, size);
-                    break;
-            }
-            if (rc <= 0) {
-                // we set SSL_MODE_AUTO_RETRY so there should never be any need to retry
-                // issue 1729: only return 0 when reading, indicating that the remote closed the connection
-                if (!sslError(xsink, mname, get_action_method(action), action == WRITE ? true : false)) {
-                    rc = 0;
-                }
-            }
-            return rc;
-        }
-    }
+    // Always use the non-blocking retry loop below.  Sockets are born non-blocking since the
+    // AsyncIoController redesign, so SSL_read/SSL_write can return WANT_READ/WANT_WRITE even
+    // when the caller passed timeout_ms < 0.  The general path handles infinite wait via
+    // isSocketDataAvailable(timeout_ms, ...) — kqueue/poll treat negative timeout as infinite.
+    // OptionalNonBlockingHelper is a no-op when the socket is already non-blocking.
 
     // set non blocking
     OptionalNonBlockingHelper nbh(qs, true, xsink);
@@ -3086,11 +3339,23 @@ int SSLSocketHelper::doSSLRW(ExceptionSink* xsink, const char* mname, void* buf,
                 rc = QSE_TIMEOUT;
                 break;
             }
-            if (!qs.isSocketDataAvailable(timeout_ms, mname, xsink)) {
-                if (*xsink) {
-                    return -1;
-                }
-                if (do_timeout && timeout_ms) {
+            // Wait for read readiness.  Yield the outer lock only on
+            // non-multiplexed sockets.  H2 mux sockets share a single TLS
+            // connection between the I/O controller's epoll and handler
+            // threads; an independent ::poll() from waitReleasingLock()
+            // would compete for TLS records and cause stream starvation.
+            int wait_rc;
+            if (qs.outer_lock && !qs.h2_session) {
+                wait_rc = SocketSyncPoll::waitReleasingLock(qs, *qs.outer_lock,
+                    true, false, timeout_ms, "Socket", mname, xsink);
+            } else {
+                wait_rc = qs.isSocketDataAvailable(timeout_ms, mname, xsink) ? 1 : 0;
+            }
+            if (*xsink) {
+                return -1;
+            }
+            if (wait_rc <= 0) {
+                if (do_timeout && timeout_ms > 0) {
                     se_timeout("Socket", mname, timeout_ms, xsink);
                 }
                 rc = QSE_TIMEOUT;
@@ -3101,11 +3366,19 @@ int SSLSocketHelper::doSSLRW(ExceptionSink* xsink, const char* mname, void* buf,
                 rc = QSE_TIMEOUT;
                 break;
             }
-            if (!qs.isWriteFinished(timeout_ms, mname, xsink)) {
-                if (*xsink) {
-                    return -1;
-                }
-                if (do_timeout && timeout_ms) {
+            // Same guard as WANT_READ: no lock-yielding on H2 mux sockets.
+            int wait_rc;
+            if (qs.outer_lock && !qs.h2_session) {
+                wait_rc = SocketSyncPoll::waitReleasingLock(qs, *qs.outer_lock,
+                    false, true, timeout_ms, "Socket", mname, xsink);
+            } else {
+                wait_rc = qs.isWriteFinished(timeout_ms, mname, xsink) ? 1 : 0;
+            }
+            if (*xsink) {
+                return -1;
+            }
+            if (wait_rc <= 0) {
+                if (do_timeout && timeout_ms > 0) {
                     se_timeout("Socket", mname, timeout_ms, xsink);
                 }
                 rc = QSE_TIMEOUT;
@@ -3185,24 +3458,38 @@ int SSLSocketHelper::doSSLUpgradeNonBlockingIO(int rc, const char* mname, int ti
     int err = SSL_get_error(ssl, rc);
 
     if (err == SSL_ERROR_WANT_READ) {
-        if (qs.isSocketDataAvailable(timeout_ms, mname, xsink)) {
-            return 0;
+        // Same H2 mux guard as doSSLRW: no lock-yielding when the socket
+        // has an H2 session — avoids TLS record contention with epoll.
+        int wait_rc;
+        if (qs.outer_lock && !qs.h2_session) {
+            wait_rc = SocketSyncPoll::waitReleasingLock(qs, *qs.outer_lock,
+                true, false, timeout_ms, "Socket", mname, xsink);
+        } else {
+            wait_rc = qs.isSocketDataAvailable(timeout_ms, mname, xsink) ? 1 : 0;
         }
-
         if (*xsink) {
             return -1;
+        }
+        if (wait_rc > 0) {
+            return 0;
         }
         se_timeout("Socket", mname, timeout_ms, xsink);
         return QSE_TIMEOUT;
     }
 
     if (err == SSL_ERROR_WANT_WRITE) {
-        if (qs.isWriteFinished(timeout_ms, mname, xsink)) {
-            return 0;
+        int wait_rc;
+        if (qs.outer_lock && !qs.h2_session) {
+            wait_rc = SocketSyncPoll::waitReleasingLock(qs, *qs.outer_lock,
+                false, true, timeout_ms, "Socket", mname, xsink);
+        } else {
+            wait_rc = qs.isWriteFinished(timeout_ms, mname, xsink) ? 1 : 0;
         }
-
         if (*xsink) {
             return -1;
+        }
+        if (wait_rc > 0) {
+            return 0;
         }
         se_timeout("Socket", mname, timeout_ms, xsink);
         return QSE_TIMEOUT;
@@ -3242,21 +3529,6 @@ DLLLOCAL OptionalNonBlockingHelper::OptionalNonBlockingHelper(qore_socket_privat
 DLLLOCAL OptionalNonBlockingHelper::~OptionalNonBlockingHelper() {
     if (set) {
         sock.set_non_blocking(false, xsink);
-    }
-}
-
-DLLLOCAL SyncBlockingHelper::SyncBlockingHelper(qore_socket_private& s, ExceptionSink* xs)
-        : sock(s), xsink(xs), set(false) {
-    if (sock.isOpen()) {
-        if (!sock.set_non_blocking(false, xs)) {
-            set = true;
-        }
-    }
-}
-
-DLLLOCAL SyncBlockingHelper::~SyncBlockingHelper() {
-    if (set && sock.isOpen()) {
-        sock.set_non_blocking(true, xsink);
     }
 }
 
@@ -3935,9 +4207,11 @@ AbstractPollState* QoreSocket::startConnect(ExceptionSink* xsink, const char* na
         if (host.strlen() > 2 && host[0] == '[' && host[host.strlen() - 1] == ']') {
             host.terminate(host.strlen() - 1);
             //printd(5, "QoreSocket::connect(%s, %s) [ipv6]\n", host.c_str() + 1, service.c_str());
-            return new SocketConnectInetPollState(xsink, priv, host.c_str() + 1, service.c_str(), AF_INET6);
+            // Explicit IPv6 bracket notation — single family, no racing needed
+            return new SocketConnectInetHappyEyeballsPollState(xsink, priv, host.c_str() + 1, service.c_str(),
+                AF_INET6);
         }
-        return new SocketConnectInetPollState(xsink, priv, host.c_str(), service.c_str());
+        return new SocketConnectInetHappyEyeballsPollState(xsink, priv, host.c_str(), service.c_str());
     }
 
     // otherwise assume it's a file name for a UNIX domain socket
@@ -5396,6 +5670,10 @@ void SocketConnectPollOperation::deref(ExceptionSink* xsink) {
         if (set_non_block) {
             sock->clearNonBlock();
         }
+        // Release poll_state before deref'ing the socket: the poll state holds a raw
+        // qore_socket_private* and may reference it during destruction (e.g.
+        // SocketConnectInetHappyEyeballsPollState::closeAllFds reads sock->sock).
+        poll_state.reset();
         sock->deref(xsink);
         delete this;
     }
@@ -5425,6 +5703,7 @@ void SocketSendPollOperation::deref(ExceptionSink* xsink) {
         if (set_non_block) {
             sock->clearNonBlock(NB_SEND);
         }
+        poll_state.reset();
         sock->deref(xsink);
         delete this;
     }
@@ -5443,6 +5722,7 @@ void SocketRecvPollOperationBase::deref(ExceptionSink* xsink) {
         if (set_non_block) {
             sock->clearNonBlock(NB_RECV);
         }
+        poll_state.reset();
         sock->deref(xsink);
         delete this;
     }
@@ -5470,6 +5750,7 @@ void SocketUpgradeClientSslPollOperation::deref(ExceptionSink* xsink) {
         if (set_non_block) {
             sock->clearNonBlock();
         }
+        poll_state.reset();
         sock->deref(xsink);
         delete this;
     }
@@ -5626,7 +5907,23 @@ QoreHashNode* SocketConnectPollOperation::continuePoll(ExceptionSink* xsink) {
         case SPS_CONNECTING: {
             int rc = checkContinuePoll(xsink);
             if (rc != 0) {
-                rv = *xsink ? nullptr : getSocketPollInfoHash(xsink, rc);
+                if (*xsink) {
+                    break;
+                }
+                // Check if the inner state is Happy Eyeballs racing — if so, include extra fds
+                // and a poll timeout for the 250ms connection attempt delay
+                auto* he_state = dynamic_cast<SocketConnectInetHappyEyeballsPollState*>(poll_state.get());
+                if (he_state && he_state->isRacing() && he_state->getState() == HEBS_RACING) {
+                    std::vector<std::pair<int, int>> extra_fds;
+                    he_state->getExtraFds(extra_fds);
+                    rv = getSocketPollInfoHash(xsink, rc, extra_fds);
+                    if (rv) {
+                        // Set poll_timeout_ms for the 250ms stagger if more addresses remain
+                        rv->setKeyValue("poll_timeout_ms", HAPPY_EYEBALLS_DELAY_MS, xsink);
+                    }
+                } else {
+                    rv = getSocketPollInfoHash(xsink, rc);
+                }
                 break;
             }
 

@@ -412,6 +412,17 @@ public:
     */
     DLLEXPORT const char* getClassName() const;
 
+    //! Returns the unique hash for this object
+    /** The hash is computed once at construction with a monotonic ID, so it is
+        stable for the object's lifetime and globally unique even when malloc
+        reuses addresses.
+
+        @return a referenced QoreStringNode with the unique hash
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT QoreStringNode* getUniqueHash() const;
+
     //! returns a pointer to the QoreClass of this object or to the injection target class in case the class was injected
     /**
         @return a pointer to the QoreClass of this object or to the injection target class in case the class was injected
@@ -524,16 +535,21 @@ public:
     DLLEXPORT QoreValue getReferencedMemberNoMethod(const char* key, const QoreClass* cls, ExceptionSink* xsink) const;
 
     //! sets the value of the given member as accessed from the given class
-    /** @param key the name of the member, assumed to be in the default encoding (QCS_DEFAULT)
+    /** The reference in \a val is transferred to the object (consuming semantics); callers
+        that wish to retain a reference to the value must pass \c val.refSelf() instead.
+        This matches the ownership contract of setValue() and avoids leaks when passing
+        freshly-allocated heap values.
+
+        @param key the name of the member, assumed to be in the default encoding (QCS_DEFAULT)
         @param cls the class context for private:internal members; may be nullptr
-        @param val the value to set
+        @param val the value to set; its reference is consumed by this call
         @param xsink if an error occurs, the Qore-language exception information will be added here
 
         @return 0 = no errors, -1 = Qore-language exception raised
 
         @since %Qore 0.9
     */
-    DLLEXPORT int setMemberValue(const char* key, const QoreClass* cls, const QoreValue val, ExceptionSink* xsink);
+    DLLEXPORT int setMemberValue(const char* key, const QoreClass* cls, QoreValue val, ExceptionSink* xsink);
 
     //! call this function when an object's private data is deleted externally
     /** this function will clear the private data and delete the object

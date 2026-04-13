@@ -68,8 +68,21 @@ public class SemanticDocumentChunker inherits StructuredDocumentChunker {
         #! Number of sentences per segment for embedding
         int segment_size;
 
-        #! Regex for sentence splitting
-        const SentenceRegex = "([.!?]+)\\s+";
+        #! Regex for sentence splitting — abbreviation-aware
+        /** Uses negative lookbehinds to avoid splitting on common abbreviations
+            (Dr., Mr., etc.), single-letter initials (A. Smith), and decimal
+            numbers (3.14). Requires the next segment to start with an uppercase
+            letter, quote, or parenthesis.
+        */
+        const SentenceRegex =
+            "(?<!\\b(?:Dr|Mr|Mrs|Ms|Prof|Rev|Gen|Gov|Sgt|Sr|Jr|St|vs|etc|al|"
+            "Inc|Corp|Ltd|Co|Vol|Fig|Eq|No|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|"
+            "Oct|Nov|Dec))"
+            "(?<!\\b[A-Z])"
+            "(?<!\\d)"
+            "([.!?]+)"
+            "\\s+"
+            "(?=[A-Z\"(])";
     }
 
     #! Creates a SemanticDocumentChunker
@@ -236,22 +249,9 @@ public class SemanticDocumentChunker inherits StructuredDocumentChunker {
     }
 
     #! Computes cosine similarity between two vectors
+    #! Computes cosine similarity using the C++ ml module for performance
     private static float cosineSimilarity(list<float> a, list<float> b) {
-        float dot = 0.0;
-        float norm_a = 0.0;
-        float norm_b = 0.0;
-
-        for (int i = 0; i < a.size(); ++i) {
-            dot += a[i] * b[i];
-            norm_a += a[i] * a[i];
-            norm_b += b[i] * b[i];
-        }
-
-        float denom = sqrt(norm_a) * sqrt(norm_b);
-        if (denom == 0.0) {
-            return 0.0;
-        }
-        return dot / denom;
+        return ML::ml_cosine_similarity(a, b);
     }
 }
 

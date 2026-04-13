@@ -64,7 +64,7 @@ auto mgr_h3 = new HttpClientConnectionManager({"protocol": "h3"});
     destructors fire on one controller's I/O thread and cancel operations on
     another controller.
 */
-public class HttpClientConnectionManager {
+public class HttpClientConnectionManager inherits HttpClientConnectionManagerBase {
     public {
         #! Interval before re-probing HTTP/3 for hosts that fell back to HTTP/2
         const H3_REPROBE_INTERVAL = 5m;
@@ -397,10 +397,10 @@ public class HttpClientConnectionManager {
                 url_info.host, path, url_info.protocol == "https");
             if (cookie_hdr) {
                 headers = headers ?? {};
-                if (headers.Cookie) {
-                    headers.Cookie += "; " + cookie_hdr;
+                if (headers.cookie) {
+                    headers.cookie += "; " + cookie_hdr;
                 } else {
-                    headers.Cookie = cookie_hdr;
+                    headers.cookie = cookie_hdr;
                 }
             }
         }
@@ -567,10 +567,10 @@ public class HttpClientConnectionManager {
                 *string cookie_hdr = cookie_jar.getCookieHeader(
                     url_info.host, path, is_secure);
                 if (cookie_hdr) {
-                    if (req_headers.Cookie) {
-                        req_headers.Cookie += "; " + cookie_hdr;
+                    if (req_headers.cookie) {
+                        req_headers.cookie += "; " + cookie_hdr;
                     } else {
-                        req_headers.Cookie = cookie_hdr;
+                        req_headers.cookie = cookie_hdr;
                     }
                 }
             }
@@ -829,6 +829,11 @@ public class HttpClientConnectionManager {
             }
         }
         foreach HttpClientConnection conn in (to_close) {
+            # Cancel from the I/O controller BEFORE closing to release the
+            # controller's strong references to the socket and poll operation.
+            # Without this, the PollInfo entry keeps the objects alive and the
+            # socket fd leaks until the controller is destroyed.
+            try { controller.cancel(conn.getSocket()); } catch () {}
             try {
                 conn.close();
             } catch () {
@@ -1172,7 +1177,8 @@ public class HttpClientConnectionManager {
             log(LoggerLevel::DEBUG, "creating new HTTP/1.1 connection to %s%s", key,
                 proxy_info ? sprintf(" via proxy %s:%d", proxy_info.host, proxy_info.port) : "");
             return new Http1ClientConnection(url_info, opts.connect_timeout, logger,
-                1, opts.ssl_verify_mode, opts.accept_all_certs, proxy_info);
+                1, opts.ssl_verify_mode, opts.accept_all_certs, proxy_info,
+                opts.client_cert, opts.client_pk);
         }
 
         if (protocol == "h3") {
@@ -1203,7 +1209,7 @@ public class HttpClientConnectionManager {
             proxy_info ? sprintf(" via proxy %s:%d", proxy_info.host, proxy_info.port) : "");
         return new Http2ClientConnection(url_info, opts.connect_timeout, logger,
             opts.max_streams_per_connection, opts.ssl_verify_mode, opts.accept_all_certs,
-            proxy_info);
+            proxy_info, opts.client_cert, opts.client_pk);
     }
 
     #! Internal: happy eyeballs parallel H3 + H2 connection race
@@ -1278,7 +1284,7 @@ public class HttpClientConnectionManager {
         log(LoggerLevel::DEBUG, "happy eyeballs: starting H2 for %s (H3 still pending)", key);
         Http2ClientConnection h2conn(url_info, opts.connect_timeout, logger,
             opts.max_streams_per_connection, opts.ssl_verify_mode, opts.accept_all_certs,
-            proxy_info);
+            proxy_info, opts.client_cert, opts.client_pk);
         h2conn.setControllerRef(controller);
         h2conn.setManagerContext(self, key);
         submitConnectionToController(key, h2conn);
@@ -1378,6 +1384,18 @@ public class HttpClientConnectionManager {
             # Set manager context once — connection_ref is already set in the
             # connection impl constructor via poll_op.setConnection(self)
             conn.setManagerContext(self, key);
+
+            # Install the proactive idle timeout for H1/H2 connections (nginx
+            # upstream keepalive_timeout model).  H3 relies on ngtcp2's built-in
+            # idle timer negotiated via QUIC max_idle_timeout transport
+            # parameter, so skip it there.
+            # NOTE: Qore's "timeout" type is an int representing milliseconds;
+            # pass it directly to the poll op's setIdleTimeout(int) method.
+            if (op instanceof Http1ClientPollOperation) {
+                cast<Http1ClientPollOperation>(op).setIdleTimeout(opts.idle_timeout);
+            } else if (op instanceof Http2ClientPollOperation) {
+                cast<Http2ClientPollOperation>(op).setIdleTimeout(opts.idle_timeout);
+            }
         }
 
         # Use no timeout (-1) for the controller operation.  The H1/H2/H3
@@ -1388,11 +1406,20 @@ public class HttpClientConnectionManager {
         # Using connect_timeout here caused the controller to kill the operation
         # after connect_timeout seconds, even though it was in the middle of a
         # request/response cycle with a longer timeout.
+        #
+        # has_on_complete=True: HttpClientPollOperation inherits onComplete()
+        # from the Qore-level base class, but the C++/Qore multiple-inheritance
+        # resolution in AsyncIoController::submit() (lib/AsyncIoControllerPriv.cpp
+        # lines 710-727) may return the AbstractPollOperation no-op from the
+        # wrong parent.  Force dispatch explicitly so HttpClientPollOperation::
+        # onComplete() fires and handleConnectionResult() removes idle-closed,
+        # errored, and proactively-timed-out connections from the pool.
         controller.submit(<SocketPollOperationInfo>{
             "sock": sock,
             "spop": op,
             "owner": owner,
             "to": -1,
+            "has_on_complete": True,
         });
     }
 
@@ -1811,6 +1838,7 @@ public class HttpClientConnectionManager {
         foreach HttpClientConnection conn in (to_close) {
             log(LoggerLevel::DEBUG, "evicting dead %s connection %d",
                 conn.getProtocol(), conn.getConnectionId());
+            try { controller.cancel(conn.getSocket()); } catch () {}
             try { conn.close(); } catch () {}
         }
     }

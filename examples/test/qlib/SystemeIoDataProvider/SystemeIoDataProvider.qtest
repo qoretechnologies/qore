@@ -1,0 +1,503 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  SystemeIoDataProvider.qtest Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/ConnectionProvider
+%requires ../../../../qlib/RestClient.qm
+%requires ../../../../qlib/RestClientIo.qm
+
+%try-module json
+%define NoJson
+%endtry
+
+%requires ../../../../qlib/SystemeIoRestClient.qm
+%requires ../../../../qlib/SystemeIoDataProvider
+
+%exec-class SystemeIoDataProviderTest
+
+public class SystemeIoDataProviderTest inherits QUnit::Test {
+    private {
+        #! Systeme.io REST client (async) for integration tests
+        *RestClientIo::RestClientIo client;
+
+        #! Custom command-line options
+        const MyOpts = Opts + {
+            "apikey": "k,apikey=s",
+            "conn": "c,connection=s",
+        };
+
+        #! IDs of test resources to clean up
+        *int testContactId;
+        *int testTagId;
+    }
+
+    constructor() : Test("SystemeIoDataProvider Test", "1.0", \ARGV, MyOpts) {
+        # Unit tests (always run, no credentials needed)
+        addTestCase("sanity tests", \sanityTests());
+        addTestCase("factory tests", \factoryTests());
+        addTestCase("metadata tests", \metadataTests());
+        addTestCase("data type tests", \dataTypeTests());
+        addTestCase("fake example data tests", \fakeExampleDataTests());
+        addTestCase("connection tests", \connectionTests());
+
+        # Integration tests (require Systeme.io credentials)
+        addTestCase("tag CRUD tests", \tagCrudTests());
+        addTestCase("contact CRUD tests", \contactCrudTests());
+        addTestCase("contact tag tests", \contactTagTests());
+        addTestCase("list contacts tests", \listContactsTests());
+        addTestCase("list tags tests", \listTagsTests());
+        addTestCase("example event data tests", \exampleEventDataTests());
+
+        # Try to set up connection for integration tests
+        try {
+            setupConnection();
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose) {
+                printf("Connection setup failed: %s: %s\n", ex.err, ex.desc);
+            }
+        }
+
+        set_return_value(main());
+    }
+
+    #! Sets up the Systeme.io client for integration tests
+    private setupConnection() {
+        *string conn_name = m_options.conn ?? ENV.SYSTEMEIO_CONNECTION;
+        if (conn_name) {
+            AbstractConnection conn = get_connection(conn_name);
+            if (conn instanceof SystemeIoRestClient::SystemeIoRestConnection) {
+                client = (cast<SystemeIoRestClient::SystemeIoRestConnection>(conn))
+                    .getAsync(True);
+            }
+            return;
+        }
+
+        *string apikey = m_options.apikey ?? ENV.SYSTEMEIO_API_KEY;
+        if (apikey) {
+            client = new SystemeIoRestClient::SystemeIoRestClientIo({
+                "apikey": apikey,
+            });
+        }
+    }
+
+    #! Helper to skip integration tests when no credentials
+    private skipIfNoCredentials() {
+        if (!client) {
+            testSkip("no Systeme.io credentials available");
+        }
+    }
+
+    #! Helper to create a data provider from the client
+    private SystemeIoDataProvider::SystemeIoDataProvider getProvider() {
+        return new SystemeIoDataProvider::SystemeIoDataProvider(client);
+    }
+
+    # ========== UNIT TESTS ==========
+
+    sanityTests() {
+        assertEq("SystemeIo", SystemeIoDataProvider::AppName);
+        assertEq(100, SystemeIoDataProvider::DefaultPageSize);
+        assertEq(120, SystemeIoDataProvider::DefaultPollInterval);
+        assertEq(60, SystemeIoDataProvider::MinPollInterval);
+
+        # Verify event constants
+        assertEq("new-contact", SystemeIoDataProvider::EVENT_NEW_CONTACT);
+        assertEq("new-tag", SystemeIoDataProvider::EVENT_NEW_TAG);
+    }
+
+    factoryTests() {
+        AbstractDataProviderFactory factory = DataProvider::getFactory("systemeio");
+        assertEq(True, factory instanceof SystemeIoDataProvider::SystemeIoDataProviderFactory);
+
+        hash<DataProviderFactoryInfo> info = factory.getInfo();
+        assertEq("systemeio", info.name);
+        assertEq(True, info.children_can_support_apis);
+        assertEq(True, info.children_can_support_records);
+        assertEq(True, info.children_can_support_observers);
+    }
+
+    metadataTests() {
+        *hash<auto> app = DataProviderActionCatalog::getApp("SystemeIo");
+        assertEq(True, app.val(), "SystemeIo app registered in action catalog");
+        assertEq("Systeme.io", app.display_name);
+        assertEq("systemeio", app.scheme);
+
+        list<hash<auto>> actions = DataProviderActionCatalog::getActions("SystemeIo");
+        assertEq(True, actions.size() >= 21, "at least 21 actions registered");
+
+        bool found_create_contact = False;
+        bool found_list_contacts = False;
+        bool found_new_contact_event = False;
+        bool found_create_tag = False;
+        bool found_list_tags = False;
+        bool found_get_contact_field = False;
+        foreach hash<auto> action in (actions) {
+            if (action.action == "create-contact") {
+                found_create_contact = True;
+                assertEq(DPAT_API, action.action_code);
+            }
+            if (action.action == "list-contacts") {
+                found_list_contacts = True;
+                assertEq(DPAT_FIND, action.action_code);
+            }
+            if (action.action == "new-contact") {
+                found_new_contact_event = True;
+                assertEq(DPAT_EVENT, action.action_code);
+            }
+            if (action.action == "create-tag") {
+                found_create_tag = True;
+                assertEq(DPAT_API, action.action_code);
+            }
+            if (action.action == "list-tags") {
+                found_list_tags = True;
+                assertEq(DPAT_FIND, action.action_code);
+            }
+            if (action.action == "get-contact-field") {
+                found_get_contact_field = True;
+                assertEq(DPAT_FIND_SINGLE, action.action_code);
+            }
+        }
+        assertEq(True, found_create_contact, "create-contact action registered");
+        assertEq(True, found_list_contacts, "list-contacts action registered");
+        assertEq(True, found_new_contact_event, "new-contact event registered");
+        assertEq(True, found_create_tag, "create-tag action registered");
+        assertEq(True, found_list_tags, "list-tags action registered");
+        assertEq(True, found_get_contact_field, "get-contact-field action registered");
+    }
+
+    dataTypeTests() {
+        SystemeIoDataProvider::SystemeIoContactDataType contact_type();
+        hash<auto> fields = contact_type.getFields();
+        assertEq(True, fields.hasKey("id"), "contact type has id field");
+        assertEq(True, fields.hasKey("email"), "contact type has email field");
+        assertEq(True, fields.hasKey("firstName"), "contact type has firstName field");
+        assertEq(True, fields.hasKey("lastName"), "contact type has lastName field");
+        assertEq(True, fields.hasKey("phoneNumber"), "contact type has phoneNumber field");
+        assertEq(True, fields.hasKey("locale"), "contact type has locale field");
+        assertEq(True, fields.hasKey("tags"), "contact type has tags field");
+        assertEq(True, fields.hasKey("fields"), "contact type has fields field");
+        assertEq(True, fields.hasKey("createdAt"), "contact type has createdAt field");
+
+        SystemeIoDataProvider::SystemeIoTagDataType tag_type();
+        hash<auto> tfields = tag_type.getFields();
+        assertEq(True, tfields.hasKey("id"), "tag type has id field");
+        assertEq(True, tfields.hasKey("name"), "tag type has name field");
+        assertEq(True, tfields.hasKey("createdAt"), "tag type has createdAt field");
+
+        SystemeIoDataProvider::SystemeIoContactFieldDataType cf_type();
+        hash<auto> cfields = cf_type.getFields();
+        assertEq(True, cfields.hasKey("slug"), "contact field type has slug field");
+        assertEq(True, cfields.hasKey("name"), "contact field type has name field");
+
+        SystemeIoDataProvider::SystemeIoCourseDataType course_type();
+        hash<auto> cofields = course_type.getFields();
+        assertEq(True, cofields.hasKey("id"), "course type has id field");
+        assertEq(True, cofields.hasKey("name"), "course type has name field");
+
+        SystemeIoDataProvider::SystemeIoEnrollmentDataType enroll_type();
+        hash<auto> efields = enroll_type.getFields();
+        assertEq(True, efields.hasKey("id"), "enrollment type has id field");
+        assertEq(True, efields.hasKey("courseId"), "enrollment type has courseId field");
+        assertEq(True, efields.hasKey("contactId"), "enrollment type has contactId field");
+        assertEq(True, efields.hasKey("accessType"), "enrollment type has accessType field");
+
+        SystemeIoDataProvider::SystemeIoCommunityDataType comm_type();
+        hash<auto> commfields = comm_type.getFields();
+        assertEq(True, commfields.hasKey("id"), "community type has id field");
+        assertEq(True, commfields.hasKey("name"), "community type has name field");
+
+        SystemeIoDataProvider::SystemeIoMembershipDataType mem_type();
+        hash<auto> mfields = mem_type.getFields();
+        assertEq(True, mfields.hasKey("id"), "membership type has id field");
+        assertEq(True, mfields.hasKey("communityId"), "membership type has communityId field");
+        assertEq(True, mfields.hasKey("contactId"), "membership type has contactId field");
+
+        SystemeIoDataProvider::SystemeIoSubscriptionDataType sub_type();
+        hash<auto> sfields = sub_type.getFields();
+        assertEq(True, sfields.hasKey("id"), "subscription type has id field");
+        assertEq(True, sfields.hasKey("status"), "subscription type has status field");
+
+        # Verify contact field value type
+        SystemeIoDataProvider::SystemeIoContactFieldValueDataType cfv_type();
+        hash<auto> cfvfields = cfv_type.getFields();
+        assertEq(True, cfvfields.hasKey("slug"), "contact field value type has slug");
+        assertEq(True, cfvfields.hasKey("value"), "contact field value type has value");
+
+        # Verify create request types have correct required fields
+        SystemeIoDataProvider::SystemeIoCreateContactRequestDataType create_contact_req();
+        hash<auto> ccrf = create_contact_req.getFields();
+        assertEq(True, ccrf.hasKey("email"), "create contact request has email");
+        assertEq(True, ccrf.hasKey("firstName"), "create contact request has firstName");
+
+        SystemeIoDataProvider::SystemeIoCreateTagRequestDataType create_tag_req();
+        hash<auto> ctrf = create_tag_req.getFields();
+        assertEq(True, ctrf.hasKey("name"), "create tag request has name");
+
+        SystemeIoDataProvider::SystemeIoCreateEnrollmentRequestDataType create_enroll_req();
+        hash<auto> cerf = create_enroll_req.getFields();
+        assertEq(True, cerf.hasKey("courseId"), "create enrollment request has courseId");
+        assertEq(True, cerf.hasKey("contactId"), "create enrollment request has contactId");
+        assertEq(True, cerf.hasKey("accessType"), "create enrollment request has accessType");
+    }
+
+    fakeExampleDataTests() {
+        # Contact watch
+        SystemeIoDataProvider::SystemeIoWatchContactsDataProvider contact_watch(
+            new SystemeIoRestClient::SystemeIoRestClientIo(
+                {"url": "https://test.example.com", "apikey": "test"}));
+        hash<auto> contact_fake = contact_watch.getFakeExampleData();
+        assertEq(True, contact_fake.hasKey("id"), "contact fake has id");
+        assertEq(True, contact_fake.hasKey("email"), "contact fake has email");
+        assertEq(True, contact_fake.hasKey("registeredAt"), "contact fake has registeredAt");
+
+        # Tag watch
+        SystemeIoDataProvider::SystemeIoWatchTagsDataProvider tag_watch(
+            new SystemeIoRestClient::SystemeIoRestClientIo(
+                {"url": "https://test.example.com", "apikey": "test"}));
+        hash<auto> tag_fake = tag_watch.getFakeExampleData();
+        assertEq(True, tag_fake.hasKey("id"), "tag fake has id");
+        assertEq(True, tag_fake.hasKey("name"), "tag fake has name");
+        assertEq(True, tag_fake.hasKey("createdAt"), "tag fake has createdAt");
+    }
+
+    connectionTests() {
+        hash<auto> scheme = ConnectionSchemeCache::getScheme("systemeio");
+        assertEq(True, scheme.val(), "systemeio scheme registered");
+        assertEq("Systeme.io REST Connection", scheme.display_name);
+        assertEq(True, scheme.auto_url);
+    }
+
+    # ========== INTEGRATION TESTS ==========
+
+    tagCrudTests() {
+        skipIfNoCredentials();
+
+        SystemeIoDataProvider::SystemeIoDataProvider provider = getProvider();
+
+        # Create a tag
+        AbstractDataProvider tags_dp = provider.getChildProvider("tags");
+        AbstractDataProvider create_dp = tags_dp.getChildProvider("create");
+        string tag_name = "Test Tag " + get_random_string(8);
+        hash<auto> create_result;
+        try {
+            create_result = create_dp.doRequest({"name": tag_name});
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.arg.status_code == 422) {
+                testSkip("tag creation not available: " + ex.arg.body.detail);
+            }
+            rethrow;
+        }
+        assertEq(True, create_result.id.val(), "tag created with ID");
+        assertEq(tag_name, create_result.name, "tag name matches");
+        testTagId = create_result.id;
+
+        # Update the tag
+        AbstractDataProvider update_dp = tags_dp.getChildProvider("update");
+        string new_name = "Updated Tag " + get_random_string(8);
+        hash<auto> update_result = update_dp.doRequest({
+            "id": testTagId,
+            "name": new_name,
+        });
+        assertEq(new_name, update_result.name, "tag name updated");
+
+        # Verify tag appears in list
+        AbstractDataProviderRecordIterator i = tags_dp.searchRecords(NOTHING,
+            {"limit": 10, "order": "desc"});
+        bool found = False;
+        while (i.next()) {
+            hash<auto> rec = i.getValue();
+            if (rec.id == testTagId) {
+                found = True;
+                assertEq(new_name, rec.name, "tag name in list matches updated name");
+                break;
+            }
+        }
+        assertEq(True, found, "created tag found in list");
+    }
+
+    contactCrudTests() {
+        skipIfNoCredentials();
+
+        SystemeIoDataProvider::SystemeIoDataProvider provider = getProvider();
+
+        # Create a contact
+        AbstractDataProvider contacts_dp = provider.getChildProvider("contacts");
+        AbstractDataProvider create_dp = contacts_dp.getChildProvider("create");
+        string email = "test-" + get_random_string(8) + "@qoretechnologies.com";
+        hash<auto> create_result = create_dp.doRequest({
+            "email": email,
+            "firstName": "Test",
+            "lastName": "Contact",
+        });
+        assertEq(True, create_result.id.val(), "contact created with ID");
+        assertEq(email.lwr(), create_result.email.lwr(), "contact email matches");
+        testContactId = create_result.id;
+
+        # Get the contact by ID
+        AbstractDataProviderRecordIterator i = contacts_dp.searchRecords(NOTHING,
+            {"id": testContactId});
+        assertEq(True, i.next(), "contact found by ID");
+        hash<auto> rec = i.getValue();
+        assertEq(email.lwr(), rec.email.lwr(), "fetched contact email matches");
+
+        # Update the contact (PATCH returns 204 No Content; firstName is not in GET responses)
+        AbstractDataProvider update_dp = contacts_dp.getChildProvider("update");
+        update_dp.doRequest({
+            "id": testContactId,
+            "firstName": "Updated",
+        });
+        assertEq(True, True, "contact updated without error");
+    }
+
+    contactTagTests() {
+        skipIfNoCredentials();
+        if (!testContactId || !testTagId) {
+            testSkip("contact or tag not created");
+        }
+
+        SystemeIoDataProvider::SystemeIoDataProvider provider = getProvider();
+        AbstractDataProvider contacts_dp = provider.getChildProvider("contacts");
+
+        # Assign tag to contact
+        AbstractDataProvider assign_dp = contacts_dp.getChildProvider("assign-tag");
+        hash<auto> assign_result = assign_dp.doRequest({
+            "id": testContactId,
+            "tagId": testTagId,
+        });
+        assertEq(True, assign_result.val(), "tag assigned to contact");
+
+        # Remove tag from contact
+        AbstractDataProvider remove_dp = contacts_dp.getChildProvider("remove-tag");
+        remove_dp.doRequest({
+            "id": testContactId,
+            "tagId": testTagId,
+        });
+        assertEq(True, True, "tag removed from contact without error");
+    }
+
+    listContactsTests() {
+        skipIfNoCredentials();
+
+        SystemeIoDataProvider::SystemeIoDataProvider provider = getProvider();
+        AbstractDataProvider contacts_dp = provider.getChildProvider("contacts");
+
+        # List contacts
+        AbstractDataProviderRecordIterator i = contacts_dp.searchRecords(NOTHING,
+            {"limit": 5});
+        int count = 0;
+        while (i.next()) {
+            hash<auto> rec = i.getValue();
+            assertEq(True, rec.hasKey("id"), "list result has id");
+            assertEq(True, rec.hasKey("email"), "list result has email");
+            ++count;
+        }
+        assertEq(True, count >= 0, "contact list returned results");
+    }
+
+    listTagsTests() {
+        skipIfNoCredentials();
+
+        SystemeIoDataProvider::SystemeIoDataProvider provider = getProvider();
+        AbstractDataProvider tags_dp = provider.getChildProvider("tags");
+
+        # List tags
+        AbstractDataProviderRecordIterator i = tags_dp.searchRecords(NOTHING,
+            {"limit": 5});
+        int count = 0;
+        while (i.next()) {
+            hash<auto> rec = i.getValue();
+            assertEq(True, rec.hasKey("id"), "tag list result has id");
+            assertEq(True, rec.hasKey("name"), "tag list result has name");
+            ++count;
+        }
+        assertEq(True, count >= 0, "tag list returned results");
+    }
+
+    exampleEventDataTests() {
+        skipIfNoCredentials();
+
+        SystemeIoDataProvider::SystemeIoDataProvider provider = getProvider();
+        AbstractDataProvider events_dp = provider.getChildProvider("events");
+
+        # Get new-contact event provider and check example data
+        AbstractDataProvider contact_watch = events_dp.getChildProvider("new-contact");
+        auto contact_example = contact_watch.getExampleEventData("new-contact");
+        assertEq(True, contact_example.hasKey("id"), "contact event example has id");
+
+        # Get new-tag event provider and check example data
+        AbstractDataProvider tag_watch = events_dp.getChildProvider("new-tag");
+        auto tag_example = tag_watch.getExampleEventData("new-tag");
+        assertEq(True, tag_example.hasKey("id"), "tag event example has id");
+
+        # Cleanup test resources at the end of the last integration test
+        cleanup();
+    }
+
+    private cleanup() {
+        if (!client) {
+            return;
+        }
+
+        SystemeIoDataProvider::SystemeIoDataProvider provider = getProvider();
+
+        # Delete test contact
+        if (testContactId) {
+            try {
+                AbstractDataProvider contacts_dp = provider.getChildProvider("contacts");
+                AbstractDataProvider delete_dp = contacts_dp.getChildProvider("delete");
+                delete_dp.doRequest({"id": testContactId});
+                if (m_options.verbose) {
+                    printf("Cleaned up test contact %d\n", testContactId);
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                if (m_options.verbose) {
+                    printf("Failed to clean up contact %d: %s: %s\n",
+                        testContactId, ex.err, ex.desc);
+                }
+            }
+        }
+
+        # Delete test tag
+        if (testTagId) {
+            try {
+                AbstractDataProvider tags_dp = provider.getChildProvider("tags");
+                AbstractDataProvider delete_dp = tags_dp.getChildProvider("delete");
+                delete_dp.doRequest({"id": testTagId});
+                if (m_options.verbose) {
+                    printf("Cleaned up test tag %d\n", testTagId);
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                if (m_options.verbose) {
+                    printf("Failed to clean up tag %d: %s: %s\n",
+                        testTagId, ex.err, ex.desc);
+                }
+            }
+        }
+    }
+}

@@ -93,6 +93,41 @@ class SlowHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+#! Handler that blocks until signaled so concurrent client requests stay
+#! pending while we tear down the server to simulate graceful shutdown.
+/** Uses a Counter instead of a fixed-duration sleep so the handler thread
+    exits immediately once the test releases it — shutdown timing measures
+    client-side cleanup, not handler delay.
+*/
+class CounterBlockingSlowHandler inherits AbstractHttpRequestHandler {
+    private {
+        Counter m_ready;       # decremented once per request reaching the handler
+        Counter m_stop_signal; # handler exits as soon as this reaches 0
+    }
+
+    constructor(int concurrency) {
+        m_ready = new Counter(concurrency);
+        m_stop_signal = new Counter(1);
+    }
+
+    #! Reaches zero once all expected requests are in flight
+    Counter getReadyCounter() {
+        return m_ready;
+    }
+
+    #! Called by the test to release blocked handlers so shutdown completes
+    #! deterministically
+    signalStop() {
+        m_stop_signal.dec();
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        m_ready.dec();
+        m_stop_signal.waitForZero(60s);
+        return makeResponse(200, "never-reached", {"Content-Type": "text/plain"});
+    }
+}
+
 #! Echo handler that returns the request body and method
 class EchoHandler inherits AbstractHttpRequestHandler {
     hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
@@ -248,6 +283,12 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         # Same-connection multiplexing test using nghttp2-ws-client
         addTestCase("same connection WS + HTTP via nghttp2 client",
             \testSameConnectionWsAndHttp());
+
+        # Graceful shutdown tests (TDD — verify GOAWAY propagation)
+        addTestCase("H2 multi-stream server shutdown cleanup",
+            \testH2MultiStreamServerShutdown());
+        addTestCase("H2 idle connection receives GOAWAY on shutdown",
+            \testH2IdleConnectionGoaway());
 
         set_return_value(main());
     }
@@ -1370,5 +1411,193 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         }
 
         assertTrue(True, "nghttp2-ws-client same-connection multiplexing test passed");
+    }
+
+    #! Test: graceful H2 server shutdown with multiple in-flight requests
+    /** Analog of testH3MultiStreamServerCrash.  Launches N concurrent HTTP/2
+        requests that block in the handler, then stops the server.  Without
+        GOAWAY propagation, each client would wait up to its own request
+        timeout (60s default).  With proper GOAWAY + connection close, all
+        streams fail within a few seconds.
+    */
+    testH2MultiStreamServerShutdown() {
+        int concurrency = 3;
+
+        # Dedicated server so we don't interfere with other tests
+        MultiplexedWsHandler ws_handler();
+        hash<HttpServerOptionInfo> opts = <HttpServerOptionInfo>{
+            "logger": mLogger,
+            "debug": True,
+        };
+        HttpServer test_server(opts);
+        CounterBlockingSlowHandler block_handler(concurrency);
+        test_server.setHandler("block", "/block", NOTHING, block_handler);
+
+        int test_port = test_server.addListener(<HttpListenerOptionInfo>{
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+        }).port;
+        test_server.waitForAsyncIo();
+        string url = "https://localhost:" + test_port;
+
+        # Launch concurrent HTTP/2 requests in background; each blocks in
+        # handler until signalStop() is called.
+        list<Counter> done = ();
+        hash<string, hash<auto>> results;
+        Mutex results_lock();
+        for (int i = 0; i < concurrency; ++i) {
+            Counter c(1);
+            push done, c;
+            int idx = i;
+            string key = sprintf("s" + idx);
+            background sub () {
+                on_exit c.dec();
+                date start = now_us();
+                try {
+                    RestClient rc({
+                        "url": url,
+                        "ssl_verify_cert": False,
+                        "http_version": "2.0",
+                        "timeout": 60000,
+                    });
+                    on_exit delete rc;
+                    hash<auto> resp = rc.get("/block");
+                    AutoLock al(results_lock);
+                    results{key} = {
+                        "ok": True,
+                        "status": resp.status_code,
+                        "elapsed_ms": (now_us() - start).durationMilliseconds(),
+                    };
+                } catch (hash<ExceptionInfo> ex) {
+                    AutoLock al(results_lock);
+                    results{key} = {
+                        "err": ex.err,
+                        "desc": ex.desc,
+                        "elapsed_ms": (now_us() - start).durationMilliseconds(),
+                    };
+                }
+            }();
+        }
+
+        # Wait for all requests to reach the handler (in flight)
+        block_handler.getReadyCounter().waitForZero(15s);
+
+        # Now stop the server.  Release handler threads first so server
+        # shutdown doesn't wait on them — we measure client-side cleanup,
+        # not handler blocking.
+        date shutdown_time = now_us();
+        block_handler.signalStop();
+        delete test_server;
+
+        # All pending client requests must terminate (success or error)
+        # within a reasonable window.  Without GOAWAY-on-shutdown / proper
+        # connection close, a client could wait its own request_timeout
+        # (60s), so 3 streams would hang for up to 180s.  With proper
+        # propagation this completes in seconds.
+        foreach Counter c in (done) {
+            c.waitForZero(30s);
+        }
+        int total_elapsed_ms = (now_us() - shutdown_time).durationMilliseconds();
+
+        # Every request must have completed — no hangs.  Some may succeed
+        # if the handler response won the race with server shutdown (frames
+        # fully transmitted before the TCP socket closed); the rest must
+        # error out cleanly rather than hang.  The critical check is that
+        # NONE are left pending.
+        int completed = 0;
+        for (int i = 0; i < concurrency; ++i) {
+            string key = sprintf("s" + i);
+            if (results{key}.err || results{key}.ok) {
+                ++completed;
+            }
+        }
+        assertEq(concurrency, completed,
+            sprintf("multi-stream shutdown: all %d requests terminated (results: %y)",
+                concurrency, results));
+
+        # Cleanup time must be well under the request timeout.  Without
+        # GOAWAY each stream would take up to 60s; with proper propagation
+        # this completes in seconds.
+        assertTrue(total_elapsed_ms < 20000,
+            sprintf("multi-stream shutdown: cleanup took %d ms (expected < 20000)",
+                total_elapsed_ms));
+    }
+
+    #! Test: idle H2 connection detects server shutdown promptly
+    /** An H2 connection with no in-flight requests must detect server
+        shutdown (GOAWAY + TCP close) so the client pool can evict the dead
+        connection.  Without this, the next request on the pooled connection
+        hangs until its own timeout.
+
+        This test opens an H2 connection, completes one request (leaving the
+        connection idle), stops the server, then attempts a second request.
+        The second request must fail quickly — not wait the full request
+        timeout.
+    */
+    testH2IdleConnectionGoaway() {
+        # Dedicated server so we don't interfere with other tests
+        hash<HttpServerOptionInfo> opts = <HttpServerOptionInfo>{
+            "logger": mLogger,
+            "debug": True,
+        };
+        HttpServer test_server(opts);
+        test_server.setHandler("simple", "/simple", NOTHING, new SimpleGetHandler());
+
+        int test_port = test_server.addListener(<HttpListenerOptionInfo>{
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+        }).port;
+        test_server.waitForAsyncIo();
+        string url = "https://localhost:" + test_port;
+
+        # Open H2 connection and complete one request; connection is now idle
+        RestClient rc({
+            "url": url,
+            "ssl_verify_cert": False,
+            "http_version": "2.0",
+            "timeout": 30000,
+        });
+        on_exit delete rc;
+
+        hash<auto> resp = rc.get("/simple");
+        assertEq(200, resp.status_code, "initial request should succeed before shutdown");
+
+        # Connection is now idle — stop the server.  A well-behaved server
+        # sends GOAWAY(NO_ERROR) so the client connection becomes unusable
+        # immediately instead of waiting for a new request to discover EOF.
+        date shutdown_time = now_us();
+        delete test_server;
+        int shutdown_ms = (now_us() - shutdown_time).durationMilliseconds();
+
+        # Shutdown itself must be prompt — no waiting on idle connections
+        assertTrue(shutdown_ms < 5000,
+            sprintf("server shutdown took %d ms (expected < 5000)", shutdown_ms));
+
+        # Second request on the same (now-dead) connection must fail quickly.
+        # Without proper GOAWAY / EOF detection, the client would queue the
+        # request and wait for its own timeout (30s above).  With proper
+        # close detection, this should fail in milliseconds.
+        date req_time = now_us();
+        bool got_error = False;
+        string err_str = "<no error>";
+        try {
+            hash<auto> resp2 = rc.get("/simple");
+            err_str = sprintf("unexpected success: status=%d body=%y",
+                resp2.status_code, resp2.body);
+        } catch (hash<ExceptionInfo> ex) {
+            got_error = True;
+            err_str = sprintf("%s: %s", ex.err, ex.desc);
+        }
+        int req_elapsed_ms = (now_us() - req_time).durationMilliseconds();
+
+        assertTrue(got_error,
+            sprintf("post-shutdown request must fail (got: %s)", err_str));
+        # Must fail well before the 30s request timeout — typical TCP RST /
+        # EOF detection completes in tens to hundreds of milliseconds
+        assertTrue(req_elapsed_ms < 10000,
+            sprintf("post-shutdown request failed after %d ms (expected < 10000): %s",
+                req_elapsed_ms, err_str));
     }
 }

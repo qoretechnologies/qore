@@ -32,14 +32,31 @@ public class AwsRestClientDataProviderTest inherits QUnit::Test {
 
     httpClientDataProviderTest() {
         checkModule();
-        assertThrows("SOCKET-CONNECT-ERROR", sub () { AwsRestClientDataProvider parent({"url": "localhost:1"}); });
-        assertThrows("SOCKET-CONNECT-ERROR", sub () { AwsRestClientCallDataProvider parent({"url": "localhost:1"}); });
-        assertThrows("SOCKET-CONNECT-ERROR", sub () { AwsRestClientDeleteDataProvider parent({"url": "localhost:1"}); });
-        assertThrows("SOCKET-CONNECT-ERROR", sub () { AwsRestClientGetDataProvider parent({"url": "localhost:1"}); });
-        assertThrows("SOCKET-CONNECT-ERROR", sub () { AwsRestClientHeadDataProvider parent({"url": "localhost:1"}); });
-        assertThrows("SOCKET-CONNECT-ERROR", sub () { AwsRestClientOptionsDataProvider parent({"url": "localhost:1"}); });
-        assertThrows("SOCKET-CONNECT-ERROR", sub () { AwsRestClientPostDataProvider parent({"url": "localhost:1"}); });
-        assertThrows("SOCKET-CONNECT-ERROR", sub () { AwsRestClientPutDataProvider parent({"url": "localhost:1"}); });
-        assertThrows("SOCKET-CONNECT-ERROR", sub () { AwsRestClientPatchDataProvider parent({"url": "localhost:1"}); });
+        # missing required AWS options must be reported precisely
+        assertThrows("AWSRESTCLIENT-ERROR", "missing required option",
+            sub () { AwsRestClientDataProvider parent({"url": "http://localhost:1"}); });
+
+        # with required options supplied, construction succeeds and the object
+        # is wired up to an AwsRestClientIo (no connect is attempted until a
+        # request is issued)
+        hash<auto> opts = {
+            "url": "http://localhost:1",
+            "aws_keyid": "test",
+            "aws_secret": "test",
+            "aws_region": "us-east-1",
+            "aws_service": "iam",
+        };
+        {
+            AwsRestClientDataProvider parent(opts);
+            assertEq("rest", parent.getName());
+        }
+        assertEq("call", (new AwsRestClientCallDataProvider(opts)).getName());
+        assertEq("delete", (new AwsRestClientDeleteDataProvider(opts)).getName());
+        assertEq("get", (new AwsRestClientGetDataProvider(opts)).getName());
+        assertEq("head", (new AwsRestClientHeadDataProvider(opts)).getName());
+        assertEq("options", (new AwsRestClientOptionsDataProvider(opts)).getName());
+        assertEq("post", (new AwsRestClientPostDataProvider(opts)).getName());
+        assertEq("put", (new AwsRestClientPutDataProvider(opts)).getName());
+        assertEq("patch", (new AwsRestClientPatchDataProvider(opts)).getName());
     }
 }

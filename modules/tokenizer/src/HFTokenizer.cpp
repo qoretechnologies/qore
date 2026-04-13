@@ -104,12 +104,36 @@ QoreHFTokenizer::QoreHFTokenizer(const QoreHashNode* config, ExceptionSink* xsin
         }
     }
 
-    // Resolve pad_token_id from added tokens
+    // Resolve special token IDs from added tokens
     for (const auto& at : added_tokens) {
-        if (at.content == "[PAD]" || at.content == "<pad>"
-                || at.content == "<|endoftext|>") {
+        // PAD
+        if (pad_token_id < 0 && (at.content == "[PAD]" || at.content == "<pad>"
+                || at.content == "<|endoftext|>")) {
             pad_token_id = at.id;
-            break;
+        }
+        // EOS
+        if (eos_token_id < 0 && (at.content == "</s>" || at.content == "<|endoftext|>"
+                || at.content == "<|end_of_text|>" || at.content == "[EOS]"
+                || at.content == "<eos>")) {
+            eos_token_id = at.id;
+        }
+        // BOS
+        if (bos_token_id < 0 && (at.content == "<s>" || at.content == "<|startoftext|>"
+                || at.content == "<|begin_of_text|>" || at.content == "[BOS]"
+                || at.content == "<bos>")) {
+            bos_token_id = at.id;
+        }
+        // CLS
+        if (cls_token_id < 0 && at.content == "[CLS]") {
+            cls_token_id = at.id;
+        }
+        // SEP
+        if (sep_token_id < 0 && at.content == "[SEP]") {
+            sep_token_id = at.id;
+        }
+        // UNK
+        if (unk_token_id < 0 && (at.content == "[UNK]" || at.content == "<unk>")) {
+            unk_token_id = at.id;
         }
     }
 }
@@ -987,6 +1011,253 @@ int QoreHFTokenizer::addTokens(const QoreListNode* tokens, ExceptionSink* xsink)
     }
 
     return added;
+}
+
+QoreListNode* QoreHFTokenizer::decodeBatch(const QoreListNode* batch,
+        bool skip_special_tokens, ExceptionSink* xsink) {
+    std::shared_lock lock(rw_mutex);
+
+    ReferenceHolder<QoreListNode> rv(new QoreListNode(stringTypeInfo), xsink);
+    ConstListIterator li(batch);
+    while (li.next()) {
+        const QoreListNode* ids = li.getValue().get<const QoreListNode>();
+        if (!ids) {
+            rv->push(new QoreStringNode(""), xsink);
+            continue;
+        }
+
+        // Collect tokens
+        std::vector<std::string> tokens;
+        ConstListIterator id_iter(ids);
+        while (id_iter.next()) {
+            int id = (int)id_iter.getValue().getAsBigInt();
+            if (skip_special_tokens && special_token_ids.count(id)) {
+                continue;
+            }
+            std::string tok = model->idToToken(id);
+            if (!tok.empty()) {
+                tokens.push_back(std::move(tok));
+            }
+        }
+
+        // Apply decoder
+        std::string result;
+        if (decoder) {
+            result = decoder->decode(tokens);
+        } else {
+            for (size_t i = 0; i < tokens.size(); ++i) {
+                if (i > 0) result += " ";
+                result += tokens[i];
+            }
+        }
+        rv->push(new QoreStringNode(result), xsink);
+    }
+    return rv.release();
+}
+
+void QoreHFTokenizer::loadConfig(const QoreHashNode* config, ExceptionSink* xsink) {
+    if (!config) {
+        return;
+    }
+
+    // Extract model_max_length
+    QoreValue mml = config->getKeyValue("model_max_length");
+    if (!mml.isNullOrNothing()) {
+        model_max_length = (int)mml.getAsBigInt();
+    }
+
+    // Extract chat_template
+    const QoreStringNode* ct = safeGetString(config->getKeyValue("chat_template"));
+    if (ct && ct->strlen()) {
+        chat_template = ct->c_str();
+    }
+
+    // Override special token IDs from explicit config
+    auto resolveToken = [this](const QoreHashNode* config, const char* key) -> int {
+        QoreValue v = config->getKeyValue(key);
+        if (v.isNullOrNothing()) return -1;
+        const QoreStringNode* s = nullptr;
+        if (v.getType() == NT_STRING) {
+            s = v.get<const QoreStringNode>();
+        } else if (v.getType() == NT_HASH) {
+            // Some configs use {"content": "token_string"}
+            s = safeGetString(v.get<const QoreHashNode>()->getKeyValue("content"));
+        }
+        if (!s || !s->strlen()) return -1;
+        return model ? model->tokenToId(s->c_str()) : -1;
+    };
+
+    int id;
+    if ((id = resolveToken(config, "eos_token")) >= 0) eos_token_id = id;
+    if ((id = resolveToken(config, "bos_token")) >= 0) bos_token_id = id;
+    if ((id = resolveToken(config, "unk_token")) >= 0) unk_token_id = id;
+    if ((id = resolveToken(config, "pad_token")) >= 0) pad_token_id = id;
+    if ((id = resolveToken(config, "cls_token")) >= 0) cls_token_id = id;
+    if ((id = resolveToken(config, "sep_token")) >= 0) sep_token_id = id;
+}
+
+QoreStringNode* QoreHFTokenizer::applyChatTemplate(const QoreListNode* messages,
+        ExceptionSink* xsink) {
+    if (chat_template.empty()) {
+        xsink->raiseException("TOKENIZER-ERROR",
+            "no chat_template configured; load tokenizer_config.json first");
+        return nullptr;
+    }
+
+    // Resolve token strings for template substitution
+    auto tokenStr = [this](int id) -> std::string {
+        if (id < 0) return "";
+        return model ? model->idToToken(id) : "";
+    };
+    std::string bos_str = tokenStr(bos_token_id);
+    std::string eos_str = tokenStr(eos_token_id);
+
+    // Simple template engine for common chat template patterns
+    // Handles: {% for message in messages %} ... {% endfor %}
+    //          {% if message['role'] == 'xxx' %} ... {% elif %} ... {% else %} ... {% endif %}
+    //          {{ bos_token }}, {{ eos_token }}, {{ message['role'] }}, {{ message['content'] }}
+    std::string result;
+
+    // Check if template has the standard message loop
+    size_t loop_start = chat_template.find("{% for message in messages %}");
+    if (loop_start == std::string::npos) {
+        // No standard loop — try simple message concatenation
+        ConstListIterator li(messages);
+        while (li.next()) {
+            const QoreHashNode* msg = li.getValue().get<const QoreHashNode>();
+            if (!msg) continue;
+            const QoreStringNode* content = safeGetString(msg->getKeyValue("content"));
+            if (content && content->strlen()) {
+                if (!result.empty()) result += "\n";
+                result += content->c_str();
+            }
+        }
+        return new QoreStringNode(result);
+    }
+
+    // Find the loop body
+    size_t body_start = loop_start + 28; // len("{% for message in messages %}")
+    size_t loop_end = chat_template.find("{% endfor %}", body_start);
+    if (loop_end == std::string::npos) {
+        xsink->raiseException("TOKENIZER-ERROR",
+            "malformed chat_template: missing {% endfor %}");
+        return nullptr;
+    }
+
+    std::string before_loop = chat_template.substr(0, loop_start);
+    std::string loop_body = chat_template.substr(body_start, loop_end - body_start);
+    std::string after_loop = chat_template.substr(loop_end + 12); // len("{% endfor %}")
+
+    // Process before-loop content
+    auto substitute = [&](std::string& s) {
+        size_t pos;
+        while ((pos = s.find("{{ bos_token }}")) != std::string::npos)
+            s.replace(pos, 14, bos_str);
+        while ((pos = s.find("{{ eos_token }}")) != std::string::npos)
+            s.replace(pos, 14, eos_str);
+    };
+
+    substitute(before_loop);
+    result += before_loop;
+
+    // Process each message through the loop body
+    ConstListIterator li(messages);
+    while (li.next()) {
+        const QoreHashNode* msg = li.getValue().get<const QoreHashNode>();
+        if (!msg) continue;
+
+        const QoreStringNode* role_s = safeGetString(msg->getKeyValue("role"));
+        const QoreStringNode* content_s = safeGetString(msg->getKeyValue("content"));
+        std::string role = role_s ? role_s->c_str() : "";
+        std::string content = content_s ? content_s->c_str() : "";
+
+        std::string expanded = loop_body;
+
+        // Handle {% if message['role'] == 'xxx' %} ... {% endif %} blocks
+        // Simple approach: process if/elif/else/endif blocks
+        // For now, just do variable substitution
+        substitute(expanded);
+
+        // Replace message variables
+        size_t pos;
+        while ((pos = expanded.find("{{ message['role'] }}")) != std::string::npos)
+            expanded.replace(pos, 20, role);
+        while ((pos = expanded.find("{{ message[\"role\"] }}")) != std::string::npos)
+            expanded.replace(pos, 20, role);
+        while ((pos = expanded.find("{{ message['content'] }}")) != std::string::npos)
+            expanded.replace(pos, 23, content);
+        while ((pos = expanded.find("{{ message[\"content\"] }}")) != std::string::npos)
+            expanded.replace(pos, 23, content);
+
+        // Process {% if %} blocks for role checks
+        std::string processed;
+        size_t cursor = 0;
+        while (cursor < expanded.size()) {
+            size_t if_pos = expanded.find("{% if ", cursor);
+            if (if_pos == std::string::npos) {
+                processed += expanded.substr(cursor);
+                break;
+            }
+            processed += expanded.substr(cursor, if_pos - cursor);
+
+            // Parse condition: message['role'] == 'xxx'
+            size_t cond_end = expanded.find(" %}", if_pos);
+            if (cond_end == std::string::npos) {
+                processed += expanded.substr(if_pos);
+                break;
+            }
+            std::string condition = expanded.substr(if_pos + 6, cond_end - if_pos - 6);
+
+            // Find endif
+            size_t endif_pos = expanded.find("{% endif %}", cond_end);
+            if (endif_pos == std::string::npos) {
+                processed += expanded.substr(if_pos);
+                break;
+            }
+
+            // Find else
+            size_t else_pos = expanded.find("{% else %}", cond_end);
+            bool else_in_block = (else_pos != std::string::npos && else_pos < endif_pos);
+
+            std::string if_body, else_body;
+            size_t body_begin = cond_end + 3;
+            if (else_in_block) {
+                if_body = expanded.substr(body_begin, else_pos - body_begin);
+                else_body = expanded.substr(else_pos + 10, endif_pos - else_pos - 10);
+            } else {
+                if_body = expanded.substr(body_begin, endif_pos - body_begin);
+            }
+
+            // Evaluate condition (simple: message['role'] == 'xxx')
+            bool cond_result = false;
+            // Extract quoted value from condition
+            size_t eq_pos = condition.find("==");
+            if (eq_pos != std::string::npos) {
+                std::string rhs = condition.substr(eq_pos + 2);
+                // Find quoted string
+                size_t q1 = rhs.find('\'');
+                size_t q2 = rhs.find('\'', q1 + 1);
+                if (q1 == std::string::npos) {
+                    q1 = rhs.find('"');
+                    q2 = rhs.find('"', q1 + 1);
+                }
+                if (q1 != std::string::npos && q2 != std::string::npos) {
+                    std::string expected = rhs.substr(q1 + 1, q2 - q1 - 1);
+                    cond_result = (role == expected);
+                }
+            }
+
+            processed += cond_result ? if_body : else_body;
+            cursor = endif_pos + 11; // len("{% endif %}")
+        }
+
+        result += processed;
+    }
+
+    substitute(after_loop);
+    result += after_loop;
+
+    return new QoreStringNode(result);
 }
 
 } // namespace QoreTokenizer

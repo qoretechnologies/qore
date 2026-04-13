@@ -56,13 +56,16 @@ public class Http1ClientPollOperation inherits Http1ClientPollOperationBase, Htt
         @param accept_all_certs if True, accept all SSL certificates including self-signed
         @param proxy_info optional proxy configuration
         @param connection the owning HttpClientConnection
+        @param client_cert X.509 client certificate for mutual TLS (optional)
+        @param client_pk private key matching \a client_cert (optional)
     */
     constructor(hash<auto> url_info, timeout connect_timeout = DefaultConnectTimeout,
             *LoggerInterface logger, *int ssl_verify_mode, bool accept_all_certs = False,
-            *hash<auto> proxy_info, HttpClientConnection connection) :
+            *hash<auto> proxy_info, HttpClientConnection connection,
+            *SSLCertificate client_cert, *SSLPrivateKey client_pk) :
             Http1ClientPollOperationBase(
                 Http1ClientPollOperation::createAndConfigureSocket(url_info, ssl_verify_mode,
-                    accept_all_certs),
+                    accept_all_certs, client_cert, client_pk),
                 Http1ClientPollOperation::computeConnectTarget(url_info, proxy_info),
                 url_info.host, url_info.port,
                 url_info.protocol == "https",
@@ -91,11 +94,51 @@ public class Http1ClientPollOperation inherits Http1ClientPollOperationBase, Htt
         log(LoggerLevel::DEBUG, "cancelled request: stream_id=%d", stream_id);
     }
 
+    #! Handles the AsyncIoController's onComplete callback and dispatches to
+    #! the owning connection so \c HttpClientConnectionManager::handleConnectionResult()
+    #! can remove closed/errored connections from the pool.
+    /** This override is **required** even though \c HttpClientPollOperation
+        already defines \c onComplete.  \c Http1ClientPollOperation inherits
+        from both \c Http1ClientPollOperationBase (a QPP C++ class whose
+        ancestor \c AbstractPollOperation defines \c onComplete as a C++
+        no-op) and \c HttpClientPollOperation (Qore-level override).
+        Qore's method resolution walks the first-listed parent first, so
+        without this concrete override the controller's
+        \c evalMethod("onComplete") dispatches the C++ no-op from
+        \c AbstractPollOperation and the Qore override in
+        \c HttpClientPollOperation is never invoked — \c handleCompletion()
+        doesn't fire, \c handleConnectionResult() doesn't run, and closed
+        or errored connections are never removed from the pool.  Declaring
+        \c onComplete directly on the concrete subclass forces method
+        resolution to pick this class first.
+
+        Protocol-switch completions (HTTP/1.1 → WebSocket via
+        \c 101 \c Switching \c Protocols) must NOT dispatch to
+        \c handleCompletion because the socket is hijacked to a separate
+        WebSocket poll operation and the \c HttpClientConnection is no
+        longer a normal keep-alive connection under manager ownership;
+        \c handleConnectionResult()'s \c continueReading() fallback would
+        throw \c HTTPCLIENT-STATE-ERROR and close the socket the
+        WebSocket layer is still using.
+
+        See also \c Http2ClientPollOperation::onComplete() which has the
+        same override (without the protocol-switch check, since H2 doesn't
+        hijack sockets the same way).
+    */
+    nothing onComplete(hash<SocketPollResultInfo> result) {
+        if (self.isProtocolSwitched()) {
+            return;
+        }
+        if (connection_ref) {
+            connection_ref.handleCompletion(result);
+        }
+    }
+
     #! Internal: creates and configures a TCP socket for HTTP/1.1
     /** No ALPN is set — HTTP/1.1 is the default protocol.
     */
     private static Socket createAndConfigureSocket(hash<auto> url_info, *int ssl_verify_mode,
-            bool accept_all_certs) {
+            bool accept_all_certs, *SSLCertificate client_cert, *SSLPrivateKey client_pk) {
         Socket sock();
         bool ssl_required = url_info.protocol == "https";
         if (ssl_required) {
@@ -104,6 +147,12 @@ public class Http1ClientPollOperation inherits Http1ClientPollOperationBase, Htt
             }
             if (accept_all_certs) {
                 sock.acceptAllCertificates(True);
+            }
+            if (client_cert) {
+                sock.setCertificate(client_cert);
+            }
+            if (client_pk) {
+                sock.setPrivateKey(client_pk);
             }
         }
         return sock;

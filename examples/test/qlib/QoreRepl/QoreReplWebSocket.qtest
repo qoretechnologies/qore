@@ -54,11 +54,14 @@ public class QoreReplWebSocketTest inherits QUnit::Test {
     }
 
     constructor() : Test("QoreReplWebSocketTest", "1.0") {
-        # Set up SIGUSR1 handler to dump thread stacks for debugging hangs
+        # Set up SIGUSR1 handler to dump thread stacks and I/O controller state
         @debug {
             set_signal_handler(SIGUSR1, sub (int sig) {
                 printf("=== SIGUSR1 Thread Stacks ===\n%Y\n=== End Thread Stacks ===\n",
                     get_all_thread_call_stacks());
+                printf("=== Controller cache_size=%d running=%y ===\n",
+                    Qore::AsyncIoController::getCacheSize(),
+                    Qore::AsyncIoController::running());
             });
         }
 

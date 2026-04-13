@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore EmpathicBuildingDataProvider module definition
 
-/** EmpathicBuildingSensorDataProvider.qc Copyright 2023 - 2024 Qore Technologies, s.r.o.
+/** EmpathicBuildingSensorDataProvider.qc Copyright 2023 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -65,8 +65,8 @@ public class EmpathicBuildingSensorDataProvider inherits EmpathicBuildingDataPro
     }
 
     #! Create the object from the REST connection
-    constructor(RestClient::RestClient rest, *Logger::LoggerInterface logger, hash<auto> org, hash<auto> loc,
-            hash<auto> sensor) : EmpathicBuildingDataProviderBase(rest, logger) {
+    constructor(RestClient::AbstractRestClient rest, *Logger::LoggerInterface logger, hash<auto> org,
+            hash<auto> loc, hash<auto> sensor) : EmpathicBuildingDataProviderBase(rest, logger) {
         self.org = org;
         self.loc = loc;
         self.sensor = sensor;

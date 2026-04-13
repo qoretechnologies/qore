@@ -392,10 +392,12 @@ int QoreEventLoop::poll(std::vector<QoreEventInfo>& events, int timeout_ms, Exce
 
     struct timespec ts;
     struct timespec* pts = nullptr;
+    int64_t deadline_us = 0;
     if (effective_timeout_ms >= 0) {
         ts.tv_sec = effective_timeout_ms / 1000;
         ts.tv_nsec = (effective_timeout_ms % 1000) * 1000000;
         pts = &ts;
+        deadline_us = q_epoch_us_fast() + (int64_t)effective_timeout_ms * 1000;
     }
 
     int rc;
@@ -403,6 +405,18 @@ int QoreEventLoop::poll(std::vector<QoreEventInfo>& events, int timeout_ms, Exce
         rc = kevent(event_fd, nullptr, 0, kevents.data(), kevents.size(), pts);
         if (rc >= 0 || errno != EINTR) {
             break;
+        }
+        // Recompute remaining time after EINTR — without this, each retry
+        // restarts the full timeout and repeated signals can prevent the
+        // timeout from ever firing (root cause of stale-detect stalls)
+        if (pts) {
+            int64_t remaining_us = deadline_us - q_epoch_us_fast();
+            if (remaining_us <= 0) {
+                rc = 0;
+                break;
+            }
+            ts.tv_sec = remaining_us / 1000000;
+            ts.tv_nsec = (remaining_us % 1000000) * 1000;
         }
     }
 
@@ -485,10 +499,24 @@ int QoreEventLoop::poll(std::vector<QoreEventInfo>& events, int timeout_ms, Exce
     std::vector<struct epoll_event> epevents(epoll_size);
 
     int rc;
+    int epoll_timeout_ms = effective_timeout_ms;
+    int64_t epoll_deadline_us = 0;
+    if (epoll_timeout_ms >= 0) {
+        epoll_deadline_us = q_epoch_us_fast() + (int64_t)epoll_timeout_ms * 1000;
+    }
     while (true) {
-        rc = epoll_wait(event_fd, epevents.data(), epevents.size(), effective_timeout_ms);
+        rc = epoll_wait(event_fd, epevents.data(), epevents.size(), epoll_timeout_ms);
         if (rc >= 0 || errno != EINTR) {
             break;
+        }
+        // Recompute remaining time after EINTR
+        if (epoll_timeout_ms >= 0) {
+            int64_t remaining_us = epoll_deadline_us - q_epoch_us_fast();
+            if (remaining_us <= 0) {
+                rc = 0;
+                break;
+            }
+            epoll_timeout_ms = (int)(remaining_us / 1000);
         }
     }
 
@@ -564,10 +592,24 @@ int QoreEventLoop::poll(std::vector<QoreEventInfo>& events, int timeout_ms, Exce
     }
 
     int rc;
+    int poll_timeout_ms = effective_timeout_ms;
+    int64_t poll_deadline_us = 0;
+    if (poll_timeout_ms >= 0) {
+        poll_deadline_us = q_epoch_us_fast() + (int64_t)poll_timeout_ms * 1000;
+    }
     while (true) {
-        rc = ::poll(pollfds.data(), pollfds.size(), effective_timeout_ms);
+        rc = ::poll(pollfds.data(), pollfds.size(), poll_timeout_ms);
         if (rc >= 0 || errno != EINTR) {
             break;
+        }
+        // Recompute remaining time after EINTR
+        if (poll_timeout_ms >= 0) {
+            int64_t remaining_us = poll_deadline_us - q_epoch_us_fast();
+            if (remaining_us <= 0) {
+                rc = 0;
+                break;
+            }
+            poll_timeout_ms = (int)(remaining_us / 1000);
         }
     }
 

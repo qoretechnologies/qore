@@ -99,6 +99,22 @@ public class Http3ClientPollOperation inherits Http3ClientPollOperationBase, Htt
         throw "COPY-ERROR", "Http3ClientPollOperation objects cannot be copied";
     }
 
+    #! Handles the AsyncIoController's onComplete callback and dispatches to
+    #! the owning connection so \c HttpClientConnectionManager::handleConnectionResult()
+    #! can remove closed/errored connections from the pool.
+    /** Required to win Qore's method resolution over the C++ no-op from
+        \c AbstractPollOperation::onComplete() inherited via
+        \c Http3ClientPollOperationBase → \c SocketPollOperationBase →
+        \c AbstractPollOperation.
+
+        See \c Http1ClientPollOperation::onComplete() for the full rationale.
+    */
+    nothing onComplete(hash<SocketPollResultInfo> result) {
+        if (connection_ref) {
+            connection_ref.handleCompletion(result);
+        }
+    }
+
     #! Registers a stream for onStreamData() notifications and registers
     #! a listener to be notified when data is dispatched
     /** @param stream_id the QUIC stream ID
@@ -491,10 +507,16 @@ public class Http3ClientPollOperation inherits Http3ClientPollOperationBase, Htt
             throw "HTTP3-STATE-ERROR", sprintf("cannot send data in state: %y", self.getState());
         }
 
+        Socket sock = self.getSocket();
+        # Check if the underlying QUIC session is dead (CONNECTION_CLOSE received,
+        # idle timeout, or draining period) before attempting to send
+        if (sock.isQuicSessionClosed()) {
+            throw "HTTP3-CONNECTION-CLOSED", "QUIC connection is closed";
+        }
+
         log(LoggerLevel::DEBUG, "sending %d bytes on stream %d (end_stream=%y)",
             data ? data.size() : 0, stream_id, end_stream);
 
-        Socket sock = self.getSocket();
         return sock.sendQuicClientStreamData(stream_id, data, end_stream);
     }
 

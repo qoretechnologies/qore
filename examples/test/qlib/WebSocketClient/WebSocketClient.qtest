@@ -204,6 +204,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         addTestCase("HTTP/2 WebSocket tests", \http2WebSocketTests());
         addTestCase("HTTP/2 WebSocket multi-send tests", \http2WebSocketMultiSendTests());
         addTestCase("HTTP/2 WebSocket external server tests", \http2WebSocketExternalTests());
+        addTestCase("cookie option", \testCookieOption());
+        addTestCase("cookie option multiple", \testCookieOptionMultiple());
+        addTestCase("cookie option absent", \testCookieOptionAbsent());
 
         logger = new Logger("test", LoggerLevel::getLevelInfo());
         if (m_options.verbose > 2) {
@@ -1070,6 +1073,59 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             });
             delete no_key_hc;
         }
+    }
+
+    # ---- Cookie option tests ----
+
+    testCookieOption() {
+        code cb = sub (*data msg) {};
+        hash<auto> opts = {
+            "url": "ws://localhost:" + linfo.port,
+            "logger": logger,
+            "cookie": "session=abc123",
+        };
+        WebSocketClient wsc(cb, opts);
+        wsc.connect();
+        on_exit {
+            wsc.disconnect();
+            delete wsc;
+        }
+        # The handler stores last_hdr from the upgrade request
+        assertTrue(wsHandler.last_hdr.cookie.val(), "cookie header should be present in upgrade request");
+        assertRegex("session=abc123", wsHandler.last_hdr.cookie);
+    }
+
+    testCookieOptionMultiple() {
+        code cb = sub (*data msg) {};
+        hash<auto> opts = {
+            "url": "ws://localhost:" + linfo.port,
+            "logger": logger,
+            "cookie": "a=1; b=2",
+        };
+        WebSocketClient wsc(cb, opts);
+        wsc.connect();
+        on_exit {
+            wsc.disconnect();
+            delete wsc;
+        }
+        assertTrue(wsHandler.last_hdr.cookie.val(), "cookie header should be present");
+        assertRegex("a=1", wsHandler.last_hdr.cookie);
+        assertRegex("b=2", wsHandler.last_hdr.cookie);
+    }
+
+    testCookieOptionAbsent() {
+        code cb = sub (*data msg) {};
+        hash<auto> opts = {
+            "url": "ws://localhost:" + linfo.port,
+            "logger": logger,
+        };
+        WebSocketClient wsc(cb, opts);
+        wsc.connect();
+        on_exit {
+            wsc.disconnect();
+            delete wsc;
+        }
+        assertFalse(wsHandler.last_hdr.cookie.val(), "no cookie header without cookie option");
     }
 }
 

@@ -1,0 +1,101 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  QoreVisionExtraction.qtest Copyright 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+%modern
+%requires ../../../../qlib/QoreVisionExtraction
+%requires Util
+%requires QUnit
+
+%exec-class QoreVisionExtractionTest
+
+public class QoreVisionExtractionTest inherits QUnit::Test {
+    constructor() : Test("QoreVisionExtractionTest", "1.0") {
+        # Config validation tests
+        addTestCase("VisionLlmClient - invalid mode", \visionInvalidModeTest());
+        addTestCase("VisionLlmClient - valid http config", \visionValidHttpTest());
+        addTestCase("VisionLlmClient - valid anthropic config", \visionValidAnthropicTest());
+        addTestCase("VisionLlmClient - openai backward compat", \visionOpenaiCompatTest());
+        addTestCase("VisionLlmClient - callback mode", \visionCallbackModeTest());
+        addTestCase("VisionLlmClient - custom system prompt", \visionCustomPromptTest());
+        addTestCase("VisionLlmConfig - defaults", \visionConfigDefaultsTest());
+
+        set_return_value(main());
+    }
+
+    visionInvalidModeTest() {
+        assertThrows("VISION-CONFIG-ERROR", "invalid mode",
+            sub () {
+                new VisionLlmClient(<VisionLlmConfig>{
+                    "mode": "invalid",
+                    "url": "http://x",
+                    "model": "x",
+                });
+            }
+        );
+    }
+
+    visionValidHttpTest() {
+        VisionLlmClient client(<VisionLlmConfig>{
+            "mode": "http",
+            "url": "https://api.openai.com",
+            "model": "gpt-4o",
+            "api_key": "test-key",
+        });
+        assertTrue(True);
+    }
+
+    visionValidAnthropicTest() {
+        VisionLlmClient client(<VisionLlmConfig>{
+            "mode": "anthropic",
+            "url": "https://api.anthropic.com",
+            "model": "claude-sonnet-4-20250514",
+            "api_key": "test-key",
+        });
+        assertTrue(True);
+    }
+
+    visionOpenaiCompatTest() {
+        # "openai" should be accepted as alias for "http"
+        VisionLlmClient client(<VisionLlmConfig>{
+            "mode": "openai",
+            "url": "https://api.openai.com",
+            "model": "gpt-4o",
+        });
+        assertTrue(True);
+    }
+
+    visionCallbackModeTest() {
+        # Callback mode should construct without error (fails at call time)
+        VisionLlmClient client(<VisionLlmConfig>{
+            "mode": "callback", "api_callback": hash<auto> sub (string m, string p, hash<auto> b) { return {}; },
+            "model": "gpt-4o",
+        });
+        assertTrue(True);
+    }
+
+    visionCustomPromptTest() {
+        VisionLlmClient client(<VisionLlmConfig>{
+            "mode": "callback", "api_callback": hash<auto> sub (string m, string p, hash<auto> b) { return {}; },
+            "model": "gpt-4o",
+            "system_prompt": "You are a medical image analyst.",
+        });
+        assertTrue(True);
+    }
+
+    visionConfigDefaultsTest() {
+        hash<VisionLlmConfig> config(<VisionLlmConfig>{
+            "mode": "http",
+            "url": "http://x",
+            "model": "test",
+        });
+        assertEq(4096, config.max_tokens);
+        assertEq(10000, config.connect_timeout_ms);
+        assertEq(120000, config.timeout_ms);
+        assertEq("2023-06-01", config.anthropic_version);
+        assertEq(NOTHING, config.system_prompt);
+    }
+}

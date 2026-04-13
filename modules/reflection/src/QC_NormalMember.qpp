@@ -104,5 +104,7 @@ nothing NormalMember::setValue(object obj, auto val) {
         return QoreValue();
     }
 
-    obj->setMemberValue(m->name.c_str(), m->cls, val, xsink);
+    // setMemberValue consumes the reference; the caller retains ownership of val
+    // (it is a Qore-level arg), so pass a refSelf'd copy.
+    obj->setMemberValue(m->name.c_str(), m->cls, val.refSelf(), xsink);
 }

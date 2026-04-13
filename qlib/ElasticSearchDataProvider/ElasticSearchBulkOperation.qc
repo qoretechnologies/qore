@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore ElasticSearchDataProvider module definition
 
-/** ElasticSearchBulkOperation.qc Copyright 2025 Qore Technologies, s.r.o.
+/** ElasticSearchBulkOperation.qc Copyright 2025 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -29,8 +29,8 @@ public namespace ElasticSearchDataProvider {
 */
 public class ElasticSearchBulkOperation inherits DataProvider::AbstractDataProviderBulkOperation {
     private {
-        #! The REST client for ElasticSearch
-        RestClient rest;
+        #! The REST client for ElasticSearch — any @ref RestClient::AbstractRestClient subclass
+        RestClient::AbstractRestClient rest;
 
         #! The index name
         string index;
@@ -56,8 +56,8 @@ public class ElasticSearchBulkOperation inherits DataProvider::AbstractDataProvi
         @param block_size the block size for bulk operations (default: 1000)
         @param options additional options: pipeline, routing, refresh
     */
-    constructor(DataProvider::AbstractDataProvider provider, RestClient rest, string index, string optype,
-            *int block_size, *hash<auto> options)
+    constructor(DataProvider::AbstractDataProvider provider, RestClient::AbstractRestClient rest, string index,
+            string optype, *int block_size, *hash<auto> options)
             : AbstractDataProviderBulkOperation(provider, optype, block_size ?? DefaultBlockSize) {
         self.rest = rest;
         self.index = index;
@@ -91,8 +91,10 @@ public class ElasticSearchBulkOperation inherits DataProvider::AbstractDataProvi
             uri += "?" + params.join("&");
         }
 
-        # Send bulk request
-        *hash<auto> response = rest.post(uri, ndjson, {"Content-Type": "application/x-ndjson"}).body;
+        # Send bulk request — use restDoRawRequest to bypass the validator's JSON
+        # serialization step (ElasticSearch's bulk API rejects wrapped/reencoded ndjson)
+        *hash<auto> response = rest.restDoRawRequest("POST", uri, ndjson,
+            {"Content-Type": "application/x-ndjson"}).body;
 
         # Handle partial failures
         if (response.errors) {
@@ -102,18 +104,24 @@ public class ElasticSearchBulkOperation inherits DataProvider::AbstractDataProvi
 
     #! Formats the buffered records as NDJSON for the bulk API
     /** @return the NDJSON string for the bulk request
+
+        @note uses @ref NdjsonDataProvider::NdjsonStringWriter "NdjsonStringWriter" — backed
+            by a @ref Qore::StringOutputStream "StringOutputStream" with geometric-growth
+            buffering — so building the bulk body is O(n) in the number of queued records
+            rather than the O(n²) cost of repeated `string += make_json(x) + "\n"`
+            concatenation
     */
     private string formatNDJSON() {
-        string result = "";
         if (!buf) {
-            return result;
+            return "";
         }
         auto first = buf.firstValue();
         if (!first) {
-            return result;
+            return "";
         }
         int count = first.lsize();
 
+        NdjsonDataProvider::NdjsonStringWriter writer();
         for (int i = 0; i < count; ++i) {
             # Build the record from column lists
             hash<auto> record = map {$1: buf{$1}[i]}, keys buf;
@@ -134,20 +142,20 @@ public class ElasticSearchBulkOperation inherits DataProvider::AbstractDataProvi
             };
 
             # Append action line
-            result += make_json(action) + "\n";
+            writer.write(action);
 
             # Append document line (except for delete operations)
             if (optype != "delete") {
                 if (optype == "update") {
                     # Update operations need the document wrapped in "doc"
-                    result += make_json({"doc": record}) + "\n";
+                    writer.write({"doc": record});
                 } else {
-                    result += make_json(record) + "\n";
+                    writer.write(record);
                 }
             }
         }
 
-        return result;
+        return writer.getString();
     }
 
     #! Handles errors from a bulk response

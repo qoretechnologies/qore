@@ -3380,6 +3380,45 @@ QoreNamespace* get_thread_ns(QoreNamespace &qorens) {
     return Thread;
 }
 
+void ThreadProgramData::clearAllProgramThreadData(ExceptionSink* xsink) {
+    AutoLocker al(pslock);
+    for (auto& i : pgm_set) {
+        qore_program_private::clearThreadData(*i, xsink);
+    }
+}
+
+void clear_all_program_thread_local_data() {
+    ThreadData* td = thread_data.get();
+    if (!td) {
+        return;
+    }
+
+    // NOTE: do NOT clear td->runtime_loc here — it is needed for exception call stack
+    // generation if subsequent cleanup code (e.g. object destructors) throws
+
+    // clear all thread_local variable values without setting the finalizing flag
+    for (auto& i : td->tlvmap) {
+        ExceptionSink xsink;
+        i.second.discard(&xsink);
+        xsink.handleExceptions();
+    }
+    td->tlvmap.clear();
+
+    // clear thread-local hash (tld) in all programs this thread has data in
+    {
+        ExceptionSink xsink;
+        td->tpd->clearAllProgramThreadData(&xsink);
+        xsink.handleExceptions();
+    }
+
+    // purge thread resources
+    {
+        ExceptionSink xsink;
+        purge_thread_resources(&xsink);
+        xsink.handleExceptions();
+    }
+}
+
 void delete_thread_local_data() {
     ThreadData* td = thread_data.get();
 

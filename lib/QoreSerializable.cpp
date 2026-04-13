@@ -943,7 +943,7 @@ QoreValue QoreSerializable::deserialize(ExceptionSink* xsink, const QoreHashNode
                             }
 
                             if (!deserializeMembers) {
-                                obj->setMemberValue(cmhi.getKey(), &mcls, *vh, xsink);
+                                obj->setMemberValue(cmhi.getKey(), &mcls, vh.release(), xsink);
                             } else {
                                 dmh->setKeyValue(cmhi.getKey(), vh.release(), xsink);
                             }
@@ -981,7 +981,7 @@ QoreValue QoreSerializable::deserialize(ExceptionSink* xsink, const QoreHashNode
                                     continue;
                                 }
                                 // assign value to member
-                                obj->setMemberValue(mi.getName(), &mcls, *val, xsink);
+                                obj->setMemberValue(mi.getName(), &mcls, val.release(), xsink);
                                 if (*xsink) {
                                     return QoreValue();
                                 }

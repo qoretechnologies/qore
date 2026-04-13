@@ -1,0 +1,77 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# ImplicitModuleTransaction.qtest - Test that factory registrations are rolled back on module init failure
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%enable-all-warnings
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/Mime.qm
+%requires ../../../../qlib/DataProvider
+
+%requires reflection
+
+%exec-class ImplicitModuleTransactionTest
+
+class ImplicitModuleTransactionTest inherits QUnit::Test {
+    constructor() : Test("ImplicitModuleTransaction", "1.0") {
+        addTestCase("factory rollback on module init failure", \testFactoryRollback());
+        set_return_value(main());
+    }
+
+    testFactoryRollback() {
+        # Record which factories exist before the test
+        *list<string> factories_before = DataProvider::listFactories();
+
+        # Simulate the tryLoad() pattern: savepoint, load, commit/rollback
+        # This is the same pattern as DataProvider::tryLoad() which is the transaction boundary
+        int sp = ImplicitModuleTransaction::savepoint();
+        bool caught = False;
+        try {
+            load_module("./FailingFactoryModule.qm");
+            ImplicitModuleTransaction::commit(sp);
+        } catch (hash<ExceptionInfo> ex) {
+            caught = True;
+            # Roll back only the partial registrations from the failed module
+            ImplicitModuleTransaction::rollback(sp);
+            assertTrue(ex.err == "INIT-ERROR" || ex.err == "LOAD-MODULE-ERROR",
+                sprintf("expected INIT-ERROR or LOAD-MODULE-ERROR, got %y: %y", ex.err, ex.desc));
+        }
+        assertTrue(caught, "module load should have thrown an exception");
+
+        # Get factories after failed module load
+        *list<string> factories_after = DataProvider::listFactories();
+
+        # The factory from the failed module should NOT be in the list
+        # (ImplicitModuleTransaction::rollback() should have deregistered it)
+        assertFalse(inlist("test-failing-factory", factories_after),
+            "factory from failed module should be deregistered by rollback");
+
+        # Verify no new factories were added
+        assertEq(factories_before, factories_after,
+            "factory list should be unchanged after failed module load");
+
+        # Verify iterating all factories doesn't throw PROGRAM-ERROR
+        # This is the crash scenario from the original bug
+        bool iterate_ok = True;
+        foreach string name in (factories_after) {
+            try {
+                *AbstractDataProviderFactory f = DataProvider::getFactory(name);
+                if (f) {
+                    f.getName();
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "PROGRAM-ERROR") {
+                    iterate_ok = False;
+                    fail(sprintf("PROGRAM-ERROR when accessing factory %y: %s", name, ex.desc));
+                }
+            }
+        }
+        assertTrue(iterate_ok, "iterating factories should not trigger PROGRAM-ERROR");
+    }
+}

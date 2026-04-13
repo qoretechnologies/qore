@@ -124,7 +124,7 @@ FtpClient::constructor(string url) {
     const char* url_path = f->getUrlPath();
     if (url_path) {
         ValueHolder val(new QoreStringNode(url_path), xsink);
-        if (self->setMemberValue("path", QC_FTPCLIENT, *val, xsink)) {
+        if (self->setMemberValue("path", QC_FTPCLIENT, val.release(), xsink)) {
             return;
         }
     }
@@ -675,7 +675,7 @@ nothing FtpClient::setURL(string url) {
     const char* url_path = f->getUrlPath();
     if (url_path) {
         ValueHolder val(new QoreStringNode(url_path), xsink);
-        if (self->setMemberValue("path", QC_FTPCLIENT, *val, xsink)) {
+        if (self->setMemberValue("path", QC_FTPCLIENT, val.release(), xsink)) {
             return QoreValue();
         }
     }

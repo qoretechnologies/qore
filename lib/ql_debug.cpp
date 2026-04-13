@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -29,12 +29,35 @@
 */
 
 #include <qore/Qore.h>
+#include <qore/QoreSocketObject.h>
+#include <qore/QoreFuture.h>
+#include <qore/AsyncCompletionAction.h>
 #include "qore/intern/QoreObjectIntern.h"
 #include "qore/intern/ql_debug.h"
 #include "qore/intern/ql_type.h"
 #include "qore/intern/AsyncIoControllerPriv.h"
+#include "qore/intern/QC_Socket.h"
+#include "qore/intern/QC_Future.h"
+#include "qore/intern/QC_FutureImpl.h"
+#include "qore/intern/QoreHttp1ClientConnection.h"
+#include "qore/intern/QoreHttp2ClientConnection.h"
+#include "qore/intern/QoreHttp3ClientConnection.h"
+#include <qore/HttpClientConnectionManager.h>
+#include <qore/QoreHttpClientObject.h>
 
+#include <arpa/inet.h>
+#include <cerrno>
+#include <cstring>
+#include <fcntl.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <unistd.h>
+
+#include <atomic>
+#include <functional>
 #include <set>
+#include <thread>
 
 static inline void strindent(QoreString* s, int indent) {
     for (int i = 0; i < indent; i++) {
@@ -382,6 +405,1231 @@ static void ut_asyncio_wait_for_processing_empty(UnitTestCounters& c) {
     UT_ASSERT(c, !xsink, "cleanup succeeds");
 }
 
+// --- q_future_get_blocking tests ---
+
+static void ut_future_get_blocking_resolved(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    // Create a Promise and its Future via the C++ API
+    ReferenceHolder<QorePromise> promise(new QorePromise(), &xsink);
+    ReferenceHolder<QoreFuture> future(promise->getFuture(&xsink), &xsink);
+    UT_ASSERT(c, !xsink, "Promise/Future creation succeeds");
+    UT_ASSERT(c, future.operator->() != nullptr, "Future is non-null");
+
+    // Wrap the Future in a QoreObject (like FutureImpl would)
+    QoreObject* future_obj = new QoreObject(QC_FUTUREIMPL, getProgram(), future.release());
+
+    // Resolve the promise from a background thread after ~50ms
+    std::thread resolver([&promise]() {
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        ExceptionSink tx;
+        promise->set(QoreValue((int64)42), &tx);
+        tx.clear();
+    });
+
+    // Block on the future with a 5s budget — should return 42 within ~50ms
+    int unused_us;
+    int64 start_s = q_epoch_us(unused_us);
+    int64 start_us = start_s * 1000000LL + unused_us;
+    QoreValue result = q_future_get_blocking(future_obj, 5000, &xsink);
+    int end_us_tick;
+    int64 end_s = q_epoch_us(end_us_tick);
+    int64 elapsed_us = (end_s * 1000000LL + end_us_tick) - start_us;
+
+    resolver.join();
+    UT_ASSERT(c, !xsink, "q_future_get_blocking on resolved Future: no exception");
+    UT_ASSERT_EQ(c, (int64)42, result.getAsBigInt(),
+        "q_future_get_blocking returns the resolved value");
+    UT_ASSERT(c, elapsed_us >= 40000 && elapsed_us < 200000,
+        "q_future_get_blocking elapsed ~50ms (before resolution)");
+
+    result.discard(&xsink);
+    future_obj->deref(&xsink);
+    UT_ASSERT(c, !xsink, "cleanup succeeds");
+}
+
+static void ut_future_get_blocking_timeout(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    ReferenceHolder<QorePromise> promise(new QorePromise(), &xsink);
+    ReferenceHolder<QoreFuture> future(promise->getFuture(&xsink), &xsink);
+    UT_ASSERT(c, !xsink, "Promise/Future creation succeeds");
+
+    QoreObject* future_obj = new QoreObject(QC_FUTUREIMPL, getProgram(), future.release());
+
+    // Don't resolve the promise — wait should time out at 100ms
+    int unused_us;
+    int64 start_s = q_epoch_us(unused_us);
+    int64 start_us = start_s * 1000000LL + unused_us;
+    QoreValue result = q_future_get_blocking(future_obj, 100, &xsink);
+    int end_us_tick;
+    int64 end_s = q_epoch_us(end_us_tick);
+    int64 elapsed_us = (end_s * 1000000LL + end_us_tick) - start_us;
+
+    UT_ASSERT(c, xsink.isException(),
+        "q_future_get_blocking times out → FUTURE-TIMEOUT exception");
+    const QoreStringNode* err = xsink.getExceptionErr().get<const QoreStringNode>();
+    UT_ASSERT(c, err && !strcmp(err->c_str(), "FUTURE-TIMEOUT"),
+        "timeout exception is FUTURE-TIMEOUT");
+    UT_ASSERT(c, result.isNothing(), "timeout returns NOTHING");
+    UT_ASSERT(c, elapsed_us >= 90000 && elapsed_us < 500000,
+        "q_future_get_blocking elapsed ~100ms on timeout");
+    xsink.clear();
+
+    // Resolve AFTER the timeout so the Future drops cleanly
+    promise->set(QoreValue((int64)1), &xsink);
+    xsink.clear();
+    future_obj->deref(&xsink);
+    UT_ASSERT(c, !xsink, "cleanup succeeds");
+}
+
+static void ut_future_get_blocking_error(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    ReferenceHolder<QorePromise> promise(new QorePromise(), &xsink);
+    ReferenceHolder<QoreFuture> future(promise->getFuture(&xsink), &xsink);
+    UT_ASSERT(c, !xsink, "Promise/Future creation succeeds");
+
+    QoreObject* future_obj = new QoreObject(QC_FUTUREIMPL, getProgram(), future.release());
+
+    // Reject the promise with an error
+    promise->setError("TEST-ERROR", "test error description", QoreValue(), &xsink);
+    UT_ASSERT(c, !xsink, "setError succeeds");
+
+    // Block on the future — should raise the error immediately
+    QoreValue result = q_future_get_blocking(future_obj, 5000, &xsink);
+    UT_ASSERT(c, xsink.isException(),
+        "q_future_get_blocking on rejected Future: raises exception");
+    const QoreStringNode* err = xsink.getExceptionErr().get<const QoreStringNode>();
+    UT_ASSERT(c, err && !strcmp(err->c_str(), "TEST-ERROR"),
+        "exception has the Future's error code");
+    UT_ASSERT(c, result.isNothing(), "error returns NOTHING");
+    xsink.clear();
+
+    future_obj->deref(&xsink);
+    UT_ASSERT(c, !xsink, "cleanup succeeds");
+}
+
+// --- PromiseAction + QoreFuture + q_future_get_blocking chain ---
+//
+// These tests exercise the exact sync-over-async chain the HTTPClient
+// migration will use in Phase 3 onward: the I/O thread invokes a
+// PromiseAction::execute() with a result, the Promise resolves, the
+// Future wakes, and q_future_get_blocking returns the value to the
+// sync caller.  Any missing glue in the chain surfaces here instead
+// of in a full integration test.
+
+static void ut_promise_action_execute_then_get(UnitTestCounters& c) {
+    ExceptionSink xsink;
+
+    // Create the Promise/Future pair as the async submitter would.
+    ReferenceHolder<QorePromise> promise_holder(new QorePromise(), &xsink);
+    ReferenceHolder<QoreFuture> future(promise_holder->getFuture(&xsink), &xsink);
+    UT_ASSERT(c, !xsink, "Promise/Future creation succeeds");
+
+    // Wrap the Future in a QoreObject so q_future_get_blocking can use
+    // the FutureImpl fast path.
+    QoreObject* future_obj = new QoreObject(QC_FUTUREIMPL, getProgram(), future.release());
+
+    // Hand ownership of the Promise to the PromiseAction.  The C++
+    // poll op would do the same — submitRequest() stores the action
+    // and invokes execute()/executeError() from continuePoll() on the
+    // I/O thread.  Here we simulate that by calling execute() from a
+    // background thread after a short delay.
+    QorePromise* promise_raw = promise_holder.release();  // action now owns it
+    AbstractAsyncAction* action = new PromiseAction(promise_raw);
+    promise_raw->deref(&xsink);  // action took its own ref in its ctor
+    UT_ASSERT(c, !xsink, "PromiseAction construction succeeds");
+
+    // Simulate an I/O-thread completion from a background thread.
+    // The action holds a ref to the Promise; we pass a copy of the
+    // result value through its execute() entry point.
+    QoreHashNode* result_hash = new QoreHashNode(autoTypeInfo);
+    {
+        ExceptionSink setup_xsink;
+        result_hash->setKeyValue("status_code", 200, &setup_xsink);
+        result_hash->setKeyValue("body", new QoreStringNode("hello"), &setup_xsink);
+        setup_xsink.clear();
+    }
+    std::thread completer([action, result_hash]() {
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        ExceptionSink tx;
+        action->execute(QoreValue(result_hash), &tx);
+        action->cleanup(&tx);
+        tx.clear();
+        delete action;
+    });
+
+    // Sync caller awaits the Future with a 5s budget — should return
+    // the result within ~50ms.
+    int us_tick;
+    int64 start_s = q_epoch_us(us_tick);
+    int64 start_us = start_s * 1000000LL + us_tick;
+    QoreValue result = q_future_get_blocking(future_obj, 5000, &xsink);
+    int end_us_tick;
+    int64 end_s = q_epoch_us(end_us_tick);
+    int64 elapsed_us = (end_s * 1000000LL + end_us_tick) - start_us;
+
+    completer.join();
+    UT_ASSERT(c, !xsink, "q_future_get_blocking succeeds");
+    UT_ASSERT(c, result.getType() == NT_HASH,
+        "q_future_get_blocking returns a hash result");
+    if (result.getType() == NT_HASH) {
+        const QoreHashNode* h = result.get<const QoreHashNode>();
+        UT_ASSERT_EQ(c, (int64)200, h->getKeyValue("status_code").getAsBigInt(),
+            "result hash carries status_code=200");
+        QoreValue body = h->getKeyValue("body");
+        UT_ASSERT(c, body.getType() == NT_STRING, "result hash carries a body string");
+        if (body.getType() == NT_STRING) {
+            UT_ASSERT(c, !strcmp(body.get<const QoreStringNode>()->c_str(), "hello"),
+                "result body is 'hello'");
+        }
+    }
+    UT_ASSERT(c, elapsed_us >= 40000 && elapsed_us < 500000,
+        "await elapsed ~50ms (before background completion)");
+
+    result.discard(&xsink);
+    future_obj->deref(&xsink);
+    UT_ASSERT(c, !xsink, "cleanup succeeds");
+}
+
+static void ut_promise_action_execute_error(UnitTestCounters& c) {
+    ExceptionSink xsink;
+
+    ReferenceHolder<QorePromise> promise_holder(new QorePromise(), &xsink);
+    ReferenceHolder<QoreFuture> future(promise_holder->getFuture(&xsink), &xsink);
+    UT_ASSERT(c, !xsink, "Promise/Future creation succeeds");
+
+    QoreObject* future_obj = new QoreObject(QC_FUTUREIMPL, getProgram(), future.release());
+
+    QorePromise* promise_raw = promise_holder.release();
+    AbstractAsyncAction* action = new PromiseAction(promise_raw);
+    promise_raw->deref(&xsink);
+
+    // Simulate an I/O-thread error completion — the poll op would
+    // call executeError("HTTP1-RECV-ERROR", "...") when recv fails.
+    std::thread completer([action]() {
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        ExceptionSink tx;
+        action->executeError("HTTP1-RECV-ERROR",
+            "connection reset by peer", &tx);
+        action->cleanup(&tx);
+        tx.clear();
+        delete action;
+    });
+
+    QoreValue result = q_future_get_blocking(future_obj, 5000, &xsink);
+    completer.join();
+
+    UT_ASSERT(c, xsink.isException(),
+        "executeError propagates to q_future_get_blocking");
+    const QoreStringNode* err = xsink.getExceptionErr().get<const QoreStringNode>();
+    UT_ASSERT(c, err && !strcmp(err->c_str(), "HTTP1-RECV-ERROR"),
+        "exception code matches the action's error code");
+    UT_ASSERT(c, result.isNothing(), "error path returns NOTHING");
+    xsink.clear();
+
+    future_obj->deref(&xsink);
+    UT_ASSERT(c, !xsink, "cleanup succeeds");
+}
+
+// --- Http1ClientConnection (Phase P2) tests ---
+//
+// These tests exercise the minimum-viable C++ HttpClientConnectionBase /
+// Http1ClientConnection end-to-end: bind a raw POSIX socket server on
+// 127.0.0.1, create a Qore::Http1ClientConnection pointed at it, submit a
+// GET request, and await the resulting Future via q_future_get_blocking.
+// This is the canary test for the full submit → Promise → Future →
+// q_future_get_blocking chain through a real H1 poll op.
+
+//! Minimal POSIX HTTP/1.1 echo server for Phase P2 unit tests.  Binds to
+//! 127.0.0.1:0, returns the ephemeral port, and runs a caller-supplied
+//! handler for a single accepted connection in a background thread.
+struct UtH1Server {
+    int listen_fd = -1;
+    int port = 0;
+    std::thread thr;
+    std::atomic<bool> thread_started{false};
+
+    //! Creates the listen socket on an ephemeral port.  Returns 0 on success.
+    int start() {
+        listen_fd = socket(AF_INET, SOCK_STREAM, 0);
+        if (listen_fd < 0) {
+            return -1;
+        }
+        int one = 1;
+        setsockopt(listen_fd, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one));
+
+        sockaddr_in addr{};
+        addr.sin_family = AF_INET;
+        addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+        addr.sin_port = 0;
+        if (bind(listen_fd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) < 0) {
+            ::close(listen_fd);
+            listen_fd = -1;
+            return -1;
+        }
+        socklen_t alen = sizeof(addr);
+        if (getsockname(listen_fd, reinterpret_cast<sockaddr*>(&addr), &alen) < 0) {
+            ::close(listen_fd);
+            listen_fd = -1;
+            return -1;
+        }
+        port = ntohs(addr.sin_port);
+
+        if (listen(listen_fd, 1) < 0) {
+            ::close(listen_fd);
+            listen_fd = -1;
+            return -1;
+        }
+        return 0;
+    }
+
+    //! Spawns a background thread that accepts one client and calls
+    //! \a handler with the client fd.  The handler must close the fd.
+    void serveOnce(std::function<void(int)> handler) {
+        thread_started.store(true, std::memory_order_release);
+        thr = std::thread([this, handler = std::move(handler)]() {
+            int cfd = accept(listen_fd, nullptr, nullptr);
+            if (cfd >= 0) {
+                handler(cfd);
+                ::close(cfd);
+            }
+            if (listen_fd >= 0) {
+                ::close(listen_fd);
+                listen_fd = -1;
+            }
+        });
+    }
+
+    ~UtH1Server() {
+        if (thr.joinable()) {
+            thr.join();
+        }
+        if (listen_fd >= 0) {
+            ::close(listen_fd);
+            listen_fd = -1;
+        }
+    }
+};
+
+//! Reads an HTTP request line + headers from @a fd into @a buf (at most
+//! @a max bytes).  Returns the total bytes read, or -1 on error.  Blocks.
+static ssize_t ut_read_request_headers(int fd, char* buf, size_t max) {
+    size_t total = 0;
+    while (total < max) {
+        ssize_t n = recv(fd, buf + total, max - total, 0);
+        if (n <= 0) {
+            return -1;
+        }
+        total += (size_t)n;
+        buf[total < max ? total : max - 1] = '\0';
+        if (total >= 4 && strstr(buf, "\r\n\r\n") != nullptr) {
+            return (ssize_t)total;
+        }
+    }
+    return -1;
+}
+
+static void ut_http1_connection_simple_request(UnitTestCounters& c) {
+    ExceptionSink xsink;
+
+    UtH1Server server;
+    if (server.start() != 0) {
+        UT_ASSERT(c, false, "test server bind/listen failed");
+        return;
+    }
+    int server_port = server.port;
+
+    server.serveOnce([](int cfd) {
+        char buf[4096];
+        ssize_t n = ut_read_request_headers(cfd, buf, sizeof(buf));
+        if (n <= 0) {
+            return;
+        }
+        static const char* resp =
+            "HTTP/1.1 200 OK\r\n"
+            "Content-Type: text/plain\r\n"
+            "Content-Length: 5\r\n"
+            "Connection: close\r\n"
+            "\r\n"
+            "hello";
+        send(cfd, resp, strlen(resp), 0);
+    });
+
+    ReferenceHolder<Http1ClientConnection> conn(
+        new Http1ClientConnection("127.0.0.1", server_port, false, &xsink), &xsink);
+    UT_ASSERT(c, !xsink, "Http1ClientConnection construction succeeds");
+    if (xsink) {
+        xsink.clear();
+        return;
+    }
+
+    // Wait for the connection to become ready (5s budget)
+    bool ready = conn->waitForReadyOrError(5000, &xsink);
+    UT_ASSERT(c, !xsink, "waitForReadyOrError succeeds (no error)");
+    UT_ASSERT(c, ready, "connection is ready");
+    if (!ready || xsink) {
+        xsink.clear();
+        return;
+    }
+
+    // Submit a GET request
+    ReferenceHolder<QoreHashNode> submit_result(
+        conn->submitRequest("GET", "/", nullptr, nullptr, 0, &xsink), &xsink);
+    UT_ASSERT(c, !xsink, "submitRequest succeeds");
+    UT_ASSERT(c, (bool)submit_result, "submitRequest returns a hash");
+    if (!submit_result) {
+        xsink.clear();
+        return;
+    }
+    QoreValue future_v = submit_result->getKeyValue("future");
+    UT_ASSERT(c, future_v.getType() == NT_OBJECT, "result has 'future' object");
+    QoreObject* future_obj = future_v.getType() == NT_OBJECT
+        ? const_cast<QoreObject*>(future_v.get<const QoreObject>()) : nullptr;
+    UT_ASSERT(c, future_obj != nullptr, "future is non-null");
+    if (!future_obj) {
+        return;
+    }
+    future_obj->ref();  // caller ref for q_future_get_blocking
+
+    // Block on the future with a 5s budget
+    QoreValue result = q_future_get_blocking(future_obj, 5000, &xsink);
+    future_obj->deref(&xsink);
+    UT_ASSERT(c, !xsink, "q_future_get_blocking succeeds");
+    UT_ASSERT(c, result.getType() == NT_HASH, "response is a hash");
+    if (result.getType() == NT_HASH) {
+        const QoreHashNode* h = result.get<const QoreHashNode>();
+        int64 status = h->getKeyValue("status_code").getAsBigInt();
+        UT_ASSERT_EQ(c, (int64)200, status, "response status is 200");
+    }
+    result.discard(&xsink);
+
+    conn->closeConnection(&xsink);
+    xsink.clear();
+}
+
+static void ut_http1_connection_timeout(UnitTestCounters& c) {
+    ExceptionSink xsink;
+
+    UtH1Server server;
+    if (server.start() != 0) {
+        UT_ASSERT(c, false, "test server bind/listen failed");
+        return;
+    }
+    int server_port = server.port;
+
+    server.serveOnce([](int cfd) {
+        // Accept, read the request, but never respond.  Sleep long enough
+        // for the client to hit its short Future timeout.
+        char buf[4096];
+        ut_read_request_headers(cfd, buf, sizeof(buf));
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    });
+
+    ReferenceHolder<Http1ClientConnection> conn(
+        new Http1ClientConnection("127.0.0.1", server_port, false, &xsink), &xsink);
+    UT_ASSERT(c, !xsink, "Http1ClientConnection construction succeeds");
+    if (xsink) {
+        xsink.clear();
+        return;
+    }
+
+    bool ready = conn->waitForReadyOrError(5000, &xsink);
+    UT_ASSERT(c, ready && !xsink, "connection reaches ready");
+    if (!ready) {
+        xsink.clear();
+        return;
+    }
+
+    ReferenceHolder<QoreHashNode> submit_result(
+        conn->submitRequest("GET", "/", nullptr, nullptr, 0, &xsink), &xsink);
+    UT_ASSERT(c, !xsink && (bool)submit_result, "submitRequest succeeds");
+    if (!submit_result) {
+        xsink.clear();
+        return;
+    }
+    QoreValue future_v = submit_result->getKeyValue("future");
+    QoreObject* future_obj = future_v.getType() == NT_OBJECT
+        ? const_cast<QoreObject*>(future_v.get<const QoreObject>()) : nullptr;
+    if (!future_obj) {
+        UT_ASSERT(c, false, "future is non-null");
+        return;
+    }
+    future_obj->ref();
+
+    // Short Future timeout — server will not respond in time
+    QoreValue result = q_future_get_blocking(future_obj, 100, &xsink);
+    future_obj->deref(&xsink);
+    UT_ASSERT(c, xsink.isException(), "q_future_get_blocking raises on timeout");
+    const QoreStringNode* err = xsink.getExceptionErr().get<const QoreStringNode>();
+    UT_ASSERT(c, err && !strcmp(err->c_str(), "FUTURE-TIMEOUT"),
+        "exception is FUTURE-TIMEOUT");
+    UT_ASSERT(c, result.isNothing(), "timeout returns NOTHING");
+    result.discard(&xsink);
+    xsink.clear();
+
+    conn->closeConnection(&xsink);
+    xsink.clear();
+}
+
+// --- onClosedHook one-shot semantics + manager dispatch (Phase P3 prep) ---
+//
+// Verifies that AbstractHttpPollConnectionPriv::onClosedHook fires exactly
+// once per connection lifetime, even when setClosed() is invoked multiple
+// times from different code paths.  Also verifies the manager back-pointer
+// dispatch path: a registered manager receives onConnectionClosed exactly
+// once; after setManager(nullptr) it receives nothing.
+
+class UtCountingManager : public HttpClientConnectionManagerBase {
+public:
+    DLLLOCAL UtCountingManager(const HttpClientConnectionManagerBase::Options& opts,
+            ExceptionSink* xsink)
+        : HttpClientConnectionManagerBase(opts, xsink) {
+    }
+
+    DLLLOCAL void onConnectionClosed(HttpClientConnectionBase* conn) override {
+        ++close_count;
+        last_conn = conn;
+        // Also call the base implementation so the connection is removed
+        // from the pool (no-op here since we never add to the pool, but
+        // documents the intended subclass pattern).
+        HttpClientConnectionManagerBase::onConnectionClosed(conn);
+    }
+    std::atomic<int> close_count{0};
+    HttpClientConnectionBase* last_conn = nullptr;
+};
+
+static void ut_http1_onclosed_hook_one_shot(UnitTestCounters& c) {
+    ExceptionSink xsink;
+
+    // Pick an ephemeral closed port — connect will be refused, the poll op
+    // will transition to CLOSED, and onClosedHook should fire once via the
+    // I/O thread setError → setClosed path.
+    int sfd = socket(AF_INET, SOCK_STREAM, 0);
+    if (sfd < 0) {
+        UT_ASSERT(c, false, "reserve socket succeeds");
+        return;
+    }
+    sockaddr_in addr{};
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    addr.sin_port = 0;
+    bind(sfd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
+    socklen_t alen = sizeof(addr);
+    getsockname(sfd, reinterpret_cast<sockaddr*>(&addr), &alen);
+    int dead_port = ntohs(addr.sin_port);
+    ::close(sfd);
+
+    ReferenceHolder<UtCountingManager> mgr(
+        new UtCountingManager(HttpClientConnectionManagerBase::Options{}, &xsink),
+        &xsink);
+    // Pass the manager to the constructor so it is registered BEFORE the
+    // poll op is submitted to the I/O controller — eliminates the race
+    // where the I/O thread fires onClosedHook before setManager.
+    ReferenceHolder<Http1ClientConnection> conn(
+        new Http1ClientConnection("127.0.0.1", dead_port, false, &xsink, *mgr), &xsink);
+    UT_ASSERT(c, !xsink, "Http1ClientConnection construction succeeds");
+    if (xsink) {
+        xsink.clear();
+        return;
+    }
+
+    // Wait for the connect to fail.  This drives setError → setClosed →
+    // onClosedHook from the async I/O thread.
+    bool ready = conn->waitForReadyOrError(5000, &xsink);
+    UT_ASSERT(c, !ready, "connection is not ready (refused)");
+    UT_ASSERT(c, xsink.isException(), "exception raised on refused connect");
+    xsink.clear();
+
+    // Hook may dispatch slightly after the state transition since
+    // setClosed → onClosedHook runs on the I/O thread but signals our
+    // condition var first.  Spin briefly to give the hook a chance to fire.
+    for (int i = 0; i < 100 && mgr->close_count.load() == 0; ++i) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    UT_ASSERT_EQ(c, 1, (int)mgr->close_count.load(),
+        "manager.onConnectionClosed fired exactly once");
+    UT_ASSERT(c, mgr->last_conn == *conn,
+        "manager received the correct connection pointer");
+
+    // Force a second setClosed via closeConnection() — should NOT re-fire
+    // the hook because the one-shot guard latches it.
+    conn->closeConnection(&xsink);
+    xsink.clear();
+    UT_ASSERT_EQ(c, 1, (int)mgr->close_count.load(),
+        "manager.onConnectionClosed not re-fired on second setClosed");
+
+    // Clear the manager back-pointer BEFORE deref'ing the manager — the
+    // contract requires this to prevent UAF.
+    conn->setManager(nullptr);
+}
+
+static void ut_http1_onclosed_hook_app_thread_close(UnitTestCounters& c) {
+    ExceptionSink xsink;
+
+    // Spin up a server that just accepts and closes — the client connect
+    // succeeds, then we close from the app thread.
+    UtH1Server server;
+    if (server.start() != 0) {
+        UT_ASSERT(c, false, "test server bind/listen failed");
+        return;
+    }
+    int server_port = server.port;
+    server.serveOnce([](int cfd) {
+        // Accept and immediately close — the client will see EOF on first recv
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    });
+
+    ReferenceHolder<UtCountingManager> mgr(
+        new UtCountingManager(HttpClientConnectionManagerBase::Options{}, &xsink),
+        &xsink);
+    ReferenceHolder<Http1ClientConnection> conn(
+        new Http1ClientConnection("127.0.0.1", server_port, false, &xsink, *mgr), &xsink);
+    UT_ASSERT(c, !xsink, "Http1ClientConnection construction succeeds");
+    if (xsink) { xsink.clear(); return; }
+
+    bool ready = conn->waitForReadyOrError(5000, &xsink);
+    UT_ASSERT(c, ready && !xsink, "connection ready");
+    if (xsink) xsink.clear();
+
+    // App-thread initiated close — drives setClosed via the abort() path.
+    conn->closeConnection(&xsink);
+    xsink.clear();
+
+    // Hook should have fired exactly once.
+    UT_ASSERT_EQ(c, 1, (int)mgr->close_count.load(),
+        "manager.onConnectionClosed fired exactly once on app-thread close");
+
+    conn->setManager(nullptr);
+}
+
+static void ut_http1_connection_connect_refused(UnitTestCounters& c) {
+    ExceptionSink xsink;
+
+    // Bind an ephemeral port then immediately close the listen socket —
+    // the kernel will refuse subsequent connects to it (ECONNREFUSED).
+    int sfd = socket(AF_INET, SOCK_STREAM, 0);
+    UT_ASSERT(c, sfd >= 0, "reserve socket succeeds");
+    if (sfd < 0) {
+        return;
+    }
+    sockaddr_in addr{};
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    addr.sin_port = 0;
+    int br = bind(sfd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
+    UT_ASSERT(c, br == 0, "bind ephemeral port succeeds");
+    socklen_t alen = sizeof(addr);
+    getsockname(sfd, reinterpret_cast<sockaddr*>(&addr), &alen);
+    int dead_port = ntohs(addr.sin_port);
+    ::close(sfd);
+
+    ReferenceHolder<Http1ClientConnection> conn(
+        new Http1ClientConnection("127.0.0.1", dead_port, false, &xsink), &xsink);
+    UT_ASSERT(c, !xsink, "Http1ClientConnection construction succeeds (connect is async)");
+    if (xsink) {
+        xsink.clear();
+        return;
+    }
+
+    // waitForReadyOrError should fail with a connection error
+    bool ready = conn->waitForReadyOrError(5000, &xsink);
+    UT_ASSERT(c, !ready, "connection is not ready");
+    UT_ASSERT(c, xsink.isException(),
+        "waitForReadyOrError raises on connection refused");
+    const QoreStringNode* err = xsink.getExceptionErr().get<const QoreStringNode>();
+    // Error code comes through from the poll op's error info hash; the
+    // SocketConnectPollOperation raises SOCKET-CONNECT-ERROR on refused.
+    UT_ASSERT(c, err && strstr(err->c_str(), "CONNECT") != nullptr,
+        "exception code contains 'CONNECT'");
+    xsink.clear();
+
+    conn->closeConnection(&xsink);
+    xsink.clear();
+}
+
+// --- HttpClientConnectionManagerBase (Phase P3) tests ---
+//
+// Exercise the C++ pool, per-key creation serialization, eviction via
+// onClosedHook, and the convenience request() method.
+
+static void ut_manager_acquire_first_request(UnitTestCounters& c) {
+    ExceptionSink xsink;
+
+    UtH1Server server;
+    if (server.start() != 0) {
+        UT_ASSERT(c, false, "test server bind/listen failed");
+        return;
+    }
+    int server_port = server.port;
+    server.serveOnce([](int cfd) {
+        char buf[4096];
+        ut_read_request_headers(cfd, buf, sizeof(buf));
+        static const char* resp =
+            "HTTP/1.1 200 OK\r\n"
+            "Content-Type: text/plain\r\n"
+            "Content-Length: 5\r\n"
+            "Connection: close\r\n"
+            "\r\n"
+            "hello";
+        send(cfd, resp, strlen(resp), 0);
+    });
+
+    HttpClientConnectionManagerBase::Options opts;
+    opts.connect_timeout_ms = 5000;
+    opts.request_timeout_ms = 5000;
+    ReferenceHolder<HttpClientConnectionManagerBase> mgr(
+        new HttpClientConnectionManagerBase(opts, &xsink), &xsink);
+    UT_ASSERT(c, !xsink, "manager construction succeeds");
+    if (xsink) { xsink.clear(); return; }
+
+    ReferenceHolder<QoreHashNode> response(
+        mgr->request("GET", "http", "127.0.0.1", server_port, "/",
+            nullptr, nullptr, 0, 0, &xsink),
+        &xsink);
+    UT_ASSERT(c, !xsink, "manager.request succeeds");
+    UT_ASSERT(c, (bool)response, "manager.request returns a response hash");
+    if (response) {
+        int64 status = response->getKeyValue("status_code").getAsBigInt();
+        UT_ASSERT_EQ(c, (int64)200, status, "response status is 200");
+    }
+    xsink.clear();
+}
+
+static void ut_manager_pool_reuse(UnitTestCounters& c) {
+    ExceptionSink xsink;
+
+    HttpClientConnectionManagerBase::Options opts;
+    opts.connect_timeout_ms = 5000;
+    opts.request_timeout_ms = 5000;
+    ReferenceHolder<HttpClientConnectionManagerBase> mgr(
+        new HttpClientConnectionManagerBase(opts, &xsink), &xsink);
+    UT_ASSERT(c, !xsink, "manager construction succeeds");
+    if (xsink) { xsink.clear(); return; }
+
+    // Server that handles two sequential requests on the same connection
+    // (HTTP/1.1 keep-alive — Connection: keep-alive header).  After the
+    // second response, the server closes.
+    UtH1Server server;
+    if (server.start() != 0) {
+        UT_ASSERT(c, false, "test server bind/listen failed");
+        return;
+    }
+    int server_port = server.port;
+    server.serveOnce([](int cfd) {
+        for (int i = 0; i < 2; ++i) {
+            char buf[4096];
+            ssize_t n = ut_read_request_headers(cfd, buf, sizeof(buf));
+            if (n <= 0) return;
+            // Use Content-Length-only reply with keep-alive on the first
+            // response so the client reuses the connection.
+            const char* resp = (i == 0)
+                ? "HTTP/1.1 200 OK\r\n"
+                  "Content-Type: text/plain\r\n"
+                  "Content-Length: 5\r\n"
+                  "Connection: keep-alive\r\n"
+                  "\r\n"
+                  "hello"
+                : "HTTP/1.1 200 OK\r\n"
+                  "Content-Type: text/plain\r\n"
+                  "Content-Length: 5\r\n"
+                  "Connection: close\r\n"
+                  "\r\n"
+                  "world";
+            send(cfd, resp, strlen(resp), 0);
+        }
+    });
+
+    // First request — creates a connection.
+    {
+        ReferenceHolder<QoreHashNode> r1(
+            mgr->request("GET", "http", "127.0.0.1", server_port, "/",
+                nullptr, nullptr, 0, 0, &xsink),
+            &xsink);
+        UT_ASSERT(c, !xsink && r1, "first request succeeds");
+        if (xsink) xsink.clear();
+    }
+    UT_ASSERT_EQ(c, 1, mgr->getPoolSize(), "pool has 1 connection after first request");
+    UT_ASSERT_EQ(c, 1, mgr->getConnectionCount("127.0.0.1", server_port),
+        "key has 1 connection");
+
+    // Second request to the same target — should reuse the pooled connection.
+    {
+        ReferenceHolder<QoreHashNode> r2(
+            mgr->request("GET", "http", "127.0.0.1", server_port, "/",
+                nullptr, nullptr, 0, 0, &xsink),
+            &xsink);
+        UT_ASSERT(c, !xsink && r2, "second request succeeds (reuse)");
+        if (xsink) xsink.clear();
+    }
+    // Pool size still 1 — same connection reused, not a new one created.
+    UT_ASSERT_EQ(c, 1, mgr->getPoolSize(),
+        "pool still has 1 connection after second request (reuse)");
+}
+
+static void ut_manager_close_all(UnitTestCounters& c) {
+    ExceptionSink xsink;
+
+    UtH1Server server;
+    if (server.start() != 0) {
+        UT_ASSERT(c, false, "test server bind/listen failed");
+        return;
+    }
+    int server_port = server.port;
+    server.serveOnce([](int cfd) {
+        char buf[4096];
+        ut_read_request_headers(cfd, buf, sizeof(buf));
+        static const char* resp =
+            "HTTP/1.1 200 OK\r\n"
+            "Content-Length: 2\r\n"
+            "Connection: keep-alive\r\n"
+            "\r\n"
+            "ok";
+        send(cfd, resp, strlen(resp), 0);
+        // Sleep so the connection stays in the pool after the response
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    });
+
+    HttpClientConnectionManagerBase::Options opts;
+    opts.connect_timeout_ms = 5000;
+    opts.request_timeout_ms = 5000;
+    ReferenceHolder<HttpClientConnectionManagerBase> mgr(
+        new HttpClientConnectionManagerBase(opts, &xsink), &xsink);
+    UT_ASSERT(c, !xsink, "manager construction succeeds");
+    if (xsink) { xsink.clear(); return; }
+
+    ReferenceHolder<QoreHashNode> r(
+        mgr->request("GET", "http", "127.0.0.1", server_port, "/",
+            nullptr, nullptr, 0, 0, &xsink),
+        &xsink);
+    UT_ASSERT(c, !xsink && r, "request succeeds");
+    if (xsink) xsink.clear();
+
+    UT_ASSERT_EQ(c, 1, mgr->getPoolSize(), "pool has 1 connection before closeAll");
+    mgr->closeAll(&xsink);
+    UT_ASSERT(c, !xsink, "closeAll succeeds");
+    UT_ASSERT_EQ(c, 0, mgr->getPoolSize(), "pool empty after closeAll");
+
+    // Subsequent acquireConnection raises HTTPCLIENT-SHUTDOWN
+    HttpClientConnectionBase* dead_conn = mgr->acquireConnection(
+        "http", "127.0.0.1", server_port, &xsink);
+    UT_ASSERT(c, !dead_conn, "acquireConnection returns nullptr after closeAll");
+    UT_ASSERT(c, xsink.isException(), "acquireConnection raises after closeAll");
+    const QoreStringNode* err = xsink.getExceptionErr().get<const QoreStringNode>();
+    UT_ASSERT(c, err && !strcmp(err->c_str(), "HTTPCLIENT-SHUTDOWN"),
+        "exception code is HTTPCLIENT-SHUTDOWN");
+    xsink.clear();
+}
+
+// --- HTTP/2 connection (Phase P4) ---
+//
+// End-to-end H2 testing requires a real HTTP/2 server (nghttp2 framing,
+// HPACK, ALPN), which is too involved for the C++ unit test framework.
+// Phase P6 wires up the existing HttpClientIo H2 tests via the C++
+// manager — those tests will catch H2 regressions end-to-end.
+//
+// For Phase P4 we exercise the C++ code path with two minimal tests:
+// (1) construction succeeds and the connection submits to the
+// controller without crashing, and (2) the connect-refused path
+// transitions to CLOSED via the I/O thread, fires onClosedHook, and
+// surfaces an error to the caller.
+
+static void ut_http2_connection_construct(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    // Bind an ephemeral port and immediately close — the next connect
+    // is refused.  H2 socket setup includes ALPN configuration which
+    // exercises the SSL code path on construction.
+    int sfd = socket(AF_INET, SOCK_STREAM, 0);
+    if (sfd < 0) {
+        UT_ASSERT(c, false, "reserve socket succeeds");
+        return;
+    }
+    sockaddr_in addr{};
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    addr.sin_port = 0;
+    bind(sfd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
+    socklen_t alen = sizeof(addr);
+    getsockname(sfd, reinterpret_cast<sockaddr*>(&addr), &alen);
+    int dead_port = ntohs(addr.sin_port);
+    ::close(sfd);
+
+    // Plain HTTP h2c connection (no ALPN required) — verifies the
+    // construction path without exercising the SSL setup.
+    ReferenceHolder<Http2ClientConnection> conn(
+        new Http2ClientConnection("127.0.0.1", dead_port,
+            /* ssl_required */ false, /* max_streams */ 100, &xsink),
+        &xsink);
+    UT_ASSERT(c, !xsink, "Http2ClientConnection construction succeeds (h2c, refused port)");
+    if (xsink) { xsink.clear(); return; }
+
+    // The connect should fail (refused).  We accept either:
+    //   - waitForReadyOrError raises HTTPCLIENT-CONNECT-ERROR / SOCKET-CONNECT-ERROR
+    //   - waitForReadyOrError times out and isClosed() is true afterward
+    bool ready = conn->waitForReadyOrError(5000, &xsink);
+    UT_ASSERT(c, !ready, "h2c connection to refused port is not ready");
+    UT_ASSERT(c, xsink.isException() || conn->isClosed(),
+        "either an exception was raised or the connection is closed");
+    xsink.clear();
+}
+
+static void ut_http2_connection_alpn_setup(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    // HTTPS H2 — the constructor configures ALPN ("h2") on the socket
+    // BEFORE the SSL handshake.  The actual handshake will fail (no
+    // server) but we verify that the ALPN setup path doesn't crash.
+    int sfd = socket(AF_INET, SOCK_STREAM, 0);
+    if (sfd < 0) { UT_ASSERT(c, false, "reserve socket"); return; }
+    sockaddr_in addr{};
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    addr.sin_port = 0;
+    bind(sfd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
+    socklen_t alen = sizeof(addr);
+    getsockname(sfd, reinterpret_cast<sockaddr*>(&addr), &alen);
+    int dead_port = ntohs(addr.sin_port);
+    ::close(sfd);
+
+    ReferenceHolder<Http2ClientConnection> conn(
+        new Http2ClientConnection("127.0.0.1", dead_port,
+            /* ssl_required */ true, /* max_streams */ 100, &xsink),
+        &xsink);
+    UT_ASSERT(c, !xsink, "HTTPS Http2ClientConnection construction succeeds (ALPN configured)");
+    if (xsink) { xsink.clear(); return; }
+
+    // Just verify isReady() / isClosed() are queryable; the actual
+    // connect outcome is not deterministic on a refused port + SSL.
+    UT_ASSERT(c, !conn->isReady(), "fresh https H2 connection not yet ready");
+    conn->closeConnection(&xsink);
+    xsink.clear();
+}
+
+static void ut_manager_h2_dispatch(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    HttpClientConnectionManagerBase::Options opts;
+    opts.protocol = HttpClientProtocol::H2;
+    opts.connect_timeout_ms = 1000;
+    ReferenceHolder<HttpClientConnectionManagerBase> mgr(
+        new HttpClientConnectionManagerBase(opts, &xsink), &xsink);
+    UT_ASSERT(c, !xsink, "manager(H2) construction succeeds");
+    if (xsink) { xsink.clear(); return; }
+
+    // Acquire to a refused port — used to raise PROTOCOL-NOT-IMPLEMENTED
+    // before P4; now should attempt the connect and surface a CONNECT
+    // error.
+    int sfd = socket(AF_INET, SOCK_STREAM, 0);
+    if (sfd < 0) { UT_ASSERT(c, false, "reserve socket"); return; }
+    sockaddr_in addr{};
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    addr.sin_port = 0;
+    bind(sfd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
+    socklen_t alen = sizeof(addr);
+    getsockname(sfd, reinterpret_cast<sockaddr*>(&addr), &alen);
+    int dead_port = ntohs(addr.sin_port);
+    ::close(sfd);
+
+    HttpClientConnectionBase* conn = mgr->acquireConnection(
+        "http", "127.0.0.1", dead_port, &xsink);
+    UT_ASSERT(c, !conn, "acquireConnection on refused port returns nullptr");
+    UT_ASSERT(c, xsink.isException(),
+        "manager(H2) raises a connect error (no longer PROTOCOL-NOT-IMPLEMENTED)");
+    const QoreStringNode* err = xsink.getExceptionErr().get<const QoreStringNode>();
+    UT_ASSERT(c, err && strcmp(err->c_str(), "PROTOCOL-NOT-IMPLEMENTED") != 0,
+        "exception is NOT PROTOCOL-NOT-IMPLEMENTED");
+    xsink.clear();
+}
+
+static void ut_http3_connection_construct(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    // H3/QUIC requires a real hostname for UDP bind + QUIC handshake.
+    // Use localhost with a closed port — the QUIC handshake will fail but
+    // the construction path (UDP bind + SocketQuicClientPollOperation
+    // creation + controller submission) is exercised.
+    int sfd = socket(AF_INET, SOCK_STREAM, 0);
+    if (sfd < 0) { UT_ASSERT(c, false, "reserve socket"); return; }
+    sockaddr_in addr{};
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    addr.sin_port = 0;
+    bind(sfd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
+    socklen_t alen = sizeof(addr);
+    getsockname(sfd, reinterpret_cast<sockaddr*>(&addr), &alen);
+    int dead_port = ntohs(addr.sin_port);
+    ::close(sfd);
+
+    ReferenceHolder<Http3ClientConnection> conn(
+        new Http3ClientConnection("127.0.0.1", dead_port,
+            /* max_streams */ 100, &xsink),
+        &xsink);
+    UT_ASSERT(c, !xsink, "Http3ClientConnection construction succeeds (QUIC to refused port)");
+    if (xsink) { xsink.clear(); return; }
+
+    // waitForReadyOrError — should fail (no QUIC server)
+    bool ready = conn->waitForReadyOrError(3000, &xsink);
+    UT_ASSERT(c, !ready, "H3 connection to refused port is not ready");
+    // Either timeout or error — both are acceptable
+    xsink.clear();
+
+    conn->closeConnection(&xsink);
+    xsink.clear();
+}
+
+static void ut_manager_h3_dispatch(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    HttpClientConnectionManagerBase::Options opts;
+    opts.protocol = HttpClientProtocol::H3;
+    opts.connect_timeout_ms = 1000;
+    ReferenceHolder<HttpClientConnectionManagerBase> mgr(
+        new HttpClientConnectionManagerBase(opts, &xsink), &xsink);
+    UT_ASSERT(c, !xsink, "manager(H3) construction succeeds");
+    if (xsink) { xsink.clear(); return; }
+
+    int sfd = socket(AF_INET, SOCK_STREAM, 0);
+    if (sfd < 0) { UT_ASSERT(c, false, "reserve socket"); return; }
+    sockaddr_in addr{};
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    addr.sin_port = 0;
+    bind(sfd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
+    socklen_t alen = sizeof(addr);
+    getsockname(sfd, reinterpret_cast<sockaddr*>(&addr), &alen);
+    int dead_port = ntohs(addr.sin_port);
+    ::close(sfd);
+
+    // H3 requires HTTPS scheme — but we're just testing the manager
+    // dispatch path (no PROTOCOL-NOT-IMPLEMENTED anymore)
+    HttpClientConnectionBase* conn = mgr->acquireConnection(
+        "https", "127.0.0.1", dead_port, &xsink);
+    UT_ASSERT(c, !conn, "acquireConnection fails on refused port");
+    UT_ASSERT(c, xsink.isException(),
+        "manager(H3) raises a connect error (not PROTOCOL-NOT-IMPLEMENTED)");
+    const QoreStringNode* err = xsink.getExceptionErr().get<const QoreStringNode>();
+    UT_ASSERT(c, err && strcmp(err->c_str(), "PROTOCOL-NOT-IMPLEMENTED") != 0,
+        "exception is NOT PROTOCOL-NOT-IMPLEMENTED");
+    xsink.clear();
+}
+
+static void ut_manager_proxy_url_parse(UnitTestCounters& c) {
+    ExceptionSink xsink;
+
+    // Valid http proxy URL with explicit port
+    {
+        HttpClientConnectionManagerBase::Options opts;
+        opts.proxy_url = "http://proxy.example.com:8080";
+        ReferenceHolder<HttpClientConnectionManagerBase> mgr(
+            new HttpClientConnectionManagerBase(opts, &xsink), &xsink);
+        UT_ASSERT(c, !xsink, "valid proxy URL parses");
+        xsink.clear();
+    }
+
+    // Valid http proxy URL without explicit port (defaults to 80)
+    {
+        HttpClientConnectionManagerBase::Options opts;
+        opts.proxy_url = "http://proxy.example.com";
+        ReferenceHolder<HttpClientConnectionManagerBase> mgr(
+            new HttpClientConnectionManagerBase(opts, &xsink), &xsink);
+        UT_ASSERT(c, !xsink, "proxy URL without port defaults to 80");
+        xsink.clear();
+    }
+
+    // Invalid proxy scheme
+    {
+        HttpClientConnectionManagerBase::Options opts;
+        opts.proxy_url = "ftp://proxy.example.com";
+        ReferenceHolder<HttpClientConnectionManagerBase> mgr(
+            new HttpClientConnectionManagerBase(opts, &xsink), &xsink);
+        UT_ASSERT(c, xsink.isException(), "invalid proxy scheme rejected");
+        xsink.clear();
+    }
+}
+
+// --- P10 tests: HTTPClient via conn_mgr ---
+
+static void ut_httpclient_conn_mgr_get(UnitTestCounters& c) {
+    ExceptionSink xsink;
+
+    UtH1Server server;
+    if (server.start() != 0) {
+        UT_ASSERT(c, false, "test server bind/listen failed");
+        return;
+    }
+    int server_port = server.port;
+    server.serveOnce([](int cfd) {
+        char buf[4096];
+        ut_read_request_headers(cfd, buf, sizeof(buf));
+        static const char* resp =
+            "HTTP/1.1 200 OK\r\n"
+            "Content-Type: text/plain\r\n"
+            "Content-Length: 5\r\n"
+            "Connection: close\r\n"
+            "\r\n"
+            "hello";
+        send(cfd, resp, strlen(resp), 0);
+    });
+
+    // Create HTTPClient and enable conn_mgr dispatch
+    QoreHttpClientObject client;
+    QoreString url_str;
+    url_str.sprintf("http://127.0.0.1:%d/", server_port);
+    client.setURL(url_str.c_str(), &xsink);
+    UT_ASSERT(c, !xsink, "setURL succeeds");
+    if (xsink) { xsink.clear(); return; }
+
+    client.setUseConnectionManager(true);
+    UT_ASSERT(c, client.getUseConnectionManager(), "conn_mgr enabled");
+
+    QoreHashNode* info = new QoreHashNode(autoTypeInfo);
+    ReferenceHolder<QoreHashNode> info_holder(info, &xsink);
+    ReferenceHolder<QoreHashNode> response(
+        client.send("GET", "/", nullptr, nullptr, 0, true, info, &xsink), &xsink);
+    UT_ASSERT(c, !xsink, "GET via conn_mgr succeeds");
+    if (xsink) {
+        QoreStringValueHelper err(xsink.getExceptionErr());
+        QoreStringValueHelper desc(xsink.getExceptionDesc());
+        printd(0, "ut_httpclient_conn_mgr_get: %s: %s\n", err->c_str(), desc->c_str());
+        xsink.clear();
+        return;
+    }
+    UT_ASSERT(c, (bool)response, "GET returns a response hash");
+    if (response) {
+        int64 status = response->getKeyValue("status_code").getAsBigInt();
+        UT_ASSERT_EQ(c, (int64)200, status, "status is 200");
+
+        QoreValue body = response->getKeyValue("body");
+        UT_ASSERT(c, body.getType() == NT_STRING, "body is a string");
+        if (body.getType() == NT_STRING) {
+            const QoreStringNode* bs = body.get<const QoreStringNode>();
+            UT_ASSERT(c, !strcmp(bs->c_str(), "hello"), "body is 'hello'");
+        }
+
+        // Verify status_message is present
+        QoreValue sm = response->getKeyValue("status_message");
+        UT_ASSERT(c, sm.getType() == NT_STRING, "status_message present");
+
+        // Verify content-type header was flattened to top level
+        QoreValue ct = response->getKeyValue("content-type");
+        UT_ASSERT(c, ct.getType() == NT_STRING, "content-type header flattened");
+    }
+    xsink.clear();
+}
+
+static void ut_httpclient_conn_mgr_post(UnitTestCounters& c) {
+    ExceptionSink xsink;
+
+    UtH1Server server;
+    if (server.start() != 0) {
+        UT_ASSERT(c, false, "test server bind/listen failed");
+        return;
+    }
+    int server_port = server.port;
+    server.serveOnce([](int cfd) {
+        char buf[4096];
+        int hdr_len = ut_read_request_headers(cfd, buf, sizeof(buf));
+        // Read body based on Content-Length
+        const char* cl_hdr = strcasestr(buf, "Content-Length:");
+        int body_len = cl_hdr ? atoi(cl_hdr + 15) : 0;
+        char body_buf[4096] = {};
+        if (body_len > 0) {
+            // Check if body was already received with headers
+            int remaining = hdr_len - (int)(strstr(buf, "\r\n\r\n") - buf + 4);
+            if (remaining > 0) {
+                memcpy(body_buf, strstr(buf, "\r\n\r\n") + 4, remaining);
+            }
+            if (remaining < body_len) {
+                recv(cfd, body_buf + remaining, body_len - remaining, 0);
+            }
+        }
+
+        // Echo body in response
+        char resp[8192];
+        snprintf(resp, sizeof(resp),
+            "HTTP/1.1 200 OK\r\n"
+            "Content-Type: text/plain\r\n"
+            "Content-Length: %d\r\n"
+            "Connection: close\r\n"
+            "\r\n"
+            "%.*s",
+            body_len, body_len, body_buf);
+        send(cfd, resp, strlen(resp), 0);
+    });
+
+    QoreHttpClientObject client;
+    QoreString url_str;
+    url_str.sprintf("http://127.0.0.1:%d/", server_port);
+    client.setURL(url_str.c_str(), &xsink);
+    UT_ASSERT(c, !xsink, "setURL succeeds");
+    if (xsink) { xsink.clear(); return; }
+
+    client.setUseConnectionManager(true);
+
+    SimpleRefHolder<QoreStringNode> body_str(new QoreStringNode("test-body"));
+    ReferenceHolder<QoreHashNode> response(
+        client.send("POST", "/data", nullptr, **body_str, true, nullptr, &xsink), &xsink);
+    UT_ASSERT(c, !xsink, "POST via conn_mgr succeeds");
+    if (xsink) {
+        QoreStringValueHelper err(xsink.getExceptionErr());
+        QoreStringValueHelper desc(xsink.getExceptionDesc());
+        printd(0, "ut_httpclient_conn_mgr_post: %s: %s\n", err->c_str(), desc->c_str());
+        xsink.clear();
+        return;
+    }
+    UT_ASSERT(c, (bool)response, "POST returns a response hash");
+    if (response) {
+        int64 status = response->getKeyValue("status_code").getAsBigInt();
+        UT_ASSERT_EQ(c, (int64)200, status, "status is 200");
+
+        QoreValue body = response->getKeyValue("body");
+        UT_ASSERT(c, body.getType() == NT_STRING, "body is a string");
+        if (body.getType() == NT_STRING) {
+            const QoreStringNode* bs = body.get<const QoreStringNode>();
+            UT_ASSERT(c, !strcmp(bs->c_str(), "test-body"), "body echoed");
+        }
+    }
+    xsink.clear();
+}
+
+static void ut_httpclient_conn_mgr_error_passthru(UnitTestCounters& c) {
+    ExceptionSink xsink;
+
+    UtH1Server server;
+    if (server.start() != 0) {
+        UT_ASSERT(c, false, "test server bind/listen failed");
+        return;
+    }
+    int server_port = server.port;
+    server.serveOnce([](int cfd) {
+        char buf[4096];
+        ut_read_request_headers(cfd, buf, sizeof(buf));
+        static const char* resp =
+            "HTTP/1.1 404 Not Found\r\n"
+            "Content-Type: text/plain\r\n"
+            "Content-Length: 9\r\n"
+            "Connection: close\r\n"
+            "\r\n"
+            "not found";
+        send(cfd, resp, strlen(resp), 0);
+    });
+
+    QoreHttpClientObject client;
+    QoreString url_str;
+    url_str.sprintf("http://127.0.0.1:%d/", server_port);
+    client.setURL(url_str.c_str(), &xsink);
+    UT_ASSERT(c, !xsink, "setURL succeeds");
+    if (xsink) { xsink.clear(); return; }
+
+    client.setUseConnectionManager(true);
+
+    // Without error_passthru, 404 should raise an exception
+    ReferenceHolder<QoreHashNode> response(
+        client.send("GET", "/missing", nullptr, nullptr, 0, true, nullptr, &xsink), &xsink);
+    UT_ASSERT(c, (bool)xsink, "404 raises HTTP-CLIENT-RECEIVE-ERROR");
+    if (xsink) {
+        QoreStringValueHelper err(xsink.getExceptionErr());
+        UT_ASSERT(c, !strcmp(err->c_str(), "HTTP-CLIENT-RECEIVE-ERROR"),
+            "exception is HTTP-CLIENT-RECEIVE-ERROR");
+    }
+    xsink.clear();
+}
+
 static void ut_asyncio_stop_clear(UnitTestCounters& c) {
     ExceptionSink xsink;
     AsyncIoControllerPriv* ctrl = new AsyncIoControllerPriv(false, &xsink);
@@ -396,6 +1644,35 @@ static void ut_asyncio_stop_clear(UnitTestCounters& c) {
     UT_ASSERT(c, !xsink, "cleanup succeeds");
 }
 
+#ifdef DEBUG
+//! Debug-only: arm a one-shot fd-swap simulation on the next lock-yielding wait of @a sock.
+/** Tests use this to exercise the fd_generation re-verification path in
+    @ref SocketSyncPoll::waitReleasingLock() without racing an actual
+    close() across threads.  The next sync I/O helper on @a sock that
+    enters its lock-yielding wait phase bumps the socket's internal
+    fd_generation counter inside the wait window, so the re-acquire
+    detects the simulated swap and aborts with SOCKET-CLOSED.
+ */
+static QoreValue f_dbg_force_fd_swap_next_wait(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    const QoreObject* obj = get_param_value(params, 0).get<const QoreObject>();
+    if (!obj) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR",
+            "dbg_force_fd_swap_next_wait() requires a Socket argument");
+        return QoreValue();
+    }
+    ReferenceHolder<QoreSocketObject> sock(
+        reinterpret_cast<QoreSocketObject*>(
+            const_cast<QoreObject*>(obj)->getReferencedPrivateData(CID_SOCKET, xsink)),
+        xsink);
+    if (*xsink || !sock) {
+        return QoreValue();
+    }
+    sock->dbgForceFdSwapNextWait();
+    return QoreValue();
+}
+#endif
+
 static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     UnitTestCounters c;
 
@@ -406,6 +1683,28 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_asyncio_timers(c);
     ut_asyncio_restart(c);
     ut_asyncio_concurrent_lifecycle(c);
+    ut_future_get_blocking_resolved(c);
+    ut_future_get_blocking_timeout(c);
+    ut_future_get_blocking_error(c);
+    ut_promise_action_execute_then_get(c);
+    ut_promise_action_execute_error(c);
+    ut_http1_connection_simple_request(c);
+    ut_http1_connection_timeout(c);
+    ut_http1_connection_connect_refused(c);
+    ut_http1_onclosed_hook_one_shot(c);
+    ut_http1_onclosed_hook_app_thread_close(c);
+    ut_manager_acquire_first_request(c);
+    ut_manager_pool_reuse(c);
+    ut_manager_close_all(c);
+    ut_manager_proxy_url_parse(c);
+    ut_http2_connection_construct(c);
+    ut_http2_connection_alpn_setup(c);
+    ut_manager_h2_dispatch(c);
+    ut_http3_connection_construct(c);
+    ut_manager_h3_dispatch(c);
+    ut_httpclient_conn_mgr_get(c);
+    ut_httpclient_conn_mgr_post(c);
+    ut_httpclient_conn_mgr_error_passthru(c);
     ut_asyncio_logger(c);
     ut_asyncio_wait_for_processing_empty(c);
     ut_asyncio_stop_clear(c);
@@ -423,4 +1722,9 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_global_vars", f_dbg_global_vars, QCF_NO_FLAGS, QDOM_DEFAULT, listTypeInfo);
     qns.addBuiltinVariant("dbg_get_ns_info", f_dbg_get_ns_info, QCF_NO_FLAGS, QDOM_DEFAULT, hashTypeInfo);
     qns.addBuiltinVariant("run_unit_tests", f_run_unit_tests, QCF_NO_FLAGS, QDOM_DEFAULT, hashTypeInfo);
+#ifdef DEBUG
+    qns.addBuiltinVariant("dbg_force_fd_swap_next_wait", f_dbg_force_fd_swap_next_wait,
+        QCF_NO_FLAGS, QDOM_DEFAULT, nothingTypeInfo, 1,
+        QC_SOCKET->getTypeInfo(), QORE_PARAM_NO_ARG, "sock");
+#endif
 }

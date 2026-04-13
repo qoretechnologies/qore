@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore ElasticSearchScrollRecordIterator class definition
 
-/** ElasticSearchScrollRecordIterator.qc Copyright 2025 Qore Technologies, s.r.o.
+/** ElasticSearchScrollRecordIterator.qc Copyright 2025 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -36,8 +36,8 @@ public namespace ElasticSearchDataProvider {
 */
 public class ElasticSearchScrollRecordIterator inherits DataProvider::AbstractDataProviderRecordIterator {
     private:internal {
-        #! The REST client object for API calls
-        RestClient::RestClient rest;
+        #! The REST client object for API calls — any @ref RestClient::AbstractRestClient subclass
+        RestClient::AbstractRestClient rest;
 
         #! Current index name
         string name;
@@ -80,7 +80,7 @@ public class ElasticSearchScrollRecordIterator inherits DataProvider::AbstractDa
         @param scroll_timeout the scroll timeout (default: "1m" = 1 minute)
         @param batch_size the batch size for scroll requests (default: 1000)
     */
-    constructor(RestClient::RestClient rest, string name, hash<auto> index,
+    constructor(RestClient::AbstractRestClient rest, string name, hash<auto> index,
             hash<string, DataProvider::AbstractDataField> record_type, *hash<auto> where_cond,
             *hash<auto> search_options, string scroll_timeout = "1m", int batch_size = 1000)
             : AbstractDataProviderRecordIterator(search_options.requires_result ?? True,
@@ -102,16 +102,22 @@ public class ElasticSearchScrollRecordIterator inherits DataProvider::AbstractDa
 
         # Make query
         *hash<auto> query_body = makeQuery(where_cond, search_options);
-        hash<auto> info;
         try {
-            hash<auto> response = rest.post(uri, query_body, \info).body;
+            hash<auto> response = rest.restPost(uri, query_body).body;
             scroll_id = response._scroll_id;
             processHits(response.hits.hits);
         } catch (hash<ExceptionInfo> ex) {
-            # Ensure that any error response body is included in the exception
+            # Ensure that any error response body is included in the exception; RestClientIo
+            # throws REST-RESPONSE-ERROR with a RestResponseInfo hashdecl in ex.arg
             hash<auto> ex_arg = {
                 "query": query_body,
-            } + info{"response-code", "response-body"};
+            };
+            if (ex.arg.typeCode() == NT_HASH) {
+                ex_arg += {
+                    "response-code": ex.arg.status_code,
+                    "response-body": ex.arg.body,
+                };
+            }
             rethrow ex.err, ex.desc, ex_arg;
         }
     }
@@ -125,7 +131,7 @@ public class ElasticSearchScrollRecordIterator inherits DataProvider::AbstractDa
     private clearScroll() {
         if (scroll_id) {
             try {
-                rest.del("_search/scroll", {"scroll_id": scroll_id});
+                rest.restDel("_search/scroll", {"scroll_id": scroll_id});
             } catch () {
                 # Ignore errors when clearing scroll - it may have already expired
             }
@@ -212,12 +218,11 @@ public class ElasticSearchScrollRecordIterator inherits DataProvider::AbstractDa
             return;
         }
 
-        hash<auto> info;
         try {
-            hash<auto> response = rest.post("_search/scroll", {
+            hash<auto> response = rest.restPost("_search/scroll", {
                 "scroll": scroll_timeout,
                 "scroll_id": scroll_id,
-            }, \info).body;
+            }).body;
 
             # Update scroll_id (it may change between requests)
             scroll_id = response._scroll_id;
@@ -232,7 +237,13 @@ public class ElasticSearchScrollRecordIterator inherits DataProvider::AbstractDa
         } catch (hash<ExceptionInfo> ex) {
             exhausted = True;
             clearScroll();
-            hash<auto> ex_arg = info{"response-code", "response-body"};
+            hash<auto> ex_arg = {};
+            if (ex.arg.typeCode() == NT_HASH) {
+                ex_arg = {
+                    "response-code": ex.arg.status_code,
+                    "response-body": ex.arg.body,
+                };
+            }
             rethrow ex.err, ex.desc, ex_arg;
         }
     }

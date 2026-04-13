@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file DataProviderImplicitModuleTransaction.qc provides the DataProvider catalog API
 
-/** DataProviderImplicitModuleTransaction.qc Copyright 2019 - 2024 Qore Technologies, s.r.o.
+/** DataProviderImplicitModuleTransaction.qc Copyright 2019 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -25,18 +25,32 @@
 #! Contains all public definitions in the DataProvider module
 public namespace DataProvider {
 #! Implements a mechanism to roll back changes made in external module initialization if an error occurs
+/** Rollback closures accumulate across module loads in a thread_local. The savepoint mechanism
+    ensures that only closures added during a specific module load are rolled back or committed,
+    without affecting closures from previous successful loads.
+
+    @par Usage in tryLoad():
+    @code
+    int sp = ImplicitModuleTransaction::savepoint();
+    try {
+        load_module(name);
+        ImplicitModuleTransaction::commit(sp);
+    } catch (...) {
+        ImplicitModuleTransaction::rollback(sp);
+    }
+    @endcode
+*/
 public class ImplicitModuleTransaction {
     public {}
 
     private {
-        list<code> rollback();
+        list<code> rollback_list();
     }
 
     #! Executes all rollback code if there is an active exception in module initialization
     destructor() {
         if (active_exception()) {
-            # execute all rollback actions
-            map $1(), rollback;
+            map $1(), rollback_list;
         }
     }
 
@@ -45,12 +59,47 @@ public class ImplicitModuleTransaction {
         if (!rb) {
             rb = new ImplicitModuleTransaction();
         }
-        rb.addRollback(rb_code);
+        rb.rollback_list += rb_code;
     }
 
-    #! Adds a rollback closure to be executed if there is an active exception in module initialization
-    private addRollback(code rb_code) {
-        rollback += rb_code;
+    #! Returns the current savepoint (number of rollback closures registered so far)
+    /** Call this before \c load_module() to mark the boundary between pre-existing
+        rollback closures and new ones added during the module load.
+    */
+    static int savepoint() {
+        if (!rb) {
+            return 0;
+        }
+        return rb.rollback_list.size();
+    }
+
+    #! Executes rollback closures added since the given savepoint and removes them
+    /** Call this when module loading fails to clean up partial registrations from the
+        failed module without affecting registrations from previous successful loads.
+    */
+    static rollback(int sp) {
+        if (!rb) {
+            return;
+        }
+        # execute closures added after the savepoint in reverse order
+        if (sp < rb.rollback_list.size()) {
+            list<code> to_rollback = rb.rollback_list[sp..];
+            rb.rollback_list = sp > 0 ? rb.rollback_list[0..sp - 1] : new list<code>();
+            map $1(), to_rollback;
+        }
+    }
+
+    #! Discards rollback closures added since the given savepoint (module loaded successfully)
+    /** Call this after a successful module load to discard the rollback closures
+        for that module, since its registrations should be kept.
+    */
+    static commit(int sp) {
+        if (!rb) {
+            return;
+        }
+        if (sp < rb.rollback_list.size()) {
+            rb.rollback_list = sp > 0 ? rb.rollback_list[0..sp - 1] : new list<code>();
+        }
     }
 }
 }

@@ -1,0 +1,754 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore SystemeIoDataProvider module definition
+
+/*  SystemeIoDataProvider.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 2.0
+# assume local scope for variables, do not use "$" signs
+%modern
+
+%requires(reexport) DataProvider
+%requires(reexport) SystemeIoRestClient
+%requires RestClientIo
+
+module SystemeIoDataProvider {
+    version = "1.0";
+    desc = "User module providing a data provider API for Systeme.io";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        # Register the data provider factory
+        DataProvider::registerFactory(new SystemeIoDataProviderFactory());
+
+        # Register the application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": SystemeIoDataProvider::AppName,
+            "display_name": "Systeme.io",
+            "short_desc": "Systeme.io all-in-one marketing platform",
+            "desc": "Systeme.io is an all-in-one online marketing platform for building sales "
+                "funnels, running email campaigns, managing online courses and communities, "
+                "and handling affiliate programs.\n\n"
+                "This integration supports managing contacts, tags, custom fields, course "
+                "enrollments, community memberships, and subscriptions.",
+            "scheme": "systemeio",
+            "logo": SystemeIoLogo,
+            "logo_file_name": "systemeio-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::Marketing,),
+        });
+
+        # ========== CONTACT ACTIONS ==========
+
+        # Create Contact
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SystemeIoDataProvider::AppName,
+            "path": "/contacts/create",
+            "action": "create-contact",
+            "groups": "Contacts",
+            "display_name": "Create Contact",
+            "short_desc": "Create a new contact",
+            "desc": "Create a new contact in Systeme.io",
+            "action_code": DPAT_API,
+            "data_provider_info": SystemeIoCreateContactDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new SystemeIoContactDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                SystemeIoCreateContactRequestDataType::Fields),
+        });
+
+        # Update Contact
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SystemeIoDataProvider::AppName,
+            "path": "/contacts/update",
+            "action": "update-contact",
+            "groups": "Contacts",
+            "display_name": "Update Contact",
+            "short_desc": "Update an existing contact",
+            "desc": "Update an existing contact in Systeme.io using merge-patch",
+            "action_code": DPAT_API,
+            "data_provider_info": SystemeIoUpdateContactDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new SystemeIoContactDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                SystemeIoUpdateContactRequestDataType::Fields),
+        });
+
+        # Delete Contact
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SystemeIoDataProvider::AppName,
+            "path": "/contacts/delete",
+            "action": "delete-contact",
+            "groups": "Contacts",
+            "display_name": "Delete Contact",
+            "short_desc": "Delete a contact",
+            "desc": "Delete a contact from Systeme.io",
+            "action_code": DPAT_API,
+            "data_provider_info": SystemeIoDeleteContactDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return AbstractDataProviderType::get(AutoHashType);
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                SystemeIoDeleteContactRequestDataType::Fields),
+        });
+
+        # List Contacts
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SystemeIoDataProvider::AppName,
+            "path": "/contacts",
+            "action": "list-contacts",
+            "groups": "Contacts",
+            "display_name": "List Contacts",
+            "short_desc": "List contacts with pagination",
+            "desc": "List contacts from Systeme.io with cursor-based pagination",
+            "action_code": DPAT_FIND,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Contact ID",
+                    "short_desc": "Get a specific contact",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
+                },
+                "order": <ActionOptionInfo>{
+                    "display_name": "Order",
+                    "short_desc": "Sort order",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "asc", "display_name": "Ascending"},
+                        <AllowedValueInfo>{"value": "desc", "display_name": "Descending"},
+                    ),
+                },
+            },
+        });
+
+        # Get Contact
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SystemeIoDataProvider::AppName,
+            "path": "/contacts",
+            "action": "get-contact",
+            "groups": "Contacts",
+            "display_name": "Get Contact",
+            "short_desc": "Get a single contact by ID",
+            "desc": "Retrieve a single contact by its ID",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Contact ID",
+                    "short_desc": "The contact ID",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                },
+            },
+        });
+
+        # ========== CONTACT TAG ACTIONS ==========
+
+        # Assign Contact Tag
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SystemeIoDataProvider::AppName,
+            "path": "/contacts/assign-tag",
+            "action": "assign-contact-tag",
+            "groups": "Contacts",
+            "display_name": "Assign Tag to Contact",
+            "short_desc": "Assign a tag to a contact",
+            "desc": "Assign a tag to a contact in Systeme.io",
+            "action_code": DPAT_API,
+            "data_provider_info": SystemeIoAssignContactTagDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new SystemeIoContactDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                SystemeIoAssignContactTagRequestDataType::Fields),
+        });
+
+        # Remove Contact Tag
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SystemeIoDataProvider::AppName,
+            "path": "/contacts/remove-tag",
+            "action": "remove-contact-tag",
+            "groups": "Contacts",
+            "display_name": "Remove Tag from Contact",
+            "short_desc": "Remove a tag from a contact",
+            "desc": "Remove a tag from a contact in Systeme.io",
+            "action_code": DPAT_API,
+            "data_provider_info": SystemeIoRemoveContactTagDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return AbstractDataProviderType::get(AutoHashType);
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                SystemeIoRemoveContactTagRequestDataType::Fields),
+        });
+
+        # ========== TAG ACTIONS ==========
+
+        # Create Tag
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SystemeIoDataProvider::AppName,
+            "path": "/tags/create",
+            "action": "create-tag",
+            "groups": "Tags",
+            "display_name": "Create Tag",
+            "short_desc": "Create a new tag",
+            "desc": "Create a new tag in Systeme.io",
+            "action_code": DPAT_API,
+            "data_provider_info": SystemeIoCreateTagDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new SystemeIoTagDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                SystemeIoCreateTagRequestDataType::Fields),
+        });
+
+        # Update Tag
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SystemeIoDataProvider::AppName,
+            "path": "/tags/update",
+            "action": "update-tag",
+            "groups": "Tags",
+            "display_name": "Update Tag",
+            "short_desc": "Update an existing tag",
+            "desc": "Update an existing tag in Systeme.io",
+            "action_code": DPAT_API,
+            "data_provider_info": SystemeIoUpdateTagDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new SystemeIoTagDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                SystemeIoUpdateTagRequestDataType::Fields),
+        });
+
+        # Delete Tag
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SystemeIoDataProvider::AppName,
+            "path": "/tags/delete",
+            "action": "delete-tag",
+            "groups": "Tags",
+            "display_name": "Delete Tag",
+            "short_desc": "Delete a tag",
+            "desc": "Delete a tag from Systeme.io",
+            "action_code": DPAT_API,
+            "data_provider_info": SystemeIoDeleteTagDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return AbstractDataProviderType::get(AutoHashType);
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                SystemeIoDeleteTagRequestDataType::Fields),
+        });
+
+        # List Tags
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SystemeIoDataProvider::AppName,
+            "path": "/tags",
+            "action": "list-tags",
+            "groups": "Tags",
+            "display_name": "List Tags",
+            "short_desc": "List tags with pagination",
+            "desc": "List tags from Systeme.io with cursor-based pagination",
+            "action_code": DPAT_FIND,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Tag ID",
+                    "short_desc": "Get a specific tag",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
+                },
+                "order": <ActionOptionInfo>{
+                    "display_name": "Order",
+                    "short_desc": "Sort order",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "asc", "display_name": "Ascending"},
+                        <AllowedValueInfo>{"value": "desc", "display_name": "Descending"},
+                    ),
+                },
+            },
+        });
+
+        # Get Tag
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SystemeIoDataProvider::AppName,
+            "path": "/tags",
+            "action": "get-tag",
+            "groups": "Tags",
+            "display_name": "Get Tag",
+            "short_desc": "Get a single tag by ID",
+            "desc": "Retrieve a single tag by its ID",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Tag ID",
+                    "short_desc": "The tag ID",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                },
+            },
+        });
+
+        # ========== CONTACT FIELD ACTIONS ==========
+
+        # Create Contact Field
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SystemeIoDataProvider::AppName,
+            "path": "/contact-fields/create",
+            "action": "create-contact-field",
+            "groups": "Contact Fields",
+            "display_name": "Create Contact Field",
+            "short_desc": "Create a custom contact field",
+            "desc": "Create a new custom contact field in Systeme.io",
+            "action_code": DPAT_API,
+            "data_provider_info": SystemeIoCreateContactFieldDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new SystemeIoContactFieldDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                SystemeIoCreateContactFieldRequestDataType::Fields),
+        });
+
+        # Update Contact Field
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SystemeIoDataProvider::AppName,
+            "path": "/contact-fields/update",
+            "action": "update-contact-field",
+            "groups": "Contact Fields",
+            "display_name": "Update Contact Field",
+            "short_desc": "Update a custom contact field",
+            "desc": "Update an existing custom contact field in Systeme.io",
+            "action_code": DPAT_API,
+            "data_provider_info": SystemeIoUpdateContactFieldDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new SystemeIoContactFieldDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                SystemeIoUpdateContactFieldRequestDataType::Fields),
+        });
+
+        # Delete Contact Field
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SystemeIoDataProvider::AppName,
+            "path": "/contact-fields/delete",
+            "action": "delete-contact-field",
+            "groups": "Contact Fields",
+            "display_name": "Delete Contact Field",
+            "short_desc": "Delete a custom contact field",
+            "desc": "Delete a custom contact field from Systeme.io",
+            "action_code": DPAT_API,
+            "data_provider_info": SystemeIoDeleteContactFieldDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return AbstractDataProviderType::get(AutoHashType);
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                SystemeIoDeleteContactFieldRequestDataType::Fields),
+        });
+
+        # List Contact Fields
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SystemeIoDataProvider::AppName,
+            "path": "/contact-fields",
+            "action": "list-contact-fields",
+            "groups": "Contact Fields",
+            "display_name": "List Contact Fields",
+            "short_desc": "List custom contact fields",
+            "desc": "List custom contact fields from Systeme.io",
+            "action_code": DPAT_FIND,
+            "options": {
+                "slug": <ActionOptionInfo>{
+                    "display_name": "Slug",
+                    "short_desc": "Get a specific field by slug",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
+                },
+                "order": <ActionOptionInfo>{
+                    "display_name": "Order",
+                    "short_desc": "Sort order",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "asc", "display_name": "Ascending"},
+                        <AllowedValueInfo>{"value": "desc", "display_name": "Descending"},
+                    ),
+                },
+            },
+        });
+
+        # Get Contact Field
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SystemeIoDataProvider::AppName,
+            "path": "/contact-fields",
+            "action": "get-contact-field",
+            "groups": "Contact Fields",
+            "display_name": "Get Contact Field",
+            "short_desc": "Get a single contact field by slug",
+            "desc": "Retrieve a single custom contact field by its slug",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "slug": <ActionOptionInfo>{
+                    "display_name": "Slug",
+                    "short_desc": "The contact field slug",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                },
+            },
+        });
+
+        # ========== COURSE ACTIONS ==========
+
+        # List Courses
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SystemeIoDataProvider::AppName,
+            "path": "/courses",
+            "action": "list-courses",
+            "groups": "Courses",
+            "display_name": "List Courses",
+            "short_desc": "List courses",
+            "desc": "List courses from Systeme.io",
+            "action_code": DPAT_FIND,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Course ID",
+                    "short_desc": "Get a specific course",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
+                },
+                "order": <ActionOptionInfo>{
+                    "display_name": "Order",
+                    "short_desc": "Sort order",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "asc", "display_name": "Ascending"},
+                        <AllowedValueInfo>{"value": "desc", "display_name": "Descending"},
+                    ),
+                },
+            },
+        });
+
+        # ========== ENROLLMENT ACTIONS ==========
+
+        # Create Enrollment
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SystemeIoDataProvider::AppName,
+            "path": "/enrollments/create",
+            "action": "create-enrollment",
+            "groups": "Enrollments",
+            "display_name": "Create Enrollment",
+            "short_desc": "Enroll a contact in a course",
+            "desc": "Enroll a contact in a course in Systeme.io",
+            "action_code": DPAT_API,
+            "data_provider_info": SystemeIoCreateEnrollmentDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new SystemeIoEnrollmentDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                SystemeIoCreateEnrollmentRequestDataType::Fields),
+        });
+
+        # Delete Enrollment
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SystemeIoDataProvider::AppName,
+            "path": "/enrollments/delete",
+            "action": "delete-enrollment",
+            "groups": "Enrollments",
+            "display_name": "Delete Enrollment",
+            "short_desc": "Remove a course enrollment",
+            "desc": "Remove a contact's enrollment from a course in Systeme.io",
+            "action_code": DPAT_API,
+            "data_provider_info": SystemeIoDeleteEnrollmentDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return AbstractDataProviderType::get(AutoHashType);
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                SystemeIoDeleteEnrollmentRequestDataType::Fields),
+        });
+
+        # List Enrollments
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SystemeIoDataProvider::AppName,
+            "path": "/enrollments",
+            "action": "list-enrollments",
+            "groups": "Enrollments",
+            "display_name": "List Enrollments",
+            "short_desc": "List course enrollments",
+            "desc": "List course enrollments from Systeme.io",
+            "action_code": DPAT_FIND,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Enrollment ID",
+                    "short_desc": "Get a specific enrollment",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
+                },
+                "order": <ActionOptionInfo>{
+                    "display_name": "Order",
+                    "short_desc": "Sort order",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "asc", "display_name": "Ascending"},
+                        <AllowedValueInfo>{"value": "desc", "display_name": "Descending"},
+                    ),
+                },
+            },
+        });
+
+        # ========== COMMUNITY ACTIONS ==========
+
+        # List Communities
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SystemeIoDataProvider::AppName,
+            "path": "/communities",
+            "action": "list-communities",
+            "groups": "Communities",
+            "display_name": "List Communities",
+            "short_desc": "List communities",
+            "desc": "List communities from Systeme.io",
+            "action_code": DPAT_FIND,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Community ID",
+                    "short_desc": "Get a specific community",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
+                },
+                "order": <ActionOptionInfo>{
+                    "display_name": "Order",
+                    "short_desc": "Sort order",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "asc", "display_name": "Ascending"},
+                        <AllowedValueInfo>{"value": "desc", "display_name": "Descending"},
+                    ),
+                },
+            },
+        });
+
+        # ========== MEMBERSHIP ACTIONS ==========
+
+        # Create Membership
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SystemeIoDataProvider::AppName,
+            "path": "/memberships/create",
+            "action": "create-membership",
+            "groups": "Memberships",
+            "display_name": "Create Membership",
+            "short_desc": "Add a contact to a community",
+            "desc": "Add a contact as a member of a community in Systeme.io",
+            "action_code": DPAT_API,
+            "data_provider_info": SystemeIoCreateMembershipDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new SystemeIoMembershipDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                SystemeIoCreateMembershipRequestDataType::Fields),
+        });
+
+        # Delete Membership
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SystemeIoDataProvider::AppName,
+            "path": "/memberships/delete",
+            "action": "delete-membership",
+            "groups": "Memberships",
+            "display_name": "Delete Membership",
+            "short_desc": "Remove a community membership",
+            "desc": "Remove a contact's membership from a community in Systeme.io",
+            "action_code": DPAT_API,
+            "data_provider_info": SystemeIoDeleteMembershipDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return AbstractDataProviderType::get(AutoHashType);
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                SystemeIoDeleteMembershipRequestDataType::Fields),
+        });
+
+        # List Memberships
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SystemeIoDataProvider::AppName,
+            "path": "/memberships",
+            "action": "list-memberships",
+            "groups": "Memberships",
+            "display_name": "List Memberships",
+            "short_desc": "List community memberships",
+            "desc": "List community memberships from Systeme.io",
+            "action_code": DPAT_FIND,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Membership ID",
+                    "short_desc": "Get a specific membership",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
+                },
+                "order": <ActionOptionInfo>{
+                    "display_name": "Order",
+                    "short_desc": "Sort order",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "asc", "display_name": "Ascending"},
+                        <AllowedValueInfo>{"value": "desc", "display_name": "Descending"},
+                    ),
+                },
+            },
+        });
+
+        # ========== SUBSCRIPTION ACTIONS ==========
+
+        # Cancel Subscription
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SystemeIoDataProvider::AppName,
+            "path": "/subscriptions/cancel",
+            "action": "cancel-subscription",
+            "groups": "Subscriptions",
+            "display_name": "Cancel Subscription",
+            "short_desc": "Cancel a subscription",
+            "desc": "Cancel a subscription in Systeme.io",
+            "action_code": DPAT_API,
+            "data_provider_info": SystemeIoCancelSubscriptionDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new SystemeIoSubscriptionDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                SystemeIoCancelSubscriptionRequestDataType::Fields),
+        });
+
+        # List Subscriptions
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SystemeIoDataProvider::AppName,
+            "path": "/subscriptions",
+            "action": "list-subscriptions",
+            "groups": "Subscriptions",
+            "display_name": "List Subscriptions",
+            "short_desc": "List subscriptions",
+            "desc": "List subscriptions from Systeme.io",
+            "action_code": DPAT_FIND,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Subscription ID",
+                    "short_desc": "Get a specific subscription",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
+                },
+                "order": <ActionOptionInfo>{
+                    "display_name": "Order",
+                    "short_desc": "Sort order",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "asc", "display_name": "Ascending"},
+                        <AllowedValueInfo>{"value": "desc", "display_name": "Descending"},
+                    ),
+                },
+            },
+        });
+
+        # ========== EVENT TRIGGERS ==========
+
+        # New Contact Event
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SystemeIoDataProvider::AppName,
+            "path": "/events/" + EVENT_NEW_CONTACT,
+            "action": EVENT_NEW_CONTACT,
+            "groups": "Events",
+            "display_name": "New Contact",
+            "short_desc": "Trigger when a new contact is created",
+            "desc": "Fires when a new contact is created in Systeme.io",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_NEW_CONTACT,
+        });
+
+        # New Tag Event
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SystemeIoDataProvider::AppName,
+            "path": "/events/" + EVENT_NEW_TAG,
+            "action": EVENT_NEW_TAG,
+            "groups": "Events",
+            "display_name": "New Tag",
+            "short_desc": "Trigger when a new tag is created",
+            "desc": "Fires when a new tag is created in Systeme.io",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_NEW_TAG,
+        });
+    };
+}
+
+/** @mainpage SystemeIoDataProvider Module
+
+    @tableofcontents
+
+    @section systemeio_dataproviderintro SystemeIoDataProvider Module Introduction
+
+    The %SystemeIoDataProvider module provides a data provider API for Systeme.io,
+    an all-in-one online marketing platform.
+
+    This module supports managing contacts, tags, custom contact fields, course enrollments,
+    community memberships, and subscriptions with full CRUD operations where supported by
+    the Systeme.io API.
+
+    @section systemeio_dataprovider_relnotes Release Notes
+
+    @subsection systemeio_dataprovider_v1_0 SystemeIoDataProvider v1.0
+    - the initial version of the %SystemeIoDataProvider module
+*/

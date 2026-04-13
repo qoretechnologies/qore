@@ -87,6 +87,48 @@ public:
     //! Returns the pad token ID (or -1 if no pad token)
     int getPadTokenId() const { return pad_token_id; }
 
+    //! Returns the EOS token ID (or -1 if not found)
+    int getEosTokenId() const { return eos_token_id; }
+
+    //! Returns the BOS token ID (or -1 if not found)
+    int getBosTokenId() const { return bos_token_id; }
+
+    //! Returns the CLS token ID (or -1 if not found)
+    int getClsTokenId() const { return cls_token_id; }
+
+    //! Returns the SEP token ID (or -1 if not found)
+    int getSepTokenId() const { return sep_token_id; }
+
+    //! Returns the UNK token ID (or -1 if not found)
+    int getUnkTokenId() const { return unk_token_id; }
+
+    //! Returns the model maximum sequence length (or -1 if not set)
+    int getModelMaxLength() const { return model_max_length; }
+
+    //! Decodes a batch of token ID sequences
+    /** @param batch list of token ID lists
+        @param skip_special_tokens whether to skip special tokens
+        @param xsink exception sink
+        @return list of decoded strings
+    */
+    QoreListNode* decodeBatch(const QoreListNode* batch, bool skip_special_tokens,
+        ExceptionSink* xsink);
+
+    //! Loads additional configuration from tokenizer_config.json
+    /** Extracts special token overrides, model_max_length, and chat_template.
+        @param config parsed tokenizer_config.json hash
+        @param xsink exception sink
+    */
+    void loadConfig(const QoreHashNode* config, ExceptionSink* xsink);
+
+    //! Applies a chat template to a list of messages
+    /** @param messages list of {role, content} hashes
+        @param xsink exception sink
+        @return the formatted prompt string
+    */
+    QoreStringNode* applyChatTemplate(const QoreListNode* messages,
+        ExceptionSink* xsink);
+
     //! Adds tokens to the vocabulary dynamically
     /** @param tokens list of token definitions (string or hash with content/special/single_word)
         @param xsink exception sink
@@ -119,6 +161,20 @@ private:
 
     //! Pad token ID (-1 if no pad token found)
     int pad_token_id = -1;
+    //! EOS token ID (-1 if not found)
+    int eos_token_id = -1;
+    //! BOS token ID (-1 if not found)
+    int bos_token_id = -1;
+    //! CLS token ID (-1 if not found)
+    int cls_token_id = -1;
+    //! SEP token ID (-1 if not found)
+    int sep_token_id = -1;
+    //! UNK token ID (-1 if not found)
+    int unk_token_id = -1;
+    //! Model maximum sequence length (-1 if not set)
+    int model_max_length = -1;
+    //! Chat template string (Jinja2-like)
+    std::string chat_template;
 
     //! Count of tokens added dynamically via addTokens() (not from config)
     int dynamic_added_count = 0;

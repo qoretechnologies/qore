@@ -67,6 +67,11 @@ void ThreadPoolThread::worker(ExceptionSink* xsink) {
         sl.lock();
         task->del(xsink);
         task = 0;
+        // Clear all thread-local data (program tld hash + thread_local vars + thread
+        // resources) only after task cleanup/derefs complete so destructors still
+        // have access to thread-local state if needed, while preventing leakage
+        // between unrelated tasks on the same worker thread.
+        clear_all_program_thread_local_data();
         // Task complete — decrement thread_counter that was incremented at submit time
         thread_counter.dec();
 

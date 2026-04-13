@@ -37,6 +37,7 @@
 #include <qore/Qore.h>
 #include <qore/QoreURL.h>
 #include <qore/QoreHttpClientObject.h>
+#include <qore/HttpClientConnectionManager.h>
 #include "qore/intern/ql_misc.h"
 #include "qore/intern/QC_Socket.h"
 #include "qore/intern/QC_Queue.h"
@@ -973,6 +974,44 @@ static QoreValue process_binary_body(const BinaryNode* bin, const QoreEncoding* 
     return new QoreStringNode((const char*)bin->getPtr(), bin->size(), body_enc);
 }
 
+// Transform a conn_mgr response hash (nested "headers") to the legacy flat
+// format that send_internal's redirect/auth/encoding logic expects.
+static QoreHashNode* transformConnMgrResponse(QoreHashNode* src, ExceptionSink* xsink) {
+    ReferenceHolder<QoreHashNode> result(new QoreHashNode(autoTypeInfo), xsink);
+
+    // Copy top-level scalar fields
+    QoreValue v = src->getKeyValue("status_code");
+    if (!v.isNullOrNothing()) {
+        result->setKeyValue("status_code", v.refSelf(), xsink);
+    }
+    v = src->getKeyValue("status_message");
+    if (!v.isNullOrNothing()) {
+        result->setKeyValue("status_message", v.refSelf(), xsink);
+    }
+    v = src->getKeyValue("http_version");
+    if (!v.isNullOrNothing()) {
+        result->setKeyValue("http_version", v.refSelf(), xsink);
+    }
+
+    // Flatten nested headers to top level (matching readHTTPHeader format)
+    v = src->getKeyValue("headers");
+    if (v.getType() == NT_HASH) {
+        const QoreHashNode* hdrs = v.get<const QoreHashNode>();
+        ConstHashIterator hi(hdrs);
+        while (hi.next()) {
+            result->setKeyValue(hi.getKey(), hi.get().refSelf(), xsink);
+        }
+    }
+
+    // Copy body if present
+    v = src->getKeyValue("body");
+    if (!v.isNullOrNothing()) {
+        result->setKeyValue("body", v.refSelf(), xsink);
+    }
+
+    return result.release();
+}
+
 void do_content_length_event(Queue* event_queue, qore_socket_private* priv, size_t len) {
     if (event_queue) {
         QoreHashNode* h = priv->getEvent(QORE_EVENT_HTTP_CONTENT_LENGTH, QORE_SOURCE_HTTPCLIENT);
@@ -1050,8 +1089,9 @@ struct qore_httpclient_priv {
 
     // Alt-Svc cache entry
     struct AltSvcEntry {
-        int port;              // QUIC port from Alt-Svc header
-        int64 expiry_epoch;    // When this entry expires (epoch seconds)
+        int port;                    // QUIC port from Alt-Svc header
+        int64 expiry_epoch;          // When this entry expires (epoch seconds)
+        int64 retry_after_epoch{0};  // After QUIC failure, don't retry before this time
     };
 
     // Alt-Svc cache: "host:port" → {quic_port, expiry}
@@ -1096,6 +1136,42 @@ struct qore_httpclient_priv {
         if (msock) {
             msock->socket->priv->setH2ActiveStreamId(stream_id);
         }
+    }
+
+    //! C++ connection manager for async-driven dispatch (Phase P7+).
+    /** Lazily created on first use via getConnMgr().  When present, sync
+        HTTPClient methods (P8-P11) delegate H1/H2/H3 work through it
+        instead of using the legacy sync socket dispatch.  The Qore-level
+        HttpClientIo module has its own manager with richer features
+        (retry, Alt-Svc, cookies); this one is the minimal C++ base for
+        the sync HTTPClient conversion.
+    */
+    std::unique_ptr<HttpClientConnectionManagerBase> conn_mgr;
+
+    //! When true, send_internal delegates to the C++ conn_mgr for simple
+    //! H1 request/response flows (no streaming, no proxy).
+    bool use_conn_mgr = false;
+
+    //! Returns the connection manager, creating it lazily if needed.
+    DLLLOCAL HttpClientConnectionManagerBase& getConnMgr(ExceptionSink* xsink) {
+        if (!conn_mgr) {
+            HttpClientConnectionManagerBase::Options opts;
+            opts.protocol = HttpClientProtocol::H1;  // default; updated per http2_mode/http3_mode
+            opts.connect_timeout_ms = connect_timeout_ms;
+            opts.request_timeout_ms = timeout;
+            opts.idle_timeout_ms = 60000;
+            // Proxy URL from the existing connection info
+            if (proxy_connection.has_url()) {
+                char buf[512];
+                snprintf(buf, sizeof(buf), "%s://%s:%d",
+                    proxy_connection.ssl ? "https" : "http",
+                    proxy_connection.host.c_str(),
+                    proxy_connection.port);
+                opts.proxy_url = buf;
+            }
+            conn_mgr.reset(new HttpClientConnectionManagerBase(opts, xsink));
+        }
+        return *conn_mgr;
     }
 
     // persistent count
@@ -2292,6 +2368,11 @@ struct qore_httpclient_priv {
         OutputStream* os = nullptr, InputStream* is = nullptr, size_t max_chunk_size = 0,
         const ResolvedCallReferenceNode* trailer_callback = nullptr, bool streaming = false);
 
+    //! Conn_mgr dispatch path for simple H1 request/response (no streaming, no proxy)
+    DLLLOCAL QoreHashNode* send_internal_conn_mgr(ExceptionSink* xsink, const char* mname, const char* meth,
+        const char* mpath, const QoreHashNode* headers, const QoreStringNode* msg_body, const void* data,
+        unsigned size, bool getbody, QoreHashNode* info, int timeout_ms, QoreObject* obj);
+
     //! Send a request and get response using HTTP/2
     DLLLOCAL QoreHashNode* sendHttp2MessageAndGetResponse(const char* mname, const char* meth, const char* mpath,
         const QoreHashNode& nh, const QoreStringNode* body, const void* data, unsigned size,
@@ -2305,17 +2386,30 @@ struct qore_httpclient_priv {
     // Look up Alt-Svc entry for a given origin; returns nullptr if not found or expired
     DLLLOCAL std::optional<AltSvcEntry> lookupAltSvc(const char* host, int port);
 
-    //! Remove Alt-Svc entry after a failed QUIC connect attempt
-    /** Prevents repeated QUIC upgrade attempts to a broken endpoint.
-        A fresh Alt-Svc header from the server will re-add the entry.
-    */
+    //! Remove Alt-Svc entry (used on QUIC disconnect for clean slate)
     DLLLOCAL void removeAltSvc(const char* host, int port) {
         std::string origin = std::string(host) + ":" + std::to_string(port);
         alt_svc_cache.erase(origin);
     }
 
+    //! Mark Alt-Svc entry as failed with a backoff period
+    /** Prevents repeated QUIC upgrade attempts to a broken endpoint.
+        The entry remains in the cache but lookupAltSvc() will skip it
+        until the backoff expires.  New Alt-Svc headers from the server
+        do not reset the backoff — only expiry does.
+    */
+    DLLLOCAL void markAltSvcFailed(const char* host, int port) {
+        std::string origin = std::string(host) + ":" + std::to_string(port);
+        auto it = alt_svc_cache.find(origin);
+        if (it != alt_svc_cache.end()) {
+            // 5-minute backoff before retrying QUIC for this origin
+            it->second.retry_after_epoch = q_epoch() + 300;
+        }
+    }
+
     // Establish a QUIC/HTTP3 connection to the given server
-    DLLLOCAL int connectQuic(ExceptionSink* xsink, con_info& connection);
+    // timeout_override_ms: -1 = use connect_timeout_ms; > 0 = use this timeout
+    DLLLOCAL int connectQuic(ExceptionSink* xsink, con_info& connection, int timeout_override_ms = -1);
 
     // Send an HTTP/3 request and get the response
     DLLLOCAL QoreHashNode* sendHttp3MessageAndGetResponse(const char* mname, const char* meth, const char* mpath,
@@ -3027,6 +3121,11 @@ void HttpClientConnectSendRecvPollOperation::deref(ExceptionSink* xsink) {
         if (info) {
             info.release()->deref(xsink);
         }
+        // Release poll_state before deref'ing the client: the inner poll state
+        // (e.g. SocketConnectInetHappyEyeballsPollState) holds a raw
+        // qore_socket_private* and reads sock->sock during destruction, so the
+        // socket must still be alive when poll_state is destroyed.
+        poll_state.reset();
         client->deref(xsink);
         delete this;
     }
@@ -4581,6 +4680,14 @@ int QoreHttpClientObject::getConnectTimeout() const {
     return http_priv->connect_timeout_ms;
 }
 
+void QoreHttpClientObject::setUseConnectionManager(bool enable) {
+    http_priv->use_conn_mgr = enable;
+}
+
+bool QoreHttpClientObject::getUseConnectionManager() const {
+    return http_priv->use_conn_mgr;
+}
+
 int QoreHttpClientObject::setURL(const char* str, ExceptionSink* xsink) {
     SafeLocker sl(priv->m);
     // disconnect immediately if not using a proxy
@@ -4615,6 +4722,7 @@ int QoreHttpClientObject::setHTTPVersion(const char* version, ExceptionSink* xsi
     } else if (!strcmp(version, "2.0") || !strcmp(version, "2")) {
         http_priv->http11 = true;
         http_priv->http2_mode = HTTP2_MODE_REQUIRED;
+        http_priv->http3_mode = HTTP3_MODE_DISABLED;
         // ALPN protocols are set at connect time based on both object mode and global mode
     } else if (!strcmp(version, "3.0") || !strcmp(version, "3")) {
         http_priv->http11 = true;
@@ -5540,6 +5648,7 @@ bool QoreHttpClientObject::isProxySecure() const {
 }
 
 int QoreHttpClientObject::connect(ExceptionSink* xsink) {
+    SocketSyncPoll::assertNotOnIoThread("HTTPClient", "connect", xsink);
     SafeLocker sl(priv->m);
 
     if (priv->checkNonBlock(xsink)) {
@@ -5596,15 +5705,20 @@ QoreHashNode* qore_httpclient_priv::sendMessageAndGetResponse(con_info& connecti
             info, timeout_ms, code, xsink);
     }
 
-    // Try HTTP/3 upgrade if Alt-Svc is cached — but NOT when HTTP/2 is already
-    // active and healthy.  Attempting QUIC on every request when H2 works adds
-    // a multi-second penalty per failed QUIC handshake (connect timeout).
-    // Only attempt QUIC upgrade when no H2 session exists or when H3 is required.
-    if (!*xsink && !http3_active && http3_mode != HTTP3_MODE_DISABLED && connection.ssl
-            && !(http2_active && getH2Session())) {
+    // Try HTTP/3 upgrade if Alt-Svc is cached.  On QUIC failure, the entry
+    // is marked with a 5-minute backoff so we don't retry on every request
+    // (the penalty is a blocking handshake timeout per attempt).
+    if (!*xsink && !http3_active && http3_mode != HTTP3_MODE_DISABLED && connection.ssl) {
         auto alt = lookupAltSvc(connection.host.c_str(), connection.port);
         if (alt.has_value() || http3_mode == HTTP3_MODE_REQUIRED) {
-            if (!connectQuic(xsink, connection)) {
+            // In auto mode, use a short timeout (3s) for the speculative QUIC
+            // upgrade.  This is an opportunistic optimization — if the server
+            // supports QUIC, the handshake completes in <100ms.  A long timeout
+            // would block the calling thread (potentially a handler pool worker),
+            // causing latency spikes and pool exhaustion when QUIC is unreachable.
+            // Required mode uses the full connect_timeout_ms.
+            int quic_timeout = http3_mode == HTTP3_MODE_REQUIRED ? -1 : 3000;
+            if (!connectQuic(xsink, connection, quic_timeout)) {
                 return sendHttp3MessageAndGetResponse(mname, meth, msgpath, nh, body, data, size,
                     send_callback, is, max_chunk_size, trailer_callback,
                     info, timeout_ms, code, xsink);
@@ -5612,11 +5726,10 @@ QoreHashNode* qore_httpclient_priv::sendMessageAndGetResponse(con_info& connecti
             if (http3_mode == HTTP3_MODE_REQUIRED) {
                 return nullptr;
             }
-            // QUIC connect failed — remove the Alt-Svc entry so we don't retry
-            // on every subsequent request (RFC 9369 §3.2: clients SHOULD cache
-            // failures and avoid repeated connection attempts).  A fresh Alt-Svc
-            // header from the server will re-enable the upgrade path.
-            removeAltSvc(connection.host.c_str(), connection.port);
+            // QUIC connect failed — mark the Alt-Svc entry with a 5-minute
+            // backoff so we don't retry on every request (RFC 9369 §3.2:
+            // clients SHOULD cache failures and avoid repeated attempts).
+            markAltSvcFailed(connection.host.c_str(), connection.port);
             // Log QUIC error details before clearing for HTTP/1.x fallback.
             // xsink->clear() is intentional: the QUIC failure is non-fatal when
             // http3_mode == HTTP3_MODE_AUTO — we retry with TCP/TLS below.
@@ -6381,10 +6494,14 @@ void qore_httpclient_priv::parseAltSvc(const char* value, const char* host, int 
         // Only store h3 (not h3-29 or other draft versions)
         if (proto == "h3" && alt_port > 0) {
             std::string origin = std::string(host) + ":" + std::to_string(port);
-            alt_svc_cache[origin] = AltSvcEntry{
-                alt_port,
-                q_epoch() + max_age,
-            };
+            auto it = alt_svc_cache.find(origin);
+            if (it != alt_svc_cache.end()) {
+                // Update port and expiry but preserve retry_after backoff
+                it->second.port = alt_port;
+                it->second.expiry_epoch = q_epoch() + max_age;
+            } else {
+                alt_svc_cache[origin] = AltSvcEntry{alt_port, q_epoch() + max_age, 0};
+            }
         }
     }
 }
@@ -6400,6 +6517,10 @@ std::optional<qore_httpclient_priv::AltSvcEntry> qore_httpclient_priv::lookupAlt
         alt_svc_cache.erase(it);
         return std::nullopt;
     }
+    // Check if retry backoff is active (after QUIC failure)
+    if (it->second.retry_after_epoch > q_epoch()) {
+        return std::nullopt;
+    }
     return it->second;
 }
 
@@ -6407,7 +6528,7 @@ std::optional<qore_httpclient_priv::AltSvcEntry> qore_httpclient_priv::lookupAlt
 // This is analogous to TCP connect + TLS handshake: it blocks under msock->m
 // until the handshake completes or times out.  The asynchronous (poll-based)
 // path uses SocketQuicClientPollOperation instead.
-int qore_httpclient_priv::connectQuic(ExceptionSink* xsink, con_info& connection) {
+int qore_httpclient_priv::connectQuic(ExceptionSink* xsink, con_info& connection, int timeout_override_ms) {
     // Resolve server address
     struct addrinfo hints{};
     hints.ai_family = AF_UNSPEC;
@@ -6530,7 +6651,8 @@ int qore_httpclient_priv::connectQuic(ExceptionSink* xsink, con_info& connection
     quic_local_addrlen = local_addrlen;
 
     // Drive QUIC handshake
-    int64 deadline_ms = connect_timeout_ms < 0 ? -1 : q_clock_getmillis() + connect_timeout_ms;
+    int effective_timeout = timeout_override_ms > 0 ? timeout_override_ms : connect_timeout_ms;
+    int64 deadline_ms = effective_timeout < 0 ? -1 : q_clock_getmillis() + effective_timeout;
 
     while (!quic_session->isHandshakeComplete()) {
         if (quic_session->isClosed()) {
@@ -7308,6 +7430,225 @@ void check_headers(const char* str, int len, bool &multipart, QoreHashNode& ans,
     }
 }
 
+QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink, const char* mname,
+        const char* meth, const char* mpath, const QoreHashNode* headers, const QoreStringNode* msg_body,
+        const void* data, unsigned size, bool getbody, QoreHashNode* info, int timeout_ms, QoreObject* obj) {
+    SocketSyncPoll::assertNotOnIoThread("HTTPClient", mname, xsink);
+
+    con_info this_connection = connection;
+
+    bool bodyp = false;
+    meth = checkMethod(xsink, meth, bodyp);
+    if (*xsink) {
+        return nullptr;
+    }
+
+    if (!timeout_ms) {
+        timeout_ms = timeout;
+    }
+
+    // Build request headers
+    bool keep_alive = true;
+    bool host_override = false;
+    ReferenceHolder<QoreHashNode> nh(getRequestHeaders(xsink, headers,
+        msg_body ? msg_body->getEncoding() : nullptr, (data && size), false,
+        keep_alive, host_override), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
+    // Prepare body pointer
+    const void* body_ptr = nullptr;
+    size_t body_len = 0;
+    if (msg_body && msg_body->size()) {
+        body_ptr = msg_body->c_str();
+        body_len = msg_body->size();
+    } else if (data && size) {
+        body_ptr = data;
+        body_len = size;
+    }
+
+    // Build path
+    QoreString pathstr(enc ? enc : QCS_UTF8);
+    bool path_already_encoded = false;
+
+    // Redirect loop
+    int redirect_count = 0;
+    const char* location = nullptr;
+    ReferenceHolder<QoreHashNode> ans(xsink);
+    int code = 0;
+
+    while (true) {
+        const char* msgpath = getMsgPath(xsink, this_connection, mpath, pathstr, path_already_encoded);
+        if (*xsink) {
+            return nullptr;
+        }
+
+        // Determine scheme
+        const char* scheme = this_connection.ssl ? "https" : "http";
+
+        // Populate request-uri in info hash
+        if (info) {
+            info->setKeyValue("request-uri", new QoreStringNodeMaker("%s %s HTTP/%s", meth,
+                msgpath && msgpath[0] ? msgpath : "/", http11 ? "1.1" : "1.0"), xsink);
+            if (*xsink) {
+                return nullptr;
+            }
+        }
+
+        // Submit request via conn_mgr
+        HttpClientConnectionManagerBase& mgr = getConnMgr(xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+
+        ReferenceHolder<QoreHashNode> raw_resp(
+            mgr.request(meth, scheme, this_connection.host.c_str(), this_connection.port,
+                msgpath, *nh, body_ptr, body_len, timeout_ms, xsink),
+            xsink);
+        if (!raw_resp || *xsink) {
+            return nullptr;
+        }
+
+        // Transform to legacy flat format
+        ans = transformConnMgrResponse(*raw_resp, xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+
+        code = (int)ans->getKeyValue("status_code").getAsBigInt();
+
+        if (info) {
+            info->setKeyValue("response-headers", ans->refSelf(), xsink);
+            if (*xsink) {
+                return nullptr;
+            }
+        }
+
+        if (!ans->is_unique()) {
+            ans = ans->copy();
+        }
+
+        // Handle 3xx redirects (304 Not Modified passes through)
+        if (!redirect_passthru && code >= 300 && code < 400 && code != 304) {
+            host_override = false;
+            const QoreStringNode* mess = ans->getKeyValue("status_message").get<QoreStringNode>();
+
+            const QoreStringNode* loc = get_string_header_node(xsink, **ans, "location");
+            if (*xsink) {
+                return nullptr;
+            }
+            location = loc && !loc->empty() ? loc->c_str() : nullptr;
+            if (!location) {
+                const char* msg = mess ? mess->c_str() : "<no message>";
+                xsink->raiseException("HTTP-CLIENT-REDIRECT-ERROR",
+                    "no redirect location given for status code %d: message: '%s'", code, msg);
+                return nullptr;
+            }
+
+            if (++redirect_count > max_redirects) {
+                break;
+            }
+
+            if (redirectUrlUnlocked(location, this_connection, xsink)) {
+                const char* msg = mess ? mess->c_str() : "<no message>";
+                xsink->appendLastDescription(": while setting URL for redirect location '%s' (code %d: "
+                    "message: '%s')", location, code, msg);
+                return nullptr;
+            }
+            if (!path_already_encoded) {
+                path_already_encoded = true;
+            }
+
+            // Set redirect info in info hash if present
+            if (info) {
+                QoreString tmp;
+                tmp.sprintf("redirect-%d", redirect_count);
+                info->setKeyValue(tmp.c_str(), loc->refSelf(), xsink);
+                if (*xsink) {
+                    return nullptr;
+                }
+
+                tmp.clear();
+                tmp.sprintf("redirect-message-%d", redirect_count);
+                info->setKeyValue(tmp.c_str(), mess ? mess->refSelf() : QoreValue(), xsink);
+            }
+
+            // Use updated connection path for the next iteration
+            mpath = nullptr;
+            continue;
+        }
+
+        break;
+    }
+
+    // Check for max redirects exceeded
+    if (!redirect_passthru && code >= 300 && code < 400 && code != 304) {
+        const char* mess = get_string_header(xsink, **ans, "status_message");
+        if (!mess) {
+            mess = "<no message>";
+        }
+        if (!location) {
+            location = "<no location>";
+        }
+        xsink->raiseException("HTTP-CLIENT-MAXIMUM-REDIRECTS-EXCEEDED",
+            "maximum redirections (%d) exceeded; redirect code %d to '%s' ignored (message: '%s')",
+            max_redirects, code, location, mess);
+        return nullptr;
+    }
+
+    // Process content-type
+    if (processContentType(xsink, **ans)) {
+        return nullptr;
+    }
+
+    // Handle body content-encoding
+    QoreValue body_val = ans->getKeyValue("body");
+    if (!body_val.isNullOrNothing() && body_val.getType() == NT_BINARY) {
+        const BinaryNode* bin = body_val.get<const BinaryNode>();
+        if (bin && bin->size()) {
+            qore_uncompress_to_string_t dec = nullptr;
+            const char* content_encoding = normalizeContentEncoding(xsink, **ans, false, dec);
+            if (*xsink) {
+                return nullptr;
+            }
+
+            // Use default encoding from the HTTPClient
+            const QoreEncoding* body_enc = enc ? enc : QCS_UTF8;
+            QoreValue processed = process_binary_body(bin, body_enc, content_encoding, dec,
+                encoding_passthru, xsink);
+            if (*xsink) {
+                return nullptr;
+            }
+            if (processed) {
+                ans->setKeyValue("body", processed.getInternalNode(), xsink);
+            }
+        }
+    }
+
+    // Populate info hash with response body
+    if (info) {
+        QoreValue bv = ans->getKeyValue("body");
+        if (!bv.isNullOrNothing()) {
+            info->setKeyValue("response-body", bv.refSelf(), xsink);
+        }
+    }
+
+    // Check error status codes
+    if (!error_passthru && !*xsink && (code < 100 || code >= 300)) {
+        const char* mess = get_string_header(xsink, **ans, "status_message");
+        if (!mess) {
+            mess = "<no message>";
+        }
+        assert(!*xsink);
+        xsink->raiseExceptionArg("HTTP-CLIENT-RECEIVE-ERROR", ans.release(),
+            "HTTP status code %d received: message: %s", code, mess);
+        return nullptr;
+    }
+
+    return *xsink ? nullptr : ans.release();
+}
+
 QoreHashNode* qore_httpclient_priv::send_internal(ExceptionSink* xsink, const char* mname, const char* meth,
         const char* mpath, const QoreHashNode* headers, const QoreStringNode* msg_body, const void* data,
         unsigned size, const ResolvedCallReferenceNode* send_callback, bool getbody, QoreHashNode* info,
@@ -7317,6 +7658,7 @@ QoreHashNode* qore_httpclient_priv::send_internal(ExceptionSink* xsink, const ch
     assert(!(data && is));
     assert(!(is && send_callback));
     assert(!info || info->is_unique());
+    SocketSyncPoll::assertNotOnIoThread("HTTPClient", mname, xsink);
 
     // issue #4841: do not override the connection path when sending
     con_info this_connection = connection;
@@ -7330,6 +7672,13 @@ QoreHashNode* qore_httpclient_priv::send_internal(ExceptionSink* xsink, const ch
     // use the default timeout value if a zero value is given in the call
     if (!timeout_ms)
         timeout_ms = timeout;
+
+    // P10: delegate to conn_mgr for simple H1 requests (no streaming, no proxy)
+    if (use_conn_mgr && !send_callback && !recv_callback && !is && !os && !streaming
+            && !proxy_connection.has_url()) {
+        return send_internal_conn_mgr(xsink, mname, meth, mpath, headers,
+            msg_body, data, size, getbody, info, timeout_ms, obj);
+    }
 
     SafeLocker sl(msock->m);
 

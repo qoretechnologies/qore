@@ -61,6 +61,11 @@ public:
 
     DLLLOCAL void deref(ExceptionSink* xsink) {
         if (ROdereference()) {
+            // Release poll_state before deref'ing the client: the inner poll state
+            // (e.g. SocketConnectInetHappyEyeballsPollState) holds a raw
+            // qore_socket_private* and reads sock->sock during destruction, so the
+            // socket must still be alive when poll_state is destroyed.
+            poll_state.reset();
             client->deref(xsink);
             delete this;
         }

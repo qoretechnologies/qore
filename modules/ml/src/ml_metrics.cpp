@@ -144,40 +144,6 @@ static void computePerClass(const VectorXd& y_true, const VectorXd& y_pred,
     }
 }
 
-static double mlPrecision(const VectorXd& y_true, const VectorXd& y_pred,
-        double class_label, ExceptionSink* xsink) {
-    if (checkVectorLengths(y_true, y_pred, xsink)) {
-        return 0.0;
-    }
-    int tp, fp, fn;
-    computePerClass(y_true, y_pred, class_label, tp, fp, fn);
-    int denom = tp + fp;
-    return (denom > 0) ? static_cast<double>(tp) / denom : 0.0;
-}
-
-static double mlRecall(const VectorXd& y_true, const VectorXd& y_pred,
-        double class_label, ExceptionSink* xsink) {
-    if (checkVectorLengths(y_true, y_pred, xsink)) {
-        return 0.0;
-    }
-    int tp, fp, fn;
-    computePerClass(y_true, y_pred, class_label, tp, fp, fn);
-    int denom = tp + fn;
-    return (denom > 0) ? static_cast<double>(tp) / denom : 0.0;
-}
-
-static double mlF1Score(const VectorXd& y_true, const VectorXd& y_pred,
-        double class_label, ExceptionSink* xsink) {
-    if (checkVectorLengths(y_true, y_pred, xsink)) {
-        return 0.0;
-    }
-    int tp, fp, fn;
-    computePerClass(y_true, y_pred, class_label, tp, fp, fn);
-    double prec = (tp + fp > 0) ? static_cast<double>(tp) / (tp + fp) : 0.0;
-    double rec = (tp + fn > 0) ? static_cast<double>(tp) / (tp + fn) : 0.0;
-    return (prec + rec > 0.0) ? 2.0 * prec * rec / (prec + rec) : 0.0;
-}
-
 QoreHashNode* mlClassificationReport(const VectorXd& y_true, const VectorXd& y_pred,
         ExceptionSink* xsink) {
     if (checkVectorLengths(y_true, y_pred, xsink)) {

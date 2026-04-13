@@ -193,6 +193,16 @@ public class Http3ClientConnection inherits HttpClientConnection {
         } catch () {
             # Ignore abort errors during close
         }
+        # Close the socket fd immediately to prevent descriptor leaks.
+        # abort() intentionally does NOT close the socket (to avoid use-after-free
+        # if the I/O thread is inside continuePoll). By this point, the connection
+        # has been removed from the pool and cancelled from the controller, so
+        # the I/O thread is no longer polling this fd.
+        try {
+            self.getSocket().close();
+        } catch () {
+            # Ignore close errors (socket may already be closed)
+        }
     }
 
     #! Registers a stream for notifications and sets a listener
@@ -216,6 +226,12 @@ public class Http3ClientConnection inherits HttpClientConnection {
         if (!self.isReady()) {
             throw "HTTP3-STATE-ERROR",
                 sprintf("cannot send data in state: %y", self.getConnectionState());
+        }
+        # Check if the underlying QUIC session is dead before sending
+        if (poll_op.getSocket().isQuicSessionClosed()) {
+            self.setClosed();
+            throw "HTTP3-CONNECTION-CLOSED",
+                "QUIC session closed; connection evicted from pool";
         }
         *object ctl;
         {

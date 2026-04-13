@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore ElasticSearchDataProvider module definition
 
-/** ElasticSearchScrollSearchDataProvider.qc Copyright 2025 Qore Technologies, s.r.o.
+/** ElasticSearchScrollSearchDataProvider.qc Copyright 2025 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -70,7 +70,7 @@ public class ElasticSearchScrollSearchDataProvider inherits ElasticSearchDataPro
     }
 
     #! Creates the object from a REST connection
-    constructor(RestClient::RestClient rest) : ElasticSearchDataProviderBase(rest) {
+    constructor(RestClient::AbstractRestClient rest) : ElasticSearchDataProviderBase(rest) {
     }
 
     #! Returns the data provider name
@@ -80,7 +80,7 @@ public class ElasticSearchScrollSearchDataProvider inherits ElasticSearchDataPro
 
     #! Returns the data provider description
     *string getDesc() {
-        return sprintf("ElasticSearch scroll search API provider for `%s`", rest.getSafeURL());
+        return sprintf("ElasticSearch scroll search API provider for `%s`", rest.getSafeUrl());
     }
 
     #! Makes a request and returns the response
@@ -126,7 +126,7 @@ public class ElasticSearchScrollSearchDataProvider inherits ElasticSearchDataPro
         remove req.scroll_id;
         remove req.clear;
 
-        hash<auto> response = rest.post(uri, req.size() ? req : NOTHING).body;
+        hash<auto> response = rest.restPost(uri, req.size() ? req : NOTHING).body;
         return {
             "_scroll_id": response._scroll_id,
             "took": response.took,
@@ -138,7 +138,7 @@ public class ElasticSearchScrollSearchDataProvider inherits ElasticSearchDataPro
 
     #! Continues scrolling with an existing scroll_id
     private hash<auto> continueScroll(string scroll_id, string scroll) {
-        hash<auto> response = rest.post("_search/scroll", {
+        hash<auto> response = rest.restPost("_search/scroll", {
             "scroll": scroll,
             "scroll_id": scroll_id,
         }).body;
@@ -154,7 +154,7 @@ public class ElasticSearchScrollSearchDataProvider inherits ElasticSearchDataPro
     #! Clears a scroll context
     private hash<auto> clearScroll(string scroll_id) {
         try {
-            rest.del("_search/scroll", {"scroll_id": scroll_id});
+            rest.restDel("_search/scroll", {"scroll_id": scroll_id});
             return {"succeeded": True};
         } catch (hash<ExceptionInfo> ex) {
             return {"succeeded": False, "error": ex.desc};

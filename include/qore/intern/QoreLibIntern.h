@@ -1184,6 +1184,7 @@ DLLLOCAL int64 q_clock_getnanos();
 
 DLLLOCAL void qore_init_random_salt();
 DLLLOCAL int qore_get_ptr_hash(QoreString& str, const void* ptr);
+DLLLOCAL int qore_get_object_hash(QoreString& str, const void* ptr, uint64_t id);
 
 // find the position of the first path separator in the string, or 0
 DLLLOCAL const char* q_find_first_path_sep(const char* path);

@@ -104,13 +104,19 @@ bool QoreSocketObject::hasPendingData() const {
     // - hasStreamData(): CONNECT stream DATA received in a previous read cycle
     //   but not yet drained by the poll operation
     // - wantWrite(): nghttp2 has outgoing frames (SETTINGS_ACK, WINDOW_UPDATE)
-    //   that must be flushed before the peer will send more data
-    // - wantRead(): nghttp2 has buffered frames to process
+    //   OR bytes buffered in our send_buffer waiting to go out
     // Without these checks, the SSL/TCP buffers appear empty so epoll never
     // triggers a re-poll, but the H2 session has actionable work.
+    //
+    // IMPORTANT: do NOT check nghttp2_session_want_read() here.  That API
+    // returns non-zero for any alive H2 session (the default state when the
+    // session is open and not closing), so treating it as "pending data"
+    // causes a tight polling loop on every idle H2 connection.  Actual
+    // inbound data waiting to be processed shows up in SSL_pending() /
+    // buflen (checked above) — not in nghttp2's internal state.
     if (priv->socket->priv->h2_session) {
         Http2Session* h2 = priv->socket->priv->h2_session.get();
-        if (h2->hasStreamData() || h2->wantWrite() || h2->wantRead()) {
+        if (h2->hasStreamData() || h2->wantWrite()) {
             return true;
         }
     }
@@ -974,6 +980,13 @@ int QoreSocketObject::getSocket() {
     return priv->socket->getSocket();
 }
 
+#ifdef DEBUG
+void QoreSocketObject::dbgForceFdSwapNextWait() {
+    AutoLocker al(priv->m);
+    qore_socket_private::get(*priv->socket)->debug_force_fd_swap_next_wait = true;
+}
+#endif
+
 void QoreSocketObject::setEncoding(const QoreEncoding* id) {
     priv->socket->setEncoding(id);
 }
@@ -1347,6 +1360,15 @@ int QoreSocketObject::sendQuicClientStreamData(int64_t stream_id, const void* da
     }
 
     return session->sendStreamData(stream_id, data, len, end_stream, xsink);
+}
+
+bool QoreSocketObject::isQuicSessionClosed() const {
+    AutoLocker al(priv->m);
+    qore_socket_private* sp = qore_socket_private::get(*priv->socket);
+    if (sp->quic_sessions.empty()) {
+        return true;
+    }
+    return sp->quic_sessions.begin()->second->isClosed();
 }
 
 int QoreSocketObject::waitForQuicClientStreamDrain(int64_t stream_id, int timeout_ms,

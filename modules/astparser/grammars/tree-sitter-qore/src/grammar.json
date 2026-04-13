@@ -6019,15 +6019,37 @@
     "float": {
       "type": "TOKEN",
       "content": {
-        "type": "PATTERN",
-        "value": "[0-9]+\\.[0-9]+([eE][+-]?[0-9]+)?"
+        "type": "CHOICE",
+        "members": [
+          {
+            "type": "PATTERN",
+            "value": "[0-9]+\\.[0-9]+([eE][+-]?[0-9]+)?"
+          },
+          {
+            "type": "PATTERN",
+            "value": "[0-9]+[eE][+-]?[0-9]+"
+          }
+        ]
       }
     },
     "number": {
       "type": "TOKEN",
       "content": {
-        "type": "PATTERN",
-        "value": "[0-9]+(\\.[0-9]+)?n"
+        "type": "CHOICE",
+        "members": [
+          {
+            "type": "PATTERN",
+            "value": "[0-9]+(\\.[0-9]+)?n"
+          },
+          {
+            "type": "PATTERN",
+            "value": "[0-9]+[eE][+-]?[0-9]+n"
+          },
+          {
+            "type": "PATTERN",
+            "value": "[0-9]+\\.[0-9]+[eE][+-]?[0-9]+n"
+          }
+        ]
       }
     },
     "relative_date": {
@@ -7651,5 +7673,6 @@
   "precedences": [],
   "externals": [],
   "inline": [],
-  "supertypes": []
+  "supertypes": [],
+  "reserved": {}
 }

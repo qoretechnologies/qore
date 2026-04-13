@@ -83,11 +83,19 @@ static void setPollTimeoutFromExpiry(QoreHashNode* poll_info, ngtcp2_tstamp expi
     } else {
         ngtcp2_tstamp now = QuicSession::timestamp();
         if (expiry <= now) {
-            timeout_ms = 1;  // fire immediately on next poll cycle
+            // Timer still in the past after processTimerAndWrite handled it.
+            // Don't set a sub-ms timeout — the timer work was already done
+            // and tight-polling won't help.  Use the default fallback so the
+            // poll blocks until the next packet arrives or the fallback fires.
+            // Matches curl's pattern: if expiry <= ts after handle+flush,
+            // no Curl_expire is set — the next I/O event wakes the loop.
+            timeout_ms = QUIC_NO_TIMER_POLL_MS;
         } else {
-            timeout_ms = static_cast<int64_t>((expiry - now) / 1000000);
-            if (timeout_ms == 0) {
-                timeout_ms = 1;
+            ngtcp2_duration timeout_ns = expiry - now;
+            timeout_ms = static_cast<int64_t>(timeout_ns / 1000000);
+            // Round up sub-millisecond durations to 1ms (curl pattern: line 933-934)
+            if (timeout_ns % 1000000) {
+                ++timeout_ms;
             }
         }
     }
@@ -456,7 +464,17 @@ QoreValue SocketQuicClientPollOperation::getOutput() const {
     h->setKeyValue("stream_id", cached_stream->stream_id, nullptr);
 
     if (!cached_stream->error_message.empty()) {
-        h->setKeyValue("err", new QoreStringNode("QUIC-BODY-TOO-LARGE"), nullptr);
+        // Use a more specific error code for peer-reset streams; keep
+        // QUIC-BODY-TOO-LARGE for the request-body-exceeded case (legacy).
+        const char* err_code = "QUIC-STREAM-ERROR";
+        if (cached_stream->error_message.find("exceeded maximum size")
+                != std::string::npos) {
+            err_code = "QUIC-BODY-TOO-LARGE";
+        } else if (cached_stream->error_message.find("peer reset")
+                != std::string::npos) {
+            err_code = "QUIC-STREAM-RESET";
+        }
+        h->setKeyValue("err", new QoreStringNode(err_code), nullptr);
         h->setKeyValue("desc", new QoreStringNode(cached_stream->error_message), nullptr);
     }
 
@@ -537,13 +555,28 @@ int SocketQuicClientPollOperation::flushPendingWrites(ExceptionSink* xsink) {
     if (!quic_session || !quic_session->hasPendingWrite()) {
         return 0;
     }
-    ngtcp2_tstamp next_expiry;
-    int rv = sendPendingPackets(next_expiry, xsink);
-    if (rv < 0) {
-        return -1;
+    // Use a local batch — NOT the member pkt_batch_ — because this method
+    // can be called from any thread (app thread) while the I/O thread is
+    // concurrently using pkt_batch_ in sendPendingPackets() via continuePoll().
+    // Sharing pkt_batch_ without synchronization causes a data race where
+    // the I/O thread captures batch.size(), then this thread clears/refills
+    // pkt_batch_, and the I/O thread's packetData() hits an out-of-bounds
+    // assert (QuicCommon.h:95).
+    QuicPacketBatch flush_batch;
+    auto result = quic_session->processTimerAndWrite(flush_batch, xsink);
+    if (result.error || flush_batch.empty()) {
+        return 0;
     }
-    // rv == SOCK_POLLOUT means partial send — acceptable for flush purposes,
-    // the I/O thread will pick up the remainder
+    int fd = sock->priv->socket->getSocket();
+    int sent = sendQuicPacketsBatch(fd, flush_batch, nullptr, 0);
+    if (sent < 0) {
+        if (errno != EAGAIN && errno != EWOULDBLOCK) {
+            xsink->raiseErrnoException("QUIC-SEND-ERROR", errno,
+                "sendto/sendmmsg() failed in flushPendingWrites");
+            return -1;
+        }
+    }
+    // Partial or EAGAIN acceptable — the I/O thread will pick up the remainder
     return 0;
 }
 
@@ -626,11 +659,40 @@ QoreHashNode* SocketQuicClientPollOperation::trySetupEarlyHttp3(ExceptionSink* x
 
 QoreHashNode* SocketQuicClientPollOperation::flushAndReturnPollInfo(ExceptionSink* xsink,
         bool do_flush) {
+    // Check if the QUIC session is dead (CONNECTION_CLOSE received, idle timeout,
+    // or draining period).  Without this, continuePoll returns goal=0 (POLLIN)
+    // forever on a dead connection, causing a livelock in the async I/O controller.
+    if (quic_session->isClosed()) {
+        qcs_state = QCS::CLOSED;
+        if (set_non_block) {
+            sock->priv->clearNonBlock();
+            set_non_block = false;
+        }
+        return nullptr;
+    }
     ngtcp2_tstamp expiry = 0;
     int srv = 0;
     if (do_flush) {
         srv = sendPendingPackets(expiry, xsink);
         if (*xsink) {
+            return nullptr;
+        }
+        // Curl pattern (curl_ngtcp2.c:928): after handle_expiry + egress,
+        // re-check expiry.  If still in the past, do one more handle+flush
+        // cycle to drain any timers that re-armed during the write.
+        if (expiry != UINT64_MAX && expiry <= QuicSession::timestamp()) {
+            srv = sendPendingPackets(expiry, xsink);
+            if (*xsink) {
+                return nullptr;
+            }
+        }
+        // Check for idle close after timer processing
+        if (quic_session->isClosed()) {
+            qcs_state = QCS::CLOSED;
+            if (set_non_block) {
+                sock->priv->clearNonBlock();
+                set_non_block = false;
+            }
             return nullptr;
         }
     } else {
@@ -706,6 +768,21 @@ QoreHashNode* SocketQuicClientPollOperation::continuePoll(ExceptionSink* xsink) 
                         break;  // EAGAIN — no more data
                     }
                 }
+
+                // Check if connection closed during handshake (e.g., TLS
+                // rejection via CONNECTION_CLOSE).  ngtcp2_conn_read_pkt()
+                // returns 0 when processing a CONNECTION_CLOSE and silently
+                // enters DRAINING state — without this check the handshake
+                // loop would poll forever.
+                if (quic_session->isClosed()) {
+                    ngtcp2_ccerr ccerr = quic_session->getCloseError();
+                    xsink->raiseException("QUIC-HANDSHAKE-ERROR",
+                        "QUIC handshake failed: connection closed by peer "
+                        "(type=%d, error_code=0x%llx)",
+                        (int)ccerr.type, (long long)ccerr.error_code);
+                    return nullptr;
+                }
+
                 // 0-RTT: set up HTTP/3 early when 0-RTT TX key is installed
                 // (may be detected after receiving server response to Initial)
                 {
@@ -854,6 +931,18 @@ QoreHashNode* SocketQuicClientPollOperation::continuePoll(ExceptionSink* xsink) 
                         return nullptr;
                     }
 
+                    // sendPendingPackets runs the timer-expiry handler, which
+                    // may have transitioned the session to the idle-closed
+                    // state (RFC 9000 Section 10.1 silent close).  Check
+                    // immediately so the UDP fd is released in the same
+                    // continuePoll cycle instead of waiting another round.
+                    if (quic_session->isClosed()) {
+                        qcs_state = QCS::CLOSED;
+                        sock->priv->clearNonBlock();
+                        set_non_block = false;
+                        return nullptr;
+                    }
+
                     // Check again for completed streams
                     if (quic_session->hasCompletedStreams()) {
                         cached_stream = quic_session->takeCompletedStream();
@@ -951,6 +1040,12 @@ QoreHashNode* SocketQuicClientPollOperation::continuePoll(ExceptionSink* xsink) 
                 // Already reached goal; if called again, go back to reading.
                 // Non-blocking mode is maintained throughout (no toggle per
                 // response) — the QUIC socket always uses raw recvfrom/sendto
+                if (quic_session->isClosed()) {
+                    qcs_state = QCS::CLOSED;
+                    sock->priv->clearNonBlock();
+                    set_non_block = false;
+                    return nullptr;
+                }
                 if (quic_session->hasCompletedStreams()) {
                     cached_stream = quic_session->takeCompletedStream();
                     return flushAndReturnPollInfo(xsink);
@@ -1096,6 +1191,10 @@ int SocketQuicClientPollOperation::migrateConnection(ExceptionSink* xsink) {
         AutoLocker al(sock->priv->m);
         fd_guard.release();
         sock->priv->socket->priv->sock = new_fd;
+        // Bump fd_generation so any sync I/O helper mid-wait (lock
+        // released) returns QSE_NOT_OPEN on re-acquire instead of
+        // operating on the pre-migration fd.
+        ++sock->priv->socket->priv->fd_generation;
         memcpy(&local_addr_, &new_local, new_local_len);
         local_addrlen_ = new_local_len;
     }
@@ -1564,13 +1663,8 @@ int SocketQuicServerPollOperation::recvAndProcessPacket(ExceptionSink* xsink, Qu
     if (*xsink) {
         // A single session's packet read failure (e.g., TLS handshake error when
         // client cert is required but not provided) should not abort the entire
-        // server listener.  Log the error and let the session be cleaned up by
-        // cleanupClosedSessions() — the failed session enters the ngtcp2 closing
-        // state, so isClosed() returns true.  We must NOT erase the session from
-        // sessions_ here because:
-        //   1. The caller may hold a raw QuicSession* via target_out
-        //   2. Other iteration loops in continuePoll() may reference the session
-        // Deferring removal to cleanupClosedSessions() avoids use-after-free.
+        // server listener.  Log the error and send a CONNECTION_CLOSE to the
+        // client so it gets a clean error instead of timing out.
         const QoreStringNode* err_str = xsink->getExceptionErr().get<const QoreStringNode>();
         const QoreStringNode* desc_str = xsink->getExceptionDesc().get<const QoreStringNode>();
         qore_async_io_log(QORE_LOG_LEVEL_WARN,
@@ -1579,6 +1673,24 @@ int SocketQuicServerPollOperation::recvAndProcessPacket(ExceptionSink* xsink, Qu
             err_str ? err_str->c_str() : "unknown",
             desc_str ? desc_str->c_str() : "unknown");
         xsink->clear();
+
+        // Send CONNECTION_CLOSE frame so the client gets an immediate error
+        // rather than waiting for a timeout.  The ngtcp2 connection has the
+        // TLS alert set from the failed SSL_do_handshake().
+        {
+            uint8_t close_buf[1280];  // minimum QUIC packet size
+            ssize_t close_len = target_session->writeConnectionClose(
+                close_buf, sizeof(close_buf));
+            if (close_len > 0) {
+                struct sockaddr_storage remote_addr;
+                socklen_t remote_addrlen;
+                target_session->getRemoteAddrCopy(remote_addr, remote_addrlen);
+                int fd = sock->priv->socket->getSocket();
+                (void)sendto(fd, close_buf, static_cast<size_t>(close_len), 0,
+                    reinterpret_cast<const struct sockaddr*>(&remote_addr),
+                    remote_addrlen);
+            }
+        }
 
         // Clear target_out so the caller does not use this failed session
         if (target_out) {

@@ -215,6 +215,7 @@ public class DataProvider {
 
             "grok": "GrokDataProvider",
             "openai": "OpenAiDataProvider",
+            "openapi3": "OpenApi3DataProvider",
             "perplexity": "PerplexityDataProvider",
             "pdfco": "PdfCoDataProvider",
             "pop3": "Pop3ClientDataProvider",
@@ -232,6 +233,7 @@ public class DataProvider {
             "lemlist": "LemlistDataProvider",
             "shippo": "ShippoDataProvider",
             "shipstation": "ShipStationDataProvider",
+            "systemeio": "SystemeIoDataProvider",
             "customerio": "CustomerIoDataProvider",
             "instantly": "InstantlyDataProvider",
             "keap": "KeapDataProvider",
@@ -1439,13 +1441,17 @@ if (errors) {
 
     #! Try to load the given module
     private static bool tryLoad(string module_str, *bool init) {
+        int sp = ImplicitModuleTransaction::savepoint();
         try {
             if (logger) {
                 logger.info("DataProvider loading module: %y", module_str);
             }
             load_module(module_str);
+            ImplicitModuleTransaction::commit(sp);
             return True;
         } catch (hash<ExceptionInfo> ex) {
+            # roll back any partial registrations from the failed module
+            ImplicitModuleTransaction::rollback(sp);
             string err = sprintf("DataProvider load module %y: %s", module_str, get_exception_string(ex));
             if (logger) {
                 if (init) {
@@ -1665,9 +1671,17 @@ if (errors) {
         if (!factory) {
             return;
         }
-        *string module_name = Class::getClass(factory).getModuleName();
-        if (exists module_name) {
-            remove factory_module_map{factory.className()};
+        # the factory's QoreProgram may already be destroyed if module init failed;
+        # handle PROGRAM-ERROR gracefully during rollback cleanup
+        try {
+            *string module_name = Class::getClass(factory).getModuleName();
+            if (exists module_name) {
+                remove factory_module_map{factory.className()};
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "PROGRAM-ERROR") {
+                rethrow;
+            }
         }
     }
 }

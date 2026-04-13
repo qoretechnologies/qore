@@ -86,6 +86,9 @@ set(TOK_CPP_SRC
     src/pretokenizers/MetaspacePreTokenizer.cpp
     src/pretokenizers/WhitespacePreTokenizer.cpp
     src/pretokenizers/SequencePreTokenizer.cpp
+    src/pretokenizers/SplitPreTokenizer.cpp
+    src/pretokenizers/PunctuationPreTokenizer.cpp
+    src/pretokenizers/DigitsPreTokenizer.cpp
     src/models/AbstractTokenizerModel.cpp
     src/models/BPEModel.cpp
     src/models/WordPieceModel.cpp

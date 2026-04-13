@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore ElasticSearchDataProvider module definition
 
-/** ElasticSearchBulkDataProvider.qc Copyright 2025 Qore Technologies, s.r.o.
+/** ElasticSearchBulkDataProvider.qc Copyright 2025 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -68,7 +68,7 @@ public class ElasticSearchBulkDataProvider inherits ElasticSearchDataProviderBas
     }
 
     #! Creates the object from a REST connection
-    constructor(RestClient::RestClient rest) : ElasticSearchDataProviderBase(rest) {
+    constructor(RestClient::AbstractRestClient rest) : ElasticSearchDataProviderBase(rest) {
     }
 
     #! Returns the data provider name
@@ -78,7 +78,7 @@ public class ElasticSearchBulkDataProvider inherits ElasticSearchDataProviderBas
 
     #! Returns the data provider description
     *string getDesc() {
-        return sprintf("ElasticSearch bulk API provider for `%s`", rest.getSafeURL());
+        return sprintf("ElasticSearch bulk API provider for `%s`", rest.getSafeUrl());
     }
 
     #! Makes a request and returns the response
@@ -107,15 +107,25 @@ public class ElasticSearchBulkDataProvider inherits ElasticSearchDataProviderBas
             uri += sprintf("%s=%s", arg, encode_url(string(req{arg}), True));
         }
 
-        return rest.post(uri, ndjson, {"Content-Type": "application/x-ndjson"}).body;
+        # Use restDoRawRequest to bypass the validator's JSON serialization step —
+        # ElasticSearch's bulk API is strict about newline-delimited JSON and rejects
+        # any wrapping (the default data-serialization path would JSON-encode the string,
+        # wrapping it in quotes and stripping the trailing \n).
+        return rest.restDoRawRequest("POST", uri, ndjson, {"Content-Type": "application/x-ndjson"}).body;
     }
 
     #! Formats the operations list as NDJSON
     /** @param operations list of operation hashes
         @return NDJSON string for the bulk request
+
+        @note uses @ref NdjsonDataProvider::NdjsonStringWriter "NdjsonStringWriter" — backed
+            by a @ref Qore::StringOutputStream "StringOutputStream" with geometric-growth
+            buffering — so building the bulk body is O(n) in the number of operations
+            rather than the O(n²) cost of repeated `string += make_json(x) + "\n"`
+            concatenation
     */
     private string formatOperations(list<hash<auto>> operations) {
-        string result = "";
+        NdjsonDataProvider::NdjsonStringWriter writer();
 
         foreach hash<auto> op in (operations) {
             string action = op.action;
@@ -152,7 +162,7 @@ public class ElasticSearchBulkDataProvider inherits ElasticSearchDataProviderBas
             }
 
             # Append action line
-            result += make_json({action: action_meta}) + "\n";
+            writer.write({action: action_meta});
 
             # Append document line (except for delete operations)
             if (action != "delete" && op.doc) {
@@ -171,14 +181,14 @@ public class ElasticSearchBulkDataProvider inherits ElasticSearchDataProviderBas
                     if (op.upsert) {
                         update_body.upsert = op.upsert;
                     }
-                    result += make_json(update_body) + "\n";
+                    writer.write(update_body);
                 } else {
-                    result += make_json(op.doc) + "\n";
+                    writer.write(op.doc);
                 }
             }
         }
 
-        return result;
+        return writer.getString();
     }
 
     #! Returns the description of a successful request message, if any

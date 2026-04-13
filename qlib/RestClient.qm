@@ -411,7 +411,11 @@ public hashdecl RestResponseInfo {
 
 #! Abstract interface for REST clients
 /** This class defines a common API for REST clients that can be implemented by both
-    @ref RestClient (HTTP/1.1) and \c RestClientIo (HTTP/2/3 multiplexed).
+    @ref RestClient (synchronous HTTP/1.x transport, built on @ref Qore::HTTPClient "HTTPClient")
+    and \c RestClientIo (async transport supporting HTTP/1.x, HTTP/2, and HTTP/3 with connection
+    multiplexing on HTTP/2 and HTTP/3). \c RestClientIo is the recommended transport for new code
+    as it is the async evolution of \c RestClient and is the only transport that supports HTTP/2
+    and HTTP/3.
 
     @par Design
     GET, HEAD, and OPTIONS methods do not accept a body parameter, correcting the original
@@ -420,6 +424,28 @@ public hashdecl RestResponseInfo {
     @since RestClient 2.4
 */
 public class AbstractRestClient inherits Serializable, Qore::Thread::AbstractPoolableResource {
+    public {
+        #! HTTPClient-era options that HTTP/2 and HTTP/3 cannot honor
+        /** These options exist in @ref RestClient::RestConnection "RestConnection" because
+            @ref RestClient::RestClient "RestClient" (HTTP/1.x via HTTPClient) honors them, but
+            they are structurally incompatible with HTTP/2 and HTTP/3 where percent-encoded URIs
+            and explicit charset handling are mandated by the protocol.
+
+            @ref RestClient::RestConnection::getAsyncImpl() "RestConnection::getAsyncImpl()" strips
+            these before constructing an async client; direct construction of \c RestClientIo with
+            any of these keys raises a @c RESTCLIENTIO-OPTION-ERROR.
+
+            @since %RestClient 2.6
+        */
+        const Http1OnlyOptions = {
+            "pre_encoded_urls": "HTTP/2 and HTTP/3 mandate percent-encoded URIs at the protocol "
+                "level; send pre-encoded paths directly",
+            "assume_encoding": "HTTP/2 and HTTP/3 responses use binary bodies with explicit "
+                "content-type charset parameters",
+            "encode_chars": "HTTP/2 and HTTP/3 mandate percent-encoded URIs at the protocol level",
+        };
+    }
+
     #! Sends an HTTP \c GET request and returns the response
     abstract hash<RestResponseInfo> restGet(string path, *hash<auto> hdr);
 
@@ -443,6 +469,37 @@ public class AbstractRestClient inherits Serializable, Qore::Thread::AbstractPoo
 
     #! Sends a generic REST request and returns the response
     abstract hash<RestResponseInfo> restDoRequest(string method, string path, auto body, *hash<auto> hdr);
+
+    #! Sends a REST request with a pre-serialized body; skips client-side request schema validation
+    /** Mirrors the semantics of @ref RestClient::RestClient::doValidatedRequest(): the caller has
+        already prepared and serialized the request body (and set the \c Content-Type header),
+        so the client-side validator's \c processRequest() step is skipped. Response-side
+        schema validation still runs.
+    */
+    abstract hash<RestResponseInfo> restDoRawRequest(string method, string path, *data body, *hash<auto> hdr);
+
+    #! Returns the target URL for this client
+    abstract string getUrl();
+
+    #! Returns the target URL with any password masked for safe display/logging
+    abstract string getSafeUrl();
+
+    #! Returns the current REST schema validator (may be a @ref NullRestSchemaValidator)
+    abstract RestSchemaValidator::AbstractRestSchemaValidator getValidator();
+
+    #! Sets the REST schema validator for this client
+    abstract setValidator(RestSchemaValidator::AbstractRestSchemaValidator validator);
+
+    #! Returns a new client pointed at a different URL, with the same configuration as this one
+    /** Non-mutating URL override: the returned instance inherits the caller's configuration
+        (tokens, headers, validator, OAuth2 state) but targets \a new_url. The caller-supplied
+        client is not modified.
+
+        @param new_url the new target URL
+
+        @return a new @ref AbstractRestClient instance with the updated URL
+    */
+    abstract AbstractRestClient copyWithUrl(string new_url);
 
     #! Sets the data serialization format
     abstract setSerialization(string data = "auto");
@@ -486,6 +543,28 @@ public class AbstractRestClient inherits Serializable, Qore::Thread::AbstractPoo
         @since %RestClient 2.6
     */
     abstract setLogger(*LoggerInterface logger);
+
+    #! Preprocesses the request body before serialization
+    /** The default implementation returns the body unchanged. Subclasses (e.g.,
+        @ref MewsRestClient::MewsRestClient "MewsRestClient",
+        @ref MewsRestClient::MewsRestClientIo "MewsRestClientIo") override this
+        to inject API-specific fields (auth tokens, metadata) into every outgoing
+        request body.
+
+        Transport implementations (@ref RestClient::RestClient "RestClient" and
+        @ref RestClientIo::RestClientIo "RestClientIo") call this hook before
+        running the schema validator's request processing step.
+
+        Called with no argument by @ref RestSchemaValidator::AbstractRestSchemaObject
+        "AbstractRestSchemaObject::getDataTypeIntern()" to extract a default body
+        containing injected fields, which are used as defaults for required body
+        fields in generated data provider types.
+
+        @param request_body the caller-supplied body (may be @ref NOTHING)
+    */
+    auto preprocessRequestBody(auto request_body) {
+        return request_body;
+    }
 }
 
 #! this class provides the REST client API
@@ -703,6 +782,12 @@ public class RestClient inherits Qore::HTTPClient, Logger::LoggerWrapper, Connec
     }
 
     private {
+        #! Constructor options hash, kept for @ref copyWithUrl() / @ref getConstructorOptions()
+        /** Captured verbatim in the constructor so that a sibling instance can be built
+            with the same config via @ref copyWithUrl(). Immutable post-construction.
+        */
+        hash<auto> saved_opts;
+
         # headers to send with every request
         hash<auto> headers;
         # data serialization code
@@ -919,6 +1004,8 @@ RestClient rest({"url": "http://localhost:8001/rest"});
     */
     constructor(*hash<auto> opts, *softbool do_not_connect)
             : HTTPClient(opts + ((opts.url || !opts.validator) ? NOTHING : {"url": opts.validator.getTargetUrl()})) {
+        # capture caller options verbatim for copyWithUrl() sibling construction
+        saved_opts = opts ?? {};
         # set logger, if any
         self.logger = remove opts.logger;
         # set update token code, if any
@@ -1655,6 +1742,64 @@ hash<auto> ans = rest.del("/orders/1");
     */
     hash<RestResponseInfo> restDoRequest(string method, string path, auto body, *hash<auto> hdr) {
         return makeRestResponse(doRequest(method, path, body, NOTHING, NOTHING, hdr));
+    }
+
+    #! Sends a REST request with a pre-serialized body; skips client-side request validation
+    /** Mirrors the @ref AbstractRestClient::restDoRawRequest() contract by delegating to the
+        existing @ref doValidatedRequest() method, which sends the body as-is (no
+        \c processRequest() pass) while still running response-side validation.
+    */
+    hash<RestResponseInfo> restDoRawRequest(string method, string path, *data body, *hash<auto> hdr) {
+        hash<auto> info;
+        hash<auto> rv = doValidatedRequest(method, path, body, \info, NOTHING, hdr);
+        return <RestResponseInfo>{
+            "status_code": rv.status_code,
+            "headers": info."response-headers" ?? rv.hdr ?? (rv - ("body", "status_code")),
+            "body": rv.body,
+            "content_type": rv."content-type",
+        };
+    }
+
+    #! Returns the target URL for this client (lowercase name for @ref AbstractRestClient parity)
+    /** @return the target URL (delegates to @ref Qore::HTTPClient::getURL())
+    */
+    string getUrl() {
+        return getURL();
+    }
+
+    #! Returns the target URL with any password masked for safe display/logging
+    /** @return the safe URL (delegates to @ref Qore::HTTPClient::getSafeURL())
+    */
+    string getSafeUrl() {
+        return getSafeURL();
+    }
+
+    #! Returns a new RestClient pointed at a different URL with the same configuration
+    /** Constructs a new @ref RestClient instance using the saved constructor options plus
+        the new URL. The caller-supplied client is not modified. The new instance inherits
+        the parent's token (if any) so it does not fire a duplicate OAuth2 login.
+
+        @param new_url the new target URL
+
+        @return a new @ref AbstractRestClient instance with the updated URL
+
+        @note If the current client holds an OAuth2 access token, it is copied to the new
+            client via the \c token / \c token_type options so the child does not re-login.
+    */
+    AbstractRestClient copyWithUrl(string new_url) {
+        hash<auto> opts = saved_opts + {"url": new_url};
+        # Inherit the parent's current token if one is set
+        if (token.val()) {
+            opts.token = token;
+            opts.token_type = token_type;
+            if (oauth2_token_expiry.val()) {
+                opts.oauth2_token_expiry = oauth2_token_expiry;
+            }
+            if (refresh_token.val()) {
+                opts.oauth2_refresh_token = refresh_token;
+            }
+        }
+        return new RestClient(opts, True);
     }
 
     #! Closes the client by disconnecting the underlying HTTP connection
@@ -4337,12 +4482,16 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
         return RestClient rest(getConnectionOptions(rtopts), !connect);
     }
 
-    #! Returns an async-I/O-capable REST client using multiplexed HTTP connections
+    #! Returns an async-I/O-capable REST client supporting HTTP/1.x, HTTP/2, and HTTP/3
     /** @param connect ignored — RestClientIo connections are established lazily on
         the first request via the HttpClientConnectionManager
         @param rtopts runtime options for connection acquisition
 
-        @return a @ref RestClientIo::RestClientIo "RestClientIo" object
+        @return a @ref RestClientIo::RestClientIo "RestClientIo" object — the async evolution of
+        @ref RestClient::RestClient "RestClient" supporting HTTP/1.x, HTTP/2, and HTTP/3, with
+        connection multiplexing on HTTP/2 and HTTP/3. Whereas @ref RestClient::RestClient "RestClient"
+        is synchronous and speaks HTTP/1.x only, \c RestClientIo is async and additionally supports
+        HTTP/2 and HTTP/3.
 
         @note RestClientIo uses a connection manager that establishes and pools
         connections on demand; there is no eager connection phase. The \a connect
@@ -4352,7 +4501,11 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
     */
     private object getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
         load_module("RestClientIo");
-        return create_object("RestClientIo::RestClientIo", getConnectionOptions(rtopts));
+        # Http1OnlyOptions are HTTPClient-specific URI/encoding workarounds (inherited by the
+        # sync RestClient via HTTPClient) that do not carry over to the HttpClientIo-based
+        # RestClientIo transport — strip them from the RestClientIo option set
+        hash<auto> opts = getConnectionOptions(rtopts) - keys AbstractRestClient::Http1OnlyOptions;
+        return create_object("RestClientIo::RestClientIo", opts);
     }
 
     #! Returns an async-I/O-capable connection object with alt token signer applied

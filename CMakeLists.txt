@@ -292,6 +292,8 @@ set(LIBQORE_QPP_SRC
     lib/QC_FilePollOperation.qpp
     lib/QC_DelegatingPollOperation.qpp
     lib/QC_AbstractHttpPollConnection.qpp
+    lib/QC_HttpClientConnectionBase.qpp
+    lib/QC_HttpClientConnectionManagerBase.qpp
     lib/QC_HttpIdlePollOperationBase.qpp
     lib/QC_HttpKeepAlivePollOperationBase.qpp
     lib/QC_HttpAcceptPollOperationBase.qpp
@@ -304,6 +306,7 @@ set(LIBQORE_QPP_SRC
     lib/QC_Http3ServerPollOperation.qpp
     lib/QC_HttpClientPingPollOperationBase.qpp
     lib/QC_Http2ClientPollOperationBase.qpp
+    lib/QC_HttpClientConnection.qpp
     lib/QC_EventLoop.qpp
     lib/QC_EventNotifier.qpp
     lib/QC_LoggerInterfaceBase.qpp
@@ -995,15 +998,22 @@ set(LIBQORE_CPP_SRC
     lib/QoreFile.cpp
     lib/QoreDir.cpp
     lib/QoreSocket.cpp
+    lib/SocketSyncPoll.cpp
     lib/QoreEventLoop.cpp
     lib/QoreEventNotifier.cpp
     lib/QoreIoUring.cpp
     lib/QoreLoggerBridge.cpp
     lib/QoreAsyncIoLogger.cpp
     lib/AsyncIoControllerPriv.cpp
+    lib/QoreHttpClientConnectionBase.cpp
+    lib/QoreHttp1ClientConnection.cpp
+    lib/QoreHttp2ClientConnection.cpp
+    lib/QoreHttp3ClientConnection.cpp
+    lib/QoreHttpClientConnectionManagerBase.cpp
     lib/QoreSandboxManager.cpp
     lib/DateTime.cpp
     lib/QoreLib.cpp
+    lib/qore_git_revision.cpp
     lib/QoreTimeZoneManager.cpp
     lib/QoreString.cpp
     lib/QoreObject.cpp
@@ -1324,12 +1334,18 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreFile.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreDir.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreSocket.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/SocketSyncPoll.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreEventLoop.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreEventNotifier.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreIoUring.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreLoggerBridge.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreAsyncIoLogger.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/AsyncIoControllerPriv.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreHttpClientConnectionBase.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreHttp1ClientConnection.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreHttp2ClientConnection.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreHttp3ClientConnection.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreHttpClientConnectionManagerBase.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreSandboxManager.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/DateTime.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreLib.cpp\"
@@ -1613,6 +1629,8 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_BINARY_DIR}/QC_FilePollOperation.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_DelegatingPollOperation.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_AbstractHttpPollConnection.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_HttpClientConnectionBase.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_HttpClientConnectionManagerBase.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_HttpIdlePollOperationBase.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_HttpKeepAlivePollOperationBase.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_HttpAcceptPollOperationBase.cpp\"
@@ -1625,6 +1643,7 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_BINARY_DIR}/QC_Http3ServerPollOperation.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_Http2ClientPollOperationBase.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_HttpClientPingPollOperationBase.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_HttpClientConnection.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_EventNotifier.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_EventLoop.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_LoggerInterfaceBase.cpp\"
@@ -1682,10 +1701,12 @@ if (SINGLE_COMPILATION_UNIT)
         file(APPEND ${CMAKE_CURRENT_BINARY_DIR}/lib/single-compilation-unit.cpp
             "#include \"${CMAKE_BINARY_DIR}/ql_alloc_tracking.cpp\"\n")
     endif ()
-    # AllocTracking.cpp defines global malloc/free symbols and must be compiled separately from the SCU
-    set(LIBQORE_EXTRA_SRC "")
+    # Files that must be compiled separately from the SCU:
+    # - qore_git_revision.cpp: so git hash changes only recompile this tiny file
+    # - AllocTracking.cpp: defines global malloc/free symbols
+    set(LIBQORE_EXTRA_SRC lib/qore_git_revision.cpp)
     if (ENABLE_ALLOC_TRACKING AND Backtrace_FOUND)
-        set(LIBQORE_EXTRA_SRC lib/AllocTracking.cpp)
+        list(APPEND LIBQORE_EXTRA_SRC lib/AllocTracking.cpp)
     endif ()
     add_library(libqore SHARED ${CMAKE_CURRENT_BINARY_DIR}/lib/single-compilation-unit.cpp ${LIBQORE_EXTRA_SRC} ${LIBQORE_SOURCE_HEADERS})
 else (SINGLE_COMPILATION_UNIT)
@@ -1693,7 +1714,7 @@ else (SINGLE_COMPILATION_UNIT)
 endif (SINGLE_COMPILATION_UNIT)
 
 add_dependencies(QPP_GENERATED_FILES qpp)
-add_dependencies(libqore QPP_GENERATED_FILES BISON_GENERATED_FILES FLEX_GENERATED_FILES)
+add_dependencies(libqore QPP_GENERATED_FILES BISON_GENERATED_FILES FLEX_GENERATED_FILES UpdateGitRevision)
 
 target_compile_definitions(libqore PUBLIC _QORE_LIB_INTERN HAVE_UNIX_CONFIG_H)
 if (APPLE)
@@ -1960,6 +1981,7 @@ if (NOT Eigen3_FOUND)
 endif()
 add_subdirectory(modules/ml)
 add_subdirectory(modules/tokenizer)
+add_subdirectory(modules/ocr)
 add_subdirectory(modules/dataframe)
 # protobuf module (requires libprotobuf)
 # Try MODULE mode first (CMake's FindProtobuf) — avoids broken CONFIG files
@@ -2041,12 +2063,18 @@ qore_user_module("qlib/EdifactUtil" "Util;DataProvider;FileLocationHandler")
 
 # base 3 modules
 qore_user_module("qlib/DataProvider" "MapperUtil;Mime;Util" "DataProvider-Full.svg;Qore-Q-square.svg")
-qore_user_module("qlib/DataProviderML" "DataProvider;modules/ml/ml")
+qore_user_module("qlib/DataProviderML" "DataProvider;modules/ml/ml;QoreStructuredExtraction;QoreGuardrails;QoreOcrUtils;QoreVisionExtraction")
 qore_user_module("qlib/DataProviderDataFrame" "DataProvider;modules/dataframe/dataframe")
 qore_user_module("qlib/QoreModelRegistry" "DataProvider;modules/ml/ml;Mime;Util")
 qore_user_module("qlib/QoreOnnxExport" "modules/protobuf/protobuf;modules/ml/ml;Util")
 qore_user_module("qlib/QoreMLUtils" "modules/ml/ml")
 qore_user_module("qlib/QoreTokenizerUtils" "modules/tokenizer/tokenizer")
+qore_user_module("qlib/QoreLlmUtils" "")
+qore_user_module("qlib/QoreStructuredExtraction" "QoreLlmUtils")
+qore_user_module("qlib/QoreGuardrails" "")
+qore_user_module("qlib/QoreOcrUtils" "")
+qore_user_module("qlib/QoreVisionExtraction" "QoreLlmUtils")
+qore_user_module("qlib/QoreAgentStrategies" "QoreLlmUtils")
 qore_user_module("qlib/DpqlWebSocket" "DataProvider;HttpServerUtil;WebSocketHandler")
 qore_user_module("qlib/DebugProgramControl.qm" "DebugUtil")
 qore_user_module("qlib/HttpUtil.qm" "Util")
@@ -2157,6 +2185,7 @@ qore_user_module("qlib/PerplexityRestClient.qm" "ConnectionProvider;Mime;RestCli
 qore_user_module("qlib/ServiceNowRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/LemlistRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/ShipStationRestClient.qm" "ConnectionProvider;Mime;RestClient")
+qore_user_module("qlib/SystemeIoRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/CustomerIoRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/InstantlyRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/ShippoRestClient.qm" "ConnectionProvider;Mime;RestClient")
@@ -2177,6 +2206,7 @@ qore_user_module("qlib/ZohoInventoryRestClient.qm" "ConnectionProvider;Mime;Rest
 qore_user_module("qlib/ZohoInvoiceRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/AwsRestClient.qm" "ConnectionProvider;RestClient;RestSchemaValidator;RestClientIo")
 qore_user_module("qlib/SwaggerDataProvider" "Swagger;RestClient;RestSchemaValidator;DataProvider")
+qore_user_module("qlib/OpenApi3DataProvider" "OpenApi3;RestClient;RestClientIo;RestSchemaValidator;DataProvider")
 qore_user_module("qlib/AsyncApiDataProvider" "AsyncApi;WebSocketClient;DataProvider")
 qore_user_module("qlib/RestSchemaDataProvider" "Swagger;OpenApi3;RestClient;RestSchemaValidator;DataProvider")
 qore_user_module("qlib/BigCommerceDataProvider" "BigCommerceRestClient;RestClient;DataProvider" "bigcommerce-logo.svg")
@@ -2186,9 +2216,9 @@ qore_user_module("qlib/GorgiasDataProvider" "GorgiasRestClient;RestClient;RestCl
 qore_user_module("qlib/CdsRestDataProvider" "RestClient;CdsRestClient;RestSchemaValidator;DataProvider" "dynamics-logo.svg;business-central-logo.svg")
 qore_user_module("qlib/ServiceNowRestDataProvider" "RestClient;ServiceNowRestClient;RestSchemaValidator;DataProvider" "servicenow-logo-white.svg;servicenow-logo-black.svg")
 qore_user_module("qlib/RestClientDataProvider" "RestClient;DataProvider" "webhook-logo.svg")
-qore_user_module("qlib/ElasticSearchDataProvider" "RestClient;DataProvider;ConnectionProvider" "elastic-logo.svg")
+qore_user_module("qlib/ElasticSearchDataProvider" "RestClient;RestClientIo;DataProvider;ConnectionProvider;NdjsonDataProvider" "elastic-logo.svg")
 qore_user_module("qlib/QdrantDataProvider" "RestClient;DataProvider" "qdrant-logo.svg")
-qore_user_module("qlib/EmpathicBuildingDataProvider" "RestClient;DataProvider" "Haltian-EmpathicBuilding.svg")
+qore_user_module("qlib/EmpathicBuildingDataProvider" "RestClient;RestClientIo;DataProvider" "Haltian-EmpathicBuilding.svg")
 qore_user_module("qlib/GeneratorDataProvider" "DataProvider" "generator-logo.svg")
 qore_user_module("qlib/MemcachedDataProvider" "DataProvider" "memcached-logo.svg")
 qore_user_module("qlib/MongoDbDataProvider" "DataProvider;ConnectionProvider" "mongodb-logo.svg")
@@ -2227,6 +2257,7 @@ qore_user_module("qlib/ZohoInventoryDataProvider" "ZohoInventoryRestClient;RestC
 qore_user_module("qlib/ZohoInvoiceDataProvider" "ZohoInvoiceRestClient;RestClient;DataProvider" "zohoinvoice-logo.svg")
 qore_user_module("qlib/LemlistDataProvider" "LemlistRestClient;RestClient;DataProvider" "lemlist-logo.svg")
 qore_user_module("qlib/ShipStationDataProvider" "ShipStationRestClient;RestClient;DataProvider" "shipstation-logo.svg")
+qore_user_module("qlib/SystemeIoDataProvider" "SystemeIoRestClient;RestClient;DataProvider" "systemeio-logo.svg")
 qore_user_module("qlib/CustomerIoDataProvider" "CustomerIoRestClient;RestClient;DataProvider" "customerio-logo.svg")
 qore_user_module("qlib/InstantlyDataProvider" "InstantlyRestClient;RestClient;DataProvider" "instantly-logo.svg")
 qore_user_module("qlib/ShippoDataProvider" "ShippoRestClient;RestClient;DataProvider" "shippo-logo.svg")

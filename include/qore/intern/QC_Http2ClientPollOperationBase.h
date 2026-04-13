@@ -166,6 +166,18 @@ public:
         return active_stream_count;
     }
 
+    //! Sets the proactive idle timeout for this connection (microseconds).
+    /** When the connection has no active streams for this duration,
+        handleReading() will close it proactively — matching nginx's upstream
+        keepalive_timeout behavior.  Defense-in-depth against peers that never
+        close idle connections.
+
+        @param timeout_us timeout in microseconds; <= 0 disables proactive timeout
+    */
+    DLLLOCAL void setIdleTimeout(int64_t timeout_us) {
+        idle_timeout_us = timeout_us;
+    }
+
     //! Returns the raw connection priv pointer (for I/O-thread calls)
     DLLLOCAL AbstractHttpPollConnectionPriv* getConnectionPriv() const {
         return connection_priv;
@@ -290,15 +302,41 @@ private:
     */
     AbstractHttpPollConnectionPriv* connection_priv = nullptr;
 
-    //! Registered stream queues for CONNECT stream data delivery (stream_id -> info)
+    //! Lock protecting only pending_stream_registrations (app→I/O command queue)
+    /** Separate from stream_lock to avoid lock-ordering inversion with the
+        H2 session mutex.  Never held during I/O operations.
+    */
+    QoreThreadLock sq_lock;
+
+    //! Pending stream queue registrations from app threads (under sq_lock)
+    /** App threads push here; I/O thread drains at the start of
+        drainStreamQueues().  Follows the nginx pattern: all mutable
+        connection state is owned by the event loop thread.
+    */
+    std::vector<std::pair<int32_t, StreamQueueInfo>> pending_stream_registrations;
+
+    // --- I/O-thread-only data (no lock needed) ---
+
+    //! Registered stream queues — I/O-thread-only
     std::unordered_map<int32_t, StreamQueueInfo> stream_queues;
 
-    //! Stream IDs that had data drained in the last continuePoll cycle
-    /** Populated by drainStreamQueues(), consumed by the controller after
-        continuePoll() returns. The controller dispatches onStreamData()
-        to the worker pool for each stream ID.
-    */
+    //! Stream IDs that had data drained — I/O-thread-only
     std::vector<int32_t> data_ready_streams;
+
+    //! Proactive idle timeout (microseconds); -1 = no proactive timeout
+    /** Set by setIdleTimeout() after construction from the connection manager.
+        When active_stream_count is 0 for this many microseconds, handleReading()
+        closes the connection proactively with HTTP2-IDLE-TIMEOUT.  Mirrors
+        nginx's upstream keepalive_timeout.  I/O thread only.
+    */
+    int64_t idle_timeout_us = -1;
+
+    //! Deadline for the current idle period (epoch us); 0 = not yet armed
+    /** Armed on the first handleReading() cycle that observes
+        active_stream_count == 0; cleared whenever active_stream_count > 0 so
+        the next idle period starts fresh.  I/O thread only.
+    */
+    int64_t idle_deadline_us = 0;
 
     static constexpr int MAX_DRAIN_ITERATIONS = 100;
     static constexpr int MAX_EMPTY_READS = 100;
@@ -311,6 +349,30 @@ private:
     DLLLOCAL QoreHashNode* handleProxyConnectSend(ExceptionSink* xsink);
     DLLLOCAL QoreHashNode* handleProxyConnectRecv(ExceptionSink* xsink);
     DLLLOCAL QoreHashNode* handleReading(ExceptionSink* xsink);
+
+    //! Applies the proactive idle-timeout policy to a handleReading return value.
+    /** If no idle timeout is configured or h2c is not yet confirmed, this is a
+        no-op and returns \a poll_info unchanged.  Otherwise:
+          - If any streams are active, clears the idle deadline and returns
+            \a poll_info unchanged.
+          - On the first idle cycle, arms the deadline to \c now + idle_timeout_us
+            and annotates \a poll_info with a \c poll_timeout_ms so the
+            controller wakes continuePoll() when the deadline expires.
+          - On subsequent idle cycles, if the deadline has elapsed, calls
+            \c setError("HTTP2-IDLE-TIMEOUT", ...), derefs \a poll_info, and
+            returns \c nullptr so the caller exits continuePoll cleanly.
+
+        All decision-making runs under \c stream_lock in one critical section to
+        avoid a TOCTOU race with an app-thread submit.  Mirrors nginx's
+        upstream keepalive_timeout with a per-connection timer.
+
+        @param poll_info the poll_info hash about to be returned from
+               handleReading (may be \c nullptr)
+        @param xsink exception sink
+        @return the (possibly annotated) \a poll_info, or \c nullptr when the
+                connection has been closed due to idle timeout
+    */
+    DLLLOCAL QoreHashNode* applyIdleTimeout(QoreHashNode* poll_info, ExceptionSink* xsink);
 
     DLLLOCAL void startSslUpgrade(ExceptionSink* xsink);
     DLLLOCAL void startProxyConnect(ExceptionSink* xsink);

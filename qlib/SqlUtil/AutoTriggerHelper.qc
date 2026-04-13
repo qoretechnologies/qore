@@ -76,6 +76,11 @@ public hash<auto> sub generate_auto_triggers(string driver_name, string table_na
     bool has_modified = auto_trigger_config.modified.toBool();
     *hash<string, string> seq_cols = auto_trigger_config.sequence_columns;
 
+    # the caller can force insert_only via the positional argument, or the schema can request it
+    # via the auto_triggers.insert_only key (useful for insert-only tables that still carry a
+    # modified column the application maintains by hand)
+    bool effective_insert_only = insert_only || auto_trigger_config.insert_only.toBool();
+
     if (!has_created && !has_modified && !seq_cols) {
         return {};
     }
@@ -83,16 +88,16 @@ public hash<auto> sub generate_auto_triggers(string driver_name, string table_na
     switch (driver_name) {
         case "pgsql":
             return generate_pgsql_auto_triggers(table_name, has_created, has_modified, seq_cols,
-                insert_only);
+                effective_insert_only);
         case "oracle":
             return generate_oracle_auto_triggers(table_name, has_created, has_modified, seq_cols,
-                insert_only);
+                effective_insert_only);
         case "mysql":
             return generate_mysql_auto_triggers(table_name, has_created, has_modified, seq_cols,
-                insert_only);
+                effective_insert_only);
         case "mssql":
             return generate_mssql_auto_triggers(table_name, has_created, has_modified, seq_cols,
-                insert_only, pk_columns);
+                effective_insert_only, pk_columns);
         default:
             throw "AUTO-TRIGGER-ERROR", sprintf("auto-trigger generation is not supported for driver %y; "
                 "supported drivers: pgsql, oracle, mysql, mssql", driver_name);

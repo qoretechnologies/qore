@@ -86,6 +86,18 @@ class QoreSocketObject : public AbstractPollableIoObjectBase {
     friend class SocketQuicSendStreamingResponsePollOperation;
 
 public:
+#ifdef DEBUG
+    //! Debug-only: arm a one-shot fd-swap simulation on the next lock-yielding wait.
+    /** Called via the @c dbg_force_fd_swap_next_wait() debug builtin in
+        @ref lib/ql_debug.cpp.  DLLLOCAL so the function never appears
+        in the public ABI — debug-only test hook with no release-build
+        surface.
+
+        @since %Qore 2.3
+    */
+    DLLLOCAL void dbgForceFdSwapNextWait();
+#endif
+
     DLLEXPORT QoreSocketObject();
 
     DLLEXPORT QoreSocketObject(QoreSocketObject& orig, int descriptor);
@@ -655,6 +667,16 @@ public:
     */
     DLLEXPORT int waitForQuicClientStreamDrain(int64_t stream_id, int timeout_ms,
         ExceptionSink* xsink);
+
+    //! Returns true if the QUIC session on this socket is closed or absent
+    /** Checks whether the QUIC connection has entered CLOSING, DRAINING, or
+        idle-closed state.  Returns true if no QUIC session exists.
+
+        @return true if the session is closed or absent
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT bool isQuicSessionClosed() const;
 
     //! Returns the first QUIC session ID for this socket (for client connections with one session)
     /** @return the session ID of the first (or only) QUIC session, 0 if no session is active

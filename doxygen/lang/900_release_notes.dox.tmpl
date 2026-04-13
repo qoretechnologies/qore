@@ -471,10 +471,10 @@ cargo install tree-sitter-cli@0.26.5
       - @ref date_or_nothing_type "*date<absolute>" and @ref date_or_nothing_type "*date<relative>" allow @ref nothing
     - new @ref string_formatting "printf format specifier":
       - \c %%Y: formats any value as multi-line pseudo-YAML with proper indentation for nested structures
-    - <b>NaN-boxing optimization for internal value representation</b>
+    - <b><a href="https://en.wikipedia.org/wiki/NaN-boxing">NaN-boxing</a> optimization for internal value representation</b>
       (<a href="https://github.com/qoretechnologies/qore/issues/5084">issue 5084</a>)
       - reduces memory usage per value from 16 bytes to 8 bytes (50% reduction in value storage overhead)
-      - uses IEEE 754 NaN bit patterns to encode multiple value types (int, float, bool, nothing, null,
+      - uses <a href="https://en.wikipedia.org/wiki/IEEE_754">IEEE 754</a> NaN bit patterns to encode multiple value types (int, float, bool, nothing, null,
         and pointers to complex types) in a single 64-bit word
       - includes small string optimization (SSO): strings up to 6 bytes are stored inline without heap
         allocation, eliminating memory allocation overhead for common short strings (e.g., hash keys
@@ -484,9 +484,11 @@ cargo install tree-sitter-cli@0.26.5
       - faster value passing and copying since values fit in a single register
       - particularly beneficial for code with many small values (loops, function calls, hash/list operations)
       - no API changes required - existing code benefits automatically from the optimization
-    - <b>HTTP/2 support (h2 over TLS via ALPN negotiation)</b>
-      - new builtin \c nghttp2 library support for HTTP/2 binary framing and HPACK header compression
-      - ALPN (Application-Layer Protocol Negotiation) support in Socket class for TLS protocol selection
+    - <b><a href="https://datatracker.ietf.org/doc/html/rfc9113">HTTP/2</a> support (h2 over TLS via ALPN negotiation)</b>
+      - new builtin \c nghttp2 library support for HTTP/2 binary framing and
+        <a href="https://datatracker.ietf.org/doc/html/rfc7541">HPACK</a> header compression
+      - <a href="https://datatracker.ietf.org/doc/html/rfc7301">ALPN</a> (Application-Layer Protocol Negotiation)
+        support in Socket class for TLS protocol selection
       - @ref Qore::HTTPClient "HTTPClient" support for HTTP/2 with automatic fallback to HTTP/1.1
       - transparent to existing HTTP code - default mode is "auto" (use HTTP/2 if available)
       - new @ref Qore::HTTPClient::setHttp2Mode() "HTTPClient::setHttp2Mode()" method to control HTTP/2 mode ("auto", "disabled", "required")
@@ -496,17 +498,22 @@ cargo install tree-sitter-cli@0.26.5
       - new @ref Qore::Socket::startPollReadHttp2Request() "Socket::startPollReadHttp2Request()" for non-blocking HTTP/2 request reading
       - new @ref Qore::Socket::startPollSendHttp2Response() "Socket::startPollSendHttp2Response()" for non-blocking HTTP/2 response sending
       - new \c http_version option in \c ConnectionProvider for client-side HTTP version control
-      - WebSocket over HTTP/2 support (RFC 8441 extended CONNECT method)
-      - Server-Sent Events (SSE) over HTTP/2 support
+      - <a href="https://datatracker.ietf.org/doc/html/rfc8441">WebSocket over HTTP/2</a> support (RFC 8441 extended CONNECT method)
+      - <a href="https://html.spec.whatwg.org/multipage/server-sent-events.html">Server-Sent Events</a> (SSE) over HTTP/2 support
       - new @ref Qore::set_global_http2_mode() "set_global_http2_mode()" function to globally control HTTP/2 mode
         at runtime (\c "auto", \c "disabled", or \c "required") - affects all new HTTP connections
         (requires @ref Qore::DOM_PROCESS_CONTROL "DOM_PROCESS_CONTROL" rights)
       - new @ref Qore::get_global_http2_mode() "get_global_http2_mode()" function to query the current global HTTP/2 mode
       - new @ref Qore::Option::HAVE_HTTP2 "Option::HAVE_HTTP2" constant (always \c True as nghttp2 is now required)
-    - <b>QUIC/HTTP/3 support (h3 over QUIC via ngtcp2 + nghttp3)</b>
-      - new builtin ngtcp2 + nghttp3 library support for QUIC transport and HTTP/3 binary framing
-      - QUIC handshake with TLS 1.3 over UDP for 0-RTT and 1-RTT connection establishment
-      - @ref Qore::HTTPClient "HTTPClient" support for HTTP/3 with automatic discovery via Alt-Svc headers and fallback to HTTP/1.x or HTTP/2
+    - <b><a href="https://datatracker.ietf.org/doc/html/rfc9000">QUIC</a>/<a href="https://datatracker.ietf.org/doc/html/rfc9114">HTTP/3</a> support (h3 over QUIC via ngtcp2 + nghttp3)</b>
+      - new builtin <a href="https://github.com/ngtcp2/ngtcp2">ngtcp2</a> +
+        <a href="https://github.com/ngtcp2/nghttp3">nghttp3</a> library support for QUIC transport and HTTP/3 binary framing
+      - QUIC handshake with <a href="https://datatracker.ietf.org/doc/html/rfc8446">TLS 1.3</a> over UDP
+        for 0-RTT and 1-RTT connection establishment
+      - @ref Qore::HTTPClient "HTTPClient" support for HTTP/3 with automatic discovery via
+        <a href="https://datatracker.ietf.org/doc/html/rfc7838">Alt-Svc</a> headers and fallback to HTTP/1.x or HTTP/2
+      - Alt-Svc upgrade to HTTP/3 is supported even when HTTP/2 is already active via ALPN; failed QUIC
+        handshakes use a 5-minute backoff to avoid repeated connection penalties
       - new @ref Qore::HTTPClient::setHttp3Mode() "HTTPClient::setHttp3Mode()" method to control HTTP/3 mode ("auto", "disabled", "required")
       - new @ref Qore::HTTP3Mode "HTTP3Mode" enum for type-safe HTTP/3 mode selection
       - HttpServer support for HTTP/3 with async I/O integration
@@ -514,14 +521,30 @@ cargo install tree-sitter-cli@0.26.5
       - new @ref Qore::Socket::startPollQuicAccept() "Socket::startPollQuicAccept()" for non-blocking QUIC server connection acceptance
       - new @ref Qore::Socket::startPollQuicSendResponse() "Socket::startPollQuicSendResponse()" for non-blocking HTTP/3 response sending
       - new @ref Qore::Option::HAVE_HTTP3 "Option::HAVE_HTTP3" constant (always \c True as ngtcp2/nghttp3 are now required)
-      - new @ref httputilintro "HttpUtil" user module providing shared RFC 6265 cookie handling for both HttpServerUtil and HttpClientIo
+      - new @ref httputilintro "HttpUtil" user module providing shared
+        <a href="https://datatracker.ietf.org/doc/html/rfc6265">RFC 6265</a> cookie handling for both HttpServerUtil and HttpClientIo
       - new @ref httpclientiointro "HttpClientIo" user module providing unified HTTP/2 and HTTP/3 client I/O
-      - WebSocket over HTTP/3 support (RFC 9220 extended CONNECT over QUIC)
+      - <a href="https://datatracker.ietf.org/doc/html/rfc9220">WebSocket over HTTP/3</a> support (RFC 9220 extended CONNECT over QUIC)
       - Server-Sent Events (SSE) over HTTP/3 support
-      - QUIC connection migration support (RFC 9000 §9)
-      - QUIC mutual TLS (mTLS) for client certificate verification
+      - <a href="https://datatracker.ietf.org/doc/html/rfc9000#section-9">QUIC connection migration</a> support (RFC 9000 §9)
+      - QUIC <a href="https://en.wikipedia.org/wiki/Mutual_authentication#mTLS">mutual TLS</a> (mTLS) for client certificate verification
       - unified \c http_version option: \c "3.0" can now be used to require HTTP/3 via the same \c http_version
         interface used for HTTP/1.x and HTTP/2
+      - <a href="https://datatracker.ietf.org/doc/html/rfc8305">Happy Eyeballs</a> (RFC 8305) dual-stack connection
+        racing for QUIC connections — ensures that a broken or slow IPv6/IPv4 path does not add latency to
+        QUIC connection establishment
+    - <b><a href="https://datatracker.ietf.org/doc/html/rfc8305">Happy Eyeballs</a> (RFC 8305) dual-stack connection racing</b>
+      - automatically races IPv6 and IPv4 connections with a 250ms stagger so a broken or slow address
+        family does not add latency
+      - applies to all TCP socket connections: @ref Qore::Socket::connect() "Socket::connect()",
+        @ref Qore::Socket::connectINET() "Socket::connectINET()",
+        @ref Qore::Socket::connectINETSSL() "Socket::connectINETSSL()", and their async equivalents
+        (@ref Qore::Socket::startPollConnect() "Socket::startPollConnect()",
+        @ref Qore::Socket::startPollConnectSsl() "Socket::startPollConnectSsl()")
+      - addresses are interleaved by family (IPv6 first, then IPv4) per RFC 8305 §4
+      - single-family connections fall back to sequential behavior with no overhead
+      - benefits all higher-level networking automatically (@ref Qore::HTTPClient "HTTPClient",
+        @ref httpclientiointro "HttpClientIo", @ref restclientio_intro "RestClientIo", etc.)
     - new @ref Qore::SandboxManager "SandboxManager" class for comprehensive code sandboxing
       - @ref sandbox_filesystem "filesystem access control" with sandbox roots, allow/deny lists, and access modes
       - @ref sandbox_network "network access control" with CIDR-based IP ranges, hostname patterns, and port restrictions
@@ -838,10 +861,50 @@ cargo install tree-sitter-cli@0.26.5
         - non-pollable InputStreams are read by the handler thread with backpressure-aware retry
         - \c Content-Length mismatch detection raises \c HTTP-STREAM-ERROR if the InputStream provides fewer
           bytes than declared
+      - true incremental streaming for non-I/O-thread-safe \c InputStream response bodies on HTTP/2 and HTTP/3
+        - handlers returning a Qore-defined \c InputStream subclass (including \c CallbackInputStream)
+          are now streamed chunk-by-chunk by a dedicated
+\if QORE_LANG_FINAL
+          @ref HttpServer::StreamResponseProducer "StreamResponseProducer"
+\else
+          \c HttpServer::StreamResponseProducer
+\endif
+          worker thread — no materialization, memory bounded by the peer's flow-control window,
+          time-to-first-byte ≈ one RTT after the handler produces its first chunk
+        - resolves the previous behavior where such streams were fully buffered in memory before any
+          bytes reached the wire — unsuitable for multi-GB or open-ended responses typical of enterprise
+          integration workloads (DataStream over Connect protocol, gRPC-over-Connect, chunked uploads,
+          live event feeds)
+        - architectural invariant: \c read() never executes on the async I/O thread; the producer worker
+          handles blocking reads and uses CV-based
+\if QORE_LANG_FINAL
+          @ref Qore::Socket::waitForHttp2StreamDrain() "waitForHttp2StreamDrain()" /
+          @ref Qore::Socket::waitForQuicStreamDrain() "waitForQuicStreamDrain()"
+\else
+          \c waitForHttp2StreamDrain() / \c waitForQuicStreamDrain()
+\endif
+          for backpressure; read errors are surfaced as a clean \c RST_STREAM / \c cancelQuicStream to
+          the peer rather than a silent hang
+      - new
+\if QORE_LANG_FINAL
+        @ref HttpServer::HttpServer::removeHandler(string) "HttpServer::removeHandler()"
+\else
+        \c HttpServer::removeHandler()
+\endif
+        method (with name and handler-reference overloads) to complement \c setHandler() for dynamic
+        handler registration
     - @ref httpserverutilintro "HttpServerUtil" module
       - added functionality to support setting cookies
       - refactored authentication methods to provide a more extensible and clear design
       - new \c http_version option in \c HttpListenerOptionInfo for HTTP/2 and HTTP/3 mode control
+      - new
+\if QORE_LANG_FINAL
+        @ref HttpServer::StreamResponseProducer "StreamResponseProducer"
+\else
+        \c HttpServer::StreamResponseProducer
+\endif
+        class: worker-thread response-body streamer used by the \c HttpServer / \c HttpServerAsyncIo
+        pipeline for non-I/O-thread-safe \c InputStream response bodies on HTTP/2 and HTTP/3
     - @ref loggerintro "Logger" module
 \if QORE_LANG_FINAL
       - added memory-based backpressure support to @ref Qore::Logger::LoggerAppenderQueue "Qore::Logger::LoggerAppenderQueue"
@@ -1092,6 +1155,12 @@ cargo install tree-sitter-cli@0.26.5
       - Eigen3-backed float64 columns for SIMD-friendly numeric operations
       - thread-safe with \c std::mutex, cooperative cancellation via \c qore_check_cancel()
       - \c dom=FILESYSTEM on CSV/Parquet I/O, \c dom=DATABASE on database I/O
+    - @ref ocrintro "ocr" module
+      - new builtin module providing text extraction from images using Tesseract OCR
+      - TesseractEngine class with extractText() and extractTextWithMetadata()
+      - block-level bounding boxes and confidence scores
+      - supports PNG, JPEG, TIFF, BMP, GIF input formats
+      - thread-safe with std::mutex, dom=FILESYSTEM on all methods
     - @ref tokenizerintro "tokenizer" module
       - new builtin module providing <a href="https://huggingface.co/">HuggingFace</a>-compatible text tokenization
       - supports BPE (GPT-2, Llama, Mistral), WordPiece (BERT, DistilBERT), and Unigram/SentencePiece (T5, XLM-R)
@@ -1336,6 +1405,14 @@ cargo install tree-sitter-cli@0.26.5
       - 3 classification/regression pipeline processors: logistic-regression, knn-classification, knn-regression
       - 3 evaluation pipeline processors: classification-metrics, regression-metrics, clustering-metrics
       - optional onnx-model pipeline processor for ONNX Runtime inference
+      - extract-structured pipeline processor for LLM-based structured data extraction with
+        built-in NER, invoice, contact, and sentiment schemas
+      - rerank-text pipeline processor for cross-encoder re-ranking of search results
+      - semantic-chunk-text pipeline processor for embedding-similarity-based document chunking
+      - guardrail-filter pipeline processor (DPC_FILTER) for blocking unsafe records
+      - guardrail-transform pipeline processor (DPC_TRANSFORM) for annotating and redacting records
+      - ocr pipeline processor for text extraction from images via Tesseract or HTTP
+      - vision-extraction pipeline processor for multimodal LLM image analysis
       - action catalog integration with the "ML Analytics" app
     - @ref dataproviderdataframeintro "DataProviderDataFrame" module
       - new module providing DataProvider integration for the dataframe binary module
@@ -1540,6 +1617,17 @@ cargo install tree-sitter-cli@0.26.5
       - new @ref OpenApi3::OpenApi3SchemaTokenizer "OpenApi3SchemaTokenizer" class for parsing \@SCHEMA documentation blocks
       - new @ref OpenApi3::OpenApi3TypeMapper "OpenApi3TypeMapper" class for mapping Qore types to OpenAPI types
       - new \c qore-openapi3-gen CLI tool for generating schemas from source files
+    - @ref openapi3dataproviderintro "OpenApi3DataProvider" module
+      - new module providing a @ref dataproviderintro "data provider" API for OpenAPI 3.0 / 3.1 schemas
+      - introspects OpenAPI 3 schemas to expose REST operations as child data providers
+        (e.g., <tt>pets/POST</tt> resolves to an
+        @ref OpenApi3DataProvider::OpenApi3RequestDataProvider "OpenApi3RequestDataProvider" instance)
+      - transparently supports both @ref RestClient::RestClient "RestClient" (HTTP/1.1 sync) and
+        @ref RestClientIo::RestClientIo "RestClientIo" (multiplexed HTTP/2 + HTTP/3) via the
+        @ref RestClient::AbstractRestClient "AbstractRestClient" interface
+      - request bodies declared via OpenAPI 3 \c requestBody are automatically mapped onto the
+        request type \c body field
+      - response bodies including schemas with multiple content types are supported
     - @ref pdfcorestclientintro "PdfCoRestClient" module
       - new module providing a REST client for <a href="https://pdf.co/">PDF.co</a>'s document processing API
       - supports API key authentication via \c x-api-key header
@@ -1607,7 +1695,40 @@ cargo install tree-sitter-cli@0.26.5
       - supports DecisionTree, RandomForest, GradientBoostedTrees (classification and regression)
       - GBT export handles binary (Sigmoid) and multiclass (Softmax) post-processing
       - enables interoperability with Python/TensorFlow/PyTorch via standard ONNX files
+    - @ref qoreagentstrategiesintro "QoreAgentStrategies" module
+      - new module providing configurable agent execution strategies for LLM agents
+      - PlanningAgentStrategy: decompose → execute sub-tasks → synthesize
+      - ReflexionAgentStrategy: execute → evaluate completeness → correct
+      - ParallelToolDispatcher: concurrent tool execution with batching and timeouts
+      - token budget tracking with AGENT-BUDGET-EXCEEDED enforcement
+    - @ref qoreguardrailsintro "QoreGuardrails" module
+      - new module providing input/output guardrails for AI-powered chat endpoints
+      - PiiDetector: pattern-based detection/redaction of email, phone, SSN, credit card
+      - PromptInjectionDetector: pattern + LLM-based prompt injection classification
+      - TopicRestrictionRule: LLM-based topic boundary enforcement
+      - OutputFormatEnforcer: length, forbidden/required pattern validation
+      - GuardrailEngine: rule chain orchestration with severity-based short-circuit
+    - @ref qoreocrutilsintro "QoreOcrUtils" module
+      - new module providing an OCR abstraction layer with native and HTTP backends
+      - OcrEngine: dual-mode OCR (Tesseract native + HTTP endpoint)
+      - ScannedPdfDetector: heuristic detection of scanned PDF pages
+    - @ref qorevisionextractionintro "QoreVisionExtraction" module
+      - new module providing multimodal LLM vision extraction
+      - VisionLlmClient: image description, table extraction, and text extraction
+      - supports OpenAI and Anthropic multimodal APIs with base64 image content blocks
+    - @ref qorellmutilsintro "QoreLlmUtils" module
+      - new module providing a pluggable LLM backend abstraction for chat completions
+      - supports HTTP/OpenAI-compatible, Anthropic Messages API, and custom callback modes
+      - thread-safe lazy-initialized REST client with configurable timeouts
+      - JSON schema enforcement via response_format (HTTP) and tool-use extraction (Anthropic)
+    - @ref qorestructuredextractionintro "QoreStructuredExtraction" module
+      - new module providing LLM-based structured information extraction from unstructured text
+      - built-in templates: NER, invoice, contact, and sentiment analysis schemas
+      - ExtractionPipeline with validation, retry logic, and JSON code fence handling
+      - ExtractionSchema with JSON Schema conversion for LLM prompt engineering
     - @ref qoretokenizerutilsintro "QoreTokenizerUtils" module
+      - ONNX backend implemented for EmbeddingModel: batch tokenize, mean-pool, L2-normalize
+      - ONNX backend implemented for CrossEncoderReranker: sentence-pair tokenization, sigmoid scoring
       - new module providing document chunking and token counting for RAG pipelines
       - DocumentChunker: splits documents into overlapping token-bounded chunks for embedding
       - TokenCounter: counts tokens, checks context window fit, truncates at token boundaries
@@ -1668,6 +1789,17 @@ cargo install tree-sitter-cli@0.26.5
       - webhook-based event triggers for order and shipment notifications
       - action catalog integration with 36 actions and 4 triggers
       - connection support with \c shipstation:// URL scheme
+    - @ref systemeiorestclientintro "SystemeIoRestClient" module
+      - new module providing a REST client for <a href="https://systeme.io/">Systeme.io</a>'s marketing platform API
+      - supports API key authentication via X-API-Key header
+      - provides SystemeIoRestConnection for connection management with \c systemeio:// URL scheme
+    - @ref systemeio_dataproviderintro "SystemeIoDataProvider" module
+      - new module providing a data provider API for <a href="https://systeme.io/">Systeme.io</a> all-in-one marketing platform
+      - contact management (create, update, delete, list, tag assignment)
+      - tag, custom field, course, enrollment, community, membership, and subscription management
+      - polling-based event triggers for new contacts and tags
+      - action catalog integration with 28 actions and 2 triggers
+      - connection support with \c systemeio:// URL scheme
     - @ref squarerestclientintro "SquareRestClient" module
       - new module providing a REST client for <a href="https://squareup.com/">Square</a>'s payments and commerce API
       - supports OAuth2 authentication with bearer tokens
@@ -2146,6 +2278,7 @@ hash<ExtendedInfo> ext = <ExtendedInfo>{"name": "test", "id": 1, "created": now(
       - <a href="../../modules/PerplexityDataProvider/html/index.html#perplexitydataproviderintro">PerplexityDataProvider</a>
       - <a href="../../modules/PerplexityRestClient/html/index.html#perplexityrestclientintro">PerplexityRestClient</a>
       - <a href="../../modules/OpenApi3/html/index.html#openapi3intro">OpenApi3</a>
+      - <a href="../../modules/OpenApi3DataProvider/html/index.html#openapi3dataproviderintro">OpenApi3DataProvider</a>
       - <a href="../../modules/Pop3ClientDataProvider/html/index.html#pop3clientdataproviderintro">Pop3ClientDataProvider</a>
       - <a href="../../modules/ServerSentEventClient/html/index.html#serversenteventclientintro">ServerSentEventClient</a>
       - <a href="../../modules/ServerSentEventHandler/html/index.html#serversenteventhandlerintro">ServerSentEventHandler</a>

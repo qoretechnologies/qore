@@ -285,6 +285,8 @@ ModuleName/
         <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> pipeline \
         processors wrapping the <a href="../../modules/ml/html/index.html#mlintro">ml</a> module's machine \
         learning algorithms for anomaly detection, clustering, forecasting, and dimensionality reduction
+    |binary|<a href="../../modules/ocr/html/index.html#ocrintro">ocr</a>|Provides text extraction from images \
+        using the Tesseract OCR engine with confidence scores and block-level bounding boxes
     |binary|<a href="../../modules/tokenizer/html/index.html#tokenizerintro">tokenizer</a>|Provides \
         HuggingFace-compatible text tokenization (BPE, WordPiece, Unigram) with word_ids, sliding window, \
         pre-tokenized input, dynamic vocabulary, and full tokenizer.json support
@@ -349,6 +351,9 @@ ModuleName/
     |user|<a href="../../modules/OpenApi3/html/index.html#openapi3intro">OpenApi3</a>|Provides an \
         <a href="https://swagger.io/">OpenApi 3 REST API validation API</a> and schema generation from source code \
         annotations; includes the \c qore-openapi3-gen CLI tool
+    |user|<a href="../../modules/OpenApi3DataProvider/html/index.html#openapi3dataproviderintro">OpenApi3DataProvider</a>|Provides a \
+        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for \
+        <a href="https://swagger.io/">OpenAPI 3.0 / 3.1</a> schemas
     |user|<a href="../../modules/OracleSqlUtilBase/html/index.html#oraclesqlutilbaseintro">OracleSqlUtilBase</a>|Provides a \
         high-level DB-independent API for working with Oracle database objects; this module supports \
         <a href="../../modules/OracleSqlUtil/html/index.html#oraclesqlutilintro">OracleSqlUtil</a> and \
@@ -403,6 +408,21 @@ ModuleName/
     |user|<a href="../../modules/QoreOnnxExport/html/index.html#qoreonnxexportintro">QoreOnnxExport</a>|Provides \
         ONNX model export for 11 trained ML algorithms including tree ensembles \
         (DecisionTree, RandomForest, GradientBoostedTrees), linear models, preprocessing, and clustering
+    |user|<a href="../../modules/QoreAgentStrategies/html/index.html#qoreagentstrategiesintro">QoreAgentStrategies</a>|Provides \
+        configurable agent execution strategies (planning, reflexion, parallel tool dispatch) for LLM agents
+    |user|<a href="../../modules/QoreGuardrails/html/index.html#qoreguardrailsintro">QoreGuardrails</a>|Provides \
+        input and output guardrails for AI chat endpoints with PII detection/redaction, prompt \
+        injection detection, topic restriction, and output format enforcement
+    |user|<a href="../../modules/QoreOcrUtils/html/index.html#qoreocrutilsintro">QoreOcrUtils</a>|Provides \
+        an OCR abstraction layer with native (Tesseract) and HTTP backends, plus scanned PDF detection
+    |user|<a href="../../modules/QoreVisionExtraction/html/index.html#qorevisionextractionintro">QoreVisionExtraction</a>|Provides \
+        multimodal LLM vision extraction for image description, table extraction, and text extraction
+    |user|<a href="../../modules/QoreLlmUtils/html/index.html#qorellmutilsintro">QoreLlmUtils</a>|Provides \
+        a pluggable LLM backend abstraction for chat completions across HTTP/OpenAI-compatible, \
+        Anthropic, and Qorus AI Gateway endpoints
+    |user|<a href="../../modules/QoreStructuredExtraction/html/index.html#qorestructuredextractionintro">QoreStructuredExtraction</a>|Provides \
+        LLM-based structured information extraction with schema enforcement and built-in templates \
+        for NER, invoice, contact, and sentiment analysis
     |user|<a href="../../modules/QoreTokenizerUtils/html/index.html#qoretokenizerutilsintro">QoreTokenizerUtils</a>|Provides \
         document chunking (DocumentChunker) and token counting (TokenCounter) for RAG text ingestion \
         pipelines using HuggingFace-compatible tokenizers
@@ -466,6 +486,11 @@ ModuleName/
         logistics services including order management, shipments, carriers, warehouses, and webhooks
     |user|<a href="../../modules/ShipStationRestClient/html/index.html#shipstationrestclientintro">ShipStationRestClient</a>|Provides APIs for \
         communicating with <a href="https://www.shipstation.com">ShipStation</a>'s REST API
+    |user|<a href="../../modules/SystemeIoDataProvider/html/index.html#systemeio_dataproviderintro">SystemeIoDataProvider</a>|Provides a \
+        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Systeme.io all-in-one marketing \
+        platform including contacts, tags, courses, communities, and subscriptions
+    |user|<a href="../../modules/SystemeIoRestClient/html/index.html#systemeiorestclientintro">SystemeIoRestClient</a>|Provides APIs for \
+        communicating with <a href="https://systeme.io">Systeme.io</a>'s REST API
     |user|<a href="../../modules/CustomerIoDataProvider/html/index.html#customeriodataproviderintro">CustomerIoDataProvider</a>|Provides a \
         <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Customer.io marketing automation \
         including customer management, campaigns, broadcasts, transactional messaging, and webhook events

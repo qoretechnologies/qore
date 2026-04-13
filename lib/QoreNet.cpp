@@ -5,7 +5,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -327,7 +327,6 @@ char* q_gethostbyaddr(const char* addr, int len, int type) {
 }
 
 // thread-safe gethostbyaddr
-// FIXME: check err?
 QoreHashNode* q_gethostbyaddr_to_hash(ExceptionSink* xsink, const char* addr, int type) {
     in_addr sin_addr;
     in6_addr sin6_addr;
@@ -360,14 +359,22 @@ QoreHashNode* q_gethostbyaddr_to_hash(ExceptionSink* xsink, const char* addr, in
     char buf[NET_BUFSIZE];
     int err;
 # ifdef HAVE_SOLARIS_STYLE_GETHOST
-    if (!gethostbyaddr_r((char*)dst, len, type, &he, buf, NET_BUFSIZE, &err))
+    if (!gethostbyaddr_r((char*)dst, len, type, &he, buf, NET_BUFSIZE, &err)) {
+        xsink->raiseException("GETHOSTBYADDR-ERROR", "gethostbyaddr('%s') failed: %s", addr, hstrerror(err));
         return 0;
+    }
 # else // assume glibc2-style gethostbyaddr_r
     struct hostent* p;
 
     rc = gethostbyaddr_r(dst, len, type, &he, buf, NET_BUFSIZE, &p, &err);
-    if (rc || !p)
+    if (rc || !p) {
+        if (rc) {
+            xsink->raiseException("GETHOSTBYADDR-ERROR", "gethostbyaddr('%s') failed: %s", addr, strerror(rc));
+        } else {
+            xsink->raiseException("GETHOSTBYADDR-ERROR", "gethostbyaddr('%s') failed: %s", addr, hstrerror(err));
+        }
         return 0;
+    }
 # endif // HAVE_SOLARIS_STYLE_GETHOST
 
     return he_to_hash(he);
@@ -375,8 +382,10 @@ QoreHashNode* q_gethostbyaddr_to_hash(ExceptionSink* xsink, const char* addr, in
 #else  // else if !HAVE_GETHOSTBYADDR_R
     AutoLocker al(&lck_gethostbyaddr);
     struct hostent* he;
-    if (!(he = gethostbyaddr((char*)dst, len, type)))
+    if (!(he = gethostbyaddr((char*)dst, len, type))) {
+        xsink->raiseException("GETHOSTBYADDR-ERROR", "gethostbyaddr('%s') failed: %s", addr, hstrerror(h_errno));
         return 0;
+    }
 
     return he_to_hash(*he);
 #endif // HAVE_GETHOSTBYADDR_R
@@ -461,10 +470,21 @@ int QoreAddrInfo::getInfo(ExceptionSink* xsink, const char* node, const char* se
     hints.ai_socktype = socktype;
     hints.ai_protocol = protocol;
 
-    int status = getaddrinfo(node, service, &hints, &ai);
+    // retry on transient system-level errors (EINTR: interrupted by signal, EAGAIN: resolver temporarily unavailable)
+    int status;
+    int retries = 0;
+    static const int GETADDRINFO_MAX_RETRIES = 10;
+    do {
+        status = getaddrinfo(node, service, &hints, &ai);
+    } while (status == EAI_SYSTEM && (errno == EINTR || errno == EAGAIN) && ++retries < GETADDRINFO_MAX_RETRIES);
+
     if (status) {
-        if (xsink)
-            xsink->raiseException("QOREADDRINFO-GETINFO-ERROR", "getaddrinfo(node: '%s', service: '%s', address_family: %d='%s', flags: %d) error: %s", node ? node : "", service ? service : "", family, q_af_to_str(family), flags, gai_strerror(status));
+        if (xsink) {
+            if (status == EAI_SYSTEM)
+                xsink->raiseException("QOREADDRINFO-GETINFO-ERROR", "getaddrinfo(node: '%s', service: '%s', address_family: %d='%s', flags: %d) error: %s (errno: %d: %s)", node ? node : "", service ? service : "", family, q_af_to_str(family), flags, gai_strerror(status), errno, strerror(errno));
+            else
+                xsink->raiseException("QOREADDRINFO-GETINFO-ERROR", "getaddrinfo(node: '%s', service: '%s', address_family: %d='%s', flags: %d) error: %s", node ? node : "", service ? service : "", family, q_af_to_str(family), flags, gai_strerror(status));
+        }
         return -1;
     }
 

@@ -1,0 +1,553 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/SqlUtil
+%requires ../../../../qlib/MysqlSqlUtil.qm
+%requires ../../../../qlib/QUnit.qm
+
+%try-module mysql
+%define NoMysql
+%endtry
+
+%exec-class MysqlExpressionTest
+
+class TestAppender inherits LoggerAppenderWithLayout {
+    constructor() : LoggerAppenderWithLayout("test", new LoggerLayoutPattern("%d T%t [%p]: %m%n")) {
+        open();
+    }
+
+    processEventImpl(int type, auto params) {
+        switch (type) {
+            case EVENT_LOG:
+                print(params);
+                break;
+        }
+    }
+}
+
+class MysqlExpressionTest inherits QUnit::Test {
+    public {
+        const MyOpts = Opts + {
+            "connstr": "c,conn=s",
+        };
+
+        const TableName = "mysql_expr_test";
+    }
+
+    private {
+        *Datasource ds;
+        *MysqlTable table;
+        Logger logger;
+    }
+
+    constructor() : Test("MysqlExpressionTest", "1.0", \ARGV, MyOpts) {
+        {
+            LoggerLevel level;
+            if (m_options.verbose > 3) {
+                level = LoggerLevel::getLevelDebug();
+            } else if (m_options.verbose > 2) {
+                level = LoggerLevel::getLevelInfo();
+            } else {
+                level = LoggerLevel::getLevelError();
+            }
+            logger = new Logger("test", level);
+        }
+        logger.addAppender(new TestAppender());
+
+        try {
+            ds = getDatasource();
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose) {
+                printf("%s: %s\n", ex.err, ex.desc);
+            }
+        }
+
+        if (ds) {
+            setupTable();
+        }
+
+        # Pattern matching tests
+        addTestCase("DP_OP_LIKE", \testDpOpLike());
+        addTestCase("DP_OP_REGEX_MATCH", \testDpOpRegexMatch());
+        addTestCase("DP_OP_REGEX_NMATCH", \testDpOpRegexNmatch());
+        addTestCase("DP_OP_REGEX_SUBST", \testDpOpRegexSubst());
+        addTestCase("DP_OP_CONTAINS", \testDpOpContains());
+        addTestCase("DP_OP_STARTS_WITH", \testDpOpStartsWith());
+        addTestCase("DP_OP_ENDS_WITH", \testDpOpEndsWith());
+        addTestCase("DP_OP_REPLACE", \testDpOpReplace());
+
+        # Type conversion tests
+        addTestCase("DP_OP_TO_STRING", \testDpOpToString());
+        addTestCase("DP_OP_TO_INT", \testDpOpToInt());
+        addTestCase("DP_OP_TO_FLOAT", \testDpOpToFloat());
+        addTestCase("DP_OP_TO_NUMBER", \testDpOpToNumber());
+        addTestCase("DP_OP_TO_DATE", \testDpOpToDate());
+        addTestCase("DP_OP_TO_BOOL", \testDpOpToBool());
+
+        # String manipulation tests
+        addTestCase("DP_OP_TO_LOWER", \testDpOpToLower());
+        addTestCase("DP_OP_TO_UPPER", \testDpOpToUpper());
+        addTestCase("DP_OP_LENGTH", \testDpOpLength());
+
+        # Control flow / misc tests
+        addTestCase("DP_OP_TERNARY", \testDpOpTernary());
+        addTestCase("DP_OP_HAS_VALUE", \testDpOpHasValue());
+
+        # Date/string function tests
+        addTestCase("DP_FUNC_FORMAT_DATE", \testDpFuncFormatDate());
+
+        # Test format conversion helper
+        addTestCase("convertDateFormat", \testConvertDateFormat());
+
+        # Verify expression map completeness
+        addTestCase("expression map keys", \testExpressionMapKeys());
+
+        set_return_value(main());
+    }
+
+    globalTearDown() {
+        if (table) {
+            table.dropCommit();
+        }
+    }
+
+    private Datasource getDatasource() {
+%ifdef NoMysql
+        testSkip("no mysql module");
+%endif
+        string connstr = m_options.connstr ?? ENV.QORE_DB_CONNSTR_MYSQL ?? "";
+        if (!connstr.val()) {
+            testSkip("no DB connection");
+        }
+        Datasource ds(connstr);
+        if (ds.getDriverName() != "mysql") {
+            testSkip("not a mysql connection");
+        }
+        ds.open();
+        return ds;
+    }
+
+    private setupTable() {
+        # drop if exists
+        {
+            MysqlTable t(ds, TableName);
+            if (t.checkExistence()) {
+                t.dropCommit();
+            }
+        }
+        # create test table with various column types
+        ds.execRaw("create table " + TableName + " ("
+            "id int primary key, "
+            "name varchar(100) not null, "
+            "description text, "
+            "amount decimal(12,2), "
+            "is_active tinyint(1) default 1, "
+            "created_at datetime default now()"
+            ")");
+        ds.commit();
+
+        table = new MysqlTable(ds, TableName);
+
+        # insert test data
+        ds.execRaw("insert into " + TableName + " values "
+            "(1, 'Hello World', 'A test description', 100.50, 1, '2026-01-15 10:30:00'), "
+            "(2, 'foo bar', 'Another test', 200.75, 0, '2026-02-20 14:45:30'), "
+            "(3, 'UPPER CASE', null, 0.00, 1, '2026-03-25 08:00:00'), "
+            "(4, 'Test String', 'has special chars: 100%', 50.25, null, '2026-04-10 16:15:45')");
+        ds.commit();
+    }
+
+    # Helper: create a field reference
+    private hash<DataProviderFieldReference> fref(string name) {
+        return <DataProviderFieldReference>{"field": name};
+    }
+
+    # Helper: create an expression
+    private hash<DataProviderExpression> expr(string exp, softlist<auto> args) {
+        return <DataProviderExpression>{"exp": exp, "args": args};
+    }
+
+    # Helper: create an aliased expression column (wraps with COP_AS)
+    private hash<DataProviderExpression> aliased(string alias, hash<DataProviderExpression> inner) {
+        return expr(COP_AS, (inner, alias));
+    }
+
+    # Helper: select with expression-based where clause and return rows
+    private hash<auto> selectWhere(hash<DataProviderExpression> cond) {
+        return table.select({
+            "columns": ("id",),
+            "where": cond,
+            "orderby": "id",
+        });
+    }
+
+    # Helper: select a single row with an aliased expression column
+    private *hash<auto> selectExprRow(string alias, hash<DataProviderExpression> col_expr, int id) {
+        return table.selectRow({
+            "columns": (
+                "id",
+                aliased(alias, col_expr),
+            ),
+            "where": {"id": id},
+        });
+    }
+
+    # --- Pattern matching tests ---
+
+    testDpOpLike() {
+        if (!table) { testSkip("no DB connection"); }
+
+        # case-sensitive LIKE
+        hash<auto> rows = selectWhere(
+            expr(DP_OP_LIKE, (fref("name"), "%World%", False)),
+        );
+        assertEq((1,), rows.id);
+
+        # case-insensitive LIKE
+        rows = selectWhere(
+            expr(DP_OP_LIKE, (fref("name"), "%world%", True)),
+        );
+        assertEq((1,), rows.id);
+
+        # case-sensitive no match
+        rows = selectWhere(
+            expr(DP_OP_LIKE, (fref("name"), "%world%", False)),
+        );
+        assertEq((), rows.id);
+    }
+
+    testDpOpRegexMatch() {
+        if (!table) { testSkip("no DB connection"); }
+
+        # case-sensitive regex
+        hash<auto> rows = selectWhere(
+            expr(DP_OP_REGEX_MATCH, (fref("name"), "^Hello")),
+        );
+        assertEq((1,), rows.id);
+
+        # case-insensitive regex
+        rows = selectWhere(
+            expr(DP_OP_REGEX_MATCH, (fref("name"), "^hello", ("i",))),
+        );
+        assertEq((1,), rows.id);
+
+        # regex with character class
+        rows = selectWhere(
+            expr(DP_OP_REGEX_MATCH, (fref("name"), "^[A-Z ]+$")),
+        );
+        assertEq((3,), rows.id);
+    }
+
+    testDpOpRegexNmatch() {
+        if (!table) { testSkip("no DB connection"); }
+
+        # matches rows that DON'T match the pattern
+        hash<auto> rows = selectWhere(
+            expr(DP_OP_REGEX_NMATCH, (fref("name"), "^Hello")),
+        );
+        assertEq((2, 3, 4), rows.id);
+
+        # case-insensitive non-match
+        rows = selectWhere(
+            expr(DP_OP_REGEX_NMATCH, (fref("name"), "^(hello|foo)", ("i",))),
+        );
+        assertEq((3, 4), rows.id);
+    }
+
+    testDpOpRegexSubst() {
+        if (!table) { testSkip("no DB connection"); }
+
+        # simple substitution
+        *hash<auto> row = selectExprRow("result",
+            expr(DP_OP_REGEX_SUBST, (fref("name"), "World", "Earth")), 1);
+        assertEq("Hello Earth", row.result);
+
+        # global substitution with "g" flag
+        row = selectExprRow("result",
+            expr(DP_OP_REGEX_SUBST, (fref("name"), "[aeiou]", "X", ("g",))), 1);
+        assertEq("HXllX WXrld", row.result);
+
+        # case-insensitive substitution
+        row = selectExprRow("result",
+            expr(DP_OP_REGEX_SUBST, (fref("name"), "hello", "Hi", ("i",))), 1);
+        assertEq("Hi World", row.result);
+    }
+
+    testDpOpContains() {
+        if (!table) { testSkip("no DB connection"); }
+
+        # case-insensitive contains
+        hash<auto> rows = selectWhere(
+            expr(DP_OP_CONTAINS, (fref("name"), "world", True)),
+        );
+        assertEq((1,), rows.id);
+
+        # case-sensitive contains
+        rows = selectWhere(
+            expr(DP_OP_CONTAINS, (fref("name"), "world", False)),
+        );
+        assertEq((), rows.id);
+
+        # substring in middle
+        rows = selectWhere(
+            expr(DP_OP_CONTAINS, (fref("name"), "bar", False)),
+        );
+        assertEq((2,), rows.id);
+    }
+
+    testDpOpStartsWith() {
+        if (!table) { testSkip("no DB connection"); }
+
+        # case-insensitive starts with
+        hash<auto> rows = selectWhere(
+            expr(DP_OP_STARTS_WITH, (fref("name"), "hello", True)),
+        );
+        assertEq((1,), rows.id);
+
+        # case-sensitive starts with
+        rows = selectWhere(
+            expr(DP_OP_STARTS_WITH, (fref("name"), "Hello", False)),
+        );
+        assertEq((1,), rows.id);
+
+        # case-sensitive no match
+        rows = selectWhere(
+            expr(DP_OP_STARTS_WITH, (fref("name"), "hello", False)),
+        );
+        assertEq((), rows.id);
+    }
+
+    testDpOpEndsWith() {
+        if (!table) { testSkip("no DB connection"); }
+
+        # case-insensitive ends with
+        hash<auto> rows = selectWhere(
+            expr(DP_OP_ENDS_WITH, (fref("name"), "world", True)),
+        );
+        assertEq((1,), rows.id);
+
+        # case-sensitive ends with
+        rows = selectWhere(
+            expr(DP_OP_ENDS_WITH, (fref("name"), "bar", False)),
+        );
+        assertEq((2,), rows.id);
+
+        # case-sensitive match
+        rows = selectWhere(
+            expr(DP_OP_ENDS_WITH, (fref("name"), "CASE", False)),
+        );
+        assertEq((3,), rows.id);
+    }
+
+    testDpOpReplace() {
+        if (!table) { testSkip("no DB connection"); }
+
+        # simple replace
+        *hash<auto> row = selectExprRow("result",
+            expr(DP_OP_REPLACE, (fref("name"), "World", "Qore")), 1);
+        assertEq("Hello Qore", row.result);
+
+        # replace nothing (no match)
+        row = selectExprRow("result",
+            expr(DP_OP_REPLACE, (fref("name"), "xyz", "abc")), 1);
+        assertEq("Hello World", row.result);
+    }
+
+    # --- Type conversion tests ---
+
+    testDpOpToString() {
+        if (!table) { testSkip("no DB connection"); }
+
+        *hash<auto> row = selectExprRow("result",
+            expr(DP_OP_TO_STRING, (fref("amount"),)), 1);
+        assertEq(Type::String, row.result.type());
+        assertTrue(row.result.val());
+    }
+
+    testDpOpToInt() {
+        if (!table) { testSkip("no DB connection"); }
+
+        *hash<auto> row = selectExprRow("result",
+            expr(DP_OP_TO_INT, (fref("amount"),)), 1);
+        # 100.50 cast to integer = 100 (truncated) or 101 (rounded)
+        assertEq(Type::Int, row.result.type());
+        assertTrue(row.result >= 100 && row.result <= 101);
+    }
+
+    testDpOpToFloat() {
+        if (!table) { testSkip("no DB connection"); }
+
+        *hash<auto> row = selectExprRow("result",
+            expr(DP_OP_TO_FLOAT, (fref("id"),)), 1);
+        assertEq(Type::Float, row.result.type());
+        assertEq(1.0, row.result);
+    }
+
+    testDpOpToNumber() {
+        if (!table) { testSkip("no DB connection"); }
+
+        *hash<auto> row = selectExprRow("result",
+            expr(DP_OP_TO_NUMBER, (fref("id"),)), 1);
+        assertTrue(row.result == 1);
+    }
+
+    testDpOpToDate() {
+        if (!table) { testSkip("no DB connection"); }
+
+        *hash<auto> row = selectExprRow("result",
+            expr(DP_OP_TO_DATE, (fref("created_at"),)), 1);
+        assertEq(Type::Date, row.result.type());
+    }
+
+    testDpOpToBool() {
+        if (!table) { testSkip("no DB connection"); }
+
+        *hash<auto> row = selectExprRow("result",
+            expr(DP_OP_TO_BOOL, (fref("is_active"),)), 1);
+        # MySQL CAST(1 AS SIGNED INTEGER) = 1
+        assertTrue(row.result == 1);
+
+        row = selectExprRow("result",
+            expr(DP_OP_TO_BOOL, (fref("is_active"),)), 2);
+        # MySQL CAST(0 AS SIGNED INTEGER) = 0
+        assertTrue(row.result == 0);
+    }
+
+    # --- String manipulation tests ---
+
+    testDpOpToLower() {
+        if (!table) { testSkip("no DB connection"); }
+
+        *hash<auto> row = selectExprRow("result",
+            expr(DP_OP_TO_LOWER, (fref("name"),)), 3);
+        assertEq("upper case", row.result);
+    }
+
+    testDpOpToUpper() {
+        if (!table) { testSkip("no DB connection"); }
+
+        *hash<auto> row = selectExprRow("result",
+            expr(DP_OP_TO_UPPER, (fref("name"),)), 1);
+        assertEq("HELLO WORLD", row.result);
+    }
+
+    testDpOpLength() {
+        if (!table) { testSkip("no DB connection"); }
+
+        *hash<auto> row = selectExprRow("result",
+            expr(DP_OP_LENGTH, (fref("name"),)), 1);
+        assertEq(11, row.result);  # "Hello World" = 11 chars
+    }
+
+    # --- Control flow / misc tests ---
+
+    testDpOpTernary() {
+        if (!table) { testSkip("no DB connection"); }
+
+        # ternary with comparison: if amount > 100 then 'high' else 'low'
+        # id=1: amount=100.50 (>100) -> "high"
+        *hash<auto> row = selectExprRow("result",
+            expr(DP_OP_TERNARY, (
+                expr(DP_SEARCH_OP_GT, (fref("amount"), 100)),
+                "high", "low")), 1);
+        assertEq("high", row.result);
+
+        # id=3: amount=0.00 (<=100) -> "low"
+        row = selectExprRow("result",
+            expr(DP_OP_TERNARY, (
+                expr(DP_SEARCH_OP_GT, (fref("amount"), 100)),
+                "high", "low")), 3);
+        assertEq("low", row.result);
+    }
+
+    testDpOpHasValue() {
+        if (!table) { testSkip("no DB connection"); }
+
+        # description is null for id=3
+        hash<auto> rows = selectWhere(
+            expr(DP_OP_HAS_VALUE, (fref("description"),)),
+        );
+        assertEq((1, 2, 4), rows.id);
+
+        # is_active is null for id=4
+        rows = selectWhere(
+            expr(DP_OP_HAS_VALUE, (fref("is_active"),)),
+        );
+        assertEq((1, 2, 3), rows.id);
+    }
+
+    # --- Date/string function tests ---
+
+    testDpFuncFormatDate() {
+        if (!table) { testSkip("no DB connection"); }
+
+        *hash<auto> row = selectExprRow("result",
+            expr(DP_FUNC_FORMAT_DATE, (fref("created_at"), "YYYY-MM-DD")), 1);
+        assertEq("2026-01-15", row.result);
+
+        # format with time components
+        row = selectExprRow("result",
+            expr(DP_FUNC_FORMAT_DATE, (fref("created_at"), "YYYY-MM-DD HH:mm:SS")), 1);
+        assertEq("2026-01-15 10:30:00", row.result);
+    }
+
+    # --- Helper tests ---
+
+    testConvertDateFormat() {
+        # test the date format conversion - no DB needed
+        # YYYY -> %Y
+        assertEq("%Y-%m-%d", MysqlTable::convertDateFormat("YYYY-MM-DD"));
+        # YY -> %y
+        assertEq("%y-%m-%d", MysqlTable::convertDateFormat("YY-MM-DD"));
+        # HH -> %H, mm -> %i, SS -> %s
+        assertEq("%Y-%m-%d %H:%i:%s", MysqlTable::convertDateFormat("YYYY-MM-DD HH:mm:SS"));
+        # us -> %f
+        assertEq("%Y-%m-%d %H:%i:%s.%f", MysqlTable::convertDateFormat("YYYY-MM-DD HH:mm:SS.us"));
+        # ensure single quotes are escaped for SQL safety
+        assertEq("%Y''%m''%d", MysqlTable::convertDateFormat("YYYY'MM'DD"));
+    }
+
+    testExpressionMapKeys() {
+        if (!table) { testSkip("no DB connection"); }
+
+        hash<auto> emap = table.getExpressionMap();
+
+        # verify all MySQL-specific operators are present
+        assertTrue(emap.hasKey(DP_OP_LIKE));
+        assertTrue(emap.hasKey(DP_OP_REGEX_MATCH));
+        assertTrue(emap.hasKey(DP_OP_REGEX_NMATCH));
+        assertTrue(emap.hasKey(DP_OP_REGEX_SUBST));
+        assertTrue(emap.hasKey(DP_OP_CONTAINS));
+        assertTrue(emap.hasKey(DP_OP_STARTS_WITH));
+        assertTrue(emap.hasKey(DP_OP_ENDS_WITH));
+        assertTrue(emap.hasKey(DP_OP_REPLACE));
+        assertTrue(emap.hasKey(DP_OP_TO_STRING));
+        assertTrue(emap.hasKey(DP_OP_TO_INT));
+        assertTrue(emap.hasKey(DP_OP_TO_FLOAT));
+        assertTrue(emap.hasKey(DP_OP_TO_NUMBER));
+        assertTrue(emap.hasKey(DP_OP_TO_DATE));
+        assertTrue(emap.hasKey(DP_OP_TO_BOOL));
+        assertTrue(emap.hasKey(DP_OP_TO_LOWER));
+        assertTrue(emap.hasKey(DP_OP_TO_UPPER));
+        assertTrue(emap.hasKey(DP_OP_LENGTH));
+        assertTrue(emap.hasKey(DP_OP_TERNARY));
+        assertTrue(emap.hasKey(DP_OP_HAS_VALUE));
+        assertTrue(emap.hasKey(DP_FUNC_FORMAT_DATE));
+
+        # verify existing operators are still present
+        assertTrue(emap.hasKey(COP_CAST));
+        assertTrue(emap.hasKey(COP_YEAR));
+        assertTrue(emap.hasKey(DP_FUNC_NOW));
+        assertTrue(emap.hasKey(DP_FUNC_YEARS));
+        assertTrue(emap.hasKey(DP_FUNC_GET_YEAR));
+        assertTrue(emap.hasKey(DP_OP_AND));
+        assertTrue(emap.hasKey(OP_LIKE));
+        assertTrue(emap.hasKey(COP_UPPER));
+        assertTrue(emap.hasKey(COP_LOWER));
+    }
+}
