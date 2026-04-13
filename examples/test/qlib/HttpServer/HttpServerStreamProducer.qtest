@@ -4,14 +4,13 @@
 /*
     Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
 
-    Tests for the HttpServerOptionInfo.use_stream_producer path — true
-    incremental streaming response delivery via StreamResponseProducer,
-    without materialization.
+    Tests for the StreamResponseProducer path — true incremental streaming
+    response delivery without materialization.
 
-    When enabled, response InputStream bodies whose isIoThreadSafe() == false
-    are streamed chunk-by-chunk to the H2/H3 session's send buffer by a
-    dedicated producer worker thread.  The I/O thread never calls read() on
-    the stream; memory is bounded by the peer's flow-control window.
+    Response InputStream bodies whose isIoThreadSafe() == false are streamed
+    chunk-by-chunk to the H2/H3 session's send buffer by a dedicated
+    producer worker thread.  The I/O thread never calls read() on the
+    stream; memory is bounded by the peer's flow-control window.
 
     Coverage (matches /home/david/.claude/plans/streaming-semantics-fix.md):
     - T1: Multi-GB synthesized response streams without exhausting memory
@@ -319,8 +318,6 @@ l50Xb2GWQesIt9k5jF5IOw==
         HttpServer server(<HttpServerOptionInfo>{
             "logger": mLogger,
             "debug": True,
-            # The feature under test: enable producer-based streaming
-            "use_stream_producer": True,
             "quic_headers_only": opts.quic_headers_only ?? False,
         });
 

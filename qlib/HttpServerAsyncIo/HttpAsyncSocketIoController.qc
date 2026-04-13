@@ -1434,23 +1434,25 @@ public class HttpAsyncSocketIoController {
                     remove result.hdr."Transfer-Encoding";
                 }
 
-                # Non-I/O-thread-safe InputStream handling (see doResponse() in
-                # HttpServer.qm for the architectural rule).  Two paths:
-                #
-                #   1. Producer path (use_stream_producer = True): submit
-                #      headers only and spawn a StreamResponseProducer to
-                #      push DATA frames incrementally.  Memory is bounded by
-                #      the peer's flow-control window; no materialization.
-                #
-                #   2. Materialization path (default): drain the stream on
-                #      the handler thread and replace with a BinaryInputStream.
-                #      Safe but buffers the entire body in memory — unsuitable
-                #      for large or open-ended streams.
-                bool stream_producer_active = False;
-                if (result.input_stream && !result.input_stream.isIoThreadSafe()) {
-                    if (result.use_stream_producer) {
-                        hash<auto> resp_hdr = result.hdr ?? {};
-                        remove resp_hdr."Transfer-Encoding";
+                # InputStream response body: try the fast path
+                # (submit*StreamingResponseWithStream), which delegates to
+                # the C++ vtable's isIoThreadSafe() check — that gate is the
+                # authoritative one (Qore subclass overrides of
+                # isIoThreadSafe() do NOT propagate to the C++ vtable).  If
+                # the gate rejects (rv=1), the stream is truly unsafe for
+                # the I/O thread — spawn a StreamResponseProducer to drain
+                # it on a worker thread without materialization.
+                if (result.input_stream) {
+                    hash<auto> resp_hdr = result.hdr ?? {};
+                    remove resp_hdr."Transfer-Encoding";
+                    int rv = cinfo.sock.submitQuicStreamingResponseWithStream(
+                        session_id, stream_id, result.code, resp_hdr, result.input_stream);
+                    if (!rv) {
+                        # Memory-backed stream — I/O thread drives it.
+                        controller.wakeSocket(cinfo.sock);
+                    } else {
+                        # C++ gate rejected: non-I/O-thread-safe stream.
+                        # Spawn a producer worker to push DATA frames.
                         cinfo.sock.submitQuicResponseStreaming(session_id, stream_id,
                             result.code, resp_hdr);
                         result.input_stream.unassignThread();
@@ -1460,49 +1462,6 @@ public class HttpAsyncSocketIoController {
                         HttpServer::StreamResponseProducer producer(cinfo.sock,
                             stream_id, session_id, result.input_stream, wake_fn);
                         producer.start();
-                        remove result.input_stream;
-                        stream_producer_active = True;
-                    } else {
-                        # Materialize on the handler thread (legacy path)
-                        result.input_stream.reassignThread();
-                        binary buf;
-                        while (*binary chunk = result.input_stream.read(65536)) {
-                            buf += chunk;
-                        }
-                        result.input_stream.unassignThread();
-                        if (buf.size() > 0) {
-                            result.input_stream = new BinaryInputStream(buf);
-                        } else {
-                            remove result.input_stream;
-                            result.body = NOTHING;
-                        }
-                    }
-                }
-
-                if (stream_producer_active) {
-                    # Producer is already running; it submits DATA frames and
-                    # END_STREAM on its own.  Nothing more to do on this thread
-                    # — wake the I/O thread so it flushes what's already queued.
-                    controller.wakeSocket(cinfo.sock);
-                } else if (result.input_stream) {
-                    hash<auto> resp_hdr = result.hdr ?? {};
-                    remove resp_hdr."Transfer-Encoding";
-                    int rv = cinfo.sock.submitQuicStreamingResponseWithStream(
-                        session_id, stream_id, result.code, resp_hdr, result.input_stream);
-                    if (!rv) {
-                        controller.wakeSocket(cinfo.sock);
-                    } else {
-                        # C++ gate rejected — materialize and fall through to body path
-                        log(LoggerLevel::DEBUG, "HTTP/3 stream %d: InputStream submit "
-                            "rejected (rv=%d), materializing", stream_id, rv);
-                        result.input_stream.reassignThread();
-                        binary buf;
-                        while (*binary chunk = result.input_stream.read(65536)) {
-                            buf += chunk;
-                        }
-                        result.input_stream.unassignThread();
-                        cinfo.sock.submitQuicResponse(session_id, stream_id, result.code,
-                            result.hdr, buf);
                         controller.wakeSocket(cinfo.sock);
                     }
                 } else {
@@ -3322,84 +3281,35 @@ public class HttpAsyncSocketIoController {
                     remove result.hdr."Transfer-Encoding";
                 }
 
-                # Non-I/O-thread-safe InputStream handling.  Two paths (see
-                # doResponse() in HttpServer.qm for the architectural rule):
-                #
-                #   1. Producer path (use_stream_producer = True): submit
-                #      headers only and spawn a StreamResponseProducer to
-                #      push DATA frames incrementally.  Memory is bounded by
-                #      the peer's flow-control window.
-                #
-                #   2. Materialization path (default): drain the stream on
-                #      the handler thread and replace with a BinaryInputStream.
-                #      Safe but buffers the entire body in memory.
-                bool stream_producer_active = False;
-                if (result.input_stream && !result.input_stream.isIoThreadSafe()) {
-                    if (result.use_stream_producer) {
-                        hash<auto> resp_hdr = result.hdr ?? {};
-                        remove resp_hdr."Transfer-Encoding";
-                        cinfo.sock.submitHttp2StreamingResponseHeaders(stream_id,
-                            result.code, resp_hdr);
-                        result.input_stream.unassignThread();
-                        code<nothing()> wake_fn = sub () {
-                            controller.wakeSocket(cinfo.sock);
-                        };
-                        HttpServer::StreamResponseProducer producer(cinfo.sock,
-                            stream_id, NOTHING, result.input_stream, wake_fn);
-                        producer.start();
-                        remove result.input_stream;
-                        stream_producer_active = True;
-                    } else {
-                        # Materialize on the handler thread (legacy path)
-                        result.input_stream.reassignThread();
-                        binary buf;
-                        while (*binary chunk = result.input_stream.read(65536)) {
-                            buf += chunk;
-                        }
-                        result.input_stream.unassignThread();
-                        if (buf.size() > 0) {
-                            result.input_stream = new BinaryInputStream(buf);
-                        } else {
-                            remove result.input_stream;
-                            result.body = NOTHING;
-                        }
-                    }
-                }
-
-                if (stream_producer_active) {
-                    # Producer is already running; wake I/O thread to flush
-                    # whatever the producer has already queued.
-                    controller.wakeSocket(cinfo.sock);
-                    return;
-                }
-
-                # Submit InputStream to I/O thread for non-blocking streaming
+                # InputStream response body: try the fast path; if the
+                # C++ gate rejects (non-I/O-thread-safe), spawn a producer.
+                # See the H3 branch above for detail on why the gate
+                # (not the Qore-level isIoThreadSafe()) is authoritative.
                 if (result.input_stream) {
                     hash<auto> resp_hdr = result.hdr ?? {};
                     remove resp_hdr."Transfer-Encoding";
                     int rv = cinfo.sock.submitHttp2StreamingResponseWithStream(
                         stream_id, result.code, resp_hdr, result.input_stream);
                     if (!rv) {
+                        # Memory-backed stream — I/O thread drives it.
                         log(LoggerLevel::DEBUG, "HTTP/2 stream %d: submitting "
                             "InputStream response (CL=%y)",
                             stream_id, result.hdr."Content-Length");
                         controller.wakeSocket(cinfo.sock);
                         return;
                     }
-                    # C++ gate rejected the stream (e.g., lying isIoThreadSafe).
-                    # Materialize to binary on the handler thread and fall through
-                    # to the in-memory body path.
-                    log(LoggerLevel::DEBUG, "HTTP/2 stream %d: InputStream submit "
-                        "rejected (rv=%d), materializing on handler thread",
-                        stream_id, rv);
-                    result.input_stream.reassignThread();
-                    binary buf;
-                    while (*binary chunk = result.input_stream.read(65536)) {
-                        buf += chunk;
-                    }
+                    # C++ gate rejected: spawn a producer worker.
+                    cinfo.sock.submitHttp2StreamingResponseHeaders(stream_id,
+                        result.code, resp_hdr);
                     result.input_stream.unassignThread();
-                    result.body = buf;
-                    remove result.input_stream;
+                    code<nothing()> wake_fn = sub () {
+                        controller.wakeSocket(cinfo.sock);
+                    };
+                    HttpServer::StreamResponseProducer producer(cinfo.sock,
+                        stream_id, NOTHING, result.input_stream, wake_fn);
+                    producer.start();
+                    controller.wakeSocket(cinfo.sock);
+                    return;
                 }
 
                 # In-memory response body

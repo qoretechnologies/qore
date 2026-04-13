@@ -137,16 +137,6 @@ public namespace HttpServerAsyncIo {
         #! Streaming response body (for HTTP/2 responses with InputStream)
         *InputStream input_stream;
 
-        #! Enable the streaming response producer path for this response
-        /** When \c True, the controller spawns a producer worker to stream
-            @ref input_stream without materialization.  Set by HttpServer.qm
-            based on the server's @ref HttpServerOptionInfo.use_stream_producer
-            option.
-
-            @since HttpServerAsyncIo 1.0
-        */
-        bool use_stream_producer = False;
-
         #! HTTP status message text (e.g., "OK", "Not Found")
         /** Used by the controller for HTTP/1.x response sending.
             If not set, the fallback is \c "Unknown".
