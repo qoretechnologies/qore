@@ -846,15 +846,22 @@ static void assignClosureVarValue(LocalVar* var, const QoreValue& value, Excepti
     if (!var) {
         return;
     }
-    // When executing inside a closure body (closure_rt_env is set), prefer the
-    // closure's captured variable (from rtenv) over the cvstack. The cvstack may
-    // have entries from an enclosing recursive call that shadow the closure's
-    // captured variable. When NOT inside a closure body, use the cvstack to find
-    // the current function's own variable.
+    // See LocalVar::eval for the lookup priority strategy. In summary: when
+    // a nested function call has pushed its own CVV on cvstack (different from
+    // the closure's captured CVV for the same LocalVar*), the write must go to
+    // the NESTED function's own CVV, not the captured one.
     ClosureVarValue* cv = nullptr;
     if (thread_has_runtime_closure_env()) {
-        // Inside closure body: prefer the closure's captured variable binding
-        cv = thread_try_get_runtime_closure_var(var);
+        ClosureVarValue* stack_cvv = thread_try_find_closure_var(var->getName());
+        ClosureVarValue* env_cvv = thread_try_get_runtime_closure_var(var);
+        if (stack_cvv && env_cvv && stack_cvv != env_cvv) {
+            // Nested function call pushed its own CVV on top
+            cv = stack_cvv;
+        } else if (env_cvv) {
+            cv = env_cvv;
+        } else {
+            cv = stack_cvv;
+        }
     }
     if (!cv) {
         // Regular function body or closure variable not in rtenv: use cvstack
@@ -890,9 +897,18 @@ static void assignClosureVarValueTransfer(LocalVar* var, QoreValue value, Except
         value.discard(xsink);
         return;
     }
+    // See LocalVar::eval / assignClosureVarValue for lookup priority strategy.
     ClosureVarValue* cv = nullptr;
     if (thread_has_runtime_closure_env()) {
-        cv = thread_try_get_runtime_closure_var(var);
+        ClosureVarValue* stack_cvv = thread_try_find_closure_var(var->getName());
+        ClosureVarValue* env_cvv = thread_try_get_runtime_closure_var(var);
+        if (stack_cvv && env_cvv && stack_cvv != env_cvv) {
+            cv = stack_cvv;
+        } else if (env_cvv) {
+            cv = env_cvv;
+        } else {
+            cv = stack_cvv;
+        }
     }
     if (!cv) {
         cv = thread_try_find_closure_var(var->getName());
@@ -3572,15 +3588,27 @@ load_local_done:
                                 locals_instantiated[local_inst->slot_id] = true;
                             }
                         }
-                        // When executing inside a closure body (runtime closure env
-                        // is set), prefer the closure's captured variable binding
-                        // (rtenv) over the cvstack.  ensureLocalInstantiated() may
-                        // have pushed a new (empty) CVV that shadows the captured
-                        // one.  When NOT in a closure body, prefer the cvstack
-                        // (topmost = current function's own variable).
+                        // See LocalVar::eval for the lookup priority strategy.
+                        // In summary: when inside a closure body AND a newer
+                        // CVV has been pushed on cvstack (by a nested function
+                        // call from the closure body), prefer the cvstack CVV.
+                        // This handles parameters of nested functions correctly
+                        // — they should read the nested function's own value,
+                        // not the closure's captured value.
                         ClosureVarValue* cv = nullptr;
                         if (thread_has_runtime_closure_env()) {
-                            cv = thread_try_get_runtime_closure_var(local_inst->local);
+                            ClosureVarValue* stack_cvv = thread_try_find_closure_var(
+                                local_inst->local->getName());
+                            ClosureVarValue* env_cvv = thread_try_get_runtime_closure_var(
+                                local_inst->local);
+                            if (stack_cvv && env_cvv && stack_cvv != env_cvv) {
+                                // Nested function call pushed its own CVV on top
+                                cv = stack_cvv;
+                            } else if (env_cvv) {
+                                cv = env_cvv;
+                            } else {
+                                cv = stack_cvv;
+                            }
                         }
                         if (!cv) {
                             cv = thread_try_find_closure_var(local_inst->local->getName());

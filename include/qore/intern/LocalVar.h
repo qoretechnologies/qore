@@ -504,27 +504,43 @@ public:
             return val->eval(needs_deref, xsink);
         }
 
-        // When executing inside a closure body, prefer the closure's captured
-        // CVV over the cvstack.  CVecInstantiator pushes captured variables
-        // back onto the cvstack in an order that reverses same-named variables
-        // from different recursion depths.  For recursive functions with
-        // closure-captured variables, this causes the cvstack to have the
-        // OUTER call's variable on top, making name-based lookup return the
-        // wrong value.  The closure's own cmap always has the correct CVV
-        // that was captured at closure creation time.
+        // Lookup priority is tricky because we must handle three cases correctly:
+        //  1. Direct closure body (possibly on a worker thread): must use the
+        //     captured CVV from closure env — the worker thread's cvstack only
+        //     has what CVecInstantiator pushed.
+        //  2. Direct function body (no closure env): use cvstack (topmost =
+        //     current function's own variable).
+        //  3. Nested function call from closure body: a new CVV has been pushed
+        //     on cvstack (by the nested function's own instantiation) and sits
+        //     on top of the closure's captured CVV. We must use the NEW CVV
+        //     (the nested function's own var), NOT the captured one. This is
+        //     the key difference vs case 1.
+        //
+        // Strategy: look up both stack_cvv (by name, topmost) and env_cvv
+        // (by LocalVar* in closure's cmap). If stack_cvv != env_cvv, we're in
+        // case 3 and must use stack_cvv. Otherwise use env_cvv if present.
         ClosureVarValue* val = nullptr;
         if (thread_has_runtime_closure_env()) {
-            // Inside closure body: prefer closure's captured CVV (by pointer)
-            val = thread_try_get_runtime_closure_var(this);
-            if (!val) {
-                val = thread_try_find_closure_var(name.c_str());
+            ClosureVarValue* stack_cvv = thread_try_find_closure_var(name.c_str());
+            ClosureVarValue* env_cvv = thread_try_get_runtime_closure_var(this);
+            if (stack_cvv && env_cvv && stack_cvv != env_cvv) {
+                // Case 3: nested function pushed its own CVV after the closure's
+                // captured one. Prefer the nested function's own variable.
+                val = stack_cvv;
+            } else if (env_cvv) {
+                // Case 1: direct closure body (or env_cvv == stack_cvv on
+                // same thread). Use the closure's captured CVV.
+                val = env_cvv;
+            } else {
+                // Closure env doesn't have this LocalVar (nested function's
+                // own local not in any outer closure's capture set).
+                val = stack_cvv;
             }
         } else {
-            // Direct function body: prefer cvstack (by name, topmost = current
-            // function's own variable).  Use try_find() to avoid crashing if the
-            // variable hasn't been instantiated yet (AOT mode skips closure-use
-            // var pre-instantiation in evalTiered, relying on LLVM codegen for
-            // lazy instantiation).
+            // Case 2: direct function body. Prefer cvstack (by name, topmost).
+            // Use try_find() to avoid crashing if the variable hasn't been
+            // instantiated yet (AOT mode skips closure-use var pre-instantiation
+            // in evalTiered, relying on LLVM codegen for lazy instantiation).
             val = thread_try_find_closure_var(name.c_str());
             if (!val) {
                 val = thread_try_get_runtime_closure_var(this);

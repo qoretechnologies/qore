@@ -1160,8 +1160,9 @@ public auto sub parse_to_qore_value(string arg) {
             return eval_text(pc[1], True).value;
     }
 
-    # we should not use "auto" here because this lvalue must be able to convert to an untyped list
-    auto v;
+    # do not use "auto" here because auto narrows on assignment — this lvalue
+    # must remain heterogeneous so later iterations can push/add differently-typed values
+    any v;
 
     list<hash> l = scan_exp(arg);
 
