@@ -32,6 +32,10 @@
 
 %requires QoreModelRegistry
 %requires QoreTokenizerUtils
+%requires QoreStructuredExtraction
+%requires QoreGuardrails
+%requires QoreOcrUtils
+%requires QoreVisionExtraction
 
 module DataProviderML {
     version = "1.0";
@@ -1251,6 +1255,257 @@ module DataProviderML {
             ) + DataProviderActionCatalog::getActionOptionFromFields(
                 QoreEmbedTextProcessor::ConstructorOptions{
                     "embedding_url", "embedding_model", "embedding_api_key", "window_size",
+                }, {
+                    "loc": "constructor",
+                }
+            ),
+        });
+
+        # register extract-structured action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MLApp::AppName,
+            "path": "/extract-structured",
+            "action": "extract-structured",
+            "display_name": "Extract Structured Data from Text",
+            "short_desc": "Pulls structured fields from unstructured text using an LLM",
+            "desc": "Uses an LLM to extract typed structured data from a text field — for "
+                "example, pulling names and addresses from emails, line items from invoices, "
+                "entities from articles, or sentiment from reviews.\n\n"
+                "Choose a built-in schema template (NER, invoice, contact, sentiment) or "
+                "define a custom schema. Each record is enriched with:\n"
+                "- `_extracted` — the structured data matching the schema\n"
+                "- `_extraction_valid` — whether the output passed validation\n"
+                "- `_extraction_usage` — LLM token usage\n"
+                "- `_extraction_errors` — validation errors (if any)",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_TRANSFORM,
+            "cls": "DataProviderML::QoreExtractionProcessor",
+            "groups": (AppGroup::Analytics,),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                QoreExtractionProcessor::ConstructorOptions{"text_field", "llm_mode"}, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                QoreExtractionProcessor::ConstructorOptions{
+                    "schema_template", "llm_url", "llm_model", "llm_api_key",
+                    "temperature", "max_retries",
+                }, {
+                    "loc": "constructor",
+                }
+            ),
+        });
+
+        # register rerank-text action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MLApp::AppName,
+            "path": "/rerank-text",
+            "action": "rerank-text",
+            "display_name": "Re-rank Search Results by Relevance",
+            "short_desc": "Scores and re-orders search results using a cross-encoder model",
+            "desc": "Improves search precision by scoring each candidate passage against the "
+                "query using a cross-encoder model. Unlike embedding-based search which "
+                "encodes query and passage independently, cross-encoders attend to both "
+                "simultaneously for more accurate relevance scoring.\n\n"
+                "Accumulates all candidate records, scores them, and emits the top-k most "
+                "relevant records enriched with:\n"
+                "- `reranker_score` — relevance score (0.0 to 1.0)\n"
+                "- `reranker_rank` — rank position (1 = most relevant)",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_AGGREGATE,
+            "cls": "DataProviderML::QoreRerankerProcessor",
+            "groups": (AppGroup::Analytics,),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                QoreRerankerProcessor::ConstructorOptions{
+                    "query_field", "passage_field", "reranker_mode",
+                }, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                QoreRerankerProcessor::ConstructorOptions{
+                    "top_k", "reranker_url", "reranker_api_key",
+                    "reranker_model_path", "tokenizer_config_path", "max_length",
+                }, {
+                    "loc": "constructor",
+                }
+            ),
+        });
+
+        # register semantic-chunk-text action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MLApp::AppName,
+            "path": "/semantic-chunk-text",
+            "action": "semantic-chunk-text",
+            "display_name": "Split Text at Semantic Boundaries",
+            "short_desc": "Chunks text where topics change instead of at fixed token counts",
+            "desc": "Splits text into chunks at semantic boundaries rather than arbitrary "
+                "token counts. Groups related sentences together by comparing embedding "
+                "similarity between consecutive segments — when similarity drops below a "
+                "threshold, a new chunk begins.\n\n"
+                "Each input record produces one or more output records with:\n"
+                "- `chunk_text` — the text of the semantic chunk\n"
+                "- `chunk_index` — zero-based index of the chunk\n"
+                "- `chunk_token_count` — number of tokens in the chunk\n\n"
+                "Best for narrative documents (articles, reports, transcripts) where meaning "
+                "flows across sentences. For structured documents with clear headings, use "
+                "the standard `chunk-text` processor instead.",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_AGGREGATE,
+            "cls": "DataProviderML::QoreSemanticChunkProcessor",
+            "groups": (AppGroup::Analytics,),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                QoreSemanticChunkProcessor::ConstructorOptions{
+                    "text_field", "tokenizer_config_path", "embedding_mode",
+                }, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                QoreSemanticChunkProcessor::ConstructorOptions{
+                    "chunk_size", "chunk_overlap", "similarity_threshold", "segment_size",
+                    "embedding_url", "embedding_model", "embedding_api_key",
+                    "embedding_model_path",
+                }, {
+                    "loc": "constructor",
+                }
+            ),
+        });
+
+        # register guardrail-filter action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MLApp::AppName,
+            "path": "/guardrail-filter",
+            "action": "guardrail-filter",
+            "display_name": "Block Unsafe Records",
+            "short_desc": "Drops records that contain PII, prompt injections, or policy violations",
+            "desc": "Evaluates each record's text field against configured guardrail rules and "
+                "drops records that fail. Use this before an LLM call to prevent PII, prompt "
+                "injections, or off-topic queries from reaching the model.\n\n"
+                "Records that pass all rules continue through the pipeline unchanged. "
+                "Records that fail any rule are silently dropped.",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_FILTER,
+            "cls": "DataProviderML::QoreGuardrailFilterProcessor",
+            "groups": (AppGroup::Analytics,),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                QoreGuardrailFilterProcessor::ConstructorOptions{"text_field", "rules"}, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ),
+        });
+
+        # register guardrail-transform action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MLApp::AppName,
+            "path": "/guardrail-transform",
+            "action": "guardrail-transform",
+            "display_name": "Check and Annotate Text Safety",
+            "short_desc": "Enriches records with guardrail results and optionally redacts PII",
+            "desc": "Evaluates each record's text field against configured guardrail rules and "
+                "enriches the record with results. Records always pass through (unlike the "
+                "filter processor).\n\n"
+                "Each record gets:\n"
+                "- `_guardrail_passed` — whether the text passed all rules\n"
+                "- `_guardrail_violations` — list of violations found\n\n"
+                "If PII redaction is configured, the text field is replaced with the "
+                "redacted version.",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_TRANSFORM,
+            "cls": "DataProviderML::QoreGuardrailTransformProcessor",
+            "groups": (AppGroup::Analytics,),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                QoreGuardrailTransformProcessor::ConstructorOptions{"text_field", "rules"}, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ),
+        });
+
+        # register document-ocr action (unified interface for all document formats)
+        # Note: the lower-level ocr and pdf-ocr processors remain available for
+        # programmatic use but are not registered as actions — users should use
+        # document-ocr which handles all formats automatically
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MLApp::AppName,
+            "path": "/document-ocr",
+            "action": "document-ocr",
+            "display_name": "Extract Text from Any Document",
+            "short_desc": "Reads text from PDFs, images, and scanned documents automatically",
+            "desc": "Extracts text from any document format your users might upload — PDF "
+                "files, photos of documents, scanned images, screenshots, and more.\n\n"
+                "The processor automatically detects the file type and applies the best "
+                "extraction strategy:\n"
+                "- **PDFs**: extracts the digital text layer (fast); scanned pages are "
+                "automatically rasterized and OCR'd\n"
+                "- **Images** (PNG, JPEG, TIFF, BMP, GIF, WebP): runs OCR directly\n"
+                "- **SVG files**: renders to image first, then OCR\n\n"
+                "Each record is enriched with:\n"
+                "- `document_text` — the full extracted text\n"
+                "- `document_format` — detected format (e.g., `PDF`, `JPEG`, `TIFF`)\n"
+                "- `document_pages` — number of pages\n"
+                "- `document_ocr_pages` — how many pages required OCR\n"
+                "- `document_confidence` — average OCR confidence (0.0 to 1.0)\n\n"
+                "**Optional modules:** `pdf` (for PDFs), `imagemagick` (for WebP, HEIC, "
+                "and 100+ other formats), `cairo` (for SVGs).",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_TRANSFORM,
+            "cls": "DataProviderML::QoreDocumentOcrProcessor",
+            "groups": (AppGroup::Analytics,),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                QoreDocumentOcrProcessor::ConstructorOptions{"document_field",}, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                QoreDocumentOcrProcessor::ConstructorOptions{
+                    "mime_type_field", "language", "dpi", "scanned_threshold",
+                }, {
+                    "loc": "constructor",
+                }
+            ),
+        });
+
+        # register vision-extraction action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MLApp::AppName,
+            "path": "/vision-extraction",
+            "action": "vision-extraction",
+            "display_name": "Analyze Images with Vision AI",
+            "short_desc": "Uses a vision LLM to describe images, extract tables, or read text",
+            "desc": "Sends images to a vision-capable LLM (GPT-4o, Claude) for analysis. "
+                "Useful when OCR alone cannot handle complex layouts, charts, diagrams, "
+                "or visual content that requires understanding.\n\n"
+                "Extraction types:\n"
+                "- `describe` — detailed image description\n"
+                "- `extract_table` — tables as markdown\n"
+                "- `extract_text` — all visible text preserving layout\n\n"
+                "Each record is enriched with:\n"
+                "- `vision_text` — the extracted content\n"
+                "- `vision_format` — output format used",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_TRANSFORM,
+            "cls": "DataProviderML::QoreVisionExtractionProcessor",
+            "groups": (AppGroup::Analytics,),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                QoreVisionExtractionProcessor::ConstructorOptions{
+                    "image_field", "extraction_type", "vision_mode",
+                    "vision_url", "vision_model",
+                }, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                QoreVisionExtractionProcessor::ConstructorOptions{
+                    "mime_type_field", "vision_api_key",
                 }, {
                     "loc": "constructor",
                 }

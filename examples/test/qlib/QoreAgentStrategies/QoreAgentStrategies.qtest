@@ -1,0 +1,542 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  QoreAgentStrategies.qtest Copyright 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+%modern
+%requires ../../../../qlib/QoreAgentStrategies
+%requires json
+%requires Util
+%requires QUnit
+
+%exec-class QoreAgentStrategiesTest
+
+#! Mock LLM that supports both complete() and chat() with pre-configured responses
+class MockChatLlm inherits QoreLlmUtils::LlmBackend {
+    private {
+        list<auto> responses;
+        int call_idx = 0;
+        int total_calls = 0;
+    }
+
+    constructor(list<auto> resp_list)
+            : LlmBackend(<LlmBackendConfig>{"mode": "callback", "api_callback": hash<auto> sub (string m, string p, hash<auto> b) { return {}; }}) {
+        responses = resp_list;
+    }
+
+    hash<LlmCompletionResult> complete(string system_prompt, string user_prompt,
+            *hash<auto> output_schema) {
+        auto resp = getNextResponse();
+        ++total_calls;
+        if (resp.typeCode() == NT_STRING) {
+            return <LlmCompletionResult>{
+                "content": resp,
+                "usage": {"total_tokens": 80},
+            };
+        }
+        # hash response — extract content
+        return <LlmCompletionResult>{
+            "content": resp.content ?? "",
+            "usage": {"total_tokens": 80},
+        };
+    }
+
+    hash<ChatResponse> chat(list<hash<ChatMessage>> messages,
+            *list<hash<ToolDefinition>> tools) {
+        auto resp = getNextResponse();
+        ++total_calls;
+        if (resp.typeCode() == NT_HASH) {
+            return cast<hash<ChatResponse>>(resp);
+        }
+        # String response — wrap as end_turn
+        return <ChatResponse>{
+            "stop_reason": "end_turn",
+            "content": resp.toString(),
+            "usage": {"total_tokens": 80},
+        };
+    }
+
+    private auto getNextResponse() {
+        auto resp;
+        if (call_idx < responses.size()) {
+            resp = responses[call_idx];
+        } else {
+            resp = responses[responses.size() - 1];
+        }
+        ++call_idx;
+        return resp;
+    }
+
+    int getTotalCalls() {
+        return total_calls;
+    }
+}
+
+public class QoreAgentStrategiesTest inherits QUnit::Test {
+    constructor() : Test("QoreAgentStrategiesTest", "1.0") {
+        # SimpleAgentStrategy tests
+        addTestCase("SimpleAgent - no tools, text response", \simpleNoToolsTest());
+        addTestCase("SimpleAgent - single tool call", \simpleSingleToolTest());
+        addTestCase("SimpleAgent - multiple iterations", \simpleMultiIterationTest());
+        addTestCase("SimpleAgent - max iterations reached", \simpleMaxIterationsTest());
+        addTestCase("SimpleAgent - tool dispatch error", \simpleToolErrorTest());
+        addTestCase("SimpleAgent - event callback", \simpleEventsTest());
+        addTestCase("SimpleAgent - conversation history", \simpleHistoryTest());
+        addTestCase("SimpleAgent - token budget", \simpleBudgetTest());
+
+        # PlanningAgentStrategy tests
+        addTestCase("Planning - basic execution", \planningBasicTest());
+        addTestCase("Planning - with tool dispatch", \planningToolTest());
+
+        # ReflexionAgentStrategy tests
+        addTestCase("Reflexion - complete on first try", \reflexionCompleteTest());
+        addTestCase("Reflexion - reflection corrects", \reflexionCorrectTest());
+
+        # ParallelToolDispatcher tests
+        addTestCase("Parallel - concurrent dispatch", \parallelTest());
+        addTestCase("Parallel - error handling", \parallelErrorTest());
+
+        # Hashdecl tests
+        addTestCase("AgentContext defaults", \contextDefaultsTest());
+        addTestCase("AgentEvent construction", \eventConstructionTest());
+
+        set_return_value(main());
+    }
+
+    # ===================== SimpleAgentStrategy Tests =====================
+
+    simpleNoToolsTest() {
+        MockChatLlm mock(("The answer is 42",));
+        SimpleAgentStrategy agent(mock, {"max_iterations": 5});
+        hash<AgentResult> result = agent.execute(<AgentContext>{
+            "message": "What is the answer?",
+        });
+        assertEq("The answer is 42", result.response);
+        assertEq(0, result.tool_calls.size());
+        assertEq(1, result.llm_calls);
+        assertEq("simple", result.metadata.strategy);
+    }
+
+    simpleSingleToolTest() {
+        # First call: LLM requests a tool
+        hash<ChatResponse> tool_response(<ChatResponse>{
+            "stop_reason": "tool_use",
+            "content": "",
+            "tool_calls": (<ChatToolCall>{
+                "id": "tc_1",
+                "name": "get_weather",
+                "arguments": {"city": "Prague"},
+            },),
+            "usage": {"total_tokens": 100},
+        });
+        # Second call: LLM gives final answer
+        hash<ChatResponse> text_response(<ChatResponse>{
+            "stop_reason": "end_turn",
+            "content": "The weather in Prague is sunny, 22C.",
+            "usage": {"total_tokens": 80},
+        });
+
+        MockChatLlm mock((tool_response, text_response));
+        SimpleAgentStrategy agent(mock, {"max_iterations": 5});
+
+        bool tool_called = False;
+        code dispatch = auto sub (string name, hash<auto> args) {
+            tool_called = True;
+            assertEq("get_weather", name);
+            assertEq("Prague", args.city);
+            return {"temp": 22, "condition": "sunny"};
+        };
+
+        hash<AgentResult> result = agent.execute(<AgentContext>{
+            "message": "Weather in Prague?",
+            "tools": (<ToolDefinition>{"name": "get_weather"},),
+            "tool_dispatch": dispatch,
+        });
+
+        assertTrue(tool_called);
+        assertEq("The weather in Prague is sunny, 22C.", result.response);
+        assertEq(1, result.tool_calls.size());
+        assertEq("get_weather", result.tool_calls[0].tool);
+        assertEq(22, result.tool_calls[0].result.temp);
+        assertEq(2, result.llm_calls);
+    }
+
+    simpleMultiIterationTest() {
+        # 2 tool calls before final text
+        hash<ChatResponse> tool1(<ChatResponse>{
+            "stop_reason": "tool_use",
+            "tool_calls": (<ChatToolCall>{"id": "t1", "name": "search", "arguments": {"q": "data"}},),
+            "usage": {"total_tokens": 80},
+        });
+        hash<ChatResponse> tool2(<ChatResponse>{
+            "stop_reason": "tool_use",
+            "tool_calls": (<ChatToolCall>{"id": "t2", "name": "analyze", "arguments": {"d": "result"}},),
+            "usage": {"total_tokens": 80},
+        });
+        hash<ChatResponse> final_resp(<ChatResponse>{
+            "stop_reason": "end_turn",
+            "content": "Analysis complete.",
+            "usage": {"total_tokens": 80},
+        });
+
+        MockChatLlm mock((tool1, tool2, final_resp));
+        SimpleAgentStrategy agent(mock, {"max_iterations": 5});
+
+        code dispatch = auto sub (string name, hash<auto> args) {
+            return {"status": "ok"};
+        };
+
+        hash<AgentResult> result = agent.execute(<AgentContext>{
+            "message": "Analyze data",
+            "tools": (<ToolDefinition>{"name": "search"}, <ToolDefinition>{"name": "analyze"},),
+            "tool_dispatch": dispatch,
+        });
+
+        assertEq(2, result.tool_calls.size());
+        assertEq(3, result.llm_calls);
+        assertEq(3, result.metadata.iterations);
+    }
+
+    simpleMaxIterationsTest() {
+        # Always returns tool_use — should cap at max_iterations
+        hash<ChatResponse> tool_resp(<ChatResponse>{
+            "stop_reason": "tool_use",
+            "tool_calls": (<ChatToolCall>{"id": "t1", "name": "loop"},),
+            "usage": {"total_tokens": 50},
+        });
+        hash<ChatResponse> final_resp(<ChatResponse>{
+            "stop_reason": "end_turn",
+            "content": "Stopped after max iterations.",
+            "usage": {"total_tokens": 50},
+        });
+
+        MockChatLlm mock((tool_resp, tool_resp, tool_resp, final_resp));
+        SimpleAgentStrategy agent(mock, {"max_iterations": 2});
+
+        code dispatch = auto sub (string name, hash<auto> args) {
+            return {"ok": True};
+        };
+
+        hash<AgentResult> result = agent.execute(<AgentContext>{
+            "message": "Loop forever",
+            "tools": (<ToolDefinition>{"name": "loop"},),
+            "tool_dispatch": dispatch,
+        });
+
+        assertTrue(result.metadata.max_iterations_reached);
+        assertEq(2, result.tool_calls.size());
+    }
+
+    simpleToolErrorTest() {
+        hash<ChatResponse> tool_resp(<ChatResponse>{
+            "stop_reason": "tool_use",
+            "tool_calls": (<ChatToolCall>{"id": "t1", "name": "fail_tool"},),
+            "usage": {"total_tokens": 80},
+        });
+        hash<ChatResponse> text_resp(<ChatResponse>{
+            "stop_reason": "end_turn",
+            "content": "The tool failed, but I handled it.",
+            "usage": {"total_tokens": 80},
+        });
+
+        MockChatLlm mock((tool_resp, text_resp));
+        SimpleAgentStrategy agent(mock, {"max_iterations": 5});
+
+        code dispatch = auto sub (string name, hash<auto> args) {
+            throw "TOOL-ERROR", "intentional failure";
+        };
+
+        hash<AgentResult> result = agent.execute(<AgentContext>{
+            "message": "Try the broken tool",
+            "tools": (<ToolDefinition>{"name": "fail_tool"},),
+            "tool_dispatch": dispatch,
+        });
+
+        assertEq(1, result.tool_calls.size());
+        assertTrue(result.tool_calls[0].error.val());
+        assertTrue(result.tool_calls[0].error =~ /TOOL-ERROR/);
+        assertEq(2, result.llm_calls);
+    }
+
+    simpleEventsTest() {
+        hash<ChatResponse> tool_resp(<ChatResponse>{
+            "stop_reason": "tool_use",
+            "tool_calls": (<ChatToolCall>{"id": "t1", "name": "test_tool"},),
+            "usage": {"total_tokens": 80},
+        });
+        hash<ChatResponse> text_resp(<ChatResponse>{
+            "stop_reason": "end_turn",
+            "content": "Done.",
+            "usage": {"total_tokens": 80},
+        });
+
+        MockChatLlm mock((tool_resp, text_resp));
+
+        list<string> event_types = ();
+        code event_cb = sub (hash<AgentEvent> ev) {
+            push event_types, ev.event_type;
+        };
+
+        SimpleAgentStrategy agent(mock, {
+            "max_iterations": 5,
+            "event_callback": event_cb,
+        });
+
+        code dispatch = auto sub (string name, hash<auto> args) {
+            return {"ok": True};
+        };
+
+        agent.execute(<AgentContext>{
+            "message": "Test events",
+            "tools": (<ToolDefinition>{"name": "test_tool"},),
+            "tool_dispatch": dispatch,
+        });
+
+        assertTrue(inlist("strategy_started", event_types));
+        assertTrue(inlist("llm_called", event_types));
+        assertTrue(inlist("tool_dispatched", event_types));
+        assertTrue(inlist("tool_completed", event_types));
+        assertTrue(inlist("iteration_completed", event_types));
+        assertTrue(inlist("strategy_completed", event_types));
+    }
+
+    simpleHistoryTest() {
+        MockChatLlm mock(("Response with history context",));
+        SimpleAgentStrategy agent(mock, {"max_iterations": 5});
+
+        hash<AgentResult> result = agent.execute(<AgentContext>{
+            "message": "Follow-up question",
+            "history": (
+                <ChatMessage>{"role": "system", "content": "You are a helper."},
+                <ChatMessage>{"role": "user", "content": "First question"},
+                <ChatMessage>{"role": "assistant", "content": "First answer"},
+            ),
+        });
+
+        assertEq("Response with history context", result.response);
+        assertEq(1, result.llm_calls);
+    }
+
+    simpleBudgetTest() {
+        # Each call uses 80 tokens; budget is 50 — first call succeeds, second blocked
+        hash<ChatResponse> tool_resp(<ChatResponse>{
+            "stop_reason": "tool_use",
+            "tool_calls": (<ChatToolCall>{"id": "t1", "name": "tool"},),
+            "usage": {"total_tokens": 80},
+        });
+
+        MockChatLlm mock((tool_resp, tool_resp));
+        SimpleAgentStrategy agent(mock, {"max_iterations": 5, "token_budget": 50});
+
+        code dispatch = auto sub (string name, hash<auto> args) {
+            return {};
+        };
+
+        assertThrows("AGENT-BUDGET-EXCEEDED",
+            sub () {
+                agent.execute(<AgentContext>{
+                    "message": "Test budget",
+                    "tools": (<ToolDefinition>{"name": "tool"},),
+                    "tool_dispatch": dispatch,
+                });
+            }
+        );
+    }
+
+    # ===================== PlanningAgentStrategy Tests =====================
+
+    planningBasicTest() {
+        string plan_response = make_json({
+            "subtasks": (
+                {"description": "Search for data"},
+                {"description": "Analyze results"},
+            ),
+        });
+        # Sub-task executions (SimpleAgent calls chat())
+        hash<ChatResponse> sub1_resp(<ChatResponse>{
+            "stop_reason": "end_turn",
+            "content": "Found data: revenue=$1M",
+            "usage": {"total_tokens": 80},
+        });
+        hash<ChatResponse> sub2_resp(<ChatResponse>{
+            "stop_reason": "end_turn",
+            "content": "Analysis: revenue is up 10%",
+            "usage": {"total_tokens": 80},
+        });
+        string synthesis = "Revenue is $1M, up 10% year-over-year.";
+
+        MockChatLlm mock((plan_response, sub1_resp, sub2_resp, synthesis));
+        PlanningAgentStrategy strategy(mock, {"max_subtasks": 5, "token_budget": 0});
+
+        hash<AgentResult> result = strategy.execute(<AgentContext>{
+            "message": "Analyze revenue",
+        });
+
+        assertEq(synthesis, result.response);
+        assertEq("planning", result.metadata.strategy);
+        assertEq(2, result.metadata.subtask_count);
+    }
+
+    planningToolTest() {
+        string plan_response = make_json({
+            "subtasks": (
+                {"description": "Search DB", "tool": "search_db",
+                    "args": {"query": "revenue"}},
+            ),
+        });
+        # SimpleAgent for subtask: tool call then text
+        hash<ChatResponse> tool_resp(<ChatResponse>{
+            "stop_reason": "tool_use",
+            "tool_calls": (<ChatToolCall>{"id": "t1", "name": "search_db",
+                "arguments": {"query": "revenue"}},),
+            "usage": {"total_tokens": 80},
+        });
+        hash<ChatResponse> sub_text(<ChatResponse>{
+            "stop_reason": "end_turn",
+            "content": "Found 42 rows",
+            "usage": {"total_tokens": 80},
+        });
+        string synthesis = "Revenue data: 42 rows found.";
+
+        MockChatLlm mock((plan_response, tool_resp, sub_text, synthesis));
+        PlanningAgentStrategy strategy(mock, {"token_budget": 0});
+
+        list<hash<auto>> dispatched = ();
+        code dispatch = auto sub (string name, hash<auto> args) {
+            push dispatched, {"name": name};
+            return {"rows": 42};
+        };
+
+        hash<AgentResult> result = strategy.execute(<AgentContext>{
+            "message": "Get revenue",
+            "tools": (<ToolDefinition>{"name": "search_db"},),
+            "tool_dispatch": dispatch,
+        });
+
+        assertEq(1, dispatched.size());
+        assertTrue(result.tool_calls.size() >= 1);
+    }
+
+    # ===================== ReflexionAgentStrategy Tests =====================
+
+    reflexionCompleteTest() {
+        # Initial execution — SimpleAgent returns text
+        hash<ChatResponse> exec_resp(<ChatResponse>{
+            "stop_reason": "end_turn",
+            "content": "The answer is 42",
+            "usage": {"total_tokens": 80},
+        });
+        # Reflection says complete
+        string reflection = make_json({
+            "complete": True,
+            "missing": "",
+            "corrections": "",
+        });
+
+        MockChatLlm mock((exec_resp, reflection));
+        ReflexionAgentStrategy strategy(mock, {"max_reflections": 2, "token_budget": 0});
+
+        hash<AgentResult> result = strategy.execute(<AgentContext>{
+            "message": "What is the answer?",
+        });
+
+        assertEq("The answer is 42", result.response);
+        assertEq(0, result.metadata.reflections_done);
+    }
+
+    reflexionCorrectTest() {
+        # Initial: incomplete
+        hash<ChatResponse> exec1(<ChatResponse>{
+            "stop_reason": "end_turn",
+            "content": "Partial answer",
+            "usage": {"total_tokens": 80},
+        });
+        string reflect_incomplete = make_json({
+            "complete": False,
+            "missing": "missing details",
+            "corrections": "add details",
+        });
+        # Correction: complete
+        hash<ChatResponse> exec2(<ChatResponse>{
+            "stop_reason": "end_turn",
+            "content": "Complete answer with details",
+            "usage": {"total_tokens": 80},
+        });
+        string reflect_complete = make_json({
+            "complete": True,
+            "missing": "",
+            "corrections": "",
+        });
+
+        MockChatLlm mock((exec1, reflect_incomplete, exec2, reflect_complete));
+        ReflexionAgentStrategy strategy(mock, {"max_reflections": 2, "token_budget": 0});
+
+        hash<AgentResult> result = strategy.execute(<AgentContext>{
+            "message": "Give full details",
+        });
+
+        assertEq("Complete answer with details", result.response);
+        assertEq(1, result.metadata.reflections_done);
+    }
+
+    # ===================== ParallelToolDispatcher Tests =====================
+
+    parallelTest() {
+        ParallelToolDispatcher dispatcher({"max_concurrent": 5});
+        code dispatch = auto sub (string name, hash<auto> args) {
+            return {"name": name, "tid": gettid()};
+        };
+
+        list<hash<auto>> results = dispatcher.dispatchToolsParallel(
+            ({"name": "a"}, {"name": "b"}, {"name": "c"}),
+            dispatch,
+        );
+
+        assertEq(3, results.size());
+        foreach hash<auto> r in (results) {
+            assertTrue(exists r.result);
+        }
+    }
+
+    parallelErrorTest() {
+        ParallelToolDispatcher dispatcher();
+        code dispatch = auto sub (string name, hash<auto> args) {
+            if (name == "fail") {
+                throw "TOOL-ERROR", "fail";
+            }
+            return {"ok": True};
+        };
+
+        list<hash<auto>> results = dispatcher.dispatchToolsParallel(
+            ({"name": "good"}, {"name": "fail"}),
+            dispatch,
+        );
+
+        assertEq(2, results.size());
+        assertTrue(exists results[0].result);
+        assertTrue(exists results[1].error);
+    }
+
+    # ===================== Hashdecl Tests =====================
+
+    contextDefaultsTest() {
+        hash<AgentContext> ctx(<AgentContext>{"message": "test"});
+        assertEq("test", ctx.message);
+        assertEq(NOTHING, ctx.history);
+        assertEq(NOTHING, ctx.tools);
+        assertEq(NOTHING, ctx.system_prompt);
+    }
+
+    eventConstructionTest() {
+        hash<AgentEvent> ev(<AgentEvent>{
+            "event_type": "strategy_started",
+            "strategy": "simple",
+            "timestamp": now_us(),
+        });
+        assertEq("strategy_started", ev.event_type);
+        assertEq("simple", ev.strategy);
+        assertTrue(exists ev.timestamp);
+    }
+}

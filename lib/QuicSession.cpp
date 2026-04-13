@@ -1376,7 +1376,8 @@ QuicTimerWriteResult QuicSession::processTimerAndWrite(QuicPacketBatch& packets,
 
     QuicTimerWriteResult result;
 
-    // Check and handle timer expiry
+    // Check and handle timer expiry (matches curl's pattern: handle once,
+    // then re-check after writePacketsLocked flushes the result).
     ngtcp2_tstamp expiry = getExpiryLocked();
     if (expiry != UINT64_MAX) {
         ngtcp2_tstamp now = timestamp();
@@ -2178,6 +2179,7 @@ int QuicSession::submitConnectResponse(int64_t stream_id, int status_code,
     auto& sbd = streaming_body_data_[stream_id];
     sbd = QuicStreamingBodyData{};
     sbd.deferred = true;
+    sbd.no_end_stream = true;  // CONNECT tunnel: keep stream open for bidirectional data
 
     int rv = nghttp3_conn_submit_response(h3_conn_, stream_id, nva.data(), nva.size(), &dr);
     if (rv != 0) {
@@ -2837,6 +2839,9 @@ int QuicSession::streamCloseCallback(ngtcp2_conn* /* conn */, uint32_t flags,
     printd(5, "QuicSession::streamCloseCallback() stream_id=" QLLD " flags=0x%x error_code=%llu\n",
         stream_id, flags, (unsigned long long)app_error_code);
 
+    bool peer_reset = (flags & NGTCP2_STREAM_CLOSE_FLAG_APP_ERROR_CODE_SET)
+        && app_error_code != NGHTTP3_H3_NO_ERROR;
+
     try {
         if (session->h3_conn_) {
             if (!(flags & NGTCP2_STREAM_CLOSE_FLAG_APP_ERROR_CODE_SET)) {
@@ -2849,6 +2854,22 @@ int QuicSession::streamCloseCallback(ngtcp2_conn* /* conn */, uint32_t flags,
             if (rv != 0 && rv != NGHTTP3_ERR_STREAM_NOT_FOUND
                          && rv != NGHTTP3_ERR_H3_CLOSED_CRITICAL_STREAM) {
                 return NGTCP2_ERR_CALLBACK_FAILURE;
+            }
+        }
+
+        // If the peer reset the stream with an error code, record the error
+        // so the poll operation dispatches an error to the Promise/Future
+        // instead of an empty "successful" response.  Without this, client
+        // callers cannot distinguish "peer reset" from "empty response" —
+        // leading to silent data loss.
+        if (peer_reset) {
+            auto sit = session->streams_.find(stream_id);
+            if (sit != session->streams_.end() && sit->second->error_message.empty()) {
+                char buf[128];
+                snprintf(buf, sizeof(buf),
+                    "peer reset stream (HTTP/3 error code 0x%llx)",
+                    (unsigned long long)app_error_code);
+                sit->second->error_message = buf;
             }
         }
 

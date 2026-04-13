@@ -1624,6 +1624,28 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         });
     }
 
+    #! removes a request handler registered via @ref setHandler() by name
+    /** @param name the name the handler was registered under
+
+        @throw INVALID-HANDLER-ERROR no handler with the given name exists
+
+        @since HttpServer 1.6
+    */
+    removeHandler(string name) {
+        handlers.removeHandler(name);
+    }
+
+    #! removes a request handler registered via @ref setHandler() by reference
+    /** @param handler the handler instance to remove
+
+        @throw INVALID-HANDLER-ERROR the handler is not registered
+
+        @since HttpServer 1.6
+    */
+    removeHandler(HttpServer::AbstractHttpRequestHandler handler) {
+        handlers.removeHandler(handler);
+    }
+
     #! sets a dynamic request handler according to the arguments given
     setDynamicHandler(string name, HttpServer::AbstractUrlHandler obj) {
         dhandlers.setHandler(name, <HttpHandlerConfigInfo>{
@@ -3505,8 +3527,15 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         *InputStream is;
         if (body instanceof InputStream) {
             is = body;
-            # Unassign thread affinity while still on the handler thread
-            # so the I/O controller thread can access it later
+            # Architectural rule: the I/O thread must NEVER call readHelper()
+            # on a non-I/O-thread-safe InputStream.  Enforcement happens
+            # downstream: sendMultiplexedResponse() and the async I/O
+            # controller's handleHttp{2,3}MultiplexedResult() spawn a
+            # @ref StreamResponseProducer "StreamResponseProducer" on a
+            # dedicated worker thread for any non-I/O-thread-safe stream,
+            # so read() is always invoked on a worker — never on the I/O
+            # thread.  Here we only unassign thread affinity so the
+            # downstream worker can claim the stream via reassignThread().
             is.unassignThread();
             body = NOTHING;
         }
@@ -5063,7 +5092,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
     private sendMultiplexedResponse(Socket s, hash<auto> header_info,
             hash<HttpAsyncResponseInfo> response) {
         int stream_id = header_info.stream_id;
-        code io_wake = header_info.io_wake;
+        code<nothing()> io_wake = header_info.io_wake;
         hash<auto> hdr = response.hdr ?? {};
         remove hdr."Transfer-Encoding";
 
@@ -5074,38 +5103,33 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 auto sub() { return cb(); }, s);
         }
 
-        # Materialize non-I/O-thread-safe InputStreams into memory.
-        # Handler threads must NEVER do blocking socket I/O on multiplexed
-        # connections — the I/O thread needs the socket/session mutex to
-        # process incoming data, and blocking sends cause deadlock.
-        if (response.input_stream && !response.input_stream.isIoThreadSafe()) {
-            response.input_stream.reassignThread();
-            binary buf;
-            while (*binary chunk = response.input_stream.read(65536)) {
-                buf += chunk;
-            }
-            response.input_stream.unassignThread();
-            if (buf.size() > 0) {
-                response.input_stream = new BinaryInputStream(buf);
-            } else {
-                remove response.input_stream;
-            }
-        }
-
+        # InputStream response body delivery.  The C++ vtable's
+        # isIoThreadSafe() check (inside submit*StreamingResponseWithStream)
+        # is the authoritative gate — Qore subclass overrides of
+        # isIoThreadSafe() do NOT propagate to the C++ vtable.  So:
+        #
+        #   1. Try the fast path (submit the stream for I/O-thread drain)
+        #   2. If the gate returns 1 (rejected → stream is truly unsafe),
+        #      spawn a @ref StreamResponseProducer "StreamResponseProducer"
+        #      to drain it on a worker thread.
+        #
+        # This preserves streaming semantics for both paths: memory-backed
+        # streams stream directly from the I/O thread; user-defined streams
+        # stream from a dedicated producer worker.  Backpressure is driven
+        # by the peer's flow-control window in both cases.  read() never
+        # runs on the async I/O thread.
         if (header_info.http3) {
             int session_id = header_info.session_id;
             if (response.input_stream) {
                 int rv = s.submitQuicStreamingResponseWithStream(
                     session_id, stream_id, response.code, hdr, response.input_stream);
                 if (rv) {
-                    # C++ gate rejected — materialize and send as body
-                    response.input_stream.reassignThread();
-                    binary buf;
-                    while (*binary chunk = response.input_stream.read(65536)) {
-                        buf += chunk;
-                    }
+                    # C++ gate rejected — spawn a producer.
+                    s.submitQuicResponseStreaming(session_id, stream_id, response.code, hdr);
                     response.input_stream.unassignThread();
-                    s.submitQuicResponse(session_id, stream_id, response.code, hdr, buf);
+                    StreamResponseProducer producer(s, stream_id, session_id,
+                        response.input_stream, io_wake);
+                    producer.start();
                 }
                 io_wake();
             } else {
@@ -5118,14 +5142,12 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 int rv = s.submitHttp2StreamingResponseWithStream(
                     stream_id, response.code, hdr, response.input_stream);
                 if (rv) {
-                    # C++ gate rejected — materialize and send as body
-                    response.input_stream.reassignThread();
-                    binary buf;
-                    while (*binary chunk = response.input_stream.read(65536)) {
-                        buf += chunk;
-                    }
+                    # C++ gate rejected — spawn a producer.
+                    s.submitHttp2StreamingResponseHeaders(stream_id, response.code, hdr);
                     response.input_stream.unassignThread();
-                    s.submitHttp2Response(stream_id, response.code, hdr, buf);
+                    StreamResponseProducer producer(s, stream_id, NOTHING,
+                        response.input_stream, io_wake);
+                    producer.start();
                 }
                 io_wake();
             } else {

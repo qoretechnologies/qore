@@ -1613,18 +1613,19 @@ public class AbstractStreamRequest {
             # CallbackInputStream would destroy those boundaries because the HTTP library reads from
             # the InputStream in arbitrary block sizes.
             rv.no_content_encoding = True;
-            if (cx."header-info".http2) {
+            if (cx."header-info".http2 || cx."header-info".http3) {
                 remove rv.hdr."Transfer-Encoding";
                 if (rv.hdr."Content-Type" =~ /^application\/connect\+/) {
                     # Connect protocol: frames are self-describing (5-byte length prefix),
                     # so per-chunk boundaries are not needed. Stream via CallbackInputStream
-                    # + HTTP/2 DATA frames for true streaming without buffering.
+                    # + HTTP/2 DATA frames or HTTP/3 QUIC stream data for true streaming
+                    # without buffering.
                     AbstractStreamRequest stream_ref = self;
                     rv.body = new CallbackInputStream(auto sub() { return stream_ref.send(); }, self);
                 } else {
                     # DataStream v1: relies on per-chunk boundaries for YAML record parsing.
                     # Buffer all chunks and send as a single response body since HTTP/2 DATA
-                    # frames do not preserve per-chunk boundaries.
+                    # frames and HTTP/3 QUIC stream data do not preserve per-chunk boundaries.
                     binary buf;
                     while (True) {
                         auto chunk = send();
@@ -1633,7 +1634,7 @@ public class AbstractStreamRequest {
                         }
                         if (chunk.typeCode() == NT_HASH) {
                             # hash = DataStream error trailer (from ds_get_send catch block);
-                            # HTTP/2 doesn't support chunked trailers, so stop buffering.
+                            # HTTP/2+3 don't support chunked trailers, so stop buffering.
                             # The error is lost at the transport level but sendDataImpl()
                             # already logged it via the exception handler.
                             break;
@@ -1656,11 +1657,12 @@ public class AbstractStreamRequest {
 
         # Normal streaming: wrap the send callback in a CallbackInputStream so that data is
         # streamed without buffering the entire response in memory. For HTTP/2, the downstream
-        # code sends DATA frames via startPollSendHttp2StreamingResponse; for HTTP/1.x, the
-        # InputStream is sent as a chunked response via sendHTTPResponse. Both protocols route
-        # through the async I/O controller, freeing the handler thread immediately.
-        if (cx."header-info".http2) {
-            # HTTP/2 uses DATA frames, not chunked transfer encoding
+        # code sends DATA frames via startPollSendHttp2StreamingResponse; for HTTP/3, the
+        # downstream code sends QUIC stream data; for HTTP/1.x, the InputStream is sent as
+        # a chunked response via sendHTTPResponse. All protocols route through the async I/O
+        # controller, freeing the handler thread immediately.
+        if (cx."header-info".http2 || cx."header-info".http3) {
+            # HTTP/2+3 use DATA frames / QUIC stream data, not chunked transfer encoding
             remove rv.hdr."Transfer-Encoding";
         }
         rv.body = new CallbackInputStream(\send(), self);
@@ -1911,6 +1913,189 @@ public class CallbackInputStream inherits InputStream {
             }
         }
         return buf[0];
+    }
+}
+
+#! Dedicated worker that streams a non-I/O-thread-safe InputStream response body
+#! as HTTP/2 DATA frames or HTTP/3 QUIC stream data without materialization
+/** Runs on its own background thread so blocking @ref Qore::InputStream::read() "read()"
+    calls never execute on the async I/O thread (architectural invariant).
+
+    The producer reads chunks from the InputStream and calls
+    @ref Qore::Socket::sendHttp2StreamData() "sendHttp2StreamData()" (HTTP/2)
+    or @ref Qore::Socket::submitQuicStreamData() "submitQuicStreamData()" (HTTP/3)
+    to push frames into the session's internal send buffer.  The I/O thread
+    drains that buffer to the socket as part of its normal poll loop.
+
+    Backpressure: when the session's buffer is full, the send primitive either
+    returns @c 1 (HTTP/3) or raises @c HTTP2-FLOW-CONTROL (HTTP/2).  In both
+    cases the producer blocks on @ref Qore::Socket::waitForHttp2StreamDrain()
+    "waitForHttp2StreamDrain()" / @ref Qore::Socket::waitForQuicStreamDrain()
+    "waitForQuicStreamDrain()" until the peer's window advances, then retries
+    the same chunk (no data loss).
+
+    Error handling: any exception from @c read() or a stream-level send error
+    triggers a per-stream reset via @ref Qore::Socket::resetHttp2Stream()
+    "resetHttp2Stream()" or @ref Qore::Socket::cancelQuicStream()
+    "cancelQuicStream()" — the peer sees a clean RST, never a silent hang.
+
+    Lifecycle: the producer holds the InputStream's thread affinity for the
+    duration of its @c run() method.  On exit (EOF, error, or abort) it
+    releases the affinity and decrements the @c done Counter so callers can
+    wait for completion.
+
+    @since HttpServerUtil 2.3
+*/
+public class StreamResponseProducer {
+    public {
+        #! Reaches zero when the producer has finished (EOF, error, or abort)
+        Counter done(1);
+
+        #! TID of the producer worker thread (set once run() begins)
+        int producer_tid = 0;
+    }
+
+    private {
+        Socket sock;
+        int stream_id;
+        *int session_id;   # HTTP/3: non-null; HTTP/2: NOTHING
+        InputStream is;
+        *code<nothing()> io_wake;
+        *hash<ExceptionInfo> error_info;
+
+        #! Size of each chunk pulled from the InputStream
+        int chunk_size = 65536;
+        #! Per-drain wait timeout in milliseconds (CV signaled by the I/O thread)
+        int drain_timeout_ms = 30000;
+        #! Safety cap on consecutive drain retries per chunk (bounds total block time)
+        int max_drain_retries = 60;
+    }
+
+    #! Creates the producer; call @ref start() to dispatch the background worker
+    /** @param sock the socket hosting the HTTP/2 or HTTP/3 stream
+        @param stream_id the HTTP/2 or HTTP/3 stream ID to send data on
+        @param session_id the QUIC session ID for HTTP/3; pass @ref nothing
+        for HTTP/2
+        @param is the response body @ref Qore::InputStream "InputStream";
+        must be unassigned from any thread (the producer will claim it)
+        @param io_wake optional callback invoked after every chunk send so
+        the async I/O controller can flush pending frames to the wire
+    */
+    constructor(Socket sock, int stream_id, *int session_id, InputStream is,
+            *code<nothing()> io_wake) {
+        self.sock = sock;
+        self.stream_id = stream_id;
+        self.session_id = session_id;
+        self.is = is;
+        self.io_wake = io_wake;
+    }
+
+    #! Spawns the producer on a background thread
+    /** The producer begins reading from the @c InputStream and pushing
+        frames immediately after this call returns.
+    */
+    start() {
+        # Capture `self` in a closure reference so the object stays alive
+        # for the duration of the background task.
+        StreamResponseProducer me = self;
+        background sub () { me.run(); }();
+    }
+
+    #! Blocks the caller until the producer has finished; returns any error
+    /** @param t maximum time to wait for the producer to finish
+        @return the exception hash if the producer failed (EOF path succeeded
+        but a @c read() error or send error was observed) or @ref nothing
+        if the producer completed cleanly
+        @throw COUNTER-TIMEOUT if the producer does not finish within @a t
+    */
+    *hash<ExceptionInfo> waitForDone(timeout t = 120s) {
+        done.waitForZero(t);
+        return error_info;
+    }
+
+    #! Main producer loop — runs on the background thread
+    private run() {
+        producer_tid = gettid();
+        on_exit {
+            try {
+                is.unassignThread();
+            } catch (hash<ExceptionInfo> ex) {
+                # ignore; best-effort release
+            }
+            done.dec();
+        }
+        try {
+            is.reassignThread();
+            while (True) {
+                *binary chunk = is.read(chunk_size);
+                if (!exists chunk) {
+                    sendWithBackpressure(binary(), True);
+                    return;
+                }
+                sendWithBackpressure(chunk, False);
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            error_info = ex;
+            try {
+                resetStream();
+            } catch (hash<ExceptionInfo> reset_ex) {
+                # stream likely already closed; swallow
+            }
+        }
+    }
+
+    #! Sends a chunk, blocking on drain if the session buffer is full
+    private sendWithBackpressure(binary data, bool end_stream) {
+        int retries = 0;
+        while (True) {
+            bool backpressure = False;
+            try {
+                if (session_id) {
+                    int rv = sock.submitQuicStreamData(session_id, stream_id,
+                        data, end_stream);
+                    if (rv == 1) {
+                        backpressure = True;
+                    } else if (rv != 0) {
+                        throw "STREAM-SEND-ERROR",
+                            sprintf("unexpected rv=%d from submitQuicStreamData on "
+                                "stream %d", rv, stream_id);
+                    }
+                } else {
+                    sock.sendHttp2StreamData(stream_id, data, end_stream);
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "HTTP2-FLOW-CONTROL") {
+                    backpressure = True;
+                } else {
+                    rethrow;
+                }
+            }
+            if (io_wake) {
+                io_wake();
+            }
+            if (!backpressure) {
+                return;
+            }
+            if (++retries > max_drain_retries) {
+                throw "STREAM-BACKPRESSURE-TIMEOUT",
+                    sprintf("stream %d buffer still full after %d drain attempts; "
+                        "peer may be stalled or disconnected", stream_id, retries);
+            }
+            if (session_id) {
+                sock.waitForQuicStreamDrain(session_id, stream_id, drain_timeout_ms);
+            } else {
+                sock.waitForHttp2StreamDrain(stream_id, drain_timeout_ms);
+            }
+        }
+    }
+
+    #! Sends a stream-level reset to the peer (best-effort)
+    private resetStream() {
+        if (session_id) {
+            sock.cancelQuicStream(session_id, stream_id);
+        } else {
+            sock.resetHttp2Stream(stream_id);
+        }
     }
 }
 

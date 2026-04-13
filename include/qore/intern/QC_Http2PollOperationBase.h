@@ -259,14 +259,18 @@ private:
     int empty_read_count;                       //!< consecutive empty reads (control frames only)
     mutable QoreThreadLock op_lock;             //!< protects handler-thread methods
 
-    //! Registered stream queues for CONNECT stream data delivery (stream_id -> info)
+    //! Lock protecting only pending_stream_registrations (app→I/O command queue)
+    QoreThreadLock sq_lock;
+
+    //! Pending stream queue registrations from app threads (under sq_lock)
+    std::vector<std::pair<int32_t, StreamQueueInfo>> pending_stream_registrations;
+
+    // --- I/O-thread-only data (no lock needed) ---
+
+    //! Registered stream queues — I/O-thread-only
     std::unordered_map<int32_t, StreamQueueInfo> stream_queues;
 
-    //! Stream IDs that had data drained in the last continuePoll cycle
-    /** Populated by drainStreamQueues(), consumed by the controller after
-        continuePoll() returns. The controller dispatches onStreamData()
-        to the worker pool for each stream ID.
-    */
+    //! Stream IDs that had data drained — I/O-thread-only
     std::vector<int32_t> data_ready_streams;
 
     //! Maximum consecutive empty reads before closing the connection

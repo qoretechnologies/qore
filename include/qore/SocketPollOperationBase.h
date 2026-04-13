@@ -197,9 +197,35 @@ protected:
         fd_generation.fetch_add(1, std::memory_order_release);
     }
 
+    //! Wakes the I/O thread that owns this operation
+    /** Call from app threads after queueing async commands (e.g., stream queue
+        registrations) that the I/O thread must process.  Uses the controller's
+        WakeSocket mechanism (eventfd/pipe) to interrupt poll().
+        No-op if the controller back-reference is not set.
+
+        @param xsink exception sink
+        @since %Qore 2.3
+    */
+    DLLEXPORT void wakeIoThread(ExceptionSink* xsink);
+
 private:
+    friend class AsyncIoControllerPriv;
+
+    //! Sets the async I/O controller and socket object for wakeIoThread()
+    /** Called by the controller when the operation is submitted to the cache.
+    */
+    void setIoController(class AsyncIoControllerPriv* controller, QoreObject* sock_obj) {
+        io_controller = controller;
+        io_sock_obj = sock_obj;
+    }
+
     //! fd generation counter — bumped when the underlying fd changes
     std::atomic<uint32_t> fd_generation{0};
+
+    //! Back-reference to the async I/O controller (not ref'd; cleared on cache removal)
+    class AsyncIoControllerPriv* io_controller = nullptr;
+    //! Socket QoreObject for wakeSocketByObject (not ref'd; cache holds the ref)
+    QoreObject* io_sock_obj = nullptr;
 
 public:
     //! Weak reference to the QoreObject wrapping this private data

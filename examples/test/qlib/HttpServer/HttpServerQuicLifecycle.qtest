@@ -1,0 +1,277 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  HttpServerQuicLifecycle.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+%requires ../../../../qlib/HttpServer.qm
+%requires ../../../../qlib/HttpServerUtil.qm
+%requires ../../../../qlib/RestClient.qm
+%requires ../../../../qlib/RestClientIo.qm
+%requires ../../../../qlib/HttpClientIo
+%requires ../../../../qlib/Mime.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires json
+
+%exec-class HttpServerQuicLifecycleTest
+
+# Self-signed test certificate
+const CertPem = "-----BEGIN CERTIFICATE-----
+MIIDCTCCAfGgAwIBAgIUahuuRGDlubXWYmiPhjVeT66vtNYwDQYJKoZIhvcNAQEL
+BQAwFDESMBAGA1UEAwwJbG9jYWxob3N0MB4XDTI2MDIyMjE5MjIwMVoXDTM2MDIy
+MDE5MjIwMVowFDESMBAGA1UEAwwJbG9jYWxob3N0MIIBIjANBgkqhkiG9w0BAQEF
+AAOCAQ8AMIIBCgKCAQEAjZNfLFUyyo02MjZjouaR11FybkZNwDWBG/bhkpTVyj/x
+QKlwKf20LbGSCmMIYHaFnODMg6u6E6sfRJVk+ofwVHBN/Ug+mvoL1zlNJanMdXLH
+7oUsUILY6bVUDPm1ACZmFJsAc9jfHfkluJ6vfYG+DOJbyB0nsMfO9/fvrwndQPUQ
+k9eMq2VfDohni4ijk5BWD/P9UmrciZUNOaNISay469Le5ZrtfGt9An1+Ye3TckJC
+tTF4q7+V+GC88w5QtLd1AMQGf/1ax5cwqQv9SSFvhnwj9o3V3Wkz1dq4XA/9rSA1
+ecPHh/tJeGuvbD11Hyr9LTYjQ+DIel0DV0ZDHdc5vwIDAQABo1MwUTAdBgNVHQ4E
+FgQUYBBsVylVinbbAzTbUt0jRM6mJvwwHwYDVR0jBBgwFoAUYBBsVylVinbbAzTb
+Ut0jRM6mJvwwDwYDVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOCAQEAfIAE
+EPvLO+gOnm366xJabLr2Sw3hfmvCq/zSTlPcrB9jdBlOLpMmKcdGiOOCNmzg9+BX
+YNX+I6+MNOGp0j3afWlVwEjiMD66ydSMPEQw0FTzvpIjFN3fHo/MJzFbingRLrk8
+LCo94GmjMBYG+50M8MCKE6EzqfmoYT9fiMJcyJwwdptOWf0URNYKKrG1wRlX4+o8
+uNjQ3VwynI95fAw9WcR/ZtP0pkmCor/hKaYgVRsSGjD78Fu0Uuhm/pCAOuObpEHj
+5eoTlaWC3pZzGA67piqlEDOWiRi9Mo2CzG0t5fmQ83KB51ImauKdYB21whxjkZ+5
+BjwMC4hqSD+bzO2B+A==
+-----END CERTIFICATE-----";
+
+const KeyPem = "-----BEGIN PRIVATE KEY-----
+MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCNk18sVTLKjTYy
+NmOi5pHXUXJuRk3ANYEb9uGSlNXKP/FAqXAp/bQtsZIKYwhgdoWc4MyDq7oTqx9E
+lWT6h/BUcE39SD6a+gvXOU0lqcx1csfuhSxQgtjptVQM+bUAJmYUmwBz2N8d+SW4
+nq99gb4M4lvIHSewx8739++vCd1A9RCT14yrZV8OiGeLiKOTkFYP8/1SatyJlQ05
+o0hJrLjr0t7lmu18a30CfX5h7dNyQkK1MXirv5X4YLzzDlC0t3UAxAZ//VrHlzCp
+C/1JIW+GfCP2jdXdaTPV2rhcD/2tIDV5w8eH+0l4a69sPXUfKv0tNiND4Mh6XQNX
+RkMd1zm/AgMBAAECggEAATo1WYTgPK75DiS4PBR5UDS7DryvoN/LNOsGLUdQC9b+
+aEaacSrAvKKs9vJr2KuTtfahn0SbsjRKFZtL9aYRuHxZbhLfGWiF4MGflcOBQRq+
+eVFl6clwnaS+S/cq5rZD1/WODUhkisslqhI/cubvNwe2rvyduE510LgxYkLuIZ7a
++SCQz1XyPyhb8eVrWIZiprufjqXvDy01MC74l3ZYqaq1hr1oKi0ZDHI95Os7gtwQ
+4HQ3qdJsmYfbaf1223REp8gybnshsxkyjhKRU3nG7ZvgrRRMFkJvfHZ8VcS3cvsK
+ccKBJg7376+VDtc+RHUcBMyVZ881y4Rq2t6ssYVJVQKBgQDFq+N7ZGKOtQChSIXn
+ju/gP5WzSKJFaZhdkSggHi1K+PkuCZ1SXzKD3CPibreSUx9hzoZAAmTjzOfwhVZ7
+5HDqhrKfkWNeThAdXlglhNX5LVKhhmBsNGawANO8Pmq+pueWhK/76XgiGcOknyt6
+NH1ZE/QZpFeZB2binEhf6leYGwKBgQC3WgF2eaj2c4pugq13oZ9BHms5nsbYQgj8
+1H2C1wsgJNiz4tq6xFdvjiaw+r1OrCFrl9nz7npFc7uohtrRxXr7sq5nwMPO3QAP
+VxzyZ/TFP/FI70Avz6x+xX7HIlptpQ1mWacsdrvtoIG1c8veEJTyA4JgjoMhdDer
+JuPze+ZHLQKBgAzuLIhCzcul/W+Pberyx7A0mJdMtgiyWpwsRaKsNqxD0xD24gqk
+XYqQmOxT78Arnc7pEpEXVwArxDRQlJKwI87DluWnPgfKNXWmWT/DC7gsBc65Go+Z
+ceorc65JqvPjuRx4e4aQBCK+6rRXESICUvzDuGEBBhXljQ5fyMA1dRtnAoGAQSFH
+w74Ttvf0BK2G0SgoWglkLWOpXsiWSLlynDenTBPKppu+9vkn1gi41cU72eZrOL0I
+Pw5HgMRLtOGyeTGdLiuaqGBhLepzSv+22KT03dyI6U+TjWhH7gBZuIMLfEdVKzZN
+nA3RU+fgK4SmtotNXWrBtWrqScfuvm1iK+unMUECgYBrwc1rU/GI9tH4MWvBX99n
+pmFneeIUuXJajOsh7jUyTxcrHl+4kkgHDExuFMNPHfrIG8xCj43fjzxD/spz3xRS
++Ki3i3lYOFNhTUCREt5Xx23hkksK6j7SYlfY0IV2UruWt/UubpsfEqxC1Uk07NTo
+l50Xb2GWQesIt9k5jF5IOw==
+-----END PRIVATE KEY-----";
+
+#! Handler that responds normally
+class NormalHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return <HttpResponseInfo>{
+            "code": 200,
+            "body": make_json({"ok": True}),
+            "hdr": {"Content-Type": MimeTypeJson},
+        };
+    }
+}
+
+#! Handler that delays response to trigger client timeout
+class SilentHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        # Sleep longer than any reasonable client timeout but still bounded
+        # so the test can shut down cleanly
+        sleep(10);
+        return <HttpResponseInfo>{
+            "code": 200,
+            "body": "{}",
+        };
+    }
+}
+
+class HttpServerQuicLifecycleTest inherits QUnit::Test {
+    private {
+        HttpServer m_http;
+        int m_quic_port;
+        bool m_quic_available = False;
+    }
+
+    constructor() : Test("HttpServerQuicLifecycleTest", "1.0") {
+        @debug {
+            set_signal_handler(SIGUSR1, sub (int sig) {
+                printf("=== SIGUSR1 Thread Stacks ===\n%Y\n", get_all_thread_call_stacks());
+            });
+        }
+        Logger logger("test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+
+        m_http = new HttpServer(<HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+        });
+        m_http.waitForAsyncIo();
+
+        m_http.setHandler("normal", "/normal", MimeTypeJson, new NormalHandler());
+        m_http.setDefaultHandler("normal", new NormalHandler());
+
+        # Add QUIC listener
+        try {
+            hash<auto> quic_info = m_http.addQuicListener(<HttpListenerOptionInfo>{
+                "cert": new SSLCertificate(CertPem),
+                "key": new SSLPrivateKey(KeyPem),
+            });
+            m_quic_port = quic_info.port;
+            m_quic_available = True;
+        } catch (hash<ExceptionInfo> ex) {
+            printf("QUIC listener failed: %s: %s\n", ex.err, ex.desc);
+        }
+
+        if (m_quic_available) {
+            addTestCase("H3 normal request completes efficiently", \testNormalRequest());
+            addTestCase("H3 request timeout on silent server", \testRequestTimeout());
+            addTestCase("H3 connection reuse after error", \testConnectionReuseAfterError());
+        } else {
+            printf("SKIP: QUIC not available\n");
+        }
+
+        set_return_value(main());
+
+        delete m_http;
+    }
+
+    private string getQuicUrl() {
+        return sprintf("https://127.0.0.1:%d", m_quic_port);
+    }
+
+    #! Test 1: Normal H3 request completes within reasonable time (no livelock)
+    testNormalRequest() {
+        RestClientIo rc({
+            "url": getQuicUrl(),
+            "data": "json",
+            "accept_all_certs": True,
+            "timeout": 10s,
+            "connect_timeout": 5s,
+        });
+
+        date start = now_us();
+        hash<auto> resp = rc.restGet("/normal");
+        date elapsed = now_us() - start;
+
+        assertEq(200, resp.status_code, "H3 request succeeds");
+        assertTrue(resp.body.ok, "H3 response body correct");
+        assertTrue(elapsed < 5s,
+            sprintf("H3 request completed in %y (expected < 5s)", elapsed));
+    }
+
+    #! Test 2: Client times out on silent server (no livelock, no busy-loop)
+    testRequestTimeout() {
+        # Use a separate server with the silent handler
+        Logger logger("silent", LoggerLevel::getLevelInfo());
+        HttpServer silent_http(<HttpServerOptionInfo>{
+            "logger": logger,
+        });
+        silent_http.waitForAsyncIo();
+        silent_http.setHandler("silent", "/silent", MimeTypeJson, new SilentHandler());
+        silent_http.setDefaultHandler("silent", new SilentHandler());
+
+        int silent_port;
+        try {
+            hash<auto> info = silent_http.addQuicListener(<HttpListenerOptionInfo>{
+                "cert": new SSLCertificate(CertPem),
+                "key": new SSLPrivateKey(KeyPem),
+            });
+            silent_port = info.port;
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip("QUIC listener failed: " + ex.desc);
+            return;
+        }
+
+        on_exit delete silent_http;
+
+        RestClientIo rc({
+            "url": sprintf("https://127.0.0.1:%d", silent_port),
+            "data": "json",
+            "accept_all_certs": True,
+            "timeout": 3s,
+            "connect_timeout": 3s,
+        });
+
+        date start = now_us();
+        bool got_timeout = False;
+        try {
+            rc.restGet("/silent");
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err =~ /TIMEOUT/i || ex.err =~ /CLOSED/i || ex.err =~ /ERROR/i) {
+                got_timeout = True;
+            }
+            if (m_options.verbose > 1) {
+                printf("  timeout error: %s: %s\n", ex.err, ex.desc);
+            }
+        }
+        date elapsed = now_us() - start;
+
+        assertTrue(got_timeout, "silent server request timed out");
+        # Must complete within 10s — if it takes longer, something is busy-looping
+        assertTrue(elapsed < 10s,
+            sprintf("timeout completed in %y (expected < 10s)", elapsed));
+    }
+
+    #! Test 3: Connection reuse after stream error doesn't livelock
+    testConnectionReuseAfterError() {
+        RestClientIo rc({
+            "url": getQuicUrl(),
+            "data": "json",
+            "accept_all_certs": True,
+            "timeout": 5s,
+            "connect_timeout": 5s,
+        });
+
+        # First request should succeed
+        hash<auto> resp1 = rc.restGet("/normal");
+        assertEq(200, resp1.status_code, "first request succeeds");
+
+        # Second request to a non-existent path — server returns 404, not a stream error
+        # but this exercises connection reuse
+        hash<auto> resp2;
+        try {
+            resp2 = rc.restGet("/nonexistent");
+        } catch (hash<ExceptionInfo> ex) {
+            # 404 might be returned as an exception depending on RestClientIo config
+            if (m_options.verbose > 1) {
+                printf("  reuse error: %s: %s\n", ex.err, ex.desc);
+            }
+        }
+
+        # Third request should succeed (either on same or new connection)
+        date start = now_us();
+        hash<auto> resp3 = rc.restGet("/normal");
+        date elapsed = now_us() - start;
+
+        assertEq(200, resp3.status_code, "third request succeeds after error");
+        assertTrue(elapsed < 5s,
+            sprintf("third request completed in %y (expected < 5s, no livelock)", elapsed));
+    }
+}

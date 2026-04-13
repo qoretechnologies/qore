@@ -412,6 +412,17 @@ public:
     */
     DLLEXPORT const char* getClassName() const;
 
+    //! Returns the unique hash for this object
+    /** The hash is computed once at construction with a monotonic ID, so it is
+        stable for the object's lifetime and globally unique even when malloc
+        reuses addresses.
+
+        @return a referenced QoreStringNode with the unique hash
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT QoreStringNode* getUniqueHash() const;
+
     //! returns a pointer to the QoreClass of this object or to the injection target class in case the class was injected
     /**
         @return a pointer to the QoreClass of this object or to the injection target class in case the class was injected

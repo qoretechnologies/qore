@@ -178,6 +178,21 @@ public class HttpClientStreamHandle {
         return error_info;
     }
 
+    #! Returns the accumulated response hash (status_code, headers, trailers, protocol)
+    /** Populated by concrete stream implementations as headers and completion
+        events arrive. Intended for streaming callers that need header
+        metadata when the transport coalesces headers into the same event as
+        body bytes (HTTP/2 and HTTP/3), in which case the body-bytes
+        @ref readData() return value does not carry header fields.
+
+        @return response metadata hash, or NOTHING if no response info has
+        been captured yet
+    */
+    *hash<auto> getResponse() {
+        AutoLock al(lock);
+        return response;
+    }
+
     #! Returns True if a request has been submitted on this stream
     bool isSubmitted() {
         return exists stream_id;

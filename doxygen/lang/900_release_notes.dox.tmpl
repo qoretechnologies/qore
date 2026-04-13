@@ -667,10 +667,50 @@ cargo install tree-sitter-cli@0.26.5
         - non-pollable InputStreams are read by the handler thread with backpressure-aware retry
         - \c Content-Length mismatch detection raises \c HTTP-STREAM-ERROR if the InputStream provides fewer
           bytes than declared
+      - true incremental streaming for non-I/O-thread-safe \c InputStream response bodies on HTTP/2 and HTTP/3
+        - handlers returning a Qore-defined \c InputStream subclass (including \c CallbackInputStream)
+          are now streamed chunk-by-chunk by a dedicated
+\if QORE_LANG_FINAL
+          @ref HttpServer::StreamResponseProducer "StreamResponseProducer"
+\else
+          \c HttpServer::StreamResponseProducer
+\endif
+          worker thread — no materialization, memory bounded by the peer's flow-control window,
+          time-to-first-byte ≈ one RTT after the handler produces its first chunk
+        - resolves the previous behavior where such streams were fully buffered in memory before any
+          bytes reached the wire — unsuitable for multi-GB or open-ended responses typical of enterprise
+          integration workloads (DataStream over Connect protocol, gRPC-over-Connect, chunked uploads,
+          live event feeds)
+        - architectural invariant: \c read() never executes on the async I/O thread; the producer worker
+          handles blocking reads and uses CV-based
+\if QORE_LANG_FINAL
+          @ref Qore::Socket::waitForHttp2StreamDrain() "waitForHttp2StreamDrain()" /
+          @ref Qore::Socket::waitForQuicStreamDrain() "waitForQuicStreamDrain()"
+\else
+          \c waitForHttp2StreamDrain() / \c waitForQuicStreamDrain()
+\endif
+          for backpressure; read errors are surfaced as a clean \c RST_STREAM / \c cancelQuicStream to
+          the peer rather than a silent hang
+      - new
+\if QORE_LANG_FINAL
+        @ref HttpServer::HttpServer::removeHandler(string) "HttpServer::removeHandler()"
+\else
+        \c HttpServer::removeHandler()
+\endif
+        method (with name and handler-reference overloads) to complement \c setHandler() for dynamic
+        handler registration
     - @ref httpserverutilintro "HttpServerUtil" module
       - added functionality to support setting cookies
       - refactored authentication methods to provide a more extensible and clear design
       - new \c http_version option in \c HttpListenerOptionInfo for HTTP/2 and HTTP/3 mode control
+      - new
+\if QORE_LANG_FINAL
+        @ref HttpServer::StreamResponseProducer "StreamResponseProducer"
+\else
+        \c HttpServer::StreamResponseProducer
+\endif
+        class: worker-thread response-body streamer used by the \c HttpServer / \c HttpServerAsyncIo
+        pipeline for non-I/O-thread-safe \c InputStream response bodies on HTTP/2 and HTTP/3
     - @ref loggerintro "Logger" module
 \if QORE_LANG_FINAL
       - added memory-based backpressure support to @ref Qore::Logger::LoggerAppenderQueue "Qore::Logger::LoggerAppenderQueue"
@@ -921,6 +961,12 @@ cargo install tree-sitter-cli@0.26.5
       - Eigen3-backed float64 columns for SIMD-friendly numeric operations
       - thread-safe with \c std::mutex, cooperative cancellation via \c qore_check_cancel()
       - \c dom=FILESYSTEM on CSV/Parquet I/O, \c dom=DATABASE on database I/O
+    - @ref ocrintro "ocr" module
+      - new builtin module providing text extraction from images using Tesseract OCR
+      - TesseractEngine class with extractText() and extractTextWithMetadata()
+      - block-level bounding boxes and confidence scores
+      - supports PNG, JPEG, TIFF, BMP, GIF input formats
+      - thread-safe with std::mutex, dom=FILESYSTEM on all methods
     - @ref tokenizerintro "tokenizer" module
       - new builtin module providing <a href="https://huggingface.co/">HuggingFace</a>-compatible text tokenization
       - supports BPE (GPT-2, Llama, Mistral), WordPiece (BERT, DistilBERT), and Unigram/SentencePiece (T5, XLM-R)
@@ -1165,6 +1211,14 @@ cargo install tree-sitter-cli@0.26.5
       - 3 classification/regression pipeline processors: logistic-regression, knn-classification, knn-regression
       - 3 evaluation pipeline processors: classification-metrics, regression-metrics, clustering-metrics
       - optional onnx-model pipeline processor for ONNX Runtime inference
+      - extract-structured pipeline processor for LLM-based structured data extraction with
+        built-in NER, invoice, contact, and sentiment schemas
+      - rerank-text pipeline processor for cross-encoder re-ranking of search results
+      - semantic-chunk-text pipeline processor for embedding-similarity-based document chunking
+      - guardrail-filter pipeline processor (DPC_FILTER) for blocking unsafe records
+      - guardrail-transform pipeline processor (DPC_TRANSFORM) for annotating and redacting records
+      - ocr pipeline processor for text extraction from images via Tesseract or HTTP
+      - vision-extraction pipeline processor for multimodal LLM image analysis
       - action catalog integration with the "ML Analytics" app
     - @ref dataproviderdataframeintro "DataProviderDataFrame" module
       - new module providing DataProvider integration for the dataframe binary module
@@ -1447,7 +1501,40 @@ cargo install tree-sitter-cli@0.26.5
       - supports DecisionTree, RandomForest, GradientBoostedTrees (classification and regression)
       - GBT export handles binary (Sigmoid) and multiclass (Softmax) post-processing
       - enables interoperability with Python/TensorFlow/PyTorch via standard ONNX files
+    - @ref qoreagentstrategiesintro "QoreAgentStrategies" module
+      - new module providing configurable agent execution strategies for LLM agents
+      - PlanningAgentStrategy: decompose → execute sub-tasks → synthesize
+      - ReflexionAgentStrategy: execute → evaluate completeness → correct
+      - ParallelToolDispatcher: concurrent tool execution with batching and timeouts
+      - token budget tracking with AGENT-BUDGET-EXCEEDED enforcement
+    - @ref qoreguardrailsintro "QoreGuardrails" module
+      - new module providing input/output guardrails for AI-powered chat endpoints
+      - PiiDetector: pattern-based detection/redaction of email, phone, SSN, credit card
+      - PromptInjectionDetector: pattern + LLM-based prompt injection classification
+      - TopicRestrictionRule: LLM-based topic boundary enforcement
+      - OutputFormatEnforcer: length, forbidden/required pattern validation
+      - GuardrailEngine: rule chain orchestration with severity-based short-circuit
+    - @ref qoreocrutilsintro "QoreOcrUtils" module
+      - new module providing an OCR abstraction layer with native and HTTP backends
+      - OcrEngine: dual-mode OCR (Tesseract native + HTTP endpoint)
+      - ScannedPdfDetector: heuristic detection of scanned PDF pages
+    - @ref qorevisionextractionintro "QoreVisionExtraction" module
+      - new module providing multimodal LLM vision extraction
+      - VisionLlmClient: image description, table extraction, and text extraction
+      - supports OpenAI and Anthropic multimodal APIs with base64 image content blocks
+    - @ref qorellmutilsintro "QoreLlmUtils" module
+      - new module providing a pluggable LLM backend abstraction for chat completions
+      - supports HTTP/OpenAI-compatible, Anthropic Messages API, and custom callback modes
+      - thread-safe lazy-initialized REST client with configurable timeouts
+      - JSON schema enforcement via response_format (HTTP) and tool-use extraction (Anthropic)
+    - @ref qorestructuredextractionintro "QoreStructuredExtraction" module
+      - new module providing LLM-based structured information extraction from unstructured text
+      - built-in templates: NER, invoice, contact, and sentiment analysis schemas
+      - ExtractionPipeline with validation, retry logic, and JSON code fence handling
+      - ExtractionSchema with JSON Schema conversion for LLM prompt engineering
     - @ref qoretokenizerutilsintro "QoreTokenizerUtils" module
+      - ONNX backend implemented for EmbeddingModel: batch tokenize, mean-pool, L2-normalize
+      - ONNX backend implemented for CrossEncoderReranker: sentence-pair tokenization, sigmoid scoring
       - new module providing document chunking and token counting for RAG pipelines
       - DocumentChunker: splits documents into overlapping token-bounded chunks for embedding
       - TokenCounter: counts tokens, checks context window fit, truncates at token boundaries

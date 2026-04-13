@@ -302,14 +302,25 @@ private:
     */
     AbstractHttpPollConnectionPriv* connection_priv = nullptr;
 
-    //! Registered stream queues for CONNECT stream data delivery (stream_id -> info)
+    //! Lock protecting only pending_stream_registrations (app→I/O command queue)
+    /** Separate from stream_lock to avoid lock-ordering inversion with the
+        H2 session mutex.  Never held during I/O operations.
+    */
+    QoreThreadLock sq_lock;
+
+    //! Pending stream queue registrations from app threads (under sq_lock)
+    /** App threads push here; I/O thread drains at the start of
+        drainStreamQueues().  Follows the nginx pattern: all mutable
+        connection state is owned by the event loop thread.
+    */
+    std::vector<std::pair<int32_t, StreamQueueInfo>> pending_stream_registrations;
+
+    // --- I/O-thread-only data (no lock needed) ---
+
+    //! Registered stream queues — I/O-thread-only
     std::unordered_map<int32_t, StreamQueueInfo> stream_queues;
 
-    //! Stream IDs that had data drained in the last continuePoll cycle
-    /** Populated by drainStreamQueues(), consumed by the controller after
-        continuePoll() returns. The controller dispatches onStreamData()
-        to the worker pool for each stream ID.
-    */
+    //! Stream IDs that had data drained — I/O-thread-only
     std::vector<int32_t> data_ready_streams;
 
     //! Proactive idle timeout (microseconds); -1 = no proactive timeout

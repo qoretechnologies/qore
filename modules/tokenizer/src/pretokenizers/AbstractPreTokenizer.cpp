@@ -14,25 +14,15 @@
 #include "pretokenizers/MetaspacePreTokenizer.h"
 #include "pretokenizers/WhitespacePreTokenizer.h"
 #include "pretokenizers/SequencePreTokenizer.h"
+#include "pretokenizers/SplitPreTokenizer.h"
+#include "pretokenizers/PunctuationPreTokenizer.h"
+#include "pretokenizers/DigitsPreTokenizer.h"
 #include "utils/qore_helpers.h"
 
 using namespace QoreTokenizer;
 
 namespace QoreTokenizer {
 
-//! Pass-through pre-tokenizer: returns the entire input as a single token
-/** Used as a stub for pre-tokenizer types that are not yet fully implemented
-    (Punctuation, Digits, Split).
-*/
-class PassthroughPreTokenizer : public AbstractPreTokenizer {
-public:
-    std::vector<PreToken> pretokenize(const std::string& input) const override {
-        if (input.empty()) {
-            return {};
-        }
-        return {{input, 0, input.size()}};
-    }
-};
 
 std::unique_ptr<AbstractPreTokenizer> AbstractPreTokenizer::fromConfig(const QoreHashNode* config,
         ExceptionSink* xsink) {
@@ -82,9 +72,21 @@ std::unique_ptr<AbstractPreTokenizer> AbstractPreTokenizer::fromConfig(const Qor
         return std::make_unique<SequencePreTokenizer>(config, xsink);
     }
 
-    // Stub types: Punctuation, Digits, Split pass through for now
-    if (!strcmp(type, "Punctuation") || !strcmp(type, "Digits") || !strcmp(type, "Split")) {
-        return std::make_unique<PassthroughPreTokenizer>();
+    if (!strcmp(type, "Punctuation")) {
+        return std::make_unique<PunctuationPreTokenizer>();
+    }
+
+    if (!strcmp(type, "Digits")) {
+        bool individual = true;
+        QoreValue iv = config->getKeyValue("individual_digits");
+        if (!iv.isNullOrNothing()) {
+            individual = iv.getAsBool();
+        }
+        return std::make_unique<DigitsPreTokenizer>(individual);
+    }
+
+    if (!strcmp(type, "Split")) {
+        return std::make_unique<SplitPreTokenizer>(config, xsink);
     }
 
     xsink->raiseException("PRETOKENIZER-CONFIG-ERROR",

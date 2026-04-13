@@ -132,6 +132,7 @@ struct QuicStreamingBodyData {
     size_t front_acked = 0;          //!< bytes of sent_bufs.front() already acknowledged
     bool eof = false;                //!< InputStream signaled EOF
     bool deferred = false;           //!< WOULDBLOCK returned, waiting for resume
+    bool no_end_stream = false;      //!< Keep stream open after data exhausted (CONNECT tunnels)
 };
 
 class qore_socket_private;
