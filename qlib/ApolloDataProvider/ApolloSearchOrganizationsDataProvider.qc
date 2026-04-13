@@ -30,19 +30,19 @@ public class ApolloSearchOrganizationsRequestDataType inherits HashDataType {
     public {
         const Fields = {
             "organization_domains": {
-                "type": SoftListOrNothingType,
+                "type": new ListDataType("DomainList", SoftStringType, True),
                 "display_name": "Organization Domains",
                 "short_desc": "Company domains to search for",
                 "desc": "List of company domains to search for",
             },
             "organization_locations": {
-                "type": SoftListOrNothingType,
+                "type": new ListDataType("LocationList", SoftStringType, True),
                 "display_name": "Organization Locations",
                 "short_desc": "Locations to filter by",
                 "desc": "List of locations to filter by",
             },
             "organization_num_employees_ranges": {
-                "type": SoftListOrNothingType,
+                "type": new ListDataType("EmployeeRangeList", SoftStringType, True),
                 "display_name": "Employee Count Ranges",
                 "short_desc": "Employee count ranges",
                 "desc": "Employee count ranges (e.g., `1,10` or `1001,5000`)",

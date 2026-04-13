@@ -89,6 +89,8 @@ public class ConnectionSchemeCache {
 
             "bitlyrest": "BitlyRestClient",
 
+            "circlerest": "CircleRestClient",
+
             # provided by the amqp module
             "amqp": "AmqpDataProvider",
             "amqps": "AmqpDataProvider",

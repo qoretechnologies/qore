@@ -86,7 +86,7 @@ public class ChargebeeEventDataType inherits HashDataType {
             "webhooks": {
                 "display_name": "Webhooks",
                 "short_desc": "Webhook call status",
-                "type": SoftListOrNothingType,
+                "type": new ListDataType("Webhooks", AutoHashType, True),
                 "desc": "Webhook call status information",
             },
         };

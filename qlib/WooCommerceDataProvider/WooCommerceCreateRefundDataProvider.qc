@@ -50,7 +50,7 @@ public class WooCommerceCreateRefundRequestDataType inherits HashDataType {
             },
             "line_items": {
                 "display_name": "Line Items",
-                "type": SoftListOrNothingType,
+                "type": new ListDataType("LineItems", AutoHashType, True),
                 "desc": "List of line items to refund",
             },
             "api_refund": {

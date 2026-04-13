@@ -117,7 +117,7 @@ public class WooCommerceCustomerDataType inherits HashDataType {
             "meta_data": {
                 "display_name": "Meta Data",
                 "short_desc": "Customer metadata",
-                "type": SoftListOrNothingType,
+                "type": new ListDataType("MetaData", AutoHashType, True),
                 "desc": "List of metadata key-value pairs associated with the customer",
             },
         };
