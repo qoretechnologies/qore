@@ -797,6 +797,12 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
                 BlockCleanupEntry scope_entry;
                 scope_entry.type = BlockCleanupEntry::Scope;
                 scope_entry.scope_id = try_scope_id;
+                // Try-level scope registers no handlers itself; anchor
+                // handler_start to the current block_handlers size so
+                // emitBlockCleanups() on return unwinding doesn't re-inline
+                // enclosing-block handlers (see identical guard in the
+                // TryStatement lowering path).
+                scope_entry.handler_start = block_handlers.size();
                 cleanup_stack.push_back(scope_entry);
             }
             builder.createScopeEnter(try_scope_id);
@@ -1631,6 +1637,14 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             BlockCleanupEntry scope_entry;
             scope_entry.type = BlockCleanupEntry::Scope;
             scope_entry.scope_id = try_scope_id;
+            // The try scope itself never registers on_exit/on_success/on_error
+            // handlers — any such handlers inside the try body belong to inner
+            // StatementBlocks and are cleaned up by their own Scope entries.
+            // Anchor handler_start to the current block_handlers size so that
+            // emitBlockCleanups() on break/continue/return unwinding past this
+            // try scope does NOT re-inline handlers belonging to ENCLOSING
+            // blocks (which would fire them twice).
+            scope_entry.handler_start = block_handlers.size();
             cleanup_stack.push_back(scope_entry);
         }
         builder.createScopeEnter(try_scope_id);
@@ -1933,8 +1947,29 @@ bool QoreIRLowering::emitBlockCleanups(size_t target_depth, std::string& error, 
         const BlockCleanupEntry entry = cleanup_stack[i - 1];
         switch (entry.type) {
             case BlockCleanupEntry::Scope: {
-                // Phase 1: Inline handlers on break/continue/return cleanup
-                if (!lowerHandlersAtExit(is_error, error, entry.handler_start)) {
+                // Phase 1: Inline handlers on break/continue/return cleanup.
+                // Each Scope's handlers occupy the range [entry.handler_start,
+                // next_inner_scope.handler_start) in block_handlers — handlers
+                // pushed AFTER this scope's entry but BEFORE any inner scope
+                // belong to this scope.  Scan the cleanup_stack above i-1 for
+                // the innermost Scope that is still pending/being processed
+                // and use its handler_start as our upper bound, so outer
+                // scopes don't re-inline handlers already fired by inner
+                // scopes on the same unwind.  Without this bound,
+                // lowerHandlersAtExit() would use block_handlers.size() and
+                // refire inner-scope handlers — each handler must fire
+                // exactly once per unwind (matching AST semantics).  We
+                // cannot mutate block_handlers here because compileBlockHandlerIRs
+                // (invoked after the enclosing lowerStatementBlock returns)
+                // still needs to walk the registered handler vector.
+                size_t handler_end = block_handlers.size();
+                for (size_t j = i; j < cleanup_stack.size(); ++j) {
+                    if (cleanup_stack[j].type == BlockCleanupEntry::Scope) {
+                        handler_end = cleanup_stack[j].handler_start;
+                        break;
+                    }
+                }
+                if (!lowerHandlersAtExit(is_error, error, entry.handler_start, handler_end)) {
                     return false;
                 }
                 // Phase 2a: Pop scope_stack without re-executing handlers (inline_lowered=true)
@@ -2525,15 +2560,22 @@ int QoreIRLowering::compileAllHandlerIRs(std::string& error) {
     return compiled_count;
 }
 
-bool QoreIRLowering::lowerHandlersAtExit(bool is_error, std::string& error, size_t start_index) {
-    // Lower all applicable handlers for current block in LIFO order
-    // Handlers are executed in reverse registration order (innermost to outermost)
-    if (block_handlers.empty() || start_index >= block_handlers.size()) {
+bool QoreIRLowering::lowerHandlersAtExit(bool is_error, std::string& error, size_t start_index,
+        size_t end_index) {
+    // Lower handlers in [start_index, end_index) in LIFO order.
+    // Handlers are executed in reverse registration order (innermost to outermost).
+    // end_index defaults to SIZE_MAX meaning "through the end of block_handlers"
+    // (used by the normal fall-through path which has no concurrently-live
+    // inner Scope entries to exclude).
+    if (end_index > block_handlers.size()) {
+        end_index = block_handlers.size();
+    }
+    if (block_handlers.empty() || start_index >= end_index) {
         return true;
     }
 
     // Process handlers in reverse order (LIFO), starting from the end
-    for (int i = static_cast<int>(block_handlers.size()) - 1; i >= static_cast<int>(start_index); --i) {
+    for (int i = static_cast<int>(end_index) - 1; i >= static_cast<int>(start_index); --i) {
         const InlineHandler& handler = block_handlers[i];
         if (!shouldRunHandler(handler, is_error)) {
             continue;

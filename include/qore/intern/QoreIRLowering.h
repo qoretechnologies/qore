@@ -342,7 +342,8 @@ private:
      *  @param start_index start index in block_handlers (for multi-block context)
      *  @return false if lowering failed
      */
-    bool lowerHandlersAtExit(bool is_error, std::string& error, size_t start_index = 0);
+    bool lowerHandlersAtExit(bool is_error, std::string& error, size_t start_index = 0,
+            size_t end_index = SIZE_MAX);
 
     QoreIRBuilder& builder;
     QoreParseContext* parse_context = nullptr;
