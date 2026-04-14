@@ -43,8 +43,8 @@
 
 public class FirecrawlDataProviderTest inherits QUnit::Test {
     private {
-        #! Firecrawl REST client for connection/ping tests
-        *FirecrawlRestClient::FirecrawlRestClient client;
+        #! Firecrawl REST client for connection/ping tests (async)
+        *RestClientIo::RestClientIo client;
 
         #! API key for integration tests
         *string apikey;
@@ -110,7 +110,7 @@ public class FirecrawlDataProviderTest inherits QUnit::Test {
         *string conn_name = m_options.conn;
         if (conn_name) {
             AbstractConnection conn = get_connection(conn_name);
-            client = conn.get();
+            client = conn.getAsync();
             return;
         }
         apikey = m_options.apikey ?? ENV.FIRECRAWL_API_KEY;
@@ -120,7 +120,7 @@ public class FirecrawlDataProviderTest inherits QUnit::Test {
             }
             return;
         }
-        client = new FirecrawlRestClient::FirecrawlRestClient({"apikey": apikey});
+        client = new FirecrawlRestClient::FirecrawlRestClientIo({"apikey": apikey});
     }
 
     #! Check if json module is available
@@ -804,7 +804,7 @@ public class FirecrawlDataProviderTest inherits QUnit::Test {
         # (the crawl child provider auto-polls to completion)
         hash<auto> startResp;
         try {
-            startResp = client.post("v2/crawl", {"url": "https://example.com", "limit": 1});
+            startResp = client.restPost("crawl", {"url": "https://example.com", "limit": 1});
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err == "REST-RESPONSE-ERROR" && ex.arg.status_code == 402) {
                 if (m_options.verbose) {
