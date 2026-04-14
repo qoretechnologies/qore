@@ -1530,8 +1530,21 @@ struct qore_httpclient_priv {
     DLLLOCAL QoreObject* startPollSendRecv(ExceptionSink* xsink, QoreObject* self, QoreHttpClientObject* client,
             const QoreString* method, const QoreString* path, const AbstractQoreNode* data_save, const void* data,
             size_t size, const QoreHashNode* headers, const QoreEncoding* enc = nullptr) {
-        // Delegate to conn_mgr when enabled
-        if (use_conn_mgr) {
+        // Delegate to conn_mgr when enabled — but route H2-over-SSL
+        // (AUTO/REQUIRED) and h2c modes to the legacy path (see
+        // send_internal for rationale).  The conn_mgr's poll op hardcodes
+        // Http1ClientConnection and can't do ALPN or HTTP/2 prior-
+        // knowledge preface handling.
+        int global_mode = qore_global_http2_mode.load(std::memory_order_relaxed);
+        bool lib_disabled = qore_check_option(QLO_DISABLE_HTTP2);
+        bool needs_legacy_h2 =
+            (((http2_mode == HTTP2_MODE_AUTO
+                    || http2_mode == HTTP2_MODE_REQUIRED)
+                && connection.ssl)
+                || http2_mode == HTTP2_MODE_H2C_DIRECT
+                || http2_mode == HTTP2_MODE_H2C_UPGRADE)
+            && global_mode != HTTP2_MODE_DISABLED && !lib_disabled;
+        if (use_conn_mgr && !needs_legacy_h2) {
             return startPollSendRecvConnMgr(xsink, self, client,
                 method->c_str(), path ? path->c_str() : nullptr,
                 data, size, headers);
@@ -8730,10 +8743,18 @@ QoreHashNode* qore_httpclient_priv::send_internal(ExceptionSink* xsink, const ch
     {
         int global_mode = qore_global_http2_mode.load(std::memory_order_relaxed);
         bool lib_disabled = qore_check_option(QLO_DISABLE_HTTP2);
-        bool needs_legacy_h2 = (http2_mode == HTTP2_MODE_AUTO
-                || http2_mode == HTTP2_MODE_REQUIRED)
-            && global_mode != HTTP2_MODE_DISABLED && !lib_disabled
-            && connection.ssl;
+        // AUTO/REQUIRED over SSL needs ALPN negotiation on a single socket;
+        // H2C_DIRECT and H2C_UPGRADE need the client to send the HTTP/2
+        // preface on a plain-TCP connection.  Neither fits the conn_mgr's
+        // fixed per-manager protocol model — route to the legacy path
+        // which handles per-socket H2 setup.
+        bool needs_legacy_h2 =
+            (((http2_mode == HTTP2_MODE_AUTO
+                    || http2_mode == HTTP2_MODE_REQUIRED)
+                && connection.ssl)
+                || http2_mode == HTTP2_MODE_H2C_DIRECT
+                || http2_mode == HTTP2_MODE_H2C_UPGRADE)
+            && global_mode != HTTP2_MODE_DISABLED && !lib_disabled;
         bool is_ws_upgrade = false;
         if (headers) {
             // HTTP headers are case-insensitive — scan the hash looking for
