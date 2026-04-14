@@ -25,7 +25,8 @@ HttpServer server = new HttpServer(<HttpServerOptionInfo>{
 });
 server.setHandler("test", "/test", NOTHING, new SimpleHandler());
 
-string url = sprintf("http://127.0.0.1:%d", server.getSocketInfo().port);
+int port = server.addListener(<HttpListenerOptionInfo>{"service": "0"}).port;
+string url = sprintf("http://127.0.0.1:%d", port);
 
 # Create client
 HttpClientConnectionManager mgr = new HttpClientConnectionManager();
@@ -60,7 +61,10 @@ for (int i = 0; i < 20; i++) {
 }
 
 date elapsed1 = now_us() - start1;
-float seconds1 = elapsed1.toFloat() / 1000000.0;
+float seconds1 = get_duration_microseconds(elapsed1).toFloat() / 1000000.0;
+if (seconds1 <= 0.0) {
+    seconds1 = 0.000001;
+}
 printf("  Completed: %d success, %d errors in %.3f seconds (%.1f req/sec)\n",
        success1, error1, seconds1, 20.0 / seconds1);
 
@@ -91,9 +95,9 @@ for (int i = 0; i < 10; i++) {
     background thread_code();
 }
 
-done.wait();
+done.waitForZero();
 date elapsed2 = now_us() - start2;
-float seconds2 = elapsed2.toFloat() / 1000000.0;
+float seconds2 = get_duration_microseconds(elapsed2).toFloat() / 1000000.0;
 printf("  Completed: %d success, %d errors in %.3f seconds\n",
        success2, error2, seconds2);
 
@@ -101,7 +105,7 @@ printf("  Completed: %d success, %d errors in %.3f seconds\n",
 printf("\n=== Summary ===\n");
 printf("Sequential requests (20): %.3f seconds\n", seconds1);
 printf("Concurrent requests (10): %.3f seconds\n", seconds2);
-printf("Total time: %.3f seconds\n", (elapsed1 + elapsed2).toFloat() / 1000000.0);
+printf("Total time: %.3f seconds\n", seconds1 + seconds2);
 
 # Cleanup
 mgr.closeAll();
