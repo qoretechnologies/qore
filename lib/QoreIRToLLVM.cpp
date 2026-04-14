@@ -191,8 +191,6 @@ void QoreIRToLLVM::declareRuntimeHelpers(llvm::Module& module) {
             llvm::FunctionType::get(i64_type, {ptr_type, ptr_type}, false));
     module.getOrInsertFunction("qore_rt_uninstantiate_local",
             llvm::FunctionType::get(void_type, {ptr_type, ptr_type}, false));
-    module.getOrInsertFunction("qore_rt_uninstantiate_closure_block_exit",
-            llvm::FunctionType::get(void_type, {ptr_type, ptr_type}, false));
 
     // Generic opcode dispatch helpers: (i32, i64, i64, ptr) -> i64
     auto* binary_op_ft = llvm::FunctionType::get(i64_type,
@@ -3521,12 +3519,12 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             builder->CreateCall(uninst_helper, {aot_ctx_arg,
                                     llvm::ConstantInt::get(i32_type, slot), xsink_arg});
                         } else {
-                            // Block exit: clear CVV unconditionally for deterministic destruction
-                            // Loop body: only clear when CVV refcount==1
-                            const char* fn_name = linst->is_block_exit
-                                ? "qore_rt_uninstantiate_closure_block_exit"
-                                : "qore_rt_uninstantiate_local";
-                            auto uninst_helper = module.getOrInsertFunction(fn_name,
+                            // qore_rt_uninstantiate_local handles both loop-body and
+                            // block-exit cases: it clears the CVV only when the
+                            // refcount drops to 1, matching the cycle-aware semantics
+                            // needed for both (DGC handles cycle collection when
+                            // other references keep the CVV alive).
+                            auto uninst_helper = module.getOrInsertFunction("qore_rt_uninstantiate_local",
                                     llvm::FunctionType::get(void_type, {ptr_type, ptr_type}, false));
                             llvm::Value* var_ptr = llvm::ConstantInt::get(i64_type,
                                     reinterpret_cast<uint64_t>(linst->local));
@@ -3637,11 +3635,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             llvm::ConstantInt::get(i32_type, slot_idx), xsink_arg});
                 }
             } else {
-                // Block exit + closure: clear CVV unconditionally for deterministic destruction
-                const char* fn_name = (linst->is_block_exit && linst->is_closure)
-                    ? "qore_rt_uninstantiate_closure_block_exit"
-                    : "qore_rt_uninstantiate_local";
-                auto helper = module.getOrInsertFunction(fn_name,
+                // qore_rt_uninstantiate_local handles closure-use vars (clears
+                // CVV when refs==1) and non-closure vars (plain uninstantiate)
+                // uniformly, so there is no separate block-exit variant.
+                auto helper = module.getOrInsertFunction("qore_rt_uninstantiate_local",
                         llvm::FunctionType::get(void_type, {ptr_type, ptr_type}, false));
                 llvm::Value* var_ptr = llvm::ConstantInt::get(i64_type,
                         reinterpret_cast<uint64_t>(linst->local));

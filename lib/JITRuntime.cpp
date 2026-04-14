@@ -750,21 +750,6 @@ extern "C" DLLEXPORT void qore_rt_uninstantiate_local(LocalVar* var, ExceptionSi
     var->uninstantiate(xsink);
 }
 
-extern "C" DLLEXPORT void qore_rt_uninstantiate_closure_block_exit(LocalVar* var, ExceptionSink* xsink) {
-    if (!var) {
-        return;
-    }
-    // Clear the CVV value only when nothing else holds the CVV (refs==1);
-    // this matches qore_rt_uninstantiate_local and avoids corrupting captured
-    // values visible to long-running closures (e.g. background threads).
-    // Cycle collection through closure captures is handled by DGC.
-    ClosureVarValue* cvv = thread_try_find_closure_var(var->getName());
-    if (cvv && cvv->references.load(std::memory_order_acquire) == 1) {
-        cvv->clearValue(xsink);
-    }
-    var->uninstantiate(xsink);
-}
-
 // --- Generic opcode dispatch helpers ---
 
 extern "C" DLLEXPORT uint64_t qore_rt_binary_op(int opcode, uint64_t left, uint64_t right, ExceptionSink* xsink) {
