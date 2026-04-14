@@ -8702,11 +8702,17 @@ QoreHashNode* qore_httpclient_priv::send_internal(ExceptionSink* xsink, const ch
         timeout_ms = timeout;
 
     // Delegate to conn_mgr when enabled.
-    // Exception: HTTP2_MODE_AUTO over SSL requires ALPN-based per-socket
-    // protocol selection (h2 vs http/1.1), which the conn_mgr's fixed
-    // per-manager protocol can't support.  Use the legacy path for this
-    // case — it handles ALPN negotiation and H2 session creation on a
-    // single socket.
+    // Exceptions that route to the legacy path:
+    //   1. HTTP2_MODE_AUTO/REQUIRED over SSL requires ALPN-based per-socket
+    //      protocol selection (h2 vs http/1.1), which the conn_mgr's fixed
+    //      per-manager protocol can't support.  The legacy path handles
+    //      ALPN negotiation and H2 session creation on a single socket.
+    //   2. WebSocket upgrade requests (Connection: Upgrade + Upgrade: websocket
+    //      header).  After the 101 Switching Protocols response, the same TCP
+    //      socket carries the upgraded WebSocket protocol.  conn_mgr returns
+    //      pooled connections to the pool after each response, breaking the
+    //      WS upgrade contract — the legacy path leaves msock connected so
+    //      the caller can drive the WS frames over it.
     {
         int global_mode = qore_global_http2_mode.load(std::memory_order_relaxed);
         bool lib_disabled = qore_check_option(QLO_DISABLE_HTTP2);
@@ -8714,7 +8720,32 @@ QoreHashNode* qore_httpclient_priv::send_internal(ExceptionSink* xsink, const ch
                 || http2_mode == HTTP2_MODE_REQUIRED)
             && global_mode != HTTP2_MODE_DISABLED && !lib_disabled
             && connection.ssl;
-        if (use_conn_mgr && !needs_legacy_h2) {
+        bool is_ws_upgrade = false;
+        if (headers) {
+            // HTTP headers are case-insensitive — scan the hash looking for
+            // "Connection: upgrade" + "Upgrade: websocket" irrespective of
+            // the caller's header-key case.
+            bool has_conn_upgrade = false;
+            bool has_upgrade_ws = false;
+            ConstHashIterator hi(headers);
+            while (hi.next()) {
+                const char* key = hi.getKey();
+                QoreValue v = hi.get();
+                if (v.getType() != NT_STRING) {
+                    continue;
+                }
+                const char* val = v.get<const QoreStringNode>()->c_str();
+                if (!strcasecmp(key, "Connection") && val
+                        && strcasestr(val, "upgrade")) {
+                    has_conn_upgrade = true;
+                } else if (!strcasecmp(key, "Upgrade") && val
+                        && !strcasecmp(val, "websocket")) {
+                    has_upgrade_ws = true;
+                }
+            }
+            is_ws_upgrade = has_conn_upgrade && has_upgrade_ws;
+        }
+        if (use_conn_mgr && !needs_legacy_h2 && !is_ws_upgrade) {
             return send_internal_conn_mgr(xsink, mname, meth, mpath, headers,
                 msg_body, data, size, send_callback, getbody, info, timeout_ms,
                 recv_callback, obj, os, is, max_chunk_size, trailer_callback, streaming);
