@@ -1569,21 +1569,23 @@ int QoreModuleManager::addModuleToBlacklist(const char* name, const char* msg) {
     }
 
     // check if it's been blacklisted
-    bl_map_t::iterator i = mod_blacklist.lower_bound(name);
-    if ((i != mod_blacklist.end()) && !strcmp(i->first, name)) {
+    auto i = mod_blacklist.lower_bound(name);
+    if ((i != mod_blacklist.end()) && i->first == name) {
         return -2;
     }
 
-    mod_blacklist.insert(i, bl_map_t::value_type(name, msg));
+    // store std::string copies — callers pass TempEncodingHelper::c_str() buffers
+    // that are freed once the helper destructs
+    mod_blacklist.emplace_hint(i, std::string(name), std::string(msg));
     return 0;
 }
 
 int QoreModuleManager::checkBlacklist(ExceptionSink& xsink, const char* name) {
     // check if it's been blacklisted
-    bl_map_t::const_iterator i = mod_blacklist.find(name);
+    auto i = mod_blacklist.find(name);
     if (i != mod_blacklist.end()) {
         xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(name), "module '%s' was blacklisted %s",
-            name, i->second);
+            name, i->second.c_str());
         return -1;
     }
     return 0;

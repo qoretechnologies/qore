@@ -623,8 +623,11 @@ protected:
     // user module dependent map: dependent -> module
     ModMap rmd_map;
 
-    // module blacklist
-    typedef std::map<const char*, const char*, ltstr> bl_map_t;
+    // module blacklist — name and reason are stored as std::string so the map owns
+    // its own copies; callers pass through ephemeral buffers (TempEncodingHelper
+    // c_str()) that are freed once the helper destructs, so holding raw const char*
+    // here would dangle once the add function returns.
+    typedef std::map<std::string, std::string, std::less<>> bl_map_t;
     bl_map_t mod_blacklist;
 
     // module hash
