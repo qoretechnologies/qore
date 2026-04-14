@@ -339,12 +339,26 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
             *hash<auto> headers, bool body_streaming = False, *data body) {
         int retries = 0;
         bool timeout_retried = False;
+        bool h3_close_retried = False;
         while (True) {
             HttpClientStreamHandle stream = acquireStream(url);
             try {
                 stream.startStreaming(method, path, headers, body_streaming, body);
                 return stream;
             } catch (hash<ExceptionInfo> ex) {
+                # HTTP3-CONNECTION-CLOSED and HTTP3-READ-ERROR retry only ONCE:
+                # the Gmail/Google idle-close pattern needs one retry on a fresh
+                # connection, but if the fresh connection ALSO fails the server
+                # is truly down — burning MaxRequestRetries × connect_timeout
+                # turns a single dead-server failure into a 45s+ hang.
+                if ((ex.err == "HTTP3-CONNECTION-CLOSED" || ex.err == "HTTP3-READ-ERROR")
+                        && !h3_close_retried) {
+                    h3_close_retried = True;
+                    log(LoggerLevel::DEBUG, "streaming %s, retrying once on fresh connection",
+                        ex.err);
+                    evictDeadConnections(url);
+                    continue;
+                }
                 if (isConnectionError(ex.err) && ++retries <= MaxRequestRetries) {
                     log(LoggerLevel::DEBUG, "streaming connection error %s, retrying (%d/%d)",
                         ex.err, retries, MaxRequestRetries);
@@ -406,6 +420,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         }
 
         int retries = 0;
+        bool h3_close_retried = False;
         while (True) {
             *HttpClientStreamHandle stream;
             try {
@@ -430,6 +445,14 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
                 # calls releaseReservationIfHeld() on all pre-submit failure paths
                 # (waitForReady timeout, cancel, submitAsyncImpl exception), and
                 # the destructor is a final safety net
+                if ((ex.err == "HTTP3-CONNECTION-CLOSED" || ex.err == "HTTP3-READ-ERROR")
+                        && !h3_close_retried) {
+                    h3_close_retried = True;
+                    log(LoggerLevel::DEBUG, "async %s, retrying once on fresh connection",
+                        ex.err);
+                    evictDeadConnections(url);
+                    continue;
+                }
                 if ((isCapacityError(ex.err) || isConnectionError(ex.err))
                         && ++retries <= MaxRequestRetries) {
                     if (isConnectionError(ex.err)) {
@@ -489,6 +512,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         }
 
         int retries = 0;
+        bool h3_close_retried = False;
         while (True) {
             *HttpClientStreamHandle stream;
             try {
@@ -506,6 +530,14 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
                 }
                 return new HttpCancellableFuture(raw_future, stream);
             } catch (hash<ExceptionInfo> ex) {
+                if ((ex.err == "HTTP3-CONNECTION-CLOSED" || ex.err == "HTTP3-READ-ERROR")
+                        && !h3_close_retried) {
+                    h3_close_retried = True;
+                    log(LoggerLevel::DEBUG, "cancellable async %s, retrying once on fresh connection",
+                        ex.err);
+                    evictDeadConnections(url);
+                    continue;
+                }
                 if ((isCapacityError(ex.err) || isConnectionError(ex.err))
                         && ++retries <= MaxRequestRetries) {
                     if (isConnectionError(ex.err)) {
@@ -635,6 +667,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
             *hash<auto> headers, *data body, *timeout timeout_ms) {
         int retries = 0;
         bool timeout_retried = False;
+        bool h3_close_retried = False;
         while (True) {
             *HttpClientStreamHandle stream;
             try {
@@ -695,6 +728,16 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
                         continue;
                     }
                     rethrow;
+                }
+                # HTTP3-CONNECTION-CLOSED / HTTP3-READ-ERROR retry ONCE only —
+                # see acquireAndStartStreaming for rationale.
+                if ((ex.err == "HTTP3-CONNECTION-CLOSED" || ex.err == "HTTP3-READ-ERROR")
+                        && !h3_close_retried) {
+                    h3_close_retried = True;
+                    log(LoggerLevel::DEBUG, "sync request %s, retrying once on fresh connection",
+                        ex.err);
+                    evictDeadConnections(url);
+                    continue;
                 }
                 if ((isCapacityError(ex.err) || isConnectionError(ex.err))
                         && ++retries <= MaxRequestRetries) {
@@ -1535,13 +1578,6 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
             || err == "HTTP3-STATE-ERROR"
             || err == "HTTP3-ABORT"
             || err == "HTTP3-EMPTY-READ"
-            # Peer sent CONNECTION_CLOSE (typically QUIC idle timeout from
-            # servers like Google that close idle H3 connections).  The
-            # connection is unusable — evict and retry on a fresh one.
-            || err == "HTTP3-CONNECTION-CLOSED"
-            # I/O error reading from the QUIC socket mid-request (e.g., peer
-            # closed, network blip).  Same recovery: retry on fresh conn.
-            || err == "HTTP3-READ-ERROR"
             || err == "HTTP2-EMPTY-READ"
             || err == "HTTP2-CONNECT-ERROR"
             || err == "HTTP2-ALPN-ERROR"
