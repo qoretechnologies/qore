@@ -1,7 +1,6 @@
 #!/usr/bin/env qore
 
-%new-style
-%require-types
+%modern
 %enable-all-warnings
 
 %requires ../../../../qlib/QUnit.qm

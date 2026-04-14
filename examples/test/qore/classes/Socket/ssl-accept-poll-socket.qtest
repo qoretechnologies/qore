@@ -1,9 +1,7 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 
-%new-style
-%require-types
-%strict-args
+%modern
 %enable-all-warnings
 
 %requires ../../../../../qlib/Util.qm

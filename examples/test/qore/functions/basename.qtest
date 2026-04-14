@@ -2,8 +2,7 @@
 
 %requires ../../../../qlib/QUnit.qm
 
-%new-style
-%require-types
+%modern
 %enable-all-warnings
 
 %exec-class BasenameTest
