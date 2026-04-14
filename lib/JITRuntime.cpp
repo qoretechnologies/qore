@@ -6467,8 +6467,14 @@ static uint64_t dispatch_method_on_object(QoreObject* o, const QoreMethod* metho
     // Class mismatch — name-based lookup (virtual dispatch to the runtime class)
     // Pass the runtime class context so that private method access checks succeed
     // when a base class method calls a private method on self and the runtime type
-    // is a derived class (mirrors AbstractMethodCallNode::exec() in AST mode)
+    // is a derived class (mirrors AbstractMethodCallNode::exec() in AST mode).
+    // issue #3596: do not use the context class if it's not compatible with "o" —
+    // otherwise runtimeFindCommittedMethodForEval picks up a private:internal method
+    // from the caller's class for an unrelated target object.
     const qore_class_private* class_ctx = runtime_get_class();
+    if (class_ctx && !qore_class_private::parseCheckPrivateClassAccess(*o->getClass(), class_ctx)) {
+        class_ctx = nullptr;
+    }
     const qore_class_private* priv = qore_class_private::get(*o->getClass());
     const QoreMethod* w = priv->getMethodForEval(method->getName(), o->getProgram(), class_ctx, xsink);
     if (*xsink) {
@@ -6607,7 +6613,16 @@ DLLLOCAL uint64_t dot_eval_fallback_with_args(QoreValue base, const char* method
         if (!strcmp(method_name, "copy")) {
             return toBits(o->getClass()->execCopy(o, xsink));
         }
+        // issue #3596: do not use the context class if it's not compatible with "o".
+        // When calling obj.method() on a DIFFERENT object (not self), the caller's
+        // runtime class context must not leak into the method lookup — otherwise
+        // runtimeFindCommittedMethodForEval picks up a private:internal method from
+        // the caller's class even though the target object is a completely unrelated
+        // class. Mirrors MethodCallNode::exec() in FunctionCallNode.cpp:928.
         const qore_class_private* class_ctx = runtime_get_class();
+        if (class_ctx && !qore_class_private::parseCheckPrivateClassAccess(*o->getClass(), class_ctx)) {
+            class_ctx = nullptr;
+        }
         const qore_class_private* priv = qore_class_private::get(*o->getClass());
         const QoreMethod* w = priv->getMethodForEval(method_name, o->getProgram(), class_ctx, xsink);
         if (*xsink) {
