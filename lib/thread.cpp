@@ -1214,6 +1214,14 @@ ClosureVarValue* thread_instantiate_closure_var(const char* n_id, const QoreType
     return cvv;
 }
 
+bool thread_closure_var_on_stack(const ClosureVarValue* cvv) {
+    ThreadLocalProgramData* tlpd = thread_data.get()->tlpd;
+    if (!tlpd) {
+        return false;
+    }
+    return tlpd->cvstack.hasCvv(cvv);
+}
+
 void thread_instantiate_closure_var(ClosureVarValue* cvar) {
     ThreadLocalProgramData* tlpd = thread_data.get()->tlpd;
     // Get declaration order for this stack entry (issue #5168)

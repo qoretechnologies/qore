@@ -614,6 +614,12 @@ DLLLOCAL ClosureVarValue* thread_instantiate_closure_var(const char* id, const Q
 DLLLOCAL void thread_instantiate_closure_var(ClosureVarValue* cvar);
 DLLLOCAL void thread_uninstantiate_closure_var(ExceptionSink* xsink);
 DLLLOCAL ClosureVarValue* thread_find_closure_var(const char* id);
+//! Returns true if the given ClosureVarValue is already present on the current thread's cvstack
+/** Used by CVecInstantiator to avoid re-pushing CVVs that are already in scope, which would
+    cause aliasing in name-based lookup (a caller-frame CVV shadowing a current-frame CVV with
+    the same name). O(cvstack depth) per call.
+*/
+DLLLOCAL bool thread_closure_var_on_stack(const ClosureVarValue* cvv);
 //! Like thread_find_closure_var() but returns nullptr instead of asserting when the variable is not found.
 /** Used by the IR interpreter when a closure variable may or may not be on the cvstack
     (e.g., closures running on background threads where captured variables are in the

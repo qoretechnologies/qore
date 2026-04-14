@@ -174,6 +174,22 @@ public:
         return nullptr;
     }
 
+    //! Returns true if the given ClosureVarValue is already on the cvstack (pointer equality)
+    DLLLOCAL bool hasCvv(const ClosureVarValue* target) const {
+        Block* w = curr;
+        while (w) {
+            int p = w->pos;
+            while (p) {
+                --p;
+                if (w->var[p].cvv == target) {
+                    return true;
+                }
+            }
+            w = w->prev;
+        }
+        return false;
+    }
+
     DLLLOCAL ClosureVarValue* find(const char* id) {
         printd(5, "ThreadClosureVariableStack::find() this: %p id: %p\n", this, id);
         Block* w = curr;

@@ -67,23 +67,42 @@ class CVecInstantiator {
 protected:
     cvv_vec_t* cvec;
     ExceptionSink* xsink;
+    // count of CVVs actually pushed onto cvstack (CVVs already present on cvstack are skipped
+    // to avoid aliasing with lexical-scope entries — see ctor comment)
+    unsigned pushed = 0;
 
 public:
     DLLLOCAL CVecInstantiator(cvv_vec_t* cv, ExceptionSink* xs) : cvec(cv), xsink(xs) {
         if (!cvec) {
             return;
         }
-        for (cvv_vec_t::iterator i = cvec->begin(), e = cvec->end(); i != e; ++i) {
-            thread_instantiate_closure_var((*i)->refSelf());
+        // cvec was captured via thread_get_all_closure_vars() when the closure was created; it
+        // holds every CVV that was on cvstack at that moment (top→bottom). For BACKGROUND-thread
+        // invocations the worker cvstack is empty and we must push every captured CVV to restore
+        // the lexical environment. For SAME-thread invocations the captured CVVs are already on
+        // cvstack and re-pushing them causes aliasing in name-based lookup: a caller-frame CVV
+        // can shadow the current frame's own CVV with the same name (e.g. a recursive function
+        // whose local is captured via `\var` into a closure — the nested call's own local is
+        // lexically correct but gets masked by the re-push). To fix both cases uniformly we skip
+        // any CVV that's already on cvstack; the lexical binding already reachable by name/id
+        // lookup is the correct one, and we only push CVVs that are genuinely missing.
+        //
+        // Push in reverse iteration order (bottom→top from the capture) so that if the closure
+        // is actually invoked on a worker thread with an empty cvstack, the original topology
+        // is preserved (what was topmost at capture time stays topmost here).
+        for (cvv_vec_t::reverse_iterator i = cvec->rbegin(), e = cvec->rend(); i != e; ++i) {
+            ClosureVarValue* cvv = *i;
+            if (thread_closure_var_on_stack(cvv)) {
+                continue;
+            }
+            thread_instantiate_closure_var(cvv->refSelf());
+            ++pushed;
         }
     }
 
     DLLLOCAL ~CVecInstantiator() {
-        if (!cvec) {
-            return;
-        }
-        // elements are dereferenced when uninstantiated
-        for (cvv_vec_t::iterator i = cvec->begin(), e = cvec->end(); i != e; ++i) {
+        // elements are dereferenced when uninstantiated — only pop what we actually pushed
+        for (unsigned i = 0; i < pushed; ++i) {
             thread_uninstantiate_closure_var(xsink);
         }
     }
