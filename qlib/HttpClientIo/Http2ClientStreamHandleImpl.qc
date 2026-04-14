@@ -233,7 +233,13 @@ public class Http2ClientStreamHandle inherits HttpClientStreamHandle {
                     }
                     if (rv.end_stream && state < HttpClientStreamState::Complete) {
                         state = HttpClientStreamState::Complete;
-                        response = rv;
+                        # Merge rather than overwrite so status_code/headers
+                        # captured from an earlier headers event are not lost
+                        # when the end_stream event carries no headers — this
+                        # is required for extractFinalHeaders() to surface a
+                        # non-NOTHING status_code and for the `status_code >=
+                        # 300` error-propagation check in doSendDataStream().
+                        response += rv;
                         # If body is coalesced with end_stream, return body
                         # now and defer the end_stream sentinel so the
                         # caller doesn't lose the completion signal.

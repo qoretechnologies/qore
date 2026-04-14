@@ -2192,9 +2192,7 @@ public namespace RestSchemaValidator {
                 "query": h.params,
             });
 
-            *string ct = headers."content-type";
-            # remove modifiers
-            ct =~ s/[;,].*$//;
+            *string ct = mime_get_base_type(headers."content-type");
 
             if (exists http_body) {
                 *hash<auto> dh = DataDeserializationSupport{ct};
@@ -2261,8 +2259,11 @@ public namespace RestSchemaValidator {
 
                 list<string> ctl;
                 if (*string ct = headers."Content-Type" ?? headers."content-type") {
-                    ctl = (ct,);
-                    if (!DataSerializationSupport{ct}) {
+                    # strip parameters (e.g. ";charset=utf-8") for MIME type lookup — the
+                    # keys in DataSerializationSupport are bare MIME types
+                    string base_ct = mime_get_base_type(ct);
+                    ctl = (base_ct,);
+                    if (!DataSerializationSupport{base_ct}) {
                         log(LoggerLevel::ERROR, "error serializing response with unsupported "
                             "Content-Type %y required by the REST handler response: failed with response body: %Y",
                             ct, response_body);
@@ -2334,15 +2335,14 @@ public namespace RestSchemaValidator {
             });
 
             if (response_body.val()) {
-                string ct = (hdr."content-type".typeCode() == NT_LIST
+                string raw_ct = (hdr."content-type".typeCode() == NT_LIST
                     ? hdr."content-type"[0]
                     : hdr."content-type") ?? "";
-                if (!ct.val()) {
+                if (!raw_ct.val()) {
                     throw "DESERIALIZATION-ERROR", sprintf("cannot deserialize response body without a content-type; "
                         "response body: %y; headers: %y", response_body, hdr);
                 }
-                # remove modifiers
-                ct =~ s/[;,].*$//;
+                string ct = mime_get_base_type(raw_ct);
                 *hash<auto> dh = DataDeserializationSupport{ct};
                 if (!dh) {
                     throw "DESERIALIZATION-ERROR", sprintf("cannot deserialize response body; content-type is: %y; "
@@ -2400,8 +2400,12 @@ public namespace RestSchemaValidator {
             if (body.typeCode() != NT_BINARY && body.typeCode() != NT_STRING)
                 return False;
 
-            # try to find \c Content-Type header
-            *list ct = map $1, keys headers, $1 =~ /content-type/i;
+            # Find the \c Content-Type header by exact case-insensitive match — prior
+            # substring match of \c /content-type/i also matched unrelated headers such
+            # as \c X-Content-Type-Options and \c DataStream-Content-Type, which caused
+            # this function to fall through to serialization and re-wrap already-
+            # serialized bodies.
+            *list<string> ct = map $1, keys headers, $1 =~ /^content-type$/i;
 
             # if found and it is accepted, use it and don't serialize the body
             if (ct && ct.size() == 1) {
@@ -2410,10 +2414,14 @@ public namespace RestSchemaValidator {
                     resp.hdr = resp.hdr + ("Content-Type": remove resp.hdr{ct[0]});
                     return True;
                 }
+                # Compare against the bare MIME type (parameters like ";charset=utf-8"
+                # stripped) so a response with Content-Type "text/x-yaml;charset=utf-8"
+                # matches an accept entry of "text/x-yaml".
                 string contentType = headers{ct[0]};
+                string base_ct = mime_get_base_type(contentType) ?? "";
                 foreach string accepted in (content_types) {
                     accepted =~ s/\*/.*/;
-                    if (contentType.regex(accepted)) {
+                    if (base_ct.regex(accepted) || contentType.regex(accepted)) {
                         resp.body = body;
                         resp.hdr = resp.hdr + ("Content-Type": remove resp.hdr{ct[0]});
                         return True;

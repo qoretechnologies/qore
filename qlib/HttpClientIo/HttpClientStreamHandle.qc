@@ -725,8 +725,10 @@ public class HttpClientStreamHandle {
         per RFC 8259 / YAML spec regardless of any charset parameter.
     */
     private static hash<auto> normalizeResponseBody(hash<auto> resp) {
+        *string ct = resp.headers."content-type";
+        # expose the bare MIME type so downstream consumers don't each re-strip parameters
+        resp.content_type = mime_get_base_type(ct);
         if (resp.body && resp.body.typeCode() == NT_BINARY) {
-            *string ct = resp.headers."content-type";
             if (ct && (ct =~ /^text\// || ct =~ /\/(json|xml|yaml|html|javascript)/
                     || ct =~ /\+(json|xml)/ || ct =~ /charset=/
                     || ct =~ /x-www-form-urlencoded/)) {
