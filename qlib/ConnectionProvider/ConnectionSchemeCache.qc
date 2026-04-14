@@ -276,6 +276,8 @@ public class ConnectionSchemeCache {
             "zeyosrest": "ZeyosRestClient",
             "zeyosrests": "ZeyosRestClient",
 
+            "unbouncerest": "UnbounceRestClient",
+
             "unleashed": "UnleashedRestClient",
 
             "voyage": "VoyageRestClient",

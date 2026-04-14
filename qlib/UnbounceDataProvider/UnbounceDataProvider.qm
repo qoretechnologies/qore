@@ -1,0 +1,613 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore UnbounceDataProvider module definition
+
+/*  UnbounceDataProvider.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 2.0
+# assume local scope for variables, do not use "$" signs
+%modern
+# require type definitions everywhere
+# strict argument handling
+# enable all warnings
+
+%requires(reexport) DataProvider
+%requires(reexport) UnbounceRestClient
+%requires(reexport) RestClientIo
+
+module UnbounceDataProvider {
+    version = "1.0";
+    desc = "User module providing a data provider API for Unbounce landing pages and leads";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        # Register the data provider factory
+        DataProvider::registerFactory(new UnbounceDataProviderFactory());
+
+        # Register the application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": UnbounceDataProvider::AppName,
+            "display_name": "Unbounce",
+            "short_desc": "Unbounce landing page and lead management platform",
+            "desc": "Unbounce is a landing page builder and conversion optimization platform.\n\n"
+                "This integration supports listing accounts, sub-accounts, domains, pages, "
+                "page groups, leads, and users, as well as creating and deleting leads, "
+                "managing lead deletion requests, and watching for new leads via polling.",
+            "scheme": "unbouncerest",
+            "logo": UnbounceLogo,
+            "logo_file_name": "unbounce-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::Marketing,),
+        });
+
+        # ========== ACCOUNT ACTIONS ==========
+
+        # List Accounts
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": UnbounceDataProvider::AppName,
+            "path": "/accounts",
+            "action": "list-accounts",
+            "groups": "Accounts",
+            "display_name": "List Accounts",
+            "short_desc": "List all accounts",
+            "desc": "List all accounts accessible to the authenticated user",
+            "action_code": DPAT_FIND,
+            "options": {
+                "account_id": <ActionOptionInfo>{
+                    "display_name": "Account ID",
+                    "short_desc": "Filter by account ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "accounts",
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+                "offset": <ActionOptionInfo>{
+                    "display_name": "Offset",
+                    "short_desc": "Result offset",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+            },
+        });
+
+        # Get an Account
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": UnbounceDataProvider::AppName,
+            "path": "/accounts",
+            "action": "get-account",
+            "groups": "Accounts",
+            "display_name": "Get an Account",
+            "short_desc": "Get a single account by ID",
+            "desc": "Retrieve a single account by ID",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "account_id": <ActionOptionInfo>{
+                    "display_name": "Account ID",
+                    "short_desc": "The account ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "accounts",
+                },
+            },
+        });
+
+        # ========== SUB-ACCOUNT ACTIONS ==========
+
+        # List Sub-Accounts
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": UnbounceDataProvider::AppName,
+            "path": "/sub-accounts",
+            "action": "list-sub-accounts",
+            "groups": "Sub-Accounts",
+            "display_name": "List Sub-Accounts",
+            "short_desc": "List sub-accounts for an account",
+            "desc": "List all sub-accounts for a given account",
+            "action_code": DPAT_FIND,
+            "options": {
+                "account_id": <ActionOptionInfo>{
+                    "display_name": "Account ID",
+                    "short_desc": "Parent account ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                    "ref_data": "accounts",
+                },
+                "sub_account_id": <ActionOptionInfo>{
+                    "display_name": "Sub Account ID",
+                    "short_desc": "Filter by sub-account ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+                "offset": <ActionOptionInfo>{
+                    "display_name": "Offset",
+                    "short_desc": "Result offset",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+            },
+        });
+
+        # Get a Sub-Account
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": UnbounceDataProvider::AppName,
+            "path": "/sub-accounts",
+            "action": "get-sub-account",
+            "groups": "Sub-Accounts",
+            "display_name": "Get a Sub-Account",
+            "short_desc": "Get a single sub-account by ID",
+            "desc": "Retrieve a single sub-account by ID",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "sub_account_id": <ActionOptionInfo>{
+                    "display_name": "Sub Account ID",
+                    "short_desc": "The sub-account ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                },
+            },
+        });
+
+        # ========== DOMAIN ACTIONS ==========
+
+        # List Domains
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": UnbounceDataProvider::AppName,
+            "path": "/domains",
+            "action": "list-domains",
+            "groups": "Domains",
+            "display_name": "List Domains",
+            "short_desc": "List domains for a sub-account",
+            "desc": "List all domains for a given sub-account",
+            "action_code": DPAT_FIND,
+            "options": {
+                "sub_account_id": <ActionOptionInfo>{
+                    "display_name": "Sub Account ID",
+                    "short_desc": "Sub-account to list domains for",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                },
+                "domain_id": <ActionOptionInfo>{
+                    "display_name": "Domain ID",
+                    "short_desc": "Filter by domain ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+                "offset": <ActionOptionInfo>{
+                    "display_name": "Offset",
+                    "short_desc": "Result offset",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+            },
+        });
+
+        # Get a Domain
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": UnbounceDataProvider::AppName,
+            "path": "/domains",
+            "action": "get-domain",
+            "groups": "Domains",
+            "display_name": "Get a Domain",
+            "short_desc": "Get a single domain by ID",
+            "desc": "Retrieve a single domain by ID",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "domain_id": <ActionOptionInfo>{
+                    "display_name": "Domain ID",
+                    "short_desc": "The domain ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                },
+            },
+        });
+
+        # ========== PAGE GROUP ACTIONS ==========
+
+        # List Page Groups
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": UnbounceDataProvider::AppName,
+            "path": "/page-groups",
+            "action": "list-page-groups",
+            "groups": "Page Groups",
+            "display_name": "List Page Groups",
+            "short_desc": "List page groups for a sub-account",
+            "desc": "List all page groups for a given sub-account",
+            "action_code": DPAT_FIND,
+            "options": {
+                "sub_account_id": <ActionOptionInfo>{
+                    "display_name": "Sub Account ID",
+                    "short_desc": "Sub-account to list page groups for",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+                "offset": <ActionOptionInfo>{
+                    "display_name": "Offset",
+                    "short_desc": "Result offset",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+            },
+        });
+
+        # ========== PAGE ACTIONS ==========
+
+        # List Pages
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": UnbounceDataProvider::AppName,
+            "path": "/pages",
+            "action": "list-pages",
+            "groups": "Pages",
+            "display_name": "List Pages",
+            "short_desc": "List all landing pages",
+            "desc": "List all landing pages with optional filtering by role, date range, "
+                "and sort order",
+            "action_code": DPAT_FIND,
+            "options": {
+                "page_id": <ActionOptionInfo>{
+                    "display_name": "Page ID",
+                    "short_desc": "Filter by page ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "pages",
+                },
+                "with_stats": <ActionOptionInfo>{
+                    "display_name": "With Stats",
+                    "short_desc": "Include page statistics",
+                    "type": AbstractDataProviderTypeMap."*bool",
+                },
+                "role": <ActionOptionInfo>{
+                    "display_name": "Role",
+                    "short_desc": "Filter by user role",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "viewer", "desc": "Pages where the user is a viewer"},
+                        <AllowedValueInfo>{"value": "author", "desc": "Pages where the user is an author"},
+                    ),
+                },
+                "sort_order": <ActionOptionInfo>{
+                    "display_name": "Sort Order",
+                    "short_desc": "Sort direction",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "asc", "desc": "Sort in ascending order"},
+                        <AllowedValueInfo>{"value": "desc", "desc": "Sort in descending order"},
+                    ),
+                },
+                "from": <ActionOptionInfo>{
+                    "display_name": "From",
+                    "short_desc": "Start date filter",
+                    "type": AbstractDataProviderTypeMap."*date",
+                },
+                "to": <ActionOptionInfo>{
+                    "display_name": "To",
+                    "short_desc": "End date filter",
+                    "type": AbstractDataProviderTypeMap."*date",
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+                "offset": <ActionOptionInfo>{
+                    "display_name": "Offset",
+                    "short_desc": "Result offset",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+            },
+        });
+
+        # Get a Page
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": UnbounceDataProvider::AppName,
+            "path": "/pages",
+            "action": "get-page",
+            "groups": "Pages",
+            "display_name": "Get a Page",
+            "short_desc": "Get a single page by ID",
+            "desc": "Retrieve a single landing page by ID",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "page_id": <ActionOptionInfo>{
+                    "display_name": "Page ID",
+                    "short_desc": "The page ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "pages",
+                },
+            },
+        });
+
+        # ========== FORM FIELD ACTIONS ==========
+
+        # List Form Fields
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": UnbounceDataProvider::AppName,
+            "path": "/pages/form-fields",
+            "action": "list-form-fields",
+            "groups": "Pages",
+            "display_name": "List Form Fields",
+            "short_desc": "List form fields for a page",
+            "desc": "List all form fields configured on a specific landing page",
+            "action_code": DPAT_FIND,
+            "options": {
+                "page_id": <ActionOptionInfo>{
+                    "display_name": "Page ID",
+                    "short_desc": "Page to list form fields for",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                    "ref_data": "pages",
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+                "offset": <ActionOptionInfo>{
+                    "display_name": "Offset",
+                    "short_desc": "Result offset",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+            },
+        });
+
+        # ========== LEAD ACTIONS ==========
+
+        # List Leads
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": UnbounceDataProvider::AppName,
+            "path": "/leads",
+            "action": "list-leads",
+            "groups": "Leads",
+            "display_name": "List Leads",
+            "short_desc": "List leads for a page",
+            "desc": "List all leads captured on a specific landing page",
+            "action_code": DPAT_FIND,
+            "options": {
+                "page_id": <ActionOptionInfo>{
+                    "display_name": "Page ID",
+                    "short_desc": "Page to list leads for",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                    "ref_data": "pages",
+                },
+                "lead_id": <ActionOptionInfo>{
+                    "display_name": "Lead ID",
+                    "short_desc": "Filter by lead ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "sort_order": <ActionOptionInfo>{
+                    "display_name": "Sort Order",
+                    "short_desc": "Sort direction",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "asc", "desc": "Sort in ascending order"},
+                        <AllowedValueInfo>{"value": "desc", "desc": "Sort in descending order"},
+                    ),
+                },
+                "from": <ActionOptionInfo>{
+                    "display_name": "From",
+                    "short_desc": "Start date filter",
+                    "type": AbstractDataProviderTypeMap."*date",
+                },
+                "to": <ActionOptionInfo>{
+                    "display_name": "To",
+                    "short_desc": "End date filter",
+                    "type": AbstractDataProviderTypeMap."*date",
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+                "offset": <ActionOptionInfo>{
+                    "display_name": "Offset",
+                    "short_desc": "Result offset",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+            },
+        });
+
+        # Get a Lead
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": UnbounceDataProvider::AppName,
+            "path": "/leads",
+            "action": "get-lead",
+            "groups": "Leads",
+            "display_name": "Get a Lead",
+            "short_desc": "Get a single lead by ID",
+            "desc": "Retrieve a single lead by ID",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "lead_id": <ActionOptionInfo>{
+                    "display_name": "Lead ID",
+                    "short_desc": "The lead ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                },
+            },
+        });
+
+        # Create a Lead
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": UnbounceDataProvider::AppName,
+            "path": "/leads/create",
+            "action": "create-lead",
+            "groups": "Leads",
+            "display_name": "Create a Lead",
+            "short_desc": "Create a new lead on a page",
+            "desc": "Create a new lead on an Unbounce landing page with form submission data",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                UnbounceCreateLeadRequestDataType::Fields,
+            ),
+            "output_type": new UnbounceLeadDataType(),
+        });
+
+        # Delete a Lead
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": UnbounceDataProvider::AppName,
+            "path": "/leads/delete",
+            "action": "delete-lead",
+            "groups": "Leads",
+            "display_name": "Delete a Lead",
+            "short_desc": "Delete a lead from a page",
+            "desc": "Delete a lead from an Unbounce landing page. The deletion is processed "
+                "asynchronously (HTTP 202)",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                UnbounceDeleteLeadRequestDataType::Fields,
+            ),
+            "output_type": AbstractDataProviderTypeMap."hash",
+        });
+
+        # ========== LEAD DELETION REQUEST ACTIONS ==========
+
+        # Get Lead Deletion Request
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": UnbounceDataProvider::AppName,
+            "path": "/lead-deletion-requests",
+            "action": "get-lead-deletion-request",
+            "groups": "Lead Deletion Requests",
+            "display_name": "Get Lead Deletion Request",
+            "short_desc": "Get a lead deletion request status",
+            "desc": "Retrieve the status of a lead deletion request by page ID and "
+                "deletion request ID",
+            "action_code": DPAT_FIND,
+            "options": {
+                "page_id": <ActionOptionInfo>{
+                    "display_name": "Page ID",
+                    "short_desc": "Page ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                    "ref_data": "pages",
+                },
+                "deletion_request_id": <ActionOptionInfo>{
+                    "display_name": "Deletion Request ID",
+                    "short_desc": "Deletion request ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                },
+            },
+        });
+
+        # Create Lead Deletion Request
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": UnbounceDataProvider::AppName,
+            "path": "/lead-deletion-requests/create",
+            "action": "create-lead-deletion-request",
+            "groups": "Lead Deletion Requests",
+            "display_name": "Create Lead Deletion Request",
+            "short_desc": "Create a bulk lead deletion request",
+            "desc": "Create a lead deletion request to delete leads in bulk for a specific "
+                "page. Can delete specific leads by ID, all leads, or leads within a date range",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                UnbounceCreateLeadDeletionRequestRequestDataType::Fields,
+            ),
+            "output_type": new UnbounceLeadDeletionRequestDataType(),
+        });
+
+        # ========== USER ACTIONS ==========
+
+        # Get User
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": UnbounceDataProvider::AppName,
+            "path": "/users",
+            "action": "get-user",
+            "groups": "Users",
+            "display_name": "Get User",
+            "short_desc": "Get a user by ID or the current user",
+            "desc": "Retrieve a user by ID, or the current authenticated user if no ID "
+                "is provided",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "user_id": <ActionOptionInfo>{
+                    "display_name": "User ID",
+                    "short_desc": "The user ID (leave empty for current user)",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                },
+            },
+        });
+
+        # ========== EVENT ACTIONS ==========
+
+        # Watch New Leads
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": UnbounceDataProvider::AppName,
+            "path": "/events/" + EVENT_LEAD_ADDED,
+            "action": EVENT_LEAD_ADDED,
+            "groups": "Events",
+            "display_name": "Watch New Leads",
+            "short_desc": "Detect new leads on a page via polling",
+            "desc": "Polls for new leads on a specific Unbounce landing page and fires an "
+                "event for each new lead detected",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_LEAD_ADDED,
+        });
+    };
+}
+
+/** @mainpage UnbounceDataProvider Module
+
+    @tableofcontents
+
+    @section unbouncedataproviderintro UnbounceDataProvider Introduction
+
+    The %UnbounceDataProvider module provides a data provider API for the Unbounce
+    landing page and conversion optimization platform.
+
+    To use this module, use \c "%requires UnbounceDataProvider" in your code.
+
+    All the public symbols in the module are defined in the UnbounceDataProvider namespace.
+
+    The main classes are:
+    - @ref UnbounceDataProvider::UnbounceDataProvider "UnbounceDataProvider":
+      the root data provider for Unbounce
+    - @ref UnbounceDataProvider::UnbounceDataProviderFactory "UnbounceDataProviderFactory":
+      the data provider factory for Unbounce
+
+    @section unbouncedataproviderrelnotes Release Notes
+
+    @subsection unbouncedataproviderv1_0 UnbounceDataProvider v1.0
+    - the initial version of the %UnbounceDataProvider module
+*/
+
+#! Contains all public definitions in the UnbounceDataProvider module
+public namespace UnbounceDataProvider {
+}
