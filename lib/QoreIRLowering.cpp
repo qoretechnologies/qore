@@ -7266,15 +7266,16 @@ QoreIRValue QoreIRLowering::lowerRemove(const QoreValue& expr, std::string& erro
             markLocalUnassignmentFromExpression(op->getExp());
             // When the return value is not used (ExpressionStatement), invalidate the
             // result slot so the IR interpreter discards the removed value immediately
-            // instead of deferring to cleanup.  Without this, the removed value stays
-            // alive until function exit, which breaks patterns like weak references
-            // where the destructor must fire as soon as the last strong ref is dropped.
+            // instead of deferring to DiscardTemps.  This is critical for weak-reference
+            // patterns where the destructor must fire as soon as the last strong ref is
+            // dropped — even a one-instruction delay to DiscardTemps can cause hangs
+            // (thread-object.qtest transparent thread test pattern).
             if (!op->needsReturnValue()) {
                 auto& insts = builder.getBlock()->instructions;
                 if (!insts.empty()) {
                     auto* path_inst = dynamic_cast<QoreIRLValuePathInstruction*>(insts.back().get());
                     if (path_inst) {
-                        path_inst->result = QoreIRValue(0);  // invalid → IR interpreter discards
+                        path_inst->result = QoreIRValue();  // invalid → IR interpreter discards immediately
                     }
                 }
             }

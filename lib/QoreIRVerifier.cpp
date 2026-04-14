@@ -195,13 +195,18 @@ bool QoreIRVerifier::verify(const QoreIRFunction& func, std::string& error) {
         for (const auto& inst : block->instructions) {
             if (requiresResult(inst->opcode)) {
                 if (!inst->result.isValid()) {
-                    error = "instruction missing result value: opcode=" + std::to_string(static_cast<int>(inst->opcode))
-                        + " in block '" + block->name + "'";
-                    return false;
-                }
-                if (!value_ids.insert(inst->result.id).second) {
-                    error = "duplicate result value id";
-                    return false;
+                    // Allow missing result when the opcode has optional_result set
+                    // (e.g., LValuePathUnary for void remove/delete statements)
+                    if (!getOpcodeOptionalResult(static_cast<int>(inst->opcode))) {
+                        error = "instruction missing result value: opcode=" + std::to_string(static_cast<int>(inst->opcode))
+                            + " in block '" + block->name + "'";
+                        return false;
+                    }
+                } else {
+                    if (!value_ids.insert(inst->result.id).second) {
+                        error = "duplicate result value id";
+                        return false;
+                    }
                 }
             } else if (inst->result.isValid()) {
                 error = "unexpected result value: opcode="
