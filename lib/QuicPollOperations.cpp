@@ -102,6 +102,43 @@ static void setPollTimeoutFromExpiry(QoreHashNode* poll_info, ngtcp2_tstamp expi
     poll_info->setKeyValue("poll_timeout_ms", timeout_ms, xsink);
 }
 
+//! Clamp poll_timeout_ms so the I/O thread wakes no later than deadline_ns.
+/** Used when a handshake deadline is active: ngtcp2's retransmission timer may
+    point further out than our connect_timeout, so we shorten the poll window to
+    ensure continuePoll() re-runs in time to fail the op with QUIC-HANDSHAKE-TIMEOUT.
+    @param poll_info the poll info hash (must not be nullptr)
+    @param deadline_ns absolute deadline (ngtcp2 timestamp, ns); <=0 disables
+    @param xsink for exception handling
+*/
+static void clampPollTimeoutToDeadline(QoreHashNode* poll_info, int64_t deadline_ns,
+                                       ExceptionSink* xsink) {
+    if (deadline_ns <= 0 || !poll_info) {
+        return;
+    }
+    ngtcp2_tstamp now = QuicSession::timestamp();
+    int64_t remaining_ms;
+    if (static_cast<int64_t>(now) >= deadline_ns) {
+        remaining_ms = 0;  // deadline passed; fire immediately on next poll
+    } else {
+        int64_t remaining_ns = deadline_ns - static_cast<int64_t>(now);
+        remaining_ms = remaining_ns / 1000000;
+        if (remaining_ns % 1000000) {
+            ++remaining_ms;  // round up so we don't wake one tick early
+        }
+    }
+    QoreValue ptv = poll_info->getKeyValue("poll_timeout_ms");
+    if (ptv.getType() == NT_INT) {
+        int64_t current_ms = ptv.getAsBigInt();
+        // -1 = wait indefinitely; anything negative shouldn't happen here but
+        // treat as "no bound" so we still clamp it down
+        if (current_ms < 0 || remaining_ms < current_ms) {
+            poll_info->setKeyValue("poll_timeout_ms", remaining_ms, xsink);
+        }
+    } else {
+        poll_info->setKeyValue("poll_timeout_ms", remaining_ms, xsink);
+    }
+}
+
 //! Log and clear a readPacketBatch exception (shared by batch recv helpers)
 static void logBatchError(ExceptionSink* xsink, QuicSession* target, int batch_count) {
     const QoreStringNode* err_str = xsink->getExceptionErr().get<const QoreStringNode>();
@@ -330,7 +367,8 @@ static int recvAndDispatchQuicPackets(int fd, QoreDatagramDispatcher& dispatcher
 
 SocketQuicClientPollOperation::SocketQuicClientPollOperation(
     ExceptionSink* xsink, QoreSocketObject* sock,
-    const char* host, uint16_t port, int family)
+    const char* host, uint16_t port, int family,
+    int64_t handshake_timeout_ns)
     : SocketPollSocketOperationBase(sock) {
     AutoLocker al(sock->priv->m);
 
@@ -433,6 +471,14 @@ SocketQuicClientPollOperation::SocketQuicClientPollOperation(
 
     // Store the session on qore_socket_private for access via Socket QPP methods
     sock->priv->socket->priv->addQuicSession(quic_session);
+
+    // Record the absolute handshake deadline (if a connect_timeout was supplied).
+    // Without this, a stalled QUIC handshake over UDP has no transport-level
+    // deadline (unlike TCP where the OS eventually returns ETIMEDOUT) — only
+    // the outer request_timeout would bound it.
+    if (handshake_timeout_ns > 0) {
+        handshake_deadline_ns_ = QuicSession::timestamp() + handshake_timeout_ns;
+    }
 
     qcs_state = QCS::HANDSHAKE_SEND;
 }
@@ -725,6 +771,20 @@ QoreHashNode* SocketQuicClientPollOperation::continuePoll(ExceptionSink* xsink) 
         return nullptr;
     }
 
+    // Enforce the handshake deadline if one was configured. QUIC runs over UDP,
+    // so a stalled handshake gets no OS-level feedback (unlike TCP connect which
+    // eventually returns ETIMEDOUT). Without this check, the outer request_timeout
+    // is the only bound, producing an opaque HTTPCLIENT-TIMEOUT rather than a
+    // diagnosable connect-phase error at the configured connect_timeout.
+    if (handshake_deadline_ns_ > 0
+        && (qcs_state == QCS::HANDSHAKE_SEND || qcs_state == QCS::HANDSHAKE_RECV)
+        && QuicSession::timestamp() >= handshake_deadline_ns_) {
+        qcs_state = QCS::CLOSED;
+        xsink->raiseException("QUIC-HANDSHAKE-TIMEOUT",
+            "QUIC handshake did not complete within the configured connect_timeout");
+        return nullptr;
+    }
+
     while (true) {
         switch (qcs_state) {
             case QCS::HANDSHAKE_SEND: {
@@ -738,6 +798,7 @@ QoreHashNode* SocketQuicClientPollOperation::continuePoll(ExceptionSink* xsink) 
                     QoreHashNode* poll_info = getSocketPollInfoHash(xsink, SOCK_POLLOUT);
                     if (poll_info) {
                         setPollTimeoutFromExpiry(poll_info, next_expiry, xsink);
+                        clampPollTimeoutToDeadline(poll_info, handshake_deadline_ns_, xsink);
                     }
                     return poll_info;
                 }
@@ -815,6 +876,7 @@ QoreHashNode* SocketQuicClientPollOperation::continuePoll(ExceptionSink* xsink) 
                     QoreHashNode* poll_info = getSocketPollInfoHash(xsink, SOCK_POLLIN);
                     if (poll_info) {
                         setPollTimeoutFromExpiry(poll_info, next_expiry, xsink);
+                        clampPollTimeoutToDeadline(poll_info, handshake_deadline_ns_, xsink);
                     }
                     return poll_info;
                 }

@@ -923,8 +923,12 @@ enum class QCS : int {
 */
 class SocketQuicClientPollOperation : public SocketPollSocketOperationBase {
 public:
+    //! @param handshake_timeout_ns optional handshake deadline in nanoseconds
+    //!     (0 = disabled); when >0, continuePoll() fails with QUIC-HANDSHAKE-TIMEOUT
+    //!     if the handshake has not reached SETUP_HTTP3 by this elapsed time
     DLLLOCAL SocketQuicClientPollOperation(ExceptionSink* xsink, QoreSocketObject* sock,
-                                           const char* host, uint16_t port, int family);
+                                           const char* host, uint16_t port, int family,
+                                           int64_t handshake_timeout_ns = 0);
 
     DLLLOCAL void deref(ExceptionSink* xsink) {
         if (ROdereference()) {
@@ -1037,6 +1041,12 @@ private:
     uint8_t recv_buf_[QUIC_RECV_BUF_SIZE]{};
     //! Reusable packet batch (avoids per-call heap allocations)
     QuicPacketBatch pkt_batch_;
+    //! Absolute deadline (ngtcp2 timestamp, ns) for completing the QUIC+TLS
+    //! handshake; 0 means disabled. Checked in continuePoll() while in
+    //! HANDSHAKE_SEND/HANDSHAKE_RECV; exceeding it raises QUIC-HANDSHAKE-TIMEOUT
+    //! so a stalled handshake over UDP fails fast at the configured
+    //! connect_timeout instead of silently waiting for the outer request_timeout.
+    int64_t handshake_deadline_ns_ = 0;
 
     //! Coalesced timer + write + send pending QUIC packets via UDP
     /** @param next_expiry output: next timer expiry for poll timeout
