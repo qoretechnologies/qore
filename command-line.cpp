@@ -1671,6 +1671,32 @@ int qore_main_intern(int argc, char* argv[], int other_po) {
 
          // Check if input is a directory (split module)
          bool is_split_module = program_file_name && is_directory(program_file_name);
+         // Holds the resolved directory path when auto-detecting a .qm file as part
+         // of a separated module; empty when the user already passed a directory.
+         std::string split_module_dir;
+
+         // Auto-detect separated modules: if input is a .qm file whose basename
+         // matches its parent directory name (e.g., DataProvider/DataProvider.qm),
+         // treat the parent directory as a separated module directory.
+         if (!is_split_module && program_file_name && compile_module_mode) {
+            std::string pf(program_file_name);
+            size_t dot = pf.rfind('.');
+            if (dot != std::string::npos && pf.substr(dot) == ".qm") {
+               size_t last_slash = pf.rfind('/', dot);
+               if (last_slash != std::string::npos) {
+                  std::string parent = pf.substr(0, last_slash);
+                  std::string file_base = pf.substr(last_slash + 1, dot - last_slash - 1);
+                  // Get parent directory's basename
+                  size_t prev_slash = parent.rfind('/');
+                  std::string dir_base = (prev_slash != std::string::npos)
+                     ? parent.substr(prev_slash + 1) : parent;
+                  if (file_base == dir_base && is_directory(parent.c_str())) {
+                     is_split_module = true;
+                     split_module_dir = std::move(parent);
+                  }
+               }
+            }
+         }
 
          // Auto-enable module mode for directories
          if (is_split_module && !compile_module_mode) {
@@ -1710,7 +1736,7 @@ int qore_main_intern(int argc, char* argv[], int other_po) {
          } else if (program_file_name) {
             if (is_split_module) {
                // For split modules, derive output from directory basename
-               std::string dir_str(program_file_name);
+               std::string dir_str(split_module_dir.empty() ? program_file_name : split_module_dir.c_str());
                // Remove trailing slashes
                while (!dir_str.empty() && dir_str.back() == '/') {
                   dir_str.pop_back();
@@ -1745,8 +1771,9 @@ int qore_main_intern(int argc, char* argv[], int other_po) {
 
          std::string error;
          if (is_split_module) {
-            // Compile split module directory
-            if (!QoreAOT::compileSeparatedModule(program_file_name, output_path, parse_options, error,
+            // Compile split module directory (use resolved dir when auto-detected from .qm path)
+            const char* split_dir = split_module_dir.empty() ? program_file_name : split_module_dir.c_str();
+            if (!QoreAOT::compileSeparatedModule(split_dir, output_path, parse_options, error,
                      aot_opt_level, aot_target, aot_include_source)) {
                fprintf(stderr, "AOT split module compilation failed: %s\n", error.c_str());
                rc = 1;
