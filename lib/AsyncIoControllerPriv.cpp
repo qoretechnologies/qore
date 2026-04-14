@@ -1081,6 +1081,11 @@ bool AsyncIoControllerPriv::cancelByKey(const QoreStringNode* key, ExceptionSink
         cmd.cancel_count = &found_count;
         if (anyThreadRunning() && !io_exiting) {
             target.cmdq.push(std::move(cmd));
+            // Bump submit_seq so the I/O thread's pre-poll catch-up at
+            // line 2702 covers this Cancel — submit() does the same.  Without
+            // this, a missed EVFILT_USER notify on macOS leaves the I/O
+            // thread blocked in kevent(-1) and waitCancel() hangs forever.
+            ++submit_seq;
             do_signal = true;
         }
     }
@@ -1161,6 +1166,9 @@ int AsyncIoControllerPriv::cancelByOwner(const QoreStringNode* owner, ExceptionS
                     cmd.cancel_count = &actual_count;
                     cmd.pending_threads = &pending_threads;
                     tp->cmdq.push(std::move(cmd));
+                    // Bump submit_seq so the I/O thread's pre-poll catch-up
+                    // covers this CancelOwner — see Cancel for details.
+                    ++submit_seq;
                 }
                 do_signal = true;
             }
@@ -1262,6 +1270,9 @@ void AsyncIoControllerPriv::cancelByProgram(QoreProgram* pgm, ExceptionSink* xsi
                     cmd.done_cond = &done_cond;
                     cmd.cancel_done_flag = &cancel_done;
                     tp->cmdq.push(std::move(cmd));
+                    // Bump submit_seq so the I/O thread's pre-poll catch-up
+                    // covers this CancelByProgram — see Cancel for details.
+                    ++submit_seq;
                 }
                 do_signal = true;
             } else {
@@ -2722,6 +2733,26 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
             } else if (processed_seq < current_submit) {
                 ASYNC_IO_TRACE("BLOCKED processed_seq=%d submit_seq=%d cmdq-nonempty\n",
                     (int)processed_seq, current_submit);
+            }
+        }
+
+        // Final pre-poll cmdq re-check (lock-free, lock-acquire-ordered): a
+        // worker may have pushed a non-SubmitOp command (Cancel, CancelOwner,
+        // Quit, WakeSocket, …) between the post-processCommands re-check and
+        // here, while we were doing Phase 1/2/3 + deferred deliveries.  Those
+        // paths do not bump submit_seq, so the catch-up block above will not
+        // trigger.  If the worker's notify() reaches the kqueue we will wake
+        // immediately anyway; the check exists for the lost-wakeup case
+        // (observed on macOS/kqueue under Tart virtualization) where the
+        // EVFILT_USER trigger never materializes and poll(-1) would block
+        // forever, hanging waitCancel() / waitFor* in the worker.  Reading
+        // cmdq.empty() under the worker-side lock m provides happens-before
+        // for the Vyukov push, so a push that completed before we got here is
+        // guaranteed visible.
+        {
+            AutoLocker al(m);
+            if (!t.cmdq.empty()) {
+                continue;
             }
         }
 

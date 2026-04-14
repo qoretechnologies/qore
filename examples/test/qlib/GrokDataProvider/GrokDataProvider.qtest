@@ -174,7 +174,6 @@ public class GrokDataProviderTest inherits QUnit::Test {
 
     private setupConnection() {
 %ifndef NoJson
-        string conn_name = m_options.conn ?? ENV.GROK_CONNECTION ?? "grok";
         *string api_key = ENV.GROK_API_KEY;
         if (api_key) {
             rc = new GrokRestClient::GrokRestConnection("test", "test", NOTHING, NOTHING, {
