@@ -7185,6 +7185,18 @@ load_local_done:
                 QoreValue res;
                 qore_type_t vt = lvh.getType();
                 if (vt == NT_NOTHING) {
+                    // Mirror AST behavior (QoreExtractOperatorNode::evalImpl): if the lvalue
+                    // has a default list/string type, auto-initialize it so extract on a
+                    // declared-but-unassigned `list l` returns an empty list rather than NOTHING.
+                    const QoreTypeInfo* ti = lvh.getTypeInfo();
+                    if (ti == softListTypeInfo || ti == listTypeInfo || ti == stringTypeInfo
+                            || ti == softStringTypeInfo) {
+                        if (!lvh.assign(QoreTypeInfo::getDefaultQoreValue(ti))) {
+                            vt = lvh.getType();
+                        }
+                    }
+                }
+                if (vt == NT_NOTHING) {
                     // Nothing to extract — return NOTHING
                 } else if (vt != NT_LIST && vt != NT_STRING && vt != NT_BINARY) {
                     xsink->raiseException("EXTRACT-ERROR",
