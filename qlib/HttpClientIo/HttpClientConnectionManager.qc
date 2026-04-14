@@ -1532,6 +1532,13 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
             || err == "HTTP3-STATE-ERROR"
             || err == "HTTP3-ABORT"
             || err == "HTTP3-EMPTY-READ"
+            # Peer sent CONNECTION_CLOSE (typically QUIC idle timeout from
+            # servers like Google that close idle H3 connections).  The
+            # connection is unusable — evict and retry on a fresh one.
+            || err == "HTTP3-CONNECTION-CLOSED"
+            # I/O error reading from the QUIC socket mid-request (e.g., peer
+            # closed, network blip).  Same recovery: retry on fresh conn.
+            || err == "HTTP3-READ-ERROR"
             || err == "HTTP2-EMPTY-READ"
             || err == "HTTP2-CONNECT-ERROR"
             || err == "HTTP2-ALPN-ERROR"
