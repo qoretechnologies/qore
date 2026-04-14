@@ -98,6 +98,39 @@ QoreObject* qore_get_async_io_controller_obj(ExceptionSink* xsink) {
     return obj;
 }
 
+void qore_async_io_controller_pre_cleanup() {
+    // Early shutdown: drop any cross-module QoreObject references held by the
+    // singleton before QMM.delUser() runs. Without this, user-module classes
+    // (e.g., Logger-module LoggerWrapper, or a user-supplied timer callback
+    // target) stay pinned by the singleton's state through module teardown
+    // and their parse trees leak.
+    //
+    // The singleton itself is NOT stopped here — it must remain alive during
+    // user-module teardown so per-program aio_program_cleanup callbacks can
+    // still call cancelByProgram() on it. Full stop happens later, in
+    // qore_async_io_controller_cleanup(), after all modules are torn down.
+    AsyncIoControllerPriv* priv;
+    {
+        AutoLocker al(aio_singleton_lock);
+        priv = aio_singleton;
+        if (priv) {
+            priv->ref();
+        }
+    }
+    if (!priv) {
+        return;
+    }
+    ExceptionSink xsink;
+    // Drop logger QoreObject (may be a user-module LoggerWrapper/StdoutAppender etc.)
+    priv->setLogger(nullptr, &xsink);
+    // Drop timer callback + any timer user data (values may hold QoreObject refs)
+    priv->clearCrossModuleRefs(&xsink);
+    priv->deref(&xsink);
+    if (xsink) {
+        xsink.clear();
+    }
+}
+
 void qore_async_io_controller_cleanup() {
     QoreObject* obj;
     AsyncIoControllerPriv* priv;
@@ -1562,6 +1595,23 @@ QoreHashNode* AsyncIoControllerPriv::getInfo(ExceptionSink* xsink) {
     }
 
     return rv.release();
+}
+
+void AsyncIoControllerPriv::clearCrossModuleRefs(ExceptionSink* xsink) {
+    ResolvedCallReferenceNode* tcb;
+    std::unordered_map<int64_t, TimerInfo> stolen_timers;
+    {
+        AutoLocker al(m);
+        tcb = timer_callback;
+        timer_callback = nullptr;
+        stolen_timers.swap(timer_info_map);
+    }
+    if (tcb) {
+        tcb->deref(xsink);
+    }
+    for (auto& [id, tinfo] : stolen_timers) {
+        tinfo.udata.discard(xsink);
+    }
 }
 
 void AsyncIoControllerPriv::setLogger(QoreObject* logger_obj, ExceptionSink* xsink) {

@@ -427,11 +427,21 @@ QoreUserModule::~QoreUserModule() {
             del->deref(&xsink);
         }
     }
-    // issue #4816: Use waitForTermination() + deref() instead of waitForTerminationAndDeref()
-    // This allows Type objects in foreign modules to keep the program data alive via strong refs.
-    // When deref() triggers clear(), the cleanup callback will break cycles for same-program Types.
-    // For cross-program Types, the strong ref keeps the program data alive.
+    // issue #4816: Type objects in foreign modules can hold strong refs to
+    // this program's data, so plain deref() can leave refcount > 0 at shutdown
+    // — the destructor never runs, stranding the parse tree (namespaces,
+    // classes, functions, constants, globals) until process exit.
+    //
+    // Run waitForTerminationAndClear() first. It takes plock, sets ptid,
+    // runs the cleanup callback (breaks Type cycles via qore_release_type_refs),
+    // then clears local vars and namespace data under the proper locking and
+    // thread-termination discipline. This is the same path clear() uses when
+    // refcount reaches zero — calling it explicitly forces that safe teardown
+    // even when foreign strong refs are holding the program alive. The method
+    // is already idempotent (guarded by `clr` / `ns_vars` / `ns_const` flags),
+    // so the later clear() invoked by deref() → ROdereference() is a no-op.
     pgm->waitForTermination();
+    qore_program_private::get(*pgm)->waitForTerminationAndClear(&xsink);
     pgm->deref(&xsink);
 }
 
