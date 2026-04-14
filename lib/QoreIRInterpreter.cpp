@@ -6744,11 +6744,21 @@ load_local_done:
                     // Single-step path: navigate to the variable itself and clear
                     LValueHelper lvh(xsink);
                     if (lvh.navigatePath(path_inst->path.data(), path_inst->path.size(), true)) {
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                        cleanupLocalCaches();
-                        return false;
-                    }
-                    if (path_inst->unary_op == LVUnaryOp::Remove) {
+                        if (*xsink) {
+                            // Real error during navigation — propagate
+                            cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                            cleanupLocalCaches();
+                            return false;
+                        }
+                        // navigatePath failed without exception: target doesn't exist
+                        // (e.g. `delete r` where r is a reference<hash> to an unassigned
+                        // hash member h.b, and for_remove=true refuses to vivify the parent).
+                        // Treat as no-op — matches AST semantics (QoreDeleteOperatorNode /
+                        // QoreRemoveOperatorNode on a missing target both succeed silently)
+                        // and the multi-step path case at :6736. Returning false here would
+                        // trigger a false AST deopt and silently re-run the function body.
+                        res = QoreValue();
+                    } else if (path_inst->unary_op == LVUnaryOp::Remove) {
                         // `remove self` on a static_assignment lvalue (borrowed ref)
                         // must not propagate the borrowed value — discard it and return
                         // NOTHING.  Matches LValueRemoveHelper::deleteLValue's clearTemp
