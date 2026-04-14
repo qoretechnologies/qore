@@ -74,17 +74,17 @@ public class WooCommerceCreateProductRequestDataType inherits HashDataType {
             },
             "categories": {
                 "display_name": "Categories",
-                "type": SoftListOrNothingType,
+                "type": new ListDataType("Categories", AutoHashType, True),
                 "desc": "List of category objects (each with an `id` key)",
             },
             "tags": {
                 "display_name": "Tags",
-                "type": SoftListOrNothingType,
+                "type": new ListDataType("Tags", AutoHashType, True),
                 "desc": "List of tag objects (each with an `id` key)",
             },
             "images": {
                 "display_name": "Images",
-                "type": SoftListOrNothingType,
+                "type": new ListDataType("Images", AutoHashType, True),
                 "desc": "List of image objects (each with a `src` key)",
             },
             "manage_stock": {
@@ -124,7 +124,7 @@ public class WooCommerceCreateProductRequestDataType inherits HashDataType {
             },
             "meta_data": {
                 "display_name": "Meta Data",
-                "type": SoftListOrNothingType,
+                "type": new ListDataType("MetaData", AutoHashType, True),
                 "desc": "List of metadata key-value pairs for the product",
             },
         };

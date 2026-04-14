@@ -339,6 +339,13 @@ void qore_cleanup() {
     // to avoid use-after-free: BgCompileWork holds raw pointers to UserVariantBase members
     QoreJIT::instance().shutdown();
 
+    // drop any user-module QoreObject references held by the async I/O
+    // controller singleton (logger, timer callback, timer user data) BEFORE
+    // user modules are unloaded, so their class data can finish refcounting
+    // down and be freed during module cleanup rather than stranded past it.
+    // The singleton itself is left alive — actual stop happens below.
+    qore_async_io_controller_pre_cleanup();
+
     // first delete all user modules (runs module del handlers, stops ThreadPools)
     QMM.delUser();
 

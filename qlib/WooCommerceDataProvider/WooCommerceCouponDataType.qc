@@ -81,13 +81,13 @@ public class WooCommerceCouponDataType inherits HashDataType {
             "product_ids": {
                 "display_name": "Product IDs",
                 "short_desc": "Products the coupon applies to",
-                "type": SoftListOrNothingType,
+                "type": new ListDataType("ProductIdList", SoftIntType, True),
                 "desc": "List of product IDs the coupon can be applied to",
             },
             "excluded_product_ids": {
                 "display_name": "Excluded Product IDs",
                 "short_desc": "Products excluded from the coupon",
-                "type": SoftListOrNothingType,
+                "type": new ListDataType("ExcludedProductIdList", SoftIntType, True),
                 "desc": "List of product IDs excluded from the coupon",
             },
             "usage_limit": {
@@ -135,7 +135,7 @@ public class WooCommerceCouponDataType inherits HashDataType {
             "meta_data": {
                 "display_name": "Meta Data",
                 "short_desc": "Coupon metadata",
-                "type": SoftListOrNothingType,
+                "type": new ListDataType("MetaData", AutoHashType, True),
                 "desc": "List of metadata key-value pairs associated with the coupon",
             },
         };

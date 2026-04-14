@@ -30,19 +30,19 @@ public class ApolloSearchPeopleRequestDataType inherits HashDataType {
     public {
         const Fields = {
             "person_titles": {
-                "type": SoftListOrNothingType,
+                "type": new ListDataType("TitleList", SoftStringType, True),
                 "display_name": "Person Titles",
                 "short_desc": "Job titles to search for",
                 "desc": "List of job titles to search for",
             },
             "person_locations": {
-                "type": SoftListOrNothingType,
+                "type": new ListDataType("LocationList", SoftStringType, True),
                 "display_name": "Person Locations",
                 "short_desc": "Locations to filter by",
                 "desc": "List of locations to filter by",
             },
             "person_seniorities": {
-                "type": SoftListOrNothingType,
+                "type": new ListDataType("SeniorityList", SoftStringType, True),
                 "display_name": "Person Seniorities",
                 "short_desc": "Seniority levels to filter by",
                 "desc": "List of seniority levels (e.g., `senior`, `manager`)",
@@ -54,7 +54,7 @@ public class ApolloSearchPeopleRequestDataType inherits HashDataType {
                 "desc": "Keywords to search for",
             },
             "organization_domains": {
-                "type": SoftListOrNothingType,
+                "type": new ListDataType("DomainList", SoftStringType, True),
                 "display_name": "Organization Domains",
                 "short_desc": "Company domains to search within",
                 "desc": "List of company domains to search within",

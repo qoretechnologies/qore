@@ -55,7 +55,7 @@ public class MailgunBaseEventDataType inherits HashDataType {
                 "desc": "The recipient email address",
             },
             "tags": {
-                "type": SoftListOrNothingType,
+                "type": new ListDataType("Tags", SoftStringType, True),
                 "display_name": "Tags",
                 "short_desc": "Message tags",
                 "desc": "Tags associated with the message",

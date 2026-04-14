@@ -160,7 +160,7 @@ public class HuggingFaceChatCompletionsRequestDataType inherits HashDataType {
                 "display_name": "Stop Sequences",
                 "short_desc": "Stop sequences",
                 "desc": "Up to 4 sequences where the model will stop generating further tokens",
-                "type": SoftListOrNothingType,
+                "type": new ListDataType("StopSequences", SoftStringType, True),
             },
             "response_format": {
                 "display_name": "Response Format",

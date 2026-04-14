@@ -1,0 +1,364 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file OneDriveDataProvider.qm Qore user module providing a data provider API for Microsoft OneDrive
+
+/*  OneDriveDataProvider.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum qore version
+%requires qore >= 2.0
+
+# don't use "$" for vars, members, and methods, assume local variable scope
+%modern
+
+%requires Mime >= 1.3
+%requires(reexport) DataProvider
+%requires OneDriveRestClient
+%requires RestClientIo
+
+module OneDriveDataProvider {
+    version = "1.0";
+    desc = "user module providing a data provider API for Microsoft OneDrive via Microsoft Graph";
+    author = "David Nichols <david@qore.org>";
+    url = "http://qore.org";
+    license = "MIT";
+    init = sub () {
+        # register the data provider factory
+        DataProvider::registerFactory(new OneDriveDataProviderFactory());
+
+        # register the data provider application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": OneDriveDataProvider::AppName,
+            "display_name": "Microsoft OneDrive",
+            "short_desc": "Microsoft OneDrive cloud file storage",
+            "desc": "Provides access to [Microsoft OneDrive](https://onedrive.live.com/) for cloud file "
+                "storage and management via the Microsoft Graph API.\n\n"
+                "**Common use cases**:\n"
+                "- **File management**: list, upload, download, and delete files and folders\n"
+                "- **Sharing**: create sharing links for files and folders\n"
+                "- **Change tracking**: watch for file changes using delta queries\n"
+                "- **Large file uploads**: create resumable upload sessions for files larger than 4 MB\n\n"
+                "Microsoft and OneDrive are trademarks of the Microsoft group of companies",
+            "scheme": "onedrive",
+            "logo": OneDriveLogo,
+            "logo_file_name": "onedrive-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::CloudStorage,),
+        });
+
+        # --- Drive Actions ---
+
+        # get-drive-info
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": OneDriveDataProvider::AppName,
+            "path": "/get-drive-info",
+            "action": "get-drive-info",
+            "display_name": "Get Drive Info",
+            "short_desc": "Get drive metadata and quota",
+            "desc": "Retrieve the current user's OneDrive metadata including storage quota, drive type, "
+                "and owner information",
+            "action_code": DPAT_API,
+            "groups": ("Drive",),
+            "output_type": OneDriveGetDriveInfoDataProvider::ResponseType,
+        });
+
+        # --- File/Folder Actions ---
+
+        # search-items
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": OneDriveDataProvider::AppName,
+            "path": "/items",
+            "action": "search-items",
+            "display_name": "Search Items",
+            "short_desc": "List or search files and folders",
+            "desc": "List items in a folder or search across the drive. Supports pagination and sorting",
+            "action_code": DPAT_FIND,
+            "groups": ("Files",),
+            "options": {
+                "folder_id": <ActionOptionInfo>{
+                    "display_name": "Folder ID",
+                    "short_desc": "The folder to list items from",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "The ID of the folder to list items from. If omitted, lists items from the "
+                        "drive root",
+                    "preselected": True,
+                    "ref_data": "folders",
+                },
+                "search_query": <ActionOptionInfo>{
+                    "display_name": "Search Query",
+                    "short_desc": "Search query string",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "A search query string to filter items by name or content",
+                    "preselected": True,
+                },
+                "top": <ActionOptionInfo>{
+                    "display_name": "Top",
+                    "short_desc": "Maximum items to return per page",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "Maximum number of items to return per page (default `200`, max `1000`)",
+                    "preselected": True,
+                },
+                "orderby": <ActionOptionInfo>{
+                    "display_name": "Order By",
+                    "short_desc": "Sort field and direction",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Sort order for results (e.g., `name asc`, `size desc`)",
+                },
+            },
+            "output_type": OneDriveDriveItemDataType,
+        });
+
+        # get-item
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": OneDriveDataProvider::AppName,
+            "path": "/get-item",
+            "action": "get-item",
+            "display_name": "Get Item",
+            "short_desc": "Get file or folder metadata",
+            "desc": "Retrieve metadata for a specific file or folder by ID or path",
+            "action_code": DPAT_API,
+            "groups": ("Files",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                OneDriveGetItemRequestDataType::Fields{"id",}, {
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                OneDriveGetItemRequestDataType::Fields{"path",}, {
+                    "preselected": True,
+                }
+            ),
+            "output_type": OneDriveGetItemDataProvider::ResponseType,
+        });
+
+        # create-folder
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": OneDriveDataProvider::AppName,
+            "path": "/create-folder",
+            "action": "create-folder",
+            "display_name": "Create Folder",
+            "short_desc": "Create a new folder",
+            "desc": "Create a new folder in OneDrive, optionally within a specific parent folder",
+            "action_code": DPAT_API,
+            "groups": ("Files",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                OneDriveCreateFolderRequestDataType::Fields{"name",}, {
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                OneDriveCreateFolderRequestDataType::Fields{"description", "parent_id", "conflict_behavior"}, {
+                    "preselected": True,
+                }
+            ),
+            "output_type": OneDriveCreateFolderDataProvider::ResponseType,
+        });
+
+        # upload-file
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": OneDriveDataProvider::AppName,
+            "path": "/upload-file",
+            "action": "upload-file",
+            "display_name": "Upload File",
+            "short_desc": "Upload a file (up to 4 MB)",
+            "desc": "Upload a file to OneDrive using simple upload. For files larger than 4 MB, use the "
+                "`create-upload-session` action instead",
+            "action_code": DPAT_API,
+            "groups": ("Files",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                OneDriveUploadFileRequestDataType::Fields{"file",}, {
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                OneDriveUploadFileRequestDataType::Fields{"parent_id",}, {
+                    "preselected": True,
+                }
+            ),
+            "output_type": OneDriveUploadFileDataProvider::ResponseType,
+        });
+
+        # create-upload-session
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": OneDriveDataProvider::AppName,
+            "path": "/create-upload-session",
+            "action": "create-upload-session",
+            "display_name": "Create Upload Session",
+            "short_desc": "Create a resumable upload session",
+            "desc": "Create a resumable upload session for uploading large files (>4 MB) in chunks. "
+                "Returns an upload URL that accepts PUT requests with byte ranges",
+            "action_code": DPAT_API,
+            "groups": ("Files",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                OneDriveCreateUploadSessionRequestDataType::Fields{"filename",}, {
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                OneDriveCreateUploadSessionRequestDataType::Fields{"parent_id", "conflict_behavior"}, {
+                    "preselected": True,
+                }
+            ),
+            "output_type": OneDriveCreateUploadSessionDataProvider::ResponseType,
+        });
+
+        # download-file
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": OneDriveDataProvider::AppName,
+            "path": "/download-file",
+            "action": "download-file",
+            "display_name": "Download File",
+            "short_desc": "Download a file",
+            "desc": "Get the download URL and metadata for a file. Returns a pre-authenticated download "
+                "URL that can be used to download the file content directly",
+            "action_code": DPAT_API,
+            "groups": ("Files",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                OneDriveDownloadFileRequestDataType::Fields, {
+                    "required": True,
+                }
+            ),
+            "output_type": OneDriveDownloadFileDataProvider::ResponseType,
+        });
+
+        # delete-item
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": OneDriveDataProvider::AppName,
+            "path": "/delete-item",
+            "action": "delete-item",
+            "display_name": "Delete Item",
+            "short_desc": "Delete a file or folder",
+            "desc": "Delete a file or folder from OneDrive. The item is moved to the recycle bin",
+            "action_code": DPAT_API,
+            "groups": ("Files",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                OneDriveDeleteItemRequestDataType::Fields, {
+                    "required": True,
+                }
+            ),
+            "output_type": OneDriveDeleteItemDataProvider::ResponseType,
+        });
+
+        # update-item
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": OneDriveDataProvider::AppName,
+            "path": "/update-item",
+            "action": "update-item",
+            "display_name": "Update Item",
+            "short_desc": "Rename, move, or update a file or folder",
+            "desc": "Update the metadata of a file or folder in OneDrive. Can be used to rename an item, "
+                "move it to a different folder, or update its description",
+            "action_code": DPAT_API,
+            "groups": ("Files",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                OneDriveUpdateItemRequestDataType::Fields{"id",}, {
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                OneDriveUpdateItemRequestDataType::Fields{"name", "description", "parent_id"}, {
+                    "preselected": True,
+                }
+            ),
+            "output_type": OneDriveUpdateItemDataProvider::ResponseType,
+        });
+
+        # copy-item
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": OneDriveDataProvider::AppName,
+            "path": "/copy-item",
+            "action": "copy-item",
+            "display_name": "Copy Item",
+            "short_desc": "Copy a file or folder",
+            "desc": "Asynchronously copy a file or folder to a new location, optionally with a new name. "
+                "Returns a monitor URL to track copy progress",
+            "action_code": DPAT_API,
+            "groups": ("Files",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                OneDriveCopyItemRequestDataType::Fields{"id",}, {
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                OneDriveCopyItemRequestDataType::Fields{"name", "parent_id", "parent_drive_id",
+                    "conflict_behavior"}, {
+                    "preselected": True,
+                }
+            ),
+            "output_type": OneDriveCopyItemDataProvider::ResponseType,
+        });
+
+        # --- Sharing Actions ---
+
+        # create-sharing-link
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": OneDriveDataProvider::AppName,
+            "path": "/create-sharing-link",
+            "action": "create-sharing-link",
+            "display_name": "Create Sharing Link",
+            "short_desc": "Create a sharing link for an item",
+            "desc": "Create a sharing link (view, edit, or embed) for a file or folder in OneDrive",
+            "action_code": DPAT_API,
+            "groups": ("Sharing",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                OneDriveCreateSharingLinkRequestDataType::Fields{"id", "type"}, {
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                OneDriveCreateSharingLinkRequestDataType::Fields{"scope",}, {
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                OneDriveCreateSharingLinkRequestDataType::Fields - ("id", "type", "scope")
+            ),
+            "output_type": OneDriveCreateSharingLinkDataProvider::ResponseType,
+        });
+
+        # --- Event Actions ---
+
+        # file-change event
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": OneDriveDataProvider::AppName,
+            "path": "/events/" + EVENT_FILE_CHANGE,
+            "action": EVENT_FILE_CHANGE,
+            "display_name": "File or Folder Changed",
+            "short_desc": "Trigger when a file or folder is created, modified, or deleted",
+            "desc": "Fires when a file or folder is created, modified, or deleted in OneDrive. Uses "
+                "delta queries to track changes efficiently",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_FILE_CHANGE,
+        });
+    };
+}
+
+/** @mainpage OneDriveDataProvider Module
+
+    @tableofcontents
+
+    @section onedrivedataproviderintro OneDriveDataProvider Introduction
+
+    The %OneDriveDataProvider module provides a data provider API for accessing Microsoft OneDrive
+    via the Microsoft Graph API.
+
+    The following classes are provided:
+    - @ref OneDriveDataProvider::OneDriveDataProvider "OneDriveDataProvider": the main data provider class
+
+    @section onedrivedataproviderrelnotes Release Notes
+
+    @subsection onedrivedataproviderv1_0 OneDriveDataProvider v1.0
+    - the initial version of the %OneDriveDataProvider module
+*/
+
+public namespace OneDriveDataProvider {
+}

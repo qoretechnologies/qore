@@ -1161,8 +1161,18 @@ void Http2Session::markStreamComplete(int32_t stream_id) {
             // When using callback mechanism, don't push to completed_streams.
             // Erase stream after callback completion:
             // - Server mode: erase non-CONNECT streams (CONNECT needed to detect closes)
-            // - Client mode: always erase after callback (managed by Qore layer)
-            should_erase_after_callback = is_server ? !is_connect : true;
+            // - Client mode: DO NOT erase — the stream may be in "half-closed
+            //   (remote)" state (server sent END_STREAM but client hasn't yet).
+            //   Per RFC 7540 section 5.1, the client can still send DATA on a
+            //   half-closed (remote) stream.  Erasing here races with the
+            //   client calling sendStreamData() / submitTrailers() on a stream
+            //   whose response was just processed, causing spurious
+            //   "stream N not found" errors.  The stream is erased later by
+            //   onStreamCloseCallback() when both sides have sent END_STREAM
+            //   (or RST_STREAM).  Matches the no-callback client path below
+            //   and the design requirement documented in
+            //   design/http3-client-bidi-streaming.md.
+            should_erase_after_callback = is_server && !is_connect;
             if (http2DebugEnabled()) {
                 fprintf(stderr, "HTTP2 DEBUG: markStreamComplete stream=%d using callback "
                     "(erase_after=%d)\n", stream_id, should_erase_after_callback ? 1 : 0);

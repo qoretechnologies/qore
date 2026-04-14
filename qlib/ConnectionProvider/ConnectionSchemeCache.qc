@@ -89,6 +89,8 @@ public class ConnectionSchemeCache {
 
             "bitlyrest": "BitlyRestClient",
 
+            "circlerest": "CircleRestClient",
+
             # provided by the amqp module
             "amqp": "AmqpDataProvider",
             "amqps": "AmqpDataProvider",
@@ -250,6 +252,8 @@ public class ConnectionSchemeCache {
 
             "tableaures": "TableauRestClient",
             "tally": "TallyRestClient",
+
+            "onedrive": "OneDriveRestClient",
 
             "sse": "ServerSentEventClient",
             "sses": "ServerSentEventClient",

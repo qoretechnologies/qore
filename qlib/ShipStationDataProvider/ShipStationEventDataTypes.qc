@@ -255,7 +255,7 @@ public class ShipStationItemShipNotifyEventDataType inherits ShipStationShipNoti
         #! Additional fields for item ship notify events
         const ItemFields = {
             "shipmentItems": {
-                "type": SoftListOrNothingType,
+                "type": new ListDataType("ShipmentItems", AutoHashType, True),
                 "display_name": "Shipment Items",
                 "short_desc": "Items in the shipment",
                 "desc": "The list of items included in this shipment",

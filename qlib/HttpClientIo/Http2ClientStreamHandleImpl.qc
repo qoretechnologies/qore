@@ -63,6 +63,9 @@ public class Http2ClientStreamHandle inherits HttpClientStreamHandle {
         #! Deferred end_stream sentinel: set when a channel event carries
         #! body + end_stream together, cleared on next readData() call
         bool pending_end_stream = False;
+
+        #! True when the request write side remains open after startStreaming()
+        bool request_body_streaming = False;
     }
 
     #! Creates a new stream handle
@@ -120,6 +123,7 @@ public class Http2ClientStreamHandle inherits HttpClientStreamHandle {
             }
             state = HttpClientStreamState::Open;
             streaming = True;
+            request_body_streaming = body_streaming;
             data_channel = new Channel(-1);
         }
 
@@ -130,6 +134,7 @@ public class Http2ClientStreamHandle inherits HttpClientStreamHandle {
                     AutoLock al(lock);
                     state = HttpClientStreamState::Pending;
                     streaming = False;
+                    request_body_streaming = False;
                     delete data_channel;
                 }
                 throw "HTTPCLIENT-TIMEOUT", "connection establishment timed out";
@@ -147,6 +152,7 @@ public class Http2ClientStreamHandle inherits HttpClientStreamHandle {
                 AutoLock al(lock);
                 state = HttpClientStreamState::Pending;
                 streaming = False;
+                request_body_streaming = False;
                 delete data_channel;
             }
             rethrow;
@@ -227,7 +233,13 @@ public class Http2ClientStreamHandle inherits HttpClientStreamHandle {
                     }
                     if (rv.end_stream && state < HttpClientStreamState::Complete) {
                         state = HttpClientStreamState::Complete;
-                        response = rv;
+                        # Merge rather than overwrite so status_code/headers
+                        # captured from an earlier headers event are not lost
+                        # when the end_stream event carries no headers — this
+                        # is required for extractFinalHeaders() to surface a
+                        # non-NOTHING status_code and for the `status_code >=
+                        # 300` error-propagation check in doSendDataStream().
+                        response += rv;
                         # If body is coalesced with end_stream, return body
                         # now and defer the end_stream sentinel so the
                         # caller doesn't lose the completion signal.
@@ -289,6 +301,13 @@ public class Http2ClientStreamHandle inherits HttpClientStreamHandle {
             }
             if (!stream_id) {
                 throw "HTTPCLIENT-STATE-ERROR", "stream not yet established";
+            }
+            if (!request_body_streaming) {
+                if (end_stream && data.empty()) {
+                    return;
+                }
+                throw "HTTPCLIENT-STATE-ERROR",
+                    "cannot send data: request write side is closed";
             }
             sid = stream_id;
         }

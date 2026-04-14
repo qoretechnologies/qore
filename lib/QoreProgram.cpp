@@ -1356,6 +1356,15 @@ void qore_program_private::exportGlobalVariable(ExceptionSink* xsink, const char
 void qore_program_private::del(ExceptionSink* xsink) {
     printd(5, "qore_program_private::del() pgm: %p (base_object: %d)\n", pgm, base_object);
 
+    // Idempotent guard: del() may be called twice — once from ModuleManager at
+    // shutdown to break cross-program Type strong refs (issue #4816), and
+    // again from ~qore_program_private() if refcount eventually reaches 0.
+    // RootNS is set to nullptr at the end of del() so this flag detects the
+    // second call and short-circuits.
+    if (!RootNS) {
+        return;
+    }
+
     // dereference all external data
     for (auto& i : extmap) {
         try {

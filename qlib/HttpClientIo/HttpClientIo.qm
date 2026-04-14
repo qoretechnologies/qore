@@ -27,6 +27,7 @@
 %requires Logger
 %requires AsyncSocketIo
 %requires HttpUtil
+%requires Mime
 
 module HttpClientIo {
     version = "1.0";
@@ -262,6 +263,15 @@ public namespace HttpClientIo {
 
         #! Response body (binary or string depending on content-type)
         auto body;
+
+        #! Bare MIME type from the response \c Content-Type header, with parameters stripped
+        /** Populated by @ref HttpClientStreamHandle::normalizeResponseBody() from
+            \c headers."content-type" using @ref Mime::mime_get_base_type().  Downstream
+            consumers (REST schema validator, DataStream client, etc.) should prefer this
+            field for MIME type lookups so they don't each have to strip
+            \c ";charset=utf-8" and other parameters themselves.
+        */
+        *string content_type;
 
         #! Stream ID used for this request
         int stream_id;

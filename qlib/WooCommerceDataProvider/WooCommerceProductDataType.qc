@@ -165,31 +165,31 @@ public class WooCommerceProductDataType inherits HashDataType {
             "categories": {
                 "display_name": "Categories",
                 "short_desc": "Product categories",
-                "type": SoftListOrNothingType,
+                "type": new ListDataType("Categories", AutoHashType, True),
                 "desc": "List of categories the product belongs to",
             },
             "tags": {
                 "display_name": "Tags",
                 "short_desc": "Product tags",
-                "type": SoftListOrNothingType,
+                "type": new ListDataType("Tags", AutoHashType, True),
                 "desc": "List of tags assigned to the product",
             },
             "images": {
                 "display_name": "Images",
                 "short_desc": "Product images",
-                "type": SoftListOrNothingType,
+                "type": new ListDataType("Images", AutoHashType, True),
                 "desc": "List of product images",
             },
             "attributes": {
                 "display_name": "Attributes",
                 "short_desc": "Product attributes",
-                "type": SoftListOrNothingType,
+                "type": new ListDataType("Attributes", AutoHashType, True),
                 "desc": "List of product attributes (e.g., color, size)",
             },
             "variations": {
                 "display_name": "Variations",
                 "short_desc": "Product variation IDs",
-                "type": SoftListOrNothingType,
+                "type": new ListDataType("VariationIdList", SoftIntType, True),
                 "desc": "List of variation IDs for variable products",
             },
             "price": {
@@ -213,7 +213,7 @@ public class WooCommerceProductDataType inherits HashDataType {
             "meta_data": {
                 "display_name": "Meta Data",
                 "short_desc": "Product metadata",
-                "type": SoftListOrNothingType,
+                "type": new ListDataType("MetaData", AutoHashType, True),
                 "desc": "List of metadata key-value pairs associated with the product",
             },
         };

@@ -2844,6 +2844,11 @@ public:
         if (var_refs.ROdereference()) {
             // issue #3521: only clear vars here; do not delete
             vars.clear(xsink);
+            // delete key-value data when the last program sharing this class is cleaned up
+            for (auto& i : kvmap) {
+                i.second.discard(xsink);
+            }
+            kvmap.clear();
         }
     }
 
@@ -2851,16 +2856,16 @@ public:
         if (deref_vars && var_refs.ROdereference()) {
             vars.clear(xsink);
             vars.del(xsink);
+            // delete key-value data when the last program sharing this class is cleaned up
+            for (auto& i : kvmap) {
+                i.second.discard(xsink);
+            }
+            kvmap.clear();
         } else if (!var_refs.reference_count()) {
             // delete vars again if possible
             vars.del(xsink);
         }
-
-        // delete key-value data
-        for (auto& i : kvmap) {
-            i.second.discard(xsink);
-        }
-        kvmap.clear();
+        // note: kvmap is cleared in clear() for the normal shutdown path (deref_vars=false)
 
         /*
         if (!const_refs.reference_count()) {

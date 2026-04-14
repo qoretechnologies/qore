@@ -112,7 +112,7 @@ public class GoHighLevelCreateContactRequestDataType inherits HashDataType {
                 "desc": "The contact's timezone",
             },
             "tags": {
-                "type": SoftListOrNothingType,
+                "type": new ListDataType("Tags", SoftStringType, True),
                 "display_name": "Tags",
                 "short_desc": "Tags to assign to the contact",
                 "desc": "Tags to assign to the contact",

@@ -1192,6 +1192,13 @@ cargo install tree-sitter-cli@0.26.5
       - includes SSE streaming support for both sync (RestClient) and async (RestClientIo) clients
     - @ref anthropicdataproviderintro "AnthropicDataProvider" module
       - new module providing a data provider API for <a href="https://www.anthropic.com/">Anthropic</a> Claude AI services
+    - @ref onedriverestclientintro "OneDriveRestClient" module
+      - new module providing a REST client for <a href="https://onedrive.live.com/">Microsoft OneDrive</a> via Microsoft Graph API
+      - provides OneDriveRestConnection for connection management with \c onedrive:// URL scheme
+      - supports OAuth2 with tenant-aware authentication and RestClientIo async pattern
+    - @ref onedrivedataproviderintro "OneDriveDataProvider" module
+      - new module providing a data provider API for <a href="https://onedrive.live.com/">Microsoft OneDrive</a> cloud file storage
+      - supports file/folder CRUD, search, sharing links, upload sessions, and delta query change tracking
     - @ref tallyrestclientintro "TallyRestClient" module
       - new module providing a REST client for <a href="https://tally.so/">Tally.so</a>'s form management API
       - provides TallyRestConnection for connection management with \c tally:// URL scheme
@@ -1305,6 +1312,21 @@ cargo install tree-sitter-cli@0.26.5
       - custom bitlink support
       - polling-based event triggers for bitlink click activity
       - action catalog integration with 21 actions and 1 trigger
+    - @ref circlerestclientintro "CircleRestClient" module
+      - new module providing a REST client for <a href="https://circle.so/">Circle</a>'s community platform API
+      - supports Bearer token authentication
+      - uses the new async RestClientIo pattern for HTTP/2 and HTTP/3 multiplexed connections
+      - provides CircleRestConnection for connection management with \c circlerest:// URL scheme
+    - @ref circledataproviderintro "CircleDataProvider" module
+      - new module providing a data provider API for <a href="https://circle.so/">Circle</a> community platform
+      - post management (create, delete, list)
+      - comment management (create, delete, list)
+      - member management (invite, remove, tag, untag, list)
+      - space and space group membership management
+      - direct messaging support
+      - generic API call action for arbitrary API requests
+      - polling-based event triggers for new posts, comments, spaces, communities, member invitations, and member tags
+      - action catalog integration with 19 actions and 6 triggers
     - @ref smartsheetrestclientintro "SmartSheetRestClient" module
       - new module providing a REST client for <a href="https://www.smartsheet.com/">Smartsheet</a>'s spreadsheet and work management API
       - supports OAuth2 authentication with regional endpoint support (US, EU, AU, Gov)

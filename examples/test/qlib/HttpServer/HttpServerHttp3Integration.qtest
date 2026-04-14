@@ -278,6 +278,8 @@ l50Xb2GWQesIt9k5jF5IOw==
 
         # Group 4: Error Handling
         addTestCase("connection timeout", \testConnectionTimeout());
+        addTestCase("connect_timeout enforced before request_timeout",
+            \testConnectTimeoutEnforcedBeforeRequestTimeout());
         addTestCase("no handler response", \testNoHandlerResponse());
         addTestCase("server shutdown", \testServerShutdown());
         addTestCase("GOAWAY graceful shutdown", \testGoawayGracefulShutdown());
@@ -717,14 +719,72 @@ l50Xb2GWQesIt9k5jF5IOw==
             mgr.request(sprintf("https://127.0.0.1:%d", port), "GET", "/", NOTHING, NOTHING, 2s);
         } catch (hash<ExceptionInfo> ex) {
             got_error = True;
-            # Verify the exception is a known HTTP/3 or QUIC error type
-            assertRegex("^(HTTP3-CONNECT-ERROR|HTTP3-TIMEOUT|HTTPCLIENT-TIMEOUT|QUIC-ERROR)$", ex.err,
-                "expected HTTP/3 or QUIC error type, got: " + ex.err);
+            # Verify the exception is a known HTTP/3 or QUIC error type.
+            # QUIC-HANDSHAKE-TIMEOUT is the expected error when the handshake
+            # stalls beyond connect_timeout (transport-level deadline enforced
+            # in SocketQuicClientPollOperation::continuePoll()). Other codes
+            # remain accepted to tolerate edge-case timing.
+            assertRegex("^(HTTP3-CONNECT-ERROR|HTTP3-TIMEOUT|HTTPCLIENT-TIMEOUT|HTTPCLIENT-CONNECT-ERROR|QUIC-ERROR|QUIC-HANDSHAKE-TIMEOUT)$",
+                ex.err, "expected HTTP/3 or QUIC error type, got: " + ex.err);
             if (m_options.verbose > 1) {
                 printf("testConnectionTimeout: got expected error: %s: %s\n", ex.err, ex.desc);
             }
         }
         assertTrue(got_error, "connecting to non-listening port should fail");
+    }
+
+    testConnectTimeoutEnforcedBeforeRequestTimeout() {
+        # Verifies the transport-level deadline: a stalled QUIC handshake must
+        # fail at connect_timeout, not at the outer request_timeout. Before the
+        # deadline was plumbed through, a silent UDP peer produced an opaque
+        # HTTPCLIENT-TIMEOUT at request_timeout with no diagnosable connect-phase
+        # error (UDP has no OS-level ETIMEDOUT analogue).
+        #
+        # Timeouts are deliberately far apart: if the handshake deadline did
+        # NOT fire, the manager would retry against the silent peer up to
+        # MaxRequestRetries (3) times at request_timeout each, blowing far
+        # past the elapsed cap below.
+        auto mgr = new HttpClientIo::HttpClientConnectionManager(
+            <HttpClientIo::HttpClientConnectionManagerOptions>{
+                "protocol": "h3",
+                "logger": mLogger,
+                "connect_timeout": 500ms,
+                "request_timeout": 30s,
+            },
+        );
+        on_exit mgr.closeAll();
+
+        # Bind a plain UDP socket that never responds to QUIC Initial packets
+        Socket dummy();
+        dummy.bindINET("127.0.0.1", "0", True, AF_INET, SOCK_DGRAM);
+        on_exit delete dummy;
+        int port = dummy.getSocketInfo().port;
+
+        date started = now_us();
+        bool got_error = False;
+        *hash<ExceptionInfo> caught;
+        try {
+            mgr.request(sprintf("https://127.0.0.1:%d", port), "GET", "/");
+        } catch (hash<ExceptionInfo> ex) {
+            got_error = True;
+            caught = ex;
+        }
+        int elapsed_ms = (now_us() - started).durationMilliseconds();
+
+        assertTrue(got_error, "request to silent UDP port must fail");
+        # Underlying cause must be the new transport-level deadline error; without
+        # the fix, the manager reports HTTPCLIENT-TIMEOUT from the outer wait.
+        assertTrue(caught.desc =~ /QUIC-HANDSHAKE-TIMEOUT/,
+            sprintf("expected QUIC-HANDSHAKE-TIMEOUT in error; got %s: %s", caught.err, caught.desc));
+        # At most 4 attempts (1 + MaxRequestRetries) × connect_timeout (500ms)
+        # ≈ 2s.  Cap at 8s for CI I/O-thread scheduling jitter. If the deadline
+        # weren't enforced, this would hit request_timeout (30s) × 4 = 120s.
+        assertLt(8000, elapsed_ms,
+            sprintf("must fail at connect_timeout (~500ms each), not request_timeout (30s); elapsed=%dms", elapsed_ms));
+        if (m_options.verbose > 1) {
+            printf("testConnectTimeoutEnforcedBeforeRequestTimeout: %s: %s (elapsed=%dms)\n",
+                caught.err, caught.desc, elapsed_ms);
+        }
     }
 
     testNoHandlerResponse() {
