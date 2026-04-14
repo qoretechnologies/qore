@@ -1213,6 +1213,15 @@ private:
     */
     std::unordered_set<int64_t> closed_streams_;
 
+    //! Peer-initiated stream reset info, persisted beyond streams_.erase()
+    /** Populated by h3StopSendingCallback() and h3ResetStreamCallback() so that
+        QuicSession::sendStreamData() can still surface a typed QUIC-STREAM-RESET
+        exception after the stream has been erased from streams_ by the normal
+        close path.  Protected by mtx_.  Cleared when the poll operation
+        transitions to SENT (alongside closed_streams_).
+    */
+    std::unordered_map<int64_t, uint64_t> peer_reset_streams_;
+
     //! Queue of completed stream IDs
     std::queue<int64_t> completed_streams_;
 
