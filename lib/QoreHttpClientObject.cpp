@@ -9434,6 +9434,14 @@ public:
         assert(future);
         future->ref();
         notifier->ref();
+        // Ref the pending connection to keep its priv data (including the
+        // AbstractHttpPollConnectionPriv state) alive until continuePoll
+        // inspects it.  Without this, a fast connect failure can evict the
+        // connection from the pool and free it before our continuePoll runs,
+        // leaving pending_conn pointing at freed memory.  Released in
+        // clearPending() via pending_mgr->releaseConnection (stream slot)
+        // and explicit pending_conn->deref().
+        pending_conn->ref();
         if (client_obj) {
             client_obj->ref();
         }
@@ -9496,7 +9504,11 @@ public:
         if (pending_conn && pending_mgr) {
             pending_mgr->releaseConnection(pending_conn);
         }
-        pending_conn = nullptr;
+        if (pending_conn) {
+            // Release the ref acquired in the WAITING_CONNECT constructor
+            pending_conn->deref(xsink);
+            pending_conn = nullptr;
+        }
         pending_mgr = nullptr;
         if (pending_headers) {
             pending_headers->deref(xsink);
@@ -9526,9 +9538,14 @@ public:
                 "HTTPClient has been deleted; poll operation aborted");
             done = true;
             phase = Phase::DONE;
-            // The manager and connection are owned by the HTTPClient that
-            // was just destroyed — don't dereference them.
-            pending_conn = nullptr;
+            // The manager is owned by the HTTPClient that was destroyed —
+            // don't call releaseConnection on it.  But our own ref on
+            // pending_conn (acquired in the WAITING_CONNECT ctor) is still
+            // valid via the connection's own refcount, so deref it here.
+            if (pending_conn) {
+                pending_conn->deref(xsink);
+                pending_conn = nullptr;
+            }
             pending_mgr = nullptr;
             clearPending(xsink);
             return nullptr;
@@ -9695,9 +9712,11 @@ public:
 
         // Successful submit: the connection has consumed its reservation
         // (submitRequestWithAction called releaseStreamReservation
-        // internally).  Null pending_conn/mgr so clearPending does NOT
-        // double-release.  Drop the other pending refs — the future +
-        // notifier remain and will be used by WAITING_RESPONSE logic.
+        // internally).  Release our own connection ref explicitly, then
+        // null pending_conn/mgr so clearPending does NOT double-release
+        // the stream reservation.  Drop the other pending refs — the
+        // future + notifier remain and will be used by WAITING_RESPONSE.
+        pending_conn->deref(xsink);
         pending_conn = nullptr;
         pending_mgr = nullptr;
         clearPending(xsink);
