@@ -107,6 +107,16 @@ struct QuicStreamInfo {
     //! True for client-side streaming responses (SSE, etc.) — enables incremental
     //! body delivery via completed_streams_ (same pattern as CONNECT tunnels)
     bool streaming = false;
+    //! True after the peer asked us to stop sending on this stream (STOP_SENDING)
+    /** Parallel to Http2StreamInfo::reset.  Subsequent
+        @ref QuicSession::sendStreamData() calls must fail with a typed
+        \c QUIC-STREAM-RESET exception so producers (e.g. DataStream-v1
+        retry-until-error tests) terminate promptly instead of spinning while
+        nghttp3 silently drops further writes on a stream the peer has closed.
+    */
+    bool peer_stop_sending = false;
+    //! Application error code accompanying STOP_SENDING/RESET_STREAM from the peer
+    uint64_t peer_close_error_code = 0;
 };
 
 //! Per-stream body data for sending via nghttp3 data reader callback
