@@ -958,8 +958,20 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
         cmd.submit_has_qore_abort = has_qore_abort;
         cmd.submit_has_qore_on_complete = has_qore_on_complete;
 
+        // Increment submit_seq BEFORE push+notify so that when the I/O
+        // thread processes the command and runs its main-loop "advance
+        // processed_seq = submit_seq" step, submit_seq already reflects
+        // this submit.  If ++submit_seq happens AFTER, the I/O thread
+        // processes, advances processed_seq to the PRE-INCREMENT value,
+        // and enters poll() before the worker increments — leaving
+        // processed_seq < submit_seq with nothing to wake the I/O thread.
+        // A concurrent waitForProcessing(timeout) then blocks the full
+        // timeout even though no work is actually pending.
+        ++submit_seq;
         target.cmdq.push(std::move(cmd));
         target.notifier->notify();
+        ASYNC_IO_TRACE("worker submit: ++submit_seq(%d)+pushed+notified key='%s'\n",
+            (int)submit_seq.load(), uh.c_str());
 
         // Post-push verification: if the I/O thread exited while we were
         // building/pushing the command (TOCTOU between the running check
@@ -975,8 +987,6 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
                 }
             }
         }
-
-        ++submit_seq;
     }
 
     log(QORE_LOG_LEVEL_DEBUG, "submit: operation '%s' submitted (owner: '%s')", uh.c_str(), owner.c_str());
@@ -2020,6 +2030,8 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
             // Update processed sequence counter (lock for condition broadcast)
             {
                 AutoLocker al(m);
+                ASYNC_IO_TRACE("advance processed_seq: %d -> %d (submit_seq=%d) main-loop\n",
+                    (int)processed_seq, (int)submit_seq.load(), (int)submit_seq.load());
                 processed_seq = submit_seq;
                 processed_cond.broadcast();
             }
@@ -2646,8 +2658,13 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
             AutoLocker al(m);
             int current_submit = submit_seq.load(std::memory_order_acquire);
             if (processed_seq < current_submit && t.cmdq.empty()) {
+                ASYNC_IO_TRACE("advance processed_seq: %d -> %d (pre-poll recheck)\n",
+                    (int)processed_seq, current_submit);
                 processed_seq = current_submit;
                 processed_cond.broadcast();
+            } else if (processed_seq < current_submit) {
+                ASYNC_IO_TRACE("BLOCKED processed_seq=%d submit_seq=%d cmdq-nonempty\n",
+                    (int)processed_seq, current_submit);
             }
         }
 
@@ -2986,6 +3003,7 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
     while (true) {
         std::vector<Command> batch;
         t.cmdq.drain(batch);
+        ASYNC_IO_TRACE("processCommands: drained batch size=%d\n", (int)batch.size());
         for (auto& cmd : batch) {
             switch (cmd.cmd) {
                 case IoCommand::Quit: {
@@ -3271,6 +3289,8 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                 }
 
                 case IoCommand::SubmitOp: {
+                    ASYNC_IO_TRACE("processCmd SubmitOp key='%s' owner='%s'\n",
+                        cmd.key.c_str(), cmd.owner.c_str());
                     // Reject stale re-submissions for recently-cancelled keys
                     auto ck_it = t.cancelled_keys.find(cmd.key);
                     if (ck_it != t.cancelled_keys.end()) {
