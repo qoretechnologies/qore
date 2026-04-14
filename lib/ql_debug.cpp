@@ -661,7 +661,7 @@ struct UtH1Server {
         addr.sin_family = AF_INET;
         addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
         addr.sin_port = 0;
-        if (bind(listen_fd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) < 0) {
+        if (::bind(listen_fd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) < 0) {
             ::close(listen_fd);
             listen_fd = -1;
             return -1;
@@ -912,7 +912,7 @@ static void ut_http1_onclosed_hook_one_shot(UnitTestCounters& c) {
     addr.sin_family = AF_INET;
     addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
     addr.sin_port = 0;
-    bind(sfd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
+    ::bind(sfd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
     socklen_t alen = sizeof(addr);
     getsockname(sfd, reinterpret_cast<sockaddr*>(&addr), &alen);
     int dead_port = ntohs(addr.sin_port);
@@ -1015,7 +1015,7 @@ static void ut_http1_connection_connect_refused(UnitTestCounters& c) {
     addr.sin_family = AF_INET;
     addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
     addr.sin_port = 0;
-    int br = bind(sfd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
+    int br = ::bind(sfd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
     UT_ASSERT(c, br == 0, "bind ephemeral port succeeds");
     socklen_t alen = sizeof(addr);
     getsockname(sfd, reinterpret_cast<sockaddr*>(&addr), &alen);
@@ -1246,7 +1246,7 @@ static void ut_http2_connection_construct(UnitTestCounters& c) {
     addr.sin_family = AF_INET;
     addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
     addr.sin_port = 0;
-    bind(sfd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
+    ::bind(sfd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
     socklen_t alen = sizeof(addr);
     getsockname(sfd, reinterpret_cast<sockaddr*>(&addr), &alen);
     int dead_port = ntohs(addr.sin_port);
@@ -1282,7 +1282,7 @@ static void ut_http2_connection_alpn_setup(UnitTestCounters& c) {
     addr.sin_family = AF_INET;
     addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
     addr.sin_port = 0;
-    bind(sfd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
+    ::bind(sfd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
     socklen_t alen = sizeof(addr);
     getsockname(sfd, reinterpret_cast<sockaddr*>(&addr), &alen);
     int dead_port = ntohs(addr.sin_port);
@@ -1321,7 +1321,7 @@ static void ut_manager_h2_dispatch(UnitTestCounters& c) {
     addr.sin_family = AF_INET;
     addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
     addr.sin_port = 0;
-    bind(sfd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
+    ::bind(sfd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
     socklen_t alen = sizeof(addr);
     getsockname(sfd, reinterpret_cast<sockaddr*>(&addr), &alen);
     int dead_port = ntohs(addr.sin_port);
@@ -1350,7 +1350,7 @@ static void ut_http3_connection_construct(UnitTestCounters& c) {
     addr.sin_family = AF_INET;
     addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
     addr.sin_port = 0;
-    bind(sfd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
+    ::bind(sfd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
     socklen_t alen = sizeof(addr);
     getsockname(sfd, reinterpret_cast<sockaddr*>(&addr), &alen);
     int dead_port = ntohs(addr.sin_port);
@@ -1389,7 +1389,7 @@ static void ut_manager_h3_dispatch(UnitTestCounters& c) {
     addr.sin_family = AF_INET;
     addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
     addr.sin_port = 0;
-    bind(sfd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
+    ::bind(sfd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
     socklen_t alen = sizeof(addr);
     getsockname(sfd, reinterpret_cast<sockaddr*>(&addr), &alen);
     int dead_port = ntohs(addr.sin_port);
