@@ -1002,6 +1002,17 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
         // timeout even though no work is actually pending.
         ++submit_seq;
         target.cmdq.push(std::move(cmd));
+        // Bump submit_seq immediately after push, BEFORE notify().  The I/O
+        // thread's Phase 1 sets processed_seq = submit_seq after processing
+        // commands; if ++submit_seq came after notify() (the old ordering),
+        // the I/O thread could process the command, read a stale submit_seq,
+        // set processed_seq to the stale value, and enter poll(-1) with no
+        // pending notification — causing waitForProcessing() to time out.
+        // With submit_seq bumped before notify, the I/O thread always sees
+        // the updated value by the time it processes the command and reaches
+        // Phase 1 (the push + seq bump are on the same thread, so the I/O
+        // thread cannot observe the pushed command without the bumped seq).
+        ++submit_seq;
         target.notifier->notify();
         ASYNC_IO_TRACE("worker submit: ++submit_seq(%d)+pushed+notified key='%s'\n",
             (int)submit_seq.load(), uh.c_str());
@@ -2716,10 +2727,11 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
             }
         }
 
-        // Catch up processed_seq before blocking in poll.  Worker-thread submit()
-        // increments submit_seq AFTER pushing the command and notifying, so the
-        // Phase 1 snapshot (processed_seq = submit_seq) can read a stale value
-        // if the I/O thread processes the command before the worker increments.
+        // Catch up processed_seq before blocking in poll.  Worker-thread
+        // cancel/cancelByOwner/cancelByProgram push commands and bump submit_seq
+        // under lock m, but the I/O thread's Phase 1 snapshot may have already
+        // read submit_seq before the bump.  This re-check under lock provides
+        // happens-before ordering with the worker's push+bump sequence.
         // Without this re-check, poll(-1) would block indefinitely and
         // waitForProcessing() would time out.
         {

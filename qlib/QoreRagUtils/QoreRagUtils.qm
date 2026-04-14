@@ -275,6 +275,20 @@ public hashdecl RetrievalHit {
     @since QoreRagUtils 1.0
 */
 public class RagPipeline {
+    public {
+        #! Fixed namespace UUID used to derive deterministic v5-style chunk IDs.
+        /** Use this in combination with a caller-supplied \c doc_id +
+            \c chunk_index to produce a UUID that:
+            - is accepted by every vector-store backend (Qdrant requires
+              UUIDs or unsigned integers; pgvector accepts any string)
+            - is deterministic so that re-ingesting the same document
+              overwrites rather than duplicates
+            - does not leak the original identifier into wire-format
+              storage keys
+        */
+        const ChunkIdNamespace = "qore-rag-utils-chunk-id-v1";
+    }
+
     private {
         AbstractEmbedder embedder;
         AbstractVectorStore vector_store;
@@ -282,6 +296,32 @@ public class RagPipeline {
         AbstractChunker chunker;
         int top_k = 10;
         int initial_retrieval_k = 50;
+    }
+
+    #! Derives a deterministic UUIDv5-style chunk id from \a doc_id and \a chunk_index
+    /** Uses SHA1 over a namespace-prefixed concatenation and formats the
+        first 16 bytes as an RFC 4122 UUID (version 5, variant 10xx).  Two
+        calls with the same arguments always produce the same UUID.
+
+        @param doc_id the caller-supplied document identifier
+        @param chunk_index zero-based index of the chunk within the document
+        @return a lowercase UUID string suitable for every AbstractVectorStore backend
+
+        @since QoreRagUtils 1.0
+    */
+    static string deriveChunkId(string doc_id, int chunk_index) {
+        binary sha = SHA1_bin(ChunkIdNamespace + "|" + doc_id + ":"
+            + chunk_index);
+        # Take the first 16 bytes and stamp version/variant bits per RFC 4122
+        binary b = sha[0..15];
+        # set version = 5 (byte 6: clear high 4 bits, set to 0x50)
+        int b6 = (b[6] & 0x0f) | 0x50;
+        # set variant = 10xx (byte 8: clear top 2 bits, set to 0x80)
+        int b8 = (b[8] & 0x3f) | 0x80;
+        return sprintf("%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-"
+            "%02x%02x%02x%02x%02x%02x",
+            b[0], b[1], b[2], b[3], b[4], b[5], b6, b[7], b8, b[9],
+            b[10], b[11], b[12], b[13], b[14], b[15]);
     }
 
     #! Constructs a RagPipeline from concrete components
@@ -321,7 +361,12 @@ public class RagPipeline {
         list<hash<VectorRecord>> records = ();
         list<string> ids = ();
         for (int i = 0; i < chunks.size(); ++i) {
-            string id = sprintf("%s:%d", doc_id, chunks[i].index);
+            # deterministic UUIDv5-style id derived from doc_id + index;
+            # accepted by every AbstractVectorStore backend (Qdrant
+            # requires UUIDs/uints; pgvector accepts any string).  The
+            # original doc_id / chunk_index stay in the payload for
+            # retrieval-time access.
+            string id = deriveChunkId(doc_id, chunks[i].index);
             push ids, id;
             hash<auto> payload = {
                 "doc_id": doc_id,
