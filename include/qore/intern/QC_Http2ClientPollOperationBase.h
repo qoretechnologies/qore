@@ -178,6 +178,18 @@ public:
         idle_timeout_us = timeout_us;
     }
 
+    //! Sets the keepalive ping interval (microseconds, -1 = disabled)
+    /** When positive, an HTTP/2 PING frame is submitted when the connection
+        has been idle (no active streams) for this long.  nghttp2 handles the
+        PING ACK automatically; if the connection is dead, the next recv()
+        fails and existing error handling evicts it.
+        @param interval_us ping interval in microseconds (-1 = disabled)
+        @since %Qore 2.3
+    */
+    DLLLOCAL void setPingInterval(int64_t interval_us) {
+        ping_interval_us = interval_us;
+    }
+
     //! Returns the raw connection priv pointer (for I/O-thread calls)
     DLLLOCAL AbstractHttpPollConnectionPriv* getConnectionPriv() const {
         return connection_priv;
@@ -337,6 +349,16 @@ private:
         the next idle period starts fresh.  I/O thread only.
     */
     int64_t idle_deadline_us = 0;
+
+    //! Keepalive ping interval (microseconds); -1 = disabled
+    /** When positive and active_stream_count == 0, a PING frame is
+        submitted every ping_interval_us to probe connection liveness.
+        nghttp2 handles PING ACK automatically.  I/O thread only.
+    */
+    int64_t ping_interval_us = -1;
+
+    //! Timestamp of last PING sent (epoch us); 0 = none sent
+    int64_t last_ping_sent_us = 0;
 
     static constexpr int MAX_DRAIN_ITERATIONS = 100;
     static constexpr int MAX_EMPTY_READS = 100;

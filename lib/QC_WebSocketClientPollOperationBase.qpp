@@ -129,7 +129,8 @@ QoreHashNode* WebSocketClientPollOperationPriv::continuePoll(ExceptionSink* xsin
             // Recv errors on EAGAIN/TIMEOUT are not fatal — clear and continue
             xsink->clear();
         } else if (!recv_info) {
-            // Recv complete — process the data
+            // Recv complete — process the data; update heartbeat activity
+            last_recv_activity_ms = q_clock_getmillis();
             bool got_data = false;
             if (recv_op->goalReached()) {
                 QoreValue output = recv_op->getOutput();
@@ -198,6 +199,21 @@ QoreHashNode* WebSocketClientPollOperationPriv::continuePoll(ExceptionSink* xsin
         }
     }
 
+    // --- Phase 2c: Heartbeat ping ---
+    // Send a PING frame when the connection has been idle for
+    // heartbeat_interval_ms.  Mirrors the server-side heartbeat in
+    // HttpWebSocketPollOperationBase::continuePoll().
+    if (heartbeat_interval_ms > 0 && !goalReached() && last_recv_activity_ms > 0) {
+        int64 elapsed = q_clock_getmillis() - last_recv_activity_ms;
+        if (elapsed >= heartbeat_interval_ms) {
+            queueSendPing(nullptr, xsink);
+            if (*xsink) {
+                return nullptr;
+            }
+            last_recv_activity_ms = q_clock_getmillis();
+        }
+    }
+
     // --- Phase 3: Start recv if no active recv ---
     // Skip in CLOSING state (FIN would cause SSL errors). No
     // isDataAvailable() — the controller's hasPendingData() check and
@@ -240,7 +256,20 @@ QoreHashNode* WebSocketClientPollOperationPriv::continuePoll(ExceptionSink* xsin
         poll_events |= SOCK_POLLIN;
     }
 
-    return getSocketPollInfoHash(xsink, poll_events);
+    QoreHashNode* poll_info = getSocketPollInfoHash(xsink, poll_events);
+
+    // Set poll_timeout_ms so the controller wakes us for heartbeat even if
+    // no socket events arrive (same pattern as server-side heartbeat timer).
+    if (poll_info && heartbeat_interval_ms > 0 && last_recv_activity_ms > 0) {
+        int64 hb_remaining = heartbeat_interval_ms
+            - (q_clock_getmillis() - last_recv_activity_ms);
+        if (hb_remaining < 1) {
+            hb_remaining = 1;
+        }
+        poll_info->setKeyValue("poll_timeout_ms", hb_remaining, xsink);
+    }
+
+    return poll_info;
 }
 
 void WebSocketClientPollOperationPriv::abort(ExceptionSink* xsink) {
@@ -442,6 +471,7 @@ void WebSocketClientPollOperationPriv::handleFrame(const WsFrame& frame, Excepti
 
 void WebSocketClientPollOperationPriv::pushRecvFrame(const char* type, AbstractQoreNode* data,
         uint8_t rsv, ExceptionSink* xsink) {
+    last_recv_activity_ms = q_clock_getmillis();
     ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
     h->setKeyValue("type", new QoreStringNode(type), xsink);
     if (data) {
@@ -457,6 +487,7 @@ void WebSocketClientPollOperationPriv::pushRecvFrame(const char* type, AbstractQ
 
 void WebSocketClientPollOperationPriv::pushRecvCloseFrame(uint16_t code, const char* reason,
         ExceptionSink* xsink) {
+    last_recv_activity_ms = q_clock_getmillis();
     ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
     h->setKeyValue("type", new QoreStringNode("close"), xsink);
     h->setKeyValue("code", static_cast<int64>(code), xsink);
@@ -1056,4 +1087,20 @@ nothing WebSocketClientPollOperationBase::onPollComplete() {
 */
 Socket WebSocketClientPollOperationBase::getSocket() {
     return self->getReferencedMemberNoMethod("sock", xsink);
+}
+
+//! Sets the heartbeat ping interval in milliseconds
+/** When set to a positive value, a PING frame is sent automatically
+    when no data has been received for this many milliseconds.  The I/O
+    controller wakes at the deadline via @c poll_timeout_ms even if no
+    socket events arrive.
+
+    Set to 0 to disable heartbeat (the default).
+
+    @param ms the heartbeat interval in milliseconds (0 = disabled)
+
+    @since %Qore 2.3
+*/
+nothing WebSocketClientPollOperationBase::setHeartbeat(int ms) {
+    priv->setHeartbeat(static_cast<int64>(ms));
 }

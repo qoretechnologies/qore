@@ -230,6 +230,19 @@ public:
         return result;
     }
 
+    //! Sets the heartbeat interval in milliseconds (0 = disabled)
+    /** When set, a PING frame is sent automatically when no data has been
+        received for this many milliseconds.  The poll_timeout_ms field in
+        the continuePoll result ensures the controller wakes at the deadline.
+        @param ms heartbeat interval (0 = disabled)
+    */
+    DLLLOCAL void setHeartbeat(int64 ms) {
+        heartbeat_interval_ms = ms;
+        if (ms > 0 && last_recv_activity_ms == 0) {
+            last_recv_activity_ms = q_clock_getmillis();
+        }
+    }
+
     //! Releases all internal references
     DLLLOCAL void cleanup(ExceptionSink* xsink);
 
@@ -264,6 +277,16 @@ private:
         Read by the controller via getAndClearFramesPushed() to dispatch notifications.
     */
     int frames_pushed_in_cycle = 0;
+
+    //! Heartbeat ping interval (milliseconds, 0 = disabled)
+    /** When positive and the connection is idle (no data received for this
+        many milliseconds), a PING frame is sent automatically.  Mirrors the
+        server-side HttpWebSocketPollOperationBase heartbeat timer.
+    */
+    int64 heartbeat_interval_ms = 0;
+
+    //! Timestamp of last received data (milliseconds, monotonic clock)
+    int64 last_recv_activity_ms = 0;
 
     //! Error information (ref'd or nullptr)
     QoreHashNode* error_info = nullptr;

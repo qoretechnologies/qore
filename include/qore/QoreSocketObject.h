@@ -954,6 +954,15 @@ public:
     */
     DLLEXPORT bool isQuicDatagramSupported(int64_t session_id, ExceptionSink* xsink);
 
+    //! Submits an HTTP/2 PING frame and flushes pending data
+    /** Used by the async I/O keepalive timer to probe idle connections.
+        No-op if no HTTP/2 session is active.
+        @param xsink exception sink
+        @return 0 on success, -1 on error
+        @since %Qore 2.3
+    */
+    DLLEXPORT int submitHttp2Ping(ExceptionSink* xsink);
+
 private:
     DLLLOCAL QoreSocketObject(QoreSocket* s, QoreSSLCertificate* cert = nullptr, QoreSSLPrivateKey* pk = nullptr);
 
