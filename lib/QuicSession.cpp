@@ -1200,6 +1200,25 @@ int QuicSession::writePacketsLocked(QuicPacketBatch& packets, ExceptionSink* xsi
                 if (h3_conn_) {
                     nghttp3_conn_shutdown_stream_write(h3_conn_, stream_id);
                 }
+                // The peer asked us to stop sending (STOP_SENDING or RESET_STREAM).
+                // Mark the stream so subsequent sendStreamData() calls raise a
+                // typed QUIC-STREAM-RESET exception instead of silently queuing
+                // more data that nghttp3 will now discard.  Without this, a
+                // tight producer loop (e.g. DataStream-v1 retry-until-error) would
+                // fill the staging buffer indefinitely without ever observing
+                // the peer-initiated termination.
+                {
+                    auto sit = streams_.find(stream_id);
+                    if (sit != streams_.end()) {
+                        sit->second->peer_stop_sending = true;
+                        // error code unknown at this point (ngtcp2 handled the
+                        // incoming frame internally); leave peer_close_error_code
+                        // at its default 0 — NGHTTP3_H3_REQUEST_CANCELLED style
+                        // context is encoded in the response body the peer sent
+                        // alongside the reset.
+                        sit->second->state = QuicStreamState::Closed;
+                    }
+                }
                 continue;
             case NGTCP2_ERR_WRITE_MORE:
                 assert(ndatalen >= 0);
