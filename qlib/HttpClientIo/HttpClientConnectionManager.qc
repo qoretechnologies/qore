@@ -1395,6 +1395,9 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
                 cast<Http1ClientPollOperation>(op).setIdleTimeout(opts.idle_timeout);
             } else if (op instanceof Http2ClientPollOperation) {
                 cast<Http2ClientPollOperation>(op).setIdleTimeout(opts.idle_timeout);
+                # Set keepalive ping at half the idle timeout so dead connections
+                # are detected before the idle timer fires and evicts them.
+                cast<Http2ClientPollOperation>(op).setPingInterval(opts.idle_timeout / 2);
             }
         }
 

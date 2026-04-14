@@ -2014,6 +2014,10 @@ ws.setEventQueue();
                 try { controller.cancel(ws_sock); } catch () {}
                 poll_op = new WebSocketClientPollOperation(ws_sock, transport, 0,
                     active_extensions, timeout_ms, logger, raw_callback, on_poll_complete);
+                # Enable keepalive heartbeat at 20s — sends a PING frame when
+                # no data has been received for this interval, detecting dead
+                # connections proactively instead of waiting for the next send.
+                poll_op.setHeartbeat(20000);
                 async_wake_socket = ws_sock;
                 # Submit to the global async I/O controller
                 controller.submit(<SocketPollOperationInfo>{
@@ -5808,6 +5812,7 @@ public class WebSocketConnectAndRunPollOperation inherits Qore::AbstractPollOper
         Socket ws_sock = h1conn.getSocket();
         ws_op = new WebSocketClientPollOperation(ws_sock, "http1", 0,
             offered_extensions, timeout_ms, logger, raw_callback, on_poll_complete);
+        ws_op.setHeartbeat(20000);
 
         # Notify the WebSocketClient of the successful connect
         wsc.finishAsyncConnect(rh, ws_op, ws_sock);
