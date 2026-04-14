@@ -125,6 +125,8 @@ class AOTSmokeTest inherits QUnit::Test {
         # Closure exception safety tests
         addTestCase("AOT closure exception safety", \testClosureExceptionSafety());
         addTestCase("AOT closure exception outer", \testClosureExceptionOuter());
+        # Regression: corrupt .qmod load must not deadlock inside parse-lock scope
+        addTestCase("AOT corrupt qmod load no deadlock", \testCorruptQmodLoadNoDeadlock());
         set_return_value(main());
     }
 
@@ -3141,5 +3143,131 @@ exit(0);
         string interp_out = runInterpreted(code);
         assertEq(interp_out, result.run_out,
             "closure-exception-outer output matches interpreter");
+    }
+
+    private int hexToInt(string s) {
+        int v = 0;
+        for (int i = 0; i < s.size(); ++i) {
+            int c = ord(s.substr(i, 1));
+            int d;
+            if (c >= 0x30 && c <= 0x39) d = c - 0x30;
+            else if (c >= 0x41 && c <= 0x46) d = 10 + c - 0x41;
+            else if (c >= 0x61 && c <= 0x66) d = 10 + c - 0x61;
+            else return v;
+            v = v * 16 + d;
+        }
+        return v;
+    }
+
+    #! Regression: AOT .qmod load used to deadlock forever when the embedded
+    #! metadata could not be deserialized.  Two waitForTerminationAndDeref()
+    #! calls in qore_aot_module_init_v2/v3 sat INSIDE the scope of a
+    #! ProgramRuntimeParseContextHelper, so parse_count was still 1 when wait
+    #! ran — and wait waits for parse_count==0.  A malformed .qmod (truncated
+    #! AOT metadata) exercises the failure path deterministically; the test
+    #! passes when -l exits promptly with a MODULE-LOAD-ERROR instead of hanging.
+    testCorruptQmodLoadNoDeadlock() {
+        string tmp_dir = sprintf("/tmp/aot_corrupt_qmod_%d_%d", getpid(), rand());
+        mkdir(tmp_dir);
+        on_exit {
+            backquote(sprintf("rm -rf %s", tmp_dir));
+        }
+
+        # Build a valid .qmod first, then damage its AOT section so
+        # deserializeIntoProgram() fails during parse-context scope.
+        string mod_code = "%modern
+
+module CorruptQmodTest {
+    version = \"1.0\";
+    desc = \"Corrupt qmod load test\";
+    author = \"Test\";
+    license = \"MIT\";
+}
+
+public namespace CorruptQmodTest {
+    public int sub one() { return 1; }
+}
+";
+        string qm_path = tmp_dir + "/CorruptQmodTest.qm";
+        {
+            File f();
+            f.open2(qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write(mod_code);
+            f.close();
+        }
+        string qmod_path = tmp_dir + "/CorruptQmodTest.qmod";
+        hash<auto> compile_res = compileModuleFile(qm_path, qmod_path);
+        assertTrue(compile_res.compiled,
+            "corrupt-qmod-regression: baseline compile succeeded: " + compile_res.compile_out);
+
+        # Corrupt the embedded AOT metadata.  The compiler emits it into
+        # .rodata with PrivateLinkage (no symbol entry), but the section
+        # layout is stable: the first ~48 bytes hold the module description
+        # C-strings (name, version, desc, author, license) followed by the
+        # `QORD` magic + serialized blob.  We locate .rodata via readelf
+        # and zero everything from 0x30 to the end — the module loader still
+        # finds a valid feature name, but deserializeIntoProgram() trips
+        # on the zeroed tag stream and triggers the v3 error path the
+        # deadlock lived on.
+        list<string> se_lines = backquote(sprintf("readelf -SW %s 2>&1", qmod_path)).split("\n");
+        int ro_off = -1;
+        int ro_size = -1;
+        foreach string line in (se_lines) {
+            if (!line.regex(" \\.rodata ")) continue;
+            list<string> tok = ();
+            foreach string p in (line.split(" ")) {
+                if (p != "") tok += p;
+            }
+            # "[N] .rodata PROGBITS <addr> <off> <size> ..."
+            int base = (tok[0].regex("^\\[") && tok.size() > 1) ? 1 : 0;
+            if (tok.size() < base + 5) continue;
+            ro_off = hexToInt(tok[base + 3]);
+            ro_size = hexToInt(tok[base + 4]);
+            break;
+        }
+        assertTrue(ro_off > 0 && ro_size > 64,
+            sprintf("corrupt-qmod-regression: located .rodata off=0x%x size=0x%x", ro_off, ro_size));
+
+        int md_off = ro_off + 0x30;
+        int md_len = ro_size - 0x30;
+        {
+            File f();
+            f.open2(qmod_path, O_RDWR);
+            f.setPos(md_off);
+            binary zeroes = binary();
+            for (int i = 0; i < md_len; ++i) zeroes += <00>;
+            f.write(zeroes);
+            f.close();
+        }
+
+        # Load the corrupt .qmod with -l. Before the fix this process
+        # hung forever; now it exits quickly with a MODULE-LOAD-ERROR.
+        string script = tmp_dir + "/noop.q";
+        {
+            File f();
+            f.open2(script, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write("%modern\nprintf(\"ok\\n\");\n");
+            f.close();
+        }
+
+        # Use `timeout 15` so a regression deadlock produces a detectable
+        # non-zero exit and the test suite doesn't stall indefinitely.
+        string cmd = sprintf("LD_LIBRARY_PATH=%s timeout 15 %s --exec-mode=ast -l %s %s 2>&1; echo EXIT=$?",
+            libqore_dir, qore_bin, qmod_path, script);
+        date started = now_us();
+        string out = backquote(cmd);
+        date elapsed = now_us() - started;
+
+        # Deadlock would make `timeout 15` kill the process, producing
+        # EXIT=124.  With the fix, qore returns fast with a non-zero exit
+        # (the module load fails) but NOT 124.  Any of the AOT init error
+        # tags ("LOAD-MODULE-ERROR", "MODULE-LOAD-ERROR") is acceptable —
+        # the regression is the HANG, not which specific error surfaces.
+        assertTrue(elapsed < 10s,
+            "corrupt-qmod-regression: load returned promptly (elapsed=" + elapsed.format("u") + "us): " + out);
+        assertFalse(out.regex("EXIT=124"),
+            "corrupt-qmod-regression: process not killed by timeout: " + out);
+        assertTrue(out.regex("(MODULE-LOAD-ERROR|LOAD-MODULE-ERROR)"),
+            "corrupt-qmod-regression: saw module load error: " + out);
     }
 }

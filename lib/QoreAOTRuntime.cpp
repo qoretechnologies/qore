@@ -6687,16 +6687,29 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v2(
     QoreAOTBinaryDeserializer deserializer;
     std::string deser_error;
     {
-        // Set parse context so UserVariantBase constructor can call
-        // parse_get_parse_options() which reads thread-local current_pgm
-        ProgramRuntimeParseContextHelper pch(&xsink, local_pgm);
-        if (xsink.isException()) {
-            xsink.clear();
+        // parse_ctx_failed: set parse context threw; deser_failed: metadata read rejected.
+        // Both must emit the error OUTSIDE the ProgramRuntimeParseContextHelper scope —
+        // waitForTerminationAndDeref blocks until parse_count==0, and pch owns parse_count
+        // until it goes out of scope. Calling wait* while pch is live deadlocks.
+        bool parse_ctx_failed = false;
+        bool deser_failed = false;
+        {
+            // Set parse context so UserVariantBase constructor can call
+            // parse_get_parse_options() which reads thread-local current_pgm
+            ProgramRuntimeParseContextHelper pch(&xsink, local_pgm);
+            if (xsink.isException()) {
+                xsink.clear();
+                parse_ctx_failed = true;
+            } else if (!deserializer.deserializeIntoProgram(local_pgm,
+                    metadata, static_cast<uint32_t>(metadata_len), deser_error)) {
+                deser_failed = true;
+            }
+        }
+        if (parse_ctx_failed) {
             local_pgm->waitForTerminationAndDeref(nullptr);
             return new QoreStringNode("AOT module v2: failed to set parse context");
         }
-        if (!deserializer.deserializeIntoProgram(local_pgm,
-                metadata, static_cast<uint32_t>(metadata_len), deser_error)) {
+        if (deser_failed) {
             QoreStringNode* err = new QoreStringNode("AOT module metadata deserialization error: ");
             err->concat(deser_error.c_str());
             local_pgm->waitForTerminationAndDeref(nullptr);
@@ -7142,16 +7155,29 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
     QoreAOTBinaryDeserializer deserializer;
     std::string deser_error;
     {
-        // Set parse context so UserVariantBase constructor can call
-        // parse_get_parse_options() which reads thread-local current_pgm
-        ProgramRuntimeParseContextHelper pch(&xsink, local_pgm);
-        if (xsink.isException()) {
-            xsink.clear();
+        // parse_ctx_failed: set parse context threw; deser_failed: metadata read rejected.
+        // Both must emit the error OUTSIDE the ProgramRuntimeParseContextHelper scope —
+        // waitForTerminationAndDeref blocks until parse_count==0, and pch owns parse_count
+        // until it goes out of scope. Calling wait* while pch is live deadlocks.
+        bool parse_ctx_failed = false;
+        bool deser_failed = false;
+        {
+            // Set parse context so UserVariantBase constructor can call
+            // parse_get_parse_options() which reads thread-local current_pgm
+            ProgramRuntimeParseContextHelper pch(&xsink, local_pgm);
+            if (xsink.isException()) {
+                xsink.clear();
+                parse_ctx_failed = true;
+            } else if (!deserializer.deserializeIntoProgram(local_pgm,
+                    metadata, static_cast<uint32_t>(metadata_len), deser_error)) {
+                deser_failed = true;
+            }
+        }
+        if (parse_ctx_failed) {
             local_pgm->waitForTerminationAndDeref(nullptr);
             return new QoreStringNode("AOT module v3: failed to set parse context");
         }
-        if (!deserializer.deserializeIntoProgram(local_pgm,
-                metadata, static_cast<uint32_t>(metadata_len), deser_error)) {
+        if (deser_failed) {
             QoreStringNode* err = new QoreStringNode("AOT module metadata deserialization error: ");
             err->concat(deser_error.c_str());
             local_pgm->waitForTerminationAndDeref(nullptr);
