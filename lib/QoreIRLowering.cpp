@@ -581,11 +581,19 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         flow_stack.pop_back();
 
         builder.setBlock(cond_block);
+        // Bracket the condition with PushTempMark/DiscardTemps — see the
+        // WhileStatement case below for the rationale (per-iteration node
+        // temps from weak-ref LoadLocal in the condition must not persist).
+        builder.createPushTempMark(stmt->loc);
         QoreIRValue cond = lowerConditionValue(do_stmt->getCond(), error);
         if (!cond.isValid()) {
             return false;
         }
-        builder.createBranchIf(cond, body_block, exit_block);
+        // Convert to scalar bool so cond value survives DiscardTemps.
+        QoreIRValue cond_bool = builder.createUnaryOp(QoreIROpcode::ToBool, cond,
+            stmt->loc)->result;
+        builder.createDiscardTemps(stmt->loc);
+        builder.createBranchIf(cond_bool, body_block, exit_block);
 
         // Move exit_block to end so LLVM lowering processes it after any
         // invoke.cont blocks created during the do-while body lowering.
@@ -616,14 +624,35 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         }
 
         builder.setBlock(cond_block);
+        // Bracket the condition with PushTempMark/DiscardTemps so per-iteration
+        // node temps (e.g., LoadLocal of a weak-ref local in the condition) get
+        // cleaned up every iteration, matching AST-mode ValueEvalRefHolder timing.
+        // Without this, condition temps accumulate in the cleanup vector across
+        // iterations and any refSelf'd node values hold the object alive
+        // indefinitely (thread-object.qtest transparent thread pattern: worker
+        // loops on `self.stop` where self holds a weak ref; each iteration's
+        // LoadLocal refSelfs the unwrapped object, preventing the strong ref
+        // from dropping to zero when the outer scope releases its ref).
+        //
+        // The cond value may itself be a node (e.g. `while (data)` where data
+        // is a string — BranchIf calls getAsBool() on whatever type), so we
+        // convert to a scalar bool BEFORE DiscardTemps to prevent the cond
+        // value from being dropped.  The ToBool result is a scalar not in the
+        // cleanup vector, so it survives DiscardTemps.
         // Try fused BranchIfLtLocalInt for int local < int local conditions
         if (!tryEmitFusedBranchIfLtLocalInt(while_stmt->getCond(), body_block, exit_block)) {
+            builder.createPushTempMark(while_stmt->loc);
             QoreIRValue cond = lowerConditionValue(while_stmt->getCond(), error);
             if (!cond.isValid()) {
                 return false;
             }
-            builder.createBranchIf(cond, body_block, exit_block);
+            // Convert to scalar bool so cond value survives DiscardTemps
+            QoreIRValue cond_bool = builder.createUnaryOp(QoreIROpcode::ToBool, cond,
+                while_stmt->loc)->result;
+            builder.createDiscardTemps(while_stmt->loc);
+            builder.createBranchIf(cond_bool, body_block, exit_block);
         }
+        // Fused path: int comparisons don't create node temps, no cleanup needed.
 
         builder.setBlock(body_block);
         flow_stack.push_back({exit_block, cond_block, false, catch_cleanup_depth, cleanup_stack.size(), QoreIRValue()});
@@ -680,8 +709,12 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         // Try fused BranchIfLtLocalInt for int local < int local conditions
         if (cond_expr && !cond_expr.isNothing()
                 && tryEmitFusedBranchIfLtLocalInt(cond_expr, body_block, exit_block)) {
-            // Fused condition+branch emitted
+            // Fused condition+branch emitted — no node temps, no cleanup needed.
         } else {
+            // Bracket the condition with PushTempMark/DiscardTemps — see the
+            // WhileStatement case above for the rationale (per-iteration node
+            // temps from weak-ref LoadLocal in the condition must not persist).
+            builder.createPushTempMark(stmt->loc);
             QoreIRValue cond_value;
             if (!cond_expr || cond_expr.isNothing()) {
                 cond_value = builder.createConstBool(true)->result;
@@ -691,7 +724,11 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
                     return false;
                 }
             }
-            builder.createBranchIf(cond_value, body_block, exit_block);
+            // Convert to scalar bool so cond value survives DiscardTemps.
+            QoreIRValue cond_bool = builder.createUnaryOp(QoreIROpcode::ToBool, cond_value,
+                stmt->loc)->result;
+            builder.createDiscardTemps(stmt->loc);
+            builder.createBranchIf(cond_bool, body_block, exit_block);
         }
 
         builder.setBlock(body_block);

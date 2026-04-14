@@ -3472,10 +3472,39 @@ next_instruction:
                             cleanupLocalCaches();
                             return false;
                         }
-                        // Store in slot cache for fast access on next load
+                        // Weak reference detection: LocalVar::eval() unwraps
+                        // WeakReferenceNode/WeakHashReferenceNode/WeakListReferenceNode
+                        // and returns the raw target with needs_deref=false. Caching the
+                        // unwrapped value in the slot cache would create a persistent
+                        // strong reference, preventing the destructor from firing when
+                        // the last external strong ref is dropped. Skip caching so
+                        // every access goes through TLS eval() which reads the current
+                        // weak-ref target — matching AST-mode weak ref semantics.
+                        // This is the LoadLocal-side fix for thread-object.qtest's
+                        // transparent thread pattern; the matching fix in the while
+                        // loop lowering emits DiscardTemps per iteration to drop the
+                        // out slot's refSelf'd temp ref.
+                        bool is_weak_ref_local = false;
+                        if (!needs_deref && val.hasNode()) {
+                            LocalVarValue* lvv = thread_find_lvar(local_inst->local->getName());
+                            if (lvv) {
+                                qore_type_t raw_type = lvv->val.getType();
+                                if (raw_type == NT_WEAKREF || raw_type == NT_WEAKREF_HASH
+                                        || raw_type == NT_WEAKREF_LIST) {
+                                    is_weak_ref_local = true;
+                                }
+                            }
+                        }
+                        // Store in slot cache for fast access on next load (unless weak-ref)
                         if (sid != UINT32_MAX && sid < locals_slot_cache.size()) {
                             locals_slot_cache[sid].discard(xsink);
-                            locals_slot_cache[sid] = val.hasNode() ? val.refSelf() : val;
+                            if (is_weak_ref_local) {
+                                // Clear cache entirely for weak-ref locals so next
+                                // access re-evaluates via TLS (weak-ref target check)
+                                locals_slot_cache[sid] = QoreValue();
+                            } else {
+                                locals_slot_cache[sid] = val.hasNode() ? val.refSelf() : val;
+                            }
                         }
                         out = val.hasNode() ? val.refSelf() : val;
                         // Release eval()'s owned ref — slot-cache and out each hold
