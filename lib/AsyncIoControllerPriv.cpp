@@ -991,16 +991,6 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
         cmd.submit_has_qore_abort = has_qore_abort;
         cmd.submit_has_qore_on_complete = has_qore_on_complete;
 
-        // Increment submit_seq BEFORE push+notify so that when the I/O
-        // thread processes the command and runs its main-loop "advance
-        // processed_seq = submit_seq" step, submit_seq already reflects
-        // this submit.  If ++submit_seq happens AFTER, the I/O thread
-        // processes, advances processed_seq to the PRE-INCREMENT value,
-        // and enters poll() before the worker increments — leaving
-        // processed_seq < submit_seq with nothing to wake the I/O thread.
-        // A concurrent waitForProcessing(timeout) then blocks the full
-        // timeout even though no work is actually pending.
-        ++submit_seq;
         target.cmdq.push(std::move(cmd));
         // Bump submit_seq immediately after push, BEFORE notify().  The I/O
         // thread's Phase 1 sets processed_seq = submit_seq after processing
