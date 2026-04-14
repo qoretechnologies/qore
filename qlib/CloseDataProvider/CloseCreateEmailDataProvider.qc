@@ -90,7 +90,7 @@ public class CloseCreateEmailRequestDataType inherits HashDataType {
                 "desc": "The sender email address",
             },
             "to": {
-                "type": SoftListOrNothingType,
+                "type": new ListDataType("EmailRecipients", SoftStringType, True),
                 "display_name": "To",
                 "short_desc": "To recipients",
                 "desc": "A list of recipient email addresses as strings",
@@ -102,13 +102,13 @@ public class CloseCreateEmailRequestDataType inherits HashDataType {
                 "desc": "The unique identifier of the contact to associate with this email",
             },
             "cc": {
-                "type": SoftListOrNothingType,
+                "type": new ListDataType("CcRecipients", SoftStringType, True),
                 "display_name": "CC",
                 "short_desc": "CC recipients",
                 "desc": "A list of CC recipient email addresses as strings",
             },
             "bcc": {
-                "type": SoftListOrNothingType,
+                "type": new ListDataType("BccRecipients", SoftStringType, True),
                 "display_name": "BCC",
                 "short_desc": "BCC recipients",
                 "desc": "A list of BCC recipient email addresses as strings",

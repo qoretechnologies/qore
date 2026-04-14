@@ -79,7 +79,7 @@ public class SquarespaceProductDataType inherits HashDataType {
                 "desc": "The URL slug for the product",
             },
             "tags": {
-                "type": SoftListOrNothingType,
+                "type": new ListDataType("Tags", SoftStringType, True),
                 "display_name": "Tags",
                 "short_desc": "The product tags",
                 "desc": "The list of tags associated with the product",
@@ -97,19 +97,19 @@ public class SquarespaceProductDataType inherits HashDataType {
                 "desc": "The SEO options for the product (`title`, `description`)",
             },
             "variantAttributes": {
-                "type": SoftListOrNothingType,
+                "type": new ListDataType("VariantAttributes", SoftStringType, True),
                 "display_name": "Variant Attributes",
                 "short_desc": "The variant attribute names",
                 "desc": "The list of attribute names used for product variants",
             },
             "variants": {
-                "type": SoftListOrNothingType,
+                "type": new ListDataType("Variants", AutoHashType, True),
                 "display_name": "Variants",
                 "short_desc": "The product variants",
                 "desc": "The list of variants for the product",
             },
             "images": {
-                "type": SoftListOrNothingType,
+                "type": new ListDataType("Images", AutoHashType, True),
                 "display_name": "Images",
                 "short_desc": "The product images",
                 "desc": "The list of images associated with the product",

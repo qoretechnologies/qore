@@ -81,7 +81,7 @@ public class WooCommerceSystemStatusThemeDataType inherits HashDataType {
             "overrides": {
                 "display_name": "Template Overrides",
                 "short_desc": "List of template overrides",
-                "type": SoftListOrNothingType,
+                "type": new ListDataType("Overrides", AutoHashType, True),
                 "desc": "List of WooCommerce templates overridden by the theme",
             },
             "parent_name": {

@@ -46,7 +46,7 @@ public class HuggingFaceListRequestDataType inherits HashDataType {
                 "display_name": "Filter",
                 "short_desc": "Filter by tags",
                 "desc": "A list of tags to filter results by (e.g. `text-generation`, `pytorch`)",
-                "type": SoftListOrNothingType,
+                "type": new ListDataType("TagFilter", SoftStringType, True),
                 "example_value": ("text-generation",),
             },
             "sort": {

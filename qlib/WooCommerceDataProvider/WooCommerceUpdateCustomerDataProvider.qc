@@ -77,7 +77,7 @@ public class WooCommerceUpdateCustomerRequestDataType inherits HashDataType {
             },
             "meta_data": {
                 "display_name": "Meta Data",
-                "type": SoftListOrNothingType,
+                "type": new ListDataType("MetaData", AutoHashType, True),
                 "desc": "List of metadata key-value pairs",
             },
         };

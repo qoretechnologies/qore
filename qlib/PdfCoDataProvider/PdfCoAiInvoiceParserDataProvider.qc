@@ -45,14 +45,14 @@ public class PdfCoAiInvoiceParserRequestDataType inherits HashDataType {
                 "required_groups": ("source",),
             },
             "customField": {
-                "type": SoftListOrNothingType,
+                "type": new ListDataType("CustomFields", SoftStringType, True),
                 "display_name": "Custom Fields",
                 "short_desc": "Custom field names to extract",
                 "desc": "Custom field names to extract in camelCase format "
                     "(e.g., `purchaseOrderNumber`, `taxId`, `vendorAddress`)",
             },
             "lineItemStructure": {
-                "type": SoftListOrNothingType,
+                "type": new ListDataType("LineItemColumns", SoftStringType, True),
                 "display_name": "Line Item Structure",
                 "short_desc": "Custom line item column names",
                 "desc": "Column names defining the line item structure "

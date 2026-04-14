@@ -46,13 +46,13 @@ public class WooCommerceSystemStatusDataType inherits HashDataType {
             "active_plugins": {
                 "display_name": "Active Plugins",
                 "short_desc": "List of active plugins",
-                "type": SoftListOrNothingType,
+                "type": new ListDataType("ActivePlugins", AutoHashType, True),
                 "desc": "List of currently active WordPress plugins",
             },
             "inactive_plugins": {
                 "display_name": "Inactive Plugins",
                 "short_desc": "List of inactive plugins",
-                "type": SoftListOrNothingType,
+                "type": new ListDataType("InactivePlugins", AutoHashType, True),
                 "desc": "List of currently inactive WordPress plugins",
             },
             "theme": {
@@ -76,7 +76,7 @@ public class WooCommerceSystemStatusDataType inherits HashDataType {
             "pages": {
                 "display_name": "Pages",
                 "short_desc": "WooCommerce pages status",
-                "type": SoftListOrNothingType,
+                "type": new ListDataType("Pages", AutoHashType, True),
                 "desc": "List of WooCommerce pages and their configuration status",
             },
         };

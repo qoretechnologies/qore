@@ -57,12 +57,12 @@ public class ZohoBooksEmailInvoiceDataProvider inherits ZohoBooksDataProviderBas
             },
             "to_mail_ids": {
                 "display_name": "To",
-                "type": SoftListOrNothingType,
+                "type": new ListDataType("EmailRecipients", SoftStringType, True),
                 "desc": "Email addresses to send the invoice to (comma-separated or list)",
             },
             "cc_mail_ids": {
                 "display_name": "CC",
-                "type": SoftListOrNothingType,
+                "type": new ListDataType("CcRecipients", SoftStringType, True),
                 "desc": "CC email addresses",
             },
             "subject": {

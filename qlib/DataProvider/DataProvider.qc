@@ -90,6 +90,7 @@ public class DataProvider {
             "bcrest": "CdsRestDataProvider",
             "bigcommerce": "BigCommerceDataProvider",
             "bitly": "BitlyDataProvider",
+            "circle": "CircleDataProvider",
 
             # provided by the jni module
             "busylight": "BusyLightDataProvider",
@@ -246,6 +247,8 @@ public class DataProvider {
             "squarespace": "SquarespaceDataProvider",
             "tableau": "TableauDataProvider",
             "tally": "TallyDataProvider",
+
+            "onedrive": "OneDriveDataProvider",
 
             # provided by the ssh2 module
             "sftpclient": "SftpClientDataProvider",

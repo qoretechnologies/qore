@@ -161,37 +161,37 @@ public class WooCommerceOrderDataType inherits HashDataType {
             "line_items": {
                 "display_name": "Line Items",
                 "short_desc": "Order line items",
-                "type": SoftListOrNothingType,
+                "type": new ListDataType("LineItems", AutoHashType, True),
                 "desc": "List of line items (products) in the order",
             },
             "shipping_lines": {
                 "display_name": "Shipping Lines",
                 "short_desc": "Shipping line items",
-                "type": SoftListOrNothingType,
+                "type": new ListDataType("ShippingLines", AutoHashType, True),
                 "desc": "List of shipping lines applied to the order",
             },
             "fee_lines": {
                 "display_name": "Fee Lines",
                 "short_desc": "Fee line items",
-                "type": SoftListOrNothingType,
+                "type": new ListDataType("FeeLines", AutoHashType, True),
                 "desc": "List of fee lines applied to the order",
             },
             "coupon_lines": {
                 "display_name": "Coupon Lines",
                 "short_desc": "Coupon line items",
-                "type": SoftListOrNothingType,
+                "type": new ListDataType("CouponLines", AutoHashType, True),
                 "desc": "List of coupon lines applied to the order",
             },
             "refunds": {
                 "display_name": "Refunds",
                 "short_desc": "Order refunds",
-                "type": SoftListOrNothingType,
+                "type": new ListDataType("Refunds", AutoHashType, True),
                 "desc": "List of refunds applied to the order",
             },
             "meta_data": {
                 "display_name": "Meta Data",
                 "short_desc": "Order metadata",
-                "type": SoftListOrNothingType,
+                "type": new ListDataType("MetaData", AutoHashType, True),
                 "desc": "List of metadata key-value pairs associated with the order",
             },
         };

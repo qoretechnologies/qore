@@ -38,7 +38,7 @@ public class PdfCoMergePdfRequestDataType inherits HashDataType {
                 "preselected": True,
             },
             "url": {
-                "type": SoftListOrNothingType,
+                "type": new ListDataType("UrlList", SoftStringType, True),
                 "display_name": "Source URLs",
                 "short_desc": "URLs of the source PDF files to merge",
                 "desc": "Source URLs of PDF files to merge",

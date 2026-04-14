@@ -31,7 +31,7 @@
 %modern
 
 module Mime {
-    version = "1.8";
+    version = "1.9";
     desc = "Mime module providing MIME-related definitions";
     author = "David Nichols";
     url = "http://qore.org";
@@ -1278,6 +1278,28 @@ public namespace Mime {
     /** @defgroup MimeMiscFunctions Misc MIME Functions
      */
     #/@{
+    #! Returns the base MIME type from a Content-Type string, with parameters removed
+    /** Strips any modifiers after the first \c ";" or \c "," (e.g. \c "charset=utf-8",
+        \c "boundary=...") and returns the bare MIME type suitable for lookups against
+        registered MIME type tables (e.g. serializer maps keyed on \c "text/x-yaml"
+        rather than \c "text/x-yaml;charset=utf-8"). Returns @ref NOTHING if the input
+        is empty.
+
+        @param ct a Content-Type header value, optionally with parameters
+
+        @return the bare MIME type with parameters stripped, or @ref NOTHING if \a ct
+        is empty
+
+        @since Mime 1.9
+    */
+    public *string sub mime_get_base_type(*string ct) {
+        if (!ct) {
+            return;
+        }
+        ct =~ s/[;,].*$//;
+        return trim ct;
+    }
+
     #! Returns @ref True if the given MIME type is known to provide text content, @ref False if not
     /** @param mime The MIME type to test
 

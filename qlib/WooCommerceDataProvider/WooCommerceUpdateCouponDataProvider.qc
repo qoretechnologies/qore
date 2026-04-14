@@ -74,12 +74,12 @@ public class WooCommerceUpdateCouponRequestDataType inherits HashDataType {
             },
             "product_ids": {
                 "display_name": "Product IDs",
-                "type": SoftListOrNothingType,
+                "type": new ListDataType("ProductIdList", SoftIntType, True),
                 "desc": "List of product IDs the coupon can be applied to",
             },
             "excluded_product_ids": {
                 "display_name": "Excluded Product IDs",
-                "type": SoftListOrNothingType,
+                "type": new ListDataType("ExcludedProductIdList", SoftIntType, True),
                 "desc": "List of product IDs excluded from the coupon",
             },
             "usage_limit_per_user": {
@@ -102,12 +102,12 @@ public class WooCommerceUpdateCouponRequestDataType inherits HashDataType {
             },
             "product_categories": {
                 "display_name": "Product Categories",
-                "type": SoftListOrNothingType,
+                "type": new ListDataType("CategoryIdList", SoftIntType, True),
                 "desc": "List of category IDs the coupon applies to",
             },
             "excluded_product_categories": {
                 "display_name": "Excluded Product Categories",
-                "type": SoftListOrNothingType,
+                "type": new ListDataType("ExcludedCategoryIdList", SoftIntType, True),
                 "desc": "List of category IDs excluded from the coupon",
             },
             "exclude_sale_items": {
@@ -130,12 +130,12 @@ public class WooCommerceUpdateCouponRequestDataType inherits HashDataType {
             },
             "email_restrictions": {
                 "display_name": "Email Restrictions",
-                "type": SoftListOrNothingType,
+                "type": new ListDataType("EmailRestrictions", SoftStringType, True),
                 "desc": "List of email addresses that can use this coupon",
             },
             "meta_data": {
                 "display_name": "Meta Data",
-                "type": SoftListOrNothingType,
+                "type": new ListDataType("MetaData", AutoHashType, True),
                 "desc": "List of metadata key-value pairs",
             },
         };

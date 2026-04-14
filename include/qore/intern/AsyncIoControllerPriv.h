@@ -359,6 +359,11 @@ public:
     */
     DLLLOCAL void setLogger(QoreObject* logger_obj, ExceptionSink* xsink);
 
+    //! Drops timer_callback and timer user-data values (may hold cross-module
+    //! QoreObject refs). Safe to call while the controller is still running —
+    //! timer firings after this simply see no callback/data.
+    DLLLOCAL void clearCrossModuleRefs(ExceptionSink* xsink);
+
     //! Adds a timer to fire at the given deadline
     /** @param deadline the absolute deadline
         @param udata Qore user data to associate with the timer (referenced)
@@ -783,6 +788,15 @@ DLLLOCAL QoreObject* qore_get_async_io_controller_obj(ExceptionSink* xsink);
 
 //! Cleans up the global AsyncIoController singleton (called from qore_cleanup())
 DLLLOCAL void qore_async_io_controller_cleanup();
+
+//! Early shutdown hook: drops any QoreObject references the singleton holds that
+//! may belong to user modules (logger, timer callback, timer user data). Called
+//! from qore_cleanup() BEFORE QMM.delUser() so the refs are released while the
+//! referenced modules are still fully loaded (safe to destruct their objects).
+//! The singleton itself is left alive — its actual stop/destroy still happens
+//! in qore_async_io_controller_cleanup() afterward, so the controller can keep
+//! serving cancelByProgram() callbacks during module teardown.
+DLLLOCAL void qore_async_io_controller_pre_cleanup();
 
 //! Returns true if the given controller is the global singleton
 DLLLOCAL bool qore_is_async_io_controller_singleton(AsyncIoControllerPriv* ctrl);

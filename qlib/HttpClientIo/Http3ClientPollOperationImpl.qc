@@ -87,7 +87,9 @@ public class Http3ClientPollOperation inherits Http3ClientPollOperationBase, Htt
                     accept_all_certs, client_cert, client_pk),
                 url_info.host,
                 url_info.port,
-                connection) {
+                connection,
+                AF_UNSPEC,
+                connect_timeout) {
         h3_url_info = url_info;
         h3_logger = logger;
         # Store connection in Qore data hash for DGC cycle detection

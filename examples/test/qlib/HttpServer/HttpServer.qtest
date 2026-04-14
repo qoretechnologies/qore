@@ -1885,6 +1885,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
             "debug": True,
         };
         HttpServer server(opts);
+        on_exit server.stop();
         server.setHandler("my-handler", "", MimeTypeHtml, new ReqHandler());
         server.setDefaultHandler("my-handler", new ReqHandler());
         server.addListener(<HttpListenerOptionInfo>{"service": 0});
@@ -1951,6 +1952,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
             "debug": True,
         };
         HttpServer server(opts);
+        on_exit server.stop();
         Queue started();
         SlowHandler handler(started, 2s);
         server.setHandler("slow-handler", "", MimeTypeHtml, handler);

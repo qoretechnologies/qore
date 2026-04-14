@@ -42,7 +42,7 @@ public class SquareWatchNewEventsDataProvider inherits SquareWatchDataProviderBa
             "event_types": <DataProviderOptionInfo>{
                 "display_name": "Event Types",
                 "short_desc": "Square event types to watch",
-                "type": AbstractDataProviderType::get(SoftListOrNothingType),
+                "type": new ListDataType("EventTypes", SoftStringType, True),
                 "desc": "List of Square event types to watch (e.g. 'payment.created', "
                     "'order.updated'). Defaults to all supported event types. Supported types: "
                     + (foldl $1 + ", " + $2, AllSquareEventTypes),

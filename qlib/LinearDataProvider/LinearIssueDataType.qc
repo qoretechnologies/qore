@@ -190,7 +190,7 @@ public class LinearIssueDataType inherits HashDataType {
                 "example_value": "b5ea5f1f-8adc-4f52-b4bd-ab4e84cf51ba",
             },
             "labelIds": {
-                "type": SoftListOrNothingType,
+                "type": new ListDataType("LabelIdList", SoftStringType, True),
                 "display_name": "Label IDs",
                 "short_desc": "The label IDs",
                 "desc": "Array of IDs of labels attached to the issue",
@@ -300,7 +300,7 @@ public class LinearIssueCreateDataType inherits HashDataType {
                 "example_value": "cycle-uuid-here",
             },
             "labelIds": {
-                "type": SoftListOrNothingType,
+                "type": new ListDataType("LabelIdList", SoftStringType, True),
                 "display_name": "Label IDs",
                 "short_desc": "The label IDs",
                 "desc": "Array of label IDs to attach to the issue",
@@ -383,7 +383,7 @@ public class LinearIssueUpdateDataType inherits HashDataType {
                 "example_value": "cycle-uuid-here",
             },
             "labelIds": {
-                "type": SoftListOrNothingType,
+                "type": new ListDataType("LabelIdList", SoftStringType, True),
                 "display_name": "Label IDs",
                 "short_desc": "The label IDs",
                 "desc": "Array of label IDs to set on the issue",
@@ -473,7 +473,7 @@ public class LinearIssueUpdateRequestDataType inherits HashDataType {
                 "example_value": "cycle-uuid-here",
             },
             "labelIds": {
-                "type": SoftListOrNothingType,
+                "type": new ListDataType("LabelIdList", SoftStringType, True),
                 "display_name": "Labels",
                 "short_desc": "The labels to set",
                 "desc": "Array of label IDs to set on the issue (replaces existing labels)",

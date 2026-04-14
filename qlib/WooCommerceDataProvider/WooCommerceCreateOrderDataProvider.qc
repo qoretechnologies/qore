@@ -57,7 +57,7 @@ public class WooCommerceCreateOrderRequestDataType inherits HashDataType {
             },
             "line_items": {
                 "display_name": "Line Items",
-                "type": SoftListOrNothingType,
+                "type": new ListDataType("LineItems", AutoHashType, True),
                 "desc": "List of line items (products) for the order",
                 "preselected": True,
             },
@@ -87,17 +87,17 @@ public class WooCommerceCreateOrderRequestDataType inherits HashDataType {
             },
             "shipping_lines": {
                 "display_name": "Shipping Lines",
-                "type": SoftListOrNothingType,
+                "type": new ListDataType("ShippingLines", AutoHashType, True),
                 "desc": "List of shipping lines for the order",
             },
             "fee_lines": {
                 "display_name": "Fee Lines",
-                "type": SoftListOrNothingType,
+                "type": new ListDataType("FeeLines", AutoHashType, True),
                 "desc": "List of fee lines for the order",
             },
             "coupon_lines": {
                 "display_name": "Coupon Lines",
-                "type": SoftListOrNothingType,
+                "type": new ListDataType("CouponLines", AutoHashType, True),
                 "desc": "List of coupon lines for the order",
             },
             "customer_note": {
@@ -108,7 +108,7 @@ public class WooCommerceCreateOrderRequestDataType inherits HashDataType {
             },
             "meta_data": {
                 "display_name": "Meta Data",
-                "type": SoftListOrNothingType,
+                "type": new ListDataType("MetaData", AutoHashType, True),
                 "desc": "List of metadata key-value pairs for the order",
             },
         };

@@ -211,13 +211,13 @@ public class ChargebeeTransactionDataType inherits HashDataType {
                 "desc": "Indicates whether the transaction has been deleted",
             },
             "linked_invoices": {
-                "type": SoftListOrNothingType,
+                "type": new ListDataType("LinkedInvoices", AutoHashType, True),
                 "display_name": "Linked Invoices",
                 "short_desc": "Invoices linked to this transaction",
                 "desc": "The list of invoices linked to this transaction",
             },
             "linked_refunds": {
-                "type": SoftListOrNothingType,
+                "type": new ListDataType("LinkedRefunds", AutoHashType, True),
                 "display_name": "Linked Refunds",
                 "short_desc": "Refunds linked to this transaction",
                 "desc": "The list of refunds linked to this transaction",

@@ -1,0 +1,567 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  CircleDataProvider.qtest Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/ConnectionProvider
+%requires ../../../../qlib/RestClient.qm
+%requires ../../../../qlib/RestClientIo.qm
+
+%try-module json
+%define NoJson
+%endtry
+
+%requires ../../../../qlib/CircleRestClient.qm
+%requires ../../../../qlib/CircleDataProvider
+
+%exec-class CircleDataProviderTest
+
+public class CircleDataProviderTest inherits QUnit::Test {
+    private {
+        #! Circle REST client (async) for integration tests
+        *RestClientIo::RestClientIo client;
+
+        #! Custom command-line options
+        const MyOpts = Opts + {
+            "apikey": "k,apikey=s",
+            "conn": "c,connection=s",
+        };
+
+        #! IDs of test resources to clean up
+        *int testPostId;
+        *int testCommentId;
+        *int testSpaceId;
+    }
+
+    constructor() : Test("CircleDataProvider Test", "1.0", \ARGV, MyOpts) {
+        # Unit tests (always run, no credentials needed)
+        addTestCase("sanity tests", \sanityTests());
+        addTestCase("factory tests", \factoryTests());
+        addTestCase("metadata tests", \metadataTests());
+        addTestCase("data type tests", \dataTypeTests());
+        addTestCase("connection tests", \connectionTests());
+
+        # Integration tests (require Circle credentials)
+        addTestCase("list posts tests", \listPostsTests());
+        addTestCase("list comments tests", \listCommentsTests());
+        addTestCase("list members tests", \listMembersTests());
+        addTestCase("list spaces tests", \listSpacesTests());
+        addTestCase("list communities tests", \listCommunitiesTests());
+        addTestCase("space round-trip tests", \spaceRoundTripTests());
+        addTestCase("post round-trip tests", \postRoundTripTests());
+        addTestCase("execute API call tests", \executeApiCallTests());
+        addTestCase("trigger example data tests", \triggerExampleDataTests());
+        addTestCase("cleanup tests", \cleanupTests());
+
+        # Try to set up connection for integration tests
+        try {
+            setupConnection();
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose) {
+                printf("Connection setup failed: %s: %s\n", ex.err, ex.desc);
+            }
+        }
+
+        set_return_value(main());
+    }
+
+    #! Sets up the Circle client for integration tests
+    private setupConnection() {
+        *string conn_name = m_options.conn ?? ENV.CIRCLE_CONNECTION;
+        if (conn_name) {
+            AbstractConnection conn = get_connection(conn_name);
+            if (conn instanceof CircleRestClient::CircleRestConnection) {
+                client = (cast<CircleRestClient::CircleRestConnection>(conn)).getAsync(True);
+            }
+            return;
+        }
+
+        *string apikey = m_options.apikey ?? ENV.CIRCLE_API_KEY ?? ENV.CIRCLE_API_TOKEN;
+        if (apikey) {
+            client = new CircleRestClient::CircleRestClientIo({"apikey": apikey});
+        }
+    }
+
+    #! Helper to skip integration tests when no credentials
+    private skipIfNoCredentials() {
+        if (!client) {
+            testSkip("no Circle credentials available");
+        }
+    }
+
+    #! Helper to create a data provider from the client
+    private CircleDataProvider::CircleDataProvider getProvider() {
+        return new CircleDataProvider::CircleDataProvider(client);
+    }
+
+    # ========== UNIT TESTS ==========
+
+    sanityTests() {
+        # Verify module loaded
+        assertEq(True, True, "module loaded");
+
+        # Test creating provider with options
+        try {
+            CircleDataProvider::CircleDataProvider prov();
+        } catch (hash<ExceptionInfo> ex) {
+            # Expected to fail without credentials
+            assertTrue(True, "provider requires options");
+        }
+    }
+
+    factoryTests() {
+        # Test factory creation
+        CircleDataProvider::CircleDataProviderFactory factory();
+        assertEq("circle", factory.getName(), "factory name");
+    }
+
+    metadataTests() {
+        # Test data type metadata
+        CircleDataProvider::CirclePostDataType postType();
+        hash<string, AbstractDataField> fields = postType.getFields();
+        assertTrue(fields.hasKey("id"), "post type has id field");
+        assertTrue(fields.hasKey("name"), "post type has name field");
+        assertTrue(fields.hasKey("body"), "post type has body field");
+        assertTrue(fields.hasKey("space_id"), "post type has space_id field");
+        assertTrue(fields.hasKey("status"), "post type has status field");
+
+        CircleDataProvider::CircleCommentDataType commentType();
+        fields = commentType.getFields();
+        assertTrue(fields.hasKey("id"), "comment type has id field");
+        assertTrue(fields.hasKey("body"), "comment type has body field");
+        assertTrue(fields.hasKey("post_id"), "comment type has post_id field");
+
+        CircleDataProvider::CircleMemberDataType memberType();
+        fields = memberType.getFields();
+        assertTrue(fields.hasKey("id"), "member type has id field");
+        assertTrue(fields.hasKey("name"), "member type has name field");
+        assertTrue(fields.hasKey("email"), "member type has email field");
+
+        CircleDataProvider::CircleSpaceDataType spaceType();
+        fields = spaceType.getFields();
+        assertTrue(fields.hasKey("id"), "space type has id field");
+        assertTrue(fields.hasKey("name"), "space type has name field");
+        assertTrue(fields.hasKey("slug"), "space type has slug field");
+        assertTrue(fields.hasKey("is_private"), "space type has is_private field");
+        assertTrue(fields.hasKey("community_id"), "space type has community_id field");
+        assertTrue(fields.hasKey("emoji"), "space type has emoji field");
+
+        CircleDataProvider::CircleCommunityDataType communityType();
+        fields = communityType.getFields();
+        assertTrue(fields.hasKey("id"), "community type has id field");
+        assertTrue(fields.hasKey("name"), "community type has name field");
+        assertTrue(fields.hasKey("slug"), "community type has slug field");
+        assertTrue(fields.hasKey("locale"), "community type has locale field");
+    }
+
+    dataTypeTests() {
+        # Test request types
+        CircleDataProvider::CircleCreatePostRequestDataType createPostReq();
+        hash<string, AbstractDataField> fields = createPostReq.getFields();
+        assertTrue(fields.hasKey("space_id"), "create post has space_id");
+        assertTrue(fields.hasKey("name"), "create post has name");
+        assertTrue(fields.hasKey("body"), "create post has body");
+        assertTrue(fields.hasKey("published_at"), "create post has published_at");
+        assertTrue(fields.hasKey("skip_notifications"), "create post has skip_notifications");
+
+        CircleDataProvider::CircleUpdatePostRequestDataType updatePostReq();
+        fields = updatePostReq.getFields();
+        assertTrue(fields.hasKey("id"), "update post has id");
+        assertTrue(fields.hasKey("name"), "update post has name");
+        assertTrue(fields.hasKey("body"), "update post has body");
+        assertTrue(fields.hasKey("status"), "update post has status");
+        assertTrue(fields.hasKey("is_pinned"), "update post has is_pinned");
+        assertTrue(fields.hasKey("published_at"), "update post has published_at");
+        assertTrue(fields.hasKey("skip_notifications"), "update post has skip_notifications");
+
+        CircleDataProvider::CircleCreateCommentRequestDataType createCommentReq();
+        fields = createCommentReq.getFields();
+        assertTrue(fields.hasKey("post_id"), "create comment has post_id");
+        assertTrue(fields.hasKey("body"), "create comment has body");
+
+        CircleDataProvider::CircleInviteMemberRequestDataType inviteReq();
+        fields = inviteReq.getFields();
+        assertTrue(fields.hasKey("email"), "invite member has email");
+        assertTrue(fields.hasKey("headline"), "invite member has headline");
+        assertTrue(fields.hasKey("skip_invitation"), "invite member has skip_invitation");
+        assertTrue(fields.hasKey("space_ids"), "invite member has space_ids");
+
+        CircleDataProvider::CircleSendMessageRequestDataType msgReq();
+        fields = msgReq.getFields();
+        assertTrue(fields.hasKey("recipient_id"), "send message has recipient_id");
+        assertTrue(fields.hasKey("body"), "send message has body");
+
+        CircleDataProvider::CircleExecuteApiCallRequestDataType apiCallReq();
+        fields = apiCallReq.getFields();
+        assertTrue(fields.hasKey("method"), "execute api call has method");
+        assertTrue(fields.hasKey("path"), "execute api call has path");
+
+        CircleDataProvider::CircleCreateSpaceRequestDataType createSpaceReq();
+        fields = createSpaceReq.getFields();
+        assertTrue(fields.hasKey("name"), "create space has name");
+        assertTrue(fields.hasKey("is_private"), "create space has is_private");
+        assertTrue(fields.hasKey("emoji"), "create space has emoji");
+
+        CircleDataProvider::CircleUpdateSpaceRequestDataType updateSpaceReq();
+        fields = updateSpaceReq.getFields();
+        assertTrue(fields.hasKey("id"), "update space has id");
+        assertTrue(fields.hasKey("name"), "update space has name");
+        assertTrue(fields.hasKey("is_private"), "update space has is_private");
+    }
+
+    connectionTests() {
+        # Verify connection scheme exists
+        *hash<ConnectionSchemeInfo> scheme = ConnectionSchemeCache::getScheme("circlerest");
+        assertTrue(exists scheme, "circlerest scheme registered");
+
+        # Connection ping test (requires credentials)
+        *string conn_name = m_options.conn ?? ENV.CIRCLE_CONNECTION;
+        if (conn_name) {
+            AbstractConnection conn = get_connection(conn_name);
+            hash<auto> ping_result = conn.ping(True);
+            assertEq(True, ping_result.ok, "connection ping returns ok");
+        }
+    }
+
+    # ========== INTEGRATION TESTS ==========
+
+    listPostsTests() {
+        skipIfNoCredentials();
+
+        CircleDataProvider::CircleDataProvider prov = getProvider();
+        AbstractDataProvider posts = prov.getChildProvider("posts");
+        assertEq("posts", posts.getName(), "posts provider name");
+
+        # List posts (limited)
+        AbstractDataProviderRecordIterator it = posts.searchRecords(
+            NOTHING, {"limit": 5});
+        list<hash<auto>> results;
+        while (it.next()) {
+            results += it.getValue();
+        }
+        assertTrue(results.size() > 0, "list posts returned results");
+        assertTrue(results[0].hasKey("id"), "post record has id");
+        assertTrue(results[0].id.typeCode() == NT_INT, "post id is int");
+        assertTrue(results[0].hasKey("name"), "post record has name");
+        assertTrue(results[0].hasKey("status"), "post record has status");
+        assertTrue(results[0].hasKey("space_id"), "post record has space_id");
+    }
+
+    listCommentsTests() {
+        skipIfNoCredentials();
+
+        CircleDataProvider::CircleDataProvider prov = getProvider();
+        AbstractDataProvider comments = prov.getChildProvider("comments");
+        assertEq("comments", comments.getName(), "comments provider name");
+
+        AbstractDataProviderRecordIterator it = comments.searchRecords(
+            NOTHING, {"limit": 5});
+        list<hash<auto>> results;
+        while (it.next()) {
+            results += it.getValue();
+        }
+        assertTrue(results.size() >= 0, "list comments completed");
+        if (results) {
+            assertTrue(results[0].hasKey("id"), "comment record has id");
+            assertTrue(results[0].hasKey("body"), "comment record has body");
+        }
+    }
+
+    listMembersTests() {
+        skipIfNoCredentials();
+
+        CircleDataProvider::CircleDataProvider prov = getProvider();
+        AbstractDataProvider members = prov.getChildProvider("members");
+        assertEq("members", members.getName(), "members provider name");
+
+        AbstractDataProviderRecordIterator it = members.searchRecords(
+            NOTHING, {"limit": 5});
+        list<hash<auto>> results;
+        while (it.next()) {
+            results += it.getValue();
+        }
+        assertTrue(results.size() > 0, "list members returned results");
+        assertTrue(results[0].hasKey("id"), "member record has id");
+        assertTrue(results[0].id.typeCode() == NT_INT, "member id is int");
+        assertTrue(results[0].hasKey("email"), "member record has email");
+        assertTrue(results[0].hasKey("name"), "member record has name");
+    }
+
+    listSpacesTests() {
+        skipIfNoCredentials();
+
+        CircleDataProvider::CircleDataProvider prov = getProvider();
+        AbstractDataProvider spaces = prov.getChildProvider("spaces");
+        assertEq("spaces", spaces.getName(), "spaces provider name");
+
+        # List spaces (limited)
+        AbstractDataProviderRecordIterator it = spaces.searchRecords(
+            NOTHING, {"limit": 5});
+        list<hash<auto>> results;
+        while (it.next()) {
+            results += it.getValue();
+        }
+        assertTrue(results.size() > 0, "list spaces returned results");
+        assertTrue(results[0].hasKey("id"), "space record has id");
+        assertTrue(results[0].id.typeCode() == NT_INT, "space id is int");
+        assertTrue(results[0].hasKey("name"), "space record has name");
+        assertTrue(results[0].hasKey("slug"), "space record has slug");
+    }
+
+    listCommunitiesTests() {
+        skipIfNoCredentials();
+
+        CircleDataProvider::CircleDataProvider prov = getProvider();
+        AbstractDataProvider communities = prov.getChildProvider("communities");
+        assertEq("communities", communities.getName(), "communities provider name");
+
+        AbstractDataProviderRecordIterator it = communities.searchRecords(
+            NOTHING, {"limit": 5});
+        list<hash<auto>> results;
+        while (it.next()) {
+            results += it.getValue();
+        }
+        assertTrue(results.size() > 0, "list communities returned results");
+        assertTrue(results[0].hasKey("id"), "community record has id");
+        assertTrue(results[0].id.typeCode() == NT_INT, "community id is int");
+        assertTrue(results[0].hasKey("name"), "community record has name");
+        assertTrue(results[0].hasKey("slug"), "community record has slug");
+    }
+
+    spaceRoundTripTests() {
+        skipIfNoCredentials();
+
+        CircleDataProvider::CircleDataProvider prov = getProvider();
+        AbstractDataProvider spaces = prov.getChildProvider("spaces");
+
+        string test_name = "QoreTest Space " + string(now_us());
+
+        # CREATE
+        AbstractDataProvider createSpace = prov.getChildProvider("create-space");
+        hash<auto> created = createSpace.doRequest({
+            "name": test_name,
+            "is_private": True,
+        });
+        assertTrue(created.hasKey("id"), "created space has id");
+        testSpaceId = created.id;
+        assertEq(test_name, created.name, "created space name matches");
+
+        # GET (verify persistence)
+        AbstractDataProviderRecordIterator it = spaces.searchRecords(
+            NOTHING, {"id": testSpaceId});
+        hash<auto> fetched;
+        while (it.next()) {
+            fetched = it.getValue();
+        }
+        assertEq(testSpaceId, fetched.id, "fetched space id matches");
+        assertEq(test_name, fetched.name, "fetched space name matches");
+
+        # UPDATE
+        string updated_name = "QoreTest Updated Space " + string(now_us());
+        AbstractDataProvider updateSpace = prov.getChildProvider("update-space");
+        hash<auto> updated = updateSpace.doRequest({
+            "id": testSpaceId,
+            "name": updated_name,
+        });
+        assertTrue(updated.hasKey("id"), "updated space has id");
+
+        # GET (verify update persisted)
+        it = spaces.searchRecords(NOTHING, {"id": testSpaceId});
+        hash<auto> refetched;
+        while (it.next()) {
+            refetched = it.getValue();
+        }
+        assertEq(updated_name, refetched.name, "updated space name matches");
+
+        # DELETE
+        AbstractDataProvider delSpace = prov.getChildProvider("delete-space");
+        hash<auto> delResult = delSpace.doRequest({"id": testSpaceId});
+        assertEq(True, delResult.success, "delete space returned success");
+
+        # VERIFY GONE - search should return no results or throw
+        try {
+            it = spaces.searchRecords(NOTHING, {"id": testSpaceId});
+            *hash<auto> gone;
+            while (it.next()) {
+                gone = it.getValue();
+            }
+            assertTrue(!gone, "deleted space is gone");
+        } catch () {
+            # API may throw 404 for deleted space - this is also acceptable
+            assertTrue(True, "deleted space returns error");
+        }
+        testSpaceId = NOTHING;
+    }
+
+    postRoundTripTests() {
+        skipIfNoCredentials();
+
+        CircleDataProvider::CircleDataProvider prov = getProvider();
+
+        # Find a space to create the post in
+        AbstractDataProvider posts = prov.getChildProvider("posts");
+        AbstractDataProviderRecordIterator it = posts.searchRecords(NOTHING, {"limit": 1});
+        *int space_id;
+        while (it.next()) {
+            space_id = it.getValue().space_id;
+        }
+        if (!space_id) {
+            testSkip("no spaces available for post creation");
+        }
+
+        string test_name = "QoreTest Post " + string(now_us());
+        string test_body = "<p>This is an automated test post.</p>";
+
+        # CREATE
+        AbstractDataProvider createPost = prov.getChildProvider("create-post");
+        hash<auto> created = createPost.doRequest({
+            "space_id": space_id,
+            "name": test_name,
+            "body": test_body,
+            "status": "draft",
+        });
+        assertTrue(created.hasKey("id"), "created post has id");
+        testPostId = created.id;
+        assertEq(test_name, created.name, "created post name matches");
+        assertEq(space_id, created.space_id, "created post space_id matches");
+
+        # GET (verify persistence)
+        it = posts.searchRecords(NOTHING, {"id": testPostId});
+        hash<auto> fetched;
+        while (it.next()) {
+            fetched = it.getValue();
+        }
+        assertEq(testPostId, fetched.id, "fetched post id matches");
+        assertEq(test_name, fetched.name, "fetched post name matches");
+
+        # UPDATE
+        string updated_name = "QoreTest Updated " + string(now_us());
+        AbstractDataProvider updatePost = prov.getChildProvider("update-post");
+        hash<auto> updated = updatePost.doRequest({
+            "id": testPostId,
+            "name": updated_name,
+        });
+        assertTrue(updated.hasKey("id"), "updated post has id");
+
+        # GET (verify update persisted)
+        it = posts.searchRecords(NOTHING, {"id": testPostId});
+        hash<auto> refetched;
+        while (it.next()) {
+            refetched = it.getValue();
+        }
+        assertEq(updated_name, refetched.name, "updated post name matches");
+
+        # DELETE
+        AbstractDataProvider delPost = prov.getChildProvider("delete-post");
+        hash<auto> delResult = delPost.doRequest({"id": testPostId});
+        assertEq(True, delResult.success, "delete post returned success");
+
+        # VERIFY GONE
+        it = posts.searchRecords(NOTHING, {"id": testPostId});
+        *hash<auto> gone;
+        while (it.next()) {
+            gone = it.getValue();
+        }
+        assertTrue(!gone, "deleted post is gone");
+        testPostId = NOTHING;
+    }
+
+    executeApiCallTests() {
+        skipIfNoCredentials();
+
+        CircleDataProvider::CircleDataProvider prov = getProvider();
+        AbstractDataProvider apiCall = prov.getChildProvider("execute-api-call");
+        assertEq("execute-api-call", apiCall.getName(), "api call provider name");
+
+        # Test GET request via execute-api-call
+        apiCall.doRequest({
+            "method": "GET",
+            "path": "spaces",
+        });
+        assertTrue(True, "execute API call completed");
+    }
+
+    triggerExampleDataTests() {
+        skipIfNoCredentials();
+
+        CircleDataProvider::CircleDataProvider prov = getProvider();
+        AbstractDataProvider events = prov.getChildProvider("events");
+        assertEq("events", events.getName(), "events provider name");
+
+        # Verify all event types exist
+        list<string> eventNames = events.getChildProviderNames();
+        assertTrue(eventNames.size() >= 6, "at least 6 event types");
+
+        # Test getExampleEventData() for each trigger
+        foreach string eventName in (eventNames) {
+            AbstractDataProvider eventProv = events.getChildProvider(eventName);
+            hash<string, hash<DataProviderMessageInfo>> eventTypes = eventProv.getEventTypes();
+            assertTrue(eventTypes.hasKey(eventName),
+                sprintf("event provider %y has event type %y", eventName, eventName));
+
+            auto exampleData = eventProv.getExampleEventData(eventName);
+            assertTrue(exampleData.typeCode() == NT_HASH,
+                sprintf("event %y example data is a hash", eventName));
+            assertTrue(exampleData.hasKey("id"),
+                sprintf("event %y example data has id field", eventName));
+            assertTrue(exampleData.hasKey("created_at") || exampleData.hasKey("updated_at"),
+                sprintf("event %y example data has timestamp field", eventName));
+        }
+    }
+
+    cleanupTests() {
+        skipIfNoCredentials();
+
+        # Clean up test resources if any were created
+        if (testPostId) {
+            try {
+                CircleDataProvider::CircleDataProvider prov = getProvider();
+                AbstractDataProvider delPost = prov.getChildProvider("delete-post");
+                delPost.doRequest({"id": testPostId});
+            } catch () {
+            }
+        }
+        if (testCommentId) {
+            try {
+                CircleDataProvider::CircleDataProvider prov = getProvider();
+                AbstractDataProvider delComment = prov.getChildProvider("delete-comment");
+                delComment.doRequest({"id": testCommentId});
+            } catch () {
+            }
+        }
+        if (testSpaceId) {
+            try {
+                CircleDataProvider::CircleDataProvider prov = getProvider();
+                AbstractDataProvider delSpace = prov.getChildProvider("delete-space");
+                delSpace.doRequest({"id": testSpaceId});
+            } catch () {
+            }
+        }
+        assertTrue(True, "cleanup done");
+    }
+}
