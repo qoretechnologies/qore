@@ -754,10 +754,12 @@ extern "C" DLLEXPORT void qore_rt_uninstantiate_closure_block_exit(LocalVar* var
     if (!var) {
         return;
     }
-    // Block scope exit: clear CVV value unconditionally to trigger
-    // deterministic destruction even when closures hold extra refs
+    // Clear the CVV value only when nothing else holds the CVV (refs==1);
+    // this matches qore_rt_uninstantiate_local and avoids corrupting captured
+    // values visible to long-running closures (e.g. background threads).
+    // Cycle collection through closure captures is handled by DGC.
     ClosureVarValue* cvv = thread_try_find_closure_var(var->getName());
-    if (cvv) {
+    if (cvv && cvv->references.load(std::memory_order_acquire) == 1) {
         cvv->clearValue(xsink);
     }
     var->uninstantiate(xsink);

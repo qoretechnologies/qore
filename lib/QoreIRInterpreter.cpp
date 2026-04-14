@@ -5149,10 +5149,13 @@ load_local_done:
                                         }
                                     }
                                     cvval.discard(xsink);
-                                    // Block exit: clear unconditionally (variable leaving scope)
-                                    // Loop body: only clear when CVV refcount==1
-                                    if (local_inst->is_block_exit
-                                        || cvv->references.load(std::memory_order_acquire) == 1) {
+                                    // Clear CVV value ONLY when refcount==1 (no outliving
+                                    // closures hold the CVV). DGC cycle detection (post-p27
+                                    // cvec/cmap dedupe) handles the case where closures
+                                    // cyclically reference the stored value; unconditional
+                                    // clearing here would corrupt captured values visible
+                                    // to long-running closures (e.g. background threads).
+                                    if (cvv->references.load(std::memory_order_acquire) == 1) {
                                         cvv->clearValue(xsink);
                                     }
                                 }
@@ -5256,11 +5259,11 @@ load_local_done:
                                     }
                                     cvval.discard(xsink);
                                 }
-                                // 3. clearValue triggers destructor
-                                // Block exit: clear unconditionally (variable leaving scope)
-                                // Loop body: only clear when CVV refcount==1
-                                if (local_inst->is_block_exit
-                                    || cvv->references.load(std::memory_order_acquire) == 1) {
+                                // 3. clearValue triggers destructor when the CVV is about
+                                // to be deleted. Only clear when refs==1 so outliving
+                                // closures (e.g. captured on a background thread) still
+                                // see the captured value; DGC handles cycle collection.
+                                if (cvv->references.load(std::memory_order_acquire) == 1) {
                                     cvv->clearValue(xsink);
                                 }
                             }
