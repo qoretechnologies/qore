@@ -81,9 +81,13 @@ public class FirecrawlRestClientBase {
         #! Default Firecrawl REST API URL
         const DefaultUrl = "https://api.firecrawl.dev";
 
+        #! Default API version
+        const DefaultApiVersion = "v2";
+
         #! Default constructor options
         const DefaultOptions = {
             "url": DefaultUrl,
+            "default_path": "/" + DefaultApiVersion,
         };
 
         #! Default ping method
@@ -95,7 +99,8 @@ public class FirecrawlRestClientBase {
         };
 
         #! Default ping path - uses credit-usage endpoint for connectivity and auth check
-        const DefaultPingPath = "v2/team/credit-usage";
+        #! Relative to default_path (/v2), so resolves to /v2/team/credit-usage
+        const DefaultPingPath = "team/credit-usage";
     }
 
     #! Returns options for the FirecrawlRestClient constructor
@@ -247,7 +252,16 @@ public class FirecrawlRestConnection inherits RestClient::RestConnection {
         @throw CONNECTION-OPTION-ERROR missing or invalid connection option or attribute
     */
     constructor(hash<auto> config, *hash<auto> attr)
-            : RestConnection(config + (exists config.url ? {} : {"url": DefaultUrl}), attr) {
+            : RestConnection(FirecrawlRestConnection::getConfig(config), attr) {
+    }
+
+    #! Returns the config hash with the correct URL
+    /** Firecrawl has a single fixed API endpoint, so the URL is always overridden
+    */
+    private static hash<auto> getConfig(hash<auto> config) {
+        # Firecrawl has a single fixed API endpoint — always override
+        config.url = DefaultUrl;
+        return config;
     }
 
     #! Returns \c "firecrawlrest"

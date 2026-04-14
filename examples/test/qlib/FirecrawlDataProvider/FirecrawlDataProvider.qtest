@@ -437,6 +437,31 @@ public class FirecrawlDataProviderTest inherits QUnit::Test {
         assertTrue(colorsFields.hasKey("warning"));
         assertTrue(colorsFields.hasKey("error"));
 
+        FirecrawlDataProvider::FirecrawlBrandingFontFamiliesDataType fontFamiliesType();
+        hash<string, AbstractDataField> fontFamiliesFields = fontFamiliesType.getFields();
+        assertTrue(fontFamiliesFields.hasKey("primary"));
+        assertTrue(fontFamiliesFields.hasKey("heading"));
+        assertTrue(fontFamiliesFields.hasKey("code"));
+
+        FirecrawlDataProvider::FirecrawlBrandingFontSizesDataType fontSizesType();
+        hash<string, AbstractDataField> fontSizesFields = fontSizesType.getFields();
+        assertTrue(fontSizesFields.hasKey("h1"));
+        assertTrue(fontSizesFields.hasKey("h2"));
+        assertTrue(fontSizesFields.hasKey("h3"));
+        assertTrue(fontSizesFields.hasKey("body"));
+
+        FirecrawlDataProvider::FirecrawlBrandingFontWeightsDataType fontWeightsType();
+        hash<string, AbstractDataField> fontWeightsFields = fontWeightsType.getFields();
+        assertTrue(fontWeightsFields.hasKey("light"));
+        assertTrue(fontWeightsFields.hasKey("regular"));
+        assertTrue(fontWeightsFields.hasKey("medium"));
+        assertTrue(fontWeightsFields.hasKey("bold"));
+
+        FirecrawlDataProvider::FirecrawlBrandingLineHeightsDataType lineHeightsType();
+        hash<string, AbstractDataField> lineHeightsFields = lineHeightsType.getFields();
+        assertTrue(lineHeightsFields.hasKey("heading"));
+        assertTrue(lineHeightsFields.hasKey("body"));
+
         FirecrawlDataProvider::FirecrawlBrandingTypographyDataType typographyType();
         hash<string, AbstractDataField> typographyFields = typographyType.getFields();
         assertTrue(typographyFields.hasKey("fontFamilies"));
@@ -450,6 +475,13 @@ public class FirecrawlDataProviderTest inherits QUnit::Test {
         assertTrue(spacingFields.hasKey("borderRadius"));
         assertTrue(spacingFields.hasKey("padding"));
         assertTrue(spacingFields.hasKey("margins"));
+
+        FirecrawlDataProvider::FirecrawlBrandingButtonStyleDataType buttonStyleType();
+        hash<string, AbstractDataField> buttonStyleFields = buttonStyleType.getFields();
+        assertTrue(buttonStyleFields.hasKey("background"));
+        assertTrue(buttonStyleFields.hasKey("textColor"));
+        assertTrue(buttonStyleFields.hasKey("borderColor"));
+        assertTrue(buttonStyleFields.hasKey("borderRadius"));
 
         FirecrawlDataProvider::FirecrawlBrandingComponentsDataType componentsType();
         hash<string, AbstractDataField> componentsFields = componentsType.getFields();

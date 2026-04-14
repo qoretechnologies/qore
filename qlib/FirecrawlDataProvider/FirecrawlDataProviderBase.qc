@@ -83,15 +83,8 @@ public class FirecrawlDataProviderBase inherits DataProvider::AbstractDataProvid
                 throw "CONSTRUCTOR-ERROR", "missing 'apikey' argument for Firecrawl API communication";
             }
             hash<auto> opts = copts.restclient_options ?? {};
-            opts += {
-                "url": "https://api.firecrawl.dev",
-                "default_path": "/v2",
-                "data": "json",
-                "headers": {
-                    "Authorization": "Bearer " + copts.apikey,
-                },
-            };
-            rest = new RestClientIo::RestClientIo(opts);
+            opts.apikey = copts.apikey;
+            rest = new FirecrawlRestClient::FirecrawlRestClientIo(opts);
         }
     }
 

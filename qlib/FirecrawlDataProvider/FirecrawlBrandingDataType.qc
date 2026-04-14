@@ -99,6 +99,140 @@ public class FirecrawlBrandingColorsDataType inherits HashDataType {
     }
 }
 
+#! Font family assignments type for Firecrawl branding responses
+public class FirecrawlBrandingFontFamiliesDataType inherits HashDataType {
+    public {
+        #! Field definitions
+        const Fields = {
+            "primary": {
+                "display_name": "Primary",
+                "short_desc": "Primary font family",
+                "desc": "Primary font family used for body text",
+                "type": StringOrNothingType,
+            },
+            "heading": {
+                "display_name": "Heading",
+                "short_desc": "Heading font family",
+                "desc": "Font family used for headings",
+                "type": StringOrNothingType,
+            },
+            "code": {
+                "display_name": "Code",
+                "short_desc": "Code font family",
+                "desc": "Monospace font family used for code blocks",
+                "type": StringOrNothingType,
+            },
+        };
+    }
+
+    #! Creates the type
+    constructor(*Type base_type) : HashDataType(base_type ?? AutoHashType) {
+        addQoreFields(Fields);
+    }
+}
+
+#! Font size settings type for Firecrawl branding responses
+public class FirecrawlBrandingFontSizesDataType inherits HashDataType {
+    public {
+        #! Field definitions
+        const Fields = {
+            "h1": {
+                "display_name": "H1",
+                "short_desc": "Heading 1 font size",
+                "desc": "Font size for `h1` headings",
+                "type": StringOrNothingType,
+            },
+            "h2": {
+                "display_name": "H2",
+                "short_desc": "Heading 2 font size",
+                "desc": "Font size for `h2` headings",
+                "type": StringOrNothingType,
+            },
+            "h3": {
+                "display_name": "H3",
+                "short_desc": "Heading 3 font size",
+                "desc": "Font size for `h3` headings",
+                "type": StringOrNothingType,
+            },
+            "body": {
+                "display_name": "Body",
+                "short_desc": "Body text font size",
+                "desc": "Font size for body text",
+                "type": StringOrNothingType,
+            },
+        };
+    }
+
+    #! Creates the type
+    constructor(*Type base_type) : HashDataType(base_type ?? AutoHashType) {
+        addQoreFields(Fields);
+    }
+}
+
+#! Font weight settings type for Firecrawl branding responses
+public class FirecrawlBrandingFontWeightsDataType inherits HashDataType {
+    public {
+        #! Field definitions
+        const Fields = {
+            "light": {
+                "display_name": "Light",
+                "short_desc": "Light font weight",
+                "desc": "Font weight value for light text",
+                "type": SoftIntOrNothingType,
+            },
+            "regular": {
+                "display_name": "Regular",
+                "short_desc": "Regular font weight",
+                "desc": "Font weight value for regular text",
+                "type": SoftIntOrNothingType,
+            },
+            "medium": {
+                "display_name": "Medium",
+                "short_desc": "Medium font weight",
+                "desc": "Font weight value for medium text",
+                "type": SoftIntOrNothingType,
+            },
+            "bold": {
+                "display_name": "Bold",
+                "short_desc": "Bold font weight",
+                "desc": "Font weight value for bold text",
+                "type": SoftIntOrNothingType,
+            },
+        };
+    }
+
+    #! Creates the type
+    constructor(*Type base_type) : HashDataType(base_type ?? AutoHashType) {
+        addQoreFields(Fields);
+    }
+}
+
+#! Line height settings type for Firecrawl branding responses
+public class FirecrawlBrandingLineHeightsDataType inherits HashDataType {
+    public {
+        #! Field definitions
+        const Fields = {
+            "heading": {
+                "display_name": "Heading",
+                "short_desc": "Heading line height",
+                "desc": "Line height value for headings",
+                "type": StringOrNothingType,
+            },
+            "body": {
+                "display_name": "Body",
+                "short_desc": "Body line height",
+                "desc": "Line height value for body text",
+                "type": StringOrNothingType,
+            },
+        };
+    }
+
+    #! Creates the type
+    constructor(*Type base_type) : HashDataType(base_type ?? AutoHashType) {
+        addQoreFields(Fields);
+    }
+}
+
 #! Typography settings type for Firecrawl branding responses
 public class FirecrawlBrandingTypographyDataType inherits HashDataType {
     public {
@@ -108,25 +242,25 @@ public class FirecrawlBrandingTypographyDataType inherits HashDataType {
                 "display_name": "Font Families",
                 "short_desc": "Font family assignments",
                 "desc": "Font family assignments with `primary`, `heading`, and `code` keys",
-                "type": AutoHashOrNothingType,
+                "type": new FirecrawlBrandingFontFamiliesDataType(AutoHashOrNothingType),
             },
             "fontSizes": {
                 "display_name": "Font Sizes",
                 "short_desc": "Font sizes by heading level",
                 "desc": "Font sizes with `h1`, `h2`, `h3`, and `body` keys",
-                "type": AutoHashOrNothingType,
+                "type": new FirecrawlBrandingFontSizesDataType(AutoHashOrNothingType),
             },
             "fontWeights": {
                 "display_name": "Font Weights",
                 "short_desc": "Font weight values",
                 "desc": "Font weight values with `light`, `regular`, `medium`, and `bold` keys",
-                "type": AutoHashOrNothingType,
+                "type": new FirecrawlBrandingFontWeightsDataType(AutoHashOrNothingType),
             },
             "lineHeights": {
                 "display_name": "Line Heights",
                 "short_desc": "Line height values",
                 "desc": "Line height values with `heading` and `body` keys",
-                "type": AutoHashOrNothingType,
+                "type": new FirecrawlBrandingLineHeightsDataType(AutoHashOrNothingType),
             },
         };
     }
@@ -175,6 +309,44 @@ public class FirecrawlBrandingSpacingDataType inherits HashDataType {
     }
 }
 
+#! Button style type for Firecrawl branding responses
+public class FirecrawlBrandingButtonStyleDataType inherits HashDataType {
+    public {
+        #! Field definitions
+        const Fields = {
+            "background": {
+                "display_name": "Background",
+                "short_desc": "Button background color",
+                "desc": "Button background color as a hex value or CSS value",
+                "type": StringOrNothingType,
+            },
+            "textColor": {
+                "display_name": "Text Color",
+                "short_desc": "Button text color",
+                "desc": "Button text color as a hex value",
+                "type": StringOrNothingType,
+            },
+            "borderColor": {
+                "display_name": "Border Color",
+                "short_desc": "Button border color",
+                "desc": "Button border color as a hex value",
+                "type": StringOrNothingType,
+            },
+            "borderRadius": {
+                "display_name": "Border Radius",
+                "short_desc": "Button border radius",
+                "desc": "Button border radius value",
+                "type": StringOrNothingType,
+            },
+        };
+    }
+
+    #! Creates the type
+    constructor(*Type base_type) : HashDataType(base_type ?? AutoHashType) {
+        addQoreFields(Fields);
+    }
+}
+
 #! UI component styles type for Firecrawl branding responses
 public class FirecrawlBrandingComponentsDataType inherits HashDataType {
     public {
@@ -185,14 +357,14 @@ public class FirecrawlBrandingComponentsDataType inherits HashDataType {
                 "short_desc": "Primary button styles",
                 "desc": "Primary button styles including `background`, `textColor`, "
                     "and `borderRadius`",
-                "type": AutoHashOrNothingType,
+                "type": new FirecrawlBrandingButtonStyleDataType(AutoHashOrNothingType),
             },
             "buttonSecondary": {
                 "display_name": "Secondary Button",
                 "short_desc": "Secondary button styles",
                 "desc": "Secondary button styles including `background`, `textColor`, "
                     "`borderColor`, and `borderRadius`",
-                "type": AutoHashOrNothingType,
+                "type": new FirecrawlBrandingButtonStyleDataType(AutoHashOrNothingType),
             },
             "input": {
                 "display_name": "Input",

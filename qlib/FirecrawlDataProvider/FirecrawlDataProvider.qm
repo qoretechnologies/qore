@@ -31,6 +31,7 @@
 # enable all warnings
 
 %requires(reexport) DataProvider
+%requires(reexport) FirecrawlRestClient
 %requires(reexport) RestClientIo
 %requires json
 
