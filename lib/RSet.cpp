@@ -205,28 +205,54 @@ int RSet::canDelete(int ref_copy, int rcount) {
     if (!valid)
         return -1;
 
+    bool need_rescan = false;
     {
         QoreAutoRWReadLocker al(rwl);
         if (!valid)
             return -1;
 
-        // to avoid race conditions, we only delete in the thread where the references == rcount for the current
-        // object
-        if (ref_copy != rcount)
+        // Invariant: rcount <= refs for every rset member. This is enforced at
+        // scan time by RSetHelper. A post-scan violation means an intra-rset
+        // edge was removed (e.g., a hash or data-member cleared) without
+        // decrementing the target's rcount — rcount is now stale and the rset
+        // must be rescanned before any collection decision can be made.
+        // Without this rescan, a genuinely collectable cycle can be silently
+        // stranded forever once any in-cycle ref drops.
+        if (ref_copy < rcount) {
+            need_rescan = true;
+        } else if (ref_copy != rcount) {
+            // ref_copy > rcount: the triggering object has live external refs
+            // outside the cycle — can't delete from this thread.
             return 0;
-
-        for (rset_t::iterator i = begin(), e = end(); i != e; ++i) {
-            // we do not need to lock the object here; if there are no external references, then no external changes can be made
-            if (!(*i)->isValid())
-                return 0;
-            if ((*i)->rcount != (*i)->refs()) {
-                printd(QRO_LVL, "RSet::canDelete() this: %p cannot delete graph obj %p '%s' rcount: %d refs: %d\n",
-                    this, *i, (*i)->getName(), (*i)->rcount, (*i)->refs());
-                return 0;
+        } else {
+            for (rset_t::iterator i = begin(), e = end(); i != e; ++i) {
+                // no locking needed: if there are no external references, no external changes can be made
+                if (!(*i)->isValid())
+                    return 0;
+                int r = (*i)->refs();
+                if ((*i)->rcount > r) {
+                    // stale rcount — rset needs rescan
+                    need_rescan = true;
+                    break;
+                }
+                if ((*i)->rcount != r) {
+                    printd(QRO_LVL, "RSet::canDelete() this: %p cannot delete graph obj %p '%s' rcount: %d "
+                        "refs: %d\n", this, *i, (*i)->getName(), (*i)->rcount, r);
+                    return 0;
+                }
+                printd(QRO_LVL, "RSet::canDelete() this: %p can delete graph obj %p '%s' rcount: %d refs: %d\n",
+                    this, *i, (*i)->getName(), (*i)->rcount, r);
             }
-            printd(QRO_LVL, "RSet::canDelete() this: %p can delete graph obj %p '%s' rcount: %d refs: %d\n", this, *i,
-                (*i)->getName(), (*i)->rcount, (*i)->refs());
         }
+    }
+
+    if (need_rescan) {
+        // invalidate rset and signal caller to rescan
+        QoreAutoRWWriteLocker al(rwl);
+        if (!valid)
+            return -1;
+        invalidateIntern();
+        return -1;
     }
 
     // invalidate the rset
