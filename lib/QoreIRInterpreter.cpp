@@ -6741,7 +6741,64 @@ load_local_done:
                     }
                     // navigatePath failed without exception: parent doesn't exist, skip
                 } else if (is_remove) {
-                    // Single-step path: navigate to the variable itself and clear
+                    // Single-step path: navigate to the variable itself and clear.
+                    //
+                    // Special case: if the variable holds a ReferenceNode (e.g.
+                    // `reference<hash> r = \h.b; delete r;`), delegate to the AST
+                    // LValueRemoveHelper on the reference — it dispatches through the
+                    // reference's vexp to the correct container-level removal (hash
+                    // takeKeyValue / list setEntry), matching AST semantics. Bare
+                    // lvh.remove() on a reference-target only clears the slot and leaves
+                    // the hash key behind; AST fallback here would trigger a spurious
+                    // re-run of the function body (execute() returning false without an
+                    // exception).
+                    if (path_inst->path.size() == 1
+                        && (path_inst->path[0].kind == LVPathStepKind::LocalVar
+                            || path_inst->path[0].kind == LVPathStepKind::ClosureVar)) {
+                        const LocalVar* lv = static_cast<const LocalVar*>(path_inst->path[0].ref_ptr);
+                        // Peek at the raw slot value (LocalVarValue / ClosureVarValue) to
+                        // detect a ReferenceNode — lv->eval() would dereference through the
+                        // reference's vexp and hide the NT_REFERENCE marker. Use the variable's
+                        // closure_use flag (NOT the LVPath step kind) to pick the right stack,
+                        // since for VT_LOCAL_TS the path kind is LocalVar but the CVV lives on
+                        // cvstack; thread_find_lvar would walk past the lvstack root and crash.
+                        ReferenceNode* ref = nullptr;
+                        if (lv) {
+                            if (!lv->closureUse()) {
+                                LocalVarValue* lvv = thread_find_lvar(lv->getName());
+                                if (lvv && lvv->val.getType() == NT_REFERENCE) {
+                                    ref = reinterpret_cast<ReferenceNode*>(lvv->val.v.n);
+                                }
+                            } else {
+                                ClosureVarValue* cvv = thread_try_find_closure_var(lv->getName());
+                                if (!cvv) {
+                                    cvv = thread_try_get_runtime_closure_var(lv);
+                                }
+                                if (cvv && cvv->val.getType() == NT_REFERENCE) {
+                                    ref = reinterpret_cast<ReferenceNode*>(cvv->val.v.n);
+                                }
+                            }
+                        }
+                        if (ref) {
+                            bool is_delete = (path_inst->unary_op == LVUnaryOp::Delete);
+                            LValueRemoveHelper lvrh(*ref, xsink, is_delete);
+                            if (lvrh && !*xsink) {
+                                if (is_delete) {
+                                    lvrh.deleteLValue();
+                                    res = QoreValue();
+                                } else {
+                                    res = lvrh.removeValue();
+                                }
+                            }
+                            if (*xsink) {
+                                cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                                cleanupLocalCaches();
+                                return false;
+                            }
+                            goto single_step_remove_done;
+                        }
+                    }
+                    {
                     LValueHelper lvh(xsink);
                     if (lvh.navigatePath(path_inst->path.data(), path_inst->path.size(), true)) {
                         if (*xsink) {
@@ -6795,6 +6852,8 @@ load_local_done:
                             res = QoreValue();
                         }
                     }
+                    }  // end of LValueHelper scope
+                    single_step_remove_done:;
                 } else {
                     // Pop, Shift, Trim, Chomp use for_remove=true to avoid vivification:
                     // if the target is NOTHING, these should be no-ops rather than creating
