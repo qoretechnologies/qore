@@ -1980,6 +1980,21 @@ int QuicSession::sendStreamData(int64_t stream_id, const void* data, size_t len,
                                  bool end_stream, ExceptionSink* xsink) {
     std::lock_guard<std::recursive_mutex> lock(mtx_);
 
+    // If the peer asked us to stop sending (STOP_SENDING / RESET_STREAM after
+    // an early error response), surface a typed exception rather than silently
+    // appending to a staging buffer that nghttp3 will discard — this is what
+    // lets producer loops break out of an otherwise infinite send.  Mirrors
+    // Http2Session::sendStreamData()'s state==Closed check.
+    {
+        auto sit = streams_.find(stream_id);
+        if (sit != streams_.end() && sit->second->peer_stop_sending) {
+            xsink->raiseException("QUIC-STREAM-RESET",
+                "stream %" PRId64 " was reset by peer (error code %" PRIu64 ")",
+                stream_id, sit->second->peer_close_error_code);
+            return -1;
+        }
+    }
+
     auto it = streaming_body_data_.find(stream_id);
     if (it == streaming_body_data_.end()) {
         printd(1, "QuicSession::sendStreamData() stream_id=" QLLD " NOT FOUND in streaming_body_data_\n",
@@ -3731,6 +3746,20 @@ int QuicSession::h3StopSendingCallback(nghttp3_conn* /* conn */, int64_t stream_
                                         void* conn_user_data,
                                         void* /* stream_user_data */) {
     auto* session = static_cast<QuicSession*>(conn_user_data);
+    // Mark the stream so subsequent sendStreamData() raises a typed
+    // QUIC-STREAM-RESET exception instead of silently appending to a buffer
+    // that nghttp3 will discard.  Without this, a tight producer loop on
+    // top of DataStream-v1 keeps pushing rows after the server has closed
+    // the stream and never observes the failure.
+    {
+        std::lock_guard<std::recursive_mutex> lock(session->mtx_);
+        auto it = session->streams_.find(stream_id);
+        if (it != session->streams_.end()) {
+            it->second->peer_stop_sending = true;
+            it->second->peer_close_error_code = app_error_code;
+            it->second->state = QuicStreamState::Closed;
+        }
+    }
     int rv = ngtcp2_conn_shutdown_stream_read(session->conn_, 0, stream_id, app_error_code);
     // During shutdown, ngtcp2 may have already closed the stream
     if (rv != 0 && rv != NGTCP2_ERR_STREAM_NOT_FOUND) {
@@ -3744,6 +3773,20 @@ int QuicSession::h3ResetStreamCallback(nghttp3_conn* /* conn */, int64_t stream_
                                         void* conn_user_data,
                                         void* /* stream_user_data */) {
     auto* session = static_cast<QuicSession*>(conn_user_data);
+    // RESET_STREAM is the peer's send-side close.  A peer that resets its
+    // own send side after replying with an error response also expects us
+    // to stop sending (the request stream is symmetrical from the peer's
+    // perspective).  Mark the stream closed so sendStreamData() raises a
+    // typed exception — see h3StopSendingCallback() for context.
+    {
+        std::lock_guard<std::recursive_mutex> lock(session->mtx_);
+        auto it = session->streams_.find(stream_id);
+        if (it != session->streams_.end()) {
+            it->second->peer_stop_sending = true;
+            it->second->peer_close_error_code = app_error_code;
+            it->second->state = QuicStreamState::Closed;
+        }
+    }
     int rv = ngtcp2_conn_shutdown_stream_write(session->conn_, 0, stream_id, app_error_code);
     // During shutdown, ngtcp2 may have already closed the stream
     if (rv != 0 && rv != NGTCP2_ERR_STREAM_NOT_FOUND) {
