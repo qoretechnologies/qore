@@ -2586,6 +2586,20 @@ struct qore_httpclient_priv {
         if (it != alt_svc_cache.end()) {
             // 5-minute backoff before retrying QUIC for this origin
             it->second.retry_after_epoch = q_epoch() + 300;
+        } else {
+            // Cache entry may have been erased by disconnectQuic() during
+            // the failed connect attempt.  Insert a backoff-only placeholder
+            // with port=0 so parseAltSvc() preserves the backoff (it keeps
+            // retry_after_epoch when updating existing entries) even if the
+            // next response re-advertises Alt-Svc.  Without this, every
+            // H2/HTTPS request to a server advertising a broken h3 endpoint
+            // would retry QUIC with the 3s timeout — see:
+            // * disconnectQuic() erases cache on any failed connect
+            // * parseAltSvc() re-adds from next response header
+            // * markAltSvcFailed() previously only set backoff if entry present
+            // Result: infinite 3s-per-request loop on H2 keep-alive.
+            alt_svc_cache[origin] = AltSvcEntry{0, q_epoch() + 3600,
+                q_epoch() + 300};
         }
     }
 
