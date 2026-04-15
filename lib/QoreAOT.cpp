@@ -3496,13 +3496,19 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
         hdr.magic = QORE_AOT_BINARY_MAGIC;
         hdr.version = QORE_AOT_BINARY_VERSION;
         hdr.flags = QORE_AOT_FLAG_IS_MODULE;
-        hdr.parse_options_lo = mod_po.getLo();
+        // Use the program's current parse options (after parsing), not the
+        // initial mod_po.  The source may add options via %modern, %new-style,
+        // %require-types, etc; without this, those added options are lost at
+        // module load time and e.g. eval_text's child Program(PO_LOCKDOWN)
+        // wouldn't inherit PO_ALLOW_BARE_REFS from the Util module's %modern.
+        const QoreParseOptions& final_po = qpgm->getParseOptions();
+        hdr.parse_options_lo = final_po.getLo();
         hdr.label_offset = writer.strings.add(label);
         hdr.max_opcode_id = QORE_IR_MAX_OPCODE;
         hdr.qore_version_major = QORE_VERSION_MAJOR;
         hdr.qore_version_minor = QORE_VERSION_MINOR;
         hdr.qore_version_patch = QORE_VERSION_PATCH;
-        hdr.parse_options_hi = mod_po.getHi();
+        hdr.parse_options_hi = final_po.getHi();
         hdr.source_hash = computeSourceHash(label);
         hdr.feature_flags = computeFeatureFlags(compiled_funcs);
 
@@ -3611,7 +3617,11 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
             cf.feature_flags = cif.feature_flags;
             compiled_funcs.push_back(std::move(cf));
         }
-        generateModuleABIV2(ctx, *module, *use_metadata, label, mod_po, mod_info, compiled_funcs);
+        // Pass the program's FINAL parse options (after parsing) so %modern /
+        // %new-style / %require-types / etc added by the source are preserved
+        // at module load time.  mod_po is only the initial seed.
+        generateModuleABIV2(ctx, *module, *use_metadata, label, qpgm->getParseOptions(),
+            mod_info, compiled_funcs);
     }
 
     // Finalize shared debug info after all functions are lowered
@@ -3912,13 +3922,16 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
             hdr.magic = QORE_AOT_BINARY_MAGIC;
             hdr.version = QORE_AOT_BINARY_VERSION;
             hdr.flags = QORE_AOT_FLAG_IS_MODULE;
-            hdr.parse_options_lo = mod_po.getLo();
+            // Use the program's current parse options (after parsing), not the
+            // initial mod_po — see comment in generateModuleBinary().
+            const QoreParseOptions& final_po = qpgm->getParseOptions();
+            hdr.parse_options_lo = final_po.getLo();
             hdr.label_offset = writer.strings.add(qm_path.c_str());
             hdr.max_opcode_id = QORE_IR_MAX_OPCODE;
             hdr.qore_version_major = QORE_VERSION_MAJOR;
             hdr.qore_version_minor = QORE_VERSION_MINOR;
             hdr.qore_version_patch = QORE_VERSION_PATCH;
-            hdr.parse_options_hi = mod_po.getHi();
+            hdr.parse_options_hi = final_po.getHi();
             hdr.source_hash = computeSourceHash(qm_path.c_str());
             hdr.feature_flags = computeFeatureFlags(compiled_funcs);
 
@@ -4028,7 +4041,10 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
                 cf.feature_flags = cif.feature_flags;
                 compiled_funcs.push_back(std::move(cf));
             }
-            generateModuleABIV2(ctx, *module, *use_metadata, qm_path.c_str(), mod_po, mod_info, compiled_funcs);
+            // Pass the program's final parse options — see comment in the
+            // single-file module path.
+            generateModuleABIV2(ctx, *module, *use_metadata, qm_path.c_str(),
+                qpgm->getParseOptions(), mod_info, compiled_funcs);
         }
 
         // Finalize shared debug info after all functions are lowered
