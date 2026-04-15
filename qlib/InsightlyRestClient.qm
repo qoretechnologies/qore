@@ -127,6 +127,7 @@ public class InsightlyRestClientBase {
             "data": DefaultData,
             "default_path": "/" + DefaultApiVersion,
             "headers": DefaultHeaders,
+            "http_version": "1.1",
             "ping_headers": DefaultPingHeaders,
             "ping_method": DefaultPingMethod,
             "ping_path": DefaultPingPath,
@@ -308,6 +309,10 @@ public class InsightlyRestConnection inherits RestClient::RestConnection {
                 "data": RestConnection::ConnectionScheme.options."data"
                 + <ConnectionOptionInfo>{
                     "default_value": InsightlyRestClientBase::DefaultData,
+                },
+                "http_version": RestConnection::ConnectionScheme.options."http_version"
+                + <ConnectionOptionInfo>{
+                    "default_value": "1.1",
                 },
                 "ping_headers": RestConnection::ConnectionScheme.options."ping_headers"
                 + <ConnectionOptionInfo>{

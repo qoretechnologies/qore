@@ -106,6 +106,9 @@ module InsightlyDataProvider {
             "desc": "Delete a contact from Insightly CRM",
             "action_code": DPAT_API,
             "data_provider_info": InsightlyDeleteContactDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return AbstractDataProviderType::get(AutoHashType);
+            },
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 InsightlyDeleteContactRequestDataType::Fields),
         });
@@ -125,6 +128,7 @@ module InsightlyDataProvider {
                     "display_name": "Contact ID",
                     "short_desc": "Get a specific contact",
                     "type": AbstractDataProviderTypeMap."*int",
+                    "ref_data": "contacts",
                 },
                 "skip": <ActionOptionInfo>{
                     "display_name": "Skip",
@@ -167,6 +171,7 @@ module InsightlyDataProvider {
                     "short_desc": "The contact ID",
                     "type": AbstractDataProviderTypeMap."int",
                     "required": True,
+                    "ref_data": "contacts",
                 },
             },
         });
@@ -217,6 +222,9 @@ module InsightlyDataProvider {
             "desc": "Delete an organisation from Insightly CRM",
             "action_code": DPAT_API,
             "data_provider_info": InsightlyDeleteOrganisationDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return AbstractDataProviderType::get(AutoHashType);
+            },
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 InsightlyDeleteOrganisationRequestDataType::Fields),
         });
@@ -235,6 +243,7 @@ module InsightlyDataProvider {
                     "display_name": "Organisation ID",
                     "short_desc": "Get a specific organisation",
                     "type": AbstractDataProviderTypeMap."*int",
+                    "ref_data": "organisations",
                 },
                 "skip": <ActionOptionInfo>{
                     "display_name": "Skip",
@@ -276,6 +285,7 @@ module InsightlyDataProvider {
                     "short_desc": "The organisation ID",
                     "type": AbstractDataProviderTypeMap."int",
                     "required": True,
+                    "ref_data": "organisations",
                 },
             },
         });
@@ -326,6 +336,9 @@ module InsightlyDataProvider {
             "desc": "Delete a lead from Insightly CRM",
             "action_code": DPAT_API,
             "data_provider_info": InsightlyDeleteLeadDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return AbstractDataProviderType::get(AutoHashType);
+            },
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 InsightlyDeleteLeadRequestDataType::Fields),
         });
@@ -344,6 +357,7 @@ module InsightlyDataProvider {
                     "display_name": "Lead ID",
                     "short_desc": "Get a specific lead",
                     "type": AbstractDataProviderTypeMap."*int",
+                    "ref_data": "leads",
                 },
                 "skip": <ActionOptionInfo>{
                     "display_name": "Skip",
@@ -385,6 +399,7 @@ module InsightlyDataProvider {
                     "short_desc": "The lead ID",
                     "type": AbstractDataProviderTypeMap."int",
                     "required": True,
+                    "ref_data": "leads",
                 },
             },
         });
@@ -435,6 +450,9 @@ module InsightlyDataProvider {
             "desc": "Delete an opportunity from Insightly CRM",
             "action_code": DPAT_API,
             "data_provider_info": InsightlyDeleteOpportunityDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return AbstractDataProviderType::get(AutoHashType);
+            },
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 InsightlyDeleteOpportunityRequestDataType::Fields),
         });
@@ -453,6 +471,7 @@ module InsightlyDataProvider {
                     "display_name": "Opportunity ID",
                     "short_desc": "Get a specific opportunity",
                     "type": AbstractDataProviderTypeMap."*int",
+                    "ref_data": "opportunities",
                 },
                 "skip": <ActionOptionInfo>{
                     "display_name": "Skip",
@@ -494,6 +513,7 @@ module InsightlyDataProvider {
                     "short_desc": "The opportunity ID",
                     "type": AbstractDataProviderTypeMap."int",
                     "required": True,
+                    "ref_data": "opportunities",
                 },
             },
         });
@@ -544,6 +564,9 @@ module InsightlyDataProvider {
             "desc": "Delete a project from Insightly CRM",
             "action_code": DPAT_API,
             "data_provider_info": InsightlyDeleteProjectDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return AbstractDataProviderType::get(AutoHashType);
+            },
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 InsightlyDeleteProjectRequestDataType::Fields),
         });
@@ -562,6 +585,7 @@ module InsightlyDataProvider {
                     "display_name": "Project ID",
                     "short_desc": "Get a specific project",
                     "type": AbstractDataProviderTypeMap."*int",
+                    "ref_data": "projects",
                 },
                 "skip": <ActionOptionInfo>{
                     "display_name": "Skip",
@@ -603,6 +627,7 @@ module InsightlyDataProvider {
                     "short_desc": "The project ID",
                     "type": AbstractDataProviderTypeMap."int",
                     "required": True,
+                    "ref_data": "projects",
                 },
             },
         });
@@ -653,6 +678,9 @@ module InsightlyDataProvider {
             "desc": "Delete a task from Insightly CRM",
             "action_code": DPAT_API,
             "data_provider_info": InsightlyDeleteTaskDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return AbstractDataProviderType::get(AutoHashType);
+            },
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 InsightlyDeleteTaskRequestDataType::Fields),
         });
@@ -671,6 +699,7 @@ module InsightlyDataProvider {
                     "display_name": "Task ID",
                     "short_desc": "Get a specific task",
                     "type": AbstractDataProviderTypeMap."*int",
+                    "ref_data": "tasks",
                 },
                 "skip": <ActionOptionInfo>{
                     "display_name": "Skip",
@@ -712,6 +741,7 @@ module InsightlyDataProvider {
                     "short_desc": "The task ID",
                     "type": AbstractDataProviderTypeMap."int",
                     "required": True,
+                    "ref_data": "tasks",
                 },
             },
         });
@@ -762,6 +792,9 @@ module InsightlyDataProvider {
             "desc": "Delete a note from Insightly CRM",
             "action_code": DPAT_API,
             "data_provider_info": InsightlyDeleteNoteDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return AbstractDataProviderType::get(AutoHashType);
+            },
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 InsightlyDeleteNoteRequestDataType::Fields),
         });
@@ -780,6 +813,7 @@ module InsightlyDataProvider {
                     "display_name": "Note ID",
                     "short_desc": "Get a specific note",
                     "type": AbstractDataProviderTypeMap."*int",
+                    "ref_data": "notes",
                 },
                 "skip": <ActionOptionInfo>{
                     "display_name": "Skip",
@@ -821,6 +855,7 @@ module InsightlyDataProvider {
                     "short_desc": "The note ID",
                     "type": AbstractDataProviderTypeMap."int",
                     "required": True,
+                    "ref_data": "notes",
                 },
             },
         });
@@ -871,6 +906,9 @@ module InsightlyDataProvider {
             "desc": "Delete a calendar event from Insightly CRM",
             "action_code": DPAT_API,
             "data_provider_info": InsightlyDeleteCalendarEventDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return AbstractDataProviderType::get(AutoHashType);
+            },
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 InsightlyDeleteCalendarEventRequestDataType::Fields),
         });
@@ -889,6 +927,7 @@ module InsightlyDataProvider {
                     "display_name": "Event ID",
                     "short_desc": "Get a specific event",
                     "type": AbstractDataProviderTypeMap."*int",
+                    "ref_data": "calendar_events",
                 },
                 "skip": <ActionOptionInfo>{
                     "display_name": "Skip",
@@ -930,6 +969,7 @@ module InsightlyDataProvider {
                     "short_desc": "The event ID",
                     "type": AbstractDataProviderTypeMap."int",
                     "required": True,
+                    "ref_data": "calendar_events",
                 },
             },
         });
@@ -980,6 +1020,9 @@ module InsightlyDataProvider {
             "desc": "Delete a product from Insightly CRM",
             "action_code": DPAT_API,
             "data_provider_info": InsightlyDeleteProductDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return AbstractDataProviderType::get(AutoHashType);
+            },
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 InsightlyDeleteProductRequestDataType::Fields),
         });
@@ -998,6 +1041,7 @@ module InsightlyDataProvider {
                     "display_name": "Product ID",
                     "short_desc": "Get a specific product",
                     "type": AbstractDataProviderTypeMap."*int",
+                    "ref_data": "products",
                 },
                 "skip": <ActionOptionInfo>{
                     "display_name": "Skip",
@@ -1039,6 +1083,7 @@ module InsightlyDataProvider {
                     "short_desc": "The product ID",
                     "type": AbstractDataProviderTypeMap."int",
                     "required": True,
+                    "ref_data": "products",
                 },
             },
         });
@@ -1072,6 +1117,9 @@ module InsightlyDataProvider {
             "desc": "Delete an email record from Insightly CRM",
             "action_code": DPAT_API,
             "data_provider_info": InsightlyDeleteEmailDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return AbstractDataProviderType::get(AutoHashType);
+            },
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 InsightlyDeleteEmailRequestDataType::Fields),
         });
@@ -1090,6 +1138,7 @@ module InsightlyDataProvider {
                     "display_name": "Email ID",
                     "short_desc": "Get a specific email",
                     "type": AbstractDataProviderTypeMap."*int",
+                    "ref_data": "emails",
                 },
                 "skip": <ActionOptionInfo>{
                     "display_name": "Skip",
@@ -1131,6 +1180,7 @@ module InsightlyDataProvider {
                     "short_desc": "The email ID",
                     "type": AbstractDataProviderTypeMap."int",
                     "required": True,
+                    "ref_data": "emails",
                 },
             },
         });

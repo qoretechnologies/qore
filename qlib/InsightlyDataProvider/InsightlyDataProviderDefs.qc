@@ -77,6 +77,28 @@ public namespace InsightlyDataProvider {
             "desc": "Visible to the owner's team"},
     );
 
+    #! Allowed values for LINK_SUBJECT_TYPE field (notes)
+    public const LinkSubjectTypeAllowedValues = (
+        <AllowedValueInfo>{"value": "Contact", "display_name": "Contact"},
+        <AllowedValueInfo>{"value": "Lead", "display_name": "Lead"},
+        <AllowedValueInfo>{"value": "Opportunity", "display_name": "Opportunity"},
+        <AllowedValueInfo>{"value": "Organisation", "display_name": "Organisation"},
+        <AllowedValueInfo>{"value": "Project", "display_name": "Project"},
+    );
+
+    #! Allowed values for OBJECT_NAME field (links)
+    public const ObjectNameAllowedValues = (
+        <AllowedValueInfo>{"value": "Contact", "display_name": "Contact"},
+        <AllowedValueInfo>{"value": "Email", "display_name": "Email"},
+        <AllowedValueInfo>{"value": "Event", "display_name": "Event"},
+        <AllowedValueInfo>{"value": "Lead", "display_name": "Lead"},
+        <AllowedValueInfo>{"value": "Note", "display_name": "Note"},
+        <AllowedValueInfo>{"value": "Opportunity", "display_name": "Opportunity"},
+        <AllowedValueInfo>{"value": "Organisation", "display_name": "Organisation"},
+        <AllowedValueInfo>{"value": "Project", "display_name": "Project"},
+        <AllowedValueInfo>{"value": "Task", "display_name": "Task"},
+    );
+
     #! Insightly logo in SVG format (loaded from file)
     public const InsightlyLogo = File::readTextFile(get_script_dir() + "/insightly-logo.svg");
 }

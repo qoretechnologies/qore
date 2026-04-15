@@ -206,11 +206,11 @@ public class InsightlyCreateContactRequestDataType inherits HashDataType {
                 "example_value": "Smith",
             },
             "FIRST_NAME": {
-                "type": SoftStringOrNothingType,
+                "type": SoftStringType,
                 "display_name": "First Name",
+                "required": True,
                 "short_desc": "Contact's first name",
-                "desc": "The first name of the contact",
-                "preselected": True,
+                "desc": "The first name of the contact (required)",
                 "example_value": "Jane",
             },
             "SALUTATION": {

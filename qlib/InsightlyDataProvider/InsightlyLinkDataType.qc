@@ -40,7 +40,8 @@ public class InsightlyLinkDataType inherits HashDataType {
                 "type": SoftStringOrNothingType,
                 "display_name": "Object Name",
                 "short_desc": "The linked object type",
-                "desc": "The type name of the linked object (e.g., `Contact`, `Organisation`)",
+                "desc": "The type name of the linked object",
+                "allowed_values": ObjectNameAllowedValues,
             },
             "OBJECT_ID": {
                 "type": SoftIntOrNothingType,

@@ -41,6 +41,7 @@ public class InsightlyNoteLinkDataType inherits HashDataType {
                 "display_name": "Object Name",
                 "short_desc": "The linked object type",
                 "desc": "The type name of the linked object",
+                "allowed_values": ObjectNameAllowedValues,
             },
             "OBJECT_ID": {
                 "type": SoftIntOrNothingType,

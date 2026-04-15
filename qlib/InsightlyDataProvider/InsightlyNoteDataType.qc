@@ -28,8 +28,8 @@ public class InsightlyNoteDataType inherits HashDataType {
             "LINK_SUBJECT_TYPE": {
                 "type": SoftStringOrNothingType, "display_name": "Link Subject Type",
                 "short_desc": "Linked subject type",
-                "desc": "The type of object this note is linked to (e.g., `Contact`, "
-                    "`Organisation`)",
+                "desc": "The type of object this note is linked to",
+                "allowed_values": LinkSubjectTypeAllowedValues,
             },
             "OWNER_USER_ID": {
                 "type": SoftIntOrNothingType, "display_name": "Owner User ID",
@@ -88,9 +88,9 @@ public class InsightlyCreateNoteRequestDataType inherits HashDataType {
             "LINK_SUBJECT_TYPE": {
                 "type": SoftStringOrNothingType, "display_name": "Link Subject Type",
                 "short_desc": "Linked subject type",
-                "desc": "The type of object to link this note to (e.g., `Contact`, "
-                    "`Organisation`)",
+                "desc": "The type of object to link this note to",
                 "preselected": True,
+                "allowed_values": LinkSubjectTypeAllowedValues,
             },
             "OWNER_USER_ID": {
                 "type": SoftIntOrNothingType, "display_name": "Owner User ID",

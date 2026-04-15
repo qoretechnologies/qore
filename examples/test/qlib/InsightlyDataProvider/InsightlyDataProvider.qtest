@@ -75,6 +75,7 @@ public class InsightlyDataProviderTest inherits QUnit::Test {
         addTestCase("connection tests", \connectionTests());
 
         # Integration tests (require Insightly credentials)
+        addTestCase("connection ping test", \connectionPingTest());
         addTestCase("contact CRUD tests", \contactCrudTests());
         addTestCase("organisation CRUD tests", \organisationCrudTests());
         addTestCase("lead CRUD tests", \leadCrudTests());
@@ -84,6 +85,7 @@ public class InsightlyDataProviderTest inherits QUnit::Test {
         addTestCase("note CRUD tests", \noteCrudTests());
         addTestCase("calendar event CRUD tests", \calendarEventCrudTests());
         addTestCase("product CRUD tests", \productCrudTests());
+        addTestCase("email CRUD tests", \emailCrudTests());
         addTestCase("list contacts tests", \listContactsTests());
         addTestCase("event example data tests", \eventDataTests());
         addTestCase("cleanup tests", \cleanupTests());
@@ -280,6 +282,18 @@ public class InsightlyDataProviderTest inherits QUnit::Test {
 
     # ========== INTEGRATION TESTS ==========
 
+    connectionPingTest() {
+        skipIfNoCredentials();
+
+        *string conn_name = m_options.conn ?? ENV.INSIGHTLY_CONNECTION;
+        if (!conn_name) {
+            testSkip("connection ping test requires a named connection (-c)");
+        }
+        AbstractConnection conn = get_connection(conn_name);
+        hash<auto> ping_result = conn.ping(True);
+        assertEq(True, ping_result.ok, "connection ping succeeded");
+    }
+
     contactCrudTests() {
         skipIfNoCredentials();
 
@@ -382,6 +396,13 @@ public class InsightlyDataProviderTest inherits QUnit::Test {
             "TITLE": "CTO",
         });
         assertEq(True, updated.LEAD_ID.val(), "lead updated");
+
+        # Verify update persisted
+        AbstractDataProviderRecordIterator it2 = leads.searchRecords(NOTHING,
+            {"id": testLeadId});
+        assertEq(True, it2.next(), "updated lead found");
+        hash<auto> verified = it2.getValue();
+        assertEq("CTO", verified.TITLE, "TITLE update persisted");
     }
 
     opportunityCrudTests() {
@@ -411,6 +432,13 @@ public class InsightlyDataProviderTest inherits QUnit::Test {
             "BID_AMOUNT": 5000.00,
         });
         assertEq(True, updated.OPPORTUNITY_ID.val(), "opportunity updated");
+
+        # Verify update persisted
+        AbstractDataProviderRecordIterator it2 = opps.searchRecords(NOTHING,
+            {"id": testOpportunityId});
+        assertEq(True, it2.next(), "updated opportunity found");
+        hash<auto> verified = it2.getValue();
+        assertEq(5000.00, verified.BID_AMOUNT, "BID_AMOUNT update persisted");
     }
 
     projectCrudTests() {
@@ -440,6 +468,13 @@ public class InsightlyDataProviderTest inherits QUnit::Test {
             "STATUS": "In Progress",
         });
         assertEq(True, updated.PROJECT_ID.val(), "project updated");
+
+        # Verify update persisted
+        AbstractDataProviderRecordIterator it2 = projects.searchRecords(NOTHING,
+            {"id": testProjectId});
+        assertEq(True, it2.next(), "updated project found");
+        hash<auto> verified = it2.getValue();
+        assertEq("In Progress", verified.STATUS, "STATUS update persisted");
     }
 
     taskCrudTests() {
@@ -486,12 +521,19 @@ public class InsightlyDataProviderTest inherits QUnit::Test {
 
         # Create note
         AbstractDataProvider create = notes.getChildProvider("create");
-        hash<auto> result = create.doRequest({
-            "TITLE": "QoreTest Note " + now_us().toString(),
-            "BODY": "Test note body",
-        });
-        assertEq(True, result.NOTE_ID.val(), "note created with ID");
-        testNoteId = result.NOTE_ID;
+        try {
+            hash<auto> result = create.doRequest({
+                "TITLE": "QoreTest Note " + now_us().toString(),
+                "BODY": "Test note body",
+            });
+            assertEq(True, result.NOTE_ID.val(), "note created with ID");
+            testNoteId = result.NOTE_ID;
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.arg.status_code == 405) {
+                testSkip("POST /Notes not supported on this Insightly plan");
+            }
+            rethrow;
+        }
 
         # Update note
         AbstractDataProvider update = notes.getChildProvider("update");
@@ -500,6 +542,13 @@ public class InsightlyDataProviderTest inherits QUnit::Test {
             "BODY": "Updated note body by QoreTest",
         });
         assertEq(True, updated.NOTE_ID.val(), "note updated");
+
+        # Verify update persisted
+        AbstractDataProviderRecordIterator it = notes.searchRecords(NOTHING,
+            {"id": testNoteId});
+        assertEq(True, it.next(), "updated note found");
+        hash<auto> verified = it.getValue();
+        assertEq("Updated note body by QoreTest", verified.BODY, "BODY update persisted");
     }
 
     calendarEventCrudTests() {
@@ -533,6 +582,14 @@ public class InsightlyDataProviderTest inherits QUnit::Test {
             "DETAILS": "Updated by QoreTest",
         });
         assertEq(True, updated.EVENT_ID.val(), "calendar event updated");
+
+        # Verify update persisted
+        AbstractDataProviderRecordIterator it2 = events.searchRecords(NOTHING,
+            {"id": testCalendarEventId});
+        assertEq(True, it2.next(), "updated calendar event found");
+        hash<auto> verified = it2.getValue();
+        assertEq("Updated by QoreTest", verified.DETAILS,
+            "calendar event DETAILS update persisted");
     }
 
     productCrudTests() {
@@ -543,13 +600,20 @@ public class InsightlyDataProviderTest inherits QUnit::Test {
 
         # Create product
         AbstractDataProvider create = products.getChildProvider("create");
-        hash<auto> result = create.doRequest({
-            "PRODUCT_NAME": "QoreTest Product " + now_us().toString(),
-            "PRODUCT_CODE": "QT-" + string(rand()),
-            "DEFAULT_PRICE": 99.99,
-        });
-        assertEq(True, result.PRODUCT_ID.val(), "product created with ID");
-        testProductId = result.PRODUCT_ID;
+        try {
+            hash<auto> result = create.doRequest({
+                "PRODUCT_NAME": "QoreTest Product " + now_us().toString(),
+                "PRODUCT_CODE": "QT-" + string(rand()),
+                "DEFAULT_PRICE": 99.99,
+            });
+            assertEq(True, result.PRODUCT_ID.val(), "product created with ID");
+            testProductId = result.PRODUCT_ID;
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.arg.status_code == 405) {
+                testSkip("POST /Products not supported on this Insightly plan");
+            }
+            rethrow;
+        }
 
         # Get product
         AbstractDataProviderRecordIterator it = products.searchRecords(NOTHING,
@@ -563,6 +627,46 @@ public class InsightlyDataProviderTest inherits QUnit::Test {
             "DEFAULT_PRICE": 149.99,
         });
         assertEq(True, updated.PRODUCT_ID.val(), "product updated");
+
+        # Verify update persisted
+        AbstractDataProviderRecordIterator it2 = products.searchRecords(NOTHING,
+            {"id": testProductId});
+        assertEq(True, it2.next(), "updated product found");
+        hash<auto> verified = it2.getValue();
+        assertEq(149.99, verified.DEFAULT_PRICE, "DEFAULT_PRICE update persisted");
+    }
+
+    emailCrudTests() {
+        skipIfNoCredentials();
+
+        InsightlyDataProvider::InsightlyDataProvider provider = getProvider();
+        AbstractDataProvider emails = provider.getChildProvider("emails");
+
+        # Create email
+        AbstractDataProvider create = emails.getChildProvider("create");
+        string test_subject = "QoreTest Email " + now_us().toString();
+        try {
+            hash<auto> result = create.doRequest({
+                "SUBJECT": test_subject,
+                "BODY": "Test email body from QoreTest",
+            });
+            assertEq(True, result.EMAIL_ID.val(), "email created with ID");
+            testEmailId = result.EMAIL_ID;
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.arg.status_code == 405) {
+                testSkip("POST /Emails not supported on this Insightly plan");
+            }
+            rethrow;
+        }
+
+        # Get email
+        AbstractDataProviderRecordIterator it = emails.searchRecords(NOTHING,
+            {"id": testEmailId});
+        assertEq(True, it.next(), "email found by ID");
+        hash<auto> found = it.getValue();
+        assertEq(test_subject, found.SUBJECT, "email SUBJECT matches");
+
+        # Note: Insightly API does not support email updates -- delete tested in cleanup
     }
 
     listContactsTests() {
@@ -613,6 +717,7 @@ public class InsightlyDataProviderTest inherits QUnit::Test {
 
         # Delete in reverse dependency order
         list<hash<auto>> cleanup_items = (
+            {"name": "emails", "id": testEmailId, "id_field": "EMAIL_ID"},
             {"name": "notes", "id": testNoteId, "id_field": "NOTE_ID"},
             {"name": "calendar-events", "id": testCalendarEventId, "id_field": "EVENT_ID"},
             {"name": "tasks", "id": testTaskId, "id_field": "TASK_ID"},
