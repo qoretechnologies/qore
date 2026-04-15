@@ -412,15 +412,12 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::createConnection(
             break;
         }
         case HttpClientProtocol::H2:
-            // H2 proxy support requires a CONNECT tunnel established via
-            // H1, then upgrading to H2 inside the tunnel — the Qore-level
-            // HttpClientConnectionManager handles this; C++ support is a
-            // future phase.
             if (proxy_info_ && ssl_required) {
-                xsink->raiseException("HTTPCLIENT-PROXY-ERROR",
-                    "HTTPS through HTTP proxy is not yet implemented for "
-                    "HTTP/2 connections");
-                return nullptr;
+                // H2 through an HTTP proxy: use the NEGOTIATE path which
+                // creates an H1 CONNECT tunnel, does SSL+ALPN inside, and
+                // adopts the result into an H2 connection.  Fall through
+                // to the NEGOTIATE case.
+                goto negotiate_case;
             }
             conn = new Http2ClientConnection(host, port, ssl_required,
                 opts_.max_streams_per_connection, xsink, this);
@@ -434,13 +431,18 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::createConnection(
             conn = new Http3ClientConnection(host, port,
                 opts_.max_streams_per_connection, xsink, this);
             break;
-        case HttpClientProtocol::NEGOTIATE: {
-            // Per-connect ALPN negotiation: runs a
-            // NegotiatingHttpClientConnection helper async via the
-            // AsyncIoController (TCP connect + TLS handshake with ALPN
-            // offer {"h2","http/1.1"}), waits for completion, then
-            // hands the adopted socket to an Http1 or Http2 concrete
-            // connection via the Phase 2 adopt-socket constructor.
+        case HttpClientProtocol::NEGOTIATE:
+        negotiate_case: {
+            // Per-connect ALPN negotiation.  Two paths:
+            //
+            // 1. Direct (no proxy): runs NegotiatingHttpClientConnection
+            //    which does TCP connect + TLS handshake with ALPN offer
+            //    {"h2","http/1.1"}, then adopts into H1 or H2.
+            //
+            // 2. Proxy: creates an H1 connection with proxy_tunnel=true
+            //    and ALPN configured.  The H1 poll op handles CONNECT +
+            //    SSL upgrade inside the tunnel.  After READY, reads ALPN;
+            //    if h2, extracts the socket and adopts into H2.
             //
             // NEGOTIATE requires SSL; plain-HTTP AUTO is always H1 at
             // the HTTPClient level and never reaches this case.
@@ -450,15 +452,6 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::createConnection(
                     "only runs over TLS)");
                 return nullptr;
             }
-            // Proxy + NEGOTIATE is not yet implemented (per design doc
-            // §10 open question 1 — inherits the H2 + HTTPS proxy
-            // limitation).
-            if (proxy_info_) {
-                xsink->raiseException("HTTPCLIENT-PROXY-ERROR",
-                    "HTTPS through HTTP proxy is not yet implemented "
-                    "for NEGOTIATE (ALPN-selected) connections");
-                return nullptr;
-            }
 
             Http1SslConfig ssl_cfg;
             ssl_cfg.verify_mode = opts_.ssl_verify_mode;
@@ -466,6 +459,80 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::createConnection(
             ssl_cfg.cert = opts_.client_cert;
             ssl_cfg.key = opts_.client_key;
 
+            if (proxy_info_) {
+                // Enable ALPN on the H1 socket so the SSL handshake
+                // inside the CONNECT tunnel advertises h2+http/1.1.
+                ssl_cfg.negotiate_alpn = true;
+
+                // Proxy path: H1 CONNECT tunnel + SSL + ALPN check.
+                // The H1 connection's socket is configured with ALPN
+                // {"h2","http/1.1"} via the SSL config — setAlpnProtocols
+                // is called in buildAndSubmit before the connect op starts.
+                //
+                // After the CONNECT tunnel + SSL upgrade completes (H1
+                // connection reaches READY), we read the negotiated ALPN
+                // from the socket:
+                // - "h2" → extract socket, adopt into Http2ClientConnection
+                // - "http/1.1" or empty → keep the H1 connection
+                ReferenceHolder<Http1ClientConnection> h1(
+                    new Http1ClientConnection(host, port, ssl_required,
+                        proxy_info_->host.c_str(), proxy_info_->port,
+                        xsink, this, ssl_cfg),
+                    xsink);
+                if (*xsink) {
+                    return nullptr;
+                }
+
+                bool ready = h1->waitForReadyOrError(
+                    opts_.connect_timeout_ms, xsink);
+                if (!ready || *xsink) {
+                    if (!*xsink) {
+                        xsink->raiseException("HTTPCLIENT-NEGOTIATE-TIMEOUT",
+                            "ALPN negotiation through proxy to %s:%d "
+                            "timed out after %d ms",
+                            host, port, opts_.connect_timeout_ms);
+                    }
+                    ExceptionSink dx;
+                    h1->setManager(nullptr);
+                    h1->closeConnection(&dx);
+                    dx.clear();
+                    return nullptr;
+                }
+
+                // Read the ALPN result from the tunneled+SSL socket.
+                QoreSocketObject* h1_sock = h1->getSocketPriv();
+                SimpleRefHolder<QoreStringNode> alpn(
+                    h1_sock ? h1_sock->getAlpnProtocol() : nullptr);
+                std::string alpn_id;
+                if (alpn && !alpn->empty()) {
+                    alpn_id = alpn->c_str();
+                }
+
+                if (alpn_id == "h2") {
+                    // Protocol escalation: extract socket, adopt into H2.
+                    QoreObject* adopted_obj = nullptr;
+                    QoreSocketObject* adopted_priv = nullptr;
+                    h1->setManager(nullptr);
+                    if (h1->takeSocket(adopted_obj, adopted_priv, xsink)) {
+                        return nullptr;
+                    }
+                    conn = new Http2ClientConnection(adopted_obj,
+                        adopted_priv, host, port,
+                        opts_.max_streams_per_connection, xsink, this);
+                    if (*xsink) {
+                        if (conn) {
+                            conn->deref(xsink);
+                        }
+                        return nullptr;
+                    }
+                } else {
+                    // H1 (or no ALPN) — keep the H1 connection.
+                    conn = h1.release();
+                }
+                break;
+            }
+
+            // Direct path (no proxy): use NegotiatingHttpClientConnection.
             ReferenceHolder<NegotiatingHttpClientConnection> neg(
                 new NegotiatingHttpClientConnection(host, port, ssl_cfg, xsink),
                 xsink);

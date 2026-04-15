@@ -56,6 +56,7 @@ struct Http1SslConfig {
     bool accept_all = false;    //!< accept self-signed certificates
     QoreSSLCertificate* cert = nullptr;  //!< client cert for mutual TLS (NOT ref'd by this struct)
     QoreSSLPrivateKey* key = nullptr;    //!< client key for mutual TLS (NOT ref'd by this struct)
+    bool negotiate_alpn = false; //!< if true, configure ALPN {"h2","http/1.1"} on the socket
 };
 
 //! HTTP/1.1 C++ client connection
@@ -266,6 +267,30 @@ public:
 
     DLLEXPORT void closeConnection(ExceptionSink* xsink) override;
 
+    //! Extracts the socket from this connection for protocol escalation.
+    /** Disarms the poll op, cancels it from the controller, and transfers
+        ownership of the socket QoreObject wrapper to the caller.  Leaves
+        the connection in a defunct state (isClosed returns true).
+
+        Used by the NEGOTIATE+proxy path in @ref createConnection: the H1
+        connection drives the CONNECT tunnel + SSL upgrade, then this
+        method hands the tunneled socket to an H2 adopt-socket ctor when
+        ALPN negotiated @c "h2".
+
+        @param sock_obj_out receives the QoreObject socket wrapper
+            (one strong ref transferred to caller)
+        @param sock_priv_out receives the raw priv pointer
+        @param xsink exception sink
+        @return 0 on success, -1 on failure (exception raised)
+
+        @since %Qore 2.3
+    */
+    DLLLOCAL int takeSocket(QoreObject*& sock_obj_out,
+        QoreSocketObject*& sock_priv_out, ExceptionSink* xsink);
+
+    //! Returns the raw socket priv pointer (for ALPN inspection after READY).
+    DLLLOCAL QoreSocketObject* getSocketPriv() const { return sock_priv; }
+
 protected:
     DLLLOCAL QoreHashNode* getReferencedErrorInfo() override;
 
@@ -284,6 +309,10 @@ private:
 
     //! True once the poll op has been submitted to the controller
     bool submitted_to_controller = false;
+
+    //! If true, configure ALPN {"h2","http/1.1"} on the socket for the
+    //! NEGOTIATE+proxy path (protocol escalation after CONNECT tunnel).
+    bool negotiate_alpn = false;
 
     //! Owner string used for the controller submit info hash.
     /** Defaults to a per-instance string built from @c this in

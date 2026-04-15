@@ -84,6 +84,7 @@ Http1ClientConnection::Http1ClientConnection(const char* target_host, int target
     accept_all_certs = ssl_config.accept_all;
     client_cert = ssl_config.cert;
     client_key = ssl_config.key;
+    negotiate_alpn = ssl_config.negotiate_alpn;
     if (mgr) {
         setManager(mgr);
     }
@@ -180,6 +181,24 @@ int Http1ClientConnection::buildAndSubmit(ExceptionSink* xsink) {
     if (client_key) {
         client_key->ref();
         sock_priv_raw->setPrivateKey(client_key);
+    }
+
+    // 1c. Configure ALPN for the NEGOTIATE+proxy path.  When this
+    //     connection is used as a CONNECT tunnel for protocol escalation,
+    //     the SSL handshake inside the tunnel must advertise h2+http/1.1
+    //     so the origin server can select h2 via ALPN.
+    if (negotiate_alpn && ssl_required) {
+        ReferenceHolder<QoreListNode> protocols(
+            new QoreListNode(autoTypeInfo), xsink);
+        protocols->push(new QoreStringNode("h2"), xsink);
+        protocols->push(new QoreStringNode("http/1.1"), xsink);
+        if (*xsink) {
+            return -1;
+        }
+        sock_priv_raw->setAlpnProtocols(*protocols, xsink);
+        if (*xsink) {
+            return -1;
+        }
     }
 
     // 2. Build the TCP connect target string "host:port".
@@ -747,6 +766,55 @@ void Http1ClientConnection::closeConnection(ExceptionSink* xsink) {
     // Drive the connection base state machine to CLOSED so any
     // waitForReadyOrError sleeper wakes up.
     setClosed();
+}
+
+int Http1ClientConnection::takeSocket(QoreObject*& sock_obj_out,
+        QoreSocketObject*& sock_priv_out, ExceptionSink* xsink) {
+    if (!sock_obj || !sock_priv) {
+        xsink->raiseException("HTTPCLIENT-INTERNAL-ERROR",
+            "no socket to extract from H1 connection");
+        return -1;
+    }
+    if (!isReady()) {
+        xsink->raiseException("HTTPCLIENT-INTERNAL-ERROR",
+            "cannot extract socket: connection is not READY");
+        return -1;
+    }
+
+    // Disarm the poll op's connection_priv back-pointer.
+    if (poll_op_priv) {
+        poll_op_priv->disarmConnectionPriv();
+    }
+
+    // Cancel the H1 poll op from the controller so the socket fd is no
+    // longer registered in epoll.
+    if (submitted_to_controller && sock_priv) {
+        ExceptionSink cancel_xsink;
+        ReferenceHolder<QoreObject> ctl_obj_holder(
+            qore_get_async_io_controller_obj(&cancel_xsink), &cancel_xsink);
+        if (ctl_obj_holder) {
+            ReferenceHolder<AsyncIoControllerPriv> ctl_priv_holder(
+                static_cast<AsyncIoControllerPriv*>(
+                    ctl_obj_holder->getReferencedPrivateData(
+                        CID_ASYNCIOCONTROLLER, &cancel_xsink)),
+                &cancel_xsink);
+            if (ctl_priv_holder) {
+                ctl_priv_holder->cancel(sock_priv, &cancel_xsink);
+            }
+        }
+        cancel_xsink.clear();
+        submitted_to_controller = false;
+    }
+
+    // Transfer socket ownership to the caller.
+    sock_obj_out = sock_obj;
+    sock_priv_out = sock_priv;
+    sock_obj = nullptr;
+    sock_priv = nullptr;
+
+    // Mark this connection as closed/defunct.
+    setClosed();
+    return 0;
 }
 
 QoreHashNode* Http1ClientConnection::getReferencedErrorInfo() {
