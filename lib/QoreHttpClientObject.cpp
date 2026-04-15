@@ -1232,6 +1232,13 @@ static QoreHashNode* toLegacyPollApiOutputShape(const QoreHashNode* src,
     // path).  The poll path's raw response may not have protocol/
     // http_version, so derive the version from stream_id presence.
     if (!sc.isNullOrNothing()) {
+        QoreValue sm_val = src->getKeyValue("status_message");
+        const char* sm_str = sm_val.getType() == NT_STRING
+            ? sm_val.get<const QoreStringNode>()->c_str() : "";
+        if (!sm_str[0]) {
+            sm_str = QoreHttpClientObject::getHttpStatusMessage(
+                (int)sc.getAsBigInt());
+        }
         const char* ver = "HTTP/1.1";
         QoreValue proto = src->getKeyValue("protocol");
         QoreValue hv_src = src->getKeyValue("http_version");
@@ -1242,25 +1249,22 @@ static QoreHashNode* toLegacyPollApiOutputShape(const QoreHashNode* src,
             } else if (!strcmp(p, "h3")) {
                 ver = "HTTP/3";
             } else if (hv_src.getType() == NT_STRING) {
-                // H1 with explicit version
-                static char buf[32];
-                snprintf(buf, sizeof(buf), "HTTP/%s",
-                    hv_src.get<const QoreStringNode>()->c_str());
-                ver = buf;
+                // H1 with explicit version — build URI inline to avoid
+                // a static buffer (thread safety)
+                QoreStringNode* uri = new QoreStringNodeMaker("HTTP/%s %d %s",
+                    hv_src.get<const QoreStringNode>()->c_str(),
+                    (int)sc.getAsBigInt(), sm_str);
+                info_hash->setKeyValue("response-uri", uri, xsink);
+                ver = nullptr;  // skip default URI below
             }
         } else if (!src->getKeyValue("stream_id").isNullOrNothing()) {
             ver = "HTTP/2";
         }
-        QoreValue sm_val = src->getKeyValue("status_message");
-        const char* sm_str = sm_val.getType() == NT_STRING
-            ? sm_val.get<const QoreStringNode>()->c_str() : "";
-        if (!sm_str[0]) {
-            sm_str = QoreHttpClientObject::getHttpStatusMessage(
-                (int)sc.getAsBigInt());
+        if (ver) {
+            QoreStringNode* uri = new QoreStringNodeMaker("%s %d %s", ver,
+                (int)sc.getAsBigInt(), sm_str);
+            info_hash->setKeyValue("response-uri", uri, xsink);
         }
-        QoreStringNode* uri = new QoreStringNodeMaker("%s %d %s", ver,
-            (int)sc.getAsBigInt(), sm_str);
-        info_hash->setKeyValue("response-uri", uri, xsink);
     }
     if (!info_hash->empty()) {
         result->setKeyValue("info", info_hash.release(), xsink);
