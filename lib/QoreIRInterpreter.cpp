@@ -6734,6 +6734,35 @@ load_local_done:
                 QoreValue res;
                 bool is_remove = (path_inst->unary_op == LVUnaryOp::Remove
                                 || path_inst->unary_op == LVUnaryOp::Delete);
+                // AST-compatible path: delegate Delete/Remove to AST's
+                // LValueRemoveHelper when the original AST lvalue expression was
+                // stored during lowering.  LValueRemoveHelper::deleteLValue() uses
+                // detach-then-destroy ordering (remove entry from container FIRST,
+                // then call doDelete on the detached object) which is essential for
+                // object destructors whose C++ member cleanup chains interact with
+                // async I/O controllers.  The in-place setEntry(NOTHING) approach
+                // below deadlocks on such objects (WebSocketH2PerfTest concurrent
+                // cleanup — see session p37).  This path re-evaluates dynamic
+                // operands (hash keys / list indices) via the stored AST expression.
+                if (is_remove && path_inst->delete_lvalue_expr.hasNode()) {
+                    bool is_delete = (path_inst->unary_op == LVUnaryOp::Delete);
+                    LValueRemoveHelper lvrh(path_inst->delete_lvalue_expr, xsink, is_delete);
+                    if (lvrh && !*xsink) {
+                        if (is_delete) {
+                            lvrh.deleteLValue();
+                            res = QoreValue();
+                        } else {
+                            res = lvrh.removeValue();
+                        }
+                    }
+                    if (xsink && *xsink) {
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupLocalCaches();
+                        return false;
+                    }
+                    // Skip to common epilogue (cleanupLocalCaches + set result)
+                    goto lvalue_path_unary_done;
+                }
                 if (is_remove && path_inst->path.size() >= 2) {
                     // For multi-step paths, navigate to the PARENT container, then
                     // remove/delete the key/element. LValueHelper::remove() only clears
@@ -7090,6 +7119,7 @@ load_local_done:
                     cleanupLocalCaches();
                     return false;
                 }
+lvalue_path_unary_done:
                 cleanupLocalCaches();
                 if (path_inst->result.isValid()) {
                     setValueSlot(values, path_inst->result.id, res, xsink);

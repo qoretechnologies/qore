@@ -1079,6 +1079,14 @@ public:
     //! For LValuePathUnary
     LVUnaryOp unary_op = LVUnaryOp::PreInc;
 
+    //! For LValuePathUnary Delete/Remove: original AST lvalue expression,
+    //! used by the interpreter to delegate to AST's LValueRemoveHelper when
+    //! the container-level delete needs detach-then-destroy ordering that
+    //! only LValueRemoveHelper::deleteLValue() provides (e.g. object
+    //! destructors whose C++ member cleanup chains interact with async I/O
+    //! controllers and cannot tolerate in-place setEntry(NOTHING) deref).
+    QoreValue delete_lvalue_expr;
+
     //! For LValuePathBinaryMut
     LVBinaryMutOp binary_mut_op = LVBinaryMutOp::Push;
 

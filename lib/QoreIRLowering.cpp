@@ -7357,6 +7357,16 @@ QoreIRValue QoreIRLowering::lowerDelete(const QoreValue& expr, std::string& erro
         QoreIRValue path_result = tryEmitLValuePathOp(QoreIROpcode::LValuePathUnary,
             op->getExp(), nullptr, op->loc, error, false, LVCompoundOp::AddAssign, LVUnaryOp::Delete);
         if (path_result.isValid()) {
+            // Store the original AST lvalue expression for runtime fallback via
+            // LValueRemoveHelper::deleteLValue() (matches AST detach-then-destroy
+            // semantics for async-I/O-interacting object destructors).
+            auto& insts = builder.getBlock()->instructions;
+            if (!insts.empty()) {
+                auto* path_inst = dynamic_cast<QoreIRLValuePathInstruction*>(insts.back().get());
+                if (path_inst) {
+                    path_inst->delete_lvalue_expr = op->getExp();
+                }
+            }
             markLocalUnassignmentFromExpression(op->getExp());
             return path_result;
         }
