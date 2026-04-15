@@ -195,6 +195,139 @@ public class PiiDetector inherits AbstractGuardrailRule {
         return "pii";
     }
 
+    #! Returns the DataProvider-option schema for this rule's \c params hash
+    /** UI renderers can use this schema to build a typed editor form for a
+        PII detection rule without hard-coding knowledge of the PII detector's
+        internals.
+
+        @since QoreGuardrails 1.1
+    */
+    public static hash<string, hash<DataProviderOptionInfo>> getConfigSchema() {
+        return {
+            "action": <DataProviderOptionInfo>{
+                "type": (AbstractDataProviderType::get(StringType),),
+                "display_name": "Action on Detection",
+                "short_desc": "What to do when PII is detected in the text",
+                "desc": "Controls how the rule reacts when any configured PII "
+                    "pattern matches.  **Redact** (default) replaces the "
+                    "matching text with a placeholder and lets the request "
+                    "continue; **Block** rejects the whole request; **Warn** "
+                    "records the detection but lets the request through "
+                    "unchanged.",
+                "default_value": "block",
+                "required": False,
+                "preselected": True,
+                "allowed_values": (
+                    <AllowedValueInfo>{
+                        "value": "block",
+                        "display_name": "Block the request (default)",
+                        "short_desc": "Reject the request with a guardrail violation.",
+                        "desc": "The detection is reported as a violation and the "
+                            "request is blocked.  Use when any appearance of PII "
+                            "is a policy failure.",
+                    },
+                    <AllowedValueInfo>{
+                        "value": "redact",
+                        "display_name": "Redact the match",
+                        "short_desc": "Replace the matching text with a placeholder "
+                            "and let the request continue.",
+                        "desc": "The sensitive value is replaced with a "
+                            "`[PII_<type>_REDACTED]`-style placeholder and the "
+                            "request continues as if the user had written the "
+                            "redacted form themselves.  Safe default for most "
+                            "public-facing endpoints.",
+                    },
+                    <AllowedValueInfo>{
+                        "value": "warn",
+                        "display_name": "Log only",
+                        "short_desc": "Record the detection but let the request "
+                            "through unchanged.",
+                        "desc": "The violation is written to the guardrail audit "
+                            "log but the original text (with PII intact) "
+                            "reaches the LLM.  Useful during pilot rollout when "
+                            "you want visibility without behaviour change.",
+                    },
+                ),
+            },
+            "types": <DataProviderOptionInfo>{
+                "type": (AbstractDataProviderType::get(AutoListOrNothingType),),
+                "display_name": "Enabled PII Types",
+                "short_desc": "Which PII types to detect (default: all built-in types)",
+                "desc": "List of PII type names to enable for this rule.  When "
+                    "empty, every built-in type is enabled: `email`, `phone`, "
+                    "`ssn`, `credit_card`, `iban`, `phone_intl`, `uk_nin`.  "
+                    "Supply an explicit list to narrow the rule to a specific "
+                    "subset — e.g. `[\"email\", \"phone\"]` for endpoints that "
+                    "only need basic contact-info redaction.  Custom pattern "
+                    "names added via `custom_patterns` are always enabled "
+                    "regardless of this list.",
+                "required": False,
+                "allowed_values": (
+                    <AllowedValueInfo>{
+                        "value": "email",
+                        "display_name": "Email addresses",
+                        "desc": "Standard RFC 5322-like email addresses.",
+                    },
+                    <AllowedValueInfo>{
+                        "value": "phone",
+                        "display_name": "US phone numbers",
+                        "desc": "North-American-format phone numbers with word-"
+                            "boundary enforcement to reduce false positives on "
+                            "order / product / invoice numbers.",
+                    },
+                    <AllowedValueInfo>{
+                        "value": "ssn",
+                        "display_name": "US Social Security Numbers",
+                        "desc": "Nine-digit US SSNs in `xxx-xx-xxxx` format.",
+                    },
+                    <AllowedValueInfo>{
+                        "value": "credit_card",
+                        "display_name": "Credit card numbers",
+                        "desc": "Visa, MasterCard, AmEx, Discover — validated "
+                            "with the Luhn checksum to reduce false positives.",
+                    },
+                    <AllowedValueInfo>{
+                        "value": "iban",
+                        "display_name": "IBAN bank account numbers",
+                        "desc": "International Bank Account Numbers, validated "
+                            "with the mod-97 checksum.",
+                    },
+                    <AllowedValueInfo>{
+                        "value": "phone_intl",
+                        "display_name": "International phone numbers",
+                        "desc": "Phone numbers with `+<country-code>` prefix.",
+                    },
+                    <AllowedValueInfo>{
+                        "value": "uk_nin",
+                        "display_name": "UK National Insurance Numbers",
+                        "desc": "UK NINO format with checksum letter.",
+                    },
+                ),
+                "allowed_values_creatable": False,
+                "element_allowed_values_creatable": True,
+            },
+            "custom_patterns": <DataProviderOptionInfo>{
+                "type": (AbstractDataProviderType::get(AutoListOrNothingType),),
+                "display_name": "Custom Patterns",
+                "short_desc": "Additional regex patterns to detect as PII",
+                "desc": "List of custom PII patterns to detect in addition to "
+                    "(or instead of) the built-in types.  Each entry is a "
+                    "hash with `name` (unique type name), `pattern` (a regex), "
+                    "and optional `validator` (a `code<bool(string)>` "
+                    "post-match validator, e.g. for checksum validation).  "
+                    "Use this to add business-specific identifiers like "
+                    "employee numbers or customer IDs.",
+                "required": False,
+                "example_value": (
+                    {
+                        "name": "employee_id",
+                        "pattern": "EMP-\\d{6}",
+                    },
+                ),
+            },
+        };
+    }
+
     hash<GuardrailResult> evaluate(string text, *hash<auto> ctx) {
         date start = now_us();
         list<hash<auto>> findings = ();

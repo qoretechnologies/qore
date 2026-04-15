@@ -54,6 +54,18 @@ public class QoreGuardrailsTest inherits QUnit::Test {
         addTestCase("GuardrailEngine - unknown rule type", \engineUnknownRuleTest());
         addTestCase("GuardrailEngine - all pass", \engineAllPassTest());
 
+        # Rule-type registry (1.1)
+        addTestCase("RuleTypeRegistry - contains all built-in types",
+            \registryBuiltinTypesTest());
+        addTestCase("RuleTypeRegistry - entries are well-formed",
+            \registryEntryShapeTest());
+        addTestCase("RuleTypeRegistry - PII schema has action allowed_values",
+            \registryPiiActionSchemaTest());
+        addTestCase("RuleTypeRegistry - default_direction matches rule class",
+            \registryDirectionTest());
+        addTestCase("AbstractGuardrailRule.getConfigSchema base returns empty",
+            \baseGetConfigSchemaTest());
+
         set_return_value(main());
     }
 
@@ -413,5 +425,89 @@ public class QoreGuardrailsTest inherits QUnit::Test {
         assertTrue(r.passed);
         assertEq(0, r.violations.size());
         assertEq(2, r.rules_evaluated);
+    }
+
+    # ===================== Rule-Type Registry Tests =====================
+
+    registryBuiltinTypesTest() {
+        hash<string, hash<RuleTypeInfo>> reg = GuardrailEngine::getRuleTypeRegistry();
+        # Every built-in rule type has an entry
+        foreach string t in ("pii", "prompt_injection", "topic_restriction",
+                "output_format", "toxicity", "hallucination") {
+            assertTrue(exists reg{t}, sprintf("registry must contain %y", t));
+            assertEq(t, reg{t}.type,
+                sprintf("registry[%y].type must equal %y", t, t));
+        }
+        assertEq(6, reg.size(), "registry must contain exactly 6 built-in rule types");
+    }
+
+    registryEntryShapeTest() {
+        hash<string, hash<RuleTypeInfo>> reg = GuardrailEngine::getRuleTypeRegistry();
+        foreach hash<auto> i in (reg.pairIterator()) {
+            hash<RuleTypeInfo> info = i.value;
+            assertTrue(info.display_name.val(),
+                sprintf("%y must have non-empty display_name", i.key));
+            assertTrue(info.short_desc.val(),
+                sprintf("%y must have non-empty short_desc", i.key));
+            assertTrue(info.desc.val(),
+                sprintf("%y must have non-empty desc", i.key));
+            assertTrue(info.default_direction == GD_INPUT
+                    || info.default_direction == GD_OUTPUT
+                    || info.default_direction == GD_BOTH,
+                sprintf("%y default_direction must be input/output/both", i.key));
+            assertTrue(info.config_schema instanceof hash,
+                sprintf("%y must have a config_schema hash", i.key));
+        }
+    }
+
+    registryPiiActionSchemaTest() {
+        hash<string, hash<RuleTypeInfo>> reg = GuardrailEngine::getRuleTypeRegistry();
+        hash<RuleTypeInfo> pii = reg.pii;
+        hash<DataProviderOptionInfo> action = pii.config_schema.action;
+        assertTrue(exists action, "pii.config_schema must have an 'action' option");
+        assertEq("block", action.default_value,
+            "pii.action default must be 'block'");
+        assertTrue(action.preselected ?? False,
+            "pii.action must be preselected");
+        # allowed_values must include block / redact / warn with display names
+        hash<string, bool> seen;
+        foreach auto av in (action.allowed_values) {
+            seen{av.value} = av.display_name.val();
+        }
+        assertTrue(seen.block, "pii.action allowed_values must include 'block' with display_name");
+        assertTrue(seen.redact, "pii.action allowed_values must include 'redact' with display_name");
+        assertTrue(seen.warn, "pii.action allowed_values must include 'warn' with display_name");
+
+        # types option also exists and is an allowed_values list
+        hash<DataProviderOptionInfo> types = pii.config_schema.types;
+        assertTrue(exists types, "pii.config_schema must have a 'types' option");
+        assertTrue(types.allowed_values.size() >= 7,
+            "pii.types must advertise at least the 7 built-in PII types");
+    }
+
+    registryDirectionTest() {
+        hash<string, hash<RuleTypeInfo>> reg = GuardrailEngine::getRuleTypeRegistry();
+        assertEq(GD_BOTH, reg.pii.default_direction,
+            "pii default direction is both");
+        assertEq(GD_INPUT, reg.prompt_injection.default_direction,
+            "prompt_injection default direction is input");
+        assertEq(GD_INPUT, reg.topic_restriction.default_direction,
+            "topic_restriction default direction is input");
+        assertEq(GD_OUTPUT, reg.output_format.default_direction,
+            "output_format default direction is output");
+        assertEq(GD_BOTH, reg.toxicity.default_direction,
+            "toxicity default direction is both");
+        assertEq(GD_OUTPUT, reg.hallucination.default_direction,
+            "hallucination default direction is output");
+    }
+
+    baseGetConfigSchemaTest() {
+        # The base class getConfigSchema returns an empty hash — subclasses
+        # are expected to override.  Every subclass does, so the registry
+        # entries are non-empty, but the base-class fallback itself is
+        # observable.
+        hash<string, hash<DataProviderOptionInfo>> base =
+            AbstractGuardrailRule::getConfigSchema();
+        assertEq({}, base, "base class getConfigSchema returns empty hash");
     }
 }
