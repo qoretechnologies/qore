@@ -6488,6 +6488,23 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
             }
         }
 
+        // Fire HTTP events on the HTTPClient's event queue (matching legacy
+        // send_internal behavior).  The conn_mgr path uses its own sockets
+        // for I/O, but events are fired on msock's queue for user visibility.
+        {
+            Queue* event_queue = msock->socket->getQueue();
+            if (event_queue) {
+                const char* cl = get_string_header(xsink, **ans, "content-length");
+                if (!*xsink && cl) {
+                    ssize_t len = strtoll(cl, nullptr, 10);
+                    do_content_length_event(event_queue, msock->socket->priv, len);
+                }
+                if (*xsink) {
+                    return nullptr;
+                }
+            }
+        }
+
         // Handle 3xx redirects (304 Not Modified passes through)
         if (!redirect_passthru && code >= 300 && code < 400 && code != 304) {
             host_override = false;
@@ -6507,6 +6524,15 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
 
             if (++redirect_count > max_redirects) {
                 break;
+            }
+
+            // Fire redirect event on the HTTPClient's event queue
+            {
+                Queue* event_queue = msock->socket->getQueue();
+                if (event_queue) {
+                    do_redirect_event(event_queue, msock->socket->priv,
+                        loc, mess);
+                }
             }
 
             if (redirectUrlUnlocked(location, this_connection, xsink)) {
