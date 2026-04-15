@@ -248,7 +248,9 @@ public class UnbounceDataProviderBase inherits DataProvider::AbstractDataProvide
     *hash<string, bool> getSupportedReferenceData() {
         return {
             "accounts": True,
+            "sub_accounts": True,
             "pages": True,
+            "leads": True,
         };
     }
 
@@ -256,7 +258,9 @@ public class UnbounceDataProviderBase inherits DataProvider::AbstractDataProvide
     private *list<hash<AllowedValueInfo>> getReferenceDataImpl(string type, *hash<auto> action_opts) {
         switch (type) {
             case "accounts": return getReferenceAccounts();
+            case "sub_accounts": return getReferenceSubAccounts(action_opts.account_id);
             case "pages": return getReferencePages();
+            case "leads": return getReferenceLeads(action_opts.page_id);
         }
     }
 
@@ -295,6 +299,64 @@ public class UnbounceDataProviderBase inherits DataProvider::AbstractDataProvide
                         "short_desc": page.url ?? "",
                         "desc": sprintf("%s (ID: %s)", display_name, page.id),
                         "value": string(page.id),
+                    };
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            # Silently ignore errors when fetching reference data
+        }
+        return rv;
+    }
+
+    #! Returns available sub-accounts for reference data
+    private *list<hash<AllowedValueInfo>> getReferenceSubAccounts(*string account_id) {
+        list<hash<AllowedValueInfo>> rv = ();
+        try {
+            if (!account_id) {
+                # Try to get the first account to enumerate sub-accounts
+                hash<auto> acct_response = doGet("accounts", {"limit": 1});
+                if (!acct_response.accounts) {
+                    return rv;
+                }
+                account_id = string(acct_response.accounts[0].id);
+            }
+            hash<auto> response = doGet("accounts/" + account_id + "/sub_accounts",
+                {"limit": DefaultPageSize});
+            if (response.sub_accounts) {
+                foreach hash<auto> sa in (response.sub_accounts) {
+                    string display_name = sa.name ?? sprintf("Sub-Account %s", sa.id);
+                    rv += <AllowedValueInfo>{
+                        "display_name": display_name,
+                        "short_desc": "",
+                        "desc": sprintf("%s (ID: %s)", display_name, sa.id),
+                        "value": string(sa.id),
+                    };
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            # Silently ignore errors when fetching reference data
+        }
+        return rv;
+    }
+
+    #! Returns available leads for reference data
+    private *list<hash<AllowedValueInfo>> getReferenceLeads(*string page_id) {
+        if (!page_id) {
+            return;
+        }
+        list<hash<AllowedValueInfo>> rv = ();
+        try {
+            hash<auto> response = doGet("pages/" + page_id + "/leads",
+                {"limit": DefaultPageSize});
+            if (response.leads) {
+                foreach hash<auto> lead in (response.leads) {
+                    *string email = lead.form_data.email[0];
+                    string display_name = email ?? sprintf("Lead %s", lead.id);
+                    rv += <AllowedValueInfo>{
+                        "display_name": display_name,
+                        "short_desc": lead.created_at ?? "",
+                        "desc": sprintf("%s (ID: %s)", display_name, lead.id),
+                        "value": string(lead.id),
                     };
                 }
             }

@@ -59,8 +59,10 @@ public class UnbouncePageDataType inherits HashDataType {
                 "desc": "The current publication state of the page",
                 "type": SoftStringOrNothingType,
                 "allowed_values": (
-                    <AllowedValueInfo>{"value": "published", "desc": "Page is published and live"},
-                    <AllowedValueInfo>{"value": "unpublished", "desc": "Page is unpublished"},
+                    <AllowedValueInfo>{"value": "published", "display_name": "Published",
+                        "desc": "Page is published and live"},
+                    <AllowedValueInfo>{"value": "unpublished", "display_name": "Unpublished",
+                        "desc": "Page is unpublished"},
                 ),
             },
             "sub_account_id": {

@@ -71,9 +71,12 @@ public class UnbounceLeadDeletionRequestDataType inherits HashDataType {
                 "desc": "The current status of the deletion request",
                 "type": SoftStringOrNothingType,
                 "allowed_values": (
-                    <AllowedValueInfo>{"value": "completed", "desc": "Deletion completed successfully"},
-                    <AllowedValueInfo>{"value": "failed", "desc": "Deletion failed"},
-                    <AllowedValueInfo>{"value": "pending", "desc": "Deletion is pending"},
+                    <AllowedValueInfo>{"value": "completed", "display_name": "Completed",
+                        "desc": "Deletion completed successfully"},
+                    <AllowedValueInfo>{"value": "failed", "display_name": "Failed",
+                        "desc": "Deletion failed"},
+                    <AllowedValueInfo>{"value": "pending", "display_name": "Pending",
+                        "desc": "Deletion is pending"},
                 ),
             },
         };

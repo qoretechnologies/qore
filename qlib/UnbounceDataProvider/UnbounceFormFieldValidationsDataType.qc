@@ -50,7 +50,8 @@ public class UnbounceFormFieldValidationsDataType inherits HashDataType {
         };
     }
 
-    constructor() : HashDataType("UnbounceFormFieldValidationsDataType") {
+    constructor(Type base_type = AutoHashType) : HashDataType(base_type,
+            "UnbounceFormFieldValidationsDataType") {
         addQoreFields(Fields);
     }
 }

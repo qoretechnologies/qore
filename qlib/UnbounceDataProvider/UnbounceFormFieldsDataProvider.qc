@@ -82,8 +82,8 @@ public class UnbounceFormFieldsDataProvider inherits UnbounceDataProviderBase {
     }
 
     #! Returns the record type
-    private *AbstractDataProviderType getRecordTypeImpl() {
-        return new UnbounceFormFieldDataType();
+    private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
+        return new UnbounceFormFieldDataType().getFields();
     }
 
     #! Returns an iterator for records matching the search criteria

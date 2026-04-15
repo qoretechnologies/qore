@@ -36,6 +36,7 @@ public class UnbounceDeleteLeadRequestDataType inherits HashDataType {
                 "type": SoftStringType,
                 "required": True,
                 "ref_data": "pages",
+                "example_value": "abc123def456",
             },
             "lead_id": {
                 "display_name": "Lead ID",
@@ -43,6 +44,8 @@ public class UnbounceDeleteLeadRequestDataType inherits HashDataType {
                 "desc": "The unique identifier of the lead to delete",
                 "type": SoftStringType,
                 "required": True,
+                "ref_data": "leads",
+                "example_value": "abc123def456",
             },
         };
     }

@@ -66,8 +66,10 @@ public class UnbounceLeadsDataProvider inherits UnbounceDataProviderBase {
                 "type": AbstractDataProviderType::get(SoftStringOrNothingType),
                 "desc": "Sort direction for results",
                 "allowed_values": (
-                    <AllowedValueInfo>{"value": "asc", "desc": "Sort in ascending order"},
-                    <AllowedValueInfo>{"value": "desc", "desc": "Sort in descending order"},
+                    <AllowedValueInfo>{"value": "asc", "display_name": "Ascending",
+                        "desc": "Sort in ascending order"},
+                    <AllowedValueInfo>{"value": "desc", "display_name": "Descending",
+                        "desc": "Sort in descending order"},
                 ),
             },
             "from": <DataProviderOptionInfo>{
@@ -131,8 +133,8 @@ public class UnbounceLeadsDataProvider inherits UnbounceDataProviderBase {
     }
 
     #! Returns the record type
-    private *AbstractDataProviderType getRecordTypeImpl() {
-        return new UnbounceLeadDataType();
+    private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
+        return new UnbounceLeadDataType().getFields();
     }
 
     #! Returns an iterator for records matching the search criteria

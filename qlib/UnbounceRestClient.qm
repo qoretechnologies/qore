@@ -345,15 +345,9 @@ public class UnbounceRestConnection inherits RestClient::RestConnection {
         # Always set OAuth2 URLs
         rv.oauth2_auth_url = UnbounceRestClientBase::DefaultAuthUrl;
         rv.oauth2_token_url = UnbounceRestClientBase::DefaultTokenUrl;
-        if (!rv.oauth2_grant_type) {
-            rv.oauth2_grant_type = UnbounceRestClientBase::DefaultGrantType;
-        }
-        if (!rv.oauth2_scopes) {
-            rv.oauth2_scopes = UnbounceRestClientBase::DefaultScopes;
-        }
-        if (!rv.oauth2_auth_args) {
-            rv.oauth2_auth_args = UnbounceRestClientBase::DefaultAuthArgs;
-        }
+        rv.oauth2_grant_type = UnbounceRestClientBase::DefaultGrantType;
+        rv.oauth2_scopes = UnbounceRestClientBase::DefaultScopes;
+        rv.oauth2_auth_args = UnbounceRestClientBase::DefaultAuthArgs;
         return rv;
     }
 

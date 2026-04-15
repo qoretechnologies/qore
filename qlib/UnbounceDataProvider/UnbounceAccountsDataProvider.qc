@@ -51,6 +51,30 @@ public class UnbounceAccountsDataProvider inherits UnbounceDataProviderBase {
                 "type": AbstractDataProviderType::get(SoftStringOrNothingType),
                 "desc": "Filter by account ID for single record lookup",
             },
+            "sort_order": <DataProviderOptionInfo>{
+                "display_name": "Sort Order",
+                "short_desc": "Sort direction",
+                "type": AbstractDataProviderType::get(SoftStringOrNothingType),
+                "desc": "Sort direction for results",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "asc", "display_name": "Ascending",
+                        "desc": "Sort in ascending order"},
+                    <AllowedValueInfo>{"value": "desc", "display_name": "Descending",
+                        "desc": "Sort in descending order"},
+                ),
+            },
+            "from": <DataProviderOptionInfo>{
+                "display_name": "From",
+                "short_desc": "Start date filter",
+                "type": AbstractDataProviderType::get(SoftDateOrNothingType),
+                "desc": "Filter accounts created on or after this date",
+            },
+            "to": <DataProviderOptionInfo>{
+                "display_name": "To",
+                "short_desc": "End date filter",
+                "type": AbstractDataProviderType::get(SoftDateOrNothingType),
+                "desc": "Filter accounts created on or before this date",
+            },
             "limit": <DataProviderOptionInfo>{
                 "display_name": "Limit",
                 "short_desc": "Maximum results",
@@ -81,8 +105,8 @@ public class UnbounceAccountsDataProvider inherits UnbounceDataProviderBase {
     }
 
     #! Returns the record type
-    private *AbstractDataProviderType getRecordTypeImpl() {
-        return new UnbounceAccountDataType();
+    private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
+        return new UnbounceAccountDataType().getFields();
     }
 
     #! Returns an iterator for records matching the search criteria
@@ -95,7 +119,19 @@ public class UnbounceAccountsDataProvider inherits UnbounceDataProviderBase {
                 where_cond, search_options);
         }
 
-        list<hash<auto>> all_records = fetchAllPages("accounts", "accounts", NOTHING,
+        # Build query params
+        hash<auto> params;
+        if (search_options.sort_order) {
+            params.sort_order = search_options.sort_order;
+        }
+        if (search_options."from") {
+            params."from" = formatDateTime(search_options."from");
+        }
+        if (search_options."to") {
+            params."to" = formatDateTime(search_options."to");
+        }
+
+        list<hash<auto>> all_records = fetchAllPages("accounts", "accounts", params,
             search_options.limit);
         return new DefaultRecordIterator(new ListHashIterator(all_records), where_cond,
             search_options);

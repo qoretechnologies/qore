@@ -36,13 +36,15 @@ public class UnbounceCreateLeadDeletionRequestRequestDataType inherits HashDataT
                 "type": SoftStringType,
                 "required": True,
                 "ref_data": "pages",
+                "example_value": "abc123def456",
             },
             "lead_ids": {
                 "display_name": "Lead IDs",
                 "short_desc": "Specific lead IDs to delete",
                 "desc": "A list of specific lead IDs to delete. If not provided, use `all_leads` "
                     "or date range filters instead",
-                "type": SoftListOrNothingType,
+                "type": new ListDataType("LeadIds", SoftStringType, True),
+                "example_value": ("lead_id_1", "lead_id_2"),
             },
             "all_leads": {
                 "display_name": "All Leads",
@@ -50,18 +52,21 @@ public class UnbounceCreateLeadDeletionRequestRequestDataType inherits HashDataT
                 "desc": "If `True`, delete all leads for the page. Cannot be combined with "
                     "`lead_ids`",
                 "type": SoftBoolOrNothingType,
+                "example_value": True,
             },
             "from": {
                 "display_name": "From",
                 "short_desc": "Start date filter",
                 "desc": "Delete leads created on or after this date",
                 "type": SoftDateOrNothingType,
+                "example_value": "2026-01-01T00:00:00Z",
             },
             "to": {
                 "display_name": "To",
                 "short_desc": "End date filter",
                 "desc": "Delete leads created on or before this date",
                 "type": SoftDateOrNothingType,
+                "example_value": "2026-12-31T23:59:59Z",
             },
         };
     }

@@ -36,6 +36,7 @@ public class UnbounceCreateLeadRequestDataType inherits HashDataType {
                 "type": SoftStringType,
                 "required": True,
                 "ref_data": "pages",
+                "example_value": "abc123def456",
             },
             "form_submission": {
                 "display_name": "Form Submission",
@@ -50,12 +51,14 @@ public class UnbounceCreateLeadRequestDataType inherits HashDataType {
                 "short_desc": "Count as conversion",
                 "desc": "Whether to count this lead as a conversion",
                 "type": SoftBoolOrNothingType,
+                "example_value": True,
             },
             "visitor_id": {
                 "display_name": "Visitor ID",
                 "short_desc": "Visitor identifier",
                 "desc": "The visitor ID to associate with this lead",
                 "type": SoftStringOrNothingType,
+                "example_value": "visitor_abc123",
             },
         };
     }

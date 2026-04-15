@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
-#! @file UnbounceAccountDataType.qc Unbounce account data type
+#! @file UnbounceLeadExtraDataType.qc Unbounce lead extra data type
 
-/*  UnbounceAccountDataType.qc Copyright (C) 2026 Qore Technologies, s.r.o.
+/*  UnbounceLeadExtraDataType.qc Copyright (C) 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -25,44 +25,42 @@
 #! Contains all public definitions in the UnbounceDataProvider module
 public namespace UnbounceDataProvider {
 
-#! Unbounce account data type
-public class UnbounceAccountDataType inherits HashDataType {
+#! Unbounce lead extra data type for additional metadata captured with lead submissions
+public class UnbounceLeadExtraDataType inherits HashDataType {
     public {
         const Fields = {
-            "id": {
-                "display_name": "ID",
-                "short_desc": "Account unique identifier",
-                "desc": "The unique identifier of the account",
-                "type": SoftStringType,
+            "rapleaf": {
+                "display_name": "Rapleaf",
+                "short_desc": "Rapleaf enrichment data",
+                "desc": "Enrichment data from Rapleaf (now TowerData) for the lead",
+                "type": AutoHashOrNothingType,
             },
-            "name": {
-                "display_name": "Name",
-                "short_desc": "Account name",
-                "desc": "The name of the account",
-                "type": SoftStringType,
+            "cookies": {
+                "display_name": "Cookies",
+                "short_desc": "Browser cookies",
+                "desc": "Browser cookie data captured with the lead submission",
+                "type": AutoHashOrNothingType,
             },
-            "state": {
-                "display_name": "State",
-                "short_desc": "Account state",
-                "desc": "The current state of the account",
+            "request_id": {
+                "display_name": "Request ID",
+                "short_desc": "API request identifier",
+                "desc": "The request ID when the lead was created via API",
+                "type": SoftStringOrNothingType,
+            },
+            "created_by": {
+                "display_name": "Created By",
+                "short_desc": "Lead creation source",
+                "desc": "How the lead was created",
                 "type": SoftStringOrNothingType,
                 "allowed_values": (
-                    <AllowedValueInfo>{"value": "active", "display_name": "Active",
-                        "desc": "Account is active"},
-                    <AllowedValueInfo>{"value": "suspended", "display_name": "Suspended",
-                        "desc": "Account is suspended"},
+                    <AllowedValueInfo>{"value": "api", "display_name": "API",
+                        "desc": "Lead created via the Unbounce API"},
                 ),
-            },
-            "created_at": {
-                "display_name": "Created At",
-                "short_desc": "Creation timestamp",
-                "desc": "When the account was created",
-                "type": SoftDateOrNothingType,
             },
         };
     }
 
-    constructor() : HashDataType("UnbounceAccountDataType") {
+    constructor() : HashDataType(AutoHashOrNothingType, "UnbounceLeadExtraDataType") {
         addQoreFields(Fields);
     }
 }

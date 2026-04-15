@@ -77,12 +77,35 @@ module UnbounceDataProvider {
                     "display_name": "Account ID",
                     "short_desc": "Filter by account ID",
                     "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
                     "ref_data": "accounts",
+                },
+                "sort_order": <ActionOptionInfo>{
+                    "display_name": "Sort Order",
+                    "short_desc": "Sort direction",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "asc", "display_name": "Ascending",
+                            "desc": "Sort in ascending order"},
+                        <AllowedValueInfo>{"value": "desc", "display_name": "Descending",
+                            "desc": "Sort in descending order"},
+                    ),
+                },
+                "from": <ActionOptionInfo>{
+                    "display_name": "From",
+                    "short_desc": "Start date filter",
+                    "type": AbstractDataProviderTypeMap."*date",
+                },
+                "to": <ActionOptionInfo>{
+                    "display_name": "To",
+                    "short_desc": "End date filter",
+                    "type": AbstractDataProviderTypeMap."*date",
                 },
                 "limit": <ActionOptionInfo>{
                     "display_name": "Limit",
                     "short_desc": "Maximum results",
                     "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
                 },
                 "offset": <ActionOptionInfo>{
                     "display_name": "Offset",
@@ -108,7 +131,6 @@ module UnbounceDataProvider {
                     "short_desc": "The account ID",
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
-                    "preselected": True,
                     "ref_data": "accounts",
                 },
             },
@@ -138,11 +160,34 @@ module UnbounceDataProvider {
                     "display_name": "Sub Account ID",
                     "short_desc": "Filter by sub-account ID",
                     "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "sub_accounts",
+                },
+                "sort_order": <ActionOptionInfo>{
+                    "display_name": "Sort Order",
+                    "short_desc": "Sort direction",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "asc", "display_name": "Ascending",
+                            "desc": "Sort in ascending order"},
+                        <AllowedValueInfo>{"value": "desc", "display_name": "Descending",
+                            "desc": "Sort in descending order"},
+                    ),
+                },
+                "from": <ActionOptionInfo>{
+                    "display_name": "From",
+                    "short_desc": "Start date filter",
+                    "type": AbstractDataProviderTypeMap."*date",
+                },
+                "to": <ActionOptionInfo>{
+                    "display_name": "To",
+                    "short_desc": "End date filter",
+                    "type": AbstractDataProviderTypeMap."*date",
                 },
                 "limit": <ActionOptionInfo>{
                     "display_name": "Limit",
                     "short_desc": "Maximum results",
                     "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
                 },
                 "offset": <ActionOptionInfo>{
                     "display_name": "Offset",
@@ -168,7 +213,7 @@ module UnbounceDataProvider {
                     "short_desc": "The sub-account ID",
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
-                    "preselected": True,
+                    "ref_data": "sub_accounts",
                 },
             },
         });
@@ -191,16 +236,39 @@ module UnbounceDataProvider {
                     "short_desc": "Sub-account to list domains for",
                     "type": AbstractDataProviderTypeMap."*string",
                     "preselected": True,
+                    "ref_data": "sub_accounts",
                 },
                 "domain_id": <ActionOptionInfo>{
                     "display_name": "Domain ID",
                     "short_desc": "Filter by domain ID",
                     "type": AbstractDataProviderTypeMap."*string",
                 },
+                "sort_order": <ActionOptionInfo>{
+                    "display_name": "Sort Order",
+                    "short_desc": "Sort direction",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "asc", "display_name": "Ascending",
+                            "desc": "Sort in ascending order"},
+                        <AllowedValueInfo>{"value": "desc", "display_name": "Descending",
+                            "desc": "Sort in descending order"},
+                    ),
+                },
+                "from": <ActionOptionInfo>{
+                    "display_name": "From",
+                    "short_desc": "Start date filter",
+                    "type": AbstractDataProviderTypeMap."*date",
+                },
+                "to": <ActionOptionInfo>{
+                    "display_name": "To",
+                    "short_desc": "End date filter",
+                    "type": AbstractDataProviderTypeMap."*date",
+                },
                 "limit": <ActionOptionInfo>{
                     "display_name": "Limit",
                     "short_desc": "Maximum results",
                     "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
                 },
                 "offset": <ActionOptionInfo>{
                     "display_name": "Offset",
@@ -226,7 +294,6 @@ module UnbounceDataProvider {
                     "short_desc": "The domain ID",
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
-                    "preselected": True,
                 },
             },
         });
@@ -249,11 +316,34 @@ module UnbounceDataProvider {
                     "short_desc": "Sub-account to list page groups for",
                     "type": AbstractDataProviderTypeMap."*string",
                     "preselected": True,
+                    "ref_data": "sub_accounts",
+                },
+                "sort_order": <ActionOptionInfo>{
+                    "display_name": "Sort Order",
+                    "short_desc": "Sort direction",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "asc", "display_name": "Ascending",
+                            "desc": "Sort in ascending order"},
+                        <AllowedValueInfo>{"value": "desc", "display_name": "Descending",
+                            "desc": "Sort in descending order"},
+                    ),
+                },
+                "from": <ActionOptionInfo>{
+                    "display_name": "From",
+                    "short_desc": "Start date filter",
+                    "type": AbstractDataProviderTypeMap."*date",
+                },
+                "to": <ActionOptionInfo>{
+                    "display_name": "To",
+                    "short_desc": "End date filter",
+                    "type": AbstractDataProviderTypeMap."*date",
                 },
                 "limit": <ActionOptionInfo>{
                     "display_name": "Limit",
                     "short_desc": "Maximum results",
                     "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
                 },
                 "offset": <ActionOptionInfo>{
                     "display_name": "Offset",
@@ -281,6 +371,7 @@ module UnbounceDataProvider {
                     "display_name": "Page ID",
                     "short_desc": "Filter by page ID",
                     "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
                     "ref_data": "pages",
                 },
                 "with_stats": <ActionOptionInfo>{
@@ -293,8 +384,10 @@ module UnbounceDataProvider {
                     "short_desc": "Filter by user role",
                     "type": AbstractDataProviderTypeMap."*string",
                     "allowed_values": (
-                        <AllowedValueInfo>{"value": "viewer", "desc": "Pages where the user is a viewer"},
-                        <AllowedValueInfo>{"value": "author", "desc": "Pages where the user is an author"},
+                        <AllowedValueInfo>{"value": "viewer", "display_name": "Viewer",
+                            "desc": "Pages where the user is a viewer"},
+                        <AllowedValueInfo>{"value": "author", "display_name": "Author",
+                            "desc": "Pages where the user is an author"},
                     ),
                 },
                 "sort_order": <ActionOptionInfo>{
@@ -302,8 +395,10 @@ module UnbounceDataProvider {
                     "short_desc": "Sort direction",
                     "type": AbstractDataProviderTypeMap."*string",
                     "allowed_values": (
-                        <AllowedValueInfo>{"value": "asc", "desc": "Sort in ascending order"},
-                        <AllowedValueInfo>{"value": "desc", "desc": "Sort in descending order"},
+                        <AllowedValueInfo>{"value": "asc", "display_name": "Ascending",
+                            "desc": "Sort in ascending order"},
+                        <AllowedValueInfo>{"value": "desc", "display_name": "Descending",
+                            "desc": "Sort in descending order"},
                     ),
                 },
                 "from": <ActionOptionInfo>{
@@ -320,6 +415,7 @@ module UnbounceDataProvider {
                     "display_name": "Limit",
                     "short_desc": "Maximum results",
                     "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
                 },
                 "offset": <ActionOptionInfo>{
                     "display_name": "Offset",
@@ -345,7 +441,6 @@ module UnbounceDataProvider {
                     "short_desc": "The page ID",
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
-                    "preselected": True,
                     "ref_data": "pages",
                 },
             },
@@ -375,6 +470,7 @@ module UnbounceDataProvider {
                     "display_name": "Limit",
                     "short_desc": "Maximum results",
                     "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
                 },
                 "offset": <ActionOptionInfo>{
                     "display_name": "Offset",
@@ -408,14 +504,17 @@ module UnbounceDataProvider {
                     "display_name": "Lead ID",
                     "short_desc": "Filter by lead ID",
                     "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "leads",
                 },
                 "sort_order": <ActionOptionInfo>{
                     "display_name": "Sort Order",
                     "short_desc": "Sort direction",
                     "type": AbstractDataProviderTypeMap."*string",
                     "allowed_values": (
-                        <AllowedValueInfo>{"value": "asc", "desc": "Sort in ascending order"},
-                        <AllowedValueInfo>{"value": "desc", "desc": "Sort in descending order"},
+                        <AllowedValueInfo>{"value": "asc", "display_name": "Ascending",
+                            "desc": "Sort in ascending order"},
+                        <AllowedValueInfo>{"value": "desc", "display_name": "Descending",
+                            "desc": "Sort in descending order"},
                     ),
                 },
                 "from": <ActionOptionInfo>{
@@ -432,6 +531,7 @@ module UnbounceDataProvider {
                     "display_name": "Limit",
                     "short_desc": "Maximum results",
                     "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
                 },
                 "offset": <ActionOptionInfo>{
                     "display_name": "Offset",
@@ -457,7 +557,7 @@ module UnbounceDataProvider {
                     "short_desc": "The lead ID",
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
-                    "preselected": True,
+                    "ref_data": "leads",
                 },
             },
         });
@@ -574,9 +674,9 @@ module UnbounceDataProvider {
             "action": EVENT_LEAD_ADDED,
             "groups": "Events",
             "display_name": "Watch New Leads",
-            "short_desc": "Detect new leads on a page via polling",
-            "desc": "Polls for new leads on a specific Unbounce landing page and fires an "
-                "event for each new lead detected",
+            "short_desc": "Trigger when new leads are captured on a page",
+            "desc": "Fires when a new lead is captured on an Unbounce landing page, "
+                "detected via polling",
             "action_code": DPAT_EVENT,
             "action_val": EVENT_LEAD_ADDED,
         });

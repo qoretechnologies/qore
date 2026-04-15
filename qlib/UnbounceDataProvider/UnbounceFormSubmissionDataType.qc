@@ -35,6 +35,7 @@ public class UnbounceFormSubmissionDataType inherits HashDataType {
                 "desc": "The ID of the page variant where the form was submitted",
                 "type": SoftStringType,
                 "required": True,
+                "example_value": "a",
             },
             "submitter_ip": {
                 "display_name": "Submitter IP",
@@ -51,6 +52,7 @@ public class UnbounceFormSubmissionDataType inherits HashDataType {
                     "defined on the page",
                 "type": AutoHashType,
                 "required": True,
+                "example_value": {"email": ("user@example.com",), "name": ("John Doe",)},
             },
         };
     }

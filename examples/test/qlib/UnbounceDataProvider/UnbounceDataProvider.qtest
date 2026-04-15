@@ -69,6 +69,7 @@ public class UnbounceDataProviderTest inherits QUnit::Test {
         addTestCase("connection tests", \connectionTests());
 
         # Integration tests (require Unbounce credentials)
+        addTestCase("connection ping tests", \connectionPingTests());
         addTestCase("integration tests", \integrationTests());
 
         # Try to set up connection for integration tests
@@ -290,6 +291,25 @@ public class UnbounceDataProviderTest inherits QUnit::Test {
         assertEq("Unbounce REST Connection", scheme.display_name);
     }
 
+    #! Connection ping tests (require Unbounce credentials)
+    connectionPingTests() {
+        if (!client) {
+            testSkip("no Unbounce credentials available");
+        }
+
+        *string conn_name = m_options.conn ?? ENV.UNBOUNCE_CONNECTION;
+        if (!conn_name) {
+            testSkip("no connection name available for ping test");
+        }
+        AbstractConnection conn = get_connection(conn_name);
+        hash<auto> ping_result = conn.ping(True);
+        assertEq(True, ping_result.ok, "connection ping succeeded");
+
+        if (m_options.verbose) {
+            printf("Ping result: %y\n", ping_result);
+        }
+    }
+
     #! Integration tests (require Unbounce credentials)
     integrationTests() {
         if (!client) {
@@ -320,7 +340,10 @@ public class UnbounceDataProviderTest inherits QUnit::Test {
         while (page_iter.next()) {
             pages += page_iter.getValue();
         }
-        assertEq(True, True, "pages list succeeded");
+        if (pages.size()) {
+            assertEq(True, pages[0].id.val(), "page has id field");
+            assertEq(True, pages[0].name.val(), "page has name field");
+        }
         if (m_options.verbose) {
             printf("Found %d page(s)\n", pages.size());
         }
@@ -346,7 +369,10 @@ public class UnbounceDataProviderTest inherits QUnit::Test {
         while (lead_iter.next()) {
             leads += lead_iter.getValue();
         }
-        assertEq(True, True, "leads list succeeded");
+        if (leads.size()) {
+            assertEq(True, leads[0].id.val(), "lead has id field");
+            assertEq(True, leads[0].page_id.val(), "lead has page_id field");
+        }
         if (m_options.verbose) {
             printf("Found %d lead(s) on page %s\n", leads.size(), page_id);
         }
@@ -433,6 +459,9 @@ public class UnbounceDataProviderTest inherits QUnit::Test {
         # Test get user (current user)
         AbstractDataProvider users_dp = provider.getChildProvider("users");
         AbstractDataProviderRecordIterator user_iter = users_dp.searchRecords(NOTHING);
-        assertEq(True, True, "users query succeeded");
+        if (user_iter.next()) {
+            hash<auto> user = user_iter.getValue();
+            assertEq(True, user.id.val(), "user has id field");
+        }
     }
 }

@@ -98,8 +98,8 @@ public class UnbounceLeadDeletionRequestsDataProvider inherits UnbounceDataProvi
     }
 
     #! Returns the record type
-    private *AbstractDataProviderType getRecordTypeImpl() {
-        return new UnbounceLeadDeletionRequestDataType();
+    private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
+        return new UnbounceLeadDeletionRequestDataType().getFields();
     }
 
     #! Returns an iterator for records matching the search criteria

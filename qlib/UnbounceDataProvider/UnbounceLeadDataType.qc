@@ -69,9 +69,9 @@ public class UnbounceLeadDataType inherits HashDataType {
             "extra_data": {
                 "display_name": "Extra Data",
                 "short_desc": "Extra lead data",
-                "desc": "Additional data captured with the lead submission. Fields are dynamic "
-                    "and depend on the page configuration",
-                "type": AutoHashOrNothingType,
+                "desc": "Additional data captured with the lead submission, including enrichment "
+                    "data, cookies, and API metadata",
+                "type": new UnbounceLeadExtraDataType(),
             },
         };
     }

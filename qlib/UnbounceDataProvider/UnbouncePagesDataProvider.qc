@@ -66,8 +66,10 @@ public class UnbouncePagesDataProvider inherits UnbounceDataProviderBase {
                 "type": AbstractDataProviderType::get(SoftStringOrNothingType),
                 "desc": "Filter pages by the user's role on the page",
                 "allowed_values": (
-                    <AllowedValueInfo>{"value": "viewer", "desc": "Pages where the user is a viewer"},
-                    <AllowedValueInfo>{"value": "author", "desc": "Pages where the user is an author"},
+                    <AllowedValueInfo>{"value": "viewer", "display_name": "Viewer",
+                        "desc": "Pages where the user is a viewer"},
+                    <AllowedValueInfo>{"value": "author", "display_name": "Author",
+                        "desc": "Pages where the user is an author"},
                 ),
             },
             "sort_order": <DataProviderOptionInfo>{
@@ -76,8 +78,10 @@ public class UnbouncePagesDataProvider inherits UnbounceDataProviderBase {
                 "type": AbstractDataProviderType::get(SoftStringOrNothingType),
                 "desc": "Sort direction for results",
                 "allowed_values": (
-                    <AllowedValueInfo>{"value": "asc", "desc": "Sort in ascending order"},
-                    <AllowedValueInfo>{"value": "desc", "desc": "Sort in descending order"},
+                    <AllowedValueInfo>{"value": "asc", "display_name": "Ascending",
+                        "desc": "Sort in ascending order"},
+                    <AllowedValueInfo>{"value": "desc", "display_name": "Descending",
+                        "desc": "Sort in descending order"},
                 ),
             },
             "from": <DataProviderOptionInfo>{
@@ -140,8 +144,8 @@ public class UnbouncePagesDataProvider inherits UnbounceDataProviderBase {
     }
 
     #! Returns the record type
-    private *AbstractDataProviderType getRecordTypeImpl() {
-        return new UnbouncePageDataType();
+    private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
+        return new UnbouncePageDataType().getFields();
     }
 
     #! Returns an iterator for records matching the search criteria

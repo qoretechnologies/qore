@@ -38,6 +38,9 @@ public class UnbounceDeleteLeadDataProvider inherits UnbounceDataProviderBase {
         };
 
         const ConstructorOptions = BaseConstructorOptions;
+
+        static *AbstractDataProviderType ResponseType = AbstractDataProviderTypeMap."hash";
+        static *AbstractDataProviderType RequestType = new UnbounceDeleteLeadRequestDataType();
     }
 
     #! Creates the object with a REST client
