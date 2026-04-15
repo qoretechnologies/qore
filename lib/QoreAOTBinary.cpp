@@ -111,6 +111,40 @@ static bool readDeferredMemberDefault(
     }
     const uint8_t* save = ptr;
     uint8_t tag_byte = *ptr;
+    if (tag_byte == static_cast<uint8_t>(QoreAOTValueTag::VT_ENUM)) {
+        // Class/static member defaults are read during deserializeClasses,
+        // which runs BEFORE deserializeEnums. The enum the member references
+        // doesn't exist yet — defer resolution to resolveInstanceMembers /
+        // resolveStaticMembers where all enums are registered.
+        ++ptr;  // consume tag
+        if (ptr + 8 > end) {
+            error = "unexpected end of data reading enum path";
+            return false;
+        }
+        (void)QoreAOTBinaryReader::readU32(ptr);  // path_len (unused)
+        uint32_t path_offset = QoreAOTBinaryReader::readU32(ptr);
+        const char* path = reader.getString(path_offset);
+        if (!path) {
+            error = "invalid string offset for enum path";
+            return false;
+        }
+        if (ptr + 8 > end) {
+            error = "unexpected end of data reading enum member name";
+            return false;
+        }
+        (void)QoreAOTBinaryReader::readU32(ptr);  // name_len (unused)
+        uint32_t name_offset = QoreAOTBinaryReader::readU32(ptr);
+        const char* member_name = reader.getString(name_offset);
+        if (!member_name) {
+            error = "invalid string offset for enum member name";
+            return false;
+        }
+        pim.pending_enum_path = path;
+        pim.pending_enum_member = member_name;
+        default_val = QoreValue();
+        (void)save;
+        return true;
+    }
     if (tag_byte != static_cast<uint8_t>(QoreAOTValueTag::VT_NEW_OBJECT)) {
         // Normal case: use the standard reader
         default_val = reader.readValue(ptr, end, error);
@@ -4485,6 +4519,34 @@ bool QoreAOTBinaryDeserializer::resolveInstanceMembers(std::string& error) {
                 pim.pending_new_class_path.clear();
             }
 
+            // Resolve a pending forward-referenced enum member default if any.
+            // Enums are deserialized after classes, so member defaults that
+            // reference enum values are deferred until here.
+            if (!pim.pending_enum_path.empty()) {
+                const QoreNamespace* pns = nullptr;
+                const QoreEnumDecl* ed = getProgram()->findEnum(
+                    pim.pending_enum_path.c_str(), pns);
+                if (ed) {
+                    const QoreEnumMember* member = ed->findMember(
+                        pim.pending_enum_member.c_str());
+                    if (member) {
+                        pim.default_val = QoreValue::makeEnum(member);
+                    } else {
+                        printd(0, "AOT deser: enum member '%s::%s' not found for "
+                            "instance member '%s' in class '%s'\n",
+                            pim.pending_enum_path.c_str(),
+                            pim.pending_enum_member.c_str(),
+                            pim.name.c_str(), qc->getName());
+                    }
+                } else {
+                    printd(0, "AOT deser: enum '%s' not found for instance member "
+                        "'%s' in class '%s'\n",
+                        pim.pending_enum_path.c_str(), pim.name.c_str(), qc->getName());
+                }
+                pim.pending_enum_path.clear();
+                pim.pending_enum_member.clear();
+            }
+
             // Transfer ownership of the default value to the class member
             QoreValue default_val = pim.default_val;
             pim.default_val = QoreValue();  // Clear to prevent double-deref
@@ -4597,6 +4659,34 @@ bool QoreAOTBinaryDeserializer::resolveStaticMembers(std::string& error) {
                     psm.pending_new_args.clear();
                 }
                 psm.pending_new_class_path.clear();
+            }
+
+            // Resolve a pending forward-referenced enum member default if any.
+            // Enums are deserialized after classes, so static member defaults
+            // that reference enum values are deferred until here.
+            if (!psm.pending_enum_path.empty()) {
+                const QoreNamespace* pns = nullptr;
+                const QoreEnumDecl* ed = getProgram()->findEnum(
+                    psm.pending_enum_path.c_str(), pns);
+                if (ed) {
+                    const QoreEnumMember* member = ed->findMember(
+                        psm.pending_enum_member.c_str());
+                    if (member) {
+                        psm.default_val = QoreValue::makeEnum(member);
+                    } else {
+                        printd(0, "AOT deser: enum member '%s::%s' not found for "
+                            "static member '%s' in class '%s'\n",
+                            psm.pending_enum_path.c_str(),
+                            psm.pending_enum_member.c_str(),
+                            psm.name.c_str(), qc->getName());
+                    }
+                } else {
+                    printd(0, "AOT deser: enum '%s' not found for static member "
+                        "'%s' in class '%s'\n",
+                        psm.pending_enum_path.c_str(), psm.name.c_str(), qc->getName());
+                }
+                psm.pending_enum_path.clear();
+                psm.pending_enum_member.clear();
             }
 
             // Create the static variable info. The default value is

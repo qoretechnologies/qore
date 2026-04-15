@@ -1069,6 +1069,11 @@ class QoreAOTBinaryDeserializer {
         std::string pending_new_class_path;
         //! Evaluated constructor args for pending_new_class_path (owned).
         std::vector<QoreValue> pending_new_args;
+        //! When set, the member init references an enum member that was not
+        //! yet deserialized at class-read time (enums are deserialized after
+        //! classes). Resolved into the enum member value in the second pass.
+        std::string pending_enum_path;
+        std::string pending_enum_member;
     };
     std::vector<std::vector<PendingInstanceMember>> pending_instance_members;
 
@@ -1081,6 +1086,9 @@ class QoreAOTBinaryDeserializer {
         //! Same deferred-new-object channel as PendingInstanceMember.
         std::string pending_new_class_path;
         std::vector<QoreValue> pending_new_args;
+        //! Same deferred-enum channel as PendingInstanceMember.
+        std::string pending_enum_path;
+        std::string pending_enum_member;
     };
     std::vector<std::vector<PendingStaticMember>> pending_static_members;
 
