@@ -1729,7 +1729,16 @@ static void writeVariantSignature(QoreAOTBinaryWriter& writer, const AbstractQor
 
     // flags: bit 0 = varargs
     uint16_t flags = 0;
-    if (sig->hasVarargs()) {
+    // IMPORTANT: use variant->hasVarargs() which checks BOTH the signature
+    // ellipsis (`...`) AND the variant's QCF_USES_EXTRA_ARGS flag.  The
+    // signature-only `sig->hasVarargs()` would miss functions like
+    // `sub zip()` whose body references `argv` — the parser sets the
+    // QCF_USES_EXTRA_ARGS flag on the VARIANT at parse time (via
+    // get_pop_argv_ref()), not on the signature.  Losing this bit in the
+    // AOT binary causes downstream callers to fail overload resolution:
+    // e.g. `zip(l1, l2)` at %strict-args errors with "no variant matching"
+    // because the deserialized variant is seen as strictly zero-arg.
+    if (v->hasVarargs()) {
         flags |= 0x0001;
     }
     if (v->isUser()) {
