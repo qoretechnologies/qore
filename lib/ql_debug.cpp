@@ -1110,9 +1110,13 @@ static void ut_manager_pool_reuse(UnitTestCounters& c) {
     UT_ASSERT(c, !xsink, "manager construction succeeds");
     if (xsink) { xsink.clear(); return; }
 
-    // Server that handles two sequential requests on the same connection
-    // (HTTP/1.1 keep-alive — Connection: keep-alive header).  After the
-    // second response, the server closes.
+    // Server that handles two sequential requests on the SAME TCP
+    // connection.  Reuse is enforced by the test topology: the server
+    // listen queue is size 1 and the handler thread does exactly one
+    // accept() — if the client were to open a second TCP connection for
+    // the second request, the server would not service it and mgr->request()
+    // would hang.  Both requests succeeding is therefore proof that the
+    // manager reused the pooled connection.
     UtH1Server server;
     if (server.start() != 0) {
         UT_ASSERT(c, false, "test server bind/listen failed");
@@ -1124,21 +1128,19 @@ static void ut_manager_pool_reuse(UnitTestCounters& c) {
             char buf[4096];
             ssize_t n = ut_read_request_headers(cfd, buf, sizeof(buf));
             if (n <= 0) return;
-            // Use Content-Length-only reply with keep-alive on the first
-            // response so the client reuses the connection.
-            const char* resp = (i == 0)
-                ? "HTTP/1.1 200 OK\r\n"
-                  "Content-Type: text/plain\r\n"
-                  "Content-Length: 5\r\n"
-                  "Connection: keep-alive\r\n"
-                  "\r\n"
-                  "hello"
-                : "HTTP/1.1 200 OK\r\n"
-                  "Content-Type: text/plain\r\n"
-                  "Content-Length: 5\r\n"
-                  "Connection: close\r\n"
-                  "\r\n"
-                  "world";
+            // Both responses use keep-alive so the H1 poll op does not
+            // proactively close the connection after response 2 (that
+            // would evict it from the pool before we can observe it).
+            // The server-side socket still closes when the handler
+            // returns, but the client's I/O thread processes that TCP
+            // close asynchronously, which is a separate condition.
+            static const char* resp =
+                "HTTP/1.1 200 OK\r\n"
+                "Content-Type: text/plain\r\n"
+                "Content-Length: 5\r\n"
+                "Connection: keep-alive\r\n"
+                "\r\n"
+                "hello";
             send(cfd, resp, strlen(resp), 0);
         }
     });
@@ -1156,7 +1158,10 @@ static void ut_manager_pool_reuse(UnitTestCounters& c) {
     UT_ASSERT_EQ(c, 1, mgr->getConnectionCount("127.0.0.1", server_port),
         "key has 1 connection");
 
-    // Second request to the same target — should reuse the pooled connection.
+    // Second request to the same target — reuses the pooled connection.
+    // (If reuse is broken, the server's single-accept topology makes the
+    // request hang rather than produce wrong data, so a successful r2
+    // already proves reuse.)
     {
         ReferenceHolder<QoreHashNode> r2(
             mgr->request("GET", "http", "127.0.0.1", server_port, "/",
@@ -1165,9 +1170,14 @@ static void ut_manager_pool_reuse(UnitTestCounters& c) {
         UT_ASSERT(c, !xsink && r2, "second request succeeds (reuse)");
         if (xsink) xsink.clear();
     }
-    // Pool size still 1 — same connection reused, not a new one created.
-    UT_ASSERT_EQ(c, 1, mgr->getPoolSize(),
-        "pool still has 1 connection after second request (reuse)");
+
+    // We intentionally do NOT assert getPoolSize() after the second
+    // request: the server-side socket is closed by the handler thread
+    // when serveOnce's wrapper calls ::close(cfd) after the lambda
+    // returns, and the client's I/O thread may or may not have
+    // processed that TCP close by the time this function returns from
+    // mgr->request().  A pool-size assertion here is racy.  Reuse is
+    // already proven by the server's single-accept topology.
 }
 
 static void ut_manager_close_all(UnitTestCounters& c) {
