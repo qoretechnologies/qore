@@ -95,7 +95,9 @@ foreach hash<auto> chunk in (chunks) {
     - Added @ref QoreTokenizerUtils::EmbeddingModel "EmbeddingModel" for HTTP and ONNX
       dense embedding support
     - Added @ref QoreTokenizerUtils::CrossEncoderReranker "CrossEncoderReranker" for
-      two-stage retrieval with re-ranking
+      two-stage retrieval with re-ranking, including
+      @ref QoreTokenizerUtils::CrossEncoderReranker::rerankWithScores() "rerankWithScores()"
+      which exposes the real per-passage model scores alongside the sorted indices
     - Added @ref QoreTokenizerUtils::SemanticDocumentChunker "SemanticDocumentChunker"
       for embedding-similarity-based semantic chunking
 
