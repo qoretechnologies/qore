@@ -1418,8 +1418,14 @@ struct qore_httpclient_priv {
             // HTTP2_MODE_AUTO + SSL is still handled by the legacy path
             // (which does ALPN-based protocol selection per-socket) —
             // see the needs_legacy_h2 bypass in send_internal for the
-            // remaining architectural reason.  REQUIRED and H2C_DIRECT
-            // map to the H2 protocol here and go through the conn_mgr.
+            // remaining architectural reason.  Phase 3 of the conn-mgr
+            // ALPN work (design/conn-mgr-alpn-negotiation.md) added the
+            // NegotiatingHttpClientConnection path that would handle
+            // this case through the conn_mgr, but Phase 5's final
+            // wire-up is blocked on an H2-multiplex lifetime race — the
+            // NEGOTIATE path is exercised only via explicit
+            // opts.protocol = NEGOTIATE (C++ unit tests), not from the
+            // HTTPClient layer.  REQUIRED and H2C_DIRECT map to H2 here.
             // The global mode override must be checked here so that
             // set_global_http2_mode("disabled") prevents H2 connections
             // even for REQUIRED-mode clients (matches legacy connect).
@@ -1714,9 +1720,12 @@ struct qore_httpclient_priv {
         }
         // Delegate to conn_mgr when enabled.  Bypasses routed to the
         // legacy path:
-        //   - AUTO+SSL: needs per-connect ALPN in the conn_mgr (Issue 2)
-        //   - REQUIRED+SSL / H2C_DIRECT exposed latent conn_mgr-H2 bugs
-        //     (Issue 1.5); being lifted incrementally as each is fixed.
+        //   - AUTO+SSL: needs per-connect ALPN in the conn_mgr.  The
+        //     NEGOTIATE infrastructure is in place (Phases 1-4 of
+        //     design/conn-mgr-alpn-negotiation.md) but Phase 5's final
+        //     wire-up is blocked on an H2 multiplex lifetime race (the
+        //     H2 multiplex op's first continuePoll sees the socket
+        //     closed after the NEG priv's Phase 3 finalization).
         bool needs_legacy_h2 = h2_enabled
             && http2_mode == HTTP2_MODE_AUTO && connection.ssl;
         if (use_conn_mgr && !needs_legacy_h2) {
@@ -8924,9 +8933,16 @@ QoreHashNode* qore_httpclient_priv::send_internal(ExceptionSink* xsink, const ch
     // Delegate to conn_mgr when enabled.
     // Bypasses routed to the legacy path:
     //   1. AUTO + SSL: the client can't know whether to speak h1 or h2
-    //      until TLS ALPN completes on the TCP socket.  The conn_mgr's
-    //      fixed per-manager protocol model can't represent "negotiate
-    //      at connect time" — see Issue 2 in the H2 cleanup plan.
+    //      until TLS ALPN completes on the TCP socket.  Phase 3–4 of the
+    //      conn-mgr ALPN work built the NEGOTIATE infrastructure
+    //      (NegotiatingHttpClientConnection → adopt-socket H1/H2), but
+    //      Phase 5's final step of wiring it into send_internal is
+    //      blocked on a lifetime race between the DECIDED-state NEG
+    //      cleanup and the just-installed Http2 multiplex op: after
+    //      takeOver the H2 multiplex op fails its first continuePoll
+    //      with `socket closed during poll operation` because something
+    //      in the QoreObject wrapper destruction chain is closing the
+    //      adopted socket.  Keep the legacy bypass until that is fixed.
     //   2. WebSocket upgrade requests (Connection: Upgrade + Upgrade:
     //      websocket header).  After the 101 Switching Protocols
     //      response, the same TCP socket carries the upgraded WebSocket

@@ -472,15 +472,18 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::createConnection(
                 return nullptr;
             }
 
-            // Block on the negotiation handshake.  wait_for_ready is
-            // required for NEGOTIATE in this phase — async takeover is
-            // a future enhancement.
-            if (!wait_for_ready) {
-                xsink->raiseException("HTTPCLIENT-NEGOTIATE-NOT-IMPLEMENTED",
-                    "wait_for_ready=false is not supported for "
-                    "NEGOTIATE connections in this phase");
-                return nullptr;
-            }
+            // Block on the negotiation handshake regardless of the
+            // caller's wait_for_ready setting — we cannot construct
+            // the concrete H1/H2 adopt-socket connection until ALPN
+            // has been decided.  The resulting concrete connection
+            // will be returned in READY state, which satisfies the
+            // acquireConnectionAsync contract's "caller waits on
+            // CONNECTING via registerReadyNotifier" because there
+            // will be nothing to wait for.  True async takeover
+            // (returning a transitional NegotiatingHttpClientConnection
+            // that reports CONNECTING and later morphs into the
+            // concrete) is a later enhancement — blocking here keeps
+            // the phase 5 bypass removal atomic.
             bool ready = neg->waitForReadyOrError(opts_.connect_timeout_ms, xsink);
             if (!ready || *xsink) {
                 if (!*xsink) {
