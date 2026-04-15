@@ -1,0 +1,1268 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore InsightlyDataProvider module definition
+
+/*  InsightlyDataProvider.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 2.0
+# assume local scope for variables, do not use "$" signs
+%modern
+
+%requires(reexport) DataProvider
+%requires(reexport) InsightlyRestClient
+%requires RestClientIo
+
+module InsightlyDataProvider {
+    version = "1.0";
+    desc = "User module providing a data provider API for Insightly CRM";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        # Register the data provider factory
+        DataProvider::registerFactory(new InsightlyDataProviderFactory());
+
+        # Register the application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": InsightlyDataProvider::AppName,
+            "display_name": "Insightly",
+            "short_desc": "Insightly CRM integration",
+            "desc": "Insightly is a CRM platform for managing contacts, organisations, leads, "
+                "opportunities, projects, tasks, notes, calendar events, products, and emails."
+                "\n\nThis integration supports full CRUD operations on core CRM objects "
+                "and polling-based triggers for new records.",
+            "scheme": "insightlyrest",
+            "logo": InsightlyLogo,
+            "logo_file_name": "insightly-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::CrmSales,),
+        });
+
+        # ========== CONTACT ACTIONS ==========
+
+        # Create Contact
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InsightlyDataProvider::AppName,
+            "path": "/contacts/create",
+            "action": "create-contact",
+            "groups": "Contacts",
+            "display_name": "Create Contact",
+            "short_desc": "Create a new contact",
+            "desc": "Create a new contact in Insightly CRM",
+            "action_code": DPAT_API,
+            "data_provider_info": InsightlyCreateContactDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new InsightlyContactDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                InsightlyCreateContactRequestDataType::Fields),
+        });
+
+        # Update Contact
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InsightlyDataProvider::AppName,
+            "path": "/contacts/update",
+            "action": "update-contact",
+            "groups": "Contacts",
+            "display_name": "Update Contact",
+            "short_desc": "Update an existing contact",
+            "desc": "Update an existing contact in Insightly CRM",
+            "action_code": DPAT_API,
+            "data_provider_info": InsightlyUpdateContactDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new InsightlyContactDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                InsightlyUpdateContactRequestDataType::Fields),
+        });
+
+        # Delete Contact
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InsightlyDataProvider::AppName,
+            "path": "/contacts/delete",
+            "action": "delete-contact",
+            "groups": "Contacts",
+            "display_name": "Delete Contact",
+            "short_desc": "Delete a contact",
+            "desc": "Delete a contact from Insightly CRM",
+            "action_code": DPAT_API,
+            "data_provider_info": InsightlyDeleteContactDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return AbstractDataProviderType::get(AutoHashType);
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                InsightlyDeleteContactRequestDataType::Fields),
+        });
+
+        # List Contacts
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InsightlyDataProvider::AppName,
+            "path": "/contacts",
+            "action": "list-contacts",
+            "groups": "Contacts",
+            "display_name": "List Contacts",
+            "short_desc": "List contacts with optional pagination",
+            "desc": "List contacts from Insightly CRM with optional OData pagination",
+            "action_code": DPAT_FIND,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Contact ID",
+                    "short_desc": "Get a specific contact",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "ref_data": "contacts",
+                },
+                "skip": <ActionOptionInfo>{
+                    "display_name": "Skip",
+                    "short_desc": "Number of records to skip",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
+                },
+                "top": <ActionOptionInfo>{
+                    "display_name": "Top",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
+                },
+                "brief": <ActionOptionInfo>{
+                    "display_name": "Brief",
+                    "short_desc": "Return brief results",
+                    "type": AbstractDataProviderTypeMap."*bool",
+                },
+                "count_total": <ActionOptionInfo>{
+                    "display_name": "Count Total",
+                    "short_desc": "Include total count",
+                    "type": AbstractDataProviderTypeMap."*bool",
+                },
+            },
+        });
+
+        # Get Contact
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InsightlyDataProvider::AppName,
+            "path": "/contacts",
+            "action": "get-contact",
+            "groups": "Contacts",
+            "display_name": "Get Contact",
+            "short_desc": "Get a single contact by ID",
+            "desc": "Retrieve a single contact by its ID",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Contact ID",
+                    "short_desc": "The contact ID",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "ref_data": "contacts",
+                },
+            },
+        });
+
+        # ========== ORGANISATION ACTIONS ==========
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InsightlyDataProvider::AppName,
+            "path": "/organisations/create",
+            "action": "create-organisation",
+            "groups": "Organisations",
+            "display_name": "Create Organisation",
+            "short_desc": "Create a new organisation",
+            "desc": "Create a new organisation in Insightly CRM",
+            "action_code": DPAT_API,
+            "data_provider_info": InsightlyCreateOrganisationDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new InsightlyOrganisationDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                InsightlyCreateOrganisationRequestDataType::Fields),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InsightlyDataProvider::AppName,
+            "path": "/organisations/update",
+            "action": "update-organisation",
+            "groups": "Organisations",
+            "display_name": "Update Organisation",
+            "short_desc": "Update an existing organisation",
+            "desc": "Update an existing organisation in Insightly CRM",
+            "action_code": DPAT_API,
+            "data_provider_info": InsightlyUpdateOrganisationDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new InsightlyOrganisationDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                InsightlyUpdateOrganisationRequestDataType::Fields),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InsightlyDataProvider::AppName,
+            "path": "/organisations/delete",
+            "action": "delete-organisation",
+            "groups": "Organisations",
+            "display_name": "Delete Organisation",
+            "short_desc": "Delete an organisation",
+            "desc": "Delete an organisation from Insightly CRM",
+            "action_code": DPAT_API,
+            "data_provider_info": InsightlyDeleteOrganisationDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return AbstractDataProviderType::get(AutoHashType);
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                InsightlyDeleteOrganisationRequestDataType::Fields),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InsightlyDataProvider::AppName,
+            "path": "/organisations",
+            "action": "list-organisations",
+            "groups": "Organisations",
+            "display_name": "List Organisations",
+            "short_desc": "List organisations with optional pagination",
+            "desc": "List organisations from Insightly CRM",
+            "action_code": DPAT_FIND,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Organisation ID",
+                    "short_desc": "Get a specific organisation",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "ref_data": "organisations",
+                },
+                "skip": <ActionOptionInfo>{
+                    "display_name": "Skip",
+                    "short_desc": "Number of records to skip",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
+                },
+                "top": <ActionOptionInfo>{
+                    "display_name": "Top",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
+                },
+                "brief": <ActionOptionInfo>{
+                    "display_name": "Brief",
+                    "short_desc": "Return brief results",
+                    "type": AbstractDataProviderTypeMap."*bool",
+                },
+                "count_total": <ActionOptionInfo>{
+                    "display_name": "Count Total",
+                    "short_desc": "Include total count",
+                    "type": AbstractDataProviderTypeMap."*bool",
+                },
+            },
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InsightlyDataProvider::AppName,
+            "path": "/organisations",
+            "action": "get-organisation",
+            "groups": "Organisations",
+            "display_name": "Get Organisation",
+            "short_desc": "Get a single organisation by ID",
+            "desc": "Retrieve a single organisation by its ID",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Organisation ID",
+                    "short_desc": "The organisation ID",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "ref_data": "organisations",
+                },
+            },
+        });
+
+        # ========== LEAD ACTIONS ==========
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InsightlyDataProvider::AppName,
+            "path": "/leads/create",
+            "action": "create-lead",
+            "groups": "Leads",
+            "display_name": "Create Lead",
+            "short_desc": "Create a new lead",
+            "desc": "Create a new lead in Insightly CRM",
+            "action_code": DPAT_API,
+            "data_provider_info": InsightlyCreateLeadDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new InsightlyLeadDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                InsightlyCreateLeadRequestDataType::Fields),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InsightlyDataProvider::AppName,
+            "path": "/leads/update",
+            "action": "update-lead",
+            "groups": "Leads",
+            "display_name": "Update Lead",
+            "short_desc": "Update an existing lead",
+            "desc": "Update an existing lead in Insightly CRM",
+            "action_code": DPAT_API,
+            "data_provider_info": InsightlyUpdateLeadDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new InsightlyLeadDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                InsightlyUpdateLeadRequestDataType::Fields),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InsightlyDataProvider::AppName,
+            "path": "/leads/delete",
+            "action": "delete-lead",
+            "groups": "Leads",
+            "display_name": "Delete Lead",
+            "short_desc": "Delete a lead",
+            "desc": "Delete a lead from Insightly CRM",
+            "action_code": DPAT_API,
+            "data_provider_info": InsightlyDeleteLeadDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return AbstractDataProviderType::get(AutoHashType);
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                InsightlyDeleteLeadRequestDataType::Fields),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InsightlyDataProvider::AppName,
+            "path": "/leads",
+            "action": "list-leads",
+            "groups": "Leads",
+            "display_name": "List Leads",
+            "short_desc": "List leads with optional pagination",
+            "desc": "List leads from Insightly CRM",
+            "action_code": DPAT_FIND,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Lead ID",
+                    "short_desc": "Get a specific lead",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "ref_data": "leads",
+                },
+                "skip": <ActionOptionInfo>{
+                    "display_name": "Skip",
+                    "short_desc": "Number of records to skip",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
+                },
+                "top": <ActionOptionInfo>{
+                    "display_name": "Top",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
+                },
+                "brief": <ActionOptionInfo>{
+                    "display_name": "Brief",
+                    "short_desc": "Return brief results",
+                    "type": AbstractDataProviderTypeMap."*bool",
+                },
+                "count_total": <ActionOptionInfo>{
+                    "display_name": "Count Total",
+                    "short_desc": "Include total count",
+                    "type": AbstractDataProviderTypeMap."*bool",
+                },
+            },
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InsightlyDataProvider::AppName,
+            "path": "/leads",
+            "action": "get-lead",
+            "groups": "Leads",
+            "display_name": "Get Lead",
+            "short_desc": "Get a single lead by ID",
+            "desc": "Retrieve a single lead by its ID",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Lead ID",
+                    "short_desc": "The lead ID",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "ref_data": "leads",
+                },
+            },
+        });
+
+        # ========== OPPORTUNITY ACTIONS ==========
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InsightlyDataProvider::AppName,
+            "path": "/opportunities/create",
+            "action": "create-opportunity",
+            "groups": "Opportunities",
+            "display_name": "Create Opportunity",
+            "short_desc": "Create a new opportunity",
+            "desc": "Create a new opportunity in Insightly CRM",
+            "action_code": DPAT_API,
+            "data_provider_info": InsightlyCreateOpportunityDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new InsightlyOpportunityDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                InsightlyCreateOpportunityRequestDataType::Fields),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InsightlyDataProvider::AppName,
+            "path": "/opportunities/update",
+            "action": "update-opportunity",
+            "groups": "Opportunities",
+            "display_name": "Update Opportunity",
+            "short_desc": "Update an existing opportunity",
+            "desc": "Update an existing opportunity in Insightly CRM",
+            "action_code": DPAT_API,
+            "data_provider_info": InsightlyUpdateOpportunityDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new InsightlyOpportunityDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                InsightlyUpdateOpportunityRequestDataType::Fields),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InsightlyDataProvider::AppName,
+            "path": "/opportunities/delete",
+            "action": "delete-opportunity",
+            "groups": "Opportunities",
+            "display_name": "Delete Opportunity",
+            "short_desc": "Delete an opportunity",
+            "desc": "Delete an opportunity from Insightly CRM",
+            "action_code": DPAT_API,
+            "data_provider_info": InsightlyDeleteOpportunityDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return AbstractDataProviderType::get(AutoHashType);
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                InsightlyDeleteOpportunityRequestDataType::Fields),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InsightlyDataProvider::AppName,
+            "path": "/opportunities",
+            "action": "list-opportunities",
+            "groups": "Opportunities",
+            "display_name": "List Opportunities",
+            "short_desc": "List opportunities with optional pagination",
+            "desc": "List opportunities from Insightly CRM",
+            "action_code": DPAT_FIND,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Opportunity ID",
+                    "short_desc": "Get a specific opportunity",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "ref_data": "opportunities",
+                },
+                "skip": <ActionOptionInfo>{
+                    "display_name": "Skip",
+                    "short_desc": "Number of records to skip",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
+                },
+                "top": <ActionOptionInfo>{
+                    "display_name": "Top",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
+                },
+                "brief": <ActionOptionInfo>{
+                    "display_name": "Brief",
+                    "short_desc": "Return brief results",
+                    "type": AbstractDataProviderTypeMap."*bool",
+                },
+                "count_total": <ActionOptionInfo>{
+                    "display_name": "Count Total",
+                    "short_desc": "Include total count",
+                    "type": AbstractDataProviderTypeMap."*bool",
+                },
+            },
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InsightlyDataProvider::AppName,
+            "path": "/opportunities",
+            "action": "get-opportunity",
+            "groups": "Opportunities",
+            "display_name": "Get Opportunity",
+            "short_desc": "Get a single opportunity by ID",
+            "desc": "Retrieve a single opportunity by its ID",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Opportunity ID",
+                    "short_desc": "The opportunity ID",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "ref_data": "opportunities",
+                },
+            },
+        });
+
+        # ========== PROJECT ACTIONS ==========
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InsightlyDataProvider::AppName,
+            "path": "/projects/create",
+            "action": "create-project",
+            "groups": "Projects",
+            "display_name": "Create Project",
+            "short_desc": "Create a new project",
+            "desc": "Create a new project in Insightly CRM",
+            "action_code": DPAT_API,
+            "data_provider_info": InsightlyCreateProjectDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new InsightlyProjectDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                InsightlyCreateProjectRequestDataType::Fields),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InsightlyDataProvider::AppName,
+            "path": "/projects/update",
+            "action": "update-project",
+            "groups": "Projects",
+            "display_name": "Update Project",
+            "short_desc": "Update an existing project",
+            "desc": "Update an existing project in Insightly CRM",
+            "action_code": DPAT_API,
+            "data_provider_info": InsightlyUpdateProjectDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new InsightlyProjectDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                InsightlyUpdateProjectRequestDataType::Fields),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InsightlyDataProvider::AppName,
+            "path": "/projects/delete",
+            "action": "delete-project",
+            "groups": "Projects",
+            "display_name": "Delete Project",
+            "short_desc": "Delete a project",
+            "desc": "Delete a project from Insightly CRM",
+            "action_code": DPAT_API,
+            "data_provider_info": InsightlyDeleteProjectDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return AbstractDataProviderType::get(AutoHashType);
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                InsightlyDeleteProjectRequestDataType::Fields),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InsightlyDataProvider::AppName,
+            "path": "/projects",
+            "action": "list-projects",
+            "groups": "Projects",
+            "display_name": "List Projects",
+            "short_desc": "List projects with optional pagination",
+            "desc": "List projects from Insightly CRM",
+            "action_code": DPAT_FIND,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Project ID",
+                    "short_desc": "Get a specific project",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "ref_data": "projects",
+                },
+                "skip": <ActionOptionInfo>{
+                    "display_name": "Skip",
+                    "short_desc": "Number of records to skip",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
+                },
+                "top": <ActionOptionInfo>{
+                    "display_name": "Top",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
+                },
+                "brief": <ActionOptionInfo>{
+                    "display_name": "Brief",
+                    "short_desc": "Return brief results",
+                    "type": AbstractDataProviderTypeMap."*bool",
+                },
+                "count_total": <ActionOptionInfo>{
+                    "display_name": "Count Total",
+                    "short_desc": "Include total count",
+                    "type": AbstractDataProviderTypeMap."*bool",
+                },
+            },
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InsightlyDataProvider::AppName,
+            "path": "/projects",
+            "action": "get-project",
+            "groups": "Projects",
+            "display_name": "Get Project",
+            "short_desc": "Get a single project by ID",
+            "desc": "Retrieve a single project by its ID",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Project ID",
+                    "short_desc": "The project ID",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "ref_data": "projects",
+                },
+            },
+        });
+
+        # ========== TASK ACTIONS ==========
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InsightlyDataProvider::AppName,
+            "path": "/tasks/create",
+            "action": "create-task",
+            "groups": "Tasks",
+            "display_name": "Create Task",
+            "short_desc": "Create a new task",
+            "desc": "Create a new task in Insightly CRM",
+            "action_code": DPAT_API,
+            "data_provider_info": InsightlyCreateTaskDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new InsightlyTaskDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                InsightlyCreateTaskRequestDataType::Fields),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InsightlyDataProvider::AppName,
+            "path": "/tasks/update",
+            "action": "update-task",
+            "groups": "Tasks",
+            "display_name": "Update Task",
+            "short_desc": "Update an existing task",
+            "desc": "Update an existing task in Insightly CRM",
+            "action_code": DPAT_API,
+            "data_provider_info": InsightlyUpdateTaskDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new InsightlyTaskDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                InsightlyUpdateTaskRequestDataType::Fields),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InsightlyDataProvider::AppName,
+            "path": "/tasks/delete",
+            "action": "delete-task",
+            "groups": "Tasks",
+            "display_name": "Delete Task",
+            "short_desc": "Delete a task",
+            "desc": "Delete a task from Insightly CRM",
+            "action_code": DPAT_API,
+            "data_provider_info": InsightlyDeleteTaskDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return AbstractDataProviderType::get(AutoHashType);
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                InsightlyDeleteTaskRequestDataType::Fields),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InsightlyDataProvider::AppName,
+            "path": "/tasks",
+            "action": "list-tasks",
+            "groups": "Tasks",
+            "display_name": "List Tasks",
+            "short_desc": "List tasks with optional pagination",
+            "desc": "List tasks from Insightly CRM",
+            "action_code": DPAT_FIND,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Task ID",
+                    "short_desc": "Get a specific task",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "ref_data": "tasks",
+                },
+                "skip": <ActionOptionInfo>{
+                    "display_name": "Skip",
+                    "short_desc": "Number of records to skip",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
+                },
+                "top": <ActionOptionInfo>{
+                    "display_name": "Top",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
+                },
+                "brief": <ActionOptionInfo>{
+                    "display_name": "Brief",
+                    "short_desc": "Return brief results",
+                    "type": AbstractDataProviderTypeMap."*bool",
+                },
+                "count_total": <ActionOptionInfo>{
+                    "display_name": "Count Total",
+                    "short_desc": "Include total count",
+                    "type": AbstractDataProviderTypeMap."*bool",
+                },
+            },
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InsightlyDataProvider::AppName,
+            "path": "/tasks",
+            "action": "get-task",
+            "groups": "Tasks",
+            "display_name": "Get Task",
+            "short_desc": "Get a single task by ID",
+            "desc": "Retrieve a single task by its ID",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Task ID",
+                    "short_desc": "The task ID",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "ref_data": "tasks",
+                },
+            },
+        });
+
+        # ========== NOTE ACTIONS ==========
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InsightlyDataProvider::AppName,
+            "path": "/notes/create",
+            "action": "create-note",
+            "groups": "Notes",
+            "display_name": "Create Note",
+            "short_desc": "Create a new note",
+            "desc": "Create a new note in Insightly CRM",
+            "action_code": DPAT_API,
+            "data_provider_info": InsightlyCreateNoteDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new InsightlyNoteDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                InsightlyCreateNoteRequestDataType::Fields),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InsightlyDataProvider::AppName,
+            "path": "/notes/update",
+            "action": "update-note",
+            "groups": "Notes",
+            "display_name": "Update Note",
+            "short_desc": "Update an existing note",
+            "desc": "Update an existing note in Insightly CRM",
+            "action_code": DPAT_API,
+            "data_provider_info": InsightlyUpdateNoteDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new InsightlyNoteDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                InsightlyUpdateNoteRequestDataType::Fields),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InsightlyDataProvider::AppName,
+            "path": "/notes/delete",
+            "action": "delete-note",
+            "groups": "Notes",
+            "display_name": "Delete Note",
+            "short_desc": "Delete a note",
+            "desc": "Delete a note from Insightly CRM",
+            "action_code": DPAT_API,
+            "data_provider_info": InsightlyDeleteNoteDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return AbstractDataProviderType::get(AutoHashType);
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                InsightlyDeleteNoteRequestDataType::Fields),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InsightlyDataProvider::AppName,
+            "path": "/notes",
+            "action": "list-notes",
+            "groups": "Notes",
+            "display_name": "List Notes",
+            "short_desc": "List notes with optional pagination",
+            "desc": "List notes from Insightly CRM",
+            "action_code": DPAT_FIND,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Note ID",
+                    "short_desc": "Get a specific note",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "ref_data": "notes",
+                },
+                "skip": <ActionOptionInfo>{
+                    "display_name": "Skip",
+                    "short_desc": "Number of records to skip",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
+                },
+                "top": <ActionOptionInfo>{
+                    "display_name": "Top",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
+                },
+                "brief": <ActionOptionInfo>{
+                    "display_name": "Brief",
+                    "short_desc": "Return brief results",
+                    "type": AbstractDataProviderTypeMap."*bool",
+                },
+                "count_total": <ActionOptionInfo>{
+                    "display_name": "Count Total",
+                    "short_desc": "Include total count",
+                    "type": AbstractDataProviderTypeMap."*bool",
+                },
+            },
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InsightlyDataProvider::AppName,
+            "path": "/notes",
+            "action": "get-note",
+            "groups": "Notes",
+            "display_name": "Get Note",
+            "short_desc": "Get a single note by ID",
+            "desc": "Retrieve a single note by its ID",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Note ID",
+                    "short_desc": "The note ID",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "ref_data": "notes",
+                },
+            },
+        });
+
+        # ========== CALENDAR EVENT ACTIONS ==========
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InsightlyDataProvider::AppName,
+            "path": "/calendar-events/create",
+            "action": "create-calendar-event",
+            "groups": "Calendar Events",
+            "display_name": "Create Calendar Event",
+            "short_desc": "Create a new calendar event",
+            "desc": "Create a new calendar event in Insightly CRM",
+            "action_code": DPAT_API,
+            "data_provider_info": InsightlyCreateCalendarEventDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new InsightlyCalendarEventDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                InsightlyCreateCalendarEventRequestDataType::Fields),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InsightlyDataProvider::AppName,
+            "path": "/calendar-events/update",
+            "action": "update-calendar-event",
+            "groups": "Calendar Events",
+            "display_name": "Update Calendar Event",
+            "short_desc": "Update an existing calendar event",
+            "desc": "Update an existing calendar event in Insightly CRM",
+            "action_code": DPAT_API,
+            "data_provider_info": InsightlyUpdateCalendarEventDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new InsightlyCalendarEventDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                InsightlyUpdateCalendarEventRequestDataType::Fields),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InsightlyDataProvider::AppName,
+            "path": "/calendar-events/delete",
+            "action": "delete-calendar-event",
+            "groups": "Calendar Events",
+            "display_name": "Delete Calendar Event",
+            "short_desc": "Delete a calendar event",
+            "desc": "Delete a calendar event from Insightly CRM",
+            "action_code": DPAT_API,
+            "data_provider_info": InsightlyDeleteCalendarEventDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return AbstractDataProviderType::get(AutoHashType);
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                InsightlyDeleteCalendarEventRequestDataType::Fields),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InsightlyDataProvider::AppName,
+            "path": "/calendar-events",
+            "action": "list-calendar-events",
+            "groups": "Calendar Events",
+            "display_name": "List Calendar Events",
+            "short_desc": "List calendar events with optional pagination",
+            "desc": "List calendar events from Insightly CRM",
+            "action_code": DPAT_FIND,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Event ID",
+                    "short_desc": "Get a specific event",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "ref_data": "calendar_events",
+                },
+                "skip": <ActionOptionInfo>{
+                    "display_name": "Skip",
+                    "short_desc": "Number of records to skip",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
+                },
+                "top": <ActionOptionInfo>{
+                    "display_name": "Top",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
+                },
+                "brief": <ActionOptionInfo>{
+                    "display_name": "Brief",
+                    "short_desc": "Return brief results",
+                    "type": AbstractDataProviderTypeMap."*bool",
+                },
+                "count_total": <ActionOptionInfo>{
+                    "display_name": "Count Total",
+                    "short_desc": "Include total count",
+                    "type": AbstractDataProviderTypeMap."*bool",
+                },
+            },
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InsightlyDataProvider::AppName,
+            "path": "/calendar-events",
+            "action": "get-calendar-event",
+            "groups": "Calendar Events",
+            "display_name": "Get Calendar Event",
+            "short_desc": "Get a single calendar event by ID",
+            "desc": "Retrieve a single calendar event by its ID",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Event ID",
+                    "short_desc": "The event ID",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "ref_data": "calendar_events",
+                },
+            },
+        });
+
+        # ========== PRODUCT ACTIONS ==========
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InsightlyDataProvider::AppName,
+            "path": "/products/create",
+            "action": "create-product",
+            "groups": "Products",
+            "display_name": "Create Product",
+            "short_desc": "Create a new product",
+            "desc": "Create a new product in Insightly CRM",
+            "action_code": DPAT_API,
+            "data_provider_info": InsightlyCreateProductDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new InsightlyProductDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                InsightlyCreateProductRequestDataType::Fields),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InsightlyDataProvider::AppName,
+            "path": "/products/update",
+            "action": "update-product",
+            "groups": "Products",
+            "display_name": "Update Product",
+            "short_desc": "Update an existing product",
+            "desc": "Update an existing product in Insightly CRM",
+            "action_code": DPAT_API,
+            "data_provider_info": InsightlyUpdateProductDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new InsightlyProductDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                InsightlyUpdateProductRequestDataType::Fields),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InsightlyDataProvider::AppName,
+            "path": "/products/delete",
+            "action": "delete-product",
+            "groups": "Products",
+            "display_name": "Delete Product",
+            "short_desc": "Delete a product",
+            "desc": "Delete a product from Insightly CRM",
+            "action_code": DPAT_API,
+            "data_provider_info": InsightlyDeleteProductDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return AbstractDataProviderType::get(AutoHashType);
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                InsightlyDeleteProductRequestDataType::Fields),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InsightlyDataProvider::AppName,
+            "path": "/products",
+            "action": "list-products",
+            "groups": "Products",
+            "display_name": "List Products",
+            "short_desc": "List products with optional pagination",
+            "desc": "List products from Insightly CRM",
+            "action_code": DPAT_FIND,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Product ID",
+                    "short_desc": "Get a specific product",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "ref_data": "products",
+                },
+                "skip": <ActionOptionInfo>{
+                    "display_name": "Skip",
+                    "short_desc": "Number of records to skip",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
+                },
+                "top": <ActionOptionInfo>{
+                    "display_name": "Top",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
+                },
+                "brief": <ActionOptionInfo>{
+                    "display_name": "Brief",
+                    "short_desc": "Return brief results",
+                    "type": AbstractDataProviderTypeMap."*bool",
+                },
+                "count_total": <ActionOptionInfo>{
+                    "display_name": "Count Total",
+                    "short_desc": "Include total count",
+                    "type": AbstractDataProviderTypeMap."*bool",
+                },
+            },
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InsightlyDataProvider::AppName,
+            "path": "/products",
+            "action": "get-product",
+            "groups": "Products",
+            "display_name": "Get Product",
+            "short_desc": "Get a single product by ID",
+            "desc": "Retrieve a single product by its ID",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Product ID",
+                    "short_desc": "The product ID",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "ref_data": "products",
+                },
+            },
+        });
+
+        # ========== EMAIL ACTIONS ==========
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InsightlyDataProvider::AppName,
+            "path": "/emails/create",
+            "action": "create-email",
+            "groups": "Emails",
+            "display_name": "Create Email",
+            "short_desc": "Create a new email record",
+            "desc": "Create a new email record in Insightly CRM",
+            "action_code": DPAT_API,
+            "data_provider_info": InsightlyCreateEmailDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new InsightlyEmailDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                InsightlyCreateEmailRequestDataType::Fields),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InsightlyDataProvider::AppName,
+            "path": "/emails/delete",
+            "action": "delete-email",
+            "groups": "Emails",
+            "display_name": "Delete Email",
+            "short_desc": "Delete an email record",
+            "desc": "Delete an email record from Insightly CRM",
+            "action_code": DPAT_API,
+            "data_provider_info": InsightlyDeleteEmailDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return AbstractDataProviderType::get(AutoHashType);
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                InsightlyDeleteEmailRequestDataType::Fields),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InsightlyDataProvider::AppName,
+            "path": "/emails",
+            "action": "list-emails",
+            "groups": "Emails",
+            "display_name": "List Emails",
+            "short_desc": "List email records with optional pagination",
+            "desc": "List email records from Insightly CRM",
+            "action_code": DPAT_FIND,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Email ID",
+                    "short_desc": "Get a specific email",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "ref_data": "emails",
+                },
+                "skip": <ActionOptionInfo>{
+                    "display_name": "Skip",
+                    "short_desc": "Number of records to skip",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
+                },
+                "top": <ActionOptionInfo>{
+                    "display_name": "Top",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
+                },
+                "brief": <ActionOptionInfo>{
+                    "display_name": "Brief",
+                    "short_desc": "Return brief results",
+                    "type": AbstractDataProviderTypeMap."*bool",
+                },
+                "count_total": <ActionOptionInfo>{
+                    "display_name": "Count Total",
+                    "short_desc": "Include total count",
+                    "type": AbstractDataProviderTypeMap."*bool",
+                },
+            },
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InsightlyDataProvider::AppName,
+            "path": "/emails",
+            "action": "get-email",
+            "groups": "Emails",
+            "display_name": "Get Email",
+            "short_desc": "Get a single email by ID",
+            "desc": "Retrieve a single email record by its ID",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Email ID",
+                    "short_desc": "The email ID",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "ref_data": "emails",
+                },
+            },
+        });
+
+        # ========== EVENT TRIGGERS ==========
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InsightlyDataProvider::AppName,
+            "path": "/events/" + EVENT_NEW_CONTACT,
+            "action": EVENT_NEW_CONTACT,
+            "groups": "Events",
+            "display_name": "New Contact",
+            "short_desc": "Trigger when a new contact is created",
+            "desc": "Fires when a new contact is created in Insightly",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_NEW_CONTACT,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InsightlyDataProvider::AppName,
+            "path": "/events/" + EVENT_NEW_ORGANISATION,
+            "action": EVENT_NEW_ORGANISATION,
+            "groups": "Events",
+            "display_name": "New Organisation",
+            "short_desc": "Trigger when a new organisation is created",
+            "desc": "Fires when a new organisation is created in Insightly",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_NEW_ORGANISATION,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InsightlyDataProvider::AppName,
+            "path": "/events/" + EVENT_NEW_LEAD,
+            "action": EVENT_NEW_LEAD,
+            "groups": "Events",
+            "display_name": "New Lead",
+            "short_desc": "Trigger when a new lead is created",
+            "desc": "Fires when a new lead is created in Insightly",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_NEW_LEAD,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InsightlyDataProvider::AppName,
+            "path": "/events/" + EVENT_NEW_OPPORTUNITY,
+            "action": EVENT_NEW_OPPORTUNITY,
+            "groups": "Events",
+            "display_name": "New Opportunity",
+            "short_desc": "Trigger when a new opportunity is created",
+            "desc": "Fires when a new opportunity is created in Insightly",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_NEW_OPPORTUNITY,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": InsightlyDataProvider::AppName,
+            "path": "/events/" + EVENT_NEW_TASK,
+            "action": EVENT_NEW_TASK,
+            "groups": "Events",
+            "display_name": "New Task",
+            "short_desc": "Trigger when a new task is created",
+            "desc": "Fires when a new task is created in Insightly",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_NEW_TASK,
+        });
+    };
+}
+
+/** @mainpage InsightlyDataProvider Module
+
+    @tableofcontents
+
+    @section insightlydataproviderintro InsightlyDataProvider Introduction
+
+    The %InsightlyDataProvider module provides a data provider API for Insightly CRM.
+
+    To use this module, use \c "%requires InsightlyDataProvider" in your code.
+
+    All the public symbols in the module are defined in the InsightlyDataProvider namespace.
+
+    @section insightlydataproviderrelnotes Release Notes
+
+    @subsection insightlydataproviderv1_0 InsightlyDataProvider v1.0
+    - the initial version of the %InsightlyDataProvider module
+*/

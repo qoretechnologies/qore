@@ -163,6 +163,8 @@ public class DataProvider {
             "icsread": "IcsDataProvider",
             "icswrite": "IcsDataProvider",
 
+            "insightly": "InsightlyDataProvider",
+
             "jotform": "JotformDataProvider",
 
             # provided by the json module

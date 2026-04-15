@@ -148,6 +148,9 @@ public class ConnectionSchemeCache {
 
             "hue": "HueRestClient",
 
+            "insightlyrest": "InsightlyRestClient",
+            "insightlyrests": "InsightlyRestClient",
+
             "jotform": "JotformRestClient",
 
             # provided by the json module

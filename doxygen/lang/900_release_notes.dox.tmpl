@@ -1365,6 +1365,17 @@ cargo install tree-sitter-cli@0.26.5
       - supports incremental body reading with @ref HttpStreamClient::HTTPResponseStream::readChunk() "HTTPResponseStream::readChunk()"
       - automatic decompression for gzip, deflate, bzip2, brotli, zstd, and lz4 content encodings
       - works with the new @ref Qore::HTTPClient::sendAndStream() "HTTPClient::sendAndStream()" method
+    - @ref insightlyrestclientintro "InsightlyRestClient" module
+      - new module providing a REST client for <a href="https://www.insightly.com/">Insightly</a>'s CRM API v3.1
+      - supports API key authentication via HTTP Basic Auth
+      - auto-detects regional pod (na1, eu1, au1) from API key
+      - uses the new async RestClientIo pattern for HTTP/2 and HTTP/3 multiplexed connections
+      - provides InsightlyRestConnection for connection management with \c insightlyrest:// URL scheme
+    - @ref insightlydataproviderintro "InsightlyDataProvider" module
+      - new module providing a data provider API for <a href="https://www.insightly.com/">Insightly</a> CRM
+      - supports contacts, organisations, leads, opportunities, projects, tasks, notes, calendar events, products, and emails
+      - includes polling-based triggers for new contacts, organisations, leads, opportunities, and tasks
+      - reference data support for users, pipelines, pipeline stages, lead sources/statuses, categories, and teams
     - @ref instantlyrestclientintro "InstantlyRestClient" module
       - new module providing a REST client for <a href="https://instantly.ai/">Instantly</a>'s email outreach API v2
       - supports Bearer token (API key) authentication
