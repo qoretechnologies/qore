@@ -5030,8 +5030,12 @@ extern "C" DLLEXPORT void qore_rt_pop_closure_var_aot(QoreAOTContext* ctx, int32
     // pop from the cvstack.  The variable may have been lazily instantiated by
     // StoreLocal or by LocalVar::getLValue/eval; if it was never accessed, it
     // may not be on the cvstack at all — check before popping.
+    //
+    // Frame-aware: only pop if the CVV is in the current frame. Otherwise the
+    // pop would touch an outer frame's CVV (dangling for the outer's closure
+    // captures) and crash on the outer's return.
     LocalVar* var = ctx->locals[idx];
-    if (thread_try_find_closure_var(var->getName())) {
+    if (thread_try_find_closure_var_in_current_frame(var->getName())) {
         qore_rt_uninstantiate_local(var, xsink);
     }
 }
