@@ -831,7 +831,16 @@ QoreHashNode* HttpClientConnectionManagerBase::request(const char* method,
             "Future returned non-hash result type %d", (int)result.getType());
         return nullptr;
     }
+    // The future returns result.refSelf() — a new ref on the SAME hash
+    // instance.  If the hash has multiple refs (e.g., the promise still
+    // holds one), setKeyValue triggers the uniqueness assertion.  Copy
+    // the hash to ensure we have sole ownership before mutating.
     QoreHashNode* rv = result.get<QoreHashNode>();
+    if (!rv->is_unique()) {
+        QoreHashNode* copy = rv->copy();
+        rv->deref(xsink);
+        rv = copy;
+    }
     // Stamp the response with the actual protocol of the connection that
     // served it.  The C++ multiplex ops (H1/H2/H3) don't set this — the
     // Qore-level stream handles do, but the C++ conn_mgr path doesn't go
