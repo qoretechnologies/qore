@@ -395,32 +395,24 @@ sse.connect();
                 clearTid();
             }
 
-            # Spawn the event loop.  When raw @c background is available
-            # (the default path), we pass @c self as a direct argument to
-            # the static @ref runEventLoop helper, which immediately
-            # converts it to a WEAK reference via @c remove + @c := and
-            # signals @c started.dec() before running the loop.  The
-            # background thread then holds only a weak ref, so the
-            # destructor can fire as soon as all external strong refs to
-            # this client drop, even while the loop is still iterating.
-            #
-            # When the caller has provided @c start_thread (sandbox /
-            # @c PO_NO_THREAD_CONTROL contexts where @c background is
-            # forbidden), we fall back to the legacy method call ref —
-            # this path strongly captures @c self via the closure, so
-            # auto-destruction does not work and the caller must call
-            # @ref disconnect() / @ref delete explicitly.
+            # Spawn the event loop on a background thread holding only a
+            # WEAK reference to this client.  Both spawn paths
+            # (@c background and @ref start_thread) go through the same
+            # static @ref makeEventLoopClosure factory — closures created
+            # inside a static method have no implicit @c self capture, so
+            # the returned callable holds @c self only via the captured
+            # @c w parameter.  When invoked, the closure body immediately
+            # consumes @c w (via @c remove) by passing it to
+            # @ref runEventLoop, which then converts it to a weak ref via
+            # @c := remove.  The @ref Counter ensures the caller does not
+            # return from @ref start until the strong→weak conversion is
+            # complete.
             Counter started(1);
+            code<nothing()> fn = ServerSentEventClient::makeEventLoopClosure(self, started);
 %ifdef PO_NO_THREAD_CONTROL
-            updateTid(start_thread(\eventLoop()));
-            started.dec();  # legacy path does not synchronize via Counter
+            updateTid(start_thread(fn));
 %else
-            if (start_thread) {
-                updateTid(start_thread(\eventLoop()));
-                started.dec();
-            } else {
-                updateTid(background ServerSentEventClient::runEventLoop(self, started));
-            }
+            updateTid(start_thread ? start_thread(fn) : background fn());
 %endif
             started.waitForZero();
         }
@@ -791,73 +783,6 @@ sse.setEventQueue();
         dstream = new TransformOutputStream(ostream, decompressor);
     }
 
-    #! Legacy event loop entry point — used by the @ref start_thread
-    #! and @c PO_NO_THREAD_CONTROL paths.
-    /** This path strongly captures @c self via the closure, so the
-        destructor cannot fire while the loop is running.  The default
-        @ref start path uses the static @ref runEventLoop with a weak
-        reference instead and is exempt from that limitation.
-    */
-    private eventLoop() {
-        on_exit {
-            # issue #4697: went out of scope in event loop
-            if (self) {
-                m.lock();
-                on_exit m.unlock();
-                clearTid();
-
-                logDebug("SSE I/O thread with TID %d terminating", gettid());
-            }
-        }
-
-        setupDecompression();
-
-        while (True) {
-            # issue #4697: went out of scope in event loop
-            if (!self) {
-                break;
-            }
-            int rv;
-            try {
-                rv = eventLoopOnce();
-            } catch (hash<ExceptionInfo> ex) {
-                string err = sprintf("%s: %s: %s", get_ex_pos(ex), ex.err, ex.desc);
-                try {
-                    logError(err);
-                } catch (hash<ExceptionInfo> ex) {
-                    if (ex.err == "OBJECT-ALREADY-DELETED") {
-                        return;
-                    }
-                    rethrow;
-                }
-                break;
-            }
-            if (rv != 0) {
-                break;
-            }
-        }
-
-        closingConnection();
-
-        if (hc.isOpen()) {
-            hc.shutdown();
-            hc.close();
-        }
-
-        if (!self) {
-            return;
-        }
-        if (reconnect && !stop) {
-            startReconnect();
-        } else {
-            if (stop) {
-                logInfo("Disconnected sse connection on external request");
-            } else {
-                logInfo("Disconnected sse connection; reconnect flag not set");
-            }
-        }
-    }
-
     #! Runs one iteration of the event loop body.
     /** @return @c 0 to continue, non-zero to break out of the loop
 
@@ -938,6 +863,28 @@ sse.setEventQueue();
 
         @since ServerSentEventClient 1.1
     */
+    #! Builds a 0-arg callable that drives the event loop with a weak self ref.
+    /** Defined as a @c static method so the returned closure has no
+        implicit @c self capture (closures inside instance methods
+        always capture @c self strongly).  The closure captures only the
+        parameters @c w and @c started — neither forms a self-reference
+        cycle, and @c w is consumed via @c remove on the closure's first
+        and only execution.
+
+        Used by both the @c background and @ref start_thread spawn
+        paths in @ref start, so PO_NO_THREAD_CONTROL clients also get
+        clean auto-destruction (the legacy strong-self closure pattern
+        is gone).
+
+        @since ServerSentEventClient 1.1
+    */
+    private static code<nothing()> makeEventLoopClosure(ServerSentEventClient w,
+            Counter started) {
+        return sub () {
+            ServerSentEventClient::runEventLoop(remove w, started);
+        };
+    }
+
     private static runEventLoop(ServerSentEventClient client0, Counter started) {
         ServerSentEventClient client := remove client0;
         # Background thread now holds only a weak reference; signal the
@@ -1035,32 +982,50 @@ sse.setEventQueue();
     }
 
     #! Starts a reconnect
-    /** Uses the same weak-self spawn pattern as @ref start: capture
-        @c \doReconnect() as a call reference (weak self binding) and
-        dispatch it through the static @ref runReconnect wrapper so the
-        background thread does not keep this client alive on its own.
+    /** Uses the same weak-self spawn pattern as @ref start: a static
+        closure factory whose returned callable holds @c self only via
+        the captured @c w parameter, which the closure body consumes via
+        @c remove on first execution.  The reconnect thread therefore
+        does not keep this client alive on its own.
     */
     private startReconnect() {
-        code<nothing()> fn = \doReconnect();
+        code<nothing()> fn = ServerSentEventClient::makeReconnectClosure(self);
         int tid;
 %ifdef PO_NO_THREAD_CONTROL
         tid = start_thread(fn);
 %else
-        tid = start_thread
-            ? start_thread(fn)
-            : background ServerSentEventClient::runReconnect(fn);
+        tid = start_thread ? start_thread(fn) : background fn();
 %endif
         logInfo("Disconnected sse connection; starting reconnect in TID %d", tid);
     }
 
-    #! Background-thread entry point for the reconnect loop.
-    /** See @ref runEventLoop — same weak-self rationale.
+    #! Builds a 0-arg callable that drives a reconnect with a weak self ref.
+    /** Counterpart to @ref makeEventLoopClosure for the reconnect path.
+        Same rationale: static method = no implicit @c self capture, the
+        closure consumes @c w via @c remove on first execution.
 
         @since ServerSentEventClient 1.1
     */
-    private static runReconnect(code<nothing()> fn) {
+    private static code<nothing()> makeReconnectClosure(ServerSentEventClient w) {
+        return sub () {
+            ServerSentEventClient::runReconnect(remove w);
+        };
+    }
+
+    #! Background-thread entry point for the reconnect loop (weak-ref path).
+    /** Mirrors @ref runEventLoop: receives @c client0 as a strong-ref
+        argument, immediately converts it to a weak ref via @c remove +
+        @c :=, then drives the reconnect via short instance-method
+        invocations so the destructor can fire between iterations.
+
+        @since ServerSentEventClient 1.1
+    */
+    private static runReconnect(ServerSentEventClient client0) {
+        ServerSentEventClient client := remove client0;
         try {
-            fn();
+            if (client) {
+                client.doReconnect();
+            }
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err == "OBJECT-ALREADY-DELETED") {
                 return;
