@@ -1,0 +1,436 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file UnbounceRestClient.qm Qore user module for calling Unbounce REST API services
+
+/*  UnbounceRestClient.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum qore version
+%requires qore >= 2.0
+
+# assume local scope for variables, do not use "$" signs
+%modern
+
+%requires(reexport) Mime >= 1.3
+%requires(reexport) RestClient >= 1.3.1
+%requires(reexport) RestClientIo
+%requires(reexport) ConnectionProvider >= 1.4
+
+module UnbounceRestClient {
+    version = "1.0";
+    desc = "User module for calling Unbounce REST API services";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        ConnectionSchemeCache::registerScheme("unbouncerest", UnbounceRestConnection::ConnectionScheme);
+    };
+}
+
+/** @mainpage UnbounceRestClient Module
+
+    @tableofcontents
+
+    @section unbouncerestclientintro UnbounceRestClient Introduction
+
+    The %UnbounceRestClient module provides an API for calling Unbounce REST API services.
+
+    To use this module, use \c "%requires UnbounceRestClient" in your code.
+
+    All the public symbols in the module are defined in the UnbounceRestClient namespace.
+
+    The main classes are:
+    - @ref UnbounceRestClient::UnbounceRestClient "UnbounceRestClient":
+      this class provides the REST client API for communication with the Unbounce API;
+      it handles OAuth2 authentication
+    - @ref UnbounceRestClient::UnbounceRestConnection "UnbounceRestConnection":
+      provides a connection object to Unbounce services (based on the
+      @ref connectionproviderintro "ConnectionProvider" module)
+
+    @par Example:
+    @code{.py}
+#!/usr/bin/env qore
+
+%requires UnbounceRestClient
+
+UnbounceRestClient unbounce({
+    "oauth2_client_id": ENV.UNBOUNCE_CLIENT_ID,
+    "oauth2_client_secret": ENV.UNBOUNCE_CLIENT_SECRET,
+    "oauth2_refresh_token": ENV.UNBOUNCE_REFRESH_TOKEN,
+});
+hash<auto> result = unbounce.get("accounts");
+printf("Accounts: %y\n", result.body);
+    @endcode
+
+    @section unbouncerestclientrelnotes Release Notes
+
+    @subsection unbouncerestclientv1_0 UnbounceRestClient v1.0
+    - the initial version of the %UnbounceRestClient module
+*/
+
+#! the UnbounceRestClient namespace contains all the objects in the UnbounceRestClient module
+public namespace UnbounceRestClient {
+
+#! Common base class for UnbounceRestClient functionality
+public class UnbounceRestClientBase {
+    public {
+        #! Default Unbounce API URL
+        const DefaultUrl = "https://api.unbounce.com";
+
+        #! Default authorization request URL
+        const DefaultAuthUrl = "https://api.unbounce.com/oauth/authorize";
+
+        #! Default OAuth2 grant type
+        const DefaultGrantType = "authorization_code";
+
+        #! Default token request URL
+        const DefaultTokenUrl = "https://api.unbounce.com/oauth/token";
+
+        #! Default "data" option value
+        const DefaultData = "json";
+
+        #! Default ping method
+        const DefaultPingMethod = "GET";
+
+        #! Default ping path (no leading slash)
+        const DefaultPingPath = "accounts";
+
+        #! Custom Accept header required for Unbounce API versioning
+        const DefaultAcceptHeader = "application/vnd.unbounce.api.v0.4+json";
+
+        #! Default ping headers
+        const DefaultPingHeaders = {
+            "Accept": DefaultAcceptHeader,
+        };
+
+        #! Default headers for all requests
+        const DefaultHeaders = {
+            "Accept": DefaultAcceptHeader,
+        };
+
+        #! Default OAuth2 scopes
+        const DefaultScopes = (
+            "full",
+        );
+
+        #! Default OAuth2 auth args to request offline access (refresh tokens)
+        const DefaultAuthArgs = {
+            "access_type": "offline",
+            "prompt": "consent",
+        };
+
+        #! Default constructor options
+        const DefaultOptions = {
+            "data": DefaultData,
+            "headers": DefaultHeaders,
+            "oauth2_auth_args": DefaultAuthArgs,
+            "ping_headers": DefaultPingHeaders,
+            "ping_method": DefaultPingMethod,
+            "ping_path": DefaultPingPath,
+            "url": DefaultUrl,
+        };
+
+        #! OAuth2 options (added when OAuth2 credentials are provided)
+        const OAuth2Options = {
+            "oauth2_auth_url": DefaultAuthUrl,
+            "oauth2_grant_type": DefaultGrantType,
+            "oauth2_token_url": DefaultTokenUrl,
+            "oauth2_scopes": DefaultScopes,
+        };
+
+        #! Default connection URL
+        const DefaultConnectionUrl = "unbouncerest://api.unbounce.com";
+    }
+
+    #! returns options for the UnbounceRestClient constructor
+    static hash<auto> getOptions(hash<auto> opts) {
+        hash<auto> rv = DefaultOptions + opts;
+
+        # Ensure URL is always set (auto_url connections may pass NOTHING)
+        if (!rv.url) {
+            rv.url = DefaultUrl;
+        }
+
+        # Ensure the custom Accept header is always present
+        rv.headers.Accept = DefaultAcceptHeader;
+
+        if (opts.oauth2_client_id) {
+            rv += OAuth2Options;
+        } else if (opts.token) {
+            # Bearer token mode
+            rv.headers.Authorization = "Bearer " + opts.token;
+            remove rv.token;
+        }
+
+        return rv;
+    }
+}
+
+#! This class provides the REST client API for communication with Unbounce servers
+/** Unbounce uses a REST API at https://api.unbounce.com with OAuth2 authentication.
+
+    @par Authentication:
+    - OAuth2 with Bearer tokens (authorization code grant)
+    - Access tokens expire after 600 seconds and are refreshed automatically
+    - Scope: full
+
+    @par API Versioning:
+    Unbounce uses a custom Accept header for API versioning:
+    \c Accept: application/vnd.unbounce.api.v0.4+json
+
+    This header is set automatically on all requests.
+*/
+public class UnbounceRestClient inherits RestClient::RestClient, UnbounceRestClientBase {
+    #! creates the object with the given options
+    /**
+        @par Example:
+        @code{.py}
+UnbounceRestClient unbounce({
+    "oauth2_client_id": "your-client-id",
+    "oauth2_client_secret": "your-client-secret",
+    "oauth2_refresh_token": "your-refresh-token",
+});
+        @endcode
+
+        @param opts valid options are all the options for the @ref RestClient::RestClient "RestClient" class
+
+        @param do_not_connect if \c False (the default), then a connection will be immediately
+        established to the remote server
+
+        @throw RESTCLIENT-ERROR invalid option passed to constructor, unsupported data
+        serialization, etc
+    */
+    constructor(hash<auto> opts, *softbool do_not_connect)
+            : RestClient(UnbounceRestClientBase::getOptions(opts), do_not_connect) {
+        setAssumedEncoding("UTF-8");
+    }
+}
+
+#! Class for Unbounce REST connections; returns @ref UnbounceRestClient objects
+/** This class implements all options of @ref RestClient::RestConnection "RestClientConnection"
+
+    @see @ref UnbounceRestClient::UnbounceRestClient::constructor() for more information on the
+    above options
+*/
+public class UnbounceRestConnection inherits RestClient::RestConnection {
+    public {
+        #! Connection entry info
+        const ConnectionScheme = <ConnectionSchemeInfo>{
+            "display_name": "Unbounce REST Connection",
+            "short_desc": "A connection to the Unbounce REST API",
+            "desc": "A connection to the Unbounce REST API for landing pages, popups, sticky bars, "
+                "leads, form submissions, and A/B testing",
+            "cls": Class::forName("UnbounceRestConnection"),
+            "auto_url": True,
+            "schemes": {
+                "unbouncerest": True,
+            },
+            "base_scheme_map": {
+                "https": "unbouncerest",
+            },
+            "required_options": "oauth2_client_id,oauth2_client_secret",
+            "options": RestConnection::ConnectionScheme.options + {
+                "data": RestConnection::ConnectionScheme.options."data"
+                + <ConnectionOptionInfo>{
+                    "default_value": UnbounceRestClientBase::DefaultData,
+                },
+                "ping_headers": RestConnection::ConnectionScheme.options."ping_headers"
+                + <ConnectionOptionInfo>{
+                    "default_value": UnbounceRestClientBase::DefaultPingHeaders,
+                },
+                "ping_method": RestConnection::ConnectionScheme.options."ping_method"
+                + <ConnectionOptionInfo>{
+                    "default_value": UnbounceRestClientBase::DefaultPingMethod,
+                },
+                "ping_path": RestConnection::ConnectionScheme.options."ping_path"
+                + <ConnectionOptionInfo>{
+                    "default_value": UnbounceRestClientBase::DefaultPingPath,
+                },
+                "oauth2_auth_args": RestConnection::ConnectionScheme.options.oauth2_auth_args
+                + <ConnectionOptionInfo>{
+                    "default_value": UnbounceRestClientBase::DefaultAuthArgs,
+                },
+                "oauth2_auth_url": RestConnection::ConnectionScheme.options.oauth2_auth_url
+                + <ConnectionOptionInfo>{
+                    "default_value": UnbounceRestClientBase::DefaultAuthUrl,
+                },
+                "oauth2_grant_type": RestConnection::ConnectionScheme.options.oauth2_grant_type
+                + <ConnectionOptionInfo>{
+                    "default_value": UnbounceRestClientBase::DefaultGrantType,
+                },
+                "oauth2_scopes": RestConnection::ConnectionScheme.options.oauth2_scopes
+                + <ConnectionOptionInfo>{
+                    "default_value": UnbounceRestClientBase::DefaultScopes,
+                },
+                "oauth2_token_url": RestConnection::ConnectionScheme.options.oauth2_token_url
+                + <ConnectionOptionInfo>{
+                    "default_value": UnbounceRestClientBase::DefaultTokenUrl,
+                },
+            },
+        };
+    }
+
+    #! creates the UnbounceRestConnection object
+    /** @param name the name of the connection
+        @param description connection description
+        @param url connection URL (potentially with password info)
+        @param attributes various attributes. See below
+        @param options connection options
+
+        See @ref ConnectionProvider::AbstractConnection::constructor() for \c attributes and
+        \c options reference.
+
+        @throw CONNECTION-OPTION-ERROR missing or invalid connection option
+    */
+    constructor(string name, string description, string url = UnbounceRestClientBase::DefaultConnectionUrl,
+            hash<auto> attributes = {}, hash<auto> options = {})
+            : RestConnection(name, description, url, attributes, options) {
+    }
+
+    #! creates the UnbounceRestConnection object
+    /** @param config with the following keys:
+        - name (required string): the connection name
+        - display_name (optional string): the display name
+        - short_desc (optional string): a short description in plain text
+        - desc (optional string): a long description with markdown formatting
+        - url (required string): the connection URL
+        - opts (optional hash): connection options
+        - logger (optional LoggerInterface object): logger for the connection
+        @param attr optional connection attributes
+        - monitor (optional bool): should the connection be monitored? Default: True
+        - enabled (optional bool): is the connection enabled? Default: True
+        - locked (optional bool): is the connection locked? Default: False
+        - debug_data (optional bool): debug data? Default: False
+        - tags (optional hash): tags for the connection; no default value
+
+        @throw CONNECTION-OPTION-ERROR missing or invalid connection option or attribute
+    */
+    constructor(hash<auto> config, *hash<auto> attr)
+            : RestConnection(UnbounceRestConnection::getConfig(config), attr) {
+    }
+
+    #! returns config for @ref UnbounceRestConnection::constructor()
+    private static hash<auto> getConfig(hash<auto> config) {
+        # Unbounce has a single fixed API endpoint — always override
+        config.url = UnbounceRestClientBase::DefaultConnectionUrl;
+        return config;
+    }
+
+    #! returns \c "unbouncerest"
+    string getType() {
+        return "unbouncerest";
+    }
+
+    #! Returns connection options
+    *hash<auto> getConnectionOptions(*hash<auto> rtopts) {
+        hash<auto> rv = RestConnection::getConnectionOptions(rtopts);
+        # Always set OAuth2 URLs
+        rv.oauth2_auth_url = UnbounceRestClientBase::DefaultAuthUrl;
+        rv.oauth2_token_url = UnbounceRestClientBase::DefaultTokenUrl;
+        rv.oauth2_grant_type = UnbounceRestClientBase::DefaultGrantType;
+        rv.oauth2_scopes = UnbounceRestClientBase::DefaultScopes;
+        rv.oauth2_auth_args = UnbounceRestClientBase::DefaultAuthArgs;
+        return rv;
+    }
+
+    #! returns @ref True as this connection returns a data provider with the @ref getDataProvider()
+    #! method
+    bool hasDataProvider() {
+        return True;
+    }
+
+    #! Returns the data provider application name this connection serves, if any
+    *string getAppName() {
+        return "Unbounce";
+    }
+
+    #! returns a data provider object for this connection
+    /** @param constructor_options any additional constructor options for the data provider
+
+        @return a data provider object for this connection
+    */
+    DataProvider::AbstractDataProvider getDataProvider(*hash<auto> constructor_options) {
+        # to avoid circular dependencies, this object loads the UnbounceDataProvider and creates
+        # the data provider object dynamically
+        load_module("UnbounceDataProvider");
+        return create_object("UnbounceDataProvider", getAsync());
+    }
+
+    #! Sets child data provider capabilities
+    private setChildCapabilities() {
+        children_can_support_records = True;
+        children_can_support_apis = True;
+        children_can_support_observers = True;
+    }
+
+    #! Sets the update options code for the connection
+    setUpdateOptionsCode(*code update_options) {
+        UpdateOptionsInterface::setUpdateOptionsCode(update_options);
+        if (update_options) {
+            hash<auto> update;
+            if (url != UnbounceRestClientBase::DefaultConnectionUrl) {
+                update.url = UnbounceRestClientBase::DefaultConnectionUrl;
+            }
+            if (opts.ping_path =~ /^\//) {
+                update.ping_path = opts.ping_path.substr(1);
+            }
+            if (update) {
+                doUpdateOptions(self, update);
+            }
+        }
+    }
+
+    #! returns a @ref UnbounceRestClient object
+    /** @param connect if @ref True "True", then the connection is returned already connected
+        @param rtopts this connection type does not accept any runtime options, so this parameter
+        is ignored
+
+        @return a @ref UnbounceRestClient object
+    */
+    private UnbounceRestClient getImpl(bool connect = True, *hash<auto> rtopts) {
+        return new UnbounceRestClient(getConnectionOptions(rtopts), !connect);
+    }
+
+    #! Returns an async-I/O-capable connection object
+    /** @since UnbounceRestClient 1.0
+    */
+    private object getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
+        return new UnbounceRestClientIo(getConnectionOptions(rtopts));
+    }
+
+    #! Returns the ConnectionSchemeInfo hash for this object
+    private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
+        return ConnectionScheme;
+    }
+}
+
+#! REST client for Unbounce REST API using multiplexed HTTP connections
+/** @see UnbounceRestClient for more information
+*/
+public class UnbounceRestClientIo inherits RestClientIo::RestClientIo, UnbounceRestClientBase {
+    #! Creates the object with the given options
+    /** @param opts constructor options
+        @param shared_mgr optional shared connection manager
+    */
+    constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
+            : RestClientIo(UnbounceRestClientBase::getOptions(opts), shared_mgr) {
+    }
+}
+}

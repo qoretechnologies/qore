@@ -281,6 +281,8 @@ public class DataProvider {
             # provided by the zip module
             "zip": "ZipDataProvider",
 
+            "unbounce": "UnbounceDataProvider",
+
             "unleashed": "UnleashedDataProvider",
 
             # provided by the jni module
