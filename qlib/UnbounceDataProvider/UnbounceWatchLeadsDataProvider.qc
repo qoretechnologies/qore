@@ -84,6 +84,9 @@ public class UnbounceWatchLeadsDataProvider inherits UnbounceWatchDataProviderBa
 
     #! Fetches leads created since the given date
     private list<hash<auto>> fetchRecords(date since) {
+        if (!page_id) {
+            throw "UNBOUNCE-ERROR", "page_id is required for fetching leads";
+        }
         return fetchAllPages(
             "pages/" + page_id + "/leads",
             "leads",

@@ -328,9 +328,8 @@ public class UnbounceRestConnection inherits RestClient::RestConnection {
 
     #! returns config for @ref UnbounceRestConnection::constructor()
     private static hash<auto> getConfig(hash<auto> config) {
-        if (!config.url) {
-            config.url = UnbounceRestClientBase::DefaultConnectionUrl;
-        }
+        # Unbounce has a single fixed API endpoint — always override
+        config.url = UnbounceRestClientBase::DefaultConnectionUrl;
         return config;
     }
 

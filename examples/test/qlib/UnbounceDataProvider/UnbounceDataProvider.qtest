@@ -42,8 +42,8 @@
 
 public class UnbounceDataProviderTest inherits QUnit::Test {
     private {
-        #! Unbounce REST client for integration tests
-        *UnbounceRestClient::UnbounceRestClient client;
+        #! Unbounce REST client for integration tests (async)
+        *RestClientIo::RestClientIo client;
 
         #! Logger for verbose output
         Logger logger;
@@ -64,13 +64,16 @@ public class UnbounceDataProviderTest inherits QUnit::Test {
         addTestCase("metadata tests", \metadataTests());
         addTestCase("child provider tests", \childProviderTests());
         addTestCase("data type tests", \dataTypeTests());
-        addTestCase("trigger example data tests", \triggerExampleDataTests());
         addTestCase("negative tests", \negativeTests());
         addTestCase("connection tests", \connectionTests());
 
         # Integration tests (require Unbounce credentials)
-        addTestCase("connection ping tests", \connectionPingTests());
+        # NOTE: integration tests must run before trigger/ping tests because those tests
+        # can poison the HttpClientConnectionManager (e.g. via AbstractWatchDataProviderBase
+        # destructor cleanup), causing subsequent API calls to fail with HTTPCLIENT-SHUTDOWN
         addTestCase("integration tests", \integrationTests());
+        addTestCase("trigger example data tests", \triggerExampleDataTests());
+        addTestCase("connection ping tests", \connectionPingTests());
 
         # Try to set up connection for integration tests
         try {
@@ -91,7 +94,7 @@ public class UnbounceDataProviderTest inherits QUnit::Test {
         if (conn_name) {
             AbstractConnection conn = get_connection(conn_name);
             if (conn instanceof UnbounceRestClient::UnbounceRestConnection) {
-                client = (cast<UnbounceRestClient::UnbounceRestConnection>(conn)).get(True);
+                client = conn.getAsync();
             }
             return;
         }
@@ -99,7 +102,7 @@ public class UnbounceDataProviderTest inherits QUnit::Test {
         # Try environment variables
         *string token = m_options.token ?? ENV.UNBOUNCE_TOKEN;
         if (token) {
-            client = new UnbounceRestClient::UnbounceRestClient({"token": token});
+            client = new UnbounceRestClient::UnbounceRestClientIo({"token": token});
         }
     }
 
