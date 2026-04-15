@@ -413,14 +413,18 @@ public:
         return cap;
     }
 
-    //! Blocks up to @a timeout_ms waiting for the channel to become
-    //! non-empty or closed.  Non-destructive — does not consume any value.
-    /** @param timeout_ms wait budget; 0 or negative = wait forever
+    //! Waits for the channel to become non-empty or closed.
+    //! Non-destructive — does not consume any value.
+    /** @param timeout_ms wait budget; @c 0 = non-blocking check,
+        negative = wait forever, positive = wait up to the given number
+        of milliseconds
         @param xsink exception sink (for deletion/interrupt detection)
 
         @return @c true if the channel has at least one buffered value or
-            is closed; @c false on timeout or interrupt.  Callers typically
-            follow up with @ref tryRecv or @ref recv to fetch the value.
+            is closed; @c false if no readable state is available before
+            the timeout expires, in non-blocking mode, or on interrupt.
+            Callers typically follow up with @ref tryRecv or @ref recv
+            to fetch the value.
     */
     DLLLOCAL bool waitReadable(int64 timeout_ms, ExceptionSink* xsink) {
         AutoLocker al(&lck);

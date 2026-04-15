@@ -812,7 +812,10 @@ int64_t HttpClientConnectionManagerBase::requestStreaming(const char* method,
         return -1;
     }
 
-    // The connection stays reserved until the stream completes — the caller
-    // is responsible for releasing it after draining the channel.
+    // Release the stream reservation — submitRequestStreaming internally
+    // calls releaseStreamReservation on success (matching the non-streaming
+    // request() path).  The connection itself stays in the pool; the
+    // active stream count tracks in-flight work independently.
+    releaseConnection(conn);
     return stream_id;
 }
