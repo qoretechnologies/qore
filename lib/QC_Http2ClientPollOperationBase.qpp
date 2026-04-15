@@ -949,8 +949,11 @@ int64_t Http2ClientPollOperationPriv::submitRequest(const char* method, const ch
         }
     }
 
-    // Add Content-Length if body present and header not already set
-    // (matching legacy sendHttp2MessageAndGetResponse behavior)
+    // Add Content-Length when a one-shot request body is present.  The
+    // `streaming` parameter indicates request-body streaming (chunked TE
+    // where the caller pushes body data incrementally via pushSendData),
+    // NOT response streaming (SSE/Channel delivery).  For one-shot bodies
+    // (streaming == false) the full size is known upfront.
     if (body_len > 0 && !streaming) {
         if (req_headers->getKeyValue("content-length").isNullOrNothing()
                 && req_headers->getKeyValue("Content-Length").isNullOrNothing()) {

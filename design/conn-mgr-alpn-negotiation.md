@@ -1,11 +1,11 @@
 # Per-connect ALPN negotiation in HttpClientConnectionManagerBase
 
-**Status:** design proposal — not yet implemented
-**Branch target:** new feature branch off `bugfix/socket_fixes`
-**Depends on:** `design/http-client-manager-cpp-port.md` (the C++ conn_mgr
-  port, phases P1–P7, which this extends)
-**Related:** `lib/QoreHttpClientObject.cpp` — the last remaining
-  `needs_legacy_h2` bypass entry (`http2_mode == AUTO && connection.ssl`)
+**Status:** implemented (phases 1–6 landed on `bugfix/socket_fixes`)
+**Branch:** `bugfix/socket_fixes`
+**Builds on:** `design/http-client-manager-cpp-port.md` (the C++ conn_mgr
+  port, phases P1–P7, which this work extends)
+**Resolved:** `needs_legacy_h2` bypass deleted — AUTO+SSL routes through
+  `HttpClientProtocol::NEGOTIATE` via the conn_mgr
 
 ## 1. Goal
 

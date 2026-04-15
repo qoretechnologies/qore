@@ -1558,11 +1558,11 @@ public class AbstractStreamRequest {
                             chunk = s.readQuicStreamDataBlock(session_id, sid, timeout_ms);
                         } catch (hash<ExceptionInfo> ex) {
                             if (ex.err == "QUIC-STREAM-TIMEOUT") {
-                                # Treat idle timeout as end-of-stream, matching the
-                                # return-NOTHING semantics of
-                                # @ref Socket::readHttp2StreamDataBlock().  The handler
-                                # processes whatever chunks have already been delivered.
-                                break;
+                                # Propagate the timeout so the handler can
+                                # return 408 or otherwise react to a stalled
+                                # client — silently breaking here would
+                                # truncate the request body.
+                                rethrow;
                             }
                             rethrow;
                         }

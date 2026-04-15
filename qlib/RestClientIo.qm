@@ -1203,8 +1203,10 @@ while (*hash<SseMessageInfo> evt = reader.readEvent(30s)) {
                 *hash<auto> hdr, *data body) {
             ensureToken();
             hdr = hdr ?? {};
-            if (!hdr.Accept) {
-                hdr.Accept = "text/event-stream";
+            # Use lowercase header key — HTTP/2 and HTTP/3 require
+            # lowercase header names on the wire (RFC 9113 §8.2).
+            if (!hdr.accept && !hdr.Accept) {
+                hdr.accept = "text/event-stream";
             }
             # Merge auth headers
             {
