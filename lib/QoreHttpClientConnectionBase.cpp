@@ -32,6 +32,7 @@
 #include <qore/Qore.h>
 #include <qore/HttpClientConnection.h>
 #include <qore/HttpClientConnectionManager.h>
+#include <qore/AsyncCompletionAction.h>
 
 bool HttpClientConnectionBase::tryReserveStream() {
     AutoLocker al(reserve_lock);
@@ -95,6 +96,20 @@ int64_t HttpClientConnectionBase::submitRequestStreaming(const char* method, con
         QoreChannel*& channel_out, ExceptionSink* xsink) {
     xsink->raiseException("HTTPCLIENT-NOT-IMPLEMENTED",
         "submitRequestStreaming not implemented on this connection class");
+    return -1;
+}
+
+int64_t HttpClientConnectionBase::submitRequestWithAction(const char* method, const char* path,
+        const QoreHashNode* headers, const void* body, size_t body_len,
+        AbstractAsyncAction* action, ExceptionSink* xsink) {
+    // Default: not supported.  H1/H2 subclasses override.  We own the
+    // action on entry and must release it on failure so the caller does
+    // not leak (matches the H1/H2 overrides which also deref on error).
+    if (action) {
+        action->deref(xsink);
+    }
+    xsink->raiseException("HTTPCLIENT-NOT-IMPLEMENTED",
+        "submitRequestWithAction not implemented on this connection class");
     return -1;
 }
 

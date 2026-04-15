@@ -44,6 +44,7 @@ class QoreObject;
 class ExceptionSink;
 class QoreChannel;
 class HttpClientConnectionManagerBase;
+class AbstractAsyncAction;
 
 //! HTTP client protocol version
 /** @since %Qore 2.3
@@ -214,6 +215,34 @@ public:
     DLLEXPORT virtual int64_t submitRequestStreaming(const char* method, const char* path,
         const QoreHashNode* headers, const void* body, size_t body_len,
         QoreChannel*& channel_out, ExceptionSink* xsink);
+
+    //! Submits a request with a caller-provided async completion action.
+    /** Like @ref submitRequest but uses the caller's
+        @ref AbstractAsyncAction instead of creating a PromiseAction
+        internally.  Used by the conn_mgr poll operation to install a
+        @c PromiseNotifierAction that signals an @c EventNotifier when
+        the response is ready.
+
+        Default implementation raises @c HTTPCLIENT-INTERNAL-ERROR;
+        H1/H2 subclasses override to dispatch through their
+        protocol-specific poll operation.  H3 is not yet supported.
+
+        @param method HTTP method
+        @param path request path
+        @param headers optional request headers
+        @param body optional request body (may be nullptr)
+        @param body_len body length
+        @param action the action to use — ownership transferred on
+            success, dereffed on failure
+        @param xsink exception sink
+
+        @return stream id on success, -1 on failure
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT virtual int64_t submitRequestWithAction(const char* method, const char* path,
+        const QoreHashNode* headers, const void* body, size_t body_len,
+        AbstractAsyncAction* action, ExceptionSink* xsink);
 
     //! Close the connection and release controller resources
     /** After this call, @ref isClosed returns true and no further requests

@@ -1530,11 +1530,11 @@ struct qore_httpclient_priv {
     DLLLOCAL QoreObject* startPollSendRecv(ExceptionSink* xsink, QoreObject* self, QoreHttpClientObject* client,
             const QoreString* method, const QoreString* path, const AbstractQoreNode* data_save, const void* data,
             size_t size, const QoreHashNode* headers, const QoreEncoding* enc = nullptr) {
-        // Delegate to conn_mgr when enabled — but route H2-over-SSL
-        // (AUTO/REQUIRED) and h2c modes to the legacy path (see
-        // send_internal for rationale).  The conn_mgr's poll op hardcodes
-        // Http1ClientConnection and can't do ALPN or HTTP/2 prior-
-        // knowledge preface handling.
+        // Delegate to conn_mgr when enabled — with the same bypass as
+        // send_internal for H2 modes that need per-socket protocol
+        // selection.  See the comment in send_internal for the full
+        // rationale; this path uses the same conn_mgr infrastructure
+        // and inherits the same limitation.
         int global_mode = qore_global_http2_mode.load(std::memory_order_relaxed);
         bool lib_disabled = qore_check_option(QLO_DISABLE_HTTP2);
         bool needs_legacy_h2 =
@@ -8730,24 +8730,31 @@ QoreHashNode* qore_httpclient_priv::send_internal(ExceptionSink* xsink, const ch
 
     // Delegate to conn_mgr when enabled.
     // Exceptions that route to the legacy path:
-    //   1. HTTP2_MODE_AUTO/REQUIRED over SSL requires ALPN-based per-socket
-    //      protocol selection (h2 vs http/1.1), which the conn_mgr's fixed
-    //      per-manager protocol can't support.  The legacy path handles
-    //      ALPN negotiation and H2 session creation on a single socket.
-    //   2. WebSocket upgrade requests (Connection: Upgrade + Upgrade: websocket
-    //      header).  After the 101 Switching Protocols response, the same TCP
-    //      socket carries the upgraded WebSocket protocol.  conn_mgr returns
-    //      pooled connections to the pool after each response, breaking the
-    //      WS upgrade contract — the legacy path leaves msock connected so
-    //      the caller can drive the WS frames over it.
+    //   1. H2 modes that need per-socket protocol negotiation:
+    //      - AUTO/REQUIRED over SSL: ALPN must decide h2 vs http/1.1
+    //        on the connected socket.  The conn_mgr's fixed per-manager
+    //        protocol model can't represent "negotiate at connect time";
+    //        a proper fix requires the manager to instantiate either
+    //        Http1ClientConnection or Http2ClientConnection based on
+    //        the ALPN result, which the current P3 API doesn't support.
+    //      - H2C_DIRECT / H2C_UPGRADE: the client drives the HTTP/2
+    //        preface over a plain-TCP socket, which likewise doesn't
+    //        fit the manager's acquireConnection(scheme, host, port) API.
+    //      HttpClientConnMgrPollOp already dispatches via the virtual
+    //      HttpClientConnectionBase::submitRequestWithAction so it can
+    //      submit requests on either H1 or H2 connections once the
+    //      manager can create them — the bypass here is the remaining
+    //      blocker.
+    //   2. WebSocket upgrade requests (Connection: Upgrade + Upgrade:
+    //      websocket header).  After the 101 Switching Protocols
+    //      response, the same TCP socket carries the upgraded WebSocket
+    //      protocol.  conn_mgr returns pooled connections to the pool
+    //      after each response, breaking the WS upgrade contract — the
+    //      legacy path leaves msock connected so the caller can drive
+    //      the WS frames over it.
     {
         int global_mode = qore_global_http2_mode.load(std::memory_order_relaxed);
         bool lib_disabled = qore_check_option(QLO_DISABLE_HTTP2);
-        // AUTO/REQUIRED over SSL needs ALPN negotiation on a single socket;
-        // H2C_DIRECT and H2C_UPGRADE need the client to send the HTTP/2
-        // preface on a plain-TCP connection.  Neither fits the conn_mgr's
-        // fixed per-manager protocol model — route to the legacy path
-        // which handles per-socket H2 setup.
         bool needs_legacy_h2 =
             (((http2_mode == HTTP2_MODE_AUTO
                     || http2_mode == HTTP2_MODE_REQUIRED)
@@ -9697,18 +9704,9 @@ public:
             return nullptr;
         }
 
-        // READY: submit the request now.
-        Http1ClientConnection* h1 =
-            dynamic_cast<Http1ClientConnection*>(pending_conn);
-        if (!h1) {
-            xsink->raiseException("HTTPCLIENT-INTERNAL-ERROR",
-                "poll send/recv not supported on non-H1 connections");
-            done = true;
-            phase = Phase::DONE;
-            clearPending(xsink);
-            return nullptr;
-        }
-
+        // READY: submit the request now.  Dispatch via the virtual
+        // submitRequestWithAction — H1 and H2 both implement it, H3
+        // raises HTTPCLIENT-NOT-IMPLEMENTED.
         // PromiseNotifierAction refs both promise and notifier; we still
         // hold our own refs, which are deref'd via clearPending / ~dtor.
         PromiseNotifierAction* action =
@@ -9719,9 +9717,9 @@ public:
             body_ptr = pending_body->getPtr();
             body_len = pending_body->size();
         }
-        int64_t stream_id = h1->submitRequestWithAction(pending_method.c_str(),
-            pending_path.c_str(), pending_headers, body_ptr, body_len,
-            action, xsink);
+        int64_t stream_id = pending_conn->submitRequestWithAction(
+            pending_method.c_str(), pending_path.c_str(), pending_headers,
+            body_ptr, body_len, action, xsink);
         if (*xsink || stream_id < 0) {
             // submitRequestWithAction deref'd the action on failure but did
             // NOT release the stream reservation — clearPending does that.

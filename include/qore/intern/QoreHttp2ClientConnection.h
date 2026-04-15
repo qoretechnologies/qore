@@ -123,6 +123,18 @@ public:
         const QoreHashNode* headers, const void* body, size_t body_len,
         ExceptionSink* xsink) override;
 
+    //! Submits a request with a caller-provided completion action.
+    /** Like @ref submitRequest but uses the caller's @c AbstractAsyncAction
+        directly — the conn_mgr poll operation uses this with a
+        @c PromiseNotifierAction so the response wakes an EventNotifier
+        and resolves a Future.
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT int64_t submitRequestWithAction(const char* method, const char* path,
+        const QoreHashNode* headers, const void* body, size_t body_len,
+        AbstractAsyncAction* action, ExceptionSink* xsink) override;
+
     DLLEXPORT void closeConnection(ExceptionSink* xsink) override;
 
 protected:

@@ -217,7 +217,7 @@ public:
     */
     DLLEXPORT int64_t submitRequestWithAction(const char* method, const char* path,
         const QoreHashNode* headers, const void* body, size_t body_len,
-        AbstractAsyncAction* action, ExceptionSink* xsink);
+        AbstractAsyncAction* action, ExceptionSink* xsink) override;
 
     DLLEXPORT void closeConnection(ExceptionSink* xsink) override;
 
