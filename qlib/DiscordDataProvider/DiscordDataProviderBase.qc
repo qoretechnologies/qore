@@ -111,7 +111,7 @@ public class DiscordDataProviderBase inherits DataProvider::AbstractDataProvider
         int retries = 0;
         while (True) {
             try {
-                debug("REST %y %y (%y) body: %y", method, rest.getURL(), path, body);
+                debug("REST %y %y (%y) body: %y", method, rest.getUrl(), path, body);
                 return rest.doRequest(method, path, body, \info);
             } catch (hash<ExceptionInfo> ex) {
                 # handle rate limit errors immediately
