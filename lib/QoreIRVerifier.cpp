@@ -1203,6 +1203,27 @@ void QoreIRFunction::computeSlotIdsAndEmbed() {
                         assign_slot(reinterpret_cast<const LocalVar*>(base_var->ref.id));
                     }
                 }
+            } else if (inst->opcode == QoreIROpcode::HashKeyStore) {
+                // HashKeyStore[Dynamic] reference their container LocalVar via
+                // the `container` VarRefNode for the COW branch + auto-vivify
+                // assign-back path. The container is NOT serialized — only
+                // container_slot_id is — so the slot must be assigned here so
+                // pass 2 can fill in container_slot_id and AOT deser can
+                // resolve it back to the LocalVar* via slot_to_local.
+                auto* hks = static_cast<QoreIRHashKeyStoreInstruction*>(inst.get());
+                if (hks->container && hks->container->ref.id) {
+                    assign_slot(reinterpret_cast<const LocalVar*>(hks->container->ref.id));
+                }
+            } else if (inst->opcode == QoreIROpcode::HashKeyStoreDynamic) {
+                auto* hksd = static_cast<QoreIRHashKeyStoreDynamicInstruction*>(inst.get());
+                if (hksd->container && hksd->container->ref.id) {
+                    assign_slot(reinterpret_cast<const LocalVar*>(hksd->container->ref.id));
+                }
+            } else if (inst->opcode == QoreIROpcode::ListIndexStore) {
+                auto* lis = static_cast<QoreIRListIndexStoreInstruction*>(inst.get());
+                if (lis->container && lis->container->ref.id) {
+                    assign_slot(reinterpret_cast<const LocalVar*>(lis->container->ref.id));
+                }
             }
         }
     }
