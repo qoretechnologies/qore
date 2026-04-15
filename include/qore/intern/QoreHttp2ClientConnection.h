@@ -34,6 +34,7 @@
 #define _QORE_INTERN_QOREHTTP2CLIENTCONNECTION_H
 
 #include <qore/HttpClientConnection.h>
+#include <qore/ReferenceHolder.h>
 
 #include <string>
 
@@ -203,6 +204,39 @@ private:
         @return 0 on success, -1 on failure
     */
     DLLLOCAL int buildAndSubmitAdopted(QoreSocketObject* adopted_sock_priv,
+        ExceptionSink* xsink);
+
+    //! Submission tail shared between @ref buildAndSubmit and
+    //! @ref buildAndSubmitAdopted.
+    /** Sets @c "sock" and @c "goal" on the poll op QoreObject, fetches
+        the AsyncIoController singleton, builds the SocketPollOperationInfo
+        hash, submits, and on success commits the holders into the member
+        pointers and sets @ref submitted_to_controller to true.
+
+        Extracted to eliminate the drift risk between the two constructor
+        paths (see design/conn-mgr-alpn-negotiation.md §9).
+
+        @param sock_obj_holder holder for the socket QoreObject — on
+            success ownership transfers to @ref sock_obj
+        @param poll_obj_holder holder for the poll op QoreObject — on
+            success ownership transfers to @ref poll_op_obj
+        @param priv_raw raw pointer to the Http2 poll op priv inside
+            @a poll_obj_holder
+        @param sock_priv_raw raw pointer to the socket priv inside
+            @a sock_obj_holder
+        @param owner_prefix prefix for the auto-generated controller
+            submission owner string (the full owner is
+            @c "<owner_prefix><pointer>")
+        @param xsink exception sink
+
+        @return 0 on success, -1 on failure (holders unwind on scope exit)
+    */
+    DLLLOCAL int finalizePollOpSubmission(
+        ReferenceHolder<QoreObject>& sock_obj_holder,
+        ReferenceHolder<QoreObject>& poll_obj_holder,
+        Http2ClientPollOperationPriv* priv_raw,
+        QoreSocketObject* sock_priv_raw,
+        const char* owner_prefix,
         ExceptionSink* xsink);
 };
 

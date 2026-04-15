@@ -239,77 +239,11 @@ int Http1ClientConnection::buildAndSubmit(ExceptionSink* xsink) {
     priv_raw->setSelf(*poll_obj_holder);
     connect_ptr->setSelf(*poll_obj_holder);
 
-    // 7. Set poll op QoreObject members: "sock" (the Socket QoreObject) and
-    //    "goal" — same as the QPP binding would.
-    poll_obj_holder->setValue("sock", sock_obj_holder->refSelf(), xsink);
-    if (*xsink) {
-        return -1;
-    }
-    poll_obj_holder->setValue("goal", new QoreStringNode("http1_client"), xsink);
-    if (*xsink) {
-        return -1;
-    }
-
-    // 8. Submit to the global AsyncIoController.  The controller needs a
-    //    SocketPollOperationInfo hash with sock, spop, owner, and to fields.
-    //    We use a process-unique owner string based on our pointer so
-    //    cancelByOwner can be used for cleanup.
-    ReferenceHolder<QoreObject> ctl_obj_holder(
-        qore_get_async_io_controller_obj(xsink), xsink);
-    if (*xsink || !ctl_obj_holder) {
-        return -1;
-    }
-    ReferenceHolder<AsyncIoControllerPriv> ctl_priv_holder(
-        static_cast<AsyncIoControllerPriv*>(
-            ctl_obj_holder->getReferencedPrivateData(CID_ASYNCIOCONTROLLER, xsink)),
-        xsink);
-    if (*xsink || !ctl_priv_holder) {
-        if (!*xsink) {
-            xsink->raiseException("HTTPCLIENT-CONNECT-ERROR",
-                "failed to get AsyncIoController singleton");
-        }
-        return -1;
-    }
-
-    // Owner string: caller-supplied (via setOwner before construction
-    // wired into a manager — Phase P3+) or per-instance default for
-    // standalone use (Phase P2 unit tests).
-    char owner_buf[64];
-    const char* owner_to_use;
-    if (!owner_str.empty()) {
-        owner_to_use = owner_str.c_str();
-    } else {
-        snprintf(owner_buf, sizeof(owner_buf), "http1-cpp-conn-%p", (void*)this);
-        owner_to_use = owner_buf;
-    }
-
-    ReferenceHolder<QoreHashNode> info(new QoreHashNode(autoTypeInfo), xsink);
-    info->setKeyValue("sock", sock_obj_holder->refSelf(), xsink);
-    info->setKeyValue("spop", poll_obj_holder->refSelf(), xsink);
-    info->setKeyValue("owner", new QoreStringNode(owner_to_use), xsink);
-    // Disable the controller-level timeout for this poll op.  The H1 poll
-    // op manages its own idle timeout via armIdleDeadline(), and per-request
-    // timeouts are handled by q_future_get_blocking on the caller's side.
-    // A negative "to" value tells the controller to never expire this entry.
-    info->setKeyValue("to", -1, xsink);
-    if (*xsink) {
-        return -1;
-    }
-
-    ReferenceHolder<QoreObject> submit_rv(
-        ctl_priv_holder->submit(*ctl_obj_holder, *info, false, xsink), xsink);
-    if (*xsink) {
-        return -1;
-    }
-
-    // Success — commit ownership to member variables.  After this point the
-    // destructor will manage the lifetimes of these objects.
-    sock_priv = sock_priv_raw;
-    sock_obj = sock_obj_holder.release();
-    poll_op_priv = priv_raw;
-    poll_op_obj = poll_obj_holder.release();
-    submitted_to_controller = true;
-    return 0;
+    // 7. Finalize: set poll op members, submit to AsyncIoController, and
+    //    on success commit the holders to member pointers.  Shared with
+    //    buildAndSubmitAdopted — see design/conn-mgr-alpn-negotiation.md §9.
+    return finalizePollOpSubmission(sock_obj_holder, poll_obj_holder,
+        priv_raw, sock_priv_raw, "http1-cpp-conn-", xsink);
 }
 
 int Http1ClientConnection::buildAndSubmitAdopted(QoreSocketObject* adopted_sock_priv,
@@ -360,17 +294,47 @@ int Http1ClientConnection::buildAndSubmitAdopted(QoreSocketObject* adopted_sock_
         return -1;
     }
 
-    // Transition the priv to READING and fire the ready callback.  This
-    // brings the C++ connection state to READY before we submit to the
-    // controller, so a waitForReadyOrError from the caller completes
-    // immediately.
+    // Transition the priv to READING and fire the ready callback BEFORE
+    // the helper submits to the controller.  Order matters: the I/O
+    // thread's first continuePoll() must see h1_state = READING, or
+    // handleConnecting would run and error on current_op == nullptr.
+    // initAdoptedReady only touches h1_state and the connection priv —
+    // it does not depend on poll_obj members, so running it before the
+    // helper (which sets "sock"/"goal") is safe.
     priv_raw->initAdoptedReady(xsink);
     if (*xsink) {
         return -1;
     }
 
-    // Submit the poll op to the AsyncIoController.  Identical to
-    // buildAndSubmit's submission tail.
+    // Finalize: set poll op members, submit to AsyncIoController, and
+    // on success commit the holders to member pointers.  Shared with
+    // buildAndSubmit — see design/conn-mgr-alpn-negotiation.md §9.
+    return finalizePollOpSubmission(sock_obj_holder, poll_obj_holder,
+        priv_raw, sock_priv_raw, "http1-cpp-conn-adopted-", xsink);
+}
+
+int Http1ClientConnection::finalizePollOpSubmission(
+        ReferenceHolder<QoreObject>& sock_obj_holder,
+        ReferenceHolder<QoreObject>& poll_obj_holder,
+        Http1ClientPollOperationPriv* priv_raw,
+        QoreSocketObject* sock_priv_raw,
+        const char* owner_prefix,
+        ExceptionSink* xsink) {
+    // Set poll op QoreObject members: "sock" (the Socket QoreObject) and
+    // "goal" — same as the QPP binding would.  Idempotent when already
+    // set by the caller (adopt-socket path sets them before calling
+    // initAdoptedReady, which must run before this helper).
+    poll_obj_holder->setValue("sock", sock_obj_holder->refSelf(), xsink);
+    if (*xsink) {
+        return -1;
+    }
+    poll_obj_holder->setValue("goal", new QoreStringNode("http1_client"), xsink);
+    if (*xsink) {
+        return -1;
+    }
+
+    // Get the global AsyncIoController.  The controller needs a
+    // SocketPollOperationInfo hash with sock, spop, owner, and to fields.
     ReferenceHolder<QoreObject> ctl_obj_holder(
         qore_get_async_io_controller_obj(xsink), xsink);
     if (*xsink || !ctl_obj_holder) {
@@ -382,19 +346,22 @@ int Http1ClientConnection::buildAndSubmitAdopted(QoreSocketObject* adopted_sock_
         xsink);
     if (*xsink || !ctl_priv_holder) {
         if (!*xsink) {
-            xsink->raiseException("HTTPCLIENT-ADOPT-ERROR",
+            xsink->raiseException("HTTPCLIENT-CONNECT-ERROR",
                 "failed to get AsyncIoController singleton");
         }
         return -1;
     }
 
+    // Owner string: caller-supplied (via setOwner) or auto-generated from
+    // the supplied prefix + this pointer so cancelByOwner can be used for
+    // cleanup.
     char owner_buf[64];
     const char* owner_to_use;
     if (!owner_str.empty()) {
         owner_to_use = owner_str.c_str();
     } else {
-        snprintf(owner_buf, sizeof(owner_buf),
-            "http1-cpp-conn-adopted-%p", (void*)this);
+        snprintf(owner_buf, sizeof(owner_buf), "%s%p",
+            owner_prefix, (void*)this);
         owner_to_use = owner_buf;
     }
 
@@ -402,6 +369,10 @@ int Http1ClientConnection::buildAndSubmitAdopted(QoreSocketObject* adopted_sock_
     info->setKeyValue("sock", sock_obj_holder->refSelf(), xsink);
     info->setKeyValue("spop", poll_obj_holder->refSelf(), xsink);
     info->setKeyValue("owner", new QoreStringNode(owner_to_use), xsink);
+    // Disable the controller-level timeout for this poll op.  The H1 poll
+    // op manages its own idle timeout via armIdleDeadline(), and per-request
+    // timeouts are handled by q_future_get_blocking on the caller's side.
+    // A negative "to" value tells the controller to never expire this entry.
     info->setKeyValue("to", -1, xsink);
     if (*xsink) {
         return -1;
@@ -413,6 +384,8 @@ int Http1ClientConnection::buildAndSubmitAdopted(QoreSocketObject* adopted_sock_
         return -1;
     }
 
+    // Success — commit ownership to member variables.  After this point
+    // the destructor will manage the lifetimes of these objects.
     sock_priv = sock_priv_raw;
     sock_obj = sock_obj_holder.release();
     poll_op_priv = priv_raw;
