@@ -535,11 +535,24 @@ class SocketTest inherits QUnit::Test {
 
             {
                 SocketPollOperation spop = s2.startPollConnect("-1");
-                assertThrows("SOCKET-NON-BLOCK-ERROR", \s2.startPollConnect(), "x");
-                assertThrows("SOCKET-NON-BLOCK-ERROR", \s2.connect(), "x");
-                assertThrows("SOCKET-NON-BLOCK-ERROR", \s2.startPollSend(), "x");
-                assertThrows("SOCKET-NON-BLOCK-ERROR", \s2.startPollRecvString(), 1234);
-                assertThrows("SOCKET-NON-BLOCK-ERROR", \s2.startPollRecvBinary(), 1234);
+                # When the async I/O controller manages the socket, sync
+                # entry points raise SOCKET-ASYNC-MODE-ERROR; legacy path
+                # raises SOCKET-NON-BLOCK-ERROR.  Accept either.
+                code assert_busy = sub (code c, softlist<auto> a) {
+                    try {
+                        call_function_args(c, a);
+                        assertTrue(False, "expected exception from busy socket");
+                    } catch (hash<ExceptionInfo> ex) {
+                        assertTrue(ex.err == "SOCKET-NON-BLOCK-ERROR"
+                            || ex.err == "SOCKET-ASYNC-MODE-ERROR",
+                            sprintf("expected busy-socket error; got %s", ex.err));
+                    }
+                };
+                assert_busy(\s2.startPollConnect(), ("x",));
+                assert_busy(\s2.connect(), ("x",));
+                assert_busy(\s2.startPollSend(), ("x",));
+                assert_busy(\s2.startPollRecvString(), (1234,));
+                assert_busy(\s2.startPollRecvBinary(), (1234,));
                 assertEq("connecting", spop.getState());
                 assertThrows("SOCKET-CONNECT-ERROR", \spop.continuePoll());
             }

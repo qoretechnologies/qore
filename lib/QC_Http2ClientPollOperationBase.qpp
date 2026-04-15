@@ -949,6 +949,17 @@ int64_t Http2ClientPollOperationPriv::submitRequest(const char* method, const ch
         }
     }
 
+    // Add Content-Length if body present and header not already set
+    // (matching legacy sendHttp2MessageAndGetResponse behavior)
+    if (body_len > 0 && !streaming) {
+        if (req_headers->getKeyValue("content-length").isNullOrNothing()
+                && req_headers->getKeyValue("Content-Length").isNullOrNothing()) {
+            QoreStringNode* cl = new QoreStringNode();
+            cl->sprintf("%zu", body_len);
+            req_headers->setKeyValue("content-length", cl, xsink);
+        }
+    }
+
     // Check for errors from header construction before acquiring lock
     if (*xsink) {
         action->deref(xsink);

@@ -8656,7 +8656,24 @@ void SocketHttp2ClientMultiplexPollOperation::onStreamComplete(int32_t stream_id
                 || media_type == "text/x-yaml" || media_type == "application/yaml";
         }
 
-        if (is_text) {
+        // Skip text conversion if content-encoding indicates compression
+        // (gzip, deflate, br, zstd, etc.) — the compressed bytes must stay
+        // as binary until the upstream decompression layer in
+        // send_internal_conn_mgr / process_binary_body runs.  Without this
+        // check, compressed bytes are interpreted as UTF-8 and corrupted.
+        bool has_content_encoding = false;
+        {
+            auto ce_it = stream->headers.find("content-encoding");
+            if (ce_it != stream->headers.end() && !ce_it->second.empty()) {
+                const std::string& ce = ce_it->second.back();
+                // "identity" means no encoding — treat as uncompressed
+                if (!ce.empty() && strcasecmp(ce.c_str(), "identity") != 0) {
+                    has_content_encoding = true;
+                }
+            }
+        }
+
+        if (is_text && !has_content_encoding) {
             const QoreEncoding* enc = QCS_UTF8;
             if (!force_utf8) {
                 // Extract charset from full content-type header (case-insensitive search)
