@@ -2100,6 +2100,7 @@ qore_user_module("qlib/SquareRestClient.qm" "ConnectionProvider;Mime;RestClient"
 qore_user_module("qlib/SquarespaceRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/TableauRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/Cin7CoreRestClient.qm" "ConnectionProvider;Mime;RestClient")
+qore_user_module("qlib/ClickFunnelsRestClient.qm" "ConnectionProvider;Mime;RestClient;RestClientIo")
 qore_user_module("qlib/UnbounceRestClient.qm" "ConnectionProvider;Mime;RestClient;RestClientIo")
 qore_user_module("qlib/UnleashedRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/ZohoBooksRestClient.qm" "ConnectionProvider;Mime;RestClient")
@@ -2180,6 +2181,7 @@ qore_user_module("qlib/CloseDataProvider" "CloseRestClient;RestClient;DataProvid
 qore_user_module("qlib/SquarespaceDataProvider" "SquarespaceRestClient;RestClient;DataProvider" "squarespace-logo.svg")
 qore_user_module("qlib/TableauDataProvider" "TableauRestClient;RestClient;DataProvider" "tableau-logo.svg")
 qore_user_module("qlib/Cin7CoreDataProvider" "Cin7CoreRestClient;RestClient;DataProvider" "cin7core-logo.svg")
+qore_user_module("qlib/ClickFunnelsDataProvider" "ClickFunnelsRestClient;RestClient;RestClientIo;DataProvider" "clickfunnels-logo.svg")
 qore_user_module("qlib/UnbounceDataProvider" "UnbounceRestClient;RestClient;RestClientIo;DataProvider" "unbounce-logo.svg")
 qore_user_module("qlib/UnleashedDataProvider" "UnleashedRestClient;RestClient;DataProvider" "unleashed-logo.svg")
 

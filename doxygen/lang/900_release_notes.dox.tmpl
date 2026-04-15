@@ -1189,6 +1189,23 @@ cargo install tree-sitter-cli@0.26.5
       - polling-based event triggers for payments, invoices, credit notes, tracking, stock levels, and contact updates
       - action catalog integration with 35 actions and 8 triggers
       - connection support with \c cin7core:// URL scheme
+    - @ref clickfunnelsrestclientintro "ClickFunnelsRestClient" module
+      - new module providing a REST client for <a href="https://www.clickfunnels.com/">ClickFunnels</a> 2.0 REST API
+      - supports Bearer token authentication
+      - provides ClickFunnelsRestConnection for connection management with \c clickfunnelsres:// URL scheme
+    - @ref clickfunnelsdataproviderintro "ClickFunnelsDataProvider" module
+      - new module providing a data provider API for <a href="https://www.clickfunnels.com/">ClickFunnels</a> 2.0
+      - contact management (create, read, update, delete, list)
+      - contact tag and applied tag management
+      - order management (create, read, list)
+      - product management (create, read, update, list)
+      - funnel listing
+      - course and enrollment management
+      - form and form submission management
+      - fulfillment management (create, read, update, list)
+      - polling-based event triggers for contacts, orders, form submissions, enrollments, and fulfillments
+      - action catalog integration with 56 actions and 8 triggers
+      - connection support with \c clickfunnelsres:// URL scheme
     - @ref closerestclientintro "CloseRestClient" module
       - new module providing a REST client for <a href="https://www.close.com/">Close</a> CRM's REST API
       - supports OAuth2 authentication with automatic token refresh

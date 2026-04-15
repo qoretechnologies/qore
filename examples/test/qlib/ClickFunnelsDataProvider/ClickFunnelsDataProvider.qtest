@@ -1,0 +1,362 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  ClickFunnelsDataProvider.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/ConnectionProvider
+%requires ../../../../qlib/RestClient.qm
+
+%try-module json
+%define NoJson
+%endtry
+
+%requires ../../../../qlib/ClickFunnelsRestClient.qm
+%requires ../../../../qlib/ClickFunnelsDataProvider
+
+%exec-class ClickFunnelsDataProviderTest
+
+public class ClickFunnelsDataProviderTest inherits QUnit::Test {
+    private {
+        #! ClickFunnels REST client for integration tests
+        *ClickFunnelsRestClient::ClickFunnelsRestClient client;
+
+        #! Logger for verbose output
+        Logger logger;
+
+        #! Custom command-line options
+        const MyOpts = Opts + {
+            "token": "t,token=s",
+            "team": "team=s",
+            "workspace_id": "w,workspace-id=s",
+            "conn": "c,connection=s",
+        };
+
+        #! Test contact ID (created during test)
+        *string testContactId;
+
+        #! Test tag ID (created during test)
+        *string testTagId;
+    }
+
+    constructor() : Test("ClickFunnelsDataProvider Test", "1.0", \ARGV, MyOpts) {
+        logger = new Logger("test", LoggerLevel::getLevelInfo());
+
+        # Unit tests (always run, no credentials needed)
+        addTestCase("sanity tests", \sanityTests());
+        addTestCase("factory tests", \factoryTests());
+        addTestCase("metadata tests", \metadataTests());
+        addTestCase("data type tests", \dataTypeTests());
+        addTestCase("negative tests", \negativeTests());
+        addTestCase("connection tests", \connectionTests());
+
+        # Integration tests (require ClickFunnels credentials)
+        addTestCase("integration tests", \integrationTests());
+
+        # Try to set up connection for integration tests
+        try {
+            setupConnection();
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose) {
+                printf("Connection setup failed: %s: %s\n", ex.err, ex.desc);
+            }
+        }
+
+        set_return_value(main());
+    }
+
+    #! Sets up the ClickFunnels client for integration tests
+    private setupConnection() {
+        # Try to use a connection from Qorus if specified
+        *string conn_name = m_options.conn ?? ENV.CLICKFUNNELS_CONNECTION;
+        if (conn_name) {
+            AbstractConnection conn = get_connection(conn_name);
+            if (conn instanceof ClickFunnelsRestClient::ClickFunnelsRestConnection) {
+                client = (cast<ClickFunnelsRestClient::ClickFunnelsRestConnection>(conn)).get(True);
+            }
+            return;
+        }
+
+        # Try environment variables
+        *string token = m_options.token ?? ENV.CLICKFUNNELS_TOKEN;
+        *string team = m_options.team ?? ENV.CLICKFUNNELS_TEAM;
+        *string workspace_id = m_options.workspace_id ?? ENV.CLICKFUNNELS_WORKSPACE_ID;
+
+        if (token && team && workspace_id) {
+            client = new ClickFunnelsRestClient::ClickFunnelsRestClient({
+                "token": token,
+                "team": team,
+                "workspace_id": workspace_id,
+            });
+        }
+    }
+
+    #! Basic sanity tests
+    sanityTests() {
+        # Verify module loaded
+        assertEq(True, True, "module loaded");
+
+        # Verify constants
+        assertEq("ClickFunnels", ClickFunnelsDataProvider::AppName);
+        assertEq(20, ClickFunnelsDataProvider::DefaultPageSize);
+        assertEq(60, ClickFunnelsDataProvider::DefaultPollInterval);
+        assertEq(30, ClickFunnelsDataProvider::MinPollInterval);
+
+        # Verify event constants
+        assertEq("contact.created", ClickFunnelsDataProvider::EVENT_CONTACT_CREATED);
+        assertEq("contact.updated", ClickFunnelsDataProvider::EVENT_CONTACT_UPDATED);
+        assertEq("order.created", ClickFunnelsDataProvider::EVENT_ORDER_CREATED);
+        assertEq("order.updated", ClickFunnelsDataProvider::EVENT_ORDER_UPDATED);
+        assertEq("order.completed", ClickFunnelsDataProvider::EVENT_ORDER_COMPLETED);
+        assertEq("form_submission.created", ClickFunnelsDataProvider::EVENT_FORM_SUBMISSION_CREATED);
+        assertEq("courses/enrollment.created", ClickFunnelsDataProvider::EVENT_ENROLLMENT_CREATED);
+        assertEq("fulfillment.created", ClickFunnelsDataProvider::EVENT_FULFILLMENT_CREATED);
+    }
+
+    #! Factory tests
+    factoryTests() {
+        # Verify factory exists
+        AbstractDataProviderFactory factory = DataProvider::getFactory("clickfunnels");
+        assertEq(True, factory instanceof ClickFunnelsDataProvider::ClickFunnelsDataProviderFactory);
+
+        # Verify factory info
+        hash<DataProviderFactoryInfo> info = factory.getInfo();
+        assertEq("clickfunnels", info.name);
+        assertEq(True, info.children_can_support_apis);
+        assertEq(True, info.children_can_support_records);
+        assertEq(True, info.children_can_support_observers);
+    }
+
+    #! Metadata tests
+    metadataTests() {
+        # Verify action catalog app registration
+        *hash<auto> app = DataProviderActionCatalog::getApp("ClickFunnels");
+        assertEq(True, app.val(), "ClickFunnels app registered in action catalog");
+        assertEq("ClickFunnels", app.display_name);
+        assertEq("clickfunnelsrest", app.scheme);
+
+        # Verify some actions are registered
+        list<hash<auto>> actions = DataProviderActionCatalog::getActions("ClickFunnels");
+        assertEq(True, actions.size() > 30, "at least 30 actions registered");
+
+        # Verify specific actions
+        bool found_create_contact = False;
+        bool found_list_contacts = False;
+        bool found_contact_created_event = False;
+        foreach hash<auto> action in (actions) {
+            if (action.action == "create-contact") {
+                found_create_contact = True;
+                assertEq(DPAT_API, action.action_code);
+            }
+            if (action.action == "list-contacts") {
+                found_list_contacts = True;
+                assertEq(DPAT_FIND, action.action_code);
+            }
+            if (action.action == "contact-created") {
+                found_contact_created_event = True;
+                assertEq(DPAT_EVENT, action.action_code);
+            }
+        }
+        assertEq(True, found_create_contact, "create-contact action registered");
+        assertEq(True, found_list_contacts, "list-contacts action registered");
+        assertEq(True, found_contact_created_event, "contact-created event registered");
+    }
+
+    #! Data type tests
+    dataTypeTests() {
+        # Test contact data type
+        ClickFunnelsDataProvider::ClickFunnelsContactDataType contact_type();
+        hash<auto> fields = contact_type.getFields();
+        assertEq(True, fields.hasKey("id"), "contact type has id field");
+        assertEq(True, fields.hasKey("email_address"), "contact type has email_address field");
+        assertEq(True, fields.hasKey("first_name"), "contact type has first_name field");
+        assertEq(True, fields.hasKey("last_name"), "contact type has last_name field");
+
+        # Test order data type
+        ClickFunnelsDataProvider::ClickFunnelsOrderDataType order_type();
+        hash<auto> ofields = order_type.getFields();
+        assertEq(True, ofields.hasKey("id"), "order type has id field");
+        assertEq(True, ofields.hasKey("contact_id"), "order type has contact_id field");
+
+        # Test product data type
+        ClickFunnelsDataProvider::ClickFunnelsProductDataType product_type();
+        hash<auto> pfields = product_type.getFields();
+        assertEq(True, pfields.hasKey("id"), "product type has id field");
+        assertEq(True, pfields.hasKey("name"), "product type has name field");
+
+        # Test funnel data type
+        ClickFunnelsDataProvider::ClickFunnelsFunnelDataType funnel_type();
+        hash<auto> ffields = funnel_type.getFields();
+        assertEq(True, ffields.hasKey("id"), "funnel type has id field");
+        assertEq(True, ffields.hasKey("name"), "funnel type has name field");
+
+        # Test contact tag data type
+        ClickFunnelsDataProvider::ClickFunnelsContactTagDataType tag_type();
+        hash<auto> tfields = tag_type.getFields();
+        assertEq(True, tfields.hasKey("id"), "tag type has id field");
+        assertEq(True, tfields.hasKey("name"), "tag type has name field");
+    }
+
+    #! Negative tests
+    negativeTests() {
+        # Test invalid factory name returns NOTHING
+        assertEq(NOTHING, DataProvider::getFactory("nonexistent_clickfunnels"),
+            "nonexistent factory returns NOTHING");
+    }
+
+    #! Connection tests
+    connectionTests() {
+        # Verify connection scheme is registered
+        assertEq(True, exists ConnectionSchemeCache::getScheme("clickfunnelsres"),
+            "clickfunnelsres scheme registered");
+
+        # Verify connection scheme info
+        hash<auto> scheme = ConnectionSchemeCache::getScheme("clickfunnelsres");
+        assertEq("ClickFunnels REST Connection", scheme.display_name);
+    }
+
+    #! Integration tests (require ClickFunnels credentials)
+    integrationTests() {
+        if (!client) {
+            testSkip("no ClickFunnels credentials available");
+        }
+
+        ClickFunnelsDataProvider::ClickFunnelsDataProvider provider(client);
+
+        # Verify child names
+        *list<string> children = provider.getChildProviderNames();
+        assertEq(True, children.size() >= 12, "at least 12 child providers");
+        assertEq(True, inlist("contacts", children), "contacts child exists");
+        assertEq(True, inlist("orders", children), "orders child exists");
+        assertEq(True, inlist("products", children), "products child exists");
+        assertEq(True, inlist("funnels", children), "funnels child exists");
+        assertEq(True, inlist("events", children), "events child exists");
+
+        # Test list contacts
+        AbstractDataProvider contacts_dp = provider.getChildProvider("contacts");
+        AbstractDataProviderRecordIterator iter = contacts_dp.searchRecords(NOTHING, {"limit": 5});
+        list<hash<auto>> contacts = ();
+        while (iter.next()) {
+            contacts += iter.getValue();
+        }
+        assertEq(True, True, "contacts list succeeded");
+
+        # Test create contact
+        AbstractDataProvider create_dp = contacts_dp.getChildProvider("create");
+        string test_email = "test_cfdp_" + now_us().getEpochSeconds() + "@example.com";
+        hash<auto> new_contact = create_dp.doRequest({
+            "email_address": test_email,
+            "first_name": "Test",
+            "last_name": "ClickFunnelsDP_" + now_us().toString(),
+        });
+        assertEq(True, new_contact.id.val(), "contact created with ID");
+        testContactId = string(new_contact.id);
+
+        on_exit {
+            # Cleanup: delete test contact
+            if (testContactId) {
+                try {
+                    AbstractDataProvider del_dp = contacts_dp.getChildProvider("delete");
+                    del_dp.doRequest({"contact_id": testContactId});
+                } catch (hash<ExceptionInfo> ex) {
+                    if (m_options.verbose) {
+                        printf("Cleanup failed (contact): %s: %s\n", ex.err, ex.desc);
+                    }
+                }
+            }
+        }
+
+        # Test get contact by ID
+        AbstractDataProviderRecordIterator get_iter = contacts_dp.searchRecords(NOTHING,
+            {"contact_id": testContactId});
+        assertEq(True, get_iter.next(), "found created contact");
+        hash<auto> found = get_iter.getValue();
+        assertEq("Test", found.first_name);
+
+        # Test update contact
+        AbstractDataProvider update_dp = contacts_dp.getChildProvider("update");
+        hash<auto> updated = update_dp.doRequest({
+            "contact_id": testContactId,
+            "last_name": "Updated_CF_Test",
+        });
+        assertEq(True, updated.val(), "contact updated");
+
+        # Verify persistence - re-fetch and check
+        AbstractDataProviderRecordIterator verify_iter = contacts_dp.searchRecords(NOTHING,
+            {"contact_id": testContactId});
+        assertEq(True, verify_iter.next(), "found updated contact");
+        hash<auto> verified = verify_iter.getValue();
+        assertEq("Updated_CF_Test", verified.last_name, "last_name persisted");
+
+        # Test list contact tags
+        AbstractDataProvider tags_dp = provider.getChildProvider("contact-tags");
+        AbstractDataProviderRecordIterator tag_iter = tags_dp.searchRecords(NOTHING, {"limit": 5});
+        assertEq(True, True, "contact tags list succeeded");
+
+        # Test create contact tag
+        AbstractDataProvider create_tag_dp = tags_dp.getChildProvider("create");
+        hash<auto> new_tag = create_tag_dp.doRequest({
+            "name": "Test_CFDP_" + now_us().getEpochSeconds(),
+        });
+        assertEq(True, new_tag.id.val(), "tag created with ID");
+        testTagId = string(new_tag.id);
+
+        on_exit {
+            # Cleanup: delete test tag
+            if (testTagId) {
+                try {
+                    AbstractDataProvider del_tag_dp = tags_dp.getChildProvider("delete");
+                    del_tag_dp.doRequest({"tag_id": testTagId});
+                } catch (hash<ExceptionInfo> ex) {
+                    if (m_options.verbose) {
+                        printf("Cleanup failed (tag): %s: %s\n", ex.err, ex.desc);
+                    }
+                }
+            }
+        }
+
+        # Test list orders
+        AbstractDataProvider orders_dp = provider.getChildProvider("orders");
+        AbstractDataProviderRecordIterator order_iter = orders_dp.searchRecords(NOTHING, {"limit": 5});
+        assertEq(True, True, "orders list succeeded");
+
+        # Test list products
+        AbstractDataProvider products_dp = provider.getChildProvider("products");
+        AbstractDataProviderRecordIterator prod_iter = products_dp.searchRecords(NOTHING, {"limit": 5});
+        assertEq(True, True, "products list succeeded");
+
+        # Test list funnels
+        AbstractDataProvider funnels_dp = provider.getChildProvider("funnels");
+        AbstractDataProviderRecordIterator funnel_iter = funnels_dp.searchRecords(NOTHING, {"limit": 5});
+        assertEq(True, True, "funnels list succeeded");
+
+        # Test list courses
+        AbstractDataProvider courses_dp = provider.getChildProvider("courses");
+        AbstractDataProviderRecordIterator course_iter = courses_dp.searchRecords(NOTHING, {"limit": 5});
+        assertEq(True, True, "courses list succeeded");
+    }
+}
