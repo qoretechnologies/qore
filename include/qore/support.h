@@ -55,10 +55,18 @@ DLLEXPORT extern int debug;
 
 #ifdef DEBUG
 //! a macro for printing debugging statements; when "DEBUG" is not defined, the function call to print_debug() not be included in the compiled output
-#define printd print_debug
+#ifdef __GNUC__
+#define printd(level, args...) do { if ((level) <= debug) print_debug((level), args); } while (0)
+#else
+#define printd(level, ...) do { if ((level) <= debug) print_debug((level), __VA_ARGS__); } while (0)
+#endif
 
-//! a macro for tracing, when "DEBUG" is not defined, the function call to trace_function() will not be included in the compiled output
-#define QORE_TRACE(a) trace_function(TRACE_IN, a); ON_BLOCK_EXIT(trace_function, TRACE_OUT, a)
+//! legacy tracing macro; disabled because QORE_TRACE instrumentation is no longer used
+#ifdef __GNUC__
+#define QORE_TRACE(args...)
+#else
+#define QORE_TRACE(...)
+#endif
 
 #else
 #ifdef __GNUC__

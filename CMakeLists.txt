@@ -51,6 +51,10 @@ option(ENABLE_ALLOC_TRACKING
        "Enable malloc/free interposer for memory leak tracking (adds overhead to all allocations; debug only)"
        OFF)
 
+option(QORE_OPTIMIZE_DEBUG_BUILDS
+       "Use debug-friendly compiler optimization for debug builds"
+       ON)
+
 STRING(LENGTH ${VERSION_MINOR} MINOR_LEN)
 if (${MINOR_LEN} EQUAL 1)
     set(VERSION_FORMATTED_MINOR 0${VERSION_MINOR})
@@ -77,6 +81,10 @@ endif (NOT CMAKE_BUILD_TYPE)
 string(TOLOWER ${CMAKE_BUILD_TYPE} QORE_BUILD_TYPE_LWR)
 if (${QORE_BUILD_TYPE_LWR} MATCHES "debug")
     add_definitions(-DDEBUG)
+    if (QORE_OPTIMIZE_DEBUG_BUILDS AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
+        set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -Og")
+        set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -Og")
+    endif ()
 else ()
     add_definitions(-DNDEBUG)
 endif ()
