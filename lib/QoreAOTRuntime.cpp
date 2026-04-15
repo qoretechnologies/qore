@@ -6881,35 +6881,41 @@ static void executeInitFunctions(
         // Store the result in the target constant or static var
         switch (desc.target_type) {
             case AOTCompiledInitFunc::NS_CONSTANT: {
+                // Look up the target ConstantEntry AND the shadow (module)
+                // ConstantEntry. Either or both may be non-null: a constant
+                // declared with an init expression that was merged into the
+                // target program will be findable via root_ns; if only the
+                // module program holds it (some init-expr constants are not
+                // merged into the target namespace tree — only their values
+                // propagate via RuntimeConstantRefNode resolution), we still
+                // need to populate the shadow copy so AOT functions' runtime
+                // constant references can read the value.
+                ConstantEntry* target_ce = nullptr;
                 qore_ns_private* ns = findNamespaceByPath(root_ns, desc.ns_path);
-                if (!ns) {
-                    printd(0, "AOT init: namespace '%s' not found for constant '%s'\n",
+                if (ns) {
+                    target_ce = ns->constant.findEntry(desc.item_name.c_str());
+                }
+                ConstantEntry* shadow_ce = nullptr;
+                if (shadow_root_ns) {
+                    qore_ns_private* sns = findNamespaceByPath(shadow_root_ns, desc.ns_path);
+                    if (sns) {
+                        shadow_ce = sns->constant.findEntry(desc.item_name.c_str());
+                    }
+                }
+                if (!target_ce && !shadow_ce) {
+                    printd(0, "AOT init: constant '%s::%s' not found in target or shadow\n",
                         desc.ns_path.c_str(), desc.item_name.c_str());
                     result.discard(&xsink);
                     ++failed;
                     break;
                 }
-                ConstantEntry* ce = ns->constant.findEntry(desc.item_name.c_str());
-                if (!ce) {
-                    printd(0, "AOT init: constant '%s' not found in namespace '%s'\n",
-                        desc.item_name.c_str(), desc.ns_path.c_str());
-                    result.discard(&xsink);
-                    ++failed;
-                    break;
+                // Set both val and saved_val so RuntimeConstantRefNode::evalImpl() works.
+                // refSelf() each time because setRuntimeValue takes ownership.
+                if (target_ce) {
+                    target_ce->setRuntimeValue(result.refSelf(), &xsink);
                 }
-                // Set both val and saved_val so RuntimeConstantRefNode::evalImpl() works
-                ce->setRuntimeValue(result.refSelf(), &xsink);
-                // Also mirror into the shadow program's ConstantEntry if one exists,
-                // so subsequent init functions resolving this constant via the
-                // module program see the populated value.
-                if (shadow_root_ns) {
-                    qore_ns_private* sns = findNamespaceByPath(shadow_root_ns, desc.ns_path);
-                    if (sns) {
-                        ConstantEntry* sce = sns->constant.findEntry(desc.item_name.c_str());
-                        if (sce && sce != ce) {
-                            sce->setRuntimeValue(result.refSelf(), &xsink);
-                        }
-                    }
+                if (shadow_ce && shadow_ce != target_ce) {
+                    shadow_ce->setRuntimeValue(result.refSelf(), &xsink);
                 }
                 result.discard(&xsink);
                 ++executed;
