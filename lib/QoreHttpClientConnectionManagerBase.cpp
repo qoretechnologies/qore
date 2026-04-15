@@ -162,6 +162,48 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::findReusableLocked(
     if (it == pool_.end()) {
         return nullptr;
     }
+
+    // For NEGOTIATE managers the pool may hold a mix of H1 and H2
+    // connections under the same (host, port) key.  H2 is nearly always
+    // cheaper to reuse than H1 — a single H2 connection multiplexes up
+    // to max_concurrent_streams requests concurrently, whereas an H1
+    // connection serializes one request at a time.  A dual-pass search
+    // prefers H2 when available, falling back to H1 otherwise.
+    //
+    // For fixed-protocol managers (H1, H2, H3) every pool entry has the
+    // same protocol, so the first pass either matches every entry or
+    // none — the second pass is a no-op.  The extra traversal is O(n)
+    // per pool key with small constants and skipped entirely for
+    // non-NEGOTIATE managers.
+    if (opts_.protocol == HttpClientProtocol::NEGOTIATE) {
+        // Pass 1: prefer H2.
+        for (HttpClientConnectionBase* conn : it->second) {
+            if (conn->isClosed() || conn->isDraining()) {
+                continue;
+            }
+            if (conn->getProtocol() != HttpClientProtocol::H2) {
+                continue;
+            }
+            if (conn->tryReserveStream()) {
+                return conn;
+            }
+        }
+        // Pass 2: any live H1 (or other) connection.
+        for (HttpClientConnectionBase* conn : it->second) {
+            if (conn->isClosed() || conn->isDraining()) {
+                continue;
+            }
+            if (conn->getProtocol() == HttpClientProtocol::H2) {
+                continue;  // already tried above
+            }
+            if (conn->tryReserveStream()) {
+                return conn;
+            }
+        }
+        return nullptr;
+    }
+
+    // Fixed-protocol manager: single pass, insertion order.
     for (HttpClientConnectionBase* conn : it->second) {
         if (conn->isClosed() || conn->isDraining()) {
             continue;
