@@ -1333,12 +1333,21 @@ void QoreIRFunction::computeSlotIdsAndEmbed() {
                 // LValuePath instruction: set root variable's slot_id for targeted cache invalidation
                 auto* path_inst = static_cast<QoreIRLValuePathInstruction*>(inst.get());
                 if (!path_inst->path.empty()) {
-                    const LVPathStep& root = path_inst->path[0];
+                    LVPathStep& root = path_inst->path[0];
                     if ((root.kind == LVPathStepKind::LocalVar || root.kind == LVPathStepKind::ClosureVar)
                             && root.ref_ptr) {
                         auto it = slot_map.find(reinterpret_cast<const LocalVar*>(root.ref_ptr));
                         if (it != slot_map.end()) {
                             path_inst->lvalue_slot_id = it->second;
+                            // Also embed slot_id on the path step itself, so AOT
+                            // serialization carries a stable reference that can
+                            // rebuild ref_ptr when the instruction is deserialized
+                            // for a closure/handler body (where AOTRuntime does
+                            // not walk the path to re-resolve ref_ptr from
+                            // ctx->locals).
+                            if (root.slot_id == UINT32_MAX) {
+                                root.slot_id = it->second;
+                            }
                         }
                     } else {
                         path_inst->lvalue_slot_id = QoreIRLValuePathInstruction::LVALUE_NON_LOCAL;

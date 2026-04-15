@@ -1702,6 +1702,11 @@ static std::unique_ptr<QoreIRInstruction> readHashKeyStore(
     auto* hi = new QoreIRHashKeyStoreInstruction(nullptr, key_name ? key_name : "");
     hi->opcode = static_cast<QoreIROpcode>(opcode_raw);
     hi->container_slot_id = container_slot_id;
+    // Resolve container LocalVar for COW branch — see readHashKeyStoreDynamic.
+    if (LocalVar* lv = ctx.resolveLocalBySlot(container_slot_id)) {
+        hi->container_lv = lv;
+        hi->container_is_closure = lv->closureUse();
+    }
     hi->result = QoreIRValue(result_id);
     hi->operands = operands;
     hi->exception_target = exc_target;
@@ -2103,6 +2108,15 @@ static std::unique_ptr<QoreIRInstruction> readHashKeyStoreDynamic(
     auto* hi = new QoreIRHashKeyStoreDynamicInstruction(nullptr);
     hi->opcode = static_cast<QoreIROpcode>(opcode_raw);
     hi->container_slot_id = container_slot_id;
+    // Resolve the container LocalVar via slot_to_local so the COW branch in
+    // the interpreter can dispatch without dereferencing the never-serialized
+    // container VarRefNode*. Without this, closure bodies that write to a
+    // captured hash hit the COW path (refcount > 1 because both the
+    // enclosing function and the closure reference the hash) and segfault.
+    if (LocalVar* lv = ctx.resolveLocalBySlot(container_slot_id)) {
+        hi->container_lv = lv;
+        hi->container_is_closure = lv->closureUse();
+    }
     hi->result = QoreIRValue(result_id);
     hi->operands = operands;
     hi->exception_target = exc_target;
@@ -2151,8 +2165,22 @@ static std::unique_ptr<QoreIRInstruction> readLValuePath(
         const char* name = ctx.reader.readStringRef(ctx.ptr);
         step.name = name ? name : "";
         step.operand_idx = QoreAOTBinaryReader::readU32(ctx.ptr);
-        // ref_ptr is resolved at deserialization time in QoreAOTRuntime.cpp,
-        // not here — AOTInstReadCtx doesn't have the local/global resolution context
+        // Resolve ref_ptr from slot_to_local for closure-body / handler IR
+        // paths. The main-function AOT context still resolves ref_ptr from
+        // ctx->locals in buildContextFromSlotMap (QoreAOTRuntime.cpp), but
+        // closure body IR is deserialized via deserializeIRFunction which
+        // doesn't run that resolution — without this fix, navigatePath on a
+        // LocalVar / ClosureVar root crashes dereferencing null ref_ptr.
+        if (step.kind == LVPathStepKind::LocalVar
+                || step.kind == LVPathStepKind::ClosureVar) {
+            if (LocalVar* lv = ctx.resolveLocalBySlot(step.slot_id)) {
+                step.ref_ptr = lv;
+            } else if (!step.name.empty()) {
+                if (LocalVar* lv_by_name = ctx.resolveLocal(step.name.c_str())) {
+                    step.ref_ptr = lv_by_name;
+                }
+            }
+        }
         pi->path.push_back(step);
     }
     pi->result = QoreIRValue(result_id);

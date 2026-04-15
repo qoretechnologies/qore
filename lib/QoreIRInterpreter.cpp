@@ -3761,9 +3761,23 @@ load_local_done:
                         // in LValueHelper::assign takes the "unique" in-place branch for
                         // hash<auto!> etc., leaving new_h in TLS at refcount 1.
                         QoreHashNode* new_h = h->copy();  // refcount 1, unique
-                        LocalVar* lv = const_cast<LocalVar*>(
-                            reinterpret_cast<const LocalVar*>(hks_inst->container->ref.id));
-                        if (hks_inst->container->getType() == VT_CLOSURE) {
+                        // Prefer container_lv (set at AOT deser time) over
+                        // container->ref.id (fresh-parse path) — the container
+                        // VarRefNode is not serialized, so AOT-loaded closure
+                        // bodies have container==nullptr and must use _lv.
+                        LocalVar* lv;
+                        bool is_closure;
+                        if (hks_inst->container_lv) {
+                            lv = hks_inst->container_lv;
+                            // Check at runtime: closureUse may be set after AOT
+                            // deser time when a later closure captures this var.
+                            is_closure = lv->closureUse();
+                        } else {
+                            lv = const_cast<LocalVar*>(
+                                reinterpret_cast<const LocalVar*>(hks_inst->container->ref.id));
+                            is_closure = (hks_inst->container->getType() == VT_CLOSURE);
+                        }
+                        if (is_closure) {
                             assignClosureVarValueTransfer(lv, QoreValue(new_h), xsink);
                         } else {
                             assignLocalVarValueTransfer(lv, QoreValue(new_h), xsink);
@@ -3810,9 +3824,17 @@ load_local_done:
                         cleanupLocalCaches();
                         return false;
                     }
-                    LocalVar* lv = const_cast<LocalVar*>(
-                        reinterpret_cast<const LocalVar*>(hks_inst->container->ref.id));
-                    if (hks_inst->container->getType() == VT_CLOSURE) {
+                    LocalVar* lv;
+                    bool is_closure;
+                    if (hks_inst->container_lv) {
+                        lv = hks_inst->container_lv;
+                        is_closure = lv->closureUse();
+                    } else {
+                        lv = const_cast<LocalVar*>(
+                            reinterpret_cast<const LocalVar*>(hks_inst->container->ref.id));
+                        is_closure = (hks_inst->container->getType() == VT_CLOSURE);
+                    }
+                    if (is_closure) {
                         assignClosureVarValueTransfer(lv, QoreValue(new_h), xsink);
                     } else {
                         assignLocalVarValueTransfer(lv, QoreValue(new_h), xsink);
@@ -3855,9 +3877,17 @@ load_local_done:
                     if (h->reference_count() > 1) {
                         // COW: see HashKeyStore above for rationale on *Transfer variants
                         QoreHashNode* new_h = h->copy();  // refcount 1, unique
-                        LocalVar* lv = const_cast<LocalVar*>(
-                            reinterpret_cast<const LocalVar*>(hksd_inst->container->ref.id));
-                        if (hksd_inst->container->getType() == VT_CLOSURE) {
+                        LocalVar* lv;
+                        bool is_closure;
+                        if (hksd_inst->container_lv) {
+                            lv = hksd_inst->container_lv;
+                            is_closure = lv->closureUse();
+                        } else {
+                            lv = const_cast<LocalVar*>(
+                                reinterpret_cast<const LocalVar*>(hksd_inst->container->ref.id));
+                            is_closure = (hksd_inst->container->getType() == VT_CLOSURE);
+                        }
+                        if (is_closure) {
                             assignClosureVarValueTransfer(lv, QoreValue(new_h), xsink);
                         } else {
                             assignLocalVarValueTransfer(lv, QoreValue(new_h), xsink);
@@ -3893,9 +3923,17 @@ load_local_done:
                         cleanupLocalCaches();
                         return false;
                     }
-                    LocalVar* lv = const_cast<LocalVar*>(
-                        reinterpret_cast<const LocalVar*>(hksd_inst->container->ref.id));
-                    if (hksd_inst->container->getType() == VT_CLOSURE) {
+                    LocalVar* lv;
+                    bool is_closure;
+                    if (hksd_inst->container_lv) {
+                        lv = hksd_inst->container_lv;
+                        is_closure = lv->closureUse();
+                    } else {
+                        lv = const_cast<LocalVar*>(
+                            reinterpret_cast<const LocalVar*>(hksd_inst->container->ref.id));
+                        is_closure = (hksd_inst->container->getType() == VT_CLOSURE);
+                    }
+                    if (is_closure) {
                         assignClosureVarValueTransfer(lv, QoreValue(new_h), xsink);
                     } else {
                         assignLocalVarValueTransfer(lv, QoreValue(new_h), xsink);

@@ -979,6 +979,14 @@ public:
     const VarRefNode* container;  //!< Container variable (for COW: get LocalVar* from ref.id)
     std::string key_name;
     uint32_t container_slot_id = UINT32_MAX; // Pre-computed slot index for container variable
+    //! LocalVar* populated at AOT deserialization time from slot_to_local.
+    //! The original `container` VarRefNode* is not serialized (only slot_id is),
+    //! so deserialized instructions have `container == nullptr`. The interpreter
+    //! must prefer `container_lv` (+ container_is_closure) over `container` when
+    //! set — fresh IR lowering from AST leaves container_lv null and the COW path
+    //! uses `container->ref.id` as before.
+    class LocalVar* container_lv = nullptr;
+    bool container_is_closure = false;
     // operands[0] = hash value (from LoadLocal on container)
     // operands[1] = new element value to store
 };
@@ -994,6 +1002,9 @@ public:
 
     const VarRefNode* container;  //!< Container variable (for COW: get LocalVar* from ref.id)
     uint32_t container_slot_id = UINT32_MAX; // Pre-computed slot index for container variable
+    //! LocalVar* populated at AOT deserialization time — see QoreIRHashKeyStoreInstruction.
+    class LocalVar* container_lv = nullptr;
+    bool container_is_closure = false;
     // operands[0] = hash value (from LoadLocal on container)
     // operands[1] = new element value to store
     // operands[2] = key value (converted to string at runtime)

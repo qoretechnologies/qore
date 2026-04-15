@@ -2794,6 +2794,11 @@ static bool extractLValuePath(const QoreValue& expr,
             case VT_LOCAL_TS:
                 step.kind = LVPathStepKind::LocalVar;
                 step.ref_ptr = vr->ref.id;
+                // Record the name so AOT deserialization can resolve the
+                // variable via enclosing_locals name lookup when the closure
+                // body captures a var that doesn't live in the closure's own
+                // local_var_slots (captured vars from enclosing scopes).
+                step.name = vr->getName() ? vr->getName() : "";
                 step.type_info = vr->getTypeInfo();
                 break;
             case VT_CLOSURE:
