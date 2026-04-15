@@ -1993,6 +1993,13 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             hdr += extra_hdrs;
         }
 
+        # Merge any response headers stashed by a handler's preprocessRequest() —
+        # e.g. CORS headers — so that framework-level errors still return headers
+        # the browser needs to read the body
+        if (cx."error-response-headers".typeCode() == NT_HASH) {
+            hdr += cx."error-response-headers";
+        }
+
         hdr.Date = getDateHeader();
         if (is_multiplexed) {
             # HTTP/2 and HTTP/3 prohibit connection-specific headers (RFC 9113 Section 8.2.2,
@@ -3031,6 +3038,12 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             "Content-Type": MimeTypeHtml + ";charset=" + encoding,
             "Date": getDateHeader(),
         };
+        # Merge any response headers stashed by a handler's preprocessRequest() —
+        # e.g. CORS headers — so that framework-level exceptions during response
+        # serialization still return headers the browser needs to read the body
+        if (cx."error-response-headers".typeCode() == NT_HASH) {
+            err_hdr += cx."error-response-headers";
+        }
         return <HttpAsyncResponseInfo>{
             "code": status_code,
             "hdr": err_hdr,

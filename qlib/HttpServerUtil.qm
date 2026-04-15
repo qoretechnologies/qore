@@ -32,7 +32,7 @@
 %modern
 
 module HttpServerUtil {
-    version = "1.4";
+    version = "1.5";
     desc = "HttpServerUtil class definition";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -124,6 +124,12 @@ module HttpServerUtil {
     |\c uctx|*hash|any user thread context for the listener (see @ref HttpServer::HttpListenerInterface::addUserThreadContext() "HttpListenerInterface::addUserThreadContext()")
 
     @section httpserverutil_relnotes HttpServerUtil Module Release Notes
+
+    @subsection httputil1_5 HttpServerUtil 1.5
+    - made the \c owner argument of @ref HttpServer::CallbackInputStream::constructor() "CallbackInputStream::constructor()"
+      optional to support plain closure callbacks that do not need an owner pin to prevent garbage collection;
+      this fixes a \c RUNTIME-OVERLOAD-ERROR when HTTP/2 handlers returned a \c send_callback response in a
+      context where no socket object was available to pass as the owner
 
     @subsection httputil1_4 HttpServerUtil 1.4
     - added HTTP/3 (QUIC) listener configuration support (\c enable_h3, \c alt_svc_max_age, \c no_bind)
@@ -1808,8 +1814,11 @@ public class CallbackInputStream inherits InputStream {
         #! strong reference to the object that owns the callback, preventing premature garbage collection
         /** In Qore, method call references created with \\method() do not hold strong references to the
             owning object. This field ensures the owner stays alive as long as the stream exists.
+
+            Optional: plain closures (\c sub () { ... }) capture their environment and don't need an
+            owner pin; only method-reference callbacks (\c \\obj.method()) require it.
         */
-        object owner;
+        *object owner;
         #! internal buffer for partially-consumed chunks
         *binary buf;
         #! end-of-stream flag
@@ -1820,9 +1829,12 @@ public class CallbackInputStream inherits InputStream {
     /** @param callback a callback that returns string or binary data for each chunk, a hash of
         trailers, or @ref nothing to signal end of stream
         @param owner the object that owns the callback; a strong reference is held to prevent the owner
-        from being garbage collected while the stream is still in use
+        from being garbage collected while the stream is still in use.  May be @ref nothing if the
+        callback is a plain closure that carries its own environment and does not need an owner pin
+
+        @since HttpServerUtil 1.5
     */
-    constructor(code callback, object owner) {
+    constructor(code callback, *object owner) {
         self.callback = callback;
         self.owner = owner;
     }
