@@ -1486,6 +1486,77 @@ static void ut_http2_adopt_socket_construct(UnitTestCounters& c) {
     xsink.clear();
 }
 
+// --- NEGOTIATE manager dispatch tests (phase 3) ---
+//
+// These exercise the manager's NEGOTIATE case wire-up: reject on plain
+// HTTP (no ALPN without TLS), reject on proxy (future work), and surface
+// a connect error cleanly on a refused port.  Full end-to-end coverage
+// of the ALPN selection path lands in phase 5 when QoreHttpClientObject's
+// AUTO+SSL flow switches from the legacy bypass to NEGOTIATE.
+
+static void ut_manager_negotiate_requires_ssl(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    HttpClientConnectionManagerBase::Options opts;
+    opts.protocol = HttpClientProtocol::NEGOTIATE;
+    opts.connect_timeout_ms = 1000;
+    ReferenceHolder<HttpClientConnectionManagerBase> mgr(
+        new HttpClientConnectionManagerBase(opts, &xsink), &xsink);
+    UT_ASSERT(c, !xsink, "manager(NEGOTIATE) construction succeeds");
+    if (xsink) { xsink.clear(); return; }
+
+    // Plain HTTP (scheme "http") → NEGOTIATE rejects with
+    // HTTPCLIENT-NEGOTIATE-SSL-REQUIRED.
+    HttpClientConnectionBase* conn = mgr->acquireConnection(
+        "http", "127.0.0.1", 1, &xsink);
+    UT_ASSERT(c, !conn, "NEGOTIATE + plain HTTP returns nullptr");
+    UT_ASSERT(c, xsink.isException(),
+        "NEGOTIATE + plain HTTP raises an exception");
+    const QoreStringNode* err = xsink.getExceptionErr().get<const QoreStringNode>();
+    UT_ASSERT(c, err && strcmp(err->c_str(), "HTTPCLIENT-NEGOTIATE-SSL-REQUIRED") == 0,
+        "exception code is HTTPCLIENT-NEGOTIATE-SSL-REQUIRED");
+    xsink.clear();
+}
+
+static void ut_manager_negotiate_refused_port(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    HttpClientConnectionManagerBase::Options opts;
+    opts.protocol = HttpClientProtocol::NEGOTIATE;
+    opts.connect_timeout_ms = 2000;
+    opts.accept_all_certs = true;  // not used — handshake never starts
+    ReferenceHolder<HttpClientConnectionManagerBase> mgr(
+        new HttpClientConnectionManagerBase(opts, &xsink), &xsink);
+    UT_ASSERT(c, !xsink, "manager(NEGOTIATE) construction succeeds");
+    if (xsink) { xsink.clear(); return; }
+
+    // Bind+close an ephemeral port so the next connect is refused.
+    int sfd = socket(AF_INET, SOCK_STREAM, 0);
+    if (sfd < 0) { UT_ASSERT(c, false, "reserve socket"); return; }
+    sockaddr_in addr{};
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    addr.sin_port = 0;
+    ::bind(sfd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
+    socklen_t alen = sizeof(addr);
+    getsockname(sfd, reinterpret_cast<sockaddr*>(&addr), &alen);
+    int dead_port = ntohs(addr.sin_port);
+    ::close(sfd);
+
+    // https scheme triggers the NEGOTIATE path.  Connect fails at TCP
+    // (refused); the error propagates out of the negotiation helper.
+    HttpClientConnectionBase* conn = mgr->acquireConnection(
+        "https", "127.0.0.1", dead_port, &xsink);
+    UT_ASSERT(c, !conn, "NEGOTIATE + refused port returns nullptr");
+    UT_ASSERT(c, xsink.isException(),
+        "NEGOTIATE + refused port raises an exception");
+    // Exception code should NOT be HTTPCLIENT-NEGOTIATE-NOT-IMPLEMENTED
+    // (the Phase 1 placeholder) — if we see that, the wire-up is broken.
+    const QoreStringNode* err = xsink.getExceptionErr().get<const QoreStringNode>();
+    UT_ASSERT(c, err
+            && strcmp(err->c_str(), "HTTPCLIENT-NEGOTIATE-NOT-IMPLEMENTED") != 0,
+        "NEGOTIATE is wired (not the phase 1 placeholder)");
+    xsink.clear();
+}
+
 static void ut_manager_h2_dispatch(UnitTestCounters& c) {
     ExceptionSink xsink;
     HttpClientConnectionManagerBase::Options opts;
@@ -2151,6 +2222,8 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_http2_connection_alpn_setup(c);
     ut_http1_adopt_socket_simple_request(c);
     ut_http2_adopt_socket_construct(c);
+    ut_manager_negotiate_requires_ssl(c);
+    ut_manager_negotiate_refused_port(c);
     ut_manager_h2_dispatch(c);
     ut_http3_connection_construct(c);
     ut_manager_h3_dispatch(c);

@@ -35,6 +35,7 @@
 #include "qore/intern/QoreHttp1ClientConnection.h"
 #include "qore/intern/QoreHttp2ClientConnection.h"
 #include "qore/intern/QoreHttp3ClientConnection.h"
+#include "qore/intern/NegotiatingConnectionPollOp.h"
 #include "qore/intern/QC_FutureImpl.h"
 #include "qore/intern/QC_Future.h"
 
@@ -390,18 +391,79 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::createConnection(
             conn = new Http3ClientConnection(host, port,
                 opts_.max_streams_per_connection, xsink, this);
             break;
-        case HttpClientProtocol::NEGOTIATE:
-            // Phase 1 placeholder: per-connect ALPN negotiation is
-            // implemented in Phase 3 of the conn-mgr-alpn-negotiation
-            // design (see design/conn-mgr-alpn-negotiation.md).  For
-            // now, NEGOTIATE is not yet wired into QoreHttpClientObject's
-            // getConnMgr, so reaching this case indicates a configuration
-            // bug.
-            xsink->raiseException("HTTPCLIENT-NEGOTIATE-NOT-IMPLEMENTED",
-                "HttpClientProtocol::NEGOTIATE is a phase 1 placeholder; "
-                "per-connect ALPN negotiation will be wired in phases 2-5 "
-                "of the conn-mgr-alpn-negotiation work");
-            return nullptr;
+        case HttpClientProtocol::NEGOTIATE: {
+            // Per-connect ALPN negotiation: runs a
+            // NegotiatingHttpClientConnection helper async via the
+            // AsyncIoController (TCP connect + TLS handshake with ALPN
+            // offer {"h2","http/1.1"}), waits for completion, then
+            // hands the adopted socket to an Http1 or Http2 concrete
+            // connection via the Phase 2 adopt-socket constructor.
+            //
+            // NEGOTIATE requires SSL; plain-HTTP AUTO is always H1 at
+            // the HTTPClient level and never reaches this case.
+            if (!ssl_required) {
+                xsink->raiseException("HTTPCLIENT-NEGOTIATE-SSL-REQUIRED",
+                    "HttpClientProtocol::NEGOTIATE requires SSL (ALPN "
+                    "only runs over TLS)");
+                return nullptr;
+            }
+            // Proxy + NEGOTIATE is not yet implemented (per design doc
+            // §10 open question 1 — inherits the H2 + HTTPS proxy
+            // limitation).
+            if (proxy_info_) {
+                xsink->raiseException("HTTPCLIENT-PROXY-ERROR",
+                    "HTTPS through HTTP proxy is not yet implemented "
+                    "for NEGOTIATE (ALPN-selected) connections");
+                return nullptr;
+            }
+
+            Http1SslConfig ssl_cfg;
+            ssl_cfg.verify_mode = opts_.ssl_verify_mode;
+            ssl_cfg.accept_all = opts_.accept_all_certs;
+            ssl_cfg.cert = opts_.client_cert;
+            ssl_cfg.key = opts_.client_key;
+
+            ReferenceHolder<NegotiatingHttpClientConnection> neg(
+                new NegotiatingHttpClientConnection(host, port, ssl_cfg, xsink),
+                xsink);
+            if (*xsink) {
+                return nullptr;
+            }
+
+            // Block on the negotiation handshake.  wait_for_ready is
+            // required for NEGOTIATE in this phase — async takeover is
+            // a future enhancement.
+            if (!wait_for_ready) {
+                xsink->raiseException("HTTPCLIENT-NEGOTIATE-NOT-IMPLEMENTED",
+                    "wait_for_ready=false is not supported for "
+                    "NEGOTIATE connections in this phase");
+                return nullptr;
+            }
+            bool ready = neg->waitForReadyOrError(opts_.connect_timeout_ms, xsink);
+            if (!ready || *xsink) {
+                if (!*xsink) {
+                    xsink->raiseException("HTTPCLIENT-NEGOTIATE-TIMEOUT",
+                        "ALPN negotiation with %s:%d timed out after %d ms",
+                        host, port, opts_.connect_timeout_ms);
+                }
+                ExceptionSink dx;
+                neg->closeConnection(&dx);
+                dx.clear();
+                return nullptr;
+            }
+
+            // Hand off the adopted socket to the concrete H1 or H2
+            // connection.  The adopt-socket ctor submits the socket
+            // back to the AsyncIoController under its own poll op.
+            conn = neg->takeOver(opts_.max_streams_per_connection, this, xsink);
+            if (*xsink) {
+                return nullptr;
+            }
+            // The neg helper is taken over; its destructor (on
+            // ReferenceHolder scope exit) will not double-close the
+            // socket.
+            break;
+        }
     }
     if (*xsink) {
         if (conn) {
