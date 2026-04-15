@@ -196,37 +196,40 @@ QoreHashNode* NegotiatingConnectionPollOpPriv::handleConnecting(ExceptionSink* x
 }
 
 void NegotiatingConnectionPollOpPriv::setError(const char* err, const char* desc,
-        ExceptionSink* /*xsink*/) {
+        ExceptionSink* xsink) {
     if (error_info) {
         return;  // preserve the first error
     }
-    ExceptionSink tmp_xsink;
     error_info = new QoreHashNode(autoTypeInfo);
-    error_info->setKeyValue("err", new QoreStringNode(err), &tmp_xsink);
-    error_info->setKeyValue("desc", new QoreStringNode(desc), &tmp_xsink);
-    tmp_xsink.clear();
+    error_info->setKeyValue("err", new QoreStringNode(err), xsink);
+    error_info->setKeyValue("desc", new QoreStringNode(desc), xsink);
 
     neg_state.store(NegState::CLOSED, std::memory_order_release);
 
-    // Wake any waiter so it observes the error.  The owning connection
-    // transitions its own state to CLOSED via setClosed() in its
-    // closeConnection() path, but we also need to unblock
-    // waitForReadyOrError here in case the connection is mid-construction.
+    // Transition the owning connection to CLOSED so the app thread
+    // blocked in waitForReadyOrError wakes up and observes the failure.
+    // Without this, the waiter would sleep until connect_timeout_ms
+    // expires and surface a timeout instead of the real handshake
+    // error.  Matches the pattern in
+    // Http1ClientPollOperationPriv::setError — fire the connection's
+    // setClosed hook, then null the back-pointer so later callbacks
+    // cannot touch a connection that may already be tearing down.
+    //
+    // setClosed() is thread-safe (AbstractHttpPollConnectionPriv takes
+    // its own lock) so calling it from the I/O thread is fine.
     if (owner_conn) {
-        // onConnectionReady would transition to READY, which is wrong on
-        // an error path — instead the manager's wait loop will observe
-        // CLOSED via setClosed().  Defer to the close path triggered by
-        // the caller's closeConnection() on error return.
-        //
-        // We mark the owner's state via its getReferencedErrorInfo()
-        // hook which will pick up our error_info through the poll op's
-        // back-pointer.
+        owner_conn->setClosed();
+        owner_conn = nullptr;
     }
 }
 
 void NegotiatingConnectionPollOpPriv::abort(ExceptionSink* xsink) {
     neg_state.store(NegState::CLOSED, std::memory_order_release);
     releaseCurrentOp(xsink);
+    if (owner_conn) {
+        owner_conn->setClosed();
+        owner_conn = nullptr;
+    }
 }
 
 // ============================================================
