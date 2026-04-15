@@ -983,8 +983,54 @@ static QoreValue process_binary_body(const BinaryNode* bin, const QoreEncoding* 
     return new QoreStringNode((const char*)bin->getPtr(), bin->size(), body_enc);
 }
 
-// Transform a conn_mgr response hash (nested "headers") to the legacy flat
-// format that send_internal's redirect/auth/encoding logic expects.
+// ============================================================================
+// LEGACY RESPONSE SHAPE ADAPTERS
+// ----------------------------------------------------------------------------
+// The C++ connection manager produces ONE canonical response hash shape for
+// every request — the one documented by the HttpClientResponseInfo hashdecl
+// in qlib/HttpClientIo/HttpClientIo.qm:
+//
+//     { status_code, status_message, http_version,
+//       headers, headers_raw, body }
+//
+// Pure-async callers (HttpClientConnectionManager.qc, HttpClientIo,
+// RestClientIo, their DataProviders) consume that shape directly.  No code
+// in that path is allowed to add ad-hoc fields, flatten nested data, or
+// duplicate values into multiple slots.
+//
+// TWO legacy callers still expect different response shapes, and they are
+// fed by the adapters in this section — nothing else:
+//
+//   1. qore_httpclient_priv::send_internal_conn_mgr → transformConnMgrResponse
+//        feeds the sync HTTPClient::send()/get()/post()/… API, which
+//        predates nested headers and expects them flattened to the top
+//        level alongside status_code and body.  Matches the legacy
+//        readHTTPHeader() response format.
+//
+//   2. HttpClientConnMgrPollOp::getOutput → toLegacyPollApiOutputShape
+//        feeds HTTPClient::startPollSendRecv(...).getOutput(), which
+//        predates the nested-headers design and expects the shape
+//          { code,
+//            info: { response-headers, response-headers-raw, response-body },
+//            response-body }
+//        where response-body is intentionally present at BOTH positions
+//        for backward compatibility with existing poll-API consumers
+//        that read either location.  This matches what the pre-conn_mgr
+//        HttpClientConnectSendRecvPollOperation::getOutput() produced.
+//
+// NEW CODE MUST NOT ADD TO THIS SECTION.  If you need a different shape
+// for a new async API, read HttpClientResponseInfo directly and do the
+// transformation at the call site you introduce.  Any future legacy
+// adapter (if one is ever needed again) goes in its own named function
+// right here, in this section, with this same guardrail.
+// ============================================================================
+
+// Transform a clean HttpClientResponseInfo-shaped response hash into the
+// legacy sync HTTPClient shape that send_internal's redirect/auth/encoding
+// logic expects.  Only called from @c send_internal_conn_mgr.
+//
+// See LEGACY RESPONSE SHAPE ADAPTERS block above for the rationale and
+// the full list of callers — do not reuse this function for anything else.
 static QoreHashNode* transformConnMgrResponse(QoreHashNode* src, ExceptionSink* xsink) {
     ReferenceHolder<QoreHashNode> result(new QoreHashNode(autoTypeInfo), xsink);
 
@@ -1018,6 +1064,113 @@ static QoreHashNode* transformConnMgrResponse(QoreHashNode* src, ExceptionSink* 
         result->setKeyValue("body", v.refSelf(), xsink);
     }
 
+    return result.release();
+}
+
+// Transform a clean HttpClientResponseInfo-shaped response hash into the
+// legacy HTTPClient poll API shape consumed by
+//   hc.startPollSendRecv(...).getOutput()
+// which returns:
+//
+//   { code, info: { response-headers, response-headers-raw,
+//                   response-body },
+//     response-body }
+//
+// — response-body lives in BOTH positions (inside info and at the top
+// level), matching the pre-conn_mgr @c HttpClientConnectSendRecvPollOperation
+// output format: @c processReceivedBody sets @c info->response-body and
+// @c getOutput sets @c rv->response-body from @c recv_data_holder.  Existing
+// poll-API consumers read either location, so we populate both.
+//
+// Also handles Content-Encoding decompression on the body, preserving
+// the contract that poll-API callers don't see the compressed bytes.
+//
+// Only called from @c HttpClientConnMgrPollOp::getOutput.
+//
+// See LEGACY RESPONSE SHAPE ADAPTERS block above for the rationale and
+// the full list of callers — do not reuse this function for anything else.
+static QoreHashNode* toLegacyPollApiOutputShape(const QoreHashNode* src,
+        ExceptionSink* xsink) {
+    ReferenceHolder<QoreHashNode> result(new QoreHashNode(autoTypeInfo), xsink);
+    QoreValue sc = src->getKeyValue("status_code");
+    if (!sc.isNullOrNothing()) {
+        result->setKeyValue("code", sc.getAsBigInt(), xsink);
+    }
+
+    // Decode the body once (decompressing if needed) and reuse the same
+    // ref at both the top-level and the info sub-hash positions.
+    ReferenceHolder<AbstractQoreNode> body_ref(nullptr);
+    QoreValue body = src->getKeyValue("body");
+    QoreValue hdrs_v = src->getKeyValue("headers");
+    if (!body.isNullOrNothing()) {
+        if (body.getType() == NT_BINARY) {
+            const BinaryNode* bin = body.get<const BinaryNode>();
+            const char* content_encoding = nullptr;
+            if (hdrs_v.getType() == NT_HASH) {
+                QoreValue cev = hdrs_v.get<const QoreHashNode>()->getKeyValue(
+                    "content-encoding");
+                if (cev.getType() == NT_STRING) {
+                    const char* ce = cev.get<const QoreStringNode>()->c_str();
+                    if (ce && *ce && strcasecmp(ce, "identity")) {
+                        content_encoding = ce;
+                    }
+                }
+            }
+            if (content_encoding && bin && bin->size()) {
+                bool ignore_encoding = false;
+                qore_uncompress_to_string_t dec =
+                    get_decoder_for_content_encoding(content_encoding,
+                        ignore_encoding);
+                if (dec && !ignore_encoding) {
+                    QoreStringNode* decoded = dec(bin, QCS_UTF8, xsink);
+                    if (!*xsink && decoded) {
+                        // Convert decompressed string back to binary for
+                        // the poll API's response-body format
+                        SimpleRefHolder<BinaryNode> decompressed(
+                            new BinaryNode());
+                        decompressed->append(decoded->c_str(), decoded->size());
+                        decoded->deref(xsink);
+                        body_ref = decompressed.release();
+                    } else {
+                        if (*xsink) {
+                            xsink->clear();
+                        }
+                        if (decoded) {
+                            decoded->deref(xsink);
+                        }
+                    }
+                }
+            }
+        }
+        // If no decompression happened (not binary, no encoding, or
+        // decoder missing), pass the source body through.
+        if (!body_ref) {
+            body_ref = body.getInternalNode()
+                ? body.getInternalNode()->refSelf() : nullptr;
+        }
+    }
+
+    // Build the info sub-hash (response-headers, response-headers-raw,
+    // response-body).
+    ReferenceHolder<QoreHashNode> info_hash(new QoreHashNode(autoTypeInfo), xsink);
+    if (hdrs_v.getType() == NT_HASH) {
+        info_hash->setKeyValue("response-headers", hdrs_v.refSelf(), xsink);
+    }
+    QoreValue hdrs_raw_v = src->getKeyValue("headers_raw");
+    if (hdrs_raw_v.getType() == NT_HASH) {
+        info_hash->setKeyValue("response-headers-raw",
+            hdrs_raw_v.refSelf(), xsink);
+    }
+    if (body_ref) {
+        info_hash->setKeyValue("response-body", body_ref->refSelf(), xsink);
+    }
+    if (!info_hash->empty()) {
+        result->setKeyValue("info", info_hash.release(), xsink);
+    }
+    // Top-level response-body (legacy consumers read here).
+    if (body_ref) {
+        result->setKeyValue("response-body", body_ref.release(), xsink);
+    }
     return result.release();
 }
 
@@ -9785,106 +9938,25 @@ public:
             xsink.clear();
             return QoreValue();
         }
-        // Transform conn_mgr response to legacy getOutput format.
-        // The legacy poll op
-        // (HttpClientConnectSendRecvPollOperation::getOutput) returns:
-        //   { code: <int>,
-        //     info: { response-headers, response-headers-raw,
-        //             response-body },
-        //     response-body: <binary> }
-        // — response-body lives in BOTH places: inside the info sub-hash
-        // (set by processReceivedBody) AND at the top level (added by
-        // getOutput from recv_data_holder).  The conn_mgr path must
-        // match both so existing consumers that read either location
-        // keep working.
+        // The conn_mgr produces one canonical response shape
+        // (HttpClientResponseInfo — see the hashdecl in
+        // qlib/HttpClientIo/HttpClientIo.qm).  This poll op is the
+        // LEGACY ADAPTER for HTTPClient::startPollSendRecv(...).getOutput()
+        // and translates to the historical dual-location shape via
+        // toLegacyPollApiOutputShape — see the LEGACY RESPONSE SHAPE
+        // ADAPTERS block at the top of this file for the rationale.
         if (rv.getType() == NT_HASH) {
             QoreHashNode* src = rv.get<QoreHashNode>();
-            ReferenceHolder<QoreHashNode> result(new QoreHashNode(autoTypeInfo), &xsink);
-            QoreValue sc = src->getKeyValue("status_code");
-            if (!sc.isNullOrNothing()) {
-                result->setKeyValue("code", sc.getAsBigInt(), &xsink);
-            }
-            // Decode the body once (decompressing if needed) and reuse
-            // the same ref at both the top-level and the info sub-hash
-            // positions.
-            ReferenceHolder<AbstractQoreNode> body_ref(nullptr);
-            QoreValue body = src->getKeyValue("body");
-            QoreValue hdrs_v = src->getKeyValue("headers");
-            if (!body.isNullOrNothing()) {
-                if (body.getType() == NT_BINARY) {
-                    const BinaryNode* bin = body.get<const BinaryNode>();
-                    const char* content_encoding = nullptr;
-                    if (hdrs_v.getType() == NT_HASH) {
-                        QoreValue cev = hdrs_v.get<const QoreHashNode>()->getKeyValue(
-                            "content-encoding");
-                        if (cev.getType() == NT_STRING) {
-                            const char* ce = cev.get<const QoreStringNode>()->c_str();
-                            if (ce && *ce && strcasecmp(ce, "identity")) {
-                                content_encoding = ce;
-                            }
-                        }
-                    }
-                    if (content_encoding && bin && bin->size()) {
-                        bool ignore_encoding = false;
-                        qore_uncompress_to_string_t dec =
-                            get_decoder_for_content_encoding(content_encoding,
-                                ignore_encoding);
-                        if (dec && !ignore_encoding) {
-                            QoreStringNode* decoded = dec(bin, QCS_UTF8, &xsink);
-                            if (!xsink && decoded) {
-                                // Convert decompressed string back to binary
-                                // for the poll API's response-body format
-                                SimpleRefHolder<BinaryNode> decompressed(
-                                    new BinaryNode());
-                                decompressed->append(decoded->c_str(),
-                                    decoded->size());
-                                decoded->deref(&xsink);
-                                body_ref = decompressed.release();
-                            } else {
-                                if (xsink) {
-                                    xsink.clear();
-                                }
-                                if (decoded) {
-                                    decoded->deref(&xsink);
-                                }
-                            }
-                        }
-                    }
-                }
-                // If no decompression happened (not binary, no encoding,
-                // or decoder missing), pass the source body through.
-                if (!body_ref) {
-                    body_ref = body.getInternalNode() ? body.getInternalNode()->refSelf() : nullptr;
-                }
-            }
-
-            // Build the info sub-hash (response-headers, response-headers-raw,
-            // response-body).
-            ReferenceHolder<QoreHashNode> info_hash(
-                new QoreHashNode(autoTypeInfo), &xsink);
-            if (hdrs_v.getType() == NT_HASH) {
-                info_hash->setKeyValue("response-headers",
-                    hdrs_v.refSelf(), &xsink);
-            }
-            QoreValue hdrs_raw_v = src->getKeyValue("headers_raw");
-            if (hdrs_raw_v.getType() == NT_HASH) {
-                info_hash->setKeyValue("response-headers-raw",
-                    hdrs_raw_v.refSelf(), &xsink);
-            }
-            if (body_ref) {
-                info_hash->setKeyValue("response-body",
-                    body_ref->refSelf(), &xsink);
-            }
-            if (!info_hash->empty()) {
-                result->setKeyValue("info", info_hash.release(), &xsink);
-            }
-            // Top-level response-body (legacy consumers read here).
-            if (body_ref) {
-                result->setKeyValue("response-body",
-                    body_ref.release(), &xsink);
-            }
+            QoreHashNode* out = toLegacyPollApiOutputShape(src, &xsink);
             rv.discard(&xsink);
-            return result.release();
+            if (xsink) {
+                xsink.clear();
+                if (out) {
+                    out->deref(&xsink);
+                }
+                return QoreValue();
+            }
+            return out;
         }
         return rv;
     }
