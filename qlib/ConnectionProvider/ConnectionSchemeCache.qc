@@ -127,6 +127,8 @@ public class ConnectionSchemeCache {
             "esrest": "ElasticSearchDataProvider",
             "esrests": "ElasticSearchDataProvider",
 
+            "firecrawlrest": "FirecrawlRestClient",
+
             "freshbooks": "FreshBooksRestClient",
 
             "freshsalesrest": "FreshsalesRestClient",

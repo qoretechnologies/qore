@@ -97,6 +97,12 @@ public class QoreAgentStrategiesTest inherits QUnit::Test {
         # ParallelToolDispatcher tests
         addTestCase("Parallel - concurrent dispatch", \parallelTest());
         addTestCase("Parallel - error handling", \parallelErrorTest());
+        addTestCase("Parallel - start_thread invoked when supplied",
+            \parallelStartThreadTest());
+        addTestCase("Parallel - unknown option rejected",
+            \parallelUnknownOptionTest());
+        addTestCase("Parallel - sandbox parse stub passes under PO_NO_THREAD_CONTROL",
+            \parallelSandboxParseStubTest());
 
         # Hashdecl tests
         addTestCase("AgentContext defaults", \contextDefaultsTest());
@@ -498,6 +504,78 @@ public class QoreAgentStrategiesTest inherits QUnit::Test {
         foreach hash<auto> r in (results) {
             assertTrue(exists r.result);
         }
+    }
+
+    #! When start_thread is provided, it replaces the `background` operator
+    #! for every concurrent batch element.
+    parallelStartThreadTest() {
+        int starter_calls = 0;
+        Mutex m();
+        code<int(code<nothing()>)> starter = int sub (code<nothing()> body) {
+            {
+                m.lock();
+                on_exit m.unlock();
+                ++starter_calls;
+            }
+            return background body();
+        };
+
+        ParallelToolDispatcher dispatcher({
+            "max_concurrent": 3,
+            "start_thread": starter,
+        });
+        code dispatch = auto sub (string name, hash<auto> args) {
+            return {"ok": True, "name": name};
+        };
+        list<hash<auto>> results = dispatcher.dispatchToolsParallel(
+            ({"name": "a"}, {"name": "b"}, {"name": "c"}),
+            dispatch,
+        );
+        assertEq(3, results.size());
+        foreach hash<auto> r in (results) {
+            assertTrue(exists r.result);
+        }
+        assertEq(3, starter_calls);
+    }
+
+    #! Unknown constructor options are rejected immediately
+    parallelUnknownOptionTest() {
+        assertThrows("PARALLEL-DISPATCH-ARG-ERROR", "unknown option",
+            sub () {
+                new ParallelToolDispatcher({"not_a_real_option": 1});
+            }
+        );
+    }
+
+    #! Proves that the parallel-dispatch pattern used in ParallelToolDispatcher
+    #! parses cleanly under PO_NO_THREAD_CONTROL.  See the equivalent test in
+    #! QoreStructuredExtractionTest::sandboxParseStubTest() for why an
+    #! end-to-end module-load sandbox test is not feasible from this qtest.
+    parallelSandboxParseStubTest() {
+        Program p(PO_NEW_STYLE | PO_NO_THREAD_CONTROL);
+        string stub = '
+            class Dispatcher {
+                private {
+                    *code<int(code<nothing()>)> start_thread;
+                }
+
+                constructor(*code<int(code<nothing()>)> starter) {
+                    start_thread = starter;
+                }
+
+                int run(code<nothing()> worker) {
+%ifdef PO_NO_THREAD_CONTROL
+                    return call_function(start_thread, worker);
+%else
+                    if (start_thread) {
+                        return call_function(start_thread, worker);
+                    }
+                    return background worker();
+%endif
+                }
+            }
+        ';
+        p.parse(stub, "parallel-sandbox-stub");
     }
 
     parallelErrorTest() {

@@ -84,10 +84,42 @@ hash<AgentResult> result = strategy.execute(<AgentContext>{
 printf("Response: %s\n", result.response);
     @endcode
 
+    @section qoreagentstrategiessandbox QoreAgentStrategies Module in Sandboxed Programs
+
+    The @ref QoreAgentStrategies::ParallelToolDispatcher "ParallelToolDispatcher" class
+    spawns background threads to dispatch tool calls concurrently.  Under a
+    sandboxed @ref Qore::Program "Program" with @ref Qore::PO_NO_THREAD_CONTROL set,
+    the @ref background operator is unavailable, so the caller must supply a
+    \c start_thread callable when constructing the dispatcher:
+
+    - \c start_thread: required when \c max_concurrent > 1 in a program with
+      @ref Qore::PO_NO_THREAD_CONTROL set; a
+      @ref closure "closure" or @ref call_reference "call reference" that accepts a
+      zero-arg code reference and returns the integer thread ID of the new thread
+
+    When running in a non-sandboxed program, \c start_thread is optional; if not
+    supplied, the @ref background operator is used directly.  When
+    \c max_concurrent is 1, no threads are spawned and the option is ignored.
+
+    @par Example: Sandboxed parallel tool dispatch
+    @code{.py}
+Program sandbox(PO_NEW_STYLE | PO_NO_THREAD_CONTROL);
+sandbox.loadModule("QoreAgentStrategies");
+code<int(code<nothing()>)> starter = int sub (code<nothing()> body) {
+    return background body();
+};
+ParallelToolDispatcher dispatcher({
+    "max_concurrent": 5,
+    "start_thread": starter,
+});
+    @endcode
+
     @section qoreagentstrategiesrelnotes QoreAgentStrategies Module Release Notes
 
     @subsection qoreagentstrategies_1_0 QoreAgentStrategies Module Version 1.0
     - Initial release with @ref QoreAgentStrategies::PlanningAgentStrategy "PlanningAgentStrategy",
       @ref QoreAgentStrategies::ReflexionAgentStrategy "ReflexionAgentStrategy", and
-      @ref QoreAgentStrategies::ParallelToolDispatcher "ParallelToolDispatcher"
+      @ref QoreAgentStrategies::ParallelToolDispatcher "ParallelToolDispatcher";
+      supports sandboxed execution under @ref Qore::PO_NO_THREAD_CONTROL via the
+      \c start_thread option
 */

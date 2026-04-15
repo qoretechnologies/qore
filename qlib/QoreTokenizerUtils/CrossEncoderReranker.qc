@@ -24,6 +24,20 @@
 #! @see CrossEncoderReranker
 public namespace QoreTokenizerUtils {
 
+#! A scored reranker hit: an index into the caller's passage list plus the model score
+/** Returned by @ref CrossEncoderReranker::rerankWithScores().  The list of hits is
+    ordered by descending \c score and truncated to the caller's \c top_k.
+
+    @since QoreTokenizerUtils 1.1
+*/
+public hashdecl RerankerScoredHit {
+    #! Position in the input passage list this hit refers to
+    int index;
+    #! Cross-encoder relevance score — the model's raw output (or sigmoid(raw),
+    #! depending on backend configuration); higher means more relevant
+    float score;
+}
+
 #! Configuration for CrossEncoderReranker
 public hashdecl RerankerConfig {
     #! Mode: "http" for HTTP endpoint, "onnx" for local ONNX model
@@ -160,8 +174,34 @@ public class CrossEncoderReranker {
         @param passages list of candidate passages
         @param top_k number of top results to return
         @return list of indices into the original passages list, ordered by descending relevance
+
+        @note Thin wrapper around @ref rerankWithScores() — returned indices are
+        the \c index column of that method's result.
     */
     list<int> rerank(string query, list<string> passages, int top_k) {
+        list<hash<RerankerScoredHit>> hits = rerankWithScores(query, passages, top_k);
+        return map $1.index, hits;
+    }
+
+    #! Re-ranks passages by relevance and returns the top-k hits with real model scores
+    /** Exposes the per-passage relevance scores the model already computes internally,
+        instead of discarding them like @ref rerank() does.  Use this when downstream
+        consumers (logging, debugging, hit-level observability) need the actual score —
+        for example when adapting this class to a generic reranker interface whose
+        result type carries a \c score field.
+
+        @param query the search query
+        @param passages list of candidate passages
+        @param top_k number of top results to return
+        @return list of @ref RerankerScoredHit in descending score order, truncated to
+        \a top_k entries.  For HTTP backends using the `{"scores": [...]}` response
+        format and for ONNX backends, the \c score is the model's raw output (subject
+        to the configured activation function); for HTTP backends using the
+        `{"results": [{"relevance_score": ...}]}` format it is the provider's
+        \c relevance_score.
+    */
+    list<hash<RerankerScoredHit>> rerankWithScores(string query, list<string> passages,
+            int top_k) {
         if (!passages) {
             return ();
         }
@@ -169,19 +209,20 @@ public class CrossEncoderReranker {
         list<float> scores = score(query, passages);
 
         # create index-score pairs and sort by score descending
-        list<hash<auto>> scored = ();
+        list<hash<RerankerScoredHit>> scored = ();
         for (int i = 0; i < scores.size(); ++i) {
-            push scored, {"index": i, "score": scores[i]};
+            push scored, <RerankerScoredHit>{"index": i, "score": scores[i]};
         }
-        scored = sort(scored, int sub(hash<auto> a, hash<auto> b) {
-            return b.score <=> a.score;
-        });
+        scored = sort(scored,
+            int sub(hash<RerankerScoredHit> a, hash<RerankerScoredHit> b) {
+                return b.score <=> a.score;
+            });
 
-        # take top_k indices
-        list<int> result = ();
+        # truncate to top_k
         int limit = min(top_k, scored.size());
+        list<hash<RerankerScoredHit>> result = ();
         for (int i = 0; i < limit; ++i) {
-            push result, scored[i]."index";
+            push result, scored[i];
         }
         return result;
     }

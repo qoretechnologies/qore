@@ -1483,6 +1483,18 @@ cargo install tree-sitter-cli@0.26.5
         batching support, configurable batch size and flush interval, date-based index patterns, and thread-safe
         buffer management
         (<a href="https://github.com/qoretechnologies/qore/issues/5016">issue 5016</a>)
+    - @ref firecrawlrestclientintro "FirecrawlRestClient" module
+      - new module providing a REST client for <a href="https://www.firecrawl.dev/">Firecrawl</a>'s web scraping API
+      - supports API key authentication via Bearer token
+      - provides FirecrawlRestConnection for connection management with \c firecrawlrest:// URL scheme
+    - @ref firecrawldataproviderintro "FirecrawlDataProvider" module
+      - new module providing a data provider API for <a href="https://www.firecrawl.dev/">Firecrawl</a> web scraping and crawling
+      - web scraping (single page and batch), crawling (multi-page with status tracking)
+      - URL mapping, web search, AI-powered structured data extraction, and autonomous agent tasks
+      - action catalog integration with 14 actions across 5 groups
+      - typed response sub-types for metadata, actions results, change tracking, and branding
+      - PDF parser configuration support with mode and maxPages options
+      - connection support with \c firecrawlrest:// URL scheme
     - @ref freshbooksrestclientintro "FreshBooksRestClient" module
       - new module providing a REST client for <a href="https://www.freshbooks.com/">FreshBooks</a>' accounting API
       - supports OAuth2 authentication

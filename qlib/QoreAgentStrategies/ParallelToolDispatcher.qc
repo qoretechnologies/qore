@@ -60,6 +60,16 @@ foreach hash<auto> r in (results) {
     @since QoreAgentStrategies 1.0
 */
 public class ParallelToolDispatcher {
+    public {
+        #! Known constructor options
+        const Options = (
+            "max_concurrent",
+            "tool_timeout_ms",
+            "max_total_time_ms",
+            "start_thread",
+        );
+    }
+
     private {
         #! Maximum concurrent tool dispatches
         int max_concurrent;
@@ -67,6 +77,8 @@ public class ParallelToolDispatcher {
         int tool_timeout_ms;
         #! Total time budget for all tools
         int max_total_time_ms;
+        #! Optional thread-start callable for parallel tool dispatch
+        *code<int(code<nothing()>)> start_thread;
     }
 
     #! Creates a ParallelToolDispatcher
@@ -74,11 +86,37 @@ public class ParallelToolDispatcher {
             - \c max_concurrent (int): max parallel tools; default 5
             - \c tool_timeout_ms (int): per-tool timeout; default 30000
             - \c max_total_time_ms (int): total time budget; default 120000
+            - \c start_thread (*code<int(code<nothing()>)>): optional callable
+              that starts a new thread and returns the thread ID; <b>required
+              when the enclosing program has @ref Qore::PO_NO_THREAD_CONTROL
+              set and \c max_concurrent > 1</b>.  In a non-sandboxed program
+              this option is optional and defaults to the @ref background
+              operator.
+
+        @throw PARALLEL-DISPATCH-ARG-ERROR if a required option is missing or
+            invalid in the current parse context
     */
     constructor(*hash<auto> options) {
+        foreach string k in (keys options) {
+            if (!inlist(k, Options)) {
+                throw "PARALLEL-DISPATCH-ARG-ERROR",
+                    sprintf("unknown option %y; known options: %y", k, Options);
+            }
+        }
         max_concurrent = options.max_concurrent ?? 5;
         tool_timeout_ms = options.tool_timeout_ms ?? 30000;
         max_total_time_ms = options.max_total_time_ms ?? 120000;
+        start_thread = options.start_thread;
+
+%ifdef PO_NO_THREAD_CONTROL
+        if (max_concurrent > 1 && !start_thread) {
+            throw "PARALLEL-DISPATCH-ARG-ERROR",
+                "ParallelToolDispatcher requires the \"start_thread\" option "
+                "when \"max_concurrent\" > 1 in a program with "
+                "PO_NO_THREAD_CONTROL set; see the QoreAgentStrategies module "
+                "documentation for sandbox integration details";
+        }
+%endif
     }
 
     #! Dispatches multiple tool calls in parallel
@@ -129,7 +167,7 @@ public class ParallelToolDispatcher {
             for (int i = 0; i < batch.size(); ++i) {
                 int idx = i;
                 hash<auto> tc = batch[i];
-                background sub () {
+                code<nothing()> worker = sub () {
                     on_exit cnt.dec();
                     date tool_start = now_us();
                     try {
@@ -150,7 +188,16 @@ public class ParallelToolDispatcher {
                             "duration_ms": dur,
                         };
                     }
-                }();
+                };
+%ifdef PO_NO_THREAD_CONTROL
+                call_function(start_thread, worker);
+%else
+                if (start_thread) {
+                    call_function(start_thread, worker);
+                } else {
+                    background worker();
+                }
+%endif
             }
 
             # Wait for batch with timeout

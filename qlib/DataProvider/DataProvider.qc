@@ -123,6 +123,7 @@ public class DataProvider {
             "excelread": "ExcelDataProvider",
             "excelwrite": "ExcelDataProvider",
 
+            "firecrawl": "FirecrawlDataProvider",
             "file": "FileDataProvider",
             "filepoller": "FilePoller",
             "fixedlengthread": "FixedLengthUtil",
