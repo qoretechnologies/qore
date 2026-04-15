@@ -358,6 +358,18 @@ private:
     // instructions have been lowered (so all invoke_result_allocas are known).
     void finalizeFunctionUnwindLP(llvm::Module& module);
 
+    // C++ EH prototype helper: emit either a CreateCall (default) or a
+    // CreateInvoke (when aot_eh_enabled and the instruction is not inside a
+    // try block) targeting the given normal/throwing helper pair. Sets
+    // skip_next_exception_check on the EH path so the surrounding
+    // emitExceptionCheck call becomes a no-op for this site. Both helpers
+    // must have identical signatures and return a NaN-boxed i64.
+    llvm::Value* emitMaybeInvoke(llvm::FunctionCallee normal_helper,
+            llvm::FunctionCallee throwing_helper,
+            llvm::ArrayRef<llvm::Value*> args,
+            llvm::Module& module, llvm::Function* llvm_func,
+            const QoreIRInstruction* inst);
+
     // Deferred PHI nodes: (LLVM PHI, IR PHI instruction) pairs to fixup after all blocks lowered
     std::vector<std::pair<llvm::PHINode*, const QoreIRPhiInstruction*>> pending_phis;
 

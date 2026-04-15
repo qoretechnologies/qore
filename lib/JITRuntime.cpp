@@ -5789,6 +5789,15 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_direct_aot(QoreAOTContext* ctx, int32
     return qore_rt_call_with_args(ctx->exprs[slot], args, nargs, xsink);
 }
 
+// Forward declarations for AOT helpers defined later in this file that
+// the throwing wrappers below need to call.
+extern "C" DLLEXPORT uint64_t qore_rt_call_method_direct_aot(QoreAOTContext* ctx,
+        int32_t slot, uint64_t* args, int nargs, ExceptionSink* xsink);
+extern "C" DLLEXPORT uint64_t qore_rt_call_method_fast_aot(QoreAOTContext* ctx,
+        int32_t slot, uint64_t* args, int nargs, ExceptionSink* xsink);
+extern "C" DLLEXPORT uint64_t qore_rt_call_static_method_fast_aot(QoreAOTContext* ctx,
+        int32_t slot, uint64_t* args, int nargs, ExceptionSink* xsink);
+
 //! Throwing variant of qore_rt_call_direct_aot for the C++ EH prototype.
 /** Callers emit CreateInvoke on this function and wire the unwind edge to a
     landing pad that cleans up live temps and returns NOTHING. On exception
@@ -5797,11 +5806,104 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_direct_aot(QoreAOTContext* ctx, int32
 
     This wrapper exists so we can roll out EH-style invoke sites incrementally
     without breaking every existing CreateCall caller of the base helper.
+    Each throwing variant is a thin tail-call style wrapper: forward to the
+    base helper, then throw if xsink is set.
 */
 extern "C" DLLEXPORT uint64_t qore_rt_call_direct_aot_throwing(
         QoreAOTContext* ctx, int32_t slot, uint64_t* args, int nargs,
         ExceptionSink* xsink) {
     uint64_t result = qore_rt_call_direct_aot(ctx, slot, args, nargs, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_call_with_args_aot_throwing(
+        QoreAOTContext* ctx, int32_t slot, uint64_t* args, int nargs,
+        ExceptionSink* xsink) {
+    uint64_t result = qore_rt_call_with_args_aot(ctx, slot, args, nargs, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_call_static_method_direct_aot_throwing(
+        QoreAOTContext* ctx, int32_t slot, uint64_t* args, int nargs,
+        ExceptionSink* xsink) {
+    uint64_t result = qore_rt_call_static_method_direct_aot(ctx, slot, args, nargs, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_call_method_direct_aot_throwing(
+        QoreAOTContext* ctx, int32_t slot, uint64_t* args, int nargs,
+        ExceptionSink* xsink) {
+    uint64_t result = qore_rt_call_method_direct_aot(ctx, slot, args, nargs, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_call_method_fast_aot_throwing(
+        QoreAOTContext* ctx, int32_t slot, uint64_t* args, int nargs,
+        ExceptionSink* xsink) {
+    uint64_t result = qore_rt_call_method_fast_aot(ctx, slot, args, nargs, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_call_static_method_fast_aot_throwing(
+        QoreAOTContext* ctx, int32_t slot, uint64_t* args, int nargs,
+        ExceptionSink* xsink) {
+    uint64_t result = qore_rt_call_static_method_fast_aot(ctx, slot, args, nargs, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_dot_eval_method_direct_aot_throwing(
+        QoreAOTContext* ctx, int32_t slot, uint64_t base_bits,
+        uint64_t* args, int nargs, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_dot_eval_method_direct_aot(ctx, slot, base_bits,
+            args, nargs, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_dot_eval_pseudo_method_direct_aot_throwing(
+        QoreAOTContext* ctx, int32_t slot, uint64_t base_bits,
+        uint64_t* args, int nargs, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_dot_eval_pseudo_method_direct_aot(ctx, slot, base_bits,
+            args, nargs, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_new_object_nb_aot_throwing(
+        QoreAOTContext* ctx, int32_t slot, uint64_t* args, int nargs,
+        ExceptionSink* xsink) {
+    uint64_t result = qore_rt_new_object_nb_aot(ctx, slot, args, nargs, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_call_closure_fast_throwing(
+        uint64_t ref_bits, uint64_t* args, int nargs, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_call_closure_fast(ref_bits, args, nargs, xsink);
     if (xsink && *xsink) {
         throw QoreJITException();
     }
