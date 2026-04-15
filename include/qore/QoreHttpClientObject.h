@@ -81,7 +81,9 @@ enum Http3Mode {
  */
 class QoreHttpClientObject : public QoreSocketObject {
     friend struct qore_httpclient_priv;
-    friend class HttpClientConnectSendRecvPollOperation;
+    // HttpClientConnectSendRecvPollOperation was the legacy poll op
+    // for startPollSendRecv/startPollConnect; removed in Phase 5
+    // (all traffic now routes through HttpClientConnMgrPollOp).
 
 public:
     //! creates the QoreHttpClientObject object
