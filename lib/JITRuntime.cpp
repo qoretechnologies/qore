@@ -5188,7 +5188,13 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_compound(
             break;
         default: {
             qore_type_t vtype = lvh.getType();
-            if (vtype == NT_FLOAT || rhs.getType() == NT_FLOAT) {
+            if (vtype == NT_NUMBER || rhs.getType() == NT_NUMBER) {
+                switch (inst->compound_op) {
+                    case LVCompoundOp::MulAssign: lvh.multiplyEqualsNumber(rhs); break;
+                    case LVCompoundOp::DivAssign: lvh.divideEqualsNumber(rhs); break;
+                    default: res = QoreValue(); break;
+                }
+            } else if (vtype == NT_FLOAT || rhs.getType() == NT_FLOAT) {
                 double rv = rhs.getAsFloat();
                 switch (inst->compound_op) {
                     case LVCompoundOp::MulAssign: res = lvh.multiplyEqualsFloat(rv); break;
@@ -5429,6 +5435,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_binary_mut(
     if (lvh.navigatePath(path_copy.data(), path_copy.size(), false)) {
         return toBits(QoreValue());
     }
+
     QoreValue res;
     switch (inst->binary_mut_op) {
         case LVBinaryMutOp::Push:

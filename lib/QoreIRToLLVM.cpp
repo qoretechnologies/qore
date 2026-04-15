@@ -1850,6 +1850,23 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     ir_only_locals_set = func.ir_only_locals.empty()
         ? nullptr : &func.ir_only_locals;
 
+    // In AOT mode, remove pre-instantiated body locals from the IR-only set.
+    // evalTiered pre-instantiates ALL body locals from all_body_locals on the
+    // runtime stack, so StoreLocal must sync via qore_rt_assign_local_aot (which
+    // adds a reference).  Without sync, the alloca holds the only reference while
+    // the cleanup alloca also tracks the source value for decref → double-free on
+    // function exit.  Parameters and other non-body locals remain IR-only.
+    aot_adjusted_ir_only.clear();
+    if (aot_mode && ir_only_locals_set && !func.all_body_locals.empty()) {
+        aot_adjusted_ir_only = *ir_only_locals_set;
+        for (LocalVar* lv : func.all_body_locals) {
+            const void* key = reinterpret_cast<const void*>(lv);
+            aot_adjusted_ir_only.erase(key);
+        }
+        ir_only_locals_set = aot_adjusted_ir_only.empty()
+            ? nullptr : &aot_adjusted_ir_only;
+    }
+
     // Phase 4: Check if ALL locals are IR-only, enabling bulk skip of
     // reloadAllLocalsFromRuntime() after calls.
     all_locals_ir_only = ir_only_locals_set

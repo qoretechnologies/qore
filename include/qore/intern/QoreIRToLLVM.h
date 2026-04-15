@@ -258,6 +258,11 @@ private:
     // call path skips their instantiation when all body locals are IR-only).
     std::unordered_set<const void*> ir_only_body_locals;
 
+    // AOT-adjusted IR-only set: removes pre-instantiated body locals from the
+    // IR-only set so that StoreLocal syncs them to the runtime stack (fixing
+    // double-free when body locals are pre-instantiated by evalTiered).
+    std::unordered_set<const void*> aot_adjusted_ir_only;
+
     // Saved on_block_exit handler count at function entry (for LIFO cleanup)
     llvm::Value* obe_saved_count = nullptr;
 
