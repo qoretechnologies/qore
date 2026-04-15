@@ -64,6 +64,27 @@ Http2ClientPollOperationPriv::Http2ClientPollOperationPriv(QoreObject* self,
     // Qore-level connection_ref member (private, stored in the data hash)
 }
 
+Http2ClientPollOperationPriv::Http2ClientPollOperationPriv(QoreObject* self,
+        QoreSocketObject* sock, std::string target_host, int target_port,
+        AbstractHttpPollConnectionPriv* conn_priv)
+    : SocketPollOperationBase(self), current_op(nullptr), sock_obj(sock),
+      ssl_required(true), proxy_tunnel(false),
+      target_host(std::move(target_host)), target_port(target_port),
+      connection_priv(conn_priv) {
+    // Adopt-socket path: no connect op, socket already SSL-handshook and
+    // ALPN-confirmed h2.  h2_state stays at CONNECTING; the multiplex
+    // inner op is installed by initAdoptedMultiplex() once the owning
+    // connection class has called setSelf().
+}
+
+void Http2ClientPollOperationPriv::initAdoptedMultiplex(ExceptionSink* xsink) {
+    // startMultiplex() creates the SocketHttp2ClientMultiplexPollOperation,
+    // installs it as current_op, transitions h2_state to READING, and
+    // (because ssl_required is true on the adopt-socket path) confirms
+    // h2 and fires the ready callback.  Requires self to be set.
+    startMultiplex(xsink);
+}
+
 Http2ClientPollOperationPriv::~Http2ClientPollOperationPriv() {
     if (current_op || sock_obj || error_info) {
         ExceptionSink xsink;

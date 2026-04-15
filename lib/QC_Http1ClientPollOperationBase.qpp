@@ -65,6 +65,32 @@ Http1ClientPollOperationPriv::Http1ClientPollOperationPriv(QoreObject* self,
     // Qore-level connection_ref member (private, stored in the data hash)
 }
 
+Http1ClientPollOperationPriv::Http1ClientPollOperationPriv(QoreObject* self,
+        QoreSocketObject* sock, bool ssl_required,
+        std::string target_host, int target_port,
+        AbstractHttpPollConnectionPriv* conn_priv)
+    : SocketPollOperationBase(self), current_op(nullptr), sock_obj(sock),
+      ssl_required(ssl_required), proxy_tunnel(false),
+      is_proxy_plain(false),
+      target_host(std::move(target_host)), target_port(target_port),
+      connection_priv(conn_priv) {
+    // Adopt-socket path: no connect op, socket already connected (and
+    // TLS-handshook if ssl_required is true).  h1_state stays at its
+    // default CONNECTING value; initAdoptedReady() transitions it to
+    // READING and fires the ready callback once the owning connection
+    // class has set self via setSelf().
+}
+
+void Http1ClientPollOperationPriv::initAdoptedReady(ExceptionSink* xsink) {
+    // startReady() transitions h1_state CONNECTING -> READING, releases
+    // current_op (no-op here since adopt path leaves it nullptr), and
+    // invokes fireReadyCallback() which broadcasts the connection READY
+    // state to the connection priv.  Safe to call from the app thread
+    // before controller submission — the I/O thread will see READING
+    // on its first continuePoll().
+    startReady(xsink);
+}
+
 Http1ClientPollOperationPriv::~Http1ClientPollOperationPriv() {
     if (current_op || sock_obj || error_info) {
         ExceptionSink xsink;

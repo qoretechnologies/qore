@@ -92,6 +92,44 @@ public:
             bool is_proxy_plain, std::string target_host, int target_port,
             AbstractHttpPollConnectionPriv* connection_priv);
 
+    //! Creates the poll operation by adopting an already-connected (and
+    //! TLS-handshook, if SSL is in use) socket.
+    /** Used by @ref NegotiatingConnectionPollOp after per-connect ALPN
+        negotiation selected HTTP/1.1.  The priv starts in
+        @ref H1State::CONNECTING with no @c current_op; the connection
+        class must call @ref initAdoptedReady to transition to
+        @ref H1State::READING and fire the ready callback after
+        @ref setSelf.
+
+        @param self the QoreObject wrapping this private data (may be
+            nullptr; set later via @ref setSelf)
+        @param sock the already-connected socket (ref'd by caller,
+            ownership transferred)
+        @param ssl_required whether the adopted socket is using TLS —
+            informational only; no handshake is attempted
+        @param target_host target hostname (for Host header)
+        @param target_port target TCP port
+        @param connection_priv the owning C++ connection priv
+            (raw pointer — @ref setSelf takes the Qore ref separately)
+
+        @since %Qore 2.3
+    */
+    DLLLOCAL Http1ClientPollOperationPriv(QoreObject* self, QoreSocketObject* sock,
+            bool ssl_required, std::string target_host, int target_port,
+            AbstractHttpPollConnectionPriv* connection_priv);
+
+    //! Transitions an adopt-socket-constructed poll op from CONNECTING to
+    //! READING and fires the connection ready callback.
+    /** Must be called after @ref setSelf and before the poll op is
+        submitted to the I/O controller.  Only valid on instances created
+        via the adopt-socket constructor.
+
+        @param xsink exception sink
+
+        @since %Qore 2.3
+    */
+    DLLLOCAL void initAdoptedReady(ExceptionSink* xsink);
+
     DLLLOCAL virtual ~Http1ClientPollOperationPriv();
 
     // --- SocketPollOperationBase overrides ---

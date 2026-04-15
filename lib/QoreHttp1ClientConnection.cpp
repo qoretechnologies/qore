@@ -92,6 +92,21 @@ Http1ClientConnection::Http1ClientConnection(const char* target_host, int target
     }
 }
 
+Http1ClientConnection::Http1ClientConnection(QoreSocketObject* adopted_sock,
+        std::string target_host, int target_port, bool ssl_required,
+        ExceptionSink* xsink, HttpClientConnectionManagerBase* mgr)
+    : HttpClientConnectionBase(std::move(target_host), target_port, ssl_required) {
+    // Register the manager back-pointer BEFORE submitting so onClosedHook
+    // dispatches correctly even if the I/O thread fires a close event
+    // before the constructor returns.
+    if (mgr) {
+        setManager(mgr);
+    }
+    if (buildAndSubmitAdopted(adopted_sock, xsink)) {
+        return;
+    }
+}
+
 void Http1ClientConnection::configureSsl(int verify_mode, bool accept_all,
         QoreSSLCertificate* cert, QoreSSLPrivateKey* key) {
     ssl_verify_mode = verify_mode;
@@ -289,6 +304,115 @@ int Http1ClientConnection::buildAndSubmit(ExceptionSink* xsink) {
 
     // Success — commit ownership to member variables.  After this point the
     // destructor will manage the lifetimes of these objects.
+    sock_priv = sock_priv_raw;
+    sock_obj = sock_obj_holder.release();
+    poll_op_priv = priv_raw;
+    poll_op_obj = poll_obj_holder.release();
+    submitted_to_controller = true;
+    return 0;
+}
+
+int Http1ClientConnection::buildAndSubmitAdopted(QoreSocketObject* adopted_sock_priv,
+        ExceptionSink* xsink) {
+    if (!adopted_sock_priv) {
+        xsink->raiseException("HTTPCLIENT-ADOPT-ERROR",
+            "cannot adopt a null socket");
+        return -1;
+    }
+    QoreProgram* pgm = getProgram();
+
+    // Adopt the caller's ref on adopted_sock_priv by handing it directly to
+    // a ReferenceHolder; on any fallible step after this, the holder
+    // unwinds and the ref is released.
+    ReferenceHolder<QoreSocketObject> sock_priv_holder(adopted_sock_priv, xsink);
+    QoreSocketObject* sock_priv_raw = *sock_priv_holder;
+    ReferenceHolder<QoreObject> sock_obj_holder(
+        new QoreObject(QC_SOCKET, pgm, sock_priv_holder.release()), xsink);
+
+    // Create the adopt-socket H1 poll op priv.  It owns one ref on
+    // sock_priv_raw (we bump the ref here because sock_obj holds the
+    // original) and starts in CONNECTING with no current_op.
+    sock_priv_raw->ref();
+    ReferenceHolder<Http1ClientPollOperationPriv> priv_holder(
+        new Http1ClientPollOperationPriv(
+            /* self */ nullptr,
+            /* sock */ sock_priv_raw,
+            /* ssl_required */ ssl_required,
+            /* target_host */ target_host,
+            /* target_port */ target_port,
+            /* conn_priv */ this),
+        xsink);
+    Http1ClientPollOperationPriv* priv_raw = *priv_holder;
+
+    ReferenceHolder<QoreObject> poll_obj_holder(
+        new QoreObject(QC_HTTP1CLIENTPOLLOPERATIONBASE, pgm, priv_holder.release()), xsink);
+
+    priv_raw->setSelf(*poll_obj_holder);
+
+    // Set poll op QoreObject members: "sock" and "goal" — same as the
+    // connect-path constructor does.
+    poll_obj_holder->setValue("sock", sock_obj_holder->refSelf(), xsink);
+    if (*xsink) {
+        return -1;
+    }
+    poll_obj_holder->setValue("goal", new QoreStringNode("http1_client"), xsink);
+    if (*xsink) {
+        return -1;
+    }
+
+    // Transition the priv to READING and fire the ready callback.  This
+    // brings the C++ connection state to READY before we submit to the
+    // controller, so a waitForReadyOrError from the caller completes
+    // immediately.
+    priv_raw->initAdoptedReady(xsink);
+    if (*xsink) {
+        return -1;
+    }
+
+    // Submit the poll op to the AsyncIoController.  Identical to
+    // buildAndSubmit's submission tail.
+    ReferenceHolder<QoreObject> ctl_obj_holder(
+        qore_get_async_io_controller_obj(xsink), xsink);
+    if (*xsink || !ctl_obj_holder) {
+        return -1;
+    }
+    ReferenceHolder<AsyncIoControllerPriv> ctl_priv_holder(
+        static_cast<AsyncIoControllerPriv*>(
+            ctl_obj_holder->getReferencedPrivateData(CID_ASYNCIOCONTROLLER, xsink)),
+        xsink);
+    if (*xsink || !ctl_priv_holder) {
+        if (!*xsink) {
+            xsink->raiseException("HTTPCLIENT-ADOPT-ERROR",
+                "failed to get AsyncIoController singleton");
+        }
+        return -1;
+    }
+
+    char owner_buf[64];
+    const char* owner_to_use;
+    if (!owner_str.empty()) {
+        owner_to_use = owner_str.c_str();
+    } else {
+        snprintf(owner_buf, sizeof(owner_buf),
+            "http1-cpp-conn-adopted-%p", (void*)this);
+        owner_to_use = owner_buf;
+    }
+
+    ReferenceHolder<QoreHashNode> info(new QoreHashNode(autoTypeInfo), xsink);
+    info->setKeyValue("sock", sock_obj_holder->refSelf(), xsink);
+    info->setKeyValue("spop", poll_obj_holder->refSelf(), xsink);
+    info->setKeyValue("owner", new QoreStringNode(owner_to_use), xsink);
+    info->setKeyValue("to", -1, xsink);
+    if (*xsink) {
+        return -1;
+    }
+
+    ReferenceHolder<QoreObject> submit_rv(
+        ctl_priv_holder->submit(*ctl_obj_holder, *info, false, xsink), xsink);
+    if (*xsink) {
+        return -1;
+    }
+
     sock_priv = sock_priv_raw;
     sock_obj = sock_obj_holder.release();
     poll_op_priv = priv_raw;

@@ -63,6 +63,20 @@ Http2ClientConnection::Http2ClientConnection(const char* target_host, int target
     }
 }
 
+Http2ClientConnection::Http2ClientConnection(QoreSocketObject* adopted_sock,
+        std::string target_host, int target_port, int max_concurrent_streams,
+        ExceptionSink* xsink, HttpClientConnectionManagerBase* mgr)
+    : HttpClientConnectionBase(std::move(target_host), target_port,
+          /* ssl_required */ true),
+      max_concurrent_streams_(max_concurrent_streams) {
+    if (mgr) {
+        setManager(mgr);
+    }
+    if (buildAndSubmitAdopted(adopted_sock, xsink)) {
+        return;
+    }
+}
+
 Http2ClientConnection::~Http2ClientConnection() {
     ExceptionSink xsink;
     closeConnection(&xsink);
@@ -204,6 +218,107 @@ int Http2ClientConnection::buildAndSubmit(ExceptionSink* xsink) {
     }
 
     // Success — commit ownership to member variables atomically.
+    sock_priv = sock_priv_raw;
+    sock_obj = sock_obj_holder.release();
+    poll_op_priv = priv_raw;
+    poll_op_obj = poll_obj_holder.release();
+    submitted_to_controller = true;
+    return 0;
+}
+
+int Http2ClientConnection::buildAndSubmitAdopted(QoreSocketObject* adopted_sock_priv,
+        ExceptionSink* xsink) {
+    if (!adopted_sock_priv) {
+        xsink->raiseException("HTTPCLIENT-ADOPT-ERROR",
+            "cannot adopt a null socket");
+        return -1;
+    }
+    QoreProgram* pgm = getProgram();
+
+    // Adopt the caller's ref on adopted_sock_priv via a holder.
+    ReferenceHolder<QoreSocketObject> sock_priv_holder(adopted_sock_priv, xsink);
+    QoreSocketObject* sock_priv_raw = *sock_priv_holder;
+    ReferenceHolder<QoreObject> sock_obj_holder(
+        new QoreObject(QC_SOCKET, pgm, sock_priv_holder.release()), xsink);
+
+    // Create the adopt-socket H2 poll op priv.  ssl_required is
+    // implicitly true for the adopt path (see design doc §5.1).
+    sock_priv_raw->ref();
+    ReferenceHolder<Http2ClientPollOperationPriv> priv_holder(
+        new Http2ClientPollOperationPriv(
+            /* self */ nullptr,
+            /* sock */ sock_priv_raw,
+            /* target_host */ target_host,
+            /* target_port */ target_port,
+            /* conn_priv */ this),
+        xsink);
+    Http2ClientPollOperationPriv* priv_raw = *priv_holder;
+
+    ReferenceHolder<QoreObject> poll_obj_holder(
+        new QoreObject(QC_HTTP2CLIENTPOLLOPERATIONBASE, pgm, priv_holder.release()), xsink);
+
+    priv_raw->setSelf(*poll_obj_holder);
+
+    poll_obj_holder->setValue("sock", sock_obj_holder->refSelf(), xsink);
+    if (*xsink) {
+        return -1;
+    }
+    poll_obj_holder->setValue("goal", new QoreStringNode("http2_client"), xsink);
+    if (*xsink) {
+        return -1;
+    }
+
+    // Install the H2 multiplex inner op, send the client preface, and
+    // transition to READING + ready.  Must happen after setSelf() because
+    // the multiplex op takes a self reference.
+    priv_raw->initAdoptedMultiplex(xsink);
+    if (*xsink) {
+        return -1;
+    }
+
+    // Submit the poll op to the AsyncIoController.
+    ReferenceHolder<QoreObject> ctl_obj_holder(
+        qore_get_async_io_controller_obj(xsink), xsink);
+    if (*xsink || !ctl_obj_holder) {
+        return -1;
+    }
+    ReferenceHolder<AsyncIoControllerPriv> ctl_priv_holder(
+        static_cast<AsyncIoControllerPriv*>(
+            ctl_obj_holder->getReferencedPrivateData(CID_ASYNCIOCONTROLLER, xsink)),
+        xsink);
+    if (*xsink || !ctl_priv_holder) {
+        if (!*xsink) {
+            xsink->raiseException("HTTPCLIENT-ADOPT-ERROR",
+                "failed to get AsyncIoController singleton");
+        }
+        return -1;
+    }
+
+    char owner_buf[64];
+    const char* owner_to_use;
+    if (!owner_str.empty()) {
+        owner_to_use = owner_str.c_str();
+    } else {
+        snprintf(owner_buf, sizeof(owner_buf),
+            "http2-cpp-conn-adopted-%p", (void*)this);
+        owner_to_use = owner_buf;
+    }
+
+    ReferenceHolder<QoreHashNode> info(new QoreHashNode(autoTypeInfo), xsink);
+    info->setKeyValue("sock", sock_obj_holder->refSelf(), xsink);
+    info->setKeyValue("spop", poll_obj_holder->refSelf(), xsink);
+    info->setKeyValue("owner", new QoreStringNode(owner_to_use), xsink);
+    info->setKeyValue("to", -1, xsink);
+    if (*xsink) {
+        return -1;
+    }
+
+    ReferenceHolder<QoreObject> submit_rv(
+        ctl_priv_holder->submit(*ctl_obj_holder, *info, false, xsink), xsink);
+    if (*xsink) {
+        return -1;
+    }
+
     sock_priv = sock_priv_raw;
     sock_obj = sock_obj_holder.release();
     poll_op_priv = priv_raw;

@@ -115,6 +115,38 @@ public:
         ExceptionSink* xsink, HttpClientConnectionManagerBase* mgr = nullptr,
         const Http1SslConfig& ssl_config = Http1SslConfig{});
 
+    //! Creates a new HTTP/1.1 client connection by adopting an
+    //! already-connected (and TLS-handshook, if SSL is in use) socket.
+    /** Used by @ref NegotiatingConnectionPollOp after per-connect ALPN
+        negotiation selected HTTP/1.1.  The constructor skips the connect
+        and TLS handshake phases entirely: it wraps @a adopted_sock in a
+        Qore Socket object, creates an adopt-socket
+        @ref Http1ClientPollOperationPriv, puts it in the READING state,
+        and submits to the global AsyncIoController.
+
+        The connection transitions to READY before the constructor
+        returns — no @ref waitForReadyOrError call is needed on the
+        caller's side (though calling it is harmless).
+
+        @param adopted_sock an already-connected socket (caller transfers
+            ownership of one ref; the constructor takes it).  Must not be
+            nullptr.  Must have its TLS handshake already completed if
+            @a ssl_required is @c true.
+        @param target_host target hostname (used for the Host header)
+        @param target_port target TCP port
+        @param ssl_required informational flag for @ref isSslRequired;
+            no handshake is attempted
+        @param xsink exception sink — set on construction failure
+        @param mgr optional owning manager — registered via
+            @ref setManager before controller submission
+
+        @since %Qore 2.3
+    */
+    DLLLOCAL Http1ClientConnection(QoreSocketObject* adopted_sock,
+        std::string target_host, int target_port, bool ssl_required,
+        ExceptionSink* xsink,
+        HttpClientConnectionManagerBase* mgr = nullptr);
+
     DLLLOCAL virtual ~Http1ClientConnection();
 
     //! Sets the controller-submission owner string before submission to
@@ -274,6 +306,18 @@ private:
     //! Builds the C++ pieces and submits to the controller.  Called from
     //! the constructor.
     DLLLOCAL int buildAndSubmit(ExceptionSink* xsink);
+
+    //! Builds the C++ pieces around an already-connected socket and
+    //! submits to the controller.  Called from the adopt-socket
+    //! constructor.
+    /** @param adopted_sock_priv the adopted socket's priv (caller
+            transfers one ref; on success it ends up in @ref sock_priv,
+            on failure the holder unwinds)
+        @param xsink exception sink
+        @return 0 on success, -1 on failure
+    */
+    DLLLOCAL int buildAndSubmitAdopted(QoreSocketObject* adopted_sock_priv,
+        ExceptionSink* xsink);
 };
 
 #endif // _QORE_INTERN_QOREHTTP1CLIENTCONNECTION_H

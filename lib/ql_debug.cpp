@@ -630,6 +630,11 @@ static void ut_promise_action_execute_error(UnitTestCounters& c) {
     UT_ASSERT(c, !xsink, "cleanup succeeds");
 }
 
+// Forward declarations for the adopt-socket tests added in the
+// NEGOTIATE-phase work.
+static void ut_http1_adopt_socket_simple_request(UnitTestCounters& c);
+static void ut_http2_adopt_socket_construct(UnitTestCounters& c);
+
 // --- Http1ClientConnection (Phase P2) tests ---
 //
 // These tests exercise the minimum-viable C++ HttpClientConnectionBase /
@@ -1302,6 +1307,175 @@ static void ut_http2_connection_alpn_setup(UnitTestCounters& c) {
     xsink.clear();
 }
 
+// --- Adopt-socket constructor tests (NEGOTIATE phase 2) ---
+//
+// These exercise the new Http1/Http2 ClientConnection constructors that
+// take an already-connected socket instead of doing the connect phase
+// themselves.  The H1 test is full end-to-end: a local POSIX server is
+// bound, a QoreSocketObject is connected to it synchronously, the
+// adopt-socket Http1ClientConnection constructor is invoked, and a GET
+// request is issued and awaited.  The H2 test verifies the construction
+// path against a dead socket — the H2 preface send will fail but we
+// assert that the constructor itself doesn't crash and the connection
+// ends up in a reasonable state.
+
+static void ut_http1_adopt_socket_simple_request(UnitTestCounters& c) {
+    ExceptionSink xsink;
+
+    UtH1Server server;
+    if (server.start() != 0) {
+        UT_ASSERT(c, false, "test server bind/listen failed");
+        return;
+    }
+    int server_port = server.port;
+
+    server.serveOnce([](int cfd) {
+        char buf[4096];
+        ssize_t n = ut_read_request_headers(cfd, buf, sizeof(buf));
+        if (n <= 0) {
+            return;
+        }
+        static const char* resp =
+            "HTTP/1.1 200 OK\r\n"
+            "Content-Type: text/plain\r\n"
+            "Content-Length: 5\r\n"
+            "Connection: close\r\n"
+            "\r\n"
+            "hello";
+        send(cfd, resp, strlen(resp), 0);
+    });
+
+    // Create a QoreSocketObject and connect it synchronously to the
+    // test server.  This gives us an already-connected socket to pass
+    // to the adopt-socket constructor.
+    ReferenceHolder<QoreSocketObject> sock(new QoreSocketObject, &xsink);
+    int rc = sock->connectINET("127.0.0.1", server_port, 5000, &xsink);
+    UT_ASSERT(c, rc == 0, "synchronous connectINET to test server succeeds");
+    UT_ASSERT(c, !xsink, "connectINET raises no exception");
+    if (rc != 0 || xsink) {
+        xsink.clear();
+        return;
+    }
+
+    // Hand the connected socket to Http1ClientConnection via the new
+    // adopt-socket ctor.  One ref on the priv transfers to the ctor.
+    sock->ref();
+    ReferenceHolder<Http1ClientConnection> conn(
+        new Http1ClientConnection(*sock, "127.0.0.1", server_port,
+            /* ssl_required */ false, &xsink),
+        &xsink);
+    UT_ASSERT(c, !xsink, "adopt-socket Http1ClientConnection construction succeeds");
+    if (xsink) {
+        xsink.clear();
+        return;
+    }
+
+    // The adopt ctor transitions to READY synchronously — waitForReady
+    // should return true immediately.
+    bool ready = conn->waitForReadyOrError(1000, &xsink);
+    UT_ASSERT(c, !xsink, "adopt-path waitForReadyOrError raises no error");
+    UT_ASSERT(c, ready, "adopt-socket connection is READY after construction");
+    if (!ready || xsink) {
+        xsink.clear();
+        return;
+    }
+
+    // Submit a GET request and await the Future.
+    ReferenceHolder<QoreHashNode> submit_result(
+        conn->submitRequest("GET", "/", nullptr, nullptr, 0, &xsink), &xsink);
+    UT_ASSERT(c, !xsink, "adopt-socket submitRequest succeeds");
+    UT_ASSERT(c, (bool)submit_result, "submitRequest returns a hash");
+    if (!submit_result) {
+        xsink.clear();
+        return;
+    }
+    QoreValue future_v = submit_result->getKeyValue("future");
+    QoreObject* future_obj = future_v.getType() == NT_OBJECT
+        ? const_cast<QoreObject*>(future_v.get<const QoreObject>()) : nullptr;
+    UT_ASSERT(c, future_obj != nullptr, "future is non-null");
+    if (!future_obj) {
+        return;
+    }
+    future_obj->ref();
+    QoreValue result = q_future_get_blocking(future_obj, 5000, &xsink);
+    future_obj->deref(&xsink);
+    UT_ASSERT(c, !xsink, "q_future_get_blocking on adopt-path succeeds");
+    UT_ASSERT(c, result.getType() == NT_HASH, "response is a hash");
+    if (result.getType() == NT_HASH) {
+        const QoreHashNode* h = result.get<const QoreHashNode>();
+        int64 status = h->getKeyValue("status_code").getAsBigInt();
+        UT_ASSERT_EQ(c, (int64)200, status,
+            "adopt-socket response status is 200");
+    }
+    result.discard(&xsink);
+
+    conn->closeConnection(&xsink);
+    xsink.clear();
+}
+
+static void ut_http2_adopt_socket_construct(UnitTestCounters& c) {
+    ExceptionSink xsink;
+
+    // Construction-only coverage: we can't easily build a real
+    // SSL+ALPN-handshook socket inline in a C++ unit test.  Instead we
+    // exercise the code path on an already-connected (but non-SSL)
+    // socket — the H2 multiplex op will send the preface and eventually
+    // fail to confirm H2, but we verify the adopt-socket ctor itself
+    // doesn't crash and the resulting connection object is in a
+    // reasonable state.
+    //
+    // End-to-end SSL+ALPN coverage of the H2 adopt-socket path lives in
+    // the Phase 3 NegotiatingConnectionPollOp integration tests.
+
+    UtH1Server server;
+    if (server.start() != 0) {
+        UT_ASSERT(c, false, "test server bind/listen failed");
+        return;
+    }
+    int server_port = server.port;
+
+    // The test server accepts the connection but never responds.  The
+    // H2 multiplex op will time out or error on SETTINGS, which is fine
+    // for this construction-focused test.
+    server.serveOnce([](int cfd) {
+        // Read whatever the client sends (the H2 preface + SETTINGS)
+        // then close without responding.
+        char buf[4096];
+        recv(cfd, buf, sizeof(buf), 0);
+    });
+
+    ReferenceHolder<QoreSocketObject> sock(new QoreSocketObject, &xsink);
+    int rc = sock->connectINET("127.0.0.1", server_port, 5000, &xsink);
+    UT_ASSERT(c, rc == 0, "synchronous connectINET for H2 adopt test succeeds");
+    if (rc != 0 || xsink) {
+        xsink.clear();
+        return;
+    }
+
+    sock->ref();
+    ReferenceHolder<Http2ClientConnection> conn(
+        new Http2ClientConnection(*sock, "127.0.0.1", server_port,
+            /* max_streams */ 100, &xsink),
+        &xsink);
+    UT_ASSERT(c, !xsink,
+        "adopt-socket Http2ClientConnection construction succeeds");
+    if (xsink) {
+        xsink.clear();
+        return;
+    }
+
+    // The adopt ctor calls initAdoptedMultiplex which installs the H2
+    // multiplex op.  Because ssl_required is implicitly true on the
+    // adopt path, fireReadyCallback runs synchronously — verify.
+    UT_ASSERT(c, conn->isReady(),
+        "adopt-socket Http2 connection is READY after construction");
+
+    // Close the connection cleanly; no request is submitted because the
+    // peer is not a real H2 server.
+    conn->closeConnection(&xsink);
+    xsink.clear();
+}
+
 static void ut_manager_h2_dispatch(UnitTestCounters& c) {
     ExceptionSink xsink;
     HttpClientConnectionManagerBase::Options opts;
@@ -1965,6 +2139,8 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_manager_proxy_url_parse(c);
     ut_http2_connection_construct(c);
     ut_http2_connection_alpn_setup(c);
+    ut_http1_adopt_socket_simple_request(c);
+    ut_http2_adopt_socket_construct(c);
     ut_manager_h2_dispatch(c);
     ut_http3_connection_construct(c);
     ut_manager_h3_dispatch(c);

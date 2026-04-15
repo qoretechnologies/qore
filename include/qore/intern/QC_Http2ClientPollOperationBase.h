@@ -89,6 +89,45 @@ public:
             std::string target_host, int target_port,
             AbstractHttpPollConnectionPriv* connection_priv);
 
+    //! Creates the poll operation by adopting an already-connected and
+    //! TLS-handshook socket (ALPN has already confirmed "h2").
+    /** Used by @ref NegotiatingConnectionPollOp after per-connect ALPN
+        negotiation selected HTTP/2.  The priv starts in
+        @ref H2State::CONNECTING with no @c current_op; the connection
+        class must call @ref initAdoptedMultiplex after @ref setSelf to
+        install the multiplex inner op, transition to
+        @ref H2State::READING, and fire the ready callback.
+
+        Always implies @c ssl_required=true and no proxy tunnel — per
+        the design doc §5.1, @ref HttpClientProtocol::NEGOTIATE only
+        applies to TLS connections.
+
+        @param self the QoreObject wrapping this private data (may be
+            nullptr; set later via @ref setSelf)
+        @param sock the already-connected (and SSL-handshook) socket
+            (ref'd by caller, ownership transferred)
+        @param target_host target hostname (for @c :authority pseudo-header)
+        @param target_port target TCP port
+        @param connection_priv the owning C++ connection priv
+
+        @since %Qore 2.3
+    */
+    DLLLOCAL Http2ClientPollOperationPriv(QoreObject* self, QoreSocketObject* sock,
+            std::string target_host, int target_port,
+            AbstractHttpPollConnectionPriv* connection_priv);
+
+    //! Installs the HTTP/2 multiplex inner op on an adopt-socket-constructed
+    //! poll op and transitions to READING + ready.
+    /** Must be called after @ref setSelf and before the poll op is
+        submitted to the I/O controller.  Only valid on instances created
+        via the adopt-socket constructor.
+
+        @param xsink exception sink
+
+        @since %Qore 2.3
+    */
+    DLLLOCAL void initAdoptedMultiplex(ExceptionSink* xsink);
+
     DLLLOCAL virtual ~Http2ClientPollOperationPriv();
 
     // --- SocketPollOperationBase overrides ---
