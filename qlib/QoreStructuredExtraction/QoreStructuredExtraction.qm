@@ -78,9 +78,43 @@ if (result.valid) {
 }
     @endcode
 
+    @section qorestructuredextractionsandbox QoreStructuredExtraction Module in Sandboxed Programs
+
+    The @ref QoreStructuredExtraction::ExtractionPipeline "ExtractionPipeline" class
+    supports parallel batch extraction via the \c batch_parallel option; under a
+    sandboxed @ref Qore::Program "Program" with @ref Qore::PO_NO_THREAD_CONTROL set,
+    the @ref background operator is unavailable, so the caller must supply a
+    \c start_thread callable in @ref ExtractionPipelineOptions:
+
+    - \c start_thread: required when \c batch_parallel > 1 in a program with
+      @ref Qore::PO_NO_THREAD_CONTROL set; a
+      @ref closure "closure" or @ref call_reference "call reference" that accepts a
+      zero-arg code reference and returns the integer thread ID of the new thread
+
+    When running in a non-sandboxed program, \c start_thread is optional; if not
+    supplied, the @ref background operator is used directly.  When
+    \c batch_parallel is 1 (the default), no threads are spawned and the option is
+    ignored.
+
+    @par Example: Sandboxed parallel extraction
+    @code{.py}
+Program sandbox(PO_NEW_STYLE | PO_NO_THREAD_CONTROL);
+sandbox.loadModule("QoreStructuredExtraction");
+code<int(code<nothing()>)> starter = int sub (code<nothing()> body) {
+    return background body();
+};
+ExtractionPipeline pipeline(llm, ExtractionSchema::NerSchema,
+    <ExtractionPipelineOptions>{
+        "batch_parallel": 4,
+        "start_thread": starter,
+    });
+    @endcode
+
     @section qorestructuredextractionrelnotes QoreStructuredExtraction Module Release Notes
 
     @subsection qorestructuredextraction_1_0 QoreStructuredExtraction Module Version 1.0
     - Initial release with @ref QoreStructuredExtraction::ExtractionPipeline "ExtractionPipeline"
-      and four built-in templates: NER, Invoice, Contact, Sentiment
+      and four built-in templates: NER, Invoice, Contact, Sentiment; supports
+      sandboxed execution under @ref Qore::PO_NO_THREAD_CONTROL via the
+      \c start_thread option
 */
