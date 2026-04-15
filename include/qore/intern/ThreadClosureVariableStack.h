@@ -174,6 +174,35 @@ public:
         return nullptr;
     }
 
+    //! Frame-aware variant: only searches CVVs pushed AFTER the topmost frame
+    //! boundary (i.e., within the current function frame). Returns nullptr if
+    //! the id was only pushed in an outer frame.
+    /** Needed by qore_rt_instantiate_local to detect same-frame idempotent
+        re-instantiation while still pushing a fresh CVV for recursive calls
+        that share the same LocalVar name pointer across frames. A plain
+        try_find() walks ALL frames, which makes recursive calls reuse the
+        outer frame's CVV — causing pop-order confusion on inner-frame exit.
+    */
+    DLLLOCAL ClosureVarValue* try_find_in_current_frame(const char* id) {
+        Block* w = curr;
+        while (w) {
+            int p = w->pos;
+            while (p) {
+                --p;
+                ClosureVarValue* rv = w->var[p].cvv;
+                if (!rv) {
+                    // frame boundary — stop searching
+                    return nullptr;
+                }
+                if (rv->id == id) {
+                    return rv;
+                }
+            }
+            w = w->prev;
+        }
+        return nullptr;
+    }
+
     //! Returns true if the given ClosureVarValue is already on the cvstack (pointer equality)
     DLLLOCAL bool hasCvv(const ClosureVarValue* target) const {
         Block* w = curr;

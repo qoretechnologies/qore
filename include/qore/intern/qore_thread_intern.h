@@ -626,6 +626,7 @@ DLLLOCAL bool thread_closure_var_on_stack(const ClosureVarValue* cvv);
     ThreadSafeLocalVarRuntimeEnvironment, not on the cvstack).
 */
 DLLLOCAL ClosureVarValue* thread_try_find_closure_var(const char* id);
+DLLLOCAL ClosureVarValue* thread_try_find_closure_var_in_current_frame(const char* id);
 
 DLLLOCAL ClosureVarValue* thread_get_runtime_closure_var(const LocalVar* id);
 //! Safe version that returns nullptr when no runtime closure environment is set

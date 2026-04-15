@@ -617,10 +617,21 @@ extern "C" DLLEXPORT uint64_t qore_rt_box_big_int(int64_t val) {
 extern "C" DLLEXPORT void qore_rt_instantiate_local(LocalVar* var) {
     if (var) {
         // Don't create a duplicate CVV if the closure variable is already on the
-        // cvstack (e.g., instantiated by the declaring function's AST execution
-        // before the function was JIT-compiled). Creating a duplicate breaks
-        // closure write-back semantics during tiered compilation tier transitions.
-        if (var->closureUse() && thread_try_find_closure_var(var->getName())) {
+        // cvstack WITHIN THE CURRENT FRAME (e.g., when emitLocalInstantiation
+        // and a later InstantiateLocal opcode both target the same entry-block
+        // closure-use local — the double-call must be idempotent).
+        //
+        // Using the frame-aware lookup is critical for recursive calls:
+        // plain thread_try_find_closure_var walks all frames and would find
+        // the OUTER frame's CVV for the same LocalVar name, causing the
+        // inner frame to skip pushing its own CVV, then pop the outer's CVV
+        // on inner exit — leaving outer closures with dangling captures and
+        // a SIGSEGV on cleanup at outer return. Recursive calls share the
+        // same LocalVar* pointer (and therefore the same name pointer)
+        // across frames, so the frame boundary is the only way to
+        // distinguish "my own frame's CVV" from an outer frame's.
+        if (var->closureUse()
+                && thread_try_find_closure_var_in_current_frame(var->getName())) {
             return;
         }
         var->instantiate(QoreParseOptions());
