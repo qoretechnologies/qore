@@ -1705,7 +1705,6 @@ static std::unique_ptr<QoreIRInstruction> readHashKeyStore(
     // Resolve container LocalVar for COW branch — see readHashKeyStoreDynamic.
     if (LocalVar* lv = ctx.resolveLocalBySlot(container_slot_id)) {
         hi->container_lv = lv;
-        hi->container_is_closure = lv->closureUse();
     }
     hi->result = QoreIRValue(result_id);
     hi->operands = operands;
@@ -2115,7 +2114,6 @@ static std::unique_ptr<QoreIRInstruction> readHashKeyStoreDynamic(
     // enclosing function and the closure reference the hash) and segfault.
     if (LocalVar* lv = ctx.resolveLocalBySlot(container_slot_id)) {
         hi->container_lv = lv;
-        hi->container_is_closure = lv->closureUse();
     }
     hi->result = QoreIRValue(result_id);
     hi->operands = operands;

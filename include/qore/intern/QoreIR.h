@@ -982,11 +982,12 @@ public:
     //! LocalVar* populated at AOT deserialization time from slot_to_local.
     //! The original `container` VarRefNode* is not serialized (only slot_id is),
     //! so deserialized instructions have `container == nullptr`. The interpreter
-    //! must prefer `container_lv` (+ container_is_closure) over `container` when
-    //! set — fresh IR lowering from AST leaves container_lv null and the COW path
-    //! uses `container->ref.id` as before.
+    //! prefers `container_lv` over `container->ref.id` when set — fresh IR
+    //! lowering from AST leaves container_lv null and the COW path uses
+    //! `container->ref.id` as before. `closureUse` is queried on the LocalVar
+    //! at runtime rather than cached here because captured-var flags may be
+    //! set after deser (by CLOSURE_CREATE processing that runs later).
     class LocalVar* container_lv = nullptr;
-    bool container_is_closure = false;
     // operands[0] = hash value (from LoadLocal on container)
     // operands[1] = new element value to store
 };
@@ -1004,7 +1005,6 @@ public:
     uint32_t container_slot_id = UINT32_MAX; // Pre-computed slot index for container variable
     //! LocalVar* populated at AOT deserialization time — see QoreIRHashKeyStoreInstruction.
     class LocalVar* container_lv = nullptr;
-    bool container_is_closure = false;
     // operands[0] = hash value (from LoadLocal on container)
     // operands[1] = new element value to store
     // operands[2] = key value (converted to string at runtime)
