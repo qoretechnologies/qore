@@ -3807,148 +3807,26 @@ static void skipSlotMapEntry(const QoreAOTBinaryReader& reader, const uint8_t*& 
         reader.readStringRef(ptr);
         QoreAOTBinaryReader::readU8(ptr);
     }
-    // Skip expression entries
+    // Skip expression entries.
+    //
+    // Delegate to skipOneExpr() which is the canonical walker for a single
+    // serialized AOT expression.  The previous inlined switch was a partial
+    // copy that drifted out of sync: it used readStringRef for CONST_INT/
+    // CONST_FLOAT (actual format is 8 raw bytes), used readStringRef for
+    // CONST_BOOL (actual format is 1 raw byte), and was missing HASH_DEREF,
+    // PARSE_REF, CALL_REF, OBJ_METHOD_REF, and CONST_NULL entirely.  When an
+    // unhandled kind appeared the switch's default just broke, leaving ptr
+    // stranded after the kind byte, so subsequent iterations read garbage
+    // and eventually walked off the buffer (SEGV in standalone executables
+    // compiled from .qtest files that use richer literals).
+    //
+    // skipOneExpr() reads the kind byte itself and advances ptr past the
+    // full encoded expression, so we just call it in a loop.
     for (int i = 0; i < ne; ++i) {
-        uint8_t kind = QoreAOTBinaryReader::readU8(ptr);
-        switch (static_cast<AOTExprKind>(kind)) {
-            case AOTExprKind::NEW_OBJECT:
-            case AOTExprKind::SCOPED_NEW_OBJECT: {
-                // ref1 = class path + u8 num_args + N×classifyAndWriteExpr-encoded args
-                reader.readStringRef(ptr);  // class path
-                uint8_t num_args = QoreAOTBinaryReader::readU8(ptr);
-                for (uint8_t j = 0; j < num_args; ++j) {
-                    skipOneExpr(reader, ptr, end);
-                }
-                break;
-            }
-            case AOTExprKind::FUNC_CALL:
-            case AOTExprKind::RUNTIME_CONST_REF:
-            case AOTExprKind::LOCAL_VARREF:
-            case AOTExprKind::GLOBAL_VARREF:
-            case AOTExprKind::CONST_NUMBER:
-            case AOTExprKind::CONST_BINARY:
-            case AOTExprKind::CONST_STRING:
-            case AOTExprKind::SELF_VARREF:
-                reader.readStringRef(ptr);
-                break;
-            case AOTExprKind::HASHDECL_NEW:
-            case AOTExprKind::COMPLEX_HASH_NEW:
-            case AOTExprKind::COMPLEX_LIST_NEW: {
-                // ref1 = path + u8 num_args + N×classifyAndWriteExpr-encoded args
-                reader.readStringRef(ptr);  // path
-                uint8_t num_args = QoreAOTBinaryReader::readU8(ptr);
-                for (uint8_t j = 0; j < num_args; ++j) {
-                    skipOneExpr(reader, ptr, end);
-                }
-                break;
-            }
-            case AOTExprKind::STATIC_METHOD_CALL: {
-                // ref1 = class path + ref2 = method name + u8 num_args + N×classifyAndWriteExpr-encoded args
-                reader.readStringRef(ptr);  // class path
-                reader.readStringRef(ptr);  // method name
-                uint8_t num_args = QoreAOTBinaryReader::readU8(ptr);
-                for (uint8_t j = 0; j < num_args; ++j) {
-                    skipOneExpr(reader, ptr, end);
-                }
-                break;
-            }
-            case AOTExprKind::DOT_EVAL_TARGET:
-                reader.readStringRef(ptr);  // class_path
-                reader.readStringRef(ptr);  // method_name
-                QoreAOTBinaryReader::readU8(ptr);  // is_pseudo
-                break;
-            case AOTExprKind::FUNC_CALL_REF:
-            case AOTExprKind::SELF_METHOD_REF:
-                reader.readStringRef(ptr);  // function/method name
-                break;
-            case AOTExprKind::BOUND_METHOD_REF:
-            case AOTExprKind::STATIC_METHOD_REF:
-                reader.readStringRef(ptr);  // class_path
-                reader.readStringRef(ptr);  // method_name
-                break;
-            case AOTExprKind::OBJ_METHOD_REF_EXPR:
-                reader.readStringRef(ptr);  // method_name
-                skipOneExpr(reader, ptr, end);  // child target expression
-                break;
-            case AOTExprKind::SELF_METHOD_CALL:
-            case AOTExprKind::STATIC_VARREF:
-            case AOTExprKind::CONST_ENUM:
-                reader.readStringRef(ptr);
-                reader.readStringRef(ptr);
-                break;
-            case AOTExprKind::CAST_HASHDECL:
-            case AOTExprKind::CAST_COMPLEX_HASH:
-            case AOTExprKind::CAST_COMPLEX_LIST:
-            case AOTExprKind::CAST_CLASS:
-            case AOTExprKind::CAST_ENUM:
-                reader.readStringRef(ptr);  // type/class/hashdecl path
-                QoreAOTBinaryReader::readU8(ptr);  // or_nothing
-                break;
-            case AOTExprKind::EXPR_TREE: {
-                uint32_t blob_size = QoreAOTBinaryReader::readU32(ptr);
-                ptr += blob_size;
-                break;
-            }
-            case AOTExprKind::CLOSURE_CREATE: {
-                // Skip flags, class_type_path
-                reader.readStringRef(ptr);  // flags
-                reader.readStringRef(ptr);  // class_type_path
-                // Skip return type
-                reader.readStringRef(ptr);
-                // Skip params
-                uint16_t skip_nparams = QoreAOTBinaryReader::readU16(ptr);
-                for (uint16_t p = 0; p < skip_nparams; ++p) {
-                    reader.readStringRef(ptr);  // param name
-                    reader.readStringRef(ptr);  // param type
-                    uint8_t skip_has_default = QoreAOTBinaryReader::readU8(ptr);
-                    if (skip_has_default) {
-                        std::string skip_error;
-                        reader.readValue(ptr, end, skip_error);  // skip by reading & discarding
-                    }
-                }
-                QoreAOTBinaryReader::readU8(ptr);  // varargs
-                // Skip captured var names and parent slot indices
-                uint16_t skip_ncap = QoreAOTBinaryReader::readU16(ptr);
-                for (uint16_t c = 0; c < skip_ncap; ++c) {
-                    reader.readStringRef(ptr);  // name
-                    QoreAOTBinaryReader::readU32(ptr);  // parent_slot_index
-                }
-                // Skip closure IR
-                uint8_t skip_has_ir = QoreAOTBinaryReader::readU8(ptr);
-                if (skip_has_ir) {
-                    uint32_t skip_ir_size = QoreAOTBinaryReader::readU32(ptr);
-                    ptr += skip_ir_size;
-                }
-                break;
-            }
-            case AOTExprKind::HASH_LITERAL: {
-                // num_pairs(u8) + [key_str(stringref) + value(AOTExprKind)] * N
-                // Use skipOneExpr to advance past each value without allocating objects
-                uint8_t skip_npairs = QoreAOTBinaryReader::readU8(ptr);
-                for (uint8_t sp = 0; sp < skip_npairs; ++sp) {
-                    reader.readStringRef(ptr);  // key
-                    skipOneExpr(reader, ptr, end ? end : ptr + 65536);  // value
-                }
-                break;
-            }
-            case AOTExprKind::LIST_LITERAL: {
-                // count(u8) + [value(AOTExprKind)] * N
-                uint8_t skip_count = QoreAOTBinaryReader::readU8(ptr);
-                for (uint8_t sp = 0; sp < skip_count; ++sp) {
-                    skipOneExpr(reader, ptr, end ? end : ptr + 65536);
-                }
-                break;
-            }
-            case AOTExprKind::CONST_INT:
-            case AOTExprKind::CONST_FLOAT:
-            case AOTExprKind::CONST_BOOL:
-                reader.readStringRef(ptr);
-                break;
-            case AOTExprKind::CONST_NOTHING:
-                break;
-            default:
-                break;
+        if (ptr >= end) {
+            break;
         }
+        skipOneExpr(reader, ptr, end);
     }
     // Skip body locals
     for (int i = 0; i < nbl; ++i) {
