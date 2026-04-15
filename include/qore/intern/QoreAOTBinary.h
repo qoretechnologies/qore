@@ -1267,6 +1267,8 @@ enum class QoreIRInstGroup : uint8_t {
     NewHashDeclFromHash = 54, //!< QoreIRNewHashDeclFromHashInstruction
     HashKeyStoreDynamic = 55, //!< QoreIRHashKeyStoreDynamicInstruction
     LValuePath = 56,        //!< QoreIRLValuePathInstruction
+    MakeList = 57,          //!< QoreIRMakeListInstruction
+    MakeHash = 58,          //!< QoreIRMakeHashInstruction
     Unsupported = 0xFF,     //!< Instruction cannot be serialized
 };
 

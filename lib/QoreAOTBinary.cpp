@@ -3816,6 +3816,12 @@ static QoreIRInstGroup classifyInstruction(const QoreIRInstruction* inst) {
     if (dynamic_cast<const QoreIRMakeHashConstKeysInstruction*>(inst)) {
         return QoreIRInstGroup::MakeHashConstKeys;
     }
+    if (dynamic_cast<const QoreIRMakeListInstruction*>(inst)) {
+        return QoreIRInstGroup::MakeList;
+    }
+    if (dynamic_cast<const QoreIRMakeHashInstruction*>(inst)) {
+        return QoreIRInstGroup::MakeHash;
+    }
     if (dynamic_cast<const QoreIRSwitchCaseMatchInstruction*>(inst)) {
         return QoreIRInstGroup::SwitchCaseMatch;
     }

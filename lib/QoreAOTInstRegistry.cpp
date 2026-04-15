@@ -2188,6 +2188,56 @@ static std::unique_ptr<QoreIRInstruction> readLValuePath(
 }
 
 // ============================================================================
+// Group 57: MakeList - List construction with optional parse-time type info
+// ============================================================================
+//
+// The typeInfo field is not serialized: the interpreter falls back to deriving
+// the element type from the operands (autoTypeInfo for empty lists) when
+// typeInfo is null.  This matches the MakeHashConstKeys pattern.  The
+// essential point is that the *correct subclass* (QoreIRMakeListInstruction)
+// is created on deserialization so the interpreter's static_cast and
+// ml->typeInfo read land on a valid field (initialized to nullptr), not past
+// the end of a base QoreIRInstruction.
+
+static bool writeMakeList(AOTInstWriteCtx& ctx) {
+    // No subclass-specific fields serialized (typeInfo derived at runtime).
+    return true;
+}
+
+static std::unique_ptr<QoreIRInstruction> readMakeList(
+        uint16_t opcode_raw, QoreIRBasicBlock* exc_target,
+        const std::vector<QoreIRValue>& operands, uint32_t result_id,
+        AOTInstReadCtx& ctx) {
+    auto inst = std::make_unique<QoreIRMakeListInstruction>();
+    inst->result = QoreIRValue(result_id);
+    inst->operands = operands;
+    inst->exception_target = exc_target;
+    return inst;
+}
+
+// ============================================================================
+// Group 58: MakeHash - Hash construction with optional parse-time type info
+// ============================================================================
+//
+// See MakeList comment: typeInfo not serialized; the correct subclass must be
+// created on deser so the interpreter's static_cast lands on a valid field.
+
+static bool writeMakeHash(AOTInstWriteCtx& ctx) {
+    return true;
+}
+
+static std::unique_ptr<QoreIRInstruction> readMakeHash(
+        uint16_t opcode_raw, QoreIRBasicBlock* exc_target,
+        const std::vector<QoreIRValue>& operands, uint32_t result_id,
+        AOTInstReadCtx& ctx) {
+    auto inst = std::make_unique<QoreIRMakeHashInstruction>();
+    inst->result = QoreIRValue(result_id);
+    inst->operands = operands;
+    inst->exception_target = exc_target;
+    return inst;
+}
+
+// ============================================================================
 // Instruction Group Registry Table
 // ============================================================================
 
@@ -2365,8 +2415,14 @@ const QoreIRInstGroupInfo AOT_INST_GROUP_REGISTRY[AOT_INST_GROUP_TABLE_SIZE] = {
     // Index 56: LValuePath
     { "LValuePath", 56, true, false, writeLValuePath, readLValuePath, "Structured lvalue path operations" },
 
-    // Remaining 57-255: Unsupported/undefined
-    UNUSED_ENTRY(57), UNUSED_ENTRY(58), UNUSED_ENTRY(59),
+    // Index 57: MakeList
+    { "MakeList", 57, true, false, writeMakeList, readMakeList, "List construction (typed subclass)" },
+
+    // Index 58: MakeHash
+    { "MakeHash", 58, true, false, writeMakeHash, readMakeHash, "Hash construction (typed subclass)" },
+
+    // Remaining 59-255: Unsupported/undefined
+    UNUSED_ENTRY(59),
     UNUSED_ENTRY(60), UNUSED_ENTRY(61), UNUSED_ENTRY(62), UNUSED_ENTRY(63),
     UNUSED_ENTRY(64), UNUSED_ENTRY(65), UNUSED_ENTRY(66), UNUSED_ENTRY(67),
     UNUSED_ENTRY(68), UNUSED_ENTRY(69), UNUSED_ENTRY(70), UNUSED_ENTRY(71),
