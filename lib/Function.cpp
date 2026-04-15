@@ -2726,6 +2726,16 @@ static std::vector<QoreJIT::BatchCallee> collectDirectCallees(const QoreIRFuncti
             // (common in --exec-mode=jit where the caller is compiled on first call).
             const QoreIRFunction* callee_ir = uvb->getCachedIR();
             if (!callee_ir && callee_name) {
+                // AOT-loaded callees from source-stripped qmods have no
+                // statements (no AST), so attemptIRLowering would assert.
+                // They will already have a cached AOT function if available
+                // or otherwise need to be invoked through the AST/JIT
+                // dispatch path; either way batch compilation can't fold
+                // them in here. Skip silently — the parent function will
+                // call them via the regular call helper.
+                if (!uvb->getStatementBlock()) {
+                    continue;
+                }
                 // Force IR lowering for the callee — must go through forceIRLowering
                 // which handles the call_once flag properly
                 uvb->forceIRLowering(callee_name);
