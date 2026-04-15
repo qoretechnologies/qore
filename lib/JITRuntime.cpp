@@ -234,6 +234,23 @@ extern "C" DLLEXPORT uint64_t qore_rt_mod_any(uint64_t left, uint64_t right, Exc
     return toBits(result);
 }
 
+// Timeout arithmetic: `int + date` or `date + int` where the int is interpreted
+// as milliseconds (Qore's `timeout` type is int-based milliseconds).  Delegates
+// to evalBinary for the full typed logic (int→relative-date conversion + date add).
+extern "C" DLLEXPORT uint64_t qore_rt_add_timeout(uint64_t left, uint64_t right, ExceptionSink* xsink) {
+    QoreValue lv = fromBits(left);
+    QoreValue rv = fromBits(right);
+    QoreValue result = QoreIRInterpreter::evalBinary(QoreIROpcode::AddTimeout, lv, rv, xsink);
+    return toBits(result);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_sub_timeout(uint64_t left, uint64_t right, ExceptionSink* xsink) {
+    QoreValue lv = fromBits(left);
+    QoreValue rv = fromBits(right);
+    QoreValue result = QoreIRInterpreter::evalBinary(QoreIROpcode::SubTimeout, lv, rv, xsink);
+    return toBits(result);
+}
+
 // --- Number arithmetic (QoreNumberNode operations) ---
 
 extern "C" DLLEXPORT uint64_t qore_rt_number_add(uint64_t left, uint64_t right, ExceptionSink* xsink) {

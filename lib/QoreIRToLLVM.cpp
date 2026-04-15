@@ -2500,6 +2500,26 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             trackResultForCleanup(result, inst->result.id, llvm_func);
             return true;
         }
+        // Timeout arithmetic: `int + date` where int is ms (Qore timeout type).
+        // Both operands are boxed; the runtime helper handles the int→date
+        // conversion and the date addition/subtraction.
+        case QoreIROpcode::AddTimeout:
+        case QoreIROpcode::SubTimeout: {
+            auto* lhs = getVal(inst->operands[0].id, error);
+            auto* rhs = getVal(inst->operands[1].id, error);
+            if (!lhs || !rhs) { return false; }
+            llvm::Value* lhs_boxed = boxValue(lhs, inst->operands[0].id);
+            llvm::Value* rhs_boxed = boxValue(rhs, inst->operands[1].id);
+            const char* helper_name = (inst->opcode == QoreIROpcode::AddTimeout)
+                ? "qore_rt_add_timeout" : "qore_rt_sub_timeout";
+            auto helper = module.getOrInsertFunction(helper_name,
+                llvm::FunctionType::get(i64_type, {i64_type, i64_type, ptr_type}, false));
+            llvm::Value* result = builder->CreateCall(helper, {lhs_boxed, rhs_boxed, xsink_arg});
+            values[inst->result.id] = result;
+            nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(result, inst->result.id, llvm_func);
+            return true;
+        }
         case QoreIROpcode::MulAny: {
             auto* lhs = getVal(inst->operands[0].id, error);
             auto* rhs = getVal(inst->operands[1].id, error);
