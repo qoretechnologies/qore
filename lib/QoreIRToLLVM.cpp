@@ -1536,6 +1536,21 @@ llvm::Value* QoreIRToLLVM::emitMaybeInvoke(llvm::FunctionCallee normal_helper,
         llvm::Module& module, llvm::Function* llvm_func,
         const QoreIRInstruction* inst) {
     if (aot_eh_enabled && inst && !inst->exception_target) {
+        // Mark the throwing wrapper noinline so the LLVM inliner doesn't try to
+        // expand its body into every caller — that turns 1 invoke + 1 cont block
+        // per call site into N invokes + N cont blocks (one per inlined helper),
+        // and SimplifyCFG then runs many quadratic passes over the inflated CFG.
+        // Measured: 60s+ at -O1 vs 0.6s with noinline applied. The inliner respects
+        // module-level attributes set on the function symbol, but
+        // getOrInsertFunction creates a fresh declaration each call — so we set
+        // the attribute every time. It's idempotent on the underlying Function.
+        if (auto* fn = llvm::dyn_cast<llvm::Function>(throwing_helper.getCallee())) {
+            fn->addFnAttr(llvm::Attribute::NoInline);
+            // Cold hint: the throw path is rare; tells the optimizer not to
+            // spend cycles trying to vectorize / inline through this edge.
+            fn->addFnAttr(llvm::Attribute::Cold);
+        }
+
         llvm::BasicBlock* lp = getOrCreateFunctionUnwindLP(module, llvm_func);
         llvm::BasicBlock* cont = llvm::BasicBlock::Create(ctx, "call_cont", llvm_func);
         llvm::Value* result = builder->CreateInvoke(throwing_helper, cont, lp, args);
@@ -1671,11 +1686,50 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     // C++ EH prototype (QORE_AOT_EH=1): reset per-function landing pad state.
     // Enable only in aot_mode since JIT mode's non-AOT paths don't have
     // qore_rt_call_direct_aot_throwing wired up yet.
+    //
+    // Per-function gating: count call-like IR instructions and downgrade to
+    // the check-based path for functions above QORE_AOT_EH_MAX_CALLS (default
+    // 100). LLVM SimplifyCFG runs ~1s per pass over 500-cont-block CFGs, and
+    // the optimizer runs SimplifyCFG many times, so large functions blow
+    // compile time from seconds to minutes. Module-level functions (qmod) are
+    // usually small enough to stay under the threshold; only standalone test
+    // executables with monolithic test methods hit it.
     function_unwind_lp = nullptr;
     skip_next_exception_check = false;
     {
         static const bool env_eh = getenv("QORE_AOT_EH") != nullptr;
+        static const int env_eh_max_calls = []() {
+            const char* s = getenv("QORE_AOT_EH_MAX_CALLS");
+            return s ? std::atoi(s) : 100;
+        }();
         aot_eh_enabled = env_eh && aot_mode;
+        if (aot_eh_enabled && env_eh_max_calls > 0) {
+            int call_like = 0;
+            for (const auto& block : func.blocks) {
+                for (const auto& inst : block->instructions) {
+                    auto op = inst->opcode;
+                    // Count opcodes that lower to potentially-throwing helpers.
+                    if (op == QoreIROpcode::Invoke
+                            || op == QoreIROpcode::CallDirect
+                            || op == QoreIROpcode::CallStaticDirect
+                            || op == QoreIROpcode::CallMethodDirect
+                            || op == QoreIROpcode::DotEvalMethodDirect
+                            || op == QoreIROpcode::InvokeMethodDirect
+                            || op == QoreIROpcode::InvokeDotEvalMethodDirect) {
+                        ++call_like;
+                        if (call_like > env_eh_max_calls) {
+                            break;
+                        }
+                    }
+                }
+                if (call_like > env_eh_max_calls) {
+                    break;
+                }
+            }
+            if (call_like > env_eh_max_calls) {
+                aot_eh_enabled = false;
+            }
+        }
     }
 
     // Determine function name: use fast_entry_name if set (Approach B)

@@ -5809,7 +5809,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_static_method_fast_aot(QoreAOTContext
     Each throwing variant is a thin tail-call style wrapper: forward to the
     base helper, then throw if xsink is set.
 */
-extern "C" DLLEXPORT uint64_t qore_rt_call_direct_aot_throwing(
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_call_direct_aot_throwing(
         QoreAOTContext* ctx, int32_t slot, uint64_t* args, int nargs,
         ExceptionSink* xsink) {
     uint64_t result = qore_rt_call_direct_aot(ctx, slot, args, nargs, xsink);
@@ -5819,7 +5819,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_direct_aot_throwing(
     return result;
 }
 
-extern "C" DLLEXPORT uint64_t qore_rt_call_with_args_aot_throwing(
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_call_with_args_aot_throwing(
         QoreAOTContext* ctx, int32_t slot, uint64_t* args, int nargs,
         ExceptionSink* xsink) {
     uint64_t result = qore_rt_call_with_args_aot(ctx, slot, args, nargs, xsink);
@@ -5829,7 +5829,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_with_args_aot_throwing(
     return result;
 }
 
-extern "C" DLLEXPORT uint64_t qore_rt_call_static_method_direct_aot_throwing(
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_call_static_method_direct_aot_throwing(
         QoreAOTContext* ctx, int32_t slot, uint64_t* args, int nargs,
         ExceptionSink* xsink) {
     uint64_t result = qore_rt_call_static_method_direct_aot(ctx, slot, args, nargs, xsink);
@@ -5839,7 +5839,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_static_method_direct_aot_throwing(
     return result;
 }
 
-extern "C" DLLEXPORT uint64_t qore_rt_call_method_direct_aot_throwing(
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_call_method_direct_aot_throwing(
         QoreAOTContext* ctx, int32_t slot, uint64_t* args, int nargs,
         ExceptionSink* xsink) {
     uint64_t result = qore_rt_call_method_direct_aot(ctx, slot, args, nargs, xsink);
@@ -5849,7 +5849,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_method_direct_aot_throwing(
     return result;
 }
 
-extern "C" DLLEXPORT uint64_t qore_rt_call_method_fast_aot_throwing(
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_call_method_fast_aot_throwing(
         QoreAOTContext* ctx, int32_t slot, uint64_t* args, int nargs,
         ExceptionSink* xsink) {
     uint64_t result = qore_rt_call_method_fast_aot(ctx, slot, args, nargs, xsink);
@@ -5859,7 +5859,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_method_fast_aot_throwing(
     return result;
 }
 
-extern "C" DLLEXPORT uint64_t qore_rt_call_static_method_fast_aot_throwing(
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_call_static_method_fast_aot_throwing(
         QoreAOTContext* ctx, int32_t slot, uint64_t* args, int nargs,
         ExceptionSink* xsink) {
     uint64_t result = qore_rt_call_static_method_fast_aot(ctx, slot, args, nargs, xsink);
@@ -5869,7 +5869,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_static_method_fast_aot_throwing(
     return result;
 }
 
-extern "C" DLLEXPORT uint64_t qore_rt_dot_eval_method_direct_aot_throwing(
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_dot_eval_method_direct_aot_throwing(
         QoreAOTContext* ctx, int32_t slot, uint64_t base_bits,
         uint64_t* args, int nargs, ExceptionSink* xsink) {
     uint64_t result = qore_rt_dot_eval_method_direct_aot(ctx, slot, base_bits,
@@ -5880,7 +5880,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_dot_eval_method_direct_aot_throwing(
     return result;
 }
 
-extern "C" DLLEXPORT uint64_t qore_rt_dot_eval_pseudo_method_direct_aot_throwing(
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_dot_eval_pseudo_method_direct_aot_throwing(
         QoreAOTContext* ctx, int32_t slot, uint64_t base_bits,
         uint64_t* args, int nargs, ExceptionSink* xsink) {
     uint64_t result = qore_rt_dot_eval_pseudo_method_direct_aot(ctx, slot, base_bits,
@@ -5891,7 +5891,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_dot_eval_pseudo_method_direct_aot_throwing
     return result;
 }
 
-extern "C" DLLEXPORT uint64_t qore_rt_new_object_nb_aot_throwing(
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_new_object_nb_aot_throwing(
         QoreAOTContext* ctx, int32_t slot, uint64_t* args, int nargs,
         ExceptionSink* xsink) {
     uint64_t result = qore_rt_new_object_nb_aot(ctx, slot, args, nargs, xsink);
@@ -5901,7 +5901,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_new_object_nb_aot_throwing(
     return result;
 }
 
-extern "C" DLLEXPORT uint64_t qore_rt_call_closure_fast_throwing(
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_call_closure_fast_throwing(
         uint64_t ref_bits, uint64_t* args, int nargs, ExceptionSink* xsink) {
     uint64_t result = qore_rt_call_closure_fast(ref_bits, args, nargs, xsink);
     if (xsink && *xsink) {

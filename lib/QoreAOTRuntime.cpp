@@ -30,6 +30,7 @@
 */
 
 #include "qore/intern/QoreJITIncludes.h"
+#include "qore/intern/QoreJITException.h"
 
 #include "qore/intern/QoreAOT.h"
 #include "qore/intern/QoreAOTBinary.h"
@@ -6807,7 +6808,17 @@ static void executeInitFunctions(
                     ++instantiated;
                 }
             }
-            raw_result = info->fn_ptr(info->ctx, &xsink);
+            // C++ EH prototype: AOT init functions go through the same EH path
+            // as regular AOT functions when QORE_AOT_EH=1, so they may throw
+            // QoreJITException out of the function body. Catch here at the
+            // C++↔AOT boundary — xsink is already populated at the raise site.
+            // raw_result stays 0 (NOTHING bits) which is what the check-based
+            // path would have written too.
+            try {
+                raw_result = info->fn_ptr(info->ctx, &xsink);
+            } catch (const QoreJITException&) {
+                raw_result = 0;
+            }
             for (int k = instantiated - 1; k >= 0; --k) {
                 LocalVar* lv = info->ctx->all_body_locals[k];
                 if (lv) {
@@ -6815,7 +6826,11 @@ static void executeInitFunctions(
                 }
             }
         } else {
-            raw_result = info->fn_ptr(info->ctx, &xsink);
+            try {
+                raw_result = info->fn_ptr(info->ctx, &xsink);
+            } catch (const QoreJITException&) {
+                raw_result = 0;
+            }
         }
         printd(5, "AOT init: '%s' returned raw=%llu\n", desc.name.c_str(), (unsigned long long)raw_result);
 
