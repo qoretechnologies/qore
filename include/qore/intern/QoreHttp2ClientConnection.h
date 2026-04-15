@@ -98,18 +98,30 @@ public:
     //! @c "h2".
     /** Used by @ref NegotiatingConnectionPollOp after per-connect ALPN
         negotiation selected HTTP/2.  The constructor skips the connect
-        and TLS handshake phases entirely: it wraps @a adopted_sock in a
-        Qore Socket object, creates an adopt-socket
-        @ref Http2ClientPollOperationPriv, installs the HTTP/2 multiplex
-        inner op (which sends the H2 client preface), and submits to
-        the global AsyncIoController.
+        and TLS handshake phases entirely: it takes over
+        @a adopted_sock_obj (the existing Qore Socket wrapper), creates
+        an adopt-socket @ref Http2ClientPollOperationPriv, installs the
+        HTTP/2 multiplex inner op (which sends the H2 client preface),
+        and submits to the global AsyncIoController.
 
         The connection transitions to READY before the constructor
         returns.
 
-        @param adopted_sock an already-connected, SSL-handshook,
-            ALPN="h2"-confirmed socket (caller transfers one ref).
-            Must not be nullptr.
+        @note The caller MUST transfer ownership of the existing
+        @c QoreObject socket wrapper — do NOT create a new wrapper around
+        the priv.  Creating a second wrapper and then dropping the original
+        runs @c QoreSocketObject::deref → @c priv->socket->cleanup() →
+        @c close_internal() on the adopted fd, killing the SSL session
+        and the underlying socket before the new connection can use it.
+
+        @param adopted_sock_obj the existing socket @c QoreObject wrapper
+            (caller transfers ownership of one strong ref; the constructor
+            takes it and the resulting connection's @c sock_obj member owns
+            it).  Must not be nullptr.  Must wrap an SSL-handshook socket
+            whose ALPN has been confirmed as @c "h2".
+        @param adopted_sock_priv the priv pointer inside @a adopted_sock_obj
+            (raw — kept alive by the wrapper).  Must match the wrapper's
+            priv.
         @param target_host target hostname (for @c :authority pseudo-header)
         @param target_port target TCP port
         @param max_concurrent_streams advisory cap on concurrent streams
@@ -118,7 +130,8 @@ public:
 
         @since %Qore 2.3
     */
-    DLLLOCAL Http2ClientConnection(QoreSocketObject* adopted_sock,
+    DLLLOCAL Http2ClientConnection(QoreObject* adopted_sock_obj,
+        QoreSocketObject* adopted_sock_priv,
         std::string target_host, int target_port, int max_concurrent_streams,
         ExceptionSink* xsink, HttpClientConnectionManagerBase* mgr = nullptr);
 
@@ -198,13 +211,16 @@ private:
     //! Builds the C++ pieces around an already-connected, SSL+ALPN
     //! confirmed socket and submits to the controller.  Called from the
     //! adopt-socket constructor.
-    /** @param adopted_sock_priv the adopted socket's priv (caller
-            transfers one ref; on success it ends up in @ref sock_priv)
+    /** @param adopted_sock_obj the existing socket QoreObject wrapper
+            (caller transfers one strong ref; on success it ends up in
+            @ref sock_obj)
+        @param adopted_sock_priv the priv pointer inside @a adopted_sock_obj
+            (raw — kept alive by the wrapper)
         @param xsink exception sink
         @return 0 on success, -1 on failure
     */
-    DLLLOCAL int buildAndSubmitAdopted(QoreSocketObject* adopted_sock_priv,
-        ExceptionSink* xsink);
+    DLLLOCAL int buildAndSubmitAdopted(QoreObject* adopted_sock_obj,
+        QoreSocketObject* adopted_sock_priv, ExceptionSink* xsink);
 
     //! Submission tail shared between @ref buildAndSubmit and
     //! @ref buildAndSubmitAdopted.

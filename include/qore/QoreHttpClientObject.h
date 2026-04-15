@@ -953,6 +953,11 @@ public:
 
     DLLLOCAL static void static_init();
 
+    //! Returns the standard HTTP reason phrase for a status code.
+    /** @since %Qore 2.3
+    */
+    DLLLOCAL static const char* getHttpStatusMessage(int code);
+
     DLLLOCAL void cleanup(ExceptionSink* xsink);
 
 protected:

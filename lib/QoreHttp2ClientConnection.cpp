@@ -63,7 +63,8 @@ Http2ClientConnection::Http2ClientConnection(const char* target_host, int target
     }
 }
 
-Http2ClientConnection::Http2ClientConnection(QoreSocketObject* adopted_sock,
+Http2ClientConnection::Http2ClientConnection(QoreObject* adopted_sock_obj,
+        QoreSocketObject* adopted_sock_priv,
         std::string target_host, int target_port, int max_concurrent_streams,
         ExceptionSink* xsink, HttpClientConnectionManagerBase* mgr)
     : HttpClientConnectionBase(std::move(target_host), target_port,
@@ -72,7 +73,7 @@ Http2ClientConnection::Http2ClientConnection(QoreSocketObject* adopted_sock,
     if (mgr) {
         setManager(mgr);
     }
-    if (buildAndSubmitAdopted(adopted_sock, xsink)) {
+    if (buildAndSubmitAdopted(adopted_sock_obj, adopted_sock_priv, xsink)) {
         return;
     }
 }
@@ -170,20 +171,24 @@ int Http2ClientConnection::buildAndSubmit(ExceptionSink* xsink) {
         priv_raw, sock_priv_raw, "http2-cpp-conn-", xsink);
 }
 
-int Http2ClientConnection::buildAndSubmitAdopted(QoreSocketObject* adopted_sock_priv,
-        ExceptionSink* xsink) {
-    if (!adopted_sock_priv) {
+int Http2ClientConnection::buildAndSubmitAdopted(QoreObject* adopted_sock_obj,
+        QoreSocketObject* adopted_sock_priv, ExceptionSink* xsink) {
+    if (!adopted_sock_obj || !adopted_sock_priv) {
         xsink->raiseException("HTTPCLIENT-ADOPT-ERROR",
             "cannot adopt a null socket");
         return -1;
     }
     QoreProgram* pgm = getProgram();
+    (void)pgm;
 
-    // Adopt the caller's ref on adopted_sock_priv via a holder.
-    ReferenceHolder<QoreSocketObject> sock_priv_holder(adopted_sock_priv, xsink);
-    QoreSocketObject* sock_priv_raw = *sock_priv_holder;
-    ReferenceHolder<QoreObject> sock_obj_holder(
-        new QoreObject(QC_SOCKET, pgm, sock_priv_holder.release()), xsink);
+    // Adopt the caller's ref on the existing socket QoreObject wrapper.
+    // Do NOT create a new wrapper — see the extended comment in
+    // Http1ClientConnection::buildAndSubmitAdopted for why: the close_internal
+    // fires on refcount 0 of the wrapper, so a second wrapper over the same
+    // priv would race the original to zero and kill the adopted fd before
+    // the H2 multiplex op's first continuePoll runs.
+    ReferenceHolder<QoreObject> sock_obj_holder(adopted_sock_obj, xsink);
+    QoreSocketObject* sock_priv_raw = adopted_sock_priv;
 
     // Create the adopt-socket H2 poll op priv.  ssl_required is
     // implicitly true for the adopt path (see design doc §5.1).

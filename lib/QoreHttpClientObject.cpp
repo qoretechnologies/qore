@@ -743,7 +743,7 @@ static const char* get_string_header(ExceptionSink* xsink, QoreHashNode& h, cons
    return str && !str->empty() ? str->c_str() : nullptr;
 }
 
-static const char* get_http_status_message(int code) {
+const char* QoreHttpClientObject::getHttpStatusMessage(int code) {
     switch (code) {
         // 1xx: Informational
         case 100: return "Continue";
@@ -815,7 +815,7 @@ static const char* get_http_status_message(int code) {
 static void set_http2_response_info(ExceptionSink* xsink, QoreHashNode& headers, QoreHashNode& info,
         int code) {
     headers.setKeyValue("status_code", code, xsink);
-    const char* status_msg = get_http_status_message(code);
+    const char* status_msg = QoreHttpClientObject::getHttpStatusMessage(code);
     headers.setKeyValue("status_message", new QoreStringNode(status_msg), xsink);
     headers.setKeyValue("http_version", new QoreStringNode("2"), xsink);
 
@@ -1153,16 +1153,114 @@ static QoreHashNode* toLegacyPollApiOutputShape(const QoreHashNode* src,
     // Build the info sub-hash (response-headers, response-headers-raw,
     // response-body).
     ReferenceHolder<QoreHashNode> info_hash(new QoreHashNode(autoTypeInfo), xsink);
+    // Build response-headers by merging top-level response metadata
+    // (status_code, status_message, http_version) into the headers hash,
+    // matching what set_http2_response_info does in the legacy sync path.
     if (hdrs_v.getType() == NT_HASH) {
-        info_hash->setKeyValue("response-headers", hdrs_v.refSelf(), xsink);
+        ReferenceHolder<QoreHashNode> rh(hdrs_v.get<QoreHashNode>()->copy(), xsink);
+        if (!sc.isNullOrNothing()) {
+            rh->setKeyValue("status_code", sc.getAsBigInt(), xsink);
+        }
+        QoreValue sm = src->getKeyValue("status_message");
+        if (sm.getType() == NT_STRING) {
+            rh->setKeyValue("status_message", sm.refSelf(), xsink);
+        } else if (!sc.isNullOrNothing()) {
+            rh->setKeyValue("status_message",
+                new QoreStringNode(QoreHttpClientObject::getHttpStatusMessage(
+                    (int)sc.getAsBigInt())), xsink);
+        }
+        QoreValue hv = src->getKeyValue("http_version");
+        if (hv.getType() == NT_STRING) {
+            rh->setKeyValue("http_version", hv.refSelf(), xsink);
+        } else {
+            // Infer http_version from protocol or stream_id presence
+            QoreValue proto = src->getKeyValue("protocol");
+            if (proto.getType() == NT_STRING) {
+                const char* p = proto.get<const QoreStringNode>()->c_str();
+                if (!strcmp(p, "h2")) {
+                    rh->setKeyValue("http_version",
+                        new QoreStringNode("2"), xsink);
+                } else if (!strcmp(p, "h3")) {
+                    rh->setKeyValue("http_version",
+                        new QoreStringNode("3"), xsink);
+                }
+            } else if (!src->getKeyValue("stream_id").isNullOrNothing()) {
+                rh->setKeyValue("http_version",
+                    new QoreStringNode("2"), xsink);
+            }
+        }
+        info_hash->setKeyValue("response-headers", rh.release(), xsink);
     }
     QoreValue hdrs_raw_v = src->getKeyValue("headers_raw");
     if (hdrs_raw_v.getType() == NT_HASH) {
         info_hash->setKeyValue("response-headers-raw",
             hdrs_raw_v.refSelf(), xsink);
+    } else if (hdrs_v.getType() == NT_HASH) {
+        // H2/H3 responses have no headers_raw (headers are already
+        // lowercase per spec); use the same headers hash.
+        info_hash->setKeyValue("response-headers-raw",
+            hdrs_v.refSelf(), xsink);
     }
     if (body_ref) {
         info_hash->setKeyValue("response-body", body_ref->refSelf(), xsink);
+    }
+    // Populate body-content-type from the Content-Type header (matching
+    // set_body_content_type_info in the legacy sync path).
+    if (hdrs_v.getType() == NT_HASH) {
+        const QoreHashNode* hdrs = hdrs_v.get<const QoreHashNode>();
+        QoreValue ct = hdrs->getKeyValue("content-type");
+        if (ct.getType() == NT_STRING) {
+            const QoreStringNode* cts = ct.get<const QoreStringNode>();
+            if (!cts->empty()) {
+                const char* s = cts->c_str();
+                while (*s == ' ') { ++s; }
+                const char* e = s;
+                while (*e && *e != ';' && *e != ',') { ++e; }
+                if (e > s) {
+                    SimpleRefHolder<QoreStringNode> base(new QoreStringNode());
+                    base->concat(s, e - s);
+                    base->trim();
+                    if (!base->empty()) {
+                        info_hash->setKeyValue("body-content-type",
+                            base.release(), xsink);
+                    }
+                }
+            }
+        }
+    }
+    // Populate response-uri (matching setConnMgrResponseUri in the sync
+    // path).  The poll path's raw response may not have protocol/
+    // http_version, so derive the version from stream_id presence.
+    if (!sc.isNullOrNothing()) {
+        const char* ver = "HTTP/1.1";
+        QoreValue proto = src->getKeyValue("protocol");
+        QoreValue hv_src = src->getKeyValue("http_version");
+        if (proto.getType() == NT_STRING) {
+            const char* p = proto.get<const QoreStringNode>()->c_str();
+            if (!strcmp(p, "h2")) {
+                ver = "HTTP/2";
+            } else if (!strcmp(p, "h3")) {
+                ver = "HTTP/3";
+            } else if (hv_src.getType() == NT_STRING) {
+                // H1 with explicit version
+                static char buf[32];
+                snprintf(buf, sizeof(buf), "HTTP/%s",
+                    hv_src.get<const QoreStringNode>()->c_str());
+                ver = buf;
+            }
+        } else if (!src->getKeyValue("stream_id").isNullOrNothing()) {
+            ver = "HTTP/2";
+        }
+        QoreValue sm_val = src->getKeyValue("status_message");
+        const char* sm_str = sm_val.getType() == NT_STRING
+            ? sm_val.get<const QoreStringNode>()->c_str() : "";
+        if (!sm_str[0]) {
+            sm_str = QoreHttpClientObject::getHttpStatusMessage(
+                (int)sc.getAsBigInt());
+        }
+        QoreStringNode* uri = new QoreStringNodeMaker("%s %d %s", ver,
+            (int)sc.getAsBigInt(), sm_str);
+        info_hash->setKeyValue("response-uri", uri, xsink);
     }
     if (!info_hash->empty()) {
         result->setKeyValue("info", info_hash.release(), xsink);
@@ -1391,16 +1489,21 @@ struct qore_httpclient_priv {
             // H2C_DIRECT is also an H2 protocol (over plain TCP, client
             // sends the HTTP/2 preface on connect).  REQUIRED with SSL
             // negotiates h2 via ALPN; REQUIRED without SSL is equivalent
-            // to H2C_DIRECT.
-            bool h2e = (http2_mode == HTTP2_MODE_REQUIRED
+            // to H2C_DIRECT.  AUTO over SSL uses NEGOTIATE (per-connect
+            // ALPN via NegotiatingHttpClientConnection).
+            bool h2_hard = (http2_mode == HTTP2_MODE_REQUIRED
                     || http2_mode == HTTP2_MODE_H2C_DIRECT)
+                && gm != HTTP2_MODE_DISABLED && !ld;
+            bool h2_auto_ssl = http2_mode == HTTP2_MODE_AUTO && connection.ssl
                 && gm != HTTP2_MODE_DISABLED && !ld;
             HttpClientProtocol want_proto;
             if (http3_mode.load(std::memory_order_relaxed)
                     == HTTP3_MODE_REQUIRED) {
                 want_proto = HttpClientProtocol::H3;
-            } else if (h2e) {
+            } else if (h2_hard) {
                 want_proto = HttpClientProtocol::H2;
+            } else if (h2_auto_ssl) {
+                want_proto = HttpClientProtocol::NEGOTIATE;
             } else {
                 want_proto = HttpClientProtocol::H1;
             }
@@ -1415,33 +1518,34 @@ struct qore_httpclient_priv {
         if (!conn_mgr) {
             HttpClientConnectionManagerBase::Options opts;
             // Derive protocol from the HTTPClient's mode settings.
-            // HTTP2_MODE_AUTO + SSL is still handled by the legacy path
-            // (which does ALPN-based protocol selection per-socket) —
-            // see the needs_legacy_h2 bypass in send_internal for the
-            // remaining architectural reason.  Phase 3 of the conn-mgr
-            // ALPN work (design/conn-mgr-alpn-negotiation.md) added the
-            // NegotiatingHttpClientConnection path that would handle
-            // this case through the conn_mgr, but Phase 5's final
-            // wire-up is blocked on an H2-multiplex lifetime race — the
-            // NEGOTIATE path is exercised only via explicit
-            // opts.protocol = NEGOTIATE (C++ unit tests), not from the
-            // HTTPClient layer.  REQUIRED and H2C_DIRECT map to H2 here.
-            // The global mode override must be checked here so that
-            // set_global_http2_mode("disabled") prevents H2 connections
-            // even for REQUIRED-mode clients (matches legacy connect).
+            // HTTP2_MODE_AUTO over SSL maps to HttpClientProtocol::
+            // NEGOTIATE — the conn_mgr's NegotiatingHttpClientConnection
+            // path does per-connect ALPN over TLS and adopts the result
+            // into a concrete H1/H2 connection (see
+            // design/conn-mgr-alpn-negotiation.md).  REQUIRED and
+            // H2C_DIRECT map to H2, REQUIRED H3 maps to H3, and
+            // everything else maps to H1.  The global mode override
+            // must be checked here so that set_global_http2_mode("disabled")
+            // prevents H2 connections even for REQUIRED-mode clients
+            // (matches legacy connect).
             {
                 int global_mode = qore_global_http2_mode.load(
                     std::memory_order_relaxed);
                 bool lib_disabled = qore_check_option(QLO_DISABLE_HTTP2);
-                bool h2_effective = (http2_mode == HTTP2_MODE_REQUIRED
+                bool h2_hard = (http2_mode == HTTP2_MODE_REQUIRED
                         || http2_mode == HTTP2_MODE_H2C_DIRECT)
+                    && global_mode != HTTP2_MODE_DISABLED && !lib_disabled;
+                bool h2_auto_ssl = http2_mode == HTTP2_MODE_AUTO
+                    && connection.ssl
                     && global_mode != HTTP2_MODE_DISABLED && !lib_disabled;
 
                 if (http3_mode.load(std::memory_order_relaxed)
                         == HTTP3_MODE_REQUIRED) {
                     opts.protocol = HttpClientProtocol::H3;
-                } else if (h2_effective) {
+                } else if (h2_hard) {
                     opts.protocol = HttpClientProtocol::H2;
+                } else if (h2_auto_ssl) {
+                    opts.protocol = HttpClientProtocol::NEGOTIATE;
                 } else {
                     opts.protocol = HttpClientProtocol::H1;
                 }
@@ -1718,17 +1822,13 @@ struct qore_httpclient_priv {
                 "with prior knowledge");
             return nullptr;
         }
-        // Delegate to conn_mgr when enabled.  Bypasses routed to the
-        // legacy path:
-        //   - AUTO+SSL: needs per-connect ALPN in the conn_mgr.  The
-        //     NEGOTIATE infrastructure is in place (Phases 1-4 of
-        //     design/conn-mgr-alpn-negotiation.md) but Phase 5's final
-        //     wire-up is blocked on an H2 multiplex lifetime race (the
-        //     H2 multiplex op's first continuePoll sees the socket
-        //     closed after the NEG priv's Phase 3 finalization).
-        bool needs_legacy_h2 = h2_enabled
-            && http2_mode == HTTP2_MODE_AUTO && connection.ssl;
-        if (use_conn_mgr && !needs_legacy_h2) {
+        // Delegate to conn_mgr when enabled.  All protocol modes route
+        // through conn_mgr now — AUTO+SSL picks HttpClientProtocol::
+        // NEGOTIATE in getConnMgr, which drives per-connect ALPN via
+        // NegotiatingHttpClientConnection and adopts the result into a
+        // concrete H1/H2 connection.  The only legitimate bypass left
+        // is the WebSocket upgrade path handled in send_internal.
+        if (use_conn_mgr) {
             return startPollSendRecvConnMgr(xsink, self, client,
                 method->c_str(), path ? path->c_str() : nullptr,
                 data, size, headers);
@@ -4127,7 +4227,7 @@ int HttpClientConnectSendRecvPollOperation::processH3Response(ExceptionSink* xsi
     }
 
     // Set HTTP/3 response info (status_message, http_version, response-uri)
-    const char* status_msg = get_http_status_message(http_response_code);
+    const char* status_msg = QoreHttpClientObject::getHttpStatusMessage(http_response_code);
     response_headers->setKeyValue("status_code", http_response_code, xsink);
     if (*xsink) {
         return -1;
@@ -5210,7 +5310,19 @@ int QoreHttpClientObject::getPollableDescriptor() const {
 }
 
 bool QoreHttpClientObject::isHttp2Active() const {
-    return http_priv->http2_active;
+    if (http_priv->http2_active) {
+        return true;
+    }
+    // For NEGOTIATE clients, http2_active may not have been refreshed yet
+    // (the poll API's goalReached() can return true before continuePoll
+    // runs the refresh).  Check the conn_mgr's pool for H2 connections.
+    if (http_priv->conn_mgr) {
+        const auto& opts = http_priv->conn_mgr->getOptions();
+        if (opts.protocol == HttpClientProtocol::NEGOTIATE) {
+            return http_priv->conn_mgr->hasProtocolInPool(HttpClientProtocol::H2);
+        }
+    }
+    return false;
 }
 
 QoreHashNode* QoreHttpClientObject::getHttp2Settings() const {
@@ -6727,7 +6839,7 @@ QoreHashNode* qore_httpclient_priv::sendHttp2MessageAndGetResponse(const char* m
     response->setKeyValue("status_code", code, xsink);
 
     // Map status codes to messages (HTTP/2 only transmits status code, not message)
-    const char* status_msg = get_http_status_message(code);
+    const char* status_msg = QoreHttpClientObject::getHttpStatusMessage(code);
     response->setKeyValue("status_message", new QoreStringNode(status_msg), xsink);
     response->setKeyValue("http_version", new QoreStringNode("2"), xsink);
 
@@ -7777,7 +7889,7 @@ QoreHashNode* qore_httpclient_priv::sendHttp3MessageAndGetResponse(const char* m
 
     response->setKeyValue("status_code", code, xsink);
 
-    const char* status_msg = get_http_status_message(code);
+    const char* status_msg = QoreHttpClientObject::getHttpStatusMessage(code);
     response->setKeyValue("status_message", new QoreStringNode(status_msg), xsink);
     response->setKeyValue("http_version", new QoreStringNode("3"), xsink);
 
@@ -8838,6 +8950,21 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
         return nullptr;
     }
 
+    // Refresh http2_active for NEGOTIATE clients: the first successful
+    // response reveals the actual protocol the conn_mgr selected.  Phase 6
+    // of design/conn-mgr-alpn-negotiation.md (Option β).
+    {
+        QoreValue proto = ans->getKeyValue("protocol");
+        if (proto.getType() == NT_STRING) {
+            const char* p = proto.get<const QoreStringNode>()->c_str();
+            if (!strcmp(p, "h2")) {
+                http2_active = true;
+            } else if (!strcmp(p, "h3")) {
+                http3_active = true;
+            }
+        }
+    }
+
     // Process content-type (skip for streaming path — already done in channel bridge)
     if (!recv_callback && !os) {
         if (processContentType(xsink, **ans)) {
@@ -8930,31 +9057,17 @@ QoreHashNode* qore_httpclient_priv::send_internal(ExceptionSink* xsink, const ch
             return nullptr;
         }
     }
-    // Delegate to conn_mgr when enabled.
-    // Bypasses routed to the legacy path:
-    //   1. AUTO + SSL: the client can't know whether to speak h1 or h2
-    //      until TLS ALPN completes on the TCP socket.  Phase 3–4 of the
-    //      conn-mgr ALPN work built the NEGOTIATE infrastructure
-    //      (NegotiatingHttpClientConnection → adopt-socket H1/H2), but
-    //      Phase 5's final step of wiring it into send_internal is
-    //      blocked on a lifetime race between the DECIDED-state NEG
-    //      cleanup and the just-installed Http2 multiplex op: after
-    //      takeOver the H2 multiplex op fails its first continuePoll
-    //      with `socket closed during poll operation` because something
-    //      in the QoreObject wrapper destruction chain is closing the
-    //      adopted socket.  Keep the legacy bypass until that is fixed.
-    //   2. WebSocket upgrade requests (Connection: Upgrade + Upgrade:
-    //      websocket header).  After the 101 Switching Protocols
-    //      response, the same TCP socket carries the upgraded WebSocket
-    //      protocol.  conn_mgr returns pooled connections to the pool
-    //      after each response, breaking the WS upgrade contract — the
-    //      legacy path leaves msock connected so the caller can drive
-    //      the WS frames over it.
+    // Delegate to conn_mgr when enabled.  The only remaining bypass is
+    // WebSocket upgrade requests (Connection: Upgrade + Upgrade:
+    // websocket header): after the 101 Switching Protocols response,
+    // the same TCP socket carries the upgraded WebSocket protocol, and
+    // conn_mgr returns pooled connections to the pool after each
+    // response — breaking the WS upgrade contract.  The legacy path
+    // leaves msock connected so the caller can drive the WS frames
+    // over it.  AUTO+SSL used to bypass to the legacy path as well;
+    // the conn_mgr now handles it via NEGOTIATE (see getConnMgr and
+    // design/conn-mgr-alpn-negotiation.md).
     {
-        int global_mode = qore_global_http2_mode.load(std::memory_order_relaxed);
-        bool lib_disabled = qore_check_option(QLO_DISABLE_HTTP2);
-        bool needs_legacy_h2 = global_mode != HTTP2_MODE_DISABLED && !lib_disabled
-            && http2_mode == HTTP2_MODE_AUTO && connection.ssl;
         bool is_ws_upgrade = false;
         if (headers) {
             // HTTP headers are case-insensitive — scan the hash looking for
@@ -8980,7 +9093,7 @@ QoreHashNode* qore_httpclient_priv::send_internal(ExceptionSink* xsink, const ch
             }
             is_ws_upgrade = has_conn_upgrade && has_upgrade_ws;
         }
-        if (use_conn_mgr && !needs_legacy_h2 && !is_ws_upgrade) {
+        if (use_conn_mgr && !is_ws_upgrade) {
             return send_internal_conn_mgr(xsink, mname, meth, mpath, headers,
                 msg_body, data, size, send_callback, getbody, info, timeout_ms,
                 recv_callback, obj, os, is, max_chunk_size, trailer_callback, streaming);
@@ -9793,6 +9906,24 @@ public:
             phase = Phase::DONE;
             if (notifier) {
                 notifier->acknowledge(xsink);
+            }
+            // Refresh http2_active for NEGOTIATE clients (Phase 6):
+            // peek the future's value for the "protocol" field without
+            // consuming it (the caller reads via getOutput later).
+            if (priv_ref && !future->isError()) {
+                ExceptionSink peek_xsink;
+                QoreValue pv = future->get(0, &peek_xsink);
+                if (!peek_xsink && pv.getType() == NT_HASH) {
+                    QoreValue proto = pv.get<QoreHashNode>()->getKeyValue("protocol");
+                    if (proto.getType() == NT_STRING) {
+                        const char* p = proto.get<const QoreStringNode>()->c_str();
+                        if (!strcmp(p, "h2")) {
+                            priv_ref->http2_active = true;
+                        }
+                    }
+                }
+                pv.discard(&peek_xsink);
+                peek_xsink.clear();
             }
             // If the future was rejected (error), surface the error.
             // Map HTTP1-ABORT to SOCKET-NOT-OPEN only when a user-initiated

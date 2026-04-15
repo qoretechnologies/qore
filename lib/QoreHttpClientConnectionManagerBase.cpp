@@ -31,6 +31,7 @@
 
 #include <qore/Qore.h>
 #include <qore/HttpClientConnectionManager.h>
+#include <qore/QoreHttpClientObject.h>
 #include <qore/QoreFuture.h>
 #include "qore/intern/QoreHttp1ClientConnection.h"
 #include "qore/intern/QoreHttp2ClientConnection.h"
@@ -632,6 +633,18 @@ void HttpClientConnectionManagerBase::closeAll(ExceptionSink* xsink) {
     }
 }
 
+bool HttpClientConnectionManagerBase::hasProtocolInPool(HttpClientProtocol proto) const {
+    std::shared_lock<std::shared_mutex> rl(pool_lock_);
+    for (const auto& kv : pool_) {
+        for (const auto* conn : kv.second) {
+            if (conn->getProtocol() == proto) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 int HttpClientConnectionManagerBase::getPoolSize() const {
     std::shared_lock<std::shared_mutex> rl(pool_lock_);
     int total = 0;
@@ -751,7 +764,36 @@ QoreHashNode* HttpClientConnectionManagerBase::request(const char* method,
             "Future returned non-hash result type %d", (int)result.getType());
         return nullptr;
     }
-    return result.get<QoreHashNode>();
+    QoreHashNode* rv = result.get<QoreHashNode>();
+    // Stamp the response with the actual protocol of the connection that
+    // served it.  The C++ multiplex ops (H1/H2/H3) don't set this — the
+    // Qore-level stream handles do, but the C++ conn_mgr path doesn't go
+    // through Qore.  Callers like send_internal_conn_mgr rely on these
+    // fields for isHttp2Active refresh and response-uri generation.
+    switch (conn->getProtocol()) {
+        case HttpClientProtocol::H2:
+            rv->setKeyValue("protocol", new QoreStringNode("h2"), xsink);
+            rv->setKeyValue("http_version", new QoreStringNode("2"), xsink);
+            break;
+        case HttpClientProtocol::H3:
+            rv->setKeyValue("protocol", new QoreStringNode("h3"), xsink);
+            rv->setKeyValue("http_version", new QoreStringNode("3"), xsink);
+            break;
+        default:
+            rv->setKeyValue("protocol", new QoreStringNode("h1"), xsink);
+            break;
+    }
+    // H2/H3 don't carry a reason phrase; derive it from the status code
+    // so the legacy shape has a status_message field.
+    if (!rv->getKeyValue("status_message").getType()) {
+        int code = (int)rv->getKeyValue("status_code").getAsBigInt();
+        if (code > 0) {
+            const char* msg = QoreHttpClientObject::getHttpStatusMessage(code);
+            rv->setKeyValue("status_message",
+                new QoreStringNode(msg), xsink);
+        }
+    }
+    return rv;
 }
 
 int64_t HttpClientConnectionManagerBase::requestStreaming(const char* method,

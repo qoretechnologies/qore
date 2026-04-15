@@ -92,7 +92,8 @@ Http1ClientConnection::Http1ClientConnection(const char* target_host, int target
     }
 }
 
-Http1ClientConnection::Http1ClientConnection(QoreSocketObject* adopted_sock,
+Http1ClientConnection::Http1ClientConnection(QoreObject* adopted_sock_obj,
+        QoreSocketObject* adopted_sock_priv,
         std::string target_host, int target_port, bool ssl_required,
         ExceptionSink* xsink, HttpClientConnectionManagerBase* mgr)
     : HttpClientConnectionBase(std::move(target_host), target_port, ssl_required) {
@@ -102,7 +103,7 @@ Http1ClientConnection::Http1ClientConnection(QoreSocketObject* adopted_sock,
     if (mgr) {
         setManager(mgr);
     }
-    if (buildAndSubmitAdopted(adopted_sock, xsink)) {
+    if (buildAndSubmitAdopted(adopted_sock_obj, adopted_sock_priv, xsink)) {
         return;
     }
 }
@@ -246,22 +247,30 @@ int Http1ClientConnection::buildAndSubmit(ExceptionSink* xsink) {
         priv_raw, sock_priv_raw, "http1-cpp-conn-", xsink);
 }
 
-int Http1ClientConnection::buildAndSubmitAdopted(QoreSocketObject* adopted_sock_priv,
-        ExceptionSink* xsink) {
-    if (!adopted_sock_priv) {
+int Http1ClientConnection::buildAndSubmitAdopted(QoreObject* adopted_sock_obj,
+        QoreSocketObject* adopted_sock_priv, ExceptionSink* xsink) {
+    if (!adopted_sock_obj || !adopted_sock_priv) {
         xsink->raiseException("HTTPCLIENT-ADOPT-ERROR",
             "cannot adopt a null socket");
         return -1;
     }
     QoreProgram* pgm = getProgram();
+    (void)pgm;
 
-    // Adopt the caller's ref on adopted_sock_priv by handing it directly to
-    // a ReferenceHolder; on any fallible step after this, the holder
-    // unwinds and the ref is released.
-    ReferenceHolder<QoreSocketObject> sock_priv_holder(adopted_sock_priv, xsink);
-    QoreSocketObject* sock_priv_raw = *sock_priv_holder;
-    ReferenceHolder<QoreObject> sock_obj_holder(
-        new QoreObject(QC_SOCKET, pgm, sock_priv_holder.release()), xsink);
+    // Adopt the caller's ref on the existing socket QoreObject wrapper.
+    // Do NOT create a new wrapper — the caller's wrapper already owns the
+    // underlying fd's "on-destroy close" semantics via QoreSocketObject::
+    // deref → priv->socket->cleanup() → close_internal().  If we created
+    // a second wrapper and then let the original drop to refcount 0
+    // (which happens naturally once the NEG helper unwinds), close_internal
+    // would fire on the adopted fd, killing the SSL session and the
+    // underlying socket before the new H1 op's first continuePoll could
+    // use it.  The Phase 5 NEGOTIATE wire-up blocker was exactly this:
+    // "socket closed during poll operation" on the first adopted H2
+    // multiplex continuePoll.  Transferring the wrapper keeps the
+    // single-owner invariant intact across the H1/H2 handover.
+    ReferenceHolder<QoreObject> sock_obj_holder(adopted_sock_obj, xsink);
+    QoreSocketObject* sock_priv_raw = adopted_sock_priv;
 
     // Create the adopt-socket H1 poll op priv.  It owns one ref on
     // sock_priv_raw (we bump the ref here because sock_obj holds the

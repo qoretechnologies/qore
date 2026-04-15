@@ -235,6 +235,15 @@ public:
         return opts_;
     }
 
+    //! Returns true if any pooled connection uses the given protocol.
+    /** Used by @c isHttp2Active() to detect whether a NEGOTIATE manager
+        has established at least one H2 connection.
+        @param proto the protocol to check for
+        @return true if at least one pooled connection reports @a proto
+        @since %Qore 2.3
+    */
+    DLLEXPORT bool hasProtocolInPool(HttpClientProtocol proto) const;
+
     //! Returns the total number of pooled connections across all keys.
     DLLEXPORT int getPoolSize() const;
 

@@ -1368,10 +1368,17 @@ static void ut_http1_adopt_socket_simple_request(UnitTestCounters& c) {
     }
 
     // Hand the connected socket to Http1ClientConnection via the new
-    // adopt-socket ctor.  One ref on the priv transfers to the ctor.
+    // adopt-socket ctor.  The ctor takes the QoreObject wrapper (not a
+    // fresh copy) so the handover preserves the single-owner
+    // close_internal invariant — see the comment in
+    // Http1ClientConnection::buildAndSubmitAdopted.
     sock->ref();
+    QoreSocketObject* sock_raw = *sock;
+    ReferenceHolder<QoreObject> sock_obj_holder(
+        new QoreObject(QC_SOCKET, getProgram(), sock_raw), &xsink);
     ReferenceHolder<Http1ClientConnection> conn(
-        new Http1ClientConnection(*sock, "127.0.0.1", server_port,
+        new Http1ClientConnection(sock_obj_holder.release(), sock_raw,
+            "127.0.0.1", server_port,
             /* ssl_required */ false, &xsink),
         &xsink);
     UT_ASSERT(c, !xsink, "adopt-socket Http1ClientConnection construction succeeds");
@@ -1463,8 +1470,12 @@ static void ut_http2_adopt_socket_construct(UnitTestCounters& c) {
     }
 
     sock->ref();
+    QoreSocketObject* sock_raw = *sock;
+    ReferenceHolder<QoreObject> sock_obj_holder(
+        new QoreObject(QC_SOCKET, getProgram(), sock_raw), &xsink);
     ReferenceHolder<Http2ClientConnection> conn(
-        new Http2ClientConnection(*sock, "127.0.0.1", server_port,
+        new Http2ClientConnection(sock_obj_holder.release(), sock_raw,
+            "127.0.0.1", server_port,
             /* max_streams */ 100, &xsink),
         &xsink);
     UT_ASSERT(c, !xsink,

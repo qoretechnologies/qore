@@ -426,7 +426,7 @@ HttpClientConnectionBase* NegotiatingHttpClientConnection::takeOver(
             "negotiating connection is not ready");
         return nullptr;
     }
-    if (!sock_priv) {
+    if (!sock_obj || !sock_priv) {
         xsink->raiseException("HTTPCLIENT-NEGOTIATE-ERROR",
             "negotiating connection has no socket to hand off");
         return nullptr;
@@ -438,39 +438,31 @@ HttpClientConnectionBase* NegotiatingHttpClientConnection::takeOver(
     // non_block_flags when its refcount dropped, so sock_priv is in an
     // Unclaimed state and can be re-submitted by the adopt-socket ctor.
 
-    // Capture the target host/port + the adopted socket ref.  We
-    // release the socket priv ref held via our sock_obj wrapper by
-    // dereffing sock_obj — but first bump sock_priv so the adopt-socket
-    // ctor has its own ref.
-    sock_priv->ref();
-    QoreSocketObject* adopted = sock_priv;
-
-    // Mark as taken over so the destructor doesn't double-close.
-    taken_over = true;
-
-    // Drop our sock_obj wrapper (holds 1 ref on sock_priv).  After this,
-    // the QoreObject wrapper is gone and sock_priv has exactly 1
-    // remaining ref: the one we bumped above for the adopted ctor.
-    if (sock_obj) {
-        sock_obj->deref(xsink);
-        sock_obj = nullptr;
-    }
-
-    // We still hold poll_op_obj → neg_priv → (no more refs on sock_priv
-    // since the connect op was released in handleConnecting and the
-    // priv's own sock ref is... wait.  The priv holds its own sock_priv
-    // ref (from the sock_priv->ref() bump in buildAndSubmit step 6).
-    // When we deref poll_op_obj below, the priv dtor will deref that
-    // ref.  Good — that accounting balances.
+    // Transfer the socket QoreObject wrapper (and the priv it owns)
+    // atomically to the concrete H1/H2 connection.  Do NOT deref the
+    // wrapper here — QoreSocketObject::deref closes the fd on refcount 0
+    // (priv->socket->cleanup → close_internal), and the QoreObject ref
+    // count IS at 1 by this point (the controller's Phase 3 cleanup has
+    // already dropped pinfo.sock_obj), so a deref would immediately kill
+    // the adopted socket.  The adopt-socket constructor takes ownership
+    // of the wrapper directly: the H1/H2 connection's sock_obj member
+    // becomes the single strong-ref holder, and when it's later
+    // re-submitted to the controller, pinfo.sock_obj bumps the refcount
+    // back up.
     //
-    // Similarly, the PollInfo in the controller cache held one ref on
-    // the "sock" QoreObject which the DECIDED finalization dropped
-    // during pinfo.cleanup.  That matches our sock_obj wrapper's
-    // construction — we created the wrapper with 1 ref and the submit
-    // info hash transferred it (sock_obj_holder->refSelf() bumped it
-    // back).  The member sock_obj = sock_obj_holder.release() owned the
-    // original ref, and the cleanup drops the bumped one.  All
-    // accounted for.
+    // This is the exact mechanism of the Phase 5 NEGOTIATE wire-up race:
+    // an earlier version of this function created a fresh QoreObject
+    // wrapper in the adopt ctor and let the NEG wrapper drop to zero,
+    // producing "socket closed during poll operation" on the first
+    // multiplex continuePoll.  See the Phase 5 commit message.
+    QoreObject* transferred_sock_obj = sock_obj;
+    QoreSocketObject* transferred_sock_priv = sock_priv;
+    sock_obj = nullptr;
+    sock_priv = nullptr;
+
+    // Mark as taken over so the destructor neither double-closes nor
+    // double-derefs the transferred wrapper.
+    taken_over = true;
 
     int nominal_protocol;  // 1 = H1, 2 = H2
     if (alpn_result == "h2") {
@@ -482,14 +474,16 @@ HttpClientConnectionBase* NegotiatingHttpClientConnection::takeOver(
     HttpClientConnectionBase* concrete = nullptr;
     if (nominal_protocol == 2) {
         concrete = new Http2ClientConnection(
-            /* adopted_sock */ adopted,
+            /* adopted_sock_obj */ transferred_sock_obj,
+            /* adopted_sock_priv */ transferred_sock_priv,
             /* target_host */ target_host,
             /* target_port */ target_port,
             /* max_concurrent_streams */ max_concurrent_streams,
             xsink, mgr);
     } else {
         concrete = new Http1ClientConnection(
-            /* adopted_sock */ adopted,
+            /* adopted_sock_obj */ transferred_sock_obj,
+            /* adopted_sock_priv */ transferred_sock_priv,
             /* target_host */ target_host,
             /* target_port */ target_port,
             /* ssl_required */ true,
@@ -503,7 +497,6 @@ HttpClientConnectionBase* NegotiatingHttpClientConnection::takeOver(
         return nullptr;
     }
 
-    sock_priv = nullptr;  // ownership transferred to the concrete conn
     return concrete;
 }
 
