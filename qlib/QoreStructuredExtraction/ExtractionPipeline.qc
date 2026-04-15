@@ -34,6 +34,14 @@ public hashdecl ExtractionPipelineOptions {
     *string user_prompt_template;
     #! Number of parallel extractions for extractBatch(); default 1 (sequential)
     int batch_parallel = 1;
+    #! Optional thread-start callable used for parallel batch extraction
+    /** Required when the enclosing @ref Qore::Program "Program" has
+        @ref Qore::PO_NO_THREAD_CONTROL set and \c batch_parallel > 1; the
+        callable must take a zero-arg code reference and return the integer
+        thread ID.  When not set in a non-sandboxed program, Qore's
+        @ref background operator is used directly.
+    */
+    *code<int(code<nothing()>)> start_thread;
 }
 
 #! LLM-based structured information extraction engine
@@ -88,6 +96,8 @@ public class ExtractionPipeline {
         int max_retries;
         #! Batch parallelism
         int batch_parallel;
+        #! Optional thread-start callable for parallel batch extraction
+        *code<int(code<nothing()>)> start_thread;
     }
 
     #! Creates an ExtractionPipeline
@@ -97,6 +107,9 @@ public class ExtractionPipeline {
         @param options optional pipeline configuration
 
         @throw EXTRACTION-PIPELINE-ERROR if the schema has no fields
+        @throw EXTRACTION-ARG-ERROR if the pipeline is constructed in a program
+            with @ref Qore::PO_NO_THREAD_CONTROL set and \c batch_parallel > 1
+            but no \c start_thread callable is supplied
     */
     constructor(LlmBackend llm_backend, hash<ExtractionSchemaInfo> extraction_schema,
             *hash<ExtractionPipelineOptions> options) {
@@ -111,6 +124,17 @@ public class ExtractionPipeline {
         max_retries = options.max_retries ?? 2;
         user_prompt_template = options.user_prompt_template;
         batch_parallel = options.batch_parallel ?? 1;
+        start_thread = options.start_thread;
+
+%ifdef PO_NO_THREAD_CONTROL
+        if (batch_parallel > 1 && !start_thread) {
+            throw "EXTRACTION-ARG-ERROR",
+                "ExtractionPipeline requires the \"start_thread\" option when "
+                "\"batch_parallel\" > 1 in a program with PO_NO_THREAD_CONTROL "
+                "set; see the QoreStructuredExtraction module documentation "
+                "for sandbox integration details";
+        }
+%endif
 
         if (options.system_prompt.val()) {
             system_prompt = options.system_prompt;
@@ -214,15 +238,16 @@ public class ExtractionPipeline {
         int total = texts.size();
         int completed = 0;
         Mutex progress_mutex();
-        Counter cnt(total);
 
         int offset = 0;
         while (offset < total) {
             int batch_end = min(offset + batch_parallel, total);
+            int batch_size = batch_end - offset;
+            Counter cnt(batch_size);
             for (int i = offset; i < batch_end; ++i) {
                 int idx = i;
                 string text = texts[i];
-                background sub () {
+                code<nothing()> worker = sub () {
                     on_exit cnt.dec();
                     results[idx] = extractData(text);
                     if (progress) {
@@ -231,14 +256,18 @@ public class ExtractionPipeline {
                         ++completed;
                         progress(completed, total);
                     }
-                }();
+                };
+%ifdef PO_NO_THREAD_CONTROL
+                call_function(start_thread, worker);
+%else
+                if (start_thread) {
+                    call_function(start_thread, worker);
+                } else {
+                    background worker();
+                }
+%endif
             }
-            # Wait for this batch
-            int batch_size = batch_end - offset;
-            for (int i = 0; i < batch_size; ++i) {
-                cnt.waitForZero();
-                cnt.inc();
-            }
+            cnt.waitForZero();
             offset = batch_end;
         }
 

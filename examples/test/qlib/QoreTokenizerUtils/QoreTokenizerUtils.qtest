@@ -62,6 +62,11 @@ public class QoreTokenizerUtilsTest inherits QUnit::Test {
         addTestCase("CrossEncoderReranker config validation", \rerankerConfigTest());
         addTestCase("CrossEncoderReranker ONNX config validation", \rerankerOnnxConfigTest());
         addTestCase("CrossEncoderReranker empty input", \rerankerEmptyTest());
+        addTestCase("CrossEncoderReranker rerankWithScores ordering", \rerankerWithScoresOrderingTest());
+        addTestCase("CrossEncoderReranker rerank/rerankWithScores agree on indices",
+            \rerankerIndexParityTest());
+        addTestCase("CrossEncoderReranker rerankWithScores truncation", \rerankerTruncationTest());
+        addTestCase("CrossEncoderReranker RerankerScoredHit hashdecl", \rerankerScoredHitHashdeclTest());
         set_return_value(main());
     }
 
@@ -562,5 +567,130 @@ public class QoreTokenizerUtilsTest inherits QUnit::Test {
 
         list<int> indices = rr.rerank("test query", (), 3);
         assertEq(0, indices.size(), "empty passages should return empty indices");
+
+        list<hash<QoreTokenizerUtils::RerankerScoredHit>> hits =
+            rr.rerankWithScores("test query", (), 3);
+        assertEq(0, hits.size(), "empty passages should return empty scored hits");
+    }
+
+    rerankerWithScoresOrderingTest() {
+        # input scores out of order - reranker should sort descending
+        FakeScoreReranker rr((0.2, 0.9, 0.1, 0.7, 0.5));
+        list<string> passages = ("a", "b", "c", "d", "e");
+
+        list<hash<QoreTokenizerUtils::RerankerScoredHit>> hits =
+            rr.rerankWithScores("q", passages, 5);
+
+        assertEq(5, hits.size(), "all passages should be returned");
+        # expected descending order: b (0.9), d (0.7), e (0.5), a (0.2), c (0.1)
+        assertEq(1, hits[0].index, "highest score should be index 1");
+        assertEq(3, hits[1].index, "second-highest should be index 3");
+        assertEq(4, hits[2].index);
+        assertEq(0, hits[3].index);
+        assertEq(2, hits[4].index);
+
+        # scores must be the ones we fed in (no fabrication)
+        assertEq(0.9, hits[0].score, "score for index 1 must be 0.9");
+        assertEq(0.7, hits[1].score);
+        assertEq(0.5, hits[2].score);
+        assertEq(0.2, hits[3].score);
+        assertEq(0.1, hits[4].score);
+
+        # scores must be non-increasing (descending contract)
+        for (int i = 1; i < hits.size(); ++i) {
+            assertTrue(hits[i - 1].score >= hits[i].score,
+                sprintf("score[%d]=%g must be >= score[%d]=%g",
+                    i - 1, hits[i - 1].score, i, hits[i].score));
+        }
+    }
+
+    rerankerIndexParityTest() {
+        FakeScoreReranker rr((0.55, 0.95, 0.15, 0.75, 0.35, 0.65));
+        list<string> passages = ("a", "b", "c", "d", "e", "f");
+
+        # rerank() and rerankWithScores() must agree on index order for every top_k
+        foreach int k in (1, 3, 6) {
+            list<int> idx = rr.rerank("q", passages, k);
+            list<hash<QoreTokenizerUtils::RerankerScoredHit>> hits =
+                rr.rerankWithScores("q", passages, k);
+            assertEq(hits.size(), idx.size(),
+                sprintf("rerank/rerankWithScores size parity at top_k=%d", k));
+            for (int i = 0; i < idx.size(); ++i) {
+                assertEq(hits[i].index, idx[i],
+                    sprintf("rerank/rerankWithScores index parity at top_k=%d, i=%d", k, i));
+            }
+        }
+    }
+
+    rerankerTruncationTest() {
+        FakeScoreReranker rr((0.1, 0.2, 0.3, 0.4, 0.5));
+        list<string> passages = ("a", "b", "c", "d", "e");
+
+        # top_k smaller than passages
+        list<hash<QoreTokenizerUtils::RerankerScoredHit>> hits =
+            rr.rerankWithScores("q", passages, 2);
+        assertEq(2, hits.size(), "top_k=2 returns 2 hits");
+        assertEq(4, hits[0].index, "top hit should be the highest-scored passage");
+        assertEq(3, hits[1].index);
+
+        # top_k equal to passages
+        hits = rr.rerankWithScores("q", passages, 5);
+        assertEq(5, hits.size(), "top_k=passages returns all hits");
+
+        # top_k larger than passages — should not exceed input size
+        hits = rr.rerankWithScores("q", passages, 100);
+        assertEq(5, hits.size(), "top_k > passages should be clamped to passage count");
+
+        # top_k == 0 returns empty
+        hits = rr.rerankWithScores("q", passages, 0);
+        assertEq(0, hits.size(), "top_k=0 returns empty");
+
+        # parity with rerank()
+        list<int> idx = rr.rerank("q", passages, 2);
+        assertEq(2, idx.size(), "rerank top_k=2 returns 2 indices");
+        assertEq(4, idx[0]);
+        assertEq(3, idx[1]);
+    }
+
+    rerankerScoredHitHashdeclTest() {
+        # hashdecl must be exported and constructible with the documented fields
+        hash<QoreTokenizerUtils::RerankerScoredHit> h =
+            <QoreTokenizerUtils::RerankerScoredHit>{"index": 7, "score": 0.42};
+        assertEq(7, h.index, "hashdecl index field");
+        assertEq(0.42, h.score, "hashdecl score field");
+        # list<hash<...>> construction must type-check
+        list<hash<QoreTokenizerUtils::RerankerScoredHit>> hits = (h,);
+        assertEq(1, hits.size());
+    }
+}
+
+#! Test-only subclass: returns canned scores instead of calling out to HTTP/ONNX.
+/** Used by the rerank ordering/parity/truncation tests to exercise the sort and
+    top_k logic of CrossEncoderReranker without needing a live endpoint.
+*/
+public class FakeScoreReranker inherits QoreTokenizerUtils::CrossEncoderReranker {
+    private {
+        list<float> fake_scores;
+    }
+
+    constructor(list<float> scores)
+            : QoreTokenizerUtils::CrossEncoderReranker(
+                <QoreTokenizerUtils::RerankerConfig>{
+                    "mode": "http",
+                    "url": "http://localhost:1",
+                }) {
+        fake_scores = scores;
+    }
+
+    list<float> score(string query, list<string> passages) {
+        if (!passages) {
+            return ();
+        }
+        if (passages.size() != fake_scores.size()) {
+            throw "FAKE-SCORE-ERROR",
+                sprintf("fake_scores has %d entries but got %d passages",
+                    fake_scores.size(), passages.size());
+        }
+        return fake_scores;
     }
 }

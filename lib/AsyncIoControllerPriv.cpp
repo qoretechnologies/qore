@@ -223,8 +223,7 @@ void AsyncIoControllerPriv::PollInfo::cleanup(ExceptionSink* xsink) {
 QoreCallDispatcher::QoreCallDispatcher(int max_workers, AsyncIoControllerPriv* controller)
     : ctrl(controller) {
     if (max_workers <= 0) {
-        int hw = std::thread::hardware_concurrency();
-        this->max_workers = hw > 0 ? hw : DEFAULT_WORKER_CAP;
+        this->max_workers = DEFAULT_WORKER_CAP;
     } else {
         this->max_workers = max_workers;
     }
@@ -306,8 +305,10 @@ void QoreCallDispatcher::enqueue(AsyncWorkItem&& item) {
         return;
     }
 
-    // Lazily spawn a worker if needed and below max
-    if (active_workers < max_workers) {
+    // Spawn a new worker only when all existing workers are busy (active_processing
+    // covers all running workers) and we are below the cap.  If idle workers exist
+    // they will be woken by work_avail.signal() below.
+    if (active_processing >= active_workers && active_workers < max_workers) {
         ++active_workers;
         ExceptionSink xsink;
         int tid = q_start_thread(&xsink, workerEntry, this, QTF_EXTERNAL_LIFECYCLE);
@@ -401,7 +402,17 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
         {
             AutoLocker al(m);
             while (async_queue.empty() && !stopping) {
-                work_avail.wait(m);
+                int rc = work_avail.wait(m, WORKER_IDLE_TIMEOUT_MS);
+                if (rc == ETIMEDOUT && async_queue.empty() && !stopping) {
+                    // Idle timeout: exit this worker so active_workers decrements,
+                    // allowing a fresh worker to be spawned on the next burst.
+                    --active_workers;
+                    if (active_workers == 0) {
+                        workers_done.broadcast();
+                        idle_cond.broadcast();
+                    }
+                    return;
+                }
             }
             if (stopping && async_queue.empty()) {
                 --active_workers;

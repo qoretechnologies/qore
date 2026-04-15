@@ -1,0 +1,543 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  RagPipeline.qtest Copyright 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+%modern
+%requires ../../../../qlib/QoreRagUtils
+%requires Util
+%requires QUnit
+
+%exec-class RagPipelineTest
+
+#! Deterministic embedder — vector is derived from the length of the input
+#! text so tests can reason about which text was encoded.
+class TestEmbedder inherits AbstractEmbedder {
+    public {
+        int encode_calls = 0;
+        list<string> encoded_inputs = ();
+        Mutex m();
+    }
+
+    list<float> encode(string text) {
+        m.lock();
+        on_exit m.unlock();
+        ++encode_calls;
+        push encoded_inputs, text;
+        return vectorFor(text);
+    }
+
+    list<list<float>> encodeBatch(list<string> texts) {
+        list<list<float>> rv = ();
+        foreach string t in (texts) {
+            push rv, encode(t);
+        }
+        return rv;
+    }
+
+    int getDimension() {
+        return 3;
+    }
+
+    static list<float> vectorFor(string text) {
+        # Deterministic non-zero vector; value encodes the string length so
+        # tests can inspect what was embedded.
+        float base = text.size().toFloat();
+        return (base, base + 1.0, base + 2.0);
+    }
+}
+
+#! Records every search call and returns a configurable canned result.
+class TestVectorStore inherits AbstractVectorStore {
+    public {
+        int search_calls = 0;
+        list<hash<auto>> search_history = ();
+        list<hash<VectorSearchResult>> canned;
+        *hash<ExceptionInfo> raise_on_search;
+        bool return_empty = False;
+        string name;
+    }
+
+    constructor(string name_, list<hash<VectorSearchResult>> canned_) {
+        name = name_;
+        canned = canned_;
+    }
+
+    upsert(list<hash<VectorRecord>> records) {}
+
+    deleteByIds(list<string> ids) {}
+
+    list<hash<VectorSearchResult>> search(list<float> query_vector, int k,
+            *hash<auto> filter) {
+        ++search_calls;
+        push search_history, {
+            "k": k,
+            "filter": filter,
+            "query_vector": query_vector,
+        };
+        if (raise_on_search) {
+            throw raise_on_search.err, raise_on_search.desc;
+        }
+        if (return_empty) {
+            return ();
+        }
+        return canned;
+    }
+
+    string getCollection() {
+        return name;
+    }
+
+    int getDimension() {
+        return 3;
+    }
+}
+
+#! Minimal reranker that echoes input ordering and records the query it saw.
+class TestReranker inherits AbstractReranker {
+    public {
+        *string last_query;
+        int rerank_calls = 0;
+    }
+
+    list<hash<RerankResult>> rerank(string query, list<string> documents, int k) {
+        ++rerank_calls;
+        last_query = query;
+        list<hash<RerankResult>> rv = ();
+        int upper = documents.size() < k ? documents.size() : k;
+        for (int i = 0; i < upper; ++i) {
+            push rv, <RerankResult>{
+                "index": i,
+                "score": (upper - i).toFloat(),
+                "document": documents[i],
+            };
+        }
+        return rv;
+    }
+
+    int getTopK() {
+        return 5;
+    }
+}
+
+#! Minimal chunker — not exercised in retrieve() but required by constructor.
+class TestChunker inherits AbstractChunker {
+    list<hash<ChunkInfo>> chunk(string content, *hash<auto> metadata) {
+        return (<ChunkInfo>{
+            "index": 0,
+            "content": content,
+            "token_count": content.size(),
+            "metadata": metadata,
+        },);
+    }
+
+    string getStrategy() {
+        return "test";
+    }
+}
+
+#! Helper: build a small canned hit list for a store
+list<hash<VectorSearchResult>> sub makeHits(string prefix, int n) {
+    list<hash<VectorSearchResult>> rv = ();
+    for (int i = 0; i < n; ++i) {
+        push rv, <VectorSearchResult>{
+            "id": sprintf("%s-%d", prefix, i),
+            "score": 1.0 - (i.toFloat() * 0.1),
+            "payload": {
+                "content": sprintf("%s content %d", prefix, i),
+            },
+        };
+    }
+    return rv;
+}
+
+#! Helper: an empty typed list of VectorSearchResult (cannot use bare `()`
+#! because Qore treats it as NOTHING in a typed parameter position)
+list<hash<VectorSearchResult>> sub emptyHits() {
+    list<hash<VectorSearchResult>> rv = ();
+    return rv;
+}
+
+public class RagPipelineTest inherits QUnit::Test {
+    constructor() : Test("RagPipelineTest", "1.0") {
+        # Backwards-compat and smoke tests
+        addTestCase("RagPipeline - legacy positional constructor",
+            \legacyConstructorTest());
+        addTestCase("RagPipeline - retrieve without reranker passes filter",
+            \filterPassthroughNoRerankerTest());
+        addTestCase("RagPipeline - retrieve with reranker passes filter",
+            \filterPassthroughWithRerankerTest());
+
+        # LruEmbeddingCache unit tests
+        addTestCase("LruEmbeddingCache - put/get/size/capacity",
+            \lruCacheBasicTest());
+        addTestCase("LruEmbeddingCache - eviction order",
+            \lruCacheEvictionTest());
+        addTestCase("LruEmbeddingCache - access moves to MRU",
+            \lruCacheAccessOrderTest());
+        addTestCase("LruEmbeddingCache - negative capacity rejected",
+            \lruCacheNegativeCapacityTest());
+
+        # 12.1 query_transformer
+        addTestCase("RagPipeline - query_transformer rewrites embedding input",
+            \queryTransformerTest());
+        addTestCase("RagPipeline - reranker sees original query not transformed",
+            \rerankerSeesOriginalQueryTest());
+
+        # 12.2 embedding_cache
+        addTestCase("RagPipeline - embedding_cache hit skips encode",
+            \embeddingCacheHitTest());
+        addTestCase("RagPipeline - embedding_cache miss populates cache",
+            \embeddingCacheMissTest());
+        addTestCase("RagPipeline - transformer + cache key is transformer output",
+            \transformerPlusCacheKeyTest());
+
+        # 12.3 fallback vector store chain
+        addTestCase("RagPipeline - list constructor accepts chain",
+            \listConstructorTest());
+        addTestCase("RagPipeline - empty vector_stores rejected",
+            \emptyVectorStoresTest());
+        addTestCase("RagPipeline - fallback on exception",
+            \fallbackOnExceptionTest());
+        addTestCase("RagPipeline - fallback on empty result",
+            \fallbackOnEmptyTest());
+        addTestCase("RagPipeline - all stores fail rethrows last exception",
+            \fallbackAllFailTest());
+        addTestCase("RagPipeline - filter forwarded to every store in chain",
+            \fallbackFilterForwardedTest());
+
+        # 12.4 pre_rerank_top_k
+        addTestCase("RagPipeline - pre_rerank_top_k overrides initial_retrieval_k",
+            \preRerankTopKTest());
+        addTestCase("RagPipeline - pre_rerank_top_k ignored without reranker",
+            \preRerankNoRerankerTest());
+
+        # Combination test
+        addTestCase("RagPipeline - all hooks combined",
+            \allHooksCombinedTest());
+
+        set_return_value(main());
+    }
+
+    # ===================== helpers =====================
+
+    private TestChunker makeChunker() {
+        return new TestChunker();
+    }
+
+    # ===================== Backwards-compat / filter =====================
+
+    legacyConstructorTest() {
+        # 6-arg positional constructor must still work unchanged
+        TestEmbedder e();
+        TestVectorStore s("primary", makeHits("p", 3));
+        RagPipeline pipe(e, s, NOTHING, makeChunker(), 10, 50);
+        list<hash<RetrievalHit>> hits = pipe.retrieve("what");
+        assertEq(3, hits.size());
+        assertEq("p-0", hits[0].id);
+        assertEq(1, e.encode_calls);
+        assertEq(1, s.search_calls);
+    }
+
+    filterPassthroughNoRerankerTest() {
+        TestEmbedder e();
+        TestVectorStore s("primary", makeHits("p", 2));
+        RagPipeline pipe(e, s, NOTHING, makeChunker());
+        hash<auto> filter = {"account_id": "acct-42"};
+        list<hash<RetrievalHit>> hits = pipe.retrieve("who", NOTHING, filter);
+        assertEq(2, hits.size());
+        assertEq(1, s.search_calls);
+        assertEq(filter, s.search_history[0].filter);
+    }
+
+    filterPassthroughWithRerankerTest() {
+        TestEmbedder e();
+        TestVectorStore s("primary", makeHits("p", 4));
+        TestReranker r();
+        RagPipeline pipe(e, s, r, makeChunker(), 2, 4);
+        hash<auto> filter = {"tenant": "t1"};
+        list<hash<RetrievalHit>> hits = pipe.retrieve("why", NOTHING, filter);
+        assertEq(2, hits.size());
+        assertEq(filter, s.search_history[0].filter);
+        assertEq(4, s.search_history[0].k);
+        assertEq(1, r.rerank_calls);
+    }
+
+    # ===================== LruEmbeddingCache =====================
+
+    lruCacheBasicTest() {
+        LruEmbeddingCache cache(3);
+        assertEq(3, cache.getCapacity());
+        assertEq(0, cache.size());
+        assertEq(NOTHING, cache.get("missing"));
+        cache.put("a", (1.0, 2.0, 3.0));
+        assertEq(1, cache.size());
+        assertEq((1.0, 2.0, 3.0), cache.get("a"));
+        cache.clear();
+        assertEq(0, cache.size());
+        assertEq(NOTHING, cache.get("a"));
+    }
+
+    lruCacheEvictionTest() {
+        LruEmbeddingCache cache(2);
+        cache.put("a", (1.0,));
+        cache.put("b", (2.0,));
+        cache.put("c", (3.0,));
+        assertEq(2, cache.size());
+        assertEq(NOTHING, cache.get("a"));
+        assertEq((2.0,), cache.get("b"));
+        assertEq((3.0,), cache.get("c"));
+    }
+
+    lruCacheAccessOrderTest() {
+        LruEmbeddingCache cache(2);
+        cache.put("a", (1.0,));
+        cache.put("b", (2.0,));
+        # Accessing "a" moves it to MRU; "b" becomes the eviction target
+        assertEq((1.0,), cache.get("a"));
+        cache.put("c", (3.0,));
+        assertEq((1.0,), cache.get("a"));
+        assertEq(NOTHING, cache.get("b"));
+        assertEq((3.0,), cache.get("c"));
+    }
+
+    lruCacheNegativeCapacityTest() {
+        assertThrows("LRU-EMBEDDING-CACHE-ERROR", "capacity",
+            sub () {
+                new LruEmbeddingCache(-1);
+            }
+        );
+    }
+
+    # ===================== 12.1 query_transformer =====================
+
+    queryTransformerTest() {
+        TestEmbedder e();
+        TestVectorStore s("primary", makeHits("p", 1));
+        code<string(string)> transformer = string sub (string q) {
+            return "HYDE: " + q;
+        };
+        RagPipeline pipe(e, s, NOTHING, makeChunker(), 10, 50,
+            <RagPipelineOptions>{"query_transformer": transformer});
+        pipe.retrieve("how do I reset");
+        assertEq(1, e.encode_calls);
+        assertEq("HYDE: how do I reset", e.encoded_inputs[0]);
+    }
+
+    rerankerSeesOriginalQueryTest() {
+        TestEmbedder e();
+        TestVectorStore s("primary", makeHits("p", 3));
+        TestReranker r();
+        code<string(string)> transformer = string sub (string q) {
+            return "EXPANDED:" + q;
+        };
+        RagPipeline pipe(e, s, r, makeChunker(), 2, 3,
+            <RagPipelineOptions>{"query_transformer": transformer});
+        pipe.retrieve("original query");
+        assertEq("EXPANDED:original query", e.encoded_inputs[0]);
+        assertEq("original query", r.last_query);
+    }
+
+    # ===================== 12.2 embedding_cache =====================
+
+    embeddingCacheHitTest() {
+        TestEmbedder e();
+        TestVectorStore s("primary", makeHits("p", 1));
+        LruEmbeddingCache cache(16);
+        cache.put("prewarmed", TestEmbedder::vectorFor("prewarmed"));
+        RagPipeline pipe(e, s, NOTHING, makeChunker(), 10, 50,
+            <RagPipelineOptions>{"embedding_cache": cache});
+        pipe.retrieve("prewarmed");
+        # Cache hit — encode() was never called
+        assertEq(0, e.encode_calls);
+        # Store still sees the pre-cached vector
+        assertEq(TestEmbedder::vectorFor("prewarmed"),
+            s.search_history[0].query_vector);
+    }
+
+    embeddingCacheMissTest() {
+        TestEmbedder e();
+        TestVectorStore s("primary", makeHits("p", 1));
+        LruEmbeddingCache cache(16);
+        RagPipeline pipe(e, s, NOTHING, makeChunker(), 10, 50,
+            <RagPipelineOptions>{"embedding_cache": cache});
+        pipe.retrieve("cold");
+        assertEq(1, e.encode_calls);
+        assertEq(1, cache.size());
+        # Second retrieve is now a hit
+        pipe.retrieve("cold");
+        assertEq(1, e.encode_calls);
+    }
+
+    transformerPlusCacheKeyTest() {
+        TestEmbedder e();
+        TestVectorStore s("primary", makeHits("p", 1));
+        LruEmbeddingCache cache(16);
+        code<string(string)> transformer = string sub (string q) {
+            return "T:" + q;
+        };
+        RagPipeline pipe(e, s, NOTHING, makeChunker(), 10, 50,
+            <RagPipelineOptions>{
+                "query_transformer": transformer,
+                "embedding_cache": cache,
+            });
+        pipe.retrieve("alpha");
+        # Cache key is the transformer output, not the raw query
+        assertEq(NOTHING, cache.get("alpha"));
+        assertEq(TestEmbedder::vectorFor("T:alpha"), cache.get("T:alpha"));
+    }
+
+    # ===================== 12.3 fallback vector store chain =====================
+
+    listConstructorTest() {
+        TestEmbedder e();
+        TestVectorStore qd("qdrant", makeHits("qd", 2));
+        TestVectorStore pg("pgvector", makeHits("pg", 2));
+        RagPipeline pipe(e, (qd, pg), NOTHING, makeChunker());
+        assertEq(2, pipe.getVectorStores().size());
+        assertEq(qd, pipe.getVectorStore());
+        list<hash<RetrievalHit>> hits = pipe.retrieve("x");
+        # qd has results — pg must NOT be called
+        assertEq(2, hits.size());
+        assertEq("qd-0", hits[0].id);
+        assertEq(1, qd.search_calls);
+        assertEq(0, pg.search_calls);
+    }
+
+    emptyVectorStoresTest() {
+        TestEmbedder e();
+        assertThrows("RAG-PIPELINE-ERROR", "at least one",
+            sub () {
+                list<AbstractVectorStore> empty = ();
+                new RagPipeline(e, empty, NOTHING, new TestChunker());
+            }
+        );
+    }
+
+    fallbackOnExceptionTest() {
+        TestEmbedder e();
+        TestVectorStore qd("qdrant", emptyHits());
+        qd.raise_on_search = <ExceptionInfo>{
+            "err": "QDRANT-DOWN",
+            "desc": "connection refused",
+        };
+        TestVectorStore pg("pgvector", makeHits("pg", 3));
+        RagPipeline pipe(e, (qd, pg), NOTHING, makeChunker());
+        list<hash<RetrievalHit>> hits = pipe.retrieve("fallback");
+        assertEq(3, hits.size());
+        assertEq("pg-0", hits[0].id);
+        assertEq(1, qd.search_calls);
+        assertEq(1, pg.search_calls);
+    }
+
+    fallbackOnEmptyTest() {
+        TestEmbedder e();
+        TestVectorStore qd("qdrant", emptyHits());
+        qd.return_empty = True;
+        TestVectorStore pg("pgvector", makeHits("pg", 2));
+        RagPipeline pipe(e, (qd, pg), NOTHING, makeChunker());
+        list<hash<RetrievalHit>> hits = pipe.retrieve("q");
+        assertEq(2, hits.size());
+        assertEq("pg-0", hits[0].id);
+        assertEq(1, qd.search_calls);
+        assertEq(1, pg.search_calls);
+    }
+
+    fallbackAllFailTest() {
+        TestEmbedder e();
+        TestVectorStore qd("qdrant", emptyHits());
+        qd.raise_on_search = <ExceptionInfo>{
+            "err": "QDRANT-DOWN",
+            "desc": "first",
+        };
+        TestVectorStore pg("pgvector", emptyHits());
+        pg.raise_on_search = <ExceptionInfo>{
+            "err": "PGVECTOR-DOWN",
+            "desc": "second",
+        };
+        RagPipeline pipe(e, (qd, pg), NOTHING, makeChunker());
+        # The last exception from the chain is rethrown so callers can
+        # distinguish "no matches" from "all backends down"
+        assertThrows("PGVECTOR-DOWN", "second",
+            \pipe.retrieve(), ("query",));
+    }
+
+    fallbackFilterForwardedTest() {
+        TestEmbedder e();
+        TestVectorStore qd("qdrant", emptyHits());
+        qd.return_empty = True;
+        TestVectorStore pg("pgvector", makeHits("pg", 2));
+        RagPipeline pipe(e, (qd, pg), NOTHING, makeChunker());
+        hash<auto> filter = {"account_id": "acct-7"};
+        pipe.retrieve("q", NOTHING, filter);
+        assertEq(filter, qd.search_history[0].filter);
+        assertEq(filter, pg.search_history[0].filter);
+    }
+
+    # ===================== 12.4 pre_rerank_top_k =====================
+
+    preRerankTopKTest() {
+        TestEmbedder e();
+        TestVectorStore s("primary", makeHits("p", 25));
+        TestReranker r();
+        # default initial_retrieval_k=50, but override to 25
+        RagPipeline pipe(e, s, r, makeChunker(), 5, 50,
+            <RagPipelineOptions>{"pre_rerank_top_k": 25});
+        list<hash<RetrievalHit>> hits = pipe.retrieve("q");
+        assertEq(5, hits.size());
+        assertEq(25, s.search_history[0].k);
+    }
+
+    preRerankNoRerankerTest() {
+        TestEmbedder e();
+        TestVectorStore s("primary", makeHits("p", 3));
+        # pre_rerank_top_k is ignored when no reranker is configured; the
+        # vector store sees final_k
+        RagPipeline pipe(e, s, NOTHING, makeChunker(), 3, 50,
+            <RagPipelineOptions>{"pre_rerank_top_k": 25});
+        pipe.retrieve("q");
+        assertEq(3, s.search_history[0].k);
+    }
+
+    # ===================== Combination =====================
+
+    allHooksCombinedTest() {
+        TestEmbedder e();
+        TestVectorStore qd("qdrant", emptyHits());
+        qd.return_empty = True;
+        TestVectorStore pg("pgvector", makeHits("pg", 10));
+        TestReranker r();
+        LruEmbeddingCache cache(16);
+        code<string(string)> transformer = string sub (string q) {
+            return "HYDE:" + q;
+        };
+        RagPipeline pipe(e, (qd, pg), r, makeChunker(), 3, 10,
+            <RagPipelineOptions>{
+                "query_transformer": transformer,
+                "embedding_cache": cache,
+                "pre_rerank_top_k": 8,
+            });
+
+        hash<auto> filter = {"tenant": "t"};
+        list<hash<RetrievalHit>> hits = pipe.retrieve("alpha", NOTHING, filter);
+        assertEq(3, hits.size());
+        # embedder saw the transformed query, reranker saw the original
+        assertEq("HYDE:alpha", e.encoded_inputs[0]);
+        assertEq("alpha", r.last_query);
+        # cache populated under transformer output
+        assertEq(1, cache.size());
+        # both stores were called in order, each with the pre_rerank_top_k
+        # override and the same filter
+        assertEq(8, qd.search_history[0].k);
+        assertEq(8, pg.search_history[0].k);
+        assertEq(filter, qd.search_history[0].filter);
+        assertEq(filter, pg.search_history[0].filter);
+
+        # A second retrieve with the same query should skip the embedder
+        int encode_before = e.encode_calls;
+        pipe.retrieve("alpha", NOTHING, filter);
+        assertEq(encode_before, e.encode_calls);
+    }
+}

@@ -36,7 +36,7 @@
 %requires(reexport) SGLangRestClient
 
 module QoreRagUtils {
-    version = "1.0";
+    version = "1.0.1";
     desc = "user module providing a composable RAG abstraction layer";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -87,6 +87,8 @@ module QoreRagUtils {
       @ref QoreRagUtils::HttpGatewayReranker "HttpGatewayReranker"
     - Chunkers: @ref QoreRagUtils::StructuredChunker "StructuredChunker",
       @ref QoreRagUtils::FixedChunker "FixedChunker"
+    - Embedding caches: @ref QoreRagUtils::LruEmbeddingCache "LruEmbeddingCache"
+      (bounded, thread-safe LRU)
     - Vector stores are not bundled here — use the abstract interface and
       provide a concrete impl that wraps your backend (Qdrant, pgvector,
       etc.); callers typically construct stores directly with the appropriate
@@ -118,6 +120,23 @@ foreach hash<RetrievalHit> hit in (hits) {
     @endcode
 
     @section QoreRagUtilsRelnotes Release Notes
+
+    @subsection QoreRagUtilsv1_0_1 QoreRagUtils v1.0.1
+    - added optional @ref RagPipelineOptions hooks to
+      @ref QoreRagUtils::RagPipeline "RagPipeline" so external retrievers
+      can absorb the abstraction without feature regression:
+      - @ref RagPipelineOptions::query_transformer "query_transformer" for
+        HyDE-style query expansion
+      - @ref RagPipelineOptions::embedding_cache "embedding_cache" for
+        per-pipeline query-vector caching, with a bundled
+        @ref QoreRagUtils::LruEmbeddingCache "LruEmbeddingCache" default
+      - @ref RagPipelineOptions::pre_rerank_top_k "pre_rerank_top_k" for
+        explicit over-retrieval before reranking
+      - a fallback vector-store chain overload (Qdrant → pgvector, etc.)
+    - documented the existing payload-filter passthrough on
+      @ref QoreRagUtils::RagPipeline::retrieve() "retrieve()"
+    - every new feature is strictly additive — pre-existing callers keep
+      working unchanged
 
     @subsection QoreRagUtilsv1_0 QoreRagUtils v1.0
     - the initial version of the %QoreRagUtils module
@@ -203,6 +222,38 @@ public hashdecl RagConfig {
     int initial_retrieval_k = 50;
 }
 
+#! Optional hooks passed to @ref RagPipeline::constructor()
+/** Every field is optional and strictly additive — omitting the options hash
+    preserves the behavior of earlier module versions.
+
+    @since QoreRagUtils 1.0
+*/
+public hashdecl RagPipelineOptions {
+    #! Optional query transformer (e.g. HyDE-style hypothetical-answer generation)
+    /** When set, the raw query is passed through this callable and the result
+        is used for embedding.  The reranker still sees the **original** query
+        so that scoring semantics stay stable.
+    */
+    *code<string(string)> query_transformer;
+
+    #! Optional cache for query embeddings
+    /** When set, @ref RagPipeline::retrieve() "retrieve()" consults this cache
+        before calling @ref AbstractEmbedder::encode() "encode()" and populates
+        it on cache misses.  Cache keys are the exact string that would
+        otherwise be passed to \c encode() — the transformer output when a
+        \c query_transformer is configured, otherwise the raw query.
+    */
+    *AbstractEmbeddingCache embedding_cache;
+
+    #! Explicit vector-search K before reranking
+    /** When set **and** a reranker is configured, overrides the pipeline's
+        \c initial_retrieval_k for the vector-store call.  The reranker still
+        emits \c top_k results.  Use this to implement an over-retrieval
+        multiplier (e.g. 5x top_k) without changing the pipeline default.
+    */
+    *int pre_rerank_top_k;
+}
+
 #! A single chunk produced by a chunker
 public hashdecl ChunkInfo {
     #! Sequential index of this chunk in the source document
@@ -272,6 +323,18 @@ public hashdecl RetrievalHit {
     Each component is responsible for its own thread-safety; this class
     holds only references and dispatches calls — it adds no locking.
 
+    @par Retrieval Filters
+
+    @ref retrieve() accepts an optional \a filter hash that is forwarded
+    verbatim to every
+    @ref AbstractVectorStore::search() "AbstractVectorStore::search()" call.
+    The pipeline itself is backend-agnostic and does not inspect the hash —
+    callers pass backend-native payload predicates (Qdrant filter clauses,
+    pgvector \c WHERE fragments, etc.) that the concrete store understands.
+    When a @ref fallback_stores "fallback vector store chain" is configured,
+    the same filter is forwarded to every store in the chain until one
+    returns results.
+
     @since QoreRagUtils 1.0
 */
 public class RagPipeline {
@@ -291,11 +354,29 @@ public class RagPipeline {
 
     private {
         AbstractEmbedder embedder;
+        #! Primary vector store — always equal to @ref vector_stores[0]
         AbstractVectorStore vector_store;
+        #! Fallback vector store chain
+        /** A list of at least one vector store.  @ref retrieve() iterates
+            the chain in order and falls through to the next store on any
+            exception raised by @ref AbstractVectorStore::search() "search()"
+            or when a store returns an empty result.  A pipeline constructed
+            with a single store has a one-element list here.
+        */
+        list<AbstractVectorStore> vector_stores;
         *AbstractReranker reranker;
         AbstractChunker chunker;
         int top_k = 10;
         int initial_retrieval_k = 50;
+
+        #! Optional HyDE-style query transformer
+        *code<string(string)> query_transformer;
+
+        #! Optional cache for query embeddings
+        *AbstractEmbeddingCache embedding_cache;
+
+        #! Optional explicit over-retrieval K before reranking
+        *int pre_rerank_top_k;
     }
 
     #! Derives a deterministic UUIDv5-style chunk id from \a doc_id and \a chunk_index
@@ -332,16 +413,71 @@ public class RagPipeline {
         @param top_k default top-K for retrieve() — final returned count
         @param initial_retrieval_k initial vector-search top-K before reranking
             (only relevant when a reranker is configured); typically 5x top_k
+        @param opts optional hash of additional hooks — see
+            @ref RagPipelineOptions for the full list.  Every field is optional
+            and strictly additive; omit \a opts to preserve the v1.0 behavior.
     */
     constructor(AbstractEmbedder embedder, AbstractVectorStore vector_store,
             *AbstractReranker reranker, AbstractChunker chunker,
-            int top_k = 10, int initial_retrieval_k = 50) {
+            int top_k = 10, int initial_retrieval_k = 50,
+            *hash<RagPipelineOptions> opts) {
+        initPipeline(embedder, (vector_store,), reranker, chunker, top_k,
+            initial_retrieval_k, opts);
+    }
+
+    #! Constructs a RagPipeline with a fallback vector-store chain
+    /** @param embedder the embedder to use
+        @param vector_stores an ordered list of vector stores — e.g.
+            \c "Qdrant → pgvector"; @ref retrieve() iterates the chain in
+            order and falls through to the next store on any exception from
+            @ref AbstractVectorStore::search() "search()" or when a store
+            returns an empty result
+        @param reranker optional reranker
+        @param chunker the chunker to use for ingest()
+        @param top_k default top-K for retrieve()
+        @param initial_retrieval_k initial vector-search top-K before reranking
+        @param opts optional hash of additional hooks — see @ref RagPipelineOptions
+
+        @throw RAG-PIPELINE-ERROR if \a vector_stores is empty
+
+        @par Example: Qdrant → pgvector fallback chain
+        @code{.py}
+RagPipeline pipe(
+    embedder,
+    (qdrant_store, pgvector_store),
+    reranker,
+    chunker,
+);
+        @endcode
+    */
+    constructor(AbstractEmbedder embedder,
+            list<AbstractVectorStore> vector_stores,
+            *AbstractReranker reranker, AbstractChunker chunker,
+            int top_k = 10, int initial_retrieval_k = 50,
+            *hash<RagPipelineOptions> opts) {
+        if (!vector_stores) {
+            throw "RAG-PIPELINE-ERROR",
+                "vector_stores list must contain at least one vector store";
+        }
+        initPipeline(embedder, vector_stores, reranker, chunker, top_k,
+            initial_retrieval_k, opts);
+    }
+
+    private initPipeline(AbstractEmbedder embedder,
+            list<AbstractVectorStore> vector_stores,
+            *AbstractReranker reranker, AbstractChunker chunker,
+            int top_k, int initial_retrieval_k,
+            *hash<RagPipelineOptions> opts) {
         self.embedder = embedder;
-        self.vector_store = vector_store;
+        self.vector_stores = vector_stores;
+        self.vector_store = vector_stores[0];
         self.reranker = reranker;
         self.chunker = chunker;
         self.top_k = top_k;
         self.initial_retrieval_k = initial_retrieval_k;
+        self.query_transformer = opts.query_transformer;
+        self.embedding_cache = opts.embedding_cache;
+        self.pre_rerank_top_k = opts.pre_rerank_top_k;
     }
 
     #! Ingests a document — chunks, embeds, and stores it
@@ -388,18 +524,64 @@ public class RagPipeline {
     }
 
     #! Retrieves the top-K most relevant chunks for a query
-    /** @param query the user's query text
+    /** @param query the user's query text — passed verbatim to the reranker
+            (when configured) and, when no query_transformer is set, also
+            passed to the embedder
         @param k optional override for the final top-K; defaults to the constructor's \c top_k
-        @param filter optional vector-store filter (backend-specific)
+        @param filter optional vector-store filter; forwarded verbatim to
+            every @ref AbstractVectorStore::search() "search()" call in the
+            fallback chain — see @ref RagPipeline's "Retrieval Filters"
+            section for semantics
 
         @return list of @ref RetrievalHit hashes, ordered by descending relevance
+
+        @par Hook order
+        1. The raw query is optionally transformed via
+           @ref RagPipelineOptions::query_transformer "query_transformer"
+           (HyDE-style query expansion).
+        2. The embedding for the transformed (or raw) query is fetched from
+           the @ref RagPipelineOptions::embedding_cache "embedding_cache"
+           when set; on miss, @ref AbstractEmbedder::encode() "encode()" is
+           called and the result is cached.
+        3. Vector search is dispatched to the first store in the fallback
+           chain.  On a search exception or an empty result, the next store
+           in the chain is tried.  \a filter is forwarded to each store.
+        4. When a reranker is configured, the vector-search K is
+           @ref RagPipelineOptions::pre_rerank_top_k "pre_rerank_top_k"
+           (when set) or \c initial_retrieval_k (the default); the reranker
+           is always fed the **original** \a query, not the transformer
+           output, to keep score semantics stable.
     */
     list<hash<RetrievalHit>> retrieve(string query, *int k, *hash<auto> filter) {
         int final_k = k ?? top_k;
-        int search_k = exists reranker ? initial_retrieval_k : final_k;
+        int search_k;
+        if (exists reranker) {
+            search_k = pre_rerank_top_k ?? initial_retrieval_k;
+        } else {
+            search_k = final_k;
+        }
 
-        list<float> query_vec = embedder.encode(query);
-        list<hash<VectorSearchResult>> hits = vector_store.search(query_vec, search_k, filter);
+        # Step 1: optional HyDE-style query transformation — the reranker
+        # still sees the *original* query for stable scoring
+        string embed_query = query_transformer ? query_transformer(query) : query;
+
+        # Step 2: embedding cache lookup + encode-on-miss
+        list<float> query_vec;
+        if (embedding_cache) {
+            *list<float> cached = embedding_cache.get(embed_query);
+            if (exists cached) {
+                query_vec = cached;
+            } else {
+                query_vec = embedder.encode(embed_query);
+                embedding_cache.put(embed_query, query_vec);
+            }
+        } else {
+            query_vec = embedder.encode(embed_query);
+        }
+
+        # Step 3: fallback vector-store chain
+        list<hash<VectorSearchResult>> hits = searchWithFallback(query_vec,
+            search_k, filter);
 
         if (!exists reranker || hits.size() <= 1) {
             list<hash<RetrievalHit>> rv = ();
@@ -415,7 +597,7 @@ public class RagPipeline {
             return rv;
         }
 
-        # rerank phase
+        # Step 4: rerank phase — uses the original query
         list<string> docs = map $1.payload.content, hits;
         list<hash<RerankResult>> reranked = reranker.rerank(query, docs, final_k);
         list<hash<RetrievalHit>> rv = ();
@@ -429,6 +611,43 @@ public class RagPipeline {
             };
         }
         return rv;
+    }
+
+    #! Walks the configured fallback vector-store chain
+    /** Tries each store in order; on a search exception or an empty result,
+        advances to the next store.  Returns the first non-empty result, or
+        an empty list if every store is exhausted.  The last exception is
+        rethrown only if every store raised one (i.e. no store returned a
+        clean empty result and at least one error occurred) — this lets
+        callers distinguish "no matches" from "all backends down".
+
+        @param query_vector the pre-computed query embedding
+        @param k how many results the store should return
+        @param filter optional backend-specific filter, forwarded verbatim
+
+        @return hits from the first store that succeeded with a non-empty
+            result, or () if every store returned empty cleanly
+    */
+    private list<hash<VectorSearchResult>> searchWithFallback(
+            list<float> query_vector, int k, *hash<auto> filter) {
+        *hash<ExceptionInfo> last_err;
+        foreach AbstractVectorStore store in (vector_stores) {
+            try {
+                list<hash<VectorSearchResult>> hits = store.search(query_vector,
+                    k, filter);
+                if (hits) {
+                    return hits;
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                last_err = ex;
+            }
+        }
+        if (last_err) {
+            # every store we tried raised; rethrow the last one so callers
+            # see a real error rather than silently empty results
+            throw last_err.err, last_err.desc, last_err.arg;
+        }
+        return ();
     }
 
     #! Re-rank an arbitrary list of documents using the configured reranker
@@ -450,8 +669,16 @@ public class RagPipeline {
     #! Returns the embedder
     AbstractEmbedder getEmbedder() { return embedder; }
 
-    #! Returns the vector store
+    #! Returns the primary vector store (the first element of the fallback chain)
     AbstractVectorStore getVectorStore() { return vector_store; }
+
+    #! Returns the full vector-store fallback chain in search order
+    /** A pipeline constructed with a single store returns a one-element list.
+    */
+    list<AbstractVectorStore> getVectorStores() { return vector_stores; }
+
+    #! Returns the configured embedding cache, if any
+    *AbstractEmbeddingCache getEmbeddingCache() { return embedding_cache; }
 
     #! Returns the reranker, if configured
     *AbstractReranker getReranker() { return reranker; }

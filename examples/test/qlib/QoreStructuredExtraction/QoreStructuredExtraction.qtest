@@ -140,6 +140,14 @@ public class QoreStructuredExtractionTest inherits QUnit::Test {
         addTestCase("ExtractionPipeline - array item validation",
             \extractArrayItemValidationTest());
 
+        # Sandbox + start_thread tests
+        addTestCase("ExtractionPipeline - start_thread invoked in parallel batch",
+            \extractBatchStartThreadTest());
+        addTestCase("ExtractionPipeline - parallel batch default uses background",
+            \extractBatchDefaultBackgroundTest());
+        addTestCase("ExtractionPipeline - sandbox parse stub passes under PO_NO_THREAD_CONTROL",
+            \sandboxParseStubTest());
+
         # Processor tests (need DataProviderML module)
 %ifndef NoDataProviderML
         addTestCase("QoreExtractionProcessor - constructor validation",
@@ -536,6 +544,108 @@ public class QoreStructuredExtractionTest inherits QUnit::Test {
             assertTrue(r.valid);
         }
         assertEq(3, mock.getCallCount());
+    }
+
+    # ===================== Sandbox + start_thread Tests =====================
+
+    #! Non-sandboxed: start_thread closure is invoked instead of background
+    extractBatchStartThreadTest() {
+        string response = make_json({
+            "entities": (
+                {
+                    "entity_type": "PERSON",
+                    "text": "Alpha",
+                    "start": 0,
+                    "end": 5,
+                    "confidence": 0.9,
+                },
+            ),
+        });
+
+        MockLlmBackend mock(response);
+        int start_thread_calls = 0;
+        code<int(code<nothing()>)> starter = int sub (code<nothing()> body) {
+            ++start_thread_calls;
+            return background body();
+        };
+        ExtractionPipeline pipeline(mock, ExtractionSchema::NerSchema,
+            <ExtractionPipelineOptions>{
+                "batch_parallel": 3,
+                "start_thread": starter,
+            });
+        list<hash<ExtractionResult>> results = pipeline.extractBatch(
+            ("first", "second", "third"));
+        assertEq(3, results.size());
+        foreach hash<ExtractionResult> r in (results) {
+            assertTrue(r.valid);
+        }
+        # Must have used our starter rather than the background operator
+        assertEq(3, start_thread_calls);
+    }
+
+    #! Default parallel path uses `background` when start_thread is not supplied
+    extractBatchDefaultBackgroundTest() {
+        string response = make_json({
+            "entities": (
+                {
+                    "entity_type": "PERSON",
+                    "text": "Gamma",
+                    "start": 0,
+                    "end": 5,
+                    "confidence": 0.9,
+                },
+            ),
+        });
+        MockLlmBackend mock(response);
+        ExtractionPipeline pipeline(mock, ExtractionSchema::NerSchema,
+            <ExtractionPipelineOptions>{"batch_parallel": 2});
+        list<hash<ExtractionResult>> results = pipeline.extractBatch(
+            ("a", "b", "c", "d"));
+        assertEq(4, results.size());
+        foreach hash<ExtractionResult> r in (results) {
+            assertTrue(r.valid);
+        }
+    }
+
+    #! Proves that the parallel-dispatch pattern used in ExtractionPipeline
+    #! parses cleanly under PO_NO_THREAD_CONTROL.  A stub that replicates the
+    #! module's %ifdef guard is parsed into a sandboxed Program; if the guard
+    #! is missing or wrong, the parser rejects the `background` fallback with
+    #! "illegal use of 'background' operator".
+    #!
+    #! Note: we cannot load the real QoreStructuredExtraction module into a
+    #! PO_NO_THREAD_CONTROL sub-Program because its transitive dependencies
+    #! (RestClient, ConnectionProvider, DataProvider) use `background`
+    #! unconditionally and cannot themselves be re-parsed under sandbox.
+    #! End-to-end sandbox validation therefore happens in the Qorus user
+    #! service that consumes the pipeline.
+    sandboxParseStubTest() {
+        Program p(PO_NEW_STYLE | PO_NO_THREAD_CONTROL);
+        string stub = '
+            class Dispatcher {
+                private {
+                    *code<int(code<nothing()>)> start_thread;
+                }
+
+                constructor(*code<int(code<nothing()>)> starter) {
+                    start_thread = starter;
+                }
+
+                int run(code<nothing()> worker) {
+%ifdef PO_NO_THREAD_CONTROL
+                    return call_function(start_thread, worker);
+%else
+                    if (start_thread) {
+                        return call_function(start_thread, worker);
+                    }
+                    return background worker();
+%endif
+                }
+            }
+        ';
+        # Must parse cleanly — if the %ifdef guard is missing for any code
+        # path, parse() throws "illegal use of 'background' operator"
+        p.parse(stub, "sandbox-stub");
     }
 
     extractArrayItemValidationTest() {

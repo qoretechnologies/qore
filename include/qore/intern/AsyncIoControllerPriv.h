@@ -180,8 +180,12 @@ public:
     */
     DLLLOCAL void waitForProgramIdle(QoreProgram* pgm);
 
-    //! Fallback cap for auto-scaled workers when hardware_concurrency() is unavailable
-    static constexpr int DEFAULT_WORKER_CAP = 4;
+    //! Maximum worker cap — workers exit when idle, so a large cap is safe; this just
+    //! prevents runaway thread creation under extreme load
+    static constexpr int DEFAULT_WORKER_CAP = 4096;
+
+    //! Idle timeout before a worker thread exits (milliseconds)
+    static constexpr int WORKER_IDLE_TIMEOUT_MS = 60000;
 
 private:
     QoreThreadLock m;
