@@ -428,6 +428,13 @@ void Http2ClientConnection::closeConnection(ExceptionSink* xsink) {
         return;
     }
 
+    // Disarm the raw connection_priv back-pointer BEFORE cancel.  The
+    // I/O thread's cancel processing calls abort() which reads
+    // connection_priv — without this disarm, abort() can dereference a
+    // destroyed connection if the app thread destroys us after cancel
+    // returns (the H2 cancel-abort race — see project_h2_cancel_race.md).
+    poll_op_priv->disarmConnectionPriv();
+
     // Cancel the op in the global AsyncIoController — this synchronously
     // waits until the I/O thread stops processing the operation.  The I/O
     // thread's cancel processing calls abort() on the poll op via

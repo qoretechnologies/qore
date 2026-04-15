@@ -679,11 +679,16 @@ void Http2ClientPollOperationPriv::abort(ExceptionSink* xsink) {
     }
     clearStreamQueues(xsink);
     notifyPendingStreams("HTTP2-ABORT", "connection aborted", xsink);
-    if (connection_priv) {
-        connection_priv->setClosed();
+    // Read connection_priv under stream_lock to race-free disarm against
+    // closeConnection's disarmConnectionPriv (which nulls it before
+    // cancel sends the Cancel command that triggers this abort).
+    {
+        AutoLocker al(stream_lock);
+        if (connection_priv) {
+            connection_priv->setClosed();
+        }
+        connection_priv = nullptr;
     }
-    connection_priv = nullptr;
-    // Note: do NOT close socket or delete current_op here to avoid
     // Note: do NOT close socket or delete current_op here to avoid
     // use-after-free if a driver thread is still inside continuePoll
 }
@@ -705,10 +710,13 @@ void Http2ClientPollOperationPriv::setError(const char* err, const char* desc,
         sock_obj->close();
     }
     notifyPendingStreams(err, desc, xsink);
-    if (connection_priv) {
-        connection_priv->setClosed();
+    {
+        AutoLocker al(stream_lock);
+        if (connection_priv) {
+            connection_priv->setClosed();
+        }
+        connection_priv = nullptr;
     }
-    connection_priv = nullptr;
 }
 
 void Http2ClientPollOperationPriv::notifyPendingStreams(const char* err, const char* desc,
@@ -731,6 +739,7 @@ void Http2ClientPollOperationPriv::notifyPendingStreams(const char* err, const c
 }
 
 void Http2ClientPollOperationPriv::fireReadyCallback(ExceptionSink* xsink) {
+    AutoLocker al(stream_lock);
     if (connection_priv) {
         connection_priv->onConnectionReady();  // Pure C++, no evalMethod, I/O-thread safe
     }

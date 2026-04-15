@@ -132,6 +132,16 @@ public:
 
     DLLLOCAL virtual ~Http1ClientPollOperationPriv();
 
+    //! Disarms the raw connection_priv back-pointer under stream_lock.
+    /** @see Http2ClientPollOperationPriv::disarmConnectionPriv for the
+        rationale — same cancel-vs-destroy race pattern.
+        @since %Qore 2.3
+    */
+    DLLLOCAL void disarmConnectionPriv() {
+        AutoLocker al(stream_lock);
+        connection_priv = nullptr;
+    }
+
     // --- SocketPollOperationBase overrides ---
 
     DLLLOCAL bool goalReached() const override {

@@ -715,6 +715,10 @@ void Http1ClientConnection::closeConnection(ExceptionSink* xsink) {
         return;
     }
 
+    // Disarm the raw connection_priv back-pointer BEFORE cancel — same
+    // pattern as Http2ClientConnection::closeConnection.
+    poll_op_priv->disarmConnectionPriv();
+
     // Cancel the op in the global AsyncIoController — this synchronously
     // waits until the I/O thread stops processing the operation.  The I/O
     // thread's cancel processing calls abort() on the poll op via
