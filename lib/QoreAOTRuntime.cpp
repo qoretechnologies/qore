@@ -162,6 +162,7 @@
 #include <string>
 #include <deque>
 #include <unordered_map>
+#include <unordered_set>
 #include <fstream>
 #include <vector>
 
@@ -2292,14 +2293,41 @@ static QoreAOTContext* buildContextFromSlotMap(
         }
         ctx->all_body_locals = stmt_locals;
     } else {
-        // Toplevel path — create new LocalVars, reuse from ctx->locals[] where possible
+        // Toplevel / source-stripped path — reuse LocalVars from ctx->locals[] where
+        // possible so that all_body_locals (used by evalTiered to pre-instantiate
+        // locals on the lvstack) and ctx->locals[] (used by AOT code to load/store
+        // locals by slot) share pointer identity.
+        //
+        // CRITICAL: params/self/argv must be EXCLUDED from the reuse pool — they
+        // are already instantiated by the caller (setupCall / signature instantiation),
+        // so reusing a param's LocalVar for a body local that happens to share the
+        // same name (e.g. `ex` as both a function param and a catch variable) would
+        // cause evalTiered to double-instantiate the param and the AOT slot for the
+        // body local would dangle off the lvstack (thread_find_lvar walks off the
+        // bottom → SIGSEGV).
+        std::unordered_set<const LocalVar*> sig_like_locals;
+        if (sig) {
+            for (unsigned p = 0; p < sig->lv.size(); ++p) {
+                if (sig->lv[p]) {
+                    sig_like_locals.insert(sig->lv[p]);
+                }
+            }
+            if (sig->selfid) {
+                sig_like_locals.insert(sig->selfid);
+            }
+            if (sig->argvid) {
+                sig_like_locals.insert(sig->argvid);
+            }
+        }
         // Use a deque map because nested scopes can have variables with the same name
         // (e.g., 'h' in nested foreach loops). Consuming front-to-back gives correct matches.
         std::unordered_map<std::string, std::deque<LocalVar*>> local_name_map;
         for (int i = 0; i < num_locals; ++i) {
-            if (ctx->locals[i]) {
-                local_name_map[ctx->locals[i]->getName()].push_back(ctx->locals[i]);
+            LocalVar* slot_lv = ctx->locals[i];
+            if (!slot_lv || sig_like_locals.count(slot_lv)) {
+                continue;
             }
+            local_name_map[slot_lv->getName()].push_back(slot_lv);
         }
 
         // Read body locals
