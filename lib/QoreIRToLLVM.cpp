@@ -805,6 +805,10 @@ void QoreIRToLLVM::emitLocalInstantiation(llvm::Module& module) {
     if (aot_mode) {
         auto helper = module.getOrInsertFunction("qore_rt_instantiate_local_aot",
                 llvm::FunctionType::get(void_type, {ptr_type, i32_type}, false));
+        // Track which closure-use vars we've already instantiated at function
+        // entry so we can instantiate any closure-use body locals that were
+        // not classified as entry_locals.
+        std::unordered_set<const void*> instantiated_closure_use;
         for (LocalVar* var : entry_locals) {
             if (pre_instantiated_locals &&
                     pre_instantiated_locals->count(reinterpret_cast<const void*>(var))) {
@@ -820,6 +824,33 @@ void QoreIRToLLVM::emitLocalInstantiation(llvm::Module& module) {
                     reinterpret_cast<const void*>(var));
             builder->CreateCall(helper, {aot_ctx_arg,
                     llvm::ConstantInt::get(i32_type, slot)});
+            if (var->closureUse()) {
+                instantiated_closure_use.insert(reinterpret_cast<const void*>(var));
+            }
+        }
+        // Also instantiate closure-use body locals that are NOT entry_locals
+        // (e.g., declared inside a for-loop body).  Without this, the first
+        // access to such a var lazily instantiates it via LocalVar::getLValue,
+        // which uses a name-based walk-all lookup; for recursive calls, that
+        // lookup would find an OUTER frame's CVV (same LocalVar name pointer)
+        // and skip creating a fresh CVV, causing cross-frame aliasing of the
+        // var's value.  By pre-instantiating per function-entry, each
+        // invocation has its own CVV on top of the cvstack, so walk-all
+        // lookups resolve to the current function's own variable.
+        if (current_ir_func) {
+            for (LocalVar* var : current_ir_func->all_body_locals) {
+                if (!var || !var->closureUse()) {
+                    continue;
+                }
+                const void* key = reinterpret_cast<const void*>(var);
+                if (instantiated_closure_use.count(key)) {
+                    continue;
+                }
+                int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(key);
+                builder->CreateCall(helper, {aot_ctx_arg,
+                        llvm::ConstantInt::get(i32_type, slot)});
+                instantiated_closure_use.insert(key);
+            }
         }
     } else {
         auto helper = module.getOrInsertFunction("qore_rt_instantiate_local",
