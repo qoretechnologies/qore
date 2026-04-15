@@ -30,6 +30,12 @@
 # enable all warnings
 %modern
 
+# allow weak reference assignments — used by ServerSentEventClient::start /
+# runEventLoop to spawn the event-loop background thread holding only a weak
+# reference to the client, so the destructor can fire as soon as external
+# strong refs drop
+%allow-weak-references
+
 %requires Util >= 1.0
 %requires(reexport) ConnectionProvider >= 1.4
 %requires(reexport) DataProvider

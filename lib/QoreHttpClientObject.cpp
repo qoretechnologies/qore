@@ -1235,7 +1235,12 @@ struct qore_httpclient_priv {
             // Recompute the effective protocol
             int gm = qore_global_http2_mode.load(std::memory_order_relaxed);
             bool ld = qore_check_option(QLO_DISABLE_HTTP2);
-            bool h2e = (http2_mode == HTTP2_MODE_REQUIRED)
+            // H2C_DIRECT is also an H2 protocol (over plain TCP, client
+            // sends the HTTP/2 preface on connect).  REQUIRED with SSL
+            // negotiates h2 via ALPN; REQUIRED without SSL is equivalent
+            // to H2C_DIRECT.
+            bool h2e = (http2_mode == HTTP2_MODE_REQUIRED
+                    || http2_mode == HTTP2_MODE_H2C_DIRECT)
                 && gm != HTTP2_MODE_DISABLED && !ld;
             HttpClientProtocol want_proto;
             if (http3_mode.load(std::memory_order_relaxed)
@@ -1257,9 +1262,11 @@ struct qore_httpclient_priv {
         if (!conn_mgr) {
             HttpClientConnectionManagerBase::Options opts;
             // Derive protocol from the HTTPClient's mode settings.
-            // HTTP2_MODE_AUTO + SSL is handled by the legacy path
+            // HTTP2_MODE_AUTO + SSL is still handled by the legacy path
             // (which does ALPN-based protocol selection per-socket) —
-            // see the needs_legacy_h2 bypass in send_internal.
+            // see the needs_legacy_h2 bypass in send_internal for the
+            // remaining architectural reason.  REQUIRED and H2C_DIRECT
+            // map to the H2 protocol here and go through the conn_mgr.
             // The global mode override must be checked here so that
             // set_global_http2_mode("disabled") prevents H2 connections
             // even for REQUIRED-mode clients (matches legacy connect).
@@ -1267,7 +1274,8 @@ struct qore_httpclient_priv {
                 int global_mode = qore_global_http2_mode.load(
                     std::memory_order_relaxed);
                 bool lib_disabled = qore_check_option(QLO_DISABLE_HTTP2);
-                bool h2_effective = (http2_mode == HTTP2_MODE_REQUIRED)
+                bool h2_effective = (http2_mode == HTTP2_MODE_REQUIRED
+                        || http2_mode == HTTP2_MODE_H2C_DIRECT)
                     && global_mode != HTTP2_MODE_DISABLED && !lib_disabled;
 
                 if (http3_mode.load(std::memory_order_relaxed)
@@ -1530,20 +1538,33 @@ struct qore_httpclient_priv {
     DLLLOCAL QoreObject* startPollSendRecv(ExceptionSink* xsink, QoreObject* self, QoreHttpClientObject* client,
             const QoreString* method, const QoreString* path, const AbstractQoreNode* data_save, const void* data,
             size_t size, const QoreHashNode* headers, const QoreEncoding* enc = nullptr) {
-        // Delegate to conn_mgr when enabled — with the same bypass as
-        // send_internal for H2 modes that need per-socket protocol
-        // selection.  See the comment in send_internal for the full
-        // rationale; this path uses the same conn_mgr infrastructure
-        // and inherits the same limitation.
         int global_mode = qore_global_http2_mode.load(std::memory_order_relaxed);
         bool lib_disabled = qore_check_option(QLO_DISABLE_HTTP2);
-        bool needs_legacy_h2 =
-            (((http2_mode == HTTP2_MODE_AUTO
+        bool h2_enabled = global_mode != HTTP2_MODE_DISABLED && !lib_disabled;
+        // H2C_UPGRADE is deprecated by RFC 9113 §3.2 and never implemented;
+        // raise the error here so the rejection is consistent across the
+        // sync and async entry points regardless of routing.
+        if (h2_enabled && http2_mode == HTTP2_MODE_H2C_UPGRADE) {
+            xsink->raiseException("HTTP2-ERROR", "h2c-upgrade mode is not supported "
+                "(deprecated by RFC 9113); use h2c (h2c-direct) mode for HTTP/2 cleartext "
+                "with prior knowledge");
+            return nullptr;
+        }
+        // Delegate to conn_mgr when enabled.  Bypasses routed to the
+        // legacy path:
+        //   - AUTO+SSL: needs per-connect ALPN in the conn_mgr (Issue 2)
+        //   - REQUIRED+SSL: exposes latent conn_mgr-H2 bugs (Issue 1.5):
+        //     isHttp2Active() not set, poll body truncation, multi-value
+        //     header merging missing.  Will be removed after those bugs
+        //     are fixed at the root.
+        //   - H2C_DIRECT: same latent conn_mgr-H2 issues apply on
+        //     cleartext; bypassed for the same reason as REQUIRED+SSL.
+        //     The ALPN setup itself is not the blocker here.
+        bool needs_legacy_h2 = h2_enabled
+            && (((http2_mode == HTTP2_MODE_AUTO
                     || http2_mode == HTTP2_MODE_REQUIRED)
                 && connection.ssl)
-                || http2_mode == HTTP2_MODE_H2C_DIRECT
-                || http2_mode == HTTP2_MODE_H2C_UPGRADE)
-            && global_mode != HTTP2_MODE_DISABLED && !lib_disabled;
+                || http2_mode == HTTP2_MODE_H2C_DIRECT);
         if (use_conn_mgr && !needs_legacy_h2) {
             return startPollSendRecvConnMgr(xsink, self, client,
                 method->c_str(), path ? path->c_str() : nullptr,
@@ -8728,24 +8749,33 @@ QoreHashNode* qore_httpclient_priv::send_internal(ExceptionSink* xsink, const ch
     if (!timeout_ms)
         timeout_ms = timeout;
 
+    // H2C_UPGRADE is deprecated by RFC 9113 §3.2 and was never implemented;
+    // raise the deprecated-mode error up front so the rejection does not
+    // depend on which code path would have handled the request.
+    {
+        int gm = qore_global_http2_mode.load(std::memory_order_relaxed);
+        bool ld = qore_check_option(QLO_DISABLE_HTTP2);
+        if (gm != HTTP2_MODE_DISABLED && !ld
+                && http2_mode == HTTP2_MODE_H2C_UPGRADE) {
+            xsink->raiseException("HTTP2-ERROR", "h2c-upgrade mode is not supported "
+                "(deprecated by RFC 9113); use h2c (h2c-direct) mode for HTTP/2 cleartext "
+                "with prior knowledge");
+            return nullptr;
+        }
+    }
     // Delegate to conn_mgr when enabled.
-    // Exceptions that route to the legacy path:
-    //   1. H2 modes that need per-socket protocol negotiation:
-    //      - AUTO/REQUIRED over SSL: ALPN must decide h2 vs http/1.1
-    //        on the connected socket.  The conn_mgr's fixed per-manager
-    //        protocol model can't represent "negotiate at connect time";
-    //        a proper fix requires the manager to instantiate either
-    //        Http1ClientConnection or Http2ClientConnection based on
-    //        the ALPN result, which the current P3 API doesn't support.
-    //      - H2C_DIRECT / H2C_UPGRADE: the client drives the HTTP/2
-    //        preface over a plain-TCP socket, which likewise doesn't
-    //        fit the manager's acquireConnection(scheme, host, port) API.
-    //      HttpClientConnMgrPollOp already dispatches via the virtual
-    //      HttpClientConnectionBase::submitRequestWithAction so it can
-    //      submit requests on either H1 or H2 connections once the
-    //      manager can create them — the bypass here is the remaining
-    //      blocker.
-    //   2. WebSocket upgrade requests (Connection: Upgrade + Upgrade:
+    // Bypasses routed to the legacy path:
+    //   1. AUTO + SSL: the client can't know whether to speak h1 or h2
+    //      until TLS ALPN completes on the TCP socket.  The conn_mgr's
+    //      fixed per-manager protocol model can't represent "negotiate
+    //      at connect time" — see Issue 2 in the H2 cleanup plan.
+    //   2. REQUIRED + SSL and H2C_DIRECT: the conn_mgr creates the
+    //      right protocol connection, but there are latent H2-through-
+    //      conn_mgr bugs (isHttp2Active() not mirrored, poll-response
+    //      body truncation, multi-value header merging) surfaced when
+    //      the bypass is lifted.  Kept bypassed until those are fixed
+    //      at the root — see Issue 1.5 in the plan.
+    //   3. WebSocket upgrade requests (Connection: Upgrade + Upgrade:
     //      websocket header).  After the 101 Switching Protocols
     //      response, the same TCP socket carries the upgraded WebSocket
     //      protocol.  conn_mgr returns pooled connections to the pool
@@ -8755,13 +8785,11 @@ QoreHashNode* qore_httpclient_priv::send_internal(ExceptionSink* xsink, const ch
     {
         int global_mode = qore_global_http2_mode.load(std::memory_order_relaxed);
         bool lib_disabled = qore_check_option(QLO_DISABLE_HTTP2);
-        bool needs_legacy_h2 =
-            (((http2_mode == HTTP2_MODE_AUTO
+        bool needs_legacy_h2 = global_mode != HTTP2_MODE_DISABLED && !lib_disabled
+            && (((http2_mode == HTTP2_MODE_AUTO
                     || http2_mode == HTTP2_MODE_REQUIRED)
                 && connection.ssl)
-                || http2_mode == HTTP2_MODE_H2C_DIRECT
-                || http2_mode == HTTP2_MODE_H2C_UPGRADE)
-            && global_mode != HTTP2_MODE_DISABLED && !lib_disabled;
+                || http2_mode == HTTP2_MODE_H2C_DIRECT);
         bool is_ws_upgrade = false;
         if (headers) {
             // HTTP headers are case-insensitive — scan the hash looking for
@@ -9947,17 +9975,6 @@ QoreObject* qore_httpclient_priv::startPollSendRecvConnMgr(ExceptionSink* xsink,
         return nullptr;
     }
 
-    // H1-only for now (mirrors the old code path).  We check protocol
-    // before going any further so we don't leak a reservation on a
-    // connection type we can't drive from this code path.
-    Http1ClientConnection* h1_conn = dynamic_cast<Http1ClientConnection*>(conn);
-    if (!h1_conn) {
-        xsink->raiseException("HTTPCLIENT-INTERNAL-ERROR",
-            "poll send/recv not supported on non-H1 connections");
-        mgr.releaseConnection(conn);
-        return nullptr;
-    }
-
     // Create EventNotifier + Promise + Future.  The notifier is used for
     // BOTH connection-ready signaling (WAITING_CONNECT phase) and response
     // completion (WAITING_RESPONSE phase, via PromiseNotifierAction).
@@ -10011,10 +10028,12 @@ QoreObject* qore_httpclient_priv::startPollSendRecvConnMgr(ExceptionSink* xsink,
     if (conn->isReady()) {
         // Fast path: pool hit (or the controller finished the handshake
         // between async acquire and here).  Submit synchronously, just
-        // like the pre-async implementation.
+        // like the pre-async implementation.  Dispatches via the virtual
+        // HttpClientConnectionBase::submitRequestWithAction, so H1 and H2
+        // are both supported.
         PromiseNotifierAction* action = new PromiseNotifierAction(
             promise_raw, notifier_raw);
-        int64_t stream_id = h1_conn->submitRequestWithAction(method, msgpath,
+        int64_t stream_id = conn->submitRequestWithAction(method, msgpath,
             *nh, data, size, action, xsink);
         if (*xsink || stream_id < 0) {
             mgr.releaseConnection(conn);
@@ -10059,7 +10078,7 @@ QoreObject* qore_httpclient_priv::startPollSendRecvConnMgr(ExceptionSink* xsink,
             // READY now — fall into the fast-path synchronous submit.
             PromiseNotifierAction* action = new PromiseNotifierAction(
                 promise_raw, notifier_raw);
-            int64_t stream_id = h1_conn->submitRequestWithAction(method,
+            int64_t stream_id = conn->submitRequestWithAction(method,
                 msgpath, *nh, data, size, action, xsink);
             if (*xsink || stream_id < 0) {
                 mgr.releaseConnection(conn);
@@ -10460,22 +10479,21 @@ bool QoreHttpClientObject::hasStreamingChannel() const {
         || !http_priv->sse_recv_buffer.empty();
 }
 
-int QoreHttpClientObject::isDataAvailableConnMgr() const {
-    if (!http_priv->streaming_recv_channel) {
-        return -1;
-    }
-    // Consider buffered SSE text as pending — matches readServerSentEventConnMgr,
-    // which drains the buffer before touching the channel.
-    if (!http_priv->sse_recv_buffer.empty()) {
-        return 1;
-    }
-    return http_priv->streaming_recv_channel->size() > 0 ? 1 : 0;
-}
-
 bool QoreHttpClientObject::isDataAvailable(int timeout_ms, ExceptionSink* xsink) const {
-    int rv = isDataAvailableConnMgr();
-    if (rv >= 0) {
-        return rv == 1;
+    if (http_priv->streaming_recv_channel) {
+        // Consider buffered SSE text as immediately-pending — matches
+        // readServerSentEventConnMgr which drains this buffer first.
+        if (!http_priv->sse_recv_buffer.empty()) {
+            return true;
+        }
+        // Non-destructive wait on the channel: blocks up to timeout_ms
+        // for the channel to become non-empty or closed.  Returning true
+        // on "closed" is correct — the caller's next readHTTPChunk /
+        // readServerSentEvent will see EOF and unwind its loop.  Without
+        // the wait, a busy caller (e.g. ServerSentEventClient::eventLoop)
+        // would burn CPU polling size() instead of blocking like the
+        // legacy msock path did.
+        return http_priv->streaming_recv_channel->waitReadable(timeout_ms, xsink);
     }
     // No streaming channel — legacy msock path
     return http_priv->msock->socket->isDataAvailable(xsink, timeout_ms);
@@ -10678,7 +10696,14 @@ bool QoreHttpClientObject::getNoDelay() const {
 }
 
 bool QoreHttpClientObject::isConnected() const {
+    if (http_priv->streaming_recv_channel) {
+        return !http_priv->streaming_recv_channel->isClosed();
+    }
     return http_priv->msock->socket->isOpen();
+}
+
+bool QoreHttpClientObject::isOpen() const {
+    return isConnected();
 }
 
 void QoreHttpClientObject::setUserPassword(const char* user, const char* pass) {

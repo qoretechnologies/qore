@@ -692,30 +692,34 @@ public:
     //! Returns true if a conn_mgr streaming channel is currently held by this client
     /** When true, @ref readHTTPChunk / @ref readServerSentEvent / @ref readHTTPChunkedBody
         read from the conn_mgr channel instead of the raw socket, and
-        @ref isDataAvailableConnMgr should be used to check for pending data.
+        @ref isDataAvailable waits on the channel instead of probing the
+        legacy socket.
 
         @since %Qore 2.3
     */
     DLLEXPORT bool hasStreamingChannel() const;
 
-    //! Non-blocking check for pending data on the conn_mgr streaming channel.
-    /** Returns a tri-state result so callers can fall back to the raw socket
-        when no streaming channel is held:
-        - @c 1 if a streaming channel is held AND has at least one pending
-          message
-        - @c 0 if a streaming channel is held but has no pending messages
-        - @c -1 if no streaming channel is held (caller should fall back to
-          @ref QoreSocket::isDataAvailable)
+    //! Reports whether the client is open, including when a conn_mgr streaming channel is held.
+    /** When the client is using conn_mgr (`use_conn_mgr=true`), the
+        legacy @c msock socket is never connected, so the inherited
+        @c Socket::isOpen reports @c false even while the client is
+        actively streaming.  This override reports @c true whenever a
+        conn_mgr streaming channel is held; otherwise it falls through
+        to the legacy socket check.
 
         @since %Qore 2.3
     */
-    DLLEXPORT int isDataAvailableConnMgr() const;
+    DLLEXPORT bool isOpen() const;
 
     //! Reports whether data is available, across the conn_mgr streaming channel and the raw socket.
     /** When the client holds a conn_mgr streaming channel (e.g. after a
-        @c sendAndStream for SSE), the channel is checked first and the raw
-        socket is not consulted — the socket belongs to the conn_mgr pool,
-        not this client.  Otherwise falls through to the legacy @c msock.
+        @c sendAndStream for SSE), the channel is consulted with the full
+        @a timeout_ms budget via @c QoreChannel::waitReadable (non-
+        destructive — the data stays in the channel for the subsequent
+        @c readHTTPChunk / @c readServerSentEvent call).  The raw socket
+        is not probed in this case because it belongs to the conn_mgr
+        pool, not this client.  Otherwise falls through to the legacy
+        @c msock.
 
         @param timeout_ms wait budget in milliseconds; @c 0 = non-blocking
         @param xsink exception sink

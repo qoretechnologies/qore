@@ -395,11 +395,34 @@ sse.connect();
                 clearTid();
             }
 
+            # Spawn the event loop.  When raw @c background is available
+            # (the default path), we pass @c self as a direct argument to
+            # the static @ref runEventLoop helper, which immediately
+            # converts it to a WEAK reference via @c remove + @c := and
+            # signals @c started.dec() before running the loop.  The
+            # background thread then holds only a weak ref, so the
+            # destructor can fire as soon as all external strong refs to
+            # this client drop, even while the loop is still iterating.
+            #
+            # When the caller has provided @c start_thread (sandbox /
+            # @c PO_NO_THREAD_CONTROL contexts where @c background is
+            # forbidden), we fall back to the legacy method call ref —
+            # this path strongly captures @c self via the closure, so
+            # auto-destruction does not work and the caller must call
+            # @ref disconnect() / @ref delete explicitly.
+            Counter started(1);
 %ifdef PO_NO_THREAD_CONTROL
             updateTid(start_thread(\eventLoop()));
+            started.dec();  # legacy path does not synchronize via Counter
 %else
-            updateTid(start_thread ? start_thread(\eventLoop()) : background eventLoop());
+            if (start_thread) {
+                updateTid(start_thread(\eventLoop()));
+                started.dec();
+            } else {
+                updateTid(background ServerSentEventClient::runEventLoop(self, started));
+            }
 %endif
+            started.waitForZero();
         }
 
         logDebug("Connected; SSE I/O thread TID %d; raising connected event: %y", tid,
@@ -409,13 +432,23 @@ sse.connect();
     }
 
     #! Disconnect with the given @ref closecodes "close code"
+    /** Whenever an event thread is running on behalf of this client (@c tid
+        is set), this method unconditionally stops it.  Historically this
+        was gated on @c hc.isOpen(), but a client using the conn_mgr
+        streaming channel does not keep the legacy HTTPClient socket open —
+        so that guard left dangling event threads that nothing else could
+        stop.  @a destroy is still honoured for the "already disconnected
+        but reconnecting" edge case so the destructor never skips the
+        wait.
+    */
     private disconnectIntern(*bool destroy) {
         AutoLock al(m);
 
         if (hc.isOpen()) {
             disconnectUnlocked();
-        } else if (destroy && tid && tid != gettid()) {
-            # wait for reconnect thread to stop if deleting when disconnected and reconnecting
+        } else if (tid && tid != gettid()) {
+            # Event thread still running (typical for conn_mgr streaming clients
+            # whose legacy msock was never connected) — stop it deterministically.
             stop = True;
             # wake up any sleeping threads
             sleep_cond.broadcast();
@@ -713,8 +746,18 @@ sse.setEventQueue();
         }
     }
 
+    #! Wait for the event thread with @a old_tid to exit (clear its tid slot).
+    /** The previous loop condition <tt>tid && tid != old_tid</tt> exited
+        immediately when @c tid was still equal to @a old_tid — i.e. in the
+        common case where the event thread had not yet reached its @c on_exit
+        block.  That made the caller (@ref disconnectUnlocked /
+        @ref disconnectIntern) return while the event thread was still
+        running, so callers couldn't rely on "disconnect means the thread
+        has stopped".  The correct loop waits WHILE @c tid is still
+        @a old_tid, and exits once the event thread clears or replaces it.
+    */
     private waitTidCleared(int old_tid) {
-        while (tid && tid != old_tid) {
+        while (tid == old_tid) {
             ++tid_waiting;
             tid_cond.wait(m);
             --tid_waiting;
@@ -748,6 +791,13 @@ sse.setEventQueue();
         dstream = new TransformOutputStream(ostream, decompressor);
     }
 
+    #! Legacy event loop entry point — used by the @ref start_thread
+    #! and @c PO_NO_THREAD_CONTROL paths.
+    /** This path strongly captures @c self via the closure, so the
+        destructor cannot fire while the loop is running.  The default
+        @ref start path uses the static @ref runEventLoop with a weak
+        reference instead and is exempt from that limitation.
+    */
     private eventLoop() {
         on_exit {
             # issue #4697: went out of scope in event loop
@@ -767,46 +817,9 @@ sse.setEventQueue();
             if (!self) {
                 break;
             }
-            if (stop) {
-                logInfo("SSE I/O thread stopping on user request");
-                break;
-            }
-            if (do_reconnect) {
-                logInfo("SSE I/O thread for an externally-initiated reconnect");
-                break;
-            }
-
+            int rv;
             try {
-                if (!hc.isDataAvailable(50ms)) {
-%ifdef PO_NO_PROCESS_CONTROL
-                    yield();
-%else
-                    yield ? yield() : Qore::thread_yield();
-%endif
-                    continue;
-                }
-                hash<SseMessageInfo> h;
-                if (chunked) {
-                    hash<auto> hh = hc.readHTTPChunk(timeout_ms);
-                    if (hh.body) {
-                        dstream.write(hh.body);
-                    } else {
-                        logInfo("Server closed the stream");
-                        break;
-                    }
-                    h = hc.parseServerSentEvent(ostream.getData());
-                } else {
-                    h = hc.readServerSentEvent(content_encoding, timeout_ms);
-                }
-                int disp = handleEvent(h);
-                if (disp == SSEEDC_CONTINUE) {
-                    continue;
-                } else if (disp == SSEEDC_BREAK) {
-                    logInfo("I/O thread stopping on request");
-                    break;
-                }
-
-                break;
+                rv = eventLoopOnce();
             } catch (hash<ExceptionInfo> ex) {
                 string err = sprintf("%s: %s: %s", get_ex_pos(ex), ex.err, ex.desc);
                 try {
@@ -817,6 +830,9 @@ sse.setEventQueue();
                     }
                     rethrow;
                 }
+                break;
+            }
+            if (rv != 0) {
                 break;
             }
         }
@@ -842,15 +858,215 @@ sse.setEventQueue();
         }
     }
 
+    #! Runs one iteration of the event loop body.
+    /** @return @c 0 to continue, non-zero to break out of the loop
+
+        Extracted so that @ref runEventLoop can drive the loop while
+        holding only a WEAK reference to this client — each call to
+        @c eventLoopOnce briefly re-strengthens @c self for the
+        method-invocation duration (~50 ms maximum, the
+        @c isDataAvailable poll), then returns, allowing the destructor
+        to fire between iterations.
+    */
+    private int eventLoopOnce() {
+        if (stop) {
+            logInfo("SSE I/O thread stopping on user request");
+            return 1;
+        }
+        if (do_reconnect) {
+            logInfo("SSE I/O thread for an externally-initiated reconnect");
+            return 1;
+        }
+
+        if (!hc.isDataAvailable(50ms)) {
+%ifdef PO_NO_PROCESS_CONTROL
+            yield();
+%else
+            yield ? yield() : Qore::thread_yield();
+%endif
+            return 0;
+        }
+        hash<SseMessageInfo> h;
+        if (chunked) {
+            hash<auto> hh = hc.readHTTPChunk(timeout_ms);
+            if (hh.body) {
+                dstream.write(hh.body);
+            } else {
+                logInfo("Server closed the stream");
+                return 1;
+            }
+            h = hc.parseServerSentEvent(ostream.getData());
+        } else {
+            h = hc.readServerSentEvent(content_encoding, timeout_ms);
+        }
+        int disp = handleEvent(h);
+        if (disp == SSEEDC_CONTINUE) {
+            return 0;
+        } else if (disp == SSEEDC_BREAK) {
+            logInfo("I/O thread stopping on request");
+            return 1;
+        }
+        return 1;
+    }
+
+    #! Background-thread entry point for the event loop (weak-ref path).
+    /** Receives the owning @ref ServerSentEventClient as a strong-ref
+        argument, then immediately converts it to a WEAK reference via
+        @c remove + @c := and signals @c started.dec().  The background
+        thread thereafter holds only a weak ref, so the destructor can
+        fire as soon as all external strong refs drop.
+
+        The loop calls @ref eventLoopOnce on the weak ref each
+        iteration; each call briefly re-strengthens @c self for the
+        method-invocation duration (~50 ms maximum), then returns —
+        between iterations the destructor is free to run.  When the
+        client is destroyed, the next iteration throws
+        @c OBJECT-ALREADY-DELETED, which this wrapper catches and exits
+        cleanly.
+
+        @param client0 strong-ref argument carrying the owning client;
+            converted to a weak ref on the first line of this method.
+            Passing as a parameter avoids a closure capture, which
+            would keep the client alive for the full lifetime of the
+            background thread.
+        @param started signaled (via @c dec) once the strong→weak
+            conversion is complete, so the caller's @c start method
+            knows it is safe to return — without this, the caller could
+            return and drop its own strong ref before the background
+            thread has performed the conversion, leaving the spawn
+            machinery's transient ref as the only one alive.
+
+        @since ServerSentEventClient 1.1
+    */
+    private static runEventLoop(ServerSentEventClient client0, Counter started) {
+        ServerSentEventClient client := remove client0;
+        # Background thread now holds only a weak reference; signal the
+        # caller that it is safe to return from start().
+        started.dec();
+
+        # Decompression setup runs on the weak ref; if the client is
+        # already gone, exit immediately.
+        try {
+            if (client) {
+                client.setupDecompression();
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "OBJECT-ALREADY-DELETED") {
+                return;
+            }
+            rethrow;
+        }
+
+        # Main loop — each iteration is a short instance method call
+        # that lets the destructor fire between iterations.
+        bool done = False;
+        while (!done) {
+            if (!client) {
+                return;
+            }
+            int rv;
+            try {
+                rv = client.eventLoopOnce();
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "OBJECT-ALREADY-DELETED") {
+                    return;
+                }
+                # Any other exception: log if possible, then exit.
+                try {
+                    if (client) {
+                        client.logError("%s: %s: %s", get_ex_pos(ex), ex.err, ex.desc);
+                    }
+                } catch (hash<ExceptionInfo> ex2) {
+                    if (ex2.err == "OBJECT-ALREADY-DELETED") {
+                        return;
+                    }
+                }
+                done = True;
+            }
+            if (!done && rv != 0) {
+                done = True;
+            }
+        }
+
+        # Cleanup phase — also via the weak ref so a destroy mid-shutdown
+        # doesn't crash.  Each call may re-strengthen briefly.
+        try {
+            if (client) {
+                client.eventLoopShutdown();
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "OBJECT-ALREADY-DELETED") {
+                return;
+            }
+            rethrow;
+        }
+    }
+
+    #! Cleanup invoked after the event loop exits (weak-ref path).
+    /** Mirrors the post-loop cleanup of @ref eventLoop: closingConnection,
+        socket shutdown, clearTid, optional reconnect.  Called from
+        @ref runEventLoop via the weak ref, so it briefly re-strengthens
+        @c self for the method-invocation duration only.
+    */
+    private eventLoopShutdown() {
+        closingConnection();
+
+        if (hc.isOpen()) {
+            hc.shutdown();
+            hc.close();
+        }
+
+        {
+            m.lock();
+            on_exit m.unlock();
+            clearTid();
+            logDebug("SSE I/O thread with TID %d terminating", gettid());
+        }
+
+        if (reconnect && !stop) {
+            startReconnect();
+        } else {
+            if (stop) {
+                logInfo("Disconnected sse connection on external request");
+            } else {
+                logInfo("Disconnected sse connection; reconnect flag not set");
+            }
+        }
+    }
+
     #! Starts a reconnect
+    /** Uses the same weak-self spawn pattern as @ref start: capture
+        @c \doReconnect() as a call reference (weak self binding) and
+        dispatch it through the static @ref runReconnect wrapper so the
+        background thread does not keep this client alive on its own.
+    */
     private startReconnect() {
+        code<nothing()> fn = \doReconnect();
         int tid;
 %ifdef PO_NO_THREAD_CONTROL
-        tid = start_thread(\doReconnect());
+        tid = start_thread(fn);
 %else
-        tid = start_thread ? start_thread(\doReconnect()) : background doReconnect();
+        tid = start_thread
+            ? start_thread(fn)
+            : background ServerSentEventClient::runReconnect(fn);
 %endif
         logInfo("Disconnected sse connection; starting reconnect in TID %d", tid);
+    }
+
+    #! Background-thread entry point for the reconnect loop.
+    /** See @ref runEventLoop — same weak-self rationale.
+
+        @since ServerSentEventClient 1.1
+    */
+    private static runReconnect(code<nothing()> fn) {
+        try {
+            fn();
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "OBJECT-ALREADY-DELETED") {
+                return;
+            }
+            rethrow;
+        }
     }
 
     #! Handles reconnections

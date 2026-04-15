@@ -413,6 +413,42 @@ public:
         return cap;
     }
 
+    //! Blocks up to @a timeout_ms waiting for the channel to become
+    //! non-empty or closed.  Non-destructive — does not consume any value.
+    /** @param timeout_ms wait budget; 0 or negative = wait forever
+        @param xsink exception sink (for deletion/interrupt detection)
+
+        @return @c true if the channel has at least one buffered value or
+            is closed; @c false on timeout or interrupt.  Callers typically
+            follow up with @ref tryRecv or @ref recv to fetch the value.
+    */
+    DLLLOCAL bool waitReadable(int64 timeout_ms, ExceptionSink* xsink) {
+        int64 cond_timeout = (timeout_ms <= 0) ? -1 : timeout_ms;
+        AutoLocker al(&lck);
+        if (cap == 0) {
+            if (unbuffered_has_value || closed || deleted) {
+                return true;
+            }
+            ++recv_waiting;
+            int rc = recv_cond.waitWithInterrupt(&lck, cond_timeout, xsink);
+            --recv_waiting;
+            if (rc == QORE_COND_RESULT_INTERRUPTED) {
+                return false;
+            }
+            return unbuffered_has_value || closed || deleted;
+        }
+        if (!buffer.empty() || closed || deleted) {
+            return true;
+        }
+        ++recv_waiting;
+        int rc = recv_cond.waitWithInterrupt(&lck, cond_timeout, xsink);
+        --recv_waiting;
+        if (rc == QORE_COND_RESULT_INTERRUPTED) {
+            return false;
+        }
+        return !buffer.empty() || closed || deleted;
+    }
+
     DLLLOCAL bool empty() const {
         AutoLocker al(&lck);
         if (cap == 0) {
