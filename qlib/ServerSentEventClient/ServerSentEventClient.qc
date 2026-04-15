@@ -958,7 +958,11 @@ sse.setEventQueue();
                     (url, info));
                 rethrow $1.err, sprintf("%s: info: %y", $1.desc, info{"request-uri", "response-uri"});
             }
-            rh = hc.send(NOTHING, "GET", NOTHING, hdr, NOTHING, \info);
+            # Use sendAndStream so the response body stays on the connection
+            # for incremental reads via readServerSentEvent / readHTTPChunk.
+            # A regular send() would return the connection to the conn_mgr pool
+            # after the HTTP response, breaking subsequent streaming reads.
+            rh = hc.sendAndStream("GET", NOTHING, NOTHING, hdr, \info);
         }
 
         if (rh.status_code != 200) {

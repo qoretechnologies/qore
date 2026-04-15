@@ -163,6 +163,11 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
             "id": id,
             "retry": retry,
         });
+        # Wake the controller so the poll op runs even if it was parked on
+        # POLLIN waiting for a client disconnect: without this, queued events
+        # sit until the next spontaneous POLLIN (e.g., client close) and the
+        # fan-out stalls indefinitely.
+        Qore::AsyncIoController::wakeSocket(sock);
     }
 
     #! Queues a raw SSE message
@@ -170,6 +175,7 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
     */
     queueRawEvent(hash<auto> event) {
         event_channel.send(event);
+        Qore::AsyncIoController::wakeSocket(sock);
     }
 
     #! Queues a pre-formatted SSE string for sending
@@ -177,6 +183,7 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
     */
     queueRawString(string data) {
         event_channel.send(data);
+        Qore::AsyncIoController::wakeSocket(sock);
     }
 
     #! Formats an SSE event according to the spec

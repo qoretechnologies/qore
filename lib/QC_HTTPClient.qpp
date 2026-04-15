@@ -1448,6 +1448,20 @@ hash<auto> HTTPClient::sendAndStream(string method, *string path, *data body, *h
     return *xsink ? QoreValue() : rv.release();
 }
 
+//! Checks the conn_mgr streaming channel (if any) for pending data; overrides Socket::isDataAvailable
+/** When a conn_mgr streaming channel is active (e.g. from a prior sendAndStream call for SSE),
+    reports whether the channel has any pending message.  The 0-timeout form is non-blocking;
+    non-zero timeouts fall through to Socket::isDataAvailable when no streaming channel is held.
+
+    @param timeout_ms 0 for a non-blocking check; non-zero for a timed wait on the raw socket
+    @return @ref True if data is available on the streaming channel or the raw socket
+
+    @since %Qore 2.3
+*/
+bool HTTPClient::isDataAvailable(timeout timeout_ms = 0) {
+    return client->isDataAvailable((int)timeout_ms, xsink);
+}
+
 //! Reads a single HTTP chunk; overrides Socket::readHTTPChunk to support conn_mgr streaming
 /** When a conn_mgr streaming channel is active (from a prior sendAndStream call),
     reads the next body chunk from the channel.  Otherwise delegates to Socket::readHTTPChunk.

@@ -10457,6 +10457,32 @@ QoreHashNode* QoreHttpClientObject::sendAndStream(const char* meth, const char* 
         false, info, http_priv->timeout, nullptr, nullptr, nullptr, nullptr, 0, nullptr, true);
 }
 
+bool QoreHttpClientObject::hasStreamingChannel() const {
+    return http_priv->streaming_recv_channel != nullptr
+        || !http_priv->sse_recv_buffer.empty();
+}
+
+int QoreHttpClientObject::isDataAvailableConnMgr() const {
+    if (!http_priv->streaming_recv_channel) {
+        return -1;
+    }
+    // Consider buffered SSE text as pending — matches readServerSentEventConnMgr,
+    // which drains the buffer before touching the channel.
+    if (!http_priv->sse_recv_buffer.empty()) {
+        return 1;
+    }
+    return http_priv->streaming_recv_channel->size() > 0 ? 1 : 0;
+}
+
+bool QoreHttpClientObject::isDataAvailable(int timeout_ms, ExceptionSink* xsink) const {
+    int rv = isDataAvailableConnMgr();
+    if (rv >= 0) {
+        return rv == 1;
+    }
+    // No streaming channel — legacy msock path
+    return http_priv->msock->socket->isDataAvailable(xsink, timeout_ms);
+}
+
 QoreHashNode* QoreHttpClientObject::sendAndStream(const char* meth, const char* new_path, const QoreHashNode* headers,
         const QoreStringNode& body, QoreHashNode* info, ExceptionSink* xsink) {
     const QoreEncoding* enc = http_priv->getEncoding();

@@ -689,6 +689,41 @@ public:
     */
     DLLEXPORT QoreHashNode* readHTTPChunkedBodyBinaryConnMgr(int timeout_ms, ExceptionSink* xsink);
 
+    //! Returns true if a conn_mgr streaming channel is currently held by this client
+    /** When true, @ref readHTTPChunk / @ref readServerSentEvent / @ref readHTTPChunkedBody
+        read from the conn_mgr channel instead of the raw socket, and
+        @ref isDataAvailableConnMgr should be used to check for pending data.
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT bool hasStreamingChannel() const;
+
+    //! Non-blocking check for pending data on the conn_mgr streaming channel.
+    /** Returns a tri-state result so callers can fall back to the raw socket
+        when no streaming channel is held:
+        - @c 1 if a streaming channel is held AND has at least one pending
+          message
+        - @c 0 if a streaming channel is held but has no pending messages
+        - @c -1 if no streaming channel is held (caller should fall back to
+          @ref QoreSocket::isDataAvailable)
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT int isDataAvailableConnMgr() const;
+
+    //! Reports whether data is available, across the conn_mgr streaming channel and the raw socket.
+    /** When the client holds a conn_mgr streaming channel (e.g. after a
+        @c sendAndStream for SSE), the channel is checked first and the raw
+        socket is not consulted — the socket belongs to the conn_mgr pool,
+        not this client.  Otherwise falls through to the legacy @c msock.
+
+        @param timeout_ms wait budget in milliseconds; @c 0 = non-blocking
+        @param xsink exception sink
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT bool isDataAvailable(int timeout_ms, ExceptionSink* xsink) const;
+
     //! sends an HTTP "GET" method and returns the value of the message body returned
     /** if you need to get all the headers received, then use QoreHttpClientObject::send() instead
         @param path the path string to send in the header
