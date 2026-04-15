@@ -1308,6 +1308,15 @@ struct qore_httpclient_priv {
             // New manager: clear user-disconnect flag (which may have been
             // left set by a prior resetConnMgr — see resetConnMgr comments)
             user_disconnect_in_progress.store(false, std::memory_order_release);
+            // Mirror the manager's effective protocol to the
+            // legacy-style @c http2_active / @c http3_active flags so
+            // @c isHttp2Active() / @c isHttp3Active() report correctly
+            // for conn_mgr-routed clients (issue 1.5a).  The manager's
+            // fixed-protocol model guarantees every connection it creates
+            // uses @c opts.protocol — no per-connection variance on a
+            // given HTTPClient instance.
+            http2_active = (opts.protocol == HttpClientProtocol::H2);
+            http3_active = (opts.protocol == HttpClientProtocol::H3);
         }
         return *conn_mgr;
     }
@@ -1553,18 +1562,10 @@ struct qore_httpclient_priv {
         // Delegate to conn_mgr when enabled.  Bypasses routed to the
         // legacy path:
         //   - AUTO+SSL: needs per-connect ALPN in the conn_mgr (Issue 2)
-        //   - REQUIRED+SSL: exposes latent conn_mgr-H2 bugs (Issue 1.5):
-        //     isHttp2Active() not set, poll body truncation, multi-value
-        //     header merging missing.  Will be removed after those bugs
-        //     are fixed at the root.
-        //   - H2C_DIRECT: same latent conn_mgr-H2 issues apply on
-        //     cleartext; bypassed for the same reason as REQUIRED+SSL.
-        //     The ALPN setup itself is not the blocker here.
+        //   - REQUIRED+SSL / H2C_DIRECT exposed latent conn_mgr-H2 bugs
+        //     (Issue 1.5); being lifted incrementally as each is fixed.
         bool needs_legacy_h2 = h2_enabled
-            && (((http2_mode == HTTP2_MODE_AUTO
-                    || http2_mode == HTTP2_MODE_REQUIRED)
-                && connection.ssl)
-                || http2_mode == HTTP2_MODE_H2C_DIRECT);
+            && http2_mode == HTTP2_MODE_AUTO && connection.ssl;
         if (use_conn_mgr && !needs_legacy_h2) {
             return startPollSendRecvConnMgr(xsink, self, client,
                 method->c_str(), path ? path->c_str() : nullptr,
@@ -1788,6 +1789,10 @@ struct qore_httpclient_priv {
             // a new manager.  This ensures poll ops whose futures are
             // rejected asynchronously (after resetConnMgr returns) still
             // see the flag and map HTTP1-ABORT → SOCKET-NOT-OPEN.
+            // Clear the protocol-active flags — the next getConnMgr will
+            // set them again for the new manager's protocol.
+            http2_active = false;
+            http3_active = false;
         }
     }
 
@@ -8769,13 +8774,7 @@ QoreHashNode* qore_httpclient_priv::send_internal(ExceptionSink* xsink, const ch
     //      until TLS ALPN completes on the TCP socket.  The conn_mgr's
     //      fixed per-manager protocol model can't represent "negotiate
     //      at connect time" — see Issue 2 in the H2 cleanup plan.
-    //   2. REQUIRED + SSL and H2C_DIRECT: the conn_mgr creates the
-    //      right protocol connection, but there are latent H2-through-
-    //      conn_mgr bugs (isHttp2Active() not mirrored, poll-response
-    //      body truncation, multi-value header merging) surfaced when
-    //      the bypass is lifted.  Kept bypassed until those are fixed
-    //      at the root — see Issue 1.5 in the plan.
-    //   3. WebSocket upgrade requests (Connection: Upgrade + Upgrade:
+    //   2. WebSocket upgrade requests (Connection: Upgrade + Upgrade:
     //      websocket header).  After the 101 Switching Protocols
     //      response, the same TCP socket carries the upgraded WebSocket
     //      protocol.  conn_mgr returns pooled connections to the pool
@@ -8786,10 +8785,7 @@ QoreHashNode* qore_httpclient_priv::send_internal(ExceptionSink* xsink, const ch
         int global_mode = qore_global_http2_mode.load(std::memory_order_relaxed);
         bool lib_disabled = qore_check_option(QLO_DISABLE_HTTP2);
         bool needs_legacy_h2 = global_mode != HTTP2_MODE_DISABLED && !lib_disabled
-            && (((http2_mode == HTTP2_MODE_AUTO
-                    || http2_mode == HTTP2_MODE_REQUIRED)
-                && connection.ssl)
-                || http2_mode == HTTP2_MODE_H2C_DIRECT);
+            && http2_mode == HTTP2_MODE_AUTO && connection.ssl;
         bool is_ws_upgrade = false;
         if (headers) {
             // HTTP headers are case-insensitive — scan the hash looking for
@@ -9789,8 +9785,18 @@ public:
             xsink.clear();
             return QoreValue();
         }
-        // Transform conn_mgr response to legacy getOutput format:
-        // {code: <int>, response-body: <binary>}
+        // Transform conn_mgr response to legacy getOutput format.
+        // The legacy poll op
+        // (HttpClientConnectSendRecvPollOperation::getOutput) returns:
+        //   { code: <int>,
+        //     info: { response-headers, response-headers-raw,
+        //             response-body },
+        //     response-body: <binary> }
+        // — response-body lives in BOTH places: inside the info sub-hash
+        // (set by processReceivedBody) AND at the top level (added by
+        // getOutput from recv_data_holder).  The conn_mgr path must
+        // match both so existing consumers that read either location
+        // keep working.
         if (rv.getType() == NT_HASH) {
             QoreHashNode* src = rv.get<QoreHashNode>();
             ReferenceHolder<QoreHashNode> result(new QoreHashNode(autoTypeInfo), &xsink);
@@ -9798,32 +9804,18 @@ public:
             if (!sc.isNullOrNothing()) {
                 result->setKeyValue("code", sc.getAsBigInt(), &xsink);
             }
-            // Build info hash with response-headers and response-headers-raw
-            // (matching legacy format)
-            QoreValue hdrs_v = src->getKeyValue("headers");
-            if (hdrs_v.getType() == NT_HASH) {
-                ReferenceHolder<QoreHashNode> info_hash(
-                    new QoreHashNode(autoTypeInfo), &xsink);
-                info_hash->setKeyValue("response-headers",
-                    hdrs_v.refSelf(), &xsink);
-                QoreValue hdrs_raw_v = src->getKeyValue("headers_raw");
-                if (hdrs_raw_v.getType() == NT_HASH) {
-                    info_hash->setKeyValue("response-headers-raw",
-                        hdrs_raw_v.refSelf(), &xsink);
-                }
-                result->setKeyValue("info", info_hash.release(), &xsink);
-            }
+            // Decode the body once (decompressing if needed) and reuse
+            // the same ref at both the top-level and the info sub-hash
+            // positions.
+            ReferenceHolder<AbstractQoreNode> body_ref(nullptr);
             QoreValue body = src->getKeyValue("body");
+            QoreValue hdrs_v = src->getKeyValue("headers");
             if (!body.isNullOrNothing()) {
-                // Decompress body if Content-Encoding is set.  The poll op's
-                // convertBodyEncoding already handled text/binary conversion,
-                // so we only need decompression here.
                 if (body.getType() == NT_BINARY) {
                     const BinaryNode* bin = body.get<const BinaryNode>();
                     const char* content_encoding = nullptr;
-                    QoreValue hdrs_val = src->getKeyValue("headers");
-                    if (hdrs_val.getType() == NT_HASH) {
-                        QoreValue cev = hdrs_val.get<const QoreHashNode>()->getKeyValue(
+                    if (hdrs_v.getType() == NT_HASH) {
+                        QoreValue cev = hdrs_v.get<const QoreHashNode>()->getKeyValue(
                             "content-encoding");
                         if (cev.getType() == NT_STRING) {
                             const char* ce = cev.get<const QoreStringNode>()->c_str();
@@ -9847,8 +9839,7 @@ public:
                                 decompressed->append(decoded->c_str(),
                                     decoded->size());
                                 decoded->deref(&xsink);
-                                result->setKeyValue("response-body",
-                                    decompressed.release(), &xsink);
+                                body_ref = decompressed.release();
                             } else {
                                 if (xsink) {
                                     xsink.clear();
@@ -9856,20 +9847,41 @@ public:
                                 if (decoded) {
                                     decoded->deref(&xsink);
                                 }
-                                result->setKeyValue("response-body",
-                                    body.refSelf(), &xsink);
                             }
-                        } else {
-                            result->setKeyValue("response-body",
-                                body.refSelf(), &xsink);
                         }
-                    } else {
-                        result->setKeyValue("response-body",
-                            body.refSelf(), &xsink);
                     }
-                } else {
-                    result->setKeyValue("response-body", body.refSelf(), &xsink);
                 }
+                // If no decompression happened (not binary, no encoding,
+                // or decoder missing), pass the source body through.
+                if (!body_ref) {
+                    body_ref = body.getInternalNode() ? body.getInternalNode()->refSelf() : nullptr;
+                }
+            }
+
+            // Build the info sub-hash (response-headers, response-headers-raw,
+            // response-body).
+            ReferenceHolder<QoreHashNode> info_hash(
+                new QoreHashNode(autoTypeInfo), &xsink);
+            if (hdrs_v.getType() == NT_HASH) {
+                info_hash->setKeyValue("response-headers",
+                    hdrs_v.refSelf(), &xsink);
+            }
+            QoreValue hdrs_raw_v = src->getKeyValue("headers_raw");
+            if (hdrs_raw_v.getType() == NT_HASH) {
+                info_hash->setKeyValue("response-headers-raw",
+                    hdrs_raw_v.refSelf(), &xsink);
+            }
+            if (body_ref) {
+                info_hash->setKeyValue("response-body",
+                    body_ref->refSelf(), &xsink);
+            }
+            if (!info_hash->empty()) {
+                result->setKeyValue("info", info_hash.release(), &xsink);
+            }
+            // Top-level response-body (legacy consumers read here).
+            if (body_ref) {
+                result->setKeyValue("response-body",
+                    body_ref.release(), &xsink);
             }
             rv.discard(&xsink);
             return result.release();

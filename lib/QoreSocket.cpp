@@ -3864,31 +3864,51 @@ int32_t QoreSocket::submitHttp2Request(const QoreHashNode* headers, const void* 
         return -1;
     }
 
-    // Convert Qore headers hash to std::map and extract :method, :path
-    strcase_str_map_t h2_headers;
+    // Build an ordered vector of (name, value) pairs so list-valued
+    // headers (e.g. multiple Cookie or X-Custom entries) are emitted
+    // as separate HPACK entries — required for RFC 7540 § 8.1.2.5 cookie
+    // handling and for any other header whose single-name/multiple-value
+    // semantics must be preserved.  Using a flat strcase_str_map_t would
+    // drop all but the last entry for a given name.
+    std::vector<std::pair<std::string, std::string>> h2_headers;
+    h2_headers.reserve(headers->size() + 4);
     std::string method;
     std::string path;
+
+    auto append = [&](const std::string& key, const char* sval) {
+        if (key == ":method") {
+            if (sval && *sval) {
+                method = sval;
+            }
+        } else if (key == ":path") {
+            if (sval && *sval) {
+                path = sval;
+            }
+        }
+        h2_headers.emplace_back(key, sval ? sval : "");
+    };
 
     ConstHashIterator hi(headers);
     while (hi.next()) {
         const char* key = hi.getKey();
         QoreValue val = hi.get();
-        if (val.getType() != NT_STRING) {
-            continue;
-        }
-        const char* sval = val.get<const QoreStringNode>()->c_str();
         std::string skey(key);
-
-        if (skey == ":method") {
-            if (sval && *sval) {
-                method = sval;
-            }
-        } else if (skey == ":path") {
-            if (sval && *sval) {
-                path = sval;
+        if (val.getType() == NT_STRING) {
+            append(skey, val.get<const QoreStringNode>()->c_str());
+        } else if (val.getType() == NT_LIST) {
+            // Emit one HPACK entry per list element.  HTTP/2 explicitly
+            // supports multiple header fields with the same name (and
+            // server-side code joins cookies with "; " and keeps other
+            // multi-value headers as lists — see httpMultiHeadersToQoreHash
+            // in Http2Session.h).
+            const QoreListNode* l = val.get<const QoreListNode>();
+            for (size_t i = 0; i < l->size(); ++i) {
+                QoreValue elem = l->retrieveEntry(i);
+                if (elem.getType() == NT_STRING) {
+                    append(skey, elem.get<const QoreStringNode>()->c_str());
+                }
             }
         }
-        h2_headers[skey] = sval ? sval : "";
     }
 
     if (method.empty()) {
