@@ -327,6 +327,37 @@ private:
     // landingpad, avoiding BB explosion.
     std::unordered_map<llvm::BasicBlock*, llvm::BasicBlock*> landingpad_blocks;
 
+    // C++ EH prototype (QORE_AOT_EH=1): when set, AOT CallDirect call sites
+    // are emitted as CreateInvoke on a throwing wrapper (qore_rt_call_direct_aot_throwing)
+    // with the unwind edge pointing at a shared function-level landing pad.
+    // The landing pad cleans up tracked temps and returns NOTHING with xsink
+    // already populated by the thrown QoreJITException's underlying raise site.
+    // Gated by env var so existing check-based path remains default.
+    bool aot_eh_enabled = false;
+
+    // Set by an EH invoke emission site to tell the NEXT emitExceptionCheck
+    // call to skip (control is on the invoke's normal edge where xsink is
+    // known clean). Cleared by emitExceptionCheck after being observed.
+    // One-shot only — subsequent calls in the same cont block still need
+    // their own checks.
+    bool skip_next_exception_check = false;
+
+    // Lazily-created shared unwind landing pad for the C++ EH prototype.
+    // Reset at function entry, populated on first invoke that needs it, and
+    // terminated with a ret NOTHING after invoke_result_allocas are finalized.
+    llvm::BasicBlock* function_unwind_lp = nullptr;
+
+    // Returns the function-level unwind landing pad, creating it if needed.
+    // The block starts with a `landingpad { ptr, i32 } cleanup` instruction and
+    // is terminated later (in finalizeFunctionUnwindLP) after all live temps
+    // have been tracked. Only used when aot_eh_enabled is true.
+    llvm::BasicBlock* getOrCreateFunctionUnwindLP(llvm::Module& module,
+            llvm::Function* llvm_func);
+
+    // Populate and terminate the function-level unwind landing pad after all
+    // instructions have been lowered (so all invoke_result_allocas are known).
+    void finalizeFunctionUnwindLP(llvm::Module& module);
+
     // Deferred PHI nodes: (LLVM PHI, IR PHI instruction) pairs to fixup after all blocks lowered
     std::vector<std::pair<llvm::PHINode*, const QoreIRPhiInstruction*>> pending_phis;
 

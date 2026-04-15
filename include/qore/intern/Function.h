@@ -42,6 +42,7 @@
 #include <string>
 #include <vector>
 
+#include "qore/intern/QoreJITException.h"
 #include "qore/intern/QoreListNodeEvalOptionalRefHolder.h"
 
 class qore_class_private;
@@ -768,7 +769,19 @@ public:
     DLLLOCAL uint64_t execCachedFunction(ExceptionSink* xsink, bool& invalidated) const {
         invalidated = false;
         if (cached_aot_ctx && cached_aot_fn) {
-            return cached_aot_fn(cached_aot_ctx, xsink);
+            // C++ EH prototype: the AOT code body is now emitted with
+            // invoke/landingpad EH under QORE_AOT_EH=1. Per-function landing
+            // pads resume the in-flight exception so it propagates up through
+            // nested AOT frames. This call is the AOT↔C++ boundary — we catch
+            // here so the exception doesn't escape into libqore's non-EH C++.
+            // xsink is already populated at the raise site, so the caller
+            // just sees 0 (NOTHING bits) + xsink set, matching the behavior
+            // of the check-based path.
+            try {
+                return cached_aot_fn(cached_aot_ctx, xsink);
+            } catch (const QoreJITException&) {
+                return 0;
+            }
         }
         JitFunctionPtr fn = cached_jit_fn.load(std::memory_order_acquire);
         if (!fn) {
@@ -776,7 +789,11 @@ public:
             invalidated = true;
             return 0;
         }
-        return fn(xsink);
+        try {
+            return fn(xsink);
+        } catch (const QoreJITException&) {
+            return 0;
+        }
     }
 
     //! Returns the body locals vector for fast call setup

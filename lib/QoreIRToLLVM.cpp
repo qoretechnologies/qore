@@ -1516,12 +1516,80 @@ llvm::BasicBlock* QoreIRToLLVM::getOrCreateJitDeoptBlock(llvm::Module& module,
     return jit_deopt_block;
 }
 
+llvm::BasicBlock* QoreIRToLLVM::getOrCreateFunctionUnwindLP(llvm::Module& module,
+        llvm::Function* llvm_func) {
+    if (function_unwind_lp) {
+        return function_unwind_lp;
+    }
+    // Create an empty block for the landing pad — its terminator and the
+    // landingpad instruction itself are emitted during finalization, after
+    // all invoke sites have been lowered and invoke_result_allocas is
+    // complete. Keeping the LP empty during body lowering avoids ordering
+    // issues between invoke emission and the LP's landingpad instruction.
+    function_unwind_lp = llvm::BasicBlock::Create(ctx, "func_unwind_lp", llvm_func);
+    return function_unwind_lp;
+}
+
+void QoreIRToLLVM::finalizeFunctionUnwindLP(llvm::Module& module) {
+    if (!function_unwind_lp) {
+        return;
+    }
+    // Emit the shared function-level unwind landing pad:
+    //
+    //   %lp = landingpad { ptr, i32 } cleanup
+    //   ; cleanup sequence mirrors error_return_block
+    //   resume { ptr, i32 } %lp
+    //
+    // `cleanup`-only semantics means the personality runs our cleanup and
+    // then resumes unwinding — the exception propagates to the caller's
+    // invoke unwind edge (or terminates if no caller frame catches). This
+    // is critical: a catching LP would swallow the exception silently while
+    // xsink is still populated, leaving the caller to see a spurious
+    // normal return with xsink set. The resume keeps exception flow and
+    // xsink state in sync.
+    //
+    // Only the outermost AOT↔AST boundary (UserVariantBase::evalTiered
+    // wrapper) needs to catch-and-convert; per-function LPs resume.
+    auto* saved_insert = builder->GetInsertBlock();
+    auto saved_ip = builder->GetInsertPoint();
+    builder->SetInsertPoint(function_unwind_lp);
+
+    llvm::Type* lp_type = llvm::StructType::get(ctx, {ptr_type, i32_type});
+    llvm::LandingPadInst* lp = builder->CreateLandingPad(lp_type, 0);
+    lp->setCleanup(true);
+
+    // Same cleanup sequence as error_return_block to keep the unwind path
+    // and the normal-check error path identical in behavior.
+    emitOnBlockExitExec(module);
+    emitIteratorCleanup(module);
+    emitPreinstantiatedCleanup(module);
+    emitInvokeCleanup(module);
+    emitPreInstClosureReInstantiation(module);
+    emitLocalUninstantiation(module);
+    // Resume the in-flight exception — propagates to the caller frame.
+    builder->CreateResume(lp);
+
+    if (saved_insert) {
+        builder->SetInsertPoint(saved_insert, saved_ip);
+    }
+}
+
 void QoreIRToLLVM::emitExceptionCheck(llvm::Module& module, llvm::Function* llvm_func,
         const QoreIRInstruction* inst) {
     // For deferred exception checking (init functions): skip per-instruction checks
     // for non-try-block instructions.  Set flag to emit consolidated check at end.
     if (deferred_exception_checking && !inst->exception_target) {
         deferred_check_needed = true;
+        return;
+    }
+
+    // C++ EH prototype: the invoke site just emitted a CreateInvoke whose
+    // normal destination we're currently in. xsink is guaranteed clean on
+    // this edge (the throwing wrapper unwinds when it's set), so the check
+    // would be dead code. One-shot flag — subsequent calls in the same
+    // cont block still get their own checks.
+    if (skip_next_exception_check) {
+        skip_next_exception_check = false;
         return;
     }
 
@@ -1583,6 +1651,16 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
 
     // Reset deferred exception checking flag for new function
     deferred_check_needed = false;
+
+    // C++ EH prototype (QORE_AOT_EH=1): reset per-function landing pad state.
+    // Enable only in aot_mode since JIT mode's non-AOT paths don't have
+    // qore_rt_call_direct_aot_throwing wired up yet.
+    function_unwind_lp = nullptr;
+    skip_next_exception_check = false;
+    {
+        static const bool env_eh = getenv("QORE_AOT_EH") != nullptr;
+        aot_eh_enabled = env_eh && aot_mode;
+    }
 
     // Determine function name: use fast_entry_name if set (Approach B)
     const std::string& fn_name = fast_entry_name.empty() ? func.name : fast_entry_name;
@@ -2158,6 +2236,10 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         emitLocalUninstantiation(module);
         builder->CreateRet(llvm::ConstantInt::get(i64_type, VAL_NOTHING));
     }
+
+    // C++ EH prototype: finalize the shared function-level unwind landing pad
+    // if any invoke emitted during body lowering needed it.
+    finalizeFunctionUnwindLP(module);
 
     // Finalize the JIT deopt block (if used): clean up all tracked allocas
     // (iterator and invoke result) before requesting deopt and returning.
@@ -4641,13 +4723,39 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         // Generic AOT CallDirect: use fast direct call helper
                         int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(
                                 expr_bits);
-                        auto helper = module.getOrInsertFunction("qore_rt_call_direct_aot",
-                                llvm::FunctionType::get(i64_type,
-                                    {ptr_type, i32_type, ptr_type, i32_type, ptr_type},
-                                    false));
-                        result = builder->CreateCall(helper, {aot_ctx_arg,
-                                llvm::ConstantInt::get(i32_type, slot), args_array,
-                                llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+                        if (aot_eh_enabled && !inst->exception_target) {
+                            // C++ EH prototype: use CreateInvoke on throwing
+                            // wrapper with unwind edge to shared function LP.
+                            // Skips the conditional branch emitExceptionCheck
+                            // would emit — unwind is handled by the invoke's
+                            // unwind dest reaching the function's LP block.
+                            auto helper = module.getOrInsertFunction(
+                                    "qore_rt_call_direct_aot_throwing",
+                                    llvm::FunctionType::get(i64_type,
+                                        {ptr_type, i32_type, ptr_type, i32_type, ptr_type},
+                                        false));
+                            llvm::BasicBlock* lp = getOrCreateFunctionUnwindLP(
+                                    module, llvm_func);
+                            llvm::BasicBlock* cont = llvm::BasicBlock::Create(
+                                    ctx, "call_cont", llvm_func);
+                            result = builder->CreateInvoke(helper, cont, lp,
+                                    {aot_ctx_arg,
+                                     llvm::ConstantInt::get(i32_type, slot),
+                                     args_array,
+                                     llvm::ConstantInt::get(i32_type, nargs),
+                                     xsink_arg});
+                            builder->SetInsertPoint(cont);
+                            skip_next_exception_check = true;
+                        } else {
+                            auto helper = module.getOrInsertFunction(
+                                    "qore_rt_call_direct_aot",
+                                    llvm::FunctionType::get(i64_type,
+                                        {ptr_type, i32_type, ptr_type, i32_type, ptr_type},
+                                        false));
+                            result = builder->CreateCall(helper, {aot_ctx_arg,
+                                    llvm::ConstantInt::get(i32_type, slot), args_array,
+                                    llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+                        }
                     }
                 } else if (inv->invoke_opcode == QoreIROpcode::CallIndirect && !aot_mode) {
                     // CallIndirect invoke: use fast path — pass pre-evaluated call reference
@@ -5717,12 +5825,32 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
                 } else {
                     // Generic AOT call path
-                    auto helper = module.getOrInsertFunction("qore_rt_call_direct_aot",
-                            llvm::FunctionType::get(i64_type,
-                                {ptr_type, i32_type, ptr_type, i32_type, ptr_type}, false));
-                    call_result = builder->CreateCall(helper, {aot_ctx_arg,
-                            llvm::ConstantInt::get(i32_type, slot), args_array,
-                            llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+                    if (aot_eh_enabled && !inst->exception_target) {
+                        // C++ EH prototype: CreateInvoke with function-level
+                        // unwind LP. See the matching site in the Invoke case.
+                        auto helper = module.getOrInsertFunction(
+                                "qore_rt_call_direct_aot_throwing",
+                                llvm::FunctionType::get(i64_type,
+                                    {ptr_type, i32_type, ptr_type, i32_type, ptr_type},
+                                    false));
+                        llvm::BasicBlock* lp = getOrCreateFunctionUnwindLP(
+                                module, llvm_func);
+                        llvm::BasicBlock* cont = llvm::BasicBlock::Create(
+                                ctx, "call_cont", llvm_func);
+                        call_result = builder->CreateInvoke(helper, cont, lp,
+                                {aot_ctx_arg,
+                                 llvm::ConstantInt::get(i32_type, slot), args_array,
+                                 llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+                        builder->SetInsertPoint(cont);
+                        skip_next_exception_check = true;
+                    } else {
+                        auto helper = module.getOrInsertFunction("qore_rt_call_direct_aot",
+                                llvm::FunctionType::get(i64_type,
+                                    {ptr_type, i32_type, ptr_type, i32_type, ptr_type}, false));
+                        call_result = builder->CreateCall(helper, {aot_ctx_arg,
+                                llvm::ConstantInt::get(i32_type, slot), args_array,
+                                llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+                    }
                 }
             } else if (batch_callees && direct_inst->variant
                     && batch_callees->count(direct_inst->variant)) {

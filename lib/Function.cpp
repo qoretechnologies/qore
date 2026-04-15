@@ -45,6 +45,7 @@
 #include "qore/intern/QoreIRInterpreter.h"
 #include "qore/intern/QoreIRVerifier.h"
 #include "qore/intern/QoreJIT.h"
+#include "qore/intern/QoreJITException.h"
 #include "qore/intern/IfStatement.h"
 #include "qore/intern/ForStatement.h"
 #include "qore/intern/ForEachStatement.h"
@@ -2984,11 +2985,21 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                 // are called, so dangling pointers should not occur.
 
                 uint64_t result_bits;
-                if (cached_aot_ctx && cached_aot_fn) {
-                    result_bits = cached_aot_fn(cached_aot_ctx, xsink);
-                } else {
-                    assert(jit_fn);
-                    result_bits = jit_fn(xsink);
+                // C++ EH prototype: AOT code body may throw QoreJITException
+                // via invoke/landingpad EH. Catch at the AOT↔C++ boundary
+                // (this is UserVariantBase::evalTiered — the entry point from
+                // both AST and fast-call paths). xsink is already populated
+                // at the original raise site, so return 0 bits and fall
+                // through to the normal xsink-set path below.
+                try {
+                    if (cached_aot_ctx && cached_aot_fn) {
+                        result_bits = cached_aot_fn(cached_aot_ctx, xsink);
+                    } else {
+                        assert(jit_fn);
+                        result_bits = jit_fn(xsink);
+                    }
+                } catch (const QoreJITException&) {
+                    result_bits = 0;
                 }
 
                 // Check for JIT guard failure requesting deopt to AST.

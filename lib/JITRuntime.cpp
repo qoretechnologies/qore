@@ -5789,6 +5789,25 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_direct_aot(QoreAOTContext* ctx, int32
     return qore_rt_call_with_args(ctx->exprs[slot], args, nargs, xsink);
 }
 
+//! Throwing variant of qore_rt_call_direct_aot for the C++ EH prototype.
+/** Callers emit CreateInvoke on this function and wire the unwind edge to a
+    landing pad that cleans up live temps and returns NOTHING. On exception
+    it throws QoreJITException which LLVM's Itanium unwinder propagates. On
+    success it returns the call result exactly like qore_rt_call_direct_aot.
+
+    This wrapper exists so we can roll out EH-style invoke sites incrementally
+    without breaking every existing CreateCall caller of the base helper.
+*/
+extern "C" DLLEXPORT uint64_t qore_rt_call_direct_aot_throwing(
+        QoreAOTContext* ctx, int32_t slot, uint64_t* args, int nargs,
+        ExceptionSink* xsink) {
+    uint64_t result = qore_rt_call_direct_aot(ctx, slot, args, nargs, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
 extern "C" DLLEXPORT uint64_t qore_rt_call_self_recursive_aot(AotFunctionPtr self_fn, QoreAOTContext* ctx,
         int32_t slot, uint64_t* args, int nargs, ExceptionSink* xsink) {
     // Lightweight self-recursive call for AOT: eliminates ThreadFrameBoundaryHelper,
