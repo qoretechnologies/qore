@@ -113,6 +113,32 @@ public class PromptInjectionDetector inherits AbstractGuardrailRule {
         return direction_override ?? GD_INPUT;
     }
 
+    #! Returns the DataProvider-option schema for this rule's \c params hash
+    /** @since QoreGuardrails 1.1 */
+    public static hash<string, hash<DataProviderOptionInfo>> getConfigSchema() {
+        return {
+            "pattern_threshold": <DataProviderOptionInfo>{
+                "type": (AbstractDataProviderType::get(FloatType),),
+                "display_name": "Pattern Match Threshold",
+                "short_desc": "Minimum accumulated pattern-match weight that triggers a violation (0.0-1.0)",
+                "desc": "The detector scans user input for prompt-injection "
+                    "patterns (jailbreak language, instruction-override "
+                    "attempts, role-play escape).  Each matching pattern "
+                    "contributes a weight between 0.0 and 1.0, and the "
+                    "weights accumulate.  A violation fires when the sum "
+                    "reaches this threshold.  **Lower** values (0.3-0.4) "
+                    "catch more attempts but produce more false positives; "
+                    "**higher** values (0.6-0.8) are more conservative but "
+                    "miss subtle attempts.  The default of 0.5 is a "
+                    "reasonable starting point.  When an LLM classifier is "
+                    "also configured, the two signals are combined.",
+                "default_value": 0.5,
+                "required": False,
+                "preselected": True,
+            },
+        };
+    }
+
     hash<GuardrailResult> evaluate(string text, *hash<auto> ctx) {
         date start = now_us();
 

@@ -96,6 +96,96 @@ public class ToxicityDetector inherits AbstractGuardrailRule {
         return "toxicity";
     }
 
+    #! Returns the DataProvider-option schema for this rule's \c params hash
+    /** @since QoreGuardrails 1.1 */
+    public static hash<string, hash<DataProviderOptionInfo>> getConfigSchema() {
+        return {
+            "mode": <DataProviderOptionInfo>{
+                "type": (AbstractDataProviderType::get(StringType),),
+                "display_name": "Detection Mode",
+                "short_desc": "Whether to use ONNX classification, LLM classification, or both",
+                "desc": "Toxicity can be detected by a local ONNX classification "
+                    "model, by an LLM classification call, or by running both "
+                    "and combining the results.  **Both** (the default) is "
+                    "strongest: a violation fires if either model flags the "
+                    "text.  **ONNX** is cheapest and keeps all data on the "
+                    "Qorus host.  **LLM** is most context-aware but adds an "
+                    "inference call per request.",
+                "default_value": "both",
+                "required": False,
+                "preselected": True,
+                "allowed_values": (
+                    <AllowedValueInfo>{
+                        "value": "onnx",
+                        "display_name": "ONNX only",
+                        "desc": "Local ONNX toxicity classifier only.  Fast and "
+                            "private; requires the ONNX model file and "
+                            "HuggingFace tokenizer config to be configured.",
+                    },
+                    <AllowedValueInfo>{
+                        "value": "llm",
+                        "display_name": "LLM only",
+                        "desc": "LLM classification only.  Uses the endpoint's "
+                            "configured backend.  Slowest but best at "
+                            "understanding context and sarcasm.",
+                    },
+                    <AllowedValueInfo>{
+                        "value": "both",
+                        "display_name": "ONNX and LLM (default)",
+                        "desc": "Run both and flag the text if either says it's "
+                            "toxic.  Strongest detection, highest false "
+                            "positive rate.",
+                    },
+                ),
+            },
+            "onnx_threshold": <DataProviderOptionInfo>{
+                "type": (AbstractDataProviderType::get(FloatType),),
+                "display_name": "ONNX Confidence Threshold",
+                "short_desc": "Minimum ONNX classifier score (0.0-1.0) that "
+                    "counts as toxic",
+                "desc": "The ONNX classifier returns a confidence score in "
+                    "[0.0, 1.0].  A score at or above this threshold is "
+                    "treated as a violation.  Default 0.7 balances "
+                    "sensitivity and false-positive rate; lower values "
+                    "(0.5-0.6) catch more, higher values (0.8+) are more "
+                    "conservative.",
+                "default_value": 0.7,
+                "required": False,
+            },
+            "llm_threshold": <DataProviderOptionInfo>{
+                "type": (AbstractDataProviderType::get(FloatType),),
+                "display_name": "LLM Confidence Threshold",
+                "short_desc": "Minimum LLM classifier confidence (0.0-1.0) that "
+                    "counts as toxic",
+                "desc": "Threshold applied to the LLM classifier's confidence "
+                    "output.  Same interpretation as `onnx_threshold`.  "
+                    "Default 0.7.",
+                "default_value": 0.7,
+                "required": False,
+            },
+            "model_path": <DataProviderOptionInfo>{
+                "type": (AbstractDataProviderType::get(StringOrNothingType),),
+                "display_name": "ONNX Model Path",
+                "short_desc": "Filesystem path to the ONNX toxicity model",
+                "desc": "Absolute path to an ONNX toxicity classification model "
+                    "on the Qorus host.  Required when `mode` is `onnx` or "
+                    "`both` and the module-level default path is not set.  "
+                    "Ignored in `llm`-only mode.",
+                "required": False,
+            },
+            "tokenizer_config": <DataProviderOptionInfo>{
+                "type": (AbstractDataProviderType::get(AutoHashOrNothingType),),
+                "display_name": "Tokenizer Config",
+                "short_desc": "HuggingFace tokenizer config hash for the ONNX model",
+                "desc": "HuggingFace tokenizer configuration used by the ONNX "
+                    "classifier.  Required when `mode` is `onnx` or `both`.  "
+                    "Shape matches the standard HuggingFace `tokenizer.json` "
+                    "layout.",
+                "required": False,
+            },
+        };
+    }
+
     hash<GuardrailResult> evaluate(string text, *hash<auto> ctx) {
         date start = now_us();
 

@@ -217,6 +217,8 @@ hash<HttpHandlerResponseInfo> del(hash<auto> cx, *hash<auto> ah) {
         addTestCase("Test backslash description continuation", \testBackslashContinuation());
         addTestCase("Test @examples, @note, @x-ai-summary parsing", \testExamplesNotesAiSummary());
         addTestCase("Test extended tags in generator output", \testExtendedTagsInGenerator());
+        addTestCase("Test @content_type parsing", \testContentTypeParsing());
+        addTestCase("Test @content_type generator output", \testContentTypeGeneratorOutput());
 
         set_return_value(main());
     }
@@ -1289,5 +1291,81 @@ hash<HttpHandlerResponseInfo> get(hash<auto> cx) {}';
 
         # Verify x-permissions still works
         assertRegex("x-permissions", yaml_output, "YAML should contain x-permissions");
+    }
+
+    testContentTypeParsing() {
+        # @content_type tag should be parsed into content_type field
+        string block = "
+@summary Download YAML file
+@desc Returns a YAML file
+@content_type application/x-yaml
+@return (string): the raw YAML content
+";
+        hash<OpenApi3::SchemaBlockInfo> result =
+            OpenApi3::OpenApi3SchemaTokenizer::parseSchemaBlock(block);
+
+        assertEq("Download YAML file", result.summary);
+        assertEq("application/x-yaml", result.content_type);
+
+        # A block without @content_type should have no content_type
+        string normal_block = "
+@summary Get user
+@return (hash<UserInfo>): the user
+";
+        hash<OpenApi3::SchemaBlockInfo> normal_result =
+            OpenApi3::OpenApi3SchemaTokenizer::parseSchemaBlock(normal_block);
+        assertFalse(normal_result.content_type.val());
+
+        # Binary content type
+        string binary_block = "
+@summary Download release archive
+@content_type application/x-bzip2
+@return (binary): the bzip2 archive
+";
+        hash<OpenApi3::SchemaBlockInfo> binary_result =
+            OpenApi3::OpenApi3SchemaTokenizer::parseSchemaBlock(binary_block);
+        assertEq("application/x-bzip2", binary_result.content_type);
+    }
+
+    testContentTypeGeneratorOutput() {
+        OpenApi3::OpenApi3SchemaGenerator gen({
+            "title": "Content-Type Test API",
+            "version": "1.0.0",
+        });
+
+        # Endpoint with custom @content_type — should use that single type
+        hash<OpenApi3::SchemaBlockInfo> file_schema = makeSchemaInfo({
+            "summary": "Download file",
+            "content_type": "application/x-yaml",
+            "return_info": makeReturnInfo("string", "YAML file content"),
+        });
+        gen.addMethod("/files/{id}", makeMethodInfo("GET", "/files/{id}", file_schema));
+
+        # Normal endpoint without @content_type — should use default JSON + YAML pair
+        hash<OpenApi3::SchemaBlockInfo> normal_schema = makeSchemaInfo({
+            "summary": "Get user",
+            "return_info": makeReturnInfo("hash<UserInfo>", "User data"),
+        });
+        gen.addMethod("/users/{id}", makeMethodInfo("GET", "/users/{id}", normal_schema));
+
+        hash<auto> spec = gen.generate();
+
+        # Verify custom content_type endpoint uses only the declared type
+        hash<auto> file_response = spec.paths{"/files/{id}"}.get.responses."200";
+        assertTrue(file_response.content.hasKey("application/x-yaml"),
+            "file endpoint should have application/x-yaml response");
+        assertFalse(file_response.content.hasKey("application/json"),
+            "file endpoint should NOT have application/json response");
+        assertEq(1, file_response.content.size(),
+            "file endpoint should have exactly one content type");
+
+        # Verify normal endpoint still has the default JSON + YAML pair
+        hash<auto> user_response = spec.paths{"/users/{id}"}.get.responses."200";
+        assertTrue(user_response.content.hasKey("application/json"),
+            "normal endpoint should have application/json response");
+        assertTrue(user_response.content.hasKey("application/yaml"),
+            "normal endpoint should have application/yaml response");
+        assertEq(2, user_response.content.size(),
+            "normal endpoint should have exactly two content types");
     }
 }

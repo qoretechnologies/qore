@@ -344,7 +344,7 @@ public const MimeDataTypes =
     MimeTypeYaml: YamlSerialization,
     MimeTypeYamlRpc: YamlSerialization,
     "text/yaml": YamlSerialization,
-    "application/yaml": YamlSerialization,
+    "text/x-yaml": YamlSerialization,
 %endif
 %ifndef NoXml
     MimeTypeXmlApp: {
@@ -5272,6 +5272,11 @@ public hashdecl SchemaBlockInfo {
     #! AI-specific summary override from \@x-ai-summary (used for embedding text when
     #! \@summary cannot be changed for backward compatibility)
     *string ai_summary;
+    #! Response content type override from \@content_type (e.g., \c "application/x-yaml"
+    #! for file downloads).  When set, the response content type in the generated OpenAPI
+    #! spec uses this value instead of the default \c application/json + YAML pair.
+    #! @since OpenApi3 2.1
+    *string content_type;
 }
 
 #! REST method information parsed from source
@@ -5302,6 +5307,7 @@ public class OpenApi3SchemaTokenizer {
         const TokenExamples = "@examples";
         const TokenNote = "@note";
         const TokenAiSummary = "@x-ai-summary";
+        const TokenContentType = "@content_type";
 
         #! Pattern to match \@REST method declarations with optional path
         const RestMethodPattern = "@REST\\s+(GET|POST|PUT|DELETE|PATCH|OPTIONS|HEAD)\\s*(/\\S+)?";
@@ -5407,6 +5413,10 @@ public class OpenApi3SchemaTokenizer {
                 string val = regex_subst(trimmed, "^@x-ai-summary\\s+", "");
                 rv.ai_summary = val;
                 state = "ai_summary";
+                continue;
+            }
+            if (trimmed =~ /^@content_type\s+/) {
+                rv.content_type = trim(regex_subst(trimmed, "^@content_type\\s+", ""));
                 continue;
             }
 
@@ -6328,12 +6338,25 @@ public class OpenApi3SchemaGenerator {
                 autoRegisterReturnSchemas(method_info.schema.return_info);
             }
 
-            success_response = {
-                "description": "Successful response",
-                "content": {
+            # When @content_type is declared, the endpoint returns a specific
+            # MIME type (e.g., application/x-yaml for file downloads) instead
+            # of the standard JSON+YAML pair.  This allows getFile() and
+            # createRelease() endpoints to carry @SCHEMA documentation and
+            # appear in the OpenAPI spec / MCP tool catalog without changing
+            # their actual response format.
+            hash<auto> content_map;
+            if (method_info.schema.content_type.val()) {
+                content_map = {method_info.schema.content_type: {"schema": response_schema}};
+            } else {
+                content_map = {
                     "application/json": {"schema": response_schema},
                     MimeTypeYamlApp: {"schema": response_schema},
-                },
+                };
+            }
+
+            success_response = {
+                "description": "Successful response",
+                "content": content_map,
             };
 
             # Use 201 Created for POST with response body

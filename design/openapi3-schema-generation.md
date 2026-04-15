@@ -55,6 +55,7 @@ hash<HttpHandlerResponseInfo> get(hash<auto> cx, *hash<auto> ah) {
 | `@examples` | Usage examples as a bullet list (output as `x-examples` extension) | No |
 | `@note` | Behavioral notes/caveats (appended to description; multi-line with `\`) | No |
 | `@x-ai-summary` | AI-specific summary override for embedding text (output as `x-ai-summary` extension) | No |
+| `@content_type` | Response MIME type override (e.g., `application/x-yaml` for file downloads) | No |
 | `@ENDSCHEMA` | Marks the end of schema documentation | Yes |
 
 ### Parameter Definitions
@@ -574,3 +575,45 @@ semantic search without changing the public API docs:
     @ENDSCHEMA
 */
 ```
+
+### @content_type
+
+Override the response MIME type for endpoints that return non-JSON content (e.g., file
+downloads).  By default, the generator documents every response as `application/json` +
+`application/yaml`.  When `@content_type` is set, it replaces the default pair with the
+declared type.
+
+This allows `getFile()` endpoints and release-creation actions to carry `@SCHEMA`
+documentation and appear in the OpenAPI spec — and therefore in MCP tool catalogs — without
+changing their actual response format.
+
+```qore
+/** @REST GET action=file
+    @SCHEMA
+    @summary Export AI collection as a YAML file
+    @desc Returns the collection's metadata as a downloadable YAML file \
+    suitable for archiving or deploying via oload.
+
+    @content_type application/yaml
+    @return (string): YAML file content
+
+    @ENDSCHEMA
+*/
+```
+
+For binary responses (e.g., compressed archives):
+
+```qore
+/** @REST POST action=createRelease
+    @SCHEMA
+    @summary Create a release package from selected interfaces
+    @desc Creates a compressed TAR.BZ2 release file.
+
+    @content_type application/x-bzip2
+    @return (binary): compressed release archive
+
+    @ENDSCHEMA
+*/
+```
+
+@since OpenApi3 2.1

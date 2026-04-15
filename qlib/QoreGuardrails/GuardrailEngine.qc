@@ -117,6 +117,133 @@ public class GuardrailEngine {
         return rules.size();
     }
 
+    #! Returns the registry of built-in rule types with their config schemas
+    /** Aggregates @ref RuleTypeInfo entries for every built-in rule class.
+        UI tools use this to render a typed form when an operator is
+        editing a guardrail rule chain: for each rule type the returned
+        hash carries a human-readable \c display_name, a markdown
+        \c desc, the rule's natural \c default_direction, and a
+        \c config_schema shaped exactly like a DataProvider option hash
+        so the existing option-form renderer handles it with no
+        rule-type-specific code.
+
+        @return a hash keyed by rule-type string
+            (\c "pii", \c "prompt_injection", \c "topic_restriction",
+            \c "output_format", \c "toxicity", \c "hallucination") where
+            each value is a @ref RuleTypeInfo describing that rule type
+
+        @par Example
+        @code{.py}
+hash<string, hash<RuleTypeInfo>> registry = GuardrailEngine::getRuleTypeRegistry();
+foreach hash<RuleTypeInfo> info in (registry.iterator()) {
+    printf("%s — %s\n", info.display_name, info.short_desc);
+    foreach hash<auto> p in (info.config_schema.pairIterator()) {
+        printf("  %s (%s): %s\n", p.key,
+            p.value.type[0].getName(), p.value.short_desc);
+    }
+}
+        @endcode
+
+        @since QoreGuardrails 1.1
+    */
+    public static hash<string, hash<RuleTypeInfo>> getRuleTypeRegistry() {
+        return {
+            "pii": <RuleTypeInfo>{
+                "type": "pii",
+                "display_name": "PII Detection",
+                "short_desc": "Detects personal data (email, phone, SSN, "
+                    "credit card, IBAN, and custom patterns) in user "
+                    "messages",
+                "desc": "Scans the text for personally identifiable "
+                    "information using regex patterns with optional "
+                    "mathematical validation (Luhn checksum for credit "
+                    "cards, mod-97 for IBANs).  The built-in patterns "
+                    "cover the most common types; you can add your own "
+                    "via the `custom_patterns` parameter.  Action mode "
+                    "controls whether a match redacts (replace with "
+                    "placeholder), blocks (reject the whole request), or "
+                    "just logs the violation.",
+                "default_direction": GD_BOTH,
+                "config_schema": PiiDetector::getConfigSchema(),
+            },
+            "prompt_injection": <RuleTypeInfo>{
+                "type": "prompt_injection",
+                "display_name": "Prompt Injection Detection",
+                "short_desc": "Detects attempts to override the system "
+                    "prompt, jailbreak the assistant, or smuggle "
+                    "instructions via user input",
+                "desc": "Scans user messages for prompt-injection patterns "
+                    "(instruction-override language, role-play escape "
+                    "attempts, jailbreak templates) and optionally runs "
+                    "an LLM classifier in parallel.  Recommended for "
+                    "every public-facing endpoint where untrusted users "
+                    "can control the input.",
+                "default_direction": GD_INPUT,
+                "config_schema": PromptInjectionDetector::getConfigSchema(),
+            },
+            "topic_restriction": <RuleTypeInfo>{
+                "type": "topic_restriction",
+                "display_name": "Topic Restriction",
+                "short_desc": "Blocks user messages that don't match one "
+                    "of the endpoint's allowed topics",
+                "desc": "Uses an LLM classifier to decide whether each "
+                    "user message is on-topic for the endpoint's "
+                    "configured purpose.  Off-topic messages are blocked "
+                    "before they reach the main LLM.  Use this for "
+                    "endpoints with a narrow remit (customer support for "
+                    "a specific product, order tracking, tech help) "
+                    "where you want to politely refuse out-of-scope "
+                    "requests.",
+                "default_direction": GD_INPUT,
+                "config_schema": TopicRestrictionRule::getConfigSchema(),
+            },
+            "output_format": <RuleTypeInfo>{
+                "type": "output_format",
+                "display_name": "Output Format Enforcement",
+                "short_desc": "Validates LLM responses against length "
+                    "limits and regex patterns",
+                "desc": "Checks the LLM response against pattern-based "
+                    "constraints: maximum/minimum length, forbidden "
+                    "patterns that must NOT appear (e.g. internal URLs, "
+                    "system prompt text), and required patterns that "
+                    "MUST appear (e.g. disclaimer footers, citation "
+                    "markers).  Fails the response if any constraint "
+                    "is violated.",
+                "default_direction": GD_OUTPUT,
+                "config_schema": OutputFormatEnforcer::getConfigSchema(),
+            },
+            "toxicity": <RuleTypeInfo>{
+                "type": "toxicity",
+                "display_name": "Toxicity Detection",
+                "short_desc": "Detects toxic, harmful, or abusive language "
+                    "in user messages or LLM responses",
+                "desc": "Classifies text toxicity using a local ONNX model, "
+                    "an LLM classifier, or both.  Useful for moderation "
+                    "on both the input side (reject abusive user "
+                    "messages before they reach the LLM) and the output "
+                    "side (catch the rare case where the LLM itself "
+                    "produces inappropriate content).",
+                "default_direction": GD_BOTH,
+                "config_schema": ToxicityDetector::getConfigSchema(),
+            },
+            "hallucination": <RuleTypeInfo>{
+                "type": "hallucination",
+                "display_name": "Hallucination Detection",
+                "short_desc": "Validates LLM responses against the source "
+                    "texts retrieved by the RAG pipeline",
+                "desc": "For RAG endpoints, asks a grounding LLM to rate "
+                    "how well the response is supported by the source "
+                    "passages retrieved for the user's query.  "
+                    "Responses below the configured grounding-score "
+                    "threshold are flagged as hallucinations.  Requires "
+                    "the RAG pipeline to stash the source texts in the "
+                    "evaluation context under the configured key.",
+                "default_direction": GD_OUTPUT,
+                "config_schema": HallucinationDetector::getConfigSchema(),
+            },
+        };
+    }
+
     #! Evaluates rules matching the given phase direction
     private hash<GuardrailResult> evaluateRules(string text, *hash<auto> ctx,
             string phase) {

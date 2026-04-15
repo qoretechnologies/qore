@@ -1999,7 +1999,7 @@ public namespace RestSchemaValidator {
 %ifndef NoYaml
                 MimeTypeYamlRpc: \make_yaml(),
                 MimeTypeYaml: \make_yaml(),
-                MimeTypeYamlApp: \make_yaml(),
+                "text/x-yaml": \make_yaml(),
 %endif
 %ifndef NoXml
                 MimeTypeXml: \make_xmlrpc_value(),
@@ -2093,7 +2093,7 @@ public namespace RestSchemaValidator {
 %ifndef NoYaml
                 MimeTypeYamlRpc: DeserializeYaml,
                 MimeTypeYaml: DeserializeYaml,
-                MimeTypeYamlApp: DeserializeYaml,
+                "text/x-yaml": DeserializeYaml,
 %endif
 %ifndef NoXml
                 MimeTypeXml: DeserializeXml,

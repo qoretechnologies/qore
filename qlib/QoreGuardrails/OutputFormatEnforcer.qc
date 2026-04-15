@@ -82,6 +82,63 @@ public class OutputFormatEnforcer inherits AbstractGuardrailRule {
         return direction_override ?? GD_OUTPUT;
     }
 
+    #! Returns the DataProvider-option schema for this rule's \c params hash
+    /** @since QoreGuardrails 1.1 */
+    public static hash<string, hash<DataProviderOptionInfo>> getConfigSchema() {
+        return {
+            "max_length": <DataProviderOptionInfo>{
+                "type": (AbstractDataProviderType::get(IntOrNothingType),),
+                "display_name": "Maximum Length (characters)",
+                "short_desc": "Reject responses longer than this many characters",
+                "desc": "When set, the rule fails if the LLM response exceeds "
+                    "this character count.  Use this to cap verbose responses "
+                    "on endpoints where a tight upper bound matters (summary "
+                    "endpoints, title-generation endpoints).  Leave empty "
+                    "(or set to 0) to disable the length cap.",
+                "required": False,
+                "example_value": 2000,
+            },
+            "min_length": <DataProviderOptionInfo>{
+                "type": (AbstractDataProviderType::get(IntOrNothingType),),
+                "display_name": "Minimum Length (characters)",
+                "short_desc": "Reject responses shorter than this many characters",
+                "desc": "When set, the rule fails if the LLM response is shorter "
+                    "than this character count.  Useful on endpoints where a "
+                    "one-word answer is a symptom of the LLM refusing to "
+                    "engage with the request.  Leave empty (or set to 0) to "
+                    "disable the minimum.",
+                "required": False,
+            },
+            "forbidden_patterns": <DataProviderOptionInfo>{
+                "type": (AbstractDataProviderType::get(AutoListOrNothingType),),
+                "display_name": "Forbidden Patterns",
+                "short_desc": "List of regex patterns that must NOT appear in the response",
+                "desc": "List of regular-expression patterns that the response "
+                    "is forbidden to contain.  Use this to block specific "
+                    "phrases, URLs, or identifiers from ever appearing in "
+                    "LLM output — e.g. internal URLs, system prompt text, "
+                    "employee names.  Case-sensitive unless the pattern "
+                    "itself uses `(?i)`.",
+                "required": False,
+                "example_value": (
+                    "(?i)internal.use.only",
+                    "https://admin\\..+",
+                ),
+            },
+            "required_patterns": <DataProviderOptionInfo>{
+                "type": (AbstractDataProviderType::get(AutoListOrNothingType),),
+                "display_name": "Required Patterns",
+                "short_desc": "List of regex patterns that must appear in the response",
+                "desc": "List of regular-expression patterns that the response "
+                    "must contain to pass.  Useful when the endpoint is "
+                    "expected to include a specific marker (disclaimer text, "
+                    "citation pattern, structured output header).  Empty "
+                    "list means no required patterns.",
+                "required": False,
+            },
+        };
+    }
+
     hash<GuardrailResult> evaluate(string text, *hash<auto> ctx) {
         date start = now_us();
         list<hash<GuardrailViolation>> violations = ();

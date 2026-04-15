@@ -62,6 +62,49 @@ public hashdecl GuardrailResult {
     int duration_ms;
 }
 
+#! Rule-type registry entry
+/** Returned by @ref GuardrailEngine::getRuleTypeRegistry() — one entry per
+    registered rule type.  Describes what a rule type does and what
+    configuration parameters it accepts so UI tools can render a typed
+    editor form for any rule without hard-coding knowledge of each rule
+    class.
+
+    The \c config_schema hash uses the DataProvider option schema shape
+    (@ref DataProvider::DataProviderOptionInfo "DataProviderOptionInfo") so
+    the same renderer that drives DataProvider action option forms works
+    for guardrail rule configuration forms with no extra glue.
+
+    @since QoreGuardrails 1.1
+*/
+public hashdecl RuleTypeInfo {
+    #! The rule type key (e.g. \c "pii", \c "prompt_injection")
+    /** Matches the \c type field on @ref GuardrailRuleConfig. */
+    string type;
+
+    #! Human-readable display name (Title Case)
+    string display_name;
+
+    #! Short plain-text description of what this rule type does
+    string short_desc;
+
+    #! Longer markdown description — covers what the rule detects, when it
+    #! typically fires, and how to think about its parameters
+    string desc;
+
+    #! The rule's natural evaluation direction if no override is set
+    /** One of \c "input", \c "output", or \c "both". */
+    string default_direction;
+
+    #! DataProvider-option schema for this rule type's \c params hash
+    /** Maps parameter name to a
+        @ref DataProvider::DataProviderOptionInfo "DataProviderOptionInfo"
+        describing the parameter's type, default value, allowed values,
+        display name, and description.  Empty hash means the rule type
+        accepts no configuration parameters.
+    */
+    hash<string, hash<DataProvider::DataProviderOptionInfo>> config_schema;
+}
+
 #! Configuration for a single guardrail rule
 public hashdecl GuardrailRuleConfig {
     #! Rule type: "pii", "prompt_injection", "topic_restriction", "output_format",
@@ -151,6 +194,31 @@ public class AbstractGuardrailRule {
     #! Returns whether this rule fails when external services are unavailable
     bool getFailClosed() {
         return fail_closed;
+    }
+
+    #! Returns the DataProvider-option schema for this rule type's \c params hash
+    /** Concrete rule subclasses must provide a \c public \c static
+        \c getConfigSchema() method returning
+        \c hash<string, hash<DataProviderOptionInfo>> describing every
+        parameter the subclass's constructor reads out of \c params.
+
+        This base-class implementation returns an empty hash; subclasses
+        that accept no parameters can inherit it unchanged, but every
+        rule type with tunable parameters must override.
+
+        Qore does not support abstract static methods, so this contract
+        cannot be enforced at compile time — the
+        @ref GuardrailEngine::getRuleTypeRegistry() aggregator calls the
+        static method by name on each registered rule class and will
+        include the base-class empty hash for rule types that haven't
+        overridden it.
+
+        @return the per-parameter schema, keyed by parameter name
+
+        @since QoreGuardrails 1.1
+    */
+    public static hash<string, hash<DataProviderOptionInfo>> getConfigSchema() {
+        return {};
     }
 
     #! Creates a passing result

@@ -325,7 +325,7 @@ public const MimeDataTypes = {
     MimeTypeYaml: YamlSerialization,
     MimeTypeYamlRpc: YamlSerialization,
     "text/yaml": YamlSerialization,
-    "application/yaml": YamlSerialization,
+    "text/x-yaml": YamlSerialization,
 %endif
 };
 

@@ -290,8 +290,8 @@ public namespace Mime {
     #! Mime type for SOAP XML messages (XML MIME type reference: http://tools.ietf.org/html/rfc3023)
     public const MimeTypeSoapXml = "application/soap+xml";
 
-    #! Mime type for yaml data files
-    public const MimeTypeYaml = "text/x-yaml";
+    #! Mime type for yaml data files (RFC 9512)
+    public const MimeTypeYaml = "application/yaml";
 
     #! Mime type for plain (human-readable) xml files
     public const MimeTypeXml = "text/xml";
@@ -325,7 +325,7 @@ public namespace Mime {
     public const YamlMimeTypes = {
         MimeTypeYaml: True,
         MimeTypeYamlRpc: True,
-        MimeTypeYamlApp: True,
+        "text/x-yaml": True,
         "text/yaml": True,
     };
 
