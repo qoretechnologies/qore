@@ -50,10 +50,11 @@ class AbstractAsyncAction;
 /** @since %Qore 2.3
 */
 enum class HttpClientProtocol {
-    H1,   //!< HTTP/1.1
-    H2,   //!< HTTP/2
-    H3,   //!< HTTP/3 (QUIC)
-    AUTO  //!< AUTO: try H2 over SSL (ALPN), fall back to H1 on failure
+    H1,         //!< HTTP/1.1 over TCP or TCP+TLS
+    H2,         //!< HTTP/2 over TCP (h2c direct) or TCP+TLS (ALPN "h2")
+    H3,         //!< HTTP/3 over QUIC
+    NEGOTIATE   //!< TCP+TLS with ALPN offer {"h2", "http/1.1"};
+                //!< manager decides H1 vs H2 per connection
 };
 
 //! Abstract base for C++ HTTP client connections

@@ -351,8 +351,7 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::createConnection(
     // window where the I/O thread fires onClosedHook before setManager.
     HttpClientConnectionBase* conn = nullptr;
     switch (opts_.protocol) {
-        case HttpClientProtocol::H1:
-        create_h1: {
+        case HttpClientProtocol::H1: {
             Http1SslConfig ssl_cfg;
             ssl_cfg.verify_mode = opts_.ssl_verify_mode;
             ssl_cfg.accept_all = opts_.accept_all_certs;
@@ -391,11 +390,18 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::createConnection(
             conn = new Http3ClientConnection(host, port,
                 opts_.max_streams_per_connection, xsink, this);
             break;
-        case HttpClientProtocol::AUTO:
-            // AUTO mode is handled at the HTTPClient level: AUTO+SSL
-            // bypasses the conn_mgr and uses the legacy ALPN path.
-            // If we get here, treat AUTO as H1 (non-SSL case).
-            goto create_h1;
+        case HttpClientProtocol::NEGOTIATE:
+            // Phase 1 placeholder: per-connect ALPN negotiation is
+            // implemented in Phase 3 of the conn-mgr-alpn-negotiation
+            // design (see design/conn-mgr-alpn-negotiation.md).  For
+            // now, NEGOTIATE is not yet wired into QoreHttpClientObject's
+            // getConnMgr, so reaching this case indicates a configuration
+            // bug.
+            xsink->raiseException("HTTPCLIENT-NEGOTIATE-NOT-IMPLEMENTED",
+                "HttpClientProtocol::NEGOTIATE is a phase 1 placeholder; "
+                "per-connect ALPN negotiation will be wired in phases 2-5 "
+                "of the conn-mgr-alpn-negotiation work");
+            return nullptr;
     }
     if (*xsink) {
         if (conn) {
