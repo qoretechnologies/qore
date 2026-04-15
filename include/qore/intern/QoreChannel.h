@@ -423,8 +423,21 @@ public:
             follow up with @ref tryRecv or @ref recv to fetch the value.
     */
     DLLLOCAL bool waitReadable(int64 timeout_ms, ExceptionSink* xsink) {
-        int64 cond_timeout = (timeout_ms <= 0) ? -1 : timeout_ms;
         AutoLocker al(&lck);
+
+        // Non-blocking check: inspect channel state without touching
+        // the condition variable.  This is the correct async-friendly
+        // path for isDataAvailable(0) — no poll, no wait.
+        if (timeout_ms == 0) {
+            if (cap == 0) {
+                return unbuffered_has_value || closed || deleted;
+            }
+            return !buffer.empty() || closed || deleted;
+        }
+
+        // timeout_ms < 0  → wait indefinitely
+        // timeout_ms > 0  → wait up to timeout_ms milliseconds
+        int64 cond_timeout = (timeout_ms < 0) ? -1 : timeout_ms;
         if (cap == 0) {
             if (unbuffered_has_value || closed || deleted) {
                 return true;
