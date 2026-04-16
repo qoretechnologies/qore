@@ -1145,8 +1145,18 @@ extern "C" DLLEXPORT uint64_t qore_rt_create_local_ref_aot(QoreAOTContext* ctx, 
         return 0;
     }
     LocalVar* lv = ctx->locals[local_slot];
-    // Build a temporary VarRefNode + ParseReferenceNode and evaluate
+    // Build a temporary VarRefNode + ParseReferenceNode and evaluate.
+    // Mirror the source parser's setThreadSafe() call (ReferenceNode.cpp:281):
+    // switch the VarRefNode to VT_LOCAL_TS and mark the LocalVar closure_use so
+    // doPartialEval resolves through the closure-var stack instead of taking the
+    // VT_LOCAL fallthrough path.  Without this, evalToRef returns a ReferenceNode
+    // whose vexp is the VT_LOCAL VarRefNode itself — and at lvalue-resolution
+    // time inside the callee, VarRefNode::getLValue walks the closure-var stack
+    // and finds the callee's own CVV (which holds this very reference), producing
+    // a self-referential cycle detected by thread_ref_set() as
+    // CIRCULAR-REFERENCE-ERROR.
     VarRefNode* vrn = new VarRefNode(&loc_builtin, strdup(lv->getName()), lv, false);
+    vrn->setThreadSafe();
     SimpleRefHolder<ParseReferenceNode> prn(new ParseReferenceNode(&loc_builtin, QoreValue(vrn)));
     ReferenceNode* ref = prn->evalToRef(xsink);
     return ref ? toBits(QoreValue(ref)) : 0;
