@@ -104,6 +104,7 @@ public class DataProvider {
             "cdsrest": "CdsRestDataProvider",
             "chargebee": "ChargebeeDataProvider",
             "cin7core": "Cin7CoreDataProvider",
+            "clickfunnels": "ClickFunnelsDataProvider",
             "close": "CloseDataProvider",
             "csvread": "CsvUtil",
             "csvwrite": "CsvUtil",

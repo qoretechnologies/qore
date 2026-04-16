@@ -107,6 +107,9 @@ public class ConnectionSchemeCache {
 
             "cin7core": "Cin7CoreRestClient",
 
+            "clickfunnelsrest": "ClickFunnelsRestClient",
+            "clickfunnelsrests": "ClickFunnelsRestClient",
+
             "closerest": "CloseRestClient",
 
             "db": "DbDataProvider",
