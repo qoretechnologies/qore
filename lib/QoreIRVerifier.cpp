@@ -1124,6 +1124,17 @@ void QoreIRFunction::computeIROnlyLocals() {
             printd(5, "  local '%s' (%p): reference type (non-IR-only)\n", lv->getName(), key);
             continue;
         }
+        // Block-scoped object-typed locals need runtime stack sync for timely
+        // destructor execution at scope exit. UninstantiateLocal calls
+        // qore_rt_clear_local to trigger destructors (e.g., AutoLock::destructor
+        // calls Mutex::unlock), but the ir-only path skips qore_rt_clear_local
+        // because the runtime stack is never written. Keep these AST-visible so
+        // StoreLocal syncs to the runtime stack and UninstantiateLocal properly
+        // clears it.
+        if (QoreTypeInfo::getUniqueReturnClass(lv->getTypeInfo())) {
+            printd(5, "  local '%s' (%p): block-scoped object type (non-IR-only)\n", lv->getName(), key);
+            continue;
+        }
         printd(5, "  local '%s' (%p): IR-ONLY\n", lv->getName(), key);
         ir_only_locals.insert(key);
     }

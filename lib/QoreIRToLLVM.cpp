@@ -3767,16 +3767,27 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     }
                 }
 
-                // Clear the reload tracker for this local (if it exists).
-                // reloadAllLocalsFromRuntime() creates refSelf'd values in reload
-                // trackers via qore_rt_load_local() — if we don't clear them here,
-                // the extra reference prevents timely destruction at block scope exit.
+                // Clear the reload tracker and deferred alloca for this local
+                // (if they exist).  reloadAllLocalsFromRuntime() creates refSelf'd
+                // values in reload trackers via qore_rt_load_local() — if we don't
+                // clear them here, the extra reference prevents timely destruction
+                // at block scope exit.  The deferred alloca holds the previous
+                // tracker value (from the prior reload cycle) — it must also be
+                // cleared to avoid a leaked reference that prevents the destructor
+                // from firing (e.g., AutoLock staying locked across block scope).
                 auto tracker_it = local_reload_trackers.find(key);
                 if (tracker_it != local_reload_trackers.end()) {
                     llvm::Value* old_tracker = builder->CreateLoad(i64_type, tracker_it->second);
                     builder->CreateStore(
                             llvm::ConstantInt::get(i64_type, VAL_NOTHING), tracker_it->second);
                     builder->CreateCall(decref_fn, {old_tracker, xsink_arg});
+                }
+                auto deferred_it = local_reload_deferred.find(key);
+                if (deferred_it != local_reload_deferred.end()) {
+                    llvm::Value* old_deferred = builder->CreateLoad(i64_type, deferred_it->second);
+                    builder->CreateStore(
+                            llvm::ConstantInt::get(i64_type, VAL_NOTHING), deferred_it->second);
+                    builder->CreateCall(decref_fn, {old_deferred, xsink_arg});
                 }
 
                 // Clear the runtime stack/cvstack entry (drops refSelf'd reference).
@@ -3894,6 +3905,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     builder->CreateStore(
                             llvm::ConstantInt::get(i64_type, VAL_NOTHING), tracker_it->second);
                     builder->CreateCall(decref_fn, {old_tracker, xsink_arg});
+                }
+                auto deferred_it2 = local_reload_deferred.find(key);
+                if (deferred_it2 != local_reload_deferred.end()) {
+                    llvm::Value* old_deferred = builder->CreateLoad(i64_type, deferred_it2->second);
+                    builder->CreateStore(
+                            llvm::ConstantInt::get(i64_type, VAL_NOTHING), deferred_it2->second);
+                    builder->CreateCall(decref_fn, {old_deferred, xsink_arg});
                 }
             }
 
