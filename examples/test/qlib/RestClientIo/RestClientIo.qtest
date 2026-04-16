@@ -3477,10 +3477,18 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         on_exit rest.close();
         # OpenSSL may report "certificate required" or the server may RST
         # the connection ("Connection reset by peer") depending on platform
-        # and TLS version
-        assertThrows("HTTPCLIENT-REQUEST-ERROR",
-            NOTHING,
-            sub () { rest.restGet("/api/test"); });
+        # and TLS version.  With TLS-aware idle detection (checkIdleData),
+        # the connection close may be detected before the request is sent,
+        # yielding HTTP1-CONNECTION-CLOSED instead.
+        try {
+            rest.restGet("/api/test");
+            assertEq(True, False, "expected exception from mTLS rejection");
+        } catch (hash<ExceptionInfo> ex) {
+            assertTrue(ex.err == "HTTPCLIENT-REQUEST-ERROR"
+                || ex.err == "HTTP1-CONNECTION-CLOSED"
+                || ex.err == "HTTP1-UNEXPECTED-DATA",
+                sprintf("expected mTLS rejection error, got: %s: %s", ex.err, ex.desc));
+        }
 %endif
     }
 
