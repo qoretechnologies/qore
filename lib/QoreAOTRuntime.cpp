@@ -4181,6 +4181,13 @@ static void registerAOTFunctionsFromSlotMaps(
                 init_func_contexts->push_back(std::move(info));
                 func_map.erase(func_name);
                 printd(2, "AOT slot-reg: collected init function '%s' for execution\n", func_name);
+            } else if (is_init_func) {
+                // Init function but no init_func_contexts — deferred to ns_init.
+                // Count as registered so the warning doesn't fire for these.
+                delete ctx;
+                ++registered;
+                func_map.erase(func_name);
+                printd(2, "AOT slot-reg: init function '%s' deferred to ns_init\n", func_name);
             } else {
                 // Toplevel or unresolved — handled separately
                 delete ctx;
