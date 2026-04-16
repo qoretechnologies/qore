@@ -27,6 +27,7 @@
 #include <qore/intern/FunctionCallNode.h>
 #include <qore/intern/CallReferenceCallNode.h>
 #include <qore/intern/OnBlockExitStatement.h>
+#include "qore/intern/QorePseudoMethods.h"
 #include <qore/intern/QoreRegex.h>
 #include <qore/intern/StaticClassVarRefNode.h>
 #include <qore/intern/QoreRegexSubst.h>
@@ -8277,13 +8278,27 @@ lvalue_path_unary_done:
                 bool called_external = false;  // Track if we called external code
                 if (direct_inst->pseudo) {
                     // Fast-path optimizations for common pseudo-methods
-                    const char* method_name = direct_inst->method->getName();
+                    const char* method_name = direct_inst->method
+                        ? direct_inst->method->getName()
+                        : direct_inst->fallback_method_name;
                     qore_type_t base_type = base.getType();
 
-                    if (!strcmp(method_name, "typeCode") && nargs == 0) {
+                    // Resolve pseudo-method at runtime if not resolved at
+                    // deserialization time (e.g. pseudo-class not found)
+                    const QoreMethod* pseudo_method = direct_inst->method;
+                    const QoreClass* pseudo_qc = direct_inst->qc;
+                    if (!pseudo_method && method_name) {
+                        QoreClass* resolved_qc = nullptr;
+                        pseudo_method = pseudo_classes_find_method(base_type, method_name, resolved_qc);
+                        if (resolved_qc) {
+                            pseudo_qc = resolved_qc;
+                        }
+                    }
+
+                    if (method_name && !strcmp(method_name, "typeCode") && nargs == 0) {
                         // Inline: return type code constant
                         res = QoreValue(static_cast<int64_t>(base_type));
-                    } else if (!strcmp(method_name, "size") && nargs == 0) {
+                    } else if (method_name && !strcmp(method_name, "size") && nargs == 0) {
                         // Inline: size() for lists and strings
                         if (base_type == NT_LIST) {
                             const QoreListNode* l = base.get<const QoreListNode>();
@@ -8298,10 +8313,10 @@ lvalue_path_unary_done:
                             // Unsupported type, use runtime dispatch
                             called_external = true;
                             res = fromBits(qore_rt_dot_eval_pseudo_method_direct(
-                                toBits(base), direct_inst->method, direct_inst->qc, direct_inst->variant,
+                                toBits(base), pseudo_method, pseudo_qc, direct_inst->variant,
                                 nanboxed_args, nargs, xsink));
                         }
-                    } else if ((!strcmp(method_name, "strlen") || !strcmp(method_name, "length")) && nargs == 0) {
+                    } else if (method_name && (!strcmp(method_name, "strlen") || !strcmp(method_name, "length")) && nargs == 0) {
                         // Inline: strlen()/length() for strings
                         // strlen() returns byte length, length() returns character count
                         if (base_type == NT_STRING) {
@@ -8312,10 +8327,10 @@ lvalue_path_unary_done:
                             // Unsupported type, use runtime dispatch
                             called_external = true;
                             res = fromBits(qore_rt_dot_eval_pseudo_method_direct(
-                                toBits(base), direct_inst->method, direct_inst->qc, direct_inst->variant,
+                                toBits(base), pseudo_method, pseudo_qc, direct_inst->variant,
                                 nanboxed_args, nargs, xsink));
                         }
-                    } else if (!strcmp(method_name, "empty") && nargs == 0) {
+                    } else if (method_name && !strcmp(method_name, "empty") && nargs == 0) {
                         // Inline: empty() for lists and strings
                         if (base_type == NT_LIST) {
                             const QoreListNode* l = base.get<const QoreListNode>();
@@ -8330,10 +8345,10 @@ lvalue_path_unary_done:
                             // Unsupported type, use runtime dispatch
                             called_external = true;
                             res = fromBits(qore_rt_dot_eval_pseudo_method_direct(
-                                toBits(base), direct_inst->method, direct_inst->qc, direct_inst->variant,
+                                toBits(base), pseudo_method, pseudo_qc, direct_inst->variant,
                                 nanboxed_args, nargs, xsink));
                         }
-                    } else if (!strcmp(method_name, "val") && nargs == 0) {
+                    } else if (method_name && !strcmp(method_name, "val") && nargs == 0) {
                         // Inline: val() for lists and strings (opposite of empty)
                         if (base_type == NT_LIST) {
                             const QoreListNode* l = base.get<const QoreListNode>();
@@ -8348,17 +8363,17 @@ lvalue_path_unary_done:
                             // Unsupported type, use runtime dispatch
                             called_external = true;
                             res = fromBits(qore_rt_dot_eval_pseudo_method_direct(
-                                toBits(base), direct_inst->method, direct_inst->qc, direct_inst->variant,
+                                toBits(base), pseudo_method, pseudo_qc, direct_inst->variant,
                                 nanboxed_args, nargs, xsink));
                         }
-                    } else if (!strcmp(method_name, "type") && nargs == 0) {
+                    } else if (method_name && !strcmp(method_name, "type") && nargs == 0) {
                         // Inline: type() - return type name string
                         res = QoreValue(new QoreStringNode(base.getTypeName()));
                     } else {
                         // Unsupported pseudo-method, use generic runtime dispatch
                         called_external = true;
                         res = fromBits(qore_rt_dot_eval_pseudo_method_direct(
-                            toBits(base), direct_inst->method, direct_inst->qc, direct_inst->variant,
+                            toBits(base), pseudo_method, pseudo_qc, direct_inst->variant,
                             nanboxed_args, nargs, xsink));
                     }
                 } else {
@@ -8424,13 +8439,27 @@ lvalue_path_unary_done:
                 bool called_external = false;  // Track if we called external code
                 if (de_invoke_inst->pseudo) {
                     // Fast-path optimizations for common pseudo-methods
-                    const char* method_name = de_invoke_inst->method->getName();
+                    const char* method_name = de_invoke_inst->method
+                        ? de_invoke_inst->method->getName()
+                        : de_invoke_inst->fallback_method_name;
                     qore_type_t base_type = base.getType();
 
-                    if (!strcmp(method_name, "typeCode") && nargs == 0) {
+                    // Resolve pseudo-method at runtime if not resolved at
+                    // deserialization time
+                    const QoreMethod* pseudo_method = de_invoke_inst->method;
+                    const QoreClass* pseudo_qc = de_invoke_inst->qc;
+                    if (!pseudo_method && method_name) {
+                        QoreClass* resolved_qc = nullptr;
+                        pseudo_method = pseudo_classes_find_method(base_type, method_name, resolved_qc);
+                        if (resolved_qc) {
+                            pseudo_qc = resolved_qc;
+                        }
+                    }
+
+                    if (method_name && !strcmp(method_name, "typeCode") && nargs == 0) {
                         // Inline: return type code constant
                         res = QoreValue(static_cast<int64_t>(base_type));
-                    } else if (!strcmp(method_name, "size") && nargs == 0) {
+                    } else if (method_name && !strcmp(method_name, "size") && nargs == 0) {
                         // Inline: size() for lists and strings
                         if (base_type == NT_LIST) {
                             const QoreListNode* l = base.get<const QoreListNode>();
@@ -8445,10 +8474,10 @@ lvalue_path_unary_done:
                             // Unsupported type, use runtime dispatch
                             called_external = true;
                             res = fromBits(qore_rt_dot_eval_pseudo_method_direct(
-                                toBits(base), de_invoke_inst->method, de_invoke_inst->qc, de_invoke_inst->variant,
+                                toBits(base), pseudo_method, pseudo_qc, de_invoke_inst->variant,
                                 nanboxed_args, nargs, xsink));
                         }
-                    } else if ((!strcmp(method_name, "strlen") || !strcmp(method_name, "length")) && nargs == 0) {
+                    } else if (method_name && (!strcmp(method_name, "strlen") || !strcmp(method_name, "length")) && nargs == 0) {
                         // Inline: strlen()/length() for strings
                         // strlen() returns byte length, length() returns character count
                         if (base_type == NT_STRING) {
@@ -8459,10 +8488,10 @@ lvalue_path_unary_done:
                             // Unsupported type, use runtime dispatch
                             called_external = true;
                             res = fromBits(qore_rt_dot_eval_pseudo_method_direct(
-                                toBits(base), de_invoke_inst->method, de_invoke_inst->qc, de_invoke_inst->variant,
+                                toBits(base), pseudo_method, pseudo_qc, de_invoke_inst->variant,
                                 nanboxed_args, nargs, xsink));
                         }
-                    } else if (!strcmp(method_name, "empty") && nargs == 0) {
+                    } else if (method_name && !strcmp(method_name, "empty") && nargs == 0) {
                         // Inline: empty() for lists and strings
                         if (base_type == NT_LIST) {
                             const QoreListNode* l = base.get<const QoreListNode>();
@@ -8477,10 +8506,10 @@ lvalue_path_unary_done:
                             // Unsupported type, use runtime dispatch
                             called_external = true;
                             res = fromBits(qore_rt_dot_eval_pseudo_method_direct(
-                                toBits(base), de_invoke_inst->method, de_invoke_inst->qc, de_invoke_inst->variant,
+                                toBits(base), pseudo_method, pseudo_qc, de_invoke_inst->variant,
                                 nanboxed_args, nargs, xsink));
                         }
-                    } else if (!strcmp(method_name, "val") && nargs == 0) {
+                    } else if (method_name && !strcmp(method_name, "val") && nargs == 0) {
                         // Inline: val() for lists and strings (opposite of empty)
                         if (base_type == NT_LIST) {
                             const QoreListNode* l = base.get<const QoreListNode>();
@@ -8495,17 +8524,17 @@ lvalue_path_unary_done:
                             // Unsupported type, use runtime dispatch
                             called_external = true;
                             res = fromBits(qore_rt_dot_eval_pseudo_method_direct(
-                                toBits(base), de_invoke_inst->method, de_invoke_inst->qc, de_invoke_inst->variant,
+                                toBits(base), pseudo_method, pseudo_qc, de_invoke_inst->variant,
                                 nanboxed_args, nargs, xsink));
                         }
-                    } else if (!strcmp(method_name, "type") && nargs == 0) {
+                    } else if (method_name && !strcmp(method_name, "type") && nargs == 0) {
                         // Inline: type() - return type name string
                         res = QoreValue(new QoreStringNode(base.getTypeName()));
                     } else {
                         // Unsupported pseudo-method, use generic runtime dispatch
                         called_external = true;
                         res = fromBits(qore_rt_dot_eval_pseudo_method_direct(
-                            toBits(base), de_invoke_inst->method, de_invoke_inst->qc, de_invoke_inst->variant,
+                            toBits(base), pseudo_method, pseudo_qc, de_invoke_inst->variant,
                             nanboxed_args, nargs, xsink));
                     }
                 } else {

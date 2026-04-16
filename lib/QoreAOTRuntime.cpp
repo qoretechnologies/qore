@@ -62,6 +62,7 @@
 #include "qore/intern/qore_thread_intern.h"
 #include "qore/intern/SelfVarrefNode.h"
 #include "qore/intern/ScopedObjectCallNode.h"
+#include "qore/intern/QorePseudoMethods.h"
 #include "qore/intern/StaticClassVarRefNode.h"
 #include "qore/intern/QoreDotEvalOperatorNode.h"
 #include "qore/intern/QoreHashObjectDereferenceOperatorNode.h"
@@ -631,6 +632,32 @@ static uint64_t resolveCastExprSlot(AOTExprKind kind, const char* ref1, bool or_
     @param num_globals number of entries in globals
     @return reconstructed expression, or NOTHING on failure
 */
+//! Resolve a pseudo-class by its serialized path (e.g. "::Qore::<value>")
+//! Pseudo-classes are not in the normal namespace hierarchy, so runtimeFindClass
+//! cannot find them.  This helper iterates the pseudo-class table and matches by path.
+static const QoreClass* findPseudoClassByPath(const char* path) {
+    if (!path || !*path) {
+        return nullptr;
+    }
+    // Check base types NT_NOTHING(0) through NT_NUMBER(11)
+    for (qore_type_t t = 0; t <= NT_NUMBER; ++t) {
+        const QoreClass* pc = qore_pseudo_get_class(t);
+        if (pc && !strcmp(pc->getPath(), path)) {
+            return pc;
+        }
+    }
+    // Check funcref and closure pseudo-classes
+    const QoreClass* pc = qore_pseudo_get_class(NT_FUNCREF);
+    if (pc && !strcmp(pc->getPath(), path)) {
+        return pc;
+    }
+    pc = qore_pseudo_get_class(NT_RUNTIME_CLOSURE);
+    if (pc && !strcmp(pc->getPath(), path)) {
+        return pc;
+    }
+    return nullptr;
+}
+
 //! Advance pointer past one AOTExprKind-encoded expression without allocating objects
 static void skipOneExpr(const QoreAOTBinaryReader& rdr, const uint8_t*& p, const uint8_t* e) {
     if (p >= e) { return; }
@@ -1423,6 +1450,11 @@ static QoreAOTContext* buildContextFromSlotMap(
                 if (ref1 && *ref1) {
                     const qore_ns_private* found_ns = nullptr;
                     qc = qore_root_ns_private::runtimeFindClass(*pp->RootNS, ref1, found_ns);
+                    if (!qc) {
+                        // Pseudo-classes (e.g. ::Qore::<value>) are not in the
+                        // namespace hierarchy — try pseudo-class table lookup
+                        qc = findPseudoClassByPath(ref1);
+                    }
                     if (qc && ref2 && *ref2) {
                         method = qc->findMethod(ref2);
                         if (!method) {
@@ -2925,6 +2957,9 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
                 qore_program_private* pp = qore_program_private::get(*pgm);
                 const qore_ns_private* found_ns = nullptr;
                 qc = qore_root_ns_private::runtimeFindClass(*pp->RootNS, class_path, found_ns);
+                if (!qc) {
+                    qc = findPseudoClassByPath(class_path);
+                }
                 if (qc && method_name && *method_name) {
                     method = qc->findMethod(method_name);
                     if (!method) {
@@ -2962,6 +2997,9 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
                 qore_program_private* pp = qore_program_private::get(*pgm);
                 const qore_ns_private* found_ns = nullptr;
                 qc = qore_root_ns_private::runtimeFindClass(*pp->RootNS, class_path, found_ns);
+                if (!qc) {
+                    qc = findPseudoClassByPath(class_path);
+                }
                 if (qc && method_name && *method_name) {
                     method = qc->findMethod(method_name);
                     if (!method) {
@@ -3020,6 +3058,11 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
                 qore_program_private* pp = qore_program_private::get(*pgm);
                 const qore_ns_private* found_ns = nullptr;
                 qc = qore_root_ns_private::runtimeFindClass(*pp->RootNS, class_path, found_ns);
+                if (!qc) {
+                    // Pseudo-classes (e.g. ::Qore::<value>) are not in the namespace
+                    // hierarchy — try pseudo-class table lookup
+                    qc = findPseudoClassByPath(class_path);
+                }
                 if (qc && method_name && *method_name) {
                     method = qc->findMethod(method_name);
                     if (!method) {
@@ -3029,6 +3072,9 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
             }
             auto* ci = new QoreIRDotEvalMethodDirectInstruction(method, qc, nullptr, expr, pseudo);
             ci->has_ref_args = has_ref_args;
+            if (method_name && *method_name) {
+                ci->fallback_method_name = strdup(method_name);
+            }
             expr.discard(nullptr);
             inst.reset(ci);
             break;
@@ -3052,6 +3098,9 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
                 qore_program_private* pp = qore_program_private::get(*pgm);
                 const qore_ns_private* found_ns = nullptr;
                 qc = qore_root_ns_private::runtimeFindClass(*pp->RootNS, class_path, found_ns);
+                if (!qc) {
+                    qc = findPseudoClassByPath(class_path);
+                }
                 if (qc && method_name && *method_name) {
                     method = qc->findMethod(method_name);
                     if (!method) {
@@ -3062,6 +3111,9 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
             auto* ci = new QoreIRInvokeDotEvalMethodDirectInstruction(method, qc, nullptr, expr,
                 pseudo, resolveBlock(normal_idx), resolveBlock(exception_idx));
             ci->has_ref_args = has_ref_args;
+            if (method_name && *method_name) {
+                ci->fallback_method_name = strdup(method_name);
+            }
             expr.discard(nullptr);
             inst.reset(ci);
             break;
