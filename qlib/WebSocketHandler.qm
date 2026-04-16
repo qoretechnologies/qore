@@ -1907,7 +1907,12 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
         *code<nothing(object)> register_listener =
             cx."header-info".register_stream_listener;
         if (register_listener) {
+            logDebug("WebSocketHandler: registering stream listener for cid %y (h2=%y h3=%y)",
+                cid, is_http2, is_http3);
             register_listener(stream_proc);
+        } else {
+            logError("WebSocketHandler: NO register_stream_listener callback for cid %y "
+                "(h2=%y h3=%y) — frames will not be delivered!", cid, is_http2, is_http3);
         }
 
         # Drain any data queued during getConnectionImpl

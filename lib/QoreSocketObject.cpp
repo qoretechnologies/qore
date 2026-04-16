@@ -767,6 +767,45 @@ bool QoreSocketObject::isSecure() {
     return priv->socket->isSecure();
 }
 
+int QoreSocketObject::checkIdleData(ExceptionSink* xsink) {
+    AutoLocker al(priv->m);
+    qore_socket_private* p = qore_socket_private::get(*priv->socket);
+    if (!p->isOpen()) {
+        return -1;
+    }
+    if (p->ssl) {
+        // TLS connection: use SSL_peek to drain TLS post-handshake records (e.g., TLS 1.3
+        // NewSessionTicket).  SSL_peek consumes the TLS record from the TCP socket into
+        // OpenSSL's internal buffer and processes non-application-data records (session
+        // tickets, etc.) transparently.  Returns QSE_TIMEOUT when no application data is
+        // available after processing any such records.  This avoids the raw-recv busy-loop
+        // where a TLS Application Data record header (0x17) is seen by recv(MSG_PEEK) but
+        // never consumed because it requires OpenSSL processing.
+        int rc = p->ssl->doSSLRW(xsink, "checkIdleData", p->rbuf, 1, 0, PEEK, false);
+        if (*xsink) {
+            return -1;
+        }
+        if (!p->isOpen()) {
+            // Connection closed by TLS close notify during the peek
+            return -1;
+        }
+        if (rc == QSE_TIMEOUT) {
+            return 0;  // No application data; TLS record(s) drained
+        }
+        return rc > 0 ? 1 : 0;
+    }
+    // Plain TCP: raw non-blocking peek
+    char peek_buf;
+    ssize_t rc = ::recv(p->sock, &peek_buf, 1, MSG_PEEK | MSG_DONTWAIT);
+    if (rc > 0) {
+        return 1;
+    }
+    if (rc == 0) {
+        return -1;  // EOF
+    }
+    return 0;  // EAGAIN / EWOULDBLOCK
+}
+
 void QoreSocketObject::setAlpnProtocols(const QoreListNode* protocols, ExceptionSink* xsink) {
     AutoLocker al(priv->m);
     priv->socket->setAlpnProtocols(protocols, xsink);

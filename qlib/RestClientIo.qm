@@ -29,6 +29,7 @@
 %requires Logger
 %requires(reexport) RestClient >= 2.4
 %requires(reexport) HttpClientIo
+%requires HttpClientStreamingIo
 %requires(reexport) RestSchemaValidator >= 1.0
 %requires Swagger >= 2.0
 %requires OpenApi3 >= 1.0
@@ -2859,6 +2860,58 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
                 return;
             }
             return new SSLPrivateKey(key_data, opts.ssl_key_password);
+        }
+
+        #! Creates an SSE Observable for the given REST endpoint
+        /** Serializes the body, adds auth headers, prepends the connection path,
+            and returns an @ref HttpClientStreamingIo::SseObservable that delivers
+            parsed SSE events via the Observer pattern.
+
+            @param method HTTP method (e.g., "GET", "POST")
+            @param path request path
+            @param body request body (optional); serialized using the configured
+            data serialization setting
+            @param hdr additional request headers (optional)
+            @param opts options passed through to SseObservable:
+            - \c serialization: "json" or "none" (default: inherits from data serialization)
+            - \c timeout: I/O timeout for reading events (default: 30s)
+
+            @return an SseObservable ready for observer registration; call
+            \c observersReady() after registering observers to start the stream
+
+            @par Example
+            @code{.py}
+RestClientIo rest({"url": "https://api.example.com"});
+HttpClientStreamingIo::SseObservable obs = rest.restObserveSse("POST", "/v1/stream",
+    {"prompt": "Hello"}, NOTHING, {"serialization": "json"});
+obs.registerObserver(sub (string event_type, auto data) {
+    if (event_type == HttpClientStreamingIo::EVENT_SSE_DATA) {
+        printf("Event: %y\n", data);
+    }
+});
+obs.observersReady();
+            @endcode
+
+            @since %RestClientIo 2.3
+        */
+        HttpClientStreamingIo::SseObservable restObserveSse(string method, string path,
+                auto body, *hash<auto> hdr, *hash<auto> opts) {
+            # Prepare the request (serializes body, adds auth headers, prepends connection_path)
+            hash<auto> prepared = prepareRequest(method, \path, body, \hdr);
+
+            # Ensure Accept: text/event-stream header
+            if (!hdr."accept") {
+                hdr."accept" = "text/event-stream";
+            }
+
+            # Merge serialization from opts or default to "none"
+            hash<auto> obs_opts = opts ?? {};
+            if (!obs_opts.serialization) {
+                obs_opts.serialization = "none";
+            }
+
+            return new HttpClientStreamingIo::SseObservable(mgr, url, method, path, hdr,
+                prepared.serialized_body, obs_opts);
         }
     }
 

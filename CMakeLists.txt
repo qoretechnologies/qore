@@ -311,6 +311,7 @@ set(LIBQORE_QPP_SRC
     lib/QC_LoggerInterfaceBase.qpp
     lib/QC_AsyncIoController.qpp
     lib/ql_misc.qpp
+    lib/ql_websocket.qpp
     lib/ql_compression.qpp
     lib/ql_thread.qpp
     lib/ql_crypto.qpp
@@ -1439,6 +1440,7 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_BINARY_DIR}/ql_string.cpp\"
 #include \"${CMAKE_BINARY_DIR}/ql_pwd.cpp\"
 #include \"${CMAKE_BINARY_DIR}/ql_misc.cpp\"
+#include \"${CMAKE_BINARY_DIR}/ql_websocket.cpp\"
 #include \"${CMAKE_BINARY_DIR}/ql_list.cpp\"
 #include \"${CMAKE_BINARY_DIR}/ql_crypto.cpp\"
 #include \"${CMAKE_BINARY_DIR}/ql_object.cpp\"
@@ -1996,7 +1998,7 @@ qore_user_module("qlib/DiscordWebSocketClient.qm" "ConnectionProvider;Util;WebSo
 qore_user_module("qlib/HttpServer.qm" "HttpServerUtil;Mime;Util")
 qore_user_module("qlib/HttpServerAsyncIo" "HttpServer")
 qore_user_module("qlib/HttpClientIo" "HttpUtil;Logger;AsyncSocketIo")
-qore_user_module("qlib/HttpClientStreamingIo" "HttpClientIo")
+qore_user_module("qlib/HttpClientStreamingIo" "HttpClientIo;DataProvider;AsyncSocketIo;Logger")
 qore_user_module("qlib/Pop3Client.qm" "ConnectionProvider;MailMessage;Mime;Logger")
 qore_user_module("qlib/RestSchemaValidator.qm" "HttpServerUtil;Logger")
 qore_user_module("qlib/SewioWebSocketClient.qm" "ConnectionProvider;Util;WebSocketUtil;WebSocketClient")

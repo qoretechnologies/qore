@@ -321,6 +321,42 @@ public class Http3ClientConnection inherits HttpClientConnection {
         return stream_id;
     }
 
+    #! Submits an SSE request with Queue-based parsed event delivery
+    /** Like submitRequestStreamingWithChannel() but creates an SseAction that parses
+        SSE events on the I/O thread and pushes parsed SseMessageInfo hashes to a Queue.
+
+        @param method HTTP method
+        @param path request path
+        @param headers request headers (optional)
+        @param body request body (optional)
+        @param queue Queue for parsed SSE event delivery
+
+        @return the stream ID
+    */
+    int submitRequestSse(string method, string path, *hash<auto> headers, *data body,
+            Queue queue) {
+        if (!self.isReady()) {
+            throw "HTTPCLIENT-STATE-ERROR",
+                sprintf("connection not ready: state=%y", self.getConnectionState());
+        }
+        *object ctl;
+        {
+            AutoLock al(lock);
+            last_activity = now_us();
+            ctl = controller_ref;
+        }
+
+        log(LoggerLevel::DEBUG, "submitting SSE request: %s %s", method, path);
+        int stream_id = poll_op.submitRequestWithQueue(method, path, headers, body,
+            queue, max_concurrent_streams);
+
+        if (ctl) {
+            ctl.wakeSocket(getSocket());
+        }
+
+        return stream_id;
+    }
+
     #! Protocol-specific poll result hook, called after the base state update
     /** Checks for GOAWAY received from server after the base state update completes.
         @note Called without \c lock held.

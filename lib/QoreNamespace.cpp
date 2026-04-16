@@ -95,6 +95,7 @@
 #include "qore/intern/ql_string.h"
 #include "qore/intern/ql_pwd.h"
 #include "qore/intern/ql_misc.h"
+#include "qore/intern/ql_websocket.h"
 #include "qore/intern/ql_list.h"
 #include "qore/intern/ql_thread.h"
 #include "qore/intern/ql_crypto.h"
@@ -1476,6 +1477,7 @@ StaticSystemNamespace::StaticSystemNamespace() : RootQoreNamespace(new qore_root
     init_alloc_tracking_functions(qns);
 #endif
     init_misc_functions(qns);
+    init_websocket_functions(qns);
     init_list_functions(qns);
     init_type_functions(qns);
     init_pwd_functions(qns);

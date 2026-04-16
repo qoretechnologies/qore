@@ -1308,6 +1308,55 @@ int Http2ClientPollOperationBase::submitRequestStreaming(string method, string p
         body_ptr, body_len, streaming, action, (int)max_streams, xsink);
 }
 
+//! Submits an HTTP/2 SSE request with Queue-based parsed event delivery
+/** Like submitRequestStreaming() but creates an SseAction that parses SSE events
+    on the I/O thread and pushes parsed SseMessageInfo hashes to a Queue.
+
+    @param method HTTP method (GET, POST, etc.)
+    @param path request path
+    @param headers optional request headers
+    @param body optional request body
+    @param queue Queue for parsed SSE event delivery
+    @param max_streams maximum concurrent streams (0 = unlimited)
+
+    @return the stream ID assigned to this request
+
+    @since %Qore 2.3
+*/
+int Http2ClientPollOperationBase::submitRequestSse(string method, string path,
+        *hash<auto> headers, *data body, Queue[Queue] queue, int max_streams) {
+    const void* body_ptr = nullptr;
+    size_t body_len = 0;
+    if (body) {
+        switch (body->getType()) {
+            case NT_BINARY: {
+                const BinaryNode* b = static_cast<const BinaryNode*>(body);
+                body_ptr = b->getPtr();
+                body_len = b->size();
+                break;
+            }
+            case NT_STRING: {
+                const QoreStringNode* str = static_cast<const QoreStringNode*>(body);
+                body_ptr = str->c_str();
+                body_len = str->size();
+                break;
+            }
+            default:
+                xsink->raiseException("HTTP2-ERROR",
+                    "body must be string or binary, got type '%s'",
+                    body->getTypeName());
+                return -1;
+        }
+    }
+
+    // Create SseAction — priv takes ownership; release from QPP holder
+    Queue* queue_ptr = queue.release();
+    SseAction* action = new SseAction(queue_ptr);
+    queue_ptr->deref(xsink);  // SseAction refs the queue itself
+    return (int)priv->submitRequest(method->c_str(), path->c_str(), headers,
+        body_ptr, body_len, true, action, (int)max_streams, xsink);
+}
+
 //! Cancel a stream
 /** @param stream_id the stream to cancel
     @return True if the stream was found and cancelled

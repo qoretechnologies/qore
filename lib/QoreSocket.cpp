@@ -45,6 +45,7 @@
 #include "qore/intern/QC_SocketPollOperation.h"
 #include "qore/intern/QoreAsyncIoLogger.h"
 #include "qore/intern/qore_socket_private.h"
+#include "qore/intern/AsyncCompletionAction.h"
 #include "qore/intern/qore_string_private.h"
 #include "qore/intern/QoreClassIntern.h"
 #include "qore/intern/CompressionTransforms.h"
@@ -3017,10 +3018,11 @@ printd(0, "qore_socket_private::readServerSentEvent() cib: %p (%lld) (%s) tbuf: 
         }
     }
     //printd(5, "readServerSentEvent: raw SSE message (" QSD " bytes): %s", str.strlen(), str.c_str());
-    return parseServerSentEvent(xsink, str);
+    return parseSseEvent(xsink, str);
 }
 
-QoreHashNode* qore_socket_private::parseServerSentEvent(ExceptionSink* xsink, const QoreString& buf) {
+// Standalone SSE event parser — reused by SseAction on the I/O thread
+QoreHashNode* parseSseEvent(ExceptionSink* xsink, const QoreString& buf) {
     ReferenceHolder<QoreHashNode> rv(new QoreHashNode(hashdeclSseMessageInfo, xsink), xsink);
     assert(!*xsink);
     SimpleRefHolder<QoreStringNode> field;
@@ -3080,6 +3082,45 @@ QoreHashNode* qore_socket_private::parseServerSentEvent(ExceptionSink* xsink, co
     //printd(0, "qore_socket_private::parseServerSentEvent() %s\n", str->c_str());
 
     return rv.release();
+}
+
+// --- SseAction implementation ---
+
+void SseAction::execute(QoreValue output, ExceptionSink* xsink) {
+    // Extract body binary from the streaming data hash
+    if (output.getType() == NT_HASH) {
+        QoreValue body_val = output.get<QoreHashNode>()->getKeyValue("body");
+        if (body_val.getType() == NT_BINARY) {
+            const BinaryNode* data = body_val.get<const BinaryNode>();
+            if (data->size() > 0) {
+                sse_buffer.concat((const char*)data->getPtr(), data->size());
+            }
+        }
+    }
+    output.discard(xsink);
+
+    // Parse complete SSE events (terminated by double newline)
+    while (true) {
+        // Look for \n\n or \r\n\r\n boundary
+        qore_offset_t pos = sse_buffer.find("\n\n");
+        size_t sep_len = 2;
+        if (pos < 0) {
+            pos = sse_buffer.find("\r\n\r\n");
+            sep_len = 4;
+            if (pos < 0) {
+                break;
+            }
+        }
+        // Extract the event text (without the terminator)
+        QoreString event_text(sse_buffer.c_str(), pos);
+        event_text.concat("\n\n");  // parseSseEvent loop uses (i < size-1), needs double \n
+        // Remove consumed bytes from buffer
+        sse_buffer.replace(0, pos + sep_len, "");
+        QoreHashNode* evt = parseSseEvent(xsink, event_text);
+        if (evt && queue) {
+            queue->pushAndTakeRef(evt);
+        }
+    }
 }
 
 void QoreSocket::doException(int rc, const char* meth, int timeout_ms, ExceptionSink* xsink) {
@@ -5044,7 +5085,7 @@ QoreHashNode* QoreSocket::readHttpChunk(int timeout, ExceptionSink* xsink) {
 }
 
 QoreHashNode* QoreSocket::parseServerSentEvent(ExceptionSink* xsink, const QoreString& buf) {
-    return qore_socket_private::parseServerSentEvent(xsink, buf);
+    return parseSseEvent(xsink, buf);
 }
 
 QoreHashNode* QoreSocket::readServerSentEvent(ExceptionSink* xsink, const QoreStringNode* content_encoding,

@@ -846,6 +846,34 @@ public class HttpClientStreamHandle {
         return False;
     }
 
+    #! Starts an SSE streaming request with I/O-thread event parsing
+    /** Creates a Queue and submits an SSE request where the I/O thread parses
+        SSE events at double-newline boundaries and pushes parsed SseMessageInfo
+        hashes to the Queue.  The caller reads parsed events from the Queue via
+        Queue::get().
+
+        This method returns a Queue because the I/O thread handles all SSE parsing
+        — no additional SseStreamReader is needed.  A NOTHING sentinel is pushed
+        when the stream ends.
+
+        @param method HTTP method (e.g., "GET", "POST")
+        @param path request path
+        @param headers request headers (optional)
+        @param body request body (optional)
+
+        @return the Queue that will receive parsed SSE events
+
+        @throw HTTPCLIENT-STREAMING-NOT-SUPPORTED if the protocol does not support SSE streaming
+        @throw HTTPCLIENT-STATE-ERROR if the stream is already in use
+        @throw HTTPCLIENT-TIMEOUT if connection establishment times out
+
+        @since %HttpClientIo 1.4
+    */
+    Queue startSseStreaming(string method, string path, *hash<auto> headers, *data body) {
+        throw "HTTPCLIENT-STREAMING-NOT-SUPPORTED",
+            "SSE streaming is not supported by " + conn.getProtocol();
+    }
+
     #! Send a QUIC DATAGRAM frame on this stream's datagram channel (RFC 9221/9297)
     /** @param data the datagram payload to send
 
