@@ -145,6 +145,54 @@ static bool readDeferredMemberDefault(
         (void)save;
         return true;
     }
+    if (tag_byte == static_cast<uint8_t>(QoreAOTValueTag::VT_NEW_COMPLEX_DEFAULT)) {
+        // Class/static member defaults are read during deserializeClasses,
+        // which runs BEFORE deserializeHashDecls AND before all classes in
+        // the same module are committed. Complex-type defaults like
+        // `hash<ComponentInfo>()` (hashdecl), `hash<string, MyClass>()`
+        // (complex hash referencing a class), or `list<MyClass>()` may
+        // reference types that don't exist yet. Defer ALL complex defaults
+        // to resolveInstanceMembers / resolveStaticMembers.
+        if (ptr + 2 > end) {
+            error = "unexpected end of data reading complex_default kind";
+            return false;
+        }
+        ptr += 1;  // consume tag
+        uint8_t kind = QoreAOTBinaryReader::readU8(ptr);
+        if (ptr + 8 > end) {
+            error = "unexpected end of data reading complex_default type path";
+            return false;
+        }
+        (void)QoreAOTBinaryReader::readU32(ptr);  // path_len (unused)
+        uint32_t path_offset = QoreAOTBinaryReader::readU32(ptr);
+        const char* type_path = reader.getString(path_offset);
+        if (!type_path) {
+            error = "invalid string offset for complex_default type path in deferred member default";
+            return false;
+        }
+        if (ptr + 4 > end) {
+            error = "unexpected end of data reading complex_default arg count";
+            return false;
+        }
+        uint32_t nargs = QoreAOTBinaryReader::readU32(ptr);
+        std::vector<QoreValue> args;
+        args.reserve(nargs);
+        for (uint32_t i = 0; i < nargs; ++i) {
+            QoreValue arg = reader.readValue(ptr, end, error);
+            if (!error.empty()) {
+                for (auto& v : args) {
+                    v.discard(nullptr);
+                }
+                return false;
+            }
+            args.push_back(arg);
+        }
+        pim.pending_complex_default_kind = static_cast<int8_t>(kind);
+        pim.pending_complex_default_path = type_path;
+        pim.pending_complex_default_args = std::move(args);
+        default_val = QoreValue();
+        return true;
+    }
     if (tag_byte != static_cast<uint8_t>(QoreAOTValueTag::VT_NEW_OBJECT)) {
         // Normal case: use the standard reader
         default_val = reader.readValue(ptr, end, error);
@@ -4040,10 +4088,18 @@ bool QoreAOTBinaryDeserializer::deserializeIntoProgram(QoreProgram* in_pgm, cons
     // Rebuild root namespace indexes (fmap, varmap, clmap, etc.) so that
     // runtime lookups like runtimeFindFunctionEntry() can find the
     // deserialized functions, classes, etc.
-    qore_program_private* pp = qore_program_private::get(*pgm);
-    qore_root_ns_private* rpriv = static_cast<qore_root_ns_private*>(
-        qore_ns_private::get(*pp->RootNS));
-    rpriv->rebuildAllIndexes();
+    {
+        qore_program_private* pp_idx = qore_program_private::get(*pgm);
+        qore_root_ns_private* rpriv = static_cast<qore_root_ns_private*>(
+            qore_ns_private::get(*pp_idx->RootNS));
+        rpriv->rebuildAllIndexes();
+    }
+    // Resolve deferred BCA (base class constructor argument) EXPR_TREE blobs.
+    // Must run after commitDeserializedClasses + rebuildAllIndexes so all
+    // methods and classes are findable by the EXPR_TREE handlers.
+    if (!resolveBCAExpressions(error)) {
+        return false;
+    }
 
     printd(2, "AOT: deserialized namespace tree: %d namespaces, %d classes%s\n",
         static_cast<int>(ns_list.size()), static_cast<int>(class_list.size()),
@@ -4128,11 +4184,16 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
     uint32_t count = QoreAOTBinaryReader::readU32(ptr);
     class_list.resize(count);
 
-    // In-progress class path → QoreClass* map used as a fallback lookup in
-    // readValue VT_NEW_OBJECT for forward references inside member init
-    // expressions (e.g. `OtherClass m()`). This is needed because classes
-    // are not committed to the root namespace's clmap until after the full
-    // classes pass, so getProgram()->findClass() won't find them mid-pass.
+    // Populate the root namespace's clmap incrementally as each class is
+    // created, so standard lookup paths (runtimeFindClass, findClass,
+    // en_resolveClass in EXPR_TREE handlers) work during deserialization.
+    // The pending_class_map is kept as a secondary fallback for the
+    // VT_NEW_OBJECT deferred path which may encounter forward references
+    // (class A's member default references class B that hasn't been added
+    // to a namespace yet due to ordering within this same loop).
+    qore_program_private* pp = qore_program_private::get(*pgm);
+    qore_root_ns_private* root_priv = static_cast<qore_root_ns_private*>(
+        qore_ns_private::get(*pp->RootNS));
     std::unordered_map<std::string, QoreClass*> pending_class_map;
     struct ClassMapRAII {
         ClassMapRAII(const std::unordered_map<std::string, QoreClass*>* p) {
@@ -4186,9 +4247,13 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
         }
         class_list[i] = qc;
 
-        // Register into the forward-ref map for member-init resolution.
-        // Build both the bare path ("DataProvider::Foo") and a fully-scoped
-        // form with leading "::" so either lookup shape works.
+        // Update root namespace's clmap so all standard lookup paths work
+        // immediately (runtimeFindClass, en_resolveClass, etc.).
+        root_priv->clmap.update(qc->getName(), ns_list[ns_idx], qc);
+
+        // Also register into the forward-ref pending map as a fallback for
+        // VT_NEW_OBJECT member init expressions that may encounter ordering
+        // issues (class A's member default references class B and vice versa).
         if (path && *path) {
             pending_class_map[path] = qc;
             if (strncmp(path, "::", 2) == 0) {
@@ -4553,6 +4618,67 @@ bool QoreAOTBinaryDeserializer::resolveInstanceMembers(std::string& error) {
                 pim.pending_enum_member.clear();
             }
 
+            // Resolve a pending complex-type default (deferred because the
+            // referenced type wasn't registered yet during deserializeClasses).
+            if (pim.pending_complex_default_kind >= 0) {
+                QoreParseListNode* parse_args = nullptr;
+                if (!pim.pending_complex_default_args.empty()) {
+                    parse_args = new QoreParseListNode(&loc_builtin);
+                    for (auto& v : pim.pending_complex_default_args) {
+                        parse_args->add(v, &loc_builtin);
+                    }
+                    pim.pending_complex_default_args.clear();
+                }
+                if (pim.pending_complex_default_kind == 2) {
+                    // Hashdecl: resolve by namespace path
+                    const QoreNamespace* pns = nullptr;
+                    const TypedHashDecl* hd = getProgram()->findHashDecl(
+                        pim.pending_complex_default_path.c_str(), pns);
+                    if (hd) {
+                        NewHashDeclNode* nhd = new NewHashDeclNode(
+                            &loc_builtin, hd, parse_args, false);
+                        pim.default_val = QoreValue(nhd);
+                    } else {
+                        printd(0, "AOT deser: hashdecl '%s' not found for instance member "
+                            "'%s' in class '%s'\n",
+                            pim.pending_complex_default_path.c_str(), pim.name.c_str(),
+                            qc->getName());
+                        if (parse_args) {
+                            parse_args->deref(nullptr);
+                        }
+                    }
+                } else {
+                    // kind 0 (complex list) or kind 1 (complex hash)
+                    const QoreTypeInfo* cti = qore_get_type_from_string_intern(
+                        pim.pending_complex_default_path.c_str());
+                    if (cti) {
+                        if (pim.pending_complex_default_kind == 0) {
+                            QoreValue list_args;
+                            if (parse_args) {
+                                list_args = QoreValue(parse_args);
+                            }
+                            NewComplexListNode* ncl = new NewComplexListNode(
+                                &loc_builtin, cti, list_args);
+                            pim.default_val = QoreValue(ncl);
+                        } else {
+                            NewComplexHashNode* nch = new NewComplexHashNode(
+                                &loc_builtin, cti, parse_args);
+                            pim.default_val = QoreValue(nch);
+                        }
+                    } else {
+                        printd(0, "AOT deser: type '%s' not found for instance member "
+                            "'%s' in class '%s' (complex default kind=%d)\n",
+                            pim.pending_complex_default_path.c_str(), pim.name.c_str(),
+                            qc->getName(), (int)pim.pending_complex_default_kind);
+                        if (parse_args) {
+                            parse_args->deref(nullptr);
+                        }
+                    }
+                }
+                pim.pending_complex_default_kind = -1;
+                pim.pending_complex_default_path.clear();
+            }
+
             // Transfer ownership of the default value to the class member
             QoreValue default_val = pim.default_val;
             pim.default_val = QoreValue();  // Clear to prevent double-deref
@@ -4693,6 +4819,64 @@ bool QoreAOTBinaryDeserializer::resolveStaticMembers(std::string& error) {
                 }
                 psm.pending_enum_path.clear();
                 psm.pending_enum_member.clear();
+            }
+
+            // Resolve a pending complex-type default.
+            if (psm.pending_complex_default_kind >= 0) {
+                QoreParseListNode* parse_args = nullptr;
+                if (!psm.pending_complex_default_args.empty()) {
+                    parse_args = new QoreParseListNode(&loc_builtin);
+                    for (auto& v : psm.pending_complex_default_args) {
+                        parse_args->add(v, &loc_builtin);
+                    }
+                    psm.pending_complex_default_args.clear();
+                }
+                if (psm.pending_complex_default_kind == 2) {
+                    const QoreNamespace* pns = nullptr;
+                    const TypedHashDecl* hd = getProgram()->findHashDecl(
+                        psm.pending_complex_default_path.c_str(), pns);
+                    if (hd) {
+                        NewHashDeclNode* nhd = new NewHashDeclNode(
+                            &loc_builtin, hd, parse_args, false);
+                        psm.default_val = QoreValue(nhd);
+                    } else {
+                        printd(0, "AOT deser: hashdecl '%s' not found for static member "
+                            "'%s' in class '%s'\n",
+                            psm.pending_complex_default_path.c_str(), psm.name.c_str(),
+                            qc->getName());
+                        if (parse_args) {
+                            parse_args->deref(nullptr);
+                        }
+                    }
+                } else {
+                    const QoreTypeInfo* cti = qore_get_type_from_string_intern(
+                        psm.pending_complex_default_path.c_str());
+                    if (cti) {
+                        if (psm.pending_complex_default_kind == 0) {
+                            QoreValue list_args;
+                            if (parse_args) {
+                                list_args = QoreValue(parse_args);
+                            }
+                            NewComplexListNode* ncl = new NewComplexListNode(
+                                &loc_builtin, cti, list_args);
+                            psm.default_val = QoreValue(ncl);
+                        } else {
+                            NewComplexHashNode* nch = new NewComplexHashNode(
+                                &loc_builtin, cti, parse_args);
+                            psm.default_val = QoreValue(nch);
+                        }
+                    } else {
+                        printd(0, "AOT deser: type '%s' not found for static member "
+                            "'%s' in class '%s' (complex default kind=%d)\n",
+                            psm.pending_complex_default_path.c_str(), psm.name.c_str(),
+                            qc->getName(), (int)psm.pending_complex_default_kind);
+                        if (parse_args) {
+                            parse_args->deref(nullptr);
+                        }
+                    }
+                }
+                psm.pending_complex_default_kind = -1;
+                psm.pending_complex_default_path.clear();
             }
 
             // Create the static variable info. The default value is
@@ -4938,6 +5122,14 @@ bool QoreAOTBinaryDeserializer::deserializeHashDecls(std::string& error) {
                 mi.default_val.discard(nullptr);
             }
             continue;
+        }
+
+        // Update root namespace's thdmap so findHashDecl() works immediately
+        {
+            qore_program_private* pp_hd = qore_program_private::get(*pgm);
+            qore_root_ns_private* rpriv = static_cast<qore_root_ns_private*>(
+                qore_ns_private::get(*pp_hd->RootNS));
+            rpriv->thdmap.update(hd->getName(), ns_list[ns_idx], hd);
         }
 
         // Store members for later resolution (after all hashdecls/enums/typedefs exist)
@@ -5554,13 +5746,15 @@ bool QoreAOTBinaryDeserializer::deserializeMethods(std::string& error) {
                 mvb->setFlag(QCF_USES_EXTRA_ARGS);
             }
 
-            // Deserialize BCA (Base Class Constructor Arguments) for constructors
+            // Collect BCA (Base Class Constructor Arguments) raw blob data
+            // for deferred deserialization. EXPR_TREE blobs may reference
+            // static methods of the same class that haven't been added yet.
             if (is_constructor && ptr < end) {
                 uint8_t has_bca = QoreAOTBinaryReader::readU8(ptr);
                 if (has_bca) {
                     uint16_t num_bca = QoreAOTBinaryReader::readU16(ptr);
                     if (num_bca > 0) {
-                        BCAList* bcal = new BCAList();
+                        UserConstructorVariant* ucv = dynamic_cast<UserConstructorVariant*>(mvb);
 
                         // Build local var array from constructor's signature params
                         UserSignature* sig = umv->getUserSignature();
@@ -5577,12 +5771,18 @@ bool QoreAOTBinaryDeserializer::deserializeMethods(std::string& error) {
                             }
                         }
 
+                        PendingBCA pbca;
+                        pbca.qc = qc;
+                        pbca.ucv = ucv;
+                        pbca.local_vars = std::move(local_vars);
+
                         for (uint16_t bi = 0; bi < num_bca; ++bi) {
-                            // Read base class path
+                            PendingBCAEntry entry;
                             const char* base_path = reader.readStringRef(ptr);
+                            entry.base_path = base_path ? base_path : "";
 
                             // Resolve base class by path
-                            qore_classid_t base_classid = 0;
+                            entry.classid = 0;
                             if (base_path && base_path[0]) {
                                 ExceptionSink xsink;
                                 const QoreClass* base_cls = pgm->findClass(base_path, &xsink);
@@ -5590,56 +5790,24 @@ bool QoreAOTBinaryDeserializer::deserializeMethods(std::string& error) {
                                     xsink.clear();
                                 }
                                 if (base_cls) {
-                                    base_classid = base_cls->getID();
-                                } else {
-                                    printd(0, "AOT deser: cannot resolve BCA base class '%s' "
-                                        "for %s::constructor\n", base_path, qc->getName());
+                                    entry.classid = base_cls->getID();
                                 }
                             }
 
-                            // Read and deserialize args
+                            // Read raw arg blobs (advance ptr but don't deserialize)
                             uint16_t num_args = QoreAOTBinaryReader::readU16(ptr);
-                            QoreListNode* arg_list = nullptr;
-                            if (num_args > 0) {
-                                // Must use newList(true) so the list has value=false and
-                                // needs_eval=true; otherwise evalList() returns the list as-is
-                                // without evaluating expression nodes
-                                arg_list = qore_list_private::newList(true);
-                                qore_list_private::get(*arg_list)->complexTypeInfo =
-                                    qore_get_complex_list_type(autoTypeInfo);
-                                for (uint16_t ai = 0; ai < num_args; ++ai) {
-                                    uint32_t blob_size = QoreAOTBinaryReader::readU32(ptr);
-                                    if (blob_size > 0 && ptr + blob_size <= end) {
-                                        QoreValue arg_val = deserializeExprTreeFromBlob(
-                                            ptr, blob_size, pgm,
-                                            local_vars.empty() ? nullptr : local_vars.data(),
-                                            static_cast<int>(local_vars.size()));
-                                        ptr += blob_size;
-                                        arg_list->push(arg_val, nullptr);
-                                    } else {
-                                        ptr += blob_size;
-                                        arg_list->push(QoreValue(), nullptr);
-                                    }
-                                }
+                            entry.arg_blobs.reserve(num_args);
+                            for (uint16_t ai = 0; ai < num_args; ++ai) {
+                                uint32_t blob_size = QoreAOTBinaryReader::readU32(ptr);
+                                PendingBCAArgBlob ab;
+                                ab.data = (blob_size > 0 && ptr + blob_size <= end) ? ptr : nullptr;
+                                ab.size = blob_size;
+                                entry.arg_blobs.push_back(ab);
+                                ptr += blob_size;
                             }
-
-                            // Create BCANode with pre-resolved data
-                            BCANode* bca_node = new BCANode(base_classid, arg_list);
-                            bcal->push_back(bca_node);
-
-                            printd(5, "AOT deser: BCA entry %d/%d: base='%s' classid=%d "
-                                "num_args=%d for %s::constructor\n",
-                                bi + 1, num_bca, base_path ? base_path : "",
-                                base_classid, num_args, qc->getName());
+                            pbca.entries.push_back(std::move(entry));
                         }
-
-                        // Set BCA on the constructor variant
-                        UserConstructorVariant* ucv = dynamic_cast<UserConstructorVariant*>(mvb);
-                        if (ucv) {
-                            ucv->setBCAList(bcal);
-                        } else {
-                            delete bcal;
-                        }
+                        pending_bcas.push_back(std::move(pbca));
                     }
                 }
             }
@@ -5828,6 +5996,46 @@ bool QoreAOTBinaryDeserializer::commitDeserializedClasses(std::string& error) {
         }
     }
 
+    return true;
+}
+
+bool QoreAOTBinaryDeserializer::resolveBCAExpressions(std::string& error) {
+    for (auto& pbca : pending_bcas) {
+        if (!pbca.ucv) {
+            continue;
+        }
+
+        BCAList* bcal = new BCAList();
+        for (auto& entry : pbca.entries) {
+            // Deserialize arg EXPR_TREE blobs now that all methods are committed
+            uint16_t num_args = static_cast<uint16_t>(entry.arg_blobs.size());
+            QoreListNode* arg_list = nullptr;
+            if (num_args > 0) {
+                arg_list = qore_list_private::newList(true);
+                qore_list_private::get(*arg_list)->complexTypeInfo =
+                    qore_get_complex_list_type(autoTypeInfo);
+                for (uint16_t ai = 0; ai < num_args; ++ai) {
+                    auto& ab = entry.arg_blobs[ai];
+                    if (ab.data && ab.size > 0) {
+                        QoreValue arg_val = deserializeExprTreeFromBlob(
+                            ab.data, ab.size, pgm,
+                            pbca.local_vars.empty() ? nullptr : pbca.local_vars.data(),
+                            static_cast<int>(pbca.local_vars.size()));
+                        arg_list->push(arg_val, nullptr);
+                    } else {
+                        arg_list->push(QoreValue(), nullptr);
+                    }
+                }
+            }
+
+            BCANode* bca_node = new BCANode(entry.classid, arg_list);
+            bcal->push_back(bca_node);
+        }
+
+        pbca.ucv->setBCAList(bcal);
+    }
+
+    pending_bcas.clear();
     return true;
 }
 

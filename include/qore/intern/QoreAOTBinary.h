@@ -1025,6 +1025,8 @@ class QoreClass;
     - Functions with proper UserSignature (no bodies)
     - Methods on classes with proper UserSignature (no bodies)
 */
+class UserConstructorVariant;
+
 class QoreAOTBinaryDeserializer {
     QoreAOTBinaryReader reader;
     QoreAOTTypeResolver* type_resolver = nullptr;
@@ -1074,6 +1076,14 @@ class QoreAOTBinaryDeserializer {
         //! classes). Resolved into the enum member value in the second pass.
         std::string pending_enum_path;
         std::string pending_enum_member;
+        //! When set, the member init is a complex-type default constructor
+        //! (e.g. `hash<ComponentInfo>()`, `hash<string, T>()`, `list<T>()`)
+        //! that references a type not yet registered at class-read time.
+        //! Resolved in the second pass after all types exist.
+        //! kind: 0=complex list, 1=complex hash, 2=hashdecl
+        int8_t pending_complex_default_kind = -1;
+        std::string pending_complex_default_path;
+        std::vector<QoreValue> pending_complex_default_args;
     };
     std::vector<std::vector<PendingInstanceMember>> pending_instance_members;
 
@@ -1089,6 +1099,10 @@ class QoreAOTBinaryDeserializer {
         //! Same deferred-enum channel as PendingInstanceMember.
         std::string pending_enum_path;
         std::string pending_enum_member;
+        //! Same deferred-complex-default channel as PendingInstanceMember.
+        int8_t pending_complex_default_kind = -1;
+        std::string pending_complex_default_path;
+        std::vector<QoreValue> pending_complex_default_args;
     };
     std::vector<std::vector<PendingStaticMember>> pending_static_members;
 
@@ -1126,6 +1140,27 @@ class QoreAOTBinaryDeserializer {
     };
     std::vector<PendingEnumBaseType> pending_enum_base_types;
 
+    //! Pending BCA arg blob for deferred deserialization.
+    //! BCA arg EXPR_TREE blobs can reference static methods of the same class
+    //! that haven't been added yet during method deserialization. Deferring
+    //! blob deserialization to after all methods are committed fixes this.
+    struct PendingBCAArgBlob {
+        const uint8_t* data;
+        uint32_t size;
+    };
+    struct PendingBCAEntry {
+        qore_classid_t classid;
+        std::string base_path;
+        std::vector<PendingBCAArgBlob> arg_blobs;
+    };
+    struct PendingBCA {
+        QoreClass* qc;
+        UserConstructorVariant* ucv;
+        std::vector<LocalVar*> local_vars;
+        std::vector<PendingBCAEntry> entries;
+    };
+    std::vector<PendingBCA> pending_bcas;
+
     bool deserializeNamespaces(std::string& error);
     bool deserializeClasses(std::string& error);
     bool resolveClassBases(std::string& error);
@@ -1136,6 +1171,7 @@ class QoreAOTBinaryDeserializer {
     bool resolveHashdeclMembers(std::string& error);
     bool resolveTypedefs(std::string& error);
     bool resolveEnumBaseTypes(std::string& error);
+    bool resolveBCAExpressions(std::string& error);
     bool deserializeHashDecls(std::string& error);
     bool deserializeEnums(std::string& error);
     bool deserializeTypedefs(std::string& error);
