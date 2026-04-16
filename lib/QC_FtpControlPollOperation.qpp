@@ -1,0 +1,1110 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    QC_FtpControlPollOperation.qpp
+
+    FtpControlPollOperation class definition
+
+    Qore Programming Language
+
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    Note that the Qore library is released under a choice of three open-source
+    licenses: MIT (as above), LGPL 2+, or GPL 2+; see README-LICENSE for more
+    information.
+*/
+
+#include "qore/Qore.h"
+#include "qore/intern/QC_FtpControlPollOperation.h"
+#include "qore/intern/QC_SocketPollOperation.h"
+#include "qore/intern/QC_Socket.h"
+#include "qore/intern/AsyncIoControllerPriv.h"
+
+/** @cond INTERNAL */
+
+// ============================================================
+// FtpControlPollOperationPriv implementation
+// ============================================================
+
+FtpControlPollOperationPriv::FtpControlPollOperationPriv(QoreObject* self,
+        QoreSocketObject* ctrl_sock, SocketPollOperationBase* connect_op,
+        bool secure, bool secure_data,
+        const char* user, const char* pass)
+    : SocketPollOperationBase(self),
+      ctrl_sock(ctrl_sock),
+      current_op(connect_op),
+      secure(secure),
+      secure_data(secure_data),
+      ftp_user(user ? user : "anonymous"),
+      ftp_pass(pass ? pass : "qore@nohost.com") {
+    // ctrl_sock and connect_op are ref'd by the caller; ownership transferred
+}
+
+FtpControlPollOperationPriv::~FtpControlPollOperationPriv() {
+    // Resources must be released by deref() before destruction
+    // If not, we have a leak but we can't fix it here (no ExceptionSink)
+}
+
+void FtpControlPollOperationPriv::deref(ExceptionSink* xsink) {
+    if (ROdereference()) {
+        if (current_op) {
+            current_op->deref(xsink);
+            current_op = nullptr;
+        }
+        // ctrl_sock is NOT ref'd by us — it's owned by the "sock" member QoreObject.
+        // We just hold a raw pointer for convenience. Clear it to prevent use-after-free.
+        ctrl_sock = nullptr;
+        delete this;
+    }
+}
+
+bool FtpControlPollOperationPriv::goalReached() const {
+    if (ctrl_state == FtpCtrlState::CLOSED) {
+        return true;
+    }
+    if (ctrl_state == FtpCtrlState::READY) {
+        // After login: login_complete && no pending command → goal reached
+        // After command: command_complete → goal reached
+        if (command_complete) {
+            return true;
+        }
+        // Login goal: reached when logged in and no pending command
+        return login_complete && pending_cmd.empty();
+    }
+    return false;
+}
+
+const char* FtpControlPollOperationPriv::getStateImpl() const {
+    switch (ctrl_state) {
+        case FtpCtrlState::CONNECTING:
+            return "connecting";
+        case FtpCtrlState::RECV_LINE:
+            switch (phase) {
+                case FtpCtrlPhase::GREETING: return "recv-greeting";
+                case FtpCtrlPhase::AUTH_TLS: return "recv-auth-tls";
+                case FtpCtrlPhase::PBSZ: return "recv-pbsz";
+                case FtpCtrlPhase::PROT: return "recv-prot";
+                case FtpCtrlPhase::USER: return "recv-user";
+                case FtpCtrlPhase::PASS: return "recv-pass";
+                case FtpCtrlPhase::COMMAND: return "recv-command";
+            }
+            return "recv-line";
+        case FtpCtrlState::SENDING:
+            return "sending";
+        case FtpCtrlState::SSL_UPGRADE:
+            return "ssl-upgrade";
+        case FtpCtrlState::READY:
+            return "ready";
+        case FtpCtrlState::CLOSED:
+            return "closed";
+    }
+    return "unknown";
+}
+
+QoreValue FtpControlPollOperationPriv::getOutput() const {
+    if (!*last_response && last_code == 0) {
+        return QoreValue();
+    }
+    ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), nullptr);
+    ExceptionSink dummy;
+    h->setKeyValue("code", last_code, &dummy);
+    if (*last_response) {
+        (*last_response)->ref();
+        h->setKeyValue("message", *last_response, &dummy);
+    }
+    h->setKeyValue("login_complete", login_complete, &dummy);
+    return h.release();
+}
+
+void FtpControlPollOperationPriv::abort(ExceptionSink* xsink) {
+    if (current_op) {
+        current_op->abort(xsink);
+        current_op->deref(xsink);
+        current_op = nullptr;
+    }
+    ctrl_state = FtpCtrlState::CLOSED;
+}
+
+int FtpControlPollOperationPriv::submitCommand(const char* cmd, const char* arg, ExceptionSink* xsink) {
+    if (ctrl_state != FtpCtrlState::READY || !login_complete) {
+        xsink->raiseException("FTP-COMMAND-ERROR",
+            "cannot submit command in state '%s' (login_complete: %s)",
+            getStateImpl(), login_complete ? "true" : "false");
+        return -1;
+    }
+    // Build the command string
+    pending_cmd = cmd;
+    if (arg && *arg) {
+        pending_cmd += ' ';
+        pending_cmd += arg;
+    }
+    pending_cmd += "\r\n";
+    command_complete = false;
+    return 0;
+}
+
+int FtpControlPollOperationPriv::submitRecvResponse(ExceptionSink* xsink) {
+    if (ctrl_state != FtpCtrlState::READY || !login_complete) {
+        xsink->raiseException("FTP-COMMAND-ERROR",
+            "cannot submit recv in state '%s' (login_complete: %s)",
+            getStateImpl(), login_complete ? "true" : "false");
+        return -1;
+    }
+    // Set phase to COMMAND so dispatchResponse() will set command_complete
+    phase = FtpCtrlPhase::COMMAND;
+    command_complete = false;
+    response_accum.clear();
+    // Transition directly to recv — no send needed
+    if (startRecvLine(xsink)) {
+        return -1;
+    }
+    return 0;
+}
+
+// --- Helper methods ---
+
+void FtpControlPollOperationPriv::releaseCurrentOp(ExceptionSink* xsink) {
+    if (current_op) {
+        current_op->deref(xsink);
+        current_op = nullptr;
+    }
+}
+
+void FtpControlPollOperationPriv::setClosed() {
+    ctrl_state = FtpCtrlState::CLOSED;
+}
+
+int FtpControlPollOperationPriv::startSendData(const char* data, size_t len, ExceptionSink* xsink) {
+    assert(!current_op);
+    QoreStringNode* sdata = new QoreStringNode(data, len, QCS_DEFAULT);
+    ctrl_sock->ref();  // ref for inner op (takes ownership)
+    current_op = new SocketSendPollOperation(xsink, sdata, ctrl_sock);
+    if (*xsink) {
+        // SocketSendPollOperation constructor takes ownership of sdata even on error
+        releaseCurrentOp(xsink);
+        setClosed();
+        return -1;
+    }
+    current_op->setSelf(*self);
+    ctrl_state = FtpCtrlState::SENDING;
+    return 0;
+}
+
+int FtpControlPollOperationPriv::startSendCommand(const char* cmd, const char* arg, ExceptionSink* xsink) {
+    QoreString buf(cmd);
+    if (arg && *arg) {
+        buf.concat(' ');
+        buf.concat(arg);
+    }
+    buf.concat("\r\n");
+    return startSendData(buf.c_str(), buf.strlen(), xsink);
+}
+
+int FtpControlPollOperationPriv::startRecvLine(ExceptionSink* xsink) {
+    assert(!current_op);
+    SimpleRefHolder<QoreStringNode> pattern(new QoreStringNode("\r\n"));
+    ctrl_sock->ref();  // ref for inner op (takes ownership)
+    current_op = new SocketRecvUntilBytesPollOperation(xsink, *pattern, ctrl_sock, true);
+    if (*xsink) {
+        releaseCurrentOp(xsink);
+        setClosed();
+        return -1;
+    }
+    current_op->setSelf(*self);
+    ctrl_state = FtpCtrlState::RECV_LINE;
+    return 0;
+}
+
+int FtpControlPollOperationPriv::startSslUpgrade(ExceptionSink* xsink) {
+    assert(!current_op);
+    ctrl_sock->ref();  // ref for inner op (takes ownership)
+    current_op = new SocketUpgradeClientSslPollOperation(xsink, ctrl_sock);
+    if (*xsink) {
+        releaseCurrentOp(xsink);
+        setClosed();
+        return -1;
+    }
+    current_op->setSelf(*self);
+    ctrl_state = FtpCtrlState::SSL_UPGRADE;
+    return 0;
+}
+
+// --- State handlers ---
+
+QoreHashNode* FtpControlPollOperationPriv::continuePoll(ExceptionSink* xsink) {
+    switch (ctrl_state) {
+        case FtpCtrlState::CONNECTING:
+            return handleConnecting(xsink);
+        case FtpCtrlState::SENDING:
+            return handleSending(xsink);
+        case FtpCtrlState::RECV_LINE:
+            return handleRecvLine(xsink);
+        case FtpCtrlState::SSL_UPGRADE:
+            return handleSslUpgrade(xsink);
+        case FtpCtrlState::READY:
+            // Check for pending command
+            if (!pending_cmd.empty()) {
+                std::string cmd = std::move(pending_cmd);
+                pending_cmd.clear();
+                response_accum.clear();
+                phase = FtpCtrlPhase::COMMAND;
+                if (startSendData(cmd.c_str(), cmd.size(), xsink)) {
+                    return nullptr;
+                }
+                return handleSending(xsink);
+            }
+            // No pending command — goal already reached or idle
+            return nullptr;
+        case FtpCtrlState::CLOSED:
+            return nullptr;
+    }
+    return nullptr;
+}
+
+QoreHashNode* FtpControlPollOperationPriv::handleConnecting(ExceptionSink* xsink) {
+    assert(current_op);
+    ExceptionSink poll_xsink;
+    QoreHashNode* poll_info = current_op->continuePoll(&poll_xsink);
+    if (poll_xsink) {
+        xsink->assimilate(poll_xsink);
+        setClosed();
+        return nullptr;
+    }
+    if (poll_info) {
+        return poll_info;
+    }
+    if (!current_op->goalReached()) {
+        xsink->raiseException("FTP-CONNECT-ERROR", "TCP connection failed");
+        setClosed();
+        return nullptr;
+    }
+    // TCP connected — start reading greeting
+    releaseCurrentOp(xsink);
+    phase = FtpCtrlPhase::GREETING;
+    response_accum.clear();
+    if (startRecvLine(xsink)) {
+        return nullptr;
+    }
+    return handleRecvLine(xsink);
+}
+
+QoreHashNode* FtpControlPollOperationPriv::handleSending(ExceptionSink* xsink) {
+    assert(current_op);
+    ExceptionSink poll_xsink;
+    QoreHashNode* poll_info = current_op->continuePoll(&poll_xsink);
+    if (poll_xsink) {
+        xsink->assimilate(poll_xsink);
+        setClosed();
+        return nullptr;
+    }
+    if (poll_info) {
+        return poll_info;
+    }
+    if (!current_op->goalReached()) {
+        xsink->raiseException("FTP-SEND-ERROR", "failed to send command");
+        setClosed();
+        return nullptr;
+    }
+    // Send complete — start reading response
+    releaseCurrentOp(xsink);
+    response_accum.clear();
+    if (startRecvLine(xsink)) {
+        return nullptr;
+    }
+    return handleRecvLine(xsink);
+}
+
+QoreHashNode* FtpControlPollOperationPriv::handleRecvLine(ExceptionSink* xsink) {
+    assert(current_op);
+    ExceptionSink poll_xsink;
+    QoreHashNode* poll_info = current_op->continuePoll(&poll_xsink);
+    if (poll_xsink) {
+        xsink->assimilate(poll_xsink);
+        setClosed();
+        return nullptr;
+    }
+    if (poll_info) {
+        return poll_info;
+    }
+    if (!current_op->goalReached()) {
+        xsink->raiseException("FTP-RECEIVE-ERROR", "failed to read FTP response");
+        setClosed();
+        return nullptr;
+    }
+    // Got a line
+    ValueHolder line_val(current_op->getOutput(), xsink);
+    releaseCurrentOp(xsink);
+
+    if (line_val->getType() != NT_STRING) {
+        xsink->raiseException("FTP-RECEIVE-ERROR", "unexpected response type '%s'",
+            line_val->getFullTypeName());
+        setClosed();
+        return nullptr;
+    }
+
+    const QoreStringNode* line = line_val->get<const QoreStringNode>();
+    const char* lstr = line->c_str();
+    size_t llen = line->strlen();
+
+    // Accumulate response text
+    response_accum.concat(lstr, llen);
+
+    // RFC 959: final response line = 3 digits + space; continuation = 3 digits + dash
+    if (llen >= 4 && isdigit(lstr[0]) && isdigit(lstr[1]) && isdigit(lstr[2])
+            && lstr[3] == ' ') {
+        // Final line — extract response code
+        last_code = (lstr[0] - '0') * 100 + (lstr[1] - '0') * 10 + (lstr[2] - '0');
+        response_accum.chomp();
+        last_response = new QoreStringNode(response_accum);
+        response_accum.clear();
+        return dispatchResponse(xsink);
+    }
+
+    // Continuation line — read more
+    if (startRecvLine(xsink)) {
+        return nullptr;
+    }
+    return handleRecvLine(xsink);
+}
+
+QoreHashNode* FtpControlPollOperationPriv::handleSslUpgrade(ExceptionSink* xsink) {
+    assert(current_op);
+    ExceptionSink poll_xsink;
+    QoreHashNode* poll_info = current_op->continuePoll(&poll_xsink);
+    if (poll_xsink) {
+        xsink->assimilate(poll_xsink);
+        setClosed();
+        return nullptr;
+    }
+    if (poll_info) {
+        return poll_info;
+    }
+    if (!current_op->goalReached()) {
+        xsink->raiseException("FTPS-AUTH-ERROR", "TLS handshake failed on control channel");
+        setClosed();
+        return nullptr;
+    }
+    // SSL upgrade complete
+    releaseCurrentOp(xsink);
+
+    // After AUTH TLS + SSL: if secure_data, send PBSZ 0; otherwise go to USER
+    if (secure_data) {
+        phase = FtpCtrlPhase::PBSZ;
+        if (startSendCommand("PBSZ", "0", xsink)) {
+            return nullptr;
+        }
+        return handleSending(xsink);
+    }
+    return startUserLogin(xsink);
+}
+
+// --- Phase dispatch ---
+
+QoreHashNode* FtpControlPollOperationPriv::dispatchResponse(ExceptionSink* xsink) {
+    switch (phase) {
+        case FtpCtrlPhase::GREETING: {
+            // Expect 2xx greeting
+            if ((last_code / 100) != 2) {
+                xsink->raiseException("FTP-CONNECT-ERROR",
+                    "FTP server reported: %s", last_response ? (*last_response)->c_str() : "no response");
+                setClosed();
+                return nullptr;
+            }
+            // If FTPS, start AUTH TLS; otherwise go to USER
+            if (secure) {
+                return startAuthTls(xsink);
+            }
+            return startUserLogin(xsink);
+        }
+
+        case FtpCtrlPhase::AUTH_TLS: {
+            if (last_code == 334) {
+                xsink->raiseException("FTPS-AUTH-ERROR", "server requires unsupported ADAT exchange");
+                setClosed();
+                return nullptr;
+            }
+            if (last_code != 234) {
+                xsink->raiseException("FTPS-AUTH-ERROR",
+                    "response from FTP server: %s", last_response ? (*last_response)->c_str() : "no response");
+                setClosed();
+                return nullptr;
+            }
+            // Start TLS upgrade on control socket
+            if (startSslUpgrade(xsink)) {
+                return nullptr;
+            }
+            return handleSslUpgrade(xsink);
+        }
+
+        case FtpCtrlPhase::PBSZ: {
+            if (last_code != 200) {
+                xsink->raiseException("FTPS-SECURE-DATA-ERROR",
+                    "response from FTP server to PBSZ 0 command: %s",
+                    last_response ? (*last_response)->c_str() : "no response");
+                setClosed();
+                return nullptr;
+            }
+            // Send PROT P
+            phase = FtpCtrlPhase::PROT;
+            if (startSendCommand("PROT", "P", xsink)) {
+                return nullptr;
+            }
+            return handleSending(xsink);
+        }
+
+        case FtpCtrlPhase::PROT: {
+            if (last_code != 200) {
+                xsink->raiseException("FTPS-SECURE-DATA-ERROR",
+                    "response from FTP server to PROT P command: %s",
+                    last_response ? (*last_response)->c_str() : "no response");
+                setClosed();
+                return nullptr;
+            }
+            // FTPS setup complete, proceed to login
+            return startUserLogin(xsink);
+        }
+
+        case FtpCtrlPhase::USER: {
+            // 2xx = logged in immediately, 331 = need password
+            if ((last_code / 100) == 2) {
+                login_complete = true;
+                ctrl_state = FtpCtrlState::READY;
+                return nullptr;  // goalReached
+            }
+            if (last_code != 331) {
+                xsink->raiseException("FTP-LOGIN-ERROR",
+                    "response from FTP server: %s", last_response ? (*last_response)->c_str() : "no response");
+                setClosed();
+                return nullptr;
+            }
+            // Send PASS
+            phase = FtpCtrlPhase::PASS;
+            if (startSendCommand("PASS", ftp_pass.c_str(), xsink)) {
+                return nullptr;
+            }
+            return handleSending(xsink);
+        }
+
+        case FtpCtrlPhase::PASS: {
+            if ((last_code / 100) != 2) {
+                xsink->raiseException("FTP-LOGIN-ERROR",
+                    "response from FTP server: %s", last_response ? (*last_response)->c_str() : "no response");
+                setClosed();
+                return nullptr;
+            }
+            login_complete = true;
+            ctrl_state = FtpCtrlState::READY;
+            return nullptr;  // goalReached
+        }
+
+        case FtpCtrlPhase::COMMAND: {
+            command_complete = true;
+            ctrl_state = FtpCtrlState::READY;
+            return nullptr;  // goalReached
+        }
+    }
+    // Unreachable
+    xsink->raiseException("FTP-INTERNAL-ERROR", "unknown phase %d", (int)phase);
+    setClosed();
+    return nullptr;
+}
+
+QoreHashNode* FtpControlPollOperationPriv::startAuthTls(ExceptionSink* xsink) {
+    phase = FtpCtrlPhase::AUTH_TLS;
+    if (startSendCommand("AUTH", "TLS", xsink)) {
+        return nullptr;
+    }
+    return handleSending(xsink);
+}
+
+QoreHashNode* FtpControlPollOperationPriv::startUserLogin(ExceptionSink* xsink) {
+    phase = FtpCtrlPhase::USER;
+    if (startSendCommand("USER", ftp_user.c_str(), xsink)) {
+        return nullptr;
+    }
+    return handleSending(xsink);
+}
+
+int FtpControlPollOperationPriv::submitToController(ExceptionSink* xsink, const char* owner) {
+    assert(self);
+
+    // Get global async I/O controller singleton
+    ReferenceHolder<QoreObject> ctl_obj(qore_get_async_io_controller_obj(xsink), xsink);
+    if (*xsink || !*ctl_obj) {
+        if (!*xsink) {
+            xsink->raiseException("FTP-CONNECT-ERROR", "failed to get AsyncIoController singleton");
+        }
+        return -1;
+    }
+    ReferenceHolder<AsyncIoControllerPriv> ctl_priv(
+        static_cast<AsyncIoControllerPriv*>(
+            (*ctl_obj)->getReferencedPrivateData(CID_ASYNCIOCONTROLLER, xsink)),
+        xsink);
+    if (*xsink || !*ctl_priv) {
+        if (!*xsink) {
+            xsink->raiseException("FTP-CONNECT-ERROR", "failed to get AsyncIoController private data");
+        }
+        return -1;
+    }
+
+    // Build SocketPollOperationInfo hash
+    ReferenceHolder<QoreHashNode> info(new QoreHashNode(autoTypeInfo), xsink);
+    // Get sock from our QoreObject members
+    ValueHolder sock_val((*self)->getReferencedMemberNoMethod("sock", xsink), xsink);
+    if (*xsink) {
+        return -1;
+    }
+    info->setKeyValue("sock", sock_val.release(), xsink);
+    (*self)->ref();
+    info->setKeyValue("spop", *self, xsink);
+    info->setKeyValue("owner", new QoreStringNode(owner), xsink);
+    info->setKeyValue("to", -1, xsink);  // no controller timeout; we manage our own
+    if (*xsink) {
+        return -1;
+    }
+
+    // Submit with replace=true — the control op is re-submitted for each command,
+    // and the controller must replace the old entry to avoid ref leaks
+    ReferenceHolder<QoreObject> rv(ctl_priv->submit(*ctl_obj, info.release(), true, xsink), xsink);
+    if (*xsink) {
+        return -1;
+    }
+    return 0;
+}
+
+/** @endcond */
+
+//! @defgroup ftp_control_poll_operation_constants FTP Control Poll Operation Constants
+/** @since %Qore 2.3
+*/
+///@{
+///@}
+
+//! FTP control channel poll operation for async I/O
+/** This class implements the FTP control channel protocol as a non-blocking
+    poll operation suitable for use with the @ref Qore::Thread::AsyncIoController.
+
+    It handles:
+    - TCP connection to the FTP server
+    - Server greeting validation
+    - FTPS authentication (AUTH TLS, PBSZ, PROT)
+    - USER/PASS login
+    - Arbitrary FTP command execution via submitCommand()
+
+    @par Example
+    @code{.py}
+    FtpControlPollOperation op("ftp.example.com", 21);
+    # submit to async controller, wait for login...
+    op.submitCommand("TYPE", "I");
+    # re-submit to controller, wait for response...
+    hash<auto> resp = op.getOutput();
+    @endcode
+
+    @since %Qore 2.3
+*/
+qclass FtpControlPollOperation [
+    private_members=object sock,string goal;
+    ns=Qore;
+    arg=FtpControlPollOperationPriv* priv;
+    vparent=SocketPollOperationBase;
+    dom=NETWORK
+];
+
+//! Creates a new FTP control poll operation that connects to an FTP server
+/** @param host the FTP server hostname or IP address
+    @param port the FTP server port (default: 21)
+    @param secure if True, use FTPS (AUTH TLS on the control channel)
+    @param secure_data if True, use encrypted data channel (PBSZ 0 + PROT P)
+    @param user FTP username (default: "anonymous")
+    @param pass FTP password (default: "qore@nohost.com")
+    @throw SOCKET-CONNECT-ERROR error connecting to the FTP server
+*/
+FtpControlPollOperation::constructor(string host, int port = 21, bool secure = False,
+        bool secure_data = False, *string user, *string pass) {
+    // Create control socket — refcount starts at 1 from 'new'
+    QoreSocketObject* sock_priv = new QoreSocketObject;
+
+    // QoreObject(cls, pgm, data) takes ownership of one ref but does NOT add its own ref.
+    // We need an extra ref so the socket survives when inner ops deref their copy.
+    // Refcount after this block: 1 (new) + 1 (explicit ref) = 2
+    sock_priv->ref();
+
+    // Build target string for connect
+    QoreStringMaker target("%s:%lld", host->c_str(), port);
+
+    // Ref for the SocketConnectPollOperation (caller must ref; op stores raw pointer, derefs on destroy)
+    sock_priv->ref();
+    SocketConnectPollOperation* connect_op = new SocketConnectPollOperation(xsink,
+        false, target.c_str(), sock_priv);
+    if (*xsink) {
+        connect_op->deref(xsink);
+        // deref our explicit ref + the original ref
+        sock_priv->deref(xsink);
+        sock_priv->deref(xsink);
+        return;
+    }
+
+    // Create QoreObject wrapper — consumes one ref (from 'new'): refcount stays 3
+    // (1 consumed by QoreObject, 1 explicit, 1 connect_op)
+    QoreObject* sock_obj = new QoreObject(QC_SOCKET, getProgram(), sock_priv);
+    self->setMemberValue("sock", QC_FTPCONTROLPOLLOPERATION, sock_obj, xsink);
+    if (*xsink) {
+        sock_obj->deref(xsink);
+        connect_op->deref(xsink);
+        return;
+    }
+
+    // Set goal — setMemberValue takes ownership
+    self->setMemberValue("goal", QC_FTPCONTROLPOLLOPERATION, new QoreStringNode("ftp-login"), xsink);
+    if (*xsink) {
+        connect_op->deref(xsink);
+        return;
+    }
+
+    // ctrl_sock in the priv is a raw (non-owning) pointer — the "sock" member
+    // QoreObject owns the QoreSocketObject. The priv does NOT ref/deref it.
+    FtpControlPollOperationPriv* ftp_priv = new FtpControlPollOperationPriv(self, sock_priv,
+        connect_op, (bool)secure, (bool)secure_data,
+        user ? user->c_str() : nullptr,
+        pass ? pass->c_str() : nullptr);
+
+    self->setPrivate(CID_FTPCONTROLPOLLOPERATION, ftp_priv);
+}
+
+//! Destroys the object, releasing internal resources
+/** Releases control socket and any in-flight inner operations.
+*/
+FtpControlPollOperation::destructor() {
+    priv->deref(xsink);
+}
+
+//! Returns the goal of the operation
+/** @return "ftp-login" for the initial connection or "ftp-command" for command execution
+*/
+string FtpControlPollOperation::getGoal() {
+    return self->getReferencedMemberNoMethod("goal", xsink);
+}
+
+//! Returns the current state of the poll operation
+/** @return a string describing the current state (e.g. "connecting", "recv-greeting", "ready", etc.)
+*/
+string FtpControlPollOperation::getState() {
+    return priv->getState();
+}
+
+//! Returns True when the current goal has been reached
+/** @return True when login is complete (initial goal) or when a command response is received
+*/
+bool FtpControlPollOperation::goalReached() {
+    return priv->goalReached();
+}
+
+//! Returns the output of the last completed phase
+/** @return a hash with \c code (int response code), \c message (string response text),
+    and \c login_complete (bool) keys; or NOTHING if no response has been received yet
+*/
+auto FtpControlPollOperation::getOutput() {
+    return priv->getOutput();
+}
+
+//! Submit an FTP command for async execution
+/** Must be called when the operation is in the ready state (after login completes).
+    After calling this, re-submit the operation to the async controller.
+
+    @param cmd the FTP command (e.g. "TYPE", "EPSV", "RETR")
+    @param arg optional command argument
+
+    @throw FTP-COMMAND-ERROR if the operation is not in the ready state
+*/
+nothing FtpControlPollOperation::submitCommand(string cmd, *string arg) {
+    priv->submitCommand(cmd->c_str(), arg ? arg->c_str() : nullptr, xsink);
+    // Update goal
+    if (!*xsink) {
+        self->setMemberValue("goal", QC_FTPCONTROLPOLLOPERATION, new QoreStringNode("ftp-command"), xsink);
+    }
+}
+
+//! Submit a receive-only operation to read an unsolicited server response
+/** Used after data transfer completes to read the 226 completion response.
+    Must be called when the operation is in the ready state.
+
+    @throw FTP-COMMAND-ERROR if the operation is not in the ready state
+*/
+nothing FtpControlPollOperation::submitRecvResponse() {
+    priv->submitRecvResponse(xsink);
+    if (!*xsink) {
+        self->setMemberValue("goal", QC_FTPCONTROLPOLLOPERATION, new QoreStringNode("ftp-response"), xsink);
+    }
+}
+
+//! Returns True if the operation has completed login and is ready for commands
+/** @return True if the FTP control channel is logged in and idle
+*/
+bool FtpControlPollOperation::isReady() [flags=CONSTANT] {
+    return priv->isReady();
+}
+
+//! Returns True if the connection is closed
+/** @return True if the control channel connection has been closed
+*/
+bool FtpControlPollOperation::isClosed() [flags=CONSTANT] {
+    return priv->isClosed();
+}
+
+//! Returns the last FTP response code
+/** @return the numeric FTP response code from the last command (e.g. 220, 230, 150)
+*/
+int FtpControlPollOperation::getLastResponseCode() [flags=CONSTANT] {
+    return priv->getLastResponseCode();
+}
+
+//! Returns True if the control channel uses TLS
+/** @return True for FTPS connections
+*/
+bool FtpControlPollOperation::isSecure() [flags=CONSTANT] {
+    return priv->isSecure();
+}
+
+//! Returns True if the data channel should use TLS
+/** @return True if PROT P was negotiated
+*/
+bool FtpControlPollOperation::isSecureData() [flags=CONSTANT] {
+    return priv->isSecureData();
+}
+
+//! Continues the poll operation
+/** @return a SocketPollInfo hash if more I/O is needed, or NOTHING if the goal is reached
+*/
+*hash<SocketPollInfo> FtpControlPollOperation::continuePoll() {
+    return priv->continuePoll(xsink);
+}
+
+//! Called by the async controller when the operation completes
+/** Signals any sync thread blocking in waitForCompletion().
+    @param result the poll result info
+*/
+nothing FtpControlPollOperation::onComplete(hash<SocketPollResultInfo> result) {
+    priv->signalCompletion();
+}
+
+// ============================================================
+// FtpPortAcceptPollOperationPriv implementation
+// ============================================================
+
+/** @cond INTERNAL */
+
+FtpPortAcceptPollOperationPriv::FtpPortAcceptPollOperationPriv(QoreObject* self,
+        SocketPollOperationBase* accept_op, QoreSocketObject* listener, bool secure_data)
+    : SocketPollOperationBase(self),
+      current_op(accept_op),
+      listener(listener),
+      client_sock_obj(nullptr, nullptr),
+      secure_data(secure_data) {
+}
+
+FtpPortAcceptPollOperationPriv::~FtpPortAcceptPollOperationPriv() {
+}
+
+void FtpPortAcceptPollOperationPriv::deref(ExceptionSink* xsink) {
+    if (ROdereference()) {
+        if (current_op) {
+            current_op->deref(xsink);
+            current_op = nullptr;
+        }
+        if (client_sock) {
+            client_sock->deref(xsink);
+            client_sock = nullptr;
+        }
+        // listener is a raw pointer (owned by "sock" member) — don't deref
+        listener = nullptr;
+        delete this;
+    }
+}
+
+const char* FtpPortAcceptPollOperationPriv::getStateImpl() const {
+    switch (state) {
+        case AcceptState::ACCEPTING: return "port-accepting";
+        case AcceptState::SSL_UPGRADE: return "port-ssl-upgrade";
+        case AcceptState::COMPLETE: return "port-accepted";
+    }
+    return "port-unknown";
+}
+
+void FtpPortAcceptPollOperationPriv::releaseCurrentOp(ExceptionSink* xsink) {
+    if (current_op) {
+        current_op->deref(xsink);
+        current_op = nullptr;
+    }
+}
+
+void FtpPortAcceptPollOperationPriv::abort(ExceptionSink* xsink) {
+    if (current_op) {
+        current_op->abort(xsink);
+        current_op->deref(xsink);
+        current_op = nullptr;
+    }
+    if (client_sock) {
+        client_sock->close();
+    }
+    state = AcceptState::COMPLETE;
+}
+
+QoreValue FtpPortAcceptPollOperationPriv::getOutput() const {
+    if (*client_sock_obj) {
+        (*client_sock_obj)->ref();
+        return *client_sock_obj;
+    }
+    return QoreValue();
+}
+
+QoreHashNode* FtpPortAcceptPollOperationPriv::continuePoll(ExceptionSink* xsink) {
+    switch (state) {
+        case AcceptState::ACCEPTING: {
+            assert(current_op);
+            ExceptionSink poll_xsink;
+            QoreHashNode* pi = current_op->continuePoll(&poll_xsink);
+            if (poll_xsink) {
+                xsink->assimilate(poll_xsink);
+                state = AcceptState::COMPLETE;
+                return nullptr;
+            }
+            if (pi) {
+                return pi;
+            }
+            if (!current_op->goalReached()) {
+                xsink->raiseException("FTP-CONNECT-ERROR", "PORT accept failed");
+                state = AcceptState::COMPLETE;
+                return nullptr;
+            }
+            return handleAcceptComplete(xsink);
+        }
+        case AcceptState::SSL_UPGRADE: {
+            assert(current_op);
+            ExceptionSink poll_xsink;
+            QoreHashNode* pi = current_op->continuePoll(&poll_xsink);
+            if (poll_xsink) {
+                xsink->assimilate(poll_xsink);
+                state = AcceptState::COMPLETE;
+                return nullptr;
+            }
+            if (pi) {
+                return pi;
+            }
+            if (!current_op->goalReached()) {
+                xsink->raiseException("FTP-DATA-SSL-ERROR",
+                    "TLS handshake failed on PORT data channel");
+                state = AcceptState::COMPLETE;
+                return nullptr;
+            }
+            return handleSslComplete(xsink);
+        }
+        case AcceptState::COMPLETE:
+            return nullptr;
+    }
+    return nullptr;
+}
+
+QoreHashNode* FtpPortAcceptPollOperationPriv::handleAcceptComplete(ExceptionSink* xsink) {
+    // Get accepted socket from accept op output
+    ValueHolder output(current_op->getOutput(), xsink);
+    releaseCurrentOp(xsink);
+
+    if (output->getType() != NT_OBJECT) {
+        xsink->raiseException("FTP-CONNECT-ERROR", "PORT accept did not return a socket");
+        state = AcceptState::COMPLETE;
+        return nullptr;
+    }
+
+    // Extract QoreSocketObject from the QoreObject
+    client_sock_obj = output.release().get<QoreObject>();
+    client_sock = static_cast<QoreSocketObject*>(
+        (*client_sock_obj)->getReferencedPrivateData(CID_SOCKET, xsink));
+    if (*xsink || !client_sock) {
+        state = AcceptState::COMPLETE;
+        return nullptr;
+    }
+
+    if (secure_data) {
+        // Start SSL upgrade on the accepted socket
+        client_sock->ref();  // ref for the SSL op
+        current_op = new SocketUpgradeClientSslPollOperation(xsink, client_sock);
+        if (*xsink) {
+            releaseCurrentOp(xsink);
+            state = AcceptState::COMPLETE;
+            return nullptr;
+        }
+        current_op->setSelf(*this->self);
+        state = AcceptState::SSL_UPGRADE;
+        // Drive immediately — might complete in one shot
+        return continuePoll(xsink);
+    }
+
+    state = AcceptState::COMPLETE;
+    return nullptr;
+}
+
+QoreHashNode* FtpPortAcceptPollOperationPriv::handleSslComplete(ExceptionSink* xsink) {
+    releaseCurrentOp(xsink);
+    state = AcceptState::COMPLETE;
+    return nullptr;
+}
+
+int FtpPortAcceptPollOperationPriv::submitToController(ExceptionSink* xsink, const char* owner) {
+    assert(self);
+
+    ReferenceHolder<QoreObject> ctl_obj(qore_get_async_io_controller_obj(xsink), xsink);
+    if (*xsink || !*ctl_obj) {
+        if (!*xsink) {
+            xsink->raiseException("FTP-CONNECT-ERROR", "failed to get AsyncIoController");
+        }
+        return -1;
+    }
+    ReferenceHolder<AsyncIoControllerPriv> ctl_priv(
+        static_cast<AsyncIoControllerPriv*>(
+            (*ctl_obj)->getReferencedPrivateData(CID_ASYNCIOCONTROLLER, xsink)),
+        xsink);
+    if (*xsink || !*ctl_priv) {
+        return -1;
+    }
+
+    ReferenceHolder<QoreHashNode> info(new QoreHashNode(autoTypeInfo), xsink);
+    ValueHolder sock_val((*self)->getReferencedMemberNoMethod("sock", xsink), xsink);
+    if (*xsink) {
+        return -1;
+    }
+    info->setKeyValue("sock", sock_val.release(), xsink);
+    (*self)->ref();
+    info->setKeyValue("spop", *self, xsink);
+    info->setKeyValue("owner", new QoreStringNode(owner), xsink);
+    info->setKeyValue("to", -1, xsink);
+    if (*xsink) {
+        return -1;
+    }
+
+    ReferenceHolder<QoreObject> rv(ctl_priv->submit(*ctl_obj, info.release(), false, xsink), xsink);
+    return *xsink ? -1 : 0;
+}
+
+/** @endcond */
+
+//! FTP PORT mode accept poll operation for async I/O
+/** Composite operation: accept incoming connection + optional SSL upgrade.
+    @since %Qore 2.3
+*/
+qclass FtpPortAcceptPollOperation [
+    private_members=object sock,string goal;
+    ns=Qore;
+    arg=FtpPortAcceptPollOperationPriv* priv;
+    vparent=SocketPollOperationBase;
+    dom=NETWORK
+];
+
+//! Creates the operation from a listener socket and its accept poll op
+/** @param listener_sock the listening Socket object
+    @param accept_op the SocketAcceptPollOperation from listener.startPollAccept()
+    @param secure_data if True, upgrade accepted socket to SSL
+*/
+FtpPortAcceptPollOperation::constructor(Socket[QoreSocketObject] listener_sock, AbstractPollOperation accept_op, bool secure_data = False) {
+    // Get C++ accept op
+    SocketPollOperationBase* accept_base = static_cast<SocketPollOperationBase*>(
+        const_cast<QoreObject*>(accept_op)->getReferencedPrivateData(CID_SOCKETPOLLOPERATIONBASE, xsink));
+    if (*xsink || !accept_base) {
+        if (!*xsink) {
+            xsink->raiseException("FTP-CONNECT-ERROR", "invalid accept operation");
+        }
+        return;
+    }
+
+    // Set sock member to listener (controller polls this fd)
+    // listener_sock is a ReferenceHolder<QoreSocketObject> from QPP — get QoreObject wrapper
+    QoreObject* listener_obj = self->getReferencedMemberNoMethod("sock", xsink) ?
+        nullptr : nullptr;  // not set yet — need to create wrapper
+    // Actually, we need the caller to pass the Socket QoreObject. Use the inner obj ref:
+    {
+        // Get the Socket QoreObject from the accept_op's sock member
+        ValueHolder sock_val(const_cast<QoreObject*>(accept_op)->getReferencedMemberNoMethod("sock", xsink), xsink);
+        if (!*xsink && sock_val->getType() == NT_OBJECT) {
+            self->setMemberValue("sock", QC_FTPPORTACCEPTPOLLOPERATION, sock_val.release(), xsink);
+        }
+    }
+    if (*xsink) {
+        accept_base->deref(xsink);
+        return;
+    }
+    self->setMemberValue("goal", QC_FTPPORTACCEPTPOLLOPERATION,
+        new QoreStringNode("ftp-port-accept"), xsink);
+    if (*xsink) {
+        accept_base->deref(xsink);
+        return;
+    }
+
+    self->setPrivate(CID_FTPPORTACCEPTPOLLOPERATION,
+        new FtpPortAcceptPollOperationPriv(self, accept_base, *listener_sock,
+            (bool)secure_data));
+}
+
+//! Destroys the object
+/** Releases all internal references.
+*/
+FtpPortAcceptPollOperation::destructor() {
+    priv->deref(xsink);
+}
+
+//! Returns the goal string
+/** @return "ftp-port-accept"
+*/
+string FtpPortAcceptPollOperation::getGoal() {
+    return self->getReferencedMemberNoMethod("goal", xsink);
+}
+
+//! Returns the current state
+/** @return the accept state description
+*/
+string FtpPortAcceptPollOperation::getState() {
+    return priv->getState();
+}
+
+//! Returns True when the accept (and optional SSL) is complete
+/** @return True when the operation has finished
+*/
+bool FtpPortAcceptPollOperation::goalReached() {
+    return priv->goalReached();
+}
+
+//! Returns the accepted socket QoreObject
+/** @return the accepted Socket object, or NOTHING if not yet accepted
+*/
+auto FtpPortAcceptPollOperation::getOutput() {
+    return priv->getOutput();
+}
+
+//! Continues the poll operation
+/** @return a SocketPollInfo hash if more I/O is needed, or NOTHING if done
+*/
+*hash<SocketPollInfo> FtpPortAcceptPollOperation::continuePoll() {
+    return priv->continuePoll(xsink);
+}
+
+//! Called by the async controller when the operation completes
+/** @param result the poll result info
+*/
+nothing FtpPortAcceptPollOperation::onComplete(hash<SocketPollResultInfo> result) {
+    priv->signalCompletion();
+}

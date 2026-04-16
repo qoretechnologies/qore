@@ -151,6 +151,8 @@ delete ftp;
     @endcode
 */
 FtpClient::destructor() {
+   // disconnect to clean up async control op and sockets
+   f->disconnect();
    // have to clear callbacks before destroying
    f->cleanup(xsink);
    f->deref(xsink);

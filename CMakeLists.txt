@@ -290,6 +290,8 @@ set(LIBQORE_QPP_SRC
     lib/QC_SocketPollOperation.qpp
     lib/QC_FilePollOperation.qpp
     lib/QC_DelegatingPollOperation.qpp
+    lib/QC_FtpControlPollOperation.qpp
+    lib/QC_FtpDataPollOperation.qpp
     lib/QC_AbstractHttpPollConnection.qpp
     lib/QC_HttpClientConnectionBase.qpp
     lib/QC_HttpClientConnectionManagerBase.qpp
@@ -1559,6 +1561,8 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_BINARY_DIR}/QC_SocketPollOperation.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_FilePollOperation.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_DelegatingPollOperation.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_FtpControlPollOperation.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_FtpDataPollOperation.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_AbstractHttpPollConnection.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_HttpClientConnectionBase.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_HttpClientConnectionManagerBase.cpp\"
@@ -1997,6 +2001,7 @@ qore_user_module("qlib/DebugCmdLine.qm" "ConnectionProvider;DebugUtil;DebugProgr
 qore_user_module("qlib/DiscordWebSocketClient.qm" "ConnectionProvider;Util;WebSocketUtil;WebSocketClient")
 qore_user_module("qlib/HttpServer.qm" "HttpServerUtil;Mime;Util")
 qore_user_module("qlib/HttpServerAsyncIo" "HttpServer")
+qore_user_module("qlib/FtpClientIo" "")
 qore_user_module("qlib/HttpClientIo" "HttpUtil;Logger;AsyncSocketIo")
 qore_user_module("qlib/HttpClientStreamingIo" "HttpClientIo")
 qore_user_module("qlib/Pop3Client.qm" "ConnectionProvider;MailMessage;Mime;Logger")
