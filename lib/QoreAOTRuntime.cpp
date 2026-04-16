@@ -3809,77 +3809,16 @@ static QoreAOTContext* buildContextForVariant(UserVariantBase* uvb, const char* 
 */
 static void skipSlotMapEntry(const QoreAOTBinaryReader& reader, const uint8_t*& ptr,
         const uint8_t* end) {
-    const uint8_t* entry_start = ptr;
-    // Read entry size prefix to know where next entry starts
+    // Read the entry size prefix and jump directly to the next entry.
+    // The entry_size encodes the complete byte length of this slot map entry
+    // (not including the 4-byte size prefix itself), so we can skip the entry
+    // without parsing individual fields.  Previous versions parsed each field
+    // in turn, but this is fragile — if any field format changes or new fields
+    // are added (e.g. LValuePath instructions appended after statement slots),
+    // the skip logic must be kept in sync with buildContextFromSlotMap, and a
+    // mismatch causes ptr to drift and eventually SEGV.
     uint32_t entry_size = QoreAOTBinaryReader::readU32(ptr);
-    const uint8_t* entry_end = ptr + entry_size;
-
-    const char* skip_name = reader.readStringRef(ptr); // name
-    uint16_t nl = QoreAOTBinaryReader::readU16(ptr);
-    uint16_t ng = QoreAOTBinaryReader::readU16(ptr);
-    uint16_t ne = QoreAOTBinaryReader::readU16(ptr);
-    uint16_t ns = QoreAOTBinaryReader::readU16(ptr); // num_stmts
-    uint16_t nrc = QoreAOTBinaryReader::readU16(ptr); // num_regex_cases
-    uint16_t nbl = QoreAOTBinaryReader::readU16(ptr);
-    QoreAOTBinaryReader::readU8(ptr); // has_unsupported
-    QoreAOTBinaryReader::readU8(ptr); // padding
-    // Skip local entries
-    for (int i = 0; i < nl; ++i) {
-        reader.readStringRef(ptr);
-        reader.readStringRef(ptr);
-        QoreAOTBinaryReader::readU8(ptr);
-        QoreAOTBinaryReader::readU16(ptr);
-    }
-    // Skip global entries
-    for (int i = 0; i < ng; ++i) {
-        reader.readStringRef(ptr);
-        reader.readStringRef(ptr);
-        QoreAOTBinaryReader::readU8(ptr);
-    }
-    // Skip expression entries.
-    //
-    // Delegate to skipOneExpr() which is the canonical walker for a single
-    // serialized AOT expression.  The previous inlined switch was a partial
-    // copy that drifted out of sync: it used readStringRef for CONST_INT/
-    // CONST_FLOAT (actual format is 8 raw bytes), used readStringRef for
-    // CONST_BOOL (actual format is 1 raw byte), and was missing HASH_DEREF,
-    // PARSE_REF, CALL_REF, OBJ_METHOD_REF, and CONST_NULL entirely.  When an
-    // unhandled kind appeared the switch's default just broke, leaving ptr
-    // stranded after the kind byte, so subsequent iterations read garbage
-    // and eventually walked off the buffer (SEGV in standalone executables
-    // compiled from .qtest files that use richer literals).
-    //
-    // skipOneExpr() reads the kind byte itself and advances ptr past the
-    // full encoded expression, so we just call it in a loop.
-    for (int i = 0; i < ne; ++i) {
-        if (ptr >= end) {
-            break;
-        }
-        skipOneExpr(reader, ptr, end);
-    }
-    // Skip body locals
-    for (int i = 0; i < nbl; ++i) {
-        reader.readStringRef(ptr);
-        reader.readStringRef(ptr);
-        QoreAOTBinaryReader::readU8(ptr);
-    }
-    // Skip regex cases: pattern_ref(u32) options(i64) is_negated(u8)
-    for (int i = 0; i < nrc; ++i) {
-        reader.readStringRef(ptr);
-        QoreAOTBinaryReader::readI64(ptr);
-        QoreAOTBinaryReader::readU8(ptr);
-    }
-    // Skip handler IR entries: u8 flag, if 1 then u32 size + data
-    for (int i = 0; i < ns; ++i) {
-        uint8_t has_ir = QoreAOTBinaryReader::readU8(ptr);
-        if (has_ir) {
-            uint32_t ir_size = QoreAOTBinaryReader::readU32(ptr);
-            ptr += ir_size;
-        }
-    }
-
-    // Always jump to correct entry boundary regardless of individual read success/failure
-    ptr = entry_end;
+    ptr += entry_size;
 }
 
 //! Collected init function context for later execution
@@ -6434,11 +6373,22 @@ extern "C" DLLEXPORT void qore_aot_module_ns_init(QoreNamespace* root_ns, QoreNa
         auto it = aot_module_map.find(mod_name);
         if (it != aot_module_map.end() && !it->second.init_descriptors.empty()
                 && !it->second.metadata.empty()) {
-            // Build function table from the stored function pointers
+            // Build function table from the stored function pointers.
+            // Only include init functions (__const_init::, __svar_init::,
+            // __module_init::) — regular user functions were already registered
+            // during the module init pass against the MODULE's namespace tree
+            // (which includes private functions).  The TARGET namespace tree
+            // used here only contains public functions (merged via
+            // mergeUserPublic), so namespace-private functions would fail
+            // lookup and produce spurious "unresolved local slot" warnings.
             std::unordered_map<std::string, const QoreAOTFunc*> func_map;
             for (int i = 0; i < it->second.num_funcs; ++i) {
-                if (it->second.funcs[i].name && it->second.funcs[i].fn_ptr) {
-                    func_map[it->second.funcs[i].name] = &it->second.funcs[i];
+                const char* fname = it->second.funcs[i].name;
+                if (fname && it->second.funcs[i].fn_ptr
+                        && (strncmp(fname, "__const_init::", 14) == 0
+                            || strncmp(fname, "__svar_init::", 13) == 0
+                            || strncmp(fname, "__module_init::", 15) == 0)) {
+                    func_map[fname] = &it->second.funcs[i];
                 }
             }
 
