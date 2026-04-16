@@ -230,9 +230,16 @@ public:
     */
     DLLEXPORT QoreHashNode* submitRequestStreamingSend(const char* method, const char* path,
         const QoreHashNode* headers, bool streaming_recv,
-        QoreChannel*& channel_out, ExceptionSink* xsink);
+        QoreChannel*& channel_out, ExceptionSink* xsink) override;
 
-    //! Pushes body data for a streaming send request
+    //! Pushes body data for a streaming send request (virtual override: const void*, size_t)
+    /** @param data body chunk pointer; nullptr signals end-of-body
+        @param len data length (0 when data is nullptr)
+        @param xsink exception sink
+    */
+    DLLEXPORT void pushSendData(const void* data, size_t len, ExceptionSink* xsink) override;
+
+    //! Pushes body data for a streaming send request (H1-specific: QoreStringNode*)
     /** @param data body chunk; nullptr signals end-of-body
         @param xsink exception sink
     */
@@ -243,7 +250,7 @@ public:
         @param trailers hash of trailer key-value pairs
         @param xsink exception sink
     */
-    DLLEXPORT void setTrailers(const QoreHashNode* trailers, ExceptionSink* xsink);
+    DLLEXPORT void setTrailers(const QoreHashNode* trailers, ExceptionSink* xsink) override;
 
     //! Submits a request with a caller-provided action (for poll-based APIs)
     /** Like submitRequest() but uses the caller's action instead of creating

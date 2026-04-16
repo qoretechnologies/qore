@@ -231,6 +231,11 @@ public:
         return connection_priv;
     }
 
+    //! Returns the inner QUIC client poll operation (for stream data send)
+    DLLLOCAL SocketQuicClientPollOperation* getInnerOp() const {
+        return inner_op;
+    }
+
     //! Get the socket object (returns a referenced QoreObject*)
     DLLLOCAL QoreObject* getReferencedSocket() const {
         if (self) {

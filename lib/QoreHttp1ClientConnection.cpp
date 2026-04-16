@@ -674,6 +674,16 @@ void Http1ClientConnection::pushSendData(const QoreStringNode* data, ExceptionSi
     }
 }
 
+void Http1ClientConnection::pushSendData(const void* data, size_t len, ExceptionSink* xsink) {
+    if (!data || !len) {
+        // End-of-body sentinel
+        pushSendData(nullptr, xsink);
+        return;
+    }
+    SimpleRefHolder<QoreStringNode> str(new QoreStringNode((const char*)data, len, QCS_DEFAULT));
+    pushSendData(*str, xsink);
+}
+
 void Http1ClientConnection::setTrailers(const QoreHashNode* trailers, ExceptionSink* xsink) {
     if (!poll_op_priv) {
         xsink->raiseException("HTTPCLIENT-STATE-ERROR",

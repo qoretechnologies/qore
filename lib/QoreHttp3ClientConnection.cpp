@@ -35,6 +35,7 @@
 #include <qore/AsyncCompletionAction.h>
 #include "qore/intern/QoreChannel.h"
 #include "qore/intern/QC_Future.h"
+#include "qore/intern/QC_FutureImpl.h"
 #include "qore/intern/QoreHttp3ClientConnection.h"
 #include "qore/intern/QC_Http3ClientPollOperationBase.h"
 #include "qore/intern/QC_SocketPollOperation.h"
@@ -402,6 +403,183 @@ int64_t Http3ClientConnection::submitRequestStreaming(const char* method, const 
     ch->ref();
     channel_out = ch;
     return stream_id;
+}
+
+QoreHashNode* Http3ClientConnection::submitRequestStreamingSend(const char* method,
+        const char* path, const QoreHashNode* headers, bool streaming_recv,
+        QoreChannel*& channel_out, ExceptionSink* xsink) {
+    if (!poll_op_priv || isClosed()) {
+        xsink->raiseException("HTTPCLIENT-STATE-ERROR",
+            "cannot submit streaming send request: connection is closed");
+        return nullptr;
+    }
+    if (!isReady()) {
+        xsink->raiseException("HTTPCLIENT-STATE-ERROR",
+            "cannot submit streaming send request: connection is not ready");
+        return nullptr;
+    }
+
+    AbstractAsyncAction* action = nullptr;
+    ReferenceHolder<QoreObject> future_obj(xsink);
+    ReferenceHolder<QoreChannel> ch_holder(xsink);
+
+    if (streaming_recv) {
+        ch_holder = new QoreChannel(-1);
+        action = new ChannelAction(*ch_holder);
+    } else {
+        ReferenceHolder<QorePromise> promise_holder(new QorePromise(), xsink);
+        QorePromise* promise_raw = *promise_holder;
+        ReferenceHolder<QoreFuture> future_holder(promise_holder->getFuture(xsink), xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+        QoreProgram* pgm = getProgram();
+        future_obj = new QoreObject(QC_FUTUREIMPL, pgm, future_holder.release());
+        action = new PromiseAction(promise_raw, nullptr);
+        promise_holder.release()->deref(xsink);
+    }
+
+    // Submit with streaming=true (no END_STREAM — bidirectional streaming)
+    int64_t stream_id = poll_op_priv->submitRequest(method, path, headers,
+        nullptr, 0, /* streaming */ true, action,
+        max_concurrent_streams_, xsink);
+    if (*xsink || stream_id < 0) {
+        return nullptr;
+    }
+
+    // Store stream_id for subsequent pushSendData/setTrailers calls
+    streaming_send_stream_id = stream_id;
+
+    releaseStreamReservation();
+
+    // Wake the I/O controller
+    if (sock_obj) {
+        ExceptionSink wake_xsink;
+        ReferenceHolder<QoreObject> ctl_obj_holder(
+            qore_get_async_io_controller_obj(&wake_xsink), &wake_xsink);
+        if (ctl_obj_holder) {
+            ReferenceHolder<AsyncIoControllerPriv> ctl_priv_holder(
+                static_cast<AsyncIoControllerPriv*>(
+                    ctl_obj_holder->getReferencedPrivateData(
+                        CID_ASYNCIOCONTROLLER, &wake_xsink)),
+                &wake_xsink);
+            if (ctl_priv_holder) {
+                ctl_priv_holder->wakeSocketByObject(sock_obj, &wake_xsink);
+            }
+        }
+        wake_xsink.clear();
+    }
+
+    // Flush pending QUIC writes
+    poll_op_priv->flushPendingWrites(xsink);
+
+    // Build result
+    ReferenceHolder<QoreHashNode> result(new QoreHashNode(autoTypeInfo), xsink);
+    result->setKeyValue("stream_id", QoreValue((int64)stream_id), xsink);
+    if (streaming_recv) {
+        QoreChannel* ch = *ch_holder;
+        ch->ref();
+        channel_out = ch;
+    } else {
+        result->setKeyValue("future", future_obj.release(), xsink);
+    }
+    return result.release();
+}
+
+void Http3ClientConnection::pushSendData(const void* data, size_t len, ExceptionSink* xsink) {
+    if (!poll_op_priv) {
+        xsink->raiseException("HTTPCLIENT-STATE-ERROR",
+            "cannot push data: connection has no poll operation");
+        return;
+    }
+    if (streaming_send_stream_id < 0) {
+        xsink->raiseException("HTTPCLIENT-STATE-ERROR",
+            "cannot push data: no streaming send in progress");
+        return;
+    }
+    if (!poll_op_priv->isReady()) {
+        xsink->raiseException("HTTPCLIENT-STATE-ERROR",
+            "cannot push data: connection is not ready");
+        return;
+    }
+
+    std::shared_ptr<QuicSession> session = poll_op_priv->getInnerOp()->getSession();
+    if (!session) {
+        xsink->raiseException("HTTPCLIENT-STATE-ERROR",
+            "cannot push data: QUIC session not available");
+        return;
+    }
+
+    bool end_stream = (!data || !len);
+    if (end_stream) {
+        // End-of-body: send empty DATA with end_stream flag
+        session->sendStreamData(streaming_send_stream_id, nullptr, 0, true, xsink);
+        streaming_send_stream_id = -1;
+    } else {
+        session->sendStreamData(streaming_send_stream_id, data, len, false, xsink);
+    }
+
+    // Flush pending QUIC writes
+    if (!*xsink) {
+        poll_op_priv->flushPendingWrites(xsink);
+    }
+
+    // Wake the I/O controller
+    if (sock_obj && !*xsink) {
+        ExceptionSink wake_xsink;
+        ReferenceHolder<QoreObject> ctl_obj_holder(
+            qore_get_async_io_controller_obj(&wake_xsink), &wake_xsink);
+        if (ctl_obj_holder) {
+            ReferenceHolder<AsyncIoControllerPriv> ctl_priv_holder(
+                static_cast<AsyncIoControllerPriv*>(
+                    ctl_obj_holder->getReferencedPrivateData(
+                        CID_ASYNCIOCONTROLLER, &wake_xsink)),
+                &wake_xsink);
+            if (ctl_priv_holder) {
+                ctl_priv_holder->wakeSocketByObject(sock_obj, &wake_xsink);
+            }
+        }
+        wake_xsink.clear();
+    }
+}
+
+void Http3ClientConnection::setTrailers(const QoreHashNode* trailers, ExceptionSink* xsink) {
+    if (!poll_op_priv) {
+        xsink->raiseException("HTTPCLIENT-STATE-ERROR",
+            "cannot set trailers: connection has no poll operation");
+        return;
+    }
+    if (streaming_send_stream_id < 0) {
+        xsink->raiseException("HTTPCLIENT-STATE-ERROR",
+            "cannot set trailers: no streaming send in progress");
+        return;
+    }
+
+    std::shared_ptr<QuicSession> session = poll_op_priv->getInnerOp()->getSession();
+    if (!session) {
+        xsink->raiseException("HTTPCLIENT-STATE-ERROR",
+            "cannot set trailers: QUIC session not available");
+        return;
+    }
+
+    // Convert QoreHashNode trailers to strcase_str_map_t
+    strcase_str_map_t trailer_map;
+    if (trailers) {
+        ConstHashIterator hi(trailers);
+        while (hi.next()) {
+            QoreValue val = hi.get();
+            if (val.getType() == NT_STRING) {
+                trailer_map[hi.getKey()] = val.get<const QoreStringNode>()->c_str();
+            }
+        }
+    }
+
+    session->submitTrailers(streaming_send_stream_id, trailer_map, xsink);
+
+    // Flush pending QUIC writes
+    if (!*xsink) {
+        poll_op_priv->flushPendingWrites(xsink);
+    }
 }
 
 void Http3ClientConnection::closeConnection(ExceptionSink* xsink) {

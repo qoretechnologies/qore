@@ -110,6 +110,23 @@ public:
         const QoreHashNode* headers, const void* body, size_t body_len,
         QoreChannel*& channel_out, ExceptionSink* xsink) override;
 
+    //! Submits a request with streaming send (H3 DATA frames pushed incrementally)
+    /** @since %Qore 2.3
+    */
+    DLLEXPORT QoreHashNode* submitRequestStreamingSend(const char* method, const char* path,
+        const QoreHashNode* headers, bool streaming_recv,
+        QoreChannel*& channel_out, ExceptionSink* xsink) override;
+
+    //! Push body data for a streaming send request (H3 DATA frame via QUIC)
+    /** @since %Qore 2.3
+    */
+    DLLEXPORT void pushSendData(const void* data, size_t len, ExceptionSink* xsink) override;
+
+    //! Set HTTP trailers for a streaming send request (H3 TRAILERS)
+    /** @since %Qore 2.3
+    */
+    DLLEXPORT void setTrailers(const QoreHashNode* trailers, ExceptionSink* xsink) override;
+
     DLLEXPORT void closeConnection(ExceptionSink* xsink) override;
 
 protected:
@@ -123,6 +140,9 @@ private:
     bool submitted_to_controller = false;
     int max_concurrent_streams_ = 0;
     std::string owner_str;
+
+    //! Stream ID for the active streaming send request (-1 = none)
+    int64_t streaming_send_stream_id = -1;
 
     DLLLOCAL int buildAndSubmit(ExceptionSink* xsink);
 };

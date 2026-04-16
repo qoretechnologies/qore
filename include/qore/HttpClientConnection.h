@@ -245,6 +245,45 @@ public:
         const QoreHashNode* headers, const void* body, size_t body_len,
         AbstractAsyncAction* action, ExceptionSink* xsink);
 
+    //! Submits a request with streaming send (body pushed incrementally via pushSendData)
+    /** The initial request headers are sent without a body. The caller then pushes
+        body chunks via @ref pushSendData and signals end-of-body with pushSendData(nullptr, 0).
+        If @a streaming_recv is true, the response is delivered via @a channel_out;
+        otherwise a Future hash is returned in the result.
+
+        @param method HTTP method
+        @param path request path
+        @param headers optional request headers
+        @param streaming_recv if true, response delivered incrementally via Channel
+        @param channel_out receives a ref'd QoreChannel* when streaming_recv is true
+        @param xsink exception sink
+        @return result hash on success, nullptr on error
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT virtual QoreHashNode* submitRequestStreamingSend(const char* method, const char* path,
+        const QoreHashNode* headers, bool streaming_recv,
+        QoreChannel*& channel_out, ExceptionSink* xsink);
+
+    //! Push body data for a streaming send request
+    /** @param data body chunk pointer (nullptr signals end-of-body)
+        @param len data length (0 when data is nullptr)
+        @param xsink exception sink
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT virtual void pushSendData(const void* data, size_t len, ExceptionSink* xsink);
+
+    //! Set HTTP trailers for a streaming send request
+    /** Must be called before the final pushSendData(nullptr, 0).
+
+        @param trailers hash of trailer key-value pairs
+        @param xsink exception sink
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT virtual void setTrailers(const QoreHashNode* trailers, ExceptionSink* xsink);
+
     //! Close the connection and release controller resources
     /** After this call, @ref isClosed returns true and no further requests
         can be submitted.  Any in-flight request is rejected with

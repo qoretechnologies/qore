@@ -5661,19 +5661,10 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                 return nullptr;
             }
 
-            // Cast to Http1ClientConnection for streaming send API
-            Http1ClientConnection* h1_conn = dynamic_cast<Http1ClientConnection*>(conn);
-            if (!h1_conn) {
-                xsink->raiseException("HTTPCLIENT-INTERNAL-ERROR",
-                    "streaming send not supported on non-H1 connections");
-                mgr.releaseConnection(conn);
-                return nullptr;
-            }
-
-            // Submit streaming send request
+            // Submit streaming send request via virtual dispatch (H1/H2/H3)
             QoreChannel* channel_raw = nullptr;
             ReferenceHolder<QoreHashNode> submit_result(
-                h1_conn->submitRequestStreamingSend(meth, msgpath, *nh,
+                conn->submitRequestStreamingSend(meth, msgpath, *nh,
                     streaming_recv, channel_raw, xsink), xsink);
             if (*xsink || !submit_result) {
                 mgr.releaseConnection(conn);
@@ -5685,7 +5676,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                 while (true) {
                     ValueHolder res(send_callback->execValue(nullptr, xsink), xsink);
                     if (*xsink) {
-                        h1_conn->pushSendData(nullptr, xsink);
+                        conn->pushSendData(nullptr, 0, xsink);
                         if (channel_raw) {
                             channel_raw->close();
                             channel_raw->deref(xsink);
@@ -5693,7 +5684,6 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                         return nullptr;
                     }
 
-                    const QoreStringNode* chunk_str = nullptr;
                     bool done = false;
                     switch (res->getType()) {
                         case NT_STRING: {
@@ -5701,7 +5691,15 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                             if (str->empty()) {
                                 done = true;
                             } else {
-                                chunk_str = str;
+                                conn->pushSendData(str->c_str(), str->size(), xsink);
+                                if (*xsink) {
+                                    conn->pushSendData(nullptr, 0, xsink);
+                                    if (channel_raw) {
+                                        channel_raw->close();
+                                        channel_raw->deref(xsink);
+                                    }
+                                    return nullptr;
+                                }
                             }
                             break;
                         }
@@ -5710,20 +5708,15 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                             if (b->empty()) {
                                 done = true;
                             } else {
-                                // Convert binary to string for pushSendData
-                                SimpleRefHolder<QoreStringNode> tmp(
-                                    new QoreStringNode((const char*)b->getPtr(), b->size(),
-                                        QCS_DEFAULT));
-                                h1_conn->pushSendData(*tmp, xsink);
+                                conn->pushSendData(b->getPtr(), b->size(), xsink);
                                 if (*xsink) {
-                                    h1_conn->pushSendData(nullptr, xsink);
+                                    conn->pushSendData(nullptr, 0, xsink);
                                     if (channel_raw) {
                                         channel_raw->close();
                                         channel_raw->deref(xsink);
                                     }
                                     return nullptr;
                                 }
-                                continue;
                             }
                             break;
                         }
@@ -5736,7 +5729,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                                 "send_callback returned type '%s'; expected "
                                 "'string', 'binary', or NOTHING",
                                 res->getTypeName());
-                            h1_conn->pushSendData(nullptr, xsink);
+                            conn->pushSendData(nullptr, 0, xsink);
                             if (channel_raw) {
                                 channel_raw->close();
                                 channel_raw->deref(xsink);
@@ -5747,17 +5740,6 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                     if (done) {
                         break;
                     }
-                    if (chunk_str) {
-                        h1_conn->pushSendData(chunk_str, xsink);
-                        if (*xsink) {
-                            h1_conn->pushSendData(nullptr, xsink);
-                            if (channel_raw) {
-                                channel_raw->close();
-                                channel_raw->deref(xsink);
-                            }
-                            return nullptr;
-                        }
-                    }
                 }
             } else if (is) {
                 // InputStream path
@@ -5765,7 +5747,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                 while (true) {
                     SimpleRefHolder<BinaryNode> buf(is->readHelper(chunk_size, xsink));
                     if (*xsink) {
-                        h1_conn->pushSendData(nullptr, xsink);
+                        conn->pushSendData(nullptr, 0, xsink);
                         if (channel_raw) {
                             channel_raw->close();
                             channel_raw->deref(xsink);
@@ -5775,12 +5757,9 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                     if (!buf || buf->empty()) {
                         break;
                     }
-                    SimpleRefHolder<QoreStringNode> chunk_str(
-                        new QoreStringNode((const char*)buf->getPtr(), buf->size(),
-                            QCS_DEFAULT));
-                    h1_conn->pushSendData(*chunk_str, xsink);
+                    conn->pushSendData(buf->getPtr(), buf->size(), xsink);
                     if (*xsink) {
-                        h1_conn->pushSendData(nullptr, xsink);
+                        conn->pushSendData(nullptr, 0, xsink);
                         if (channel_raw) {
                             channel_raw->close();
                             channel_raw->deref(xsink);
@@ -5794,7 +5773,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
             if (trailer_callback) {
                 ValueHolder trailer_result(trailer_callback->execValue(nullptr, xsink), xsink);
                 if (*xsink) {
-                    h1_conn->pushSendData(nullptr, xsink);
+                    conn->pushSendData(nullptr, 0, xsink);
                     if (channel_raw) {
                         channel_raw->close();
                         channel_raw->deref(xsink);
@@ -5802,12 +5781,12 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                     return nullptr;
                 }
                 if (trailer_result->getType() == NT_HASH) {
-                    h1_conn->setTrailers(trailer_result->get<const QoreHashNode>(), xsink);
+                    conn->setTrailers(trailer_result->get<const QoreHashNode>(), xsink);
                 }
             }
 
             // Push end sentinel
-            h1_conn->pushSendData(nullptr, xsink);
+            conn->pushSendData(nullptr, 0, xsink);
 
             if (streaming_recv) {
                 // Streaming receive: drain channel (same logic as the
@@ -5918,7 +5897,10 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                             streaming_recv_channel = *channel;
                             break;
                         }
-                        continue;
+                        // Fall through to check for body data in the same
+                        // hash — H2/H3 streaming send can dispatch headers +
+                        // body in a single channel event (when the response
+                        // fits in one frame).
                     }
 
                     // Check for body data
