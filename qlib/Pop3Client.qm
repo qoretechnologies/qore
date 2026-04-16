@@ -1621,7 +1621,7 @@ public class Pop3PingPollOperation inherits Qore::PollPipeline {
     */
     constructor(Pop3Client pop3) : PollPipeline(new Socket()) {
         hash<auto> info = pop3.getInfo();
-        self.goal = "ping";
+        goal = "ping";
 
         bool has_token = info.token.val();
         bool need_stls = !info.ssl && info.tls ? True : False;
@@ -1667,54 +1667,54 @@ public class Pop3PingPollOperation inherits Qore::PollPipeline {
         #  27: (past end → pipeline complete)
 
         # --- Steps 0-4: configuration transforms ---
-        self.addSetContextBool("need_stls", need_stls);                  # 0
-        self.addSetContextBool("has_token", has_token);                  # 1
-        self.addSetContextBinary("xoauth2_cmd", xoauth2_cmd);           # 2
-        self.addSetContextBinary("user_cmd", user_cmd);                  # 3
-        self.addSetContextBinary("pass_cmd", pass_cmd);                  # 4
+        addSetContextBool("need_stls", need_stls);                  # 0
+        addSetContextBool("has_token", has_token);                  # 1
+        addSetContextBinary("xoauth2_cmd", xoauth2_cmd);           # 2
+        addSetContextBinary("user_cmd", user_cmd);                  # 3
+        addSetContextBinary("pass_cmd", pass_cmd);                  # 4
 
         # --- Step 5: connect ---
         if (info.ssl) {
-            self.addConnectSsl(info.target);                             # 5
+            addConnectSsl(info.target);                             # 5
         } else {
-            self.addConnect(info.target);                                # 5
+            addConnect(info.target);                                # 5
         }
 
         # --- Steps 6-7: read and validate server greeting ---
-        self.addRecvUntilBytes("\n");                                    # 6
-        self.addValidateResponsePrefix("+OK", "POP3-POLL-ERROR");       # 7
+        addRecvUntilBytes("\n");                                    # 6
+        addValidateResponsePrefix("+OK", "POP3-POLL-ERROR");       # 7
 
         # --- Step 8: branch on STLS decision ---
-        self.addBranchOnContextKey("need_stls", 9, 13);                 # 8
+        addBranchOnContextKey("need_stls", 9, 13);                 # 8
 
         # --- Steps 9-12: STARTTLS handshake ---
-        self.addSend("STLS\r\n");                                       # 9
-        self.addRecvUntilBytes("\n");                                    # 10
-        self.addValidateResponsePrefix("+OK", "POP3-POLL-ERROR");       # 11
-        self.addSslUpgrade();                                           # 12
+        addSend("STLS\r\n");                                       # 9
+        addRecvUntilBytes("\n");                                    # 10
+        addValidateResponsePrefix("+OK", "POP3-POLL-ERROR");       # 11
+        addSslUpgrade();                                           # 12
 
         # --- Step 13: branch on auth method ---
-        self.addBranchOnContextKey("has_token", 14, 18);                # 13
+        addBranchOnContextKey("has_token", 14, 18);                # 13
 
         # --- Steps 14-17: XOAUTH2 auth path ---
-        self.addSendFromContext("xoauth2_cmd");                         # 14
-        self.addRecvUntilBytes("\n");                                    # 15
-        self.addValidateResponsePrefix("+OK", "POP3-POLL-ERROR");       # 16
+        addSendFromContext("xoauth2_cmd");                         # 14
+        addRecvUntilBytes("\n");                                    # 15
+        addValidateResponsePrefix("+OK", "POP3-POLL-ERROR");       # 16
         # Unconditional jump to NOOP (has_token is always true here)
-        self.addBranchOnContextKey("has_token", 24, 24);                # 17
+        addBranchOnContextKey("has_token", 24, 24);                # 17
 
         # --- Steps 18-23: USER/PASS auth path ---
-        self.addSendFromContext("user_cmd");                             # 18
-        self.addRecvUntilBytes("\n");                                    # 19
-        self.addValidateResponsePrefix("+OK", "POP3-POLL-ERROR");       # 20
-        self.addSendFromContext("pass_cmd");                             # 21
-        self.addRecvUntilBytes("\n");                                    # 22
-        self.addValidateResponsePrefix("+OK", "POP3-POLL-ERROR");       # 23
+        addSendFromContext("user_cmd");                             # 18
+        addRecvUntilBytes("\n");                                    # 19
+        addValidateResponsePrefix("+OK", "POP3-POLL-ERROR");       # 20
+        addSendFromContext("pass_cmd");                             # 21
+        addRecvUntilBytes("\n");                                    # 22
+        addValidateResponsePrefix("+OK", "POP3-POLL-ERROR");       # 23
 
         # --- Steps 24-26: NOOP ping ---
-        self.addSend("NOOP\r\n");                                       # 24
-        self.addRecvUntilBytes("\n");                                    # 25
-        self.addValidateResponsePrefix("+OK", "POP3-POLL-ERROR");       # 26
+        addSend("NOOP\r\n");                                       # 24
+        addRecvUntilBytes("\n");                                    # 25
+        addValidateResponsePrefix("+OK", "POP3-POLL-ERROR");       # 26
 
         # --- Step 27 (past end): pipeline completes automatically ---
     }
@@ -1730,14 +1730,315 @@ public class Pop3PingPollOperation inherits Qore::PollPipeline {
     /** @return the current state string
     */
     string getState() {
-        if (self.goalReached()) {
+        if (goalReached()) {
             return Pop3PingState::Complete;
         }
-        if (self.isClosed()) {
+        if (isClosed()) {
             return "error";
         }
-        # Delegate to the pipeline for internal state
         return PollPipeline::getState();
+    }
+}
+
+#! POP3 stat poll operation — connects, authenticates, and runs STAT + LIST
+/** Builds on the same connect + auth sequence as @ref Pop3PingPollOperation,
+    but replaces the NOOP ping with STAT + LIST to retrieve the mailbox
+    message list.
+
+    After completion, call @ref getStatResult() for the message count and
+    @ref getListResult() for the per-message size hash. The socket remains
+    connected for subsequent RETR operations.
+
+    @since Pop3Client 2.2
+*/
+public class Pop3StatPollOperation inherits Qore::PollPipeline {
+    private {
+        #! Reference to the socket for hand-off to RETR pipeline
+        Socket my_sock;
+    }
+
+    #! Creates the stat pipeline
+    /** @param pop3 the Pop3Client whose connection info drives the pipeline
+    */
+    constructor(Pop3Client pop3) : PollPipeline(my_sock = Pop3StatPollOperation::makeSocket()) {
+        hash<auto> info = pop3.getInfo();
+        goal = "stat";
+
+        bool has_token = info.token.val();
+        bool need_stls = !info.ssl && info.tls ? True : False;
+
+        # Pre-compute auth commands
+        string xoauth2_cmd = "";
+        if (has_token) {
+            string login = sprintf("user=%s%sauth=Bearer %s%s%s", info.user, Pop3Client::CtrlA, info.token,
+                Pop3Client::CtrlA, Pop3Client::CtrlA).toBase64();
+            xoauth2_cmd = sprintf("AUTH XOAUTH2 %s\r\n", login);
+        }
+        string user_cmd = sprintf("USER %s\r\n", info.user);
+        string pass_cmd = sprintf("PASS %s\r\n", info.pass);
+
+        # --- Steps 0-4: configuration transforms ---
+        addSetContextBool("need_stls", need_stls);
+        addSetContextBool("has_token", has_token);
+        addSetContextBinary("xoauth2_cmd", xoauth2_cmd);
+        addSetContextBinary("user_cmd", user_cmd);
+        addSetContextBinary("pass_cmd", pass_cmd);
+
+        # --- Step 5: connect ---
+        if (info.ssl) {
+            addConnectSsl(info.target);
+        } else {
+            addConnect(info.target);
+        }
+
+        # --- Steps 6-7: read and validate server greeting ---
+        addRecvUntilBytes("\n");
+        addValidateResponsePrefix("+OK", "POP3-FETCH-ERROR");
+
+        # --- Step 8: branch on STLS decision ---
+        addBranchOnContextKey("need_stls", 9, 13);
+
+        # --- Steps 9-12: STARTTLS handshake ---
+        addSend("STLS\r\n");
+        addRecvUntilBytes("\n");
+        addValidateResponsePrefix("+OK", "POP3-FETCH-ERROR");
+        addSslUpgrade();
+
+        # --- Step 13: branch on auth method ---
+        addBranchOnContextKey("has_token", 14, 18);
+
+        # --- Steps 14-17: XOAUTH2 auth path ---
+        addSendFromContext("xoauth2_cmd");
+        addRecvUntilBytes("\n");
+        addValidateResponsePrefix("+OK", "POP3-FETCH-ERROR");
+        addBranchOnContextKey("has_token", 24, 24);
+
+        # --- Steps 18-23: USER/PASS auth path ---
+        addSendFromContext("user_cmd");
+        addRecvUntilBytes("\n");
+        addValidateResponsePrefix("+OK", "POP3-FETCH-ERROR");
+        addSendFromContext("pass_cmd");
+        addRecvUntilBytes("\n");
+        addValidateResponsePrefix("+OK", "POP3-FETCH-ERROR");
+
+        # --- Steps 24-26: STAT command ---
+        addSend("STAT\r\n");                                       # 24
+        addRecvUntilBytes("\n");                                    # 25
+        addValidateResponsePrefix("+OK", "POP3-FETCH-ERROR");      # 26
+
+        # --- Steps 27-30: LIST command (dot-terminated multi-line response) ---
+        addSend("LIST\r\n");                                       # 27
+        addRecvUntilBytes("\n");                                    # 28 — +OK response line
+        addValidateResponsePrefix("+OK", "POP3-FETCH-ERROR");      # 29
+        # Dot-terminator: ".\r\n" on its own line. After +OK line consumed,
+        # next data starts at column 0 — safe to match ".\r\n" directly.
+        addRecvUntilBytes(".\r\n");                                # 30 — dot-terminated body
+        # Step 31 (past end): pipeline complete
+    }
+
+    #! Returns the socket for hand-off to a RETR pipeline
+    Socket getSocket() {
+        return my_sock;
+    }
+
+    #! Helper to create a Socket for use in the constructor parent call
+    private static Socket makeSocket() {
+        return new Socket();
+    }
+
+    #! Returns the goal
+    string getGoal() {
+        return "stat";
+    }
+
+    string getState() {
+        if (goalReached()) {
+            return "complete";
+        }
+        if (isClosed()) {
+            return "error";
+        }
+        return PollPipeline::getState();
+    }
+}
+
+#! POP3 retrieve poll operation — fetches messages on an already-connected socket
+/** Takes an already-connected and authenticated POP3 socket (from
+    @ref Pop3StatPollOperation) and a list of message IDs, then statically
+    unrolls RETR + optional DELE commands per message, followed by QUIT.
+
+    @since Pop3Client 2.2
+*/
+public class Pop3RetrPollOperation inherits Qore::PollPipeline {
+    private {
+        #! Fetched message bodies keyed by message ID
+        hash<string, string> messages = {};
+        #! Current message index (for tracking during pipeline execution)
+        list<string> msg_ids;
+    }
+
+    #! Creates the retrieve pipeline
+    /** @param sock already-connected POP3 socket
+        @param msg_ids list of message IDs to fetch (from LIST output)
+        @param delete_after_fetch if True, send DELE after each RETR
+    */
+    constructor(Socket sock, list<string> ids, bool do_delete = False)
+            : PollPipeline(sock) {
+        msg_ids = ids;
+        goal = "retr";
+
+        # Statically unroll RETR per message
+        foreach string id in (ids) {
+            # RETR command
+            addSend(sprintf("RETR %s\r\n", id));
+            # Read +OK response line
+            addRecvUntilBytes("\n");
+            addValidateResponsePrefix("+OK", "POP3-FETCH-ERROR");
+            # Read dot-terminated message body (".\r\n" on its own line)
+            addRecvUntilBytes(".\r\n");
+
+            if (do_delete) {
+                addSend(sprintf("DELE %s\r\n", id));
+                addRecvUntilBytes("\n");
+                addValidateResponsePrefix("+OK", "POP3-FETCH-ERROR");
+            }
+        }
+
+        # QUIT
+        addSend("QUIT\r\n");
+        addRecvUntilBytes("\n");
+        addValidateResponsePrefix("+OK", "POP3-FETCH-ERROR");
+    }
+
+    #! Returns the goal
+    string getGoal() {
+        return "retr";
+    }
+
+    string getState() {
+        if (goalReached()) {
+            return "complete";
+        }
+        if (isClosed()) {
+            return "error";
+        }
+        return PollPipeline::getState();
+    }
+}
+
+#! POP3 fetch orchestrator — two-phase: STAT+LIST then RETR per message
+/** Composes @ref Pop3StatPollOperation and @ref Pop3RetrPollOperation.
+    Phase 1 runs the stat op (connect+auth+STAT+LIST). The caller submits it
+    to the AsyncIoController. When it completes, call @ref createRetrOp() to
+    build the RETR pipeline for the discovered messages, then submit that.
+
+    This follows the same pattern as @ref FtpClientPollOperation — the
+    orchestrator manages sub-operations but does not inherit
+    @c AbstractPollOperation itself.
+
+    @since Pop3Client 2.2
+*/
+public class Pop3FetchPollOperation {
+    private {
+        Pop3Client pop3;
+        bool delete_after_fetch;
+        Pop3StatPollOperation stat_op;
+        *Pop3RetrPollOperation retr_op;
+        #! Parsed message IDs from LIST
+        list<string> msg_ids = ();
+    }
+
+    #! Creates the fetch orchestrator
+    /** @param pop3 the Pop3Client whose connection info drives the pipeline
+        @param delete_after_fetch if True, delete messages after fetching
+    */
+    constructor(Pop3Client client, bool do_delete = False) {
+        pop3 = client;
+        delete_after_fetch = do_delete;
+        stat_op = new Pop3StatPollOperation(client);
+    }
+
+    #! Returns the stat poll operation for submission to the controller
+    Pop3StatPollOperation getStatOp() {
+        return stat_op;
+    }
+
+    #! Creates the RETR poll operation after the stat phase completes
+    /** Call this after the stat op has reached its goal. Parses the LIST
+        output and builds the RETR pipeline on the already-connected socket.
+
+        @return the RETR poll operation, or NOTHING if the mailbox is empty
+    */
+    *Pop3RetrPollOperation createRetrOp() {
+        # Parse LIST output to get message IDs
+        *auto output = stat_op.getOutput();
+        if (output.typeCode() == NT_STRING) {
+            parseListOutput(output);
+        }
+
+        if (!msg_ids) {
+            return NOTHING;
+        }
+
+        retr_op = new Pop3RetrPollOperation(
+            stat_op.getSocket(), msg_ids, delete_after_fetch);
+        return retr_op;
+    }
+
+    #! Returns the fetched message IDs (available after stat phase)
+    list<string> getMessageIds() {
+        return msg_ids;
+    }
+
+    #! Returns the number of messages in the mailbox
+    int getMessageCount() {
+        return msg_ids.size();
+    }
+
+    #! Returns True when all phases are complete
+    bool goalReached() {
+        if (!retr_op) {
+            # If no retr op yet, check if stat is done with empty mailbox
+            return stat_op.goalReached() && !msg_ids;
+        }
+        return retr_op.goalReached();
+    }
+
+    #! Returns the current state
+    string getState() {
+        if (goalReached()) {
+            return "complete";
+        }
+        if (!retr_op) {
+            return "stat:" + stat_op.getState();
+        }
+        return "retr:" + retr_op.getState();
+    }
+
+    #! Abort the current sub-operation
+    abort() {
+        if (retr_op) {
+            retr_op.abort();
+        } else {
+            stat_op.abort();
+        }
+    }
+
+    #! Parse LIST output into message IDs
+    private parseListOutput(*string list_text) {
+        if (!list_text.val()) {
+            return;
+        }
+        foreach string line in (list_text.split("\r\n")) {
+            trim line;
+            if (!line.val() || line == ".") {
+                continue;
+            }
+            *string id = (line =~ x/^(\d+)\s/)[0];
+            if (id.val()) {
+                msg_ids += id;
+            }
+        }
     }
 }
 
@@ -1868,6 +2169,19 @@ public class Pop3Connection inherits ConnectionProvider::AbstractConnectionWithI
     */
     Qore::AbstractPollOperation startPollConnect(*Logger::LoggerInterface logger) {
         return new Pop3PingPollOperation(getImpl(False));
+    }
+
+    #! Starts a non-blocking fetch operation to retrieve all messages
+    /** Connects, authenticates, runs STAT+LIST, then RETR for each message.
+        Uses the two-phase @ref Pop3FetchPollOperation orchestrator.
+
+        @param do_delete if True, delete messages after fetching (DELE)
+        @return a fetch orchestrator; submit getStatOp() first, then createRetrOp()
+
+        @since Pop3Client 2.2
+    */
+    Pop3FetchPollOperation startPollFetch(bool do_delete = False) {
+        return new Pop3FetchPollOperation(getImpl(False), do_delete);
     }
 
     #! Performs a blocking ping operation on the POP3 server

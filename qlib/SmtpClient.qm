@@ -1104,7 +1104,7 @@ public class SmtpPingPollOperation inherits Qore::PollPipeline {
     */
     constructor(SmtpClient smtp) : PollPipeline(new Socket()) {
         hash<auto> info = smtp.getInfo();
-        self.goal = "ping";
+        goal = "ping";
 
         string hostname = gethostname();
         bool do_auth = info.user.val() && info.pass.val();
@@ -1118,67 +1118,67 @@ public class SmtpPingPollOperation inherits Qore::PollPipeline {
 
         # --- Steps 0-4: configuration transforms ---
         # Step 0: store TLS flag from config
-        self.addSetContextBool("force_tls", info.tls ? True : False);
+        addSetContextBool("force_tls", info.tls ? True : False);
         # Step 1: store auth flag
-        self.addSetContextBool("do_auth", do_auth);
+        addSetContextBool("do_auth", do_auth);
         # Step 2: pre-compute EHLO command
-        self.addSetContextBinary("ehlo_cmd", sprintf("EHLO %s\r\n", hostname));
+        addSetContextBinary("ehlo_cmd", sprintf("EHLO %s\r\n", hostname));
         # Step 3: pre-compute HELO command
-        self.addSetContextBinary("helo_cmd", sprintf("HELO %s\r\n", hostname));
+        addSetContextBinary("helo_cmd", sprintf("HELO %s\r\n", hostname));
         # Step 4: pre-compute AUTH command (empty if unused; step 18 never executes)
-        self.addSetContextBinary("auth_cmd", auth_cmd);
+        addSetContextBinary("auth_cmd", auth_cmd);
 
         # --- Step 5: connect ---
         if (info.ssl) {
-            self.addConnectSsl(info.target);
+            addConnectSsl(info.target);
         } else {
-            self.addConnect(info.target);
+            addConnect(info.target);
         }
 
         # --- Step 6: read server greeting ---
-        self.addRecvUntilBytes("\n");
+        addRecvUntilBytes("\n");
 
         # --- Step 7: detect ESMTP in greeting (checks last_output) ---
-        self.addCheckContains("", "ESMTP", "esmtp");
+        addCheckContains("", "ESMTP", "esmtp");
 
         # --- Step 8: select EHLO or HELO based on ESMTP flag ---
-        self.addSelectContextValue("send_cmd", "esmtp", "ehlo_cmd", "helo_cmd");
+        addSelectContextValue("send_cmd", "esmtp", "ehlo_cmd", "helo_cmd");
 
         # --- Step 9: send the selected EHLO/HELO command ---
-        self.addSendFromContext("send_cmd");
+        addSendFromContext("send_cmd");
 
         # --- Step 10: read multi-line EHLO/HELO reply ---
-        self.addRecvLineResponse("hello_code", "hello_text", "SMTP-POLL-ERROR");
+        addRecvLineResponse("hello_code", "hello_text", "SMTP-POLL-ERROR");
 
         # --- Step 11: detect STARTTLS capability in reply ---
-        self.addCheckContains("hello_text", "STARTTLS", "server_has_starttls");
+        addCheckContains("hello_text", "STARTTLS", "server_has_starttls");
 
         # --- Step 12: combine config TLS flag with server capability ---
-        self.addContextOr("do_tls", "force_tls", "server_has_starttls");
+        addContextOr("do_tls", "force_tls", "server_has_starttls");
 
         # --- Step 13: branch on TLS decision ---
         # true (step 14): start STARTTLS handshake
         # false (step 17): skip to auth check
-        self.addBranchOnContextKey("do_tls", 14, 17);
+        addBranchOnContextKey("do_tls", 14, 17);
 
         # --- Steps 14-16: STARTTLS handshake ---
         # Step 14: send STARTTLS command
-        self.addSend("STARTTLS\r\n");
+        addSend("STARTTLS\r\n");
         # Step 15: read STARTTLS reply
-        self.addRecvLineResponse("starttls_code", "starttls_text", "SMTP-POLL-ERROR");
+        addRecvLineResponse("starttls_code", "starttls_text", "SMTP-POLL-ERROR");
         # Step 16: upgrade connection to SSL
-        self.addSslUpgrade();
+        addSslUpgrade();
 
         # --- Step 17: branch on auth decision ---
         # true (step 18): start AUTH PLAIN
         # false (step 20 = past end): pipeline complete
-        self.addBranchOnContextKey("do_auth", 18, 20);
+        addBranchOnContextKey("do_auth", 18, 20);
 
         # --- Steps 18-19: AUTH PLAIN ---
         # Step 18: send AUTH PLAIN command
-        self.addSendFromContext("auth_cmd");
+        addSendFromContext("auth_cmd");
         # Step 19: read auth reply (throws on error codes >= 400)
-        self.addRecvLineResponse("login_code", "login_text", "SMTP-POLL-ERROR");
+        addRecvLineResponse("login_code", "login_text", "SMTP-POLL-ERROR");
 
         # --- Step 20 (past end): pipeline completes automatically ---
     }
@@ -1194,13 +1194,168 @@ public class SmtpPingPollOperation inherits Qore::PollPipeline {
     /** @return the current state string
     */
     string getState() {
-        if (self.goalReached()) {
+        if (goalReached()) {
             return SmtpPingState::Complete;
         }
-        if (self.isClosed()) {
+        if (isClosed()) {
             return "error";
         }
-        # Delegate to the pipeline for internal state
+        return PollPipeline::getState();
+    }
+}
+
+#! SMTP send poll operation — sends an email asynchronously via PollPipeline
+/** Builds on the same connect + auth sequence as @ref SmtpPingPollOperation,
+    then appends MAIL FROM, RCPT TO (unrolled per recipient), DATA, message
+    body (serialized + dot-terminated), and QUIT steps.
+
+    The recipient list is statically unrolled at construction time — each
+    recipient gets its own SEND + RECV step pair. This avoids needing loop
+    primitives in the pipeline.
+
+    @par Pipeline structure
+    - Steps 0-19: connect + auth (identical to SmtpPingPollOperation)
+    - Step 20: SEND "MAIL FROM:\<sender\>"
+    - Step 21: read MAIL FROM reply
+    - Steps 22..R-1: unrolled RCPT TO (2 steps per recipient)
+    - Step R: SEND "DATA"
+    - Step R+1: read DATA reply
+    - Step R+2: SEND serialized message body + "\\r\\n.\\r\\n"
+    - Step R+3: read message accept reply
+    - Step R+4: SEND "QUIT"
+    - Step R+5: read QUIT reply
+
+    @since SmtpClient 2.2
+*/
+public class SmtpSendPollOperation inherits Qore::PollPipeline {
+    #! Creates the object for sending an email message
+    /** Builds the complete SMTP send pipeline from connection configuration
+        and a pre-built MailMessage::Message.
+
+        @param smtp the SmtpClient whose connection info drives the pipeline
+        @param message the email message to send
+
+        @throw SMTP-SEND-ERROR if the SMTP server returns an error response
+        @throw MESSAGE-ERROR if the message cannot be serialized (no sender, no recipients)
+    */
+    constructor(SmtpClient smtp, MailMessage::Message message) : PollPipeline(new Socket()) {
+        hash<auto> info = smtp.getInfo();
+        goal = "send";
+
+        # Validate message has required fields
+        *string sender = message.getFrom();
+        if (!sender.val()) {
+            throw "MESSAGE-ERROR", "message has no sender address";
+        }
+        list<string> recipients = message.getRecipients();
+        if (!recipients) {
+            throw "MESSAGE-ERROR", "message has no recipients";
+        }
+
+        # Serialize the message body upfront (MIME encoding)
+        string mstr = message.serialize();
+
+        string hostname = gethostname();
+        bool do_auth = info.user.val() && info.pass.val();
+
+        # Pre-compute the AUTH PLAIN command (empty string if no auth)
+        string auth_cmd = "";
+        if (do_auth) {
+            auth_cmd = sprintf("AUTH PLAIN %s\r\n", make_base64_string(
+                binary(info.user) + <00> + binary(info.user) + <00> + binary(info.pass)));
+        }
+
+        # --- Steps 0-4: configuration transforms (same as SmtpPingPollOperation) ---
+        addSetContextBool("force_tls", info.tls ? True : False);
+        addSetContextBool("do_auth", do_auth);
+        addSetContextBinary("ehlo_cmd", sprintf("EHLO %s\r\n", hostname));
+        addSetContextBinary("helo_cmd", sprintf("HELO %s\r\n", hostname));
+        addSetContextBinary("auth_cmd", auth_cmd);
+
+        # --- Step 5: connect ---
+        if (info.ssl) {
+            addConnectSsl(info.target);
+        } else {
+            addConnect(info.target);
+        }
+
+        # --- Step 6: read server greeting ---
+        addRecvUntilBytes("\n");
+
+        # --- Step 7: detect ESMTP in greeting ---
+        addCheckContains("", "ESMTP", "esmtp");
+
+        # --- Step 8: select EHLO or HELO ---
+        addSelectContextValue("send_cmd", "esmtp", "ehlo_cmd", "helo_cmd");
+
+        # --- Step 9: send EHLO/HELO ---
+        addSendFromContext("send_cmd");
+
+        # --- Step 10: read multi-line EHLO/HELO reply ---
+        addRecvLineResponse("hello_code", "hello_text", "SMTP-SEND-ERROR");
+
+        # --- Step 11: detect STARTTLS capability ---
+        addCheckContains("hello_text", "STARTTLS", "server_has_starttls");
+
+        # --- Step 12: combine config TLS flag with server capability ---
+        addContextOr("do_tls", "force_tls", "server_has_starttls");
+
+        # --- Step 13: branch on TLS ---
+        addBranchOnContextKey("do_tls", 14, 17);
+
+        # --- Steps 14-16: STARTTLS handshake ---
+        addSend("STARTTLS\r\n");
+        addRecvLineResponse("starttls_code", "starttls_text", "SMTP-SEND-ERROR");
+        addSslUpgrade();
+
+        # --- Step 17: branch on auth ---
+        addBranchOnContextKey("do_auth", 18, 20);
+
+        # --- Steps 18-19: AUTH PLAIN ---
+        addSendFromContext("auth_cmd");
+        addRecvLineResponse("login_code", "login_text", "SMTP-SEND-ERROR");
+
+        # --- Step 20: MAIL FROM ---
+        addSend(sprintf("MAIL FROM: <%s>\r\n", sender));
+        # Step 21: read MAIL FROM reply
+        addRecvLineResponse("mailfrom_code", "mailfrom_text", "SMTP-SEND-ERROR");
+
+        # --- Steps 22+: unrolled RCPT TO per recipient ---
+        foreach string rcpt in (recipients) {
+            addSend(sprintf("RCPT TO: <%s>\r\n", rcpt));
+            addRecvLineResponse("rcpt_code", "rcpt_text", "SMTP-SEND-ERROR");
+        }
+
+        # --- DATA command ---
+        addSend("DATA\r\n");
+        addRecvLineResponse("data_code", "data_text", "SMTP-SEND-ERROR");
+
+        # --- Send message body (serialized + dot-terminated) ---
+        addSend(binary(mstr + "\r\n.\r\n"));
+
+        # --- Read message accept reply (250 OK with message ID) ---
+        addRecvLineResponse("msgid_code", "msgid_text", "SMTP-SEND-ERROR");
+
+        # --- QUIT ---
+        addSend("QUIT\r\n");
+        addRecvLineResponse("quit_code", "quit_text", "SMTP-SEND-ERROR");
+    }
+
+    #! Returns the goal
+    /** @return "send"
+    */
+    string getGoal() {
+        return "send";
+    }
+
+    #! Returns the current state as a string
+    string getState() {
+        if (goalReached()) {
+            return "complete";
+        }
+        if (isClosed()) {
+            return "error";
+        }
         return PollPipeline::getState();
     }
 }
@@ -1360,6 +1515,19 @@ public class SmtpConnection inherits ConnectionProvider::AbstractConnectionWithI
     */
     Qore::AbstractPollOperation startPollConnect(*Logger::LoggerInterface logger) {
         return new SmtpPingPollOperation(getImpl(False));
+    }
+
+    #! Starts a non-blocking send operation for the given email message
+    /** Connects, authenticates, and sends the email asynchronously via the
+        PollPipeline-based @ref SmtpSendPollOperation.
+
+        @param message the email message to send
+        @return a poll operation that can be submitted to the AsyncIoController
+
+        @since SmtpClient 2.2
+    */
+    Qore::AbstractPollOperation startPollSend(MailMessage::Message message) {
+        return new SmtpSendPollOperation(getImpl(False), message);
     }
 
     #! Sets child data provider capabilities

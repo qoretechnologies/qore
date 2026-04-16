@@ -262,8 +262,6 @@ public class HttpClientStreamHandle {
     hash<auto> request(string method, string path, *hash<auto> headers, *data body,
             *timeout timeout_ms) {
         timeout wait_timeout = timeout_ms ?? request_timeout;
-        stderr.printf("DEBUG StreamHandle.request: timeout_ms=%y request_timeout=%y wait_timeout=%y method=%y path=%y\n",
-            timeout_ms, request_timeout, wait_timeout, method, path);
         date end_time = now_us() + wait_timeout;
 
         # Wait for connection to become ready

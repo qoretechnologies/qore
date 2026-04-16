@@ -141,8 +141,6 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
     */
     constructor(*hash<HttpClientConnectionManagerOptions> opts) {
         self.opts = opts ?? <HttpClientConnectionManagerOptions>{};
-        stderr.printf("DEBUG HCCM constructor: request_timeout=%y connect_timeout=%y (input opts.request_timeout=%y)\n",
-            self.opts.request_timeout, self.opts.connect_timeout, opts.request_timeout);
         self.logger = self.opts.logger;
         if (!HttpClientProtocolMap.hasKey(self.opts.protocol)) {
             throw "HTTPCLIENT-OPTION-ERROR",

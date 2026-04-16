@@ -1,0 +1,293 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/Mime.qm
+%requires ../../../../qlib/MailMessage.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/ConnectionProvider
+%requires ../../../../qlib/SmtpClient.qm
+%requires ../../../../qlib/QUnit.qm
+
+%exec-class SmtpClientSendTest
+
+#! Mock SMTP server that accepts a complete send sequence and records the exchange
+class MockSmtpServer {
+    private {
+        Socket listener();
+        int port;
+        #! Collected protocol exchange for verification
+        list<string> received_commands = ();
+        #! The message body received via DATA
+        *string received_body;
+        #! Signals server thread completion
+        Counter done(1);
+        #! Error from server thread
+        *string server_error;
+        #! Whether to require AUTH
+        bool require_auth;
+    }
+
+    constructor(bool require_auth = True) {
+        self.require_auth = require_auth;
+        listener.bind("localhost:0");
+        listener.listen(1);
+        port = listener.getSocketInfo().port;
+    }
+
+    int getPort() {
+        return port;
+    }
+
+    #! Start the mock server in a background thread
+    start() {
+        background acceptAndServe();
+    }
+
+    #! Wait for the server thread to finish
+    wait(timeout to = 30s) {
+        done.waitForZero(to);
+    }
+
+    list<string> getReceivedCommands() {
+        return received_commands;
+    }
+
+    *string getReceivedBody() {
+        return received_body;
+    }
+
+    *string getServerError() {
+        return server_error;
+    }
+
+    private acceptAndServe() {
+        on_exit done.dec();
+        try {
+            Socket client = listener.accept(15s);
+            serveClient(client);
+        } catch (hash<ExceptionInfo> ex) {
+            server_error = sprintf("%s: %s", ex.err, ex.desc);
+        }
+    }
+
+    #! Read a line from the socket (up to \n)
+    private string readLine(Socket client, timeout to = 10s) {
+        string str = "";
+        while (True) {
+            int c = client.recvu1(to);
+            str += chr(c);
+            if (c == 10) {  # \n
+                break;
+            }
+        }
+        return str;
+    }
+
+    private serveClient(Socket client) {
+        # Send greeting
+        client.send("220 mock.smtp.test ESMTP MockServer\r\n");
+
+        while (True) {
+            string line = readLine(client);
+            trim line;
+            received_commands += line;
+
+            if (line =~ /^EHLO /i) {
+                client.send("250-mock.smtp.test Hello\r\n");
+                client.send("250-AUTH PLAIN LOGIN\r\n");
+                client.send("250 OK\r\n");
+            } else if (line =~ /^HELO /i) {
+                client.send("250 mock.smtp.test Hello\r\n");
+            } else if (line =~ /^AUTH PLAIN/i) {
+                if (require_auth) {
+                    client.send("235 2.7.0 Authentication successful\r\n");
+                } else {
+                    client.send("503 5.5.1 Error: authentication not enabled\r\n");
+                }
+            } else if (line =~ /^MAIL FROM:/i) {
+                client.send("250 2.1.0 OK\r\n");
+            } else if (line =~ /^RCPT TO:/i) {
+                client.send("250 2.1.5 OK\r\n");
+            } else if (line =~ /^DATA$/i) {
+                client.send("354 End data with <CR><LF>.<CR><LF>\r\n");
+                # Read message body until lone dot
+                string body = "";
+                while (True) {
+                    string bline = readLine(client);
+                    if (bline == ".\r\n") {
+                        break;
+                    }
+                    # Dot-unstuffing
+                    if (bline =~ /^\.\./) {
+                        bline = bline.substr(1);
+                    }
+                    body += bline;
+                }
+                received_body = body;
+                client.send("250 2.0.0 OK id=test-msg-001\r\n");
+            } else if (line =~ /^QUIT$/i) {
+                client.send("221 2.0.0 Bye\r\n");
+                break;
+            } else {
+                client.send(sprintf("500 5.5.2 Error: command not recognized: %s\r\n", line));
+            }
+        }
+    }
+}
+
+public class SmtpClientSendTest inherits QUnit::Test {
+    constructor() : Test("SmtpClientSendTest", "1.0", \ARGV) {
+        addTestCase("basic send with auth", \testBasicSendWithAuth());
+        addTestCase("send with multiple recipients", \testMultipleRecipients());
+        addTestCase("send poll operation API", \testSendPollOperationApi());
+        addTestCase("send with no recipients error", \testNoRecipientsError());
+        set_return_value(main());
+    }
+
+    #! Test basic SMTP send with a single recipient via SmtpSendPollOperation
+    testBasicSendWithAuth() {
+        MockSmtpServer server(True);
+        server.start();
+        on_exit server.wait();
+
+        SmtpClient smtp(sprintf("esmtp://testuser:testpass@localhost:%d", server.getPort()));
+
+        MailMessage::Message msg("sender@test.com", "Test Subject");
+        msg.addTO("recipient@test.com");
+        msg.setBody("Hello, World!");
+
+        SmtpSendPollOperation op(smtp, msg);
+        assertEq("send", op.getGoal(), "goal is 'send'");
+        assertFalse(op.goalReached(), "goal not reached initially");
+
+        # Submit to the global AsyncIoController and wait for completion
+        runPollOp(op);
+
+        assertTrue(op.goalReached(), "goal reached after pipeline completes");
+        assertEq("complete", op.getState(), "state is 'complete' after success");
+
+        # Verify the mock server received the expected commands
+        list<string> cmds = server.getReceivedCommands();
+        assertTrue(cmds.size() >= 5, "server received at least 5 commands");
+
+        # Check command sequence
+        bool has_auth = False;
+        bool has_mail_from = False;
+        bool has_rcpt_to = False;
+        bool has_data = False;
+        bool has_quit = False;
+        foreach string cmd in (cmds) {
+            if (cmd =~ /^AUTH PLAIN/i) {
+                has_auth = True;
+            } else if (cmd =~ /^MAIL FROM:.*sender@test\.com/i) {
+                has_mail_from = True;
+            } else if (cmd =~ /^RCPT TO:.*recipient@test\.com/i) {
+                has_rcpt_to = True;
+            } else if (cmd =~ /^DATA$/i) {
+                has_data = True;
+            } else if (cmd =~ /^QUIT$/i) {
+                has_quit = True;
+            }
+        }
+        assertTrue(has_auth, "AUTH PLAIN sent");
+        assertTrue(has_mail_from, "MAIL FROM sent");
+        assertTrue(has_rcpt_to, "RCPT TO sent");
+        assertTrue(has_data, "DATA sent");
+        assertTrue(has_quit, "QUIT sent");
+
+        # Verify message body was received
+        *string body = server.getReceivedBody();
+        assertTrue(body.val(), "message body received");
+        assertTrue(body =~ /Hello, World!/, "message body contains expected text");
+
+        # Check no server errors
+        assertNothing(server.getServerError(), "no server errors");
+    }
+
+    #! Test SMTP send with multiple To/CC/BCC recipients
+    testMultipleRecipients() {
+        MockSmtpServer server(True);
+        server.start();
+        on_exit server.wait();
+
+        SmtpClient smtp(sprintf("esmtp://testuser:testpass@localhost:%d", server.getPort()));
+
+        MailMessage::Message msg("sender@test.com", "Multi-recipient test");
+        msg.addTO("to1@test.com");
+        msg.addTO("to2@test.com");
+        msg.addCC("cc1@test.com");
+        msg.addBCC("bcc1@test.com");
+        msg.setBody("Test body");
+
+        SmtpSendPollOperation op(smtp, msg);
+        runPollOp(op);
+
+        assertTrue(op.goalReached(), "goal reached for multi-recipient send");
+
+        # Verify all recipients got RCPT TO commands
+        list<string> cmds = server.getReceivedCommands();
+        int rcpt_count = 0;
+        foreach string cmd in (cmds) {
+            if (cmd =~ /^RCPT TO:/i) {
+                ++rcpt_count;
+            }
+        }
+        assertEq(4, rcpt_count, "4 RCPT TO commands sent (2 TO + 1 CC + 1 BCC)");
+
+        assertNothing(server.getServerError(), "no server errors");
+    }
+
+    #! Test SmtpSendPollOperation API shape
+    testSendPollOperationApi() {
+        SmtpClient smtp("smtp://user:pass@localhost:9999");
+
+        MailMessage::Message msg("sender@test.com", "API test");
+        msg.addTO("recipient@test.com");
+        msg.setBody("test");
+
+        SmtpSendPollOperation op(smtp, msg);
+        assertEq("send", op.getGoal(), "goal is 'send'");
+        assertFalse(op.goalReached(), "not reached before execution");
+        assertEq("SmtpSendPollOperation", op.className(), "class name correct");
+
+        # Abort should be callable
+        op.abort();
+        assertTrue(True, "abort() callable");
+    }
+
+    #! Test that constructing with no recipients throws
+    testNoRecipientsError() {
+        SmtpClient smtp("smtp://user:pass@localhost:9999");
+
+        MailMessage::Message msg("sender@test.com", "No recipients");
+        msg.setBody("test");
+
+        assertThrows("MESSAGE-ERROR", sub () {
+            SmtpSendPollOperation op(smtp, msg);
+        }, NOTHING, "no recipients throws MESSAGE-ERROR");
+    }
+
+    #! Submit a poll operation to the global AsyncIoController and block until done
+    private runPollOp(Qore::AbstractPollOperation op, timeout to = 30s) {
+        # First continuePoll gives us the socket for the submit info
+        *hash<SocketPollInfo> pi = op.continuePoll();
+        if (!pi) {
+            # Pipeline completed synchronously (unlikely but possible)
+            return;
+        }
+
+        Queue q = AsyncIoController::submit(<SocketPollOperationInfo>{
+            "sock": pi.socket,
+            "spop": op,
+            "owner": "smtp-send-test",
+            "to": to,
+        });
+        hash<auto> result = q.get(to);
+        if (result.ex) {
+            throw result.ex.err, result.ex.desc;
+        }
+    }
+}
