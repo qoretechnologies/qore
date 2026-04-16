@@ -1691,6 +1691,43 @@ static QoreValue read_node_EN_REF_TO_LVALUE(AOTExprNodeReadCtx& ctx) {
     if (num_children >= 1) {
         lv_exp = ctx.recurse(ctx);
     }
+    // Mirror the source parser's setThreadSafe() call (ReferenceNode.cpp:281):
+    // walk down through hash-deref/square-bracket operators to find the root
+    // VarRefNode and mark it VT_LOCAL_TS + closure_use.  Without this,
+    // ParseReferenceNode::doPartialEval takes the VT_LOCAL fallthrough path
+    // which returns the VarRefNode itself instead of resolving through the
+    // closure-var reference chain — causing CIRCULAR-REFERENCE-ERROR on
+    // recursive reference<auto> parameters in AOT standalone mode.
+    {
+        QoreValue n = lv_exp;
+        while (n.hasNode()) {
+            qore_type_t ntype = n.getType();
+            if (ntype == NT_VARREF) {
+                VarRefNode* vr = n.get<VarRefNode>();
+                if (vr->getType() == VT_LOCAL && vr->ref.id) {
+                    vr->setThreadSafe();
+                }
+                break;
+            }
+            if (ntype == NT_SELF_VARREF || ntype == NT_CLASS_VARREF) {
+                break;
+            }
+            if (ntype != NT_OPERATOR) {
+                break;
+            }
+            auto* sq = dynamic_cast<QoreSquareBracketsOperatorNode*>(n.getInternalNode());
+            if (sq) {
+                n = sq->getLeft();
+                continue;
+            }
+            auto* hd = dynamic_cast<QoreHashObjectDereferenceOperatorNode*>(n.getInternalNode());
+            if (hd) {
+                n = hd->getLeft();
+                continue;
+            }
+            break;
+        }
+    }
     return QoreValue(new ParseReferenceNode(&loc_builtin, lv_exp));
 }
 
