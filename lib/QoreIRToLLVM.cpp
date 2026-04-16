@@ -1250,9 +1250,32 @@ void QoreIRToLLVM::reloadLocalFromRuntime(const void* key, llvm::Module& module,
         tracker_it = local_reload_trackers.find(key);
     }
 
-    // Decref the previous reload value (no-op for ints/floats/bools/nothing)
-    llvm::Value* old_reload = builder->CreateLoad(i64_type, tracker_it->second);
-    builder->CreateCall(decref_fn, {old_reload, xsink_arg});
+    // Get or create the deferred decref alloca for this local.
+    // When a reload replaces the tracker value, the old tracker value is moved
+    // here instead of being decrefd immediately.  This prevents use-after-free:
+    // LoadLocal reads from the alloca (same value as the tracker); if we decrefd
+    // the old tracker immediately, any live SSA value from that LoadLocal would
+    // become a dangling pointer.  By deferring the decref by one reload cycle,
+    // the old value survives until the next reload, by which time the SSA value
+    // has been consumed by whatever operation used it.
+    auto deferred_it = local_reload_deferred.find(key);
+    if (deferred_it == local_reload_deferred.end()) {
+        llvm::BasicBlock* entry = &llvm_func->getEntryBlock();
+        llvm::IRBuilder<> alloca_builder(entry, entry->begin());
+        llvm::AllocaInst* deferred = alloca_builder.CreateAlloca(i64_type,
+                nullptr, "reload_deferred");
+        alloca_builder.CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), deferred);
+        local_reload_deferred[key] = deferred;
+        // Register for cleanup at function exit
+        invoke_result_allocas.push_back(deferred);
+        deferred_it = local_reload_deferred.find(key);
+    }
+
+    // Read the old tracker value (which might be aliased by a live SSA from LoadLocal)
+    llvm::Value* old_tracker = builder->CreateLoad(i64_type, tracker_it->second);
+
+    // Read the deferred value (from two reload cycles ago — safe to free)
+    llvm::Value* old_deferred = builder->CreateLoad(i64_type, deferred_it->second);
 
     // Load new value from runtime stack
     llvm::Value* reloaded;
@@ -1270,9 +1293,14 @@ void QoreIRToLLVM::reloadLocalFromRuntime(const void* key, llvm::Module& module,
         reloaded = builder->CreateCall(load_fn, {var_as_ptr, xsink_arg});
     }
 
-    // Update both the local alloca cache and the reload tracker
+    // Update alloca cache, tracker, and deferred:
+    // - alloca and tracker get the new value
+    // - deferred gets the old tracker value (survives until next reload)
+    // - decref the old deferred value (from two cycles ago, no live SSA refs)
     builder->CreateStore(reloaded, alloca_it->second);
     builder->CreateStore(reloaded, tracker_it->second);
+    builder->CreateStore(old_tracker, deferred_it->second);
+    builder->CreateCall(decref_fn, {old_deferred, xsink_arg});
 }
 
 void QoreIRToLLVM::clearLocalReloadTracker(const void* key, llvm::Module& module,
@@ -1315,6 +1343,14 @@ void QoreIRToLLVM::clearLocalReloadTracker(const void* key, llvm::Module& module
     llvm::Value* old_val = builder->CreateLoad(i64_type, tracker_it->second);
     builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), tracker_it->second);
     builder->CreateCall(decref_fn, {old_val, xsink_arg});
+
+    // Also clear the deferred alloca if it exists
+    auto deferred_it = local_reload_deferred.find(key);
+    if (deferred_it != local_reload_deferred.end()) {
+        llvm::Value* old_deferred = builder->CreateLoad(i64_type, deferred_it->second);
+        builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), deferred_it->second);
+        builder->CreateCall(decref_fn, {old_deferred, xsink_arg});
+    }
 }
 
 void QoreIRToLLVM::clearAllLocalReloadTrackers(llvm::Module& module, llvm::Function* llvm_func) {
@@ -2000,6 +2036,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     iterator_cleanup_allocas.clear();
     pending_phis.clear();
     local_reload_trackers.clear();
+    local_reload_deferred.clear();
     error_return_block = nullptr;
     jit_deopt_block = nullptr;
     landingpad_blocks.clear();

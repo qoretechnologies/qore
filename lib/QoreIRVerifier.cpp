@@ -621,6 +621,13 @@ static void collectLocalsFromExpr(const QoreValue& expr,
         return;
     }
 
+    // Single-value expression operators (e.g., exists, which inherits from
+    // QoreSingleValueExpressionOperatorNode<QoreOperatorNode>)
+    if (auto* unop = dynamic_cast<const QoreSingleValueExpressionOperatorNode<>*>(node)) {
+        collectLocalsFromExpr(unop->getExp(), ast_locals, unknown_node_found);
+        return;
+    }
+
     // Dot eval operator (method call on object): left.method()
     if (auto* dot = dynamic_cast<const QoreDotEvalOperatorNode*>(node)) {
         collectLocalsFromExpr(dot->getExpression(), ast_locals, unknown_node_found);

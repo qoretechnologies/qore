@@ -317,6 +317,15 @@ private:
     // (+1 ref) so it can be decref'd before being replaced or at function exit.
     std::unordered_map<const void*, llvm::Value*> local_reload_trackers;
 
+    // Deferred decref allocas for reload trackers.  When a reload replaces the
+    // tracker value, the old value is moved here instead of being decrefd
+    // immediately.  This prevents a use-after-free: LoadLocal reads from the
+    // alloca (same value as the tracker), and if the reload decrefs the tracker
+    // immediately, any live SSA value from LoadLocal becomes a dangling pointer.
+    // Deferring by one cycle ensures the old value survives until the next
+    // reload, by which time the SSA value has been consumed.
+    std::unordered_map<const void*, llvm::Value*> local_reload_deferred;
+
     // Error return block: used for exception cleanup when outside a try block.
     // When a Call/CallDirect/CallMethodDirect throws outside a try, execution
     // jumps here to return NOTHING immediately.  Created lazily on first use.
