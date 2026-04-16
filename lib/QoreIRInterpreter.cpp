@@ -28,6 +28,7 @@
 #include <qore/intern/CallReferenceCallNode.h>
 #include <qore/intern/OnBlockExitStatement.h>
 #include <qore/intern/QoreRegex.h>
+#include <qore/intern/StaticClassVarRefNode.h>
 #include <qore/intern/QoreRegexSubst.h>
 #include <qore/intern/QoreRegexSubstOperatorNode.h>
 #include <qore/intern/QoreTransliteration.h>
@@ -4485,6 +4486,11 @@ load_local_done:
             }
             case QoreIROpcode::LoadStaticVar: {
                 auto* sv_inst = static_cast<QoreIRStaticVarInstruction*>(inst);
+                // Resolve vi from expr if not set (AOT-deserialized handler IR)
+                if (!sv_inst->vi && sv_inst->expr.getType() == NT_CLASS_VARREF) {
+                    sv_inst->vi = &(static_cast<StaticClassVarRefNode*>(
+                        sv_inst->expr.getInternalNode()))->vi;
+                }
                 // issue 3523: evaluate in case the value is a reference
                 ValueHolder val(sv_inst->vi->getReferencedValue(sv_inst->var_name.c_str(), xsink),
                         xsink);
