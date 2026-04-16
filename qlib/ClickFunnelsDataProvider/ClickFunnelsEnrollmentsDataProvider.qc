@@ -38,7 +38,7 @@ public class ClickFunnelsEnrollmentsDataProvider inherits ClickFunnelsDataProvid
             "search_options": SearchOptions,
         };
         const ConstructorOptions = BaseConstructorOptions;
-        const SearchOptions = {
+        const SearchOptions = ClickFunnelsDataProviderBase::WorkspaceIdSearchOption + {
             "course_id": <DataProviderOptionInfo>{
                 "display_name": "Course ID",
                 "short_desc": "The course to list enrollments for",
@@ -90,6 +90,7 @@ public class ClickFunnelsEnrollmentsDataProvider inherits ClickFunnelsDataProvid
     }
     private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) { return new ClickFunnelsEnrollmentDataType().getFields(); }
     private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
+        setWorkspaceIdFromSearchOpts(search_options);
         if (search_options.enrollment_id) {
             auto result = doGet("courses/enrollments/" + search_options.enrollment_id);
             return new DefaultRecordIterator(new ListHashIterator((result,)), where_cond, search_options);
@@ -109,7 +110,7 @@ public class ClickFunnelsEnrollmentsDataProvider inherits ClickFunnelsDataProvid
 # --- Create Enrollment ---
 public class ClickFunnelsCreateEnrollmentRequestDataType inherits HashDataType {
     public {
-        const Fields = {
+        const Fields = ClickFunnelsDataProviderBase::WorkspaceIdField + {
             "course_id": { "type": StringType, "display_name": "Course ID", "short_desc": "The course to enroll in", "desc": "The ID of the course", "required": True, "ref_data": "courses", "example_value": "12345" },
             "contact_id": { "type": StringType, "display_name": "Contact ID", "short_desc": "The contact to enroll", "desc": "The ID of the contact to enroll", "required": True, "ref_data": "contacts", "example_value": "67890" },
             "suspended": { "type": SoftBoolOrNothingType, "display_name": "Suspended", "short_desc": "Whether enrollment is suspended", "desc": "Whether the enrollment should be suspended" },
@@ -132,6 +133,7 @@ public class ClickFunnelsCreateEnrollmentDataProvider inherits ClickFunnelsDataP
     private *AbstractDataProviderType getRequestTypeImpl() { return new ClickFunnelsCreateEnrollmentRequestDataType(); }
     private *AbstractDataProviderType getResponseTypeImpl() { return new ClickFunnelsEnrollmentDataType(); }
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
+        req = setWorkspaceIdFromReq(req);
         string course_id = remove req.course_id;
         return doPost("courses/" + course_id + "/enrollments", {"courses_enrollment": req});
     }
@@ -141,7 +143,7 @@ public class ClickFunnelsCreateEnrollmentDataProvider inherits ClickFunnelsDataP
 # --- Update Enrollment ---
 public class ClickFunnelsUpdateEnrollmentRequestDataType inherits HashDataType {
     public {
-        const Fields = {
+        const Fields = ClickFunnelsDataProviderBase::WorkspaceIdField + {
             "enrollment_id": { "type": StringType, "display_name": "Enrollment ID", "short_desc": "The enrollment to update", "desc": "The unique identifier of the enrollment to update", "required": True, "ref_data": "enrollments" },
             "suspended": { "type": SoftBoolOrNothingType, "display_name": "Suspended", "short_desc": "Whether enrollment is suspended", "desc": "Whether the enrollment should be suspended" },
             "completed": { "type": SoftBoolOrNothingType, "display_name": "Completed", "short_desc": "Whether enrollment is completed", "desc": "Whether the enrollment has been completed" },
@@ -163,6 +165,7 @@ public class ClickFunnelsUpdateEnrollmentDataProvider inherits ClickFunnelsDataP
     private *AbstractDataProviderType getRequestTypeImpl() { return new ClickFunnelsUpdateEnrollmentRequestDataType(); }
     private *AbstractDataProviderType getResponseTypeImpl() { return new ClickFunnelsEnrollmentDataType(); }
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
+        req = setWorkspaceIdFromReq(req);
         string id = remove req.enrollment_id;
         return doPut("courses/enrollments/" + id, {"courses_enrollment": req});
     }

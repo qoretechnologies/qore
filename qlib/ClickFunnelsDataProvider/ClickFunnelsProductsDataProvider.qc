@@ -38,7 +38,7 @@ public class ClickFunnelsProductsDataProvider inherits ClickFunnelsDataProviderB
             "search_options": SearchOptions,
         };
         const ConstructorOptions = BaseConstructorOptions;
-        const SearchOptions = {
+        const SearchOptions = ClickFunnelsDataProviderBase::WorkspaceIdSearchOption + {
             "product_id": <DataProviderOptionInfo>{
                 "display_name": "Product ID",
                 "short_desc": "Get a specific product by ID",
@@ -83,6 +83,7 @@ public class ClickFunnelsProductsDataProvider inherits ClickFunnelsDataProviderB
     }
     private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) { return new ClickFunnelsProductDataType().getFields(); }
     private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
+        setWorkspaceIdFromSearchOpts(search_options);
         if (search_options.product_id) {
             auto result = doGet("products/" + search_options.product_id);
             return new DefaultRecordIterator(new ListHashIterator((result,)), where_cond, search_options);
@@ -99,7 +100,7 @@ public class ClickFunnelsProductsDataProvider inherits ClickFunnelsDataProviderB
 # --- Create Product ---
 public class ClickFunnelsCreateProductRequestDataType inherits HashDataType {
     public {
-        const Fields = {
+        const Fields = ClickFunnelsDataProviderBase::WorkspaceIdField + {
             "name": { "type": StringType, "display_name": "Name", "short_desc": "The product name", "desc": "The name of the product", "required": True, "example_value": "Online Course" },
             "current_path": { "type": StringOrNothingType, "display_name": "Current Path", "short_desc": "The product URL path", "desc": "The URL path for the product" },
             "visible_in_store": { "type": SoftBoolOrNothingType, "display_name": "Visible in Store", "short_desc": "Whether visible in store", "desc": "Whether the product is visible in the store" },
@@ -126,6 +127,7 @@ public class ClickFunnelsCreateProductDataProvider inherits ClickFunnelsDataProv
     private *AbstractDataProviderType getRequestTypeImpl() { return new ClickFunnelsCreateProductRequestDataType(); }
     private *AbstractDataProviderType getResponseTypeImpl() { return new ClickFunnelsProductDataType(); }
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
+        req = setWorkspaceIdFromReq(req);
         return doPost(getWorkspacePath("products"), {"product": req});
     }
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }
@@ -134,7 +136,7 @@ public class ClickFunnelsCreateProductDataProvider inherits ClickFunnelsDataProv
 # --- Update Product ---
 public class ClickFunnelsUpdateProductRequestDataType inherits HashDataType {
     public {
-        const Fields = {
+        const Fields = ClickFunnelsDataProviderBase::WorkspaceIdField + {
             "product_id": { "type": StringType, "display_name": "Product ID", "short_desc": "The product to update", "desc": "The unique identifier of the product to update", "required": True, "ref_data": "products" },
             "name": { "type": StringOrNothingType, "display_name": "Name", "short_desc": "The product name", "desc": "The new name for the product" },
             "current_path": { "type": StringOrNothingType, "display_name": "Current Path", "short_desc": "The product URL path", "desc": "The new URL path for the product" },
@@ -162,6 +164,7 @@ public class ClickFunnelsUpdateProductDataProvider inherits ClickFunnelsDataProv
     private *AbstractDataProviderType getRequestTypeImpl() { return new ClickFunnelsUpdateProductRequestDataType(); }
     private *AbstractDataProviderType getResponseTypeImpl() { return new ClickFunnelsProductDataType(); }
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
+        req = setWorkspaceIdFromReq(req);
         string id = remove req.product_id;
         return doPut("products/" + id, {"product": req});
     }

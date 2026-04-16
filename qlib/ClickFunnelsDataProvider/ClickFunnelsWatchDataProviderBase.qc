@@ -29,7 +29,8 @@ public class ClickFunnelsWatchDataProviderBase inherits ClickFunnelsDataProvider
         DataProvider::AbstractWatchDataProviderBase {
     public {
         #! Constructor options for watch providers
-        const WatchConstructorOptions = BaseConstructorOptions + {
+        const WatchConstructorOptions = BaseConstructorOptions
+                + ClickFunnelsDataProviderBase::WorkspaceIdSearchOption + {
             "poll_interval": <DataProviderOptionInfo>{
                 "display_name": "Poll Interval",
                 "short_desc": "How often to poll for new records (seconds)",
@@ -59,6 +60,9 @@ public class ClickFunnelsWatchDataProviderBase inherits ClickFunnelsDataProvider
             : ClickFunnelsDataProviderBase(rest),
               AbstractWatchDataProviderBase(
                   max(options.poll_interval ?? DefaultPollInterval, MinPollInterval)) {
+        if (options.workspace_id) {
+            setWorkspaceId(options.workspace_id);
+        }
         last_check = options.start_date ?? now_us();
     }
 

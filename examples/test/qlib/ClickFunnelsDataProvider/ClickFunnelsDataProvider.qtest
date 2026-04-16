@@ -45,6 +45,9 @@ public class ClickFunnelsDataProviderTest inherits QUnit::Test {
         #! ClickFunnels REST client for integration tests
         *ClickFunnelsRestClient::ClickFunnelsRestClient client;
 
+        #! Workspace ID for integration tests (passed per-action, not at connection level)
+        *string workspace_id_opt;
+
         #! Logger for verbose output
         Logger logger;
 
@@ -104,13 +107,12 @@ public class ClickFunnelsDataProviderTest inherits QUnit::Test {
         # Try environment variables
         *string apikey = m_options.apikey ?? ENV.CLICKFUNNELS_TOKEN;
         *string team = m_options.team ?? ENV.CLICKFUNNELS_TEAM;
-        *string workspace_id = m_options.workspace_id ?? ENV.CLICKFUNNELS_WORKSPACE_ID;
+        workspace_id_opt = m_options.workspace_id ?? ENV.CLICKFUNNELS_WORKSPACE_ID;
 
-        if (apikey && team && workspace_id) {
+        if (apikey && team) {
             client = new ClickFunnelsRestClient::ClickFunnelsRestClient({
                 "apikey": apikey,
                 "team": team,
-                "workspace_id": workspace_id,
             });
         }
     }
@@ -266,7 +268,8 @@ public class ClickFunnelsDataProviderTest inherits QUnit::Test {
 
         # Test list contacts
         AbstractDataProvider contacts_dp = provider.getChildProvider("contacts");
-        AbstractDataProviderRecordIterator iter = contacts_dp.searchRecords(NOTHING, {"limit": 5});
+        AbstractDataProviderRecordIterator iter = contacts_dp.searchRecords(NOTHING,
+            {"workspace_id": workspace_id_opt, "limit": 5});
         list<hash<auto>> contacts = ();
         while (iter.next()) {
             contacts += iter.getValue();
@@ -277,6 +280,7 @@ public class ClickFunnelsDataProviderTest inherits QUnit::Test {
         AbstractDataProvider create_dp = contacts_dp.getChildProvider("create");
         string test_email = "test_cfdp_" + now_us().getEpochSeconds() + "@example.com";
         hash<auto> new_contact = create_dp.doRequest({
+            "workspace_id": workspace_id_opt,
             "email_address": test_email,
             "first_name": "Test",
             "last_name": "ClickFunnelsDP_" + now_us().toString(),
@@ -322,12 +326,14 @@ public class ClickFunnelsDataProviderTest inherits QUnit::Test {
 
         # Test list contact tags
         AbstractDataProvider tags_dp = provider.getChildProvider("contact-tags");
-        AbstractDataProviderRecordIterator tag_iter = tags_dp.searchRecords(NOTHING, {"limit": 5});
+        AbstractDataProviderRecordIterator tag_iter = tags_dp.searchRecords(NOTHING,
+            {"workspace_id": workspace_id_opt, "limit": 5});
         assertEq(True, True, "contact tags list succeeded");
 
         # Test create contact tag
         AbstractDataProvider create_tag_dp = tags_dp.getChildProvider("create");
         hash<auto> new_tag = create_tag_dp.doRequest({
+            "workspace_id": workspace_id_opt,
             "name": "Test_CFDP_" + now_us().getEpochSeconds(),
         });
         assertEq(True, new_tag.id.val(), "tag created with ID");
@@ -349,22 +355,26 @@ public class ClickFunnelsDataProviderTest inherits QUnit::Test {
 
         # Test list orders
         AbstractDataProvider orders_dp = provider.getChildProvider("orders");
-        AbstractDataProviderRecordIterator order_iter = orders_dp.searchRecords(NOTHING, {"limit": 5});
+        AbstractDataProviderRecordIterator order_iter = orders_dp.searchRecords(NOTHING,
+            {"workspace_id": workspace_id_opt, "limit": 5});
         assertEq(True, True, "orders list succeeded");
 
         # Test list products
         AbstractDataProvider products_dp = provider.getChildProvider("products");
-        AbstractDataProviderRecordIterator prod_iter = products_dp.searchRecords(NOTHING, {"limit": 5});
+        AbstractDataProviderRecordIterator prod_iter = products_dp.searchRecords(NOTHING,
+            {"workspace_id": workspace_id_opt, "limit": 5});
         assertEq(True, True, "products list succeeded");
 
         # Test list funnels
         AbstractDataProvider funnels_dp = provider.getChildProvider("funnels");
-        AbstractDataProviderRecordIterator funnel_iter = funnels_dp.searchRecords(NOTHING, {"limit": 5});
+        AbstractDataProviderRecordIterator funnel_iter = funnels_dp.searchRecords(NOTHING,
+            {"workspace_id": workspace_id_opt, "limit": 5});
         assertEq(True, True, "funnels list succeeded");
 
         # Test list courses
         AbstractDataProvider courses_dp = provider.getChildProvider("courses");
-        AbstractDataProviderRecordIterator course_iter = courses_dp.searchRecords(NOTHING, {"limit": 5});
+        AbstractDataProviderRecordIterator course_iter = courses_dp.searchRecords(NOTHING,
+            {"workspace_id": workspace_id_opt, "limit": 5});
         assertEq(True, True, "courses list succeeded");
 
         # Test event providers

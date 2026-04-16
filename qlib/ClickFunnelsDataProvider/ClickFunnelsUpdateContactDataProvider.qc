@@ -27,7 +27,7 @@ public namespace ClickFunnelsDataProvider {
 #! Request type for updating a contact
 public class ClickFunnelsUpdateContactRequestDataType inherits HashDataType {
     public {
-        const Fields = {
+        const Fields = ClickFunnelsDataProviderBase::WorkspaceIdField + {
             "contact_id": {
                 "type": StringType,
                 "display_name": "Contact ID",
@@ -158,6 +158,7 @@ public class ClickFunnelsUpdateContactDataProvider inherits ClickFunnelsDataProv
     }
 
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
+        req = setWorkspaceIdFromReq(req);
         string id = remove req.contact_id;
         return doPut("contacts/" + id, {"contact": req});
     }

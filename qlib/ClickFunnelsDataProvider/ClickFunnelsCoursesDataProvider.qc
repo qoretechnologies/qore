@@ -36,7 +36,7 @@ public class ClickFunnelsCoursesDataProvider inherits ClickFunnelsDataProviderBa
             "search_options": SearchOptions,
         };
         const ConstructorOptions = BaseConstructorOptions;
-        const SearchOptions = {
+        const SearchOptions = ClickFunnelsDataProviderBase::WorkspaceIdSearchOption + {
             "course_id": <DataProviderOptionInfo>{
                 "display_name": "Course ID",
                 "short_desc": "Get a specific course by ID",
@@ -73,6 +73,7 @@ public class ClickFunnelsCoursesDataProvider inherits ClickFunnelsDataProviderBa
     *string getDesc() { return "ClickFunnels courses data provider"; }
     private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) { return new ClickFunnelsCourseDataType().getFields(); }
     private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
+        setWorkspaceIdFromSearchOpts(search_options);
         if (search_options.course_id) {
             auto result = doGet("courses/" + search_options.course_id);
             return new DefaultRecordIterator(new ListHashIterator((result,)), where_cond, search_options);

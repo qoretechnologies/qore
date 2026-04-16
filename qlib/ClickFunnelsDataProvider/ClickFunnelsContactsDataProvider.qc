@@ -44,7 +44,7 @@ public class ClickFunnelsContactsDataProvider inherits ClickFunnelsDataProviderB
         const ConstructorOptions = BaseConstructorOptions;
 
         #! Search options
-        const SearchOptions = {
+        const SearchOptions = ClickFunnelsDataProviderBase::WorkspaceIdSearchOption + {
             "contact_id": <DataProviderOptionInfo>{
                 "display_name": "Contact ID",
                 "short_desc": "Get a specific contact by ID",
@@ -126,6 +126,7 @@ public class ClickFunnelsContactsDataProvider inherits ClickFunnelsDataProviderB
     #! Returns an iterator for records matching the search criteria
     private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
+        setWorkspaceIdFromSearchOpts(search_options);
         # If contact_id provided, get single record
         if (search_options.contact_id) {
             auto result = doGet("contacts/" + search_options.contact_id);

@@ -69,7 +69,7 @@ public class ClickFunnelsOrdersDataProvider inherits ClickFunnelsDataProviderBas
             "search_options": SearchOptions,
         };
         const ConstructorOptions = BaseConstructorOptions;
-        const SearchOptions = {
+        const SearchOptions = ClickFunnelsDataProviderBase::WorkspaceIdSearchOption + {
             "order_id": <DataProviderOptionInfo>{
                 "display_name": "Order ID",
                 "short_desc": "Get a specific order by ID",
@@ -125,6 +125,7 @@ public class ClickFunnelsOrdersDataProvider inherits ClickFunnelsDataProviderBas
 
     private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
+        setWorkspaceIdFromSearchOpts(search_options);
         if (search_options.order_id) {
             auto result = doGet("orders/" + search_options.order_id);
             return new DefaultRecordIterator(new ListHashIterator((result,)),
@@ -145,7 +146,7 @@ public class ClickFunnelsOrdersDataProvider inherits ClickFunnelsDataProviderBas
 # --- Create Order ---
 public class ClickFunnelsCreateOrderRequestDataType inherits HashDataType {
     public {
-        const Fields = {
+        const Fields = ClickFunnelsDataProviderBase::WorkspaceIdField + {
             "contact_id": {
                 "type": StringType,
                 "display_name": "Contact ID",
@@ -228,6 +229,7 @@ public class ClickFunnelsCreateOrderDataProvider inherits ClickFunnelsDataProvid
     private *AbstractDataProviderType getRequestTypeImpl() { return new ClickFunnelsCreateOrderRequestDataType(); }
     private *AbstractDataProviderType getResponseTypeImpl() { return new ClickFunnelsOrderDataType(); }
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
+        req = setWorkspaceIdFromReq(req);
         return doPost(getWorkspacePath("orders"), {"order": req});
     }
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }
@@ -236,7 +238,7 @@ public class ClickFunnelsCreateOrderDataProvider inherits ClickFunnelsDataProvid
 # --- Update Order ---
 public class ClickFunnelsUpdateOrderRequestDataType inherits HashDataType {
     public {
-        const Fields = {
+        const Fields = ClickFunnelsDataProviderBase::WorkspaceIdField + {
             "order_id": {
                 "type": StringType,
                 "display_name": "Order ID",
@@ -283,6 +285,7 @@ public class ClickFunnelsUpdateOrderDataProvider inherits ClickFunnelsDataProvid
     private *AbstractDataProviderType getRequestTypeImpl() { return new ClickFunnelsUpdateOrderRequestDataType(); }
     private *AbstractDataProviderType getResponseTypeImpl() { return new ClickFunnelsOrderDataType(); }
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
+        req = setWorkspaceIdFromReq(req);
         string id = remove req.order_id;
         return doPut("orders/" + id, {"order": req});
     }

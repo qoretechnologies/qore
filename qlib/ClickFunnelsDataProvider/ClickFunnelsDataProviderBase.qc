@@ -45,6 +45,34 @@ public class ClickFunnelsDataProviderBase inherits DataProvider::AbstractDataPro
                     "provided directly",
             },
         };
+
+        #! Reusable workspace_id field definition for request data types
+        const WorkspaceIdField = {
+            "workspace_id": {
+                "type": StringType,
+                "display_name": "Workspace ID",
+                "short_desc": "ClickFunnels workspace ID",
+                "desc": "The ClickFunnels workspace ID for workspace-scoped endpoints. "
+                    "You can find the workspace ID in the ClickFunnels admin panel URL "
+                    "or by calling the `GET /teams/{team_id}/workspaces` endpoint",
+                "required": True,
+                "ref_data": "workspaces",
+            },
+        };
+
+        #! Reusable workspace_id search option for collection data providers
+        const WorkspaceIdSearchOption = {
+            "workspace_id": <DataProviderOptionInfo>{
+                "display_name": "Workspace ID",
+                "short_desc": "ClickFunnels workspace ID",
+                "type": AbstractDataProviderType::get(StringType),
+                "desc": "The ClickFunnels workspace ID for workspace-scoped endpoints. "
+                    "You can find the workspace ID in the ClickFunnels admin panel URL "
+                    "or by calling the `GET /teams/{team_id}/workspaces` endpoint",
+                "required": True,
+                "ref_data": "workspaces",
+            },
+        };
     }
 
     private {
@@ -102,19 +130,13 @@ public class ClickFunnelsDataProviderBase inherits DataProvider::AbstractDataPro
         return "workspaces/" + getWorkspaceId() + "/" + resource;
     }
 
-    #! Returns the workspace ID, extracting it from the REST client URL if needed
+    #! Returns the workspace ID
+    /** @throw CLICKFUNNELS-ERROR if workspace_id has not been set
+    */
     string getWorkspaceId() {
         if (!workspace_id.val()) {
-            # Try to get workspace_id from connection options
-            if (conn) {
-                *hash<auto> conn_opts = conn.getOptions();
-                if (conn_opts.workspace_id.val()) {
-                    workspace_id = conn_opts.workspace_id;
-                }
-            }
-            if (!workspace_id.val()) {
-                throw "CLICKFUNNELS-ERROR", "workspace_id is required but not configured";
-            }
+            throw "CLICKFUNNELS-ERROR", "workspace_id is required but not set; "
+                "provide it as a field/option in the request";
         }
         return workspace_id;
     }
@@ -122,6 +144,18 @@ public class ClickFunnelsDataProviderBase inherits DataProvider::AbstractDataPro
     #! Sets the workspace ID
     setWorkspaceId(string wid) {
         workspace_id = wid;
+    }
+
+    #! Extracts workspace_id from a request hash, sets it, and returns the cleaned request
+    private hash<auto> setWorkspaceIdFromReq(hash<auto> req) {
+        string wid = remove req.workspace_id;
+        setWorkspaceId(wid);
+        return req;
+    }
+
+    #! Sets the workspace ID from search options
+    private setWorkspaceIdFromSearchOpts(*hash<auto> search_options) {
+        setWorkspaceId(search_options.workspace_id);
     }
 
     #! Makes a GET request to the ClickFunnels API
@@ -134,7 +168,11 @@ public class ClickFunnelsDataProviderBase inherits DataProvider::AbstractDataPro
         if (params) {
             url += "?" + buildQueryString(params);
         }
-        return rest.restGet(url).body;
+        try {
+            return rest.restGet(url).body;
+        } catch (hash<ExceptionInfo> ex) {
+            throw ex.err, getApiErrorDesc(ex), ex.arg;
+        }
     }
 
     #! Makes a POST request to the ClickFunnels API
@@ -143,7 +181,11 @@ public class ClickFunnelsDataProviderBase inherits DataProvider::AbstractDataPro
         @return the response body
     */
     auto doPost(string path, *hash<auto> body) {
-        return rest.restPost(path, body).body;
+        try {
+            return rest.restPost(path, body).body;
+        } catch (hash<ExceptionInfo> ex) {
+            throw ex.err, getApiErrorDesc(ex), ex.arg;
+        }
     }
 
     #! Makes a PUT request to the ClickFunnels API
@@ -152,7 +194,11 @@ public class ClickFunnelsDataProviderBase inherits DataProvider::AbstractDataPro
         @return the response body
     */
     auto doPut(string path, *hash<auto> body) {
-        return rest.restPut(path, body).body;
+        try {
+            return rest.restPut(path, body).body;
+        } catch (hash<ExceptionInfo> ex) {
+            throw ex.err, getApiErrorDesc(ex), ex.arg;
+        }
     }
 
     #! Makes a DELETE request to the ClickFunnels API
@@ -160,7 +206,19 @@ public class ClickFunnelsDataProviderBase inherits DataProvider::AbstractDataPro
         @return the response body
     */
     auto doDelete(string path) {
-        return rest.restDel(path).body;
+        try {
+            return rest.restDel(path).body;
+        } catch (hash<ExceptionInfo> ex) {
+            throw ex.err, getApiErrorDesc(ex), ex.arg;
+        }
+    }
+
+    #! Returns an enriched error description that includes the API error message if available
+    private string getApiErrorDesc(hash<ExceptionInfo> ex) {
+        if (ex.arg.body.error.val()) {
+            return sprintf("%s: %s", ex.desc, ex.arg.body.error);
+        }
+        return ex.desc;
     }
 
     #! Fetches all pages from a GET endpoint using cursor-based pagination
@@ -228,6 +286,7 @@ public class ClickFunnelsDataProviderBase inherits DataProvider::AbstractDataPro
     #! Returns information on supported reference data
     *hash<string, bool> getSupportedReferenceData() {
         return {
+            "workspaces": True,
             "contacts": True,
             "contact_tags": True,
             "applied_tags": True,
@@ -245,7 +304,12 @@ public class ClickFunnelsDataProviderBase inherits DataProvider::AbstractDataPro
     #! Returns reference data of the given kind if available
     private *list<hash<AllowedValueInfo>> getReferenceDataImpl(string type,
             *hash<auto> action_opts) {
+        # Set workspace ID from action options if provided
+        if (action_opts.workspace_id.val()) {
+            setWorkspaceId(action_opts.workspace_id);
+        }
         switch (type) {
+            case "workspaces": return getReferenceWorkspaces();
             case "contacts": return getReferenceContacts();
             case "contact_tags": return getReferenceContactTags();
             case "applied_tags": return getReferenceAppliedTags(action_opts.contact_id);
@@ -258,6 +322,34 @@ public class ClickFunnelsDataProviderBase inherits DataProvider::AbstractDataPro
             case "fulfillments": return getReferenceFulfillments();
             case "enrollments": return getReferenceEnrollments();
         }
+    }
+
+    #! Returns available workspaces for reference data
+    private *list<hash<AllowedValueInfo>> getReferenceWorkspaces() {
+        list<hash<AllowedValueInfo>> rv = ();
+        try {
+            # Get teams first, then fetch workspaces for each team
+            auto teams = doGet("teams");
+            if (teams.typeCode() == NT_LIST) {
+                foreach hash<auto> team in (teams) {
+                    list<auto> workspaces = fetchAllPages(
+                        "teams/" + string(team.id) + "/workspaces", NOTHING,
+                        DefaultPageSize);
+                    foreach hash<auto> ws in (workspaces) {
+                        string display_name = ws.name
+                            ?? sprintf("Workspace %d", ws.id);
+                        rv += <AllowedValueInfo>{
+                            "display_name": display_name,
+                            "short_desc": ws.subdomain ?? "",
+                            "desc": sprintf("%s (ID: %d)", display_name, ws.id),
+                            "value": string(ws.id),
+                        };
+                    }
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+        }
+        return rv;
     }
 
     #! Returns available contacts for reference data

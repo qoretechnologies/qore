@@ -210,6 +210,34 @@ The goal: actions should expose enough API functionality to be genuinely useful,
 
 ---
 
+## 7b. Cascading ref_data (Dependent Dropdowns)
+
+When a ref_data dropdown depends on the value of another field (e.g., applied tags filtered by contact, cycles filtered by team), the controlling and dependent fields need explicit dependency metadata. Without this, the UI cannot cascade dropdowns — the user gets no dropdown for the dependent field.
+
+**This is NOT the same as Dynamic Options (§10)** — cascading ref_data only filters dropdown values; Dynamic Options changes the set of fields entirely.
+
+### Controlling Field
+- [ ] Has `"has_dependents": True` (signals UI that other fields depend on this one)
+- [ ] Has `"on_change": ("refetch",)` (triggers refetch of dependent dropdowns when changed)
+- [ ] Uses inline `<ActionOptionInfo>` in action registration (NOT `getActionOptionFromFields()` — it does not propagate `has_dependents`)
+
+### Dependent Field
+- [ ] Has `"depends_on": ("controlling_field_name",)` (field disabled until controlling field is set)
+- [ ] Has `"ref_data"` pointing to a type registered in `getSupportedReferenceData()`
+
+### Reference Data Implementation
+- [ ] `getSupportedReferenceData()` includes the dependent ref_data type (e.g., `"applied_tags": True`)
+- [ ] `getReferenceDataImpl()` passes `action_opts.controlling_field` to the filtering method
+- [ ] The filtering method returns NOTHING (not empty list) when the controlling value is not set
+- [ ] The filtering method fetches only records scoped to the controlling value
+
+### Reference Implementations
+- Linear: `teamId` → cycles, labels, states (`qlib/LinearDataProvider/LinearDataProviderBase.qc`)
+- ZohoInventory: `organization_id` → contacts, items (`qlib/ZohoInventoryDataProvider/ZohoInventoryDataProviderBase.qc`)
+- ClickFunnels: `contact_id` → applied_tags (`qlib/ClickFunnelsDataProvider/ClickFunnelsDataProviderBase.qc`)
+
+---
+
 ## 8. Type Safety
 
 - [ ] Structured data uses custom `HashDataType` classes, not generic `hash`

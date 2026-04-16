@@ -40,7 +40,7 @@ public class ClickFunnelsContactTagsDataProvider inherits ClickFunnelsDataProvid
 
         const ConstructorOptions = BaseConstructorOptions;
 
-        const SearchOptions = {
+        const SearchOptions = ClickFunnelsDataProviderBase::WorkspaceIdSearchOption + {
             "tag_id": <DataProviderOptionInfo>{
                 "display_name": "Tag ID",
                 "short_desc": "Get a specific tag by ID",
@@ -103,6 +103,7 @@ public class ClickFunnelsContactTagsDataProvider inherits ClickFunnelsDataProvid
 
     private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
+        setWorkspaceIdFromSearchOpts(search_options);
         if (search_options.tag_id) {
             auto result = doGet("contacts/tags/" + search_options.tag_id);
             return new DefaultRecordIterator(new ListHashIterator((result,)),

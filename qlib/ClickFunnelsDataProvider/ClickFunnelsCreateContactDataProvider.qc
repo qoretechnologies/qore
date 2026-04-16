@@ -27,7 +27,7 @@ public namespace ClickFunnelsDataProvider {
 #! Request type for creating a contact
 public class ClickFunnelsCreateContactRequestDataType inherits HashDataType {
     public {
-        const Fields = {
+        const Fields = ClickFunnelsDataProviderBase::WorkspaceIdField + {
             "email_address": {
                 "type": StringType,
                 "display_name": "Email Address",
@@ -154,6 +154,7 @@ public class ClickFunnelsCreateContactDataProvider inherits ClickFunnelsDataProv
     }
 
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
+        req = setWorkspaceIdFromReq(req);
         return doPost(getWorkspacePath("contacts"), {"contact": req});
     }
 

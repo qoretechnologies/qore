@@ -28,7 +28,7 @@ public namespace ClickFunnelsDataProvider {
 
 public class ClickFunnelsCreateContactTagRequestDataType inherits HashDataType {
     public {
-        const Fields = {
+        const Fields = ClickFunnelsDataProviderBase::WorkspaceIdField + {
             "name": {
                 "type": StringType,
                 "display_name": "Name",
@@ -69,6 +69,7 @@ public class ClickFunnelsCreateContactTagDataProvider inherits ClickFunnelsDataP
     private *AbstractDataProviderType getRequestTypeImpl() { return new ClickFunnelsCreateContactTagRequestDataType(); }
     private *AbstractDataProviderType getResponseTypeImpl() { return new ClickFunnelsContactTagDataType(); }
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
+        req = setWorkspaceIdFromReq(req);
         return doPost(getWorkspacePath("contacts/tags"), {"contacts_tag": req});
     }
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }
@@ -78,7 +79,7 @@ public class ClickFunnelsCreateContactTagDataProvider inherits ClickFunnelsDataP
 
 public class ClickFunnelsUpdateContactTagRequestDataType inherits HashDataType {
     public {
-        const Fields = {
+        const Fields = ClickFunnelsDataProviderBase::WorkspaceIdField + {
             "tag_id": {
                 "type": StringType,
                 "display_name": "Tag ID",
@@ -125,6 +126,7 @@ public class ClickFunnelsUpdateContactTagDataProvider inherits ClickFunnelsDataP
     private *AbstractDataProviderType getRequestTypeImpl() { return new ClickFunnelsUpdateContactTagRequestDataType(); }
     private *AbstractDataProviderType getResponseTypeImpl() { return new ClickFunnelsContactTagDataType(); }
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
+        req = setWorkspaceIdFromReq(req);
         string id = remove req.tag_id;
         return doPut("contacts/tags/" + id, {"contacts_tag": req});
     }
@@ -135,7 +137,7 @@ public class ClickFunnelsUpdateContactTagDataProvider inherits ClickFunnelsDataP
 
 public class ClickFunnelsDeleteContactTagRequestDataType inherits HashDataType {
     public {
-        const Fields = {
+        const Fields = ClickFunnelsDataProviderBase::WorkspaceIdField + {
             "tag_id": {
                 "type": StringType,
                 "display_name": "Tag ID",
@@ -168,6 +170,7 @@ public class ClickFunnelsDeleteContactTagDataProvider inherits ClickFunnelsDataP
     private *AbstractDataProviderType getRequestTypeImpl() { return new ClickFunnelsDeleteContactTagRequestDataType(); }
     private *AbstractDataProviderType getResponseTypeImpl() { return AbstractDataProviderTypeMap."hash"; }
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
+        req = setWorkspaceIdFromReq(req);
         doDelete("contacts/tags/" + req.tag_id);
         return {"success": True, "id": req.tag_id};
     }

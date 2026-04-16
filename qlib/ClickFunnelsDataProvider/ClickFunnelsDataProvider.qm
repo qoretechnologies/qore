@@ -129,6 +129,13 @@ module ClickFunnelsDataProvider {
             "desc": "List contacts in ClickFunnels with optional filtering",
             "action_code": DPAT_FIND,
             "options": {
+                "workspace_id": <ActionOptionInfo>{
+                    "display_name": "Workspace ID",
+                    "short_desc": "ClickFunnels workspace ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "workspaces",
+                },
                 "contact_id": <ActionOptionInfo>{
                     "display_name": "Contact ID",
                     "short_desc": "Filter by contact ID",
@@ -175,6 +182,13 @@ module ClickFunnelsDataProvider {
             "desc": "Retrieve a single contact by ID from ClickFunnels",
             "action_code": DPAT_FIND_SINGLE,
             "options": {
+                "workspace_id": <ActionOptionInfo>{
+                    "display_name": "Workspace ID",
+                    "short_desc": "ClickFunnels workspace ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "workspaces",
+                },
                 "contact_id": <ActionOptionInfo>{
                     "display_name": "Contact ID",
                     "short_desc": "The contact ID",
@@ -243,6 +257,13 @@ module ClickFunnelsDataProvider {
             "desc": "List contact tags in ClickFunnels",
             "action_code": DPAT_FIND,
             "options": {
+                "workspace_id": <ActionOptionInfo>{
+                    "display_name": "Workspace ID",
+                    "short_desc": "ClickFunnels workspace ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "workspaces",
+                },
                 "tag_id": <ActionOptionInfo>{
                     "display_name": "Tag ID",
                     "short_desc": "Filter by tag ID",
@@ -289,6 +310,13 @@ module ClickFunnelsDataProvider {
             "desc": "Retrieve a single contact tag by ID from ClickFunnels",
             "action_code": DPAT_FIND_SINGLE,
             "options": {
+                "workspace_id": <ActionOptionInfo>{
+                    "display_name": "Workspace ID",
+                    "short_desc": "ClickFunnels workspace ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "workspaces",
+                },
                 "tag_id": <ActionOptionInfo>{
                     "display_name": "Tag ID",
                     "short_desc": "The tag ID to retrieve",
@@ -328,6 +356,15 @@ module ClickFunnelsDataProvider {
             "action_code": DPAT_API,
             "output_type": AbstractDataProviderTypeMap."hash",
             "options": {
+                "workspace_id": <ActionOptionInfo>{
+                    "display_name": "Workspace ID",
+                    "short_desc": "ClickFunnels workspace ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "workspaces",
+                    "has_dependents": True,
+                    "on_change": ("refetch",),
+                },
                 "contact_id": <ActionOptionInfo>{
                     "display_name": "Contact",
                     "short_desc": "The contact to remove a tag from",
@@ -335,6 +372,7 @@ module ClickFunnelsDataProvider {
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
                     "ref_data": "contacts",
+                    "depends_on": ("workspace_id",),
                     "has_dependents": True,
                     "on_change": ("refetch",),
                 },
@@ -393,6 +431,13 @@ module ClickFunnelsDataProvider {
             "desc": "List orders in ClickFunnels",
             "action_code": DPAT_FIND,
             "options": {
+                "workspace_id": <ActionOptionInfo>{
+                    "display_name": "Workspace ID",
+                    "short_desc": "ClickFunnels workspace ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "workspaces",
+                },
                 "order_id": <ActionOptionInfo>{
                     "display_name": "Order ID",
                     "short_desc": "Filter by order ID",
@@ -440,6 +485,13 @@ module ClickFunnelsDataProvider {
             "desc": "Retrieve a single order by ID from ClickFunnels",
             "action_code": DPAT_FIND_SINGLE,
             "options": {
+                "workspace_id": <ActionOptionInfo>{
+                    "display_name": "Workspace ID",
+                    "short_desc": "ClickFunnels workspace ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "workspaces",
+                },
                 "order_id": <ActionOptionInfo>{
                     "display_name": "Order ID",
                     "short_desc": "The order ID to retrieve",
@@ -493,6 +545,13 @@ module ClickFunnelsDataProvider {
             "desc": "List products in ClickFunnels",
             "action_code": DPAT_FIND,
             "options": {
+                "workspace_id": <ActionOptionInfo>{
+                    "display_name": "Workspace ID",
+                    "short_desc": "ClickFunnels workspace ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "workspaces",
+                },
                 "product_id": <ActionOptionInfo>{
                     "display_name": "Product ID",
                     "short_desc": "Filter by product ID",
@@ -534,6 +593,13 @@ module ClickFunnelsDataProvider {
             "desc": "Retrieve a single product by ID from ClickFunnels",
             "action_code": DPAT_FIND_SINGLE,
             "options": {
+                "workspace_id": <ActionOptionInfo>{
+                    "display_name": "Workspace ID",
+                    "short_desc": "ClickFunnels workspace ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "workspaces",
+                },
                 "product_id": <ActionOptionInfo>{
                     "display_name": "Product ID",
                     "short_desc": "The product ID to retrieve",
@@ -572,6 +638,13 @@ module ClickFunnelsDataProvider {
             "desc": "List funnels in ClickFunnels",
             "action_code": DPAT_FIND,
             "options": {
+                "workspace_id": <ActionOptionInfo>{
+                    "display_name": "Workspace ID",
+                    "short_desc": "ClickFunnels workspace ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "workspaces",
+                },
                 "funnel_id": <ActionOptionInfo>{
                     "display_name": "Funnel ID",
                     "short_desc": "Filter by funnel ID",
@@ -613,6 +686,13 @@ module ClickFunnelsDataProvider {
             "desc": "Retrieve a single funnel by ID from ClickFunnels",
             "action_code": DPAT_FIND_SINGLE,
             "options": {
+                "workspace_id": <ActionOptionInfo>{
+                    "display_name": "Workspace ID",
+                    "short_desc": "ClickFunnels workspace ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "workspaces",
+                },
                 "funnel_id": <ActionOptionInfo>{
                     "display_name": "Funnel ID",
                     "short_desc": "The funnel ID to retrieve",
@@ -636,6 +716,13 @@ module ClickFunnelsDataProvider {
             "desc": "List courses in ClickFunnels",
             "action_code": DPAT_FIND,
             "options": {
+                "workspace_id": <ActionOptionInfo>{
+                    "display_name": "Workspace ID",
+                    "short_desc": "ClickFunnels workspace ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "workspaces",
+                },
                 "course_id": <ActionOptionInfo>{
                     "display_name": "Course ID",
                     "short_desc": "Filter by course ID",
@@ -677,6 +764,13 @@ module ClickFunnelsDataProvider {
             "desc": "Retrieve a single course by ID from ClickFunnels",
             "action_code": DPAT_FIND_SINGLE,
             "options": {
+                "workspace_id": <ActionOptionInfo>{
+                    "display_name": "Workspace ID",
+                    "short_desc": "ClickFunnels workspace ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "workspaces",
+                },
                 "course_id": <ActionOptionInfo>{
                     "display_name": "Course ID",
                     "short_desc": "The course ID to retrieve",
@@ -730,6 +824,13 @@ module ClickFunnelsDataProvider {
             "desc": "List course enrollments in ClickFunnels",
             "action_code": DPAT_FIND,
             "options": {
+                "workspace_id": <ActionOptionInfo>{
+                    "display_name": "Workspace ID",
+                    "short_desc": "ClickFunnels workspace ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "workspaces",
+                },
                 "enrollment_id": <ActionOptionInfo>{
                     "display_name": "Enrollment ID",
                     "short_desc": "Filter by enrollment ID",
@@ -778,6 +879,13 @@ module ClickFunnelsDataProvider {
             "desc": "Retrieve a single enrollment by ID from ClickFunnels",
             "action_code": DPAT_FIND_SINGLE,
             "options": {
+                "workspace_id": <ActionOptionInfo>{
+                    "display_name": "Workspace ID",
+                    "short_desc": "ClickFunnels workspace ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "workspaces",
+                },
                 "enrollment_id": <ActionOptionInfo>{
                     "display_name": "Enrollment ID",
                     "short_desc": "The enrollment ID to retrieve",
@@ -861,6 +969,13 @@ module ClickFunnelsDataProvider {
             "desc": "List fulfillments in ClickFunnels",
             "action_code": DPAT_FIND,
             "options": {
+                "workspace_id": <ActionOptionInfo>{
+                    "display_name": "Workspace ID",
+                    "short_desc": "ClickFunnels workspace ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "workspaces",
+                },
                 "fulfillment_id": <ActionOptionInfo>{
                     "display_name": "Fulfillment ID",
                     "short_desc": "Filter by fulfillment ID",
@@ -909,6 +1024,13 @@ module ClickFunnelsDataProvider {
             "desc": "Retrieve a single fulfillment by ID from ClickFunnels",
             "action_code": DPAT_FIND_SINGLE,
             "options": {
+                "workspace_id": <ActionOptionInfo>{
+                    "display_name": "Workspace ID",
+                    "short_desc": "ClickFunnels workspace ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "workspaces",
+                },
                 "fulfillment_id": <ActionOptionInfo>{
                     "display_name": "Fulfillment ID",
                     "short_desc": "The fulfillment ID to retrieve",
@@ -977,6 +1099,13 @@ module ClickFunnelsDataProvider {
             "desc": "List forms in ClickFunnels",
             "action_code": DPAT_FIND,
             "options": {
+                "workspace_id": <ActionOptionInfo>{
+                    "display_name": "Workspace ID",
+                    "short_desc": "ClickFunnels workspace ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "workspaces",
+                },
                 "form_id": <ActionOptionInfo>{
                     "display_name": "Form ID",
                     "short_desc": "Filter by form ID",
@@ -1018,6 +1147,13 @@ module ClickFunnelsDataProvider {
             "desc": "Retrieve a single form by ID from ClickFunnels",
             "action_code": DPAT_FIND_SINGLE,
             "options": {
+                "workspace_id": <ActionOptionInfo>{
+                    "display_name": "Workspace ID",
+                    "short_desc": "ClickFunnels workspace ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "workspaces",
+                },
                 "form_id": <ActionOptionInfo>{
                     "display_name": "Form ID",
                     "short_desc": "The form ID to retrieve",
@@ -1041,6 +1177,13 @@ module ClickFunnelsDataProvider {
             "desc": "List form submissions in ClickFunnels",
             "action_code": DPAT_FIND,
             "options": {
+                "workspace_id": <ActionOptionInfo>{
+                    "display_name": "Workspace ID",
+                    "short_desc": "ClickFunnels workspace ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "workspaces",
+                },
                 "submission_id": <ActionOptionInfo>{
                     "display_name": "Submission ID",
                     "short_desc": "Filter by submission ID",
@@ -1089,6 +1232,13 @@ module ClickFunnelsDataProvider {
             "desc": "Retrieve a single form submission by ID from ClickFunnels",
             "action_code": DPAT_FIND_SINGLE,
             "options": {
+                "workspace_id": <ActionOptionInfo>{
+                    "display_name": "Workspace ID",
+                    "short_desc": "ClickFunnels workspace ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "workspaces",
+                },
                 "submission_id": <ActionOptionInfo>{
                     "display_name": "Submission ID",
                     "short_desc": "The submission ID to retrieve",
@@ -1112,6 +1262,13 @@ module ClickFunnelsDataProvider {
             "desc": "List applied tags in ClickFunnels",
             "action_code": DPAT_FIND,
             "options": {
+                "workspace_id": <ActionOptionInfo>{
+                    "display_name": "Workspace ID",
+                    "short_desc": "ClickFunnels workspace ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "workspaces",
+                },
                 "applied_tag_id": <ActionOptionInfo>{
                     "display_name": "Applied Tag ID",
                     "short_desc": "Filter by applied tag ID",

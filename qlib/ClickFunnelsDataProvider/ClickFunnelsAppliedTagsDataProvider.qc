@@ -40,7 +40,7 @@ public class ClickFunnelsAppliedTagsDataProvider inherits ClickFunnelsDataProvid
 
         const ConstructorOptions = BaseConstructorOptions;
 
-        const SearchOptions = {
+        const SearchOptions = ClickFunnelsDataProviderBase::WorkspaceIdSearchOption + {
             "contact_id": <DataProviderOptionInfo>{
                 "display_name": "Contact ID",
                 "short_desc": "The contact to list tags for",
@@ -105,6 +105,7 @@ public class ClickFunnelsAppliedTagsDataProvider inherits ClickFunnelsDataProvid
 
     private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
+        setWorkspaceIdFromSearchOpts(search_options);
         if (search_options.applied_tag_id) {
             auto result = doGet("contacts/applied_tags/" + search_options.applied_tag_id);
             return new DefaultRecordIterator(new ListHashIterator((result,)),
@@ -131,7 +132,7 @@ public class ClickFunnelsAppliedTagsDataProvider inherits ClickFunnelsDataProvid
 
 public class ClickFunnelsCreateAppliedTagRequestDataType inherits HashDataType {
     public {
-        const Fields = {
+        const Fields = ClickFunnelsDataProviderBase::WorkspaceIdField + {
             "contact_id": {
                 "type": StringType,
                 "display_name": "Contact ID",
@@ -174,9 +175,10 @@ public class ClickFunnelsCreateAppliedTagDataProvider inherits ClickFunnelsDataP
     private *AbstractDataProviderType getRequestTypeImpl() { return new ClickFunnelsCreateAppliedTagRequestDataType(); }
     private *AbstractDataProviderType getResponseTypeImpl() { return new ClickFunnelsAppliedTagDataType(); }
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
+        req = setWorkspaceIdFromReq(req);
         string contact_id = remove req.contact_id;
         return doPost("contacts/" + contact_id + "/applied_tags",
-            {"applied_tag": {"tag_id": req.tag_id}});
+            {"contacts_applied_tag": {"tag_id": req.tag_id}});
     }
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }
 }
@@ -185,7 +187,7 @@ public class ClickFunnelsCreateAppliedTagDataProvider inherits ClickFunnelsDataP
 
 public class ClickFunnelsDeleteAppliedTagRequestDataType inherits HashDataType {
     public {
-        const Fields = {
+        const Fields = ClickFunnelsDataProviderBase::WorkspaceIdField + {
             "contact_id": {
                 "type": StringType,
                 "display_name": "Contact",
@@ -229,6 +231,7 @@ public class ClickFunnelsDeleteAppliedTagDataProvider inherits ClickFunnelsDataP
     private *AbstractDataProviderType getRequestTypeImpl() { return new ClickFunnelsDeleteAppliedTagRequestDataType(); }
     private *AbstractDataProviderType getResponseTypeImpl() { return AbstractDataProviderTypeMap."hash"; }
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
+        req = setWorkspaceIdFromReq(req);
         remove req.contact_id;
         doDelete("contacts/applied_tags/" + req.applied_tag_id);
         return {"success": True, "id": req.applied_tag_id};

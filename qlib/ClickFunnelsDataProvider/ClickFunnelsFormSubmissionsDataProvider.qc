@@ -34,7 +34,7 @@ public class ClickFunnelsFormSubmissionsDataProvider inherits ClickFunnelsDataPr
             "constructor_options": ConstructorOptions, "search_options": SearchOptions,
         };
         const ConstructorOptions = BaseConstructorOptions;
-        const SearchOptions = {
+        const SearchOptions = ClickFunnelsDataProviderBase::WorkspaceIdSearchOption + {
             "form_id": <DataProviderOptionInfo>{ "display_name": "Form ID", "short_desc": "The form to list submissions for", "type": AbstractDataProviderType::get(SoftStringOrNothingType), "desc": "The form ID to list submissions for (required for listing)", "ref_data": "forms" },
             "submission_id": <DataProviderOptionInfo>{ "display_name": "Submission ID", "short_desc": "Get a specific submission", "type": AbstractDataProviderType::get(SoftStringOrNothingType), "desc": "Filter by submission ID for single record lookup", "ref_data": "form_submissions" },
             "after": <DataProviderOptionInfo>{ "display_name": "After Cursor", "short_desc": "Pagination cursor", "type": AbstractDataProviderType::get(SoftStringOrNothingType), "desc": "The cursor value for fetching the next page of results" },
@@ -55,6 +55,7 @@ public class ClickFunnelsFormSubmissionsDataProvider inherits ClickFunnelsDataPr
     private *AbstractDataProvider getChildProviderImpl(string name) { *Class cls = ChildMap{name}; if (cls) { return cls.newObject(rest); } }
     private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) { return new ClickFunnelsFormSubmissionDataType().getFields(); }
     private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
+        setWorkspaceIdFromSearchOpts(search_options);
         if (search_options.submission_id) {
             auto result = doGet("forms/submissions/" + search_options.submission_id);
             return new DefaultRecordIterator(new ListHashIterator((result,)), where_cond, search_options);
@@ -74,7 +75,7 @@ public class ClickFunnelsFormSubmissionsDataProvider inherits ClickFunnelsDataPr
 # --- Create Form Submission ---
 public class ClickFunnelsCreateFormSubmissionRequestDataType inherits HashDataType {
     public {
-        const Fields = {
+        const Fields = ClickFunnelsDataProviderBase::WorkspaceIdField + {
             "form_id": { "type": StringType, "display_name": "Form ID", "short_desc": "The form to submit to", "desc": "The ID of the form to create a submission for", "required": True, "ref_data": "forms" },
             "contact_id": { "type": StringOrNothingType, "display_name": "Contact ID", "short_desc": "The submitting contact", "desc": "The ID of the contact submitting the form", "ref_data": "contacts" },
         };
@@ -95,6 +96,7 @@ public class ClickFunnelsCreateFormSubmissionDataProvider inherits ClickFunnelsD
     private *AbstractDataProviderType getRequestTypeImpl() { return new ClickFunnelsCreateFormSubmissionRequestDataType(); }
     private *AbstractDataProviderType getResponseTypeImpl() { return new ClickFunnelsFormSubmissionDataType(); }
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
+        req = setWorkspaceIdFromReq(req);
         string form_id = remove req.form_id;
         return doPost("forms/" + form_id + "/submissions", {"form_submission": req});
     }
@@ -104,7 +106,7 @@ public class ClickFunnelsCreateFormSubmissionDataProvider inherits ClickFunnelsD
 # --- Update Form Submission ---
 public class ClickFunnelsUpdateFormSubmissionRequestDataType inherits HashDataType {
     public {
-        const Fields = {
+        const Fields = ClickFunnelsDataProviderBase::WorkspaceIdField + {
             "submission_id": { "type": StringType, "display_name": "Submission ID", "short_desc": "The submission to update", "desc": "The unique identifier of the submission to update", "required": True, "ref_data": "form_submissions" },
         };
     }
@@ -124,6 +126,7 @@ public class ClickFunnelsUpdateFormSubmissionDataProvider inherits ClickFunnelsD
     private *AbstractDataProviderType getRequestTypeImpl() { return new ClickFunnelsUpdateFormSubmissionRequestDataType(); }
     private *AbstractDataProviderType getResponseTypeImpl() { return new ClickFunnelsFormSubmissionDataType(); }
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
+        req = setWorkspaceIdFromReq(req);
         string id = remove req.submission_id;
         return doPut("forms/submissions/" + id, {"form_submission": req});
     }
@@ -133,7 +136,7 @@ public class ClickFunnelsUpdateFormSubmissionDataProvider inherits ClickFunnelsD
 # --- Delete Form Submission ---
 public class ClickFunnelsDeleteFormSubmissionRequestDataType inherits HashDataType {
     public {
-        const Fields = {
+        const Fields = ClickFunnelsDataProviderBase::WorkspaceIdField + {
             "submission_id": { "type": StringType, "display_name": "Submission ID", "short_desc": "The submission to delete", "desc": "The unique identifier of the submission to delete", "required": True, "ref_data": "form_submissions" },
         };
     }
@@ -151,6 +154,7 @@ public class ClickFunnelsDeleteFormSubmissionDataProvider inherits ClickFunnelsD
     private *AbstractDataProviderType getRequestTypeImpl() { return new ClickFunnelsDeleteFormSubmissionRequestDataType(); }
     private *AbstractDataProviderType getResponseTypeImpl() { return AbstractDataProviderTypeMap."hash"; }
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
+        req = setWorkspaceIdFromReq(req);
         doDelete("forms/submissions/" + req.submission_id);
         return {"success": True, "id": req.submission_id};
     }

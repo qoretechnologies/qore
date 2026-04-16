@@ -38,7 +38,7 @@ public class ClickFunnelsFunnelsDataProvider inherits ClickFunnelsDataProviderBa
             "search_options": SearchOptions,
         };
         const ConstructorOptions = BaseConstructorOptions;
-        const SearchOptions = {
+        const SearchOptions = ClickFunnelsDataProviderBase::WorkspaceIdSearchOption + {
             "funnel_id": <DataProviderOptionInfo>{
                 "display_name": "Funnel ID",
                 "short_desc": "Get a specific funnel by ID",
@@ -82,6 +82,7 @@ public class ClickFunnelsFunnelsDataProvider inherits ClickFunnelsDataProviderBa
     }
     private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) { return new ClickFunnelsFunnelDataType().getFields(); }
     private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
+        setWorkspaceIdFromSearchOpts(search_options);
         if (search_options.funnel_id) {
             auto result = doGet("funnels/" + search_options.funnel_id);
             return new DefaultRecordIterator(new ListHashIterator((result,)), where_cond, search_options);
@@ -98,7 +99,7 @@ public class ClickFunnelsFunnelsDataProvider inherits ClickFunnelsDataProviderBa
 # --- Update Funnel ---
 public class ClickFunnelsUpdateFunnelRequestDataType inherits HashDataType {
     public {
-        const Fields = {
+        const Fields = ClickFunnelsDataProviderBase::WorkspaceIdField + {
             "funnel_id": { "type": StringType, "display_name": "Funnel ID", "short_desc": "The funnel to update", "desc": "The unique identifier of the funnel to update", "required": True, "ref_data": "funnels" },
             "name": { "type": StringOrNothingType, "display_name": "Name", "short_desc": "The funnel name", "desc": "The new name for the funnel" },
         };
@@ -119,6 +120,7 @@ public class ClickFunnelsUpdateFunnelDataProvider inherits ClickFunnelsDataProvi
     private *AbstractDataProviderType getRequestTypeImpl() { return new ClickFunnelsUpdateFunnelRequestDataType(); }
     private *AbstractDataProviderType getResponseTypeImpl() { return new ClickFunnelsFunnelDataType(); }
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
+        req = setWorkspaceIdFromReq(req);
         string id = remove req.funnel_id;
         return doPut("funnels/" + id, {"funnel": req});
     }

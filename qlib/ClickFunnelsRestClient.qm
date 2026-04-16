@@ -75,10 +75,9 @@ module ClickFunnelsRestClient {
 ClickFunnelsRestClient cf({
     "team": "myteam",
     "apikey": ENV.CLICKFUNNELS_API_TOKEN,
-    "workspace_id": "12345",
 });
-hash<auto> result = cf.get("workspaces");
-printf("Workspaces: %y\n", result.body);
+hash<auto> result = cf.get("teams");
+printf("Teams: %y\n", result.body);
     @endcode
 
     @section clickfunnelsrestclientrelnotes Release Notes
@@ -103,7 +102,7 @@ public class ClickFunnelsRestClientBase {
         const DefaultPingMethod = "GET";
 
         #! Default ping path (relative - no leading slash since base URL has /api/v2)
-        const DefaultPingPath = "workspaces";
+        const DefaultPingPath = "teams";
 
         #! Default ping headers
         const DefaultPingHeaders = {
@@ -166,14 +165,12 @@ public class ClickFunnelsRestClient inherits RestClient::RestClient, ClickFunnel
 ClickFunnelsRestClient cf({
     "team": "myteam",
     "apikey": "your-api-token",
-    "workspace_id": "12345",
 });
         @endcode
 
         @param opts valid options are:
         - \c team: the ClickFunnels team subdomain (e.g., "myteam" for myteam.myclickfunnels.com)
         - \c apikey: the API Bearer token
-        - \c workspace_id: the ClickFunnels workspace ID
         - plus all options for the @ref RestClient::RestClient "RestClient" class
 
         @param do_not_connect if \c False (the default), then a connection will be immediately
@@ -244,23 +241,13 @@ public class ClickFunnelsRestConnection inherits RestClient::RestConnection {
                     "short_desc": "ClickFunnels API Bearer token",
                     "type": "string",
                     "desc": "The ClickFunnels API Bearer token for authentication. "
-                        "Generate this token in the ClickFunnels admin panel under "
-                        "**Account Settings > API Keys**",
+                        "Generate this token in ClickFunnels under "
+                        "**Teams List > Your Team > Team Settings > Developer Portal**",
                     "sensitive": True,
                     "preselected": True,
                 },
-                "workspace_id": <ConnectionOptionInfo>{
-                    "display_name": "Workspace ID",
-                    "short_desc": "ClickFunnels workspace ID",
-                    "type": "string",
-                    "desc": "The ClickFunnels workspace ID. Workspace-scoped API endpoints "
-                        "require this ID in their paths (e.g., `/workspaces/{id}/contacts`). "
-                        "You can find the workspace ID in the ClickFunnels admin panel URL "
-                        "or by calling the `GET /workspaces` endpoint",
-                    "preselected": True,
-                },
             },
-            "required_options": "team,apikey,workspace_id",
+            "required_options": "team,apikey",
             "messages": (
                 <UiMessageInfo>{
                     "title": "How to Find Your Team Subdomain",
@@ -274,28 +261,19 @@ public class ClickFunnelsRestConnection inherits RestClient::RestConnection {
                         "3. The team subdomain is the part before `.myclickfunnels.com`",
                 },
                 <UiMessageInfo>{
-                    "title": "How to Find Your Workspace ID",
-                    "intent": "info",
-                    "content": "The **Workspace ID** is required for API endpoints that are "
-                        "scoped to a specific workspace.\n\n"
-                        "**How to find it:**\n"
-                        "1. Log in to your ClickFunnels 2.0 account\n"
-                        "2. Navigate to the workspace you want to use\n"
-                        "3. Check the URL for the workspace ID number\n"
-                        "4. Alternatively, use the API to call `GET /workspaces` to list all "
-                        "available workspaces and their IDs",
-                },
-                <UiMessageInfo>{
                     "title": "How to Generate an API Token",
                     "intent": "info",
                     "content": "An **API Token** is required for authentication.\n\n"
                         "**How to generate one:**\n"
                         "1. Log in to your ClickFunnels 2.0 account\n"
-                        "2. Go to **Account Settings > API Keys**\n"
-                        "3. Click **Create API Key**\n"
-                        "4. Copy the generated token and paste it here\n\n"
+                        "2. Go to **Teams List > Your Team > Team Settings > Developer Portal**\n"
+                        "3. Click **Add new platform application** and fill in the required "
+                        "information\n"
+                        "4. Copy the **API access token** from the platform application "
+                        "details\n\n"
                         "**Note:** Store this token securely; it provides full API access "
-                        "to your ClickFunnels account",
+                        "to your ClickFunnels account. API access requires a Scale, Optimize, "
+                        "or Dominate plan",
                 },
             ),
         };

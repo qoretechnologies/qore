@@ -62,6 +62,7 @@ public class ClickFunnelsUpsertContactDataProvider inherits ClickFunnelsDataProv
     }
 
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
+        req = setWorkspaceIdFromReq(req);
         return doPost(getWorkspacePath("contacts/upsert"), {"contact": req});
     }
 

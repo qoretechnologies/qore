@@ -27,7 +27,7 @@ public namespace ClickFunnelsDataProvider {
 #! Request type for deleting a contact
 public class ClickFunnelsDeleteContactRequestDataType inherits HashDataType {
     public {
-        const Fields = {
+        const Fields = ClickFunnelsDataProviderBase::WorkspaceIdField + {
             "contact_id": {
                 "type": StringType,
                 "display_name": "Contact ID",
@@ -79,6 +79,7 @@ public class ClickFunnelsDeleteContactDataProvider inherits ClickFunnelsDataProv
     }
 
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
+        req = setWorkspaceIdFromReq(req);
         doDelete("contacts/" + req.contact_id);
         return {"success": True, "id": req.contact_id};
     }

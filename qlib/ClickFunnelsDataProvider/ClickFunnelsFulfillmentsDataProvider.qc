@@ -58,7 +58,7 @@ public class ClickFunnelsFulfillmentsDataProvider inherits ClickFunnelsDataProvi
             "constructor_options": ConstructorOptions, "search_options": SearchOptions,
         };
         const ConstructorOptions = BaseConstructorOptions;
-        const SearchOptions = {
+        const SearchOptions = ClickFunnelsDataProviderBase::WorkspaceIdSearchOption + {
             "fulfillment_id": <DataProviderOptionInfo>{ "display_name": "Fulfillment ID", "short_desc": "Get a specific fulfillment", "type": AbstractDataProviderType::get(SoftStringOrNothingType), "desc": "Filter by fulfillment ID for single record lookup" },
             "contact_id": <DataProviderOptionInfo>{ "display_name": "Contact ID", "short_desc": "Filter by contact", "type": AbstractDataProviderType::get(SoftStringOrNothingType), "desc": "Filter fulfillments by contact ID", "ref_data": "contacts" },
             "after": <DataProviderOptionInfo>{ "display_name": "After Cursor", "short_desc": "Pagination cursor", "type": AbstractDataProviderType::get(SoftStringOrNothingType), "desc": "The cursor value for fetching the next page of results" },
@@ -80,6 +80,7 @@ public class ClickFunnelsFulfillmentsDataProvider inherits ClickFunnelsDataProvi
     private *AbstractDataProvider getChildProviderImpl(string name) { *Class cls = ChildMap{name}; if (cls) { return cls.newObject(rest); } }
     private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) { return new ClickFunnelsFulfillmentDataType().getFields(); }
     private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
+        setWorkspaceIdFromSearchOpts(search_options);
         if (search_options.fulfillment_id) {
             auto result = doGet("fulfillments/" + search_options.fulfillment_id);
             return new DefaultRecordIterator(new ListHashIterator((result,)), where_cond, search_options);
@@ -97,7 +98,7 @@ public class ClickFunnelsFulfillmentsDataProvider inherits ClickFunnelsDataProvi
 # --- Create Fulfillment ---
 public class ClickFunnelsCreateFulfillmentRequestDataType inherits HashDataType {
     public {
-        const Fields = {
+        const Fields = ClickFunnelsDataProviderBase::WorkspaceIdField + {
             "contact_id": { "type": StringType, "display_name": "Contact ID", "short_desc": "The contact", "desc": "The ID of the contact for this fulfillment", "required": True, "ref_data": "contacts", "example_value": "12345" },
             "location_id": { "type": StringType, "display_name": "Location ID", "short_desc": "The fulfillment location", "desc": "The ID of the fulfillment location where items are shipped from", "required": True },
             "included_orders_invoices_line_items_attributes": {
@@ -132,6 +133,7 @@ public class ClickFunnelsCreateFulfillmentDataProvider inherits ClickFunnelsData
     private *AbstractDataProviderType getRequestTypeImpl() { return new ClickFunnelsCreateFulfillmentRequestDataType(); }
     private *AbstractDataProviderType getResponseTypeImpl() { return new ClickFunnelsFulfillmentDataType(); }
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
+        req = setWorkspaceIdFromReq(req);
         return doPost(getWorkspacePath("fulfillments"), {"fulfillment": req});
     }
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }
@@ -140,7 +142,7 @@ public class ClickFunnelsCreateFulfillmentDataProvider inherits ClickFunnelsData
 # --- Update Fulfillment ---
 public class ClickFunnelsUpdateFulfillmentRequestDataType inherits HashDataType {
     public {
-        const Fields = {
+        const Fields = ClickFunnelsDataProviderBase::WorkspaceIdField + {
             "fulfillment_id": { "type": StringType, "display_name": "Fulfillment ID", "short_desc": "The fulfillment to update", "desc": "The unique identifier of the fulfillment to update", "required": True, "ref_data": "fulfillments" },
             "tracking_code": { "type": StringOrNothingType, "display_name": "Tracking Code", "short_desc": "The tracking code", "desc": "The new tracking code" },
             "tracking_url": { "type": StringOrNothingType, "display_name": "Tracking URL", "short_desc": "The tracking URL", "desc": "The new tracking URL" },
@@ -164,6 +166,7 @@ public class ClickFunnelsUpdateFulfillmentDataProvider inherits ClickFunnelsData
     private *AbstractDataProviderType getRequestTypeImpl() { return new ClickFunnelsUpdateFulfillmentRequestDataType(); }
     private *AbstractDataProviderType getResponseTypeImpl() { return new ClickFunnelsFulfillmentDataType(); }
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
+        req = setWorkspaceIdFromReq(req);
         string id = remove req.fulfillment_id;
         return doPut("fulfillments/" + id, {"fulfillment": req});
     }
@@ -173,7 +176,7 @@ public class ClickFunnelsUpdateFulfillmentDataProvider inherits ClickFunnelsData
 # --- Delete Fulfillment ---
 public class ClickFunnelsDeleteFulfillmentRequestDataType inherits HashDataType {
     public {
-        const Fields = {
+        const Fields = ClickFunnelsDataProviderBase::WorkspaceIdField + {
             "fulfillment_id": { "type": StringType, "display_name": "Fulfillment ID", "short_desc": "The fulfillment to delete", "desc": "The unique identifier of the fulfillment to delete", "required": True, "ref_data": "fulfillments" },
         };
     }
@@ -191,6 +194,7 @@ public class ClickFunnelsDeleteFulfillmentDataProvider inherits ClickFunnelsData
     private *AbstractDataProviderType getRequestTypeImpl() { return new ClickFunnelsDeleteFulfillmentRequestDataType(); }
     private *AbstractDataProviderType getResponseTypeImpl() { return AbstractDataProviderTypeMap."hash"; }
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
+        req = setWorkspaceIdFromReq(req);
         doDelete("fulfillments/" + req.fulfillment_id);
         return {"success": True, "id": req.fulfillment_id};
     }
@@ -200,7 +204,7 @@ public class ClickFunnelsDeleteFulfillmentDataProvider inherits ClickFunnelsData
 # --- Cancel Fulfillment ---
 public class ClickFunnelsCancelFulfillmentRequestDataType inherits HashDataType {
     public {
-        const Fields = {
+        const Fields = ClickFunnelsDataProviderBase::WorkspaceIdField + {
             "fulfillment_id": { "type": StringType, "display_name": "Fulfillment ID", "short_desc": "The fulfillment to cancel", "desc": "The unique identifier of the fulfillment to cancel", "required": True, "ref_data": "fulfillments" },
         };
     }
@@ -220,6 +224,7 @@ public class ClickFunnelsCancelFulfillmentDataProvider inherits ClickFunnelsData
     private *AbstractDataProviderType getRequestTypeImpl() { return new ClickFunnelsCancelFulfillmentRequestDataType(); }
     private *AbstractDataProviderType getResponseTypeImpl() { return new ClickFunnelsFulfillmentDataType(); }
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
+        req = setWorkspaceIdFromReq(req);
         return doPut("fulfillments/" + req.fulfillment_id + "/cancel", NOTHING);
     }
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }
