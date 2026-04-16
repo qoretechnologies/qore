@@ -100,6 +100,14 @@ public class ClickFunnelsCreateContactRequestDataType inherits HashDataType {
                     "overwrite existing values",
                 "ref_data": "contact_tags",
             },
+            "custom_attributes": {
+                "type": AutoHashOrNothingType,
+                "display_name": "Custom Attributes",
+                "short_desc": "Custom key-value attributes",
+                "desc": "Custom key-value attributes for the contact. Both keys and values must "
+                    "be strings. Keys with special characters are automatically converted to "
+                    "`snake_case`",
+            },
         };
     }
 

@@ -88,6 +88,7 @@ public class ClickFunnelsProductsDataProvider inherits ClickFunnelsDataProviderB
             return new DefaultRecordIterator(new ListHashIterator((result,)), where_cond, search_options);
         }
         hash<auto> params;
+        if (search_options.after) { params.after = search_options.after; }
         if (search_options.sort_order) { params.sort_order = search_options.sort_order; }
         list<auto> records = fetchAllPages(getWorkspacePath("products"), params, search_options.limit);
         return new DefaultRecordIterator(new ListHashIterator(records), where_cond, search_options);

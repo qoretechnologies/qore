@@ -24,6 +24,37 @@
 
 public namespace ClickFunnelsDataProvider {
 
+#! ClickFunnels order line item type for create order requests
+public class ClickFunnelsOrderLineItemDataType inherits HashDataType {
+    private {
+        const Fields = {
+            "variant_id": {
+                "type": SoftIntType,
+                "display_name": "Variant ID",
+                "short_desc": "The product variant ID",
+                "desc": "The ID of the product variant to order",
+                "required": True,
+            },
+            "products_price_id": {
+                "type": SoftIntType,
+                "display_name": "Products Price ID",
+                "short_desc": "The product price ID",
+                "desc": "The ID of the product price to use",
+                "required": True,
+            },
+            "quantity": {
+                "type": SoftIntType,
+                "display_name": "Quantity",
+                "short_desc": "The quantity to order",
+                "desc": "The number of items to order",
+                "required": True,
+                "example_value": 1,
+            },
+        };
+    }
+    constructor() { addQoreFields(Fields); }
+}
+
 public class ClickFunnelsOrdersDataProvider inherits ClickFunnelsDataProviderBase {
     public {
         const ProviderInfo = <DataProviderInfo>{
@@ -101,6 +132,7 @@ public class ClickFunnelsOrdersDataProvider inherits ClickFunnelsDataProviderBas
         }
         hash<auto> params;
         if (search_options.contact_id) { params.contact_id = search_options.contact_id; }
+        if (search_options.after) { params.after = search_options.after; }
         if (search_options.sort_order) { params.sort_order = search_options.sort_order; }
         list<auto> records = fetchAllPages(getWorkspacePath("orders"), params,
             search_options.limit);
@@ -118,9 +150,39 @@ public class ClickFunnelsCreateOrderRequestDataType inherits HashDataType {
                 "type": StringType,
                 "display_name": "Contact ID",
                 "short_desc": "The associated contact",
+                "example_value": "12345",
                 "desc": "The ID of the contact for this order",
                 "required": True,
                 "ref_data": "contacts",
+            },
+            "order_type": {
+                "type": StringType,
+                "display_name": "Order Type",
+                "short_desc": "The type of order",
+                "desc": "The type of the order to create",
+                "required": True,
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "one-time-order", "display_name": "One-Time Order"},
+                    <AllowedValueInfo>{"value": "subscription-order", "display_name": "Subscription Order"},
+                ),
+            },
+            "live_mode": {
+                "type": SoftBoolType,
+                "display_name": "Live Mode",
+                "short_desc": "Whether this is a live order",
+                "desc": "Whether this is a live order (`True`) or a test order (`False`)",
+                "required": True,
+            },
+            "line_items_attributes": {
+                "type": new ListDataType("line_items_attributes", new ClickFunnelsOrderLineItemDataType(), False),
+                "display_name": "Line Items",
+                "short_desc": "Order line items",
+                "desc": "A list of line items for the order. Each item requires `variant_id`, "
+                    "`products_price_id`, and `quantity`.\n\n"
+                    "**Note**: for one-time orders, line items must reference one-time products. "
+                    "For subscription orders, line items can include both one-time and subscription "
+                    "products",
+                "required": True,
             },
             "currency": {
                 "type": StringOrNothingType,

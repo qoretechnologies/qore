@@ -53,11 +53,28 @@ public class ClickFunnelsAppliedTagsDataProvider inherits ClickFunnelsDataProvid
                 "type": AbstractDataProviderType::get(SoftStringOrNothingType),
                 "desc": "Filter by applied tag ID for single record lookup",
             },
+            "tag_id": <DataProviderOptionInfo>{
+                "display_name": "Tag ID",
+                "short_desc": "Filter by tag",
+                "type": AbstractDataProviderType::get(SoftStringOrNothingType),
+                "desc": "Filter applied tags by tag ID",
+                "ref_data": "contact_tags",
+            },
             "after": <DataProviderOptionInfo>{
                 "display_name": "After Cursor",
                 "short_desc": "Pagination cursor",
                 "type": AbstractDataProviderType::get(SoftStringOrNothingType),
                 "desc": "The cursor value for fetching the next page of results",
+            },
+            "sort_order": <DataProviderOptionInfo>{
+                "display_name": "Sort Order",
+                "short_desc": "Sort order for results",
+                "type": AbstractDataProviderType::get(SoftStringOrNothingType),
+                "desc": "Sort order for results",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "asc", "display_name": "Ascending"},
+                    <AllowedValueInfo>{"value": "desc", "display_name": "Descending"},
+                ),
             },
             "limit": <DataProviderOptionInfo>{
                 "display_name": "Limit",
@@ -96,9 +113,13 @@ public class ClickFunnelsAppliedTagsDataProvider inherits ClickFunnelsDataProvid
         if (!search_options.contact_id) {
             throw "CLICKFUNNELS-ERROR", "contact_id is required to list applied tags";
         }
+        hash<auto> params;
+        if (search_options.tag_id) { params.tag_id = search_options.tag_id; }
+        if (search_options.after) { params.after = search_options.after; }
+        if (search_options.sort_order) { params.sort_order = search_options.sort_order; }
         list<auto> records = fetchAllPages(
             "contacts/" + search_options.contact_id + "/applied_tags",
-            NOTHING, search_options.limit);
+            params, search_options.limit);
         return new DefaultRecordIterator(new ListHashIterator(records), where_cond,
             search_options);
     }
@@ -165,12 +186,24 @@ public class ClickFunnelsCreateAppliedTagDataProvider inherits ClickFunnelsDataP
 public class ClickFunnelsDeleteAppliedTagRequestDataType inherits HashDataType {
     public {
         const Fields = {
+            "contact_id": {
+                "type": StringType,
+                "display_name": "Contact",
+                "short_desc": "The contact to remove a tag from",
+                "desc": "Select the contact whose applied tag you want to remove",
+                "required": True,
+                "ref_data": "contacts",
+                "has_dependents": True,
+                "on_change": ("refetch",),
+            },
             "applied_tag_id": {
                 "type": StringType,
-                "display_name": "Applied Tag ID",
+                "display_name": "Applied Tag",
                 "short_desc": "The applied tag to remove",
-                "desc": "The unique identifier of the applied tag to remove",
+                "desc": "The applied tag to remove from the contact",
                 "required": True,
+                "depends_on": ("contact_id",),
+                "ref_data": "applied_tags",
             },
         };
     }
@@ -196,6 +229,7 @@ public class ClickFunnelsDeleteAppliedTagDataProvider inherits ClickFunnelsDataP
     private *AbstractDataProviderType getRequestTypeImpl() { return new ClickFunnelsDeleteAppliedTagRequestDataType(); }
     private *AbstractDataProviderType getResponseTypeImpl() { return AbstractDataProviderTypeMap."hash"; }
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
+        remove req.contact_id;
         doDelete("contacts/applied_tags/" + req.applied_tag_id);
         return {"success": True, "id": req.applied_tag_id};
     }

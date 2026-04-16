@@ -74,7 +74,7 @@ module ClickFunnelsRestClient {
 
 ClickFunnelsRestClient cf({
     "team": "myteam",
-    "token": ENV.CLICKFUNNELS_API_TOKEN,
+    "apikey": ENV.CLICKFUNNELS_API_TOKEN,
     "workspace_id": "12345",
 });
 hash<auto> result = cf.get("workspaces");
@@ -137,9 +137,9 @@ public class ClickFunnelsRestClientBase {
         }
 
         # Set Bearer token authentication
-        if (opts.token) {
-            rv.headers.Authorization = "Bearer " + opts.token;
-            remove rv.token;
+        if (opts.apikey) {
+            rv.headers.Authorization = "Bearer " + opts.apikey;
+            remove rv.apikey;
         }
 
         return rv;
@@ -151,7 +151,7 @@ public class ClickFunnelsRestClientBase {
     token authentication.
 
     @par Authentication:
-    - Bearer token provided via the \c token option
+    - Bearer token provided via the \c apikey option
     - The token is set as the \c Authorization header with "Bearer" prefix
 
     @par API Structure:
@@ -165,14 +165,14 @@ public class ClickFunnelsRestClient inherits RestClient::RestClient, ClickFunnel
         @code{.py}
 ClickFunnelsRestClient cf({
     "team": "myteam",
-    "token": "your-api-token",
+    "apikey": "your-api-token",
     "workspace_id": "12345",
 });
         @endcode
 
         @param opts valid options are:
         - \c team: the ClickFunnels team subdomain (e.g., "myteam" for myteam.myclickfunnels.com)
-        - \c token: the API Bearer token
+        - \c apikey: the API Bearer token
         - \c workspace_id: the ClickFunnels workspace ID
         - plus all options for the @ref RestClient::RestClient "RestClient" class
 
@@ -239,10 +239,10 @@ public class ClickFunnelsRestConnection inherits RestClient::RestConnection {
                         "`https://myteam.myclickfunnels.com`, the team value is `myteam`",
                     "preselected": True,
                 },
-                "token": RestConnection::ConnectionScheme.options.token
-                + <ConnectionOptionInfo>{
-                    "display_name": "API Token",
+                "apikey": <ConnectionOptionInfo>{
+                    "display_name": "API Key",
                     "short_desc": "ClickFunnels API Bearer token",
+                    "type": "string",
                     "desc": "The ClickFunnels API Bearer token for authentication. "
                         "Generate this token in the ClickFunnels admin panel under "
                         "**Account Settings > API Keys**",
@@ -260,7 +260,7 @@ public class ClickFunnelsRestConnection inherits RestClient::RestConnection {
                     "preselected": True,
                 },
             },
-            "required_options": "team,token,workspace_id",
+            "required_options": "team,apikey,workspace_id",
             "messages": (
                 <UiMessageInfo>{
                     "title": "How to Find Your Team Subdomain",

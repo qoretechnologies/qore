@@ -230,11 +230,13 @@ public class ClickFunnelsDataProviderBase inherits DataProvider::AbstractDataPro
         return {
             "contacts": True,
             "contact_tags": True,
+            "applied_tags": True,
             "products": True,
             "orders": True,
             "funnels": True,
             "courses": True,
             "forms": True,
+            "form_submissions": True,
             "fulfillments": True,
             "enrollments": True,
         };
@@ -246,11 +248,13 @@ public class ClickFunnelsDataProviderBase inherits DataProvider::AbstractDataPro
         switch (type) {
             case "contacts": return getReferenceContacts();
             case "contact_tags": return getReferenceContactTags();
+            case "applied_tags": return getReferenceAppliedTags(action_opts.contact_id);
             case "products": return getReferenceProducts();
             case "orders": return getReferenceOrders();
             case "funnels": return getReferenceFunnels();
             case "courses": return getReferenceCourses();
             case "forms": return getReferenceForms();
+            case "form_submissions": return getReferenceFormSubmissions();
             case "fulfillments": return getReferenceFulfillments();
             case "enrollments": return getReferenceEnrollments();
         }
@@ -295,6 +299,42 @@ public class ClickFunnelsDataProviderBase inherits DataProvider::AbstractDataPro
                     "short_desc": "",
                     "desc": sprintf("%s (ID: %d)", display_name, tag.id),
                     "value": string(tag.id),
+                };
+            }
+        } catch (hash<ExceptionInfo> ex) {
+        }
+        return rv;
+    }
+
+    #! Returns applied tags for a contact for reference data
+    private *list<hash<AllowedValueInfo>> getReferenceAppliedTags(*string contact_id) {
+        if (!contact_id) {
+            return;
+        }
+        list<hash<AllowedValueInfo>> rv = ();
+        try {
+            # Fetch tag definitions to get tag names for display
+            hash<string, string> tag_names;
+            try {
+                list<auto> tags = fetchAllPages(getWorkspacePath("contacts/tags"), NOTHING,
+                    DefaultPageSize);
+                foreach hash<auto> tag in (tags) {
+                    tag_names{string(tag.id)} = tag.name ?? sprintf("Tag %d", tag.id);
+                }
+            } catch (hash<ExceptionInfo> ex) {
+            }
+            list<auto> applied_tags = fetchAllPages(
+                "contacts/" + contact_id + "/applied_tags", NOTHING,
+                DefaultPageSize);
+            foreach hash<auto> at in (applied_tags) {
+                string tag_name = tag_names{string(at.tag_id)}
+                    ?? sprintf("Tag %d", at.tag_id);
+                string display_name = sprintf("%s (Applied Tag %d)", tag_name, at.id);
+                rv += <AllowedValueInfo>{
+                    "display_name": display_name,
+                    "short_desc": tag_name,
+                    "desc": sprintf("%s - Applied Tag ID: %d", tag_name, at.id),
+                    "value": string(at.id),
                 };
             }
         } catch (hash<ExceptionInfo> ex) {
@@ -396,6 +436,33 @@ public class ClickFunnelsDataProviderBase inherits DataProvider::AbstractDataPro
                     "desc": sprintf("%s (ID: %d)", display_name, form.id),
                     "value": string(form.id),
                 };
+            }
+        } catch (hash<ExceptionInfo> ex) {
+        }
+        return rv;
+    }
+
+    #! Returns available form submissions for reference data
+    private *list<hash<AllowedValueInfo>> getReferenceFormSubmissions() {
+        list<hash<AllowedValueInfo>> rv = ();
+        try {
+            list<auto> forms = fetchAllPages(getWorkspacePath("forms"), NOTHING,
+                DefaultPageSize);
+            foreach hash<auto> form in (forms) {
+                list<auto> submissions = fetchAllPages(
+                    "forms/" + string(form.id) + "/submissions", NOTHING,
+                    DefaultPageSize);
+                foreach hash<auto> submission in (submissions) {
+                    string form_name = form.name ?? sprintf("Form %d", form.id);
+                    string display_name = sprintf("%s - Submission %d",
+                        form_name, submission.id);
+                    rv += <AllowedValueInfo>{
+                        "display_name": display_name,
+                        "short_desc": "",
+                        "desc": sprintf("%s (ID: %d)", display_name, submission.id),
+                        "value": string(submission.id),
+                    };
+                }
             }
         } catch (hash<ExceptionInfo> ex) {
         }

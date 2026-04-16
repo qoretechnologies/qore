@@ -36,8 +36,9 @@ public class ClickFunnelsFormSubmissionsDataProvider inherits ClickFunnelsDataPr
         const ConstructorOptions = BaseConstructorOptions;
         const SearchOptions = {
             "form_id": <DataProviderOptionInfo>{ "display_name": "Form ID", "short_desc": "The form to list submissions for", "type": AbstractDataProviderType::get(SoftStringOrNothingType), "desc": "The form ID to list submissions for (required for listing)", "ref_data": "forms" },
-            "submission_id": <DataProviderOptionInfo>{ "display_name": "Submission ID", "short_desc": "Get a specific submission", "type": AbstractDataProviderType::get(SoftStringOrNothingType), "desc": "Filter by submission ID for single record lookup" },
+            "submission_id": <DataProviderOptionInfo>{ "display_name": "Submission ID", "short_desc": "Get a specific submission", "type": AbstractDataProviderType::get(SoftStringOrNothingType), "desc": "Filter by submission ID for single record lookup", "ref_data": "form_submissions" },
             "after": <DataProviderOptionInfo>{ "display_name": "After Cursor", "short_desc": "Pagination cursor", "type": AbstractDataProviderType::get(SoftStringOrNothingType), "desc": "The cursor value for fetching the next page of results" },
+            "sort_order": <DataProviderOptionInfo>{ "display_name": "Sort Order", "short_desc": "Sort order for results", "type": AbstractDataProviderType::get(SoftStringOrNothingType), "desc": "Sort order for results", "allowed_values": (<AllowedValueInfo>{"value": "asc", "display_name": "Ascending"}, <AllowedValueInfo>{"value": "desc", "display_name": "Descending"}) },
             "limit": <DataProviderOptionInfo>{ "display_name": "Limit", "short_desc": "Maximum number of results", "type": AbstractDataProviderType::get(SoftIntOrNothingType), "desc": "Maximum number of results to return" },
         };
         const ChildMap = {
@@ -61,7 +62,10 @@ public class ClickFunnelsFormSubmissionsDataProvider inherits ClickFunnelsDataPr
         if (!search_options.form_id) {
             throw "CLICKFUNNELS-ERROR", "form_id is required to list form submissions";
         }
-        list<auto> records = fetchAllPages("forms/" + search_options.form_id + "/submissions", NOTHING, search_options.limit);
+        hash<auto> params;
+        if (search_options.after) { params.after = search_options.after; }
+        if (search_options.sort_order) { params.sort_order = search_options.sort_order; }
+        list<auto> records = fetchAllPages("forms/" + search_options.form_id + "/submissions", params, search_options.limit);
         return new DefaultRecordIterator(new ListHashIterator(records), where_cond, search_options);
     }
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }
@@ -101,7 +105,7 @@ public class ClickFunnelsCreateFormSubmissionDataProvider inherits ClickFunnelsD
 public class ClickFunnelsUpdateFormSubmissionRequestDataType inherits HashDataType {
     public {
         const Fields = {
-            "submission_id": { "type": StringType, "display_name": "Submission ID", "short_desc": "The submission to update", "desc": "The unique identifier of the submission to update", "required": True },
+            "submission_id": { "type": StringType, "display_name": "Submission ID", "short_desc": "The submission to update", "desc": "The unique identifier of the submission to update", "required": True, "ref_data": "form_submissions" },
         };
     }
     constructor() { addQoreFields(Fields); }
@@ -130,7 +134,7 @@ public class ClickFunnelsUpdateFormSubmissionDataProvider inherits ClickFunnelsD
 public class ClickFunnelsDeleteFormSubmissionRequestDataType inherits HashDataType {
     public {
         const Fields = {
-            "submission_id": { "type": StringType, "display_name": "Submission ID", "short_desc": "The submission to delete", "desc": "The unique identifier of the submission to delete", "required": True },
+            "submission_id": { "type": StringType, "display_name": "Submission ID", "short_desc": "The submission to delete", "desc": "The unique identifier of the submission to delete", "required": True, "ref_data": "form_submissions" },
         };
     }
     constructor() { addQoreFields(Fields); }

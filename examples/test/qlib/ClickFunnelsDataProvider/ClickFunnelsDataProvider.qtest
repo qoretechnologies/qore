@@ -50,7 +50,7 @@ public class ClickFunnelsDataProviderTest inherits QUnit::Test {
 
         #! Custom command-line options
         const MyOpts = Opts + {
-            "token": "t,token=s",
+            "apikey": "t,apikey=s",
             "team": "team=s",
             "workspace_id": "w,workspace-id=s",
             "conn": "c,connection=s",
@@ -102,13 +102,13 @@ public class ClickFunnelsDataProviderTest inherits QUnit::Test {
         }
 
         # Try environment variables
-        *string token = m_options.token ?? ENV.CLICKFUNNELS_TOKEN;
+        *string apikey = m_options.apikey ?? ENV.CLICKFUNNELS_TOKEN;
         *string team = m_options.team ?? ENV.CLICKFUNNELS_TEAM;
         *string workspace_id = m_options.workspace_id ?? ENV.CLICKFUNNELS_WORKSPACE_ID;
 
-        if (token && team && workspace_id) {
+        if (apikey && team && workspace_id) {
             client = new ClickFunnelsRestClient::ClickFunnelsRestClient({
-                "token": token,
+                "apikey": apikey,
                 "team": team,
                 "workspace_id": workspace_id,
             });
@@ -231,11 +231,11 @@ public class ClickFunnelsDataProviderTest inherits QUnit::Test {
     #! Connection tests
     connectionTests() {
         # Verify connection scheme is registered
-        assertEq(True, exists ConnectionSchemeCache::getScheme("clickfunnelsres"),
-            "clickfunnelsres scheme registered");
+        assertEq(True, exists ConnectionSchemeCache::getScheme("clickfunnelsrest"),
+            "clickfunnelsrest scheme registered");
 
         # Verify connection scheme info
-        hash<auto> scheme = ConnectionSchemeCache::getScheme("clickfunnelsres");
+        hash<auto> scheme = ConnectionSchemeCache::getScheme("clickfunnelsrest");
         assertEq("ClickFunnels REST Connection", scheme.display_name);
     }
 
@@ -243,6 +243,14 @@ public class ClickFunnelsDataProviderTest inherits QUnit::Test {
     integrationTests() {
         if (!client) {
             testSkip("no ClickFunnels credentials available");
+        }
+
+        # Test connection ping
+        *string conn_name = m_options.conn ?? ENV.CLICKFUNNELS_CONNECTION;
+        if (conn_name) {
+            AbstractConnection conn = get_connection(conn_name);
+            hash<auto> ping_result = conn.ping(True);
+            assertEq("ok", ping_result.ok.toString(), "connection ping succeeds");
         }
 
         ClickFunnelsDataProvider::ClickFunnelsDataProvider provider(client);
@@ -358,5 +366,21 @@ public class ClickFunnelsDataProviderTest inherits QUnit::Test {
         AbstractDataProvider courses_dp = provider.getChildProvider("courses");
         AbstractDataProviderRecordIterator course_iter = courses_dp.searchRecords(NOTHING, {"limit": 5});
         assertEq(True, True, "courses list succeeded");
+
+        # Test event providers
+        AbstractDataProvider events_dp = provider.getChildProvider("events");
+        *list<string> event_names = events_dp.getChildProviderNames();
+        assertEq(True, event_names.size() >= 8, "at least 8 event providers");
+
+        # Test getExampleEventData for each event trigger
+        foreach string event_name in (event_names) {
+            AbstractDataProvider event_dp = events_dp.getChildProvider(event_name);
+            assertEq(True, event_dp.val(), sprintf("event provider %y exists", event_name));
+            auto example = event_dp.getExampleEventData(event_name);
+            assertEq(True, example.val(),
+                sprintf("event %y has example data", event_name));
+            assertEq(True, example.id.val(),
+                sprintf("event %y example has id field", event_name));
+        }
     }
 }

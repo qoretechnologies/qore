@@ -24,6 +24,30 @@
 
 public namespace ClickFunnelsDataProvider {
 
+#! ClickFunnels fulfillment line item type for create fulfillment requests
+public class ClickFunnelsFulfillmentLineItemDataType inherits HashDataType {
+    private {
+        const Fields = {
+            "invoices_line_item_id": {
+                "type": SoftIntType,
+                "display_name": "Invoice Line Item ID",
+                "short_desc": "The invoice line item to fulfill",
+                "desc": "The ID of the orders invoice line item to fulfill",
+                "required": True,
+            },
+            "quantity": {
+                "type": SoftIntType,
+                "display_name": "Quantity",
+                "short_desc": "The quantity to fulfill",
+                "desc": "The number of items to fulfill",
+                "required": True,
+                "example_value": 1,
+            },
+        };
+    }
+    constructor() { addQoreFields(Fields); }
+}
+
 public class ClickFunnelsFulfillmentsDataProvider inherits ClickFunnelsDataProviderBase {
     public {
         const ProviderInfo = <DataProviderInfo>{
@@ -36,6 +60,7 @@ public class ClickFunnelsFulfillmentsDataProvider inherits ClickFunnelsDataProvi
         const ConstructorOptions = BaseConstructorOptions;
         const SearchOptions = {
             "fulfillment_id": <DataProviderOptionInfo>{ "display_name": "Fulfillment ID", "short_desc": "Get a specific fulfillment", "type": AbstractDataProviderType::get(SoftStringOrNothingType), "desc": "Filter by fulfillment ID for single record lookup" },
+            "contact_id": <DataProviderOptionInfo>{ "display_name": "Contact ID", "short_desc": "Filter by contact", "type": AbstractDataProviderType::get(SoftStringOrNothingType), "desc": "Filter fulfillments by contact ID", "ref_data": "contacts" },
             "after": <DataProviderOptionInfo>{ "display_name": "After Cursor", "short_desc": "Pagination cursor", "type": AbstractDataProviderType::get(SoftStringOrNothingType), "desc": "The cursor value for fetching the next page of results" },
             "sort_order": <DataProviderOptionInfo>{ "display_name": "Sort Order", "short_desc": "Sort order", "type": AbstractDataProviderType::get(SoftStringOrNothingType), "desc": "Sort order for results", "allowed_values": (<AllowedValueInfo>{"value": "asc", "display_name": "Ascending"}, <AllowedValueInfo>{"value": "desc", "display_name": "Descending"}) },
             "limit": <DataProviderOptionInfo>{ "display_name": "Limit", "short_desc": "Maximum number of results", "type": AbstractDataProviderType::get(SoftIntOrNothingType), "desc": "Maximum number of results to return" },
@@ -60,6 +85,8 @@ public class ClickFunnelsFulfillmentsDataProvider inherits ClickFunnelsDataProvi
             return new DefaultRecordIterator(new ListHashIterator((result,)), where_cond, search_options);
         }
         hash<auto> params;
+        if (search_options.contact_id) { params.contact_id = search_options.contact_id; }
+        if (search_options.after) { params.after = search_options.after; }
         if (search_options.sort_order) { params.sort_order = search_options.sort_order; }
         list<auto> records = fetchAllPages(getWorkspacePath("fulfillments"), params, search_options.limit);
         return new DefaultRecordIterator(new ListHashIterator(records), where_cond, search_options);
@@ -71,17 +98,22 @@ public class ClickFunnelsFulfillmentsDataProvider inherits ClickFunnelsDataProvi
 public class ClickFunnelsCreateFulfillmentRequestDataType inherits HashDataType {
     public {
         const Fields = {
-            "contact_id": { "type": StringType, "display_name": "Contact ID", "short_desc": "The contact", "desc": "The ID of the contact for this fulfillment", "required": True, "ref_data": "contacts" },
-            "order_id": { "type": StringOrNothingType, "display_name": "Order ID", "short_desc": "The order", "desc": "The ID of the associated order", "ref_data": "orders" },
-            "location_id": { "type": StringOrNothingType, "display_name": "Location ID", "short_desc": "The location", "desc": "The ID of the fulfillment location" },
-            "status": { "type": StringOrNothingType, "display_name": "Status", "short_desc": "The status", "desc": "The initial status of the fulfillment", "allowed_values": (
-                <AllowedValueInfo>{"value": "cancelled", "display_name": "Cancelled"},
-                <AllowedValueInfo>{"value": "fulfilled", "display_name": "Fulfilled"},
-                <AllowedValueInfo>{"value": "restocked", "display_name": "Restocked"},
-            ) },
+            "contact_id": { "type": StringType, "display_name": "Contact ID", "short_desc": "The contact", "desc": "The ID of the contact for this fulfillment", "required": True, "ref_data": "contacts", "example_value": "12345" },
+            "location_id": { "type": StringType, "display_name": "Location ID", "short_desc": "The fulfillment location", "desc": "The ID of the fulfillment location where items are shipped from", "required": True },
+            "included_orders_invoices_line_items_attributes": {
+                "type": new ListDataType("included_orders_invoices_line_items_attributes",
+                    new ClickFunnelsFulfillmentLineItemDataType(), False),
+                "display_name": "Line Items to Fulfill",
+                "short_desc": "Invoice line items to fulfill",
+                "desc": "A list of invoice line items to fulfill. Each item requires "
+                    "`invoices_line_item_id` and `quantity`",
+                "required": True,
+            },
             "tracking_code": { "type": StringOrNothingType, "display_name": "Tracking Code", "short_desc": "The tracking code", "desc": "The shipment tracking code" },
             "tracking_url": { "type": StringOrNothingType, "display_name": "Tracking URL", "short_desc": "The tracking URL", "desc": "The shipment tracking URL" },
             "shipping_provider": { "type": StringOrNothingType, "display_name": "Shipping Provider", "short_desc": "The shipping provider", "desc": "The shipping provider for this fulfillment" },
+            "notify_customer": { "type": SoftBoolOrNothingType, "display_name": "Notify Customer", "short_desc": "Send email notification", "desc": "Whether to send an email notification to the customer about the fulfillment" },
+            "ignore_out_of_stock": { "type": SoftBoolOrNothingType, "display_name": "Ignore Out of Stock", "short_desc": "Override inventory checks", "desc": "Whether to ignore out-of-stock inventory checks when creating the fulfillment" },
         };
     }
     constructor() { addQoreFields(Fields); }
@@ -110,15 +142,10 @@ public class ClickFunnelsUpdateFulfillmentRequestDataType inherits HashDataType 
     public {
         const Fields = {
             "fulfillment_id": { "type": StringType, "display_name": "Fulfillment ID", "short_desc": "The fulfillment to update", "desc": "The unique identifier of the fulfillment to update", "required": True, "ref_data": "fulfillments" },
-            "status": { "type": StringOrNothingType, "display_name": "Status", "short_desc": "The status", "desc": "The new status of the fulfillment", "allowed_values": (
-                <AllowedValueInfo>{"value": "cancelled", "display_name": "Cancelled"},
-                <AllowedValueInfo>{"value": "fulfilled", "display_name": "Fulfilled"},
-                <AllowedValueInfo>{"value": "restocked", "display_name": "Restocked"},
-            ) },
             "tracking_code": { "type": StringOrNothingType, "display_name": "Tracking Code", "short_desc": "The tracking code", "desc": "The new tracking code" },
             "tracking_url": { "type": StringOrNothingType, "display_name": "Tracking URL", "short_desc": "The tracking URL", "desc": "The new tracking URL" },
             "shipping_provider": { "type": StringOrNothingType, "display_name": "Shipping Provider", "short_desc": "The shipping provider", "desc": "The new shipping provider" },
-            "shipped_at": { "type": DateOrNothingType, "display_name": "Shipped At", "short_desc": "When shipped", "desc": "The new shipped timestamp" },
+            "notify_customer": { "type": SoftBoolOrNothingType, "display_name": "Notify Customer", "short_desc": "Send email notification", "desc": "Whether to send an email notification to the customer about the fulfillment update" },
         };
     }
     constructor() { addQoreFields(Fields); }

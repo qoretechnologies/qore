@@ -327,8 +327,27 @@ module ClickFunnelsDataProvider {
             "desc": "Remove an applied tag from a contact in ClickFunnels",
             "action_code": DPAT_API,
             "output_type": AbstractDataProviderTypeMap."hash",
-            "options": DataProviderActionCatalog::getActionOptionFromFields(
-                ClickFunnelsDeleteAppliedTagRequestDataType::Fields),
+            "options": {
+                "contact_id": <ActionOptionInfo>{
+                    "display_name": "Contact",
+                    "short_desc": "The contact to remove a tag from",
+                    "desc": "Select the contact whose applied tag you want to remove",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "contacts",
+                    "has_dependents": True,
+                    "on_change": ("refetch",),
+                },
+                "applied_tag_id": <ActionOptionInfo>{
+                    "display_name": "Applied Tag",
+                    "short_desc": "The applied tag to remove",
+                    "desc": "The applied tag to remove from the contact",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "depends_on": ("contact_id",),
+                    "ref_data": "applied_tags",
+                },
+            },
         });
 
         # ========== ORDER ACTIONS ==========
@@ -715,6 +734,7 @@ module ClickFunnelsDataProvider {
                     "display_name": "Enrollment ID",
                     "short_desc": "Filter by enrollment ID",
                     "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "enrollments",
                     "preselected": True,
                 },
                 "course_id": <ActionOptionInfo>{
@@ -763,6 +783,7 @@ module ClickFunnelsDataProvider {
                     "short_desc": "The enrollment ID to retrieve",
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
+                    "ref_data": "enrollments",
                 },
             },
         });
@@ -844,6 +865,7 @@ module ClickFunnelsDataProvider {
                     "display_name": "Fulfillment ID",
                     "short_desc": "Filter by fulfillment ID",
                     "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "fulfillments",
                     "preselected": True,
                 },
                 "contact_id": <ActionOptionInfo>{
@@ -892,6 +914,7 @@ module ClickFunnelsDataProvider {
                     "short_desc": "The fulfillment ID to retrieve",
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
+                    "ref_data": "fulfillments",
                 },
             },
         });
@@ -1022,6 +1045,7 @@ module ClickFunnelsDataProvider {
                     "display_name": "Submission ID",
                     "short_desc": "Filter by submission ID",
                     "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "form_submissions",
                     "preselected": True,
                 },
                 "form_id": <ActionOptionInfo>{
@@ -1069,6 +1093,7 @@ module ClickFunnelsDataProvider {
                     "display_name": "Submission ID",
                     "short_desc": "The submission ID to retrieve",
                     "type": AbstractDataProviderTypeMap."string",
+                    "ref_data": "form_submissions",
                     "required": True,
                 },
             },

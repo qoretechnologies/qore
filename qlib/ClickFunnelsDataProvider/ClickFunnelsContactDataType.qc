@@ -25,6 +25,48 @@
 #! Contains all public definitions in the ClickFunnelsDataProvider module
 public namespace ClickFunnelsDataProvider {
 
+#! ClickFunnels contact tag entry type (for tags array in contact response)
+public class ClickFunnelsContactTagEntryDataType inherits HashDataType {
+    private {
+        const Fields = {
+            "id": {
+                "type": IntOrNothingType,
+                "display_name": "ID",
+                "short_desc": "The tag ID",
+                "desc": "The unique identifier of the tag",
+            },
+            "public_id": {
+                "type": StringOrNothingType,
+                "display_name": "Public ID",
+                "short_desc": "The public identifier",
+                "desc": "The public-facing unique identifier of the tag",
+            },
+            "name": {
+                "type": StringOrNothingType,
+                "display_name": "Name",
+                "short_desc": "The tag name",
+                "desc": "The name of the tag",
+            },
+            "color": {
+                "type": StringOrNothingType,
+                "display_name": "Color",
+                "short_desc": "The tag color",
+                "desc": "The color of the tag",
+            },
+            "applied_at": {
+                "type": DateOrNothingType,
+                "display_name": "Applied At",
+                "short_desc": "When the tag was applied",
+                "desc": "The timestamp when the tag was applied to the contact",
+            },
+        };
+    }
+
+    constructor() {
+        addQoreFields(Fields);
+    }
+}
+
 #! ClickFunnels contact record type
 public class ClickFunnelsContactDataType inherits HashDataType {
     private {
@@ -129,7 +171,7 @@ public class ClickFunnelsContactDataType inherits HashDataType {
                 "desc": "The website URL of the contact",
             },
             "tags": {
-                "type": AutoListOrNothingType,
+                "type": new ListDataType("tags", new ClickFunnelsContactTagEntryDataType(), True),
                 "display_name": "Tags",
                 "short_desc": "Applied tags",
                 "desc": "The tags applied to this contact. Each tag is an object with `id`, "

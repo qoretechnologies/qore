@@ -59,6 +59,7 @@ public class ClickFunnelsFormsDataProvider inherits ClickFunnelsDataProviderBase
             return new DefaultRecordIterator(new ListHashIterator((result,)), where_cond, search_options);
         }
         hash<auto> params;
+        if (search_options.after) { params.after = search_options.after; }
         if (search_options.sort_order) { params.sort_order = search_options.sort_order; }
         list<auto> records = fetchAllPages(getWorkspacePath("forms"), params, search_options.limit);
         return new DefaultRecordIterator(new ListHashIterator(records), where_cond, search_options);
@@ -70,8 +71,8 @@ public class ClickFunnelsFormsDataProvider inherits ClickFunnelsDataProviderBase
 public class ClickFunnelsCreateFormRequestDataType inherits HashDataType {
     public {
         const Fields = {
-            "name": { "type": StringType, "display_name": "Name", "short_desc": "The form name", "desc": "The name of the form", "required": True },
-            "redirect_url": { "type": StringOrNothingType, "display_name": "Redirect URL", "short_desc": "The redirect URL", "desc": "The URL to redirect to after form submission" },
+            "name": { "type": StringType, "display_name": "Name", "short_desc": "The form name", "desc": "The name of the form", "required": True, "example_value": "Contact Form" },
+            "redirect_url": { "type": StringOrNothingType, "display_name": "Redirect URL", "short_desc": "The redirect URL", "desc": "The URL to redirect to after form submission", "example_value": "https://example.com/thank-you" },
         };
     }
     constructor() { addQoreFields(Fields); }

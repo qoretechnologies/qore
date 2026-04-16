@@ -138,6 +138,9 @@ public class ClickFunnelsContactsDataProvider inherits ClickFunnelsDataProviderB
         if (search_options.email) {
             params.email = search_options.email;
         }
+        if (search_options.after) {
+            params.after = search_options.after;
+        }
         if (search_options.sort_order) {
             params.sort_order = search_options.sort_order;
         }

@@ -111,6 +111,7 @@ public class ClickFunnelsContactTagsDataProvider inherits ClickFunnelsDataProvid
 
         hash<auto> params;
         if (search_options.name) { params.name = search_options.name; }
+        if (search_options.after) { params.after = search_options.after; }
         if (search_options.sort_order) { params.sort_order = search_options.sort_order; }
 
         list<auto> records = fetchAllPages(getWorkspacePath("contacts/tags"), params,

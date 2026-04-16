@@ -58,6 +58,16 @@ public class ClickFunnelsEnrollmentsDataProvider inherits ClickFunnelsDataProvid
                 "type": AbstractDataProviderType::get(SoftStringOrNothingType),
                 "desc": "The cursor value for fetching the next page of results",
             },
+            "sort_order": <DataProviderOptionInfo>{
+                "display_name": "Sort Order",
+                "short_desc": "Sort order for results",
+                "type": AbstractDataProviderType::get(SoftStringOrNothingType),
+                "desc": "Sort order for results",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "asc", "display_name": "Ascending"},
+                    <AllowedValueInfo>{"value": "desc", "display_name": "Descending"},
+                ),
+            },
             "limit": <DataProviderOptionInfo>{
                 "display_name": "Limit",
                 "short_desc": "Maximum number of results",
@@ -87,7 +97,10 @@ public class ClickFunnelsEnrollmentsDataProvider inherits ClickFunnelsDataProvid
         if (!search_options.course_id) {
             throw "CLICKFUNNELS-ERROR", "course_id is required to list enrollments";
         }
-        list<auto> records = fetchAllPages("courses/" + search_options.course_id + "/enrollments", NOTHING, search_options.limit);
+        hash<auto> params;
+        if (search_options.after) { params.after = search_options.after; }
+        if (search_options.sort_order) { params.sort_order = search_options.sort_order; }
+        list<auto> records = fetchAllPages("courses/" + search_options.course_id + "/enrollments", params, search_options.limit);
         return new DefaultRecordIterator(new ListHashIterator(records), where_cond, search_options);
     }
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }
@@ -97,9 +110,10 @@ public class ClickFunnelsEnrollmentsDataProvider inherits ClickFunnelsDataProvid
 public class ClickFunnelsCreateEnrollmentRequestDataType inherits HashDataType {
     public {
         const Fields = {
-            "course_id": { "type": StringType, "display_name": "Course ID", "short_desc": "The course to enroll in", "desc": "The ID of the course", "required": True, "ref_data": "courses" },
-            "contact_id": { "type": StringType, "display_name": "Contact ID", "short_desc": "The contact to enroll", "desc": "The ID of the contact to enroll", "required": True, "ref_data": "contacts" },
+            "course_id": { "type": StringType, "display_name": "Course ID", "short_desc": "The course to enroll in", "desc": "The ID of the course", "required": True, "ref_data": "courses", "example_value": "12345" },
+            "contact_id": { "type": StringType, "display_name": "Contact ID", "short_desc": "The contact to enroll", "desc": "The ID of the contact to enroll", "required": True, "ref_data": "contacts", "example_value": "67890" },
             "suspended": { "type": SoftBoolOrNothingType, "display_name": "Suspended", "short_desc": "Whether enrollment is suspended", "desc": "Whether the enrollment should be suspended" },
+            "suspension_reason": { "type": StringOrNothingType, "display_name": "Suspension Reason", "short_desc": "Reason for suspension", "desc": "The reason for suspending the enrollment", "example_value": "Awaiting payment confirmation" },
         };
     }
     constructor() { addQoreFields(Fields); }
@@ -119,7 +133,7 @@ public class ClickFunnelsCreateEnrollmentDataProvider inherits ClickFunnelsDataP
     private *AbstractDataProviderType getResponseTypeImpl() { return new ClickFunnelsEnrollmentDataType(); }
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
         string course_id = remove req.course_id;
-        return doPost("courses/" + course_id + "/enrollments", {"enrollment": req});
+        return doPost("courses/" + course_id + "/enrollments", {"courses_enrollment": req});
     }
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }
 }
@@ -150,7 +164,7 @@ public class ClickFunnelsUpdateEnrollmentDataProvider inherits ClickFunnelsDataP
     private *AbstractDataProviderType getResponseTypeImpl() { return new ClickFunnelsEnrollmentDataType(); }
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
         string id = remove req.enrollment_id;
-        return doPut("courses/enrollments/" + id, {"enrollment": req});
+        return doPut("courses/enrollments/" + id, {"courses_enrollment": req});
     }
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }
 }
