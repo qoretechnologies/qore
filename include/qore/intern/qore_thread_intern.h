@@ -363,6 +363,15 @@ DLLLOCAL void clear_thread_tz();
 DLLLOCAL ThreadProgramData* get_thread_program_data();
 DLLLOCAL ThreadLocalProgramData* get_thread_local_program_data();
 
+//! Ensures td->tlpd is set for td->current_pgm.
+/** ProgramRuntimeParseContextHelper sets td->current_pgm without setting
+    td->tlpd. If ProgramThreadCountContextHelper is subsequently called
+    with the same program, it's a no-op and td->tlpd stays null. This
+    function bridges that gap by calling setThreadVarData() directly when
+    td->current_pgm is set but td->tlpd is null.
+*/
+DLLLOCAL void thread_ensure_local_program_data();
+
 DLLLOCAL int thread_ref_set(const lvalue_ref* r);
 DLLLOCAL void thread_ref_remove(const lvalue_ref* r);
 

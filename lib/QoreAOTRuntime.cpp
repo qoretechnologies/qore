@@ -6741,6 +6741,15 @@ static void executeInitFunctions(
     qore_program_private* shadow_pp = shadow_pgm ? qore_program_private::get(*shadow_pgm) : nullptr;
     qore_ns_private* shadow_root_ns = shadow_pp ? qore_ns_private::get(*shadow_pp->RootNS) : nullptr;
 
+    // Ensure thread-local program data is set for the current program.
+    // When runTimeLoadModule uses ProgramRuntimeParseContextHelper, it sets
+    // td->current_pgm without setting td->tlpd. The subsequent
+    // ProgramThreadCountContextHelper in qore_aot_module_ns_init sees
+    // pgm == td->current_pgm and becomes a no-op, leaving td->tlpd null.
+    // Init functions that construct objects need td->tlpd for
+    // thread_instantiate_lvar() (e.g. SelfInstantiatorHelper in initMembers).
+    thread_ensure_local_program_data();
+
     int executed = 0;
     int failed = 0;
 

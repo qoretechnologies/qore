@@ -1803,6 +1803,21 @@ ThreadLocalProgramData* get_thread_local_program_data() {
    return td->tlpd;
 }
 
+void thread_ensure_local_program_data() {
+    ThreadData* td = thread_data.get();
+    assert(td);
+    if (td->tlpd || !td->current_pgm) {
+        return;
+    }
+    // ProgramRuntimeParseContextHelper set td->current_pgm without
+    // td->tlpd. Set up td->tlpd via setThreadVarData so that runtime
+    // operations (e.g. object construction in AOT init functions) can
+    // instantiate local variables on the thread's lvstack.
+    qore_program_private::setThreadVarData(td->current_pgm, td->tpd, td->tlpd, false);
+    printd(5, "thread_ensure_local_program_data() set tlpd=%p for pgm=%p\n",
+        td->tlpd, td->current_pgm);
+}
+
 // pushes a new argv reference counter
 void new_argv_ref() {
    thread_data.get()->argv_refs.push();
