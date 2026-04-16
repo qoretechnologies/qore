@@ -43,7 +43,7 @@
 public class ClickFunnelsDataProviderTest inherits QUnit::Test {
     private {
         #! ClickFunnels REST client for integration tests
-        *ClickFunnelsRestClient::ClickFunnelsRestClient client;
+        *ClickFunnelsRestClient::ClickFunnelsRestClientIo client;
 
         #! Workspace ID for integration tests (passed per-action, not at connection level)
         *string workspace_id_opt;
@@ -99,7 +99,7 @@ public class ClickFunnelsDataProviderTest inherits QUnit::Test {
         if (conn_name) {
             AbstractConnection conn = get_connection(conn_name);
             if (conn instanceof ClickFunnelsRestClient::ClickFunnelsRestConnection) {
-                client = (cast<ClickFunnelsRestClient::ClickFunnelsRestConnection>(conn)).get(True);
+                client = (cast<ClickFunnelsRestClient::ClickFunnelsRestConnection>(conn)).getAsync();
             }
             return;
         }
@@ -110,7 +110,7 @@ public class ClickFunnelsDataProviderTest inherits QUnit::Test {
         workspace_id_opt = m_options.workspace_id ?? ENV.CLICKFUNNELS_WORKSPACE_ID;
 
         if (apikey && team) {
-            client = new ClickFunnelsRestClient::ClickFunnelsRestClient({
+            client = new ClickFunnelsRestClient::ClickFunnelsRestClientIo({
                 "apikey": apikey,
                 "team": team,
             });
@@ -293,7 +293,7 @@ public class ClickFunnelsDataProviderTest inherits QUnit::Test {
             if (testContactId) {
                 try {
                     AbstractDataProvider del_dp = contacts_dp.getChildProvider("delete");
-                    del_dp.doRequest({"contact_id": testContactId});
+                    del_dp.doRequest({"workspace_id": workspace_id_opt, "contact_id": testContactId});
                 } catch (hash<ExceptionInfo> ex) {
                     if (m_options.verbose) {
                         printf("Cleanup failed (contact): %s: %s\n", ex.err, ex.desc);
@@ -304,7 +304,7 @@ public class ClickFunnelsDataProviderTest inherits QUnit::Test {
 
         # Test get contact by ID
         AbstractDataProviderRecordIterator get_iter = contacts_dp.searchRecords(NOTHING,
-            {"contact_id": testContactId});
+            {"workspace_id": workspace_id_opt, "contact_id": testContactId});
         assertEq(True, get_iter.next(), "found created contact");
         hash<auto> found = get_iter.getValue();
         assertEq("Test", found.first_name);
@@ -312,6 +312,7 @@ public class ClickFunnelsDataProviderTest inherits QUnit::Test {
         # Test update contact
         AbstractDataProvider update_dp = contacts_dp.getChildProvider("update");
         hash<auto> updated = update_dp.doRequest({
+            "workspace_id": workspace_id_opt,
             "contact_id": testContactId,
             "last_name": "Updated_CF_Test",
         });
@@ -319,7 +320,7 @@ public class ClickFunnelsDataProviderTest inherits QUnit::Test {
 
         # Verify persistence - re-fetch and check
         AbstractDataProviderRecordIterator verify_iter = contacts_dp.searchRecords(NOTHING,
-            {"contact_id": testContactId});
+            {"workspace_id": workspace_id_opt, "contact_id": testContactId});
         assertEq(True, verify_iter.next(), "found updated contact");
         hash<auto> verified = verify_iter.getValue();
         assertEq("Updated_CF_Test", verified.last_name, "last_name persisted");
@@ -344,7 +345,7 @@ public class ClickFunnelsDataProviderTest inherits QUnit::Test {
             if (testTagId) {
                 try {
                     AbstractDataProvider del_tag_dp = tags_dp.getChildProvider("delete");
-                    del_tag_dp.doRequest({"tag_id": testTagId});
+                    del_tag_dp.doRequest({"workspace_id": workspace_id_opt, "tag_id": testTagId});
                 } catch (hash<ExceptionInfo> ex) {
                     if (m_options.verbose) {
                         printf("Cleanup failed (tag): %s: %s\n", ex.err, ex.desc);
