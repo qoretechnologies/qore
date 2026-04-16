@@ -1021,6 +1021,32 @@ void QoreIRToLLVM::emitLocalUninstantiation(llvm::Module& module) {
                 llvm::FunctionType::get(void_type, {ptr_type, i32_type, ptr_type}, false));
         auto pop_helper = module.getOrInsertFunction("qore_rt_pop_closure_var_aot",
                 llvm::FunctionType::get(void_type, {ptr_type, i32_type, ptr_type}, false));
+        // First pop closure-use body locals that were pre-instantiated at function
+        // entry by emitLocalInstantiation (the all_body_locals loop). These are NOT
+        // in entry_locals, so the entry_locals reverse loop below won't cover them.
+        // They must be popped BEFORE entry_locals (reverse of instantiation order:
+        // entry_locals were instantiated first, body locals second).
+        if (current_ir_func) {
+            std::unordered_set<const void*> entry_local_set;
+            for (LocalVar* var : entry_locals) {
+                entry_local_set.insert(reinterpret_cast<const void*>(var));
+            }
+            // Reverse iterate to match instantiation order symmetry
+            for (auto it = current_ir_func->all_body_locals.rbegin();
+                    it != current_ir_func->all_body_locals.rend(); ++it) {
+                LocalVar* var = *it;
+                if (!var || !var->closureUse()) {
+                    continue;
+                }
+                const void* key = reinterpret_cast<const void*>(var);
+                if (entry_local_set.count(key)) {
+                    continue;  // Already handled by the entry_locals loop below
+                }
+                int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(key);
+                builder->CreateCall(pop_helper, {aot_ctx_arg,
+                        llvm::ConstantInt::get(i32_type, slot), xsink_arg});
+            }
+        }
         for (auto it = entry_locals.rbegin(); it != entry_locals.rend(); ++it) {
             if (pre_instantiated_locals &&
                     pre_instantiated_locals->count(reinterpret_cast<const void*>(*it))) {
@@ -10669,8 +10695,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             if (!switch_val) { return false; }
             llvm::Value* switch_boxed = boxValue(switch_val, inst->operands[0].id);
             if (aot_mode) {
-                // AOT: embed the case constant value directly (CaseNode* is process-specific
-                // and doesn't survive serialization). Use isEqualHard comparison.
+                // AOT: case constant values that contain heap-allocated nodes
+                // (e.g., QoreStringNode) have process-specific pointers that can't
+                // be embedded as LLVM constants. Use expression slot indirection
+                // for node values; immediate values (int, bool, short strings) are
+                // safe to embed directly.
                 QoreValue case_val = case_inst->case_node->val;
                 // Unwrap enum values at compile time (matches CaseNode::matches semantics)
                 if (case_val.isEnum()) {
@@ -10678,11 +10707,24 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 }
                 uint64_t case_bits;
                 std::memcpy(&case_bits, &case_val, sizeof(case_bits));
-                llvm::Value* case_const = llvm::ConstantInt::get(i64_type, case_bits);
-                auto helper = module.getOrInsertFunction("qore_rt_switch_case_match_value",
-                        llvm::FunctionType::get(i64_type, {i64_type, i64_type, ptr_type}, false));
-                auto* result = builder->CreateCall(helper,
-                        {case_const, switch_boxed, xsink_arg});
+                llvm::Value* result;
+                if (case_val.hasNode()) {
+                    // Node value: load from expression slot at runtime
+                    int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(case_bits);
+                    auto helper = module.getOrInsertFunction("qore_rt_switch_case_match_value_aot",
+                            llvm::FunctionType::get(i64_type,
+                                {ptr_type, i32_type, i64_type, ptr_type}, false));
+                    result = builder->CreateCall(helper,
+                            {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot),
+                             switch_boxed, xsink_arg});
+                } else {
+                    // Immediate value: safe to embed as constant (no pointers)
+                    llvm::Value* case_const = llvm::ConstantInt::get(i64_type, case_bits);
+                    auto helper = module.getOrInsertFunction("qore_rt_switch_case_match_value",
+                            llvm::FunctionType::get(i64_type, {i64_type, i64_type, ptr_type}, false));
+                    result = builder->CreateCall(helper,
+                            {case_const, switch_boxed, xsink_arg});
+                }
                 values[inst->result.id] = result;
                 nanboxed_values.insert(inst->result.id);
             } else {

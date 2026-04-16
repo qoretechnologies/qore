@@ -4526,6 +4526,26 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots) {
                     slots.getStmtSlot(reinterpret_cast<const void*>(code));
                     break;
                 }
+                case QoreIROpcode::SwitchCaseMatch: {
+                    auto* case_inst = static_cast<QoreIRSwitchCaseMatchInstruction*>(inst.get());
+                    if (case_inst->case_node) {
+                        QoreValue case_val = case_inst->case_node->val;
+                        // Unwrap enum values at slot-map time (matches codegen semantics)
+                        if (case_val.isEnum()) {
+                            case_val = case_val.getEnumMember()->getValue();
+                        }
+                        // Only register expression slot for node values (heap-allocated
+                        // objects like QoreStringNode). Immediate values (int, bool,
+                        // NOTHING, short strings) are safe to embed as LLVM constants
+                        // since their NaN-boxed bits don't contain process-specific pointers.
+                        if (case_val.hasNode()) {
+                            uint64_t bits;
+                            memcpy(&bits, &case_val, sizeof(bits));
+                            slots.getExprSlot(bits);
+                        }
+                    }
+                    break;
+                }
                 case QoreIROpcode::SwitchRegexMatch: {
                     auto* ri = static_cast<QoreIRSwitchRegexMatchInstruction*>(inst.get());
                     if (ri->regex_case) {
@@ -6804,6 +6824,13 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
         }
         // Store closure function pointer for later serialization
         id.closure_func = ucf;
+        return id;
+    }
+
+    // QoreStringNode: string constant (e.g., switch case string values like "file")
+    if (auto* str_node = dynamic_cast<const QoreStringNode*>(node)) {
+        id.kind = AOTExprKind::CONST_STRING;
+        id.ref1 = str_node->c_str();
         return id;
     }
 

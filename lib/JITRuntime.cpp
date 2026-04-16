@@ -7135,6 +7135,14 @@ extern "C" DLLEXPORT uint64_t qore_rt_switch_case_match_value(uint64_t case_val_
     return toBits(QoreValue(lhs.isEqualHard(rhs)));
 }
 
+// AOT-safe switch case match: case value loaded from expression slot at runtime
+// (node values like QoreStringNode contain process-specific pointers that can't
+// be embedded as LLVM constants in AOT .qmod files)
+extern "C" DLLEXPORT uint64_t qore_rt_switch_case_match_value_aot(QoreAOTContext* ctx,
+        int32_t case_slot, uint64_t switch_val_bits, ExceptionSink* xsink) {
+    return qore_rt_switch_case_match_value(ctx->exprs[case_slot], switch_val_bits, xsink);
+}
+
 // ============================================================================
 // Phase 2: Optimized pseudo-method helpers for LLVM JIT (faster than dispatch)
 // ============================================================================
