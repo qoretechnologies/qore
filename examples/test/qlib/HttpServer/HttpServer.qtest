@@ -113,6 +113,26 @@ class SlowHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+class BlockingSlowHandler inherits AbstractHttpRequestHandler {
+    private {
+        Queue started;
+        Counter release;
+        date timeout;
+    }
+
+    constructor(Queue started, Counter release, date timeout) {
+        self.started = started;
+        self.release = release;
+        self.timeout = timeout;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        started.push(True);
+        release.waitForZero(timeout);
+        return makeResponse(200, "OK");
+    }
+}
+
 # WebSocket connection for async mode tests
 class TestWsConnection inherits WebSocketConnection {
     constructor(WebSocketHandler handler) : WebSocketConnection(handler) {
@@ -2032,7 +2052,13 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         # Register a slow handler to exhaust the thread pool
         Queue slow_started();
         Counter slow_done(pool_size);
-        SlowHandler slow_handler(slow_started, 10s);
+        Counter release_slow(1);
+        on_exit {
+            if (release_slow.getCount()) {
+                release_slow.dec();
+            }
+        }
+        BlockingSlowHandler slow_handler(slow_started, release_slow, 30s);
         server.setHandler("slow-handler", "/slow", MimeTypeHtml, slow_handler);
         server.setDefaultHandler("slow-handler", slow_handler);
 
@@ -2117,8 +2143,9 @@ OKKqgBjNAlYDdPhOy8O8Agk=
             assertEq("inline-ok", resp.body, "inline handler body with exhausted pool");
         }
 
-        # Wait for the background slow requests to finish before teardown. Otherwise the
+        # Release the background slow requests and wait for them before teardown. Otherwise the
         # test races server.stop() against in-flight handler threads and can wedge CI.
+        release_slow.dec();
         assertEq(0, slow_done.waitForZero(15s), "slow requests should finish before teardown");
     }
 
