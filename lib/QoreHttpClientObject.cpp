@@ -5894,6 +5894,11 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
             if (!conn || *xsink) {
                 return nullptr;
             }
+            // Hold a strong ref — the I/O thread may fire onConnectionClosed
+            // (which derefs the pool's ref) while we're blocking on pushSendData
+            // or the Future/Channel wait.
+            conn->ref();
+            ReferenceHolder<HttpClientConnectionBase> conn_holder(conn, xsink);
 
             // Ensure the connection is ready
             conn->waitForReadyOrError(timeout_ms, xsink);

@@ -367,8 +367,21 @@ protected:
     std::condition_variable create_cond_;
     std::unordered_set<std::string> creating_;
 
+    //! Connections removed from the pool by onConnectionClosed but not yet
+    //! deref'd.  The deref is deferred because onConnectionClosed runs on
+    //! the I/O thread; a synchronous deref that triggers destruction would
+    //! call closeConnection → controller cancel from inside continuePoll,
+    //! causing a use-after-free / deadlock.  Drained by processDeferredDeref().
+    //! Protected by pool_lock_ (write).
+    std::vector<HttpClientConnectionBase*> deferred_deref_;
+
     //! Computes the pool key for the given target (with proxy info baked in).
     DLLLOCAL std::string poolKey(const char* host, int port) const;
+
+    //! Drains deferred connection derefs from onConnectionClosed.
+    /** Must be called from an app thread, not the I/O thread.
+    */
+    DLLLOCAL void processDeferredDeref(ExceptionSink* xsink);
 
     //! Creates a new connection (must be called outside @ref pool_lock_
     //! since the connection constructor blocks on the controller submit).

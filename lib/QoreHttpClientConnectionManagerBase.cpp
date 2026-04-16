@@ -256,6 +256,10 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnectionImpl
         bool wait_for_ready, ExceptionSink* xsink) {
     // All three protocols (H1, H2, H3) are supported as of Phase P5.
 
+    // Drain any deferred derefs from onConnectionClosed.  Safe here
+    // because we're on an app thread, not the I/O thread.
+    processDeferredDeref(xsink);
+
     bool ssl_required = (strcmp(scheme, "https") == 0);
 
     std::string key = poolKey(host, port);
@@ -676,7 +680,7 @@ void HttpClientConnectionManagerBase::closeAll(ExceptionSink* xsink) {
     std::vector<HttpClientConnectionBase*> drained;
     {
         std::unique_lock<std::shared_mutex> wl(pool_lock_);
-        if (shutdown_ && pool_.empty()) {
+        if (shutdown_ && pool_.empty() && deferred_deref_.empty()) {
             return;
         }
         shutdown_ = true;
@@ -686,6 +690,11 @@ void HttpClientConnectionManagerBase::closeAll(ExceptionSink* xsink) {
             }
         }
         pool_.clear();
+        // Also drain any deferred derefs
+        for (auto* conn : deferred_deref_) {
+            drained.push_back(conn);
+        }
+        deferred_deref_.clear();
     }
 
     // Wake any thread waiting in acquireConnection's create_cond_ wait.
@@ -736,6 +745,21 @@ int HttpClientConnectionManagerBase::getConnectionCount(const char* host, int po
 }
 
 // ============================================================
+// processDeferredDeref — drain deferred connection derefs
+// ============================================================
+
+void HttpClientConnectionManagerBase::processDeferredDeref(ExceptionSink* xsink) {
+    std::vector<HttpClientConnectionBase*> to_deref;
+    {
+        std::unique_lock<std::shared_mutex> wl(pool_lock_);
+        to_deref.swap(deferred_deref_);
+    }
+    for (auto* conn : to_deref) {
+        conn->deref(xsink);
+    }
+}
+
+// ============================================================
 // onConnectionClosed (called from connection's onClosedHook)
 // ============================================================
 
@@ -767,15 +791,17 @@ void HttpClientConnectionManagerBase::onConnectionClosed(HttpClientConnectionBas
             }
         }
     }
-    // If we removed something, drop our pool ref on it.  The hook
-    // contract says onConnectionClosed must NOT deref — but the pool
-    // held a strong ref that we owned.  Releasing that pool ref is
-    // distinct from the lifetime ref the original caller might still
-    // hold.
+    // Drop the pool's ref on the connection.  This callback can run on
+    // the I/O thread (from continuePoll → setClosed → onClosedHook).
+    // If the deref triggers destruction, the connection destructor calls
+    // closeConnection → controller cancel on the poll op that is
+    // currently mid-continuePoll — a use-after-free / deadlock (cancel
+    // waits for the I/O thread, but we ARE the I/O thread).
+    //
+    // Stash the pointer and deref on a background thread so any
+    // destruction runs off the I/O thread.
     if (removed) {
-        ExceptionSink xs;
-        conn->deref(&xs);
-        xs.clear();
+        deferred_deref_.push_back(conn);
     }
     // Wake any thread waiting in create_cond_ for this key — we don't
     // know the key, so notify all.  Acceptable: spurious wakeups just
@@ -798,6 +824,13 @@ QoreHashNode* HttpClientConnectionManagerBase::request(const char* method,
     if (!conn || *xsink) {
         return nullptr;
     }
+    // Hold a strong ref for the duration of request().  The pool holds its
+    // own ref; the I/O thread may fire onConnectionClosed → deref at any
+    // time (even during our blocking Future wait), so without this extra
+    // ref the connection can be freed under us.
+    conn->ref();
+    // RAII deref — fires on every return path below.
+    ReferenceHolder<HttpClientConnectionBase> conn_holder(conn, xsink);
 
     ReferenceHolder<QoreHashNode> submit_result(
         conn->submitRequest(method, path, headers, body, body_len, xsink), xsink);
