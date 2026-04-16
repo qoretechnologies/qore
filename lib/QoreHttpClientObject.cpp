@@ -52,6 +52,10 @@
 #include "qore/intern/QC_SocketPollOperation.h"
 #include "qore/intern/QC_SocketPollOperationBase.h"
 #include "qore/intern/QoreHttpClientObjectIntern.h"
+#include "qore/intern/ql_crypto.h"
+
+#include <openssl/evp.h>
+#include <openssl/rand.h>
 #include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/ql_compression.h"
 
@@ -2757,6 +2761,246 @@ struct qore_httpclient_priv {
             h.setKeyValue("Proxy-Authorization", auth_str, xsink);
             assert(!*xsink);
         }
+    }
+
+    //! Parsed auth challenge from WWW-Authenticate / Proxy-Authenticate header
+    struct AuthChallenge {
+        std::string scheme;  //!< "Basic" or "Digest"
+        std::unordered_map<std::string, std::string> params;  //!< realm, nonce, qop, algorithm, etc.
+    };
+
+    //! Parse a WWW-Authenticate or Proxy-Authenticate header value
+    /** Supports "Basic realm=..." and "Digest realm=..., nonce=..., ..." formats.
+        @param header_value the raw header value
+        @return parsed challenge with scheme and parameters
+    */
+    static AuthChallenge parseAuthChallenge(const char* header_value) {
+        AuthChallenge result;
+        if (!header_value || !*header_value) {
+            return result;
+        }
+
+        // Extract scheme (first token before space)
+        const char* p = header_value;
+        while (*p && *p != ' ') {
+            ++p;
+        }
+        result.scheme.assign(header_value, p - header_value);
+
+        // Normalize scheme to title case
+        if (!result.scheme.empty()) {
+            result.scheme[0] = toupper(result.scheme[0]);
+            for (size_t i = 1; i < result.scheme.size(); ++i) {
+                result.scheme[i] = tolower(result.scheme[i]);
+            }
+        }
+
+        // Skip whitespace after scheme
+        while (*p && *p == ' ') {
+            ++p;
+        }
+
+        // Parse key=value pairs (comma-separated)
+        while (*p) {
+            // Skip whitespace and commas
+            while (*p && (*p == ' ' || *p == ',')) {
+                ++p;
+            }
+            if (!*p) {
+                break;
+            }
+
+            // Extract key
+            const char* key_start = p;
+            while (*p && *p != '=' && *p != ' ' && *p != ',') {
+                ++p;
+            }
+            std::string key(key_start, p - key_start);
+
+            // Lowercase the key
+            for (auto& c : key) {
+                c = tolower(c);
+            }
+
+            if (*p != '=') {
+                // No value — store as empty
+                result.params[key] = "";
+                continue;
+            }
+            ++p;  // skip '='
+
+            // Extract value (possibly quoted)
+            std::string value;
+            if (*p == '"') {
+                ++p;  // skip opening quote
+                while (*p && *p != '"') {
+                    if (*p == '\\' && *(p + 1)) {
+                        ++p;  // skip escape
+                    }
+                    value += *p++;
+                }
+                if (*p == '"') {
+                    ++p;  // skip closing quote
+                }
+            } else {
+                const char* val_start = p;
+                while (*p && *p != ',' && *p != ' ') {
+                    ++p;
+                }
+                value.assign(val_start, p - val_start);
+            }
+            result.params[key] = value;
+        }
+        return result;
+    }
+
+    //! Compute a hex MD5 or SHA-256 digest of the input string
+    /** @param input the string to hash
+        @param use_sha256 if true, use SHA-256; otherwise MD5
+        @return hex-encoded digest string, or empty on error
+    */
+    static std::string hexDigest(const std::string& input, bool use_sha256 = false) {
+        DigestHelper dh(input.c_str(), input.size());
+        const EVP_MD* md = use_sha256 ? EVP_sha256() : EVP_md5();
+        if (dh.doDigest("DIGEST-ERROR", md)) {
+            return {};
+        }
+        QoreString hex;
+        dh.getString(hex);
+        return hex.c_str();
+    }
+
+    //! Compute Digest auth response per RFC 7616
+    /** @param method HTTP method
+        @param uri request URI
+        @param username
+        @param password
+        @param ac parsed auth challenge parameters
+        @return the complete "Digest ..." header value, or nullptr on error
+    */
+    static QoreStringNode* computeDigestAuth(const char* method, const char* uri,
+            const char* username, const char* password,
+            const AuthChallenge& ac) {
+        auto realm_it = ac.params.find("realm");
+        auto nonce_it = ac.params.find("nonce");
+        if (realm_it == ac.params.end() || nonce_it == ac.params.end()) {
+            return nullptr;
+        }
+        const std::string& realm = realm_it->second;
+        const std::string& nonce = nonce_it->second;
+
+        // Check algorithm — default MD5
+        bool use_sha256 = false;
+        auto algo_it = ac.params.find("algorithm");
+        if (algo_it != ac.params.end()) {
+            if (strcasecmp(algo_it->second.c_str(), "SHA-256") == 0) {
+                use_sha256 = true;
+            }
+        }
+
+        // Check qop
+        auto qop_it = ac.params.find("qop");
+        bool has_qop = (qop_it != ac.params.end() && !qop_it->second.empty());
+
+        // Generate cnonce (16 random bytes → hex)
+        unsigned char cnonce_bytes[16];
+        RAND_bytes(cnonce_bytes, sizeof(cnonce_bytes));
+        char cnonce_hex[33];
+        for (int i = 0; i < 16; ++i) {
+            snprintf(cnonce_hex + i * 2, 3, "%02x", cnonce_bytes[i]);
+        }
+        std::string cnonce(cnonce_hex, 32);
+
+        // nonce count (always "00000001" — we only retry once)
+        const char* nc = "00000001";
+
+        // HA1 = H(username:realm:password)
+        std::string a1 = std::string(username) + ":" + realm + ":" + password;
+        std::string ha1 = hexDigest(a1, use_sha256);
+        if (ha1.empty()) {
+            return nullptr;
+        }
+
+        // HA2 = H(method:uri)
+        std::string a2 = std::string(method) + ":" + uri;
+        std::string ha2 = hexDigest(a2, use_sha256);
+        if (ha2.empty()) {
+            return nullptr;
+        }
+
+        // response = H(HA1:nonce:nc:cnonce:qop:HA2) if qop
+        //          = H(HA1:nonce:HA2) if no qop
+        std::string resp_input;
+        if (has_qop) {
+            resp_input = ha1 + ":" + nonce + ":" + nc + ":" + cnonce + ":auth:" + ha2;
+        } else {
+            resp_input = ha1 + ":" + nonce + ":" + ha2;
+        }
+        std::string response = hexDigest(resp_input, use_sha256);
+        if (response.empty()) {
+            return nullptr;
+        }
+
+        // Build the header value
+        QoreStringNode* hdr = new QoreStringNode;
+        hdr->sprintf("Digest username=\"%s\", realm=\"%s\", nonce=\"%s\", uri=\"%s\", response=\"%s\"",
+            username, realm.c_str(), nonce.c_str(), uri, response.c_str());
+        if (has_qop) {
+            hdr->sprintf(", qop=auth, nc=%s, cnonce=\"%s\"", nc, cnonce.c_str());
+        }
+        if (use_sha256) {
+            hdr->concat(", algorithm=SHA-256");
+        }
+        auto opaque_it = ac.params.find("opaque");
+        if (opaque_it != ac.params.end()) {
+            hdr->sprintf(", opaque=\"%s\"", opaque_it->second.c_str());
+        }
+        return hdr;
+    }
+
+    //! Attempt to compute an auth response for a 401/407 challenge
+    /** @param code HTTP status code (401 or 407)
+        @param ans response hash with headers
+        @param meth HTTP method
+        @param mpath request path
+        @param nh request headers (will be modified to add auth header)
+        @param xsink exception sink
+        @return true if an auth header was computed and the request should be retried
+    */
+    bool tryAuthChallenge(int code, QoreHashNode& ans, const char* meth,
+            const char* mpath, QoreHashNode* nh, ExceptionSink* xsink) {
+        const char* challenge_hdr = (code == 401) ? "www-authenticate" : "proxy-authenticate";
+        const char* auth_hdr = (code == 401) ? "Authorization" : "Proxy-Authorization";
+        const con_info& creds = (code == 401) ? connection : proxy_connection;
+
+        if (creds.username.empty()) {
+            return false;
+        }
+
+        const QoreStringNode* challenge = get_string_header_node(xsink, ans, challenge_hdr);
+        if (*xsink || !challenge || challenge->empty()) {
+            return false;
+        }
+
+        AuthChallenge ac = parseAuthChallenge(challenge->c_str());
+        QoreStringNode* auth_value = nullptr;
+
+        if (ac.scheme == "Digest") {
+            auth_value = computeDigestAuth(meth, mpath,
+                creds.username.c_str(), creds.password.c_str(), ac);
+        } else if (ac.scheme == "Basic") {
+            QoreString tmp;
+            tmp.sprintf("%s:%s", creds.username.c_str(), creds.password.c_str());
+            auth_value = new QoreStringNode("Basic ");
+            auth_value->concatBase64(&tmp);
+        }
+
+        if (!auth_value) {
+            return false;
+        }
+
+        nh->setKeyValue(auth_hdr, auth_value, xsink);
+        return !*xsink;
     }
 
     int getDiscardMessageBody(ExceptionSink* xsink, QoreHashNode& ans, int timeout_ms) {
@@ -5593,8 +5837,9 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
     QoreString pathstr(enc ? enc : QCS_UTF8);
     bool path_already_encoded = false;
 
-    // Redirect loop
+    // Redirect + auth retry loop
     int redirect_count = 0;
+    bool auth_retried = false;
     const char* location = nullptr;
     ReferenceHolder<QoreHashNode> ans(xsink);
     int code = 0;
@@ -5879,6 +6124,22 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                             if (*xsink) {
                                 channel->close();
                                 return nullptr;
+                            }
+                        }
+
+                        // Handle 401/407 auth challenges in streaming path
+                        if (!auth_retried && !error_passthru
+                                && (code == 401 || code == 407)) {
+                            if (tryAuthChallenge(code, **ans, meth, msgpath,
+                                    *nh, xsink)) {
+                                if (*xsink) {
+                                    channel->close();
+                                    return nullptr;
+                                }
+                                auth_retried = true;
+                                channel->close();
+                                channel_done = true;
+                                break;
                             }
                         }
 
@@ -6171,6 +6432,22 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                         if (*xsink) {
                             channel->close();
                             return nullptr;
+                        }
+                    }
+
+                    // Handle 401/407 auth challenges
+                    if (!auth_retried && !error_passthru
+                            && (code == 401 || code == 407)) {
+                        if (tryAuthChallenge(code, **ans, meth, msgpath,
+                                *nh, xsink)) {
+                            if (*xsink) {
+                                channel->close();
+                                return nullptr;
+                            }
+                            auth_retried = true;
+                            channel->close();
+                            channel_done = true;
+                            break;
                         }
                     }
 
@@ -6484,6 +6761,17 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                 if (*xsink) {
                     return nullptr;
                 }
+            }
+        }
+
+        // Handle 401/407 auth challenges — retry once with computed credentials
+        if (!auth_retried && !error_passthru && (code == 401 || code == 407)) {
+            if (tryAuthChallenge(code, **ans, meth, msgpath, *nh, xsink)) {
+                if (*xsink) {
+                    return nullptr;
+                }
+                auth_retried = true;
+                continue;
             }
         }
 
