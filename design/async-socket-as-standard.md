@@ -13,10 +13,10 @@ performing I/O directly. This eliminates the parallel sync/async code paths,
 prevents sync/async mixing corruption via `SocketIoMode` enforcement, and
 extends async coverage to FTP, SMTP, and POP3.
 
-**Builds on:**
+**Related docs:**
+- `design/async-socket-io.md` — AsyncIoController internals (thread model, lock hierarchy, event races, platform quirks)
 - `design/http-client-manager-cpp-port.md` — C++ connection manager (P1-P7)
 - `design/sync-httpclient-as-async-wrapper.md` — original investigation
-- `design/async-socket-io.md` — AsyncIoController architecture
 
 ## Architecture
 
