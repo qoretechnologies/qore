@@ -327,6 +327,18 @@ public:
     */
     DLLEXPORT HttpClientConnectionBase() = default;
 
+    //! Sets the pool key for O(1) eviction by the connection manager
+    /** Called by the manager when inserting the connection into the pool.
+        @param key the pool key string
+        @since %Qore 2.3
+    */
+    DLLEXPORT void setPoolKey(const std::string& key);
+
+    //! Returns the pool key (empty if not in a pool)
+    /** @since %Qore 2.3
+    */
+    DLLEXPORT const std::string& getPoolKey() const;
+
     //! Returns the referenced protocol-specific error hash (if any)
     /** The returned hash has @c err (string) and @c desc (string) keys;
         caller owns the returned ref (or nullptr if no error info is
@@ -334,9 +346,9 @@ public:
         externally by async poll wrappers when the connection transitions
         to CLOSED.
 
-        @since %Qore 2.3 made public
+        @since %Qore 2.3
     */
-    DLLLOCAL virtual QoreHashNode* getReferencedErrorInfo() {
+    DLLEXPORT virtual QoreHashNode* getReferencedErrorInfo() {
         return nullptr;
     }
 
@@ -381,6 +393,10 @@ protected:
         7.3 of @c design/http-client-manager-cpp-port.md.
     */
     HttpClientConnectionManagerBase* manager_ = nullptr;
+
+    //! Pool key for O(1) eviction.  Set by setPoolKey(), read by the
+    //! manager's onConnectionClosed / closeAndEvict.
+    std::string pool_key_;
 };
 
 #endif // _QORE_HTTPCLIENTCONNECTION_H

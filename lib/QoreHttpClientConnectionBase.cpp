@@ -131,6 +131,14 @@ void HttpClientConnectionBase::setTrailers(const QoreHashNode* trailers, Excepti
         "setTrailers not implemented on this connection class");
 }
 
+void HttpClientConnectionBase::setPoolKey(const std::string& key) {
+    pool_key_ = key;
+}
+
+const std::string& HttpClientConnectionBase::getPoolKey() const {
+    return pool_key_;
+}
+
 void HttpClientConnectionBase::closeConnection(ExceptionSink* xsink) {
     // Default: just transition the state machine to CLOSED.
     // C++ subclasses override to also abort the poll op and cancel the

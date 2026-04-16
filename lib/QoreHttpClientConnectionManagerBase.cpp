@@ -363,6 +363,7 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnectionImpl
                     "connection manager is shutting down");
                 return nullptr;
             }
+            conn_raw->setPoolKey(key);
             pool_[key].push_back(conn_raw);
             reserved = conn_raw->tryReserveStream();
         }
@@ -632,22 +633,28 @@ void HttpClientConnectionManagerBase::closeAndEvict(HttpClientConnectionBase* co
         return;
     }
 
-    // Find and remove from pool first to prevent re-acquisition.
+    // Find and remove from pool using the stashed pool key for O(1) lookup.
     {
         std::unique_lock<std::shared_mutex> wl(pool_lock_);
-        for (auto it = pool_.begin(); it != pool_.end(); ++it) {
-            auto& conns = it->second;
-            for (auto cit = conns.begin(); cit != conns.end(); ++cit) {
-                if (*cit == conn) {
-                    conns.erase(cit);
-                    if (conns.empty()) {
-                        pool_.erase(it);
-                    }
-                    goto found;
+        const std::string& key = conn->getPoolKey();
+        if (key.empty()) {
+            return;
+        }
+        auto it = pool_.find(key);
+        if (it == pool_.end()) {
+            return;
+        }
+        auto& conns = it->second;
+        for (auto cit = conns.begin(); cit != conns.end(); ++cit) {
+            if (*cit == conn) {
+                conns.erase(cit);
+                if (conns.empty()) {
+                    pool_.erase(it);
                 }
+                goto found;
             }
         }
-        // Not in pool — caller may have already evicted; treat as no-op.
+        // Not found in this key's vector — already evicted.
         return;
     }
 found:
@@ -736,29 +743,30 @@ void HttpClientConnectionManagerBase::onConnectionClosed(HttpClientConnectionBas
     if (!conn) {
         return;
     }
-    // Remove the connection from its pool entry.  We don't know the
-    // key (the connection doesn't carry one), so we scan all pool
-    // entries.  Pools are typically small (~10s of keys at most), so
-    // O(n) here is fine.  Future optimization: stash the key on the
-    // connection at insertion time.
+    // Remove the connection from its pool entry using the stashed key
+    // for O(1) map lookup (the connection within the vector is still
+    // a linear scan, but vectors are tiny — typically 1-3 entries per key).
     bool removed = false;
     {
         std::unique_lock<std::shared_mutex> wl(pool_lock_);
-        for (auto it = pool_.begin(); it != pool_.end(); ++it) {
-            auto& conns = it->second;
-            for (auto cit = conns.begin(); cit != conns.end(); ++cit) {
-                if (*cit == conn) {
-                    conns.erase(cit);
-                    if (conns.empty()) {
-                        pool_.erase(it);
+        const std::string& key = conn->getPoolKey();
+        if (!key.empty()) {
+            auto it = pool_.find(key);
+            if (it != pool_.end()) {
+                auto& conns = it->second;
+                for (auto cit = conns.begin(); cit != conns.end(); ++cit) {
+                    if (*cit == conn) {
+                        conns.erase(cit);
+                        if (conns.empty()) {
+                            pool_.erase(it);
+                        }
+                        removed = true;
+                        break;
                     }
-                    removed = true;
-                    goto done;
                 }
             }
         }
     }
-done:
     // If we removed something, drop our pool ref on it.  The hook
     // contract says onConnectionClosed must NOT deref — but the pool
     // held a strong ref that we owned.  Releasing that pool ref is
