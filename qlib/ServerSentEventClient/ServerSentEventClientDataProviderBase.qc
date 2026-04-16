@@ -158,6 +158,24 @@ public class ServerSentEventClientDataProviderBase inherits DataProvider::Abstra
                 "desc": "Automatically reconnect when the connection is closed or lost",
                 "default_value": False,
             },
+            "method": <DataProviderOptionInfo>{
+                "display_name": "HTTP Method",
+                "short_desc": "HTTP method for the SSE connection request",
+                "type": AbstractDataProviderTypeMap."string",
+                "desc": "The HTTP method to use for the SSE connection request; default: "
+                    "GET. Use POST for APIs that require a request body (e.g., OpenAI, "
+                    "Anthropic streaming APIs)",
+                "default_value": "GET",
+            },
+            "body": <DataProviderOptionInfo>{
+                "display_name": "Request Body",
+                "short_desc": "Request body for non-GET SSE requests",
+                "type": AbstractDataProviderTypeMap."any",
+                "desc": "The request body to send with the SSE connection request; if "
+                    "serialization is set to 'json' and the body is not a string, it will "
+                    "be serialized to JSON automatically. Only valid with non-GET methods. "
+                    "The body is resent on each reconnection attempt",
+            },
             "timeout": <DataProviderOptionInfo>{
                 "display_name": "I/O Timeout",
                 "short_desc": "Maximum time a single I/O operation can take in milliseconds",

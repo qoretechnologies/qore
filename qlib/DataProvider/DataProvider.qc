@@ -163,6 +163,8 @@ public class DataProvider {
             "icsread": "IcsDataProvider",
             "icswrite": "IcsDataProvider",
 
+            "insightly": "InsightlyDataProvider",
+
             "jotform": "JotformDataProvider",
 
             # provided by the json module
@@ -280,6 +282,8 @@ public class DataProvider {
 
             # provided by the zip module
             "zip": "ZipDataProvider",
+
+            "unbounce": "UnbounceDataProvider",
 
             "unleashed": "UnleashedDataProvider",
 

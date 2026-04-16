@@ -419,6 +419,7 @@ public namespace Mime {
         "application/manifest+json": True,              # Web App Manifest
         "application/vnd.contentful.management.v1+json": True, # Contentful CMA
         "application/vnd.contentful.delivery.v1+json": True,   # Contentful CDA
+        "application/vnd.unbounce.api.v0.4+json": True,        # Unbounce API v0.4
     };
 
     #! Returns True if the MIME type is JSON-compatible

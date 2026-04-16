@@ -111,6 +111,23 @@ public class ServerSentEventConnection inherits ConnectionProvider::AbstractConn
                         },
                     ),
                 },
+                "method": <ConnectionOptionInfo>{
+                    "display_name": "HTTP Method",
+                    "short_desc": "HTTP method for the SSE connection request",
+                    "type": "string",
+                    "desc": "The HTTP method to use for the SSE connection request; default: "
+                        "GET. Use POST for APIs that require a request body (e.g., OpenAI, "
+                        "Anthropic streaming APIs)",
+                    "default_value": "GET",
+                },
+                "body": <ConnectionOptionInfo>{
+                    "display_name": "Request Body",
+                    "short_desc": "Request body for non-GET SSE requests",
+                    "type": "string",
+                    "desc": "The request body to send with the SSE connection request; only "
+                        "valid with non-GET methods. The body is resent on each reconnection "
+                        "attempt",
+                },
             },
         };
     }
@@ -220,7 +237,7 @@ public class ServerSentEventConnection inherits ConnectionProvider::AbstractConn
     DataProvider::AbstractDataProvider getDataProvider(*hash<auto> constructor_options) {
         return new ServerSentEventClientDataProvider({
             "url": url,
-        } + opts{"token", "token_type", "username", "password"});
+        } + opts{"token", "token_type", "username", "password", "method", "body"});
     }
 
     #! returns @ref True, as the connection returns a data provider with the \c getDataProvider() method
@@ -265,6 +282,10 @@ public class ServerSentEventConnection inherits ConnectionProvider::AbstractConn
                 splice http_opts.url, 0, uh.protocol.size(), "http" + (ph.ssl ? "s" : "");
             }
         }
+        # Extract SSE-specific options before removing them from HTTP opts
+        string sse_method = remove http_opts.method ?? "GET";
+        *data sse_body = remove http_opts.body;
+
         # Remove SSE-only options
         remove http_opts{"logger", "last_event_id", "data", "reconnect", "yield", "start_thread"};
 
@@ -274,7 +295,8 @@ public class ServerSentEventConnection inherits ConnectionProvider::AbstractConn
         }
         remove http_opts.token_type;
 
-        return SseConnectPollOperation::create(http_opts.url, http_opts, NOTHING, logger);
+        return SseConnectPollOperation::create(http_opts.url, http_opts, NOTHING, logger,
+            sse_method, sse_body);
     }
 
     #! Returns the ConnectionSchemeInfo hash for this object
@@ -326,7 +348,8 @@ public class SseConnectPollOperation inherits Qore::HttpClientPingPollOperationB
         @since ServerSentEventClient 1.1
     */
     static SseConnectPollOperation create(string base_url, *hash<auto> http_opts,
-            *hash<auto> headers, *Logger::LoggerInterface logger) {
+            *hash<auto> headers, *Logger::LoggerInterface logger,
+            string sse_method = "GET", *data sse_body) {
         # Build SSE request headers
         hash<auto> sse_headers = {
             "Accept": MimeTypeSse,
@@ -334,11 +357,24 @@ public class SseConnectPollOperation inherits Qore::HttpClientPingPollOperationB
         };
         sse_headers += headers;
 
+        # Serialize body if needed
+        *data send_body;
+        if (exists sse_body) {
+            if (sse_body.typeCode() != NT_STRING) {
+                send_body = make_json(sse_body);
+                if (!sse_headers."Content-Type") {
+                    sse_headers."Content-Type" = MimeTypeJson;
+                }
+            } else {
+                send_body = sse_body;
+            }
+        }
+
         HTTPClient hc((http_opts ?? {}) + {"url": base_url});
         if (logger) {
-            logger.logArgs("INFO", "SSE async connect start: url=%y", base_url);
+            logger.logArgs("INFO", "SSE async connect start: url=%y method=%y", (base_url, sse_method));
         }
-        auto inner_op = hc.startPollSendRecv("GET", "", NOTHING, sse_headers);
+        auto inner_op = hc.startPollSendRecv(sse_method, "", send_body, sse_headers);
         return new SseConnectPollOperation(inner_op, logger);
     }
 }

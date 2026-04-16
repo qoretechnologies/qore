@@ -1366,6 +1366,17 @@ cargo install tree-sitter-cli@0.26.5
       - supports incremental body reading with @ref HttpStreamClient::HTTPResponseStream::readChunk() "HTTPResponseStream::readChunk()"
       - automatic decompression for gzip, deflate, bzip2, brotli, zstd, and lz4 content encodings
       - works with the new @ref Qore::HTTPClient::sendAndStream() "HTTPClient::sendAndStream()" method
+    - @ref insightlyrestclientintro "InsightlyRestClient" module
+      - new module providing a REST client for <a href="https://www.insightly.com/">Insightly</a>'s CRM API v3.1
+      - supports API key authentication via HTTP Basic Auth
+      - auto-detects regional pod (na1, eu1, au1) from API key
+      - uses the new async RestClientIo pattern for HTTP/2 and HTTP/3 multiplexed connections
+      - provides InsightlyRestConnection for connection management with \c insightlyrest:// URL scheme
+    - @ref insightlydataproviderintro "InsightlyDataProvider" module
+      - new module providing a data provider API for <a href="https://www.insightly.com/">Insightly</a> CRM
+      - supports contacts, organisations, leads, opportunities, projects, tasks, notes, calendar events, products, and emails
+      - includes polling-based triggers for new contacts, organisations, leads, opportunities, and tasks
+      - reference data support for users, pipelines, pipeline stages, lead sources/statuses, categories, and teams
     - @ref instantlyrestclientintro "InstantlyRestClient" module
       - new module providing a REST client for <a href="https://instantly.ai/">Instantly</a>'s email outreach API v2
       - supports Bearer token (API key) authentication
@@ -1703,6 +1714,19 @@ cargo install tree-sitter-cli@0.26.5
       - new module for rendering markdown and rich text to ANSI terminals
       - TerminalMarkdownRenderer: converts markdown (headings, bold, italic, code, tables, lists, blockquotes) to ANSI escape sequences
       - TerminalTableRenderer: formats tabular data with Unicode box-drawing characters and column alignment
+    - @ref unbouncerestclientintro "UnbounceRestClient" module
+      - new module providing a REST client for <a href="https://unbounce.com/">Unbounce</a> landing page API
+      - supports OAuth2 authentication with Bearer tokens
+      - provides UnbounceRestConnection for connection management with \c unbouncerest:// URL scheme
+    - @ref unbouncedataproviderintro "UnbounceDataProvider" module
+      - new module providing a data provider API for <a href="https://unbounce.com/">Unbounce</a> landing page services
+      - account and sub-account management (list, get)
+      - page management (list, get pages and page groups)
+      - lead management (list, get, create, delete leads and form fields)
+      - domain and user management
+      - polling-based event trigger for new leads
+      - action catalog integration with 17 actions and 1 trigger
+      - connection support with \c unbouncerest:// URL scheme
     - @ref unleashedrestclientintro "UnleashedRestClient" module
       - new module providing a REST client for <a href="https://www.unleashedsoftware.com/">Unleashed</a> Software API
       - supports HMAC-SHA256 signature-based authentication

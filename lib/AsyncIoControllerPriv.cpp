@@ -1869,23 +1869,13 @@ void AsyncIoControllerPriv::startIntern(ExceptionSink* xsink) {
             return;
         }
 
-        // Register notifier with event loop
-#ifdef DARWIN
-        int rc = t.notifier->bindToKqueue(t.loop->getKqueueFd(), xsink);
-        if (rc < 0) {
-            return;
-        }
-        rc = t.loop->addUserEvent(t.notifier->getUserIdent(), nullptr, xsink);
-        if (rc < 0) {
-            t.notifier->unbindFromKqueue();
-            return;
-        }
-#else
+        // Register notifier with event loop.  Use the notifier fd on all platforms:
+        // the macOS EVFILT_USER fast path is edge-triggered and can strand queued
+        // socket operations if a trigger is lost under virtualization.
         int rc = t.loop->add(t.notifier->fd(), QORE_EV_READ, nullptr, xsink);
         if (rc < 0) {
             return;
         }
-#endif
 
         ref();  // Reference for each I/O thread
         IoThreadStartInfo* start_info = new IoThreadStartInfo{this, i};
@@ -1895,12 +1885,7 @@ void AsyncIoControllerPriv::startIntern(ExceptionSink* xsink) {
             delete start_info;
             ROdereference();
             ExceptionSink cleanup_xsink;
-#ifdef DARWIN
-            t.loop->removeUserEvent(t.notifier->getUserIdent(), &cleanup_xsink);
-            t.notifier->unbindFromKqueue();
-#else
             t.loop->remove(t.notifier->fd(), &cleanup_xsink);
-#endif
             cleanup_xsink.clear();
             return;
         }
@@ -2950,12 +2935,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
         AutoLocker al(m);
 
         // Remove notifier from event loop
-#ifdef DARWIN
-        t.loop->removeUserEvent(t.notifier->getUserIdent(), xsink);
-        t.notifier->unbindFromKqueue();
-#else
         t.loop->remove(t.notifier->fd(), xsink);
-#endif
 
         // Clear all registrations
         {

@@ -49,7 +49,7 @@
 %endtry
 
 module ServerSentEventClient {
-    version = "1.1";
+    version = "1.0";
     desc = "User module for handling SSE events on the client side";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -114,18 +114,16 @@ module ServerSentEventClient {
 
     @section serversenteventclient_relnotes ServerSentEventClient Release History
 
-    @subsection serversenteventclient_v1_1 Version 1.1
-    - added @ref ServerSentEventClient::ServerSentEventClientIo "ServerSentEventClientIo" class for async I/O
-      SSE connections across HTTP/1.x, HTTP/2, and HTTP/3
-    - added \c SseConnectPollOperation for async connect
-      support
-    - added \c ServerSentEventConnection::supportsPollingApi()
-      and
-      \c ServerSentEventConnection::startPollConnect()
-      for connection monitoring
-
     @subsection serversenteventclient_v1_0 Version 1.0
     - the initial version of the ServerSentEventClient module
+    - added @ref ServerSentEventClient::ServerSentEventClientIo "ServerSentEventClientIo" class for async I/O
+      SSE connections across HTTP/1.x, HTTP/2, and HTTP/3
+    - added \c SseConnectPollOperation for async connect support
+    - added \c ServerSentEventConnection::supportsPollingApi() and
+      \c ServerSentEventConnection::startPollConnect() for connection monitoring
+    - added \c method and \c body options to support HTTP POST and other methods for SSE connections,
+      enabling integration with streaming APIs (OpenAI, Anthropic, etc.) that use POST with JSON
+      request bodies
 */
 
 #! the ServerSentEventClient namespace contains all the objects in the ServerSentEventClient module

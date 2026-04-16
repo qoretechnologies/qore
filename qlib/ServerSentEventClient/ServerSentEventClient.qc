@@ -142,6 +142,12 @@ public class ServerSentEventClient inherits Logger::LoggerWrapper, ConnectionPro
         #! data serialization option: json or none
         string serialization;
 
+        #! HTTP method for the SSE request (default: GET)
+        string method = "GET";
+
+        #! Request body for non-GET requests
+        *data request_body;
+
         #! Connection sequence
         static Sequence seq();
 
@@ -390,7 +396,8 @@ sse.connect();
                 disconnectUnlocked();
             }
 
-            h = connectUnlocked(opts.hdr, \info, reconnect);
+            h = connectUnlocked(opts.hdr, opts.method ?? method,
+                exists opts.body ? opts.body : request_body, \info, reconnect);
             on_error {
                 clearTid();
             }
@@ -603,7 +610,8 @@ sse.setEventQueue();
         url = getString(opts, "url", True);
 
         # remove SSE-only options
-        remove http_opts{"logger", "last_event_id", "data", "reconnect", "yield", "start_thread"};
+        remove http_opts{"logger", "last_event_id", "data", "reconnect", "yield", "start_thread",
+            "method", "body"};
 
         if (opts.hasKey("yield")) {
             if (!opts.yield.callp()) {
@@ -638,6 +646,23 @@ sse.setEventQueue();
         serialization = getString(opts, "data", True, DataSerializationSupport.firstKey());
         if (!DataSerializationSupport{serialization}) {
             unsupportedSerialization();
+        }
+
+        # set HTTP method option, if any
+        if (opts.hasKey("method")) {
+            method = getString(opts, "method").upr();
+            if (!method.val()) {
+                raiseError("ServerSentEventClient::constructor() options have an empty 'method' value");
+            }
+        }
+
+        # set request body option, if any
+        if (exists opts.body) {
+            if (method == "GET") {
+                raiseError("ServerSentEventClient::constructor() 'body' option cannot be used with "
+                    "GET method");
+            }
+            request_body = opts.body;
         }
 
         hash<UrlInfo> uh = parse_url(http_opts.url);
@@ -1123,13 +1148,27 @@ sse.setEventQueue();
     }
 
     #! Performs the HTTP socket connection to the ServerSentEvent server
-    private hash<auto> connectUnlocked(*hash<auto> hdr0, *reference<hash<auto>> info, *bool reconnect) {
+    private hash<auto> connectUnlocked(*hash<auto> hdr0, string eff_method, *data eff_body,
+            *reference<hash<auto>> info, *bool reconnect) {
         # in case hdr0 is hash<string, int> or similar
         hash<auto> hdr = {
             "User-Agent": DefaultUserAgent,
         } + hdr0;
         if (last_event_id) {
             hdr."Last-Event-ID" = last_event_id;
+        }
+
+        # serialize body for non-GET methods
+        *data send_body;
+        if (exists eff_body) {
+            if (serialization == "json" && eff_body.typeCode() != NT_STRING) {
+                send_body = make_json(eff_body);
+            } else {
+                send_body = eff_body;
+            }
+            if (serialization == "json" && !hdr."Content-Type") {
+                hdr."Content-Type" = MimeTypeJson;
+            }
         }
 
         hash<auto> rh;
@@ -1143,7 +1182,7 @@ sse.setEventQueue();
             # for incremental reads via readServerSentEvent / readHTTPChunk.
             # A regular send() would return the connection to the conn_mgr pool
             # after the HTTP response, breaking subsequent streaming reads.
-            rh = hc.sendAndStream("GET", NOTHING, NOTHING, hdr, \info);
+            rh = hc.sendAndStream(eff_method, NOTHING, send_body, hdr, \info);
         }
 
         if (rh.status_code != 200) {

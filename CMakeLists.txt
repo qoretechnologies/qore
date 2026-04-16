@@ -2055,6 +2055,7 @@ qore_user_module("qlib/BigCommerceRestClient.qm" "ConnectionProvider;Mime;RestCl
 qore_user_module("qlib/BillwerkRestClient.qm" "ConnectionProvider;RestClient;RestSchemaValidator")
 qore_user_module("qlib/BitlyRestClient.qm" "ConnectionProvider;Mime;RestClient;RestClientIo")
 qore_user_module("qlib/CircleRestClient.qm" "ConnectionProvider;Mime;RestClient;RestClientIo")
+qore_user_module("qlib/InsightlyRestClient.qm" "ConnectionProvider;Mime;RestClient;RestClientIo")
 qore_user_module("qlib/SmartSheetRestClient.qm" "ConnectionProvider;Mime;RestClient;RestClientIo")
 qore_user_module("qlib/GorgiasRestClient.qm" "ConnectionProvider;Mime;RestClient;RestClientIo")
 qore_user_module("qlib/Sap4HanaRestClient.qm" "ConnectionProvider;Mime;RestClient")
@@ -2104,6 +2105,7 @@ qore_user_module("qlib/SquareRestClient.qm" "ConnectionProvider;Mime;RestClient"
 qore_user_module("qlib/SquarespaceRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/TableauRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/Cin7CoreRestClient.qm" "ConnectionProvider;Mime;RestClient")
+qore_user_module("qlib/UnbounceRestClient.qm" "ConnectionProvider;Mime;RestClient;RestClientIo")
 qore_user_module("qlib/UnleashedRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/ZohoBooksRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/ZohoInventoryRestClient.qm" "ConnectionProvider;Mime;RestClient")
@@ -2116,6 +2118,7 @@ qore_user_module("qlib/RestSchemaDataProvider" "Swagger;OpenApi3;RestClient;Rest
 qore_user_module("qlib/BigCommerceDataProvider" "BigCommerceRestClient;RestClient;DataProvider" "bigcommerce-logo.svg")
 qore_user_module("qlib/BitlyDataProvider" "BitlyRestClient;RestClient;RestClientIo;DataProvider" "bitly-logo.svg")
 qore_user_module("qlib/CircleDataProvider" "CircleRestClient;RestClient;RestClientIo;DataProvider" "circle-logo.svg")
+qore_user_module("qlib/InsightlyDataProvider" "InsightlyRestClient;RestClientIo;DataProvider" "insightly-logo.svg")
 qore_user_module("qlib/SmartSheetDataProvider" "SmartSheetRestClient;RestClient;RestClientIo;DataProvider" "smartsheet-logo.svg")
 qore_user_module("qlib/GorgiasDataProvider" "GorgiasRestClient;RestClient;RestClientIo;DataProvider" "gorgias-logo.svg")
 qore_user_module("qlib/CdsRestDataProvider" "RestClient;CdsRestClient;RestSchemaValidator;DataProvider" "dynamics-logo.svg;business-central-logo.svg")
@@ -2182,6 +2185,7 @@ qore_user_module("qlib/CloseDataProvider" "CloseRestClient;RestClient;DataProvid
 qore_user_module("qlib/SquarespaceDataProvider" "SquarespaceRestClient;RestClient;DataProvider" "squarespace-logo.svg")
 qore_user_module("qlib/TableauDataProvider" "TableauRestClient;RestClient;DataProvider" "tableau-logo.svg")
 qore_user_module("qlib/Cin7CoreDataProvider" "Cin7CoreRestClient;RestClient;DataProvider" "cin7core-logo.svg")
+qore_user_module("qlib/UnbounceDataProvider" "UnbounceRestClient;RestClient;RestClientIo;DataProvider" "unbounce-logo.svg")
 qore_user_module("qlib/UnleashedDataProvider" "UnleashedRestClient;RestClient;DataProvider" "unleashed-logo.svg")
 
 # Configure lang Doxyfile final pass with module tag files after all modules are defined
