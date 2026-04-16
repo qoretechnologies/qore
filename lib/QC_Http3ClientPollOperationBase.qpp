@@ -544,6 +544,89 @@ void Http3ClientPollOperationPriv::endSubmitFail() {
     --submits_in_progress;
 }
 
+int64_t Http3ClientPollOperationPriv::submitRequest(const char* method, const char* path,
+        const QoreHashNode* headers, const void* body, size_t body_len,
+        bool streaming, AbstractAsyncAction* action, int max_streams,
+        ExceptionSink* xsink) {
+    if (!inner_op || isClosed()) {
+        action->deref(xsink);
+        xsink->raiseException("HTTP3-STATE-ERROR", "cannot submit request: connection is closed");
+        return -1;
+    }
+    if (!isReady()) {
+        action->deref(xsink);
+        xsink->raiseException("HTTP3-STATE-ERROR", "cannot submit request: connection is not ready");
+        return -1;
+    }
+
+    // Phase 1: capacity check
+    checkCapacity(max_streams, xsink);
+    if (*xsink) {
+        action->deref(xsink);
+        return -1;
+    }
+
+    // Phase 2: begin submit
+    beginSubmit();
+
+    // Build strcase_str_map_t from QoreHashNode
+    strcase_str_map_t hdr_map;
+    if (headers) {
+        ConstHashIterator hi(headers);
+        while (hi.next()) {
+            const char* key = hi.getKey();
+            if (key[0] == ':') {
+                continue;  // skip pseudo-headers
+            }
+            QoreValue val = hi.get();
+            if (val.getType() == NT_STRING) {
+                hdr_map[key] = val.get<const QoreStringNode>()->c_str();
+            }
+        }
+    }
+    // NOTE: Host/:authority is handled by the QUIC/nghttp3 layer based on
+    // connection target — no explicit Host header needed here.
+
+    // Submit to QUIC layer
+    int64_t stream_id;
+    if (streaming) {
+        stream_id = inner_op->submitRequestStreaming(method, path, hdr_map, xsink);
+    } else {
+        stream_id = inner_op->submitRequest(method, path, hdr_map, body, body_len, xsink);
+    }
+    if (*xsink || stream_id < 0) {
+        endSubmitFail();
+        action->deref(xsink);
+        return -1;
+    }
+
+    endSubmitOk(stream_id);
+
+    // Phase 3: register stream with action
+    bool need_cancel = false;
+    QoreListNode* buffered = registerStream(stream_id, action, need_cancel, xsink);
+    if (need_cancel || *xsink) {
+        if (buffered) {
+            buffered->deref(xsink);
+        }
+        return -1;
+    }
+
+    // Dispatch any buffered responses (race: response arrived before register)
+    if (buffered) {
+        // Dispatch buffered responses through the action
+        for (size_t i = 0; i < buffered->size(); ++i) {
+            QoreValue v = buffered->retrieveEntry(i);
+            if (v.getType() == NT_HASH) {
+                action->execute(v, xsink);
+            }
+        }
+        buffered->deref(xsink);
+    }
+
+    return stream_id;
+}
+
 int Http3ClientPollOperationPriv::flushPendingWrites(ExceptionSink* xsink) {
     if (!inner_op) {
         return 0;

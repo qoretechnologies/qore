@@ -144,6 +144,25 @@ public:
     //! Set error and close state (for connection death during submit)
     DLLLOCAL void setSubmitError(const char* err, const char* desc);
 
+    //! Submit a request to the QUIC layer with the full multi-phase protocol
+    /** Handles checkCapacity, beginSubmit, inner op submit, registerStream,
+        endSubmitOk/Fail. Called from Http3ClientConnection C++ methods.
+        @param method HTTP method
+        @param path request path
+        @param headers request headers (QoreHashNode*)
+        @param body request body (may be nullptr)
+        @param body_len body length
+        @param streaming if true, submit as streaming (no END_STREAM on headers)
+        @param action completion action (ownership transferred; deref'd on failure)
+        @param max_streams max concurrent streams
+        @param xsink exception sink
+        @return stream ID on success, -1 on failure
+    */
+    DLLLOCAL int64_t submitRequest(const char* method, const char* path,
+        const QoreHashNode* headers, const void* body, size_t body_len,
+        bool streaming, AbstractAsyncAction* action, int max_streams,
+        ExceptionSink* xsink);
+
     //! Synchronously flush pending QUIC writes to the network
     /** Delegates to the inner SocketQuicClientPollOperation::flushPendingWrites().
         Safe to call from any thread.

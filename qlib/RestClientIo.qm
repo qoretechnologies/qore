@@ -2858,6 +2858,8 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
             @return a new HttpClientConnectionManager configured from the options
         */
         static HttpClientIo::HttpClientConnectionManager buildConnectionManager(hash<auto> opts) {
+            stderr.printf("DEBUG buildConnectionManager: opts.timeout=%y opts.connect_timeout=%y\n",
+                opts.timeout, opts.connect_timeout);
             hash<HttpClientIo::HttpClientConnectionManagerOptions> mgr_opts();
             if (opts.connect_timeout) {
                 mgr_opts.connect_timeout = opts.connect_timeout;
@@ -2865,6 +2867,8 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
             if (opts.timeout) {
                 mgr_opts.request_timeout = opts.timeout;
             }
+            stderr.printf("DEBUG buildConnectionManager: mgr_opts.request_timeout=%y mgr_opts.connect_timeout=%y\n",
+                mgr_opts.request_timeout, mgr_opts.connect_timeout);
             if (opts.protocol) {
                 mgr_opts.protocol = opts.protocol;
             }

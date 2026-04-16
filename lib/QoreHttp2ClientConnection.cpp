@@ -33,6 +33,7 @@
 #include <qore/QoreSocketObject.h>
 #include <qore/QoreFuture.h>
 #include <qore/AsyncCompletionAction.h>
+#include "qore/intern/QoreChannel.h"
 #include "qore/intern/QoreHttp2ClientConnection.h"
 #include "qore/intern/QC_Http2ClientPollOperationBase.h"
 #include "qore/intern/QC_SocketPollOperation.h"
@@ -420,6 +421,61 @@ int64_t Http2ClientConnection::submitRequestWithAction(const char* method, const
         wake_xsink.clear();
     }
 
+    return stream_id;
+}
+
+int64_t Http2ClientConnection::submitRequestStreaming(const char* method, const char* path,
+        const QoreHashNode* headers, const void* body, size_t body_len,
+        QoreChannel*& channel_out, ExceptionSink* xsink) {
+    if (!poll_op_priv || isClosed()) {
+        xsink->raiseException("HTTPCLIENT-STATE-ERROR",
+            "cannot submit streaming request: connection is closed");
+        return -1;
+    }
+    if (!isReady()) {
+        xsink->raiseException("HTTPCLIENT-STATE-ERROR",
+            "cannot submit streaming request: connection is not ready");
+        return -1;
+    }
+
+    // Create an unbounded Channel for incremental response delivery
+    ReferenceHolder<QoreChannel> ch_holder(new QoreChannel(-1), xsink);
+    QoreChannel* ch = *ch_holder;
+
+    // Create ChannelAction — poll op takes ownership via submitRequest
+    ChannelAction* action = new ChannelAction(ch);
+
+    // Submit with streaming=true
+    int64_t stream_id = poll_op_priv->submitRequest(method, path, headers,
+        body, body_len, /* streaming */ true, action,
+        /* max_streams */ max_concurrent_streams_, xsink);
+    if (*xsink || stream_id < 0) {
+        return -1;
+    }
+
+    releaseStreamReservation();
+
+    // Wake the I/O controller
+    if (sock_obj) {
+        ExceptionSink wake_xsink;
+        ReferenceHolder<QoreObject> ctl_obj_holder(
+            qore_get_async_io_controller_obj(&wake_xsink), &wake_xsink);
+        if (ctl_obj_holder) {
+            ReferenceHolder<AsyncIoControllerPriv> ctl_priv_holder(
+                static_cast<AsyncIoControllerPriv*>(
+                    ctl_obj_holder->getReferencedPrivateData(
+                        CID_ASYNCIOCONTROLLER, &wake_xsink)),
+                &wake_xsink);
+            if (ctl_priv_holder) {
+                ctl_priv_holder->wakeSocketByObject(sock_obj, &wake_xsink);
+            }
+        }
+        wake_xsink.clear();
+    }
+
+    // Output the channel to the caller (ref'd; caller must deref)
+    ch->ref();
+    channel_out = ch;
     return stream_id;
 }
 

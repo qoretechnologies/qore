@@ -31,6 +31,10 @@
 
 #include <qore/Qore.h>
 #include <qore/QoreSocketObject.h>
+#include <qore/QoreFuture.h>
+#include <qore/AsyncCompletionAction.h>
+#include "qore/intern/QoreChannel.h"
+#include "qore/intern/QC_Future.h"
 #include "qore/intern/QoreHttp3ClientConnection.h"
 #include "qore/intern/QC_Http3ClientPollOperationBase.h"
 #include "qore/intern/QC_SocketPollOperation.h"
@@ -232,19 +236,172 @@ int Http3ClientConnection::getActiveStreamCount() const {
 QoreHashNode* Http3ClientConnection::submitRequest(const char* method, const char* path,
         const QoreHashNode* headers, const void* body, size_t body_len,
         ExceptionSink* xsink) {
-    // Phase P5 stub.  HTTP/3 request submission requires a multi-phase
-    // protocol that goes through the Qore-language Socket::submitQuicRequest
-    // method (QUIC session management + nghttp3 framing).  This cannot be
-    // done via direct C++ calls on the Http3ClientPollOperationPriv because
-    // the QUIC session state is managed by the Socket layer.
-    //
-    // Phase P6 will wire the Qore HttpClientIo layer to inherit from the
-    // C++ manager base and delegate H3 requests through the existing Qore
-    // Http3ClientPollOperation::submitRequest() method.
-    xsink->raiseException("HTTP3-NOT-IMPLEMENTED",
-        "HTTP/3 request submission via the C++ connection class is not yet "
-        "implemented (Phase P5); use the Qore HttpClientIo layer for now");
+    if (!poll_op_priv || isClosed()) {
+        xsink->raiseException("HTTPCLIENT-STATE-ERROR",
+            "cannot submit request: connection is closed");
+        return nullptr;
+    }
+    if (!isReady()) {
+        xsink->raiseException("HTTPCLIENT-STATE-ERROR",
+            "cannot submit request: connection is not ready");
+        return nullptr;
+    }
+
+    // Create Promise + Future for sync-over-async
+    ReferenceHolder<QorePromise> promise(new QorePromise(), xsink);
+    ReferenceHolder<QoreFuture> future(promise->getFuture(xsink), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    PromiseAction* action = new PromiseAction(promise.release());
+
+    int64_t stream_id = poll_op_priv->submitRequest(method, path, headers,
+        body, body_len, /* streaming */ false, action,
+        max_concurrent_streams_, xsink);
+    if (*xsink || stream_id < 0) {
+        return nullptr;
+    }
+
+    releaseStreamReservation();
+
+    // Wake the I/O controller
+    if (sock_obj) {
+        ExceptionSink wake_xsink;
+        ReferenceHolder<QoreObject> ctl_obj_holder(
+            qore_get_async_io_controller_obj(&wake_xsink), &wake_xsink);
+        if (ctl_obj_holder) {
+            ReferenceHolder<AsyncIoControllerPriv> ctl_priv_holder(
+                static_cast<AsyncIoControllerPriv*>(
+                    ctl_obj_holder->getReferencedPrivateData(
+                        CID_ASYNCIOCONTROLLER, &wake_xsink)),
+                &wake_xsink);
+            if (ctl_priv_holder) {
+                ctl_priv_holder->wakeSocketByObject(sock_obj, &wake_xsink);
+            }
+        }
+        wake_xsink.clear();
+    }
+
+    // Flush pending QUIC writes so request frames are on the wire
+    poll_op_priv->flushPendingWrites(xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
+    // Block on Future
+    QoreObject* future_obj = new QoreObject(QC_FUTUREIMPL, getProgram(), future.release());
+    ValueHolder result(q_future_get_blocking(future_obj, -1, xsink), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    if (result->getType() == NT_HASH) {
+        return result.release().get<QoreHashNode>();
+    }
     return nullptr;
+}
+
+int64_t Http3ClientConnection::submitRequestWithAction(const char* method, const char* path,
+        const QoreHashNode* headers, const void* body, size_t body_len,
+        AbstractAsyncAction* action, ExceptionSink* xsink) {
+    if (!poll_op_priv || isClosed()) {
+        action->deref(xsink);
+        xsink->raiseException("HTTPCLIENT-STATE-ERROR",
+            "cannot submit request: connection is closed");
+        return -1;
+    }
+    if (!isReady()) {
+        action->deref(xsink);
+        xsink->raiseException("HTTPCLIENT-STATE-ERROR",
+            "cannot submit request: connection is not ready");
+        return -1;
+    }
+
+    int64_t stream_id = poll_op_priv->submitRequest(method, path, headers,
+        body, body_len, /* streaming */ false, action,
+        max_concurrent_streams_, xsink);
+    if (*xsink || stream_id < 0) {
+        return -1;
+    }
+
+    releaseStreamReservation();
+
+    // Wake the I/O controller
+    if (sock_obj) {
+        ExceptionSink wake_xsink;
+        ReferenceHolder<QoreObject> ctl_obj_holder(
+            qore_get_async_io_controller_obj(&wake_xsink), &wake_xsink);
+        if (ctl_obj_holder) {
+            ReferenceHolder<AsyncIoControllerPriv> ctl_priv_holder(
+                static_cast<AsyncIoControllerPriv*>(
+                    ctl_obj_holder->getReferencedPrivateData(
+                        CID_ASYNCIOCONTROLLER, &wake_xsink)),
+                &wake_xsink);
+            if (ctl_priv_holder) {
+                ctl_priv_holder->wakeSocketByObject(sock_obj, &wake_xsink);
+            }
+        }
+        wake_xsink.clear();
+    }
+
+    // Flush pending QUIC writes
+    poll_op_priv->flushPendingWrites(xsink);
+
+    return stream_id;
+}
+
+int64_t Http3ClientConnection::submitRequestStreaming(const char* method, const char* path,
+        const QoreHashNode* headers, const void* body, size_t body_len,
+        QoreChannel*& channel_out, ExceptionSink* xsink) {
+    if (!poll_op_priv || isClosed()) {
+        xsink->raiseException("HTTPCLIENT-STATE-ERROR",
+            "cannot submit streaming request: connection is closed");
+        return -1;
+    }
+    if (!isReady()) {
+        xsink->raiseException("HTTPCLIENT-STATE-ERROR",
+            "cannot submit streaming request: connection is not ready");
+        return -1;
+    }
+
+    // Create Channel for incremental response delivery
+    ReferenceHolder<QoreChannel> ch_holder(new QoreChannel(-1), xsink);
+    QoreChannel* ch = *ch_holder;
+
+    ChannelAction* action = new ChannelAction(ch);
+
+    int64_t stream_id = poll_op_priv->submitRequest(method, path, headers,
+        body, body_len, /* streaming */ true, action,
+        max_concurrent_streams_, xsink);
+    if (*xsink || stream_id < 0) {
+        return -1;
+    }
+
+    releaseStreamReservation();
+
+    // Wake the I/O controller
+    if (sock_obj) {
+        ExceptionSink wake_xsink;
+        ReferenceHolder<QoreObject> ctl_obj_holder(
+            qore_get_async_io_controller_obj(&wake_xsink), &wake_xsink);
+        if (ctl_obj_holder) {
+            ReferenceHolder<AsyncIoControllerPriv> ctl_priv_holder(
+                static_cast<AsyncIoControllerPriv*>(
+                    ctl_obj_holder->getReferencedPrivateData(
+                        CID_ASYNCIOCONTROLLER, &wake_xsink)),
+                &wake_xsink);
+            if (ctl_priv_holder) {
+                ctl_priv_holder->wakeSocketByObject(sock_obj, &wake_xsink);
+            }
+        }
+        wake_xsink.clear();
+    }
+
+    // Flush pending QUIC writes
+    poll_op_priv->flushPendingWrites(xsink);
+
+    ch->ref();
+    channel_out = ch;
+    return stream_id;
 }
 
 void Http3ClientConnection::closeConnection(ExceptionSink* xsink) {

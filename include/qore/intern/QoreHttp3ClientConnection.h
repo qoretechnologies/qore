@@ -96,6 +96,20 @@ public:
         const QoreHashNode* headers, const void* body, size_t body_len,
         ExceptionSink* xsink) override;
 
+    //! Submits a request with a caller-provided completion action.
+    /** @since %Qore 2.3
+    */
+    DLLEXPORT int64_t submitRequestWithAction(const char* method, const char* path,
+        const QoreHashNode* headers, const void* body, size_t body_len,
+        AbstractAsyncAction* action, ExceptionSink* xsink) override;
+
+    //! Submits a streaming request: response delivered incrementally via Channel.
+    /** @since %Qore 2.3
+    */
+    DLLEXPORT int64_t submitRequestStreaming(const char* method, const char* path,
+        const QoreHashNode* headers, const void* body, size_t body_len,
+        QoreChannel*& channel_out, ExceptionSink* xsink) override;
+
     DLLEXPORT void closeConnection(ExceptionSink* xsink) override;
 
 protected:

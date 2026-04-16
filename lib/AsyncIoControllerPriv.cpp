@@ -305,10 +305,12 @@ void QoreCallDispatcher::enqueue(AsyncWorkItem&& item) {
         return;
     }
 
-    // Spawn a new worker only when all existing workers are busy (active_processing
-    // covers all running workers) and we are below the cap.  If idle workers exist
-    // they will be woken by work_avail.signal() below.
-    if (active_processing >= active_workers && active_workers < max_workers) {
+    // Spawn a new worker when all existing workers are committed to pending work
+    // (items already in the queue + items being actively processed >= worker count).
+    // This ensures one worker per pending item during a burst, rather than one worker
+    // for all items.  Idle workers are still woken by work_avail.signal() below.
+    int committed = (int)async_queue.size() + active_processing;
+    if (committed >= active_workers && active_workers < max_workers) {
         ++active_workers;
         ExceptionSink xsink;
         int tid = q_start_thread(&xsink, workerEntry, this, QTF_EXTERNAL_LIFECYCLE);

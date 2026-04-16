@@ -178,6 +178,15 @@ public:
         const QoreHashNode* headers, const void* body, size_t body_len,
         AbstractAsyncAction* action, ExceptionSink* xsink) override;
 
+    //! Submits a streaming request: response delivered incrementally via Channel.
+    /** Creates an unbounded Channel, submits with streaming=true, and returns
+        the Channel to the caller for incremental response reading.
+        @since %Qore 2.3
+    */
+    DLLEXPORT int64_t submitRequestStreaming(const char* method, const char* path,
+        const QoreHashNode* headers, const void* body, size_t body_len,
+        QoreChannel*& channel_out, ExceptionSink* xsink) override;
+
     DLLEXPORT void closeConnection(ExceptionSink* xsink) override;
 
 protected:
