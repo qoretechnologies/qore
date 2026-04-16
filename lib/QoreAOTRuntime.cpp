@@ -4118,6 +4118,87 @@ static void registerAOTFunctionsFromSlotMaps(
                             break;
                         }
                     }
+                    // Fallback: type-resolution failures during variant deserialization
+                    // substitute `auto` for unresolvable types (see readAndSetupVariantSignature
+                    // in QoreAOTBinary.cpp — falls back to autoTypeInfo on resolver error).
+                    // The target_sig was serialized before the fallback, so it still carries
+                    // the original type paths.  Match variants parameter-by-parameter, treating
+                    // `auto` in the variant as a wildcard.  Without this, overloaded methods
+                    // with cross-module type references (e.g., RestClientPool::constructor
+                    // referencing Qore::Thread::ConnectionPoolOptions) fail to bind their
+                    // AOT function, leaving cached_aot_fn null and causing evalIntern to
+                    // silently no-op the constructor body.
+                    if (!uvb) {
+                        auto splitParams = [](const std::string& s) {
+                            std::vector<std::string> out;
+                            if (s.size() < 2 || s.front() != '(' || s.back() != ')') {
+                                return out;
+                            }
+                            int depth = 0;
+                            std::string cur;
+                            for (size_t i = 1; i + 1 < s.size(); ++i) {
+                                char c = s[i];
+                                if (c == '<' || c == '(') {
+                                    ++depth;
+                                    cur.push_back(c);
+                                } else if (c == '>' || c == ')') {
+                                    --depth;
+                                    cur.push_back(c);
+                                } else if (c == ',' && depth == 0) {
+                                    out.push_back(cur);
+                                    cur.clear();
+                                } else {
+                                    cur.push_back(c);
+                                }
+                            }
+                            if (!cur.empty()) {
+                                out.push_back(cur);
+                            }
+                            return out;
+                        };
+                        std::vector<std::string> target_params = splitParams(target_sig);
+                        QoreFunctionIterator vi2(*mfb);
+                        while (vi2.next()) {
+                            const AbstractQoreFunctionVariant* v = vi2.getVariant();
+                            auto* candidate = const_cast<UserVariantBase*>(
+                                dynamic_cast<const UserVariantBase*>(v));
+                            if (!candidate) {
+                                continue;
+                            }
+                            std::string var_sig("(");
+                            AbstractFunctionSignature* sig = v->getSignature();
+                            if (sig) {
+                                const type_vec_t& types = sig->getTypeList();
+                                for (size_t ti = 0; ti < types.size(); ++ti) {
+                                    if (ti > 0) {
+                                        var_sig.append(",");
+                                    }
+                                    var_sig.append(QoreTypeInfo::getPath(types[ti]));
+                                }
+                            }
+                            var_sig.append(")");
+                            std::vector<std::string> var_params = splitParams(normalizeTypePaths(var_sig));
+                            if (var_params.size() != target_params.size()) {
+                                continue;
+                            }
+                            bool ok = true;
+                            for (size_t pi = 0; pi < target_params.size(); ++pi) {
+                                // `auto` in variant matches anything in target; otherwise
+                                // require exact match.
+                                if (var_params[pi] == "auto") {
+                                    continue;
+                                }
+                                if (var_params[pi] != target_params[pi]) {
+                                    ok = false;
+                                    break;
+                                }
+                            }
+                            if (ok) {
+                                uvb = candidate;
+                                break;
+                            }
+                        }
+                    }
                     // If no match found and there's a same-named static method, try that
                     if (!uvb && m_static) {
                         MethodFunctionBase* mfb_s = qore_method_private::get(*m_static)->getFunction();
