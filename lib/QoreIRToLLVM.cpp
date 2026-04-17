@@ -2254,6 +2254,58 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                         static_cast<int>(inst->opcode), builder->GetInsertBlock()->getName().str().c_str());
                 fflush(stderr);
             }
+            // Flush any deferred exception check BEFORE entering a try scope.
+            // In deferred_exception_checking mode we skip xsink checks for
+            // instructions outside try/catch; if we then reach an instruction
+            // whose exception handling routes to a catch block, any xsink
+            // left dirty from a prior skipped instruction would be caught by
+            // that catch handler (with locals unassigned). Detect "inside
+            // try scope" via the instruction's exception_target (base class
+            // field for check-based instructions, or the derived field for
+            // Invoke-family opcodes), then flush to error_return_block if
+            // the target's first instruction is a LandingPad (= catch block).
+            if (deferred_exception_checking && deferred_check_needed
+                    && inst->opcode != QoreIROpcode::Phi) {
+                QoreIRBasicBlock* eh_target = inst->exception_target;
+                if (!eh_target) {
+                    switch (inst->opcode) {
+                        case QoreIROpcode::Invoke:
+                            eh_target = static_cast<const QoreIRInvokeInstruction*>(inst)
+                                    ->exception_target;
+                            break;
+                        case QoreIROpcode::InvokeMethodDirect:
+                            eh_target = static_cast<const QoreIRInvokeMethodDirectInstruction*>(inst)
+                                    ->exception_target;
+                            break;
+                        case QoreIROpcode::InvokeDotEvalMethodDirect:
+                            eh_target = static_cast<const QoreIRInvokeDotEvalMethodDirectInstruction*>(
+                                    inst)->exception_target;
+                            break;
+                        default:
+                            break;
+                    }
+                }
+                bool target_is_catch = false;
+                if (eh_target && !eh_target->instructions.empty()) {
+                    target_is_catch = (eh_target->instructions.front()->opcode
+                            == QoreIROpcode::LandingPad);
+                }
+                if (target_is_catch) {
+                    auto has_ex = module.getOrInsertFunction("qore_rt_has_exception",
+                            llvm::FunctionType::get(i64_type, {ptr_type}, false));
+                    llvm::Value* ex_check = builder->CreateCall(has_ex, {xsink_arg});
+                    llvm::Value* has_exception = builder->CreateICmpNE(ex_check,
+                            llvm::ConstantInt::get(i64_type, 0));
+                    if (!error_return_block) {
+                        error_return_block = llvm::BasicBlock::Create(ctx, "error_return", llvm_func);
+                    }
+                    llvm::BasicBlock* cont = llvm::BasicBlock::Create(ctx, "pre_try_flush_cont",
+                            llvm_func);
+                    builder->CreateCondBr(has_exception, error_return_block, cont);
+                    builder->SetInsertPoint(cont);
+                    deferred_check_needed = false;
+                }
+            }
             if (!lowerInstruction(inst, llvm_func, module, error)) {
                 if (getenv("QORE_LLVM_DEBUG")) {
                     fprintf(stderr, "LLVM-FAIL: opcode=%d result=%%%u operands=[",
