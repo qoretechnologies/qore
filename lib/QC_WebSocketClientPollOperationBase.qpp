@@ -201,16 +201,37 @@ QoreHashNode* WebSocketClientPollOperationPriv::continuePoll(ExceptionSink* xsin
 
     // --- Phase 2c: Heartbeat ping ---
     // Send a PING frame when the connection has been idle for
-    // heartbeat_interval_ms.  Mirrors the server-side heartbeat in
-    // HttpWebSocketPollOperationBase::continuePoll().
+    // heartbeat_interval_ms.  last_ping_sent_ms guards against spamming
+    // PINGs when the peer is silent; last_recv_activity_ms reflects real
+    // incoming traffic only (so idle-timeout detection below can rely on
+    // it even when our own PINGs are in flight).
     if (heartbeat_interval_ms > 0 && !goalReached() && last_recv_activity_ms > 0) {
-        int64 elapsed = q_clock_getmillis() - last_recv_activity_ms;
-        if (elapsed >= heartbeat_interval_ms) {
+        int64 now_ms = q_clock_getmillis();
+        int64 since_recv = now_ms - last_recv_activity_ms;
+        int64 since_ping = last_ping_sent_ms ? now_ms - last_ping_sent_ms : heartbeat_interval_ms;
+        if (since_recv >= heartbeat_interval_ms && since_ping >= heartbeat_interval_ms) {
             queueSendPing(nullptr, xsink);
             if (*xsink) {
                 return nullptr;
             }
-            last_recv_activity_ms = q_clock_getmillis();
+            last_ping_sent_ms = q_clock_getmillis();
+        }
+    }
+
+    // --- Phase 2d: Idle timeout ---
+    // Close the connection if no real incoming traffic arrived within
+    // idle_timeout_ms — catches peers that silently went away (no FIN,
+    // no pong for our PINGs).
+    if (idle_timeout_ms > 0 && !goalReached() && !closed_on_idle
+            && last_recv_activity_ms > 0) {
+        int64 elapsed = q_clock_getmillis() - last_recv_activity_ms;
+        if (elapsed >= idle_timeout_ms) {
+            closed_on_idle = true;
+            close_cause = "idle-timeout";
+            queueSendClose(WSCC_GoingAway, "idle timeout", xsink);
+            if (*xsink) {
+                return nullptr;
+            }
         }
     }
 
@@ -258,15 +279,36 @@ QoreHashNode* WebSocketClientPollOperationPriv::continuePoll(ExceptionSink* xsin
 
     QoreHashNode* poll_info = getSocketPollInfoHash(xsink, poll_events);
 
-    // Set poll_timeout_ms so the controller wakes us for heartbeat even if
-    // no socket events arrive (same pattern as server-side heartbeat timer).
-    if (poll_info && heartbeat_interval_ms > 0 && last_recv_activity_ms > 0) {
-        int64 hb_remaining = heartbeat_interval_ms
-            - (q_clock_getmillis() - last_recv_activity_ms);
-        if (hb_remaining < 1) {
-            hb_remaining = 1;
+    // Set poll_timeout_ms so the controller wakes us for heartbeat and/or
+    // idle-timeout even if no socket events arrive.
+    if (poll_info && last_recv_activity_ms > 0) {
+        int64 now_ms = q_clock_getmillis();
+        int64 poll_timeout = 0;
+        if (heartbeat_interval_ms > 0) {
+            // Anchor PING pacing on whichever is later — real recv activity
+            // or our last outgoing PING — so we don't busy-loop after a PING.
+            int64 anchor_ms = last_recv_activity_ms;
+            if (last_ping_sent_ms > anchor_ms) {
+                anchor_ms = last_ping_sent_ms;
+            }
+            int64 hb_remaining = heartbeat_interval_ms - (now_ms - anchor_ms);
+            if (hb_remaining < 1) {
+                hb_remaining = 1;
+            }
+            poll_timeout = hb_remaining;
         }
-        poll_info->setKeyValue("poll_timeout_ms", hb_remaining, xsink);
+        if (idle_timeout_ms > 0 && !closed_on_idle) {
+            int64 idle_remaining = idle_timeout_ms - (now_ms - last_recv_activity_ms);
+            if (idle_remaining < 1) {
+                idle_remaining = 1;
+            }
+            if (poll_timeout == 0 || idle_remaining < poll_timeout) {
+                poll_timeout = idle_remaining;
+            }
+        }
+        if (poll_timeout > 0) {
+            poll_info->setKeyValue("poll_timeout_ms", poll_timeout, xsink);
+        }
     }
 
     return poll_info;
@@ -1103,4 +1145,36 @@ Socket WebSocketClientPollOperationBase::getSocket() {
 */
 nothing WebSocketClientPollOperationBase::setHeartbeat(int ms) {
     priv->setHeartbeat(static_cast<int64>(ms));
+}
+
+//! Sets the idle timeout in milliseconds (0 = disabled)
+/** When set to a positive value, the client closes the connection with
+    code @ref WSCC_GoingAway and reason @c "idle timeout" if no data
+    has been received for this many milliseconds.  Combine with
+    @ref setHeartbeat() to detect peers that silently went away: the
+    heartbeat sends PINGs and this timer catches the absence of any
+    response (PONG or otherwise).
+
+    Set to 0 to disable idle-timeout detection (the default).
+
+    @param ms the idle timeout in milliseconds (0 = disabled)
+
+    @since %Qore 2.3
+*/
+nothing WebSocketClientPollOperationBase::setIdleTimeout(int ms) {
+    priv->setIdleTimeout(static_cast<int64>(ms));
+}
+
+//! Returns the client-initiated close cause tag, if any
+/** Populated when the client closed the connection itself (e.g. on idle
+    timeout).  Empty string means the close came from the peer or has not
+    yet happened.  Distinct from @ref getCloseReason() which returns the
+    WebSocket protocol-level close reason string.
+
+    @return the close cause tag (e.g. @c "idle-timeout") or empty string
+
+    @since %Qore 2.3
+*/
+string WebSocketClientPollOperationBase::getCloseCause() [flags=RET_VALUE_ONLY] {
+    return new QoreStringNode(priv->getCloseCause());
 }

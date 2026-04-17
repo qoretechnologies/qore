@@ -233,14 +233,19 @@ QoreHashNode* HttpWebSocketPollOperationPriv::continuePoll(ExceptionSink* xsink)
     }
 
     // --- Heartbeat: auto-send ping if no recv activity ---
+    // last_ping_sent_ms guards against spamming PINGs when the peer is
+    // silent; last_recv_activity_ms reflects real incoming traffic only
+    // so any future idle-timeout check can rely on it.
     if (heartbeat_interval_ms > 0 && !goalReached() && last_recv_activity_ms > 0) {
-        int64 elapsed = q_clock_getmillis() - last_recv_activity_ms;
-        if (elapsed >= heartbeat_interval_ms) {
+        int64 now_ms = q_clock_getmillis();
+        int64 since_recv = now_ms - last_recv_activity_ms;
+        int64 since_ping = last_ping_sent_ms ? now_ms - last_ping_sent_ms : heartbeat_interval_ms;
+        if (since_recv >= heartbeat_interval_ms && since_ping >= heartbeat_interval_ms) {
             queueSendPing(nullptr, xsink);
             if (*xsink) {
                 return nullptr;
             }
-            last_recv_activity_ms = q_clock_getmillis();
+            last_ping_sent_ms = q_clock_getmillis();
         }
     }
 
@@ -309,7 +314,14 @@ QoreHashNode* HttpWebSocketPollOperationPriv::continuePoll(ExceptionSink* xsink)
             }
         }
         if (heartbeat_interval_ms > 0 && last_recv_activity_ms > 0) {
-            int64 hb_remaining = heartbeat_interval_ms - (q_clock_getmillis() - last_recv_activity_ms);
+            // Measure from the most recent "ping-pacing anchor" — whichever
+            // is later of last recv activity or last ping we sent.  Without
+            // this, spinning off a PING would keep hb_remaining pinned at 0.
+            int64 anchor_ms = last_recv_activity_ms;
+            if (last_ping_sent_ms > anchor_ms) {
+                anchor_ms = last_ping_sent_ms;
+            }
+            int64 hb_remaining = heartbeat_interval_ms - (q_clock_getmillis() - anchor_ms);
             if (hb_remaining <= 0) {
                 hb_remaining = 1;
             }

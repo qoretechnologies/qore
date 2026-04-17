@@ -58,6 +58,23 @@ class TestObserver inherits Observer {
     }
 }
 
+#! Observer that forwards only EVENT_WS_CLOSED events
+class CloseObserver inherits Observer {
+    private {
+        Queue q;
+    }
+
+    constructor(Queue q) {
+        self.q = q;
+    }
+
+    update(string event_id, hash<auto> data_) {
+        if (event_id == EVENT_WS_CLOSED) {
+            q.push(data_);
+        }
+    }
+}
+
 public class WebSocketClientAsyncIoTest inherits QUnit::Test {
     private {
         HttpServer m_server;
@@ -89,6 +106,12 @@ public class WebSocketClientAsyncIoTest inherits QUnit::Test {
         addTestCase("async_io multiple connectAsync", \multipleConnectAsyncTest());
         addTestCase("async_io with serialization", \serializationTest());
         addTestCase("async_io ping/pong observer events", \pingPongObserverTest());
+        addTestCase("async_io configurable heartbeat triggers pongs",
+            \configurableHeartbeatTest());
+        addTestCase("async_io idle_timeout fires on silent stream",
+            \idleTimeoutFiresTest());
+        addTestCase("async_io heartbeat + pongs keep stream alive",
+            \idleTimeoutNotFiredTest());
 
         logger = new Logger("test", LoggerLevel::getLevelInfo());
         if (m_options.verbose > 2) {
@@ -557,5 +580,99 @@ public class WebSocketClientAsyncIoTest inherits QUnit::Test {
         resp = event_queue.get(30s);
         assertEq(EVENT_WS_DATA, resp.event, "data event after ping");
         assertEq("ECHO:after-ping", resp.data, "echo after ping");
+    }
+
+    configurableHeartbeatTest() {
+        # heartbeat=200ms — client should send PINGs even without user calls,
+        # and the server auto-pongs so we see EVENT_WS_PONG.
+        Queue event_queue();
+
+        WebSocketClientWithSerialization wsc({
+            "url": "ws://127.0.0.1:" + linfo.port,
+            "async_io": True,
+            "data": "none",
+            "raise_ping_events": True,
+            "heartbeat": 200ms,
+            "logger": logger,
+        });
+        wsc.registerObserver(new TestObserver(event_queue));
+        wsc.observersReady();
+        on_exit {
+            wsc.disconnect();
+        }
+
+        assertTrue(wsc.isOpen(), "connection is open");
+        assertEq(200, wsc.getAsyncHeartbeat(), "heartbeat override applied");
+
+        # Within ~700ms we should see at least two pong responses to our
+        # automatic heartbeat PINGs.
+        date deadline = now_us() + 2s;
+        int pong_count = 0;
+        while (pong_count < 2 && now_us() < deadline) {
+            auto evt = event_queue.get(1s);
+            if (exists evt && evt.event == EVENT_WS_PONG) {
+                ++pong_count;
+            }
+        }
+        assertGe(2, pong_count, "heartbeat generated at least 2 PONG responses");
+    }
+
+    idleTimeoutFiresTest() {
+        # heartbeat=0 (disabled); idle_timeout=500ms.  The server is idle and
+        # does not initiate any traffic within the window, so the client must
+        # close with reason "idle-timeout".
+        Queue close_queue();
+
+        WebSocketClientWithSerialization wsc({
+            "url": "ws://127.0.0.1:" + linfo.port,
+            "async_io": True,
+            "data": "none",
+            "heartbeat": 0,
+            "idle_timeout": 500ms,
+            "logger": logger,
+        });
+        wsc.registerObserver(new CloseObserver(close_queue));
+        wsc.observersReady();
+        on_exit {
+            try { wsc.disconnect(); } catch () {}
+        }
+
+        assertEq(500, wsc.getAsyncIdleTimeout(), "idle_timeout option applied");
+
+        auto close_info = close_queue.get(3s);
+        assertEq(Type::Hash, close_info.type(), "got a close event within 3s");
+        assertEq("idle-timeout", close_info.reason,
+            "idle-timeout surfaced as reason");
+    }
+
+    idleTimeoutNotFiredTest() {
+        # heartbeat=200ms + idle_timeout=800ms.  The server auto-pongs each
+        # heartbeat, which resets last_recv_activity_ms, so the idle timer
+        # never fires within the observation window.
+        Queue close_queue();
+
+        WebSocketClientWithSerialization wsc({
+            "url": "ws://127.0.0.1:" + linfo.port,
+            "async_io": True,
+            "data": "none",
+            "heartbeat": 200ms,
+            "idle_timeout": 800ms,
+            "logger": logger,
+        });
+        wsc.registerObserver(new CloseObserver(close_queue));
+        wsc.observersReady();
+        on_exit {
+            wsc.disconnect();
+        }
+
+        # Observe for 2s — no close should fire; if it does, the Queue.get
+        # call below returns and the test fails.
+        try {
+            auto evt = close_queue.get(2s);
+            fail("unexpected close event: " + sprintf("%y", evt));
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("QUEUE-TIMEOUT", ex.err,
+                "no close within 2s (heartbeat kept connection alive)");
+        }
     }
 }

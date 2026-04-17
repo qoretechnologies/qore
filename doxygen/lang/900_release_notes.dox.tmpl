@@ -783,6 +783,15 @@ cargo install tree-sitter-cli@0.26.5
         - new \c extensions constructor option for extension negotiation
         - automatic compression/decompression when extensions are active
         - new \c hasPerMessageDeflate() and \c getActiveExtensions() methods
+      - new \c heartbeat constructor option overrides the previously hardcoded 20s async-mode
+        PING interval; set to 0 to disable
+      - new \c idle_timeout constructor option closes the connection with
+        @ref WebSocketClient::WSCC_GoingAway "WSCC_GoingAway" and surfaces
+        \c {reason: "idle-timeout"} on @ref EVENT_WS_CLOSED when no real incoming traffic
+        arrives within the window — detects peers that silently stopped responding to PINGs
+      - fixed the async heartbeat pacing to no longer advance \c last_recv_activity_ms when the
+        client sends a PING; a separate \c last_ping_sent_ms now guards PING spacing so idle
+        detection sees the true incoming traffic timestamp
     - @ref websockethandlerintro "WebSocketHandler" module
       - added optional AsyncAPI 3.0 validation support for WebSocket messages
       - added server-side WebSocket extension support with permessage-deflate compression

@@ -348,6 +348,12 @@ private:
     //! Timestamp of last recv activity (milliseconds since epoch)
     int64 last_recv_activity_ms = 0;
 
+    //! Timestamp of last PING frame sent (milliseconds since epoch)
+    /** Tracked separately from last_recv_activity_ms so outgoing PINGs do
+        not mask peer silence on the recv side.
+    */
+    int64 last_ping_sent_ms = 0;
+
     //! Pending send data — pre-encoded frame bytes ready to send
     /** Populated from send_queue when no send_op is active.
         Multiple queued frames are concatenated to reduce syscalls.
