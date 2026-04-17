@@ -3483,7 +3483,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         # be processed fast enough to transition the connection to CLOSED
         # before submitRequest runs (seen on macOS/kqueue and Alpine
         # ARM64/epoll), yielding HTTP1-STATE-ERROR ("cannot submit request
-        # in state: closed").
+        # in state: closed") — or HTTPCLIENT-STATE-ERROR from the
+        # HttpClientConnectionManager when it rejects a request on a
+        # non-ready connection (seen on Ubuntu ARM64).
         try {
             rest.restGet("/api/test");
             assertEq(True, False, "expected exception from mTLS rejection");
@@ -3491,7 +3493,8 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             assertTrue(ex.err == "HTTPCLIENT-REQUEST-ERROR"
                 || ex.err == "HTTP1-CONNECTION-CLOSED"
                 || ex.err == "HTTP1-UNEXPECTED-DATA"
-                || ex.err == "HTTP1-STATE-ERROR",
+                || ex.err == "HTTP1-STATE-ERROR"
+                || ex.err == "HTTPCLIENT-STATE-ERROR",
                 sprintf("expected mTLS rejection error, got: %s: %s", ex.err, ex.desc));
         }
 %endif
