@@ -7121,7 +7121,29 @@ static void executeInitFunctions(
             desc.name.c_str(), (void*)info->fn_ptr, (void*)info->ctx);
         ExceptionSink xsink;
         uint64_t raw_result = 0;
-        if (is_module_init) {
+        {
+            // Switch current_pgm to the shadow program (the module's own program)
+            // during the init call so that reflection APIs (e.g. TypedHash::forName)
+            // resolve types in the module's pgm — whose parse is complete — rather
+            // than in tpgm, which may still be parsing_in_progress when the module
+            // was loaded via %requires inside a user-program parse. Without the
+            // switch, a TypedHash constructed inside the init would be bound to
+            // tpgm; a subsequent getMembers() call would then attach to tpgm via
+            // QoreExternalProgramContextHelper and trip the parse-in-progress
+            // rejection in incThreadCount().
+            // Source mode avoids the issue because parseCommit clears
+            // parsing_in_progress BEFORE ConstantEntry::parseCommitRuntimeInit
+            // evaluates the init expression; AOT evaluates later (during module
+            // ns_init) with tpgm's parse still in progress.
+            std::unique_ptr<ProgramThreadCountContextHelper> init_ctx_helper;
+            if (shadow_pgm && shadow_pgm != pgm) {
+                init_ctx_helper.reset(new ProgramThreadCountContextHelper(&xsink, shadow_pgm, true));
+                if (xsink.isException()) {
+                    xsink.clear();
+                    init_ctx_helper.reset();
+                }
+            }
+            if (is_module_init) {
             // The compiled closure body expects its body locals to be
             // pre-instantiated on the thread's lvstack (mimicking evalTiered's
             // contract with regular functions). Manually instantiate each
@@ -7157,6 +7179,7 @@ static void executeInitFunctions(
                 raw_result = 0;
             }
         }
+        }  // end shadow-context scope (init_ctx_helper destroyed here)
         printd(5, "AOT init: '%s' returned raw=%llu\n", desc.name.c_str(), (unsigned long long)raw_result);
 
         if (xsink.isException()) {
