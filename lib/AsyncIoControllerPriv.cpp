@@ -1902,6 +1902,20 @@ void AsyncIoControllerPriv::startIntern(ExceptionSink* xsink) {
     // NOTE: do not call log() here — caller holds the lock.
 }
 
+// Read the capacity of std::priority_queue's hidden underlying container.
+// The `c` member is protected; exposing it via a derived struct is the
+// standard friend-struct trick and is well-defined — we never instantiate
+// the derived type, only form a pointer-to-member through it.
+template<class T, class C, class Cmp>
+static size_t timeout_heap_capacity(const std::priority_queue<T, C, Cmp>& pq) {
+    struct Exposed : std::priority_queue<T, C, Cmp> {
+        static size_t cap(const std::priority_queue<T, C, Cmp>& q) {
+            return (q.*&Exposed::c).capacity();
+        }
+    };
+    return Exposed::cap(pq);
+}
+
 void AsyncIoControllerPriv::ioThreadEntry(ExceptionSink* xsink, void* arg) {
     on_async_io_thread = true;
     IoThreadStartInfo* start_info = static_cast<IoThreadStartInfo*>(arg);
@@ -2107,6 +2121,30 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                 AutoLocker al(m);
                 processed_seq = submit_seq;
                 processed_cond.broadcast();
+            }
+        }
+
+        // --- timeout_heap capacity repack ---
+        // std::vector doesn't shrink on pop, so priority_queue's backing vector
+        // retains the peak allocation forever.  Rebuild into a fresh queue when
+        // size is well below retained capacity so the old container's vector can
+        // be freed.  Gated on real slack to avoid thrash; rebuild is O(n log n)
+        // with n bounded by current active size (by construction small — that's
+        // why we're rebuilding).  Steady-state iterations see size==capacity and
+        // skip in two loads + a branch.
+        {
+            size_t sz = t.timeout_heap.size();
+            size_t cap = timeout_heap_capacity(t.timeout_heap);
+            using TE = std::decay_t<decltype(t.timeout_heap.top())>;
+            if (cap > 16 && sz < cap / 4
+                    && (cap - sz) * sizeof(TE) >= 1024) {
+                std::priority_queue<TE, std::vector<TE>, std::greater<TE>> fresh;
+                while (!t.timeout_heap.empty()) {
+                    fresh.push(std::move(
+                        const_cast<TE&>(t.timeout_heap.top())));
+                    t.timeout_heap.pop();
+                }
+                t.timeout_heap = std::move(fresh);
             }
         }
 
