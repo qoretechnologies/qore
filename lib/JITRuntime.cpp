@@ -7204,7 +7204,12 @@ extern "C" DLLEXPORT uint64_t qore_rt_pseudo_size(uint64_t val_bits) {
 //! Fast pseudo-method: empty() - return true if size == 0
 extern "C" DLLEXPORT uint64_t qore_rt_pseudo_empty(uint64_t val_bits) {
     QoreValue v = fromBits(val_bits);
-    bool is_empty = false;
+    // Container types measure their own content; every other type
+    // (NOTHING, bool, int, float, number, date, binary-less, ...) inherits
+    // `<value>::empty()` which returns true unconditionally. Previously the
+    // default branch returned false, so e.g. NOTHING.empty() produced false —
+    // the opposite of the AST/pseudo-class behavior.
+    bool is_empty = true;
     switch (v.getType()) {
         case NT_LIST:
             is_empty = v.get<const QoreListNode>()->empty();
@@ -7215,13 +7220,23 @@ extern "C" DLLEXPORT uint64_t qore_rt_pseudo_empty(uint64_t val_bits) {
         case NT_HASH:
             is_empty = v.get<const QoreHashNode>()->empty();
             break;
+        case NT_BINARY:
+            is_empty = v.get<const BinaryNode>()->empty();
+            break;
         default:
             break;
     }
     return toBits(QoreValue(is_empty));
 }
 
-//! Fast pseudo-method: val() - return true if size != 0 (opposite of empty)
+//! Fast pseudo-method: val() - true if the value has content
+/** Mirror of `<type>::val()` pseudo-method dispatch: each primitive pseudo
+    class defines its own val() (int != 0, bool, date.hasValue, number != 0,
+    etc.). `<value>::val()` is the fallback and returns false — so the
+    default branch here must stay false for types we don't specifically
+    recognize (callref and object are RET_VALUE_ONLY/may raise — leave to
+    the generic dispatch in qore_rt_dot_eval_pseudo_method_direct).
+*/
 extern "C" DLLEXPORT uint64_t qore_rt_pseudo_val(uint64_t val_bits) {
     QoreValue v = fromBits(val_bits);
     bool has_value = false;
@@ -7235,6 +7250,28 @@ extern "C" DLLEXPORT uint64_t qore_rt_pseudo_val(uint64_t val_bits) {
         case NT_HASH:
             has_value = !v.get<const QoreHashNode>()->empty();
             break;
+        case NT_BINARY:
+            has_value = !v.get<const BinaryNode>()->empty();
+            break;
+        case NT_BOOLEAN:
+            has_value = v.getAsBool();
+            break;
+        case NT_INT:
+            has_value = v.getAsBigInt() != 0;
+            break;
+        case NT_FLOAT:
+            has_value = v.getAsFloat() != 0.0;
+            break;
+        case NT_NUMBER: {
+            const QoreNumberNode* n = v.get<const QoreNumberNode>();
+            has_value = n && !n->zero();
+            break;
+        }
+        case NT_DATE: {
+            const DateTimeNode* dt = v.get<const DateTimeNode>();
+            has_value = dt && dt->hasValue();
+            break;
+        }
         default:
             break;
     }
