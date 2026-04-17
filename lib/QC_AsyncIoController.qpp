@@ -460,8 +460,19 @@ static nothing AsyncIoController::setLogger(*LoggerInterfaceBase logger) {
 }
 
 //! Adds a timer on the global singleton
-/** @param deadline the absolute deadline for the timer
-    @param udata user data to associate with the timer
+/** When \a udata is a closure or call-reference, the runtime automatically dispatches
+    it to a worker thread in the async-I/O controller's dispatcher pool when the
+    deadline fires — it is @b not invoked on the I/O thread, so it may block, acquire
+    locks, or perform Qore-level I/O.
+
+    For non-callable \a udata (numbers, strings, hashes, …), the value is passed to
+    the timer callback registered via @ref setTimerCallback() (also dispatched to a
+    worker thread).  With no callback installed, non-callable \a udata is silently
+    dropped.
+
+    @param deadline the absolute deadline for the timer
+    @param udata either a closure/call-reference to dispatch, or arbitrary user data
+        to deliver through the @ref setTimerCallback() handler
     @return the unique timer ID
     @since %Qore 2.3
 */
@@ -493,11 +504,13 @@ static bool AsyncIoController::cancelTimer(int timer_id) [dom=NETWORK,PROCESS] {
 }
 
 //! Sets the timer callback on the global singleton
-/** @param callback a callback that accepts a @ref TimerEventInfo hash argument, or @ref nothing
-    to disable timer event delivery
+/** The callback is invoked once per fire of a timer whose \c udata is @b not a closure or
+    call-reference (those are auto-dispatched directly; see @ref addTimer()).  The runtime
+    dispatches the callback to a worker thread in the async-I/O controller's dispatcher
+    pool — it is @b not invoked on the I/O thread.
 
-    @note The callback is called in the I/O thread context. It should complete quickly to avoid
-    blocking other I/O operations.
+    @param callback a callback that accepts a @ref TimerEventInfo hash argument, or
+        @ref nothing to disable timer event delivery for non-callable \c udata
 
     @since %Qore 2.3
 */

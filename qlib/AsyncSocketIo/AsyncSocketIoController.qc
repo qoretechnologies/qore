@@ -285,11 +285,16 @@ public class AsyncSocketIoController inherits LoggerWrapper {
     }
 
     #! Adds a timer that fires at the given deadline
-    /** The callback closure is stored as the timer's user data and will be invoked by the
-        timer callback handler (set via @ref Qore::AsyncIoController::setTimerCallback()
-        "AsyncIoController::setTimerCallback()") when the deadline is reached. The timer
-        fires on the I/O thread, so the callback should complete quickly to avoid blocking
-        other I/O operations.
+    /** When the deadline is reached, the runtime automatically dispatches \a callback to
+        a worker thread in the async-I/O controller's dispatcher pool — the closure is
+        @b not invoked on the I/O thread, so it is free to block, acquire locks, or perform
+        Qore-level I/O.
+
+        For non-callable \c udata (numbers, strings, hashes, …) see
+        @ref Qore::AsyncIoController::setTimerCallback() "AsyncIoController::setTimerCallback()";
+        when installed, that single callback receives a @ref Qore::TimerEventInfo
+        "hash<TimerEventInfo>" for each fire.  With no callback installed, non-callable
+        \c udata is silently dropped.
 
         @param deadline the absolute time when the timer should fire
         @param callback the closure to call when the timer fires
