@@ -5989,11 +5989,13 @@ class ExprTreeSerializer {
         }
 
         // ---- Pre/post increment/decrement ----
-        if (auto* op = dynamic_cast<const QorePreIncrementOperatorNode*>(node)) {
-            return serializeUnary(AOTExprNodeKind::EN_PRE_INC, op->getExp());
-        }
+        // NOTE: QorePreDecrement inherits from QorePreIncrement; check Dec first
+        // so dynamic_cast doesn't match Inc for Dec nodes.
         if (auto* op = dynamic_cast<const QorePreDecrementOperatorNode*>(node)) {
             return serializeUnary(AOTExprNodeKind::EN_PRE_DEC, op->getExp());
+        }
+        if (auto* op = dynamic_cast<const QorePreIncrementOperatorNode*>(node)) {
+            return serializeUnary(AOTExprNodeKind::EN_PRE_INC, op->getExp());
         }
         // Int-specialized post-inc/dec must be checked BEFORE generic versions
         // (they don't inherit from QorePostIncrementOperatorNode)
@@ -6003,11 +6005,12 @@ class ExprTreeSerializer {
         if (auto* op = dynamic_cast<const QoreIntPostIncrementOperatorNode*>(node)) {
             return serializeUnary(AOTExprNodeKind::EN_POST_INC, op->getExp());
         }
-        if (auto* op = dynamic_cast<const QorePostIncrementOperatorNode*>(node)) {
-            return serializeUnary(AOTExprNodeKind::EN_POST_INC, op->getExp());
-        }
+        // NOTE: QorePostDecrement inherits from QorePostIncrement; check Dec first.
         if (auto* op = dynamic_cast<const QorePostDecrementOperatorNode*>(node)) {
             return serializeUnary(AOTExprNodeKind::EN_POST_DEC, op->getExp());
+        }
+        if (auto* op = dynamic_cast<const QorePostIncrementOperatorNode*>(node)) {
+            return serializeUnary(AOTExprNodeKind::EN_POST_INC, op->getExp());
         }
 
         // ---- Binary operators ----
@@ -6054,23 +6057,27 @@ class ExprTreeSerializer {
         if (auto* op = dynamic_cast<const QoreLogicalComparisonOperatorNode*>(node)) {
             return serializeBinary(AOTExprNodeKind::EN_LOG_CMP, op->getLeft(), op->getRight());
         }
+        // NOTE: QoreLogicalOrOperatorNode inherits from QoreLogicalAndOperatorNode;
+        // check Or first so dynamic_cast doesn't match And for OR nodes.
+        if (auto* op = dynamic_cast<const QoreLogicalOrOperatorNode*>(node)) {
+            return serializeBinary(AOTExprNodeKind::EN_LOG_OR, op->getLeft(), op->getRight());
+        }
         if (auto* op = dynamic_cast<const QoreLogicalAndOperatorNode*>(node)) {
             return serializeBinary(AOTExprNodeKind::EN_LOG_AND, op->getLeft(), op->getRight());
         }
-        if (auto* op = dynamic_cast<const QoreLogicalOrOperatorNode*>(node)) {
-            return serializeBinary(AOTExprNodeKind::EN_LOG_OR, op->getLeft(), op->getRight());
+        // NOTE: QoreLogicalNotEquals inherits from QoreLogicalEquals; check NE first.
+        if (auto* op = dynamic_cast<const QoreLogicalNotEqualsOperatorNode*>(node)) {
+            return serializeBinary(AOTExprNodeKind::EN_LOG_NE, op->getLeft(), op->getRight());
         }
         if (auto* op = dynamic_cast<const QoreLogicalEqualsOperatorNode*>(node)) {
             return serializeBinary(AOTExprNodeKind::EN_LOG_EQ, op->getLeft(), op->getRight());
         }
-        if (auto* op = dynamic_cast<const QoreLogicalNotEqualsOperatorNode*>(node)) {
-            return serializeBinary(AOTExprNodeKind::EN_LOG_NE, op->getLeft(), op->getRight());
+        // NOTE: QoreLogicalAbsoluteNotEquals inherits from QoreLogicalAbsoluteEquals; check ANE first.
+        if (auto* op = dynamic_cast<const QoreLogicalAbsoluteNotEqualsOperatorNode*>(node)) {
+            return serializeBinary(AOTExprNodeKind::EN_LOG_ANE, op->getLeft(), op->getRight());
         }
         if (auto* op = dynamic_cast<const QoreLogicalAbsoluteEqualsOperatorNode*>(node)) {
             return serializeBinary(AOTExprNodeKind::EN_LOG_AEQ, op->getLeft(), op->getRight());
-        }
-        if (auto* op = dynamic_cast<const QoreLogicalAbsoluteNotEqualsOperatorNode*>(node)) {
-            return serializeBinary(AOTExprNodeKind::EN_LOG_ANE, op->getLeft(), op->getRight());
         }
         if (auto* op = dynamic_cast<const QoreLogicalLessThanOperatorNode*>(node)) {
             return serializeBinary(AOTExprNodeKind::EN_LOG_LT, op->getLeft(), op->getRight());
@@ -6101,11 +6108,12 @@ class ExprTreeSerializer {
         if (auto* op = dynamic_cast<const QoreMinusEqualsOperatorNode*>(node)) {
             return serializeBinary(AOTExprNodeKind::EN_MINUS_EQ, op->getLeft(), op->getRight());
         }
-        if (auto* op = dynamic_cast<const QoreMultiplyEqualsOperatorNode*>(node)) {
-            return serializeBinary(AOTExprNodeKind::EN_MULTIPLY_EQ, op->getLeft(), op->getRight());
-        }
+        // NOTE: QoreDivideEquals inherits from QoreMultiplyEquals; check Divide first.
         if (auto* op = dynamic_cast<const QoreDivideEqualsOperatorNode*>(node)) {
             return serializeBinary(AOTExprNodeKind::EN_DIVIDE_EQ, op->getLeft(), op->getRight());
+        }
+        if (auto* op = dynamic_cast<const QoreMultiplyEqualsOperatorNode*>(node)) {
+            return serializeBinary(AOTExprNodeKind::EN_MULTIPLY_EQ, op->getLeft(), op->getRight());
         }
         if (auto* op = dynamic_cast<const QoreModuloEqualsOperatorNode*>(node)) {
             return serializeBinary(AOTExprNodeKind::EN_MODULO_EQ, op->getLeft(), op->getRight());
