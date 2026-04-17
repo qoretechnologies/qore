@@ -107,6 +107,18 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         #! Shutdown flag
         bool shutdown = False;
 
+        #! Timestamp of the last idle-connection cleanup, used by @ref maybeCleanupIdle().
+        /** Without periodic cleanup, idle connections accumulate in the pool indefinitely;
+            each entry keeps a socket / TLS / HTTP2 / HTTP3 session graph alive, causing
+            unbounded memory growth under connection churn.  Cleanup is run opportunistically
+            from user-facing entry points (e.g. @ref acquireStream()) on the calling thread —
+            this avoids both the async-I/O-thread restriction and the ref-cycle that would
+            arise from a background thread capturing @c self.
+
+            @since HttpClientIo 1.0
+        */
+        date last_cleanup_time = now_us();
+
         #! Mutex + condition to serialize connection creation per pool key
         Mutex create_mutex();
         Condition create_cond();
@@ -196,6 +208,49 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
             self.opts.enable_cookies);
     }
 
+    #! Internal: opportunistically runs @ref cleanupIdleConnections() if enough time
+    #! has passed since the last run.
+    /** Called from user-facing entry points (e.g. @ref acquireStream()) so cleanup
+        happens naturally on activity — no dedicated cleanup thread or timer is needed.
+        Cleanup interval is 1/3 of @c idle_timeout (clamped to [5s, 60s]).
+
+        Runs synchronously on the calling thread — never touches the async-I/O thread.
+        Qore code is forbidden on that thread, and a background-thread-based scheduler
+        would create a ref cycle through the captured @c self that prevents the
+        manager's destructor from running.
+
+        The last-cleanup-time update is best-effort under races: two threads that
+        happen to both pass the time check may both call @ref cleanupIdleConnections(),
+        which is harmless because it takes @c pool_lock and the second caller finds
+        everything already cleaned up.
+
+        @since HttpClientIo 1.0
+    */
+    private:internal maybeCleanupIdle() {
+        if (shutdown) {
+            return;
+        }
+        date interval = milliseconds(opts.idle_timeout / 3);
+        if (interval < 5s) {
+            interval = 5s;
+        } else if (interval > 60s) {
+            interval = 60s;
+        }
+        date now = now_us();
+        if ((now - last_cleanup_time) < interval) {
+            return;
+        }
+        # Update the timestamp BEFORE doing the work so concurrent callers skip;
+        # worst-case benign race produces two serial cleanups.
+        last_cleanup_time = now;
+        try {
+            cleanupIdleConnections();
+        } catch (hash<ExceptionInfo> ex) {
+            log(LoggerLevel::DEBUG, "cleanupIdleConnections error: %s: %s",
+                ex.err, ex.desc);
+        }
+    }
+
     #! Copying is not supported
     private copy() {
         throw "COPY-ERROR", "HttpClientConnectionManager objects cannot be copied";
@@ -240,6 +295,11 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         @throw HTTPCLIENT-CAPACITY-ERROR if no connection can be acquired
     */
     HttpClientStreamHandle acquireStream(string url) {
+        # Opportunistically evict idle connections on request entry so the pool
+        # doesn't grow unboundedly under churn.  Throttled to at most once per
+        # cleanup-interval window; see maybeCleanupIdle().
+        maybeCleanupIdle();
+
         # Process any Alt-Svc discoveries from async callbacks before
         # resolving the protocol — ensures async-discovered H3 capability
         # takes effect on the next connection

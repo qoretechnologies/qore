@@ -1170,6 +1170,7 @@ set(LIBQORE_CPP_SRC ${LIBQORE_CPP_SRC}
 # WebSocket frame codec (RFC 6455)
 set(LIBQORE_CPP_SRC ${LIBQORE_CPP_SRC}
     lib/WebSocketFrameCodec.cpp
+    lib/WebSocketStreamFrameState.cpp
 )
 
 # get list of header files
@@ -1613,6 +1614,7 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_SOURCE_DIR}/lib/QuicPollOperations.cpp\"
 // WebSocket frame codec (RFC 6455)
 #include \"${CMAKE_SOURCE_DIR}/lib/WebSocketFrameCodec.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/WebSocketStreamFrameState.cpp\"
 ")
     # Conditionally add alloc tracking QPP to the SCU (the QPP-generated C++ is safe for SCU;
     # only AllocTracking.cpp with its global malloc/free symbols must be compiled separately)

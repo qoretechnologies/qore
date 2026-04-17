@@ -52,6 +52,15 @@ public class Http2StreamContext inherits AbstractStreamContext {
         /** @since AsyncSocketIo 1.1
         */
         bool closed = False;
+
+        #! True when data_queue contains pre-decoded WebSocket frame hashes
+        /** Set when the underlying transport is feeding a C++
+            WebSocketStreamFrameState rather than a raw-data queue.  Consumers
+            MUST use @ref readFrame() in this mode — @ref readData() throws.
+
+            @since AsyncSocketIo 1.3
+        */
+        bool uses_frame_state = False;
     }
 
     #! Creates an HTTP/2 stream context with Queue-based async I/O
@@ -59,16 +68,52 @@ public class Http2StreamContext inherits AbstractStreamContext {
         @param stream_id the HTTP/2 stream ID (must be positive)
         @param data_queue the Queue populated by the I/O controller with incoming data;
         @ref readData() reads from this Queue non-blockingly
+        @param uses_frame_state when True, @p data_queue carries typed WS frame
+            hashes (one per complete message) and @ref readFrame() must be used
 
         @since AsyncSocketIo 1.1
     */
-    constructor(Socket sock, int stream_id, Queue data_queue) {
+    constructor(Socket sock, int stream_id, Queue data_queue,
+            bool uses_frame_state = False) {
         @assert(sock, "socket cannot be null");
         @assert(sock.isOpen(), "socket must be open");
         @assert(stream_id > 0, "stream_id must be positive");
         self.sock = sock;
         self.stream_id = stream_id;
         self.data_queue = data_queue;
+        self.uses_frame_state = uses_frame_state;
+    }
+
+    #! Returns True when the transport feeds pre-decoded WebSocket frame hashes
+    /** @since AsyncSocketIo 1.3 */
+    bool usesFrameState() {
+        return uses_frame_state;
+    }
+
+    #! Drains one pre-decoded WebSocket frame hash from the frame queue (non-blocking)
+    /** Only valid when @ref usesFrameState() is True.  The returned hash has
+        the shape @c {type: string, data: binary, [code: int, reason: string]}
+        — see @ref WebSocketStreamFrameState for semantics.
+
+        Returns @ref nothing when the queue is drained.  If a NOTHING sentinel
+        is pulled, the context is marked closed and @ref isOpen() returns False.
+
+        @since AsyncSocketIo 1.3
+    */
+    *hash<auto> readFrame() {
+        if (!uses_frame_state) {
+            throw "HTTP2-STREAM-ERROR",
+                "readFrame() requires frame-state mode — use readData() for raw streams";
+        }
+        auto result = data_queue.tryGet();
+        if (!exists result) {
+            return NOTHING;
+        }
+        if (!exists result.value || result.value.typeCode() != NT_HASH) {
+            closed = True;
+            return NOTHING;
+        }
+        return result.value;
     }
 
     string getProtocol() {

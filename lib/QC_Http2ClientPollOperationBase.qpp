@@ -1042,6 +1042,75 @@ void Http2ClientPollOperationPriv::sendStreamData(int64_t stream_id, const Binar
     sock_obj->sendHttp2StreamData(stream_id, data, end_stream, xsink);
 }
 
+void Http2ClientPollOperationPriv::installFrameState(int32_t stream_id, Queue* msg_queue,
+        const BinaryNode* residual, ExceptionSink* xsink) {
+    // Build send callback bound to this connection's socket + stream_id.
+    // The callback runs on the I/O thread inside the FrameStateAction's
+    // execute() path (feedData -> auto-pong / close-echo) — nghttp2's
+    // sendHttp2StreamData enqueues the DATA frame which the surrounding
+    // continuePoll cycle flushes to the wire after action dispatch.
+    QoreSocketObject* sock_ptr = sock_obj;
+    WebSocketStreamFrameState::SendCallback send_cb =
+        [sock_ptr, stream_id](BinaryNode* frame_bytes) {
+            if (!frame_bytes) {
+                return;
+            }
+            SimpleRefHolder<BinaryNode> holder(frame_bytes);
+            ExceptionSink cxsink;
+            int rv = sock_ptr->sendHttp2StreamData(stream_id, *holder, false, &cxsink);
+            if (cxsink || rv < 0) {
+                // Non-fatal: transport teardown handles the close path
+                cxsink.clear();
+            }
+        };
+
+    // Frame state takes the one msg_queue ref transferred from the caller.
+    // FrameStateAction owns the frame state via unique_ptr; on action cleanup
+    // the unique_ptr's destructor drops the queue ref.
+    auto frame_state = std::make_unique<WebSocketStreamFrameState>(
+        msg_queue, std::move(send_cb), /* is_server */ false);
+
+    ReferenceHolder<FrameStateAction> new_action(
+        new FrameStateAction(std::move(frame_state)), xsink);
+
+    // Feed any pre-swap residual into the frame state BEFORE publishing the
+    // new action so no post-swap DATA chunk can be interleaved between the
+    // residual and the decoder's stream.
+    if (residual && residual->size() > 0) {
+        new_action->feedResidual(residual->getPtr(), residual->size());
+    }
+
+    // Swap the action under stream_lock.  The I/O thread acquires stream_lock
+    // to look up and ref the action for each output item; the swap is
+    // serialised with that lookup.  Note: action->execute() runs outside the
+    // lock for performance (ChannelAction::trySend is non-blocking), so a
+    // stale dispatch via the old ChannelAction can race with the swap — the
+    // caller must drain the old Channel AFTER the handshake headers were
+    // consumed and BEFORE calling this method, passing the residual bytes
+    // above.  For WebSocket CONNECT tunnels the server typically awaits the
+    // client's first WS frame before sending DATA, so the race window is
+    // ordinarily empty.
+    AbstractAsyncAction* old_action = nullptr;
+    std::string sid = std::to_string(stream_id);
+    {
+        AutoLocker al(stream_lock);
+        auto it = stream_actions.find(sid);
+        if (it == stream_actions.end()) {
+            xsink->raiseException("HTTPCLIENT-STREAM-CLOSED",
+                "cannot install frame state: stream %d not found or already complete",
+                (int)stream_id);
+            return;
+        }
+        old_action = it->second;
+        it->second = new_action.release();  // transfer ref
+    }
+
+    // Deref the old action outside the lock — cleanup may enter Qore code
+    if (old_action) {
+        old_action->deref(xsink);
+    }
+}
+
 /** @endcond */
 
 //! C++ base class for HTTP/2 client poll operations
@@ -1510,6 +1579,32 @@ nothing Http2ClientPollOperationBase::registerStreamQueue(int stream_id,
 */
 nothing Http2ClientPollOperationBase::clearStreamQueues() {
     priv->clearStreamQueues(xsink);
+}
+
+//! Installs a WebSocket frame-state decoder for a CONNECT tunnel stream
+/** After this call, DATA chunks dispatched for @a stream_id are fed into a
+    pure C++ WebSocket frame decoder that pushes complete, typed message
+    hashes to @a msg_queue instead of the raw response hash routed through
+    the old ChannelAction.  This avoids the O(N²) Qore binary concatenation
+    path for large WS frames.
+
+    @param stream_id the H2 stream ID returned by submitRequestStreaming()
+    @param msg_queue the Queue that will receive typed frame hashes
+           ({type, data, rsv1?, rsv2?, rsv3?, code?, reason?})
+    @param residual optional body bytes already drained from the old Channel
+           (the caller must drain non-blockingly before calling this method)
+
+    @throw HTTPCLIENT-STREAM-CLOSED if the stream is not found or already
+           complete
+
+    @since %Qore 2.3
+*/
+nothing Http2ClientPollOperationBase::installFrameState(int stream_id,
+        Queue[Queue] msg_queue, *binary residual) {
+    // Transfer the Queue ref from the ReferenceHolder to the C++ priv
+    Queue* queue_ptr = msg_queue.release();
+    priv->installFrameState(static_cast<int32_t>(stream_id), queue_ptr,
+        residual, xsink);
 }
 
 //! Returns the socket object

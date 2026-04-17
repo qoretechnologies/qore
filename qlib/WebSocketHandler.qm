@@ -1125,9 +1125,6 @@ class WebSocketStreamProcessor {
         #! Counter to signal when the stream closes
         Counter done;
 
-        #! Buffer for incomplete WebSocket frames spanning multiple stream data chunks
-        binary stream_buf;
-
         #! Mutex to serialize I/O processing (held during notifyIo and its gotMessage/sendData calls)
         /** Note: this mutex may be held for extended periods while blocking on user code or
             QUIC stream writes. It must NOT be used to protect shutdown-critical state.
@@ -1201,80 +1198,63 @@ class WebSocketStreamProcessor {
             return;
         }
 
+        # The transport decodes WebSocket frames in C++
+        # (@ref WebSocketStreamFrameState).  The H2/H3 server controller
+        # always registers a frame state for WS CONNECT, so this path is
+        # the sole dispatch for H2/H3 WebSocket on the server.  H1 async
+        # connections parse frames in the C++ HttpWebSocketPollOperation
+        # and never enter here.
+        @assert(ctx.usesFrameState(),
+            "WebSocketStreamProcessor requires a frame-state stream context");
         try {
-            # Read ALL available stream data (may be multiple Queue entries)
-            bool got_data = False;
             while (True) {
-                *binary incoming = ctx.readData();
-                if (!exists incoming) {
-                    if (!got_data) {
-                        # NOTHING on first read = stream closed or no data
-                        # Check if the stream context reports closed
-                        if (!ctx.isOpen()) {
-                            markClosedOnce();
-                        }
-                        return;
+                *hash<auto> frame = ctx.readFrame();
+                if (!exists frame) {
+                    if (!ctx.isOpen()) {
+                        markClosedOnce();
                     }
-                    # NOTHING after successful reads = queue drained
-                    break;
+                    return;
                 }
-                if (incoming.size() == 0) {
-                    break;
-                }
-                got_data = True;
-                stream_buf = stream_buf.size() > 0 ? stream_buf + incoming : incoming;
-            }
-
-            # Parse complete WebSocket frames
-            while (stream_buf.size() >= 2) {
-                *int frame_len = ws_get_frame_size(stream_buf);
-                if (!exists frame_len || stream_buf.size() < frame_len) {
-                    break;
-                }
-                binary frame_data = stream_buf.substr(0, frame_len);
-                stream_buf = stream_buf.size() > frame_len
-                    ? stream_buf.substr(frame_len) : binary();
-
-                hash<WsMsgInfo> h = ws_parse_frame(frame_data);
                 last_recv_timestamp = clock_getmillis() / 1000;
-
-                if (h.op == WSOP_Close) {
+                string type = frame.type;
+                if (type == "close") {
                     markClosedOnce();
                     return;
                 }
-                if (h.op == WSOP_Ping) {
-                    ctx.sendData(ws_encode_message(h.msg ?? "", WSOP_Pong));
+                if (type == "ping" || type == "pong") {
+                    # Auto-pong is already done in C++; nothing to do
                     continue;
                 }
-                if (h.op == WSOP_Pong) {
-                    continue;
+                if (type == "error") {
+                    handler.logError("H2/H3 WebSocket frame-state error: %y: %y",
+                        frame.code ?? WSCC_ProtocolError,
+                        frame.reason ?? "");
+                    markClosedOnce();
+                    return;
                 }
-                if (h.op == WSOP_Text || h.op == WSOP_Binary) {
-                    auto msg = h.msg;
+                if (type == "text" || type == "binary") {
+                    # The C++ frame state always pushes `binary` payloads;
+                    # decode text frames to string so gotMessage(string)
+                    # overloads dispatch correctly (matches ws_parse_frame).
+                    auto msg = frame.data ?? binary();
+                    if (type == "text") {
+                        msg = msg.toString("UTF-8");
+                    }
+                    # Extensions are applied per-message on the worker thread.
+                    # RSV bits come from the first frame of the reassembled
+                    # message; permessage-deflate uses RSV1 to flag compressed
+                    # payloads.  The C++ reassembler handles fragmentation so
+                    # fin is always True by construction.
                     hash<auto> ext_ctx = {
-                        "op": h.op,
-                        "rsv1": h.rsv1,
-                        "rsv2": h.rsv2,
-                        "rsv3": h.rsv3,
-                        "fin": h.fin,
+                        "op": type == "text" ? WSOP_Text : WSOP_Binary,
+                        "rsv1": frame.rsv1 ?? False,
+                        "rsv2": frame.rsv2 ?? False,
+                        "rsv3": frame.rsv3 ?? False,
+                        "fin": True,
                     };
                     wsc.applyIncomingExtensions(\msg, ext_ctx);
                     wsc.validateIncomingMessage(\msg);
                     wsc.gotMessage(msg);
-                }
-            }
-
-            # Drain outgoing channel data and send via stream
-            bool sent = False;
-            while (*binary d = wsc.pollDataImmediate()) {
-                ctx.sendData(d);
-                sent = True;
-            }
-            # Wake the I/O controller to flush the H2/H3 write buffer
-            if (sent) {
-                *AsyncSocketIo::AsyncSocketIoController ctrl = wsc.getAsyncCtrl();
-                if (ctrl) {
-                    ctrl.wakeSocket(wsc.getSocket());
                 }
             }
         } catch (hash<ExceptionInfo> ex) {
@@ -1813,8 +1793,9 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                 throw "WEBSOCKET-HTTP2-ERROR", "HTTP/2 WebSocket requires "
                     "a stream data Queue from the I/O controller";
             }
-            wsc.setStreamContext(
-                new AsyncSocketIo::Http2StreamContext(sock, h2_stream_id, h2_data_queue));
+            bool h2_uses_frame_state = cx."header-info".stream_uses_frame_state ?? False;
+            wsc.setStreamContext(new AsyncSocketIo::Http2StreamContext(
+                sock, h2_stream_id, h2_data_queue, h2_uses_frame_state));
             # Stream listener registration is deferred until after setup is complete
             # (the processor is created later, after extensions and registered())
         } else if (is_http3) {
@@ -1823,13 +1804,15 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
             # CONNECT response was already sent by HttpServer.qm before calling start()
             # Create HTTP/3 stream context for WebSocket frame I/O
             *Queue h3_data_queue = cx."header-info".stream_data_queue;
+            bool uses_frame_state = cx."header-info".stream_uses_frame_state ?? False;
             code<nothing()> wake = sub () {
                 if (async_ctrl) {
                     async_ctrl.wakeSocket(sock);
                 }
             };
             wsc.setStreamContext(new AsyncSocketIo::Http3StreamContext(
-                sock, h3_session_id, h3_stream_id, wake, h3_data_queue));
+                sock, h3_session_id, h3_stream_id, wake, h3_data_queue,
+                uses_frame_state));
         }
 
         # Set up async H1 WebSocket I/O

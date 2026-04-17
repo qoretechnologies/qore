@@ -1295,6 +1295,21 @@ void Http2Session::cleanupStream(int32_t stream_id) {
     std::lock_guard<std::recursive_mutex> lg(m);
     auto it = streams.find(stream_id);
     if (it != streams.end()) {
+        // RFC 7540 §8.3 / RFC 8441: a CONNECT stream is a bidirectional tunnel;
+        // after the Qore dispatch closure exits we must NOT remove the stream
+        // entry or onDataChunkRecvCallback will silently discard subsequent
+        // peer-sent frames at `stream == nullptr`.  The entry is reclaimed
+        // later via onStreamCloseCallback when the peer actually closes.
+        if (it->second->is_connect) {
+            printd(5, "cleanupStream(%d) preserving active CONNECT tunnel\n",
+                stream_id);
+            if (http2DebugEnabled()) {
+                fprintf(stderr, "HTTP2 DEBUG: cleanupStream stream=%d preserving CONNECT tunnel\n",
+                    stream_id);
+                fflush(stderr);
+            }
+            return;
+        }
         printd(5, "cleanupStream(%d) removing dispatched stream\n", stream_id);
         if (http2DebugEnabled()) {
             fprintf(stderr, "HTTP2 DEBUG: cleanupStream stream=%d removing dispatched stream\n",

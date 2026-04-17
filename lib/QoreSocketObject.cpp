@@ -1717,6 +1717,33 @@ void QoreSocketObject::deregisterQuicConnectStreamQueue(int64_t session_id, int6
     session->deregisterConnectStreamQueue(stream_id);
 }
 
+void QoreSocketObject::registerQuicConnectStreamFrameState(int64_t session_id, int64_t stream_id,
+        Queue* msg_queue, ExceptionSink* xsink) {
+    AutoLocker al(priv->m);
+    qore_socket_private* sp = qore_socket_private::get(*priv->socket);
+    std::shared_ptr<QuicSession> session = sp->getQuicSession(session_id);
+    if (!session) {
+        ExceptionSink tmp;
+        msg_queue->deref(&tmp);
+        tmp.clear();
+        xsink->raiseException("QUIC-ERROR", "no QUIC session with id %lld on this socket",
+            (long long)session_id);
+        return;
+    }
+    session->registerConnectStreamFrameState(stream_id, msg_queue);
+}
+
+void QoreSocketObject::deregisterQuicConnectStreamFrameState(int64_t session_id, int64_t stream_id,
+        ExceptionSink* xsink) {
+    AutoLocker al(priv->m);
+    qore_socket_private* sp = qore_socket_private::get(*priv->socket);
+    std::shared_ptr<QuicSession> session = sp->getQuicSession(session_id);
+    if (!session) {
+        return;
+    }
+    session->deregisterConnectStreamFrameState(stream_id);
+}
+
 BinaryNode* QoreSocketObject::readQuicStreamDataBlock(int64_t session_id, int64_t stream_id,
         int timeout_ms, ExceptionSink* xsink) {
     // Get the session WITHOUT holding the socket lock — the session is reference-counted

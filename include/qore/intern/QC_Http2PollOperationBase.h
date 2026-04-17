@@ -36,12 +36,14 @@
 #include "qore/SocketPollOperationBase.h"
 #include "qore/QoreSocketObject.h"
 
+#include <memory>
 #include <unordered_map>
 #include <vector>
 
 // Forward declarations for stream queue support
 class Queue;
 class QoreEventNotifier;
+class WebSocketStreamFrameState;
 
 //! C++ private data for Http2PollOperationBase
 /** Core state machine and inner op lifecycle for HTTP/2 server-side poll operations.
@@ -189,6 +191,13 @@ public:
         QoreObject* queue_obj;              //!< ref'd QoreObject wrapping queue (for DGC)
         QoreEventNotifier* notifier;        //!< ref'd EventNotifier for wake-up, or nullptr
         QoreObject* notifier_obj;           //!< ref'd QoreObject wrapping notifier, or nullptr
+        //! Optional C++ frame state for RFC 8441 WebSocket CONNECT tunnels
+        /** When set, drainStreamQueues() feeds raw stream bytes into the frame
+            state instead of pushing them to @c queue; the frame state decodes
+            WebSocket frames and pushes typed message hashes onto @c queue.
+            This eliminates Qore-side O(N²) binary concatenation for large WS
+            messages on H2 tunnels (mirrors the H3 path). */
+        std::shared_ptr<WebSocketStreamFrameState> frame_state;
     };
 
     //! Registers a Queue (and optional EventNotifier) for a CONNECT stream
@@ -205,6 +214,19 @@ public:
     */
     DLLLOCAL void registerStreamQueue(int32_t stream_id, Queue* queue, QoreObject* queue_obj,
         QoreEventNotifier* notifier, QoreObject* notifier_obj);
+
+    //! Registers a Queue backed by a C++ WebSocketStreamFrameState for a CONNECT stream
+    /** Identical to @ref registerStreamQueue() except that incoming stream
+        bytes are fed into a @ref WebSocketStreamFrameState that decodes
+        WebSocket frames in C++ and pushes one typed message hash per
+        completed WebSocket message to the caller-supplied Queue.  Server-side
+        (is_server=true) so outbound auto-pong frames are unmasked.
+
+        @param stream_id the HTTP/2 stream ID
+        @param queue the Queue to receive typed message hashes (ref transferred)
+        @param queue_obj the QoreObject wrapping queue (ref transferred) */
+    DLLLOCAL void registerStreamFrameState(int32_t stream_id, Queue* queue,
+        QoreObject* queue_obj);
 
     //! Returns and clears the list of stream IDs that had data drained
     /** Called by the controller after continuePoll() returns. For each
