@@ -68,6 +68,14 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
         */
         int pending_offset = 0;
 
+        #! Heartbeat interval in milliseconds; 0 disables the heartbeat
+        int heartbeat_ms = 0;
+
+        #! Heartbeat payload sent when the interval expires with no outbound traffic
+        string heartbeat_msg = ":hb\n\n";
+
+        #! Epoch microseconds of the last successful send (or construction)
+        int last_send_us = clock_getmicros();
     }
 
     #! Creates the poll operation
@@ -75,6 +83,22 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
     */
     constructor(Socket sock) {
         self.sock = sock;
+    }
+
+    #! Configures the SSE heartbeat
+    /** The async I/O controller wakes the operation via \c poll_timeout_ms when the
+        interval elapses with no outbound traffic; the operation then sends \a msg
+        (typically a \c ":hb\\n\\n" comment) to keep proxies and load balancers from
+        dropping the idle connection.
+
+        @param interval_ms heartbeat interval in milliseconds; 0 disables the heartbeat
+        @param msg raw bytes to send (must already be SSE-framed, e.g. \c ":hb\\n\\n")
+
+        @since HttpServerAsyncIo 1.0.1
+    */
+    setHeartbeat(int interval_ms, string msg = ":hb\n\n") {
+        heartbeat_ms = interval_ms;
+        heartbeat_msg = msg;
     }
 
     #! Returns the goal of the operation
@@ -120,6 +144,7 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
                 sock.send2(pending_data, DefaultSocketSendTimeout);
                 remove pending_data;
                 pending_offset = 0;
+                last_send_us = clock_getmicros();
             } catch (hash<ExceptionInfo> ex) {
                 state = STATE_DISCONNECTED;
                 return NOTHING;
@@ -143,7 +168,26 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
             }
         }
 
-        # No data to send - just monitor for disconnect
+        # No data to send — send a heartbeat if the interval has elapsed,
+        # otherwise arm a poll_timeout_ms so we wake in time for the next one.
+        if (heartbeat_ms > 0) {
+            int elapsed_ms = (clock_getmicros() - last_send_us) / 1000;
+            if (elapsed_ms >= heartbeat_ms) {
+                pending_data = heartbeat_msg;
+                pending_offset = 0;
+                return <SocketPollInfo>{
+                    "events": SOCK_POLLOUT | SOCK_POLLIN,
+                    "socket": sock,
+                };
+            }
+            return <SocketPollInfo>{
+                "events": SOCK_POLLIN,
+                "socket": sock,
+                "poll_timeout_ms": heartbeat_ms - elapsed_ms,
+            };
+        }
+
+        # No data to send and no heartbeat - just monitor for disconnect
         return <SocketPollInfo>{
             "events": SOCK_POLLIN,
             "socket": sock,

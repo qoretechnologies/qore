@@ -54,6 +54,32 @@ class TestSseHandler inherits ServerSentEventHandler {
     }
 }
 
+#! Handler that lets each test override the async heartbeat interval (ms)
+class HeartbeatSseHandler inherits ServerSentEventHandler {
+    public {
+        int hb_ms;
+    }
+
+    constructor(int heartbeat_ms) : ServerSentEventHandler() {
+        hb_ms = heartbeat_ms;
+    }
+
+    HttpServerAsyncIo::HttpSseStreamPollOperation setupAsyncSseConnection(Socket sock,
+            hash<auto> cx, hash<auto> hdr, string cid) {
+        HttpServerAsyncIo::HttpSseStreamPollOperation poll_op =
+            ServerSentEventHandler::setupAsyncSseConnection(sock, cx, hdr, cid);
+        poll_op.setHeartbeat(hb_ms);
+        return poll_op;
+    }
+
+    connectionRegisteredImpl(ServerSentEventConnection conn) {
+        conn.send(<SseMessageInfo>{
+            "event": "greeting",
+            "data": "hello",
+        });
+    }
+}
+
 class TestObserver inherits DataProvider::Observer {
     public {
         list<hash<auto>> events = ();
@@ -108,6 +134,12 @@ class SseObservableTest inherits Test {
         addTestCase("SseObservable receives multiple events", \testObserverMultipleEvents());
         addTestCase("SseObservable stopEvents cancels stream", \testStopEvents());
         addTestCase("SseObservable with POST method and JSON body", \testPostWithJsonBody());
+        addTestCase("SseObservable receives heartbeat events", \testHeartbeatReceived());
+        addTestCase("SseObservable suppresses heartbeat when emit_heartbeat=False",
+            \testHeartbeatSuppressed());
+        addTestCase("SseObservable closes on idle timeout", \testIdleTimeoutFires());
+        addTestCase("SseObservable heartbeats prevent idle timeout",
+            \testHeartbeatPreventsIdleTimeout());
         set_return_value(main());
     }
 
@@ -248,6 +280,186 @@ class SseObservableTest inherits Test {
         assertGe(1, data_events.size(), "at least 1 data event with POST");
         assertEq("greeting", data_events[0].data.event);
         assertEq("\"hello\"", data_events[0].data.data);
+
+        obs.stopEvents();
+    }
+
+    #! Mock HTTP server that sends only headers + no events; used to exercise
+    #! the client-side idle-timeout path with no server-side heartbeat.
+    private int startSilentServer(reference<bool> stop_flag) {
+        Socket listener();
+        listener.bindINET("localhost", 0, True, AF_INET, SOCK_STREAM);
+        listener.listen();
+        int lport = listener.getSocketInfo().port;
+
+        background sub () {
+            while (!stop_flag) {
+                try {
+                    *Socket client = listener.accept(250ms);
+                    if (!client) {
+                        continue;
+                    }
+                    background sub () {
+                        try {
+                            client.readHTTPHeader(5s);
+                            client.send2(
+                                "HTTP/1.1 200 OK\r\n"
+                                "Content-Type: text/event-stream\r\n"
+                                "Cache-Control: no-cache\r\n"
+                                "Connection: keep-alive\r\n"
+                                "\r\n", 5s);
+                            # Keep socket open, send nothing — server is "alive"
+                            # but silent, so the client's idle timeout must fire.
+                            while (!stop_flag && client.isOpen()) {
+                                usleep(100ms);
+                            }
+                        } catch (hash<ExceptionInfo> ex) {
+                            # client disconnect or similar — exit the thread
+                        }
+                        try {
+                            client.close();
+                        } catch () {}
+                    }();
+                } catch (hash<ExceptionInfo> ex) {
+                    # listener issue — retry on next loop iteration
+                }
+            }
+            listener.close();
+        }();
+        return lport;
+    }
+
+    testHeartbeatReceived() {
+        # Server heartbeat every 1s; client default emit_heartbeat = True
+        HeartbeatSseHandler hb_handler(1000);
+        HttpServer hb_server(<HttpServerOptionInfo>{
+            "logger": new Logger("hb", LoggerLevel::getLevelInfo()),
+            "debug": True,
+        });
+        on_exit hb_server.stop();
+        hb_server.setDefaultHandler("sse", hb_handler);
+        int hb_port = hb_server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+
+        string url = sprintf("http://localhost:%d/sse", hb_port);
+        HttpClientIo::HttpClientConnectionManager mgr();
+        HttpClientStreamingIo::SseObservable obs(mgr, url, "GET", "/sse");
+
+        TestObserver observer(4);  # connected + greeting + >= 2 heartbeats
+        obs.registerObserver(observer);
+        obs.observersReady();
+
+        bool got = observer.waitForCount(4, 5s);
+        assertEq(True, got, "observed >= 2 heartbeats on top of connected+greeting");
+
+        list<hash<auto>> hb_events = (
+            select observer.events,
+            $1.event_id == HttpClientStreamingIo::EVENT_SSE_HEARTBEAT
+        );
+        assertGe(2, hb_events.size(), "at least 2 heartbeat events");
+        assertEq("hb", hb_events[0].data.comment, "heartbeat comment payload");
+
+        obs.stopEvents();
+    }
+
+    testHeartbeatSuppressed() {
+        # Server heartbeat every 1s; client emit_heartbeat = False
+        HeartbeatSseHandler hb_handler(1000);
+        HttpServer hb_server(<HttpServerOptionInfo>{
+            "logger": new Logger("hb-s", LoggerLevel::getLevelInfo()),
+            "debug": True,
+        });
+        on_exit hb_server.stop();
+        hb_server.setDefaultHandler("sse", hb_handler);
+        int hb_port = hb_server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+
+        string url = sprintf("http://localhost:%d/sse", hb_port);
+        HttpClientIo::HttpClientConnectionManager mgr();
+        HttpClientStreamingIo::SseObservable obs(mgr, url, "GET", "/sse",
+            NOTHING, NOTHING, {"emit_heartbeat": False});
+
+        TestObserver observer(2);  # connected + greeting only
+        obs.registerObserver(observer);
+        obs.observersReady();
+
+        bool got = observer.waitForCount(2, 5s);
+        assertEq(True, got, "received connected + greeting");
+
+        # Wait long enough for several heartbeats to arrive and be suppressed
+        usleep(2500ms);
+
+        list<hash<auto>> hb_events = (
+            select observer.events,
+            $1.event_id == HttpClientStreamingIo::EVENT_SSE_HEARTBEAT
+        );
+        assertEq(0, hb_events.size(), "no heartbeat events surfaced");
+
+        # Connection still alive — send an extra event from the server
+        hb_handler.sendAll(<SseMessageInfo>{"event": "update", "data": "live"});
+        assertTrue(observer.waitForCount(3, 3s), "data event still delivered");
+
+        obs.stopEvents();
+    }
+
+    testIdleTimeoutFires() {
+        bool stop_flag = False;
+        int silent_port = startSilentServer(\stop_flag);
+        on_exit stop_flag = True;
+
+        string url = sprintf("http://localhost:%d/sse", silent_port);
+        HttpClientIo::HttpClientConnectionManager mgr();
+        HttpClientStreamingIo::SseObservable obs(mgr, url, "GET", "/sse",
+            NOTHING, NOTHING, {"idle_timeout": 500ms});
+
+        TestObserver observer(2);  # connected + closed
+        obs.registerObserver(observer);
+        obs.observersReady();
+
+        bool got = observer.waitForCount(2, 5s);
+        assertEq(True, got, "idle-timeout produced connected + closed");
+
+        list<hash<auto>> closed = (
+            select observer.events,
+            $1.event_id == HttpClientStreamingIo::EVENT_SSE_CLOSED
+        );
+        assertEq(1, closed.size(), "one closed event");
+        assertEq("idle-timeout", closed[0].data.reason, "closed reason");
+    }
+
+    testHeartbeatPreventsIdleTimeout() {
+        # Server heartbeat every 1s; idle timeout 2.5s so heartbeats reset it
+        HeartbeatSseHandler hb_handler(1000);
+        HttpServer hb_server(<HttpServerOptionInfo>{
+            "logger": new Logger("hb-p", LoggerLevel::getLevelInfo()),
+            "debug": True,
+        });
+        on_exit hb_server.stop();
+        hb_server.setDefaultHandler("sse", hb_handler);
+        int hb_port = hb_server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+
+        string url = sprintf("http://localhost:%d/sse", hb_port);
+        HttpClientIo::HttpClientConnectionManager mgr();
+        HttpClientStreamingIo::SseObservable obs(mgr, url, "GET", "/sse",
+            NOTHING, NOTHING, {"idle_timeout": 2500ms});
+
+        TestObserver observer(100);  # keep collecting
+        obs.registerObserver(observer);
+        obs.observersReady();
+
+        # Observe for 3.5s — with 1s heartbeat and 2.5s idle timeout, the
+        # connection must stay alive (no EVENT_SSE_CLOSED with idle-timeout)
+        usleep(3500ms);
+
+        list<hash<auto>> closed = (
+            select observer.events,
+            $1.event_id == HttpClientStreamingIo::EVENT_SSE_CLOSED
+        );
+        assertEq(0, closed.size(), "no idle-timeout fired");
+
+        list<hash<auto>> hb_events = (
+            select observer.events,
+            $1.event_id == HttpClientStreamingIo::EVENT_SSE_HEARTBEAT
+        );
+        assertGe(2, hb_events.size(), "heartbeats kept the stream alive");
 
         obs.stopEvents();
     }

@@ -91,6 +91,19 @@ public class SseObservable inherits DataProvider::DelayedObservable {
         #! I/O timeout for Queue reads
         timeout timeout_ms = 30s;
 
+        #! Idle-timeout deadline; if no SSE traffic (events or heartbeat comments)
+        #! arrives within this window, the stream is treated as dead and closed.
+        #! Set \c 0 to disable idle-timeout detection.
+        timeout idle_timeout_ms = 45s;
+
+        #! If \c True, comment-only SSE messages (e.g. \c ":hb\\n\\n") are delivered to
+        #! observers via @ref EVENT_SSE_HEARTBEAT; if \c False, they are silently
+        #! consumed but still reset the idle-timeout deadline.
+        bool emit_heartbeat = True;
+
+        #! Epoch microseconds of the last SSE message received (data or heartbeat)
+        int last_event_us = 0;
+
         #! Stop flag
         bool stop = False;
 
@@ -114,6 +127,14 @@ public class SseObservable inherits DataProvider::DelayedObservable {
         @param opts options:
         - \c serialization: "json" or "none" (default: "none") — deserialize event data
         - \c timeout: I/O timeout for reading events (default: 30s)
+        - \c idle_timeout: inactivity deadline; if no SSE traffic (events or
+          heartbeat comments) arrives within this window, the stream is treated
+          as dead and closed via @ref EVENT_SSE_CLOSED with
+          \c reason = \c "idle-timeout". Set \c 0 to disable. Default \c 45s.
+        - \c emit_heartbeat: if \c True (default), deliver comment-only SSE
+          messages (e.g. \c ":hb\\n\\n") to observers via
+          @ref EVENT_SSE_HEARTBEAT; if \c False, consume them silently while
+          still using them to reset the idle-timeout deadline.
     */
     constructor(HttpClientIo::HttpClientConnectionManager mgr, string url,
             string method, string path, *hash<auto> headers, *data body,
@@ -130,6 +151,12 @@ public class SseObservable inherits DataProvider::DelayedObservable {
         }
         if (self.opts.timeout) {
             timeout_ms = self.opts.timeout;
+        }
+        if (exists self.opts.idle_timeout) {
+            idle_timeout_ms = self.opts.idle_timeout;
+        }
+        if (exists self.opts.emit_heartbeat) {
+            emit_heartbeat = self.opts.emit_heartbeat;
         }
     }
 
@@ -181,13 +208,34 @@ public class SseObservable inherits DataProvider::DelayedObservable {
     #! The read loop — runs on the worker pool thread
     /** Reads parsed SSE events from the Queue, optionally deserializes JSON,
         and notifies observers.
+
+        @par Idle-timeout detection
+        When \c idle_timeout_ms > 0, the loop tracks the wall-clock interval
+        since the last received SSE message (data event or heartbeat comment).
+        If the interval exceeds \c idle_timeout_ms, the stream is treated as
+        dead and the loop returns via @ref EVENT_SSE_CLOSED with
+        \c reason = \c "idle-timeout".
     */
     private readLoop() {
+        hash<auto> close_info = {};
         on_exit {
+            # Always cancel the underlying stream so the poll op completes
+            # and its SseAction releases its queue ref.  Without this, a
+            # loop exit on idle-timeout or NOTHING sentinel would leave the
+            # poll op running with a dangling queue ref.
+            if (stream) {
+                try {
+                    stream.cancel();
+                } catch (hash<ExceptionInfo> ex) {
+                    # Already cancelled or stream gone — fine
+                }
+            }
             if (self) {
-                notifyObservers(EVENT_SSE_CLOSED, {});
+                notifyObservers(EVENT_SSE_CLOSED, close_info);
             }
         }
+
+        last_event_us = clock_getmicros();
 
         while (True) {
             if (!self) {
@@ -200,17 +248,35 @@ public class SseObservable inherits DataProvider::DelayedObservable {
                 }
             }
 
+            # If an idle timeout is configured, bound the Queue wait so we can
+            # detect dead streams even when no traffic arrives.
+            timeout wait_ms = timeout_ms;
+            if (idle_timeout_ms > 0) {
+                int elapsed_ms = (clock_getmicros() - last_event_us) / 1000;
+                int remaining_ms = idle_timeout_ms - elapsed_ms;
+                if (remaining_ms <= 0) {
+                    close_info = {"reason": "idle-timeout"};
+                    return;
+                }
+                if (remaining_ms < wait_ms) {
+                    wait_ms = remaining_ms;
+                }
+            }
+
             auto evt;
             try {
-                evt = sse_queue.get(timeout_ms);
+                evt = sse_queue.get(wait_ms);
             } catch (hash<ExceptionInfo> ex) {
                 if (ex.err == "QUEUE-TIMEOUT") {
-                    # Timeout — loop and retry
+                    # Loop; idle-timeout check at the top handles dead streams
                     continue;
                 }
                 # Any other Queue error terminates the read loop
                 return;
             }
+
+            # Reset idle deadline on any received event, including error hashes
+            last_event_us = clock_getmicros();
 
             # NOTHING sentinel means stream ended
             if (!exists evt) {
@@ -227,6 +293,18 @@ public class SseObservable inherits DataProvider::DelayedObservable {
             if (evt_hash.hasKey("err")) {
                 # Error from SseAction — terminate the read loop
                 return;
+            }
+
+            # Comment-only SSE message (heartbeat) — no data/event/id/retry
+            if (evt_hash.comment.val() && !evt_hash.data.val() && !evt_hash.event.val()
+                    && !evt_hash.id.val() && !evt_hash.retry.val()) {
+                if (emit_heartbeat) {
+                    if (!self) {
+                        return;
+                    }
+                    notifyObservers(EVENT_SSE_HEARTBEAT, evt_hash);
+                }
+                continue;
             }
 
             # Parsed SseMessageInfo hash

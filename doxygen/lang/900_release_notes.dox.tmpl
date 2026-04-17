@@ -1377,6 +1377,11 @@ cargo install tree-sitter-cli@0.26.5
       - new @ref HttpServerAsyncIo::Http2PollOperation "Http2PollOperation" class for HTTP/2 server connection handling
       - new \c Http3ServerPollOperation class for QUIC/HTTP/3 server connection handling
       - \c HttpAsyncSocketIoController supports HTTP/2 and HTTP/3 via \c http_version option
+      - @ref HttpServerAsyncIo::HttpSseStreamPollOperation "HttpSseStreamPollOperation" now emits periodic
+        SSE heartbeat comments (configured via
+        @ref ServerSentEventHandler::ServerSentEventHandler "ServerSentEventHandler"'s \c heartbeat option)
+        using the \c poll_timeout_ms timer on @ref Qore::SocketPollInfo "SocketPollInfo" so NAT/proxy
+        intermediaries do not silently drop idle SSE connections
     - @ref httpstreamclientintro "HttpStreamClient" module
       - new module providing a convenience API for reading HTTP streaming responses
       - supports Server-Sent Events (SSE) with @ref HttpStreamClient::HTTPResponseStream::readServerSentEvent() "HTTPResponseStream::readServerSentEvent()"
