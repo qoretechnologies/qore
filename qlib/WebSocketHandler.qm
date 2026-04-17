@@ -1201,6 +1201,62 @@ class WebSocketStreamProcessor {
             return;
         }
 
+        # Fast path: the transport already decoded WebSocket frames in C++
+        # (Phase 2 WebSocketStreamFrameState).  Drain one typed frame hash
+        # per iteration — no stream_buf, no ws_parse_frame.
+        if (ctx.usesFrameState()) {
+            try {
+                while (True) {
+                    *hash<auto> frame = ctx.readFrame();
+                    if (!exists frame) {
+                        if (!ctx.isOpen()) {
+                            markClosedOnce();
+                        }
+                        return;
+                    }
+                    last_recv_timestamp = clock_getmillis() / 1000;
+                    string type = frame.type;
+                    if (type == "close") {
+                        markClosedOnce();
+                        return;
+                    }
+                    if (type == "ping" || type == "pong") {
+                        # Auto-pong is already done in C++; nothing to do
+                        continue;
+                    }
+                    if (type == "error") {
+                        handler.logError("H3 WebSocket frame-state error: %y: %y",
+                            frame.code ?? WSCC_ProtocolError,
+                            frame.reason ?? "");
+                        markClosedOnce();
+                        return;
+                    }
+                    if (type == "text" || type == "binary") {
+                        auto msg = frame.data ?? binary();
+                        # Extensions are applied per-message on the worker thread
+                        hash<auto> ext_ctx = {
+                            "op": type == "text" ? WSOP_Text : WSOP_Binary,
+                            "rsv1": False,
+                            "rsv2": False,
+                            "rsv3": False,
+                            "fin": True,
+                        };
+                        wsc.applyIncomingExtensions(\msg, ext_ctx);
+                        wsc.validateIncomingMessage(\msg);
+                        wsc.gotMessage(msg);
+                    }
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "OBJECT-ALREADY-DELETED") {
+                    return;
+                }
+                handler.logError("H3 WebSocket stream error (frame-state): %s: %s",
+                    ex.err, ex.desc);
+                markClosedOnce();
+            }
+            return;
+        }
+
         try {
             # Read ALL available stream data (may be multiple Queue entries)
             bool got_data = False;
@@ -1823,13 +1879,15 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
             # CONNECT response was already sent by HttpServer.qm before calling start()
             # Create HTTP/3 stream context for WebSocket frame I/O
             *Queue h3_data_queue = cx."header-info".stream_data_queue;
+            bool uses_frame_state = cx."header-info".stream_uses_frame_state ?? False;
             code<nothing()> wake = sub () {
                 if (async_ctrl) {
                     async_ctrl.wakeSocket(sock);
                 }
             };
             wsc.setStreamContext(new AsyncSocketIo::Http3StreamContext(
-                sock, h3_session_id, h3_stream_id, wake, h3_data_queue));
+                sock, h3_session_id, h3_stream_id, wake, h3_data_queue,
+                uses_frame_state));
         }
 
         # Set up async H1 WebSocket I/O

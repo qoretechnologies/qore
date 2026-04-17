@@ -1218,13 +1218,24 @@ public class HttpAsyncSocketIoController {
         bool body_streaming = request.hdr && !request.headers_end_stream;
 
         # For extended CONNECT: create unlimited Queue for async data delivery.
-        # Data is pushed directly from the QUIC receive callback (h3RecvDataCallback)
-        # to the Queue, eliminating the I/O poll loop dependency for data delivery.
+        # WebSocket CONNECT uses the C++ WebSocketStreamFrameState path —
+        # the Queue is populated with one entry per complete WebSocket
+        # message (a typed hash), not per raw transport chunk.  This avoids
+        # O(N²) Qore-side binary concatenation for large WS messages.
+        # Other extended-CONNECT tunnels (e.g. QUIC datagram tunnels) keep
+        # the raw-byte Queue contract.
         *Queue stream_data_queue;
+        bool stream_uses_frame_state = False;
         if (is_extended_connect) {
             stream_data_queue = new Queue();
-            listener.registerQuicConnectStreamQueue(session_id, stream_id,
-                stream_data_queue);
+            if (is_websocket_connect) {
+                listener.registerQuicConnectStreamFrameState(session_id, stream_id,
+                    stream_data_queue);
+                stream_uses_frame_state = True;
+            } else {
+                listener.registerQuicConnectStreamQueue(session_id, stream_id,
+                    stream_data_queue);
+            }
             # Register the Queue with the H3 poll operation for dispatch tracking
             h3op.registerStreamQueue(session_id, stream_id, stream_data_queue);
         }
@@ -1269,6 +1280,7 @@ public class HttpAsyncSocketIoController {
                 "body_streaming": body_streaming,
                 "headers_end_stream": request.headers_end_stream ?? False,
                 "stream_data_queue": stream_data_queue,
+                "stream_uses_frame_state": stream_uses_frame_state,
                 "send_stream_data": send_stream_data,
                 "io_wake": sub () { controller.wakeSocket(listener); },
                 "register_stream_listener": sub (object listener) {

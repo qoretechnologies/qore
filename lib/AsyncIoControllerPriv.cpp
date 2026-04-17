@@ -2254,9 +2254,11 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                 auto* h3_server_op = dynamic_cast<Http3ServerPollOperationPriv*>(op.spop_base);
                 if (h3_server_op) {
                     std::vector<std::string> ready = h3_server_op->getAndClearDataReadyStreams();
+                    ASYNC_IO_TRACE("AsyncIo h3_server dispatch check ready=%zu\n", ready.size());
                     if (!ready.empty()) {
                         ensureCallDispatcher();
                         for (auto& skey : ready) {
+                            ASYNC_IO_TRACE("AsyncIo h3_server dispatchStreamDataAsync skey='%s'\n", skey.c_str());
                             op.spop_obj->ref();
                             call_dispatcher.load(std::memory_order_acquire)->dispatchStreamDataAsync(op.spop_obj, skey);
                         }

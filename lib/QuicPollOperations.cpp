@@ -569,6 +569,7 @@ int SocketQuicClientPollOperation::sendPendingPackets(
     next_expiry = result.next_expiry;
 
     if (pkt_batch_.empty()) {
+        ASYNC_IO_TRACE("SocketQuicClientPollOperation::sendPendingPackets EMPTY (no packets to send)\n");
         return 0;
     }
 
@@ -577,12 +578,16 @@ int SocketQuicClientPollOperation::sendPendingPackets(
     int sent = sendQuicPacketsBatch(fd, pkt_batch_, nullptr, 0);
     if (sent < 0) {
         if (errno == EAGAIN || errno == EWOULDBLOCK) {
+            ASYNC_IO_TRACE("SocketQuicClientPollOperation::sendPendingPackets EAGAIN fd=%d batch=%zu\n",
+                fd, pkt_batch_.size());
             return SOCK_POLLOUT;
         }
         pkt_batch_.clear();
         xsink->raiseErrnoException("QUIC-SEND-ERROR", errno, "sendto/sendmmsg() failed");
         return -1;
     }
+    ASYNC_IO_TRACE("SocketQuicClientPollOperation::sendPendingPackets SENT fd=%d sent=%d/%zu\n",
+        fd, sent, pkt_batch_.size());
     if (sent > 0 && sent < pkt_batch_.size()) {
         printd(1, "SocketQuicClientPollOperation::sendPendingPackets(): partial QUIC send: %d/%d packets\n",
             sent, pkt_batch_.size());
@@ -599,6 +604,7 @@ int SocketQuicClientPollOperation::sendPendingPackets(
 
 int SocketQuicClientPollOperation::flushPendingWrites(ExceptionSink* xsink) {
     if (!quic_session || !quic_session->hasPendingWrite()) {
+        ASYNC_IO_TRACE("SocketQuicClientPollOperation::flushPendingWrites NO_PENDING\n");
         return 0;
     }
     // Use a local batch — NOT the member pkt_batch_ — because this method
@@ -611,10 +617,14 @@ int SocketQuicClientPollOperation::flushPendingWrites(ExceptionSink* xsink) {
     QuicPacketBatch flush_batch;
     auto result = quic_session->processTimerAndWrite(flush_batch, xsink);
     if (result.error || flush_batch.empty()) {
+        ASYNC_IO_TRACE("SocketQuicClientPollOperation::flushPendingWrites EMPTY error=%d batch_empty=%d\n",
+            (int)result.error, (int)flush_batch.empty());
         return 0;
     }
     int fd = sock->priv->socket->getSocket();
     int sent = sendQuicPacketsBatch(fd, flush_batch, nullptr, 0);
+    ASYNC_IO_TRACE("SocketQuicClientPollOperation::flushPendingWrites SENT fd=%d sent=%d/%zu\n",
+        fd, sent, flush_batch.size());
     if (sent < 0) {
         if (errno != EAGAIN && errno != EWOULDBLOCK) {
             xsink->raiseErrnoException("QUIC-SEND-ERROR", errno,

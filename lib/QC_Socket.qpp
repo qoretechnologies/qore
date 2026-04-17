@@ -6800,6 +6800,54 @@ nothing Socket::deregisterQuicConnectStreamQueue(int session_id, int stream_id) 
     s->deregisterQuicConnectStreamQueue(session_id, stream_id, xsink);
 }
 
+//! Register a C++ WebSocket frame state machine for an HTTP/3 CONNECT tunnel
+/** Once registered, the server-side QUIC receive path decodes WebSocket
+    frames on the I/O thread (no per-chunk Qore-level concatenation) and
+    pushes complete WS messages to @p queue as hashes of shape
+    @c {type, data, [code, reason]}.  Only one entry is pushed per complete
+    WebSocket message, even if the underlying transport delivered it in
+    many small chunks.  Control frames (PING / CLOSE) are auto-handled
+    by the state machine.
+
+    @param session_id the QUIC session ID
+    @param stream_id  the HTTP/3 stream ID
+    @param queue      an unlimited Queue for completed-message delivery
+
+    @throw QUIC-ERROR if session_id or stream_id is invalid
+
+    @since %Qore 2.4
+*/
+nothing Socket::registerQuicConnectStreamFrameState(int session_id, int stream_id, Queue[Queue] queue) {
+    if (session_id <= 0) {
+        xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0",
+            (long long)session_id);
+        return QoreValue();
+    }
+    if (stream_id < 0) {
+        xsink->raiseException("QUIC-ERROR", "invalid stream_id %lld: must be >= 0",
+            (long long)stream_id);
+        return QoreValue();
+    }
+    if (queue->getMax() != -1) {
+        xsink->raiseException("QUIC-ERROR", "Queue must be unlimited (max = -1) for "
+            "CONNECT stream frame delivery; got max = %lld", (long long)queue->getMax());
+        return QoreValue();
+    }
+    s->registerQuicConnectStreamFrameState(session_id, stream_id, queue.release(), xsink);
+}
+
+//! Deregister the WebSocket frame state machine for an HTTP/3 CONNECT tunnel
+/** @since %Qore 2.4 */
+nothing Socket::deregisterQuicConnectStreamFrameState(int session_id, int stream_id) {
+    if (session_id <= 0) {
+        return QoreValue();
+    }
+    if (stream_id < 0) {
+        return QoreValue();
+    }
+    s->deregisterQuicConnectStreamFrameState(session_id, stream_id, xsink);
+}
+
 //! Reset an HTTP/3 stream by shutting down the read side and cleaning up
 /** Sends a STOP_SENDING signal to the peer for the given stream and removes the stream
     from the QUIC session.

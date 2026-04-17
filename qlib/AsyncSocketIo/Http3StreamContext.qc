@@ -55,6 +55,10 @@ public class Http3StreamContext inherits AbstractStreamContext {
             @ref Qore::Socket::readQuicConnectStreamData().  Data is pushed by
             h3RecvDataCallback() in the C++ QUIC session.
 
+            When @ref uses_frame_state is True, the same Queue carries typed
+            frame hashes (one per complete WebSocket message) instead of raw
+            binary chunks, and @ref readFrame() must be used to drain it.
+
             @since AsyncSocketIo 1.2
         */
         *Queue data_queue;
@@ -62,6 +66,14 @@ public class Http3StreamContext inherits AbstractStreamContext {
         /** @since AsyncSocketIo 1.2
         */
         bool closed = False;
+        #! True when data_queue contains pre-decoded WebSocket frame hashes
+        /** Set when the underlying transport is feeding a C++ WebSocketStreamFrameState
+            rather than a raw-data queue.  Consumers MUST use @ref readFrame()
+            in this mode — @ref readData() throws.
+
+            @since AsyncSocketIo 1.3
+        */
+        bool uses_frame_state = False;
     }
 
     #! Creates an HTTP/3 stream context
@@ -70,9 +82,12 @@ public class Http3StreamContext inherits AbstractStreamContext {
         @param stream_id the HTTP/3 stream ID (must be non-negative)
         @param wake_callback optional callback to wake the I/O controller after writes
         @param data_queue optional Queue for receiving data from the QUIC receive callback
+        @param uses_frame_state when True, @p data_queue carries typed WS frame
+            hashes (one per complete message) and @ref readFrame() must be used
     */
     constructor(Socket sock, int session_id, int stream_id,
-            *code<nothing()> wake_callback, *Queue data_queue) {
+            *code<nothing()> wake_callback, *Queue data_queue,
+            bool uses_frame_state = False) {
         @assert(sock, "socket cannot be null");
         @assert(session_id > 0, "session_id must be positive");
         @assert(stream_id >= 0, "stream_id must be non-negative");
@@ -81,6 +96,42 @@ public class Http3StreamContext inherits AbstractStreamContext {
         self.stream_id = stream_id;
         self.wake_callback = wake_callback;
         self.data_queue = data_queue;
+        self.uses_frame_state = uses_frame_state;
+    }
+
+    #! Returns True when the transport feeds pre-decoded WebSocket frame hashes
+    /** @since AsyncSocketIo 1.3 */
+    bool usesFrameState() {
+        return uses_frame_state;
+    }
+
+    #! Drains one pre-decoded WebSocket frame hash from the frame queue (non-blocking)
+    /** Only valid when @ref usesFrameState() is True.  The returned hash has
+        the shape @c {type: string, data: binary, [code: int, reason: string]}
+        — see @ref WebSocketStreamFrameState for semantics.
+
+        Returns @ref nothing when the queue is drained.  If a NOTHING sentinel
+        is pulled, the context is marked closed and @ref isOpen() returns False.
+
+        @since AsyncSocketIo 1.3
+    */
+    *hash<auto> readFrame() {
+        if (!uses_frame_state) {
+            throw "HTTP3-STREAM-ERROR",
+                "readFrame() requires frame-state mode — use readData() for raw streams";
+        }
+        if (!data_queue) {
+            return NOTHING;
+        }
+        auto result = data_queue.tryGet();
+        if (!exists result) {
+            return NOTHING;
+        }
+        if (!exists result.value || result.value.typeCode() != NT_HASH) {
+            closed = True;
+            return NOTHING;
+        }
+        return result.value;
     }
 
     string getProtocol() {

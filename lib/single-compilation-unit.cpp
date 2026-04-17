@@ -411,3 +411,4 @@
 #include "AsyncIoControllerPriv.cpp"
 // WebSocket frame codec (RFC 6455)
 #include "WebSocketFrameCodec.cpp"
+#include "WebSocketStreamFrameState.cpp"
