@@ -7183,6 +7183,14 @@ extern "C" DLLEXPORT uint64_t qore_rt_pseudo_typeCode(uint64_t val_bits) {
 
 //! Fast pseudo-method: size() - return size as NaN-boxed int for list/string/hash
 extern "C" DLLEXPORT uint64_t qore_rt_pseudo_size(uint64_t val_bits) {
+    // Mirror of `<type>::size()` and `<type>::length()` pseudo-method dispatch.
+    // `<value>::size()` is the fallback and returns 0, which matches the
+    // default branch. Each container type defines its own size(). The fast
+    // path previously omitted NT_BINARY so `binary_value.size()` returned 0 —
+    // breaking loops of the form `for (int i = 0; i < b.size(); ++i)` (loop
+    // body never executed, rv appends silently lost). NT_STRING.strlen() is
+    // already bytes for both strlen() and length() here — the pseudo-method
+    // handlers map both strlen/length to this helper (QoreIRToLLVM.cpp:6415).
     QoreValue v = fromBits(val_bits);
     int64_t size = 0;
     switch (v.getType()) {
@@ -7194,6 +7202,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_pseudo_size(uint64_t val_bits) {
             break;
         case NT_HASH:
             size = static_cast<int64_t>(v.get<const QoreHashNode>()->size());
+            break;
+        case NT_BINARY:
+            size = static_cast<int64_t>(v.get<const BinaryNode>()->size());
             break;
         default:
             break;
