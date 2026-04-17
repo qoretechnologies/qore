@@ -243,6 +243,20 @@ public:
         return from_module.empty() ? nullptr : from_module.c_str();
     }
 
+    //! Override the module attribution of this namespace.
+    /** Used by the AOT deserializer to repair cases where a namespace was first
+        created under a different module's context (as a dependency-induced
+        extension) and is later re-encountered by the owning module itself.
+        Mirrors the parseAssimilate() repair at qore_ns_private::parseAssimilate().
+    */
+    DLLLOCAL void overrideFromModule(const char* mod_name) {
+        if (mod_name) {
+            from_module = mod_name;
+        } else {
+            from_module.clear();
+        }
+    }
+
     //! Sets a key value in the namespace's key-value store
     /** @param key the key to store
         @param value the value to store

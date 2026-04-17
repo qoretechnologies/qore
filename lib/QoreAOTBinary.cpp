@@ -4279,7 +4279,23 @@ bool QoreAOTBinaryDeserializer::deserializeNamespaces(std::string& error) {
             }
 
             if (existing) {
-                ns_list[i] = qore_ns_private::get(*existing);
+                qore_ns_private* existing_priv = qore_ns_private::get(*existing);
+                // Repair from_module attribution when this module is the authoritative owner.
+                // The existing namespace may have been created earlier in this program by a
+                // dependency that extends our namespace (e.g. ConnectionProvider.qmod depends on
+                // DataProvider.qmod, and DP's deserialization runs first under mod_ctx="DataProvider"
+                // — creating a ConnectionProvider namespace attributed to "DataProvider"). When CP's
+                // own deserializer then finds its namespace already present, we must re-attribute it
+                // to CP so reflection reports the correct module owner. Mirrors the parseAssimilate()
+                // repair used on the source-loading path.
+                const char* mod_ctx = get_module_context_name();
+                if (mod_ctx && strcmp(mod_ctx, name) == 0) {
+                    const char* existing_from = existing_priv->getModuleName();
+                    if (!existing_from || strcmp(existing_from, mod_ctx) != 0) {
+                        existing_priv->overrideFromModule(mod_ctx);
+                    }
+                }
+                ns_list[i] = existing_priv;
             } else {
                 QoreNamespace* ns = new QoreNamespace(name);
                 qore_ns_private* nsp = qore_ns_private::get(*ns);
