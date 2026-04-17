@@ -171,6 +171,15 @@ public class Http2ClientConnection inherits HttpClientConnection {
         poll_op.registerStreamListener(stream_id, listener);
     }
 
+    #! Installs a WebSocket frame-state decoder on an existing CONNECT stream
+    /** @param stream_id the HTTP/2 stream ID
+        @param msg_queue Queue to receive typed frame hashes
+        @param residual body bytes already drained from the old Channel
+    */
+    installFrameState(int stream_id, Queue msg_queue, *binary residual) {
+        poll_op.installFrameState(stream_id, msg_queue, residual);
+    }
+
     #! Submits a request with streaming support (HTTP/2-specific)
     /** @param method HTTP method
         @param path request path

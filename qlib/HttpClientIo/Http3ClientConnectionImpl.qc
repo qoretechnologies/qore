@@ -213,6 +213,15 @@ public class Http3ClientConnection inherits HttpClientConnection {
         poll_op.registerStreamNotifyAndListener(stream_id, listener);
     }
 
+    #! Installs a WebSocket frame-state decoder on an existing CONNECT stream
+    /** @param stream_id the QUIC stream ID
+        @param msg_queue Queue to receive typed frame hashes
+        @param residual body bytes already drained from the old Channel
+    */
+    installFrameState(int stream_id, Queue msg_queue, *binary residual) {
+        poll_op.installFrameState(stream_id, msg_queue, residual);
+    }
+
     #! Sends data on a streaming HTTP/3 request
     /** @param stream_id the stream ID to send data on
         @param data the data to send (can be NOTHING to send END_STREAM only)

@@ -5120,14 +5120,20 @@ public class WebSocketClientPollOperation inherits WebSocketClientPollOperationB
 /** Uses the stream listener pattern from the async I/O controller.
     The connection's poll operation (managed by HttpClientConnectionManager)
     dispatches \c onStreamData() to the worker pool when data arrives,
-    which calls \c notifyIo() on this adapter.  The adapter reads from the
-    stream handle's Channel, parses WS frames, and delivers messages to
-    \c recv_channel for consumption by the WebSocketClient delivery mechanism.
+    which calls \c notifyIo() on this adapter.  The adapter reads typed
+    WebSocket frame hashes from the C++ frame-state decoder's Queue and
+    delivers messages to \c recv_channel for consumption by the
+    WebSocketClient delivery mechanism.
 
     Sending is non-blocking via the connection's \c sendStreamData().
 
     No threads, no blocking I/O — fully event-driven via the async I/O controller.
     Works with both HTTP/2 (\c Http2ClientConnection) and HTTP/3 (\c Http3ClientConnection).
+
+    Large-frame fix: DATA chunks are decoded into complete WS messages in
+    pure C++ (@ref WebSocketStreamFrameState), so there is no Qore-level
+    binary accumulation of raw transport bytes and no O(N²) concatenation
+    for multi-megabyte messages.
 
     @since WebSocketClient 2.4
 */
@@ -5139,24 +5145,22 @@ public class WebSocketClientHcioPollOp {
         #! Connection object (for sendStreamData); typed as generic base
         HttpClientIo::HttpClientConnection conn;
 
-        #! Queue for incoming DATA (used for H2 stream queue registration)
-        Queue data_queue();
+        #! Queue fed by the C++ frame-state decoder with typed frame hashes
+        #! (\c {type: text|binary|ping|pong|close|error, data?, code?, reason?, rsv1?, rsv2?, rsv3?})
+        Queue msg_queue();
 
-        #! The H2 CONNECT stream ID
+        #! The H2/H3 CONNECT stream ID
         int stream_id;
 
         #! True when the adapter is fully initialized and delivery is safe
         bool started = False;
 
-        #! Mutex to serialize notifyIo/drainAndParseFrames (multiple worker
+        #! Mutex to serialize notifyIo/drainMsgQueue (multiple worker
         #! threads may call notifyIo concurrently)
         Mutex process_mutex();
 
         #! Channel for received processed WS messages
         Channel recv_channel(-1);
-
-        #! Buffer for incomplete WS frames spanning multiple H2 DATA chunks
-        binary stream_buf;
 
         #! Active WebSocket extensions
         *list<AbstractWebSocketExtension> active_extensions;
@@ -5211,26 +5215,33 @@ public class WebSocketClientHcioPollOp {
         @assert(stream_id >= 0, "stream_id must be non-negative after startStreaming");
 
         # Register for async stream data notifications.
-        # H2: uses stream queue + listener (queue enables data_ready_streams signal)
-        # H3: uses registerStreamNotifyAndListener (no queue needed)
-        # H1: uses protocol-switched listener for raw data after 101 Upgrade
+        # H2: stream queue registration populates data_ready_streams so the
+        #     controller fires onStreamData() whenever DATA is dispatched.
+        # H3: registerStreamNotifyAndListener marks the stream and installs
+        #     a listener mapping.
+        # H1: uses WebSocketClientPollOperation (C++ codec) with the extracted
+        #     socket, not WebSocketClientHcioPollOp.
         if (conn instanceof HttpClientIo::Http2ClientConnection) {
             auto h2conn = cast<HttpClientIo::Http2ClientConnection>(conn);
-            h2conn.registerStreamQueue(stream_id, data_queue);
+            h2conn.registerStreamQueue(stream_id, msg_queue);
             h2conn.registerStreamListener(stream_id, self);
         } else if (conn instanceof HttpClientIo::Http3ClientConnection) {
             auto h3conn = cast<HttpClientIo::Http3ClientConnection>(conn);
             h3conn.registerStreamNotifyAndListener(stream_id, self);
         }
-        # Note: Http1ClientConnection is not handled here — H1 WebSocket
-        # uses WebSocketClientPollOperation (C++ codec) with the extracted
-        # socket, not WebSocketClientHcioPollOp.
+
+        # Swap the stream's default ChannelAction for a FrameStateAction so
+        # DATA chunks are decoded in pure C++ and the resulting typed frame
+        # hashes land in msg_queue.  installFrameState() drains any residual
+        # body bytes from the old Channel and hands them to the new frame
+        # state so the decoder sees a contiguous byte stream across the swap.
+        stream.installFrameState(msg_queue);
     }
 
     #! Called on a worker thread when stream data has been dispatched
     /** Dispatched by the async I/O controller via onStreamData() -> notifyIo().
-        Reads from the stream handle's Channel (non-blocking), parses WS frames,
-        delivers to recv_channel.
+        Drains typed frame hashes from msg_queue and delivers reassembled
+        messages to recv_channel.
     */
     notifyIo() {
         AutoLock al(process_mutex);
@@ -5238,7 +5249,7 @@ public class WebSocketClientHcioPollOp {
             return;
         }
 
-        bool have_frames = drainAndParseFrames();
+        bool have_frames = drainMsgQueue();
 
         # Only trigger delivery after start() — before that, poll_op isn't
         # assigned in the WebSocketClient so scheduleDelivery() would fail.
@@ -5249,107 +5260,75 @@ public class WebSocketClientHcioPollOp {
         }
     }
 
-    #! Drains data from the stream handle's Channel and parses WS frames
-    /** Uses readData(0s) for non-blocking Channel read.
-        @return True if any frames were processed
-    */
     #! Marks the adapter as started — enables on_poll_complete delivery
     start() {
         started = True;
     }
 
-    #! Drains data already in the Channel and returns True if WS frames were parsed
+    #! Drains any frames already dispatched before the adapter was fully wired up
     /** Must be called after registration to pick up data dispatched before the
         adapter was created. Safe to call from the user thread.
     */
     bool initialDrain() {
         AutoLock al(process_mutex);
-        return drainAndParseFrames();
+        return drainMsgQueue();
     }
 
-    private bool drainAndParseFrames() {
-        # Read available data from the stream handle.
-        # Use 1ms timeout since 0s/NOTHING is treated as "wait forever" by Channel.recv()
-        bool got_data = False;
-        int max_reads = 100;
-        while (max_reads-- > 0) {
-            auto data;
-            try {
-                data = stream.readData(1ms);
-            } catch (hash<ExceptionInfo> ex) {
-                if (ex.err == "HTTPCLIENT-STREAM-CLOSED") {
-                    if (!closed) {
-                        closed = True;
-                        recv_channel.send({"type": "closed", "code": WSCC_AbnormalClosure,
-                            "reason": "H2 stream closed"});
-                    }
-                    return True;
+    #! Drains all typed frame hashes from msg_queue and dispatches them
+    /** Non-blocking: returns as soon as the queue is empty or a NOTHING
+        sentinel is observed.  NOTHING is the stream-ended signal emitted by
+        FrameStateAction::complete / executeError.
+        @return True if any frames were processed
+    */
+    private bool drainMsgQueue() {
+        bool processed = False;
+        int max_entries = 1000;
+        while (max_entries-- > 0) {
+            *hash<auto> wrap = msg_queue.tryGet();
+            if (!exists wrap) {
+                break;  # Queue empty
+            }
+            auto entry = wrap.value;
+            if (!exists entry) {
+                # NOTHING sentinel from FrameStateAction::complete/executeError
+                if (!closed) {
+                    closed = True;
+                    int close_c = close_code ? close_code : WSCC_AbnormalClosure;
+                    string close_r = close_reason != "" ? close_reason : "stream ended";
+                    recv_channel.send({
+                        "type": "closed",
+                        "code": close_c,
+                        "reason": close_r,
+                    });
                 }
-                rethrow;
-            }
-            if (!exists data) {
-                break;  # Timeout = no data available
-            }
-            if (data.typeCode() == NT_HASH) {
-                if (data.end_stream) {
-                    if (!closed) {
-                        closed = True;
-                        recv_channel.send({"type": "closed", "code": WSCC_AbnormalClosure,
-                            "reason": "H2 stream ended"});
-                    }
-                    return True;
-                }
-                if (data.error) {
-                    if (!closed) {
-                        closed = True;
-                        recv_channel.send({"type": "error", "error": data.error});
-                    }
-                    return True;
-                }
-                # Headers or other metadata — skip (already processed during handshake)
-                continue;
-            }
-            # Binary body data
-            if (data.typeCode() == NT_BINARY && data.size() > 0) {
-                stream_buf = stream_buf.size() > 0 ? stream_buf + data : data;
-                got_data = True;
-            }
-        }
-
-        if (!got_data && (!stream_buf || !stream_buf.size())) {
-            return False;
-        }
-
-        # Parse complete WS frames from the buffer
-        bool processed_any = False;
-        while (stream_buf && stream_buf.size() >= 2) {
-            *int frame_len = ws_get_frame_size(stream_buf);
-            if (!exists frame_len || stream_buf.size() < frame_len) {
+                processed = True;
                 break;
             }
-            binary frame_data = stream_buf.substr(0, frame_len);
-            stream_buf = stream_buf.size() > frame_len
-                ? stream_buf.substr(frame_len) : binary();
-
-            hash<WsMsgInfo> h = ws_parse_frame(frame_data);
-            processFrame(h);
-            processed_any = True;
+            if (entry.typeCode() != NT_HASH) {
+                continue;
+            }
+            processFrameHash(entry);
+            processed = True;
         }
-        return processed_any;
+        return processed;
     }
 
-    #! Processes a single parsed WS frame
-    private processFrame(hash<WsMsgInfo> h) {
-        int op = h.op;
+    #! Processes a single typed frame hash pushed by the C++ frame-state decoder
+    /** Entry shape: \c {type: text|binary|ping|pong|close|error, data?: data,
+        rsv1?: bool, rsv2?: bool, rsv3?: bool, code?: int, reason?: string}
+    */
+    private processFrameHash(hash<auto> h) {
+        string t = h.type ?? "";
 
-        if (op == WSOP_Close) {
-            close_code = h.close ?? WSCC_NormalClosure;
-            close_reason = h.msg ?? "";
+        if (t == "close") {
+            close_code = h.code ?? WSCC_NormalClosure;
+            close_reason = h.reason ?? "";
+            # Frame state does NOT auto-echo close on the client — we must
+            # send our side of the close handshake before marking closed.
             if (!ws_close_sent) {
                 ws_close_sent = True;
                 try {
-                    stream.sendData(
-                        ws_encode_message("", WSOP_Close, True));
+                    stream.sendData(ws_encode_message("", WSOP_Close, True));
                 } catch (hash<ExceptionInfo> ex) {
                     logError("close response send error: %s: %s", ex.err, ex.desc);
                 }
@@ -5359,72 +5338,119 @@ public class WebSocketClientHcioPollOp {
             return;
         }
 
-        if (op == WSOP_Ping) {
-            try {
-                stream.sendData(
-                    ws_encode_message(h.msg ?? "", WSOP_Pong, True));
-            } catch (hash<ExceptionInfo> ex) {
-                logError("pong send error: %s: %s", ex.err, ex.desc);
+        if (t == "error") {
+            if (!closed) {
+                closed = True;
+                recv_channel.send({"type": "error", "error":
+                    {"code": h.code ?? WSCC_ProtocolError, "reason": h.reason ?? ""}});
             }
-            recv_channel.send({"type": "ping", "data": h.msg});
             return;
         }
 
-        if (op == WSOP_Pong) {
-            recv_channel.send({"type": "pong", "data": h.msg});
+        if (t == "ping") {
+            # Auto-pong is already sent by the C++ frame state; just deliver
+            # the ping event to the consumer and optional raw_callback.
+            recv_channel.send({"type": "ping", "data": h.data});
+            if (raw_callback) {
+                hash<WsMsgInfo> evt = <WsMsgInfo>{
+                    "op": WSOP_Ping,
+                    "fin": True,
+                    "masked": False,
+                    "close": 0,
+                    "msg": h.data,
+                };
+                raw_callback(evt);
+            }
             return;
         }
 
-        if (op == WSOP_Text || op == WSOP_Binary) {
-            string frame_type = op == WSOP_Text ? "text" : "binary";
+        if (t == "pong") {
+            recv_channel.send({"type": "pong", "data": h.data});
+            if (raw_callback) {
+                hash<WsMsgInfo> evt = <WsMsgInfo>{
+                    "op": WSOP_Pong,
+                    "fin": True,
+                    "masked": False,
+                    "close": 0,
+                    "msg": h.data,
+                };
+                raw_callback(evt);
+            }
+            return;
+        }
 
-            hash<auto> ctx = {
-                "op": op,
-                "fin": h.fin ?? True,
-                "first": True,
-                "rsv1": h.rsv1 ?? False,
-                "rsv2": h.rsv2 ?? False,
-                "rsv3": h.rsv3 ?? False,
-            };
+        if (t != "text" && t != "binary") {
+            return;
+        }
 
-            if (has_extensions) {
-                int rsv_bits = (ctx.rsv1 ? WS_RSV1 : 0)
-                    | (ctx.rsv2 ? WS_RSV2 : 0)
-                    | (ctx.rsv3 ? WS_RSV3 : 0);
-                if (rsv_bits) {
-                    foreach AbstractWebSocketExtension ext in (active_extensions) {
-                        if (!ext.validateRsvBits(rsv_bits, op)) {
-                            logError("Extension %s rejected RSV bits", ext.getName());
-                            sendClose(WSCC_ProtocolError);
-                            return;
-                        }
+        int op = (t == "text" ? WSOP_Text : WSOP_Binary);
+        bool rsv1 = h.rsv1 ?? False;
+        bool rsv2 = h.rsv2 ?? False;
+        bool rsv3 = h.rsv3 ?? False;
+
+        hash<auto> ctx = {
+            "op": op,
+            "fin": True,
+            "first": True,
+            "rsv1": rsv1,
+            "rsv2": rsv2,
+            "rsv3": rsv3,
+        };
+
+        if (has_extensions) {
+            int rsv_bits = (rsv1 ? WS_RSV1 : 0)
+                | (rsv2 ? WS_RSV2 : 0)
+                | (rsv3 ? WS_RSV3 : 0);
+            if (rsv_bits) {
+                foreach AbstractWebSocketExtension ext in (active_extensions) {
+                    if (!ext.validateRsvBits(rsv_bits, op)) {
+                        logError("Extension %s rejected RSV bits", ext.getName());
+                        sendClose(WSCC_ProtocolError);
+                        return;
                     }
                 }
             }
-
-            if (raw_callback) {
-                int rc = raw_callback(h);
-                if (rc == WSC_Continue) {
-                    return;
-                }
-                if (rc == WSC_Break) {
-                    sendClose(WSCC_NormalClosure);
-                    recv_channel.send({"type": "closed", "code": WSCC_NormalClosure,
-                        "reason": "raw callback requested break"});
-                    return;
-                }
-            }
-
-            auto processed = h.msg;
-            if (active_extensions) {
-                for (int i = active_extensions.size() - 1; i >= 0; --i) {
-                    processed = active_extensions[i].transformIncoming(processed, ctx);
-                }
-            }
-
-            recv_channel.send({"type": frame_type, "data": processed});
-            return;
         }
+
+        # The C++ frame state always pushes `data` as BinaryNode.  Text
+        # messages get decoded to UTF-8 string so the raw_callback WsMsgInfo
+        # shape matches the legacy ws_parse_frame output.
+        auto msg_payload = h.data;
+        if (t == "text" && exists msg_payload && msg_payload.typeCode() == NT_BINARY) {
+            msg_payload = msg_payload.toString("UTF-8");
+        }
+
+        if (raw_callback) {
+            hash<WsMsgInfo> evt = <WsMsgInfo>{
+                "op": op,
+                "fin": True,
+                "masked": False,
+                "close": 0,
+                "msg": msg_payload,
+                "rsv1": rsv1,
+                "rsv2": rsv2,
+                "rsv3": rsv3,
+            };
+            int rc = raw_callback(evt);
+            if (rc == WSC_Continue) {
+                return;
+            }
+            if (rc == WSC_Break) {
+                sendClose(WSCC_NormalClosure);
+                recv_channel.send({"type": "closed", "code": WSCC_NormalClosure,
+                    "reason": "raw callback requested break"});
+                return;
+            }
+        }
+
+        auto processed = msg_payload;
+        if (active_extensions) {
+            for (int i = active_extensions.size() - 1; i >= 0; --i) {
+                processed = active_extensions[i].transformIncoming(processed, ctx);
+            }
+        }
+
+        recv_channel.send({"type": (t == "text" ? "text" : "binary"), "data": processed});
     }
 
     #! Gets the next received message (blocking with timeout)

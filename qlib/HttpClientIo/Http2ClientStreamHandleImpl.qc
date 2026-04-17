@@ -381,6 +381,62 @@ public class Http2ClientStreamHandle inherits HttpClientStreamHandle {
         return response.trailers;
     }
 
+    #! Installs a WebSocket frame-state decoder for this H2 CONNECT stream
+    /** Drains any residual body bytes from \c data_channel and swaps the
+        poll op's registered action from ChannelAction to FrameStateAction.
+        After this call, WS DATA chunks are decoded in pure C++ and pushed
+        as typed frame hashes to @a msg_queue.
+
+        @param msg_queue Queue that will receive typed frame hashes
+
+        @throw HTTPCLIENT-STATE-ERROR if the stream is not in streaming mode
+        @throw HTTPCLIENT-STREAM-CLOSED if the stream is already closed
+
+        @since %HttpClientIo 1.4
+    */
+    installFrameState(Queue msg_queue) {
+        int sid;
+        *Channel ch;
+        {
+            AutoLock al(lock);
+            if (!streaming) {
+                throw "HTTPCLIENT-STATE-ERROR", "not in streaming mode";
+            }
+            if (!exists stream_id) {
+                throw "HTTPCLIENT-STATE-ERROR", "stream not yet established";
+            }
+            sid = stream_id;
+            ch = data_channel;
+        }
+
+        # Drain any response hashes still buffered in the old Channel and
+        # concatenate their body bytes into a single residual binary.  The
+        # frame decoder sees these bytes as the head of its input stream so
+        # no transport bytes are lost across the swap.
+        binary residual = binary();
+        if (exists ch) {
+            while (True) {
+                *hash<auto> entry = ch.tryRecv();
+                if (!exists entry) {
+                    break;
+                }
+                auto v = entry.value;
+                if (v.typeCode() != NT_HASH) {
+                    continue;
+                }
+                if (v.body.typeCode() == NT_BINARY) {
+                    residual += v.body;
+                } else if (v.body.typeCode() == NT_STRING) {
+                    residual += v.body.toBinary();
+                }
+            }
+        }
+
+        h2conn.installFrameState(sid, msg_queue, residual);
+        # The old ChannelAction has been deref'd by the swap; from here on
+        # incoming DATA is fed into the frame decoder, not the Channel.
+    }
+
 }
 
 } # namespace HttpClientIo

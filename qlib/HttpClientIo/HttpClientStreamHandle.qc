@@ -846,6 +846,30 @@ public class HttpClientStreamHandle {
         return False;
     }
 
+    #! Installs a WebSocket frame-state decoder for this CONNECT tunnel stream
+    /** Swaps the stream's completion action from the default ChannelAction
+        (which pushes raw response hashes into the handle's \c data_channel)
+        to a FrameStateAction that decodes WebSocket frames in pure C++ and
+        pushes typed frame hashes to @a msg_queue instead.  After this call,
+        @ref readData() is no longer valid on this handle; the caller reads
+        WebSocket messages from @a msg_queue directly.
+
+        Concrete implementations drain any residual body bytes already in the
+        Channel and hand them to the new frame state so the frame decoder
+        sees a contiguous byte stream.
+
+        @param msg_queue Queue that will receive typed frame hashes
+
+        @throw HTTPCLIENT-STREAMING-NOT-SUPPORTED if the protocol does not
+               support frame-state streaming (H1 uses a dedicated C++ codec)
+
+        @since %HttpClientIo 1.4
+    */
+    installFrameState(Queue msg_queue) {
+        throw "HTTPCLIENT-STREAMING-NOT-SUPPORTED",
+            "frame-state streaming is not supported by " + conn.getProtocol();
+    }
+
     #! Starts an SSE streaming request with I/O-thread event parsing
     /** Creates a Queue and submits an SSE request where the I/O thread parses
         SSE events at double-newline boundaries and pushes parsed SseMessageInfo

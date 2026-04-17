@@ -176,6 +176,14 @@ public:
     */
     void pushCloseSentinel();
 
+    //! Returns the (non-owning) msg_queue pointer
+    /** Callers may use the pointer to push auxiliary entries (e.g., error
+        hashes from an AsyncCompletionAction::executeError() path) alongside
+        the typed frame hashes produced by the state machine itself.  The
+        queue stays alive as long as the frame state does.
+    */
+    Queue* getMsgQueue() const { return msg_queue; }
+
 private:
     Queue* msg_queue;
     SendCallback send_cb;
