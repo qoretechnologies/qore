@@ -422,6 +422,14 @@ extern "C" void qore_aot_fill_module_desc(QoreModuleInfo* mod_info,
 */
 extern "C" void qore_aot_raise_init_error(ExceptionSink* xsink, QoreStringNode* err);
 
+//! Returns true if \a name is registered as an AOT user module (a source Qore
+//! module compiled to .qmod binary form).  AOT user modules must be tracked in
+//! userFeatureList rather than the builtin featureList so that importSystemApi()
+//! and child-program inheritance don't incorrectly mark the module as already
+//! loaded (which would cause %requires in child programs to be silently skipped
+//! without re-merging the module's user-public symbols).
+DLLLOCAL bool qore_is_aot_user_module(const char* name);
+
 //! AOT compiler class — compiles a parsed QoreProgram to a standalone executable
 class QoreAOT {
 public:

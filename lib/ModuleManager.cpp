@@ -37,6 +37,7 @@
 #include "qore/intern/QoreException.h"
 #include "qore/intern/QoreDir.h"
 #include "qore/intern/QoreHashNodeIntern.h"
+#include "qore/intern/QoreAOT.h"
 
 // dlopen() flags
 #define QORE_DLOPEN_FLAGS RTLD_LAZY|RTLD_GLOBAL
@@ -371,7 +372,18 @@ void QoreBuiltinModule::addToProgramImpl(QoreProgram* tpgm, ExceptionSink& xsink
         qmc.commit();
         return;
     }
-    tpgm->addFeature(name.c_str());
+    // AOT user modules (source .qm compiled to .qmod binary form) export user-public
+    // symbols that must be re-merged into each program's namespace tree via %requires.
+    // Track them in userFeatureList so runtimeImportSystemApi() / setParent() do not
+    // propagate them to child programs as though they were built-in features — which
+    // would make child programs' %requires skip the per-program ns merge and leave
+    // the module's user-public symbols missing from the child's namespace tree.
+    const bool is_aot_user = qore_is_aot_user_module(name.c_str());
+    if (is_aot_user) {
+        qore_program_private::get(*tpgm)->addUserFeature(name.c_str());
+    } else {
+        tpgm->addFeature(name.c_str());
+    }
 
     // make sure getProgram() returns this Program when module_ns_init() is called
     ProgramCallContextHelper pcch(tpgm);

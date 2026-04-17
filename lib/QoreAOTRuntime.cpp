@@ -6820,6 +6820,23 @@ extern "C" DLLEXPORT void qore_aot_module_delete() {
     }
 }
 
+//! Returns true if \a name is registered as an AOT user module in aot_module_map.
+/** AOT user modules are source Qore modules compiled to .qmod binary form. They
+    export user-public symbols (functions, classes, hashdecls) that must be re-merged
+    into each program that %requires them, just like source (.qm) user modules. They
+    are therefore tracked in userFeatureList, not the builtin featureList. This helper
+    lets the binary-module load path distinguish AOT user modules from true builtin
+    C++ modules (e.g. yaml, json, reflection) so that featureList propagation to
+    child programs (via qore_program_private::runtimeImportSystemApi and setParent)
+    does not hide them from the child's %requires.
+*/
+DLLLOCAL bool qore_is_aot_user_module(const char* name) {
+    if (!name) {
+        return false;
+    }
+    return aot_module_map.find(name) != aot_module_map.end();
+}
+
 extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v2(
     const uint8_t* metadata, int metadata_len,
     const char* label,
