@@ -1941,6 +1941,32 @@ static void writeVariantSignature(QoreAOTBinaryWriter& writer, const AbstractQor
                     }
                 }
 
+                // Case 4: QoreHashDeclCastOperatorNode — `<Hashdecl>{...}` typed
+                //   hash literal, commonly used as a param default like
+                //   `hash<AuthCodeInfo> info = <AuthCodeInfo>{}`. The inner
+                //   expression is typically a parse-time-folded QoreHashNode
+                //   (empty or constant). Serialize the hashdecl path plus the
+                //   inner hash so the reader can rebuild a
+                //   QoreHashDeclCastOperatorNode whose eval produces a properly
+                //   initialized hashdecl instance.
+                if (auto* hdc = dynamic_cast<const QoreHashDeclCastOperatorNode*>(node)) {
+                    const TypedHashDecl* hd = QoreTypeInfo::getUniqueReturnHashDecl(
+                        hdc->getCastTypeInfo());
+                    QoreValue inner = hdc->getExp();
+                    qore_type_t itype = inner.getType();
+                    bool inner_ok = inner.isNothing() || itype == NT_HASH;
+                    if (hd && inner_ok) {
+                        writer.writeU8(5);  // expression default: hashdecl cast
+                        writer.writeStringRef(hd->getNamespacePath().c_str());
+                        writer.writeU8(hdc->isOrNothing() ? 1 : 0);
+                        writer.writeU8(inner.isNothing() ? 0 : 1);
+                        if (!inner.isNothing()) {
+                            writer.writeValue(inner);
+                        }
+                        continue;
+                    }
+                }
+
                 // Fallback: unclassifiable complex expression — write opaque
                 writer.writeU8(1);
                 writer.writeU8(static_cast<uint8_t>(QoreAOTValueTag::VT_OPAQUE_DEFAULT));
@@ -5535,6 +5561,48 @@ static bool readAndSetupVariantSignature(
                     cfqn ? cfqn : "(null)", mname ? mname : "(null)");
                 param_defaults[j] = QoreValue(true);
             }
+        } else if (has_default == 5) {
+            // Expression default: hashdecl typed-hash literal, e.g.
+            //   `hash<AuthCodeInfo> info = <AuthCodeInfo>{}`.
+            // Reader resolves the hashdecl by namespace path and builds a
+            // QoreHashDeclCastOperatorNode wrapping a (possibly empty) inner
+            // hash. At call time prepareDefaultArgs evaluates this node via
+            // typed_hash_decl_private::newHash, producing an all-defaults
+            // hashdecl instance.
+            const char* hd_path = reader.readStringRef(ptr);
+            uint8_t or_nothing = QoreAOTBinaryReader::readU8(ptr);
+            uint8_t has_inner = QoreAOTBinaryReader::readU8(ptr);
+            QoreValue inner;
+            if (has_inner) {
+                inner = reader.readValue(ptr, end, error);
+                if (!error.empty()) {
+                    for (uint32_t k = 0; k < j; ++k) {
+                        param_defaults[k].discard(nullptr);
+                    }
+                    return false;
+                }
+            }
+            qore_program_private* pp = qore_program_private::get(*pgm);
+            const qore_ns_private* found_ns = nullptr;
+            const TypedHashDecl* hd = hd_path
+                ? qore_root_ns_private::runtimeFindHashDecl(*pp->RootNS, hd_path, found_ns)
+                : nullptr;
+            if (!hd) {
+                printd(0, "AOT deser: cannot resolve hashdecl '%s' for default value\n",
+                    hd_path ? hd_path : "(null)");
+                inner.discard(nullptr);
+                param_defaults[j] = QoreValue(true);
+            } else {
+                // If inner was NOTHING, supply an empty hash so the cast has a
+                // concrete value to operate on (matching the parser's behavior
+                // for `<X>{}` which folds the empty body to QoreHashNode{}).
+                if (!inner.hasNode()) {
+                    inner = QoreValue(new QoreHashNode(autoTypeInfo));
+                }
+                auto* nd = new QoreHashDeclCastOperatorNode(&loc_builtin, hd, inner,
+                    or_nothing != 0);
+                param_defaults[j] = QoreValue(nd);
+            }
         }
     }
 
@@ -5619,6 +5687,19 @@ bool QoreAOTBinaryDeserializer::deserializeFunctions(std::string& error) {
                         // Expression default (method call on const): skip FQN + method name
                         reader.readStringRef(ptr);
                         reader.readStringRef(ptr);
+                    } else if (has_default == 5) {
+                        // Expression default (hashdecl cast): skip path + or_nothing +
+                        // optional inner value
+                        reader.readStringRef(ptr);
+                        (void)QoreAOTBinaryReader::readU8(ptr);  // or_nothing
+                        uint8_t has_inner = QoreAOTBinaryReader::readU8(ptr);
+                        if (has_inner) {
+                            QoreValue v = reader.readValue(ptr, end, error);
+                            if (!error.empty()) {
+                                return false;
+                            }
+                            v.discard(nullptr);
+                        }
                     }
                 }
             }
