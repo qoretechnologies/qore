@@ -812,10 +812,14 @@ public class WebSocketConnection {
                 } catch () {}
             }
         }
-        # For async H2/H3 WebSocket: close the stream processor
+        # For async H2/H3 WebSocket: force-close the stream processor.
+        # forceClose() is a pure atomic signal — no I/O, no delay — so shutdown
+        # can never be blocked by a worker thread stuck in gotMessage() or a
+        # QUIC stream write. The CLOSE frame is intentionally NOT sent during
+        # shutdown: the I/O controller will cancel the underlying stream.
         if (stream_processor) {
             try {
-                stream_processor.close();
+                stream_processor.forceClose();
             } catch () {}
         }
         # closing the channel wakes up the polling thread immediately
@@ -1124,13 +1128,25 @@ class WebSocketStreamProcessor {
         #! Buffer for incomplete WebSocket frames spanning multiple stream data chunks
         binary stream_buf;
 
-        #! Mutex to serialize processing (multiple worker threads may call notifyIo)
+        #! Mutex to serialize I/O processing (held during notifyIo and its gotMessage/sendData calls)
+        /** Note: this mutex may be held for extended periods while blocking on user code or
+            QUIC stream writes. It must NOT be used to protect shutdown-critical state.
+        */
         Mutex process_mutex();
+
+        #! Dedicated fast lock for the closed flag — never held during I/O
+        /** This lock is ONLY held to perform the check-and-set on @ref closed and
+            signal @ref done. Shutdown must always be able to acquire this lock quickly,
+            even when @ref process_mutex is held by a worker thread blocked in gotMessage()
+            or a QUIC stream write.
+        */
+        Mutex close_lock();
 
         #! Timestamp of last recv activity for heartbeat
         int last_recv_timestamp;
 
         #! True when the stream has been closed
+        /** Protected by @ref close_lock, not @ref process_mutex. */
         bool closed = False;
     }
 
@@ -1142,20 +1158,46 @@ class WebSocketStreamProcessor {
         self.last_recv_timestamp = clock_getmillis() / 1000;
     }
 
+    #! Atomic check-and-set: marks the stream closed and decrements @ref done exactly once
+    /** Uses @ref close_lock (never held during I/O) so shutdown is not blocked by
+        a worker thread stuck in @ref notifyIo() (which holds @ref process_mutex).
+        @return @ref True if this call performed the close; @ref False if already closed
+    */
+    private bool markClosedOnce() {
+        {
+            AutoLock al(close_lock);
+            if (closed) {
+                return False;
+            }
+            closed = True;
+        }
+        done.dec();
+        return True;
+    }
+
+    #! Returns True if the stream is marked closed
+    bool isClosed() {
+        AutoLock al(close_lock);
+        return closed;
+    }
+
     #! Called by the I/O controller's worker pool when stream data arrives
 
     notifyIo() {
+        # Fast bail-out without acquiring process_mutex if already closed
+        if (isClosed()) {
+            return;
+        }
+
         AutoLock al(process_mutex);
-        if (closed) {
+        # Re-check after acquiring the mutex (another worker may have closed us)
+        if (isClosed()) {
             return;
         }
 
         *AsyncSocketIo::AbstractStreamContext ctx = wsc.getStreamContext();
         if (!ctx) {
-            if (!closed) {
-                closed = True;
-                done.dec();
-            }
+            markClosedOnce();
             return;
         }
 
@@ -1169,10 +1211,7 @@ class WebSocketStreamProcessor {
                         # NOTHING on first read = stream closed or no data
                         # Check if the stream context reports closed
                         if (!ctx.isOpen()) {
-                            if (!closed) {
-                                closed = True;
-                                done.dec();
-                            }
+                            markClosedOnce();
                         }
                         return;
                     }
@@ -1200,10 +1239,7 @@ class WebSocketStreamProcessor {
                 last_recv_timestamp = clock_getmillis() / 1000;
 
                 if (h.op == WSOP_Close) {
-                    if (!closed) {
-                        closed = True;
-                        done.dec();
-                    }
+                    markClosedOnce();
                     return;
                 }
                 if (h.op == WSOP_Ping) {
@@ -1246,33 +1282,36 @@ class WebSocketStreamProcessor {
                 return;
             }
             handler.logError("H2/H3 WebSocket stream error: %s: %s", ex.err, ex.desc);
-            if (!closed) {
-                closed = True;
-                done.dec();
-            }
+            markClosedOnce();
         }
     }
 
-    #! Forces the stream closed from the handler thread
-    /** Called when the timed wait detects the underlying connection is dead
-        but no onStreamData() fired to trigger a normal close.
+    #! Immediately marks the stream closed and unblocks the handler thread
+    /** Used for shutdown and forced termination: performs NO I/O, holds NO I/O-path
+        mutex. Returns as fast as the atomic check-and-set allows — never blocks on a
+        worker thread stuck in gotMessage() or a QUIC stream write.
 
         @since WebSocketHandler 2.7
     */
     forceClose() {
-        AutoLock al(process_mutex);
-        if (!closed) {
-            closed = True;
-            done.dec();
-        }
+        markClosedOnce();
+    }
+
+    #! Returns True if the stream has been marked closed (alias for @ref isClosed)
+    bool isDone() {
+        return isClosed();
     }
 
     #! Sends a heartbeat ping if needed
     /** Called by a timer callback.
     */
     sendHeartbeat(int heartbeat_s, data heartbeat_msg) {
+        # Check closed state without acquiring process_mutex
+        if (isClosed()) {
+            return;
+        }
         AutoLock al(process_mutex);
-        if (closed) {
+        if (isClosed()) {
             return;
         }
         int now = clock_getmillis() / 1000;
@@ -1287,18 +1326,26 @@ class WebSocketStreamProcessor {
         }
     }
 
-    #! Signals the stream to close
+    #! Signals the stream to close and attempts a best-effort close frame send
+    /** Atomically marks the stream closed and unblocks the handler thread
+        immediately, THEN attempts to send the CLOSE frame as a courtesy. If the
+        close frame send is blocked or slow, the handler has already exited —
+        shutdown is never delayed by the frame send.
+    */
     close() {
+        # Signal close first — this unblocks the handler thread immediately
+        if (!markClosedOnce()) {
+            return;  # already closed
+        }
+        # Best-effort CLOSE frame send — does NOT delay shutdown because the
+        # handler has already been signaled above. Any blocking here affects
+        # only this worker thread, not the listener's shutdown wait.
         AutoLock al(process_mutex);
-        if (!closed) {
-            *AsyncSocketIo::AbstractStreamContext ctx = wsc.getStreamContext();
-            if (ctx) {
-                try {
-                    ctx.sendData(ws_encode_message("", WSOP_Close));
-                } catch () {}
-            }
-            closed = True;
-            done.dec();
+        *AsyncSocketIo::AbstractStreamContext ctx = wsc.getStreamContext();
+        if (ctx) {
+            try {
+                ctx.sendData(ws_encode_message("", WSOP_Close));
+            } catch () {}
         }
     }
 }
