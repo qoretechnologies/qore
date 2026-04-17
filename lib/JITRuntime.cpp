@@ -1093,6 +1093,60 @@ extern "C" DLLEXPORT uint64_t qore_rt_cast_by_type_path(uint64_t inner_bits,
         return toBits(result);
     }
 
+    // Try enum cast, e.g. cast<HttpClientConnectionState>(int_value).
+    // Mirrors QoreEnumCastOperatorNode::castValue semantics.
+    // Use getReturnEnum so or-nothing enum casts (*enum<Foo>) also match —
+    // the or_nothing flag handles the NOTHING input branch.
+    const QoreEnumDecl* ed = ti ? QoreTypeInfo::getReturnEnum(ti) : nullptr;
+    if (ed) {
+        if (inner.isNothing() && or_nothing) {
+            return toBits(QoreValue());
+        }
+        // Re-casting an already-typed enum value
+        if (inner.isEnum()) {
+            const QoreEnumMember* src_member = inner.getEnumMember();
+            if (src_member->getEnumDecl() == ed) {
+                return inner.hasNode() ? toBits(inner.refSelf()) : toBits(inner);
+            }
+            // Different enum: check the base value against target
+            QoreValue base_val = src_member->getValue();
+            if (!ed->isValidValue(base_val)) {
+                xsink->raiseException("RUNTIME-CAST-ERROR",
+                    "cannot cast value from enum '%s' to enum '%s'; value is not a valid "
+                    "enum member", src_member->getEnumDecl()->getName(), ed->getName());
+                return toBits(QoreValue());
+            }
+            const QoreEnumMember* member = ed->findMemberByValue(base_val);
+            assert(member);
+            return toBits(QoreValue::makeEnum(member));
+        }
+        // Check base type
+        qore_type_t base_type = QoreTypeInfo::getBaseType(ed->getBaseTypeInfo());
+        if (inner.getType() != base_type) {
+            xsink->raiseException("RUNTIME-CAST-ERROR",
+                "cannot cast from type '%s' to enum '%s'; expected %s value",
+                inner.getTypeName(), ed->getName(),
+                QoreTypeInfo::getName(ed->getBaseTypeInfo()));
+            return toBits(QoreValue());
+        }
+        if (!ed->isValidValue(inner)) {
+            QoreStringMaker desc("cannot cast value ");
+            if (base_type == NT_STRING) {
+                desc.sprintf("'%s'", inner.get<const QoreStringNode>()->c_str());
+            } else if (base_type == NT_INT) {
+                desc.sprintf("%lld", inner.getAsBigInt());
+            } else {
+                desc.sprintf("of type '%s'", inner.getTypeName());
+            }
+            desc.sprintf(" to enum '%s'; value is not a valid enum member", ed->getName());
+            xsink->raiseException("RUNTIME-CAST-ERROR", desc.c_str());
+            return toBits(QoreValue());
+        }
+        const QoreEnumMember* member = ed->findMemberByValue(inner);
+        assert(member);
+        return toBits(QoreValue::makeEnum(member));
+    }
+
     // Fallback: unsupported cast type
     xsink->raiseException("IR-CAST-ERROR", "cannot resolve cast type '%s'", type_path);
     return toBits(QoreValue());
