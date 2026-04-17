@@ -2406,14 +2406,56 @@ static QoreAOTContext* buildContextFromSlotMap(
             const char* bltype = reader.readStringRef(ptr);
             uint8_t bl_closure = QoreAOTBinaryReader::readU8(ptr);
 
-            // Reuse LocalVar* from ctx->locals[] if same name exists
+            // Reuse LocalVar* from ctx->locals[] if same name AND type match.
+            // A handler-body local that shadows a same-named outer var (e.g.
+            // `Bar al` in outer block, `Foo al` in on_exit) MUST get a fresh
+            // LocalVar of its own type — name-only matching would bind to the
+            // outer Bar and leave the Foo local without a pre-instantiated
+            // TLS entry, so handler IR that references it fails lookups.
+            //
+            // Type paths are compared after stripping namespace-separator `::`
+            // so that serialized paths like `hash<::Util::UriQueryInfo>` match
+            // runtime LocalVar paths like `hash<Util::UriQueryInfo>`.
+            auto strip_ns_sep = [](const char* s) -> std::string {
+                std::string out;
+                if (!s) return out;
+                out.reserve(strlen(s));
+                for (size_t k = 0; s[k]; ++k) {
+                    if (s[k] == ':' && s[k+1] == ':') {
+                        ++k;
+                        continue;
+                    }
+                    out.push_back(s[k]);
+                }
+                return out;
+            };
             if (blname) {
                 auto it = local_name_map.find(blname);
                 if (it != local_name_map.end() && !it->second.empty()) {
-                    ctx->all_body_locals.push_back(it->second.front());
-                    it->second.pop_front();
-                    (void)bl_closure;
-                    continue;
+                    auto cit = it->second.end();
+                    if (bltype && *bltype) {
+                        std::string norm_bltype = strip_ns_sep(bltype);
+                        for (auto qi = it->second.begin(); qi != it->second.end(); ++qi) {
+                            const char* cand_path = QoreTypeInfo::getPath((*qi)->getTypeInfo());
+                            std::string norm_cand = strip_ns_sep(cand_path);
+                            if (norm_cand == norm_bltype) {
+                                cit = qi;
+                                break;
+                            }
+                        }
+                    } else {
+                        cit = it->second.begin();
+                    }
+                    if (cit != it->second.end()) {
+                        ctx->all_body_locals.push_back(*cit);
+                        it->second.erase(cit);
+                        (void)bl_closure;
+                        continue;
+                    }
+                    // No type match: fall through to create a fresh LocalVar
+                    // with the serialized type. Do NOT consume a candidate from
+                    // local_name_map — that would leave the ctx->locals entry
+                    // dangling (other consumers rely on 1-to-1 matching).
                 }
             }
 
@@ -2584,11 +2626,54 @@ static QoreAOTContext* buildContextFromSlotMap(
     bool all_stmt_slots_have_ir = true;
     if (num_stmts > 0) {
         ctx->handler_irs.resize(num_stmts);
-        // Build local name map for handler IR deserialization
+        // Build local name map for handler IR deserialization.
+        //
+        // Include BOTH ctx->locals (parent function's slot vars) AND
+        // ctx->all_body_locals (body locals the parent function pre-instantiates
+        // via evalTiered — which also includes on_exit handler-body locals,
+        // collected transitively via collectAllStatementLocals).
+        //
+        // When the handler's own local shadows a parent name (e.g. outer block
+        // has `Bar al` and on_exit has `Foo al`), we must reuse the handler's
+        // OWN LocalVar* from all_body_locals (the one parent's evalTiered
+        // pre-instantiated on TLS with the handler's type), not the parent
+        // slot's same-named var.  Resolution is by (name, type_path): see the
+        // lookup in deserializeIRFunction that prefers the type-qualified key
+        // and falls back to name-only.
         std::unordered_map<std::string, LocalVar*> handler_local_map;
+        for (auto* lv : ctx->all_body_locals) {
+            if (lv && lv->getName() && *lv->getName()) {
+                handler_local_map[lv->getName()] = lv;
+                // Also register under a (name|type_path) composite key so
+                // handler slot deser can pick the right var among same-named
+                // shadowing vars (parent has Bar al, handler has Foo al).
+                const char* tpath = QoreTypeInfo::getPath(lv->getTypeInfo());
+                if (tpath && *tpath) {
+                    std::string ck(lv->getName());
+                    ck += '\x1f';
+                    ck += tpath;
+                    handler_local_map[ck] = lv;
+                }
+            }
+        }
         for (int i = 0; i < num_locals; ++i) {
             if (ctx->locals[i] && ctx->locals[i]->getName()) {
-                handler_local_map[ctx->locals[i]->getName()] = ctx->locals[i];
+                LocalVar* lv = ctx->locals[i];
+                // ctx->locals wins on bare-name collision so generic name-based
+                // lookups resolve to the parent slot by default.  The composite
+                // (name|type) key above lets the shadowing handler local win
+                // when the deserializer asks for it specifically.
+                handler_local_map[lv->getName()] = lv;
+                const char* tpath = QoreTypeInfo::getPath(lv->getTypeInfo());
+                if (tpath && *tpath) {
+                    std::string ck(lv->getName());
+                    ck += '\x1f';
+                    ck += tpath;
+                    // Only insert if not already set by all_body_locals (which
+                    // covers handler-shadow vars). ctx->locals may duplicate
+                    // all_body_locals for same (name, type), which is fine.
+                    handler_local_map.emplace(std::move(ck), lv);
+                }
             }
         }
         for (int i = 0; i < num_stmts; ++i) {
@@ -3724,6 +3809,26 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
             func->local_var_slots[parent_lv] = slot_id;
             local_map[lname] = parent_lv;
             continue;
+        }
+
+        // Prefer composite (name|type_path) lookup so a handler local that
+        // shadows a same-named parent var with a different type picks the
+        // correct LocalVar* from the enclosing scope's all_body_locals.
+        // Fall back to bare-name lookup when no type was serialized.
+        if (ltype && *ltype) {
+            std::string ck(lname);
+            ck += '\x1f';
+            ck += ltype;
+            auto cit = local_map.find(ck);
+            if (cit != local_map.end()) {
+                func->local_var_slots[cit->second] = slot_id;
+                // Keep the bare-name mapping for handler-internal references
+                // that didn't supply a type (rare; defensive only).
+                if (local_map.find(lname) == local_map.end()) {
+                    local_map[lname] = cit->second;
+                }
+                continue;
+            }
         }
 
         // Check if local is already provided by enclosing scope (name-based fallback)

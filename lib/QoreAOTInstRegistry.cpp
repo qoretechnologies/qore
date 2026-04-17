@@ -451,8 +451,12 @@ static std::unique_ptr<QoreIRInstruction> readOnBlockExit(
     uint8_t has_handler_ir = QoreAOTBinaryReader::readU8(ctx.ptr);
     std::unique_ptr<QoreIRFunction> nested_handler;
     if (has_handler_ir) {
+        // Pass the enclosing function's local_map so handler parent slots resolve
+        // to the PARENT's LocalVars (same pointer identity as runtime TLS stack).
+        // Without this, parent-slot references in the handler would allocate fresh
+        // LocalVars whose name pointers don't match what evalTiered pushed.
         nested_handler = deserializeIRFunction(ctx.reader, ctx.ptr, ctx.end, ctx.pgm, ctx.readExpr,
-            (const std::unordered_map<std::string, LocalVar*>*)nullptr, ctx.error);
+            &ctx.local_map, ctx.error);
         if (!nested_handler) {
             ctx.error = "failed to deserialize nested OnBlockExit handler IR: " + ctx.error;
             return nullptr;
