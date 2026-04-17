@@ -1050,6 +1050,38 @@ void QoreIRFunction::computeIROnlyLocals() {
                 }
             }
 
+            // HashKeyStore/HashKeyStoreDynamic/ListIndexStore can trigger a
+            // copy-on-write in their helper, which calls qore_rt_assign_local
+            // to install the COW'd container back into the runtime slot. The
+            // LLVM codegen explicitly calls reloadLocalFromRuntime() after the
+            // helper so subsequent LoadLocal(container) reads the updated
+            // hash/list — but reloadLocalFromRuntime() early-exits for IR-only
+            // locals (the alloca cache is assumed authoritative). Mark these
+            // container locals AST-visible so COW updates propagate back to
+            // the alloca.
+            if (inst->opcode == QoreIROpcode::HashKeyStore) {
+                auto* hks = static_cast<const QoreIRHashKeyStoreInstruction*>(inst.get());
+                if (hks->container_lv) {
+                    ast_referenced_locals.insert(
+                        reinterpret_cast<const void*>(hks->container_lv));
+                } else if (hks->container && hks->container->ref.id) {
+                    ast_referenced_locals.insert(hks->container->ref.id);
+                }
+            } else if (inst->opcode == QoreIROpcode::HashKeyStoreDynamic) {
+                auto* hksd = static_cast<const QoreIRHashKeyStoreDynamicInstruction*>(inst.get());
+                if (hksd->container_lv) {
+                    ast_referenced_locals.insert(
+                        reinterpret_cast<const void*>(hksd->container_lv));
+                } else if (hksd->container && hksd->container->ref.id) {
+                    ast_referenced_locals.insert(hksd->container->ref.id);
+                }
+            } else if (inst->opcode == QoreIROpcode::ListIndexStore) {
+                auto* lis = static_cast<const QoreIRListIndexStoreInstruction*>(inst.get());
+                if (lis->container && lis->container->ref.id) {
+                    ast_referenced_locals.insert(lis->container->ref.id);
+                }
+            }
+
             // Lvalue operations: walk the lvalue AST expression for local references
             if (isLValueOp(inst->opcode)) {
                 auto* lvinst = static_cast<const QoreIRLValueInstruction*>(inst.get());
