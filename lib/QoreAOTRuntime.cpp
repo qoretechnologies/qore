@@ -7262,29 +7262,50 @@ static void executeInitFunctions(
             }
 
             case AOTCompiledInitFunc::CLASS_CONSTANT: {
-                // ns_path is the class path like "DataProvider::AbstractDataProvider"
-                const qore_ns_private* found_ns = nullptr;
-                const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
-                    *pp->RootNS, desc.ns_path.c_str(), found_ns);
-                if (!qc) {
-                    printd(0, "AOT init: class '%s' not found for constant '%s'\n",
+                // ns_path is the class path like "DataProvider::AbstractDataProvider".
+                // Look up the class in BOTH the target and shadow (module) program
+                // root namespaces: non-public classes never make it into the target
+                // via scanMergeCommittedNamespace, so for FileLocationHandler's
+                // non-public FileLocationHandlerFile (and similar) the CE lives only
+                // in the module program. Mirrors the NS_CONSTANT handling above.
+                ConstantEntry* target_ce = nullptr;
+                {
+                    const qore_ns_private* found_ns = nullptr;
+                    const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
+                        *pp->RootNS, desc.ns_path.c_str(), found_ns);
+                    if (qc) {
+                        qore_class_private* qcp = qore_class_private::get(
+                            *const_cast<QoreClass*>(qc));
+                        target_ce = qcp->constlist.findEntry(desc.item_name.c_str());
+                    }
+                }
+                ConstantEntry* shadow_ce = nullptr;
+                if (shadow_pp) {
+                    const qore_ns_private* found_ns = nullptr;
+                    const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
+                        *shadow_pp->RootNS, desc.ns_path.c_str(), found_ns);
+                    if (qc) {
+                        qore_class_private* qcp = qore_class_private::get(
+                            *const_cast<QoreClass*>(qc));
+                        shadow_ce = qcp->constlist.findEntry(desc.item_name.c_str());
+                    }
+                }
+                if (!target_ce && !shadow_ce) {
+                    printd(0, "AOT init: class constant '%s::%s' not found in target or shadow\n",
                         desc.ns_path.c_str(), desc.item_name.c_str());
                     result.discard(&xsink);
                     ++failed;
                     break;
                 }
-                qore_class_private* qcp = qore_class_private::get(
-                    *const_cast<QoreClass*>(qc));
-                ConstantEntry* ce = qcp->constlist.findEntry(desc.item_name.c_str());
-                if (!ce) {
-                    printd(0, "AOT init: constant '%s' not found in class '%s'\n",
-                        desc.item_name.c_str(), desc.ns_path.c_str());
-                    result.discard(&xsink);
-                    ++failed;
-                    break;
+                // Set both val and saved_val so RuntimeConstantRefNode::evalImpl() works.
+                // refSelf() each time because setRuntimeValue takes ownership.
+                if (target_ce) {
+                    target_ce->setRuntimeValue(result.refSelf(), &xsink);
                 }
-                // Set both val and saved_val so RuntimeConstantRefNode::evalImpl() works
-                ce->setRuntimeValue(result, &xsink);
+                if (shadow_ce && shadow_ce != target_ce) {
+                    shadow_ce->setRuntimeValue(result.refSelf(), &xsink);
+                }
+                result.discard(&xsink);
                 ++executed;
                 printd(2, "AOT init: initialized class constant '%s::%s' type=%s\n",
                     desc.ns_path.c_str(), desc.item_name.c_str(), result.getTypeName());
@@ -7292,24 +7313,33 @@ static void executeInitFunctions(
             }
 
             case AOTCompiledInitFunc::STATIC_VAR: {
-                // ns_path is the class path
-                const qore_ns_private* found_ns = nullptr;
-                const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
-                    *pp->RootNS, desc.ns_path.c_str(), found_ns);
-                if (!qc) {
-                    printd(0, "AOT init: class '%s' not found for static var '%s'\n",
-                        desc.ns_path.c_str(), desc.item_name.c_str());
-                    result.discard(&xsink);
-                    ++failed;
-                    break;
+                // ns_path is the class path. Look up in both target and shadow: a
+                // non-public class only lives in the module program.
+                QoreVarInfo* target_vi = nullptr;
+                {
+                    const qore_ns_private* found_ns = nullptr;
+                    const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
+                        *pp->RootNS, desc.ns_path.c_str(), found_ns);
+                    if (qc) {
+                        qore_class_private* qcp = qore_class_private::get(
+                            *const_cast<QoreClass*>(qc));
+                        target_vi = qcp->vars.find(desc.item_name.c_str());
+                    }
                 }
-                qore_class_private* qcp = qore_class_private::get(
-                    *const_cast<QoreClass*>(qc));
-                // Find and set the static var value
-                QoreVarInfo* vi = qcp->vars.find(desc.item_name.c_str());
-                if (!vi) {
-                    printd(0, "AOT init: static var '%s' not found in class '%s'\n",
-                        desc.item_name.c_str(), desc.ns_path.c_str());
+                QoreVarInfo* shadow_vi = nullptr;
+                if (shadow_pp) {
+                    const qore_ns_private* found_ns = nullptr;
+                    const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
+                        *shadow_pp->RootNS, desc.ns_path.c_str(), found_ns);
+                    if (qc) {
+                        qore_class_private* qcp = qore_class_private::get(
+                            *const_cast<QoreClass*>(qc));
+                        shadow_vi = qcp->vars.find(desc.item_name.c_str());
+                    }
+                }
+                if (!target_vi && !shadow_vi) {
+                    printd(0, "AOT init: static var '%s::%s' not found in target or shadow\n",
+                        desc.ns_path.c_str(), desc.item_name.c_str());
                     result.discard(&xsink);
                     ++failed;
                     break;
@@ -7318,10 +7348,19 @@ static void executeInitFunctions(
                 // module program with an already-initialized value.  Clean up
                 // the old value before re-assigning so assignInit finds a
                 // clean QoreLValue (avoids assert in debug builds / leak in
-                // release builds).
-                vi->val.removeValue(true).discard(&xsink);
-                vi->assignInit(result);
-                vi->eval_init = true;
+                // release builds). refSelf() on result each time because
+                // assignInit takes ownership.
+                if (target_vi) {
+                    target_vi->val.removeValue(true).discard(&xsink);
+                    target_vi->assignInit(result.refSelf());
+                    target_vi->eval_init = true;
+                }
+                if (shadow_vi && shadow_vi != target_vi) {
+                    shadow_vi->val.removeValue(true).discard(&xsink);
+                    shadow_vi->assignInit(result.refSelf());
+                    shadow_vi->eval_init = true;
+                }
+                result.discard(&xsink);
                 ++executed;
                 printd(2, "AOT init: initialized static var '%s::%s' type=%s\n",
                     desc.ns_path.c_str(), desc.item_name.c_str(), result.getTypeName());
