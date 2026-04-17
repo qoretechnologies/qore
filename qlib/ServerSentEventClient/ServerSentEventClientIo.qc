@@ -244,6 +244,22 @@ public class ServerSentEventClientIo inherits Logger::LoggerWrapper, ConnectionP
         }
     }
 
+    #! Called when all observers have been added to the object
+    /** Satisfies the @ref DataProvider::DelayedObservable "DelayedObservable"
+        contract; starts the background event loop by calling @ref connect()
+        with no extra headers.  Callers that need to supply per-request
+        headers or an alternate method/body should invoke @ref connect()
+        themselves and skip this method.
+    */
+    observersReady() {
+        connect();
+    }
+
+    #! Called to stop generating events — disconnects the SSE connection
+    stopEvents() {
+        disconnect();
+    }
+
     #! Returns True if the event loop is running
     /** @return \c True if the background event thread is active
     */
@@ -423,6 +439,21 @@ public class ServerSentEventClientIo inherits Logger::LoggerWrapper, ConnectionP
         }
 %endif
         return buf;
+    }
+
+    #! Emit a DEBUG-level log entry via the wrapped logger, if any
+    private logDebug(string fmt, ...) {
+        logArgs(LoggerLevel::LevelDebug, fmt, argv);
+    }
+
+    #! Emit an INFO-level log entry via the wrapped logger, if any
+    private logInfo(string fmt, ...) {
+        logArgs(LoggerLevel::LevelInfo, fmt, argv);
+    }
+
+    #! Emit an ERROR-level log entry via the wrapped logger, if any
+    private logError(string fmt, ...) {
+        logArgs(LoggerLevel::LevelError, fmt, argv);
     }
 }
 
