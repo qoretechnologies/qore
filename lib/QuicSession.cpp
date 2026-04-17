@@ -3652,8 +3652,18 @@ int QuicSession::h3EndHeadersCallback(nghttp3_conn* /* conn */, int64_t stream_i
         // markStreamComplete(), which would set body_complete=true and cause
         // isStreamComplete() to return true immediately — preventing the
         // Queue-based drain from buffering tunnel data before the sentinel.
+        //
+        // Set `dispatched=true` BEFORE pushing to completed_streams_: without
+        // this, takeHeadersReadyStreamCopy() (which looks for
+        // headers_complete && !dispatched) ALSO picks up this stream in
+        // headers-only mode, resulting in two handler_pool.submit() dispatches
+        // for the same CONNECT request — a spurious headers-only one that
+        // sits for 30 s and then triggers cleanupQuicStream + an unsolicited
+        // fin=1 on the tunnel, dropping the WebSocket after the first wave
+        // of traffic.
         if (stream->is_connect && !stream->connect_protocol.empty()) {
             stream->headers_complete = true;
+            stream->dispatched = true;
             session->completed_streams_.push(stream_id);
             session->has_completed_streams_.store(true, std::memory_order_release);
             printd(5, "QuicSession::h3EndHeadersCallback() stream_id=" QLLD
