@@ -2577,17 +2577,25 @@ void QuicSession::cleanupStream(int64_t stream_id) {
                 (long long)getSessionId(), (long long)stream_id);
             printd(5, "QuicSession::cleanupStream() stream_id=" QLLD
                 " preserving active CONNECT tunnel\n", stream_id);
-        } else {
-            ASYNC_IO_TRACE("QuicSession::cleanupStream ERASE session=%lld stream_id=%lld is_connect=%d connect_tunnel_active=%d\n",
-                (long long)getSessionId(), (long long)stream_id,
-                (int)isc, (int)cta);
-            printd(5, "QuicSession::cleanupStream() stream_id=" QLLD " removing dispatched stream\n",
-                stream_id);
-            streams_.erase(it);
-            updateKeepAliveLocked();
+            // Active CONNECT tunnel — leave everything in place:
+            // - streams_ entry so h3RecvDataCallback can route incoming DATA
+            // - connect_stream_queues_ / connect_stream_frame_states_ so the
+            //   delivery path still has a sink for inbound tunnel bytes
+            // All of this is reclaimed later via streamCloseCallback /
+            // h3EndStreamCallback / session destruction when the peer
+            // actually closes the tunnel.
+            return;
         }
+        ASYNC_IO_TRACE("QuicSession::cleanupStream ERASE session=%lld stream_id=%lld is_connect=%d connect_tunnel_active=%d\n",
+            (long long)getSessionId(), (long long)stream_id,
+            (int)isc, (int)cta);
+        printd(5, "QuicSession::cleanupStream() stream_id=" QLLD " removing dispatched stream\n",
+            stream_id);
+        streams_.erase(it);
+        updateKeepAliveLocked();
     }
-    // Deregister Queue / frame state and release references — handler has exited
+    // Non-CONNECT stream cleanup path: deregister Queue / frame state and
+    // release references — handler has exited.
     {
         ExceptionSink xsink;
         std::lock_guard<std::mutex> lg(connect_data_mutex_);
@@ -3690,6 +3698,8 @@ int QuicSession::h3RecvDataCallback(nghttp3_conn* /* conn */, int64_t stream_id,
                                      void* conn_user_data, void* /* stream_user_data */) {
     try {
         auto* session = static_cast<QuicSession*>(conn_user_data);
+        ASYNC_IO_TRACE("QuicSession::h3RecvDataCallback ENTER session=%lld stream_id=%lld datalen=%zu\n",
+            (long long)session->getSessionId(), (long long)stream_id, datalen);
         // Use find() instead of getOrCreateStream() to avoid recreating zombie streams
         // that were already cleaned up by the handler (via cleanupStream())
         auto it = session->streams_.find(stream_id);
@@ -3708,6 +3718,11 @@ int QuicSession::h3RecvDataCallback(nghttp3_conn* /* conn */, int64_t stream_id,
         auto* stream = it->second.get();
         printd(5, "h3RecvDataCallback() stream_id=" QLLD " datalen=%d body_total=%d\n",
             stream_id, (int)datalen, (int)(stream->body.size() + datalen));
+        ASYNC_IO_TRACE("QuicSession::h3RecvDataCallback STREAM_STATE session=%lld stream_id=%lld datalen=%zu is_connect=%d is_server=%d dispatched=%d streaming=%d connect_tunnel_active=%d\n",
+            (long long)session->getSessionId(), (long long)stream_id, datalen,
+            (int)stream->is_connect, (int)session->is_server_,
+            (int)stream->dispatched, (int)stream->streaming,
+            (int)stream->connect_tunnel_active);
 
         // RFC 9220: Extended CONNECT tunnel — deliver data to handler (server side)
         if (stream->is_connect && session->is_server_) {
