@@ -3453,35 +3453,34 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
     // Build reverse map from constant value pointers to fully-qualified names
     AOTConstantReverseMap const_reverse_map = buildConstantReverseMap(root_ns);
 
-    // Compile functions from namespaces that BELONG to this module (not from dependencies)
-    // Use the namespace's from_module field to identify ownership:
-    // - Empty from_module: namespace defined in current parsing context (this module)
-    // - from_module == mod_info.name: explicitly marked as belonging to this module
-    // - from_module == other: namespace came from a dependency (skip)
+    // Check that at least one namespace belonging to this module exists
+    // (sanity check — catches empty-module typos during qcc -m).
     bool found_any = false;
     for (auto ni = root_ns->nsl.nsmap.begin(); ni != root_ns->nsl.nsmap.end(); ++ni) {
         if (!ni->second) {
             continue;
         }
-        qore_ns_private* ns_priv = qore_ns_private::get(*ni->second);
-        const char* ns_module = ns_priv->getModuleName();
-
-        // Skip namespaces from other modules (dependencies)
-        if (ns_module && strcmp(ns_module, mod_info.name.c_str()) != 0) {
-            printd(2, "AOT: skipping namespace '%s' from module '%s' (compiling '%s')\n",
-                ni->first.c_str(), ns_module, mod_info.name.c_str());
-            continue;
+        const char* ns_module = qore_ns_private::get(*ni->second)->getModuleName();
+        if (!ns_module || strcmp(ns_module, mod_info.name.c_str()) == 0) {
+            found_any = true;
+            break;
         }
-
-        found_any = true;
-        compileNamespaceFunctions(ns_priv, *qpgm, ctx, *module, di_builder, di_cu,
-            compiled_funcs, compiled_init_funcs, total_funcs, compiled_count, failed_count,
-            total_ir_insts_all, &const_reverse_map);
     }
     if (!found_any) {
         error = "no module namespaces found after parsing (expected at least '" + mod_info.name + "')";
         return false;
     }
+
+    // Compile functions and classes that BELONG to this module, starting from
+    // the root namespace. Using compile_module=mod_info.name enforces per-item
+    // filtering (shouldSkipModuleItem): items from other modules are skipped at
+    // every level. This also covers classes/functions declared at the ROOT
+    // namespace level (e.g. `class CsvHelper { ... }` with no enclosing
+    // namespace block), which were previously missed when only child
+    // namespaces were iterated.
+    compileNamespaceFunctions(root_ns, *qpgm, ctx, *module, di_builder, di_cu,
+        compiled_funcs, compiled_init_funcs, total_funcs, compiled_count, failed_count,
+        total_ir_insts_all, &const_reverse_map, nullptr, mod_info.name.c_str());
 
     // Compile module init closure (if any) as an AOT init function so its
     // side effects run at load time (e.g. DataProvider.qm assigns
@@ -3879,36 +3878,35 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
         // Build reverse map from constant value pointers to fully-qualified names
         AOTConstantReverseMap const_reverse_map = buildConstantReverseMap(root_ns);
 
-        // Compile functions from namespaces that BELONG to this module (not from dependencies)
-        // Use the namespace's from_module field to identify ownership
+        // Check that at least one namespace belonging to this module exists
+        // (sanity check — catches empty-module typos during qcc -m).
         bool found_any = false;
         for (auto ni = root_ns->nsl.nsmap.begin(); ni != root_ns->nsl.nsmap.end(); ++ni) {
             if (!ni->second) {
                 continue;
             }
-            qore_ns_private* ns_priv = qore_ns_private::get(*ni->second);
-            const char* ns_module = ns_priv->getModuleName();
-
-            // Skip namespaces from other modules (dependencies)
-            if (ns_module && strcmp(ns_module, mod_info.name.c_str()) != 0) {
-                printd(2, "AOT: skipping namespace '%s' from module '%s' (compiling '%s')\n",
-                    ni->first.c_str(), ns_module, mod_info.name.c_str());
-                if (getenv("QORE_AOT_DEBUG")) {
-                    fprintf(stderr, "AOT: skipping namespace '%s' from module '%s' (compiling '%s')\n",
-                        ni->first.c_str(), ns_module, mod_info.name.c_str());
-                }
-                continue;
+            const char* ns_module = qore_ns_private::get(*ni->second)->getModuleName();
+            if (!ns_module || strcmp(ns_module, mod_info.name.c_str()) == 0) {
+                found_any = true;
+                break;
             }
-
-            found_any = true;
-            compileNamespaceFunctions(ns_priv, *qpgm, ctx, *module, di_builder, di_cu,
-                compiled_funcs, compiled_init_funcs, total_funcs, compiled_count,
-                failed_count, total_ir_insts_all, &const_reverse_map);
         }
         if (!found_any) {
             error = "no module namespaces found after parsing (expected at least '" + mod_name + "')";
             return false;
         }
+
+        // Compile functions and classes that BELONG to this module, starting from
+        // the root namespace. Using compile_module=mod_info.name enforces per-item
+        // filtering (shouldSkipModuleItem): items from other modules are skipped
+        // at every level. This also covers classes/functions declared at the ROOT
+        // namespace level (e.g. `class CsvHelper { ... }` with no enclosing
+        // namespace block), which were previously missed when only child
+        // namespaces were iterated.
+        compileNamespaceFunctions(root_ns, *qpgm, ctx, *module, di_builder, di_cu,
+            compiled_funcs, compiled_init_funcs, total_funcs, compiled_count,
+            failed_count, total_ir_insts_all, &const_reverse_map, nullptr,
+            mod_info.name.c_str());
 
         // Compile module init closure (if any) as an AOT init function so its
         // side effects run at load time.
