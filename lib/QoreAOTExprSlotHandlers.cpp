@@ -365,9 +365,48 @@ static bool write_slot_CLOSURE_CREATE(AOTExprSlotWriteCtx& ctx) {
         uint32_t size_pos = ctx.writer.position();
         ctx.writer.writeU32(0);  // placeholder
 
-        auto writeExpr = [&ctx](
+        // Build the closure's extended locals vector in the same order the
+        // reader (CLOSURE_CREATE handler in lib/QoreAOTRuntime.cpp) builds
+        // its closure_locals_vec:
+        //   parent_locals + closure params + argv + body_locals
+        // Keeping writer/reader ordering identical is required so that
+        // EXPR_TREE blobs inside the closure body (or any other readExpr-
+        // bound field) encode and decode LocalVar slot indices against the
+        // same LocalVar* sequence on both sides.  Without this, any
+        // VarRefNode inside an EXPR_TREE blob that falls through the
+        // LOCAL_VARREF/name match paths (e.g. a body local like a
+        // `foreach auto <var>` loop variable) is silently mapped to a
+        // different LocalVar at deserialization time, corrupting the
+        // reconstructed AST.
+        std::vector<AOTLocalSlotId> closure_locals = ctx.parent_locals;
+        if (sig) {
+            for (unsigned p = 0; p < sig->numParams(); ++p) {
+                if (sig->lv[p]) {
+                    AOTLocalSlotId slot;
+                    slot.local_var_ptr = reinterpret_cast<const void*>(sig->lv[p]);
+                    slot.name = sig->lv[p]->getName();
+                    closure_locals.push_back(slot);
+                }
+            }
+            if (sig->argvid) {
+                AOTLocalSlotId slot;
+                slot.local_var_ptr = reinterpret_cast<const void*>(sig->argvid);
+                slot.name = "argv";
+                closure_locals.push_back(slot);
+            }
+        }
+        for (LocalVar* bl : closure_ir->all_body_locals) {
+            if (bl) {
+                AOTLocalSlotId slot;
+                slot.local_var_ptr = reinterpret_cast<const void*>(bl);
+                slot.name = bl->getName() ? bl->getName() : "";
+                closure_locals.push_back(slot);
+            }
+        }
+
+        auto writeExpr = [&closure_locals, &ctx](
                 QoreAOTBinaryWriter& w, const QoreValue& e) -> bool {
-            return classifyAndWriteExpr(w, e, ctx.parent_locals, ctx.parent_globals,
+            return classifyAndWriteExpr(w, e, closure_locals, ctx.parent_globals,
                 ctx.const_reverse_map);
         };
 

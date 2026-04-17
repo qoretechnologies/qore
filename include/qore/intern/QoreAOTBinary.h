@@ -1369,7 +1369,17 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
     const std::unordered_map<std::string, LocalVar*>* enclosing_locals,
     std::string& error,
     LocalVar** parent_locals_arr = nullptr,
-    int num_parent_locals = 0);
+    int num_parent_locals = 0,
+    //! If non-null, after reading the IR header's body_locals section,
+    //! this vector is extended with func->all_body_locals in the same
+    //! order they were written.  Used by closure deserialization so that
+    //! EXPR_TREE blobs in the closure body can resolve LocalVar slot
+    //! indices that reference body locals (see CLOSURE_CREATE handlers
+    //! in lib/QoreAOTRuntime.cpp and lib/QoreAOTExprHandlers.cpp for
+    //! the matching writer-side extension in lib/QoreAOTBinary.cpp
+    //! classifyAndWriteExpr's closure branch and in
+    //! lib/QoreAOTExprSlotHandlers.cpp write_slot_CLOSURE_CREATE).
+    std::vector<LocalVar*>* extended_closure_locals = nullptr);
 
 //! Compress metadata blob using zlib
 /** Compresses the serialized metadata blob to reduce size and LLVM compilation overhead.

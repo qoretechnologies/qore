@@ -669,17 +669,42 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
         enclosing_locals["self"] = closure_sig->selfid;
     }
 
+    // Build extended locals array for EXPR_TREE blob deserialization.
+    // Writer side (classifyAndWriteExpr's QoreClosureParseNode branch in
+    // lib/QoreAOTBinary.cpp) uses
+    //   closure_locals = parent_locals + closure params + argv + body_locals
+    // when serializing the closure body's IR.  The reader must mirror that
+    // layout so LOCAL_VARREF slot indices inside EXPR_TREE blobs resolve to
+    // the correct LocalVar*.  Body locals aren't known until the IR header is
+    // read, so we capture the vector by reference and let deserializeIRFunction
+    // extend it (see extended_closure_locals parameter) between header and
+    // instruction reading.
+    std::vector<LocalVar*> closure_locals_vec;
+    closure_locals_vec.reserve(ctx.num_locals + closure_sig->numParams() + 1);
+    for (int l = 0; l < ctx.num_locals; ++l) {
+        closure_locals_vec.push_back(ctx.locals[l]);
+    }
+    for (unsigned p = 0; p < closure_sig->numParams(); ++p) {
+        closure_locals_vec.push_back(closure_sig->lv[p]);
+    }
+    if (closure_sig->argvid) {
+        closure_locals_vec.push_back(closure_sig->argvid);
+    }
+
     // Deserialize closure body IR
     std::string ir_error;
-    auto readExprCb = [&ctx]
+    auto readExprCb = [&ctx, &closure_locals_vec]
             (const QoreAOTBinaryReader& rdr, const uint8_t*& p,
             const uint8_t* e, std::string& err) -> QoreValue {
+        LocalVar** arr = closure_locals_vec.empty()
+            ? nullptr : closure_locals_vec.data();
+        int cnt = static_cast<int>(closure_locals_vec.size());
         return readOneExpr(rdr, p, e, err, ctx.pgm,
-            ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
+            arr, cnt, ctx.globals, ctx.num_globals);
     };
     auto closure_ir = deserializeIRFunction(ctx.reader, ctx.ptr, ir_end_ptr, ctx.pgm,
         readExprCb, &enclosing_locals, ir_error,
-        ctx.locals, ctx.num_locals);
+        ctx.locals, ctx.num_locals, &closure_locals_vec);
     ctx.ptr = ir_end_ptr;  // Ensure we advance past IR data
 
     if (!closure_ir) {

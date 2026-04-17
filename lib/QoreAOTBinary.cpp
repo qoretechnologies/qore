@@ -3283,8 +3283,19 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
                     uint32_t size_pos = writer.position();
                     writer.writeU32(0);  // placeholder
 
-                    // Build extended locals list including the closure's own parameters
-                    // so VarRefNodes to closure params can be serialized (not GENERIC_EVAL)
+                    // Build extended locals list: parent + closure params + argv +
+                    // body_locals.  The reader side (read_expr_closure_create in
+                    // lib/QoreAOTExprHandlers.cpp and the slot-map CLOSURE_CREATE
+                    // handler in lib/QoreAOTRuntime.cpp) builds its
+                    // closure_locals_vec in the same order; keeping the ordering
+                    // identical is required so VarRefNode slot indices inside
+                    // EXPR_TREE blobs resolve to the same LocalVar* on both
+                    // sides.  Body locals especially matter: a `foreach auto arg
+                    // in (...)` loop variable is a body local whose StoreLValue
+                    // lvalue is serialized via EXPR_TREE.  If body_locals are
+                    // missing from closure_locals, `arg` gets a slot past the
+                    // closure_locals size that mis-resolves to the first closure
+                    // param at read time.
                     std::vector<AOTLocalSlotId> closure_locals = parent_locals;
                     if (sig) {
                         for (unsigned p = 0; p < sig->numParams(); ++p) {
@@ -3299,6 +3310,14 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
                             AOTLocalSlotId slot;
                             slot.local_var_ptr = reinterpret_cast<const void*>(sig->argvid);
                             slot.name = "argv";
+                            closure_locals.push_back(slot);
+                        }
+                    }
+                    for (LocalVar* bl : closure_ir->all_body_locals) {
+                        if (bl) {
+                            AOTLocalSlotId slot;
+                            slot.local_var_ptr = reinterpret_cast<const void*>(bl);
+                            slot.name = bl->getName() ? bl->getName() : "";
                             closure_locals.push_back(slot);
                         }
                     }
