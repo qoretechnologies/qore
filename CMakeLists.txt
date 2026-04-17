@@ -575,8 +575,8 @@ endif()
 # QUIC/HTTP/3 support via ngtcp2 + nghttp3
 # Try system packages first (pkg-config, then cmake find); fall back to
 # building from source via FetchContent when not installed.
-set(NGTCP2_VERSION "1.17.0")
-set(NGHTTP3_VERSION "1.14.0")
+set(NGTCP2_VERSION "1.22.1")
+set(NGHTTP3_VERSION "1.15.0")
 
 set(QUIC_FOUND_SYSTEM FALSE)
 pkg_check_modules(NGTCP2_PKG QUIET libngtcp2)
@@ -651,7 +651,7 @@ if (NOT QUIC_FOUND_SYSTEM)
     # --- nghttp3 (must come before ngtcp2) ---
     FetchContent_Declare(nghttp3
         URL "https://github.com/ngtcp2/nghttp3/releases/download/v${NGHTTP3_VERSION}/nghttp3-${NGHTTP3_VERSION}.tar.xz"
-        URL_HASH SHA256=b3083dae2ff30cf00d24d5fedd432479532c7b17d993d384103527b36c1ec82d
+        URL_HASH SHA256=6da0cd06b428d32a54c58137838505d9dc0371a900bb8070a46b29e1ceaf2e0f
     )
     FetchContent_Populate(nghttp3)
     # Patch out the unconditional 'check' target that conflicts in multi-FetchContent builds
@@ -663,7 +663,7 @@ if (NOT QUIC_FOUND_SYSTEM)
     # --- ngtcp2 (with OpenSSL crypto backend) ---
     FetchContent_Declare(ngtcp2
         URL "https://github.com/ngtcp2/ngtcp2/releases/download/v${NGTCP2_VERSION}/ngtcp2-${NGTCP2_VERSION}.tar.xz"
-        URL_HASH SHA256=9c9a4e2e150e90bf77d4ffcbefe82f738ee375287e68aaa715fa83c04a12209c
+        URL_HASH SHA256=dfd2c68bd64b89847c611425b9487105c46e8447b5c21e6aeb00642c8fbe2ca8
     )
     set(ENABLE_OPENSSL ON CACHE BOOL "" FORCE)
     set(ENABLE_GNUTLS OFF CACHE BOOL "" FORCE)
