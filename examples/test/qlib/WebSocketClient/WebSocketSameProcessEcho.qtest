@@ -1,0 +1,236 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# Tests same-process WebSocket echo (server gotMessage -> send response)
+# for all protocol levels. The H3 test exposes the wakeSocket bug where
+# the server's QUIC poll op is never woken to flush response packets.
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Mime.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/ConnectionProvider
+%requires ../../../../qlib/HttpServerUtil.qm
+%requires ../../../../qlib/AsyncSocketIo/AsyncSocketIo.qm
+%requires ../../../../qlib/HttpServerAsyncIo
+%requires ../../../../qlib/HttpServer.qm
+%requires ../../../../qlib/WebSocketUtil.qm
+%requires ../../../../qlib/WebSocketHandler.qm
+%requires ../../../../qlib/WebSocketClient.qm
+%try-module json
+%define NoJson
+%endtry
+
+%exec-class WebSocketSameProcessEchoTest
+
+class EchoWsConnection inherits WebSocketConnection {
+    constructor(WebSocketHandler handler) : WebSocketConnection(handler) {}
+    gotMessage(string msg) {
+%ifndef NoJson
+        # Send valid JSON for clients with data="json" serialization
+        send(make_json({"echo": msg}));
+%else
+        send("RESPONSE:" + msg);
+%endif
+    }
+    gotMessage(binary msg) { gotMessage(msg.toString("UTF-8")); }
+}
+
+class EchoWsHandler inherits WebSocketHandler {
+    constructor() : WebSocketHandler() {}
+    WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
+        return new EchoWsConnection(self);
+    }
+}
+
+class WebSocketSameProcessEchoTest inherits Test {
+    public {
+        const CertPem = "-----BEGIN CERTIFICATE-----
+MIIDCTCCAfGgAwIBAgIULwwY9Xmqwn7ZZIYgEu8otC1aRNMwDQYJKoZIhvcNAQEL
+BQAwFDESMBAGA1UEAwwJbG9jYWxob3N0MB4XDTI1MTIzMTE4MjIyOVoXDTI2MTIz
+MTE4MjIyOVowFDESMBAGA1UEAwwJbG9jYWxob3N0MIIBIjANBgkqhkiG9w0BAQEF
+AAOCAQ8AMIIBCgKCAQEA0r/nka21DXdApKWXg6yoM64+RXZ/j2afHJjnnL7IGt87
+wOow8iZDyn3+S9h/J6FP5dGKCmqItq/OKmZxpL61sfUwpcYe3axnoAjKshkfbwSi
+ZKL0oFJcmXYSk9H/qIIbxdHbBre9ztoJsPaBLHWbcoc/too/o4wDW3FUSZaCzgy2
+Lpphnwi/gXNoD2qxQodv+pfkAzn2+nN0J7Yt+cWs15E2DZCxekhISrhT1ull+Afr
+UbHlcqA08AXyyzx61nENtcWpFyuVmfwhvcSPMTgRpoZ+/P+QrcgbmCe2hjZJtgiL
+aQqtsakV7KxvHpR8AgnFeshfnjZY+w8oRMlaMIb6IwIDAQABo1MwUTAdBgNVHQ4E
+FgQUWOgm+lMoLNS8ReH7mvffWJfreREwHwYDVR0jBBgwFoAUWOgm+lMoLNS8ReH7
+mvffWJfreREwDwYDVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOCAQEAxBG0
+3X0YIeNaf+3XDnoiZBtgMxpsRkxMtRy+lLoQZ3XO5f58eFjDmTq9InplX4IEW0Nx
+TpWr7suU4cFwgZfe6+cHfiU0PQ/pCA7XIetZb2n3GFrQkU4U1K7DgHeZ8HZ7vQ1T
+tVaefxRR3Y8CoIWmI9kYhXs0I0imKOopzpj2iScwGYKmFuasSGyfbkEQgRvg+hAl
+8oL2f4hCFLynTLkA8bWcd3cyBbGIhPzTffuSBjfNHLRqrI4hGPvTM8Xl4WcqmrmZ
+CP3wt6EiYaxJ2zRR2kUtxdm4xntxjc+nr5sjj1pVJvoN7AVmeihS7y4Awy156UCN
+cnhHffwhNhKl6MTonQ==
+-----END CERTIFICATE-----";
+
+        const KeyPem = "-----BEGIN PRIVATE KEY-----
+MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDSv+eRrbUNd0Ck
+pZeDrKgzrj5Fdn+PZp8cmOecvsga3zvA6jDyJkPKff5L2H8noU/l0YoKaoi2r84q
+ZnGkvrWx9TClxh7drGegCMqyGR9vBKJkovSgUlyZdhKT0f+oghvF0dsGt73O2gmw
+9oEsdZtyhz+2ij+jjANbcVRJloLODLYummGfCL+Bc2gParFCh2/6l+QDOfb6c3Qn
+ti35xazXkTYNkLF6SEhKuFPW6WX4B+tRseVyoDTwBfLLPHrWcQ21xakXK5WZ/CG9
+xI8xOBGmhn78/5CtyBuYJ7aGNkm2CItpCq2xqRXsrG8elHwCCcV6yF+eNlj7DyhE
+yVowhvojAgMBAAECggEAMLi64VvmQnGyWR4LNB7DWAdNUCPAA7f2ytaynPMiMcwv
+9T5vCFw+Sd7s3j3zz4akgP37SsMsTgfAwt6iITMRsE197KUr15WW81F1As16DeFl
+ZZyirzm7PKMmUlQ3JY7Guun0F858rAiOOwISBOQ/hq+r1BiL89RXpllB4i1Qmi+8
+Y7Y4mF9j3BDfdUCY+nG8aJ9zhZHZK2/cV40G9qrafFYwQEp86mM2BhtlRr24FCFe
+nWUboADvEAiOhlj7TQl5eMnfKuOPPU9oAZX1yTRkjTPQnBSqZbLaFkcnRKkZcgyg
+dC78RDl2iOB8JclXdLu/R9Dg8SQQ8M5clcKprR+4IQKBgQD7ubtmrFpRzvVMYiGJ
++JXf5AfSRB6OeXUMDaEw31XGZU9zZALqrh/98D4GVWGPSvXVbgH8KdxEc5GN5OJj
+HKxBldRZ0sw2gJLAE6UKH/qDNmp+2qWEdrDE8YcAeCQxo6rk+Ns5qqsvmn2SR14Y
+mvtgHHS1D+9lsqea5jUTSXrc0wKBgQDWVAwsZOtah2CHvsonqOyQXotnRtBool0u
+6rtGrRXoDFvwrjRsicBv6L1kf/npD+QhkaRe3ZkOBZxPsjv9Kfc974czLBAf1zeD
+rW931aSp1YiHyBo8+PmjTvbbiOK7K/8n79CN8W+zwr9plaU+HE1nLwwp/UmaCYtM
+fArq1jHbcQKBgFWnUVkSdHk5zsX67iaga38PfInTnAIm2ekMCjkzBWDIwEwnT8bD
+ESe7Q5+sFdJIU3YYRJylMcoo+PIrW80VyJdYgDVAQTSac1TgWlwjnX5gWcRoacG1
+EVkyRhmmx8oMQu4+r3nj1PQRwYCwwBfnRHnjtOKXVYJpVBalFpJFgoT5AoGAGTUx
+aVdFRxR9CfoqlJeNmz1DcBYoFOZjx0zcUeexl+U8OwaCK/HXrFHXVKaoofy4fCpB
+BtdRVRDb3ZO88n2pEqPFZwNbsiMB6H7RiWqbP05aDH5Ad8NguRBkgFWNNS5riCrw
+gIFQ/fd9w9FR6ggyIlyqNZYQvgk5VPmR3yTqIEECgYEA0akqJwH4M2aQb3mP6FGX
+MbQ5aconCeXHrT2u80LEhF4KzwQz8k8XX2K2XRZ+4LgWq3tOfeVnkEivkJBzFEao
+/g5l2ZjftRO2yAdYhP4Sbcws88pP+cr64tWDI6qK6tlGXI93EyfCVT1FSX5CC1aq
+Do+Sl1gfqlpgpszQaOMjR4M=
+-----END PRIVATE KEY-----";
+    }
+
+    constructor() : Test("WebSocketSameProcessEchoTest", "1.0") {
+        addTestCase("same-process echo (observer)", \testSameProcessEchoObserver());
+        addTestCase("same-process echo (callback)", \testSameProcessEchoCallback());
+        set_return_value(main());
+    }
+
+    private hash<auto> createServer() {
+        Logger logger("test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+        });
+        EchoWsHandler handler();
+        server.setDefaultHandler("ws", handler);
+        hash<auto> linfo = server.addListener(<HttpListenerOptionInfo>{
+            "node": "localhost",
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+            "http_version": "auto",
+        });
+        server.waitForAsyncIo();
+        return {
+            "server": server,
+            "handler": handler,
+            "linfo": linfo,
+            "logger": logger,
+        };
+    }
+
+    testSameProcessEchoCallback() {
+        hash<auto> ctx = createServer();
+        on_exit {
+            HttpServer srv = ctx.server;
+            srv.stop();
+            AsyncSocketIo::AsyncSocketIoController ctrl = AsyncSocketIo::getGlobalAsyncIoController();
+            ctrl.stopClear();
+        }
+
+        list<auto> l = ();
+        Counter c(1);
+        code cb = sub (*data msg) {
+            if (exists msg) {
+                l += msg;
+                if (l.size() == 1) {
+                    c.dec();
+                }
+            }
+        };
+        WebSocketClient wsc(cb, {
+            "url": sprintf("wss://localhost:%d", ctx.linfo.port),
+            "logger": ctx.logger,
+            "http_version": "auto",
+            "ssl_verify_cert": False,
+        });
+        on_exit {
+            try { wsc.disconnect(); } catch () {}
+            delete wsc;
+        }
+        wsc.connect();
+        if (!wsc.isHttp3()) {
+            testSkip("H3 not negotiated");
+        }
+
+        wsc.send("ECHO-CB");
+        int rc = c.waitForZero(5s);
+        assertEq(0, rc, "callback echo must not time out");
+        # Server sends JSON: {"echo":"ECHO-CB"}
+        assertEq(1, l.size(), "should receive one response");
+        assertTrue(l[0].val(), "response should have content");
+    }
+
+    # Observer-based delivery — matches the reproducer pattern
+    testSameProcessEchoObserver() {
+%ifdef NoJson
+        testSkip("json module not available");
+%endif
+        hash<auto> ctx = createServer();
+        on_exit {
+            HttpServer srv = ctx.server;
+            srv.stop();
+            AsyncSocketIo::AsyncSocketIoController ctrl = AsyncSocketIo::getGlobalAsyncIoController();
+            ctrl.stopClear();
+        }
+
+        Counter c(1);
+        *auto response;
+
+        WebSocketClientWithSerialization wsc({
+            "url": sprintf("wss://localhost:%d", ctx.linfo.port),
+            "logger": ctx.logger,
+            "http_version": "auto",
+            "ssl_verify_cert": False,
+            "data": "json",
+        });
+        on_exit {
+            try { wsc.disconnect(); } catch () {}
+            delete wsc;
+        }
+        TestObserver obs(c, \response);
+        wsc.registerObserver(obs);
+        wsc.observersReady();
+        if (!wsc.isHttp3()) {
+            testSkip("H3 not negotiated");
+        }
+
+        wsc.sendData({"action": "test", "msg": "hello"});
+        int rc = c.waitForZero(5s);
+        assertEq(0, rc, "observer echo must not time out");
+        assertTrue(response.val(), "observer should receive response");
+    }
+}
+
+class TestObserver inherits Observer {
+    private {
+        Counter c;
+        reference<auto> response;
+    }
+
+    constructor(Counter c, reference<auto> response) {
+        self.c = c;
+        self.response = \response;
+    }
+
+    update(string event_id, hash<auto> data_) {
+        if (event_id == "ws-data-event") {
+            response = data_.data;
+            c.dec();
+        }
+    }
+}

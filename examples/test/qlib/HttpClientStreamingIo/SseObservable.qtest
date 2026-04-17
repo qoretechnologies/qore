@@ -1,0 +1,254 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  SseObservable.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Mime.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/ConnectionProvider
+%requires ../../../../qlib/HttpServerUtil.qm
+%requires ../../../../qlib/AsyncSocketIo/AsyncSocketIo.qm
+%requires ../../../../qlib/HttpServerAsyncIo
+%requires ../../../../qlib/HttpServer.qm
+%requires ../../../../qlib/ServerSentEventHandler
+%requires ../../../../qlib/HttpClientIo
+%requires ../../../../qlib/HttpClientStreamingIo
+%try-module json
+%define NoJson
+%endtry
+
+%exec-class SseObservableTest
+
+class TestSseHandler inherits ServerSentEventHandler {
+    constructor() : ServerSentEventHandler() {
+    }
+
+    connectionRegisteredImpl(ServerSentEventConnection conn) {
+        conn.send(<SseMessageInfo>{
+            "event": "greeting",
+            "data": "hello",
+        });
+    }
+}
+
+class TestObserver inherits DataProvider::Observer {
+    public {
+        list<hash<auto>> events = ();
+        Mutex m();
+        Condition cond();
+        int expected_count = 0;
+    }
+
+    constructor(int expected = 1) {
+        expected_count = expected;
+    }
+
+    update(string event_id, hash<auto> data_) {
+        AutoLock al(m);
+        push events, {
+            "event_id": event_id,
+            "data": data_,
+        };
+        if (events.size() >= expected_count) {
+            cond.broadcast();
+        }
+    }
+
+    bool waitForEvents(timeout t = 10s) {
+        return waitForCount(expected_count, t);
+    }
+
+    # Waits until at least \c count events have been received
+    bool waitForCount(int count, timeout t = 10s) {
+        AutoLock al(m);
+        date end_time = now_us() + t;
+        while (events.size() < count) {
+            date remaining = end_time - now_us();
+            if (remaining <= 0us) {
+                return False;
+            }
+            cond.wait(m, remaining);
+        }
+        return True;
+    }
+}
+
+class SseObservableTest inherits Test {
+    private {
+        HttpServer server;
+        int port;
+        TestSseHandler handler();
+    }
+
+    constructor() : Test("SseObservableTest", "1.0") {
+        addTestCase("SseObservable receives events via Observer pattern", \testObserverReceivesEvents());
+        addTestCase("SseObservable receives multiple events", \testObserverMultipleEvents());
+        addTestCase("SseObservable stopEvents cancels stream", \testStopEvents());
+        addTestCase("SseObservable with POST method and JSON body", \testPostWithJsonBody());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        Logger logger("test", LoggerLevel::getLevelInfo());
+        hash<HttpServerOptionInfo> http_opts = <HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+        };
+        server = new HttpServer(http_opts);
+        server.setDefaultHandler("sse", handler);
+        port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+    }
+
+    globalTearDown() {
+        if (server) {
+            server.stop();
+            delete server;
+        }
+    }
+
+    testObserverReceivesEvents() {
+        string url = sprintf("http://localhost:%d/sse", port);
+        HttpClientIo::HttpClientConnectionManager mgr();
+
+        HttpClientStreamingIo::SseObservable obs(mgr, url, "GET", "/sse");
+
+        # Expect: connected + at least 1 data event
+        TestObserver observer(2);
+        obs.registerObserver(observer);
+        obs.observersReady();
+
+        # Wait for the connected + greeting event
+        bool got_events = observer.waitForEvents(10s);
+        assertEq(True, got_events, "received expected events");
+        assertGe(2, observer.events.size(), "at least 2 events received");
+
+        # Verify connected event
+        assertEq(HttpClientStreamingIo::EVENT_SSE_CONNECTED, observer.events[0].event_id);
+
+        # Verify data event — the SSE handler serializes data as JSON
+        assertEq(HttpClientStreamingIo::EVENT_SSE_DATA, observer.events[1].event_id);
+        assertEq("greeting", observer.events[1].data.event);
+        assertEq("\"hello\"", observer.events[1].data.data);
+
+        obs.stopEvents();
+    }
+
+    testObserverMultipleEvents() {
+        string url = sprintf("http://localhost:%d/sse", port);
+        HttpClientIo::HttpClientConnectionManager mgr();
+
+        HttpClientStreamingIo::SseObservable obs(mgr, url, "GET", "/sse");
+
+        # connected + greeting + update = 3 events
+        TestObserver observer(3);
+        obs.registerObserver(observer);
+        obs.observersReady();
+
+        # Wait for connected + greeting before sending a second event
+        assertTrue(observer.waitForCount(2, 10s), "greeting arrived");
+
+        # Send a second event from the server
+        handler.sendAll(<SseMessageInfo>{
+            "event": "update",
+            "data": "payload",
+        });
+
+        bool got_events = observer.waitForEvents(10s);
+        assertEq(True, got_events, "received 3 events");
+
+        # Find the data events
+        list<hash<auto>> data_events = (
+            select observer.events,
+            $1.event_id == HttpClientStreamingIo::EVENT_SSE_DATA
+        );
+        assertGe(2, data_events.size(), "at least 2 data events");
+        assertEq("greeting", data_events[0].data.event);
+        assertEq("update", data_events[1].data.event);
+        assertEq("\"payload\"", data_events[1].data.data);
+
+        obs.stopEvents();
+    }
+
+    testStopEvents() {
+        string url = sprintf("http://localhost:%d/sse", port);
+        HttpClientIo::HttpClientConnectionManager mgr();
+
+        HttpClientStreamingIo::SseObservable obs(mgr, url, "GET", "/sse");
+
+        # Wait for connected + greeting + closed = 3
+        TestObserver observer(3);
+        obs.registerObserver(observer);
+        obs.observersReady();
+
+        # Wait for connected + greeting before stopping
+        assertTrue(observer.waitForCount(2, 10s), "greeting arrived before stop");
+
+        # Stop the observable
+        obs.stopEvents();
+        assertEq(True, obs.isStopped(), "observable is stopped");
+
+        # Wait for the closed event
+        bool got_events = observer.waitForEvents(10s);
+        assertEq(True, got_events, "received events including closed");
+
+        # Find the closed event
+        list<hash<auto>> closed_events = (
+            select observer.events,
+            $1.event_id == HttpClientStreamingIo::EVENT_SSE_CLOSED
+        );
+        assertEq(1, closed_events.size(), "one closed event");
+    }
+
+    testPostWithJsonBody() {
+        string url = sprintf("http://localhost:%d/sse", port);
+        HttpClientIo::HttpClientConnectionManager mgr();
+
+        # POST with JSON body — the SSE handler doesn't check method/body,
+        # but this verifies the SSE Observable works with non-GET methods
+        HttpClientStreamingIo::SseObservable obs(mgr, url, "POST", "/sse",
+            {"Content-Type": MimeTypeJson},
+            make_json({"prompt": "test"}));
+
+        # Expect: connected + greeting
+        TestObserver observer(2);
+        obs.registerObserver(observer);
+        obs.observersReady();
+
+        bool got_events = observer.waitForEvents(10s);
+        assertEq(True, got_events, "received events with POST method");
+
+        # Verify data event still arrived
+        list<hash<auto>> data_events = (
+            select observer.events,
+            $1.event_id == HttpClientStreamingIo::EVENT_SSE_DATA
+        );
+        assertGe(1, data_events.size(), "at least 1 data event with POST");
+        assertEq("greeting", data_events[0].data.event);
+        assertEq("\"hello\"", data_events[0].data.data);
+
+        obs.stopEvents();
+    }
+}

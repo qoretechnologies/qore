@@ -8500,7 +8500,7 @@ QoreHashNode* QoreHttpClientObject::readServerSentEventConnMgr(const QoreStringN
             // Parse SSE event using the static Socket method
             SimpleRefHolder<QoreStringNode> event_str(
                 new QoreStringNode(event_text.c_str(), event_text.size(), QCS_UTF8));
-            return qore_socket_private::parseServerSentEvent(xsink, **event_str);
+            return parseSseEvent(xsink, **event_str);
         }
 
         // Read more data from channel
@@ -8520,7 +8520,7 @@ QoreHashNode* QoreHttpClientObject::readServerSentEventConnMgr(const QoreStringN
                 http_priv->sse_recv_buffer.clear();
                 SimpleRefHolder<QoreStringNode> event_str(
                     new QoreStringNode(remaining.c_str(), remaining.size(), QCS_UTF8));
-                return qore_socket_private::parseServerSentEvent(xsink, **event_str);
+                return parseSseEvent(xsink, **event_str);
             }
             return nullptr;
         }

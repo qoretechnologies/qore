@@ -167,6 +167,34 @@ public class Http1ClientConnection inherits HttpClientConnection {
         return sid;
     }
 
+    #! Submits an SSE request with Queue-based parsed event delivery
+    /** Like submitRequestStreaming() but creates an SseAction that parses SSE
+        events on the I/O thread and pushes parsed SseMessageInfo hashes to a Queue.
+
+        @param method HTTP method
+        @param path request path
+        @param headers request headers (optional)
+        @param body request body (optional)
+        @param queue Queue for parsed SSE event delivery
+
+        @return the stream ID
+    */
+    int submitRequestSse(string method, string path, *hash<auto> headers,
+            *data body, Queue queue) {
+        int sid = poll_op.submitRequestSse(method, path, headers, body, queue,
+            max_concurrent_streams);
+        # Wake the I/O controller so it processes the queued request
+        *object ctl;
+        {
+            AutoLock al(lock);
+            ctl = controller_ref;
+        }
+        if (ctl) {
+            ctl.wakeSocket(getSocket());
+        }
+        return sid;
+    }
+
     #! Cancels a request (protocol-specific)
     cancelRequestImpl(int stream_id) {
         poll_op.cancelRequest(stream_id);

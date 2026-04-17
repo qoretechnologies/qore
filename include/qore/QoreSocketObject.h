@@ -389,6 +389,25 @@ public:
     DLLEXPORT const char* getSSLCipherVersion();
     DLLEXPORT bool isSecure();
 
+    //! Checks for data on an idle HTTP/1.1 keepalive connection in an async-I/O-safe way.
+    /** For TLS connections, uses SSL_peek (which processes TLS post-handshake records such
+        as TLS 1.3 NewSessionTicket internally and consumes the underlying TCP bytes) rather
+        than a raw recv(MSG_PEEK) on the file descriptor.  This avoids a busy-loop where a
+        TLS record header byte (0x17 = Application Data) is seen by the raw peek but never
+        consumed because it requires OpenSSL processing.
+
+        For plain (non-TLS) connections, falls back to raw recv(MSG_PEEK | MSG_DONTWAIT).
+
+        @return > 0  application-layer data is available (unexpected on an idle connection)
+        @return   0  no application data; any TLS post-handshake record was drained
+        @return  -1  connection closed or error (socket already closed or xsink set)
+
+        @param xsink exception sink; set on SSL error
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT int checkIdleData(ExceptionSink* xsink);
+
     //! Sets the ALPN protocols to offer during TLS negotiation
     /** @param protocols A list of protocol names in order of preference (e.g., {"h2", "http/1.1"})
         @param xsink Exception sink for error handling

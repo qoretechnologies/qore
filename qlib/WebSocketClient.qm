@@ -1535,7 +1535,7 @@ ws.setEventQueue();
     /** @since WebSocketClient 2.0
     */
     ping(*data msg) {
-        logDebug("sending PING %y (open: %y)", msg, isOpen());
+        logDebug("sending PING %y (open: %y)", LoggerUtil::getArgSummary(msg), isOpen());
         if (poll_op) {
             poll_op.sendPing(msg);
             wakeAsyncIo();
@@ -1546,7 +1546,7 @@ ws.setEventQueue();
     /** @since WebSocketClient 1.6.1
     */
     pong(*data msg) {
-        logDebug("sending PONG %y (open: %y)", msg, isOpen());
+        logDebug("sending PONG %y (open: %y)", LoggerUtil::getArgSummary(msg), isOpen());
         if (poll_op) {
             poll_op.sendPong(msg);
             wakeAsyncIo();
@@ -1562,7 +1562,7 @@ ws.setEventQueue();
         @see Socket::send()
     */
     send(string str) {
-        logDebug("sending string: %y (open: %y)", str, isOpen());
+        logDebug("sending string: %y (open: %y)", LoggerUtil::getArgSummary(str), isOpen());
         if (poll_op) {
             poll_op.sendText(str);
             wakeAsyncIo();
@@ -1578,7 +1578,7 @@ ws.setEventQueue();
         @see Socket::send()
     */
     send(binary bin) {
-        logDebug("sending binary: %y (open: %y)", bin, isOpen());
+        logDebug("sending binary: %y (open: %y)", LoggerUtil::getArgSummary(bin), isOpen());
         if (poll_op) {
             poll_op.sendBinary(bin);
             wakeAsyncIo();
@@ -1591,8 +1591,8 @@ ws.setEventQueue();
         If extensions are active (e.g., permessage-deflate), the message will be compressed before sending.
     */
     send(data msg, int op, bool fin) {
-        logDebug("sending message: %y op: %d/%y fin: %y (open: %y)", msg, op, WSOPMap{op} ?? "unknown", fin,
-            isOpen());
+        logDebug("sending message: %y op: %d/%y fin: %y (open: %y)", LoggerUtil::getArgSummary(msg), op,
+            WSOPMap{op} ?? "unknown", fin, isOpen());
         if (poll_op) {
             poll_op.sendRaw(msg, op, fin);
             wakeAsyncIo();
@@ -3421,7 +3421,15 @@ class MyObserver inherits Observer {
                 "buf": buf,
                 "data": ex,
             });
-            logError("Error handling WebSocket event data message: %s (message: %y)", get_exception_string(ex), buf);
+            # Emit to stderr as well — the logger may have no appender, in which
+            # case data-processing errors would otherwise be silently dropped and
+            # the caller would see an unexplained timeout (e.g., parse_json failure
+            # on a non-JSON payload when serialization is "json").
+            auto buf_summary = LoggerUtil::getArgSummary(buf);
+            stderr.printf("WebSocketClient: error handling %y data: %s: %s (message: %y)\n",
+                serialization, ex.err, ex.desc, buf_summary);
+            logError("Error handling WebSocket event data message: %s (message: %y)",
+                get_exception_string(ex), buf_summary);
             return WSEDC_CONTINUE;
         }
     }
@@ -3438,11 +3446,19 @@ class MyObserver inherits Observer {
             try {
                 return handleEventData(buf);
             } catch (hash<ExceptionInfo> ex) {
-                logError("Wrror handling binary WebSocket event data message: %s", get_exception_string(ex));
+                notifyObservers(EVENT_WS_ERROR, {
+                    "buf": buf,
+                    "data": ex,
+                });
+                # Emit to stderr as well — the logger may have no appender
+                stderr.printf("WebSocketClient: error handling binary data: %s: %s\n",
+                    ex.err, ex.desc);
+                logError("Error handling binary WebSocket event data message: %s",
+                    get_exception_string(ex));
             }
         } else {
-            logWarn("Ignoring binary WebSocket event data message: %y; cannot handle when serialization is %y", buf,
-                serialization);
+            logWarn("Ignoring binary WebSocket event data message: %y; cannot handle when serialization is %y",
+                LoggerUtil::getArgSummary(buf), serialization);
         }
         return WSEDC_CONTINUE;
     }

@@ -23,16 +23,49 @@
 
 %modern
 %requires HttpClientIo
+%requires DataProvider
+%requires AsyncSocketIo
+%requires json
 
 module HttpClientStreamingIo {
     version = "1.0";
-    desc = "Application-level streaming utilities for HttpClientIo: SSE event reading "
-        "and stream decompression across HTTP/1.x, HTTP/2, and HTTP/3";
+    desc = "Application-level streaming utilities for HttpClientIo: SSE event reading, "
+        "SSE observable, and stream decompression across HTTP/1.x, HTTP/2, and HTTP/3";
     author = "Qore Technologies, s.r.o.";
     url = "https://qore.org";
     license = "MIT";
 }
 
+/** @mainpage HttpClientStreamingIo Module
+
+    @tableofcontents
+
+    @section httpclientstreamingioreleasenotes Release Notes
+
+    @subsection httpclientstreamingio_v1_0 HttpClientStreamingIo v1.0
+    - initial release with @ref HttpClientStreamingIo::SseStreamReader "SseStreamReader",
+      @ref HttpClientStreamingIo::StreamDecompressor "StreamDecompressor", and
+      @ref HttpClientStreamingIo::SseObservable "SseObservable" class for push-based SSE
+      event delivery using I/O-thread parsing via C++ SseAction
+    - SSE event constants: @ref EVENT_SSE_DATA, @ref EVENT_SSE_CLOSED, @ref EVENT_SSE_CONNECTED
+*/
+
 #! Main namespace for the HttpClientStreamingIo module
 public namespace HttpClientStreamingIo {
+
+#! SSE data event constant
+/** @since %HttpClientStreamingIo 1.0
+*/
+public const EVENT_SSE_DATA = "sse-data-event";
+
+#! SSE connection closed event constant
+/** @since %HttpClientStreamingIo 1.0
+*/
+public const EVENT_SSE_CLOSED = "sse-closed-event";
+
+#! SSE connected event constant
+/** @since %HttpClientStreamingIo 1.0
+*/
+public const EVENT_SSE_CONNECTED = "sse-connected-event";
+
 }

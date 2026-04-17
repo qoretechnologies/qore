@@ -36,6 +36,8 @@
 
 #include "qore/intern/QoreChannel.h"
 #include "qore/intern/QoreEventNotifier.h"
+#include "qore/QoreQueue.h"
+#include "qore/QoreString.h"
 
 //! Pushes the result to a QoreChannel (non-blocking trySend for I/O thread)
 /** Used for streaming responses (SSE, gRPC, WebSocket, A2A). The I/O thread
@@ -173,6 +175,70 @@ public:
 private:
     QorePromise* promise;
     QoreEventNotifier* notifier;
+};
+
+//! Parses a single SSE message from a text buffer into an SseMessageInfo hash
+/** Standalone version of qore_socket_private::parseServerSentEvent().
+    @param xsink exception sink
+    @param buf the SSE message text (one event, terminated before the double newline)
+    @return a new QoreHashNode with SseMessageInfo fields (event, data, id, retry, comment)
+*/
+DLLLOCAL QoreHashNode* parseSseEvent(ExceptionSink* xsink, const QoreString& buf);
+
+//! Pushes parsed SSE events to a Queue — runs on the I/O thread
+/** Intercepts body data from HTTP streaming responses (H1 chunked, H2 DATA,
+    H3 DATA), accumulates text, splits at double-newline boundaries, parses
+    each event via parseSseEvent(), and pushes SseMessageInfo hashes to a Queue.
+
+    Zero thread hops — parsing happens in the I/O thread's continuePoll() cycle.
+    The Queue consumer (Qore SseObservable) runs on the I/O controller's worker pool.
+
+    @since %Qore 2.3
+*/
+class SseAction : public AbstractAsyncAction {
+public:
+    //! Creates an SSE action that pushes parsed events to a Queue
+    /** @param queue the target Queue (will be ref'd)
+    */
+    DLLLOCAL SseAction(Queue* queue) : queue(queue) {
+        assert(queue);
+        queue->ref();
+    }
+
+    //! Receives a body data chunk, accumulates and parses SSE events
+    DLLLOCAL void execute(QoreValue output, ExceptionSink* xsink) override;
+
+    DLLLOCAL bool isStreaming() const override { return true; }
+
+    //! Pushes NOTHING sentinel to the Queue (stream complete)
+    DLLLOCAL void complete(ExceptionSink* xsink) override {
+        if (queue) {
+            queue->pushAndTakeRef(QoreValue());
+        }
+    }
+
+    //! Pushes an error hash to the Queue
+    DLLLOCAL void executeError(const char* err, const char* desc,
+            ExceptionSink* xsink) override {
+        if (queue) {
+            ReferenceHolder<QoreHashNode> err_hash(new QoreHashNode(autoTypeInfo), xsink);
+            err_hash->setKeyValue("err", new QoreStringNode(err), xsink);
+            err_hash->setKeyValue("desc", new QoreStringNode(desc), xsink);
+            queue->pushAndTakeRef(err_hash.release());
+            queue->pushAndTakeRef(QoreValue());  // sentinel
+        }
+    }
+
+    DLLLOCAL void cleanup(ExceptionSink* xsink) override {
+        if (queue) {
+            queue->deref(xsink);
+            queue = nullptr;
+        }
+    }
+
+private:
+    Queue* queue;           //!< ref'd Queue for event delivery
+    QoreString sse_buffer;  //!< accumulated SSE text (UTF-8)
 };
 
 #endif // _QORE_INTERN_ASYNCCOMPLETIONACTION_H

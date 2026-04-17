@@ -252,63 +252,11 @@ public namespace WebSocketUtil {
         @since WebSocketUtil 1.5 added the \c rsv_bits parameter
     */
     public binary sub ws_encode_message(data msg, int op = -1, *bool masked, bool fin = True, int rsv_bits = 0) {
-        if (op == -1)
+        if (op == -1) {
             op = msg.typeCode() == NT_STRING ? WSOP_Text : WSOP_Binary;
-
-        *binary mask;
-        if (masked) {
-            do {
-                mask = (rand() % 2147483647).encodeMsb();
-            } while (mask == <00000000>);
         }
-
-        #printf("ws_encode_message() d: %y op: %d/%y masked: %y fin: %y rsv: %d\n", msg, op, WSOPMap{op}, masked, fin, rsv_bits);
-
-        # Build first byte: FIN + RSV bits + opcode
-        int b0 = op;
-        if (fin) {
-            b0 |= WS_FIN;
-        }
-        # Apply RSV bits (mask to ensure only RSV bits are set)
-        b0 |= (rsv_bits & (WS_RSV1 | WS_RSV2 | WS_RSV3));
-
-        binary frame;
-        frame += chr(b0);
-
-        # encode frames with a message size < 126 directly in the second byte
-        switch (msg.size()) {
-            case < 126: {
-                frame += chr(msg.size() | (masked ? 0x80 : 0));
-                break;
-            }
-            case < 65536: {
-                frame += chr(126 | (masked ? 0x80 : 0));
-                frame += msg.size().encodeMsb(2);
-                break;
-            }
-            default: {
-                frame += chr(127 | (masked ? 0x80 : 0));
-                frame += msg.size().encodeMsb(8);
-            }
-        }
-
-        if (masked) {
-            frame += mask;
-            # issue #2566: must be able to handle zero-length messages (ex: PONG)
-            if (msg.val()) {
-                if (msg.typeCode() == NT_STRING)
-                    msg = binary(msg);
-                binary udata;
-                for (int i = 0; i < msg.size(); ++i)
-                    udata += chr((msg[i] ^ mask[i % 4]));
-                msg = udata;
-            }
-        }
-
-        if (msg.val())
-            frame += msg;
-
-        return frame;
+        # Delegate to C++ builtin for O(n) encoding with proper masking
+        return ws_encode_frame(msg, op, masked ?? False, fin, rsv_bits);
     }
 
     #! read and decode a message from a socket
@@ -376,12 +324,8 @@ hash<WsMsgInfo> h = ws_read_message(sock);
         }
 
         # unmask data if necessary
-        if (mask) {
-            # unmasked data
-            binary udata;
-            for (int i = 0; i < data.size(); ++i)
-                udata += chr((data[i] ^ mask[i % 4]));
-            data = udata;
+        if (mask && data) {
+            data = ws_unmask_data(data, mask);
         }
 
         #printf("DEBUG: op: %d (%s) data_len: %d mask: %y data: %y\n", op, WSOPMap{op}, data_len, mask ? mask.toHex() : NOTHING, data);
@@ -507,12 +451,7 @@ hash<WsMsgInfo> h = ws_read_message(sock);
 
         # unmask data if necessary
         if (mask && data) {
-            # unmasked data
-            binary udata;
-            for (int i = 0; i < data.size(); ++i) {
-                udata += chr((data[i] ^ mask[i % 4]));
-            }
-            data = udata;
+            data = ws_unmask_data(data, mask);
         }
 
         hash<WsMsgInfo> h({

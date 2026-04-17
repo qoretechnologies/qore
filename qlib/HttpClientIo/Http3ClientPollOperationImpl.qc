@@ -495,6 +495,89 @@ public class Http3ClientPollOperation inherits Http3ClientPollOperationBase, Htt
         return stream_id;
     }
 
+    #! Submits an SSE request with Queue-based parsed event delivery
+    /** Like submitRequestWithChannel() but registers an SseAction that parses SSE
+        events on the I/O thread and pushes parsed SseMessageInfo hashes to a Queue.
+
+        @param method HTTP method
+        @param path request path
+        @param headers request headers (optional)
+        @param body request body (optional)
+        @param queue Queue for parsed SSE event delivery
+        @param max_streams maximum concurrent streams
+
+        @return the stream ID
+    */
+    int submitRequestWithQueue(string method, string path, *hash<auto> headers, *data body,
+            Queue queue, int max_streams) {
+        if (!self.isReady()) {
+            throw "HTTP3-STATE-ERROR", sprintf("cannot submit request in state: %y", self.getState());
+        }
+
+        # Filter pseudo-headers (keep :protocol for RFC 9220 extended CONNECT)
+        hash<auto> req_headers = {};
+        *string protocol;
+        if (headers) {
+            foreach string key in (keys headers) {
+                if (key == ":protocol") {
+                    protocol = headers{key};
+                } else if (key[0] != ":") {
+                    req_headers{key} = headers{key};
+                }
+            }
+        }
+        if (!req_headers.host) {
+            req_headers.host = h3_url_info.port == 443
+                ? h3_url_info.host
+                : sprintf("%s:%d", h3_url_info.host, h3_url_info.port);
+        }
+
+        # Pass :protocol through for RFC 9220 extended CONNECT
+        if (protocol) {
+            req_headers.":protocol" = protocol;
+        }
+
+        self.checkCapacity(max_streams);
+        self.beginSubmit();
+
+        Socket sock = self.getSocket();
+        int stream_id;
+        try {
+            stream_id = sock.submitQuicRequest(method, path, req_headers, body);
+        } catch () {
+            self.endSubmitFail();
+            rethrow;
+        }
+
+        self.endSubmitOk(stream_id);
+
+        # Register Queue as the SSE completion action
+        *hash<auto> reg_result = self.registerStreamWithQueue(stream_id, queue);
+        if (reg_result.need_cancel) {
+            try {
+                int sid = self.getSessionId();
+                if (sid) {
+                    sock.cancelQuicStream(sid, stream_id);
+                }
+            } catch () {}
+            throw "HTTP3-STATE-ERROR",
+                sprintf("connection closed during request submission (state: %y)",
+                    self.getState());
+        }
+
+        # Note: buffered responses for SSE are raw binary chunks — the SseAction
+        # will parse them on the I/O thread; for buffered data that arrived during
+        # the submit-to-registration window, we need to push them to the queue
+        # manually since they weren't processed by the SseAction
+        if (reg_result.buffered) {
+            foreach auto resp in (reg_result.buffered) {
+                queue.push(resp);
+            }
+        }
+
+        return stream_id;
+    }
+
     #! Sends data on a streaming HTTP/3 request
     /** @param stream_id the stream ID to send data on
         @param data the data to send (can be NOTHING to send END_STREAM only)

@@ -161,6 +161,51 @@ public class Http2ClientStreamHandle inherits HttpClientStreamHandle {
         return stream_id;
     }
 
+    #! Starts an SSE streaming request with I/O-thread event parsing
+    /** @see HttpClientStreamHandle::startSseStreaming() for full documentation
+    */
+    Queue startSseStreaming(string method, string path, *hash<auto> headers, *data body) {
+        {
+            AutoLock al(lock);
+            if (state != HttpClientStreamState::Pending) {
+                throw "HTTPCLIENT-STATE-ERROR",
+                    sprintf("stream already in use: state=%y", state);
+            }
+            state = HttpClientStreamState::Open;
+            streaming = True;
+        }
+
+        Queue queue();
+
+        # Wait for connection to become ready if not already
+        if (!conn.isReady()) {
+            if (!conn.waitForReady(request_timeout)) {
+                {
+                    AutoLock al(lock);
+                    state = HttpClientStreamState::Pending;
+                    streaming = False;
+                }
+                throw "HTTPCLIENT-TIMEOUT", "connection establishment timed out";
+            }
+        }
+
+        log(LoggerLevel::DEBUG, "starting SSE streaming request: %s %s", method, path);
+
+        try {
+            stream_id = h2conn.submitRequestSse(method, path, headers, body, queue);
+            @assert(stream_id >= 0);
+        } catch (hash<ExceptionInfo> ex) {
+            {
+                AutoLock al(lock);
+                state = HttpClientStreamState::Pending;
+                streaming = False;
+            }
+            rethrow;
+        }
+
+        return queue;
+    }
+
     #! Reads data from a streaming connection
     /** @param timeout_ms timeout for waiting for data
 

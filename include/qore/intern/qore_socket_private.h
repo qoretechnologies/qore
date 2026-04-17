@@ -5047,8 +5047,6 @@ struct qore_socket_private {
 
     DLLLOCAL QoreHashNode* readServerSentEvent(ExceptionSink* xsink, Transform* transform, int timeout_ms);
 
-    DLLLOCAL static QoreHashNode* parseServerSentEvent(ExceptionSink* xsink, const QoreString& buf);
-
     DLLLOCAL static void do_accept_encoding(char* t, QoreHashNode& info) {
         ReferenceHolder<QoreListNode> l(new QoreListNode(autoTypeInfo), 0);
 

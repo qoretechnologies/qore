@@ -241,6 +241,65 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
         return stream_id;
     }
 
+    #! Starts an SSE streaming request with I/O-thread event parsing
+    /** @see HttpClientStreamHandle::startSseStreaming() for full documentation
+    */
+    Queue startSseStreaming(string method, string path, *hash<auto> headers, *data body) {
+        {
+            AutoLock al(lock);
+            if (state != HttpClientStreamState::Pending) {
+                throw "HTTPCLIENT-STATE-ERROR",
+                    sprintf("stream already in use: state=%y", state);
+            }
+            state = HttpClientStreamState::Open;
+            streaming = True;
+        }
+
+        Queue queue();
+
+        # Wait for connection to become ready if not already
+        if (!conn.isReady()) {
+            if (!conn.waitForReady(request_timeout)) {
+                {
+                    AutoLock al(lock);
+                    state = HttpClientStreamState::Pending;
+                    streaming = False;
+                }
+                releaseReservationIfHeld();
+                throw "HTTPCLIENT-TIMEOUT", "connection establishment timed out";
+            }
+        }
+
+        # Re-check state after readiness wait — cancel() may have run concurrently
+        {
+            AutoLock al(lock);
+            if (state != HttpClientStreamState::Open) {
+                streaming = False;
+                releaseReservationIfHeld();
+                throw "HTTPCLIENT-CANCELLED",
+                    "stream was cancelled during connection setup";
+            }
+        }
+
+        log(LoggerLevel::DEBUG, "starting SSE streaming request: %s %s", method, path);
+
+        try {
+            stream_id = h3conn.submitRequestSse(method, path, headers, body, queue);
+            @assert(stream_id >= 0);
+            releaseReservationIfHeld();
+        } catch (hash<ExceptionInfo> ex) {
+            {
+                AutoLock al(lock);
+                state = HttpClientStreamState::Pending;
+                streaming = False;
+            }
+            releaseReservationIfHeld();
+            rethrow;
+        }
+
+        return queue;
+    }
+
     #! Sends data on a streaming connection
     /** @param data the data to send
         @param end_stream if True, signals end of stream; if the stream is

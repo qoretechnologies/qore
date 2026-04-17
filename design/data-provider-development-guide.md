@@ -304,6 +304,95 @@ private *list<hash<AllowedValueInfo>> getReferenceDataImpl(string type, *hash<au
 }
 ```
 
+### Cascading ref_data (Dependent Dropdowns)
+
+When a ref_data dropdown depends on the value of another field (e.g., listing applied tags for a
+specific contact, or listing cycles for a selected team), use the `has_dependents`/`depends_on`/
+`on_change` pattern. The UI selects the controlling field first, triggers a refetch, and
+`getReferenceDataImpl()` uses the `action_opts` parameter to filter the dependent dropdown.
+
+This is distinct from **Dynamic Options** (§ below), which changes the set of fields entirely.
+Cascading ref_data only filters dropdown values — the fields themselves always exist.
+
+**Step 1 — Mark the controlling field** with `has_dependents` and `on_change`:
+```qore
+"team_id": {
+    "type": StringType,
+    "display_name": "Team",
+    "required": True,
+    "ref_data": "teams",
+    "has_dependents": True,           # signals UI that other fields depend on this
+    "on_change": ("refetch",),        # triggers re-fetch of dependent ref_data on change
+},
+```
+
+**Step 2 — Mark dependent fields** with `depends_on` and their own `ref_data`:
+```qore
+"cycle_id": {
+    "type": StringOrNothingType,
+    "display_name": "Cycle",
+    "depends_on": ("team_id",),       # field disabled until team_id is set
+    "ref_data": "cycles",             # fetched with action_opts.team_id available
+},
+```
+
+**Step 3 — Use `action_opts` in `getReferenceDataImpl()`** to pass the controlling value:
+```qore
+private *list<hash<AllowedValueInfo>> getReferenceDataImpl(string type,
+        *hash<auto> action_opts) {
+    switch (type) {
+        case "teams": return getReferenceTeams();
+        case "cycles": return getReferenceCycles(action_opts.team_id);
+        case "labels": return getReferenceLabels(action_opts.team_id);
+    }
+}
+
+private *list<hash<AllowedValueInfo>> getReferenceCycles(*string team_id) {
+    if (!team_id) {
+        return;  # no team selected yet — dropdown stays empty
+    }
+    list<auto> cycles = doGet("/teams/" + team_id + "/cycles");
+    return map <AllowedValueInfo>{"value": string($1.id), "display_name": $1.name}, cycles;
+}
+```
+
+**Action registration — use inline `<ActionOptionInfo>`**, not `getActionOptionFromFields()`,
+because `getActionOptionFromFields()` does **not** propagate `has_dependents`:
+
+```qore
+"options": {
+    "team_id": <ActionOptionInfo>{
+        "type": AbstractDataProviderTypeMap."string",
+        "required": True,
+        "ref_data": "teams",
+        "has_dependents": True,
+        "on_change": ("refetch",),
+    },
+    "cycle_id": <ActionOptionInfo>{
+        "type": AbstractDataProviderTypeMap."*string",
+        "depends_on": ("team_id",),
+        "ref_data": "cycles",
+    },
+},
+```
+
+**Chaining dependencies**: Dependencies can cascade multiple levels (A → B → C):
+```qore
+"workspace_id": <ActionOptionInfo>{..., "has_dependents": True, "on_change": ("refetch",)},
+"contact_id": <ActionOptionInfo>{..., "depends_on": ("workspace_id",), "has_dependents": True, "on_change": ("refetch",)},
+"applied_tag_id": <ActionOptionInfo>{..., "depends_on": ("contact_id",), "ref_data": "applied_tags"},
+```
+
+**Conditional dependencies**: Use `"depends_on": ("field=value",)` to only enable a field when
+the controlling field has a specific value (e.g., `"depends_on": ("driver=jdbc",)` to show JDBC
+classpath only when the JDBC driver is selected).
+
+**Reference implementations:**
+- **Linear**: `teamId` → cycles, labels, states, issues (`qlib/LinearDataProvider/LinearDataProviderBase.qc`)
+- **ZohoInventory**: `organization_id` → contacts, items, invoices (`qlib/ZohoInventoryDataProvider/ZohoInventoryDataProviderBase.qc`)
+- **ClickFunnels**: `contact_id` → applied_tags (`qlib/ClickFunnelsDataProvider/ClickFunnelsDataProviderBase.qc`)
+- **DbDataProvider**: `driver=jdbc` conditional dependency (`qlib/DbDataProvider/DbDataProvider.qm`)
+
 ### Request Type Fields Pattern
 
 Request type classes should declare a `const Fields` hash in a `public {}` block. This allows action registration code to reference fields directly via `ClassName::Fields` without instantiating the type. The same constant is used in the constructor to add fields to the type.
