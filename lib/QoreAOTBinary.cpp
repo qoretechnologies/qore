@@ -88,6 +88,22 @@ extern void collectAllStatementLocals(const StatementBlock* block, std::vector<L
 static thread_local const std::unordered_map<std::string, QoreClass*>*
     g_aot_pending_class_map = nullptr;
 
+// Pending fixup for param defaults that reference a static method
+// whose class is still pending commit at the time the variant signature is
+// deserialized (e.g. `constructor(string b = MultiPartMessage::getBoundary())`
+// inside MultiPartMessage itself — the static method entry is added to the
+// class but not committed into the vlist yet). A post-pass after
+// commitDeserializedClasses resolves the QoreMethod* and patches the default
+// arg slot in place.
+struct PendingStaticMethodDefault {
+    std::string class_path;
+    std::string method_name;
+    UserVariantBase* uvb = nullptr;
+    uint32_t param_index = 0;
+};
+static thread_local std::vector<PendingStaticMethodDefault>*
+    g_aot_pending_static_method_defaults = nullptr;
+
 // Read an instance-member / static-member default value.
 //
 // If the value is a VT_NEW_OBJECT whose target class is not yet registered in
@@ -1963,6 +1979,24 @@ static void writeVariantSignature(QoreAOTBinaryWriter& writer, const AbstractQor
                         if (!inner.isNothing()) {
                             writer.writeValue(inner);
                         }
+                        continue;
+                    }
+                }
+
+                // Case 5: StaticMethodCallNode — no-arg static method call, e.g.
+                //   `string boundary = MultiPartMessage::getBoundary()`. Serialize
+                //   the class path and method name; the reader rebuilds a
+                //   StaticMethodCallNode bound to the resolved QoreMethod.
+                if (auto* smcn = dynamic_cast<const StaticMethodCallNode*>(node)) {
+                    const QoreListNode* args = smcn->getArgs();
+                    bool no_args = !args || args->size() == 0;
+                    const QoreMethod* m = smcn->getMethod();
+                    const QoreClass* qc = m ? m->getClass() : nullptr;
+                    const char* mname = smcn->getName();
+                    if (no_args && qc && mname && *mname) {
+                        writer.writeU8(6);  // expression default: static method call
+                        writer.writeStringRef(qc->getPath());
+                        writer.writeStringRef(mname);
                         continue;
                     }
                 }
@@ -4097,6 +4131,21 @@ bool QoreAOTBinaryDeserializer::deserializeIntoProgram(QoreProgram* in_pgm, cons
     if (!deserializeGlobals(error)) {
         return false;
     }
+    // Install pending-static-method-default context for the function/method
+    // deserialization phase. Param defaults like
+    // `string b = MultiPartMessage::getBoundary()` inside MultiPartMessage's
+    // own constructor need deferred resolution because the referenced static
+    // method has not been committed to the class vlist yet.
+    std::vector<PendingStaticMethodDefault> pending_smd;
+    struct StaticMethodDefaultsRAII {
+        StaticMethodDefaultsRAII(std::vector<PendingStaticMethodDefault>* p) {
+            g_aot_pending_static_method_defaults = p;
+        }
+        ~StaticMethodDefaultsRAII() {
+            g_aot_pending_static_method_defaults = nullptr;
+        }
+    };
+    StaticMethodDefaultsRAII smd_raii(&pending_smd);
     if (!deserializeFunctions(error)) {
         return false;
     }
@@ -4106,6 +4155,38 @@ bool QoreAOTBinaryDeserializer::deserializeIntoProgram(QoreProgram* in_pgm, cons
     // Commit all newly deserialized classes (set initialized + commit pending method variants)
     if (!commitDeserializedClasses(error)) {
         return false;
+    }
+    {
+        qore_program_private* pp = qore_program_private::get(*pgm);
+        for (const auto& pd : pending_smd) {
+            const qore_ns_private* found_ns = nullptr;
+            const QoreClass* qc = !pd.class_path.empty()
+                ? qore_root_ns_private::runtimeFindClass(*pp->RootNS,
+                    pd.class_path.c_str(), found_ns)
+                : nullptr;
+            const QoreMethod* m = nullptr;
+            if (qc && !pd.method_name.empty()) {
+                m = qc->findStaticMethod(pd.method_name.c_str());
+                if (!m) {
+                    qore_class_private* qcp = qore_class_private::get(
+                        *const_cast<QoreClass*>(qc));
+                    m = qcp->parseFindLocalStaticMethod(pd.method_name.c_str());
+                }
+            }
+            if (!m) {
+                printd(0, "AOT deser: cannot resolve deferred static method "
+                    "default '%s::%s()'\n",
+                    pd.class_path.c_str(), pd.method_name.c_str());
+                continue;
+            }
+            UserSignature* sig = pd.uvb->getUserSignature();
+            arg_vec_t& defaults = const_cast<arg_vec_t&>(sig->getDefaultArgList());
+            if (pd.param_index < defaults.size()) {
+                defaults[pd.param_index].discard(nullptr);
+                defaults[pd.param_index] = QoreValue(new StaticMethodCallNode(
+                    &loc_builtin, m, (QoreParseListNode*)nullptr));
+            }
+        }
     }
     if (!deserializeFallbackSources(error)) {
         return false;
@@ -5561,6 +5642,57 @@ static bool readAndSetupVariantSignature(
                     cfqn ? cfqn : "(null)", mname ? mname : "(null)");
                 param_defaults[j] = QoreValue(true);
             }
+        } else if (has_default == 6) {
+            // Expression default: no-arg static method call,
+            //   e.g. `string boundary = MultiPartMessage::getBoundary()`.
+            // Resolve the class by path, then locate the static method
+            // and wrap it in a StaticMethodCallNode. Evaluation goes
+            // through the normal AbstractFunctionCallNode dispatch.
+            const char* class_path = reader.readStringRef(ptr);
+            const char* mname = reader.readStringRef(ptr);
+            qore_program_private* pp = qore_program_private::get(*pgm);
+            const qore_ns_private* found_ns = nullptr;
+            const QoreClass* qc = (class_path && *class_path)
+                ? qore_root_ns_private::runtimeFindClass(*pp->RootNS, class_path, found_ns)
+                : nullptr;
+            const QoreMethod* m = nullptr;
+            if (qc && mname && *mname) {
+                m = qc->findStaticMethod(mname);
+                if (!m) {
+                    qore_class_private* qcp = qore_class_private::get(
+                        *const_cast<QoreClass*>(qc));
+                    m = qcp->parseFindLocalStaticMethod(mname);
+                }
+            }
+            if (m) {
+                param_defaults[j] = QoreValue(new StaticMethodCallNode(
+                    &loc_builtin, m, (QoreParseListNode*)nullptr));
+            } else {
+                // Method not yet committed (likely a default referencing a
+                // static method of the same or a still-pending class).
+                // Defer: store class_path + method_name on the signature
+                // slot for post-commit fixup by resolveDeferredStaticMethodDefaults.
+                if (g_aot_pending_static_method_defaults) {
+                    PendingStaticMethodDefault pd;
+                    pd.class_path = class_path ? class_path : "";
+                    pd.method_name = mname ? mname : "";
+                    pd.uvb = uvb;
+                    pd.param_index = j;
+                    g_aot_pending_static_method_defaults->push_back(pd);
+                    // Use a non-NOTHING placeholder so hasDefaultArg(j)
+                    // reports true and min_param_types counts this param as
+                    // optional. The fixup pass after commitDeserializedClasses
+                    // replaces this with the resolved StaticMethodCallNode
+                    // before any call can execute.
+                    param_defaults[j] = QoreValue(true);
+                } else {
+                    printd(0, "AOT deser: cannot resolve default static method "
+                        "'%s::%s()' (no deferred-defaults context)\n",
+                        class_path ? class_path : "(null)",
+                        mname ? mname : "(null)");
+                    param_defaults[j] = QoreValue(true);
+                }
+            }
         } else if (has_default == 5) {
             // Expression default: hashdecl typed-hash literal, e.g.
             //   `hash<AuthCodeInfo> info = <AuthCodeInfo>{}`.
@@ -5700,6 +5832,11 @@ bool QoreAOTBinaryDeserializer::deserializeFunctions(std::string& error) {
                             }
                             v.discard(nullptr);
                         }
+                    } else if (has_default == 6) {
+                        // Expression default (static method call): skip class path
+                        // + method name
+                        reader.readStringRef(ptr);
+                        reader.readStringRef(ptr);
                     }
                 }
             }

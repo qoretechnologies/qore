@@ -4038,6 +4038,20 @@ static void registerAOTFunctionsFromSlotMaps(
             std::string class_name = fname_str.substr(0, sep);
             std::string method_name = fname_str.substr(sep + 2);
 
+            // Handle the static-method marker used in variant keys for classes
+            // with overloaded static+instance methods of the same name. The
+            // compile-time key format is "ClassPath::_static_methodName(...)".
+            // Strip the prefix and remember whether to search the static map
+            // first.
+            bool key_is_static = false;
+            static const char kStaticPrefix[] = "_static_";
+            if (method_name.size() > sizeof(kStaticPrefix) - 1
+                    && method_name.compare(0, sizeof(kStaticPrefix) - 1,
+                        kStaticPrefix) == 0) {
+                key_is_static = true;
+                method_name = method_name.substr(sizeof(kStaticPrefix) - 1);
+            }
+
             // All special methods (constructor, destructor, copy) are registered
             // from slot maps.  The deserializer creates proper variant types
             // (UserConstructorVariant, UserDestructorVariant, UserCopyVariant)
@@ -4064,8 +4078,14 @@ static void registerAOTFunctionsFromSlotMaps(
                 // a non-static and a static method with the same name (e.g.,
                 // getDisplayName() and static getDisplayName(string)).
                 // We search both to find the variant matching the target signature.
-                const QoreMethod* m = qcp->parseFindLocalMethod(method_name.c_str());
-                const QoreMethod* m_static = qcp->parseFindLocalStaticMethod(method_name.c_str());
+                // When key_is_static, search static first and fall back to
+                // instance only if no static variant is present.
+                const QoreMethod* m = key_is_static
+                    ? qcp->parseFindLocalStaticMethod(method_name.c_str())
+                    : qcp->parseFindLocalMethod(method_name.c_str());
+                const QoreMethod* m_static = key_is_static
+                    ? nullptr
+                    : qcp->parseFindLocalStaticMethod(method_name.c_str());
                 if (!m) {
                     m = m_static;
                     m_static = nullptr;
@@ -4459,7 +4479,13 @@ static void registerAOTFunctionsInNamespace(qore_ns_private* ns, QoreProgram* pg
                     continue;
                 }
 
-                std::string method_name = std::string(class_path) + "::" + meth->getName();
+                // Include static/instance marker so overloaded methods
+                // (same name + signature, one static one instance) resolve to
+                // their correct compiled variant — matches QoreAOT.cpp method
+                // compilation key format.
+                std::string method_name = std::string(class_path) + "::"
+                    + (meth->isStatic() ? "_static_" : "")
+                    + meth->getName();
                 // Generate unique key including parameter types to match compiled variant
                 std::string variant_key = getVariantKey(method_name.c_str(), variant);
                 auto it = func_map.find(variant_key);
@@ -4860,7 +4886,9 @@ static void registerFallbackFunctionsOnMainVariants(
                     continue;
                 }
 
-                std::string method_name = std::string(class_path) + "::" + meth->getName();
+                std::string method_name = std::string(class_path) + "::"
+                    + (meth->isStatic() ? "_static_" : "")
+                    + meth->getName();
                 std::string variant_key = getVariantKey(method_name.c_str(), variant);
                 auto it = func_map.find(variant_key);
                 if (it == func_map.end()) {
@@ -4884,10 +4912,13 @@ static void registerFallbackFunctionsOnMainVariants(
                 if (main_qc) {
                     qore_class_private* main_qcp = qore_class_private::get(
                         *const_cast<QoreClass*>(main_qc));
-                    const QoreMethod* main_m = main_qcp->parseFindLocalMethod(meth->getName());
-                    if (!main_m) {
-                        main_m = main_qcp->parseFindLocalStaticMethod(meth->getName());
-                    }
+                    // Look up on the same side (static/instance) as the
+                    // variant being registered — a class with both an instance
+                    // and static method of the same name would otherwise
+                    // always resolve to the instance one.
+                    const QoreMethod* main_m = meth->isStatic()
+                        ? main_qcp->parseFindLocalStaticMethod(meth->getName())
+                        : main_qcp->parseFindLocalMethod(meth->getName());
                     if (main_m) {
                         // Extract target signature from variant_key to match the
                         // correct overloaded variant in the main program

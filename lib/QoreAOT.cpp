@@ -1224,7 +1224,13 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                 if (class_name[0] == ':' && class_name[1] == ':') {
                     class_name += 2;
                 }
-                std::string method_name = std::string(class_name) + "::" + meth->getName();
+                // Include static/instance marker so overloaded methods (e.g., an
+                // instance and a static method with the same name and signature)
+                // get distinct variant keys, both at compile time and at runtime
+                // registration (QoreAOTRuntime.cpp registerNamespaceTree).
+                std::string method_name = std::string(class_name) + "::"
+                    + (meth->isStatic() ? "_static_" : "")
+                    + meth->getName();
                 // Generate unique key including parameter types to distinguish overloads
                 std::string variant_key = getVariantKey(method_name.c_str(), variant);
                 // Skip duplicate variant keys (iterator may yield committed + pending)
