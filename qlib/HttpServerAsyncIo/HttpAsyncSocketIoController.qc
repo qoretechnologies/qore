@@ -3127,12 +3127,20 @@ public class HttpAsyncSocketIoController {
             request.headers.":protocol", uh, stream_id, request.path);
 
         # Create unlimited Queue for async data delivery to the handler.
-        # The I/O controller's h2op reads HTTP/2 frames from TCP, buffers
-        # per-stream data, then drains it to this Queue after each poll cycle.
-        # All CONNECT stream handlers — including WebSocket — use the Queue
-        # so only the I/O controller reads from the socket (no direct_io).
+        # WebSocket CONNECT takes the C++ WebSocketStreamFrameState fast
+        # path — the Queue is populated with one entry per complete
+        # WebSocket message (a typed hash), not per raw transport chunk.
+        # This eliminates O(N²) Qore-side binary concatenation for large
+        # WS messages (mirrors the H3 path).  Non-WS extended-CONNECT
+        # tunnels keep the raw-byte Queue contract.
         Queue stream_data_queue();
-        h2op.registerStreamQueue(stream_id, stream_data_queue);
+        bool stream_uses_frame_state = False;
+        if (is_websocket_connect) {
+            h2op.registerStreamFrameState(stream_id, stream_data_queue);
+            stream_uses_frame_state = True;
+        } else {
+            h2op.registerStreamQueue(stream_id, stream_data_queue);
+        }
 
         # Closure for handlers to register a stream data listener.
         # The listener's notifyIo() method is called from the controller's
@@ -3218,6 +3226,7 @@ public class HttpAsyncSocketIoController {
                 "accept-encoding": accept_encoding,
                 "body": request.body,
                 "stream_data_queue": stream_data_queue,
+                "stream_uses_frame_state": stream_uses_frame_state,
                 "register_stream_listener": register_stream_listener,
                 "send_stream_data": send_stream_data,
                 "io_wake": sub () { controller.wakeSocket(cinfo.sock); },

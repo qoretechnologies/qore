@@ -38,6 +38,7 @@
 #include "qore/intern/QC_Socket.h"
 #include "qore/QoreQueue.h"
 #include "qore/intern/QoreEventNotifier.h"
+#include "qore/intern/WebSocketStreamFrameState.h"
 
 // Forward declarations for EventNotifier QPP type references
 extern QoreClass* QC_EVENTNOTIFIER;
@@ -376,7 +377,7 @@ void Http2PollOperationPriv::registerStreamQueue(int32_t stream_id, Queue* queue
     // Push to pending queue (sq_lock only — never held during I/O)
     {
         AutoLocker al(sq_lock);
-        pending_stream_registrations.push_back({stream_id, {queue, queue_obj, notifier, notifier_obj}});
+        pending_stream_registrations.push_back({stream_id, {queue, queue_obj, notifier, notifier_obj, {}}});
     }
 
     // Drain any data already buffered in the H2 session for this stream.
@@ -400,6 +401,69 @@ void Http2PollOperationPriv::registerStreamQueue(int32_t stream_id, Queue* queue
             xsink.clear();
             break;
         }
+    }
+
+    // Wake the I/O thread so it applies the pending registration
+    ExceptionSink wake_xsink;
+    wakeIoThread(&wake_xsink);
+}
+
+void Http2PollOperationPriv::registerStreamFrameState(int32_t stream_id, Queue* queue,
+        QoreObject* queue_obj) {
+    // Send callback runs on the I/O thread (from frame_state->feedData()
+    // inside drainStreamQueues).  nghttp2 queues the DATA frame; the surrounding
+    // continueReadPoll() flushes pending data via flushHttp2PendingData() after
+    // drainStreamQueues returns.  `sock` outlives this priv and the frame_state.
+    QoreSocketObject* sock_ptr = sock;
+    WebSocketStreamFrameState::SendCallback send_cb =
+        [sock_ptr, stream_id](BinaryNode* frame_bytes) {
+            if (!frame_bytes) {
+                return;
+            }
+            SimpleRefHolder<BinaryNode> holder(frame_bytes);
+            ExceptionSink cxsink;
+            int rv = sock_ptr->sendHttp2StreamData(stream_id, *holder, false, &cxsink);
+            if (cxsink || rv < 0) {
+                // Non-fatal: transport teardown handles the close path.
+                cxsink.clear();
+            }
+        };
+
+    // The frame_state constructor takes ONE reference of `queue`; it derefs
+    // it in its destructor.  queue_obj is kept in StreamQueueInfo as a DGC
+    // anchor for the Qore wrapper and is derefed separately by cleanup.
+    auto frame_state = std::make_shared<WebSocketStreamFrameState>(
+        queue, std::move(send_cb), /* is_server */ true);
+
+    StreamQueueInfo info;
+    info.queue = queue;
+    info.queue_obj = queue_obj;
+    info.notifier = nullptr;
+    info.notifier_obj = nullptr;
+    info.frame_state = frame_state;
+
+    {
+        AutoLocker al(sq_lock);
+        pending_stream_registrations.push_back({stream_id, info});
+    }
+
+    // Drain any bytes already buffered in the H2 session for this stream
+    // directly into the frame state so we don't lose pre-registration data.
+    ExceptionSink xsink;
+    while (true) {
+        BinaryNode* data = sock->readHttp2StreamData(stream_id, 0, &xsink);
+        if (xsink) {
+            xsink.clear();
+            break;
+        }
+        if (!data || data->empty()) {
+            if (data) {
+                data->deref(&xsink);
+            }
+            break;
+        }
+        frame_state->feedData(data->getPtr(), data->size());
+        data->deref(&xsink);
     }
 
     // Wake the I/O thread so it applies the pending registration
@@ -454,11 +518,26 @@ void Http2PollOperationPriv::drainStreamQueues(ExceptionSink* xsink) {
                 data->deref(xsink);
                 break;
             }
-            ++drain_count;
-            info.queue->push(xsink, data);
-            if (*xsink) {
+            if (info.frame_state) {
+                // Frame-state fast path: feed raw bytes to the C++ frame
+                // decoder, which pushes typed message hashes to info.queue
+                // as complete WS messages are reassembled.  The send
+                // callback may enqueue control-frame responses via
+                // sendHttp2StreamData() — the enclosing continueReadPoll()
+                // will flush pending data after drainStreamQueues returns.
+                int pushed = info.frame_state->feedData(data->getPtr(), data->size());
+                drain_count += pushed;
                 data->deref(xsink);
-                return;
+                if (*xsink) {
+                    return;
+                }
+            } else {
+                ++drain_count;
+                info.queue->push(xsink, data);
+                if (*xsink) {
+                    data->deref(xsink);
+                    return;
+                }
             }
         }
 
@@ -494,7 +573,12 @@ void Http2PollOperationPriv::drainStreamQueues(ExceptionSink* xsink) {
     for (int32_t sid : completed) {
         auto it = stream_queues.find(sid);
         if (it != stream_queues.end()) {
-            it->second.queue->deref(xsink);
+            // In frame-state mode the Queue ref is owned by the frame state
+            // (its destructor derefs it when the shared_ptr drops).  Skip the
+            // direct Queue deref to avoid a double-free.
+            if (!it->second.frame_state) {
+                it->second.queue->deref(xsink);
+            }
             it->second.queue_obj->deref(xsink);
             if (it->second.notifier) {
                 it->second.notifier->deref(xsink);
@@ -522,8 +606,10 @@ void Http2PollOperationPriv::clearStreamQueues(ExceptionSink* xsink) {
         if (info.notifier) {
             info.notifier->notify();
         }
-        // Deref all refs
-        info.queue->deref(xsink);
+        // Deref refs — frame_state owns the Queue ref in frame-state mode
+        if (!info.frame_state) {
+            info.queue->deref(xsink);
+        }
         info.queue_obj->deref(xsink);
         if (info.notifier) {
             info.notifier->deref(xsink);
@@ -840,6 +926,39 @@ nothing Http2PollOperationBase::registerStreamQueue(int stream_id,
 
     priv->registerStreamQueue(static_cast<int32_t>(stream_id), queue_ptr,
         const_cast<QoreObject*>(obj_queue), notifier_ptr, notifier_obj_ptr);
+}
+
+//! Registers a Queue backed by a C++ WebSocketStreamFrameState for a CONNECT stream
+/** Incoming DATA frame payload bytes are fed into a server-side
+    @ref WebSocketStreamFrameState that decodes WebSocket frames in C++
+    and pushes one typed message hash per complete WebSocket message
+    (\c {type, data, [code, reason]}) to the supplied Queue.  Control
+    frames (ping / close) are auto-handled with outgoing responses
+    submitted via nghttp2 on the I/O thread; no Qore round-trip.
+
+    This replaces the O(N²) Qore-side binary concatenation in
+    WebSocketStreamProcessor for H2 WebSocket tunnels (mirrors the H3
+    path — see Socket::registerQuicConnectStreamFrameState()).
+
+    @param stream_id the HTTP/2 stream ID
+    @param queue the Queue that will receive typed message hashes
+
+    @note Must be called on the I/O controller thread before the handler
+    starts reading.
+
+    @since %Qore 2.4
+*/
+nothing Http2PollOperationBase::registerStreamFrameState(int stream_id,
+        Queue[Queue] queue) {
+    // Transfer the Queue ref from the ReferenceHolder to the C++ priv.
+    // The WebSocketStreamFrameState destructor derefs the Queue when the
+    // stream is torn down; no separate deref in StreamQueueInfo cleanup.
+    Queue* queue_ptr = queue.release();
+    // Ref the QoreObject for DGC preventing garbage collection
+    const_cast<QoreObject*>(obj_queue)->ref();
+
+    priv->registerStreamFrameState(static_cast<int32_t>(stream_id), queue_ptr,
+        const_cast<QoreObject*>(obj_queue));
 }
 
 //! Clears all stream queue registrations
