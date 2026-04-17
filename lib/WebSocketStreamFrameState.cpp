@@ -155,7 +155,7 @@ void WebSocketStreamFrameState::handleFrame(WsFrame& frame) {
                 close_code = code;
                 close_reason = reason;
                 peer_closed = true;
-                pushMessage(MessageKind::Close, nullptr, code, reason.c_str());
+                pushMessage(MessageKind::Close, nullptr, /* rsv */ 0, code, reason.c_str());
                 break;
             }
 
@@ -206,11 +206,11 @@ void WebSocketStreamFrameState::handleFrame(WsFrame& frame) {
     }
 
     MessageKind kind = (msg_opcode == WSOP_TEXT) ? MessageKind::Text : MessageKind::Binary;
-    pushMessage(kind, payload.release());
+    pushMessage(kind, payload.release(), msg_rsv);
 }
 
 void WebSocketStreamFrameState::pushMessage(MessageKind kind, BinaryNode* payload,
-        uint16_t code, const char* reason) {
+        uint8_t rsv, uint16_t code, const char* reason) {
     ExceptionSink xs;
     ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), &xs);
     const char* type_str = nullptr;
@@ -226,7 +226,13 @@ void WebSocketStreamFrameState::pushMessage(MessageKind kind, BinaryNode* payloa
     if (payload) {
         h->setKeyValue("data", payload, &xs);  // transfers ref to hash
     }
-    if (kind == MessageKind::Close) {
+    if (kind == MessageKind::Text || kind == MessageKind::Binary) {
+        // frame.rsv is (b0 >> 4) & 0x07: bit 2 = RSV1, bit 1 = RSV2, bit 0 = RSV3
+        h->setKeyValue("rsv1", (rsv & 0x04) != 0, &xs);
+        h->setKeyValue("rsv2", (rsv & 0x02) != 0, &xs);
+        h->setKeyValue("rsv3", (rsv & 0x01) != 0, &xs);
+    }
+    if (kind == MessageKind::Close || kind == MessageKind::Error) {
         h->setKeyValue("code", static_cast<int64_t>(code), &xs);
         h->setKeyValue("reason", new QoreStringNode(reason ? reason : ""), &xs);
     }
@@ -252,7 +258,7 @@ void WebSocketStreamFrameState::setError(const std::string& msg, uint16_t wire_c
     error_state = true;
     error_msg = msg;
     // Notify the handler
-    pushMessage(MessageKind::Error, nullptr, wire_code, msg.c_str());
+    pushMessage(MessageKind::Error, nullptr, /* rsv */ 0, wire_code, msg.c_str());
     // Attempt to send a close frame to the peer so they see a proper
     // termination rather than an abrupt stream reset.  Caller may also
     // tear down the transport.

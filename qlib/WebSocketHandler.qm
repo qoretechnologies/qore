@@ -1240,12 +1240,16 @@ class WebSocketStreamProcessor {
                     if (type == "text") {
                         msg = msg.toString("UTF-8");
                     }
-                    # Extensions are applied per-message on the worker thread
+                    # Extensions are applied per-message on the worker thread.
+                    # RSV bits come from the first frame of the reassembled
+                    # message; permessage-deflate uses RSV1 to flag compressed
+                    # payloads.  The C++ reassembler handles fragmentation so
+                    # fin is always True by construction.
                     hash<auto> ext_ctx = {
                         "op": type == "text" ? WSOP_Text : WSOP_Binary,
-                        "rsv1": False,
-                        "rsv2": False,
-                        "rsv3": False,
+                        "rsv1": frame.rsv1 ?? False,
+                        "rsv2": frame.rsv2 ?? False,
+                        "rsv3": frame.rsv3 ?? False,
                         "fin": True,
                     };
                     wsc.applyIncomingExtensions(\msg, ext_ctx);

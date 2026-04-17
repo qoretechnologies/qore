@@ -202,11 +202,23 @@ private:
     //! data frames passed to reassembler)
     void handleFrame(WsFrame& frame);
 
-    //! Pushes a message hash {type, data, code?, reason?} to msg_queue
-    /** All keys are simple — the hash is the same shape used by the
-        H1 async path for consistency with existing handler code. */
+    //! Pushes a message hash {type, data, rsv1?, rsv2?, rsv3?, code?, reason?} to msg_queue
+    /** For Text/Binary messages the rsv1/rsv2/rsv3 keys carry the RSV bits
+        from the first frame of the (possibly fragmented) message — extension
+        consumers (e.g. permessage-deflate) need them to decide whether to
+        decompress the payload.  For Close messages, code and reason are set.
+
+        All keys are simple — the hash shape is compatible with the H1 async
+        path for consistency with existing handler code.
+
+        @param kind     message kind tag
+        @param payload  completed message bytes (ref transferred); nullptr for close/error
+        @param rsv      RSV bits byte from the first frame (bit 2 = RSV1,
+                        bit 1 = RSV2, bit 0 = RSV3) — only used for data frames
+        @param code     close status code (Close only)
+        @param reason   close reason string (Close only) */
     void pushMessage(MessageKind kind, BinaryNode* payload /* ref transferred */,
-        uint16_t code = 0, const char* reason = nullptr);
+        uint8_t rsv = 0, uint16_t code = 0, const char* reason = nullptr);
 
     //! Transitions to error state with the given message
     void setError(const std::string& msg, uint16_t wire_code = WSCC_ProtocolError);
