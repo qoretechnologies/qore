@@ -1668,8 +1668,17 @@ public:
         if (run) {
             if (!tlpd->inst) {
                 doTopLevelInstantiation(*tlpd);
-            } else if (pwo.parse_options & PO_ALLOW_REPARSE) {
-                // In REPL mode, check if there are new local variables to instantiate
+            } else {
+                // Catch up on new top-level vars added after the tlpd was first
+                // initialized. Two scenarios:
+                //  1. REPL mode (PO_ALLOW_REPARSE): new statements may add vars.
+                //  2. A runtime context-switch into this program fired before its
+                //     parse finished — e.g. a reflection callback during another
+                //     module's init creates the tlpd with a partial LVList, and
+                //     the remaining top-level vars (like `x` in `%requires Foo;
+                //     string x = ...;`) are added to the LVList afterwards.
+                //     Without this, those vars never get instantiated and any
+                //     later access walks off the lvstack.
                 const LVList* lvl = sb.getLVList();
                 if (lvl && lvl->size() > tlpd->inst_count) {
                     doTopLevelInstantiation(*tlpd);
