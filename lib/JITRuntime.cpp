@@ -1761,6 +1761,24 @@ extern "C" DLLEXPORT uint64_t qore_rt_make_enum(int64_t member_ptr) {
 
 extern "C" DLLEXPORT uint64_t qore_rt_hash_key_access(uint64_t hash_val, const char* key, ExceptionSink* xsink) {
     QoreValue v = fromBits(hash_val);
+    // Unwrap weak references: member access on a weak reference target is transparent,
+    // mirroring the IR interpreter's QoreIROpcode::HashKeyAccess handling.
+    if (v.getType() == NT_WEAKREF) {
+        QoreObject* o = v.get<const WeakReferenceNode>()->get();
+        if (!o || !o->isValid()) {
+            return toBits(QoreValue());
+        }
+        QoreValue rv = o->evalMember(key, xsink);
+        return *xsink ? toBits(QoreValue()) : toBits(rv);
+    }
+    if (v.getType() == NT_WEAKREF_HASH) {
+        const QoreHashNode* h = v.get<const WeakHashReferenceNode>()->get();
+        if (!h) {
+            return toBits(QoreValue());
+        }
+        QoreValue result = h->getKeyValue(key, xsink);
+        return *xsink ? toBits(QoreValue()) : toBits(result.refSelf());
+    }
     if (v.getType() == NT_HASH) {
         const QoreHashNode* h = v.get<const QoreHashNode>();
         QoreValue result = h->getKeyValue(key, xsink);
