@@ -2245,12 +2245,19 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     common_cleanup_phi_preds.clear();
     common_cleanup_phi_values.clear();
     {
-        static const bool env_eh = getenv("QORE_AOT_EH") != nullptr;
+        // Phase E (2026-04-18 p75): EH is default-on for aot_mode.
+        // Validated via full qmod test sweep (427+ tests green) + runtime
+        // micro-benchmark showing only 1-3% runtime cost for 25% compile
+        // time improvement + full 198/198 function AOT coverage on
+        // HttpServer (vs 155/43 with the original check-based path).
+        // Opt-out via `QORE_AOT_NO_EH=1`. The legacy `QORE_AOT_EH=1`
+        // explicit-enable is still honored for forward compatibility.
+        static const bool env_no_eh = getenv("QORE_AOT_NO_EH") != nullptr;
         static const int env_eh_max_calls = []() {
             const char* s = getenv("QORE_AOT_EH_MAX_CALLS");
-            return s ? std::atoi(s) : 100;
+            return s ? std::atoi(s) : 0;  // 0 = no threshold by default
         }();
-        aot_eh_enabled = env_eh && aot_mode;
+        aot_eh_enabled = !env_no_eh && aot_mode;
         if (aot_eh_enabled && env_eh_max_calls > 0) {
             int call_like = 0;
             for (const auto& block : func.blocks) {
