@@ -1019,14 +1019,20 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
         res.result_queue->ref();  // extra ref for PollInfo storage
     }
 
-    // Ensure I/O thread is running (rare path: first submit or restart)
-    if (!ctx().running.load(std::memory_order_acquire)) {
+    // Ensure the target I/O thread is running (rare path: first submit or
+    // per-thread autostop restart).  In multi-threaded mode, threads autostop
+    // independently — checking only ctx() (thread 0) misses the case where
+    // the TARGET thread for this op's key has autostopped while thread 0 is
+    // still alive.  startIntern() is idempotent per-thread (already-running
+    // threads are skipped), so calling it when any thread is down is safe.
+    IoThreadContext& target_t = getThreadForKey(uh);
+    if (!target_t.running.load(std::memory_order_acquire)) {
         AutoLocker al(m);
         if (shutting_down) {
             xsink->raiseException("ASYNC-IO-ERROR", "controller is shutting down");
             return nullptr;
         }
-        if (io_exiting || !ctx().tid) {
+        if (io_exiting || !target_t.tid) {
             startIntern(xsink);
             if (*xsink) {
                 return nullptr;
@@ -1118,14 +1124,18 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
         ASYNC_IO_TRACE("worker submit: ++submit_seq(%d)+pushed+notified key='%s'\n",
             (int)submit_seq.load(), uh.c_str());
 
-        // Post-push verification: if the I/O thread exited while we were
-        // building/pushing the command (TOCTOU between the running check
-        // at line 802 and this point), restart it.  The exit cleanup
+        // Post-push verification: if the TARGET I/O thread exited while we
+        // were building/pushing the command (TOCTOU between the running
+        // check above and this point), restart it.  The exit cleanup
         // re-queues SubmitOp commands, so the new I/O thread will find
         // both the re-queued op and any others in the cmdq.
+        //
+        // Multi-thread correctness: check target->tid (NOT ctx().tid) — in
+        // multi-thread mode threads autostop independently, so a different
+        // thread (e.g., thread 0) being alive does not mean our target is.
         if (!target->running.load(std::memory_order_acquire)) {
             AutoLocker al(m);
-            if (io_exiting || !ctx().tid) {
+            if (io_exiting || !target->tid) {
                 startIntern(xsink);
                 if (*xsink) {
                     return nullptr;
