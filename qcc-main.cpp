@@ -61,6 +61,11 @@ static bool module_mode = false;
 // .qmod (qcc -m --from-objects). Unimplemented beyond flag plumbing;
 // see design/aot-phase4-qo-object-files.md.
 static bool compile_only = false;
+// Phase 4 slice 4: --context=DIR passes the owning module directory
+// when compiling a single file (`.qm`, `.qc`, or `.ql`) from a split
+// module so the parser has the full directory as context while the
+// AOT writer emits only the target file's contributions.
+static const char* context_dir = nullptr;
 static bool include_source = false;
 static bool verbose = false;
 static bool show_help = false;
@@ -85,6 +90,9 @@ static void print_usage(const char* prog) {
     printf("  -O, --opt-level=N      Optimization level 0-3 (default: 3)\n");
     printf("  -m, --module           Compile as module (.qm -> .qmod)\n");
     printf("  -c, --compile-only     Compile to .qo relocatable object (Phase 4, WIP)\n");
+    printf("      --context=DIR      Directory context for per-file .qo compilation\n"
+           "                         (parses the full split-module dir but emits only\n"
+           "                          the input file's contributions; requires -c)\n");
     printf("  -S, --static           Link statically against libqore\n");
     printf("  -t, --target=TRIPLE    Target triple for cross-compilation\n");
     printf("      --show-targets     Show supported target architectures and quit\n");
@@ -133,6 +141,7 @@ static struct option long_options[] = {
     {"strip-debug-info",  no_argument,       nullptr, 'D'},
     {"time-trace",        optional_argument, nullptr, 'Y'},
     {"big-fn-threshold",  required_argument, nullptr, 'B'},
+    {"context",           required_argument, nullptr, 'C'},
     {"verbose",           no_argument,       nullptr, 'v'},
     {"help",              no_argument,       nullptr, 'h'},
     {"version",           no_argument,       nullptr, 'V'},
@@ -192,6 +201,9 @@ static int parse_options_cmdline(int argc, char** argv) {
                     fprintf(stderr, "error: --big-fn-threshold must be >= 0\n");
                     return 1;
                 }
+                break;
+            case 'C':
+                context_dir = optarg;
                 break;
             case 'v':
                 verbose = true;
@@ -335,6 +347,31 @@ int main(int argc, char** argv) {
     // Check if input is a directory (split module)
     bool is_split_module = is_directory(source_file);
 
+    // Phase 4 slice 4: --context=DIR opts the caller into per-file .qo
+    // compilation. The input must be a single file in that directory
+    // (either the module's `.qm` or one of its `.qc`/`.ql` components);
+    // the directory is the parse context, not the input.
+    bool per_file_mode = (context_dir != nullptr);
+    if (per_file_mode) {
+        if (!compile_only) {
+            fprintf(stderr, "error: --context=DIR requires -c/--compile-only\n");
+            return 1;
+        }
+        if (is_split_module) {
+            fprintf(stderr, "error: --context=DIR is incompatible with a directory input; "
+                    "pass a single .qm/.qc/.ql file from the directory instead\n");
+            return 1;
+        }
+        if (!is_directory(context_dir)) {
+            fprintf(stderr, "error: --context=%s is not a directory\n", context_dir);
+            return 1;
+        }
+        module_mode = true;  // always module-shaped in per-file mode
+        if (verbose) {
+            printf("Per-file .qo mode: context=%s\n", context_dir);
+        }
+    }
+
     // Auto-detect module mode from extension or directory
     if (!module_mode) {
         if (is_split_module) {
@@ -388,6 +425,8 @@ int main(int argc, char** argv) {
                 : dir_str;
             output = basename + (compile_only ? ".qo" : ".qmod");
         } else {
+            // Per-file mode: default output is input-basename.qo
+            // (same shape as normal single-file compile-only mode).
             output = get_default_output(source_file, module_mode, compile_only);
         }
     }
@@ -429,7 +468,26 @@ int main(int argc, char** argv) {
     int rc = 0;
     std::string error;
 
-    if (is_split_module) {
+    if (per_file_mode) {
+        // Phase 4 slice 4: compile a single file from a split module
+        // directory.  The directory is the parse context; the file is the
+        // sole source of emitted metadata and native functions.
+        if (!QoreAOT::compileSeparatedModuleFile(
+                context_dir,
+                source_file,
+                output,
+                PO_DEFAULT,
+                error,
+                opt_level,
+                target_triple,
+                include_source)) {
+            fprintf(stderr, "error: %s\n", error.c_str());
+            rc = 1;
+        } else {
+            printf("%s: compiled per-file .qo (O%d%s)\n", output.c_str(), opt_level,
+                include_source ? "" : ", source-stripped");
+        }
+    } else if (is_split_module) {
         // Compile split module directory
         if (!QoreAOT::compileSeparatedModule(
                 source_file,

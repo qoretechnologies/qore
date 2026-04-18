@@ -541,6 +541,46 @@ public:
                                        bool include_source,
                                        bool compile_only);
 
+    //! Phase 4 slice 4: compile ONE file of a split module to a `.qo`.
+    /** The full split-module directory @a dir_path is parsed so
+        cross-file type references resolve, but only items whose AST
+        declaration location matches @a target_file are lowered to
+        native code and emitted in the resulting object.
+
+        @a target_file is classified as either primary (its basename
+        equals `<mod>.qm`, where `<mod>` is the directory basename) or
+        secondary (any `.qc`/`.ql`/`.q` sibling).  The primary `.qo`
+        carries module-info globals, the module descriptor and the
+        public `qore_<mod>_register` entry point; secondary `.qo`s
+        carry just the compiled code (no metadata blob, no module-info
+        globals, no register function) so that multiple per-file
+        objects can be relocated together into one binary without
+        symbol collisions.
+
+        Per-file metadata fragments, link-time aggregation into a
+        `.qmod` or `.qoa`, and runtime composition across secondary
+        `.qo`s are deferred to subsequent slices — see
+        `design/aot-phase4-qo-object-files.md`.
+
+        @param dir_path path to the owning module directory
+        @param target_file absolute path of the single file to compile
+        @param output_path path for the output `.qo`
+        @param parse_options parse options to seed the compile program
+        @param error error message on failure
+        @param opt_level LLVM optimization level 0-3 (default: 2)
+        @param target_triple target triple for cross-compilation (nullptr = native)
+        @param include_source embed source text for runtime fallback
+        @return true on success, false on failure
+    */
+    static bool compileSeparatedModuleFile(const char* dir_path,
+                                           const char* target_file,
+                                           const std::string& output_path,
+                                           const QoreParseOptions& parse_options,
+                                           std::string& error,
+                                           int opt_level = 2,
+                                           const char* target_triple = nullptr,
+                                           bool include_source = false);
+
     //! Print supported LLVM target architectures to stdout
     static void printSupportedTargets();
 };

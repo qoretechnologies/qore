@@ -547,11 +547,17 @@ private:
     @param root_ns pointer to the root namespace private data
     @param module_name optional module name; when provided, only items belonging to this module are
            serialized (items from reexported dependencies are filtered out)
+    @param keep_modules optional allow-list of module names; items in those modules are always kept
+    @param compile_file optional per-file filter (Phase 4 slice 4); when
+           provided, only items whose AST declaration location matches
+           the given file path are serialized — used for per-file
+           `.qo` metadata fragments
     @return true on success, false if serialization failed
 */
 bool serializeNamespaceTree(QoreAOTBinaryWriter& writer, qore_ns_private* root_ns,
     const char* module_name = nullptr,
-    const std::unordered_set<std::string>* keep_modules = nullptr);
+    const std::unordered_set<std::string>* keep_modules = nullptr,
+    const char* compile_file = nullptr);
 
 //! Serialize module dependencies into the DEPENDENCIES binary section
 /** Writes all module dependencies (including reexport) so they can be loaded

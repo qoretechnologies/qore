@@ -1660,15 +1660,32 @@ static inline bool shouldSkipReexportedItem(const char* item_module, const char*
     return strcmp(item_module, current_module) != 0;
 }
 
+//! Phase 4 slice 4: per-file filter helper — skip items whose AST
+//! declaration location does not match the target source file.
+static inline bool shouldSkipByCompileFile(const char* item_file, const char* compile_file) {
+    if (!compile_file) {
+        return false;
+    }
+    if (!item_file) {
+        return false;  // conservative: include unattributed items
+    }
+    return strcmp(item_file, compile_file) != 0;
+}
+
 //! Recursively collect all user-defined items from the namespace tree
 /** @param state the state object to collect items into
     @param ns the namespace to collect from
     @param parent_idx the parent namespace index
     @param current_module optional module name to filter items; when provided, only items from this
            module are collected (items from reexported dependencies are filtered out)
+    @param keep_modules optional allow-list of module names
+    @param compile_file optional per-file filter (Phase 4 slice 4); when
+           provided, items whose AST declaration file doesn't match are
+           skipped (used for per-file `.qo` metadata emission)
 */
 static void collectItems(AOTSerializeState& state, qore_ns_private* ns, uint32_t parent_idx,
-        const char* current_module, const std::unordered_set<std::string>* keep_modules = nullptr) {
+        const char* current_module, const std::unordered_set<std::string>* keep_modules = nullptr,
+        const char* compile_file = nullptr) {
     uint32_t ns_idx = static_cast<uint32_t>(state.namespaces.size());
     state.namespaces.push_back({ns, parent_idx});
 
@@ -1686,6 +1703,10 @@ static void collectItems(AOTSerializeState& state, qore_ns_private* ns, uint32_t
                     current_module ? current_module : "n/a",
                     shouldSkipReexportedItem(class_module, current_module, keep_modules));
                 if (shouldSkipReexportedItem(class_module, current_module, keep_modules)) {
+                    continue;
+                }
+                if (compile_file && priv->loc
+                        && shouldSkipByCompileFile(priv->loc->getFile(), compile_file)) {
                     continue;
                 }
 
@@ -1718,6 +1739,13 @@ static void collectItems(AOTSerializeState& state, qore_ns_private* ns, uint32_t
                 if (shouldSkipReexportedItem(hd_module, current_module, keep_modules)) {
                     continue;
                 }
+                if (compile_file) {
+                    const QoreProgramLocation* hd_loc =
+                        typed_hash_decl_private::get(*hd)->getParseLocation();
+                    if (hd_loc && shouldSkipByCompileFile(hd_loc->getFile(), compile_file)) {
+                        continue;
+                    }
+                }
                 state.hashdecls.push_back({hd, ns_idx});
             }
         }
@@ -1734,6 +1762,13 @@ static void collectItems(AOTSerializeState& state, qore_ns_private* ns, uint32_t
                 if (shouldSkipReexportedItem(ed_module, current_module, keep_modules)) {
                     continue;
                 }
+                if (compile_file) {
+                    const QoreProgramLocation* ed_loc =
+                        qore_enum_decl_private::get(*ed)->getParseLocation();
+                    if (ed_loc && shouldSkipByCompileFile(ed_loc->getFile(), compile_file)) {
+                        continue;
+                    }
+                }
                 state.enums.push_back({ed, ns_idx});
             }
         }
@@ -1745,6 +1780,10 @@ static void collectItems(AOTSerializeState& state, qore_ns_private* ns, uint32_t
             // Filter out typedefs from reexported dependencies
             const char* td_module = ti.second->getModuleName();
             if (shouldSkipReexportedItem(td_module, current_module, keep_modules)) {
+                continue;
+            }
+            if (compile_file && ti.second->loc
+                    && shouldSkipByCompileFile(ti.second->loc->getFile(), compile_file)) {
                 continue;
             }
             state.typedefs.push_back({ti.first, ti.second->typeInfo, ti.second->pub, ns_idx});
@@ -1762,6 +1801,10 @@ static void collectItems(AOTSerializeState& state, qore_ns_private* ns, uint32_t
                 if (shouldSkipReexportedItem(const_module, current_module, keep_modules)) {
                     continue;
                 }
+                if (compile_file && ce->loc
+                        && shouldSkipByCompileFile(ce->loc->getFile(), compile_file)) {
+                    continue;
+                }
                 state.constants.push_back({ce, ns_idx});
             }
         }
@@ -1776,6 +1819,12 @@ static void collectItems(AOTSerializeState& state, qore_ns_private* ns, uint32_t
             if (shouldSkipReexportedItem(var_module, current_module, keep_modules)) {
                 continue;
             }
+            if (compile_file) {
+                const QoreProgramLocation* v_loc = var->getParseLocation();
+                if (v_loc && shouldSkipByCompileFile(v_loc->getFile(), compile_file)) {
+                    continue;
+                }
+            }
             state.globals.push_back({var, ns_idx});
         }
     }
@@ -1789,6 +1838,32 @@ static void collectItems(AOTSerializeState& state, qore_ns_private* ns, uint32_t
             const char* func_module = func->getModuleName();
             if (shouldSkipReexportedItem(func_module, current_module, keep_modules)) {
                 continue;
+            }
+            // Phase 4 slice 4: per-file filter — keep the function only
+            // if at least one user variant's declaration file matches the
+            // target. Overloaded variants can live in different files
+            // (unusual but legal); per-variant filtering at codegen time
+            // ensures only matching variants produce native code.
+            if (compile_file) {
+                bool any_in_file = false;
+                QoreFunctionIterator vit(*func);
+                while (vit.next()) {
+                    const AbstractQoreFunctionVariant* v = vit.getVariant();
+                    UserVariantBase* uvb = const_cast<AbstractQoreFunctionVariant*>(v)
+                        ->getUserVariantBase();
+                    if (!uvb) {
+                        continue;
+                    }
+                    const UserSignature* sig = uvb->getUserSignature();
+                    const QoreProgramLocation* vloc = sig ? sig->getParseLocation() : nullptr;
+                    if (!vloc || !shouldSkipByCompileFile(vloc->getFile(), compile_file)) {
+                        any_in_file = true;
+                        break;
+                    }
+                }
+                if (!any_in_file) {
+                    continue;
+                }
             }
             state.functions.push_back({entry, func, ns_idx});
         }
@@ -1808,7 +1883,7 @@ static void collectItems(AOTSerializeState& state, qore_ns_private* ns, uint32_t
             if (shouldSkipReexportedItem(ns_module, current_module, keep_modules)) {
                 continue;
             }
-            collectItems(state, child_priv, ns_idx, current_module, keep_modules);
+            collectItems(state, child_priv, ns_idx, current_module, keep_modules, compile_file);
         }
     }
 }
@@ -6328,15 +6403,21 @@ bool QoreAOTBinaryDeserializer::deserializeFallbackSources(std::string& error) {
 }
 
 bool serializeNamespaceTree(QoreAOTBinaryWriter& writer, qore_ns_private* root_ns,
-        const char* module_name, const std::unordered_set<std::string>* keep_modules) {
+        const char* module_name, const std::unordered_set<std::string>* keep_modules,
+        const char* compile_file) {
     // Phase 1: Collect all user-defined items into indexed vectors
     // When module_name is provided, filter out items from reexported dependencies
     // When keep_modules is provided, items from those modules are always included
-    printd(5, "serializeNamespaceTree: module_name='%s' root_ns='%s'\n",
-        module_name ? module_name : "n/a", root_ns->ns->getName());
+    // When compile_file is provided (Phase 4 slice 4), items whose AST
+    // declaration file doesn't match are skipped so the emitted metadata
+    // describes only the contributions of one source file.
+    printd(5, "serializeNamespaceTree: module_name='%s' compile_file='%s' root_ns='%s'\n",
+        module_name ? module_name : "n/a",
+        compile_file ? compile_file : "n/a",
+        root_ns->ns->getName());
     AOTSerializeState state;
     state.root_ns = root_ns;  // Store root namespace for program-wide CRM building
-    collectItems(state, root_ns, UINT32_MAX, module_name, keep_modules);
+    collectItems(state, root_ns, UINT32_MAX, module_name, keep_modules, compile_file);
 
     // Build a program-wide constant reverse map once and make it available to
     // the writer so writeValue() can encode node-pointer references (e.g. an
