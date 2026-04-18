@@ -2852,9 +2852,10 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                 timeout_ms = 0;
             } else {
                 timeout_ms = (int)(remaining_us / 1000);
-                if (timeout_ms == 0) {
-                    timeout_ms = 1;
-                }
+                // When remaining_us < 1000, timeout_ms truncates to 0.
+                // This is correct: the deadline is sub-millisecond away,
+                // so poll immediately rather than oversleeping by up to 1ms.
+                // Not a busy loop — only triggers with a real pending deadline.
             }
         }
 
