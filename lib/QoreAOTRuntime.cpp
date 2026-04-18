@@ -7688,3 +7688,14 @@ extern "C" DLLEXPORT void qore_aot_raise_init_error(ExceptionSink* xsink, QoreSt
         xsink->raiseException("MODULE-LOAD-ERROR", err);
     }
 }
+
+extern "C" DLLEXPORT void qore_aot_register_into_program(QoreProgram* tpgm,
+        void (*desc_fn)(QoreModuleInfo&), const char* path) {
+    ExceptionSink xsink;
+    MM.registerAOTStaticModule(&xsink, tpgm,
+        reinterpret_cast<qore_binary_module_desc_t>(desc_fn),
+        path ? path : "<aot-static>");
+    if (xsink) {
+        xsink.handleExceptions();
+    }
+}

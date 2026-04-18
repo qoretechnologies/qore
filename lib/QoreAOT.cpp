@@ -3417,6 +3417,59 @@ static void generateModuleABIV2(llvm::LLVMContext& ctx, llvm::Module& module,
     // Generate API 2.0 module descriptor function (already per-module-named:
     // emits `<sanitized_name>_qore_module_desc`).
     emitModuleDescFunction(ctx, module, init_impl_fn, ns_init_impl_fn, del_impl_fn, mod_info);
+
+    // Phase 4 slice 3: in compile_only (.qo) mode, emit a public register
+    // entry point that callers can invoke directly, without going through
+    // libqore's filesystem search / dlopen path.
+    //
+    //   extern "C" void qore_<sanitized>_register(QoreProgram* tpgm) {
+    //       qore_aot_register_into_program(tpgm,
+    //                                      &<sanitized>_qore_module_desc,
+    //                                      "<aot-static>");
+    //   }
+    //
+    // The `.qmod` build path doesn't need this — its entry point is the
+    // dynamic loader that calls `<sanitized>_qore_module_desc` via dlsym.
+    if (compile_only) {
+        // Compute the same sanitized name as emitModuleDescFunction.
+        std::string sanitized_name = mod_info.name;
+        for (char& c : sanitized_name) {
+            if (c == '-') {
+                c = '_';
+            }
+        }
+        std::string desc_fn_name = sanitized_name + "_qore_module_desc";
+
+        // Get (already declared/defined) handles for the desc fn + runtime bridge.
+        llvm::Function* desc_fn = module.getFunction(desc_fn_name);
+        assert(desc_fn && "desc function must be emitted before register function");
+
+        auto* bridge_fn_type = llvm::FunctionType::get(void_type,
+            {ptr_type, ptr_type, ptr_type}, false);
+        auto bridge_fn = module.getOrInsertFunction("qore_aot_register_into_program",
+            bridge_fn_type);
+
+        // Private label string for diagnostics — "<aot-static>" is a stable
+        // cookie the bridge passes through to the loader.
+        auto* path_data = llvm::ConstantDataArray::getString(ctx, "<aot-static>", true);
+        auto* path_gv = new llvm::GlobalVariable(module, path_data->getType(), true,
+            llvm::GlobalValue::PrivateLinkage, path_data,
+            mod_prefix + "qore_aot_register_path");
+
+        // Build the register function itself.
+        std::string register_fn_name = "qore_" + sanitized_name + "_register";
+        auto* register_fn_type = llvm::FunctionType::get(void_type, {ptr_type}, false);
+        llvm::Function* register_fn = llvm::Function::Create(register_fn_type,
+            llvm::Function::ExternalLinkage, register_fn_name, module);
+        register_fn->setDLLStorageClass(llvm::GlobalValue::DLLExportStorageClass);
+
+        auto* reg_entry_bb = llvm::BasicBlock::Create(ctx, "entry", register_fn);
+        llvm::IRBuilder<> reg_builder(reg_entry_bb);
+
+        llvm::Value* tpgm_arg = &*register_fn->arg_begin();
+        reg_builder.CreateCall(bridge_fn, {tpgm_arg, desc_fn, path_gv});
+        reg_builder.CreateRetVoid();
+    }
 }
 
 //! Link an object file into a shared library

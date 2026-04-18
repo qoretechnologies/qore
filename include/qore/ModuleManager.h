@@ -215,6 +215,22 @@ public:
     DLLEXPORT static int runTimeLoadModule(ExceptionSink* xsink, const char* name, QoreProgram* pgm = nullptr,
         qore_binary_module_desc_t mod_desc_func = nullptr);
 
+    //! Register a statically-linked AOT-compiled module into a target program without dlopen
+    /** Intended for AOT `.qo` object files that have been linked directly into the host
+        image. The caller provides a pointer to the module's descriptor function (emitted
+        by qcc as `<name>_qore_module_desc`); the descriptor is invoked, validated and
+        routed through the standard module registration path, skipping the filesystem
+        search and dlopen that the normal loader uses.
+        @param xsink if any errors occur, a Qore-language "LOAD-MODULE-ERROR" exception is raised here
+        @param tpgm the target QoreProgram to register the module into; must be non-null
+        @param desc_fn the module descriptor function pointer
+        @param path a label used for diagnostics; defaults to "<aot-static>"
+        @return 0 on success, -1 if an exception was raised
+        @since %Qore 2.x (Phase 4 .qo support)
+    */
+    DLLEXPORT static int registerAOTStaticModule(ExceptionSink* xsink, QoreProgram* tpgm,
+        qore_binary_module_desc_t desc_fn, const char* path = "<aot-static>");
+
     //! loads the named module at parse time (or before run time, even if parsing is not active), returns a non-0 QoreStringNode pointer if an error occured, caller owns the QoreStringNode pointer's reference count returned if non-0
     /** if the feature is already loaded, then the function returns immediately without raising an error
         The feature's namespace changes are added to the QoreProgram object if the feature is loaded and the pgm argument is non-zero.

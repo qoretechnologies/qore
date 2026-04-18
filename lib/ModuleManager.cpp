@@ -688,6 +688,14 @@ int ModuleManager::runTimeLoadModule(ExceptionSink* xsink, const char* name, Qor
     return QMM.runTimeLoadModule(*xsink, *xsink, name, pgm, nullptr, QMLO_NONE, QP_WARN_MODULES, false, mod_desc_func);
 }
 
+int ModuleManager::registerAOTStaticModule(ExceptionSink* xsink, QoreProgram* tpgm,
+        qore_binary_module_desc_t desc_fn, const char* path) {
+    assert(xsink);
+    assert(tpgm);
+    assert(desc_fn);
+    return QMM.registerAOTStaticModuleIntern(*xsink, tpgm, desc_fn, path ? path : "<aot-static>");
+}
+
 static const char* get_feature_from_path(QoreString& tmp);
 
 int QoreModuleManager::runTimeLoadModule(ExceptionSink& xsink, ExceptionSink& wsink, const char* name,
@@ -734,6 +742,69 @@ int QoreModuleManager::runTimeLoadModule(ExceptionSink& xsink, ExceptionSink& ws
     OptLocker ol(module_load_depth == 0 ? &mutex : nullptr);
     loadModuleIntern(xsink, wsink, name, pgm, reexport, MOD_OP_NONE, 0, 0, mpgm, load_opt, warning_mask,
         mod_desc_func);
+    return xsink ? -1 : 0;
+}
+
+int QoreModuleManager::registerAOTStaticModuleIntern(ExceptionSink& xsink, QoreProgram* tpgm,
+        qore_binary_module_desc_t desc_fn, const char* path) {
+    // Populate mod_info up front so the feature name is known before taking the
+    // parse lock / module manager mutex.  The info hash is captured here and
+    // re-assigned to mod_info.info before handing off to loadBinaryModuleFromDesc,
+    // which owns it from there.
+    QoreModuleInfo mod_info;
+    desc_fn(mod_info);
+    if (mod_info.name.empty()) {
+        xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(path),
+            "AOT static module at '%s': no feature name present in module descriptor", path);
+        if (mod_info.info) {
+            mod_info.info->deref(&xsink);
+        }
+        return -1;
+    }
+    // take ownership of the info hash across the fast-path / already-loaded checks;
+    // loadBinaryModuleFromDesc will re-take it from mod_info.info when we get there
+    ReferenceHolder<QoreHashNode> info_holder(mod_info.info, &xsink);
+    mod_info.info = nullptr;
+
+    const std::string feature_str(mod_info.name.c_str(), mod_info.name.size());
+    const char* feature = feature_str.c_str();
+
+    // lock-free fast path: module already committed to this program?
+    if (qore_program_private::get(*tpgm)->hasCommittedFeature(feature)) {
+        return 0;
+    }
+
+    ProgramRuntimeParseContextHelper pah(&xsink, tpgm);
+    if (xsink) {
+        return -1;
+    }
+
+    // double-check under parse lock (matches runTimeLoadModule's race-window guard)
+    if (qore_program_private::get(*tpgm)->hasFeature(feature)) {
+        return 0;
+    }
+
+    // serialize with other module loads unless we are nested inside one already
+    OptLocker ol(module_load_depth == 0 ? &mutex : nullptr);
+
+    // tag any namespaces created by the module's init callback with the module name
+    QoreModuleNameContextHelper mnch(feature);
+
+    // see if the module is already registered with QMM; if so skip the init path
+    // and just stitch it into the target program
+    QoreAbstractModule* mi = findModuleUnlocked(feature);
+    if (!mi) {
+        // restore info hash for the descriptor handoff
+        mod_info.info = info_holder.release();
+        mi = loadBinaryModuleFromDesc(xsink, nullptr, mod_info, path, feature, false,
+            nullptr, nullptr, QMLO_NONE);
+        if (!mi || xsink) {
+            return -1;
+        }
+    }
+
+    // mirror qore_check_load_module_intern: merge the module's namespace into tpgm
+    mi->addToProgram(tpgm, xsink);
     return xsink ? -1 : 0;
 }
 

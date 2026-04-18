@@ -494,6 +494,10 @@ public:
             QoreProgram* mpgm = nullptr, unsigned load_opt = QMLO_NONE, int warning_mask = QP_WARN_MODULES,
             bool reexport = false, qore_binary_module_desc_t mod_desc_func = nullptr);
 
+    //! Worker for ModuleManager::registerAOTStaticModule — no dlopen, skip filesystem search
+    DLLLOCAL int registerAOTStaticModuleIntern(ExceptionSink& xsink, QoreProgram* tpgm,
+            qore_binary_module_desc_t desc_fn, const char* path);
+
     DLLLOCAL QoreHashNode* getModuleHash();
     DLLLOCAL QoreListNode* getModuleList();
 
