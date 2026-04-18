@@ -399,17 +399,12 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
             *hash<auto> headers, bool body_streaming = False, *data body) {
         int retries = 0;
         bool timeout_retried = False;
-        stderr.printf("STREAMS-TRACE [%s] T%d acquireAndStartStreaming ENTER method=%y path=%y url=%y body_streaming=%y\n", format_date("YYYY-MM-DD HH:mm:SS.xx", now_us()), gettid(), method, path, url, body_streaming);
         while (True) {
-            stderr.printf("STREAMS-TRACE [%s] T%d acquireAndStartStreaming iter retries=%d timeout_retried=%y before acquireStream\n", format_date("YYYY-MM-DD HH:mm:SS.xx", now_us()), gettid(), retries, timeout_retried);
             HttpClientStreamHandle stream = acquireStream(url);
-            stderr.printf("STREAMS-TRACE [%s] T%d acquireAndStartStreaming acquireStream done reused=%y\n", format_date("YYYY-MM-DD HH:mm:SS.xx", now_us()), gettid(), stream.wasConnectionReused());
             try {
                 stream.startStreaming(method, path, headers, body_streaming, body);
-                stderr.printf("STREAMS-TRACE [%s] T%d acquireAndStartStreaming startStreaming OK\n", format_date("YYYY-MM-DD HH:mm:SS.xx", now_us()), gettid());
                 return stream;
             } catch (hash<ExceptionInfo> ex) {
-                stderr.printf("STREAMS-TRACE [%s] T%d acquireAndStartStreaming CAUGHT %s: %s retries=%d\n", format_date("YYYY-MM-DD HH:mm:SS.xx", now_us()), gettid(), ex.err, ex.desc, retries);
                 if (isConnectionError(ex.err) && ++retries <= MaxRequestRetries) {
                     log(LoggerLevel::DEBUG, "streaming connection error %s, retrying (%d/%d)",
                         ex.err, retries, MaxRequestRetries);
@@ -700,13 +695,10 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
             *hash<auto> headers, *data body, *timeout timeout_ms) {
         int retries = 0;
         bool timeout_retried = False;
-        stderr.printf("STREAMS-TRACE [%s] T%d requestIntern ENTER method=%y path=%y url=%y caller_timeout=%y\n", format_date("YYYY-MM-DD HH:mm:SS.xx", now_us()), gettid(), method, path, url, timeout_ms);
         while (True) {
             *HttpClientStreamHandle stream;
             try {
-                stderr.printf("STREAMS-TRACE [%s] T%d requestIntern iter retries=%d timeout_retried=%y before acquireStream\n", format_date("YYYY-MM-DD HH:mm:SS.xx", now_us()), gettid(), retries, timeout_retried);
                 stream = acquireStream(url);
-                stderr.printf("STREAMS-TRACE [%s] T%d requestIntern acquireStream done reused=%y\n", format_date("YYYY-MM-DD HH:mm:SS.xx", now_us()), gettid(), stream.wasConnectionReused());
                 # Per-request timeout resolution:
                 # 1. Caller-provided timeout always wins (the caller knows best,
                 #    e.g. LLM queries with 60s timeout).
@@ -734,14 +726,11 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
                     "effective_timeout=%y",
                     method, path, stream.wasConnectionReused(), timeout_retried,
                     effective_timeout);
-                stderr.printf("STREAMS-TRACE [%s] T%d requestIntern before stream.request effective_timeout=%y\n", format_date("YYYY-MM-DD HH:mm:SS.xx", now_us()), gettid(), effective_timeout);
                 hash<auto> resp = stream.request(method, path, headers, body,
                     effective_timeout);
-                stderr.printf("STREAMS-TRACE [%s] T%d requestIntern stream.request returned status=%y\n", format_date("YYYY-MM-DD HH:mm:SS.xx", now_us()), gettid(), resp.status_code);
                 checkAltSvc(url, resp);
                 return resp;
             } catch (hash<ExceptionInfo> ex) {
-                stderr.printf("STREAMS-TRACE [%s] T%d requestIntern CAUGHT %s: %s retries=%d timeout_retried=%y\n", format_date("YYYY-MM-DD HH:mm:SS.xx", now_us()), gettid(), ex.err, ex.desc, retries, timeout_retried);
                 # Handle HTTPCLIENT-TIMEOUT before the generic isConnectionError
                 # retry.  HTTPCLIENT-TIMEOUT is in isConnectionError() for the
                 # benefit of acquireAndStartStreaming / submitRequestAsync where
