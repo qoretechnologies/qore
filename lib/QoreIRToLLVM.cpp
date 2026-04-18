@@ -3258,7 +3258,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             // non-string types.  The fast-path checks int+int and float+float inline.
             llvm::Value* result = emitAnyArithFastPath(
                 llvm::Instruction::Add, llvm::Instruction::FAdd,
-                "qore_rt_add_any", lhs_boxed, rhs_boxed, llvm_func, module);
+                "qore_rt_add_any", inst, lhs_boxed, rhs_boxed, llvm_func, module);
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(result, inst->result.id, llvm_func);
@@ -3303,7 +3303,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* rhs_boxed = boxValue(rhs, inst->operands[1].id);
             llvm::Value* result = emitAnyArithFastPath(
                 llvm::Instruction::Sub, llvm::Instruction::FSub,
-                "qore_rt_sub_any", lhs_boxed, rhs_boxed, llvm_func, module);
+                "qore_rt_sub_any", inst, lhs_boxed, rhs_boxed, llvm_func, module);
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(result, inst->result.id, llvm_func);
@@ -3337,7 +3337,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* rhs_boxed = boxValue(rhs, inst->operands[1].id);
             llvm::Value* result = emitAnyArithFastPath(
                 llvm::Instruction::Mul, llvm::Instruction::FMul,
-                "qore_rt_mul_any", lhs_boxed, rhs_boxed, llvm_func, module);
+                "qore_rt_mul_any", inst, lhs_boxed, rhs_boxed, llvm_func, module);
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(result, inst->result.id, llvm_func);
@@ -7391,7 +7391,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* rhs_boxed = boxValue(rhs, inst->operands[1].id);
             llvm::Value* result = emitAnyCmpFastPath(llvm::CmpInst::ICMP_EQ,
                 llvm::CmpInst::FCMP_OEQ, static_cast<int>(inst->opcode),
-                lhs_boxed, rhs_boxed, llvm_func, module);
+                inst, lhs_boxed, rhs_boxed, llvm_func, module);
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
             emitExceptionCheck(module, llvm_func, inst);
@@ -7419,7 +7419,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* rhs_boxed = boxValue(rhs, inst->operands[1].id);
             llvm::Value* result = emitAnyCmpFastPath(llvm::CmpInst::ICMP_NE,
                 llvm::CmpInst::FCMP_ONE, static_cast<int>(inst->opcode),
-                lhs_boxed, rhs_boxed, llvm_func, module);
+                inst, lhs_boxed, rhs_boxed, llvm_func, module);
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
             emitExceptionCheck(module, llvm_func, inst);
@@ -7499,7 +7499,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* rhs_boxed = boxValue(rhs, inst->operands[1].id);
             llvm::Value* result = emitAnyCmpFastPath(llvm::CmpInst::ICMP_SLT,
                 llvm::CmpInst::FCMP_OLT, static_cast<int>(inst->opcode),
-                lhs_boxed, rhs_boxed, llvm_func, module);
+                inst, lhs_boxed, rhs_boxed, llvm_func, module);
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
             emitExceptionCheck(module, llvm_func, inst);
@@ -7513,7 +7513,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* rhs_boxed = boxValue(rhs, inst->operands[1].id);
             llvm::Value* result = emitAnyCmpFastPath(llvm::CmpInst::ICMP_SLE,
                 llvm::CmpInst::FCMP_OLE, static_cast<int>(inst->opcode),
-                lhs_boxed, rhs_boxed, llvm_func, module);
+                inst, lhs_boxed, rhs_boxed, llvm_func, module);
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
             emitExceptionCheck(module, llvm_func, inst);
@@ -7527,7 +7527,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* rhs_boxed = boxValue(rhs, inst->operands[1].id);
             llvm::Value* result = emitAnyCmpFastPath(llvm::CmpInst::ICMP_SGT,
                 llvm::CmpInst::FCMP_OGT, static_cast<int>(inst->opcode),
-                lhs_boxed, rhs_boxed, llvm_func, module);
+                inst, lhs_boxed, rhs_boxed, llvm_func, module);
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
             emitExceptionCheck(module, llvm_func, inst);
@@ -7541,7 +7541,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* rhs_boxed = boxValue(rhs, inst->operands[1].id);
             llvm::Value* result = emitAnyCmpFastPath(llvm::CmpInst::ICMP_SGE,
                 llvm::CmpInst::FCMP_OGE, static_cast<int>(inst->opcode),
-                lhs_boxed, rhs_boxed, llvm_func, module);
+                inst, lhs_boxed, rhs_boxed, llvm_func, module);
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
             emitExceptionCheck(module, llvm_func, inst);
@@ -7643,7 +7643,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* lhs_boxed = boxValue(lhs, inst->operands[0].id);
             llvm::Value* rhs_boxed = boxValue(rhs, inst->operands[1].id);
             llvm::Value* result = emitAnyCmpSpaceshipFastPath(
-                    lhs_boxed, rhs_boxed, llvm_func, module);
+                    inst, lhs_boxed, rhs_boxed, llvm_func, module);
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
             emitExceptionCheck(module, llvm_func, inst);
@@ -7686,7 +7686,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* result = emitAnyBitwiseFastPath(
                 llvm::Instruction::And, "qore_rt_binary_op",
                 static_cast<int>(QoreIROpcode::AndAny),
-                lhs_boxed, rhs_boxed, llvm_func, module);
+                inst, lhs_boxed, rhs_boxed, llvm_func, module);
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(result, inst->result.id, llvm_func);
@@ -7702,7 +7702,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* result = emitAnyBitwiseFastPath(
                 llvm::Instruction::Or, "qore_rt_binary_op",
                 static_cast<int>(QoreIROpcode::OrAny),
-                lhs_boxed, rhs_boxed, llvm_func, module);
+                inst, lhs_boxed, rhs_boxed, llvm_func, module);
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(result, inst->result.id, llvm_func);
@@ -7718,7 +7718,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* result = emitAnyBitwiseFastPath(
                 llvm::Instruction::Xor, "qore_rt_binary_op",
                 static_cast<int>(QoreIROpcode::XorAny),
-                lhs_boxed, rhs_boxed, llvm_func, module);
+                inst, lhs_boxed, rhs_boxed, llvm_func, module);
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(result, inst->result.id, llvm_func);
@@ -7734,7 +7734,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* result = emitAnyBitwiseFastPath(
                 llvm::Instruction::Shl, "qore_rt_binary_op",
                 static_cast<int>(QoreIROpcode::ShlAny),
-                lhs_boxed, rhs_boxed, llvm_func, module);
+                inst, lhs_boxed, rhs_boxed, llvm_func, module);
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(result, inst->result.id, llvm_func);
@@ -7750,7 +7750,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* result = emitAnyBitwiseFastPath(
                 llvm::Instruction::AShr, "qore_rt_binary_op",
                 static_cast<int>(QoreIROpcode::ShrAny),
-                lhs_boxed, rhs_boxed, llvm_func, module);
+                inst, lhs_boxed, rhs_boxed, llvm_func, module);
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(result, inst->result.id, llvm_func);
@@ -7765,7 +7765,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* val_boxed = boxValue(val, inst->operands[0].id);
             llvm::Value* result = emitAnyUnaryFastPath(true,
                     static_cast<int>(QoreIROpcode::UnaryMinusAny),
-                    val_boxed, llvm_func, module);
+                    inst, val_boxed, llvm_func, module);
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
             emitExceptionCheck(module, llvm_func, inst);
@@ -7777,7 +7777,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* val_boxed = boxValue(val, inst->operands[0].id);
             llvm::Value* result = emitAnyUnaryFastPath(false,
                     static_cast<int>(QoreIROpcode::UnaryPlusAny),
-                    val_boxed, llvm_func, module);
+                    inst, val_boxed, llvm_func, module);
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
             emitExceptionCheck(module, llvm_func, inst);
@@ -9747,7 +9747,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* rhs_boxed = boxValue(rhs, inst->operands[1].id);
             llvm::Value* result = emitAnyCompoundAssignFastPath(
                 llvm::Instruction::Add, llvm::Instruction::FAdd,
-                "qore_rt_add_any", lhs_boxed, rhs_boxed, llvm_func, module, true);
+                "qore_rt_add_any", inst, lhs_boxed, rhs_boxed, llvm_func, module, true);
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(result, inst->result.id, llvm_func);
@@ -9761,7 +9761,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* rhs_boxed = boxValue(rhs, inst->operands[1].id);
             llvm::Value* result = emitAnyCompoundAssignFastPath(
                 llvm::Instruction::Sub, llvm::Instruction::FSub,
-                "qore_rt_sub_any", lhs_boxed, rhs_boxed, llvm_func, module, false);
+                "qore_rt_sub_any", inst, lhs_boxed, rhs_boxed, llvm_func, module, false);
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(result, inst->result.id, llvm_func);
@@ -9775,7 +9775,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* rhs_boxed = boxValue(rhs, inst->operands[1].id);
             llvm::Value* result = emitAnyCompoundAssignFastPath(
                 llvm::Instruction::Mul, llvm::Instruction::FMul,
-                "qore_rt_mul_any", lhs_boxed, rhs_boxed, llvm_func, module, false);
+                "qore_rt_mul_any", inst, lhs_boxed, rhs_boxed, llvm_func, module, false);
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(result, inst->result.id, llvm_func);
@@ -9790,7 +9790,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* result = emitAnyBitwiseFastPath(
                 llvm::Instruction::And, "qore_rt_binary_op",
                 static_cast<int>(QoreIROpcode::AndAssignAny),
-                lhs_boxed, rhs_boxed, llvm_func, module);
+                inst, lhs_boxed, rhs_boxed, llvm_func, module);
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(result, inst->result.id, llvm_func);
@@ -9805,7 +9805,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* result = emitAnyBitwiseFastPath(
                 llvm::Instruction::Or, "qore_rt_binary_op",
                 static_cast<int>(QoreIROpcode::OrAssignAny),
-                lhs_boxed, rhs_boxed, llvm_func, module);
+                inst, lhs_boxed, rhs_boxed, llvm_func, module);
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(result, inst->result.id, llvm_func);
@@ -9820,7 +9820,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* result = emitAnyBitwiseFastPath(
                 llvm::Instruction::Xor, "qore_rt_binary_op",
                 static_cast<int>(QoreIROpcode::XorAssignAny),
-                lhs_boxed, rhs_boxed, llvm_func, module);
+                inst, lhs_boxed, rhs_boxed, llvm_func, module);
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(result, inst->result.id, llvm_func);
@@ -9835,7 +9835,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* result = emitAnyBitwiseFastPath(
                 llvm::Instruction::Shl, "qore_rt_binary_op",
                 static_cast<int>(QoreIROpcode::ShlAssignAny),
-                lhs_boxed, rhs_boxed, llvm_func, module);
+                inst, lhs_boxed, rhs_boxed, llvm_func, module);
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(result, inst->result.id, llvm_func);
@@ -9850,7 +9850,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* result = emitAnyBitwiseFastPath(
                 llvm::Instruction::AShr, "qore_rt_binary_op",
                 static_cast<int>(QoreIROpcode::ShrAssignAny),
-                lhs_boxed, rhs_boxed, llvm_func, module);
+                inst, lhs_boxed, rhs_boxed, llvm_func, module);
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(result, inst->result.id, llvm_func);
@@ -12195,6 +12195,7 @@ bool QoreIRToLLVM::tryEmitListIndexAccess(const QoreIRInstruction* inst, llvm::M
 // Otherwise falls back to the specified runtime helper.
 llvm::Value* QoreIRToLLVM::emitAnyArithFastPath(llvm::Instruction::BinaryOps int_op,
         llvm::Instruction::BinaryOps float_op, const char* slow_helper,
+        const QoreIRInstruction* inst,
         llvm::Value* lhs, llvm::Value* rhs,
         llvm::Function* llvm_func, llvm::Module& module) {
     // Constants for tag checking
@@ -12251,9 +12252,12 @@ llvm::Value* QoreIRToLLVM::emitAnyArithFastPath(llvm::Instruction::BinaryOps int
 
     // Slow path: call runtime helper
     builder->SetInsertPoint(slow_bb);
-    auto helper = module.getOrInsertFunction(slow_helper,
-            llvm::FunctionType::get(i64_type, {i64_type, i64_type, ptr_type}, false));
-    llvm::Value* slow_result = builder->CreateCall(helper, {lhs, rhs, xsink_arg});
+    auto ft = llvm::FunctionType::get(i64_type, {i64_type, i64_type, ptr_type}, false);
+    auto helper = module.getOrInsertFunction(slow_helper, ft);
+    std::string throwing_name = std::string(slow_helper) + "_throwing";
+    auto helper_throwing = module.getOrInsertFunction(throwing_name, ft);
+    llvm::Value* slow_result = emitMaybeInvoke(helper, helper_throwing,
+            {lhs, rhs, xsink_arg}, module, llvm_func, inst);
     builder->CreateBr(merge_bb);
     llvm::BasicBlock* slow_end = builder->GetInsertBlock();
 
@@ -12272,6 +12276,7 @@ llvm::Value* QoreIRToLLVM::emitAnyArithFastPath(llvm::Instruction::BinaryOps int
 // Falls back to qore_rt_comparison_op for mixed types.
 llvm::Value* QoreIRToLLVM::emitAnyCmpFastPath(llvm::CmpInst::Predicate int_pred,
         llvm::CmpInst::Predicate float_pred, int opcode,
+        const QoreIRInstruction* inst,
         llvm::Value* lhs, llvm::Value* rhs,
         llvm::Function* llvm_func, llvm::Module& module) {
     // Constants for tag checking
@@ -12329,11 +12334,13 @@ llvm::Value* QoreIRToLLVM::emitAnyCmpFastPath(llvm::CmpInst::Predicate int_pred,
     // Slow path: call runtime comparison helper
     builder->SetInsertPoint(slow_bb);
     llvm::Value* opcode_val = llvm::ConstantInt::get(llvm::Type::getInt32Ty(ctx), opcode);
-    auto helper = module.getOrInsertFunction("qore_rt_comparison_op",
-            llvm::FunctionType::get(i64_type,
-                {llvm::Type::getInt32Ty(ctx), i64_type, i64_type, ptr_type}, false));
-    llvm::Value* slow_result = builder->CreateCall(helper,
-            {opcode_val, lhs, rhs, xsink_arg});
+    auto cmp_ft = llvm::FunctionType::get(i64_type,
+            {llvm::Type::getInt32Ty(ctx), i64_type, i64_type, ptr_type}, false);
+    auto helper = module.getOrInsertFunction("qore_rt_comparison_op", cmp_ft);
+    auto helper_throwing = module.getOrInsertFunction(
+            "qore_rt_comparison_op_throwing", cmp_ft);
+    llvm::Value* slow_result = emitMaybeInvoke(helper, helper_throwing,
+            {opcode_val, lhs, rhs, xsink_arg}, module, llvm_func, inst);
     builder->CreateBr(merge_bb);
     llvm::BasicBlock* slow_end = builder->GetInsertBlock();
 
@@ -12352,6 +12359,7 @@ llvm::Value* QoreIRToLLVM::emitAnyCmpFastPath(llvm::CmpInst::Predicate int_pred,
 // For AddAssignAny (handle_nothing=true), returns rhs if lhs is NOTHING.
 llvm::Value* QoreIRToLLVM::emitAnyCompoundAssignFastPath(llvm::Instruction::BinaryOps int_op,
         llvm::Instruction::BinaryOps float_op, const char* slow_helper,
+        const QoreIRInstruction* inst,
         llvm::Value* lhs, llvm::Value* rhs,
         llvm::Function* llvm_func, llvm::Module& module, bool handle_nothing) {
     // Constants for tag checking
@@ -12430,9 +12438,13 @@ llvm::Value* QoreIRToLLVM::emitAnyCompoundAssignFastPath(llvm::Instruction::Bina
 
     // Slow path: call runtime helper
     builder->SetInsertPoint(slow_bb);
-    auto ca_helper = module.getOrInsertFunction(slow_helper,
-            llvm::FunctionType::get(i64_type, {i64_type, i64_type, ptr_type}, false));
-    llvm::Value* slow_result_val = builder->CreateCall(ca_helper, {lhs, rhs, xsink_arg});
+    auto ca_ft = llvm::FunctionType::get(i64_type,
+            {i64_type, i64_type, ptr_type}, false);
+    auto ca_helper = module.getOrInsertFunction(slow_helper, ca_ft);
+    std::string ca_throwing_name = std::string(slow_helper) + "_throwing";
+    auto ca_helper_throwing = module.getOrInsertFunction(ca_throwing_name, ca_ft);
+    llvm::Value* slow_result_val = emitMaybeInvoke(ca_helper, ca_helper_throwing,
+            {lhs, rhs, xsink_arg}, module, llvm_func, inst);
     builder->CreateBr(merge_bb);
     llvm::BasicBlock* slow_end = builder->GetInsertBlock();
 
@@ -12618,17 +12630,25 @@ llvm::Value* QoreIRToLLVM::emitLValueCompoundAssignFastPath(
     emitDecrefCurrent();
     llvm::Value* slow_result;
     if (aot_mode) {
-        auto binary_fn = module.getOrInsertFunction("qore_rt_lvalue_binary_aot",
-                llvm::FunctionType::get(i64_type,
-                    {i32_type, ptr_type, i32_type, i64_type, ptr_type}, false));
-        slow_result = builder->CreateCall(binary_fn,
-                {opcode_val, aot_ctx_arg, lv_bits_or_slot, val_boxed, xsink_arg});
+        auto binary_ft = llvm::FunctionType::get(i64_type,
+                {i32_type, ptr_type, i32_type, i64_type, ptr_type}, false);
+        auto binary_fn = module.getOrInsertFunction(
+                "qore_rt_lvalue_binary_aot", binary_ft);
+        auto binary_fn_throwing = module.getOrInsertFunction(
+                "qore_rt_lvalue_binary_aot_throwing", binary_ft);
+        slow_result = emitMaybeInvoke(binary_fn, binary_fn_throwing,
+                {opcode_val, aot_ctx_arg, lv_bits_or_slot, val_boxed, xsink_arg},
+                module, llvm_func, inst);
     } else {
-        auto binary_fn = module.getOrInsertFunction("qore_rt_lvalue_binary",
-                llvm::FunctionType::get(i64_type,
-                    {i32_type, i64_type, i64_type, ptr_type}, false));
-        slow_result = builder->CreateCall(binary_fn,
-                {opcode_val, lv_bits_or_slot, val_boxed, xsink_arg});
+        auto binary_ft = llvm::FunctionType::get(i64_type,
+                {i32_type, i64_type, i64_type, ptr_type}, false);
+        auto binary_fn = module.getOrInsertFunction(
+                "qore_rt_lvalue_binary", binary_ft);
+        auto binary_fn_throwing = module.getOrInsertFunction(
+                "qore_rt_lvalue_binary_throwing", binary_ft);
+        slow_result = emitMaybeInvoke(binary_fn, binary_fn_throwing,
+                {opcode_val, lv_bits_or_slot, val_boxed, xsink_arg},
+                module, llvm_func, inst);
     }
     builder->CreateBr(merge_bb);
     llvm::BasicBlock* slow_end = builder->GetInsertBlock();
@@ -12658,6 +12678,7 @@ llvm::Value* QoreIRToLLVM::emitLValueCompoundAssignFastPath(
 // Type-checks operands for int+int, falls back to qore_rt_binary_op for non-int types.
 llvm::Value* QoreIRToLLVM::emitAnyBitwiseFastPath(llvm::Instruction::BinaryOps int_op,
         const char* slow_helper, int opcode_val_int,
+        const QoreIRInstruction* inst,
         llvm::Value* lhs, llvm::Value* rhs,
         llvm::Function* llvm_func, llvm::Module& module) {
     // Constants for tag checking
@@ -12690,11 +12711,13 @@ llvm::Value* QoreIRToLLVM::emitAnyBitwiseFastPath(llvm::Instruction::BinaryOps i
     // Slow path: call runtime helper (qore_rt_binary_op)
     builder->SetInsertPoint(slow_bb);
     llvm::Value* opcode_val = llvm::ConstantInt::get(llvm::Type::getInt32Ty(ctx), opcode_val_int);
-    auto bw_helper = module.getOrInsertFunction(slow_helper,
-            llvm::FunctionType::get(i64_type,
-                {llvm::Type::getInt32Ty(ctx), i64_type, i64_type, ptr_type}, false));
-    llvm::Value* slow_result_val = builder->CreateCall(bw_helper,
-            {opcode_val, lhs, rhs, xsink_arg});
+    auto bw_ft = llvm::FunctionType::get(i64_type,
+            {llvm::Type::getInt32Ty(ctx), i64_type, i64_type, ptr_type}, false);
+    auto bw_helper = module.getOrInsertFunction(slow_helper, bw_ft);
+    std::string bw_throwing_name = std::string(slow_helper) + "_throwing";
+    auto bw_helper_throwing = module.getOrInsertFunction(bw_throwing_name, bw_ft);
+    llvm::Value* slow_result_val = emitMaybeInvoke(bw_helper, bw_helper_throwing,
+            {opcode_val, lhs, rhs, xsink_arg}, module, llvm_func, inst);
     builder->CreateBr(merge_bb);
     llvm::BasicBlock* slow_end = builder->GetInsertBlock();
 
@@ -12710,6 +12733,7 @@ llvm::Value* QoreIRToLLVM::emitAnyBitwiseFastPath(llvm::Instruction::BinaryOps i
 // Emit inline LLVM fast-path for .any unary operations (UnaryMinusAny/UnaryPlusAny).
 // Type-checks operand for int or float, falls back to qore_rt_unary_op for other types.
 llvm::Value* QoreIRToLLVM::emitAnyUnaryFastPath(bool is_minus, int opcode_val_int,
+        const QoreIRInstruction* inst,
         llvm::Value* operand, llvm::Function* llvm_func, llvm::Module& module) {
     // Constants for tag checking
     llvm::Value* tag_mask = llvm::ConstantInt::get(i64_type, 0xFFFF000000000000ULL);
@@ -12757,11 +12781,13 @@ llvm::Value* QoreIRToLLVM::emitAnyUnaryFastPath(bool is_minus, int opcode_val_in
     // Slow path: call runtime helper
     builder->SetInsertPoint(slow_bb);
     llvm::Value* opcode_val = llvm::ConstantInt::get(llvm::Type::getInt32Ty(ctx), opcode_val_int);
-    auto helper = module.getOrInsertFunction("qore_rt_unary_op",
-            llvm::FunctionType::get(i64_type,
-                {llvm::Type::getInt32Ty(ctx), i64_type, ptr_type}, false));
-    llvm::Value* slow_result = builder->CreateCall(helper,
-            {opcode_val, operand, xsink_arg});
+    auto u_ft = llvm::FunctionType::get(i64_type,
+            {llvm::Type::getInt32Ty(ctx), i64_type, ptr_type}, false);
+    auto helper = module.getOrInsertFunction("qore_rt_unary_op", u_ft);
+    auto helper_throwing = module.getOrInsertFunction(
+            "qore_rt_unary_op_throwing", u_ft);
+    llvm::Value* slow_result = emitMaybeInvoke(helper, helper_throwing,
+            {opcode_val, operand, xsink_arg}, module, llvm_func, inst);
     builder->CreateBr(merge_bb);
     llvm::BasicBlock* slow_end = builder->GetInsertBlock();
 
@@ -12777,7 +12803,8 @@ llvm::Value* QoreIRToLLVM::emitAnyUnaryFastPath(bool is_minus, int opcode_val_in
 
 // Emit inline LLVM fast-path for CmpAny (spaceship operator).
 // Type-checks operands for int+int and float+float, falls back to qore_rt_comparison_op.
-llvm::Value* QoreIRToLLVM::emitAnyCmpSpaceshipFastPath(llvm::Value* lhs, llvm::Value* rhs,
+llvm::Value* QoreIRToLLVM::emitAnyCmpSpaceshipFastPath(const QoreIRInstruction* inst,
+        llvm::Value* lhs, llvm::Value* rhs,
         llvm::Function* llvm_func, llvm::Module& module) {
     // Constants for tag checking
     llvm::Value* tag_mask = llvm::ConstantInt::get(i64_type, 0xFFFF000000000000ULL);
@@ -12856,11 +12883,13 @@ llvm::Value* QoreIRToLLVM::emitAnyCmpSpaceshipFastPath(llvm::Value* lhs, llvm::V
     builder->SetInsertPoint(slow_bb);
     llvm::Value* opcode_val_cmp = llvm::ConstantInt::get(llvm::Type::getInt32Ty(ctx),
             static_cast<int>(QoreIROpcode::CmpAny));
-    auto cmp_helper = module.getOrInsertFunction("qore_rt_comparison_op",
-            llvm::FunctionType::get(i64_type,
-                {llvm::Type::getInt32Ty(ctx), i64_type, i64_type, ptr_type}, false));
-    llvm::Value* slow_result_cmp = builder->CreateCall(cmp_helper,
-            {opcode_val_cmp, lhs, rhs, xsink_arg});
+    auto cmp_ft = llvm::FunctionType::get(i64_type,
+            {llvm::Type::getInt32Ty(ctx), i64_type, i64_type, ptr_type}, false);
+    auto cmp_helper = module.getOrInsertFunction("qore_rt_comparison_op", cmp_ft);
+    auto cmp_helper_throwing = module.getOrInsertFunction(
+            "qore_rt_comparison_op_throwing", cmp_ft);
+    llvm::Value* slow_result_cmp = emitMaybeInvoke(cmp_helper, cmp_helper_throwing,
+            {opcode_val_cmp, lhs, rhs, xsink_arg}, module, llvm_func, inst);
     builder->CreateBr(merge_bb);
     llvm::BasicBlock* slow_end = builder->GetInsertBlock();
 

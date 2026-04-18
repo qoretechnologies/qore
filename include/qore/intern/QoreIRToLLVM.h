@@ -689,6 +689,7 @@ private:
     // Type-checks operands for int+int and float+float, falls back to helper for mixed types.
     llvm::Value* emitAnyArithFastPath(llvm::Instruction::BinaryOps int_op,
             llvm::Instruction::BinaryOps float_op, const char* slow_helper,
+            const QoreIRInstruction* inst,
             llvm::Value* lhs, llvm::Value* rhs,
             llvm::Function* llvm_func, llvm::Module& module);
 
@@ -731,6 +732,7 @@ private:
     // Type-checks operands for int-vs-int and float-vs-float, falls back to helper for mixed types.
     llvm::Value* emitAnyCmpFastPath(llvm::CmpInst::Predicate int_pred,
             llvm::CmpInst::Predicate float_pred, int opcode,
+            const QoreIRInstruction* inst,
             llvm::Value* lhs, llvm::Value* rhs,
             llvm::Function* llvm_func, llvm::Module& module);
 
@@ -739,6 +741,7 @@ private:
     // For AddAssignAny (handle_nothing=true), returns rhs if lhs is NOTHING.
     llvm::Value* emitAnyCompoundAssignFastPath(llvm::Instruction::BinaryOps int_op,
             llvm::Instruction::BinaryOps float_op, const char* slow_helper,
+            const QoreIRInstruction* inst,
             llvm::Value* lhs, llvm::Value* rhs,
             llvm::Function* llvm_func, llvm::Module& module, bool handle_nothing);
 
@@ -759,6 +762,7 @@ private:
     // Type-checks operands for int+int, falls back to qore_rt_binary_op for non-int types.
     llvm::Value* emitAnyBitwiseFastPath(llvm::Instruction::BinaryOps int_op,
             const char* slow_helper, int opcode,
+            const QoreIRInstruction* inst,
             llvm::Value* lhs, llvm::Value* rhs,
             llvm::Function* llvm_func, llvm::Module& module);
 
@@ -766,12 +770,14 @@ private:
     // Type-checks operand for int or float, falls back to qore_rt_unary_op for other types.
     // is_minus=true for UnaryMinusAny, false for UnaryPlusAny.
     llvm::Value* emitAnyUnaryFastPath(bool is_minus, int opcode,
+            const QoreIRInstruction* inst,
             llvm::Value* operand, llvm::Function* llvm_func, llvm::Module& module);
 
     // Emit inline LLVM fast-path for CmpAny (spaceship operator).
     // Type-checks operands for int+int and float+float, falls back to qore_rt_comparison_op.
     // Returns boxed int (-1, 0, or 1).
-    llvm::Value* emitAnyCmpSpaceshipFastPath(llvm::Value* lhs, llvm::Value* rhs,
+    llvm::Value* emitAnyCmpSpaceshipFastPath(const QoreIRInstruction* inst,
+            llvm::Value* lhs, llvm::Value* rhs,
             llvm::Function* llvm_func, llvm::Module& module);
 
     // Emit inline LLVM fast-path for EqHard/NeHard (=== and !==).
