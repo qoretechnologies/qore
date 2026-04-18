@@ -926,16 +926,14 @@ static std::vector<std::vector<int>> collectOperandSubgraphs(
 static bool outlineInitExpression(QoreIRFunction* outer,
         const std::string& outer_name,
         std::vector<AOTOutlinedHelper>& helpers) {
-    // Opt-in gate (Phase 1.5 staging): the outlining transformation is
-    // compile-correct for the DataProviderExpressions pathology but the
-    // resulting LLVM lowering + runtime dispatch still has at least one
-    // open runtime issue (segfault observed in self-contained repro of
-    // 4-entry const hash with closures).  Ship the infra off-by-default
-    // until the runtime path is fully validated; enable experimentally
-    // via `QORE_AOT_OUTLINE_INIT=1`.
+    // Opt-out gate: outlining is on by default and fixes the
+    // pathological `qcc` compile behavior on sources like
+    // `DataProviderExpressions.qc` (93-operand public const).  Set
+    // `QORE_AOT_OUTLINE_INIT=0` to disable if a regression is
+    // suspected — useful as an experimental toggle.
     static const bool enable = []() {
         const char* s = getenv("QORE_AOT_OUTLINE_INIT");
-        return s && *s && strcmp(s, "0") != 0;
+        return !s || !*s || strcmp(s, "0") != 0;
     }();
     if (!enable) {
         return true;
@@ -1972,94 +1970,6 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
     // Map from ConstantEntry* to init function name for dependency tracking
     std::unordered_map<const ConstantEntry*, std::string> const_entry_to_init_name;
 
-    // Helper lambda to lower a single QoreIRFunction + append its
-    // AOTCompiledInitFunc metadata entry.  Factored out of
-    // `compileInitExpr` so the outlining pass can reuse it per-helper.
-    auto lowerOneInitFn = [&](QoreIRFunction* fn,
-            const std::string& init_name,
-            AOTCompiledInitFunc::TargetType target_type,
-            const std::string& container_path,
-            const std::string& item_name) {
-        AOTSlotMap slots;
-        buildAOTSlotMap(*fn, slots);
-        std::string llvm_error;
-        bool init_ok;
-        if (metadata_only) {
-            auto* i64_t = llvm::Type::getInt64Ty(ctx);
-            auto* ptr_t = llvm::PointerType::get(ctx, 0);
-            auto* fn_type = llvm::FunctionType::get(i64_t, {ptr_t, ptr_t}, false);
-            if (!module.getFunction(fn->name)) {
-                llvm::Function::Create(fn_type, llvm::Function::ExternalLinkage,
-                    fn->name, module);
-            }
-            init_ok = true;
-        } else {
-            QoreIRToLLVM lowerer(ctx);
-            lowerer.setAOTMode(&slots);
-            lowerer.setDeferredExceptionChecking(true);
-            lowerer.setSharedDebugInfo(&di_builder, di_cu);
-            lowerer.setEmitDebugInfo(aotEmitDebugInfo());
-            if (getenv("QORE_AOT_DUMP_IR")) {
-                fprintf(stderr, "=== IR for init %s ===\n", init_name.c_str());
-                QoreIRPrinter::print(*fn, std::cerr);
-                fprintf(stderr, "=================\n");
-            }
-            init_ok = lowerer.lowerFunction(*fn, module, llvm_error);
-        }
-        if (!init_ok) {
-            if (getenv("QORE_AOT_DEBUG")) {
-                fprintf(stderr, "AOT: LLVM lowering failed for init '%s': %s\n",
-                    init_name.c_str(), llvm_error.c_str());
-            }
-            return false;
-        }
-        AOTCompiledInitFunc cif;
-        cif.name = init_name;
-        cif.llvm_symbol = fn->name;
-        cif.num_locals = static_cast<int>(slots.local_slots.size());
-        cif.num_globals = static_cast<int>(slots.global_slots.size());
-        cif.num_exprs = static_cast<int>(slots.expr_slots.size());
-        cif.num_stmts = static_cast<int>(slots.stmt_slots.size());
-        cif.num_regex_cases = static_cast<int>(slots.regex_case_slots.size());
-        cif.num_lv_path_insts = static_cast<int>(slots.lv_path_slots.size());
-        extractAOTSlotIdentities(*fn, slots, nullptr, cif.slot_ids,
-            const_reverse_map);
-        cif.num_exprs = static_cast<int>(cif.slot_ids.exprs.size());
-        cif.num_locals = static_cast<int>(cif.slot_ids.locals.size());
-        cif.num_globals = static_cast<int>(cif.slot_ids.globals.size());
-        cif.feature_flags = scanIRFeatureFlags(*fn);
-        cif.target_type = target_type;
-        cif.ns_path = container_path;
-        cif.item_name = item_name;
-        // Dep scan: for every LoadConstant in this function, record the
-        // init function of the referenced constant.  For outlined helpers,
-        // this captures dependencies that would otherwise be attached to
-        // the outer — we still report them per-function because the outer
-        // will transitively call the helper at load time, so the helper's
-        // deps are effectively its caller's deps.
-        for (auto& bp : fn->blocks) {
-            for (auto& inst : bp->instructions) {
-                if (inst->opcode == QoreIROpcode::LoadConstant) {
-                    auto* lci = static_cast<QoreIRLoadConstantInstruction*>(inst.get());
-                    if (lci->node) {
-                        const ConstantEntry* dep_ce = lci->node->getConstantEntry();
-                        auto dep_it = const_entry_to_init_name.find(dep_ce);
-                        if (dep_it != const_entry_to_init_name.end()) {
-                            cif.deps.push_back(dep_it->second);
-                        }
-                    }
-                }
-            }
-        }
-        compiled_init_funcs.push_back(std::move(cif));
-        if (getenv("QORE_AOT_DEBUG")) {
-            fprintf(stderr, "AOT: compiled init function '%s' (globals=%d, exprs=%d)\n",
-                init_name.c_str(), (int)slots.global_slots.size(),
-                (int)slots.expr_slots.size());
-        }
-        return true;
-    };
-
     // Helper lambda to compile an init expression to LLVM and record it
     auto compileInitExpr = [&](const QoreValue& init_expr, const std::string& init_name,
             AOTCompiledInitFunc::TargetType target_type,
@@ -2075,28 +1985,141 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
             return;
         }
 
-        // Phase 1.5: run the outlining pass before lowering so large
-        // aggregate init-expressions (e.g. a public const bound to a
-        // 100-entry hash literal with embedded closures) split into many
-        // small helper fns + a thin outer rather than one pathologically
-        // large LLVM function.  Each helper gets lowered and recorded
-        // just like the outer, but with target_type=OUTLINED_HELPER so
-        // the module-load runtime knows not to invoke it directly.
+        // Phase 1.5 init-expression outlining.  Must run before the shared
+        // slot map is built so the UNIFIED map includes contributions from
+        // every extracted helper's instructions (at runtime the outer's
+        // ctx is what gets passed to each helper via the CallAOTHelper's
+        // `aot_ctx_arg`, so every slot ID referenced by helper IR must
+        // resolve against the outer's ctx).  Helpers get no separate
+        // AOTCompiledInitFunc entry — they share the outer's slot map
+        // and are emitted as plain LLVM functions in the same module.
         std::vector<AOTOutlinedHelper> outlined_helpers;
         outlineInitExpression(ir_func, init_name, outlined_helpers);
 
-        // Lower every outlined helper first so its LLVM symbol is in the
-        // module by the time the outer's CallAOTHelper ops get lowered.
-        // Helpers are emitted with target_type=OUTLINED_HELPER so the
-        // module-load runtime skips them (the outer calls them instead).
+        // Build the unified slot map: scan outer + every helper.  Slot
+        // IDs are assigned by identity (expression bits / var pointer /
+        // etc.), so repeated `buildAOTSlotMap` calls against the same
+        // AOTSlotMap just accumulate entries without duplicating shared
+        // slots.  Every helper's LLVM body references slot IDs via the
+        // caller-passed `ctx`; since the outer (whose ctx this map
+        // builds) is the caller, the helpers' slot lookups resolve
+        // correctly.
+        AOTSlotMap slots;
+        buildAOTSlotMap(*ir_func, slots);
         for (auto& h : outlined_helpers) {
-            lowerOneInitFn(h.ir_func.get(), h.ir_func->name,
-                AOTCompiledInitFunc::OUTLINED_HELPER,
-                container_path, item_name);
+            buildAOTSlotMap(*h.ir_func, slots);
         }
-        // Lower the outer.
-        lowerOneInitFn(ir_func, init_name, target_type,
-            container_path, item_name);
+
+        // Lower outer + every helper against the shared slot map.
+        std::string llvm_error;
+        bool init_ok = true;
+        auto lowerOne = [&](QoreIRFunction* fn, const std::string& name) {
+            if (metadata_only) {
+                auto* i64_t = llvm::Type::getInt64Ty(ctx);
+                auto* ptr_t = llvm::PointerType::get(ctx, 0);
+                auto* fn_type = llvm::FunctionType::get(i64_t, {ptr_t, ptr_t}, false);
+                if (!module.getFunction(fn->name)) {
+                    llvm::Function::Create(fn_type, llvm::Function::ExternalLinkage,
+                        fn->name, module);
+                }
+                return true;
+            }
+            QoreIRToLLVM lowerer(ctx);
+            lowerer.setAOTMode(&slots);
+            lowerer.setDeferredExceptionChecking(true);
+            lowerer.setSharedDebugInfo(&di_builder, di_cu);
+            lowerer.setEmitDebugInfo(aotEmitDebugInfo());
+            if (getenv("QORE_AOT_DUMP_IR")) {
+                fprintf(stderr, "=== IR for init %s ===\n", name.c_str());
+                QoreIRPrinter::print(*fn, std::cerr);
+                fprintf(stderr, "=================\n");
+            }
+            std::string err;
+            bool ok = lowerer.lowerFunction(*fn, module, err);
+            if (!ok && getenv("QORE_AOT_DEBUG")) {
+                fprintf(stderr, "AOT: LLVM lowering failed for init '%s': %s\n",
+                    name.c_str(), err.c_str());
+            }
+            return ok;
+        };
+        // Lower helpers first so their LLVM symbols exist when the outer
+        // emits `CallAOTHelper` (which does `module.getOrInsertFunction`).
+        for (auto& h : outlined_helpers) {
+            if (!lowerOne(h.ir_func.get(), h.ir_func->name)) {
+                init_ok = false;
+            }
+        }
+        if (init_ok) {
+            init_ok = lowerOne(ir_func, init_name);
+        }
+
+        if (init_ok) {
+            // Single AOTCompiledInitFunc entry for the outer.  Its slot
+            // map covers the UNION of slots referenced by the outer's
+            // body and by every outlined helper — so `registerAOT
+            // FunctionsFromSlotMaps` at load time builds a ctx with
+            // everything the helpers need.  Helpers themselves are just
+            // LLVM functions in the same module; no metadata entry.
+            AOTCompiledInitFunc cif;
+            cif.name = init_name;
+            cif.llvm_symbol = ir_func->name;
+            cif.num_locals = static_cast<int>(slots.local_slots.size());
+            cif.num_globals = static_cast<int>(slots.global_slots.size());
+            cif.num_exprs = static_cast<int>(slots.expr_slots.size());
+            cif.num_stmts = static_cast<int>(slots.stmt_slots.size());
+            cif.num_regex_cases = static_cast<int>(slots.regex_case_slots.size());
+            cif.num_lv_path_insts = static_cast<int>(slots.lv_path_slots.size());
+            // Slot-identity extraction: combine identities from outer +
+            // helpers so the serialized metadata carries every slot the
+            // shared ctx needs to populate at load time.
+            extractAOTSlotIdentities(*ir_func, slots, nullptr, cif.slot_ids,
+                const_reverse_map);
+            for (auto& h : outlined_helpers) {
+                extractAOTSlotIdentities(*h.ir_func, slots, nullptr,
+                    cif.slot_ids, const_reverse_map);
+            }
+            cif.num_exprs = static_cast<int>(cif.slot_ids.exprs.size());
+            cif.num_locals = static_cast<int>(cif.slot_ids.locals.size());
+            cif.num_globals = static_cast<int>(cif.slot_ids.globals.size());
+            cif.feature_flags = scanIRFeatureFlags(*ir_func);
+            for (auto& h : outlined_helpers) {
+                cif.feature_flags |= scanIRFeatureFlags(*h.ir_func);
+            }
+            cif.target_type = target_type;
+            cif.ns_path = container_path;
+            cif.item_name = item_name;
+            // Dep scan: every LoadConstant in outer OR helpers contributes
+            // to the outer's deps (helpers execute during the outer's
+            // run, so their deps are effectively the outer's).
+            auto scan_deps = [&](const QoreIRFunction* fn) {
+                for (auto& bp : fn->blocks) {
+                    for (auto& inst : bp->instructions) {
+                        if (inst->opcode == QoreIROpcode::LoadConstant) {
+                            auto* lci = static_cast<QoreIRLoadConstantInstruction*>(inst.get());
+                            if (lci->node) {
+                                const ConstantEntry* dep_ce = lci->node->getConstantEntry();
+                                auto dep_it = const_entry_to_init_name.find(dep_ce);
+                                if (dep_it != const_entry_to_init_name.end()) {
+                                    cif.deps.push_back(dep_it->second);
+                                }
+                            }
+                        }
+                    }
+                }
+            };
+            scan_deps(ir_func);
+            for (auto& h : outlined_helpers) {
+                scan_deps(h.ir_func.get());
+            }
+            compiled_init_funcs.push_back(std::move(cif));
+            if (getenv("QORE_AOT_DEBUG")) {
+                fprintf(stderr, "AOT: compiled init function '%s' (globals=%d, exprs=%d"
+                    ", %zu helpers)\n", init_name.c_str(),
+                    (int)slots.global_slots.size(),
+                    (int)slots.expr_slots.size(),
+                    outlined_helpers.size());
+            }
+        }
         delete ir_func;
     };
 
