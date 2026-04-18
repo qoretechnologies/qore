@@ -1,33 +1,57 @@
 # AOT Compile-Time Optimization Roadmap
 
-**Status:** Roadmap. Phase E (EH default-on) shipped at commit `8d392571f`
-(2026-04-18). Baseline for all work below: HS.qm compile **623s**,
+**Status:**
+- Phase E (EH default-on) shipped at `8d392571f` (2026-04-18).
+- Phase 1 (time-trace + debug-info flags) shipped at `c828cc1a8`.
+- Phase 5a (OptimizeNone big-fn escape hatch) shipped at `f0f75a301`.
+  **HS compile: 623s → 20.8s (30x)** with `--big-fn-threshold=200`.
+
+Baseline for remaining work: HS.qm compile **20.8s** (opt-in flag),
 **198/198 functions AOT-compiled**.
 
-**Goal:** Reduce qcc compile time from 623s → ~100s for HS.qm. Scale to
-larger applications (e.g., qorus-core) compiling in tens of seconds
-incrementally.
+**Primary goal (met for HS):** Reduce qcc compile time from 623s → ~100s.
+Phase 5a exceeded this by 5x for the pathological case. Next: make the
+flag default-on and validate runtime cost is acceptable on representative
+workloads.
 
-**Secondary goal:** produce linkable `.qo` object files that can be linked
-into large C++ binaries (qorus-core) from compiled Qore sources, with
-debug-info control equivalent to CMake's `Release`, `Debug`, and
-`RelWithDebInfo` modes.
+**Secondary goal (open):** produce linkable `.qo` object files that can
+be linked into large C++ binaries (qorus-core) from compiled Qore
+sources, with debug-info control equivalent to CMake's `Release`,
+`Debug`, and `RelWithDebInfo` modes.
 
-## Why 25% isn't enough
+## Why 25% wasn't enough — and what fixed it
 
 Step 5 (EH migration) delivered a 25% compile-time improvement
 (806s→623s) + full 198-function coverage. Profiling revealed 97% of the
-remaining time is LLVM codegen (SelectionDAG + MachineInstr passes +
-RegAlloc), not mid-end opt. Meaning: further improvement comes from
-codegen-level optimization, not IR optimization.
+remaining time was LLVM codegen (SelectionDAG + MachineInstr passes +
+RegAlloc), not mid-end opt. HS profile (`aot-compile-time-profile-hs-p76.md`)
+showed `handleRequest` alone = 87% of compile time (533s of 611s): a
+single 905-basic-block function dominating SelectionDAG.
 
-The playbook is borrowed from clang, which has solved similar problems:
+**Phase 5a cracked it.** Tagging functions ≥ N basic blocks with
+`Attribute::OptimizeNone` + `NoInline` caused LLVM to skip SelectionDAG's
+quadratic-on-huge-functions codegen. 623s → 20.8s (30x). Runtime cost
+measured: ~1% on call-heavy HS workloads, ~7% on arithmetic-heavy
+microbench. 4 functions crossed threshold=200 (`handleRequest` 905 BBs,
+`sendReply` 254, `handleMultiplexedPersistentSync` 278,
+`handlePersistentConnectionSync` 253).
 
-1. **Measure first** (clang's `-ftime-trace`).
-2. **Parallelize** (clang's ThinLTO).
-3. **Cache** (clang's PCH / ccache).
-4. **Skip work** (clang's `-fdelayed-template-parsing`).
-5. **Per-build profile** (`-O2` vs `-O3`, DWARF vs no DWARF).
+This reorders the roadmap: Phases 2/3/5b are no longer urgent for HS.
+Main open work:
+1. Validate Phase 5a on more workloads; make default-on if costs hold.
+2. Phase 4 (`.qo` object files) — independent track; unblocks qorus-core
+   linkage. Now top priority.
+3. Phase 2 (caching) — dev-cycle win, still wanted.
+
+The clang playbook still informs the remaining phases:
+
+1. **Measure first** (clang's `-ftime-trace`) — done (Phase 1).
+2. **Parallelize** (clang's ThinLTO) — lower priority now.
+3. **Cache** (clang's PCH / ccache) — Phase 2.
+4. **Skip work** (clang's `-fdelayed-template-parsing`) — Phase 5a did
+   this in the codegen pipeline.
+5. **Per-build profile** (`-O2` vs `-O3`, DWARF vs no DWARF) — Phase 1 +
+   Phase 7.
 
 ## Phased roadmap
 
@@ -190,10 +214,36 @@ additional phases needed.
 **Informs:** whether Qore can replace runtime parsing entirely for
 production deployments.
 
-### Phase 5: Outlining large functions
+### Phase 5a: OptimizeNone escape hatch for large functions — SHIPPED
+
+**Commit:** `f0f75a301` (2026-04-18).
+
+**Mechanism:** when a function's basic-block count ≥
+`QORE_AOT_BIG_FN_THRESHOLD` (env) or `qcc --big-fn-threshold=N`, the LLVM
+function gets `Attribute::OptimizeNone` + `NoInline`. LLVM then bypasses
+SelectionDAG's expensive passes on that function while still producing
+correct code.
+
+**Results (HS.qm, threshold=200):**
+- Compile: **623s → 20.8s** (30x).
+- Output size: **18MB → 5.6MB** (3.2x).
+- Runtime: ~1% regression call-heavy, ~7% arithmetic-heavy microbench.
+- 4 functions tagged (handleRequest 905 BBs, sendReply 254,
+  handleMultiplexedPersistentSync 278, handlePersistentConnectionSync 253).
+
+**Status:** opt-in. Default threshold=0 (disabled). Flag promoted to
+`qcc --big-fn-threshold=N`.
+
+**Outstanding:**
+- Measure runtime cost on representative apps (not just HS).
+- Decide default: threshold=200 vs remain opt-in.
+- Consider tier: `-O3` → threshold 200; `-O2` → threshold 300; `-O0` →
+  tag everything.
+
+### Phase 5b: Outlining large functions (future, lower priority)
 
 **Goal:** reduce per-function codegen cost by splitting monolithic
-functions.
+functions. Pursue only if Phase 5a's runtime cost proves unacceptable.
 
 **Size:** medium. 1-2 sessions.
 
@@ -205,7 +255,8 @@ functions.
 - Original function becomes a driver that calls helpers.
 - LLVM SelectionDAG is near-linear per function (within normal sizes);
   by dropping handleRequest from ~500 BBs to 10 helpers of ~50 BBs
-  each, per-function codegen time drops 2-10x.
+  each, per-function codegen time drops 2-10x — with runtime
+  optimization preserved (unlike Phase 5a).
 
 **Risks:**
 - Runtime overhead: extra function calls. Mitigated by LLVM inliner
@@ -220,9 +271,8 @@ functions.
 - Runtime micro-bench: ensure no >3% runtime regression from extra
   calls.
 
-**Informs:** whether we need this even after Phase 3 parallelism. If
-parallelism + caching get us to 120s, outlining may be premature
-optimization.
+**Informs:** only pursued if Phase 5a's 1-7% runtime cost is a blocker
+for production workloads.
 
 ### Phase 6: Lazy codegen for cold functions
 
@@ -273,16 +323,16 @@ codegen options.
 ## Phase dependencies
 
 ```
-Phase 1 (time-trace, debug-info)
+Phase 1 (time-trace, debug-info)                         — SHIPPED
     ↓
-    ├→ Phase 2 (caching)    — independent, ship anytime after 1
-    ├→ Phase 3 (parallel)   — independent, ship anytime after 1
-    ├→ Phase 5 (outlining)  — informed by 1's trace data
-    └→ Phase 7 (tuning)     — informed by 1's trace data
-
-Phase 4 (.qo) — independent, ship anytime; enables qorus-core.
-
-Phase 6 (lazy) — optional; ship after 2+3 if still above target.
+Phase 5a (OptimizeNone big-fn)                           — SHIPPED
+    ↓
+    ├→ Phase 4 (.qo object files)   — TOP PRIORITY; enables qorus-core.
+    ├→ Phase 2 (caching)            — dev-cycle win.
+    ├→ Phase 3 (parallel)           — lower priority post-5a.
+    ├→ Phase 5b (outlining)         — only if 5a runtime cost is a blocker.
+    ├→ Phase 6 (lazy)               — optional polish.
+    └→ Phase 7 (LLVM tuning)        — incremental.
 ```
 
 ## Debug-info tier (CMake-style)
@@ -300,7 +350,14 @@ Introduce three levels, selectable via qcc flags:
 
 ## Entry point for next session
 
-Start with Phase 1. Small diff, immediately actionable data.
+Phases 1 and 5a shipped. Pick one of:
+
+1. **Phase 4 (.qo object files)** — user-called-out goal, orthogonal
+   to compile-time work, unblocks qorus-core linkage.
+2. **Validate Phase 5a runtime cost** on a more representative workload
+   than the synthetic microbenches; decide whether to flip the
+   `--big-fn-threshold` default.
+3. **Phase 2 (caching)** — dev-cycle ergonomics.
 
 ## References
 
