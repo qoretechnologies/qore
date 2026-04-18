@@ -639,7 +639,7 @@ void Http3ClientPollOperationPriv::waitStreamCapacity(int64_t timeout_ms) {
 }
 
 void Http3ClientPollOperationPriv::installFrameState(int64_t stream_id, Queue* msg_queue,
-        const BinaryNode* residual, ExceptionSink* xsink) {
+        ExceptionSink* xsink) {
     // Send callback runs on the I/O thread from within execute() -> feedData.
     // sendQuicClientStreamData enqueues the DATA frame; ngtcp2 flushes it in
     // the surrounding continuePoll write cycle.
@@ -662,14 +662,9 @@ void Http3ClientPollOperationPriv::installFrameState(int64_t stream_id, Queue* m
     auto frame_state = std::make_unique<WebSocketStreamFrameState>(
         msg_queue, std::move(send_cb), /* is_server */ false);
 
-    ReferenceHolder<FrameStateAction> new_action(
-        new FrameStateAction(std::move(frame_state)), xsink);
-
-    if (residual && residual->size() > 0) {
-        new_action->feedResidual(residual->getPtr(), residual->size());
-    }
-
-    AbstractAsyncAction* old_action = nullptr;
+    // Install the frame state on the existing ChannelAction under its
+    // per-action mutex — see Http2 counterpart for the race-free semantics.
+    ChannelAction* ch_action = nullptr;
     std::string sid = std::to_string(stream_id);
     {
         AutoLocker al(stream_lock);
@@ -680,13 +675,18 @@ void Http3ClientPollOperationPriv::installFrameState(int64_t stream_id, Queue* m
                 (long long)stream_id);
             return;
         }
-        old_action = it->second;
-        it->second = new_action.release();  // transfer ref
+        ch_action = dynamic_cast<ChannelAction*>(it->second);
+        if (!ch_action) {
+            xsink->raiseException("HTTPCLIENT-STATE-ERROR",
+                "cannot install frame state: stream %lld action is not a ChannelAction",
+                (long long)stream_id);
+            return;
+        }
+        ch_action->ref();
     }
 
-    if (old_action) {
-        old_action->deref(xsink);
-    }
+    ch_action->installFrameState(std::move(frame_state), xsink);
+    ch_action->deref(xsink);
 }
 
 void Http3ClientPollOperationPriv::setSubmitError(const char* err, const char* desc) {
@@ -1132,25 +1132,32 @@ nothing Http3ClientPollOperationBase::registerStreamNotify(int stream_id) {
 }
 
 //! Installs a WebSocket frame-state decoder for a CONNECT tunnel stream
-/** After this call, DATA chunks dispatched for @a stream_id are fed into a
-    pure C++ WebSocket frame decoder that pushes complete, typed message
-    hashes to @a msg_queue instead of the raw response hash routed through
-    the old ChannelAction.  This avoids the O(N²) Qore binary concatenation
-    path for large WS frames over HTTP/3.
+/** Attaches a WebSocketStreamFrameState to the ChannelAction already
+    registered for @a stream_id.  After this call, body bytes from H3 DATA
+    chunks dispatched by the I/O thread are fed into a pure C++ frame
+    decoder that pushes complete, typed message hashes to @a msg_queue
+    instead of the raw response hash routed through the handle's Channel.
+    This avoids the O(N²) Qore binary concatenation path for large WS
+    frames over HTTP/3.
+
+    The install is race-free against concurrent I/O-thread dispatches: the
+    ChannelAction's per-action mutex serialises the install with execute(),
+    complete() and executeError(), and the install itself drains any items
+    already buffered in the channel into the decoder before publishing the
+    frame state.  No caller-side pre-swap residual is needed.
 
     @param stream_id the QUIC stream ID returned by submitRequestStreamingWithChannel()
     @param msg_queue the Queue that will receive typed frame hashes
            ({type, data, rsv1?, rsv2?, rsv3?, code?, reason?})
-    @param residual optional body bytes already drained from the old Channel
 
     @throw HTTPCLIENT-STREAM-CLOSED if the stream is not found or already
            complete
+    @throw HTTPCLIENT-STATE-ERROR if the stream's action is not a ChannelAction
 
     @since %Qore 2.3
 */
 nothing Http3ClientPollOperationBase::installFrameState(int stream_id,
-        Queue[Queue] msg_queue, *binary residual) {
+        Queue[Queue] msg_queue) {
     Queue* queue_ptr = msg_queue.release();
-    priv->installFrameState(static_cast<int64_t>(stream_id), queue_ptr,
-        residual, xsink);
+    priv->installFrameState(static_cast<int64_t>(stream_id), queue_ptr, xsink);
 }

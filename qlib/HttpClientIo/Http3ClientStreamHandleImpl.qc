@@ -529,10 +529,17 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
     }
 
     #! Installs a WebSocket frame-state decoder for this H3 CONNECT stream
-    /** Drains any residual body bytes from \c data_channel and swaps the
-        poll op's registered action from ChannelAction to FrameStateAction.
-        After this call, WS DATA chunks are decoded in pure C++ and pushed
-        as typed frame hashes to @a msg_queue.
+    /** After this call, WS DATA chunks are decoded in pure C++ and pushed
+        as typed frame hashes to @a msg_queue; raw response hashes no
+        longer flow through \c data_channel.
+
+        The install is handled entirely on the C++ side: the existing
+        ChannelAction for this stream grows a frame-state decoder, and a
+        per-action mutex serialises the install with any in-flight
+        I/O-thread execute() calls.  The install atomically drains any
+        items already buffered in the channel into the decoder before
+        publishing the frame state, so no transport bytes can be lost to a
+        drain-vs-swap race.
 
         @param msg_queue Queue that will receive typed frame hashes
 
@@ -543,7 +550,6 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
     */
     installFrameState(Queue msg_queue) {
         int sid;
-        *Channel ch;
         {
             AutoLock al(lock);
             if (!streaming) {
@@ -553,32 +559,9 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
                 throw "HTTPCLIENT-STATE-ERROR", "stream not yet established";
             }
             sid = stream_id;
-            ch = data_channel;
         }
 
-        # Drain any response hashes still buffered in the old Channel and
-        # concatenate their body bytes into a single residual binary so the
-        # frame decoder receives a contiguous byte stream.
-        binary residual = binary();
-        if (exists ch) {
-            while (True) {
-                *hash<auto> entry = ch.tryRecv();
-                if (!exists entry) {
-                    break;
-                }
-                auto v = entry.value;
-                if (v.typeCode() != NT_HASH) {
-                    continue;
-                }
-                if (v.body.typeCode() == NT_BINARY) {
-                    residual += v.body;
-                } else if (v.body.typeCode() == NT_STRING) {
-                    residual += v.body.toBinary();
-                }
-            }
-        }
-
-        h3conn.installFrameState(sid, msg_queue, residual);
+        h3conn.installFrameState(sid, msg_queue);
     }
 }
 

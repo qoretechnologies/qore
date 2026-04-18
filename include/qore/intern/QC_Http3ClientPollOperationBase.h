@@ -129,24 +129,22 @@ public:
     */
     DLLLOCAL bool cancelStream(int64_t stream_id, ExceptionSink* xsink);
 
-    //! Installs a FrameStateAction for a WebSocket CONNECT stream (H3 client)
-    /** Replaces the ChannelAction previously registered for @a stream_id with
-        a FrameStateAction that feeds the H3 DATA payload into a
-        WebSocketStreamFrameState.  Any bytes buffered in the old Channel
-        MUST be drained by the caller and passed as @a residual so the frame
-        decoder sees a contiguous byte stream.
+    //! Installs a WebSocket frame-state decoder on a CONNECT stream's action
+    /** Attaches a WebSocketStreamFrameState to the ChannelAction already
+        registered for @a stream_id.  The install drains items buffered in
+        the channel into the decoder and publishes the frame state under
+        the ChannelAction's per-action mutex, so no drain-vs-install race
+        with in-flight I/O-thread execute() calls is possible.
 
-        @param stream_id    the QUIC stream ID to swap
+        @param stream_id    the QUIC stream ID to upgrade
         @param msg_queue    Queue for typed frame hash delivery (ref transferred)
-        @param residual     optional pre-swap body bytes drained from the old
-                            Channel (not ref'd; caller owns)
         @param xsink        exception sink (raises HTTPCLIENT-STREAM-CLOSED if
                             the stream is not found or already complete)
 
         @since %Qore 2.3
     */
     DLLLOCAL void installFrameState(int64_t stream_id, Queue* msg_queue,
-        const BinaryNode* residual, ExceptionSink* xsink);
+        ExceptionSink* xsink);
 
     //! Wait on stream_capacity_cond (for STREAM_ID_BLOCKED retry)
     DLLLOCAL void waitStreamCapacity(int64_t timeout_ms);
