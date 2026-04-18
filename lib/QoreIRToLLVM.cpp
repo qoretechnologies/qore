@@ -67,6 +67,7 @@ static_assert(QORE_IR_MAX_OPCODE == 359,
 #include "qore/intern/QoreInstanceOfOperatorNode.h"
 #include <qore/QoreStringNode.h>
 #include <llvm/IR/BasicBlock.h>
+#include <llvm/IR/CFG.h>
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/DIBuilder.h>
 #include <llvm/IR/DebugInfoMetadata.h>
@@ -1171,8 +1172,415 @@ void QoreIRToLLVM::emitIteratorCleanup(llvm::Module& module) {
     }
 }
 
+void QoreIRToLLVM::emitLifetimeAnnotations(llvm::Function* llvm_func) {
+    // Annotate entry-block alloca lifetimes so SROA/mem2reg can reason about
+    // when each alloca's storage is live and promote promotable ones to SSA.
+    // Without this, large functions accumulate mutually-aliasing alloca
+    // forests that make LLVM's -O3 pipeline go quadratic.
+    //
+    // Strategy: post-process after all lowering is done.
+    //   - lifetime.start goes immediately after each entry-block alloca
+    //   - lifetime.end goes immediately before every ret / resume terminator
+    // Whole-function lifetimes, but still enabling SROA since storage is
+    // explicitly marked dead before entry and after every exit.  Cleanup-
+    // flag allocas are excluded because they're read at function exit by
+    // the shared cleanup sequence and cannot be promoted regardless —
+    // annotating them would just add intrinsic-call noise.
+    const llvm::DataLayout& dl = llvm_func->getParent()->getDataLayout();
+    llvm::BasicBlock& entry = llvm_func->getEntryBlock();
+
+    // Cleanup-flag allocas cannot be promoted (read at function exit by the
+    // shared cleanup sequence).  Only annotate promotable kinds.
+    auto isPromotable = [](const llvm::StringRef& name) {
+        if (name.empty()) return false;
+        if (name.starts_with("cleanup")) return false;
+        if (name.starts_with("lv_cleanup")) return false;
+        if (name.starts_with("lvp_cleanup")) return false;
+        if (name.starts_with("box_cleanup")) return false;
+        if (name.starts_with("coerce_cleanup")) return false;
+        return true;
+    };
+
+    std::vector<llvm::AllocaInst*> allocas;
+    allocas.reserve(32);
+    for (llvm::Instruction& inst : entry) {
+        auto* ai = llvm::dyn_cast<llvm::AllocaInst>(&inst);
+        if (!ai) continue;
+        if (!isPromotable(ai->getName())) continue;
+        allocas.push_back(ai);
+    }
+    if (allocas.empty()) {
+        return;
+    }
+
+    // Compute a constant byte size per alloca (or -1 if dynamic).  Lifetime
+    // intrinsics require a constant size; -1 is the "unknown / conservative
+    // whole-alloca" sentinel.
+    auto sizeFor = [&](llvm::AllocaInst* ai) -> int64_t {
+        llvm::TypeSize ts = dl.getTypeAllocSize(ai->getAllocatedType());
+        if (ts.isScalable()) {
+            return -1;
+        }
+        uint64_t elem = ts.getFixedValue();
+        llvm::Value* count = ai->getArraySize();
+        if (auto* ci = llvm::dyn_cast<llvm::ConstantInt>(count)) {
+            return static_cast<int64_t>(elem * ci->getZExtValue());
+        }
+        return -1;
+    };
+
+    // Insert lifetime.start right after each alloca.
+    llvm::IRBuilder<> start_builder(llvm_func->getContext());
+    for (llvm::AllocaInst* ai : allocas) {
+        int64_t sz = sizeFor(ai);
+        if (sz <= 0) {
+            sz = -1;
+        }
+        llvm::Instruction* next = ai->getNextNode();
+        if (next) {
+            start_builder.SetInsertPoint(next);
+        } else {
+            start_builder.SetInsertPoint(&entry);
+        }
+        start_builder.CreateLifetimeStart(ai,
+                llvm::ConstantInt::get(llvm::Type::getInt64Ty(llvm_func->getContext()), sz));
+    }
+
+    // Emit lifetime.end before every ret / resume terminator.
+    llvm::IRBuilder<> end_builder(llvm_func->getContext());
+    for (llvm::BasicBlock& bb : *llvm_func) {
+        llvm::Instruction* term = bb.getTerminator();
+        if (!term) {
+            continue;
+        }
+        if (!llvm::isa<llvm::ReturnInst>(term) && !llvm::isa<llvm::ResumeInst>(term)) {
+            continue;
+        }
+        end_builder.SetInsertPoint(term);
+        for (llvm::AllocaInst* ai : allocas) {
+            int64_t sz = sizeFor(ai);
+            if (sz <= 0) {
+                sz = -1;
+            }
+            end_builder.CreateLifetimeEnd(ai,
+                    llvm::ConstantInt::get(llvm::Type::getInt64Ty(llvm_func->getContext()), sz));
+        }
+    }
+}
+
+bool QoreIRToLLVM::isOnStraightLineChain(llvm::BasicBlock* bb) {
+    if (!bb || !entry_block_for_idom) {
+        return false;
+    }
+    if (bb == entry_block_for_idom) {
+        return true;
+    }
+    // Walk idom chain; if every hop has exactly one predecessor and we
+    // eventually hit entry, bb is on the single-pred chain.  Lazy-
+    // compute each hop so mid-block helper BBs (invoke cont, guard
+    // continuation) are covered without an explicit instrumenting hook.
+    llvm::BasicBlock* cur = bb;
+    std::unordered_set<llvm::BasicBlock*> visited;
+    visited.reserve(16);
+    while (cur && cur != entry_block_for_idom) {
+        if (!visited.insert(cur).second) {
+            return false;
+        }
+        llvm::BasicBlock* idom = getOrComputeImmediateDominator(cur);
+        if (!idom) {
+            return false;
+        }
+        cur = idom;
+    }
+    return cur == entry_block_for_idom;
+}
+
+bool QoreIRToLLVM::canUseSsaCleanup(llvm::BasicBlock* current_bb) {
+    if (!aot_eh_enabled) {
+        return false;
+    }
+    if (!last_call_was_invoke_eh) {
+        return false;
+    }
+    if (!isOnStraightLineChain(current_bb)) {
+        return false;
+    }
+    // Consume the one-shot flag: only the immediately following track
+    // call benefits from this EH invoke's context.  Deferred-mode
+    // functions are eligible because the deferred tail poll
+    // (Return/ReturnNothing/pre-try-flush) promotes pending SSA to
+    // cleanup allocas before branching to error_return_block.
+    last_call_was_invoke_eh = false;
+    return true;
+}
+
+llvm::BasicBlock* QoreIRToLLVM::createPerInvokeCleanupLP(llvm::Module& module,
+        llvm::Function* llvm_func, llvm::BasicBlock* invoke_bb) {
+    // Fast path — nothing SSA-direct live at this invoke site: reuse the
+    // shared function-level unwind landing pad.  Avoids exploding the
+    // BB count on functions with many EH invokes and no SSA-direct
+    // cleanup (deferred-mode functions, functions that promoted early).
+    bool has_ssa_entries = false;
+    for (auto it = pending_ssa_cleanup.rbegin(); it != pending_ssa_cleanup.rend(); ++it) {
+        if (it->def_bb == invoke_bb || dominates(it->def_bb, invoke_bb)) {
+            has_ssa_entries = true;
+            break;
+        }
+    }
+    if (!has_ssa_entries) {
+        return getOrCreateFunctionUnwindLP(module, llvm_func);
+    }
+
+    llvm::BasicBlock* lp_bb = llvm::BasicBlock::Create(ctx, "inv_lp", llvm_func);
+
+    // Remember the builder's insert point so we can restore it after
+    // populating the LP (caller's control flow continues on the normal
+    // edge of the invoke, not on the unwind edge).
+    auto* saved_insert = builder->GetInsertBlock();
+    auto saved_ip = builder->GetInsertPoint();
+
+    builder->SetInsertPoint(lp_bb);
+    llvm::Type* lp_type = llvm::StructType::get(ctx, {ptr_type, i32_type});
+    llvm::LandingPadInst* lp = builder->CreateLandingPad(lp_type, 0);
+    lp->setCleanup(true);
+
+    // The LP is dominated only by invoke_bb.  A pending_ssa_cleanup entry
+    // may be referenced here only if its def_bb dominates invoke_bb —
+    // LLVM SSA dominance is transitive, so dominance at invoke_bb
+    // implies dominance at the LP's unwind edge.
+    auto decref_fn = module.getOrInsertFunction("qore_rt_decref",
+            llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+    for (auto it = pending_ssa_cleanup.rbegin(); it != pending_ssa_cleanup.rend(); ++it) {
+        if (!dominates(it->def_bb, invoke_bb) && it->def_bb != invoke_bb) {
+            continue;
+        }
+        builder->CreateCall(decref_fn, {it->value, xsink_arg});
+    }
+
+    // Lazily create the shared common-cleanup block; all per-invoke LPs
+    // funnel into it to keep the cleanup tail out of hot paths.
+    if (!function_common_cleanup) {
+        function_common_cleanup = llvm::BasicBlock::Create(ctx,
+                "function_common_cleanup", llvm_func);
+    }
+    builder->CreateBr(function_common_cleanup);
+
+    common_cleanup_phi_preds.push_back(lp_bb);
+    common_cleanup_phi_values.push_back(lp);
+
+    if (saved_insert) {
+        builder->SetInsertPoint(saved_insert, saved_ip);
+    }
+    return lp_bb;
+}
+
+void QoreIRToLLVM::finalizeFunctionCommonCleanup(llvm::Module& module) {
+    if (!function_common_cleanup) {
+        return;
+    }
+    auto* saved_insert = builder->GetInsertBlock();
+    auto saved_ip = builder->GetInsertPoint();
+
+    builder->SetInsertPoint(function_common_cleanup);
+
+    llvm::Type* lp_type = llvm::StructType::get(ctx, {ptr_type, i32_type});
+    llvm::PHINode* phi = builder->CreatePHI(lp_type,
+            static_cast<unsigned>(common_cleanup_phi_preds.size()), "lp_merged");
+    for (size_t i = 0; i < common_cleanup_phi_preds.size(); ++i) {
+        phi->addIncoming(common_cleanup_phi_values[i], common_cleanup_phi_preds[i]);
+    }
+
+    // Shared tail mirrors error_return_block's non-per-temp cleanup set.
+    // Per-temp SSA decrefs were handled per-LP before branching here.
+    // invoke_result_allocas still carries non-per-temp allocas (coerce,
+    // reload tracker, promoted per-temps if any) — always decref them.
+    emitOnBlockExitExec(module);
+    emitIteratorCleanup(module);
+    emitPreinstantiatedCleanup(module);
+    emitInvokeCleanup(module);
+    emitPreInstClosureReInstantiation(module);
+    emitLocalUninstantiation(module);
+    builder->CreateResume(phi);
+
+    if (saved_insert) {
+        builder->SetInsertPoint(saved_insert, saved_ip);
+    }
+}
+
+void QoreIRToLLVM::emitPendingSsaCleanup(llvm::Module& module) {
+    if (pending_ssa_cleanup.empty()) {
+        return;
+    }
+    auto decref_fn = module.getOrInsertFunction("qore_rt_decref",
+            llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+    llvm::BasicBlock* cur = builder->GetInsertBlock();
+    for (auto it = pending_ssa_cleanup.rbegin(); it != pending_ssa_cleanup.rend(); ++it) {
+        if (!dominates(it->def_bb, cur) && it->def_bb != cur) {
+            continue;
+        }
+        builder->CreateCall(decref_fn, {it->value, xsink_arg});
+    }
+}
+
+void QoreIRToLLVM::promotePendingSsaToAllocas(llvm::Module& module,
+        llvm::Function* llvm_func) {
+    if (pending_ssa_cleanup.empty()) {
+        return;
+    }
+    llvm::BasicBlock* entry = &llvm_func->getEntryBlock();
+    llvm::IRBuilder<> alloca_builder(entry, entry->begin());
+    for (const SsaCleanupEntry& e : pending_ssa_cleanup) {
+        llvm::AllocaInst* alloca = alloca_builder.CreateAlloca(i64_type, nullptr,
+                "cleanup_promoted");
+        // Init to NOTHING so block-scoped alloca safety holds: if the
+        // store we emit next is bypassed (shouldn't happen in well-formed
+        // IR), emitInvokeCleanup still sees a safe no-op value.
+        alloca_builder.CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING),
+                alloca);
+        builder->CreateStore(e.value, alloca);
+        invoke_result_allocas.push_back(alloca);
+    }
+    pending_ssa_cleanup.clear();
+}
+
+void QoreIRToLLVM::emitCondBrWithSsaPreamble(llvm::Module& module,
+        llvm::Function* llvm_func, llvm::Value* cond,
+        llvm::BasicBlock* exception_target, llvm::BasicBlock* normal_target) {
+    // Spill pending SSA-direct entries to cleanup allocas BEFORE the
+    // branch so both the exception and normal edges see an empty
+    // pending_ssa_cleanup downstream (no per-path divergence in the
+    // flat cleanup list).  The allocas are then decref'd by the shared
+    // target's emitInvokeCleanup (error_return_block, function_common_
+    // cleanup, Return's tail).  The per-invoke LP snapshot mechanism
+    // already ensures EH-unwind cleanup for earlier invokes — this path
+    // handles the check-based xsink-poll branches that emitMaybeInvoke
+    // skips on its EH edge.
+    promotePendingSsaToAllocas(module, llvm_func);
+    builder->CreateCondBr(cond, exception_target, normal_target);
+}
+
+llvm::AllocaInst* QoreIRToLLVM::promoteSsaEntryToAlloca(uint32_t result_id,
+        llvm::Module& module, llvm::Function* llvm_func) {
+    auto map_it = invoke_alloca_map.find(result_id);
+    if (map_it == invoke_alloca_map.end()) {
+        return nullptr;
+    }
+    if (map_it->second) {
+        return static_cast<llvm::AllocaInst*>(map_it->second);
+    }
+    auto val_it = values.find(result_id);
+    if (val_it == values.end() || !val_it->second) {
+        return nullptr;
+    }
+    llvm::Value* val = val_it->second;
+    llvm::BasicBlock* entry = &llvm_func->getEntryBlock();
+    llvm::IRBuilder<> alloca_builder(entry, entry->begin());
+    llvm::AllocaInst* ca = alloca_builder.CreateAlloca(i64_type, nullptr,
+            "cleanup_promoted");
+    alloca_builder.CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), ca);
+    builder->CreateStore(val, ca);
+    invoke_result_allocas.push_back(ca);
+    invoke_alloca_map[result_id] = ca;
+    // Remove the matching SSA entry so the normal-exit and per-invoke LP
+    // cleanup paths don't double-decref the promoted value.
+    for (auto it = pending_ssa_cleanup.begin(); it != pending_ssa_cleanup.end(); ) {
+        if (it->value == val) {
+            it = pending_ssa_cleanup.erase(it);
+        } else {
+            ++it;
+        }
+    }
+    return ca;
+}
+
+// Conservative Step 1 idom computation: exactly one predecessor ->
+// that predecessor is the idom; otherwise nullptr.  Shared by the
+// explicit update hook in the block-iteration loop and the lazy path
+// used inside dominance queries for mid-block helper BBs (invoke cont,
+// guard continuation, check-cont, etc.) that aren't in func.blocks.
+llvm::BasicBlock* QoreIRToLLVM::getOrComputeImmediateDominator(
+        llvm::BasicBlock* bb) {
+    if (!bb) {
+        return nullptr;
+    }
+    if (bb == entry_block_for_idom) {
+        immediate_dominator[bb] = nullptr;
+        return nullptr;
+    }
+    auto it = immediate_dominator.find(bb);
+    if (it != immediate_dominator.end()) {
+        return it->second;
+    }
+    // Lazy compute based on current LLVM predecessors.  Note: LLVM
+    // predecessors() reflects the CFG wired up to this point in lowering.
+    // Backedges from not-yet-lowered blocks are invisible, which is fine
+    // for Step 2's strict predicate (values pushed later have their idom
+    // recomputed at their use sites if they're ever re-queried).
+    llvm::BasicBlock* single = nullptr;
+    int count = 0;
+    for (llvm::BasicBlock* pred : llvm::predecessors(bb)) {
+        ++count;
+        if (count > 1) {
+            single = nullptr;
+            break;
+        }
+        single = pred;
+    }
+    llvm::BasicBlock* idom = (count == 1) ? single : nullptr;
+    immediate_dominator[bb] = idom;
+    return idom;
+}
+
+void QoreIRToLLVM::updateImmediateDominator(llvm::BasicBlock* bb) {
+    (void)getOrComputeImmediateDominator(bb);
+}
+
+bool QoreIRToLLVM::dominates(llvm::BasicBlock* candidate, llvm::BasicBlock* target) {
+    if (!candidate || !target) {
+        return false;
+    }
+    if (candidate == target) {
+        return true;
+    }
+    // Walk idom chain from target upward, lazily filling in idoms for
+    // mid-block helper BBs.  Defensive visited set guards against
+    // malformed idom entries producing cycles.
+    llvm::BasicBlock* cur = target;
+    std::unordered_set<llvm::BasicBlock*> visited;
+    visited.reserve(8);
+    while (cur) {
+        llvm::BasicBlock* next = getOrComputeImmediateDominator(cur);
+        if (!next) {
+            return false;
+        }
+        if (next == candidate) {
+            return true;
+        }
+        if (!visited.insert(next).second) {
+            return false;
+        }
+        cur = next;
+    }
+    return false;
+}
+
 void QoreIRToLLVM::trackResultForCleanup(llvm::Value* result, uint32_t result_id,
         llvm::Function* llvm_func) {
+    // Phase 2B — SSA-direct path: when the just-emitted call went through
+    // emitMaybeInvoke's EH path AND the current block is on the entry
+    // single-pred chain, track the result as an SSA entry whose lifetime
+    // is handled by per-invoke cleanup LPs and normal-exit emitPendingSsaCleanup.
+    // No entry-block alloca is allocated — SROA/mem2reg can now collapse
+    // the flag-alloca forest that used to dominate HttpServer's compile time.
+    if (canUseSsaCleanup(builder->GetInsertBlock())) {
+        pending_ssa_cleanup.push_back({result, builder->GetInsertBlock()});
+        // Sentinel entry in invoke_alloca_map: some callers look up the
+        // result's alloca to clear it (DotEval base release, StoreLocal
+        // tracking).  Use nullptr to signal "SSA-direct, no alloca".
+        invoke_alloca_map[result_id] = nullptr;
+        return;
+    }
+
     llvm::BasicBlock* entry = &llvm_func->getEntryBlock();
     llvm::IRBuilder<> alloca_builder(entry, entry->begin());
     llvm::AllocaInst* cleanup_alloca = alloca_builder.CreateAlloca(i64_type,
@@ -1644,10 +2052,20 @@ llvm::Value* QoreIRToLLVM::emitMaybeInvoke(llvm::FunctionCallee normal_helper,
             fn->addFnAttr(llvm::Attribute::Cold);
         }
 
-        llvm::BasicBlock* lp = getOrCreateFunctionUnwindLP(module, llvm_func);
+        // Phase 2B — per-invoke cleanup LP: capture the snapshot of
+        // pending_ssa_cleanup that dominates THIS invoke's block.  Falls
+        // back to the legacy shared function-level LP when SSA-direct is
+        // disabled for the function (no pending entries and no common
+        // cleanup block => legacy path still works for future uses).
+        llvm::BasicBlock* invoke_bb = builder->GetInsertBlock();
+        llvm::BasicBlock* lp = createPerInvokeCleanupLP(module, llvm_func, invoke_bb);
         llvm::BasicBlock* cont = llvm::BasicBlock::Create(ctx, "call_cont", llvm_func);
         llvm::Value* result = builder->CreateInvoke(throwing_helper, cont, lp, args);
         builder->SetInsertPoint(cont);
+        // Record that the just-produced result was born on the EH path.
+        // trackResultForCleanup reads + consumes this to decide whether
+        // to track the result SSA-direct or via the legacy cleanup alloca.
+        last_call_was_invoke_eh = true;
         skip_next_exception_check = true;
         return result;
     }
@@ -1760,7 +2178,15 @@ void QoreIRToLLVM::emitExceptionCheck(llvm::Module& module, llvm::Function* llvm
     // Combine: exception exists if (head != nullptr) OR (thread_exit)
     auto* has_exception = builder->CreateOr(has_exception_head, has_exception_thread_exit, "has_exception");
     llvm::BasicBlock* cont = llvm::BasicBlock::Create(ctx, "no_exception", llvm_func);
-    builder->CreateCondBr(has_exception, exception_block, cont);
+    // Phase 2B — route the exception edge through a per-site preamble
+    // BB that decrefs the current pending_ssa_cleanup snapshot before
+    // branching to `exception_block`.  Preamble is dominated by the
+    // current block, so chain-pushed entries are all visible; normal
+    // edge keeps pending_ssa_cleanup intact for downstream uses /
+    // per-invoke LPs.  This is what actually removes the cleanup-alloca
+    // forest that pushes HttpServer's LLVM IR into quadratic codegen.
+    emitCondBrWithSsaPreamble(module, llvm_func, has_exception,
+            exception_block, cont);
     builder->SetInsertPoint(cont);
 }
 
@@ -1789,6 +2215,17 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     // executables with monolithic test methods hit it.
     function_unwind_lp = nullptr;
     skip_next_exception_check = false;
+
+    // Phase 2B — reset per-function SSA-direct cleanup tracking and the
+    // incremental idom map.  entry_block_for_idom is set below, once the
+    // LLVM function has been created and its entry block exists.
+    pending_ssa_cleanup.clear();
+    immediate_dominator.clear();
+    entry_block_for_idom = nullptr;
+    last_call_was_invoke_eh = false;
+    function_common_cleanup = nullptr;
+    common_cleanup_phi_preds.clear();
+    common_cleanup_phi_values.clear();
     {
         static const bool env_eh = getenv("QORE_AOT_EH") != nullptr;
         static const int env_eh_max_calls = []() {
@@ -2212,6 +2649,13 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         }
     }
 
+    // Phase 2B — pin the LLVM function's entry block as the dominance root.
+    // After fast-entry remap (body_bb) or direct lowering, the true entry
+    // is always llvm_func->getEntryBlock(); record it with a nullptr idom
+    // so the dominance walk terminates cleanly there.
+    entry_block_for_idom = &llvm_func->getEntryBlock();
+    immediate_dominator[entry_block_for_idom] = nullptr;
+
     // Lower each block
     for (const auto& block : func.blocks) {
         llvm::BasicBlock* llvm_block = block_map[block.get()];
@@ -2226,11 +2670,23 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         }
         builder->SetInsertPoint(llvm_block);
 
+        // Phase 2B — record this block's immediate dominator based on its
+        // currently-wired predecessors.  No behavioural change in Step 1;
+        // consumed by Step 2's per-invoke cleanup LP predicate.
+        updateImmediateDominator(llvm_block);
+
         for (const auto& inst_ptr : block->instructions) {
             const QoreIRInstruction* inst = inst_ptr.get();
             if (!inst) {
                 continue;
             }
+            // Phase 2B — clear the EH-invoke one-shot flag at instruction
+            // boundary so a dropped trackResultForCleanup from a prior
+            // instruction cannot leak SSA-direct semantics into a later
+            // non-EH call in the same block.  emitMaybeInvoke's EH path
+            // re-sets it for the just-produced result.
+            last_call_was_invoke_eh = false;
+
             // If the current block already has a terminator (e.g., from an Invoke that
             // created a conditional branch), skip remaining instructions in this block.
             if (builder->GetInsertBlock()->getTerminator()) {
@@ -2301,7 +2757,10 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                     }
                     llvm::BasicBlock* cont = llvm::BasicBlock::Create(ctx, "pre_try_flush_cont",
                             llvm_func);
-                    builder->CreateCondBr(has_exception, error_return_block, cont);
+                    // Phase 2B — route exception edge through a preamble
+                    // that decrefs pending SSA; keeps normal flow SSA.
+                    emitCondBrWithSsaPreamble(module, llvm_func, has_exception,
+                            error_return_block, cont);
                     builder->SetInsertPoint(cont);
                     deferred_check_needed = false;
                 }
@@ -2364,12 +2823,32 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                         auto decref_fn = module.getOrInsertFunction("qore_rt_decref",
                                 llvm::FunctionType::get(void_type, {i64_type, ptr_type},
                                     false));
-                        llvm::Value* old_val = builder->CreateLoad(i64_type,
-                                alloca_it->second);
-                        builder->CreateStore(
-                                llvm::ConstantInt::get(i64_type, VAL_NOTHING),
-                                alloca_it->second);
-                        builder->CreateCall(decref_fn, {old_val, xsink_arg});
+                        if (alloca_it->second) {
+                            llvm::Value* old_val = builder->CreateLoad(i64_type,
+                                    alloca_it->second);
+                            builder->CreateStore(
+                                    llvm::ConstantInt::get(i64_type, VAL_NOTHING),
+                                    alloca_it->second);
+                            builder->CreateCall(decref_fn, {old_val, xsink_arg});
+                        } else {
+                            // Phase 2B — SSA-direct sentinel: decref the SSA
+                            // value directly and erase the pending entry so
+                            // the per-invoke LP / normal-exit cleanup doesn't
+                            // decref it again.
+                            auto val_it = values.find(base_id);
+                            if (val_it != values.end() && val_it->second) {
+                                llvm::Value* val = val_it->second;
+                                builder->CreateCall(decref_fn, {val, xsink_arg});
+                                for (auto pit = pending_ssa_cleanup.begin();
+                                        pit != pending_ssa_cleanup.end(); ) {
+                                    if (pit->value == val) {
+                                        pit = pending_ssa_cleanup.erase(pit);
+                                    } else {
+                                        ++pit;
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -2474,6 +2953,12 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     // if any invoke emitted during body lowering needed it.
     finalizeFunctionUnwindLP(module);
 
+    // Phase 2B — finalize the shared common-cleanup block if any
+    // per-invoke LP fed into it.  Populates the phi + shared tail +
+    // resume; a no-op when no EH invoke was emitted or SSA-direct
+    // wasn't active for this function.
+    finalizeFunctionCommonCleanup(module);
+
     // Finalize the JIT deopt block (if used): clean up all tracked allocas
     // (iterator and invoke result) before requesting deopt and returning.
     // Deferred from getOrCreateJitDeoptBlock() so that cleanup covers ALL
@@ -2513,6 +2998,10 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         }
     }
 
+    // Emit llvm.lifetime.start/end annotations for entry-block allocas.
+    // Must run after all terminators are in place (we walk ret/resume sites).
+    emitLifetimeAnnotations(llvm_func);
+
     // Verify the generated LLVM IR
     // In shared debug info mode, skip per-function verification because the DIBuilder
     // hasn't been finalized yet (unfinalised metadata causes spurious "!dbg attachment
@@ -2529,6 +3018,9 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                 // In shared debug info mode, the DIBuilder hasn't been finalized yet.
                 // Ignore spurious dbg errors — module-level verification runs after finalization.
             } else {
+                if (getenv("QORE_DUMP_IR_ON_VERIFY_FAIL")) {
+                    llvm_func->print(llvm::errs());
+                }
                 error = "LLVM verification failed: " + verify_error;
                 return false;
             }
@@ -3192,7 +3684,17 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 if (block_scoped_locals.count(key)) {
                     auto alloca_it = invoke_alloca_map.find(inst->result.id);
                     if (alloca_it != invoke_alloca_map.end()) {
-                        local_cleanup_allocas[key].push_back(alloca_it->second);
+                        // Phase 2B — SSA-direct sentinel (nullptr) requires
+                        // promotion so block-scope UninstantiateLocal can
+                        // drop the ref at block exit (not at function exit).
+                        llvm::Value* ca = alloca_it->second;
+                        if (!ca) {
+                            ca = promoteSsaEntryToAlloca(inst->result.id, module,
+                                    llvm_func);
+                        }
+                        if (ca) {
+                            local_cleanup_allocas[key].push_back(ca);
+                        }
                     }
                 }
                 return true;
@@ -3683,7 +4185,14 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             if (block_scoped_locals.count(key)) {
                 auto alloca_it = invoke_alloca_map.find(inst->operands[0].id);
                 if (alloca_it != invoke_alloca_map.end()) {
-                    local_cleanup_allocas[key].push_back(alloca_it->second);
+                    llvm::Value* ca = alloca_it->second;
+                    if (!ca) {
+                        ca = promoteSsaEntryToAlloca(inst->operands[0].id, module,
+                                llvm_func);
+                    }
+                    if (ca) {
+                        local_cleanup_allocas[key].push_back(ca);
+                    }
                 }
             }
             // Sync to Qore thread-local variable stack so AST callbacks can resolve this local.
@@ -4640,7 +5149,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     }
                     llvm::BasicBlock* cont = llvm::BasicBlock::Create(ctx, "no_exception",
                         static_cast<llvm::Function*>(builder->GetInsertBlock()->getParent()));
-                    builder->CreateCondBr(has_exception, error_return_block, cont);
+                    // Phase 2B — route exception edge through a preamble
+                    // that decrefs pending SSA; normal cont flow keeps it.
+                    emitCondBrWithSsaPreamble(module, llvm_func, has_exception,
+                            error_return_block, cont);
                     builder->SetInsertPoint(cont);
                     // Fall through — incref + cleanup + ret now emitted into cont
                 }
@@ -4659,6 +5171,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             emitPreinstantiatedCleanup(module);
             // Release Invoke/ConstString result refs
             emitInvokeCleanup(module);
+            // Phase 2B — release SSA-direct cleanup entries that dominate
+            // this return site.  The incref above ensured the returned
+            // value's pending entry (if any) cancels out to net-zero ref
+            // change; other entries are unwound here.
+            emitPendingSsaCleanup(module);
             // Uninstantiate locals before returning (pre-instantiated locals are skipped internally)
             emitLocalUninstantiation(module);
             if (boxed_ret) {
@@ -4682,13 +5199,17 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 }
                 llvm::BasicBlock* cont = llvm::BasicBlock::Create(ctx, "no_exception",
                     static_cast<llvm::Function*>(builder->GetInsertBlock()->getParent()));
-                builder->CreateCondBr(has_exception, error_return_block, cont);
+                // Phase 2B — route exception edge through a preamble
+                // that decrefs pending SSA; keeps normal flow SSA.
+                emitCondBrWithSsaPreamble(module, llvm_func, has_exception,
+                        error_return_block, cont);
                 builder->SetInsertPoint(cont);
             }
             emitOnBlockExitExec(module);
             emitIteratorCleanup(module);
             emitPreinstantiatedCleanup(module);
             emitInvokeCleanup(module);
+            emitPendingSsaCleanup(module);
             emitLocalUninstantiation(module);
             builder->CreateRet(llvm::ConstantInt::get(i64_type, VAL_NOTHING));
             return true;
@@ -5850,6 +6371,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             emitIteratorCleanup(module);
             emitPreinstantiatedCleanup(module);
             emitInvokeCleanup(module);
+            emitPendingSsaCleanup(module);
             emitLocalUninstantiation(module);
             builder->CreateRet(llvm::ConstantInt::get(i64_type, VAL_NOTHING));
             return true;
@@ -5896,6 +6418,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             emitIteratorCleanup(module);
             emitPreinstantiatedCleanup(module);
             emitInvokeCleanup(module);
+            emitPendingSsaCleanup(module);
             emitLocalUninstantiation(module);
             builder->CreateRet(llvm::ConstantInt::get(i64_type, VAL_NOTHING));
             return true;
@@ -7598,7 +8121,14 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 auto key = reinterpret_cast<const void*>(linst->local);
                 auto alloca_it = invoke_alloca_map.find(inst->operands[0].id);
                 if (alloca_it != invoke_alloca_map.end()) {
-                    local_cleanup_allocas[key].push_back(alloca_it->second);
+                    llvm::Value* ca = alloca_it->second;
+                    if (!ca) {
+                        ca = promoteSsaEntryToAlloca(inst->operands[0].id, module,
+                                llvm_func);
+                    }
+                    if (ca) {
+                        local_cleanup_allocas[key].push_back(ca);
+                    }
                 }
             }
             if (aot_mode) {
@@ -10416,6 +10946,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             emitIteratorCleanup(module);
             emitPreinstantiatedCleanup(module);
             emitInvokeCleanup(module);
+            emitPendingSsaCleanup(module);
             emitLocalUninstantiation(module);
             builder->CreateRet(llvm::ConstantInt::get(i64_type, VAL_NOTHING));
             return true;

@@ -292,6 +292,34 @@ private:
     // are destroyed, preventing deferred-to-exit cleanup from keeping objects alive.
     std::unordered_map<const void*, std::vector<llvm::Value*>> local_cleanup_allocas;
 
+    // Phase 2B — SSA-direct cleanup tracking.  An alternative to the flat
+    // cleanup-alloca forest: when a refcounted temp would normally be
+    // tracked via invoke_result_allocas, it can instead be tracked as an
+    // SSA value along with its defining basic block.  Per-invoke landing
+    // pads then filter these entries by dominance so only values that
+    // dominate the invoke site are decref'd on the unwind path, which
+    // preserves LLVM SSA dominance.  Populated by trackResultForCleanup
+    // when canUseSsaCleanup's predicate holds.
+    struct SsaCleanupEntry {
+        llvm::Value* value = nullptr;
+        llvm::BasicBlock* def_bb = nullptr;
+    };
+    std::vector<SsaCleanupEntry> pending_ssa_cleanup;
+
+    // Incremental block-level immediate-dominator map, populated as
+    // blocks are entered during lowering.  Conservative approximation:
+    // single-predecessor -> that predecessor; zero or multiple
+    // predecessors -> nullptr (non-dominating).  This is sufficient
+    // for the strict single-pred-chain predicate; broader dominance
+    // (catch-block pushes dominating post-try code, etc.) needs full
+    // Cooper-Harvey-Kennedy — deferred to Step 3.
+    std::unordered_map<llvm::BasicBlock*, llvm::BasicBlock*> immediate_dominator;
+
+    // Entry block of the currently-lowered LLVM function; its idom is
+    // conceptually nullptr.  Cached at function start for the dominance
+    // walk to terminate cleanly.
+    llvm::BasicBlock* entry_block_for_idom = nullptr;
+
     // Remaining use count for each value register ID.  Used to track when a
     // register's last use is reached, enabling early release of DotEval base
     // cleanup allocas.
@@ -360,6 +388,26 @@ private:
     // Reset at function entry, populated on first invoke that needs it, and
     // terminated with a ret NOTHING after invoke_result_allocas are finalized.
     llvm::BasicBlock* function_unwind_lp = nullptr;
+
+    // Phase 2B — per-invoke landing pads: set by emitMaybeInvoke's EH path
+    // whenever it just emitted a CreateInvoke + per-invoke cleanup LP.
+    // trackResultForCleanup reads + consumes the flag to decide SSA-direct
+    // vs legacy alloca tracking for the just-produced result.
+    bool last_call_was_invoke_eh = false;
+
+    // Phase 2B — shared common-cleanup block.  All per-invoke LPs branch
+    // here after emitting their own filtered pending_ssa_cleanup decrefs.
+    // Populated by finalizeFunctionCommonCleanup with a phi that merges
+    // landingpad values from every feeding LP, followed by the shared
+    // cleanup tail (on_block_exit, iterator, preinstantiated, invoke
+    // (allocas), local uninstantiation) and a resume that rethrows.
+    llvm::BasicBlock* function_common_cleanup = nullptr;
+
+    // Phase 2B — incoming edges feeding function_common_cleanup's phi.
+    // Populated by createPerInvokeCleanupLP; consumed by
+    // finalizeFunctionCommonCleanup.  Parallel arrays for clarity.
+    std::vector<llvm::BasicBlock*> common_cleanup_phi_preds;
+    std::vector<llvm::Value*> common_cleanup_phi_values;
 
     // Returns the function-level unwind landing pad, creating it if needed.
     // The block starts with a `landingpad { ptr, i32 } cleanup` instruction and
@@ -499,6 +547,107 @@ private:
 
     // Emit qore_rt_iterator_cleanup calls for active iterators
     void emitIteratorCleanup(llvm::Module& module);
+
+    // Emit llvm.lifetime.start after each entry-block alloca and
+    // llvm.lifetime.end before each ret/resume terminator.  Helps SROA/mem2reg
+    // understand alloca lifetimes and promote more storage to SSA, which
+    // collapses the flag-alloca forest that makes -O3 compile times pathological
+    // on large functions.  Called once per function, after all lowering and
+    // finalization is complete but before IR verification.
+    void emitLifetimeAnnotations(llvm::Function* llvm_func);
+
+    // Phase 2B — incremental idom update.  Called at each new LLVM basic
+    // block entry during lowering.  Records the block's immediate
+    // dominator based on its currently-wired predecessors: exactly one
+    // predecessor -> that predecessor; otherwise nullptr.  Broader
+    // dominance (full Cooper-Harvey-Kennedy) is deferred to Step 3.
+    void updateImmediateDominator(llvm::BasicBlock* bb);
+
+    // Phase 2B — get (or lazily compute) the immediate dominator of a
+    // block.  Covers mid-block helper BBs (invoke cont, guard
+    // continuation, check-cont) that aren't iterated by the top-level
+    // block-lowering loop.  Caches the result in immediate_dominator.
+    llvm::BasicBlock* getOrComputeImmediateDominator(llvm::BasicBlock* bb);
+
+    // Phase 2B — block-level dominance query.  Returns true if
+    // `candidate` dominates `target` per the incremental
+    // immediate_dominator map.  Walks up the idom chain from target
+    // until candidate is found or the chain terminates.
+    bool dominates(llvm::BasicBlock* candidate, llvm::BasicBlock* target);
+
+    // Phase 2B — conservative predicate: is `bb` reachable from the
+    // function entry along a single-predecessor-only chain?  Used by the
+    // strict-mode Step 2 predicate so we only push SSA-direct entries
+    // where cleanup paths are trivially dominance-safe.
+    bool isOnStraightLineChain(llvm::BasicBlock* bb);
+
+    // Phase 2B — decide whether to track a refcounted temp as an SSA
+    // entry or via the legacy cleanup alloca.  Returns true only when
+    // aot_eh_enabled && the just-emitted call was an EH invoke &&
+    // current_bb is on the entry single-pred chain.  Consumes
+    // `last_call_was_invoke_eh` (clears it) when true.  Deferred-mode
+    // functions are eligible: the deferred tail-poll sites promote
+    // pending SSA to allocas before branching to error_return_block.
+    bool canUseSsaCleanup(llvm::BasicBlock* current_bb);
+
+    // Phase 2B — emit a per-invoke cleanup landing pad right after an
+    // EH-path CreateInvoke.  Fast path: when no pending_ssa_cleanup
+    // entry dominates `invoke_bb`, reuses the shared function-level
+    // unwind landing pad (avoids an explosion of empty per-invoke LP
+    // BBs — Logger dropped from 452 to 52 inv_lp BBs after this).
+    // Slow path: creates a fresh BB with a landingpad { ptr, i32 }
+    // cleanup, derefs the dominating snapshot of pending_ssa_cleanup
+    // in LIFO order, and branches to function_common_cleanup.  Records
+    // the per-LP value for the shared phi used by
+    // finalizeFunctionCommonCleanup.  Returns the LP BB to use.
+    llvm::BasicBlock* createPerInvokeCleanupLP(llvm::Module& module,
+            llvm::Function* llvm_func, llvm::BasicBlock* invoke_bb);
+
+    // Phase 2B — terminate the shared common-cleanup block after all
+    // lowering is complete.  Emits a phi over all feeding LP edges,
+    // then the shared tail (on_block_exit, iterators, preinstantiated
+    // locals, invoke allocas, local uninstantiation) and resume().
+    void finalizeFunctionCommonCleanup(llvm::Module& module);
+
+    // Phase 2B — emit decrefs for every pending_ssa_cleanup entry whose
+    // def_bb dominates the current insert block.  Used by Return /
+    // ReturnNothing / Throw / Rethrow / ThreadExit / error_return_block
+    // finalization / jit_deopt_block finalization to release SSA-tracked
+    // temps along normal exit paths.
+    void emitPendingSsaCleanup(llvm::Module& module);
+
+    // Phase 2B — spill all currently-pending SSA-direct cleanup entries
+    // to per-temp cleanup allocas and clear pending_ssa_cleanup.  Used
+    // at the point of a control-flow branch to a shared cleanup target
+    // (error_return_block, jit_deopt_block) whose idom is not known to
+    // dominate the SSA value's def_bb.  After promotion, the shared
+    // block's emitInvokeCleanup covers the cleanup instead.
+    void promotePendingSsaToAllocas(llvm::Module& module,
+            llvm::Function* llvm_func);
+
+    // Phase 2B — spill pending_ssa_cleanup to cleanup allocas then emit
+    // `CondBr(cond, exception_target, normal_target)`.  Promotion runs
+    // in the current block BEFORE the branch so both the exception and
+    // normal edges see an empty pending_ssa_cleanup downstream; the
+    // promoted allocas are decref'd by the shared target's emitInvoke-
+    // Cleanup.  A per-site SSA-decref preamble BB on the exception edge
+    // was tried and reverted — with conservative single-pred idom it
+    // produced SSA dominance violations for catch-block pushes whose
+    // decrefs landed in post-try merge BBs.  Used by emitException-
+    // Check and the deferred-tail checks (pre-try-flush / Return /
+    // ReturnNothing deferred paths).
+    void emitCondBrWithSsaPreamble(llvm::Module& module,
+            llvm::Function* llvm_func, llvm::Value* cond,
+            llvm::BasicBlock* exception_target, llvm::BasicBlock* normal_target);
+
+    // Phase 2B — promote a single SSA-direct cleanup entry (identified
+    // by its IR result id) to a cleanup alloca.  Used when downstream
+    // bookkeeping — local_cleanup_allocas for block-scoped locals, etc.
+    // — needs a concrete alloca it can reference.  Returns the new (or
+    // existing) alloca, or nullptr if the id isn't tracked.  A no-op
+    // when the id already maps to a real alloca.
+    llvm::AllocaInst* promoteSsaEntryToAlloca(uint32_t result_id,
+            llvm::Module& module, llvm::Function* llvm_func);
 
     // Track a runtime helper result for cleanup at function exit.
     // Creates an alloca initialized to NOTHING in the entry block, stores the result,
