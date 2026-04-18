@@ -4548,7 +4548,7 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
     // Canonicalize the context directory so paths built below match the
     // `loc->file` strings recorded during parsePending (we pass the same
     // canonical paths to the parser).  realpath returns a heap-allocated
-    // string; free it via unique_ptr.
+    // buffer that must be freed with std::free.
     auto canon = [](const char* p) -> std::string {
         char* r = realpath(p, nullptr);
         if (!r) {
