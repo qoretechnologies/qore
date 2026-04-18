@@ -5546,6 +5546,19 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 ? sprintf("%s: %s: %s", get_ex_pos(ex), ex.err, ex.desc)
                 : get_exception_string(ex);
             logError("cid %d: multiplexed persistent handler error: %s", cx.id, etxt);
+            # Drain any requests routed onto the persistent queue between
+            # the last pq.get() and this error.  Without this drain, a
+            # request queued while we were processing the failing request
+            # (e.g. an End-Persistent cleanup sent in parallel with an
+            # insert, or any second request on the same connection that
+            # matched the persistence filter) is stranded on the queue:
+            # deregister stops future dispatches but does not drain what
+            # was already enqueued.  The client then waits for its full
+            # request_timeout (typically 120 s) before retrying on a
+            # fresh connection.
+            deregister_fn(sock_key);
+            drainOrphanedPersistentRequests(request_helper, pq, s, \cx,
+                cx_listener, phi, info);
         }
     }
 

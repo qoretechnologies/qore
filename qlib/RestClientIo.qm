@@ -1986,6 +1986,19 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             }
 
             if (!req_error_passthru && raw.status_code >= 300) {
+                # Unwrap server-produced typed errors: Qorus and similar
+                # services return error responses as {err, desc, arg}
+                # hashes so callers can catch specific typed exceptions
+                # (e.g. SQLUTIL-ERROR) instead of generic REST-RESPONSE-ERROR.
+                # Mirrors the behaviour of the synchronous
+                # @ref RestClient::RestClient "RestClient" class.
+                if (resp_body.typeCode() == NT_HASH && resp_body.err) {
+                    auto desc = resp_body.desc;
+                    if (desc.typeCode() == NT_STRING) {
+                        trim desc;
+                    }
+                    throw resp_body.err, desc, resp_body.arg;
+                }
                 throw "REST-RESPONSE-ERROR",
                     sprintf("HTTP %d response received", raw.status_code),
                     <RestClient::RestResponseInfo>{
