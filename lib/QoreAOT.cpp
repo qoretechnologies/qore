@@ -3229,6 +3229,120 @@ static void emitModuleDescFunction(llvm::LLVMContext& ctx, llvm::Module& module,
     builder.CreateRetVoid();
 }
 
+//! Phase 4 slice 5: sanitize a free-form name to a valid C identifier
+//! tail ([A-Za-z0-9_]; all else -> '_'). Used for fragment symbol names
+//! so `<mod>_<file>_fragment_*` survives LLVM's symbol validation and
+//! GNU ld unchanged.
+static std::string sanitizeCIdentifier(const std::string& name) {
+    std::string out = name;
+    for (char& c : out) {
+        if (!((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z')
+                || (c >= '0' && c <= '9') || c == '_')) {
+            c = '_';
+        }
+    }
+    return out;
+}
+
+//! Phase 4 slice 5: extract a filename basename without extension.
+//! `/tmp/foo/bar.qc` -> `bar`, `AsyncSocketIo.qm` -> `AsyncSocketIo`.
+static std::string fileBasenameNoExt(const std::string& path) {
+    std::string base = path;
+    size_t slash = base.rfind('/');
+    if (slash != std::string::npos) {
+        base = base.substr(slash + 1);
+    }
+    size_t dot = base.rfind('.');
+    if (dot != std::string::npos && dot > 0) {
+        base = base.substr(0, dot);
+    }
+    return base;
+}
+
+//! Phase 4 slice 5: emit the exported fragment symbols for a per-file
+//! `.qo`.
+/**
+    Each per-file `.qo` (primary or secondary) emits:
+
+    - a private blob holding the uncompressed metadata bytes that
+      describe only this file's contributions
+      (`qore_aot_<sanmod>_<sanfile>_fragment_blob`);
+    - an exported accessor
+      `extern "C" const void* qore_<sanmod>_<sanfile>_fragment_data(size_t* out_len)`
+      that returns a pointer to the blob and, if @p out_len is non-null,
+      stores the blob length;
+    - an exported `i32` constant
+      `qore_<sanmod>_<sanfile>_fragment_order` giving the file's
+      deterministic position within the module (primary `.qm` = 0;
+      secondaries sorted by basename, index + 1).
+
+    Slice 6 uses these symbols to dlsym / objcopy-extract fragments
+    from a set of per-file `.qo`s, sort by `fragment_order`, and
+    concatenate the blobs into a single monolithic metadata image for
+    the final `.qmod`.
+
+    The fragment blob uses the **same binary format** as a full
+    module's metadata (per design/aot-phase4-qo-object-files.md
+    §Link-time aggregation) — just with narrower content.  Keeping
+    it uncompressed means slice 6's aggregator doesn't have to
+    decompress every fragment before merging.
+*/
+static void emitFragmentSymbols(llvm::LLVMContext& ctx, llvm::Module& module,
+        const std::string& mod_name, const std::string& file_basename_san,
+        const std::vector<uint8_t>& fragment_metadata,
+        int fragment_order) {
+    auto* i32_type = llvm::Type::getInt32Ty(ctx);
+    auto* i64_type = llvm::Type::getInt64Ty(ctx);
+    auto* ptr_type = llvm::PointerType::get(ctx, 0);
+
+    const std::string sanmod = sanitizeCIdentifier(mod_name);
+    const std::string sanfile = file_basename_san;  // already sanitized by caller
+    const std::string prefix_private = "qore_aot_" + sanmod + "_" + sanfile;
+    const std::string prefix_public = "qore_" + sanmod + "_" + sanfile;
+
+    // Private global: the raw fragment bytes.
+    llvm::Constant* blob_init = llvm::ConstantDataArray::get(ctx,
+        llvm::ArrayRef<uint8_t>(fragment_metadata.data(), fragment_metadata.size()));
+    auto* blob_gv = new llvm::GlobalVariable(module, blob_init->getType(), true,
+        llvm::GlobalValue::PrivateLinkage, blob_init, prefix_private + "_fragment_blob");
+
+    // Exported i32 global: fragment_order.
+    auto* order_gv = new llvm::GlobalVariable(module, i32_type, true,
+        llvm::GlobalValue::ExternalLinkage,
+        llvm::ConstantInt::get(i32_type, fragment_order),
+        prefix_public + "_fragment_order");
+    order_gv->setDLLStorageClass(llvm::GlobalValue::DLLExportStorageClass);
+
+    // Exported accessor function: const void* fn(size_t* out_len).
+    auto* fn_type = llvm::FunctionType::get(ptr_type, {ptr_type}, false);
+    llvm::Function* fn = llvm::Function::Create(fn_type,
+        llvm::Function::ExternalLinkage,
+        prefix_public + "_fragment_data", module);
+    fn->setDLLStorageClass(llvm::GlobalValue::DLLExportStorageClass);
+
+    auto* entry_bb = llvm::BasicBlock::Create(ctx, "entry", fn);
+    llvm::IRBuilder<> builder(entry_bb);
+
+    llvm::Value* out_len_arg = &*fn->arg_begin();
+    // If out_len != nullptr, store the length.  Passing nullptr is
+    // explicitly supported for "just give me the pointer" callers.
+    auto* null_ptr = llvm::ConstantPointerNull::get(
+        llvm::cast<llvm::PointerType>(ptr_type));
+    auto* is_null = builder.CreateICmpEQ(out_len_arg, null_ptr);
+    auto* store_bb = llvm::BasicBlock::Create(ctx, "store_len", fn);
+    auto* ret_bb = llvm::BasicBlock::Create(ctx, "ret", fn);
+    builder.CreateCondBr(is_null, ret_bb, store_bb);
+    builder.SetInsertPoint(store_bb);
+    builder.CreateStore(
+        llvm::ConstantInt::get(i64_type, fragment_metadata.size()),
+        out_len_arg);
+    builder.CreateBr(ret_bb);
+    builder.SetInsertPoint(ret_bb);
+    llvm::Value* ptr = builder.CreateInBoundsGEP(blob_gv->getValueType(), blob_gv,
+        {builder.getInt64(0), builder.getInt64(0)});
+    builder.CreateRet(ptr);
+}
+
 //! Generate LLVM IR for binary module ABI symbols
 /** Embeds serialized metadata blob and calls qore_aot_module_init_v3.
 
@@ -4488,35 +4602,82 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
             return false;
         }
 
+        // Phase 4 slice 5: capture sibling filenames in a sorted
+        // std::vector to make fragment_order deterministic across
+        // independent qcc invocations.  The underlying fileList from
+        // QoreDir::list() is not order-guaranteed (inode / dir-entry
+        // order).  Primary (the `.qm`) always takes fragment_order 0;
+        // each secondary's order is 1 + its alphabetical index in this
+        // vector.
+        std::vector<std::string> sorted_secondary_names;
+        if (fileList && fileList->size() > 0) {
+            sorted_secondary_names.reserve(fileList->size());
+            for (size_t i = 0; i < fileList->size(); ++i) {
+                const QoreStringNode* fn =
+                    fileList->retrieveEntry(i).get<const QoreStringNode>();
+                if (fn) {
+                    sorted_secondary_names.emplace_back(fn->c_str());
+                }
+            }
+            std::sort(sorted_secondary_names.begin(), sorted_secondary_names.end());
+        }
+
         std::string combined_source = main_source;
 
-        if (fileList && fileList->size() > 0) {
-            for (size_t i = 0; i < fileList->size(); ++i) {
-                const QoreStringNode* filename =
-                    fileList->retrieveEntry(i).get<const QoreStringNode>();
-                if (!filename) {
-                    continue;
-                }
-                std::string file_path = dir_canon + "/" + filename->c_str();
-                std::string file_source = QoreDir::get_file_content(file_path.c_str());
-                if (file_source.empty()) {
-                    printd(2, "AOT: warning: skipping empty file: %s\n", file_path.c_str());
-                    continue;
-                }
-                qpgm->parsePending(file_source.c_str(), file_path.c_str(), &xsink, &wsink,
-                    QP_WARN_DEFAULT);
-                if (xsink.isException()) {
-                    mod_ctx.close();
-                    xsink.handleExceptions();
-                    error = "parse error in component file: " + file_path;
-                    return false;
-                }
-                if (!combined_source.empty() && combined_source.back() != '\n') {
-                    combined_source += '\n';
-                }
-                combined_source += "# __AOT_FILE_BREAK__\n";
-                combined_source += file_source;
+        // Parse siblings in the sorted order so parse-time behaviour is
+        // deterministic too.  This supersedes the previous natural
+        // directory-order walk without changing observable semantics.
+        for (const std::string& fname : sorted_secondary_names) {
+            std::string file_path = dir_canon + "/" + fname;
+            std::string file_source = QoreDir::get_file_content(file_path.c_str());
+            if (file_source.empty()) {
+                printd(2, "AOT: warning: skipping empty file: %s\n", file_path.c_str());
+                continue;
             }
+            qpgm->parsePending(file_source.c_str(), file_path.c_str(), &xsink, &wsink,
+                QP_WARN_DEFAULT);
+            if (xsink.isException()) {
+                mod_ctx.close();
+                xsink.handleExceptions();
+                error = "parse error in component file: " + file_path;
+                return false;
+            }
+            if (!combined_source.empty() && combined_source.back() != '\n') {
+                combined_source += '\n';
+            }
+            combined_source += "# __AOT_FILE_BREAK__\n";
+            combined_source += file_source;
+        }
+
+        // Phase 4 slice 5: compute fragment_order for the target file.
+        // Primary .qm = 0; secondaries = 1 + alphabetical index.
+        // A negative result means the target is neither the primary
+        // .qm nor a .qc/.ql recognized by the dir scan — reject so
+        // downstream slice 6 aggregation can rely on order being in
+        // [0, num_files).
+        int fragment_order = -1;
+        if (is_primary) {
+            fragment_order = 0;
+        } else {
+            std::string target_basename;
+            {
+                size_t slash = target_canon.rfind('/');
+                target_basename = (slash != std::string::npos)
+                    ? target_canon.substr(slash + 1) : target_canon;
+            }
+            for (size_t i = 0; i < sorted_secondary_names.size(); ++i) {
+                if (sorted_secondary_names[i] == target_basename) {
+                    fragment_order = static_cast<int>(i + 1);
+                    break;
+                }
+            }
+        }
+        if (fragment_order < 0) {
+            mod_ctx.close();
+            error = "target file '" + target_canon + "' is neither the module's "
+                "main .qm nor a sibling .qc/.ql (expected under --context="
+                + dir_canon + ")";
+            return false;
         }
 
         qpgm->parseCommit(&xsink);
@@ -4590,15 +4751,18 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
             is_primary ? "per-file .qo (primary)" : "per-file .qo (secondary)",
             compiled_count, total_funcs, failed_count, compiled_funcs);
 
-        if (is_primary) {
-            // Emit full module ABI for the primary .qo: metadata fragment
-            // covering just the .qm's own contributions, module-info
-            // globals, module descriptor and the public
-            // `qore_<mod>_register` entry point.  When the host binary
-            // links this primary .qo alone it gets a self-registerable
-            // module whose namespace tree covers only the .qm items —
-            // items from sibling .qc files are latent until slice 6
-            // aggregation stitches the fragments together.
+        // Phase 4 slice 5: build the per-file fragment metadata blob
+        // (uncompressed).  Both primary and secondary `.qo`s carry a
+        // fragment describing only their own contributions — the
+        // aggregator in slice 6 will extract these via the exported
+        // `qore_<sanmod>_<sanfile>_fragment_data` accessors, sort by
+        // `_fragment_order`, and concatenate.  The blob uses the same
+        // binary format as a monolithic module; compression is applied
+        // downstream only to the primary's internal self-register
+        // copy.
+        std::vector<uint8_t> uncompressed_metadata;
+        std::vector<AOTCompiledFuncWithSlots> func_slots;
+        {
             QoreAOTBinaryWriter writer;
             QoreAOTBinaryHeader hdr{};
             hdr.magic = QORE_AOT_BINARY_MAGIC;
@@ -4629,7 +4793,6 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
                 return false;
             }
 
-            std::vector<AOTCompiledFuncWithSlots> func_slots;
             for (auto& cf : compiled_funcs) {
                 AOTCompiledFuncWithSlots fws;
                 fws.name = cf.name;
@@ -4673,36 +4836,60 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
                 }
             }
 
-            std::vector<uint8_t> metadata;
             hdr.section_count = 0;
-            if (!writer.finalize(hdr, metadata)) {
+            if (!writer.finalize(hdr, uncompressed_metadata)) {
                 error = "failed to finalize per-file module binary metadata";
                 return false;
             }
+        }
 
-            printf("AOT: per-file primary metadata blob: %d bytes", (int)metadata.size());
+        printf("AOT: per-file %s fragment blob: %d bytes (uncompressed), order=%d\n",
+            is_primary ? "primary" : "secondary",
+            (int)uncompressed_metadata.size(), fragment_order);
+
+        // Phase 4 slice 5: emit the exported fragment symbols
+        // (`qore_<sanmod>_<sanfile>_fragment_data` +
+        // `..._fragment_order`) so slice 6's link-time aggregator can
+        // extract and merge fragments across a module's `.qo`s.
+        const std::string file_basename_san = sanitizeCIdentifier(
+            fileBasenameNoExt(target_canon));
+        emitFragmentSymbols(ctx, *module, mod_info.name, file_basename_san,
+            uncompressed_metadata, fragment_order);
+
+        if (is_primary) {
+            // Primary `.qo`: reuse the uncompressed blob to drive the
+            // self-register path, compressing in-place for
+            // `qore_aot_mod_metadata` (the private global that the
+            // module's init_v3 adapter calls with the compressed
+            // bytes).  The fragment blob stays uncompressed so the
+            // slice-6 aggregator never has to decompress a fragment
+            // before merging.
+            std::vector<uint8_t> selfreg_metadata = uncompressed_metadata;
+
+            printf("AOT: per-file primary self-register blob: %d bytes",
+                (int)selfreg_metadata.size());
             const uint32_t AOT_HEADER_BYTES = 60;
-            std::vector<uint8_t>* use_metadata = &metadata;
-            if (!include_source && metadata.size() > AOT_HEADER_BYTES) {
-                std::vector<uint8_t> post_header(metadata.begin() + AOT_HEADER_BYTES,
-                    metadata.end());
+            if (!include_source && selfreg_metadata.size() > AOT_HEADER_BYTES) {
+                std::vector<uint8_t> post_header(
+                    selfreg_metadata.begin() + AOT_HEADER_BYTES,
+                    selfreg_metadata.end());
                 std::vector<uint8_t> compressed_post;
                 std::string compress_error;
                 if (compressMetadata(post_header, compressed_post, compress_error)) {
-                    int compressed_total = AOT_HEADER_BYTES + (int)compressed_post.size();
+                    int compressed_total = AOT_HEADER_BYTES
+                        + (int)compressed_post.size();
                     printf(" (compressed to %d bytes, %.1f%%)\n", compressed_total,
-                        100.0 * compressed_total / (int)metadata.size());
-                    metadata[34] = 1;
-                    metadata.resize(AOT_HEADER_BYTES);
-                    metadata.insert(metadata.end(), compressed_post.begin(),
-                        compressed_post.end());
+                        100.0 * compressed_total / (int)selfreg_metadata.size());
+                    selfreg_metadata[34] = 1;  // compression flag in header
+                    selfreg_metadata.resize(AOT_HEADER_BYTES);
+                    selfreg_metadata.insert(selfreg_metadata.end(),
+                        compressed_post.begin(), compressed_post.end());
                 } else {
                     printf("\n");
                 }
             } else {
                 printf("\n");
             }
-            hdr.compression = include_source ? 0 : (use_metadata != &metadata ? 1 : 0);
 
             for (auto& cif : compiled_init_funcs) {
                 AOTCompiledFunc cf;
@@ -4722,19 +4909,13 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
             // path so the module-info globals are per-module-prefixed
             // (`qore_<mod>_module_name` etc.) and the register function
             // `qore_<mod>_register` is emitted — matching slice 3.
-            generateModuleABIV2(ctx, *module, *use_metadata, qm_path.c_str(),
+            generateModuleABIV2(ctx, *module, selfreg_metadata, qm_path.c_str(),
                 qpgm->getParseOptions(), mod_info, compiled_funcs,
                 /*compile_only=*/true);
-        } else {
-            // Secondary `.qo`: code-only. No metadata blob, no
-            // module-info globals, no register function. Compiled LLVM
-            // functions carry external linkage so they can be relocated
-            // into a primary-driven link at slice 6 aggregation time.
-            if (compiled_funcs.empty() && compiled_init_funcs.empty()) {
-                printf("AOT: per-file secondary .qo has no emitted functions "
-                    "(target='%s')\n", target_canon.c_str());
-            }
         }
+        // Secondary .qo's path ends here: compiled LLVM code + fragment
+        // symbols only.  No module-info globals, no register fn, no
+        // self-register invocation.
 
         di_builder.finalize();
 
