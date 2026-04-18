@@ -669,6 +669,21 @@ private:
     */
     DLLLOCAL bool processCommands(IoThreadContext& t, ExceptionSink* xsink);
 
+    //! Releases all refcounted resources on a command that will not be
+    //! processed — used to avoid leaks when the I/O thread is shutting
+    //! down and commands were drained from cmdq but no further processing
+    //! will occur.
+    /** Handles SubmitOp (derefs sock, spop, priv ref, poll_info, other,
+        queue), ContinuePollResult (derefs result/ex hashes), and signals
+        any condition-variable waiters (CancelOwner/CancelByProgram/GetInfo/
+        Cancel) so callers don't hang.
+
+        @note Caller must hold @ref m — the helper touches
+        @ref cancel_cond_map (shared state) in the @ref IoCommand::Cancel
+        case.
+    */
+    DLLLOCAL void cleanupAbandonedCommand(Command& cmd, ExceptionSink* xsink);
+
     //! Cancel an operation internally (delivers result, called from I/O thread)
     DLLLOCAL void doCancelIntern(PollInfo& pinfo, ExceptionSink* xsink);
 

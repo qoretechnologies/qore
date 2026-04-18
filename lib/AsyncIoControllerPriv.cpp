@@ -218,6 +218,96 @@ void AsyncIoControllerPriv::PollInfo::cleanup(ExceptionSink* xsink) {
     }
 }
 
+void AsyncIoControllerPriv::cleanupAbandonedCommand(Command& cmd, ExceptionSink* xsink) {
+    // Release refs and signal waiters for a command drained from cmdq that
+    // will not be processed (because the I/O thread received Quit or is
+    // exiting in shutdown).
+    switch (cmd.cmd) {
+        case IoCommand::SubmitOp: {
+            if (cmd.submit_sock_obj) {
+                cmd.submit_sock_obj->deref(xsink);
+                cmd.submit_sock_obj = nullptr;
+            }
+            if (cmd.submit_sock) {
+                cmd.submit_sock->deref(xsink);
+                cmd.submit_sock = nullptr;
+            }
+            if (cmd.submit_spop_obj) {
+                cmd.submit_spop_obj->deref(xsink);
+                cmd.submit_spop_obj = nullptr;
+            }
+            if (cmd.submit_spop_base) {
+                cmd.submit_spop_base->deref(xsink);
+                cmd.submit_spop_base = nullptr;
+            }
+            if (cmd.submit_poll_info) {
+                cmd.submit_poll_info->deref(xsink);
+                cmd.submit_poll_info = nullptr;
+            }
+            if (cmd.submit_other) {
+                cmd.submit_other->deref(xsink);
+                cmd.submit_other = nullptr;
+            }
+            if (cmd.submit_queue) {
+                cmd.submit_queue->deref(xsink);
+                cmd.submit_queue = nullptr;
+            }
+            break;
+        }
+        case IoCommand::ContinuePollResult: {
+            if (cmd.continue_poll_result) {
+                cmd.continue_poll_result->deref(xsink);
+                cmd.continue_poll_result = nullptr;
+            }
+            if (cmd.continue_poll_ex) {
+                cmd.continue_poll_ex->deref(xsink);
+                cmd.continue_poll_ex = nullptr;
+            }
+            break;
+        }
+        case IoCommand::Cancel: {
+            // Signal cancel waiter if present so waitCancel() returns
+            auto cit = cancel_cond_map.find(cmd.key);
+            if (cit != cancel_cond_map.end()) {
+                cit->second->broadcast();
+                delete cit->second;
+                cancel_cond_map.erase(cit);
+            }
+            break;
+        }
+        case IoCommand::CancelByProgram:
+        case IoCommand::CancelOwner:
+        case IoCommand::GetInfo: {
+            // Multi-thread commands: decrement pending_threads; last signals
+            if (cmd.pending_threads) {
+                if (cmd.pending_threads->fetch_sub(1, std::memory_order_acq_rel) == 1) {
+                    if (cmd.cancel_done_flag) {
+                        *cmd.cancel_done_flag = true;
+                    }
+                    if (cmd.done_cond) {
+                        cmd.done_cond->broadcast();
+                    }
+                }
+            } else if (cmd.done_cond) {
+                if (cmd.cancel_done_flag) {
+                    *cmd.cancel_done_flag = true;
+                }
+                cmd.done_cond->broadcast();
+            }
+            break;
+        }
+        default:
+            // WakeSocket, AddTimer, CancelTimer, Quit — no ref-holding fields
+            if (cmd.done_cond) {
+                if (cmd.cancel_done_flag) {
+                    *cmd.cancel_done_flag = true;
+                }
+                cmd.done_cond->broadcast();
+            }
+            break;
+    }
+}
+
 // --- QoreCallDispatcher implementation ---
 
 QoreCallDispatcher::QoreCallDispatcher(int max_workers, AsyncIoControllerPriv* controller)
@@ -355,7 +445,10 @@ void QoreCallDispatcher::stop(ExceptionSink* xsink) {
             item.controller->deref(xsink);
         }
         if (item.pgm) {
-            item.pgm->deref(xsink);
+            // Must match enqueue()'s depRef() — using deref() here decrements
+            // the strong refcount but not the dc counter, stranding the
+            // program past shutdown.
+            item.pgm->depDeref();
         }
     }
     async_queue.clear();
@@ -3024,8 +3117,18 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
         {
             std::vector<Command> pending_cmds;
             t.cmdq.drain(pending_cmds);
+            // When the controller is actually shutting down (stop/stopClear),
+            // no new I/O thread will restart — re-queuing SubmitOp would
+            // strand its refs in cmdq forever.  Release resources instead.
+            // We are already holding the main mutex m at this point, so
+            // reading shutting_down without re-locking is safe.
+            const bool final_shutdown = shutting_down;
             for (auto& pending_cmd : pending_cmds) {
                 if (pending_cmd.cmd == IoCommand::SubmitOp) {
+                    if (final_shutdown) {
+                        cleanupAbandonedCommand(pending_cmd, xsink);
+                        continue;
+                    }
                     // Re-queue for the next I/O thread to process
                     t.cmdq.push(std::move(pending_cmd));
                     restart_after_exit = true;
@@ -3148,7 +3251,8 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
             t.cmdq.drain(batch);
         }
         ASYNC_IO_TRACE("processCommands: drained batch size=%d\n", (int)batch.size());
-        for (auto& cmd : batch) {
+        for (size_t batch_idx = 0; batch_idx < batch.size(); ++batch_idx) {
+            auto& cmd = batch[batch_idx];
             switch (cmd.cmd) {
                 case IoCommand::Quit: {
                     // Collect PollInfo copies and cancel conditions under lock
@@ -3196,6 +3300,19 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                         if (quit_conds[i]) {
                             quit_conds[i]->broadcast();
                             delete quit_conds[i];
+                        }
+                    }
+                    // Release resources on commands that followed Quit in
+                    // this batch — they would otherwise be silently
+                    // discarded when batch is destroyed, leaking their
+                    // refcounted fields.  See cleanupAbandonedCommand().
+                    //
+                    // cleanupAbandonedCommand requires the caller to hold m
+                    // (it touches cancel_cond_map for Cancel commands).
+                    {
+                        AutoLocker al2(m);
+                        for (size_t j = batch_idx + 1; j < batch.size(); ++j) {
+                            cleanupAbandonedCommand(batch[j], xsink);
                         }
                     }
                     return true;
@@ -3490,18 +3607,32 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                     }
                     // Worker thread submitted an operation — insert into cache
                     // (cache is I/O-thread-only, no lock needed)
-                    if (cmd.submit_replace) {
+                    //
+                    // If an existing entry is present, clean it up before
+                    // overwriting below.  The pinfo.* assignments below
+                    // overwrite pointers without dereffing, so without this
+                    // step the previous pinfo's refcounted fields leak.
+                    // Managers re-submit the same spop after each onComplete
+                    // cycle (without replace=True), relying on this cleanup.
+                    {
                         auto it = t.cache.find(cmd.key);
                         if (it != t.cache.end()) {
                             if (it->second.spop_obj == cmd.submit_spop_obj) {
-                                // Same spop — cleanup without abort
+                                // Same spop re-submitted — cleanup without cancel
+                                // (canceling would deliver an unexpected
+                                // onComplete(canceled=True) for an op we're
+                                // immediately re-queueing).
                                 PollInfo old_pinfo = it->second;
                                 it->second = PollInfo();
                                 t.cache.erase(it);
                                 t.cache_size.fetch_sub(1, std::memory_order_relaxed);
                                 old_pinfo.cleanup(xsink);
                             } else {
-                                // Different spop — cancel old entry
+                                // Different spop on same key — cancel the
+                                // old operation and clean up.  Only valid
+                                // when the caller passed replace=True; for
+                                // replace=False this is a caller bug but
+                                // we still avoid leaking.
                                 unregisterExtraFds(t, cmd.key, xsink);
                                 unregisterFromEventLoop(t, cmd.key, xsink);
                                 PollInfo old_pinfo = it->second;
