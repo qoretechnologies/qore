@@ -644,6 +644,57 @@ void Http3ClientPollOperationPriv::waitStreamCapacity(int64_t timeout_ms) {
     --stream_blocked_waiters;
 }
 
+void Http3ClientPollOperationPriv::installFrameState(int64_t stream_id, Queue* msg_queue,
+        ExceptionSink* xsink) {
+    // Send callback runs on the I/O thread from within execute() -> feedData.
+    // sendQuicClientStreamData enqueues the DATA frame; ngtcp2 flushes it in
+    // the surrounding continuePoll write cycle.
+    QoreSocketObject* sock_ptr = sock_obj;
+    WebSocketStreamFrameState::SendCallback send_cb =
+        [sock_ptr, stream_id](BinaryNode* frame_bytes) {
+            if (!frame_bytes) {
+                return;
+            }
+            SimpleRefHolder<BinaryNode> holder(frame_bytes);
+            ExceptionSink cxsink;
+            int rv = sock_ptr->sendQuicClientStreamData(stream_id,
+                (*holder)->getPtr(), (*holder)->size(), false, &cxsink);
+            if (cxsink || rv < 0) {
+                // Non-fatal: transport teardown handles the close path
+                cxsink.clear();
+            }
+        };
+
+    auto frame_state = std::make_unique<WebSocketStreamFrameState>(
+        msg_queue, std::move(send_cb), /* is_server */ false);
+
+    // Install the frame state on the existing ChannelAction under its
+    // per-action mutex — see Http2 counterpart for the race-free semantics.
+    ChannelAction* ch_action = nullptr;
+    std::string sid = std::to_string(stream_id);
+    {
+        AutoLocker al(stream_lock);
+        auto it = stream_actions.find(sid);
+        if (it == stream_actions.end()) {
+            xsink->raiseException("HTTPCLIENT-STREAM-CLOSED",
+                "cannot install frame state: stream %lld not found or already complete",
+                (long long)stream_id);
+            return;
+        }
+        ch_action = dynamic_cast<ChannelAction*>(it->second);
+        if (!ch_action) {
+            xsink->raiseException("HTTPCLIENT-STATE-ERROR",
+                "cannot install frame state: stream %lld action is not a ChannelAction",
+                (long long)stream_id);
+            return;
+        }
+        ch_action->ref();
+    }
+
+    ch_action->installFrameState(std::move(frame_state), xsink);
+    ch_action->deref(xsink);
+}
+
 void Http3ClientPollOperationPriv::setSubmitError(const char* err, const char* desc) {
     AutoLocker al(stream_lock);
     if (!error_info) {
@@ -1015,6 +1066,35 @@ nothing Http3ClientPollOperationBase::endSubmitFail() {
     return rv.release();
 }
 
+//! Phase 3: register stream with a Queue for SSE event delivery
+/** Like registerStreamWithChannel() but creates an SseAction that parses SSE
+    events on the I/O thread and pushes parsed SseMessageInfo hashes to a Queue.
+
+    @param stream_id the QUIC stream ID
+    @param queue the Queue for parsed SSE event delivery
+
+    @return hash with: "need_cancel" (bool), "buffered" (list or NOTHING)
+
+    @since %Qore 2.3
+*/
+*hash<auto> Http3ClientPollOperationBase::registerStreamWithQueue(int stream_id, Queue[Queue] queue) {
+    bool need_cancel = false;
+    Queue* queue_ptr = queue.release();
+    ReferenceHolder<SseAction> action(new SseAction(queue_ptr), xsink);
+    queue_ptr->deref(xsink);  // SseAction refs the queue itself
+    // registerStream() bumps its own ref on the action when storing it;
+    // caller's initial ref stays with ReferenceHolder and is dropped on
+    // scope exit.
+    QoreListNode* buffered = priv->registerStream(stream_id, *action, need_cancel, xsink);
+
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    rv->setKeyValue("need_cancel", need_cancel, xsink);
+    if (buffered) {
+        rv->setKeyValue("buffered", buffered, xsink);
+    }
+    return rv.release();
+}
+
 //! Cancel a stream
 /** @param stream_id the stream to cancel
     @return True if the stream was found and cancelled
@@ -1055,4 +1135,35 @@ Socket Http3ClientPollOperationBase::getSocket() [flags=RET_VALUE_ONLY] {
 */
 nothing Http3ClientPollOperationBase::registerStreamNotify(int stream_id) {
     priv->registerStreamNotify(stream_id);
+}
+
+//! Installs a WebSocket frame-state decoder for a CONNECT tunnel stream
+/** Attaches a WebSocketStreamFrameState to the ChannelAction already
+    registered for @a stream_id.  After this call, body bytes from H3 DATA
+    chunks dispatched by the I/O thread are fed into a pure C++ frame
+    decoder that pushes complete, typed message hashes to @a msg_queue
+    instead of the raw response hash routed through the handle's Channel.
+    This avoids the O(N²) Qore binary concatenation path for large WS
+    frames over HTTP/3.
+
+    The install is race-free against concurrent I/O-thread dispatches: the
+    ChannelAction's per-action mutex serialises the install with execute(),
+    complete() and executeError(), and the install itself drains any items
+    already buffered in the channel into the decoder before publishing the
+    frame state.  No caller-side pre-swap residual is needed.
+
+    @param stream_id the QUIC stream ID returned by submitRequestStreamingWithChannel()
+    @param msg_queue the Queue that will receive typed frame hashes
+           ({type, data, rsv1?, rsv2?, rsv3?, code?, reason?})
+
+    @throw HTTPCLIENT-STREAM-CLOSED if the stream is not found or already
+           complete
+    @throw HTTPCLIENT-STATE-ERROR if the stream's action is not a ChannelAction
+
+    @since %Qore 2.3
+*/
+nothing Http3ClientPollOperationBase::installFrameState(int stream_id,
+        Queue[Queue] msg_queue) {
+    Queue* queue_ptr = msg_queue.release();
+    priv->installFrameState(static_cast<int64_t>(stream_id), queue_ptr, xsink);
 }

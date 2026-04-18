@@ -1296,6 +1296,21 @@ void Http2Session::cleanupStream(int32_t stream_id) {
     std::lock_guard<std::recursive_mutex> lg(m);
     auto it = streams.find(stream_id);
     if (it != streams.end()) {
+        // RFC 7540 §8.3 / RFC 8441: a CONNECT stream is a bidirectional tunnel;
+        // after the Qore dispatch closure exits we must NOT remove the stream
+        // entry or onDataChunkRecvCallback will silently discard subsequent
+        // peer-sent frames at `stream == nullptr`.  The entry is reclaimed
+        // later via onStreamCloseCallback when the peer actually closes.
+        if (it->second->is_connect) {
+            printd(5, "cleanupStream(%d) preserving active CONNECT tunnel\n",
+                stream_id);
+            if (http2DebugEnabled()) {
+                fprintf(stderr, "HTTP2 DEBUG: cleanupStream stream=%d preserving CONNECT tunnel\n",
+                    stream_id);
+                fflush(stderr);
+            }
+            return;
+        }
         printd(5, "cleanupStream(%d) removing dispatched stream\n", stream_id);
         if (http2DebugEnabled()) {
             fprintf(stderr, "HTTP2 DEBUG: cleanupStream stream=%d removing dispatched stream\n",
@@ -1679,6 +1694,11 @@ int Http2Session::onStreamCloseCallback(nghttp2_session* session, int32_t stream
         stream->error_code = error_code;
         if (error_code != 0) {
             stream->reset = true;
+            // Record the peer-initiated reset in a standalone map so that
+            // sendStreamData() can still surface HTTP2-STREAM-RESET after
+            // the stream is erased from `streams` below (mirrors
+            // QuicSession::peer_reset_streams_).
+            h2->peer_reset_streams[stream_id] = error_code;
         }
         // Mark as complete even if there was an error (including RST_STREAM without headers)
         stream->body_complete = true;
@@ -1998,6 +2018,24 @@ int Http2Session::sendStreamData(int32_t stream_id, const void* data, size_t len
     Http2StreamInfo* stream = getStream(stream_id);
     bool has_provider = pending_data_providers.find(stream_id) != pending_data_providers.end();
     if (!stream && !has_provider) {
+        // If the stream was reset by the peer and subsequently erased from
+        // `streams` by onStreamCloseCallback(), surface HTTP2-STREAM-RESET
+        // here — callers racing the close callback would otherwise see a
+        // generic "stream not found" and fail to classify the error.  Mirrors
+        // QuicSession::peer_reset_streams_.
+        auto pit = peer_reset_streams.find(stream_id);
+        if (pit != peer_reset_streams.end()) {
+            uint32_t ec = pit->second;
+            printd(2, "sendStreamData() stream %d ERASED-RESET error_code=%u end_stream=%d\n",
+                stream_id, ec, end_stream ? 1 : 0);
+            // Drop the entry now that the caller has been notified — stream IDs
+            // are monotonic so there's no re-use; this keeps the map bounded on
+            // long-lived sessions.
+            peer_reset_streams.erase(pit);
+            xsink->raiseException("HTTP2-STREAM-RESET",
+                "stream %d was reset by peer (error code %u)", stream_id, ec);
+            return -1;
+        }
         printd(2, "sendStreamData() stream %d NOT FOUND: stream=%p has_provider=%d end_stream=%d\n",
             stream_id, stream, has_provider ? 1 : 0, end_stream ? 1 : 0);
         xsink->raiseException("HTTP2-ERROR", "stream %d not found", stream_id);

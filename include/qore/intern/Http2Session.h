@@ -704,6 +704,16 @@ private:
     };
     std::unordered_map<int32_t, BodyData> pending_body_data;
 
+    //! Peer-initiated stream reset info, persisted beyond streams.erase()
+    /** Populated by onStreamCloseCallback() (when error_code!=0) so that
+        @ref Http2Session::sendStreamData() can still surface a typed
+        \c HTTP2-STREAM-RESET exception after the stream has been erased from
+        \c streams by the normal close path.  Without this, a caller racing
+        the close callback sees the generic \c HTTP2-ERROR "stream not found".
+        Mirrors @ref QuicSession::peer_reset_streams_.
+    */
+    std::unordered_map<int32_t, uint32_t> peer_reset_streams;
+
     struct DataProviderContext {
         nghttp2_data_provider provider{};
         Http2Session* h2 = nullptr;

@@ -104,6 +104,7 @@ public class DataProvider {
             "cdsrest": "CdsRestDataProvider",
             "chargebee": "ChargebeeDataProvider",
             "cin7core": "Cin7CoreDataProvider",
+            "clickfunnels": "ClickFunnelsDataProvider",
             "close": "CloseDataProvider",
             "csvread": "CsvUtil",
             "csvwrite": "CsvUtil",
@@ -162,6 +163,8 @@ public class DataProvider {
             # provided by the jni module
             "icsread": "IcsDataProvider",
             "icswrite": "IcsDataProvider",
+
+            "insightly": "InsightlyDataProvider",
 
             "jotform": "JotformDataProvider",
 
@@ -280,6 +283,8 @@ public class DataProvider {
 
             # provided by the zip module
             "zip": "ZipDataProvider",
+
+            "unbounce": "UnbounceDataProvider",
 
             "unleashed": "UnleashedDataProvider",
 

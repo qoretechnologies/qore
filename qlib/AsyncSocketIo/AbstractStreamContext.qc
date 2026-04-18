@@ -70,6 +70,28 @@ public class AbstractStreamContext {
     */
     abstract *binary readData(int max_bytes = 0);
 
+    #! Returns True when the transport feeds pre-decoded WebSocket frames
+    /** Subclasses that support WebSocket frame-level delivery (HTTP/3 with
+        C++ `WebSocketStreamFrameState` in the loop) override this.  Default
+        is False, meaning @ref readData() returns raw bytes.
+
+        @since AsyncSocketIo 1.3
+    */
+    bool usesFrameState() {
+        return False;
+    }
+
+    #! Drains one pre-decoded WebSocket frame hash (only valid when usesFrameState())
+    /** Default implementation throws — concrete classes that return True from
+        @ref usesFrameState() must override.
+
+        @since AsyncSocketIo 1.3
+    */
+    *hash<auto> readFrame() {
+        throw "STREAM-CONTEXT-ERROR",
+            "readFrame() not supported on this stream context";
+    }
+
     #! Close the stream
     /** Default implementation is a no-op. HTTP/2 streams die with the TCP connection;
         HTTP/3 streams require explicit END_STREAM signaling.

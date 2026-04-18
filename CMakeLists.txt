@@ -320,6 +320,7 @@ set(LIBQORE_QPP_SRC
     lib/QC_LoggerInterfaceBase.qpp
     lib/QC_AsyncIoController.qpp
     lib/ql_misc.qpp
+    lib/ql_websocket.qpp
     lib/ql_compression.qpp
     lib/ql_thread.qpp
     lib/ql_crypto.qpp
@@ -630,8 +631,8 @@ endif()
 # QUIC/HTTP/3 support via ngtcp2 + nghttp3
 # Try system packages first (pkg-config, then cmake find); fall back to
 # building from source via FetchContent when not installed.
-set(NGTCP2_VERSION "1.17.0")
-set(NGHTTP3_VERSION "1.14.0")
+set(NGTCP2_VERSION "1.22.1")
+set(NGHTTP3_VERSION "1.15.0")
 
 set(QUIC_FOUND_SYSTEM FALSE)
 pkg_check_modules(NGTCP2_PKG QUIET libngtcp2)
@@ -706,7 +707,7 @@ if (NOT QUIC_FOUND_SYSTEM)
     # --- nghttp3 (must come before ngtcp2) ---
     FetchContent_Declare(nghttp3
         URL "https://github.com/ngtcp2/nghttp3/releases/download/v${NGHTTP3_VERSION}/nghttp3-${NGHTTP3_VERSION}.tar.xz"
-        URL_HASH SHA256=b3083dae2ff30cf00d24d5fedd432479532c7b17d993d384103527b36c1ec82d
+        URL_HASH SHA256=6da0cd06b428d32a54c58137838505d9dc0371a900bb8070a46b29e1ceaf2e0f
     )
     FetchContent_Populate(nghttp3)
     # Patch out the unconditional 'check' target that conflicts in multi-FetchContent builds
@@ -718,7 +719,7 @@ if (NOT QUIC_FOUND_SYSTEM)
     # --- ngtcp2 (with OpenSSL crypto backend) ---
     FetchContent_Declare(ngtcp2
         URL "https://github.com/ngtcp2/ngtcp2/releases/download/v${NGTCP2_VERSION}/ngtcp2-${NGTCP2_VERSION}.tar.xz"
-        URL_HASH SHA256=9c9a4e2e150e90bf77d4ffcbefe82f738ee375287e68aaa715fa83c04a12209c
+        URL_HASH SHA256=dfd2c68bd64b89847c611425b9487105c46e8447b5c21e6aeb00642c8fbe2ca8
     )
     set(ENABLE_OPENSSL ON CACHE BOOL "" FORCE)
     set(ENABLE_GNUTLS OFF CACHE BOOL "" FORCE)
@@ -1244,6 +1245,7 @@ set(LIBQORE_CPP_SRC ${LIBQORE_CPP_SRC}
 # WebSocket frame codec (RFC 6455)
 set(LIBQORE_CPP_SRC ${LIBQORE_CPP_SRC}
     lib/WebSocketFrameCodec.cpp
+    lib/WebSocketStreamFrameState.cpp
 )
 
 # get list of header files
@@ -1519,6 +1521,7 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_BINARY_DIR}/ql_string.cpp\"
 #include \"${CMAKE_BINARY_DIR}/ql_pwd.cpp\"
 #include \"${CMAKE_BINARY_DIR}/ql_misc.cpp\"
+#include \"${CMAKE_BINARY_DIR}/ql_websocket.cpp\"
 #include \"${CMAKE_BINARY_DIR}/ql_list.cpp\"
 #include \"${CMAKE_BINARY_DIR}/ql_crypto.cpp\"
 #include \"${CMAKE_BINARY_DIR}/ql_object.cpp\"
@@ -1703,6 +1706,7 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreTermIOS.cpp\"
 // WebSocket frame codec (RFC 6455)
 #include \"${CMAKE_SOURCE_DIR}/lib/WebSocketFrameCodec.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/WebSocketStreamFrameState.cpp\"
 ")
     # Conditionally add alloc tracking QPP to the SCU (the QPP-generated C++ is safe for SCU;
     # only AllocTracking.cpp with its global malloc/free symbols must be compiled separately)
@@ -2113,7 +2117,7 @@ qore_user_module("qlib/DiscordWebSocketClient.qm" "ConnectionProvider;Util;WebSo
 qore_user_module("qlib/HttpServer.qm" "HttpServerUtil;Mime;Util")
 qore_user_module("qlib/HttpServerAsyncIo" "HttpServer")
 qore_user_module("qlib/HttpClientIo" "HttpUtil;Logger;AsyncSocketIo")
-qore_user_module("qlib/HttpClientStreamingIo" "HttpClientIo")
+qore_user_module("qlib/HttpClientStreamingIo" "HttpClientIo;DataProvider;AsyncSocketIo;Logger")
 qore_user_module("qlib/Pop3Client.qm" "ConnectionProvider;MailMessage;Mime;Logger")
 qore_user_module("qlib/RestSchemaValidator.qm" "HttpServerUtil;Logger")
 qore_user_module("qlib/SewioWebSocketClient.qm" "ConnectionProvider;Util;WebSocketUtil;WebSocketClient")
@@ -2165,6 +2169,7 @@ qore_user_module("qlib/BigCommerceRestClient.qm" "ConnectionProvider;Mime;RestCl
 qore_user_module("qlib/BillwerkRestClient.qm" "ConnectionProvider;RestClient;RestSchemaValidator")
 qore_user_module("qlib/BitlyRestClient.qm" "ConnectionProvider;Mime;RestClient;RestClientIo")
 qore_user_module("qlib/CircleRestClient.qm" "ConnectionProvider;Mime;RestClient;RestClientIo")
+qore_user_module("qlib/InsightlyRestClient.qm" "ConnectionProvider;Mime;RestClient;RestClientIo")
 qore_user_module("qlib/SmartSheetRestClient.qm" "ConnectionProvider;Mime;RestClient;RestClientIo")
 qore_user_module("qlib/GorgiasRestClient.qm" "ConnectionProvider;Mime;RestClient;RestClientIo")
 qore_user_module("qlib/Sap4HanaRestClient.qm" "ConnectionProvider;Mime;RestClient")
@@ -2214,6 +2219,8 @@ qore_user_module("qlib/SquareRestClient.qm" "ConnectionProvider;Mime;RestClient"
 qore_user_module("qlib/SquarespaceRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/TableauRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/Cin7CoreRestClient.qm" "ConnectionProvider;Mime;RestClient")
+qore_user_module("qlib/ClickFunnelsRestClient.qm" "ConnectionProvider;Mime;RestClient;RestClientIo")
+qore_user_module("qlib/UnbounceRestClient.qm" "ConnectionProvider;Mime;RestClient;RestClientIo")
 qore_user_module("qlib/UnleashedRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/ZohoBooksRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/ZohoInventoryRestClient.qm" "ConnectionProvider;Mime;RestClient")
@@ -2226,6 +2233,7 @@ qore_user_module("qlib/RestSchemaDataProvider" "Swagger;OpenApi3;RestClient;Rest
 qore_user_module("qlib/BigCommerceDataProvider" "BigCommerceRestClient;RestClient;DataProvider" "bigcommerce-logo.svg")
 qore_user_module("qlib/BitlyDataProvider" "BitlyRestClient;RestClient;RestClientIo;DataProvider" "bitly-logo.svg")
 qore_user_module("qlib/CircleDataProvider" "CircleRestClient;RestClient;RestClientIo;DataProvider" "circle-logo.svg")
+qore_user_module("qlib/InsightlyDataProvider" "InsightlyRestClient;RestClientIo;DataProvider" "insightly-logo.svg")
 qore_user_module("qlib/SmartSheetDataProvider" "SmartSheetRestClient;RestClient;RestClientIo;DataProvider" "smartsheet-logo.svg")
 qore_user_module("qlib/GorgiasDataProvider" "GorgiasRestClient;RestClient;RestClientIo;DataProvider" "gorgias-logo.svg")
 qore_user_module("qlib/CdsRestDataProvider" "RestClient;CdsRestClient;RestSchemaValidator;DataProvider" "dynamics-logo.svg;business-central-logo.svg")
@@ -2292,6 +2300,8 @@ qore_user_module("qlib/CloseDataProvider" "CloseRestClient;RestClient;DataProvid
 qore_user_module("qlib/SquarespaceDataProvider" "SquarespaceRestClient;RestClient;DataProvider" "squarespace-logo.svg")
 qore_user_module("qlib/TableauDataProvider" "TableauRestClient;RestClient;DataProvider" "tableau-logo.svg")
 qore_user_module("qlib/Cin7CoreDataProvider" "Cin7CoreRestClient;RestClient;DataProvider" "cin7core-logo.svg")
+qore_user_module("qlib/ClickFunnelsDataProvider" "ClickFunnelsRestClient;RestClient;RestClientIo;DataProvider" "clickfunnels-logo.svg")
+qore_user_module("qlib/UnbounceDataProvider" "UnbounceRestClient;RestClient;RestClientIo;DataProvider" "unbounce-logo.svg")
 qore_user_module("qlib/UnleashedDataProvider" "UnleashedRestClient;RestClient;DataProvider" "unleashed-logo.svg")
 
 # Configure lang Doxyfile final pass with module tag files after all modules are defined

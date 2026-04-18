@@ -107,6 +107,9 @@ public class ConnectionSchemeCache {
 
             "cin7core": "Cin7CoreRestClient",
 
+            "clickfunnelsrest": "ClickFunnelsRestClient",
+            "clickfunnelsrests": "ClickFunnelsRestClient",
+
             "closerest": "CloseRestClient",
 
             "db": "DbDataProvider",
@@ -147,6 +150,9 @@ public class ConnectionSchemeCache {
             "grests": "GoogleRestClient",
 
             "hue": "HueRestClient",
+
+            "insightlyrest": "InsightlyRestClient",
+            "insightlyrests": "InsightlyRestClient",
 
             "jotform": "JotformRestClient",
 
@@ -275,6 +281,8 @@ public class ConnectionSchemeCache {
 
             "zeyosrest": "ZeyosRestClient",
             "zeyosrests": "ZeyosRestClient",
+
+            "unbouncerest": "UnbounceRestClient",
 
             "unleashed": "UnleashedRestClient",
 

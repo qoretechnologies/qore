@@ -21,8 +21,39 @@ class ExceptionTest inherits QUnit::Test {
         addTestCase("return test", \returnTest());
         addTestCase("Test simple try/catch block", \testSimpleTryCatch());
         addTestCase("Test rethrow", \testRethrow());
+        addTestCase("on_error: nested swallowed rethrow preserves outer exception",
+            \onErrorNestedSwallowedRethrow());
         addTestCase("misc tests", \miscTests());
         set_return_value(main());
+    }
+
+    #! Regression guard: a nested try/catch/rethrow inside an on_error body
+    #! must not discard the outer in-flight exception when the rethrown
+    #! exception is caught internally.  The qore_es_private::rethrown flag
+    #! on the on_error's ExceptionSink used to stay set after catchException
+    #! extracted the nested rethrow, causing StatementBlock::execIntern to
+    #! clear() the outer xsink — the catch handler then saw nothing.
+    onErrorNestedSwallowedRethrow() {
+        code inner_swallow = sub () {
+            try {
+                try {
+                    throw "INNER", "inner desc";
+                } catch (hash<ExceptionInfo> ex) {
+                    rethrow;
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                # intentionally swallow the rethrown INNER
+            }
+        };
+        *string caught;
+        try {
+            on_error inner_swallow();
+            throw "ORIG", "original desc";
+        } catch (hash<ExceptionInfo> ex) {
+            caught = ex.err;
+        }
+        assertEq("ORIG", caught,
+            "outer catch must still fire after nested rethrow/swallow in on_error");
     }
 
     onErrorThreadExitTest() {

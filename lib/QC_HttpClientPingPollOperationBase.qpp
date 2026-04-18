@@ -133,13 +133,13 @@ QoreHashNode* HttpClientPingPollOperationPriv::continuePoll(ExceptionSink* xsink
     }
 
     // Extract the inner op's output and validate the response
-    QoreValue out = inner_op->getOutput();
-    if (out.getType() == NT_HASH) {
-        output = out.get<QoreHashNode>()->hashRefSelf();
-    } else if (!out.isNullOrNothing()) {
+    ValueHolder out(inner_op->getOutput(), xsink);
+    if (out->getType() == NT_HASH) {
+        output = out->get<QoreHashNode>()->hashRefSelf();
+    } else if (!out->isNullOrNothing()) {
         // Wrap non-hash output
         output = new QoreHashNode(autoTypeInfo);
-        output->setKeyValue("output", out.refSelf(), xsink);
+        output->setKeyValue("output", out.release(), xsink);
     }
 
     validateResponse(xsink);

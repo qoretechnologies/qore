@@ -1,0 +1,53 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/AsyncSocketIo
+
+%exec-class TimerDispatchTest
+
+public class TimerDispatchTest inherits QUnit::Test {
+    constructor() : Test("TimerDispatchTest", "1.0") {
+        addTestCase("closure udata fires off I/O thread", \closureFiresOffIoThread());
+        addTestCase("funcref udata fires off I/O thread", \funcrefFiresOffIoThread());
+        set_return_value(main());
+    }
+
+    # Encodes the contract documented on AsyncIoController::addTimer():
+    # a closure udata is auto-dispatched to a worker thread — callers may
+    # block / acquire locks / do Qore I/O without blocking the async I/O loop.
+    closureFiresOffIoThread() {
+        AsyncSocketIoController ctrl();
+        on_exit delete ctrl;
+
+        int caller_tid = gettid();
+        Counter cnt(1);
+        int fire_tid = 0;
+        ctrl.addTimer(now_us() + 50ms, sub () {
+            fire_tid = gettid();
+            cnt.dec();
+        });
+        assertEq(0, cnt.waitForZero(10s), "timer closure did not fire within 10s");
+        assertNeq(0, fire_tid, "closure did not record its tid");
+        assertNeq(caller_tid, fire_tid, "closure must run on a dispatcher worker, not the caller");
+    }
+
+    funcrefFiresOffIoThread() {
+        AsyncSocketIoController ctrl();
+        on_exit delete ctrl;
+
+        int caller_tid = gettid();
+        Counter cnt(1);
+        int fire_tid = 0;
+        code<nothing()> cb = sub () {
+            fire_tid = gettid();
+            cnt.dec();
+        };
+        ctrl.addTimer(now_us() + 50ms, cb);
+        assertEq(0, cnt.waitForZero(10s), "timer funcref did not fire within 10s");
+        assertNeq(caller_tid, fire_tid, "funcref must run on a dispatcher worker, not the caller");
+    }
+}

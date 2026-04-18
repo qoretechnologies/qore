@@ -36,6 +36,7 @@
 #include "qore/intern/QC_SocketPollOperation.h"
 #include "qore/QoreQueue.h"
 #include "qore/intern/QC_Queue.h"
+#include "qore/intern/QoreAsyncIoLogger.h"
 
 /** @cond INTERNAL */
 
@@ -559,6 +560,8 @@ void Http3ServerPollOperationPriv::checkStreamQueues() {
             data_ready_streams.push_back(skey);
         }
     }
+    ASYNC_IO_TRACE("Http3ServerPollOperationPriv::checkStreamQueues registered=%zu ready=%zu\n",
+        stream_queues.size(), data_ready_streams.size());
 }
 
 /** @endcond */
@@ -942,13 +945,21 @@ nothing Http3ServerPollOperation::registerStreamListener(int session_id, int str
 nothing Http3ServerPollOperation::onStreamData(string stream_key) {
     ValueHolder listeners(self->getReferencedMemberNoMethod("stream_listeners", xsink), xsink);
     if (*xsink || listeners->isNullOrNothing()) {
+        ASYNC_IO_TRACE("Http3ServerPollOperation::onStreamData NO_LISTENERS skey='%s' xsink=%d null=%d\n",
+            stream_key->c_str(), (int)(*xsink ? 1 : 0),
+            (int)(listeners->isNullOrNothing() ? 1 : 0));
         return QoreValue();
     }
     QoreHashNode* lhash = listeners->get<QoreHashNode>();
     ValueHolder listener(lhash->getKeyValue(stream_key->c_str()).refSelf(), xsink);
     if (!listener->isNullOrNothing() && listener->getType() == NT_OBJECT) {
         QoreObject* lobj = listener->get<QoreObject>();
+        ASYNC_IO_TRACE("Http3ServerPollOperation::onStreamData NOTIFY skey='%s' listener=%p\n",
+            stream_key->c_str(), (void*)lobj);
         lobj->evalMethod("notifyIo", nullptr, xsink);
+    } else {
+        ASYNC_IO_TRACE("Http3ServerPollOperation::onStreamData NO_MATCH skey='%s' listeners_keys=%zu\n",
+            stream_key->c_str(), (size_t)lhash->size());
     }
 }
 

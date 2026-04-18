@@ -171,6 +171,14 @@ public class Http2ClientConnection inherits HttpClientConnection {
         poll_op.registerStreamListener(stream_id, listener);
     }
 
+    #! Installs a WebSocket frame-state decoder on an existing CONNECT stream
+    /** @param stream_id the HTTP/2 stream ID
+        @param msg_queue Queue to receive typed frame hashes
+    */
+    installFrameState(int stream_id, Queue msg_queue) {
+        poll_op.installFrameState(stream_id, msg_queue);
+    }
+
     #! Submits a request with streaming support (HTTP/2-specific)
     /** @param method HTTP method
         @param path request path
@@ -200,6 +208,42 @@ public class Http2ClientConnection inherits HttpClientConnection {
         log(LoggerLevel::DEBUG, "submitting request: %s %s (streaming=%y)", method, path, streaming);
         int stream_id = poll_op.submitRequestStreaming(method, path, headers, body, channel,
             max_concurrent_streams, streaming);
+
+        if (ctl) {
+            ctl.wakeSocket(getSocket());
+        }
+
+        return stream_id;
+    }
+
+    #! Submits an SSE request with Queue-based parsed event delivery
+    /** Like submitRequestStreaming() but creates an SseAction that parses SSE
+        events on the I/O thread and pushes parsed SseMessageInfo hashes to a Queue.
+
+        @param method HTTP method
+        @param path request path
+        @param headers request headers (optional)
+        @param body request body (optional)
+        @param queue Queue for parsed SSE event delivery
+
+        @return the stream ID
+    */
+    int submitRequestSse(string method, string path, *hash<auto> headers, *data body,
+            Queue queue) {
+        if (!self.isReady()) {
+            throw "HTTPCLIENT-STATE-ERROR",
+                sprintf("connection not ready: state=%y", self.getConnectionState());
+        }
+        *object ctl;
+        {
+            AutoLock al(lock);
+            last_activity = now_us();
+            ctl = controller_ref;
+        }
+
+        log(LoggerLevel::DEBUG, "submitting SSE request: %s %s", method, path);
+        int stream_id = poll_op.submitRequestSse(method, path, headers, body, queue,
+            max_concurrent_streams);
 
         if (ctl) {
             ctl.wakeSocket(getSocket());

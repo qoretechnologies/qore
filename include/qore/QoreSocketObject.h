@@ -375,6 +375,25 @@ public:
     DLLEXPORT const char* getSSLCipherVersion();
     DLLEXPORT bool isSecure();
 
+    //! Checks for data on an idle HTTP/1.1 keepalive connection in an async-I/O-safe way.
+    /** For TLS connections, uses SSL_peek (which processes TLS post-handshake records such
+        as TLS 1.3 NewSessionTicket internally and consumes the underlying TCP bytes) rather
+        than a raw recv(MSG_PEEK) on the file descriptor.  This avoids a busy-loop where a
+        TLS record header byte (0x17 = Application Data) is seen by the raw peek but never
+        consumed because it requires OpenSSL processing.
+
+        For plain (non-TLS) connections, falls back to raw recv(MSG_PEEK | MSG_DONTWAIT).
+
+        @return > 0  application-layer data is available (unexpected on an idle connection)
+        @return   0  no application data; any TLS post-handshake record was drained
+        @return  -1  connection closed or error (socket already closed or xsink set)
+
+        @param xsink exception sink; set on SSL error
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT int checkIdleData(ExceptionSink* xsink);
+
     //! Sets the ALPN protocols to offer during TLS negotiation
     /** @param protocols A list of protocol names in order of preference (e.g., {"h2", "http/1.1"})
         @param xsink Exception sink for error handling
@@ -864,6 +883,32 @@ public:
         @since %Qore 2.3
     */
     DLLEXPORT void deregisterQuicConnectStreamQueue(int64_t session_id, int64_t stream_id,
+        ExceptionSink* xsink);
+
+    //! Register a C++ WebSocket frame state machine for a CONNECT stream
+    /** Installs a per-stream frame decoder on the server side.  Incoming
+        DATA frames are decoded into complete WebSocket messages in C++ and
+        pushed to @p msg_queue — one Queue entry per complete WS message
+        (hash of shape @c {type, data, [code, reason]}).  Control frames
+        (ping / close) are handled automatically; the pong / close-echo
+        responses are sent over the same stream on the I/O thread without
+        a Qore-side round trip.
+
+        Only applicable to server-side WebSocket CONNECT streams.
+
+        @param session_id the QUIC session ID
+        @param stream_id  the HTTP/3 stream ID
+        @param msg_queue  the Queue; ownership of ONE reference is transferred
+        @param xsink      exception sink
+
+        @since %Qore 2.4
+    */
+    DLLEXPORT void registerQuicConnectStreamFrameState(int64_t session_id, int64_t stream_id,
+        Queue* msg_queue, ExceptionSink* xsink);
+
+    //! Deregister the WebSocket frame state for a CONNECT stream
+    /** Mirrors @ref deregisterQuicConnectStreamQueue.  @since %Qore 2.4 */
+    DLLEXPORT void deregisterQuicConnectStreamFrameState(int64_t session_id, int64_t stream_id,
         ExceptionSink* xsink);
 
     //! Read body data from a dispatched HTTP/3 stream (headers-only mode)

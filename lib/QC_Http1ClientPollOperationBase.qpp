@@ -482,16 +482,19 @@ QoreHashNode* Http1ClientPollOperationPriv::handleIdle(ExceptionSink* xsink) {
         // Before sending on a keep-alive connection, do a non-blocking recv to
         // detect server-initiated close (EOF).  This avoids sending a request on
         // a stale connection and waiting for a response that will never arrive.
-        // We use a raw recv(MSG_PEEK) instead of isDataAvailable() — this is an
-        // async I/O path and must not call sync poll APIs.
+        // Use checkIdleData() which is TLS-aware: for TLS connections it uses SSL_peek
+        // to drain TLS post-handshake records (e.g., TLS 1.3 NewSessionTicket) instead
+        // of raw recv(MSG_PEEK) which would see the TLS record header byte (0x17) and
+        // never be able to consume it, causing a busy-loop.
         int fd = sock_obj->getSocket();
         if (fd >= 0) {
-            char peek_buf;
-            ssize_t peek_rc = ::recv(fd, &peek_buf, 1, MSG_PEEK | MSG_DONTWAIT);
-            if (peek_rc == 0) {
-                // EOF — server closed the keep-alive connection
-                ASYNC_IO_TRACE("H1 handleIdle: recv peek=0 (EOF), server closed fd=%d\n", fd);
-                // Put request data back so it can be retried on a new connection
+            ExceptionSink idle_xsink;
+            int idle_rc = sock_obj->checkIdleData(&idle_xsink);
+            if (idle_rc < 0 || idle_xsink) {
+                // EOF or SSL error — server closed the connection
+                ASYNC_IO_TRACE("H1 handleIdle: checkIdleData rc=%d before send, server closed fd=%d\n",
+                    idle_rc, fd);
+                idle_xsink.clear();
                 {
                     AutoLocker al(stream_lock);
                     pending_request_data = req_data;
@@ -500,9 +503,24 @@ QoreHashNode* Http1ClientPollOperationPriv::handleIdle(ExceptionSink* xsink) {
                 setError("HTTP1-CONNECTION-CLOSED", "server closed the keep-alive connection", xsink);
                 return nullptr;
             }
-            // peek_rc > 0: unexpected data from server (protocol error on idle connection)
-            // peek_rc < 0 + EAGAIN: no data, connection alive — proceed with send
-            ASYNC_IO_TRACE("H1 handleIdle: recv peek=%zd errno=%d fd=%d\n", peek_rc, errno, fd);
+            if (idle_rc > 0) {
+                // Unexpected application data from server before we sent a request — the
+                // connection is dirty (partial response from a prior cycle or protocol
+                // violation).  Put the request back and close so the caller retries on
+                // a fresh connection.
+                ASYNC_IO_TRACE("H1 handleIdle: unexpected server data before send, closing fd=%d\n", fd);
+                {
+                    AutoLocker al(stream_lock);
+                    pending_request_data = req_data;
+                    streaming_active = is_streaming;
+                }
+                sock_obj->close();
+                setError("HTTP1-UNEXPECTED-DATA",
+                    "server sent unexpected data on idle keep-alive connection before request", xsink);
+                return nullptr;
+            }
+            // idle_rc == 0: no application data (TLS records drained if any), connection alive
+            ASYNC_IO_TRACE("H1 handleIdle: checkIdleData ok (no data), proceeding with send fd=%d\n", fd);
         }
 
         // Connection is alive — start sending the request
@@ -525,19 +543,29 @@ QoreHashNode* Http1ClientPollOperationPriv::handleIdle(ExceptionSink* xsink) {
     // No pending request — wait for wake or socket events.
     // If the event loop fires POLLIN on an idle connection (server FIN),
     // continuePoll() will be called and we'll reach this point again with
-    // no pending request.  Do a non-blocking recv to detect EOF.
+    // no pending request.  Use checkIdleData() which is TLS-aware.
     int fd = sock_obj->getSocket();
     if (fd >= 0) {
-        char peek_buf;
-        ssize_t peek_rc = ::recv(fd, &peek_buf, 1, MSG_PEEK | MSG_DONTWAIT);
-        if (peek_rc == 0) {
-            ASYNC_IO_TRACE("H1 handleIdle: recv peek=0 (EOF), closing fd=%d (no pending req)\n", fd);
+        ExceptionSink idle_xsink;
+        int idle_rc = sock_obj->checkIdleData(&idle_xsink);
+        if (idle_rc < 0 || idle_xsink) {
+            ASYNC_IO_TRACE("H1 handleIdle: checkIdleData rc=%d, closing fd=%d (no pending req)\n",
+                idle_rc, fd);
+            idle_xsink.clear();
             sock_obj->close();
             setError("HTTP1-CONNECTION-CLOSED", "server closed the connection", xsink);
             return nullptr;
         }
-        ASYNC_IO_TRACE("H1 handleIdle: no pending req, recv peek=%zd errno=%d fd=%d\n",
-            peek_rc, errno, fd);
+        if (idle_rc > 0) {
+            // Unexpected application-layer data on an idle connection — close it.
+            ASYNC_IO_TRACE("H1 handleIdle: unexpected app data on idle conn, closing fd=%d\n", fd);
+            sock_obj->close();
+            setError("HTTP1-UNEXPECTED-DATA",
+                "server sent unexpected data on idle keep-alive connection", xsink);
+            return nullptr;
+        }
+        // idle_rc == 0: no application data (TLS post-handshake record drained if any)
+        ASYNC_IO_TRACE("H1 handleIdle: no pending req, checkIdleData ok (no data) fd=%d\n", fd);
     }
 
     // Proactive idle timeout check (nginx-style upstream keepalive_timeout).
@@ -792,12 +820,23 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvHeader(ExceptionSink* xsin
             response_body = nullptr;
         }
 
-        // Check transfer-encoding
+        // Check transfer-encoding — handles both string and list (duplicate headers)
         QoreValue te_val = response_headers->getKeyValue("transfer-encoding");
         if (te_val.getType() == NT_STRING) {
-            const char* te = te_val.get<const QoreStringNode>()->c_str();
-            if (strcasestr(te, "chunked")) {
+            if (strcasestr(te_val.get<const QoreStringNode>()->c_str(), "chunked")) {
                 response_chunked = true;
+            }
+        } else if (te_val.getType() == NT_LIST) {
+            // Duplicate Transfer-Encoding headers (e.g., CDN adds its own on top of origin's)
+            // are stored as a list; scan each element for "chunked"
+            ConstListIterator li(te_val.get<const QoreListNode>());
+            while (li.next()) {
+                QoreValue item = li.getValue();
+                if (item.getType() == NT_STRING
+                        && strcasestr(item.get<const QoreStringNode>()->c_str(), "chunked")) {
+                    response_chunked = true;
+                    break;
+                }
             }
         }
 
@@ -813,11 +852,21 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvHeader(ExceptionSink* xsin
             }
         }
 
-        // Check connection header
+        // Check connection header — handles both string and list
         QoreValue conn_val = response_headers->getKeyValue("connection");
         if (conn_val.getType() == NT_STRING) {
             if (!strcasecmp(conn_val.get<const QoreStringNode>()->c_str(), "close")) {
                 connection_close = true;
+            }
+        } else if (conn_val.getType() == NT_LIST) {
+            ConstListIterator li(conn_val.get<const QoreListNode>());
+            while (li.next()) {
+                QoreValue item = li.getValue();
+                if (item.getType() == NT_STRING
+                        && !strcasecmp(item.get<const QoreStringNode>()->c_str(), "close")) {
+                    connection_close = true;
+                    break;
+                }
             }
         }
 
@@ -826,6 +875,10 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvHeader(ExceptionSink* xsin
             response_status_code, (int)response_chunked,
             (long long)response_content_length, (int)connection_close,
             (int)streaming_active_io);
+        ASYNC_IO_TRACE("H1 handleRecvHeader: status=%d chunked=%d content_length=%lld close=%d fd=%d\n",
+            response_status_code, (int)response_chunked,
+            (long long)response_content_length, (int)connection_close,
+            sock_obj ? sock_obj->getSocket() : -1);
 
         // Determine if the response has a body
         // HEAD responses, 1xx, 204, and 304 have no body regardless of headers
@@ -2125,6 +2178,55 @@ int Http1ClientPollOperationBase::submitRequestStreaming(string method, string p
     ChannelAction* action = new ChannelAction(ch);
     return (int)priv->submitRequest(method->c_str(), path->c_str(), headers,
         body_ptr, body_len, streaming, action, (int)max_streams, xsink);
+}
+
+//! Submits an HTTP/1.1 SSE request with Queue-based parsed event delivery
+/** Like submitRequestStreaming() but creates an SseAction that parses SSE events
+    on the I/O thread and pushes parsed SseMessageInfo hashes to a Queue.
+
+    @param method HTTP method (GET, POST, etc.)
+    @param path request path
+    @param headers optional request headers
+    @param body optional request body
+    @param queue Queue for parsed SSE event delivery
+    @param max_streams maximum concurrent streams
+
+    @return the stream ID assigned to this request
+
+    @since %Qore 2.3
+*/
+int Http1ClientPollOperationBase::submitRequestSse(string method, string path,
+        *hash<auto> headers, *data body, Queue[Queue] queue, int max_streams) {
+    const void* body_ptr = nullptr;
+    size_t body_len = 0;
+    if (body) {
+        switch (body->getType()) {
+            case NT_BINARY: {
+                const BinaryNode* b = static_cast<const BinaryNode*>(body);
+                body_ptr = b->getPtr();
+                body_len = b->size();
+                break;
+            }
+            case NT_STRING: {
+                const QoreStringNode* str = static_cast<const QoreStringNode*>(body);
+                body_ptr = str->c_str();
+                body_len = str->size();
+                break;
+            }
+            default:
+                xsink->raiseException("HTTP1-ERROR",
+                    "body must be string or binary, got type '%s'",
+                    body->getTypeName());
+                return -1;
+        }
+    }
+
+    // Create SseAction — priv takes ownership; release from QPP holder
+    Queue* queue_ptr = queue.release();
+    SseAction* action = new SseAction(queue_ptr);
+    queue_ptr->deref(xsink);  // SseAction refs the queue itself
+    return (int)priv->submitRequest(method->c_str(), path->c_str(), headers,
+        body_ptr, body_len, true, action, (int)max_streams, xsink);
 }
 
 //! Cancel a stream

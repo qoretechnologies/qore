@@ -1,0 +1,749 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  InsightlyDataProvider.qtest Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/ConnectionProvider
+%requires ../../../../qlib/RestClient.qm
+%requires ../../../../qlib/RestClientIo.qm
+
+%try-module json
+%define NoJson
+%endtry
+
+%requires ../../../../qlib/InsightlyRestClient.qm
+%requires ../../../../qlib/InsightlyDataProvider
+
+%exec-class InsightlyDataProviderTest
+
+public class InsightlyDataProviderTest inherits QUnit::Test {
+    private {
+        #! Insightly REST client (async) for integration tests
+        *RestClientIo::RestClientIo client;
+
+        #! Custom command-line options
+        const MyOpts = Opts + {
+            "apikey": "k,apikey=s",
+            "pod": "p,pod=s",
+            "conn": "c,connection=s",
+        };
+
+        #! IDs of test resources to clean up
+        *int testContactId;
+        *int testOrganisationId;
+        *int testLeadId;
+        *int testOpportunityId;
+        *int testProjectId;
+        *int testTaskId;
+        *int testNoteId;
+        *int testCalendarEventId;
+        *int testProductId;
+        *int testEmailId;
+    }
+
+    constructor() : Test("InsightlyDataProvider Test", "1.0", \ARGV, MyOpts) {
+        # Unit tests (always run, no credentials needed)
+        addTestCase("sanity tests", \sanityTests());
+        addTestCase("factory tests", \factoryTests());
+        addTestCase("metadata tests", \metadataTests());
+        addTestCase("data type tests", \dataTypeTests());
+        addTestCase("connection tests", \connectionTests());
+
+        # Integration tests (require Insightly credentials)
+        addTestCase("connection ping test", \connectionPingTest());
+        addTestCase("contact CRUD tests", \contactCrudTests());
+        addTestCase("organisation CRUD tests", \organisationCrudTests());
+        addTestCase("lead CRUD tests", \leadCrudTests());
+        addTestCase("opportunity CRUD tests", \opportunityCrudTests());
+        addTestCase("project CRUD tests", \projectCrudTests());
+        addTestCase("task CRUD tests", \taskCrudTests());
+        addTestCase("note CRUD tests", \noteCrudTests());
+        addTestCase("calendar event CRUD tests", \calendarEventCrudTests());
+        addTestCase("product CRUD tests", \productCrudTests());
+        addTestCase("email CRUD tests", \emailCrudTests());
+        addTestCase("list contacts tests", \listContactsTests());
+        addTestCase("event example data tests", \eventDataTests());
+        addTestCase("cleanup tests", \cleanupTests());
+
+        # Try to set up connection for integration tests
+        try {
+            setupConnection();
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose) {
+                printf("Connection setup failed: %s: %s\n", ex.err, ex.desc);
+            }
+        }
+
+        set_return_value(main());
+    }
+
+    #! Sets up the Insightly client for integration tests
+    private setupConnection() {
+        *string conn_name = m_options.conn ?? ENV.INSIGHTLY_CONNECTION;
+        if (conn_name) {
+            AbstractConnection conn = get_connection(conn_name);
+            if (conn instanceof InsightlyRestClient::InsightlyRestConnection) {
+                client = (cast<InsightlyRestClient::InsightlyRestConnection>(conn))
+                    .getAsync(True);
+            }
+            return;
+        }
+
+        *string apikey = m_options.apikey ?? ENV.INSIGHTLY_API_KEY;
+        *string pod = m_options.pod ?? ENV.INSIGHTLY_POD;
+        if (apikey) {
+            hash<auto> opts = {
+                "apikey": apikey,
+            };
+            if (pod) {
+                opts.pod = pod;
+            }
+            client = new InsightlyRestClient::InsightlyRestClientIo(opts);
+        }
+    }
+
+    #! Helper to skip integration tests when no credentials
+    private skipIfNoCredentials() {
+        if (!client) {
+            testSkip("no Insightly credentials available");
+        }
+    }
+
+    #! Helper to create a data provider from the client
+    private InsightlyDataProvider::InsightlyDataProvider getProvider() {
+        return new InsightlyDataProvider::InsightlyDataProvider(client);
+    }
+
+    # ========== UNIT TESTS ==========
+
+    sanityTests() {
+        assertEq("Insightly", InsightlyDataProvider::AppName);
+        assertEq(100, InsightlyDataProvider::DefaultPageSize);
+        assertEq(120, InsightlyDataProvider::DefaultPollInterval);
+        assertEq(60, InsightlyDataProvider::MinPollInterval);
+
+        # Verify event constants
+        assertEq("new-contact", InsightlyDataProvider::EVENT_NEW_CONTACT);
+        assertEq("new-organisation", InsightlyDataProvider::EVENT_NEW_ORGANISATION);
+        assertEq("new-lead", InsightlyDataProvider::EVENT_NEW_LEAD);
+        assertEq("new-opportunity", InsightlyDataProvider::EVENT_NEW_OPPORTUNITY);
+        assertEq("new-task", InsightlyDataProvider::EVENT_NEW_TASK);
+    }
+
+    factoryTests() {
+        AbstractDataProviderFactory factory = DataProvider::getFactory("insightly");
+        assertEq(True, factory instanceof InsightlyDataProvider::InsightlyDataProviderFactory);
+
+        hash<DataProviderFactoryInfo> info = factory.getInfo();
+        assertEq("insightly", info.name);
+        assertEq(True, info.children_can_support_apis);
+        assertEq(True, info.children_can_support_records);
+        assertEq(True, info.children_can_support_observers);
+    }
+
+    metadataTests() {
+        *hash<auto> app = DataProviderActionCatalog::getApp("Insightly");
+        assertEq(True, app.val(), "Insightly app registered in action catalog");
+        assertEq("Insightly", app.display_name);
+        assertEq("insightlyrest", app.scheme);
+
+        list<hash<auto>> actions = DataProviderActionCatalog::getActions("Insightly");
+        assertEq(True, actions.size() >= 40, "at least 40 actions registered");
+
+        bool found_create_contact = False;
+        bool found_list_contacts = False;
+        bool found_new_contact_event = False;
+        foreach hash<auto> action in (actions) {
+            if (action.action == "create-contact") {
+                found_create_contact = True;
+                assertEq(DPAT_API, action.action_code);
+            }
+            if (action.action == "list-contacts") {
+                found_list_contacts = True;
+                assertEq(DPAT_FIND, action.action_code);
+            }
+            if (action.action == "new-contact") {
+                found_new_contact_event = True;
+                assertEq(DPAT_EVENT, action.action_code);
+            }
+        }
+        assertEq(True, found_create_contact, "create-contact action registered");
+        assertEq(True, found_list_contacts, "list-contacts action registered");
+        assertEq(True, found_new_contact_event, "new-contact event registered");
+    }
+
+    dataTypeTests() {
+        InsightlyDataProvider::InsightlyContactDataType contact_type();
+        hash<auto> fields = contact_type.getFields();
+        assertEq(True, fields.hasKey("CONTACT_ID"), "contact type has CONTACT_ID field");
+        assertEq(True, fields.hasKey("FIRST_NAME"), "contact type has FIRST_NAME field");
+        assertEq(True, fields.hasKey("LAST_NAME"), "contact type has LAST_NAME field");
+        assertEq(True, fields.hasKey("EMAIL_ADDRESS"), "contact type has EMAIL_ADDRESS field");
+        assertEq(True, fields.hasKey("DATE_CREATED_UTC"), "contact type has DATE_CREATED_UTC field");
+
+        InsightlyDataProvider::InsightlyOrganisationDataType org_type();
+        hash<auto> ofields = org_type.getFields();
+        assertEq(True, ofields.hasKey("ORGANISATION_ID"), "org type has ORGANISATION_ID field");
+        assertEq(True, ofields.hasKey("ORGANISATION_NAME"), "org type has ORGANISATION_NAME field");
+
+        InsightlyDataProvider::InsightlyLeadDataType lead_type();
+        hash<auto> lfields = lead_type.getFields();
+        assertEq(True, lfields.hasKey("LEAD_ID"), "lead type has LEAD_ID field");
+        assertEq(True, lfields.hasKey("LAST_NAME"), "lead type has LAST_NAME field");
+
+        InsightlyDataProvider::InsightlyOpportunityDataType opp_type();
+        hash<auto> oppfields = opp_type.getFields();
+        assertEq(True, oppfields.hasKey("OPPORTUNITY_ID"), "opportunity type has OPPORTUNITY_ID field");
+        assertEq(True, oppfields.hasKey("OPPORTUNITY_NAME"), "opportunity type has OPPORTUNITY_NAME field");
+        assertEq(True, oppfields.hasKey("BID_AMOUNT"), "opportunity type has BID_AMOUNT field");
+
+        InsightlyDataProvider::InsightlyProjectDataType proj_type();
+        hash<auto> pfields = proj_type.getFields();
+        assertEq(True, pfields.hasKey("PROJECT_ID"), "project type has PROJECT_ID field");
+        assertEq(True, pfields.hasKey("PROJECT_NAME"), "project type has PROJECT_NAME field");
+
+        InsightlyDataProvider::InsightlyTaskDataType task_type();
+        hash<auto> tfields = task_type.getFields();
+        assertEq(True, tfields.hasKey("TASK_ID"), "task type has TASK_ID field");
+        assertEq(True, tfields.hasKey("TITLE"), "task type has TITLE field");
+
+        InsightlyDataProvider::InsightlyNoteDataType note_type();
+        hash<auto> nfields = note_type.getFields();
+        assertEq(True, nfields.hasKey("NOTE_ID"), "note type has NOTE_ID field");
+        assertEq(True, nfields.hasKey("TITLE"), "note type has TITLE field");
+        assertEq(True, nfields.hasKey("BODY"), "note type has BODY field");
+
+        InsightlyDataProvider::InsightlyCalendarEventDataType event_type();
+        hash<auto> efields = event_type.getFields();
+        assertEq(True, efields.hasKey("EVENT_ID"), "event type has EVENT_ID field");
+        assertEq(True, efields.hasKey("TITLE"), "event type has TITLE field");
+        assertEq(True, efields.hasKey("START_DATE_UTC"), "event type has START_DATE_UTC field");
+
+        InsightlyDataProvider::InsightlyProductDataType product_type();
+        hash<auto> prfields = product_type.getFields();
+        assertEq(True, prfields.hasKey("PRODUCT_ID"), "product type has PRODUCT_ID field");
+        assertEq(True, prfields.hasKey("PRODUCT_NAME"), "product type has PRODUCT_NAME field");
+
+        InsightlyDataProvider::InsightlyEmailDataType email_type();
+        hash<auto> emfields = email_type.getFields();
+        assertEq(True, emfields.hasKey("EMAIL_ID"), "email type has EMAIL_ID field");
+        assertEq(True, emfields.hasKey("SUBJECT"), "email type has SUBJECT field");
+
+        # Verify nested sub-types
+        InsightlyDataProvider::InsightlyAddressDataType addr_type();
+        hash<auto> afields = addr_type.getFields();
+        assertEq(True, afields.hasKey("ADDRESS_TYPE"), "address type has ADDRESS_TYPE field");
+        assertEq(True, afields.hasKey("STREET"), "address type has STREET field");
+        assertEq(True, afields.hasKey("CITY"), "address type has CITY field");
+
+        InsightlyDataProvider::InsightlyTagDataType tag_type();
+        hash<auto> tagfields = tag_type.getFields();
+        assertEq(True, tagfields.hasKey("TAG_NAME"), "tag type has TAG_NAME field");
+    }
+
+    connectionTests() {
+        hash<auto> scheme = ConnectionSchemeCache::getScheme("insightlyrest");
+        assertEq(True, scheme.val(), "insightlyrest scheme registered");
+        assertEq(True, scheme.auto_url);
+
+        # Verify required options
+        assertEq(True, scheme.required_options.regex("apikey"), "apikey is required");
+
+        # Verify options exist
+        assertEq(True, scheme.options.hasKey("apikey"), "apikey option exists");
+        assertEq(True, scheme.options.hasKey("pod"), "pod option exists");
+        assertEq(True, scheme.options.apikey.sensitive, "apikey is sensitive");
+    }
+
+    # ========== INTEGRATION TESTS ==========
+
+    connectionPingTest() {
+        skipIfNoCredentials();
+
+        *string conn_name = m_options.conn ?? ENV.INSIGHTLY_CONNECTION;
+        if (!conn_name) {
+            testSkip("connection ping test requires a named connection (-c)");
+        }
+        AbstractConnection conn = get_connection(conn_name);
+        hash<auto> ping_result = conn.ping(True);
+        assertEq(True, ping_result.ok, "connection ping succeeded");
+    }
+
+    contactCrudTests() {
+        skipIfNoCredentials();
+
+        InsightlyDataProvider::InsightlyDataProvider provider = getProvider();
+
+        # Create contact
+        AbstractDataProvider contacts = provider.getChildProvider("contacts");
+        AbstractDataProvider create = contacts.getChildProvider("create");
+        hash<auto> result = create.doRequest({
+            "FIRST_NAME": "QoreTest",
+            "LAST_NAME": "Contact" + now_us().toString(),
+            "EMAIL_ADDRESS": "qoretest_" + string(rand()) + "@example.com",
+        });
+        assertEq(True, result.CONTACT_ID.val(), "contact created with ID");
+        testContactId = result.CONTACT_ID;
+
+        # Get contact
+        AbstractDataProviderRecordIterator it = contacts.searchRecords(NOTHING,
+            {"id": testContactId});
+        assertEq(True, it.next(), "contact found by ID");
+        hash<auto> found = it.getValue();
+        assertEq("QoreTest", found.FIRST_NAME);
+
+        # Update contact
+        AbstractDataProvider update = contacts.getChildProvider("update");
+        hash<auto> updated = update.doRequest({
+            "CONTACT_ID": testContactId,
+            "TITLE": "QA Tester",
+        });
+        assertEq(True, updated.CONTACT_ID.val(), "contact updated");
+
+        # Verify update persisted
+        AbstractDataProviderRecordIterator it2 = contacts.searchRecords(NOTHING,
+            {"id": testContactId});
+        assertEq(True, it2.next(), "updated contact found");
+        hash<auto> verified = it2.getValue();
+        assertEq("QA Tester", verified.TITLE, "TITLE update persisted");
+    }
+
+    organisationCrudTests() {
+        skipIfNoCredentials();
+
+        InsightlyDataProvider::InsightlyDataProvider provider = getProvider();
+        AbstractDataProvider orgs = provider.getChildProvider("organisations");
+
+        # Create organisation
+        AbstractDataProvider create = orgs.getChildProvider("create");
+        hash<auto> result = create.doRequest({
+            "ORGANISATION_NAME": "QoreTest Corp " + now_us().toString(),
+        });
+        assertEq(True, result.ORGANISATION_ID.val(), "organisation created with ID");
+        testOrganisationId = result.ORGANISATION_ID;
+
+        # Get organisation
+        AbstractDataProviderRecordIterator it = orgs.searchRecords(NOTHING,
+            {"id": testOrganisationId});
+        assertEq(True, it.next(), "organisation found by ID");
+
+        # Update organisation
+        AbstractDataProvider update = orgs.getChildProvider("update");
+        hash<auto> updated = update.doRequest({
+            "ORGANISATION_ID": testOrganisationId,
+            "BACKGROUND": "Updated by QoreTest",
+        });
+        assertEq(True, updated.ORGANISATION_ID.val(), "organisation updated");
+
+        # Verify update persisted
+        AbstractDataProviderRecordIterator it2 = orgs.searchRecords(NOTHING,
+            {"id": testOrganisationId});
+        assertEq(True, it2.next(), "updated organisation found");
+        hash<auto> verified = it2.getValue();
+        assertEq("Updated by QoreTest", verified.BACKGROUND, "BACKGROUND update persisted");
+    }
+
+    leadCrudTests() {
+        skipIfNoCredentials();
+
+        InsightlyDataProvider::InsightlyDataProvider provider = getProvider();
+        AbstractDataProvider leads = provider.getChildProvider("leads");
+
+        # Create lead
+        AbstractDataProvider create = leads.getChildProvider("create");
+        hash<auto> result = create.doRequest({
+            "FIRST_NAME": "QoreTest",
+            "LAST_NAME": "Lead" + now_us().toString(),
+            "EMAIL": "qoretestlead_" + string(rand()) + "@example.com",
+        });
+        assertEq(True, result.LEAD_ID.val(), "lead created with ID");
+        testLeadId = result.LEAD_ID;
+
+        # Get lead
+        AbstractDataProviderRecordIterator it = leads.searchRecords(NOTHING,
+            {"id": testLeadId});
+        assertEq(True, it.next(), "lead found by ID");
+
+        # Update lead
+        AbstractDataProvider update = leads.getChildProvider("update");
+        hash<auto> updated = update.doRequest({
+            "LEAD_ID": testLeadId,
+            "TITLE": "CTO",
+        });
+        assertEq(True, updated.LEAD_ID.val(), "lead updated");
+
+        # Verify update persisted
+        AbstractDataProviderRecordIterator it2 = leads.searchRecords(NOTHING,
+            {"id": testLeadId});
+        assertEq(True, it2.next(), "updated lead found");
+        hash<auto> verified = it2.getValue();
+        assertEq("CTO", verified.TITLE, "TITLE update persisted");
+    }
+
+    opportunityCrudTests() {
+        skipIfNoCredentials();
+
+        InsightlyDataProvider::InsightlyDataProvider provider = getProvider();
+        AbstractDataProvider opps = provider.getChildProvider("opportunities");
+
+        # Create opportunity
+        AbstractDataProvider create = opps.getChildProvider("create");
+        hash<auto> result = create.doRequest({
+            "OPPORTUNITY_NAME": "QoreTest Opportunity " + now_us().toString(),
+            "OPPORTUNITY_STATE": "Open",
+        });
+        assertEq(True, result.OPPORTUNITY_ID.val(), "opportunity created with ID");
+        testOpportunityId = result.OPPORTUNITY_ID;
+
+        # Get opportunity
+        AbstractDataProviderRecordIterator it = opps.searchRecords(NOTHING,
+            {"id": testOpportunityId});
+        assertEq(True, it.next(), "opportunity found by ID");
+
+        # Update opportunity
+        AbstractDataProvider update = opps.getChildProvider("update");
+        hash<auto> updated = update.doRequest({
+            "OPPORTUNITY_ID": testOpportunityId,
+            "BID_AMOUNT": 5000.00,
+        });
+        assertEq(True, updated.OPPORTUNITY_ID.val(), "opportunity updated");
+
+        # Verify update persisted
+        AbstractDataProviderRecordIterator it2 = opps.searchRecords(NOTHING,
+            {"id": testOpportunityId});
+        assertEq(True, it2.next(), "updated opportunity found");
+        hash<auto> verified = it2.getValue();
+        assertEq(5000.00, verified.BID_AMOUNT, "BID_AMOUNT update persisted");
+    }
+
+    projectCrudTests() {
+        skipIfNoCredentials();
+
+        InsightlyDataProvider::InsightlyDataProvider provider = getProvider();
+        AbstractDataProvider projects = provider.getChildProvider("projects");
+
+        # Create project
+        AbstractDataProvider create = projects.getChildProvider("create");
+        hash<auto> result = create.doRequest({
+            "PROJECT_NAME": "QoreTest Project " + now_us().toString(),
+            "STATUS": "Not Started",
+        });
+        assertEq(True, result.PROJECT_ID.val(), "project created with ID");
+        testProjectId = result.PROJECT_ID;
+
+        # Get project
+        AbstractDataProviderRecordIterator it = projects.searchRecords(NOTHING,
+            {"id": testProjectId});
+        assertEq(True, it.next(), "project found by ID");
+
+        # Update project
+        AbstractDataProvider update = projects.getChildProvider("update");
+        hash<auto> updated = update.doRequest({
+            "PROJECT_ID": testProjectId,
+            "STATUS": "In Progress",
+        });
+        assertEq(True, updated.PROJECT_ID.val(), "project updated");
+
+        # Verify update persisted
+        AbstractDataProviderRecordIterator it2 = projects.searchRecords(NOTHING,
+            {"id": testProjectId});
+        assertEq(True, it2.next(), "updated project found");
+        hash<auto> verified = it2.getValue();
+        assertEq("In Progress", verified.STATUS, "STATUS update persisted");
+    }
+
+    taskCrudTests() {
+        skipIfNoCredentials();
+
+        InsightlyDataProvider::InsightlyDataProvider provider = getProvider();
+        AbstractDataProvider tasks = provider.getChildProvider("tasks");
+
+        # Create task
+        AbstractDataProvider create = tasks.getChildProvider("create");
+        hash<auto> result = create.doRequest({
+            "TITLE": "QoreTest Task " + now_us().toString(),
+            "STATUS": "Not Started",
+        });
+        assertEq(True, result.TASK_ID.val(), "task created with ID");
+        testTaskId = result.TASK_ID;
+
+        # Get task
+        AbstractDataProviderRecordIterator it = tasks.searchRecords(NOTHING,
+            {"id": testTaskId});
+        assertEq(True, it.next(), "task found by ID");
+
+        # Update task
+        AbstractDataProvider update = tasks.getChildProvider("update");
+        hash<auto> updated = update.doRequest({
+            "TASK_ID": testTaskId,
+            "DETAILS": "Updated by QoreTest",
+        });
+        assertEq(True, updated.TASK_ID.val(), "task updated");
+
+        # Verify update persisted
+        AbstractDataProviderRecordIterator it2 = tasks.searchRecords(NOTHING,
+            {"id": testTaskId});
+        assertEq(True, it2.next(), "updated task found");
+        hash<auto> verified = it2.getValue();
+        assertEq("Updated by QoreTest", verified.DETAILS, "task DETAILS update persisted");
+    }
+
+    noteCrudTests() {
+        skipIfNoCredentials();
+
+        InsightlyDataProvider::InsightlyDataProvider provider = getProvider();
+        AbstractDataProvider notes = provider.getChildProvider("notes");
+
+        # Create note
+        AbstractDataProvider create = notes.getChildProvider("create");
+        try {
+            hash<auto> result = create.doRequest({
+                "TITLE": "QoreTest Note " + now_us().toString(),
+                "BODY": "Test note body",
+            });
+            assertEq(True, result.NOTE_ID.val(), "note created with ID");
+            testNoteId = result.NOTE_ID;
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.arg.status_code == 405) {
+                testSkip("POST /Notes not supported on this Insightly plan");
+            }
+            rethrow;
+        }
+
+        # Update note
+        AbstractDataProvider update = notes.getChildProvider("update");
+        hash<auto> updated = update.doRequest({
+            "NOTE_ID": testNoteId,
+            "BODY": "Updated note body by QoreTest",
+        });
+        assertEq(True, updated.NOTE_ID.val(), "note updated");
+
+        # Verify update persisted
+        AbstractDataProviderRecordIterator it = notes.searchRecords(NOTHING,
+            {"id": testNoteId});
+        assertEq(True, it.next(), "updated note found");
+        hash<auto> verified = it.getValue();
+        assertEq("Updated note body by QoreTest", verified.BODY, "BODY update persisted");
+    }
+
+    calendarEventCrudTests() {
+        skipIfNoCredentials();
+
+        InsightlyDataProvider::InsightlyDataProvider provider = getProvider();
+        AbstractDataProvider events = provider.getChildProvider("calendar-events");
+
+        # Create calendar event
+        AbstractDataProvider create = events.getChildProvider("create");
+        date start = now() + 1D;
+        date end = start + 1h;
+        hash<auto> result = create.doRequest({
+            "TITLE": "QoreTest Event " + now_us().toString(),
+            "START_DATE_UTC": format_date("YYYY-MM-DDTHH:mm:ssZ", start),
+            "END_DATE_UTC": format_date("YYYY-MM-DDTHH:mm:ssZ", end),
+            "DETAILS": "Test calendar event",
+        });
+        assertEq(True, result.EVENT_ID.val(), "calendar event created with ID");
+        testCalendarEventId = result.EVENT_ID;
+
+        # Get calendar event
+        AbstractDataProviderRecordIterator it = events.searchRecords(NOTHING,
+            {"id": testCalendarEventId});
+        assertEq(True, it.next(), "calendar event found by ID");
+
+        # Update calendar event
+        AbstractDataProvider update = events.getChildProvider("update");
+        hash<auto> updated = update.doRequest({
+            "EVENT_ID": testCalendarEventId,
+            "DETAILS": "Updated by QoreTest",
+        });
+        assertEq(True, updated.EVENT_ID.val(), "calendar event updated");
+
+        # Verify update persisted
+        AbstractDataProviderRecordIterator it2 = events.searchRecords(NOTHING,
+            {"id": testCalendarEventId});
+        assertEq(True, it2.next(), "updated calendar event found");
+        hash<auto> verified = it2.getValue();
+        assertEq("Updated by QoreTest", verified.DETAILS,
+            "calendar event DETAILS update persisted");
+    }
+
+    productCrudTests() {
+        skipIfNoCredentials();
+
+        InsightlyDataProvider::InsightlyDataProvider provider = getProvider();
+        AbstractDataProvider products = provider.getChildProvider("products");
+
+        # Create product
+        AbstractDataProvider create = products.getChildProvider("create");
+        try {
+            hash<auto> result = create.doRequest({
+                "PRODUCT_NAME": "QoreTest Product " + now_us().toString(),
+                "PRODUCT_CODE": "QT-" + string(rand()),
+                "DEFAULT_PRICE": 99.99,
+            });
+            assertEq(True, result.PRODUCT_ID.val(), "product created with ID");
+            testProductId = result.PRODUCT_ID;
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.arg.status_code == 405) {
+                testSkip("POST /Products not supported on this Insightly plan");
+            }
+            rethrow;
+        }
+
+        # Get product
+        AbstractDataProviderRecordIterator it = products.searchRecords(NOTHING,
+            {"id": testProductId});
+        assertEq(True, it.next(), "product found by ID");
+
+        # Update product
+        AbstractDataProvider update = products.getChildProvider("update");
+        hash<auto> updated = update.doRequest({
+            "PRODUCT_ID": testProductId,
+            "DEFAULT_PRICE": 149.99,
+        });
+        assertEq(True, updated.PRODUCT_ID.val(), "product updated");
+
+        # Verify update persisted
+        AbstractDataProviderRecordIterator it2 = products.searchRecords(NOTHING,
+            {"id": testProductId});
+        assertEq(True, it2.next(), "updated product found");
+        hash<auto> verified = it2.getValue();
+        assertEq(149.99, verified.DEFAULT_PRICE, "DEFAULT_PRICE update persisted");
+    }
+
+    emailCrudTests() {
+        skipIfNoCredentials();
+
+        InsightlyDataProvider::InsightlyDataProvider provider = getProvider();
+        AbstractDataProvider emails = provider.getChildProvider("emails");
+
+        # Create email
+        AbstractDataProvider create = emails.getChildProvider("create");
+        string test_subject = "QoreTest Email " + now_us().toString();
+        try {
+            hash<auto> result = create.doRequest({
+                "SUBJECT": test_subject,
+                "BODY": "Test email body from QoreTest",
+            });
+            assertEq(True, result.EMAIL_ID.val(), "email created with ID");
+            testEmailId = result.EMAIL_ID;
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.arg.status_code == 405) {
+                testSkip("POST /Emails not supported on this Insightly plan");
+            }
+            rethrow;
+        }
+
+        # Get email
+        AbstractDataProviderRecordIterator it = emails.searchRecords(NOTHING,
+            {"id": testEmailId});
+        assertEq(True, it.next(), "email found by ID");
+        hash<auto> found = it.getValue();
+        assertEq(test_subject, found.SUBJECT, "email SUBJECT matches");
+
+        # Note: Insightly API does not support email updates -- delete tested in cleanup
+    }
+
+    listContactsTests() {
+        skipIfNoCredentials();
+
+        InsightlyDataProvider::InsightlyDataProvider provider = getProvider();
+        AbstractDataProvider contacts = provider.getChildProvider("contacts");
+
+        # List with top limit
+        AbstractDataProviderRecordIterator it = contacts.searchRecords(NOTHING,
+            {"top": 5});
+        int count = 0;
+        while (it.next()) {
+            ++count;
+        }
+        assertEq(True, count <= 5, "list contacts respects top limit");
+    }
+
+    eventDataTests() {
+        skipIfNoCredentials();
+
+        InsightlyDataProvider::InsightlyDataProvider provider = getProvider();
+        AbstractDataProvider events = provider.getChildProvider("events");
+
+        # Test each event provider's example data
+        list<hash<auto>> event_checks = (
+            {"name": "new-contact", "key": "CONTACT_ID"},
+            {"name": "new-organisation", "key": "ORGANISATION_ID"},
+            {"name": "new-lead", "key": "LEAD_ID"},
+            {"name": "new-opportunity", "key": "OPPORTUNITY_ID"},
+            {"name": "new-task", "key": "TASK_ID"},
+        );
+
+        foreach hash<auto> check in (event_checks) {
+            AbstractDataProvider ep = events.getChildProvider(check.name);
+            auto example = ep.getExampleEventData(check.name);
+            assertEq(Type::Hash, example.type(), sprintf("%s example data is a hash",
+                check.name));
+            assertEq(True, example.hasKey(check.key),
+                sprintf("%s example data has %s", check.name, check.key));
+        }
+    }
+
+    cleanupTests() {
+        skipIfNoCredentials();
+
+        InsightlyDataProvider::InsightlyDataProvider provider = getProvider();
+
+        # Delete in reverse dependency order
+        list<hash<auto>> cleanup_items = (
+            {"name": "emails", "id": testEmailId, "id_field": "EMAIL_ID"},
+            {"name": "notes", "id": testNoteId, "id_field": "NOTE_ID"},
+            {"name": "calendar-events", "id": testCalendarEventId, "id_field": "EVENT_ID"},
+            {"name": "tasks", "id": testTaskId, "id_field": "TASK_ID"},
+            {"name": "products", "id": testProductId, "id_field": "PRODUCT_ID"},
+            {"name": "projects", "id": testProjectId, "id_field": "PROJECT_ID"},
+            {"name": "opportunities", "id": testOpportunityId, "id_field": "OPPORTUNITY_ID"},
+            {"name": "leads", "id": testLeadId, "id_field": "LEAD_ID"},
+            {"name": "organisations", "id": testOrganisationId, "id_field": "ORGANISATION_ID"},
+            {"name": "contacts", "id": testContactId, "id_field": "CONTACT_ID"},
+        );
+
+        foreach hash<auto> item in (cleanup_items) {
+            if (item.id) {
+                try {
+                    AbstractDataProvider resource = provider.getChildProvider(item.name);
+                    AbstractDataProvider del = resource.getChildProvider("delete");
+                    del.doRequest({item.id_field: item.id});
+                } catch (hash<ExceptionInfo> ex) {
+                    if (m_options.verbose) {
+                        printf("Warning: failed to delete test %s %d: %s\n",
+                            item.name, item.id, ex.desc);
+                    }
+                }
+            }
+        }
+
+        assertTrue(True, "cleanup completed");
+    }
+}

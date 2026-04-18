@@ -99,6 +99,12 @@ public class ServerSentEventClientIo inherits Logger::LoggerWrapper, ConnectionP
 
         #! Callable to start a new thread (for sandboxed environments)
         *code<int(code<nothing()>)> start_thread;
+
+        #! HTTP method for the SSE request (default: GET)
+        string method = "GET";
+
+        #! Request body for non-GET requests
+        *data request_body;
     }
 
     #! Creates the SSE client
@@ -146,6 +152,19 @@ public class ServerSentEventClientIo inherits Logger::LoggerWrapper, ConnectionP
         yield = opts.yield;
         start_thread = opts.start_thread;
 
+        # set HTTP method option, if any
+        if (opts.method) {
+            method = opts.method.upr();
+        }
+
+        # set request body option, if any
+        if (exists opts.body) {
+            if (method == "GET") {
+                throw "SSE-ERROR", "'body' option cannot be used with GET method";
+            }
+            request_body = opts.body;
+        }
+
         # Use "auto" for HTTPS (H2 via ALPN), "h1" for plain HTTP
         string protocol = url =~ /^https/i ? "auto" : "h1";
         mgr = new HttpClientIo::HttpClientConnectionManager(
@@ -184,6 +203,12 @@ public class ServerSentEventClientIo inherits Logger::LoggerWrapper, ConnectionP
         if (opts.hdr) {
             connect_headers = opts.hdr;
         }
+        if (opts.method) {
+            method = opts.method.upr();
+        }
+        if (exists opts.body) {
+            request_body = opts.body;
+        }
 
         int new_tid;
 %ifdef PO_NO_THREAD_CONTROL
@@ -217,6 +242,22 @@ public class ServerSentEventClientIo inherits Logger::LoggerWrapper, ConnectionP
                 stop_cond.wait(m);
             }
         }
+    }
+
+    #! Called when all observers have been added to the object
+    /** Satisfies the @ref DataProvider::DelayedObservable "DelayedObservable"
+        contract; starts the background event loop by calling @ref connect()
+        with no extra headers.  Callers that need to supply per-request
+        headers or an alternate method/body should invoke @ref connect()
+        themselves and skip this method.
+    */
+    observersReady() {
+        connect();
+    }
+
+    #! Called to stop generating events — disconnects the SSE connection
+    stopEvents() {
+        disconnect();
     }
 
     #! Returns True if the event loop is running
@@ -325,7 +366,20 @@ public class ServerSentEventClientIo inherits Logger::LoggerWrapper, ConnectionP
             headers."Last-Event-ID" = last_event_id;
         }
 
-        stream.startStreaming("GET", url_path, headers);
+        # serialize body for non-GET methods
+        *data send_body;
+        if (exists request_body) {
+            if (serialization == "json" && request_body.typeCode() != NT_STRING) {
+                send_body = make_json(request_body);
+            } else {
+                send_body = request_body;
+            }
+            if (serialization == "json" && !headers."Content-Type") {
+                headers."Content-Type" = MimeTypeJson;
+            }
+        }
+
+        stream.startStreaming(method, url_path, headers, False, send_body);
 
         HttpClientStreamingIo::SseStreamReader reader(stream);
 
@@ -385,6 +439,21 @@ public class ServerSentEventClientIo inherits Logger::LoggerWrapper, ConnectionP
         }
 %endif
         return buf;
+    }
+
+    #! Emit a DEBUG-level log entry via the wrapped logger, if any
+    private logDebug(string fmt, ...) {
+        logArgs(LoggerLevel::LevelDebug, fmt, argv);
+    }
+
+    #! Emit an INFO-level log entry via the wrapped logger, if any
+    private logInfo(string fmt, ...) {
+        logArgs(LoggerLevel::LevelInfo, fmt, argv);
+    }
+
+    #! Emit an ERROR-level log entry via the wrapped logger, if any
+    private logError(string fmt, ...) {
+        logArgs(LoggerLevel::LevelError, fmt, argv);
     }
 }
 

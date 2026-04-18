@@ -333,6 +333,30 @@ if (push) {
         Http2PollOperationBase::registerStreamQueue(stream_id, queue);
     }
 
+    #! Registers a Queue backed by a C++ WebSocketStreamFrameState for a CONNECT stream
+    /** Identical to @ref registerStreamQueue() except the I/O controller
+        feeds incoming DATA bytes into a server-side WebSocket frame
+        decoder that pushes one typed message hash per complete WebSocket
+        message to @p queue.  Control frames (ping / close) are handled
+        in C++ with no Qore round-trip.
+
+        This eliminates the O(N²) binary concatenation overhead in
+        WebSocketStreamProcessor for large H2 WebSocket messages and
+        mirrors the H3 path (\c registerQuicConnectStreamFrameState).
+
+        @param stream_id the HTTP/2 stream ID
+        @param queue the unlimited Queue that will receive typed message
+            hashes (\c {type, data, [code, reason]})
+
+        @note Must be called on the I/O controller thread before the
+        handler starts reading.
+
+        @since HttpServerAsyncIo 1.3
+    */
+    registerStreamFrameState(int stream_id, Queue queue) {
+        Http2PollOperationBase::registerStreamFrameState(stream_id, queue);
+    }
+
     # drainStreamQueues() is now implemented in pure C++ in the
     # Http2PollOperationBase parent class.  It is called automatically by
     # continueReadPoll() after each inner op continuePoll() cycle.

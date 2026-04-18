@@ -36,13 +36,14 @@
 %requires Util
 %requires(reexport) Logger
 %requires Mime
+%requires(reexport) DataProvider
 
 %try-module json >= 1.5
 %define NoJson
 %endtry
 
 module ServerSentEventHandler {
-    version = "1.0.2";
+    version = "1.1.0";
     desc = "User module for handling SSE connections";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -66,8 +67,20 @@ module ServerSentEventHandler {
     The main classes provided in this module are:
     - @ref ServerSentEventHandler::ServerSentEventConnection
     - @ref ServerSentEventHandler::ServerSentEventHandler
+    - @ref ServerSentEventHandler::SseObservableBridge — serves an SSE stream
+      backed by any @ref DataProvider::Observable "Observable"; the
+      @ref ServerSentEventHandler::sseObservableResponse() helper wraps
+      bridge construction for use from REST / HTTP handlers
 
     @section serversenteventhandler_relnotes ServerSentEventHandler Release History
+
+    @subsection serversenteventhandler_v1_1_0 Version 1.1.0
+    - added @ref ServerSentEventHandler::SseObservableBridge and the
+      @ref ServerSentEventHandler::sseObservableResponse() helper to stream
+      the events of any @ref DataProvider::Observable "Observable" as an
+      SSE response from a REST handler (or any other handler that returns
+      an @ref HttpServer::HttpHandlerResponseInfo "HttpHandlerResponseInfo"),
+      with no extra threads required
 
     @subsection serversenteventhandler_v1_1 Version 1.1
     - added @ref ServerSentEventHandler::ServerSentEventHandler::setupAsyncSseConnection()

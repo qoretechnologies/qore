@@ -1,0 +1,206 @@
+#!/usr/bin/env qore
+
+# Minimal reproducer: WS large-message response loss after N batches
+#
+# Sends repeated large messages (simulating clone batches) over a WS
+# connection where client and server are in the same process.
+# After ~3-4 successful round-trips, the server's response stops
+# arriving at the client.
+#
+# Usage:
+#   qore test/ws-same-process-repro.qr --size=4500 --batches=10
+#   qore test/ws-same-process-repro.qr --size=4500 --batches=10 --protocol=h2
+
+%modern
+%requires HttpServer
+%requires WebSocketHandler
+%requires WebSocketClient
+%requires json
+
+# --- Server side ---
+
+class TestWsConnection inherits WebSocketConnection {
+    constructor(WebSocketHandler handler) : WebSocketConnection(handler) {}
+
+    gotMessage(string msg) {
+        printf("  SERVER: gotMessage len=%d\n", msg.length());
+        # Echo back an ack — include request_id so the client's observer can match
+        hash<auto> response = {"event": "ack", "len": msg.length()};
+        try {
+            hash<auto> req = parse_json(msg);
+            if (req.request_id) {
+                response.request_id = req.request_id;
+            }
+        } catch () {
+            # Not JSON — ignore parse error
+        }
+        send(make_json(response));
+    }
+
+    gotMessage(binary msg) {
+        gotMessage(msg.toString("UTF-8"));
+    }
+}
+
+class TestWsHandler inherits WebSocketHandler {
+    constructor() : WebSocketHandler() {}
+
+    WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
+        printf("SERVER: connection opened (cid=%y)\n", cid);
+        return new TestWsConnection(self);
+    }
+}
+
+class MyObserver inherits DataProvider::Observer {
+    private {
+        Mutex m();
+        hash<string, Condition> pending_conds;
+        hash<string, hash<auto>> pending_responses;
+    }
+
+    update(string event_id, hash<auto> data_) {
+        if (event_id == "ws-connected-event") {
+            printf("CLIENT: connected (http2=%y http3=%y)\n",
+                data_.http2, data_.http3);
+        } else if (event_id == "ws-data-event") {
+            hash<auto> msg = data_.data;
+            *string rid = msg.request_id;
+            if (rid.val()) {
+                AutoLock al(m);
+                if (pending_conds.hasKey(rid)) {
+                    pending_responses{rid} = msg;
+                    pending_conds{rid}.signal();
+                }
+            }
+        } else if (event_id == "ws-closed-event") {
+            printf("CLIENT: disconnected\n");
+            # Wake all waiters
+            AutoLock al(m);
+            foreach string rid in (keys pending_conds) {
+                if (!pending_responses.hasKey(rid)) {
+                    pending_responses{rid} = {"event": "error", "err": "DISCONNECTED"};
+                    pending_conds{rid}.signal();
+                }
+            }
+        }
+    }
+
+    *hash<auto> waitForResponse(string request_id, timeout t) {
+        Condition cond();
+        {
+            AutoLock al(m);
+            pending_conds{request_id} = cond;
+        }
+        on_exit {
+            AutoLock al(m);
+            remove pending_conds{request_id};
+            remove pending_responses{request_id};
+        }
+        {
+            AutoLock al(m);
+            while (!pending_responses.hasKey(request_id)) {
+                int rc = cond.wait(m, t);
+                if (rc == ETIMEDOUT && !pending_responses.hasKey(request_id)) {
+                    return NOTHING;
+                }
+            }
+            return pending_responses{request_id};
+        }
+    }
+}
+
+# Parse command line
+int port = 18443;
+int msg_size_kb = 4500;
+int num_batches = 10;
+*string protocol;
+
+list<auto> args = ARGV;
+foreach string arg in (args) {
+    if (arg =~ /^--port=/) {
+        port = int(arg.substr(7));
+    } else if (arg =~ /^--size=/) {
+        msg_size_kb = int(arg.substr(7));
+    } else if (arg =~ /^--batches=/) {
+        num_batches = int(arg.substr(10));
+    } else if (arg =~ /^--protocol=/) {
+        protocol = arg.substr(11);
+    }
+}
+
+printf("=== WS Same-Process Batch Repro ===\n");
+printf("Port: %d, Message size: %d KB, Batches: %d, Protocol: %s\n",
+    port, msg_size_kb, num_batches, protocol ?? "auto");
+
+# Start HTTP server with WS handler
+HttpServer server();
+TestWsHandler ws_handler();
+server.setHandler("ws-test", "/ws/test", NOTHING, ws_handler);
+
+string cert_path = ENV.OMQ_DIR + "/etc/supah.qoretechnologies.com-cert.pem";
+string key_path = ENV.OMQ_DIR + "/etc/supah.qoretechnologies.com-privkey.pem";
+hash<HttpListenerOptionInfo> listener_opts = <HttpListenerOptionInfo>{
+    "node": "localhost",
+    "service": string(port),
+    "cert": new SSLCertificate(ReadOnlyFile::readTextFile(cert_path)),
+    "key": new SSLPrivateKey(ReadOnlyFile::readTextFile(key_path)),
+};
+server.addListener(listener_opts);
+server.waitForAsyncIo();
+printf("Server ready\n");
+
+# Connect client
+hash<auto> client_opts = {
+    "url": sprintf("wss://localhost:%d/ws/test", port),
+    "data": "json",
+};
+if (protocol) {
+    client_opts.protocol = protocol;
+}
+
+WebSocketClient::WebSocketClientWithSerialization ws(client_opts);
+MyObserver obs();
+ws.registerObserver(obs);
+ws.observersReady();
+
+# Build payload once
+string padding = strmul("X", msg_size_kb * 1024);
+
+# Send batches
+date total_start = now_us();
+int passed = 0;
+int failed = 0;
+
+for (int i = 0; i < num_batches; ++i) {
+    string request_id = sprintf("batch-%d", i);
+    date batch_start = now_us();
+
+    printf("Batch %d/%d: sending %d KB ... ", i + 1, num_batches, msg_size_kb);
+    ws.sendData({
+        "action": "big",
+        "request_id": request_id,
+        "data": padding,
+    });
+
+    *hash<auto> resp = obs.waitForResponse(request_id, 30s);
+    date elapsed = now_us() - batch_start;
+    if (resp && resp.event == "ack") {
+        printf("OK (%y)\n", elapsed);
+        ++passed;
+    } else if (resp) {
+        printf("ERROR: %y (%y)\n", resp.err, elapsed);
+        ++failed;
+        break;
+    } else {
+        printf("TIMEOUT after 30s (no response)\n");
+        ++failed;
+        break;
+    }
+}
+
+printf("\n=== Results ===\n");
+printf("Passed: %d/%d, Failed: %d, Total time: %y\n",
+    passed, num_batches, failed, now_us() - total_start);
+
+ws.disconnect();
+server.stop();

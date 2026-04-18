@@ -251,6 +251,26 @@ public class HttpAsyncSocketIoController {
         Does NOT stop the shared controller — other users may still be using it.
         If the controller was created internally, it is stopped.
     */
+    #! Pushes a \c close sentinel to every registered persistent-mux queue
+    /** Called from both @ref stop() and @ref HttpServer::stopNoWait() so that
+        dedicated persistent-handler threads blocked in @ref Queue::get() on the
+        queue's idle TTL (default 75 s) exit promptly on shutdown.
+
+        Without this, a \c stopNoWait() shutdown path (the one Qorus uses) would
+        wait up to the full TTL for each dedicated handler before
+        @ref HttpListener::stop()'s connection-thread WaitGroup drains — making
+        server shutdown visibly sluggish even though all I/O is async.
+
+        Safe to call multiple times.
+    */
+    signalPersistentQueuesToClose() {
+        persistent_queue_mutex.lock();
+        on_exit persistent_queue_mutex.unlock();
+        foreach string key in (keys persistent_queues) {
+            persistent_queues{key}.queue.push({"type": "close"});
+        }
+    }
+
     stop() {
         # Set stopping flag first — prevents handler tasks from submitting new operations
         # Copy keys under lock, then cancel without holding the lock
@@ -276,13 +296,7 @@ public class HttpAsyncSocketIoController {
             accept_counts = {};
         }
         # Signal persistent queues to exit their dedicated loops
-        {
-            persistent_queue_mutex.lock();
-            on_exit persistent_queue_mutex.unlock();
-            foreach string key in (keys persistent_queues) {
-                persistent_queues{key}.queue.push({"type": "close"});
-            }
-        }
+        signalPersistentQueuesToClose();
         foreach string lhash in (listener_keys) {
             controller.cancelByOwner(lhash);
         }
@@ -1222,13 +1236,24 @@ public class HttpAsyncSocketIoController {
         bool body_streaming = request.hdr && !request.headers_end_stream;
 
         # For extended CONNECT: create unlimited Queue for async data delivery.
-        # Data is pushed directly from the QUIC receive callback (h3RecvDataCallback)
-        # to the Queue, eliminating the I/O poll loop dependency for data delivery.
+        # WebSocket CONNECT uses the C++ WebSocketStreamFrameState path —
+        # the Queue is populated with one entry per complete WebSocket
+        # message (a typed hash), not per raw transport chunk.  This avoids
+        # O(N²) Qore-side binary concatenation for large WS messages.
+        # Other extended-CONNECT tunnels (e.g. QUIC datagram tunnels) keep
+        # the raw-byte Queue contract.
         *Queue stream_data_queue;
+        bool stream_uses_frame_state = False;
         if (is_extended_connect) {
             stream_data_queue = new Queue();
-            listener.registerQuicConnectStreamQueue(session_id, stream_id,
-                stream_data_queue);
+            if (is_websocket_connect) {
+                listener.registerQuicConnectStreamFrameState(session_id, stream_id,
+                    stream_data_queue);
+                stream_uses_frame_state = True;
+            } else {
+                listener.registerQuicConnectStreamQueue(session_id, stream_id,
+                    stream_data_queue);
+            }
             # Register the Queue with the H3 poll operation for dispatch tracking
             h3op.registerStreamQueue(session_id, stream_id, stream_data_queue);
         }
@@ -1273,6 +1298,7 @@ public class HttpAsyncSocketIoController {
                 "body_streaming": body_streaming,
                 "headers_end_stream": request.headers_end_stream ?? False,
                 "stream_data_queue": stream_data_queue,
+                "stream_uses_frame_state": stream_uses_frame_state,
                 "send_stream_data": send_stream_data,
                 "io_wake": sub () { controller.wakeSocket(listener); },
                 "register_stream_listener": sub (object listener) {
@@ -3119,12 +3145,20 @@ public class HttpAsyncSocketIoController {
             request.headers.":protocol", uh, stream_id, request.path);
 
         # Create unlimited Queue for async data delivery to the handler.
-        # The I/O controller's h2op reads HTTP/2 frames from TCP, buffers
-        # per-stream data, then drains it to this Queue after each poll cycle.
-        # All CONNECT stream handlers — including WebSocket — use the Queue
-        # so only the I/O controller reads from the socket (no direct_io).
+        # WebSocket CONNECT takes the C++ WebSocketStreamFrameState fast
+        # path — the Queue is populated with one entry per complete
+        # WebSocket message (a typed hash), not per raw transport chunk.
+        # This eliminates O(N²) Qore-side binary concatenation for large
+        # WS messages (mirrors the H3 path).  Non-WS extended-CONNECT
+        # tunnels keep the raw-byte Queue contract.
         Queue stream_data_queue();
-        h2op.registerStreamQueue(stream_id, stream_data_queue);
+        bool stream_uses_frame_state = False;
+        if (is_websocket_connect) {
+            h2op.registerStreamFrameState(stream_id, stream_data_queue);
+            stream_uses_frame_state = True;
+        } else {
+            h2op.registerStreamQueue(stream_id, stream_data_queue);
+        }
 
         # Closure for handlers to register a stream data listener.
         # The listener's notifyIo() method is called from the controller's
@@ -3210,6 +3244,7 @@ public class HttpAsyncSocketIoController {
                 "accept-encoding": accept_encoding,
                 "body": request.body,
                 "stream_data_queue": stream_data_queue,
+                "stream_uses_frame_state": stream_uses_frame_state,
                 "register_stream_listener": register_stream_listener,
                 "send_stream_data": send_stream_data,
                 "io_wake": sub () { controller.wakeSocket(cinfo.sock); },

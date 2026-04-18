@@ -1,0 +1,470 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  UnbounceDataProvider.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/ConnectionProvider
+%requires ../../../../qlib/RestClient.qm
+
+%try-module json
+%define NoJson
+%endtry
+
+%requires ../../../../qlib/UnbounceRestClient.qm
+%requires ../../../../qlib/UnbounceDataProvider
+
+%exec-class UnbounceDataProviderTest
+
+public class UnbounceDataProviderTest inherits QUnit::Test {
+    private {
+        #! Unbounce REST client for integration tests (async)
+        *RestClientIo::RestClientIo client;
+
+        #! Logger for verbose output
+        Logger logger;
+
+        #! Custom command-line options
+        const MyOpts = Opts + {
+            "token": "t,token=s",
+            "conn": "c,connection=s",
+        };
+    }
+
+    constructor() : Test("UnbounceDataProvider Test", "1.0", \ARGV, MyOpts) {
+        logger = new Logger("test", LoggerLevel::getLevelInfo());
+
+        # Unit tests (always run, no credentials needed)
+        addTestCase("sanity tests", \sanityTests());
+        addTestCase("factory tests", \factoryTests());
+        addTestCase("metadata tests", \metadataTests());
+        addTestCase("child provider tests", \childProviderTests());
+        addTestCase("data type tests", \dataTypeTests());
+        addTestCase("negative tests", \negativeTests());
+        addTestCase("connection tests", \connectionTests());
+
+        # Integration tests (require Unbounce credentials)
+        # NOTE: integration tests must run before trigger/ping tests because those tests
+        # can poison the HttpClientConnectionManager (e.g. via AbstractWatchDataProviderBase
+        # destructor cleanup), causing subsequent API calls to fail with HTTPCLIENT-SHUTDOWN
+        addTestCase("integration tests", \integrationTests());
+        addTestCase("trigger example data tests", \triggerExampleDataTests());
+        addTestCase("connection ping tests", \connectionPingTests());
+
+        # Try to set up connection for integration tests
+        try {
+            setupConnection();
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose) {
+                printf("Connection setup failed: %s: %s\n", ex.err, ex.desc);
+            }
+        }
+
+        set_return_value(main());
+    }
+
+    #! Sets up the Unbounce client for integration tests
+    private setupConnection() {
+        # Try to use a connection from Qorus if specified
+        *string conn_name = m_options.conn ?? ENV.UNBOUNCE_CONNECTION;
+        if (conn_name) {
+            AbstractConnection conn = get_connection(conn_name);
+            if (conn instanceof UnbounceRestClient::UnbounceRestConnection) {
+                client = conn.getAsync();
+            }
+            return;
+        }
+
+        # Try environment variables
+        *string token = m_options.token ?? ENV.UNBOUNCE_TOKEN;
+        if (token) {
+            client = new UnbounceRestClient::UnbounceRestClientIo({"token": token});
+        }
+    }
+
+    #! Basic sanity tests
+    sanityTests() {
+        # Verify module loaded
+        assertEq(True, True, "module loaded");
+
+        # Verify constants
+        assertEq("Unbounce", UnbounceDataProvider::AppName);
+        assertEq(50, UnbounceDataProvider::DefaultPageSize);
+        assertEq(60, UnbounceDataProvider::DefaultPollInterval);
+        assertEq(30, UnbounceDataProvider::MinPollInterval);
+
+        # Verify event constants
+        assertEq("lead-added", UnbounceDataProvider::EVENT_LEAD_ADDED);
+    }
+
+    #! Factory tests
+    factoryTests() {
+        # Verify factory exists
+        AbstractDataProviderFactory factory = DataProvider::getFactory("unbounce");
+        assertEq(True, factory instanceof UnbounceDataProvider::UnbounceDataProviderFactory);
+
+        # Verify factory info
+        hash<DataProviderFactoryInfo> info = factory.getInfo();
+        assertEq("unbounce", info.name);
+        assertEq(True, info.children_can_support_apis);
+        assertEq(True, info.children_can_support_records);
+        assertEq(True, info.children_can_support_observers);
+    }
+
+    #! Metadata tests
+    metadataTests() {
+        # Verify action catalog app registration
+        *hash<auto> app = DataProviderActionCatalog::getApp("Unbounce");
+        assertEq(True, app.val(), "Unbounce app registered in action catalog");
+        assertEq("Unbounce", app.display_name);
+        assertEq("unbouncerest", app.scheme);
+
+        # Verify some actions are registered
+        list<hash<auto>> actions = DataProviderActionCatalog::getActions("Unbounce");
+        assertEq(True, actions.size() >= 14, "at least 14 actions registered");
+
+        # Verify specific actions
+        bool found_create_lead = False;
+        bool found_list_leads = False;
+        bool found_list_pages = False;
+        bool found_lead_added_event = False;
+        foreach hash<auto> action in (actions) {
+            if (action.action == "create-lead") {
+                found_create_lead = True;
+                assertEq(DPAT_API, action.action_code);
+            }
+            if (action.action == "list-leads") {
+                found_list_leads = True;
+                assertEq(DPAT_FIND, action.action_code);
+            }
+            if (action.action == "list-pages") {
+                found_list_pages = True;
+                assertEq(DPAT_FIND, action.action_code);
+            }
+            if (action.action == "lead-added") {
+                found_lead_added_event = True;
+                assertEq(DPAT_EVENT, action.action_code);
+            }
+        }
+        assertEq(True, found_create_lead, "create-lead action registered");
+        assertEq(True, found_list_leads, "list-leads action registered");
+        assertEq(True, found_list_pages, "list-pages action registered");
+        assertEq(True, found_lead_added_event, "lead-added event registered");
+    }
+
+    #! Child provider tests
+    childProviderTests() {
+        if (!client) {
+            testSkip("no Unbounce credentials available");
+        }
+
+        UnbounceDataProvider::UnbounceDataProvider provider(client);
+
+        # Verify child names
+        *list<string> children = provider.getChildProviderNames();
+        assertEq(True, children.size() >= 9, "at least 9 child providers");
+        assertEq(True, inlist("accounts", children), "accounts child exists");
+        assertEq(True, inlist("sub-accounts", children), "sub-accounts child exists");
+        assertEq(True, inlist("domains", children), "domains child exists");
+        assertEq(True, inlist("page-groups", children), "page-groups child exists");
+        assertEq(True, inlist("pages", children), "pages child exists");
+        assertEq(True, inlist("leads", children), "leads child exists");
+        assertEq(True, inlist("lead-deletion-requests", children),
+            "lead-deletion-requests child exists");
+        assertEq(True, inlist("users", children), "users child exists");
+        assertEq(True, inlist("events", children), "events child exists");
+
+        # Verify child providers can be created
+        AbstractDataProvider accounts = provider.getChildProvider("accounts");
+        assertEq(True, accounts instanceof UnbounceDataProvider::UnbounceAccountsDataProvider);
+
+        AbstractDataProvider pages = provider.getChildProvider("pages");
+        assertEq(True, pages instanceof UnbounceDataProvider::UnbouncePagesDataProvider);
+
+        AbstractDataProvider leads = provider.getChildProvider("leads");
+        assertEq(True, leads instanceof UnbounceDataProvider::UnbounceLeadsDataProvider);
+
+        AbstractDataProvider events = provider.getChildProvider("events");
+        assertEq(True, events instanceof UnbounceDataProvider::UnbounceEventsDataProvider);
+    }
+
+    #! Data type tests
+    dataTypeTests() {
+        # Test account data type field definitions
+        assertEq(True, UnbounceDataProvider::UnbounceAccountDataType::Fields.hasKey("id"),
+            "account type has id field");
+        assertEq(True, UnbounceDataProvider::UnbounceAccountDataType::Fields.hasKey("name"),
+            "account type has name field");
+
+        # Test page data type field definitions
+        assertEq(True, UnbounceDataProvider::UnbouncePageDataType::Fields.hasKey("id"),
+            "page type has id field");
+        assertEq(True, UnbounceDataProvider::UnbouncePageDataType::Fields.hasKey("name"),
+            "page type has name field");
+
+        # Test lead data type field definitions
+        assertEq(True, UnbounceDataProvider::UnbounceLeadDataType::Fields.hasKey("id"),
+            "lead type has id field");
+        assertEq(True, UnbounceDataProvider::UnbounceLeadDataType::Fields.hasKey("page_id"),
+            "lead type has page_id field");
+        assertEq(True, UnbounceDataProvider::UnbounceLeadDataType::Fields.hasKey("form_data"),
+            "lead type has form_data field");
+
+        # Test create lead request data type field definitions
+        assertEq(True, UnbounceDataProvider::UnbounceCreateLeadRequestDataType::Fields.hasKey("page_id"),
+            "create lead type has page_id field");
+        assertEq(True, UnbounceDataProvider::UnbounceCreateLeadRequestDataType::Fields.hasKey("form_submission"),
+            "create lead type has form_submission field");
+
+        # Test delete lead request data type field definitions
+        assertEq(True, UnbounceDataProvider::UnbounceDeleteLeadRequestDataType::Fields.hasKey("page_id"),
+            "delete lead type has page_id field");
+        assertEq(True, UnbounceDataProvider::UnbounceDeleteLeadRequestDataType::Fields.hasKey("lead_id"),
+            "delete lead type has lead_id field");
+    }
+
+    #! Trigger example data tests
+    triggerExampleDataTests() {
+        if (!client) {
+            testSkip("no Unbounce credentials available");
+        }
+
+        UnbounceDataProvider::UnbounceDataProvider provider(client);
+        AbstractDataProvider events = provider.getChildProvider("events");
+
+        # Verify event children exist
+        *list<string> event_children = events.getChildProviderNames();
+        assertEq(True, event_children.size() >= 1, "at least 1 event provider");
+
+        # Verify each trigger can provide example data
+        foreach string event_name in (event_children) {
+            AbstractDataProvider trigger = events.getChildProvider(event_name);
+            hash<string, hash<DataProviderMessageInfo>> event_types = trigger.getEventTypes();
+            assertEq(True, event_types.size() > 0,
+                sprintf("trigger %s has event types", event_name));
+
+            foreach string event_type in (keys event_types) {
+                auto example = trigger.getExampleEventData(event_type);
+                assertEq(True, example instanceof hash,
+                    sprintf("trigger %s returns hash example data for %s",
+                        event_name, event_type));
+            }
+        }
+    }
+
+    #! Negative tests
+    negativeTests() {
+        # Test invalid factory name returns NOTHING
+        assertEq(NOTHING, DataProvider::getFactory("nonexistent_unbounce"),
+            "nonexistent factory returns NOTHING");
+    }
+
+    #! Connection tests
+    connectionTests() {
+        # Verify connection scheme is registered
+        assertEq(True, exists ConnectionSchemeCache::getScheme("unbouncerest"),
+            "unbouncerest scheme registered");
+
+        # Verify connection scheme info
+        hash<auto> scheme = ConnectionSchemeCache::getScheme("unbouncerest");
+        assertEq("Unbounce REST Connection", scheme.display_name);
+    }
+
+    #! Connection ping tests (require Unbounce credentials)
+    connectionPingTests() {
+        if (!client) {
+            testSkip("no Unbounce credentials available");
+        }
+
+        *string conn_name = m_options.conn ?? ENV.UNBOUNCE_CONNECTION;
+        if (!conn_name) {
+            testSkip("no connection name available for ping test");
+        }
+        AbstractConnection conn = get_connection(conn_name);
+        hash<auto> ping_result = conn.ping(True);
+        assertEq(True, ping_result.ok, "connection ping succeeded");
+
+        if (m_options.verbose) {
+            printf("Ping result: %y\n", ping_result);
+        }
+    }
+
+    #! Integration tests (require Unbounce credentials)
+    integrationTests() {
+        if (!client) {
+            testSkip("no Unbounce credentials available");
+        }
+
+        UnbounceDataProvider::UnbounceDataProvider provider(client);
+
+        # Test list accounts
+        AbstractDataProvider accounts_dp = provider.getChildProvider("accounts");
+        AbstractDataProviderRecordIterator acct_iter = accounts_dp.searchRecords(NOTHING,
+            {"limit": 5});
+        list<hash<auto>> accounts = ();
+        while (acct_iter.next()) {
+            accounts += acct_iter.getValue();
+        }
+        assertEq(True, accounts.size() > 0, "at least one account returned");
+        assertEq(True, accounts[0].id.val(), "account has id field");
+        if (m_options.verbose) {
+            printf("Found %d account(s)\n", accounts.size());
+        }
+
+        # Test list pages
+        AbstractDataProvider pages_dp = provider.getChildProvider("pages");
+        AbstractDataProviderRecordIterator page_iter = pages_dp.searchRecords(NOTHING,
+            {"limit": 5});
+        list<hash<auto>> pages = ();
+        while (page_iter.next()) {
+            pages += page_iter.getValue();
+        }
+        if (pages.size()) {
+            assertEq(True, pages[0].id.val(), "page has id field");
+            assertEq(True, pages[0].name.val(), "page has name field");
+        }
+        if (m_options.verbose) {
+            printf("Found %d page(s)\n", pages.size());
+        }
+
+        # Need a page_id for lead operations
+        if (!pages.size()) {
+            if (m_options.verbose) {
+                printf("No pages found; skipping lead tests\n");
+            }
+            return;
+        }
+
+        string page_id = string(pages[0].id);
+        if (m_options.verbose) {
+            printf("Using page_id: %s (name: %s)\n", page_id, pages[0].name ?? "N/A");
+        }
+
+        # Test list leads (requires page_id)
+        AbstractDataProvider leads_dp = provider.getChildProvider("leads");
+        AbstractDataProviderRecordIterator lead_iter = leads_dp.searchRecords(NOTHING,
+            {"page_id": page_id, "limit": 5});
+        list<hash<auto>> leads = ();
+        while (lead_iter.next()) {
+            leads += lead_iter.getValue();
+        }
+        if (leads.size()) {
+            assertEq(True, leads[0].id.val(), "lead has id field");
+            assertEq(True, leads[0].page_id.val(), "lead has page_id field");
+        }
+        if (m_options.verbose) {
+            printf("Found %d lead(s) on page %s\n", leads.size(), page_id);
+        }
+
+        # Test create lead then delete lead lifecycle
+        # Note: creating a lead requires a variant_id from the page and form field data
+        # We need to get the page's form fields first to construct valid form data
+        AbstractDataProvider form_fields_dp = pages_dp.getChildProvider("form-fields");
+        AbstractDataProviderRecordIterator ff_iter = form_fields_dp.searchRecords(NOTHING,
+            {"page_id": page_id, "limit": 50});
+        list<hash<auto>> form_fields = ();
+        while (ff_iter.next()) {
+            form_fields += ff_iter.getValue();
+        }
+        if (m_options.verbose) {
+            printf("Found %d form field(s) on page %s\n", form_fields.size(), page_id);
+        }
+
+        # Build form data with test values for each form field
+        hash<auto> form_data;
+        foreach hash<auto> field in (form_fields) {
+            string field_id = string(field.id);
+            form_data{field_id} = "test_unbounce_dp_" + now_us().getEpochSeconds();
+        }
+
+        # Get page variants to find a variant_id
+        # The page object should have a variants field or we can use the page_id
+        *string variant_id;
+        if (pages[0].variants instanceof list && pages[0].variants.size() > 0) {
+            variant_id = string(pages[0].variants[0].id);
+        }
+
+        if (!variant_id || !form_fields.size()) {
+            if (m_options.verbose) {
+                printf("No variant_id or form fields found; skipping create/delete lead test\n");
+            }
+            return;
+        }
+
+        # Create a lead
+        AbstractDataProvider create_dp = leads_dp.getChildProvider("create");
+        string test_ip = "192.168.1." + (rand() % 254 + 1);
+        hash<auto> new_lead = create_dp.doRequest({
+            "page_id": page_id,
+            "form_submission": {
+                "variant_id": variant_id,
+                "submitter_ip": test_ip,
+                "form_data": form_data,
+            },
+        });
+        assertEq(True, new_lead.id.val(), "lead created with ID");
+        string lead_id = string(new_lead.id);
+        if (m_options.verbose) {
+            printf("Created lead: %s\n", lead_id);
+        }
+
+        on_exit {
+            # Cleanup: delete the test lead
+            if (lead_id) {
+                try {
+                    AbstractDataProvider del_dp = leads_dp.getChildProvider("delete");
+                    del_dp.doRequest({
+                        "page_id": page_id,
+                        "lead_id": lead_id,
+                    });
+                    if (m_options.verbose) {
+                        printf("Deleted test lead: %s\n", lead_id);
+                    }
+                } catch (hash<ExceptionInfo> ex) {
+                    if (m_options.verbose) {
+                        printf("Cleanup failed (lead): %s: %s\n", ex.err, ex.desc);
+                    }
+                }
+            }
+        }
+
+        # Verify the lead was created by retrieving it
+        AbstractDataProviderRecordIterator get_iter = leads_dp.searchRecords(NOTHING,
+            {"lead_id": lead_id});
+        assertEq(True, get_iter.next(), "found created lead");
+        hash<auto> found_lead = get_iter.getValue();
+        assertEq(lead_id, string(found_lead.id), "retrieved lead ID matches created lead");
+
+        # Test get user (current user)
+        AbstractDataProvider users_dp = provider.getChildProvider("users");
+        AbstractDataProviderRecordIterator user_iter = users_dp.searchRecords(NOTHING);
+        if (user_iter.next()) {
+            hash<auto> user = user_iter.getValue();
+            assertEq(True, user.id.val(), "user has id field");
+        }
+    }
+}

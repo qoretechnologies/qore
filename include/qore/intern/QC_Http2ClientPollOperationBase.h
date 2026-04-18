@@ -139,6 +139,30 @@ public:
     DLLLOCAL void sendStreamData(int64_t stream_id, const BinaryNode* data,
         bool end_stream, ExceptionSink* xsink);
 
+    //! Installs a WebSocket frame-state decoder on a CONNECT stream's action
+    /** Attaches a WebSocketStreamFrameState to the ChannelAction already
+        registered for @a stream_id.  After this call, body bytes from H2
+        DATA chunks dispatched by the I/O thread are fed into the decoder
+        (in pure C++) and the resulting typed frame hashes are pushed to
+        @a msg_queue; raw response hashes no longer flow through the
+        handle's Channel.
+
+        The install is race-free: the ChannelAction's per-action mutex
+        serialises the install against all execute()/complete()/executeError()
+        calls, and the install itself drains any items already buffered in
+        the channel into the decoder BEFORE publishing the frame state.  No
+        caller-side residual drain is required.
+
+        @param stream_id    the H2 stream ID to upgrade
+        @param msg_queue    Queue for typed frame hash delivery (ref transferred)
+        @param xsink        exception sink (raises HTTPCLIENT-STREAM-CLOSED if
+                            the stream is not found or already complete)
+
+        @since %Qore 2.3
+    */
+    DLLLOCAL void installFrameState(int32_t stream_id, Queue* msg_queue,
+        ExceptionSink* xsink);
+
     // --- Accessors ---
 
     DLLLOCAL bool isClosed() const {

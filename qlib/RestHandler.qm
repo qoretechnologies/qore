@@ -40,7 +40,7 @@
 %requires reflection
 
 module RestHandler {
-    version = "1.6.6";
+    version = "1.6.7";
     desc = "user module for implementing REST services with the Qore HTTP server";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -397,6 +397,15 @@ Content-Length: 16
     @endcode
 
     @section resthandler_relnotes RestHandler Release Notes
+
+    @subsection rh_1_6_7 RestHandler v1.6.7
+    - dropped the per-response "raw body" log entry from DEBUG to TRACE; at DEBUG level it flooded
+      the HTTP log with multi-MB response bodies (e.g. vector scrolls) and caused logger contention
+      under load.  Operators who need the raw serialized body for protocol-level debugging can
+      opt in by raising the logger level to TRACE.
+    - added the @ref RestHandler::RestHandler::logTrace() "logTrace()" virtual method on
+      @ref RestHandler::RestHandler to match the existing logDebug / logInfo / logError
+      pattern and provide a cheap way to emit per-message verbose output
 
     @subsection rh_1_6_6 RestHandler v1.6.6
     - added the @ref RestHandler::RestHandler::checkAccess() "checkAccess()" virtual method that allows subclasses
@@ -1619,7 +1628,12 @@ public namespace RestHandler {
                         rethrow ex.err, ex.desc;
                     }
 
-                    logDebug("REST DBG raw body: %y -> serialized body (%s): %y", rv.body, res.hdr."Content-Type",
+                    # TRACE (not DEBUG) because both rv.body and res.body can be multi-MB — e.g. a
+                    # scroll response returning 500 vector points balloons to > 10 MB of YAML.  At
+                    # DEBUG level this floods the HTTP log and stalls logging under heavy REST
+                    # traffic.  Operators who need the raw serialized body for a protocol-level
+                    # issue can opt in by raising the logger level to TRACE.
+                    logTrace("REST DBG raw body: %y -> serialized body (%s): %y", rv.body, res.hdr."Content-Type",
                         res.body);
 
                     rv += {
@@ -1762,6 +1776,17 @@ public namespace RestHandler {
         */
         logDebug(string fmt, ...) {
             logArgs(LoggerLevel::DEBUG, fmt, argv);
+        }
+
+        #! This method is called with trace log messages
+        /** Use for verbose per-message output (e.g. raw request/response
+            bodies) that should only be emitted when the operator explicitly
+            opts into TRACE-level logging; otherwise the log grows unbounded
+            under normal DEBUG operation.  Reimplement in subclasses to
+            provide for logging.
+        */
+        logTrace(string fmt, ...) {
+            logArgs(LoggerLevel::TRACE, fmt, argv);
         }
 
         #! creates a hash for an HTTP 200 OK error response with the response message body as a string

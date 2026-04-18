@@ -461,6 +461,11 @@ QoreHashNode* Http2ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
         empty_read_count = 0;
 
         QoreHashNode* output = output_val->get<QoreHashNode>();
+        // Tag the response with the negotiated protocol so callers (e.g.
+        // RestClientIo::RestResponseInfo.protocol) can distinguish H2 from
+        // H1 and H3.  H1 does this in Http1ClientPollOperationPriv; H3 does
+        // it in Http3ClientPollOperationImpl.qc.
+        output->setKeyValue("protocol", new QoreStringNode("h2"), xsink);
         int64_t stream_id_val = output->getKeyValue("stream_id").getAsBigInt();
         std::string sid = std::to_string(stream_id_val);
         bool is_end = output->getKeyValue("end_stream").getAsBool();
@@ -500,6 +505,7 @@ QoreHashNode* Http2ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
                     ReferenceHolder<QoreHashNode> end_resp(new QoreHashNode(autoTypeInfo), xsink);
                     end_resp->setKeyValue("end_stream", true, xsink);
                     end_resp->setKeyValue("stream_id", stream_id_val, xsink);
+                    end_resp->setKeyValue("protocol", new QoreStringNode("h2"), xsink);
                     // Preserve trailers so getTrailers() works for streaming responses
                     QoreValue trailers_val = output->getKeyValue("trailers");
                     if (!trailers_val.isNullOrNothing()) {
@@ -982,6 +988,67 @@ void Http2ClientPollOperationPriv::sendStreamData(int64_t stream_id, const Binar
     sock_obj->sendHttp2StreamData(stream_id, data, end_stream, xsink);
 }
 
+void Http2ClientPollOperationPriv::installFrameState(int32_t stream_id, Queue* msg_queue,
+        ExceptionSink* xsink) {
+    // Build send callback bound to this connection's socket + stream_id.
+    // The callback runs on the I/O thread inside the ChannelAction's
+    // execute() path (feedData -> auto-pong / close-echo) — nghttp2's
+    // sendHttp2StreamData enqueues the DATA frame which the surrounding
+    // continuePoll cycle flushes to the wire after action dispatch.
+    QoreSocketObject* sock_ptr = sock_obj;
+    WebSocketStreamFrameState::SendCallback send_cb =
+        [sock_ptr, stream_id](BinaryNode* frame_bytes) {
+            if (!frame_bytes) {
+                return;
+            }
+            SimpleRefHolder<BinaryNode> holder(frame_bytes);
+            ExceptionSink cxsink;
+            int rv = sock_ptr->sendHttp2StreamData(stream_id, *holder, false, &cxsink);
+            if (cxsink || rv < 0) {
+                // Non-fatal: transport teardown handles the close path
+                cxsink.clear();
+            }
+        };
+
+    // Frame state takes the one msg_queue ref transferred from the caller;
+    // on ChannelAction cleanup the unique_ptr destructor drops the queue ref.
+    auto frame_state = std::make_unique<WebSocketStreamFrameState>(
+        msg_queue, std::move(send_cb), /* is_server */ false);
+
+    // Look up the stream's action (which must still be the original
+    // ChannelAction) and ref it so it stays alive while we install.  We do
+    // NOT swap the action — we install the frame state on the existing
+    // ChannelAction so there is no swap race between the drain and any
+    // in-flight I/O-thread execute().  The per-action mutex inside
+    // ChannelAction serialises install with all execute()/complete()/
+    // executeError() calls, and the install itself drains any body bytes
+    // already buffered in the channel into the decoder BEFORE publishing
+    // the frame state.
+    ChannelAction* ch_action = nullptr;
+    std::string sid = std::to_string(stream_id);
+    {
+        AutoLocker al(stream_lock);
+        auto it = stream_actions.find(sid);
+        if (it == stream_actions.end()) {
+            xsink->raiseException("HTTPCLIENT-STREAM-CLOSED",
+                "cannot install frame state: stream %d not found or already complete",
+                (int)stream_id);
+            return;
+        }
+        ch_action = dynamic_cast<ChannelAction*>(it->second);
+        if (!ch_action) {
+            xsink->raiseException("HTTPCLIENT-STATE-ERROR",
+                "cannot install frame state: stream %d action is not a ChannelAction",
+                (int)stream_id);
+            return;
+        }
+        ch_action->ref();
+    }
+
+    ch_action->installFrameState(std::move(frame_state), xsink);
+    ch_action->deref(xsink);
+}
+
 /** @endcond */
 
 //! C++ base class for HTTP/2 client poll operations
@@ -1315,6 +1382,55 @@ int Http2ClientPollOperationBase::submitRequestStreaming(string method, string p
         body_ptr, body_len, streaming, action, (int)max_streams, xsink);
 }
 
+//! Submits an HTTP/2 SSE request with Queue-based parsed event delivery
+/** Like submitRequestStreaming() but creates an SseAction that parses SSE events
+    on the I/O thread and pushes parsed SseMessageInfo hashes to a Queue.
+
+    @param method HTTP method (GET, POST, etc.)
+    @param path request path
+    @param headers optional request headers
+    @param body optional request body
+    @param queue Queue for parsed SSE event delivery
+    @param max_streams maximum concurrent streams (0 = unlimited)
+
+    @return the stream ID assigned to this request
+
+    @since %Qore 2.3
+*/
+int Http2ClientPollOperationBase::submitRequestSse(string method, string path,
+        *hash<auto> headers, *data body, Queue[Queue] queue, int max_streams) {
+    const void* body_ptr = nullptr;
+    size_t body_len = 0;
+    if (body) {
+        switch (body->getType()) {
+            case NT_BINARY: {
+                const BinaryNode* b = static_cast<const BinaryNode*>(body);
+                body_ptr = b->getPtr();
+                body_len = b->size();
+                break;
+            }
+            case NT_STRING: {
+                const QoreStringNode* str = static_cast<const QoreStringNode*>(body);
+                body_ptr = str->c_str();
+                body_len = str->size();
+                break;
+            }
+            default:
+                xsink->raiseException("HTTP2-ERROR",
+                    "body must be string or binary, got type '%s'",
+                    body->getTypeName());
+                return -1;
+        }
+    }
+
+    // Create SseAction — priv takes ownership; release from QPP holder
+    Queue* queue_ptr = queue.release();
+    SseAction* action = new SseAction(queue_ptr);
+    queue_ptr->deref(xsink);  // SseAction refs the queue itself
+    return (int)priv->submitRequest(method->c_str(), path->c_str(), headers,
+        body_ptr, body_len, true, action, (int)max_streams, xsink);
+}
+
 //! Cancel a stream
 /** @param stream_id the stream to cancel
     @return True if the stream was found and cancelled
@@ -1381,6 +1497,39 @@ nothing Http2ClientPollOperationBase::registerStreamQueue(int stream_id,
 */
 nothing Http2ClientPollOperationBase::clearStreamQueues() {
     priv->clearStreamQueues(xsink);
+}
+
+//! Installs a WebSocket frame-state decoder for a CONNECT tunnel stream
+/** Attaches a WebSocketStreamFrameState to the ChannelAction already
+    registered for @a stream_id.  After this call, body bytes from H2 DATA
+    chunks dispatched by the I/O thread are fed into a pure C++ frame
+    decoder that pushes complete, typed message hashes to @a msg_queue
+    (\c {type: text|binary|ping|pong|close|error, data?, code?, reason?,
+    rsv1?, rsv2?, rsv3?}) instead of the raw response hash routed through
+    the handle's Channel.  This avoids the O(N²) Qore binary concatenation
+    path for large WS frames.
+
+    The install is race-free against concurrent I/O-thread dispatches: the
+    ChannelAction's per-action mutex serialises the install with execute(),
+    complete() and executeError(), and the install itself drains any items
+    already buffered in the channel into the decoder before publishing the
+    frame state.  No caller-side pre-swap residual is needed.
+
+    @param stream_id the H2 stream ID returned by submitRequestStreaming()
+    @param msg_queue the Queue that will receive typed frame hashes
+           ({type, data, rsv1?, rsv2?, rsv3?, code?, reason?})
+
+    @throw HTTPCLIENT-STREAM-CLOSED if the stream is not found or already
+           complete
+    @throw HTTPCLIENT-STATE-ERROR if the stream's action is not a ChannelAction
+
+    @since %Qore 2.3
+*/
+nothing Http2ClientPollOperationBase::installFrameState(int stream_id,
+        Queue[Queue] msg_queue) {
+    // Transfer the Queue ref from the ReferenceHolder to the C++ priv
+    Queue* queue_ptr = msg_queue.release();
+    priv->installFrameState(static_cast<int32_t>(stream_id), queue_ptr, xsink);
 }
 
 //! Returns the socket object

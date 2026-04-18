@@ -1317,6 +1317,20 @@ public class HttpServer inherits HttpServer::AbstractLogger {
 
     #! stops all listeners; does not wait for all connections on the listeners to close
     stopNoWait() {
+        # Wake dedicated persistent-handler threads (see HttpListener::handleMultiplexedPersistentSync)
+        # so they return immediately instead of waiting up to their idle TTL in
+        # Queue::get().  Without this, HttpListener::stop()'s cThreads.wait()
+        # below blocks for the full TTL even though all I/O is already async.
+        # (The synchronous HttpServer::stop() path does this via asyncIo.stop();
+        # stopNoWait() users must get the same fast-exit behaviour.)
+        if (asyncIo) {
+            try {
+                asyncIo.signalPersistentQueuesToClose();
+            } catch () {
+                # asyncIo may already be stopped; safe to ignore
+            }
+        }
+
         # stop all listeners
         {
             lm.enter();
@@ -4667,6 +4681,21 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                     sendMultiplexedResponse(s, header_info, async_response);
                 }
             }
+            # Re-check persistence AFTER the response (incl. any inline streaming)
+            # has been fully sent: a handler's persistence condition may become
+            # false while the response was being produced.  Persistence is a
+            # generic contract — any handler that pins itself to a dedicated
+            # thread only for the duration of some context (an open SQL
+            # statement, an in-flight bidi message exchange, a transient lock,
+            # etc.) will report persistent at dispatch time but release as
+            # soon as that context ends.  Skip the persistent sync loop
+            # entirely in that case so the handler thread is freed
+            # immediately instead of idling for the full TTL.
+            if (!phi.handler.isPersistent()) {
+                log("cid %d: persistence released during initial response, "
+                    "skipping dedicated mode", cx.id);
+                return <HttpServerAsyncIo::HttpRequestResultInfo>{};
+            }
             # Enter dedicated persistent loop
             handleMultiplexedPersistentSync(request_helper, pq, s, \cx, phi, info,
                 deregister_fn, sock_key);
@@ -5347,6 +5376,25 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
 
         try {
             while (!exit && s.isOpen()) {
+                # Before blocking on the queue, check whether the handler still
+                # reports itself persistent.  A handler may release its
+                # persistence context between the previous request's completion
+                # and the start of the next loop iteration — persistence
+                # depends on whatever thread-pinning context the handler cares
+                # about (an open SQL statement, a bidi message exchange, a
+                # transient lock, etc.), not on any one specific stream shape.
+                # Without this check the loop would idle until the TTL
+                # (default 75 s) expires, making client-side close latency
+                # visibly bad for every handler that naturally terminates its
+                # persistence on request completion.
+                if (!phi.handler || !phi.handler.isPersistent()) {
+                    log("cid %d: handler no longer persistent, exiting "
+                        "dedicated mode immediately", cx.id);
+                    deregister_fn(sock_key);
+                    drainOrphanedPersistentRequests(request_helper, pq, s,
+                        \cx, cx_listener, phi, info);
+                    return;
+                }
                 # Wait for next request from Queue with idle timeout
                 date ttl = serv.getTtl();
                 *hash<auto> entry;
@@ -5546,6 +5594,19 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 ? sprintf("%s: %s: %s", get_ex_pos(ex), ex.err, ex.desc)
                 : get_exception_string(ex);
             logError("cid %d: multiplexed persistent handler error: %s", cx.id, etxt);
+            # Drain any requests routed onto the persistent queue between
+            # the last pq.get() and this error.  Without this drain, a
+            # request queued while we were processing the failing request
+            # (e.g. an End-Persistent cleanup sent in parallel with an
+            # insert, or any second request on the same connection that
+            # matched the persistence filter) is stranded on the queue:
+            # deregister stops future dispatches but does not drain what
+            # was already enqueued.  The client then waits for its full
+            # request_timeout (typically 120 s) before retrying on a
+            # fresh connection.
+            deregister_fn(sock_key);
+            drainOrphanedPersistentRequests(request_helper, pq, s, \cx,
+                cx_listener, phi, info);
         }
     }
 

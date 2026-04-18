@@ -311,7 +311,7 @@ QoreHashNode* Http1ClientConnection::submitRequest(const char* method, const cha
 }
 
 void Http1ClientConnection::closeConnection(ExceptionSink* xsink) {
-    if (!poll_op_priv || isClosed()) {
+    if (!poll_op_priv) {
         return;
     }
 
@@ -319,6 +319,13 @@ void Http1ClientConnection::closeConnection(ExceptionSink* xsink) {
     // waits until the I/O thread stops processing the operation.  The I/O
     // thread's cancel processing calls abort() on the poll op via
     // doCancelIntern → callAbort, so we must NOT call abort() again here.
+    //
+    // NOTE: we must always cancel even if isClosed() is true.  The I/O
+    // thread's setError() calls connection_priv->setClosed() (which sets
+    // the state to CLOSED) before nulling connection_priv.  If we skip
+    // the cancel based on isClosed(), the poll op remains in the I/O
+    // controller's cache with a stale connection_priv pointer — the I/O
+    // thread would access freed memory when it later processes the entry.
     if (submitted_to_controller && sock_priv) {
         ExceptionSink cancel_xsink;
         ReferenceHolder<QoreObject> ctl_obj_holder(
@@ -335,7 +342,7 @@ void Http1ClientConnection::closeConnection(ExceptionSink* xsink) {
         }
         cancel_xsink.clear();
         submitted_to_controller = false;
-    } else {
+    } else if (!isClosed()) {
         // Not submitted to the I/O controller — abort directly.
         poll_op_priv->abort(xsink);
     }

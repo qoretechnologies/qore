@@ -95,6 +95,45 @@ public class HallucinationDetector inherits AbstractGuardrailRule {
         return direction_override ?? GD_OUTPUT;
     }
 
+    #! Returns the DataProvider-option schema for this rule's \c params hash
+    /** @since QoreGuardrails 1.1 */
+    public static hash<string, hash<DataProviderOptionInfo>> getConfigSchema() {
+        return {
+            "min_grounding_score": <DataProviderOptionInfo>{
+                "type": (AbstractDataProviderType::get(FloatType),),
+                "display_name": "Minimum Grounding Score",
+                "short_desc": "Minimum LLM-assessed grounding score (0.0-1.0) "
+                    "required to pass",
+                "desc": "The hallucination detector asks a grounding LLM to "
+                    "rate how well every claim in the response is supported "
+                    "by the source texts provided in the request context.  "
+                    "A response with a grounding score below this threshold "
+                    "is flagged as a hallucination.  Default 0.5 is a "
+                    "moderate setting; raise to 0.7-0.8 for strict grounding "
+                    "(e.g. legal, medical, compliance responses), lower to "
+                    "0.3 for conversational endpoints where exact grounding "
+                    "is less critical.",
+                "default_value": 0.5,
+                "required": False,
+                "preselected": True,
+            },
+            "sources_ctx_key": <DataProviderOptionInfo>{
+                "type": (AbstractDataProviderType::get(StringType),),
+                "display_name": "Sources Context Key",
+                "short_desc": "Key in the evaluate() context hash that holds "
+                    "the source texts",
+                "desc": "Name of the hash key in the per-request context hash "
+                    "where the list of source texts (RAG passages, "
+                    "retrieved documents) is stored.  Default is `sources`, "
+                    "which matches the convention used by the Qorus RAG "
+                    "pipeline.  Change this only if your integration stores "
+                    "retrieval results under a different key.",
+                "default_value": "sources",
+                "required": False,
+            },
+        };
+    }
+
     hash<GuardrailResult> evaluate(string text, *hash<auto> ctx) {
         date start = now_us();
 

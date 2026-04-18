@@ -223,8 +223,7 @@ void AsyncIoControllerPriv::PollInfo::cleanup(ExceptionSink* xsink) {
 QoreCallDispatcher::QoreCallDispatcher(int max_workers, AsyncIoControllerPriv* controller)
     : ctrl(controller) {
     if (max_workers <= 0) {
-        int hw = std::thread::hardware_concurrency();
-        this->max_workers = hw > 0 ? hw : DEFAULT_WORKER_CAP;
+        this->max_workers = DEFAULT_WORKER_CAP;
     } else {
         this->max_workers = max_workers;
     }
@@ -306,8 +305,12 @@ void QoreCallDispatcher::enqueue(AsyncWorkItem&& item) {
         return;
     }
 
-    // Lazily spawn a worker if needed and below max
-    if (active_workers < max_workers) {
+    // Spawn a new worker when all existing workers are committed to pending work
+    // (items already in the queue + items being actively processed >= worker count).
+    // This ensures one worker per pending item during a burst, rather than one worker
+    // for all items.  Idle workers are still woken by work_avail.signal() below.
+    int committed = (int)async_queue.size() + active_processing;
+    if (committed >= active_workers && active_workers < max_workers) {
         ++active_workers;
         ExceptionSink xsink;
         int tid = q_start_thread(&xsink, workerEntry, this, QTF_EXTERNAL_LIFECYCLE);
@@ -401,7 +404,17 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
         {
             AutoLocker al(m);
             while (async_queue.empty() && !stopping) {
-                work_avail.wait(m);
+                int rc = work_avail.wait(m, WORKER_IDLE_TIMEOUT_MS);
+                if (rc == ETIMEDOUT && async_queue.empty() && !stopping) {
+                    // Idle timeout: exit this worker so active_workers decrements,
+                    // allowing a fresh worker to be spawned on the next burst.
+                    --active_workers;
+                    if (active_workers == 0) {
+                        workers_done.broadcast();
+                        idle_cond.broadcast();
+                    }
+                    return;
+                }
             }
             if (stopping && async_queue.empty()) {
                 --active_workers;
@@ -659,6 +672,14 @@ AsyncIoControllerPriv::AsyncIoControllerPriv(bool autostop, ExceptionSink* xsink
 }
 
 AsyncIoControllerPriv::~AsyncIoControllerPriv() {
+    {
+        AutoLocker al(m);
+        for (auto& [key, cond] : cancel_cond_map) {
+            cond->broadcast();
+            delete cond;
+        }
+        cancel_cond_map.clear();
+    }
     for (auto& tp : io_threads) {
         delete tp->loop;
         ExceptionSink xsink;
@@ -972,9 +993,9 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
 
         ++submit_seq;
     } else {
-        // Worker thread: package data into SubmitOp command (lock-free)
+        // Worker thread: package data into SubmitOp command
         // Route to the correct I/O thread based on operation key
-        IoThreadContext& target = getThreadForKey(uh);
+        IoThreadContext* target = nullptr;
         Command cmd;
         cmd.cmd = IoCommand::SubmitOp;
         cmd.key = uh;
@@ -991,26 +1012,23 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
         cmd.submit_has_qore_abort = has_qore_abort;
         cmd.submit_has_qore_on_complete = has_qore_on_complete;
 
-        target.cmdq.push(std::move(cmd));
-        // Bump submit_seq immediately after push, BEFORE notify().  The I/O
-        // thread's Phase 1 sets processed_seq = submit_seq after processing
-        // commands; if ++submit_seq came after notify() (the old ordering),
-        // the I/O thread could process the command, read a stale submit_seq,
-        // set processed_seq to the stale value, and enter poll(-1) with no
-        // pending notification — causing waitForProcessing() to time out.
-        // With submit_seq bumped before notify, the I/O thread always sees
-        // the updated value by the time it processes the command and reaches
-        // Phase 1 (the push + seq bump are on the same thread, so the I/O
-        // thread cannot observe the pushed command without the bumped seq).
-        ++submit_seq;
-        target.notifier->notify();
+        {
+            AutoLocker al(m);
+            target = &getThreadForKey(uh);
+            target->cmdq.push(std::move(cmd));
+            // Bump submit_seq immediately after push, BEFORE notify().  Queue
+            // mutation and the I/O thread's empty checks are synchronized by m,
+            // so a command visible to the I/O thread has a visible sequence bump.
+            ++submit_seq;
+        }
+        target->notifier->notify();
 
         // Post-push verification: if the I/O thread exited while we were
         // building/pushing the command (TOCTOU between the running check
         // at line 802 and this point), restart it.  The exit cleanup
         // re-queues SubmitOp commands, so the new I/O thread will find
         // both the re-queued op and any others in the cmdq.
-        if (!target.running.load(std::memory_order_acquire)) {
+        if (!target->running.load(std::memory_order_acquire)) {
             AutoLocker al(m);
             if (io_exiting || !ctx().tid) {
                 startIntern(xsink);
@@ -1070,20 +1088,20 @@ bool AsyncIoControllerPriv::cancelByKey(const QoreStringNode* key, ExceptionSink
         // Worker thread — send Cancel command to I/O thread and wait for result.
         // Use cancel_count atomic to learn whether the key was actually found.
         AutoLocker al(m);
-        if (!cancel_cond_map.count(uh)) {
-            cancel_cond_map[uh] = new QoreCondition();
-        }
         IoThreadContext& target = getThreadForKey(uh);
-        Command cmd;
-        cmd.cmd = IoCommand::Cancel;
-        cmd.key = uh;
-        cmd.cancel_count = &found_count;
         if (anyThreadRunning() && !io_exiting) {
+            if (!cancel_cond_map.count(uh)) {
+                cancel_cond_map[uh] = new QoreCondition();
+            }
+            Command cmd;
+            cmd.cmd = IoCommand::Cancel;
+            cmd.key = uh;
+            cmd.cancel_count = &found_count;
             target.cmdq.push(std::move(cmd));
-            // Bump submit_seq so the I/O thread's pre-poll catch-up at
-            // line 2702 covers this Cancel — submit() does the same.  Without
-            // this, a missed EVFILT_USER notify on macOS leaves the I/O
-            // thread blocked in kevent(-1) and waitCancel() hangs forever.
+            // Bump submit_seq so the I/O thread's pre-poll catch-up covers
+            // this Cancel; submit() does the same.  Without this, a queued
+            // Cancel can be left with no pending notifier byte, leaving the
+            // I/O thread blocked in kevent(-1) and waitCancel() hung.
             ++submit_seq;
             do_signal = true;
         }
@@ -1376,7 +1394,13 @@ void AsyncIoControllerPriv::wakeSocket(const std::string& sock_hash) {
     Command cmd;
     cmd.cmd = IoCommand::WakeSocket;
     cmd.sock_hash = sock_hash;
-    target.cmdq.push(std::move(cmd));
+    {
+        AutoLocker al(m);
+        if (!target.running.load(std::memory_order_acquire) || io_exiting) {
+            return;
+        }
+        target.cmdq.push(std::move(cmd));
+    }
     ASYNC_IO_TRACE("wakeSocket: hash='%s' thread=%d\n", sock_hash.c_str(), thread_idx);
     target.notifier->notify();
 }
@@ -1854,23 +1878,13 @@ void AsyncIoControllerPriv::startIntern(ExceptionSink* xsink) {
             return;
         }
 
-        // Register notifier with event loop
-#ifdef DARWIN
-        int rc = t.notifier->bindToKqueue(t.loop->getKqueueFd(), xsink);
-        if (rc < 0) {
-            return;
-        }
-        rc = t.loop->addUserEvent(t.notifier->getUserIdent(), nullptr, xsink);
-        if (rc < 0) {
-            t.notifier->unbindFromKqueue();
-            return;
-        }
-#else
+        // Register notifier with event loop.  Use the notifier fd on all platforms:
+        // the macOS EVFILT_USER fast path is edge-triggered and can strand queued
+        // socket operations if a trigger is lost under virtualization.
         int rc = t.loop->add(t.notifier->fd(), QORE_EV_READ, nullptr, xsink);
         if (rc < 0) {
             return;
         }
-#endif
 
         ref();  // Reference for each I/O thread
         IoThreadStartInfo* start_info = new IoThreadStartInfo{this, i};
@@ -1880,17 +1894,26 @@ void AsyncIoControllerPriv::startIntern(ExceptionSink* xsink) {
             delete start_info;
             ROdereference();
             ExceptionSink cleanup_xsink;
-#ifdef DARWIN
-            t.loop->removeUserEvent(t.notifier->getUserIdent(), &cleanup_xsink);
-            t.notifier->unbindFromKqueue();
-#else
             t.loop->remove(t.notifier->fd(), &cleanup_xsink);
-#endif
             cleanup_xsink.clear();
             return;
         }
     }
     // NOTE: do not call log() here — caller holds the lock.
+}
+
+// Read the capacity of std::priority_queue's hidden underlying container.
+// The `c` member is protected; exposing it via a derived struct is the
+// standard friend-struct trick and is well-defined — we never instantiate
+// the derived type, only form a pointer-to-member through it.
+template<class T, class C, class Cmp>
+static size_t timeout_heap_capacity(const std::priority_queue<T, C, Cmp>& pq) {
+    struct Exposed : std::priority_queue<T, C, Cmp> {
+        static size_t cap(const std::priority_queue<T, C, Cmp>& q) {
+            return (q.*&Exposed::c).capacity();
+        }
+    };
+    return Exposed::cap(pq);
 }
 
 void AsyncIoControllerPriv::ioThreadEntry(ExceptionSink* xsink, void* arg) {
@@ -1939,15 +1962,14 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
             break;  // Quit command received
         }
 
-        // Re-check cmdq after processCommands returns — the Vyukov MPSC
-        // queue has a push visibility window between tail.exchange() and
-        // prev->next.store() where drain()/empty() see the queue as empty
-        // even though a push is completing.  If acknowledge() consumed the
-        // notification during that window, the command would sit invisible
-        // until the next poll timeout (up to 10s).  This re-check catches
-        // the late-arriving item after the store completes.
-        if (!t.cmdq.empty()) {
-            continue;
+        // Re-check cmdq after processCommands returns.  Producers mutate cmdq
+        // while holding m, so taking the same lock here gives a reliable view
+        // before we do normal I/O work or go back to kqueue/epoll.
+        {
+            AutoLocker al(m);
+            if (!t.cmdq.empty()) {
+                continue;
+            }
         }
 
         // --- PHASE 1: Snapshot under lock ---
@@ -2102,6 +2124,30 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
             }
         }
 
+        // --- timeout_heap capacity repack ---
+        // std::vector doesn't shrink on pop, so priority_queue's backing vector
+        // retains the peak allocation forever.  Rebuild into a fresh queue when
+        // size is well below retained capacity so the old container's vector can
+        // be freed.  Gated on real slack to avoid thrash; rebuild is O(n log n)
+        // with n bounded by current active size (by construction small — that's
+        // why we're rebuilding).  Steady-state iterations see size==capacity and
+        // skip in two loads + a branch.
+        {
+            size_t sz = t.timeout_heap.size();
+            size_t cap = timeout_heap_capacity(t.timeout_heap);
+            using TE = std::decay_t<decltype(t.timeout_heap.top())>;
+            if (cap > 16 && sz < cap / 4
+                    && (cap - sz) * sizeof(TE) >= 1024) {
+                std::priority_queue<TE, std::vector<TE>, std::greater<TE>> fresh;
+                while (!t.timeout_heap.empty()) {
+                    fresh.push(std::move(
+                        const_cast<TE&>(t.timeout_heap.top())));
+                    t.timeout_heap.pop();
+                }
+                t.timeout_heap = std::move(fresh);
+            }
+        }
+
         // --- PHASE 2: continuePoll outside lock ---
         // C++ poll operations (SocketPollOperationBase subclasses) run directly
         // on the I/O thread via spop_base->continuePoll() — pure C++, no Qore
@@ -2246,9 +2292,11 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                 auto* h3_server_op = dynamic_cast<Http3ServerPollOperationPriv*>(op.spop_base);
                 if (h3_server_op) {
                     std::vector<std::string> ready = h3_server_op->getAndClearDataReadyStreams();
+                    ASYNC_IO_TRACE("AsyncIo h3_server dispatch check ready=%zu\n", ready.size());
                     if (!ready.empty()) {
                         ensureCallDispatcher();
                         for (auto& skey : ready) {
+                            ASYNC_IO_TRACE("AsyncIo h3_server dispatchStreamDataAsync skey='%s'\n", skey.c_str());
                             op.spop_obj->ref();
                             call_dispatcher.load(std::memory_order_acquire)->dispatchStreamDataAsync(op.spop_obj, skey);
                         }
@@ -2729,19 +2777,12 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
             }
         }
 
-        // Final pre-poll cmdq re-check (lock-free, lock-acquire-ordered): a
-        // worker may have pushed a non-SubmitOp command (Cancel, CancelOwner,
-        // Quit, WakeSocket, …) between the post-processCommands re-check and
-        // here, while we were doing Phase 1/2/3 + deferred deliveries.  Those
-        // paths do not bump submit_seq, so the catch-up block above will not
-        // trigger.  If the worker's notify() reaches the kqueue we will wake
-        // immediately anyway; the check exists for the lost-wakeup case
-        // (observed on macOS/kqueue under Tart virtualization) where the
-        // EVFILT_USER trigger never materializes and poll(-1) would block
-        // forever, hanging waitCancel() / waitFor* in the worker.  Reading
-        // cmdq.empty() under the worker-side lock m provides happens-before
-        // for the Vyukov push, so a push that completed before we got here is
-        // guaranteed visible.
+        // Final pre-poll cmdq re-check.  A worker may have pushed a command
+        // between the post-processCommands re-check and here, while we were
+        // doing Phase 1/2/3 + deferred deliveries.  Reading cmdq.empty() under
+        // the same mutex used by producers provides happens-before for the
+        // push, so a command completed before this point cannot be hidden by
+        // the MPSC queue's producer visibility window.
         {
             AutoLocker al(m);
             if (!t.cmdq.empty()) {
@@ -2918,7 +2959,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
 #endif
     }
 
-    // Stop accepting new commands via the lock-free path before draining
+    // Stop accepting new commands before draining
     t.running.store(false, std::memory_order_release);
 
     // Cleanup on exit — cancel results are collected under lock and delivered outside
@@ -2928,12 +2969,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
         AutoLocker al(m);
 
         // Remove notifier from event loop
-#ifdef DARWIN
-        t.loop->removeUserEvent(t.notifier->getUserIdent(), xsink);
-        t.notifier->unbindFromKqueue();
-#else
         t.loop->remove(t.notifier->fd(), xsink);
-#endif
 
         // Clear all registrations
         {
@@ -3094,11 +3130,14 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
 }
 
 bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* xsink) {
-    // Batch drain all pending commands from the lock-free MPSC queue.
+    // Batch drain all pending commands from the MPSC queue.
     // The outer loop handles commands that arrive during acknowledge.
     while (true) {
         std::vector<Command> batch;
-        t.cmdq.drain(batch);
+        {
+            AutoLocker al(m);
+            t.cmdq.drain(batch);
+        }
         for (auto& cmd : batch) {
             switch (cmd.cmd) {
                 case IoCommand::Quit: {
@@ -3633,16 +3672,21 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
         // that poll() doesn't busy-wake on stale counters.  Skipping
         // acknowledge when the batch is empty was considered but rejected:
         // it causes a busy-loop from accumulated stale notifications.
-        // The main-loop re-check after processCommands() catches items
-        // from the Vyukov MPSC push visibility window instead.
+        // The locked cmdq check below decides whether a command arrived while
+        // we were processing or acknowledging the current batch.
         t.notifier->acknowledge(xsink);
         if (*xsink) {
             xsink->clear();
         }
 
-        // Check if new commands arrived during processing/acknowledge
-        if (t.cmdq.empty()) {
-            break;
+        // Check if new commands arrived during processing/acknowledge.  This
+        // must use the same mutex as producers; otherwise we can drain the
+        // notifier byte while the command queue still appears empty on this CPU.
+        {
+            AutoLocker al(m);
+            if (t.cmdq.empty()) {
+                break;
+            }
         }
     }
 
@@ -4208,7 +4252,21 @@ void AsyncIoControllerPriv::enqueueContinuePollResult(const std::string& key,
         QoreHashNode* new_poll_info, QoreHashNode* ex_hash, bool completed) {
     // Route to the correct I/O thread that owns this operation
     IoThreadContext& target = getThreadForKey(key);
-    if (!target.running.load(std::memory_order_acquire)) {
+    bool do_signal = false;
+    {
+        AutoLocker al(m);
+        if (target.running.load(std::memory_order_acquire) && !io_exiting) {
+            Command c;
+            c.cmd = IoCommand::ContinuePollResult;
+            c.key = key;
+            c.continue_poll_result = new_poll_info;
+            c.continue_poll_ex = ex_hash;
+            c.continue_poll_completed = completed;
+            target.cmdq.push(std::move(c));
+            do_signal = true;
+        }
+    }
+    if (!do_signal) {
         ExceptionSink xsink;
         if (new_poll_info) {
             new_poll_info->deref(&xsink);
@@ -4218,13 +4276,6 @@ void AsyncIoControllerPriv::enqueueContinuePollResult(const std::string& key,
         }
         return;
     }
-    Command c;
-    c.cmd = IoCommand::ContinuePollResult;
-    c.key = key;
-    c.continue_poll_result = new_poll_info;
-    c.continue_poll_ex = ex_hash;
-    c.continue_poll_completed = completed;
-    target.cmdq.push(std::move(c));
     target.notifier->notify();
 }
 

@@ -78,6 +78,34 @@ public class TopicRestrictionRule inherits AbstractGuardrailRule {
         return direction_override ?? GD_INPUT;
     }
 
+    #! Returns the DataProvider-option schema for this rule's \c params hash
+    /** @since QoreGuardrails 1.1 */
+    public static hash<string, hash<DataProviderOptionInfo>> getConfigSchema() {
+        return {
+            "allowed_topics": <DataProviderOptionInfo>{
+                "type": (AbstractDataProviderType::get(AutoListType),),
+                "display_name": "Allowed Topics",
+                "short_desc": "List of topic names that user messages are allowed "
+                    "to discuss",
+                "desc": "The list of topic labels an LLM classifier compares each "
+                    "incoming message against.  A message that doesn't match "
+                    "any of the listed topics is classified as off-topic and "
+                    "blocked.  Use short, concrete topic names the "
+                    "classifier can recognize: `customer support`, `order "
+                    "tracking`, `product information`, `returns and refunds`.  "
+                    "Avoid meta-topics like `anything related to Acme` — they "
+                    "confuse the classifier.  Typical lists are 2-6 topics.",
+                "required": True,
+                "preselected": True,
+                "example_value": (
+                    "customer support",
+                    "order tracking",
+                    "product information",
+                ),
+            },
+        };
+    }
+
     hash<GuardrailResult> evaluate(string text, *hash<auto> ctx) {
         date start = now_us();
 

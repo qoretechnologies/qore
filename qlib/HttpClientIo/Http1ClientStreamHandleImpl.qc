@@ -162,6 +162,66 @@ public class Http1ClientStreamHandle inherits HttpClientStreamHandle {
         return stream_id;
     }
 
+    #! Starts an SSE streaming request with I/O-thread event parsing
+    /** @see HttpClientStreamHandle::startSseStreaming() for full documentation
+    */
+    Queue startSseStreaming(string method, string path, *hash<auto> headers, *data body) {
+        {
+            AutoLock al(lock);
+            if (state != HttpClientStreamState::Pending) {
+                throw "HTTPCLIENT-STATE-ERROR",
+                    sprintf("stream already in use: state=%y", state);
+            }
+            state = HttpClientStreamState::Open;
+        }
+
+        Queue queue();
+        streaming = True;
+
+        # Wait for connection to become ready
+        if (!conn.isReady()) {
+            if (!conn.waitForReady(request_timeout)) {
+                {
+                    AutoLock al(lock);
+                    state = HttpClientStreamState::Pending;
+                }
+                releaseReservationIfHeld();
+                streaming = False;
+                throw "HTTPCLIENT-TIMEOUT", "connection establishment timed out";
+            }
+        }
+
+        # Re-check state after readiness wait — cancel() may have run concurrently
+        {
+            AutoLock al(lock);
+            if (state != HttpClientStreamState::Open) {
+                releaseReservationIfHeld();
+                streaming = False;
+                throw "HTTPCLIENT-CANCELLED", "stream was cancelled during connection setup";
+            }
+        }
+
+        log(LoggerLevel::DEBUG, "starting SSE streaming request: %s %s", method, path);
+
+        try {
+            stream_id = h1conn.submitRequestSse(method, path, headers, body, queue);
+            @assert(stream_id >= 0);
+            reservation_held = False;
+        } catch (hash<ExceptionInfo> ex) {
+            {
+                AutoLock al(lock);
+                if (state == HttpClientStreamState::Open) {
+                    state = HttpClientStreamState::Pending;
+                }
+            }
+            releaseReservationIfHeld();
+            streaming = False;
+            rethrow;
+        }
+
+        return queue;
+    }
+
     #! Reads data from the streaming connection
     /** @param timeout_ms timeout for waiting for data
 
@@ -190,9 +250,27 @@ public class Http1ClientStreamHandle inherits HttpClientStreamHandle {
                 sprintf("stream %d has been closed", stream_id);
         }
 
+        # @ref Qore::Thread::Channel::recv() treats timeout_ms <= 0 as infinite
+        # wait.  A caller that passes 0 explicitly wants a non-blocking peek
+        # (matching the other HTTP reader APIs where 0 means "return NOTHING
+        # if no data is pending"); route through tryRecv() in that case so
+        # drain loops (e.g. DataStreamClientIo.sendDSv1Stream) don't hang.
         try {
             timeout wait_timeout = timeout_ms ?? -1;
-            auto rv = data_channel.recv(wait_timeout);
+            auto rv;
+            if (wait_timeout == 0ms) {
+                *hash<auto> tr = data_channel.tryRecv();
+                if (!exists tr) {
+                    return NOTHING;
+                }
+                if (!tr.has_value) {
+                    throw "HTTPCLIENT-STREAM-CLOSED",
+                        sprintf("stream %d has been closed", stream_id);
+                }
+                rv = tr.value;
+            } else {
+                rv = data_channel.recv(wait_timeout);
+            }
             # The poll operation pushes raw output hashes to the channel.
             # Extract body data and detect end_stream/error for the caller.
             if (rv.typeCode() == NT_HASH) {

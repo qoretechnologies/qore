@@ -42,10 +42,22 @@ class MyWsHandler inherits WebSocketHandler {
     public {
         bool debug = False;
         *hash<auto> last_hdr;
+        # Synchronization for tests that check last_hdr after connect();
+        # the 101 response is sent before startImpl() calls getConnectionImpl(),
+        # so connect() can return before last_hdr is set
+        Mutex hdr_mutex();
+        Condition hdr_cond();
+        int hdr_gen = 0;
     }
 
     WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
-        last_hdr = hdr;
+        {
+            hdr_mutex.lock();
+            on_exit hdr_mutex.unlock();
+            last_hdr = hdr;
+            ++hdr_gen;
+            hdr_cond.broadcast();
+        }
         MyWsConnection conn(self);
         if (hdr."send-data") {
             conn.sendData();
@@ -54,6 +66,24 @@ class MyWsHandler inherits WebSocketHandler {
             conn.sendLargeData();
         }
         return conn;
+    }
+
+    # Returns the current generation; call before connect()
+    int getHdrGen() {
+        hdr_mutex.lock();
+        on_exit hdr_mutex.unlock();
+        return hdr_gen;
+    }
+
+    # Waits until hdr_gen advances past the given generation
+    waitForNewConnection(int prev_gen, timeout t = 5s) {
+        hdr_mutex.lock();
+        on_exit hdr_mutex.unlock();
+        while (hdr_gen == prev_gen) {
+            if (hdr_cond.wait(hdr_mutex, t)) {
+                throw "TIMEOUT", "waitForNewConnection timed out";
+            }
+        }
     }
 
     logError(string fmt) {
@@ -488,7 +518,10 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             "logger": logger,
         };
         WebSocketClient wsc(cb, opts);
+        int gen = wsHandler.getHdrGen();
         wsc.connect({"hdr": {"Send-Data": "1"}});
+        # Wait for getConnectionImpl; the 101 is sent before last_hdr is set
+        wsHandler.waitForNewConnection(gen);
         assertEq(13, wsHandler.last_hdr."sec-websocket-version".toInt(),
             "WebSocket client should send Sec-WebSocket-Version");
         c.waitForZero();
@@ -1085,12 +1118,15 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             "cookie": "session=abc123",
         };
         WebSocketClient wsc(cb, opts);
+        # Record generation before connect; the 101 response is sent before
+        # getConnectionImpl sets last_hdr, so connect() can return early
+        int gen = wsHandler.getHdrGen();
         wsc.connect();
         on_exit {
             wsc.disconnect();
             delete wsc;
         }
-        # The handler stores last_hdr from the upgrade request
+        wsHandler.waitForNewConnection(gen);
         assertTrue(wsHandler.last_hdr.cookie.val(), "cookie header should be present in upgrade request");
         assertRegex("session=abc123", wsHandler.last_hdr.cookie);
     }
@@ -1103,11 +1139,13 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             "cookie": "a=1; b=2",
         };
         WebSocketClient wsc(cb, opts);
+        int gen = wsHandler.getHdrGen();
         wsc.connect();
         on_exit {
             wsc.disconnect();
             delete wsc;
         }
+        wsHandler.waitForNewConnection(gen);
         assertTrue(wsHandler.last_hdr.cookie.val(), "cookie header should be present");
         assertRegex("a=1", wsHandler.last_hdr.cookie);
         assertRegex("b=2", wsHandler.last_hdr.cookie);
@@ -1120,11 +1158,13 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             "logger": logger,
         };
         WebSocketClient wsc(cb, opts);
+        int gen = wsHandler.getHdrGen();
         wsc.connect();
         on_exit {
             wsc.disconnect();
             delete wsc;
         }
+        wsHandler.waitForNewConnection(gen);
         assertFalse(wsHandler.last_hdr.cookie.val(), "no cookie header without cookie option");
     }
 }

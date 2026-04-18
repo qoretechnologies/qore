@@ -715,6 +715,28 @@ public:
     */
     DLLLOCAL void deregisterConnectStreamQueue(int64_t stream_id);
 
+    //! Register a C++ WebSocket frame state machine for a CONNECT stream
+    /** Once registered, incoming stream DATA frames for this stream_id are
+        fed into the state machine (which decodes WS frames and pushes
+        completed messages to the Queue the state machine owns) instead of
+        being pushed as raw bytes to a Queue.
+
+        Any `connect_stream_data_` buffered for this stream before
+        registration is flushed into the state machine immediately.
+
+        The send path (pong / close-echo) issued by the state machine is
+        wired internally to this session's `sendStreamData(stream_id, ...)`.
+
+        @param stream_id the HTTP/3 stream ID
+        @param msg_queue the Queue the state machine will push complete WS
+            messages to; ownership of ONE reference is transferred (same
+            contract as `registerConnectStreamQueue`).
+    */
+    DLLLOCAL void registerConnectStreamFrameState(int64_t stream_id, Queue* msg_queue);
+
+    //! Deregister the WebSocket frame state for a CONNECT stream
+    DLLLOCAL void deregisterConnectStreamFrameState(int64_t stream_id);
+
     //! Returns true if extended CONNECT protocol is enabled locally (server)
     DLLLOCAL bool isExtendedConnectSupported() const {
         return is_server_;  // Server always enables via setupHttp3()
@@ -1213,6 +1235,15 @@ private:
     */
     std::unordered_set<int64_t> closed_streams_;
 
+    //! Peer-initiated stream reset info, persisted beyond streams_.erase()
+    /** Populated by h3StopSendingCallback() and h3ResetStreamCallback() so that
+        @ref QuicSession::sendStreamData() can still surface a typed
+        \c QUIC-STREAM-RESET exception after the stream has been erased from
+        streams_ by the normal close path.  Protected by mtx_.  Cleared when
+        the poll operation transitions to SENT (alongside closed_streams_).
+    */
+    std::unordered_map<int64_t, uint64_t> peer_reset_streams_;
+
     //! Queue of completed stream IDs
     std::queue<int64_t> completed_streams_;
 
@@ -1247,7 +1278,23 @@ private:
     */
     std::unordered_map<int64_t, Queue*> connect_stream_queues_;
 
-    std::mutex connect_data_mutex_;  //!< protects connect_stream_data_ and connect_stream_queues_
+    //! Per-stream WebSocket frame state for tunnels that want C++ frame parsing
+    /** When registered, h3RecvDataCallback feeds the decoded stream bytes
+        through the frame state machine (which decodes WebSocket frames,
+        reassembles fragments, auto-replies to pings, etc.) rather than pushing
+        raw bytes to a Queue.  Only whole WebSocket messages are dispatched to
+        the caller via the Queue owned by the frame state.  This mirrors the
+        HTTP/1 async WebSocket path and avoids O(N²) Qore-side concatenation
+        when large frames arrive in many small transport chunks.
+        Protected by connect_data_mutex_.
+
+        If both a Queue (connect_stream_queues_) and a frame state are
+        registered for the same stream, the frame state wins.
+    */
+    std::unordered_map<int64_t, std::shared_ptr<class WebSocketStreamFrameState>>
+        connect_stream_frame_states_;
+
+    std::mutex connect_data_mutex_;  //!< protects connect_stream_data_, connect_stream_queues_, and connect_stream_frame_states_
 
     //! Per-stream incoming datagram queue (RFC 9221/9297)
     /** Keyed by stream_id.  recvDatagramCallback routes datagrams here based on

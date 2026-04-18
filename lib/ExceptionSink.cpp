@@ -137,6 +137,15 @@ QoreException* ExceptionSink::catchException() {
         inc_active_exceptions(-priv->count);
         priv->count = 0;
     }
+    // Reset the `rethrown` flag along with the exception itself.  Callers
+    // (e.g. @ref StatementBlock::execIntern's on_error handling) use
+    // `rethrown` as a signal that the in-flight exception was replaced via
+    // `rethrow` inside the extracted block.  Leaving the flag set after the
+    // exception has been handed off would cause a subsequent `clear()` to
+    // wipe an unrelated outer exception — e.g. a `try { rethrow; } catch {}`
+    // nested inside an `on_error` body should not discard the original
+    // exception that triggered the block.
+    priv->rethrown = false;
     return e;
 }
 
@@ -191,6 +200,7 @@ void ExceptionSink::clear() {
     priv->clearIntern();
     priv->head = priv->tail = nullptr;
     priv->thread_exit = false;
+    priv->rethrown = false;
 }
 
 const QoreValue ExceptionSink::getExceptionErr() {

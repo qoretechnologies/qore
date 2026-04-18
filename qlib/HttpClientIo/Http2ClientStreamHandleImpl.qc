@@ -161,6 +161,51 @@ public class Http2ClientStreamHandle inherits HttpClientStreamHandle {
         return stream_id;
     }
 
+    #! Starts an SSE streaming request with I/O-thread event parsing
+    /** @see HttpClientStreamHandle::startSseStreaming() for full documentation
+    */
+    Queue startSseStreaming(string method, string path, *hash<auto> headers, *data body) {
+        {
+            AutoLock al(lock);
+            if (state != HttpClientStreamState::Pending) {
+                throw "HTTPCLIENT-STATE-ERROR",
+                    sprintf("stream already in use: state=%y", state);
+            }
+            state = HttpClientStreamState::Open;
+            streaming = True;
+        }
+
+        Queue queue();
+
+        # Wait for connection to become ready if not already
+        if (!conn.isReady()) {
+            if (!conn.waitForReady(request_timeout)) {
+                {
+                    AutoLock al(lock);
+                    state = HttpClientStreamState::Pending;
+                    streaming = False;
+                }
+                throw "HTTPCLIENT-TIMEOUT", "connection establishment timed out";
+            }
+        }
+
+        log(LoggerLevel::DEBUG, "starting SSE streaming request: %s %s", method, path);
+
+        try {
+            stream_id = h2conn.submitRequestSse(method, path, headers, body, queue);
+            @assert(stream_id >= 0);
+        } catch (hash<ExceptionInfo> ex) {
+            {
+                AutoLock al(lock);
+                state = HttpClientStreamState::Pending;
+                streaming = False;
+            }
+            rethrow;
+        }
+
+        return queue;
+    }
+
     #! Reads data from a streaming connection
     /** @param timeout_ms timeout for waiting for data
 
@@ -202,8 +247,26 @@ public class Http2ClientStreamHandle inherits HttpClientStreamHandle {
             throw "HTTPCLIENT-STREAM-CLOSED", "stream is closed";
         }
 
+        # @ref Qore::Thread::Channel::recv() treats timeout_ms <= 0 as infinite
+        # wait, which would turn a caller-intended non-blocking drain (e.g.
+        # DataStreamClientIo's sendDSv1Stream polling for early server errors)
+        # into a hang.  When the caller passes 0 explicitly, route through
+        # tryRecv() so the semantics match the other HTTP reader APIs where
+        # 0 means "return NOTHING if no data is pending".
         try {
-            auto rv = data_channel.recv(wait_timeout);
+            auto rv;
+            if (wait_timeout == 0ms) {
+                *hash<auto> tr = data_channel.tryRecv();
+                if (!exists tr) {
+                    return NOTHING;
+                }
+                if (!tr.has_value) {
+                    throw "HTTPCLIENT-STREAM-CLOSED", "stream is closed";
+                }
+                rv = tr.value;
+            } else {
+                rv = data_channel.recv(wait_timeout);
+            }
             # The poll operation pushes raw output hashes to the channel.
             # Extract body data and detect end_stream/error for the caller.
             if (rv.typeCode() == NT_HASH) {
@@ -334,6 +397,42 @@ public class Http2ClientStreamHandle inherits HttpClientStreamHandle {
     *hash<string, string> getTrailers() {
         AutoLock al(lock);
         return response.trailers;
+    }
+
+    #! Installs a WebSocket frame-state decoder for this H2 CONNECT stream
+    /** After this call, WS DATA chunks are decoded in pure C++ and pushed
+        as typed frame hashes to @a msg_queue; raw response hashes no
+        longer flow through \c data_channel.
+
+        The install is handled entirely on the C++ side: the existing
+        ChannelAction for this stream grows a frame-state decoder, and a
+        per-action mutex serialises the install with any in-flight
+        I/O-thread execute() calls.  The install atomically drains any
+        items already buffered in the channel into the decoder before
+        publishing the frame state, so no transport bytes can be lost to a
+        drain-vs-swap race.
+
+        @param msg_queue Queue that will receive typed frame hashes
+
+        @throw HTTPCLIENT-STATE-ERROR if the stream is not in streaming mode
+        @throw HTTPCLIENT-STREAM-CLOSED if the stream is already closed
+
+        @since %HttpClientIo 1.4
+    */
+    installFrameState(Queue msg_queue) {
+        int sid;
+        {
+            AutoLock al(lock);
+            if (!streaming) {
+                throw "HTTPCLIENT-STATE-ERROR", "not in streaming mode";
+            }
+            if (!exists stream_id) {
+                throw "HTTPCLIENT-STATE-ERROR", "stream not yet established";
+            }
+            sid = stream_id;
+        }
+
+        h2conn.installFrameState(sid, msg_queue);
     }
 
 }
