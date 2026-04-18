@@ -1451,10 +1451,12 @@ void QoreIRToLLVM::emitCondBrWithSsaPreamble(llvm::Module& module,
     // pending_ssa_cleanup downstream (no per-path divergence in the
     // flat cleanup list).  The allocas are then decref'd by the shared
     // target's emitInvokeCleanup (error_return_block, function_common_
-    // cleanup, Return's tail).  The per-invoke LP snapshot mechanism
-    // already ensures EH-unwind cleanup for earlier invokes — this path
-    // handles the check-based xsink-poll branches that emitMaybeInvoke
-    // skips on its EH edge.
+    // cleanup, Return's tail).  A per-site SSA-decref preamble BB
+    // variant was tried for targets with no existing preds: it did
+    // save a few allocas (Logger 1001 -> 969) but the extra BBs
+    // regressed HttpServer compile time from 13m26s back to 15m38s —
+    // LLVM codegen's per-BB overhead exceeded the alloca-elimination
+    // win.  Stick with the in-block promote.
     promotePendingSsaToAllocas(module, llvm_func);
     builder->CreateCondBr(cond, exception_target, normal_target);
 }
