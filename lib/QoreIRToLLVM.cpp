@@ -2320,6 +2320,31 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         llvm_func->setPersonalityFn(llvm::cast<llvm::Constant>(personality.getCallee()));
     }
 
+    // Phase 5 experiment: mark huge functions OptimizeNone+NoInline to cut
+    // LLVM codegen cost. SelectionDAG scales superlinearly with function
+    // size; handleRequest (~500 IR BBs) is 87% of HttpServer.qm compile time.
+    // Attribute forces LLVM to skip function-level opt passes and (in some
+    // configurations) triggers FastISel instead of SelectionDAG, trading
+    // runtime perf for compile speed.
+    //
+    // Gated by QORE_AOT_BIG_FN_THRESHOLD (default disabled; set to a BB
+    // count like 300 to enable). Set to 0 to disable entirely. This is an
+    // experiment — if it helps, Phase 5 outlining becomes less urgent.
+    {
+        static const size_t big_fn_threshold = []() {
+            const char* s = getenv("QORE_AOT_BIG_FN_THRESHOLD");
+            return s ? static_cast<size_t>(std::atoi(s)) : size_t(0);
+        }();
+        if (big_fn_threshold > 0 && func.blocks.size() >= big_fn_threshold) {
+            llvm_func->addFnAttr(llvm::Attribute::OptimizeNone);
+            llvm_func->addFnAttr(llvm::Attribute::NoInline);
+            if (getenv("QORE_AOT_DEBUG")) {
+                fprintf(stderr, "AOT: OptimizeNone for '%s' (%zu blocks >= threshold %zu)\n",
+                        fn_name.c_str(), func.blocks.size(), big_fn_threshold);
+            }
+        }
+    }
+
     // RAII cleanup: remove incomplete function from module on failure
     struct FunctionCleanup {
         llvm::Function* func;
