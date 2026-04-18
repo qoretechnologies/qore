@@ -8,7 +8,25 @@
 
 %modern
 
+# Single-file runtime-evaluated class constant — exercises slice 10f's
+# executeInitFunctions hookup.  The init expression (sprintf + toInt)
+# is non-literal so the parser can't fold it; it gets compiled as a
+# __const_init function that must run at script-register time.
+class Local {
+    public {
+        const Magic = sprintf("%d", 42).toInt();
+    }
+}
+
 int sub compute() {
     Helper h();
-    return h.multiply(6, 7);
+    int result = h.multiply(6, Local::Magic);
+    # Self-check: if slice 10f's init-func path didn't run,
+    # Local::Magic is 0 and compute() returns 0 instead of 252.
+    if (result != 252) {
+        throw "SCRIPT-TEST-ERROR",
+            sprintf("compute() got %d; expected 252 "
+                "(6 * Local::Magic=%d)", result, Local::Magic);
+    }
+    return result;
 }

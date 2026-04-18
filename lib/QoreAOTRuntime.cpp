@@ -7764,6 +7764,13 @@ extern "C" DLLEXPORT int qore_aot_script_register(QoreProgram* tpgm,
         // Register pre-compiled function pointers.  Slot-map + namespace-
         // walk fallback cover both slice 4-style per-file .qo's (slot-map
         // only) and plain script .qo's.
+        //
+        // Slot-map registration also collects init-function execution
+        // contexts (for NS_CONSTANT / CLASS_CONSTANT / STATIC_VAR /
+        // MODULE_INIT entries) into `init_func_contexts`, to be
+        // consumed below by executeInitFunctions — same pattern as
+        // qore_aot_module_init_v3.
+        std::vector<AOTInitFuncExecInfo> init_func_contexts;
         if (num_functions > 0 && functions) {
             std::unordered_map<std::string, const QoreAOTFunc*> func_map;
             for (int i = 0; i < num_functions; ++i) {
@@ -7776,14 +7783,48 @@ extern "C" DLLEXPORT int qore_aot_script_register(QoreProgram* tpgm,
             qore_ns_private* root_ns = qore_ns_private::get(*pp->RootNS);
             int registered = 0;
             registerAOTFunctionsFromSlotMaps(deserializer.getReader(), root_ns,
-                tpgm, func_map, registered);
+                tpgm, func_map, registered, &init_func_contexts);
             if (registered < num_functions) {
                 registerAOTFunctionsInNamespace(root_ns, tpgm, func_map,
                     registered);
             }
             printd(1, "qore_aot_script_register(%s): registered %d/%d "
-                "pre-compiled functions\n",
-                label ? label : "<script>", registered, num_functions);
+                "pre-compiled functions (%d init funcs)\n",
+                label ? label : "<script>", registered, num_functions,
+                (int)init_func_contexts.size());
+        }
+
+        // Phase 4 slice 10f: execute init functions (NS_CONSTANT /
+        // CLASS_CONSTANT / STATIC_VAR / MODULE_INIT) against tpgm.
+        // Mirrors what qore_aot_module_init_v3 does at ~line 5497 for
+        // module loads — but with shadow_pgm=nullptr since script mode
+        // has no shadow program.  Init functions populate constant
+        // values + static var values that the user's runtime code
+        // depends on (e.g., `const MyConst = compute_value();`).
+        if (!init_func_contexts.empty()) {
+            std::vector<AOTInitFuncDescriptor> init_descriptors;
+            std::string init_err;
+            if (readInitFuncs(metadata,
+                    static_cast<uint32_t>(metadata_len),
+                    init_descriptors, init_err)) {
+                if (!init_descriptors.empty()) {
+                    ExceptionSink tch_xsink;
+                    ProgramThreadCountContextHelper tch(&tch_xsink,
+                        tpgm, false);
+                    if (tch_xsink.isException()) {
+                        tch_xsink.handleExceptions();
+                    } else {
+                        executeInitFunctions(tpgm, init_func_contexts,
+                            init_descriptors,
+                            label ? label : "<script>",
+                            /*shadow_pgm=*/nullptr);
+                    }
+                }
+            } else {
+                fprintf(stderr, "qore_aot_script_register(%s): init-func "
+                    "descriptor read failed: %s\n",
+                    label ? label : "<script>", init_err.c_str());
+            }
         }
     }
 

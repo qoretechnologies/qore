@@ -5070,6 +5070,28 @@ bool QoreAOT::compileScriptFile(const char* target_file,
     // function table.  The host's main() calls this to register the
     // file's contents into a QoreProgram — analogous to slice 7's
     // qore_qoa_register_all but per-file and module-free.
+    //
+    // Phase 4 slice 10f: init-func entries (NS_CONSTANT /
+    // CLASS_CONSTANT / STATIC_VAR / MODULE_INIT) must also appear in
+    // the runtime function descriptor table so
+    // registerAOTFunctionsFromSlotMaps can collect their execution
+    // contexts — otherwise executeInitFunctions sees zero contexts
+    // and every init expression silently defaults to NOTHING.  Mirror
+    // the pattern compileModule / compileSeparatedModule / etc. already
+    // use: copy compiled_init_funcs into compiled_funcs before emission.
+    for (auto& cif : compiled_init_funcs) {
+        AOTCompiledFunc cf;
+        cf.name = cif.name;
+        cf.llvm_symbol = cif.llvm_symbol;
+        cf.num_locals = cif.num_locals;
+        cf.num_globals = cif.num_globals;
+        cf.num_exprs = cif.num_exprs;
+        cf.num_stmts = cif.num_stmts;
+        cf.num_regex_cases = cif.num_regex_cases;
+        cf.slot_ids = cif.slot_ids;
+        cf.feature_flags = cif.feature_flags;
+        compiled_funcs.push_back(std::move(cf));
+    }
     {
         // Look up the blob GV by the name emitFragmentSymbols just
         // emitted.  The sanitizer + prefix scheme is identical.
