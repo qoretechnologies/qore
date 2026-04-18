@@ -417,8 +417,27 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
 
         # Read from the channel — the ChannelAction pushes response chunks
         # directly from the I/O thread via trySend (pure C++).
+        #
+        # @ref Qore::Thread::Channel::recv() treats timeout_ms <= 0 as infinite
+        # wait, which would turn a caller-intended non-blocking drain (e.g.
+        # DataStreamClientIo's sendDSv1Stream polling for early server errors)
+        # into a hang.  When the caller passes 0 explicitly, route through
+        # tryRecv() so the semantics match the other HTTP reader APIs where
+        # 0 means "return NOTHING if no data is pending".
         try {
-            auto rv = data_channel.recv(wait_timeout);
+            auto rv;
+            if (wait_timeout == 0ms) {
+                *hash<auto> tr = data_channel.tryRecv();
+                if (!exists tr) {
+                    return NOTHING;
+                }
+                if (!tr.has_value) {
+                    throw "HTTPCLIENT-STREAM-CLOSED", "stream is closed";
+                }
+                rv = tr.value;
+            } else {
+                rv = data_channel.recv(wait_timeout);
+            }
             # ChannelAction pushes the full response hash from the I/O thread.
             # Extract body data for the streaming API, and detect end_stream.
             if (rv.typeCode() == NT_HASH) {
