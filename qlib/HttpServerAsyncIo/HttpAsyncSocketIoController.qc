@@ -251,6 +251,26 @@ public class HttpAsyncSocketIoController {
         Does NOT stop the shared controller — other users may still be using it.
         If the controller was created internally, it is stopped.
     */
+    #! Pushes a \c close sentinel to every registered persistent-mux queue
+    /** Called from both @ref stop() and @ref HttpServer::stopNoWait() so that
+        dedicated persistent-handler threads blocked in @ref Queue::get() on the
+        queue's idle TTL (default 75 s) exit promptly on shutdown.
+
+        Without this, a \c stopNoWait() shutdown path (the one Qorus uses) would
+        wait up to the full TTL for each dedicated handler before
+        @ref HttpListener::stop()'s connection-thread WaitGroup drains — making
+        server shutdown visibly sluggish even though all I/O is async.
+
+        Safe to call multiple times.
+    */
+    signalPersistentQueuesToClose() {
+        persistent_queue_mutex.lock();
+        on_exit persistent_queue_mutex.unlock();
+        foreach string key in (keys persistent_queues) {
+            persistent_queues{key}.queue.push({"type": "close"});
+        }
+    }
+
     stop() {
         # Set stopping flag first — prevents handler tasks from submitting new operations
         # Copy keys under lock, then cancel without holding the lock
@@ -272,13 +292,7 @@ public class HttpAsyncSocketIoController {
             accept_counts = {};
         }
         # Signal persistent queues to exit their dedicated loops
-        {
-            persistent_queue_mutex.lock();
-            on_exit persistent_queue_mutex.unlock();
-            foreach string key in (keys persistent_queues) {
-                persistent_queues{key}.queue.push({"type": "close"});
-            }
-        }
+        signalPersistentQueuesToClose();
         foreach string lhash in (listener_keys) {
             controller.cancelByOwner(lhash);
         }
