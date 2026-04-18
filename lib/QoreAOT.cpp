@@ -963,7 +963,8 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
         const AOTConstantReverseMap* const_reverse_map = nullptr,
         std::set<std::string>* compiled_keys = nullptr,
         const char* compile_module = nullptr,
-        const char* compile_file = nullptr) {
+        const char* compile_file = nullptr,
+        bool metadata_only = false) {
     // Track compiled variant keys to skip duplicates from iterator yielding
     // the same variant twice (committed + pending)
     std::set<std::string> local_keys;
@@ -1062,59 +1063,6 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                     }
                 }
 
-                // Lower to LLVM with AOT mode
-                QoreIRToLLVM lowerer(ctx);
-                lowerer.setAOTMode(&slots);
-                lowerer.setSharedDebugInfo(&di_builder, di_cu);
-    lowerer.setEmitDebugInfo(aotEmitDebugInfo());
-                // Enable deferred exception checking to reduce BasicBlock count.
-                // This prevents LLVM SimplifyCFG from hanging on functions with 200+ BBs.
-                // Safe: only defers checks for code outside try blocks; code inside try blocks
-                // still gets immediate checks via emitExceptionCheck's !inst->exception_target condition.
-                // **Except** when the function has `on_exit` / `on_error` / `on_success`
-                // handlers. Deferring past a throwing call would bypass handler execution
-                // (ScopeExit with inline_lowered=true pops handlers without firing them,
-                // leaving locks held, resources leaked, etc.). Scan for OnBlockExit and
-                // disable deferral if found.
-                bool has_obe = false;
-                for (const auto& bb : ir_func->blocks) {
-                    for (const auto& inst : bb->instructions) {
-                        if (inst->opcode == QoreIROpcode::OnBlockExit) {
-                            has_obe = true;
-                            break;
-                        }
-                    }
-                    if (has_obe) {
-                        break;
-                    }
-                }
-                lowerer.setDeferredExceptionChecking(!has_obe);
-                if (!fast_entry_name.empty()) {
-                    lowerer.setAOTSelfRecursiveFastEntry(fast_entry_name);
-                }
-                std::string llvm_error;
-                // Debug: dump IR before LLVM lowering if requested
-                if (getenv("QORE_AOT_DUMP_IR")) {
-                    fprintf(stderr, "=== IR for %s ===\n", variant_key.c_str());
-                    QoreIRPrinter::print(*ir_func, std::cerr);
-                    fprintf(stderr, "=================\n");
-                }
-                // Count total IR instructions and warn for large functions
-                size_t total_ir_insts = 0;
-                for (const auto& block : ir_func->blocks) {
-                    total_ir_insts += block->instructions.size();
-                }
-                total_ir_insts_all += total_ir_insts;
-                if (getenv("QORE_AOT_DEBUG")) {
-                    fprintf(stderr, "AOT: lowering function '%s' (blocks=%zu, insts=%zu)\n",
-                        variant_key.c_str(), ir_func->blocks.size(), total_ir_insts);
-                }
-                if (total_ir_insts > 5000) {
-                    fprintf(stderr, "warning: function '%s' has %zu IR instructions; "
-                        "LLVM compilation may take a long time; consider breaking this "
-                        "function into smaller functions\n",
-                        variant_key.c_str(), total_ir_insts);
-                }
                 // Pre-register function parameters in the slot map so that AST
                 // expressions delegated to qore_rt_invoke_expr_aot (e.g., NewObject
                 // constructor args) can resolve VarRefNode locals correctly.
@@ -1140,39 +1088,127 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                     }
                 }
 
-                bool std_entry_ok = lowerer.lowerFunction(*ir_func, module, llvm_error);
+                // Phase 4 slice 6: metadata_only mode (used by
+                // `qcc -m --from-objects`) skips the expensive LLVM IR
+                // emission and instead emits a bare external
+                // declaration that matches lowerFunction's AOT signature
+                // `i64 (ptr ctx, ptr xsink)`. The function body is
+                // expected to resolve at link time against a
+                // separately-compiled `.qo` file.
+                bool std_entry_ok;
+                std::string llvm_error;
+                std::vector<AOTCompiledFuncWithSlots::AOTLocEntry> aot_locs_local;
 
-                // Compile fast entry for self-recursive Approach B
-                if (std_entry_ok && self_rec_eligible) {
-                    const UserSignature* sig = uvb->getUserSignature();
-                    unsigned num_params = sig->numParams();
-                    llvm::Function* fast_fn = module.getFunction(fast_entry_name);
-                    assert(fast_fn);
-
-                    // Build param mapping: LocalVar* → LLVM function arg value
-                    std::unordered_map<const void*, llvm::Value*> param_map;
-                    for (unsigned i = 0; i < num_params; ++i) {
-                        const void* key = reinterpret_cast<const void*>(sig->lv[i]);
-                        param_map[key] = fast_fn->getArg(i);
-                        fast_fn->getArg(i)->setName(
-                                std::string("arg") + std::to_string(i));
+                if (metadata_only) {
+                    auto* i64_t = llvm::Type::getInt64Ty(ctx);
+                    auto* ptr_t = llvm::PointerType::get(ctx, 0);
+                    auto* fn_type = llvm::FunctionType::get(i64_t, {ptr_t, ptr_t}, false);
+                    if (!module.getFunction(ir_func->name)) {
+                        llvm::Function::Create(fn_type,
+                            llvm::Function::ExternalLinkage, ir_func->name, module);
+                    }
+                    std_entry_ok = true;
+                } else {
+                    // Lower to LLVM with AOT mode
+                    QoreIRToLLVM lowerer(ctx);
+                    lowerer.setAOTMode(&slots);
+                    lowerer.setSharedDebugInfo(&di_builder, di_cu);
+                    lowerer.setEmitDebugInfo(aotEmitDebugInfo());
+                    // Enable deferred exception checking to reduce BasicBlock count.
+                    // This prevents LLVM SimplifyCFG from hanging on functions with 200+ BBs.
+                    // Safe: only defers checks for code outside try blocks; code inside try blocks
+                    // still gets immediate checks via emitExceptionCheck's !inst->exception_target condition.
+                    // **Except** when the function has `on_exit` / `on_error` / `on_success`
+                    // handlers. Deferring past a throwing call would bypass handler execution
+                    // (ScopeExit with inline_lowered=true pops handlers without firing them,
+                    // leaving locks held, resources leaked, etc.). Scan for OnBlockExit and
+                    // disable deferral if found.
+                    bool has_obe = false;
+                    for (const auto& bb : ir_func->blocks) {
+                        for (const auto& inst : bb->instructions) {
+                            if (inst->opcode == QoreIROpcode::OnBlockExit) {
+                                has_obe = true;
+                                break;
+                            }
+                        }
+                        if (has_obe) {
+                            break;
+                        }
+                    }
+                    lowerer.setDeferredExceptionChecking(!has_obe);
+                    if (!fast_entry_name.empty()) {
+                        lowerer.setAOTSelfRecursiveFastEntry(fast_entry_name);
+                    }
+                    // Debug: dump IR before LLVM lowering if requested
+                    if (getenv("QORE_AOT_DUMP_IR")) {
+                        fprintf(stderr, "=== IR for %s ===\n", variant_key.c_str());
+                        QoreIRPrinter::print(*ir_func, std::cerr);
+                        fprintf(stderr, "=================\n");
+                    }
+                    // Count total IR instructions and warn for large functions
+                    size_t total_ir_insts = 0;
+                    for (const auto& block : ir_func->blocks) {
+                        total_ir_insts += block->instructions.size();
+                    }
+                    total_ir_insts_all += total_ir_insts;
+                    if (getenv("QORE_AOT_DEBUG")) {
+                        fprintf(stderr, "AOT: lowering function '%s' (blocks=%zu, insts=%zu)\n",
+                            variant_key.c_str(), ir_func->blocks.size(), total_ir_insts);
+                    }
+                    if (total_ir_insts > 5000) {
+                        fprintf(stderr, "warning: function '%s' has %zu IR instructions; "
+                            "LLVM compilation may take a long time; consider breaking this "
+                            "function into smaller functions\n",
+                            variant_key.c_str(), total_ir_insts);
                     }
 
-                    QoreIRToLLVM fast_lowerer(ctx);
-                    fast_lowerer.setAOTMode(&slots);
-                    fast_lowerer.setSharedDebugInfo(&di_builder, di_cu);
-                    fast_lowerer.setEmitDebugInfo(aotEmitDebugInfo());
-                    fast_lowerer.setDeferredExceptionChecking(!has_obe);  // See comment above
-                    fast_lowerer.setFastEntryMode(fast_entry_name, &param_map);
-                    fast_lowerer.setAOTSelfRecursiveFastEntry(fast_entry_name);
-                    std::string fast_error;
-                    if (!fast_lowerer.lowerFunction(*ir_func, module, fast_error)) {
-                        // Fast entry failure is non-fatal — standard entry still works
-                        printd(2, "AOT: fast entry '%s' lowering failed: %s\n",
-                            fast_entry_name.c_str(), fast_error.c_str());
-                        if (getenv("QORE_AOT_DEBUG")) {
-                            fprintf(stderr, "AOT: fast entry '%s' lowering failed: %s\n",
+                    std_entry_ok = lowerer.lowerFunction(*ir_func, module, llvm_error);
+
+                    // Compile fast entry for self-recursive Approach B
+                    if (std_entry_ok && self_rec_eligible) {
+                        const UserSignature* sig = uvb->getUserSignature();
+                        unsigned num_params = sig->numParams();
+                        llvm::Function* fast_fn = module.getFunction(fast_entry_name);
+                        assert(fast_fn);
+
+                        // Build param mapping: LocalVar* → LLVM function arg value
+                        std::unordered_map<const void*, llvm::Value*> param_map;
+                        for (unsigned i = 0; i < num_params; ++i) {
+                            const void* key = reinterpret_cast<const void*>(sig->lv[i]);
+                            param_map[key] = fast_fn->getArg(i);
+                            fast_fn->getArg(i)->setName(
+                                    std::string("arg") + std::to_string(i));
+                        }
+
+                        QoreIRToLLVM fast_lowerer(ctx);
+                        fast_lowerer.setAOTMode(&slots);
+                        fast_lowerer.setSharedDebugInfo(&di_builder, di_cu);
+                        fast_lowerer.setEmitDebugInfo(aotEmitDebugInfo());
+                        fast_lowerer.setDeferredExceptionChecking(!has_obe);  // See comment above
+                        fast_lowerer.setFastEntryMode(fast_entry_name, &param_map);
+                        fast_lowerer.setAOTSelfRecursiveFastEntry(fast_entry_name);
+                        std::string fast_error;
+                        if (!fast_lowerer.lowerFunction(*ir_func, module, fast_error)) {
+                            // Fast entry failure is non-fatal — standard entry still works
+                            printd(2, "AOT: fast entry '%s' lowering failed: %s\n",
                                 fast_entry_name.c_str(), fast_error.c_str());
+                            if (getenv("QORE_AOT_DEBUG")) {
+                                fprintf(stderr, "AOT: fast entry '%s' lowering failed: %s\n",
+                                    fast_entry_name.c_str(), fast_error.c_str());
+                            }
+                        }
+                    }
+
+                    // Transfer owned location data from LLVM codegen directly.
+                    // The lowerer's AOTLocEntry already owns string copies — no raw
+                    // pointer dereference needed here (safe against corrupt inst->loc).
+                    if (std_entry_ok) {
+                        for (const auto& loc : lowerer.getAOTLocTable()) {
+                            AOTCompiledFuncWithSlots::AOTLocEntry entry;
+                            entry.start_line = static_cast<int16_t>(loc.start_line);
+                            entry.end_line = static_cast<int16_t>(loc.end_line);
+                            entry.file = loc.file;
+                            aot_locs_local.push_back(std::move(entry));
                         }
                     }
                 }
@@ -1198,16 +1234,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                     if (!slots.stmt_slots.empty()) {
                         cf.handler_irs = extractHandlerIRs(*ir_func, slots);
                     }
-                    // Transfer owned location data from LLVM codegen directly.
-                    // The lowerer's AOTLocEntry already owns string copies — no raw
-                    // pointer dereference needed here (safe against corrupt inst->loc).
-                    for (const auto& loc : lowerer.getAOTLocTable()) {
-                        AOTCompiledFuncWithSlots::AOTLocEntry entry;
-                        entry.start_line = static_cast<int16_t>(loc.start_line);
-                        entry.end_line = static_cast<int16_t>(loc.end_line);
-                        entry.file = loc.file;
-                        cf.aot_locs.push_back(std::move(entry));
-                    }
+                    cf.aot_locs = std::move(aot_locs_local);
                     // Scan IR function for required features
                     cf.feature_flags = scanIRFeatureFlags(*ir_func);
                     compiled_funcs.push_back(std::move(cf));
@@ -1313,47 +1340,6 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                     AOTSlotMap slots;
                     buildAOTSlotMap(*ir_func, slots);
 
-                    // Lower to LLVM with AOT mode
-                    QoreIRToLLVM lowerer(ctx);
-                    lowerer.setAOTMode(&slots);
-                    lowerer.setSharedDebugInfo(&di_builder, di_cu);
-    lowerer.setEmitDebugInfo(aotEmitDebugInfo());
-                    // See comment in function compilation above about OnBlockExit guard
-                    bool has_obe = false;
-                    for (const auto& bb : ir_func->blocks) {
-                        for (const auto& inst : bb->instructions) {
-                            if (inst->opcode == QoreIROpcode::OnBlockExit) {
-                                has_obe = true;
-                                break;
-                            }
-                        }
-                        if (has_obe) {
-                            break;
-                        }
-                    }
-                    lowerer.setDeferredExceptionChecking(!has_obe);
-                    std::string llvm_error;
-                    // Count total IR instructions and warn for large functions
-                    size_t total_ir_insts = 0;
-                    for (const auto& block : ir_func->blocks) {
-                        total_ir_insts += block->instructions.size();
-                    }
-                    total_ir_insts_all += total_ir_insts;
-                    if (getenv("QORE_AOT_DEBUG")) {
-                        fprintf(stderr, "AOT: lowering method '%s' (blocks=%zu, insts=%zu)\n",
-                            variant_key.c_str(), ir_func->blocks.size(), total_ir_insts);
-                    }
-                    if (getenv("QORE_AOT_DUMP_IR")) {
-                        fprintf(stderr, "=== IR for %s ===\n", variant_key.c_str());
-                        QoreIRPrinter::print(*ir_func, std::cerr);
-                        fprintf(stderr, "=================\n");
-                    }
-                    if (total_ir_insts > 5000) {
-                        fprintf(stderr, "warning: method '%s' has %zu IR instructions; "
-                            "LLVM compilation may take a long time; consider breaking this "
-                            "method into smaller methods\n",
-                            variant_key.c_str(), total_ir_insts);
-                    }
                     // Pre-register method parameters in the slot map (see comment above)
                     {
                         const UserSignature* pre_sig = uvb->getUserSignature();
@@ -1370,7 +1356,79 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                             }
                         }
                     }
-                    if (lowerer.lowerFunction(*ir_func, module, llvm_error)) {
+
+                    bool method_ok;
+                    std::string llvm_error;
+                    std::vector<AOTCompiledFuncWithSlots::AOTLocEntry> aot_locs_local;
+
+                    if (metadata_only) {
+                        // Phase 4 slice 6: emit bare external declaration
+                        // matching lowerFunction's AOT signature.
+                        auto* i64_t = llvm::Type::getInt64Ty(ctx);
+                        auto* ptr_t = llvm::PointerType::get(ctx, 0);
+                        auto* fn_type = llvm::FunctionType::get(i64_t,
+                            {ptr_t, ptr_t}, false);
+                        if (!module.getFunction(ir_func->name)) {
+                            llvm::Function::Create(fn_type,
+                                llvm::Function::ExternalLinkage, ir_func->name, module);
+                        }
+                        method_ok = true;
+                    } else {
+                        // Lower to LLVM with AOT mode
+                        QoreIRToLLVM lowerer(ctx);
+                        lowerer.setAOTMode(&slots);
+                        lowerer.setSharedDebugInfo(&di_builder, di_cu);
+                        lowerer.setEmitDebugInfo(aotEmitDebugInfo());
+                        // See comment in function compilation above about OnBlockExit guard
+                        bool has_obe = false;
+                        for (const auto& bb : ir_func->blocks) {
+                            for (const auto& inst : bb->instructions) {
+                                if (inst->opcode == QoreIROpcode::OnBlockExit) {
+                                    has_obe = true;
+                                    break;
+                                }
+                            }
+                            if (has_obe) {
+                                break;
+                            }
+                        }
+                        lowerer.setDeferredExceptionChecking(!has_obe);
+                        // Count total IR instructions and warn for large functions
+                        size_t total_ir_insts = 0;
+                        for (const auto& block : ir_func->blocks) {
+                            total_ir_insts += block->instructions.size();
+                        }
+                        total_ir_insts_all += total_ir_insts;
+                        if (getenv("QORE_AOT_DEBUG")) {
+                            fprintf(stderr, "AOT: lowering method '%s' (blocks=%zu, insts=%zu)\n",
+                                variant_key.c_str(), ir_func->blocks.size(), total_ir_insts);
+                        }
+                        if (getenv("QORE_AOT_DUMP_IR")) {
+                            fprintf(stderr, "=== IR for %s ===\n", variant_key.c_str());
+                            QoreIRPrinter::print(*ir_func, std::cerr);
+                            fprintf(stderr, "=================\n");
+                        }
+                        if (total_ir_insts > 5000) {
+                            fprintf(stderr, "warning: method '%s' has %zu IR instructions; "
+                                "LLVM compilation may take a long time; consider breaking this "
+                                "method into smaller methods\n",
+                                variant_key.c_str(), total_ir_insts);
+                        }
+
+                        method_ok = lowerer.lowerFunction(*ir_func, module, llvm_error);
+
+                        if (method_ok) {
+                            for (const auto& loc : lowerer.getAOTLocTable()) {
+                                AOTCompiledFuncWithSlots::AOTLocEntry entry;
+                                entry.start_line = static_cast<int16_t>(loc.start_line);
+                                entry.end_line = static_cast<int16_t>(loc.end_line);
+                                entry.file = loc.file;
+                                aot_locs_local.push_back(std::move(entry));
+                            }
+                        }
+                    }
+
+                    if (method_ok) {
                         AOTCompiledFunc cf;
                         cf.name = variant_key;  // Use variant key instead of plain name
                         cf.llvm_symbol = ir_func->name;
@@ -1391,14 +1449,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                         if (!slots.stmt_slots.empty()) {
                             cf.handler_irs = extractHandlerIRs(*ir_func, slots);
                         }
-                        // Transfer owned location data from LLVM codegen directly.
-                        for (const auto& loc : lowerer.getAOTLocTable()) {
-                            AOTCompiledFuncWithSlots::AOTLocEntry entry;
-                            entry.start_line = static_cast<int16_t>(loc.start_line);
-                            entry.end_line = static_cast<int16_t>(loc.end_line);
-                            entry.file = loc.file;
-                            cf.aot_locs.push_back(std::move(entry));
-                        }
+                        cf.aot_locs = std::move(aot_locs_local);
                         // Scan IR function for required features
                         cf.feature_flags = scanIRFeatureFlags(*ir_func);
                         compiled_funcs.push_back(std::move(cf));
@@ -1467,19 +1518,35 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
         AOTSlotMap slots;
         buildAOTSlotMap(*ir_func, slots);
 
-        // Lower to LLVM
-        QoreIRToLLVM lowerer(ctx);
-        lowerer.setAOTMode(&slots);
-        lowerer.setDeferredExceptionChecking(true);
-        lowerer.setSharedDebugInfo(&di_builder, di_cu);
-    lowerer.setEmitDebugInfo(aotEmitDebugInfo());
+        // Phase 4 slice 6: in metadata_only mode, skip LLVM IR emission
+        // and emit a bare external declaration instead.  The init
+        // function's body is expected to resolve at link time against
+        // a separately-compiled `.qo`.
         std::string llvm_error;
-        if (getenv("QORE_AOT_DUMP_IR")) {
-            fprintf(stderr, "=== IR for init %s ===\n", init_name.c_str());
-            QoreIRPrinter::print(*ir_func, std::cerr);
-            fprintf(stderr, "=================\n");
+        bool init_ok;
+        if (metadata_only) {
+            auto* i64_t = llvm::Type::getInt64Ty(ctx);
+            auto* ptr_t = llvm::PointerType::get(ctx, 0);
+            auto* fn_type = llvm::FunctionType::get(i64_t, {ptr_t, ptr_t}, false);
+            if (!module.getFunction(ir_func->name)) {
+                llvm::Function::Create(fn_type, llvm::Function::ExternalLinkage,
+                    ir_func->name, module);
+            }
+            init_ok = true;
+        } else {
+            QoreIRToLLVM lowerer(ctx);
+            lowerer.setAOTMode(&slots);
+            lowerer.setDeferredExceptionChecking(true);
+            lowerer.setSharedDebugInfo(&di_builder, di_cu);
+            lowerer.setEmitDebugInfo(aotEmitDebugInfo());
+            if (getenv("QORE_AOT_DUMP_IR")) {
+                fprintf(stderr, "=== IR for init %s ===\n", init_name.c_str());
+                QoreIRPrinter::print(*ir_func, std::cerr);
+                fprintf(stderr, "=================\n");
+            }
+            init_ok = lowerer.lowerFunction(*ir_func, module, llvm_error);
         }
-        if (lowerer.lowerFunction(*ir_func, module, llvm_error)) {
+        if (init_ok) {
             AOTCompiledInitFunc cif;
             cif.name = init_name;
             cif.llvm_symbol = ir_func->name;
@@ -1683,7 +1750,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                 di_builder, di_cu,
                 compiled_funcs, compiled_init_funcs, total_funcs, compiled_count,
                 failed_count, total_ir_insts_all, const_reverse_map, compiled_keys,
-                compile_module, compile_file);
+                compile_module, compile_file, metadata_only);
         }
     }
 }
@@ -4856,34 +4923,401 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
         emitFragmentSymbols(ctx, *module, mod_info.name, file_basename_san,
             uncompressed_metadata, fragment_order);
 
-        if (is_primary) {
-            // Primary `.qo`: reuse the uncompressed blob to drive the
-            // self-register path, compressing in-place for
-            // `qore_aot_mod_metadata` (the private global that the
-            // module's init_v3 adapter calls with the compressed
-            // bytes).  The fragment blob stays uncompressed so the
-            // slice-6 aggregator never has to decompress a fragment
-            // before merging.
-            std::vector<uint8_t> selfreg_metadata = uncompressed_metadata;
+        // Phase 4 slice 6: per-file `.qo`s are intermediate artifacts
+        // (per design/aot-phase4-qo-object-files.md §Granularity) —
+        // primary and secondary are treated uniformly. Neither emits
+        // a self-register path (the module-info globals, the desc fn,
+        // or `qore_<mod>_register`); slice 6's
+        // `qcc -m --from-objects` aggregator synthesizes those in a
+        // single glue TU, avoiding duplicate-symbol collisions when
+        // primary + secondaries are relocated together into a `.qmod`.
+        //
+        // For single-file modules that should be independently
+        // loadable as a `.qo`, use `qcc -c <file.qm>` without
+        // `--context=DIR` — that path still emits the full
+        // self-register ABI via `compileModule(compile_only=true)`.
+        (void)compiled_init_funcs;  // consumed by fragment metadata above
 
-            printf("AOT: per-file primary self-register blob: %d bytes",
-                (int)selfreg_metadata.size());
+        di_builder.finalize();
+
+        std::string verify_error;
+        llvm::raw_string_ostream verify_os(verify_error);
+        if (llvm::verifyModule(*module, &verify_os)) {
+            verify_os.flush();
+            error = "LLVM module verification failed: " + verify_error;
+            return false;
+        }
+
+        if (getenv("QORE_DUMP_LLVM_IR")) {
+            module->print(llvm::errs(), nullptr);
+        }
+
+        // Per-file mode always emits a standalone `.qo` (relocatable
+        // object); there is no shared-library link step.
+        if (!emitObjectFile(*module, output_path, error, opt_level, target_triple)) {
+            return false;
+        }
+    }
+
+    QMM.removeUserModuleDependency(mod_info.name.c_str());
+    return true;
+}
+
+// Phase 4 slice 6: link multiple object files into a shared library.
+// Mirrors `linkSharedLib` (single object) but accepts a vector of input
+// `.o`/`.qo` files joined space-separated on the linker command line.
+static bool linkSharedLibMulti(const std::vector<std::string>& obj_paths,
+        const std::string& so_path, std::string& error,
+        const char* target_triple = nullptr) {
+    if (target_triple) {
+        printf("cross-compiled module objects for target '%s' — link manually\n",
+            target_triple);
+        return true;
+    }
+
+    AOTLinkConfig config = loadAOTLinkConfig();
+    std::string libqore_dir = getLibqoreDir();
+
+    std::string cmd = config.cxx + " -shared -o " + so_path;
+    for (const std::string& p : obj_paths) {
+        cmd += " " + p;
+    }
+    cmd += " -L" + libqore_dir + " -lqore"
+        + " -Wl,-rpath," + libqore_dir;
+    if (!config.dynamic_libs.empty()) {
+        cmd += " " + config.dynamic_libs;
+    }
+
+    printd(2, "AOT: link shared lib (multi) command: %s\n", cmd.c_str());
+    int rc = system(cmd.c_str());
+    if (rc != 0) {
+        error = "linker command failed with exit code " + std::to_string(rc);
+        return false;
+    }
+    return true;
+}
+
+// Phase 4 slice 6: aggregator for per-file `.qo`s into a single `.qmod`.
+// Mirrors the parse-driver pipeline of `compileSeparatedModule`, then
+// delegates to `compileNamespaceFunctions(metadata_only=true)` so no
+// LLVM IR emission happens for the already-compiled function bodies —
+// only bare external declarations go into the glue LLVM module.  The
+// declarations resolve at link time against the actual bodies inside
+// the input `.qo` files.
+//
+// The resulting `.qmod` is semantically equivalent to what a monolithic
+// `qcc -m <dir>` would produce, but the expensive LLVM codegen happens
+// once per per-file `.qo` (parallelizable) rather than once in one
+// serial aggregator run.
+bool QoreAOT::compileModuleFromObjects(const char* dir_path,
+                                       const std::vector<std::string>& object_paths,
+                                       const std::string& output_path,
+                                       const QoreParseOptions& parse_options,
+                                       std::string& error,
+                                       int opt_level,
+                                       const char* target_triple,
+                                       bool include_source) {
+    if (object_paths.empty()) {
+        error = "--from-objects requires at least one .qo input";
+        return false;
+    }
+
+    // Normalize the source dir (same convention as compileSeparatedModule).
+    std::string dir_str(dir_path);
+    while (!dir_str.empty() && dir_str.back() == '/') {
+        dir_str.pop_back();
+    }
+    if (dir_str.empty()) {
+        error = "empty directory path";
+        return false;
+    }
+
+    std::string mod_name;
+    {
+        size_t slash = dir_str.rfind('/');
+        mod_name = (slash != std::string::npos) ? dir_str.substr(slash + 1) : dir_str;
+    }
+    if (mod_name.empty()) {
+        error = "cannot determine module name from directory path";
+        return false;
+    }
+
+    std::string qm_path = dir_str + "/" + mod_name + ".qm";
+    std::string main_source = QoreDir::get_file_content(qm_path.c_str());
+    if (main_source.empty()) {
+        struct stat st;
+        if (stat(qm_path.c_str(), &st) != 0) {
+            error = "main module file not found: " + qm_path;
+            return false;
+        }
+        error = "main module file is empty: " + qm_path;
+        return false;
+    }
+
+    QoreAOTModuleInfo mod_info;
+    if (!parseModuleMetadata(main_source.c_str(), (int)main_source.size(),
+                             qm_path.c_str(), mod_info, error)) {
+        return false;
+    }
+    if (mod_info.name != mod_name) {
+        error = "module name '" + mod_info.name + "' in " + qm_path
+            + " does not match directory name '" + mod_name + "'";
+        return false;
+    }
+
+    printd(2, "AOT aggregator: name='%s' version='%s' inputs=%zu dir='%s'\n",
+        mod_info.name.c_str(), mod_info.version.c_str(),
+        object_paths.size(), dir_str.c_str());
+
+    QoreParseOptions mod_po = parse_options | QoreParseOptions(PO_IN_MODULE
+        | PO_NO_TOP_LEVEL_STATEMENTS | PO_REQUIRE_PROTOTYPES | PO_REQUIRE_OUR);
+
+    ExceptionSink xsink;
+    ExceptionSink wsink;
+    QoreProgramHelper qpgm(mod_po, xsink);
+    if (xsink.isException()) {
+        xsink.handleExceptions();
+        error = "failed to create QoreProgram for aggregator parsing";
+        return false;
+    }
+
+    qpgm->setScriptPath(qm_path.c_str());
+
+    ValueHolder init_c_holder(nullptr);
+    {
+        QoreUserModuleDefContextHelper mod_ctx(mod_info.name.c_str(),
+            qm_path.c_str(), *qpgm, xsink);
+
+        qpgm->parsePending(main_source.c_str(), qm_path.c_str(),
+            &xsink, &wsink, QP_WARN_DEFAULT);
+        if (xsink.isException()) {
+            mod_ctx.close();
+            xsink.handleExceptions();
+            error = "parse error in main module file: " + qm_path;
+            return false;
+        }
+
+        QoreString regexClassesFunc(".+\\.(qc|ql)$");
+        QoreDir moduleDir(&xsink, QCS_DEFAULT, dir_str.c_str());
+        if (xsink.isException()) {
+            mod_ctx.close();
+            xsink.handleExceptions();
+            error = "failed to open module directory: " + dir_str;
+            return false;
+        }
+        ReferenceHolder<QoreListNode> fileList(
+            moduleDir.list(&xsink, S_IFREG, &regexClassesFunc), &xsink);
+        if (xsink.isException()) {
+            mod_ctx.close();
+            xsink.handleExceptions();
+            error = "failed to list files in module directory: " + dir_str;
+            return false;
+        }
+
+        std::string combined_source = main_source;
+        if (fileList && fileList->size() > 0) {
+            for (size_t i = 0; i < fileList->size(); ++i) {
+                const QoreStringNode* filename =
+                    fileList->retrieveEntry(i).get<const QoreStringNode>();
+                if (!filename) {
+                    continue;
+                }
+                std::string file_path = dir_str + "/" + filename->c_str();
+                std::string file_source = QoreDir::get_file_content(file_path.c_str());
+                if (file_source.empty()) {
+                    continue;
+                }
+                qpgm->parsePending(file_source.c_str(), file_path.c_str(),
+                    &xsink, &wsink, QP_WARN_DEFAULT);
+                if (xsink.isException()) {
+                    mod_ctx.close();
+                    xsink.handleExceptions();
+                    error = "parse error in component file: " + file_path;
+                    return false;
+                }
+                if (!combined_source.empty() && combined_source.back() != '\n') {
+                    combined_source += '\n';
+                }
+                combined_source += "# __AOT_FILE_BREAK__\n";
+                combined_source += file_source;
+            }
+        }
+
+        qpgm->parseCommit(&xsink);
+        if (xsink.isException()) {
+            mod_ctx.close();
+            xsink.handleExceptions();
+            error = "parse commit failed: " + mod_name;
+            return false;
+        }
+
+        if (mod_ctx.hasInit()) {
+            init_c_holder = mod_ctx.init_c.refSelf();
+        }
+        mod_ctx.close();
+
+        if (wsink.isException()) {
+            wsink.handleWarnings();
+        }
+
+        // Initialize LLVM (native target suffices for the aggregator's glue
+        // module — the heavy LLVM codegen already ran in the per-file .qo
+        // builds).
+        llvm::InitializeNativeTarget();
+        llvm::InitializeNativeTargetAsmPrinter();
+        llvm::InitializeNativeTargetAsmParser();
+
+        llvm::LLVMContext ctx;
+        auto module = std::make_unique<llvm::Module>(
+            "qore_aot_agg_" + mod_info.name, ctx);
+
+        std::vector<AOTCompiledFunc> compiled_funcs;
+        std::vector<AOTCompiledInitFunc> compiled_init_funcs;
+        int total_funcs = 0;
+        int compiled_count = 0;
+        int failed_count = 0;
+        size_t total_ir_insts_all = 0;
+
+        llvm::DIBuilder di_builder(*module);
+        auto* di_file = di_builder.createFile("<aot>", ".");
+        auto* di_cu = di_builder.createCompileUnit(
+            llvm::dwarf::DW_LANG_lo_user, di_file, "Qore AOT", false, "", 0);
+        if (!module->getModuleFlag("Dwarf Version")) {
+            module->addModuleFlag(llvm::Module::Warning, "Dwarf Version", 5);
+        }
+        if (!module->getModuleFlag("Debug Info Version")) {
+            module->addModuleFlag(llvm::Module::Warning, "Debug Info Version",
+                llvm::DEBUG_METADATA_VERSION);
+        }
+
+        qore_program_private* pp = qore_program_private::get(**qpgm);
+        qore_ns_private* root_ns = qore_ns_private::get(*pp->RootNS);
+
+        AOTConstantReverseMap const_reverse_map = buildConstantReverseMap(root_ns);
+
+        // Walk the full module (no compile_file filter) with
+        // metadata_only=true — only external declarations go into the
+        // glue module; actual bodies come from input .qo's at link time.
+        compileNamespaceFunctions(root_ns, *qpgm, ctx, *module, di_builder, di_cu,
+            compiled_funcs, compiled_init_funcs, total_funcs, compiled_count,
+            failed_count, total_ir_insts_all, &const_reverse_map, nullptr,
+            mod_info.name.c_str(), /*compile_file=*/nullptr,
+            /*metadata_only=*/true);
+
+        if (init_c_holder) {
+            // The module-init closure side effects are part of the module
+            // lifecycle — the aggregator's glue runs them through the
+            // standard init pipeline.  The closure IR must be lowered to
+            // LLVM because it has no counterpart in the input .qo's.
+            // That's a small cost relative to the module's method bodies.
+            compileModuleInitClosureAsInitFunc(*init_c_holder, mod_info.name.c_str(),
+                *qpgm, ctx, *module, di_builder, di_cu, compiled_init_funcs,
+                &const_reverse_map);
+        }
+
+        reportAOTCompileStats("aggregator (metadata-only)",
+            compiled_count, total_funcs, failed_count, compiled_funcs);
+
+        // Build aggregated metadata blob (same binary format as
+        // compileSeparatedModule) and wire it into generateModuleABIV2
+        // with compile_only=false so the resulting .qmod uses the
+        // standard unprefixed module-info globals that libqore's loader
+        // expects.
+        {
+            QoreAOTBinaryWriter writer;
+            QoreAOTBinaryHeader hdr{};
+            hdr.magic = QORE_AOT_BINARY_MAGIC;
+            hdr.version = QORE_AOT_BINARY_VERSION;
+            hdr.flags = QORE_AOT_FLAG_IS_MODULE;
+            const QoreParseOptions& final_po = qpgm->getParseOptions();
+            hdr.parse_options_lo = final_po.getLo();
+            hdr.label_offset = writer.strings.add(qm_path.c_str());
+            hdr.max_opcode_id = QORE_IR_MAX_OPCODE;
+            hdr.qore_version_major = QORE_VERSION_MAJOR;
+            hdr.qore_version_minor = QORE_VERSION_MINOR;
+            hdr.qore_version_patch = QORE_VERSION_PATCH;
+            hdr.parse_options_hi = final_po.getHi();
+            hdr.source_hash = computeSourceHash(qm_path.c_str());
+            hdr.feature_flags = computeFeatureFlags(compiled_funcs);
+
+            std::vector<std::string> reexport_mods;
+            std::vector<std::string> all_deps = extractAllDependencies(
+                combined_source.c_str(), (int)combined_source.size(), &reexport_mods);
+            serializeDependencies(writer, all_deps);
+            serializeReexportModules(writer, reexport_mods);
+
+            if (!serializeNamespaceTree(writer, root_ns, mod_info.name.c_str())) {
+                error = "failed to serialize aggregated namespace tree";
+                return false;
+            }
+
+            std::vector<AOTCompiledFuncWithSlots> func_slots;
+            for (auto& cf : compiled_funcs) {
+                AOTCompiledFuncWithSlots fws;
+                fws.name = cf.name;
+                fws.num_locals = cf.num_locals;
+                fws.num_globals = cf.num_globals;
+                fws.num_exprs = cf.num_exprs;
+                fws.num_stmts = cf.num_stmts;
+                fws.num_regex_cases = cf.num_regex_cases;
+                fws.num_lv_path_insts = cf.num_lv_path_insts;
+                fws.slot_ids = cf.slot_ids;
+                for (auto& hir : cf.handler_irs) {
+                    fws.handler_irs.push_back(hir.get());
+                }
+                fws.aot_locs = cf.aot_locs;
+                func_slots.push_back(std::move(fws));
+            }
+            for (auto& cif : compiled_init_funcs) {
+                AOTCompiledFuncWithSlots fws;
+                fws.name = cif.name;
+                fws.num_locals = cif.num_locals;
+                fws.num_globals = cif.num_globals;
+                fws.num_exprs = cif.num_exprs;
+                fws.num_stmts = cif.num_stmts;
+                fws.num_regex_cases = cif.num_regex_cases;
+                fws.num_lv_path_insts = cif.num_lv_path_insts;
+                fws.slot_ids = cif.slot_ids;
+                func_slots.push_back(std::move(fws));
+            }
+            if (!serializeSlotMaps(writer, func_slots, &const_reverse_map, error)) {
+                return false;
+            }
+            if (!compiled_init_funcs.empty()) {
+                serializeInitFuncs(writer, compiled_init_funcs);
+            }
+            {
+                bool has_fallback_funcs = std::any_of(func_slots.begin(),
+                    func_slots.end(), funcNeedsFallback);
+                if (has_fallback_funcs || include_source) {
+                    serializeFallbackSources(writer, func_slots,
+                        combined_source.c_str(), (int)combined_source.size());
+                }
+            }
+
+            std::vector<uint8_t> metadata;
+            hdr.section_count = 0;
+            if (!writer.finalize(hdr, metadata)) {
+                error = "failed to finalize aggregated metadata";
+                return false;
+            }
+
+            printf("AOT: aggregated metadata blob: %d bytes", (int)metadata.size());
             const uint32_t AOT_HEADER_BYTES = 60;
-            if (!include_source && selfreg_metadata.size() > AOT_HEADER_BYTES) {
-                std::vector<uint8_t> post_header(
-                    selfreg_metadata.begin() + AOT_HEADER_BYTES,
-                    selfreg_metadata.end());
+            if (!include_source && metadata.size() > AOT_HEADER_BYTES) {
+                std::vector<uint8_t> post_header(metadata.begin() + AOT_HEADER_BYTES,
+                    metadata.end());
                 std::vector<uint8_t> compressed_post;
                 std::string compress_error;
                 if (compressMetadata(post_header, compressed_post, compress_error)) {
                     int compressed_total = AOT_HEADER_BYTES
                         + (int)compressed_post.size();
                     printf(" (compressed to %d bytes, %.1f%%)\n", compressed_total,
-                        100.0 * compressed_total / (int)selfreg_metadata.size());
-                    selfreg_metadata[34] = 1;  // compression flag in header
-                    selfreg_metadata.resize(AOT_HEADER_BYTES);
-                    selfreg_metadata.insert(selfreg_metadata.end(),
-                        compressed_post.begin(), compressed_post.end());
+                        100.0 * compressed_total / (int)metadata.size());
+                    metadata[34] = 1;
+                    metadata.resize(AOT_HEADER_BYTES);
+                    metadata.insert(metadata.end(), compressed_post.begin(),
+                        compressed_post.end());
                 } else {
                     printf("\n");
                 }
@@ -4905,17 +5339,13 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
                 compiled_funcs.push_back(std::move(cf));
             }
 
-            // Primary `.qo` always takes the compile_only=true emission
-            // path so the module-info globals are per-module-prefixed
-            // (`qore_<mod>_module_name` etc.) and the register function
-            // `qore_<mod>_register` is emitted — matching slice 3.
-            generateModuleABIV2(ctx, *module, selfreg_metadata, qm_path.c_str(),
+            // Aggregator emits a standard .qmod ABI (compile_only=false)
+            // with unprefixed module-info globals, exactly what libqore's
+            // dynamic loader expects.
+            generateModuleABIV2(ctx, *module, metadata, qm_path.c_str(),
                 qpgm->getParseOptions(), mod_info, compiled_funcs,
-                /*compile_only=*/true);
+                /*compile_only=*/false);
         }
-        // Secondary .qo's path ends here: compiled LLVM code + fragment
-        // symbols only.  No module-info globals, no register fn, no
-        // self-register invocation.
 
         di_builder.finalize();
 
@@ -4931,10 +5361,28 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
             module->print(llvm::errs(), nullptr);
         }
 
-        // Per-file mode always emits a standalone `.qo` (relocatable
-        // object); there is no shared-library link step.
-        if (!emitObjectFile(*module, output_path, error, opt_level, target_triple)) {
+        // Emit the glue `.o` next to the output path.  Intermediate — we
+        // clean it up once the shared library has been produced.
+        std::string glue_obj = output_path + ".agg.o";
+        if (!emitObjectFile(*module, glue_obj, error, opt_level, target_triple)) {
             return false;
+        }
+
+        // Link glue.o + all input .qo's into the final .qmod.
+        std::vector<std::string> link_inputs;
+        link_inputs.reserve(object_paths.size() + 1);
+        link_inputs.push_back(glue_obj);
+        for (const std::string& p : object_paths) {
+            link_inputs.push_back(p);
+        }
+
+        if (!linkSharedLibMulti(link_inputs, output_path, error, target_triple)) {
+            remove(glue_obj.c_str());
+            return false;
+        }
+
+        if (!target_triple) {
+            remove(glue_obj.c_str());
         }
     }
 

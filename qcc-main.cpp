@@ -66,6 +66,12 @@ static bool compile_only = false;
 // module so the parser has the full directory as context while the
 // AOT writer emits only the target file's contributions.
 static const char* context_dir = nullptr;
+// Phase 4 slice 6: --from-objects signals aggregator mode — the
+// positional inputs are per-file `.qo` objects (produced by
+// `qcc -c --context=DIR <file>`) that get linked together plus a
+// freshly-computed metadata glue into the output `.qmod`.  See
+// design/aot-phase4-qo-object-files.md.
+static bool from_objects = false;
 static bool include_source = false;
 static bool verbose = false;
 static bool show_help = false;
@@ -93,6 +99,9 @@ static void print_usage(const char* prog) {
     printf("      --context=DIR      Directory context for per-file .qo compilation\n"
            "                         (parses the full split-module dir but emits only\n"
            "                          the input file's contributions; requires -c)\n");
+    printf("      --from-objects     Aggregate mode: positional args are per-file .qo\n"
+           "                         inputs; requires -m and --context=DIR; produces a\n"
+           "                         standard .qmod by linking the .qo's + fresh glue\n");
     printf("  -S, --static           Link statically against libqore\n");
     printf("  -t, --target=TRIPLE    Target triple for cross-compilation\n");
     printf("      --show-targets     Show supported target architectures and quit\n");
@@ -142,6 +151,7 @@ static struct option long_options[] = {
     {"time-trace",        optional_argument, nullptr, 'Y'},
     {"big-fn-threshold",  required_argument, nullptr, 'B'},
     {"context",           required_argument, nullptr, 'C'},
+    {"from-objects",      no_argument,       nullptr, 'F'},
     {"verbose",           no_argument,       nullptr, 'v'},
     {"help",              no_argument,       nullptr, 'h'},
     {"version",           no_argument,       nullptr, 'V'},
@@ -204,6 +214,9 @@ static int parse_options_cmdline(int argc, char** argv) {
                 break;
             case 'C':
                 context_dir = optarg;
+                break;
+            case 'F':
+                from_objects = true;
                 break;
             case 'v':
                 verbose = true;
@@ -313,6 +326,77 @@ int main(int argc, char** argv) {
 
     if (show_targets) {
         QoreAOT::printSupportedTargets();
+        return 0;
+    }
+
+    // Phase 4 slice 6: --from-objects aggregator mode.  Takes a list of
+    // per-file `.qo` inputs + --context=DIR (source dir) and produces a
+    // `.qmod`.  All positional args are `.qo` files; validation happens
+    // before we touch the standard single-file dispatch path.
+    if (from_objects) {
+        if (!module_mode) {
+            fprintf(stderr,
+                "error: --from-objects requires -m/--module\n");
+            return 1;
+        }
+        if (!context_dir) {
+            fprintf(stderr,
+                "error: --from-objects requires --context=DIR pointing at "
+                "the split-module source directory\n");
+            return 1;
+        }
+        if (!is_directory(context_dir)) {
+            fprintf(stderr, "error: --context=%s is not a directory\n",
+                context_dir);
+            return 1;
+        }
+        if (optind >= argc) {
+            fprintf(stderr,
+                "error: --from-objects requires at least one .qo input\n");
+            return 1;
+        }
+
+        std::vector<std::string> object_paths;
+        for (int i = optind; i < argc; ++i) {
+            char* resolved = realpath(argv[i], nullptr);
+            if (resolved) {
+                object_paths.emplace_back(resolved);
+                free(resolved);
+            } else {
+                object_paths.emplace_back(argv[i]);
+            }
+        }
+
+        std::string output;
+        if (output_path) {
+            output = output_path;
+        } else {
+            // Derive from the context dir basename: "qlib/HttpServer/" -> "HttpServer.qmod"
+            std::string dir_str(context_dir);
+            while (!dir_str.empty() && dir_str.back() == '/') {
+                dir_str.pop_back();
+            }
+            size_t slash = dir_str.rfind('/');
+            std::string basename = (slash != std::string::npos)
+                ? dir_str.substr(slash + 1) : dir_str;
+            output = basename + ".qmod";
+        }
+
+        qore_init(QL_GPL, "UTF-8", true);
+        std::string error;
+        bool ok = QoreAOT::compileModuleFromObjects(
+            context_dir, object_paths, output, PO_DEFAULT, error,
+            opt_level, target_triple, include_source);
+        if (!ok) {
+            fprintf(stderr, "error: %s\n", error.c_str());
+            qore_cleanup();
+            return 1;
+        }
+        printf("%s: aggregated .qmod from %zu .qo input%s (O%d%s)\n",
+            output.c_str(), object_paths.size(),
+            object_paths.size() == 1 ? "" : "s", opt_level,
+            include_source ? "" : ", source-stripped");
+        qore_cleanup();
         return 0;
     }
 

@@ -541,6 +541,45 @@ public:
                                        bool include_source,
                                        bool compile_only);
 
+    //! Phase 4 slice 6: aggregate a set of per-file `.qo` files into a
+    //! single `.qmod` without re-running LLVM codegen on already-compiled
+    //! function bodies.
+    /**
+        The aggregator re-parses the source directory (fast — no codegen),
+        walks the namespace tree to rebuild the full-module metadata, and
+        emits a "glue" translation unit whose compiled-function entries
+        are bare external declarations.  Those declarations resolve at
+        link time against the actual bodies defined in the input `.qo`
+        files (each previously built by `qcc -c --context=DIR <file>`).
+
+        The result is the same functional `.qmod` that
+        `qcc -m <dir>` would produce, but the expensive LLVM emission
+        happens once per per-file `.qo` (parallelizable via `make -j`)
+        rather than once in a single serial `qcc -m` run.
+
+        @param dir_path source directory for the split module (same
+                        convention as `compileSeparatedModule`)
+        @param object_paths list of `.qo` files produced by
+                        `qcc -c --context=<dir_path>` covering the
+                        module's `.qm` + each `.qc`/`.ql`
+        @param output_path path for the output `.qmod`
+        @param parse_options parse options to seed the compile program
+        @param error error message on failure
+        @param opt_level LLVM optimization level 0-3 (default: 2)
+        @param target_triple target triple for cross-compilation
+                        (nullptr = native)
+        @param include_source embed source text for runtime fallback
+        @return true on success, false on failure
+    */
+    static bool compileModuleFromObjects(const char* dir_path,
+                                         const std::vector<std::string>& object_paths,
+                                         const std::string& output_path,
+                                         const QoreParseOptions& parse_options,
+                                         std::string& error,
+                                         int opt_level = 2,
+                                         const char* target_triple = nullptr,
+                                         bool include_source = false);
+
     //! Phase 4 slice 4: compile ONE file of a split module to a `.qo`.
     /** The full split-module directory @a dir_path is parsed so
         cross-file type references resolve, but only items whose AST
