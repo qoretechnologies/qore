@@ -7379,6 +7379,18 @@ static void executeInitFunctions(
                     desc.ns_path.c_str());
                 break;
             }
+
+            case AOTCompiledInitFunc::OUTLINED_HELPER: {
+                // Outlined helpers are LLVM-lowered and linked into the module
+                // but called BY their outer init function — not run at module
+                // load.  Reaching this arm means we mis-dispatched (the helper
+                // somehow landed in exec_infos).  Skip silently; the outer will
+                // drive it.
+                result.discard(&xsink);
+                printd(5, "AOT init: skipped outlined helper '%s' (called by outer)\n",
+                    desc.name.c_str());
+                break;
+            }
         }
     }
     }  // end two-pass loop

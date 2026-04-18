@@ -956,6 +956,11 @@ struct AOTCompiledInitFunc {
         CLASS_CONSTANT = 1,   //!< class-level constant
         STATIC_VAR = 2,       //!< static class variable
         MODULE_INIT = 3,      //!< module init closure body (side-effects only, return discarded)
+        OUTLINED_HELPER = 4,  //!< outlined init-expression helper (Phase 1.5);
+                              //!< LLVM-lowered but NOT executed at module load —
+                              //!< its outer init calls it as a helper instead.
+                              //!< Slot IDs still populate so the helper can
+                              //!< resolve globals / constants it references.
     };
     TargetType target_type = NS_CONSTANT;
     std::string ns_path;            //!< namespace path or class path

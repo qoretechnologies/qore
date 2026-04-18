@@ -668,6 +668,473 @@ static std::vector<std::unique_ptr<QoreIRFunction>> extractHandlerIRs(
     @param error [out] error message on failure
     @return 0 on success, -1 on failure
 */
+// ---- Phase 1.5: init-expression outlining ----
+//
+// Large `const`/`static` init expressions — typically a big hash literal
+// with many embedded closure / hashdecl / typed-hash sub-expressions —
+// lower to a single Qore IR block with hundreds of flat instructions
+// feeding one aggregator (`MakeHashConstKeys`, `MakeHash`, or `MakeList`)
+// at the end.  That single flat LLVM function tanks LLVM SelectionDAG
+// (super-linear in instruction count) and can take tens of minutes on
+// real modules (observed on qlib/DataProvider/DataProviderExpressions.qc
+// with 93 nested closures in one public const).
+//
+// The outlining pass extracts each aggregator-operand sub-expression
+// into its own helper IR function at `<outer_name>_entry_<idx>`, and
+// replaces the in-stream computation in the outer with a single
+// `CallAOTHelper` op that invokes the helper's LLVM symbol.  Each
+// helper is small enough that LLVM optimizes it quickly at full -O3;
+// the outer shrinks to (N × CallAOTHelper) + the aggregator.  Result
+// identity is preserved by re-binding the aggregator's operands to
+// the CallAOTHelper results.
+//
+// Scope (conservative, bolted on without touching QoreIRLowering):
+//   * Only runs against init-expression functions (single block,
+//     terminating in `Return <agg_result>`).
+//   * Only fires when the aggregator has >= MIN_OPERANDS operands
+//     AND the total instruction count is >= MIN_TOTAL_INSTS —
+//     for small init exprs the call-overhead isn't worth it.
+//   * A subgraph is extractable only if every instruction in it
+//     has its result used EXACTLY once (by another instruction
+//     in the same subgraph or by the aggregator).  Any shared
+//     sub-expression blocks outlining of that subgraph and stays
+//     inline in the outer — shared LoadConstant of a sibling
+//     const is the common case.
+//
+// After outlining, caller must lower the outer + every helper
+// IRFunction independently (helpers are emitted as LLVM functions in
+// the same module; the outer's CallAOTHelper ops resolve to them at
+// link time).  Helpers get their own AOTCompiledInitFunc entries with
+// `target_type == OUTLINED_HELPER` so the runtime knows not to invoke
+// them at module load — their outer init fn will drive them.
+struct AOTOutlinedHelper {
+    std::unique_ptr<QoreIRFunction> ir_func;
+};
+
+// Find the aggregator instruction at the end of the entry block that
+// produces the function's return value.  Returns -1 if the pattern
+// doesn't match (not a single-block function, no aggregator, etc.).
+static int findInitAggregatorIdx(const QoreIRBasicBlock* block) {
+    const auto& instrs = block->instructions;
+    if (instrs.empty()) {
+        return -1;
+    }
+    // Walk backward: skip Return + any trailing cleanup-style no-ops
+    // (DiscardTemps, PushTempMark, Incref/Decref, etc.) until we hit the
+    // value-producing aggregator.
+    int ret_idx = -1;
+    for (int i = static_cast<int>(instrs.size()) - 1; i >= 0; --i) {
+        auto* inst = instrs[i].get();
+        if (inst->opcode == QoreIROpcode::Return) {
+            ret_idx = i;
+            break;
+        }
+    }
+    if (ret_idx < 0) {
+        return -1;
+    }
+    const auto* ret_inst = static_cast<const QoreIRReturnInstruction*>(
+            instrs[ret_idx].get());
+    if (!ret_inst->has_value || !ret_inst->value.isValid()) {
+        return -1;
+    }
+    uint32_t ret_val_id = ret_inst->value.id;
+    // Walk backward from the Return to find the instruction producing ret_val_id.
+    for (int i = ret_idx - 1; i >= 0; --i) {
+        auto* inst = instrs[i].get();
+        if (!inst->result.isValid() || inst->result.id != ret_val_id) {
+            continue;
+        }
+        // Must be an outlinable aggregator.
+        switch (inst->opcode) {
+            case QoreIROpcode::MakeHashConstKeys:
+            case QoreIROpcode::MakeHash:
+            case QoreIROpcode::MakeList:
+                return i;
+            default:
+                return -1;
+        }
+    }
+    return -1;
+}
+
+// For each aggregator operand, collect the subgraph of predecessor
+// instructions that transitively produce the operand value AND whose
+// every result is consumed exactly once (within this subgraph or by
+// the aggregator).  Returns one vector per operand (in-order indices
+// into block->instructions, ascending).  An empty inner vector means
+// the operand is non-outlinable (shared with another consumer, or its
+// producer is external to this block).
+static std::vector<std::vector<int>> collectOperandSubgraphs(
+        const QoreIRBasicBlock* block,
+        int agg_idx,
+        const std::unordered_map<uint32_t, int>& value_to_defining_idx,
+        const std::unordered_map<uint32_t, int>& use_count) {
+    // The Qore IR lowering for a hash/list literal emits each operand
+    // value's subexpression as a contiguous sequence of instructions
+    // followed by any side-effect-only ops (guards, etc.).  Since the
+    // emission is strictly linear (one `lowerExpression` call per
+    // operand, results pushed onto a stack-like model), operand i's
+    // subgraph is the half-open range
+    //     (defining_idx[i-1], defining_idx[i]]
+    // with the leading range running from 0 for i==0.
+    //
+    // The contiguous-slice approach captures side-effect ops that sit
+    // BETWEEN value-producing instructions (e.g., `guard.not-nothing`
+    // immediately after a `cast.hash`) which a pure reverse def-use
+    // walk would miss — their result isn't consumed by the aggregator,
+    // but they're still part of operand i's computation.
+    //
+    // Safety rules:
+    //   1. The range for operand i must not include any instruction
+    //      whose result is used by OUTSIDE the range (other operands,
+    //      post-aggregator, etc.) — checked via `use_count`.
+    //   2. The range's operands referring to earlier values must all
+    //      resolve within the range or to external values (params /
+    //      outer locals — init-exprs have none in practice).  Any
+    //      back-ref into an earlier operand's range blocks outlining.
+    const bool dbg = getenv("QORE_AOT_DEBUG") != nullptr;
+    const auto& instrs = block->instructions;
+    auto* agg = instrs[agg_idx].get();
+    std::vector<std::vector<int>> subgraphs(agg->operands.size());
+
+    // Compute defining_idx for each aggregator operand, in agg-operand
+    // order.  If any operand's def lives outside this block, bail out
+    // of outlining entirely (the overall pattern is not the linear
+    // shape we expect from a pure hash literal).
+    std::vector<int> defining_idx(agg->operands.size(), -1);
+    for (size_t op_idx = 0; op_idx < agg->operands.size(); ++op_idx) {
+        uint32_t target_id = agg->operands[op_idx].id;
+        auto it = value_to_defining_idx.find(target_id);
+        if (it == value_to_defining_idx.end()) {
+            if (dbg) fprintf(stderr, "AOT-OUTLINE:   op[%zu] id=%u: external def; bailing\n",
+                    op_idx, target_id);
+            return subgraphs;  // all empty
+        }
+        defining_idx[op_idx] = it->second;
+    }
+    // Verify strictly ascending (linear layout).  If out-of-order,
+    // the pattern is something more complex (like interleaved sub-
+    // expressions) and we conservatively skip.
+    for (size_t i = 1; i < defining_idx.size(); ++i) {
+        if (defining_idx[i] <= defining_idx[i - 1]) {
+            if (dbg) fprintf(stderr, "AOT-OUTLINE:   op[%zu] def_idx=%d not > prev %d; bailing\n",
+                    i, defining_idx[i], defining_idx[i - 1]);
+            return subgraphs;
+        }
+    }
+
+    // For each operand i, candidate range is (end_of_prev, defining_idx[i]].
+    // An instruction j is safe to outline iff:
+    //   * its result (if any) is used only by instructions in the SAME
+    //     range OR by the aggregator (for j == defining_idx[i]);
+    //   * all of its operand-refs resolve to instructions within the
+    //     same range or to values produced outside the block.
+    // If any rule fails for an instruction in the candidate range,
+    // we skip this operand (no outlining), leaving the range inline.
+    auto range_for_op = [&](size_t op_idx) -> std::pair<int,int> {
+        int lo = (op_idx == 0) ? 0 : (defining_idx[op_idx - 1] + 1);
+        int hi = defining_idx[op_idx];
+        return {lo, hi};
+    };
+
+    for (size_t op_idx = 0; op_idx < agg->operands.size(); ++op_idx) {
+        auto [lo, hi] = range_for_op(op_idx);
+        uint32_t target_id = agg->operands[op_idx].id;
+        auto uc_it = use_count.find(target_id);
+        if (uc_it == use_count.end() || uc_it->second != 1) {
+            if (dbg) fprintf(stderr, "AOT-OUTLINE:   op[%zu] id=%u: shared (use_count=%d)\n",
+                    op_idx, target_id, uc_it == use_count.end() ? 0 : uc_it->second);
+            continue;
+        }
+        bool ok = true;
+        for (int j = lo; j <= hi; ++j) {
+            auto* inst = instrs[j].get();
+            // Rule 1: result not leaking outside the range.  The
+            // defining instruction (j == hi) is allowed to be used by
+            // the aggregator (and only by it, already checked via
+            // target_id's use_count==1); for intermediates (j < hi)
+            // we require every use of the result to be within the
+            // range itself — which is true iff use_count equals the
+            // count of uses inside the range.  Simpler conservative
+            // check: result.id's use_count must equal the number of
+            // same-range instructions whose operands reference it,
+            // but we can approximate by scanning operands of every
+            // later-in-range instruction and comparing to use_count.
+            if (inst->result.isValid()) {
+                uint32_t rid = inst->result.id;
+                auto uit = use_count.find(rid);
+                int uc = (uit == use_count.end()) ? 0 : uit->second;
+                int in_range_uses = 0;
+                for (int k = j + 1; k <= hi; ++k) {
+                    for (auto& op : instrs[k]->operands) {
+                        if (op.id == rid) {
+                            ++in_range_uses;
+                        }
+                    }
+                }
+                // The defining instruction (j==hi) additionally has
+                // one use by the aggregator, already captured above
+                // via target_id's use_count check.
+                int expected = in_range_uses + (j == hi ? 1 : 0);
+                if (uc != expected) {
+                    if (dbg) fprintf(stderr, "AOT-OUTLINE:   op[%zu] inst[%d] result %u: "
+                            "leaks (use_count=%d, expected=%d)\n",
+                            op_idx, j, rid, uc, expected);
+                    ok = false;
+                    break;
+                }
+            }
+            // Rule 2: operand refs must be within-range or external.
+            for (auto& op : inst->operands) {
+                auto dit = value_to_defining_idx.find(op.id);
+                if (dit == value_to_defining_idx.end()) {
+                    continue;  // external value (constants, params)
+                }
+                int didx = dit->second;
+                if (didx < lo || didx > hi) {
+                    if (dbg) fprintf(stderr, "AOT-OUTLINE:   op[%zu] inst[%d] "
+                            "operand %u defined at %d outside range [%d,%d]\n",
+                            op_idx, j, op.id, didx, lo, hi);
+                    ok = false;
+                    break;
+                }
+            }
+            if (!ok) break;
+        }
+        if (ok) {
+            subgraphs[op_idx].reserve(hi - lo + 1);
+            for (int j = lo; j <= hi; ++j) {
+                subgraphs[op_idx].push_back(j);
+            }
+            if (dbg) fprintf(stderr, "AOT-OUTLINE:   op[%zu] id=%u: range [%d,%d] = %zu insts\n",
+                    op_idx, target_id, lo, hi, subgraphs[op_idx].size());
+        }
+    }
+    return subgraphs;
+}
+
+// Run the outlining pass on a compiled init-expression IR function.
+// On success, `outer` is mutated in-place (outlined instructions moved
+// to helpers, replaced with CallAOTHelper ops) and `helpers` is filled
+// with the extracted helper functions (one per outlined operand).
+// The caller is responsible for lowering the outer + every helper
+// independently.
+//
+// Returns true always (no-op is a success); diagnostic output goes to
+// stderr under QORE_AOT_DEBUG.
+static bool outlineInitExpression(QoreIRFunction* outer,
+        const std::string& outer_name,
+        std::vector<AOTOutlinedHelper>& helpers) {
+    // Opt-in gate (Phase 1.5 staging): the outlining transformation is
+    // compile-correct for the DataProviderExpressions pathology but the
+    // resulting LLVM lowering + runtime dispatch still has at least one
+    // open runtime issue (segfault observed in self-contained repro of
+    // 4-entry const hash with closures).  Ship the infra off-by-default
+    // until the runtime path is fully validated; enable experimentally
+    // via `QORE_AOT_OUTLINE_INIT=1`.
+    static const bool enable = []() {
+        const char* s = getenv("QORE_AOT_OUTLINE_INIT");
+        return s && *s && strcmp(s, "0") != 0;
+    }();
+    if (!enable) {
+        return true;
+    }
+
+    // Tunables — conservatively biased to avoid outlining trivially small
+    // init expressions where the call overhead outweighs the compile-speed
+    // win.  Values chosen empirically against DataProviderExpressions.qc
+    // (93 operands, ~40 instructions per subtree) and against the synthetic
+    // N=1..87 cost curve.
+    constexpr size_t MIN_OPERANDS = 4;       //!< aggregator must have >=N operands
+    constexpr size_t MIN_TOTAL_INSTS = 20;   //!< outer must have >=N total instructions
+    constexpr size_t MIN_SUBGRAPH_SIZE = 3;  //!< each outlined subgraph must have >=N instructions
+
+    const bool dbg = getenv("QORE_AOT_DEBUG") != nullptr;
+    if (outer->blocks.size() != 1) {
+        if (dbg) fprintf(stderr, "AOT-OUTLINE: '%s' skipped: multi-block (%zu)\n",
+                outer_name.c_str(), outer->blocks.size());
+        return true;  // conservative: multi-block init fns not outlined
+    }
+    auto* block = outer->blocks.front().get();
+    if (block->instructions.size() < MIN_TOTAL_INSTS) {
+        if (dbg) fprintf(stderr, "AOT-OUTLINE: '%s' skipped: too few insts (%zu < %zu)\n",
+                outer_name.c_str(), block->instructions.size(), MIN_TOTAL_INSTS);
+        return true;
+    }
+    int agg_idx = findInitAggregatorIdx(block);
+    if (agg_idx < 0) {
+        if (dbg) {
+            // Dump last few instruction opcodes to localize why no agg was found.
+            size_t n = block->instructions.size();
+            fprintf(stderr, "AOT-OUTLINE: '%s' skipped: no terminal aggregator. "
+                    "tail opcodes:", outer_name.c_str());
+            for (size_t j = (n > 8) ? n - 8 : 0; j < n; ++j) {
+                fprintf(stderr, " [%zu]=%d",
+                        j, static_cast<int>(block->instructions[j]->opcode));
+            }
+            fprintf(stderr, "\n");
+        }
+        return true;
+    }
+    auto* agg = block->instructions[agg_idx].get();
+    if (agg->operands.size() < MIN_OPERANDS) {
+        if (dbg) fprintf(stderr, "AOT-OUTLINE: '%s' skipped: agg operands=%zu < %zu\n",
+                outer_name.c_str(), agg->operands.size(), MIN_OPERANDS);
+        return true;
+    }
+
+    // Build index maps used by the subgraph collector.
+    std::unordered_map<uint32_t, int> value_to_defining_idx;
+    std::unordered_map<uint32_t, int> use_count;
+    for (size_t i = 0; i < block->instructions.size(); ++i) {
+        auto* inst = block->instructions[i].get();
+        if (inst->result.isValid()) {
+            value_to_defining_idx[inst->result.id] = static_cast<int>(i);
+        }
+        for (auto& op : inst->operands) {
+            use_count[op.id]++;
+        }
+    }
+
+    auto subgraphs = collectOperandSubgraphs(
+            block, agg_idx, value_to_defining_idx, use_count);
+
+    // Build the new outer instruction list + helpers.  For each operand
+    // with a non-trivial subgraph:
+    //   * Clone the subgraph instructions into a helper IRFunction.
+    //   * Append a Return of the subgraph's final result.
+    //   * Replace the subgraph's instructions in the outer with a
+    //     single CallAOTHelper at the position of the final
+    //     subgraph instruction.
+    //   * Rebind the aggregator's operand to the CallAOTHelper's result.
+    std::vector<bool> moved(block->instructions.size(), false);
+    std::vector<int> last_subgraph_idx(agg->operands.size(), -1);
+    std::unordered_map<uint32_t, uint32_t> operand_remap;  // agg operand id → CallAOTHelper result id
+    std::vector<std::string> helper_names(agg->operands.size());
+
+    size_t outlined_count = 0;
+    size_t outlined_insts = 0;
+    for (size_t op_idx = 0; op_idx < agg->operands.size(); ++op_idx) {
+        if (subgraphs[op_idx].size() < MIN_SUBGRAPH_SIZE) {
+            continue;
+        }
+        // Allocate a fresh value id for the CallAOTHelper result.
+        QoreIRValue new_val = outer->createValue();
+        operand_remap[agg->operands[op_idx].id] = new_val.id;
+
+        // Build the helper IR function.
+        std::string helper_name = outer_name + "_entry_" + std::to_string(op_idx);
+        helper_names[op_idx] = helper_name;
+        AOTOutlinedHelper h;
+        h.ir_func = std::make_unique<QoreIRFunction>(helper_name);
+        auto* h_block = h.ir_func->createBlock("entry");
+        // Transfer ownership of each subgraph instruction to the helper.
+        uint32_t helper_max_val_id = 0;
+        for (int i : subgraphs[op_idx]) {
+            auto& slot = block->instructions[i];
+            if (slot->result.isValid() && slot->result.id > helper_max_val_id) {
+                helper_max_val_id = slot->result.id;
+            }
+            h_block->instructions.push_back(std::move(slot));
+            moved[i] = true;
+        }
+        // Emit a Return carrying the original aggregator operand's value id.
+        auto ret_inst = std::make_unique<QoreIRReturnInstruction>();
+        ret_inst->opcode = QoreIROpcode::Return;
+        ret_inst->has_value = true;
+        ret_inst->value = agg->operands[op_idx];
+        h_block->instructions.push_back(std::move(ret_inst));
+
+        // Helper inherits the outer's value-id space so the moved
+        // instructions' ids remain valid.  Pick next_value_id > max seen.
+        h.ir_func->max_value_id = helper_max_val_id;
+        // `next_value_id` is private; the builder-created values use
+        // QoreIRFunction::createValue() which increments it.  Since the
+        // helper's instructions are pre-built (no more value creation
+        // needed), next_value_id can stay at 0 — it's only consumed by
+        // createValue() which nothing in the helper will call.
+
+        last_subgraph_idx[op_idx] = subgraphs[op_idx].back();
+        helpers.push_back(std::move(h));
+        outlined_count++;
+        outlined_insts += subgraphs[op_idx].size();
+    }
+
+    if (outlined_count == 0) {
+        if (dbg) {
+            fprintf(stderr, "AOT-OUTLINE: '%s' found agg with %zu operands but 0 outlinable "
+                    "subgraphs (agg_idx=%d, total insts=%zu)\n",
+                    outer_name.c_str(), agg->operands.size(),
+                    agg_idx, block->instructions.size());
+            for (size_t op_idx = 0; op_idx < agg->operands.size(); ++op_idx) {
+                fprintf(stderr, "AOT-OUTLINE:   operand[%zu] id=%u subgraph_size=%zu\n",
+                        op_idx, agg->operands[op_idx].id, subgraphs[op_idx].size());
+            }
+        }
+        return true;
+    }
+
+    // Rebuild the outer's entry-block instruction list.  Walk in original
+    // order; drop moved instructions; inject CallAOTHelper at the position
+    // of each subgraph's last original instruction.
+    std::vector<std::unique_ptr<QoreIRInstruction>> rebuilt;
+    rebuilt.reserve(block->instructions.size()
+                    - outlined_insts + outlined_count + 4);
+
+    // Map from last-idx-in-subgraph → (op_idx, helper_name).  A single
+    // instruction index is the last of AT MOST ONE subgraph.
+    std::unordered_map<int, size_t> last_idx_to_op;
+    for (size_t op_idx = 0; op_idx < agg->operands.size(); ++op_idx) {
+        if (last_subgraph_idx[op_idx] >= 0) {
+            last_idx_to_op[last_subgraph_idx[op_idx]] = op_idx;
+        }
+    }
+
+    for (size_t i = 0; i < block->instructions.size(); ++i) {
+        auto last_it = last_idx_to_op.find(static_cast<int>(i));
+        if (last_it != last_idx_to_op.end()) {
+            // Replace this subgraph's tail with a single CallAOTHelper.
+            size_t op_idx = last_it->second;
+            auto call = std::make_unique<QoreIRCallAOTHelperInstruction>(
+                    helper_names[op_idx]);
+            call->result = QoreIRValue(operand_remap[agg->operands[op_idx].id]);
+            rebuilt.push_back(std::move(call));
+            continue;
+        }
+        if (moved[i]) {
+            continue;  // tail already emitted as CallAOTHelper above
+        }
+        // Unmoved: keep, but rewrite any operand that points at an outlined
+        // aggregator operand id to the new CallAOTHelper result id.
+        auto& inst = block->instructions[i];
+        for (auto& op : inst->operands) {
+            auto rit = operand_remap.find(op.id);
+            if (rit != operand_remap.end()) {
+                op.id = rit->second;
+            }
+        }
+        rebuilt.push_back(std::move(inst));
+    }
+
+    block->instructions = std::move(rebuilt);
+
+    // Recompute outer->max_value_id (new CallAOTHelper results expanded it).
+    for (auto& inst : block->instructions) {
+        if (inst->result.isValid() && inst->result.id > outer->max_value_id) {
+            outer->max_value_id = inst->result.id;
+        }
+    }
+
+    if (getenv("QORE_AOT_DEBUG")) {
+        fprintf(stderr, "AOT-OUTLINE: '%s' outlined %zu/%zu operands "
+                "(%zu helper instructions extracted)\n",
+                outer_name.c_str(), outlined_count,
+                agg->operands.size(), outlined_insts);
+    }
+    return true;
+}
+
 static int tryLowerInitExpression(const QoreValue& init_expr, const char* name,
         QoreProgram* pgm, QoreIRFunction*& ir_func, std::string& error) {
     if (!init_expr.hasNode() || !init_expr.getInternalNode()->needs_eval()) {
@@ -1505,6 +1972,94 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
     // Map from ConstantEntry* to init function name for dependency tracking
     std::unordered_map<const ConstantEntry*, std::string> const_entry_to_init_name;
 
+    // Helper lambda to lower a single QoreIRFunction + append its
+    // AOTCompiledInitFunc metadata entry.  Factored out of
+    // `compileInitExpr` so the outlining pass can reuse it per-helper.
+    auto lowerOneInitFn = [&](QoreIRFunction* fn,
+            const std::string& init_name,
+            AOTCompiledInitFunc::TargetType target_type,
+            const std::string& container_path,
+            const std::string& item_name) {
+        AOTSlotMap slots;
+        buildAOTSlotMap(*fn, slots);
+        std::string llvm_error;
+        bool init_ok;
+        if (metadata_only) {
+            auto* i64_t = llvm::Type::getInt64Ty(ctx);
+            auto* ptr_t = llvm::PointerType::get(ctx, 0);
+            auto* fn_type = llvm::FunctionType::get(i64_t, {ptr_t, ptr_t}, false);
+            if (!module.getFunction(fn->name)) {
+                llvm::Function::Create(fn_type, llvm::Function::ExternalLinkage,
+                    fn->name, module);
+            }
+            init_ok = true;
+        } else {
+            QoreIRToLLVM lowerer(ctx);
+            lowerer.setAOTMode(&slots);
+            lowerer.setDeferredExceptionChecking(true);
+            lowerer.setSharedDebugInfo(&di_builder, di_cu);
+            lowerer.setEmitDebugInfo(aotEmitDebugInfo());
+            if (getenv("QORE_AOT_DUMP_IR")) {
+                fprintf(stderr, "=== IR for init %s ===\n", init_name.c_str());
+                QoreIRPrinter::print(*fn, std::cerr);
+                fprintf(stderr, "=================\n");
+            }
+            init_ok = lowerer.lowerFunction(*fn, module, llvm_error);
+        }
+        if (!init_ok) {
+            if (getenv("QORE_AOT_DEBUG")) {
+                fprintf(stderr, "AOT: LLVM lowering failed for init '%s': %s\n",
+                    init_name.c_str(), llvm_error.c_str());
+            }
+            return false;
+        }
+        AOTCompiledInitFunc cif;
+        cif.name = init_name;
+        cif.llvm_symbol = fn->name;
+        cif.num_locals = static_cast<int>(slots.local_slots.size());
+        cif.num_globals = static_cast<int>(slots.global_slots.size());
+        cif.num_exprs = static_cast<int>(slots.expr_slots.size());
+        cif.num_stmts = static_cast<int>(slots.stmt_slots.size());
+        cif.num_regex_cases = static_cast<int>(slots.regex_case_slots.size());
+        cif.num_lv_path_insts = static_cast<int>(slots.lv_path_slots.size());
+        extractAOTSlotIdentities(*fn, slots, nullptr, cif.slot_ids,
+            const_reverse_map);
+        cif.num_exprs = static_cast<int>(cif.slot_ids.exprs.size());
+        cif.num_locals = static_cast<int>(cif.slot_ids.locals.size());
+        cif.num_globals = static_cast<int>(cif.slot_ids.globals.size());
+        cif.feature_flags = scanIRFeatureFlags(*fn);
+        cif.target_type = target_type;
+        cif.ns_path = container_path;
+        cif.item_name = item_name;
+        // Dep scan: for every LoadConstant in this function, record the
+        // init function of the referenced constant.  For outlined helpers,
+        // this captures dependencies that would otherwise be attached to
+        // the outer — we still report them per-function because the outer
+        // will transitively call the helper at load time, so the helper's
+        // deps are effectively its caller's deps.
+        for (auto& bp : fn->blocks) {
+            for (auto& inst : bp->instructions) {
+                if (inst->opcode == QoreIROpcode::LoadConstant) {
+                    auto* lci = static_cast<QoreIRLoadConstantInstruction*>(inst.get());
+                    if (lci->node) {
+                        const ConstantEntry* dep_ce = lci->node->getConstantEntry();
+                        auto dep_it = const_entry_to_init_name.find(dep_ce);
+                        if (dep_it != const_entry_to_init_name.end()) {
+                            cif.deps.push_back(dep_it->second);
+                        }
+                    }
+                }
+            }
+        }
+        compiled_init_funcs.push_back(std::move(cif));
+        if (getenv("QORE_AOT_DEBUG")) {
+            fprintf(stderr, "AOT: compiled init function '%s' (globals=%d, exprs=%d)\n",
+                init_name.c_str(), (int)slots.global_slots.size(),
+                (int)slots.expr_slots.size());
+        }
+        return true;
+    };
+
     // Helper lambda to compile an init expression to LLVM and record it
     auto compileInitExpr = [&](const QoreValue& init_expr, const std::string& init_name,
             AOTCompiledInitFunc::TargetType target_type,
@@ -1520,87 +2075,28 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
             return;
         }
 
-        // Build slot map
-        AOTSlotMap slots;
-        buildAOTSlotMap(*ir_func, slots);
+        // Phase 1.5: run the outlining pass before lowering so large
+        // aggregate init-expressions (e.g. a public const bound to a
+        // 100-entry hash literal with embedded closures) split into many
+        // small helper fns + a thin outer rather than one pathologically
+        // large LLVM function.  Each helper gets lowered and recorded
+        // just like the outer, but with target_type=OUTLINED_HELPER so
+        // the module-load runtime knows not to invoke it directly.
+        std::vector<AOTOutlinedHelper> outlined_helpers;
+        outlineInitExpression(ir_func, init_name, outlined_helpers);
 
-        // Phase 4 slice 6: in metadata_only mode, skip LLVM IR emission
-        // and emit a bare external declaration instead.  The init
-        // function's body is expected to resolve at link time against
-        // a separately-compiled `.qo`.
-        std::string llvm_error;
-        bool init_ok;
-        if (metadata_only) {
-            auto* i64_t = llvm::Type::getInt64Ty(ctx);
-            auto* ptr_t = llvm::PointerType::get(ctx, 0);
-            auto* fn_type = llvm::FunctionType::get(i64_t, {ptr_t, ptr_t}, false);
-            if (!module.getFunction(ir_func->name)) {
-                llvm::Function::Create(fn_type, llvm::Function::ExternalLinkage,
-                    ir_func->name, module);
-            }
-            init_ok = true;
-        } else {
-            QoreIRToLLVM lowerer(ctx);
-            lowerer.setAOTMode(&slots);
-            lowerer.setDeferredExceptionChecking(true);
-            lowerer.setSharedDebugInfo(&di_builder, di_cu);
-            lowerer.setEmitDebugInfo(aotEmitDebugInfo());
-            if (getenv("QORE_AOT_DUMP_IR")) {
-                fprintf(stderr, "=== IR for init %s ===\n", init_name.c_str());
-                QoreIRPrinter::print(*ir_func, std::cerr);
-                fprintf(stderr, "=================\n");
-            }
-            init_ok = lowerer.lowerFunction(*ir_func, module, llvm_error);
+        // Lower every outlined helper first so its LLVM symbol is in the
+        // module by the time the outer's CallAOTHelper ops get lowered.
+        // Helpers are emitted with target_type=OUTLINED_HELPER so the
+        // module-load runtime skips them (the outer calls them instead).
+        for (auto& h : outlined_helpers) {
+            lowerOneInitFn(h.ir_func.get(), h.ir_func->name,
+                AOTCompiledInitFunc::OUTLINED_HELPER,
+                container_path, item_name);
         }
-        if (init_ok) {
-            AOTCompiledInitFunc cif;
-            cif.name = init_name;
-            cif.llvm_symbol = ir_func->name;
-            cif.num_locals = static_cast<int>(slots.local_slots.size());
-            cif.num_globals = static_cast<int>(slots.global_slots.size());
-            cif.num_exprs = static_cast<int>(slots.expr_slots.size());
-            cif.num_stmts = static_cast<int>(slots.stmt_slots.size());
-            cif.num_regex_cases = static_cast<int>(slots.regex_case_slots.size());
-            cif.num_lv_path_insts = static_cast<int>(slots.lv_path_slots.size());
-            extractAOTSlotIdentities(*ir_func, slots, nullptr, cif.slot_ids,
-                const_reverse_map);
-            // Sync counts: ExprTreeSerializer may have grown expr_slots during extraction
-            cif.num_exprs = static_cast<int>(cif.slot_ids.exprs.size());
-            cif.num_locals = static_cast<int>(cif.slot_ids.locals.size());
-            cif.num_globals = static_cast<int>(cif.slot_ids.globals.size());
-            cif.feature_flags = scanIRFeatureFlags(*ir_func);
-            cif.target_type = target_type;
-            cif.ns_path = container_path;
-            cif.item_name = item_name;
-
-            // Scan IR for LoadConstant dependencies on other init-func constants
-            for (auto& block : ir_func->blocks) {
-                for (auto& inst : block->instructions) {
-                    if (inst->opcode == QoreIROpcode::LoadConstant) {
-                        auto* lci = static_cast<QoreIRLoadConstantInstruction*>(inst.get());
-                        if (lci->node) {
-                            const ConstantEntry* dep_ce = lci->node->getConstantEntry();
-                            auto dep_it = const_entry_to_init_name.find(dep_ce);
-                            if (dep_it != const_entry_to_init_name.end()) {
-                                cif.deps.push_back(dep_it->second);
-                            }
-                        }
-                    }
-                }
-            }
-
-            compiled_init_funcs.push_back(std::move(cif));
-            if (getenv("QORE_AOT_DEBUG")) {
-                fprintf(stderr, "AOT: compiled init function '%s' (globals=%d, exprs=%d)\n",
-                    init_name.c_str(), (int)slots.global_slots.size(),
-                    (int)slots.expr_slots.size());
-            }
-        } else {
-            if (getenv("QORE_AOT_DEBUG")) {
-                fprintf(stderr, "AOT: LLVM lowering failed for init '%s': %s\n",
-                    init_name.c_str(), llvm_error.c_str());
-            }
-        }
+        // Lower the outer.
+        lowerOneInitFn(ir_func, init_name, target_type,
+            container_path, item_name);
         delete ir_func;
     };
 
