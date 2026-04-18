@@ -56,6 +56,11 @@ static int opt_level = 3;
 static const char* target_triple = nullptr;
 static bool static_link = false;
 static bool module_mode = false;
+// Phase 4: compile-only mode — emit .qo (ELF relocatable) instead of
+// .qmod. Can be linked into a C++ binary (qcc -a) or back into a
+// .qmod (qcc -m --from-objects). Unimplemented beyond flag plumbing;
+// see design/aot-phase4-qo-object-files.md.
+static bool compile_only = false;
 static bool include_source = false;
 static bool verbose = false;
 static bool show_help = false;
@@ -79,6 +84,7 @@ static void print_usage(const char* prog) {
     printf("  -o, --output=FILE      Output file path (default: input name without extension)\n");
     printf("  -O, --opt-level=N      Optimization level 0-3 (default: 3)\n");
     printf("  -m, --module           Compile as module (.qm -> .qmod)\n");
+    printf("  -c, --compile-only     Compile to .qo relocatable object (Phase 4, WIP)\n");
     printf("  -S, --static           Link statically against libqore\n");
     printf("  -t, --target=TRIPLE    Target triple for cross-compilation\n");
     printf("      --show-targets     Show supported target architectures and quit\n");
@@ -118,6 +124,7 @@ static struct option long_options[] = {
     {"output",            required_argument, nullptr, 'o'},
     {"opt-level",         required_argument, nullptr, 'O'},
     {"module",            no_argument,       nullptr, 'm'},
+    {"compile-only",      no_argument,       nullptr, 'c'},
     {"static",            no_argument,       nullptr, 'S'},
     {"target",            required_argument, nullptr, 't'},
     {"show-targets",      no_argument,       nullptr, 'T'},
@@ -134,7 +141,7 @@ static struct option long_options[] = {
 
 static int parse_options_cmdline(int argc, char** argv) {
     int opt;
-    while ((opt = getopt_long(argc, argv, "o:O:mSt:TgvhV", long_options, nullptr)) != -1) {
+    while ((opt = getopt_long(argc, argv, "o:O:mcSt:TgvhV", long_options, nullptr)) != -1) {
         switch (opt) {
             case 'o':
                 output_path = optarg;
@@ -148,6 +155,9 @@ static int parse_options_cmdline(int argc, char** argv) {
                 break;
             case 'm':
                 module_mode = true;
+                break;
+            case 'c':
+                compile_only = true;
                 break;
             case 'S':
                 static_link = true;
@@ -343,6 +353,15 @@ int main(int argc, char** argv) {
     // Warn about ignored options
     if (static_link && module_mode) {
         fprintf(stderr, "warning: --static is ignored when compiling modules\n");
+    }
+
+    // Phase 4: -c compile-only is under construction. Flag wiring lands
+    // ahead of the .qo emission path so downstream changes can plug in
+    // cleanly. See design/aot-phase4-qo-object-files.md.
+    if (compile_only) {
+        fprintf(stderr, "error: -c/--compile-only is not yet implemented "
+                "(Phase 4; see design/aot-phase4-qo-object-files.md)\n");
+        return 1;
     }
 
     // Determine output path
