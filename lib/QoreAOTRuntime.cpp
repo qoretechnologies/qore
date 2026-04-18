@@ -7725,6 +7725,43 @@ extern "C" DLLEXPORT void qore_aot_register_into_program(QoreProgram* tpgm,
 // @param tpgm the target QoreProgram (caller-owned)
 // @param metadata serialized binary metadata blob (uncompressed)
 // @param metadata_len length of @p metadata in bytes
+// Phase 4 slice 10g: per-program batch state for out-of-order
+// registration.  Between qore_aot_script_begin_batch and
+// qore_aot_script_end_batch, qore_aot_script_register calls only do
+// phase-1 (shell creation) via QoreAOTBinaryMultiDeserializer.
+// end_batch runs phase-2 resolution + function registration + init
+// execution atomically for all accumulated blobs, so cross-file
+// inheritance / type refs resolve regardless of register call order.
+//
+// Stored on the target QoreProgram via setExternalData — no global
+// mutex needed, lifecycle bound to the program.
+namespace {
+struct AotScriptDeferredBlob {
+    const uint8_t* metadata;
+    int metadata_len;
+    std::string label;
+    const QoreAOTFunc* functions;
+    int num_functions;
+};
+
+class AotScriptBatchState : public AbstractQoreProgramExternalData {
+public:
+    QoreAOTBinaryMultiDeserializer mdes;
+    std::vector<AotScriptDeferredBlob> deferred;
+
+    explicit AotScriptBatchState(QoreProgram* pgm) : mdes(pgm) {
+    }
+
+    // Child programs start empty — a batch is transient.
+    AbstractQoreProgramExternalData* copy(QoreProgram*) const override {
+        return nullptr;
+    }
+    void doDeref() override { delete this; }
+};
+
+constexpr const char* kAotScriptBatchKey = "qore_aot_script_batch";
+}  // anonymous namespace
+
 // @param label label for diagnostics (source path)
 // @param functions array of pre-compiled function descriptors
 // @param num_functions entries in @p functions
@@ -7736,6 +7773,41 @@ extern "C" DLLEXPORT int qore_aot_script_register(QoreProgram* tpgm,
         const QoreAOTFunc* functions, int num_functions) {
     if (!tpgm || !metadata || metadata_len <= 0) {
         return 1;
+    }
+
+    // Phase 4 slice 10g: if a batch is active on tpgm, defer to
+    // end_batch: only load shells now (phase 1), stash
+    // (funcs, metadata, label) for later.  Cross-file base-class
+    // and type lookups will resolve in end_batch's resolveAll
+    // regardless of the order in which register was called.
+    {
+        AbstractQoreProgramExternalData* ext =
+            tpgm->getExternalData(kAotScriptBatchKey);
+        if (ext) {
+            auto* batch = static_cast<AotScriptBatchState*>(ext);
+            ExceptionSink pch_xsink;
+            ProgramRuntimeParseContextHelper pch(&pch_xsink, tpgm);
+            if (pch_xsink.isException()) {
+                pch_xsink.handleExceptions();
+                return 20;
+            }
+            std::string err;
+            if (!batch->mdes.addBlob(metadata,
+                    static_cast<uint32_t>(metadata_len), err)) {
+                fprintf(stderr, "qore_aot_script_register(%s, batch): "
+                    "addBlob failed: %s\n",
+                    label ? label : "<script>", err.c_str());
+                return 21;
+            }
+            AotScriptDeferredBlob d;
+            d.metadata = metadata;
+            d.metadata_len = metadata_len;
+            d.label = label ? label : "<script>";
+            d.functions = functions;
+            d.num_functions = num_functions;
+            batch->deferred.push_back(std::move(d));
+            return 0;
+        }
     }
 
     ExceptionSink xsink;
@@ -7801,6 +7873,12 @@ extern "C" DLLEXPORT int qore_aot_script_register(QoreProgram* tpgm,
         // has no shadow program.  Init functions populate constant
         // values + static var values that the user's runtime code
         // depends on (e.g., `const MyConst = compute_value();`).
+        //
+        // Note (slice 10g): this path runs only when no batch is
+        // active — i.e. immediate register.  Batched register calls
+        // stash the init descriptors in AotScriptBatchState::deferred
+        // and are executed in bulk by qore_aot_script_end_batch after
+        // all blobs' shells are in.
         if (!init_func_contexts.empty()) {
             std::vector<AOTInitFuncDescriptor> init_descriptors;
             std::string init_err;
@@ -7829,4 +7907,138 @@ extern "C" DLLEXPORT int qore_aot_script_register(QoreProgram* tpgm,
     }
 
     return 0;
+}
+
+// Phase 4 slice 10g: begin a batch of deferred script registrations.
+// Between begin and end, each qore_aot_script_register call only
+// loads shells (phase 1) and stashes (funcs, metadata, label) for
+// the end-batch flush.  Multiple begin calls replace any prior
+// unflushed state (with a warning) — a host error but non-fatal.
+extern "C" DLLEXPORT void qore_aot_script_begin_batch(QoreProgram* tpgm) {
+    if (!tpgm) {
+        return;
+    }
+    AbstractQoreProgramExternalData* existing =
+        tpgm->getExternalData(kAotScriptBatchKey);
+    if (existing) {
+        fprintf(stderr, "qore_aot_script_begin_batch: batch already "
+            "active on %p, replacing (host error; forgotten end_batch?)\n",
+            (void*)tpgm);
+        AbstractQoreProgramExternalData* removed =
+            tpgm->removeExternalData(kAotScriptBatchKey);
+        if (removed) {
+            removed->doDeref();
+        }
+    }
+    tpgm->setExternalData(kAotScriptBatchKey, new AotScriptBatchState(tpgm));
+}
+
+// Phase 4 slice 10g: flush a batch.  Runs phase-2 cross-blob
+// resolution (QoreAOTBinaryMultiDeserializer::resolveAll), then
+// per-blob function registration + init-func execution in
+// insertion order.  If no batch is active, returns 0 (no-op).
+//
+// Init-func ordering: within one blob, init descriptors run in
+// compile-time declaration order (unchanged).  Across blobs, they
+// run in insertion order (= order of qore_aot_script_register
+// calls during the batch).  That means for cross-blob constant
+// dependencies the host still needs to register "dependency"
+// files first.  Class-inheritance / type-reference order is
+// what's actually order-free here (via resolveAll).
+extern "C" DLLEXPORT int qore_aot_script_end_batch(QoreProgram* tpgm) {
+    if (!tpgm) {
+        return -1;
+    }
+    AbstractQoreProgramExternalData* ext =
+        tpgm->removeExternalData(kAotScriptBatchKey);
+    if (!ext) {
+        return 0;  // no batch; no-op
+    }
+    std::unique_ptr<AotScriptBatchState> batch(
+        static_cast<AotScriptBatchState*>(ext));
+
+    ExceptionSink xsink;
+    int rc = 0;
+
+    {
+        ProgramRuntimeParseContextHelper pch(&xsink, tpgm);
+        if (xsink.isException()) {
+            xsink.handleExceptions();
+            return 2;
+        }
+
+        // Phase 2: cross-blob resolution.
+        std::string resolve_err;
+        if (!batch->mdes.resolveAll(resolve_err)) {
+            fprintf(stderr, "qore_aot_script_end_batch: resolveAll "
+                "failed: %s\n", resolve_err.c_str());
+            return 3;
+        }
+
+        // Per-blob registration + init execution.  Each session owns
+        // a reader; registerAOTFunctionsFromSlotMaps needs that
+        // reader to enumerate slot-map functions.
+        qore_program_private* pp = qore_program_private::get(*tpgm);
+        qore_ns_private* root_ns = qore_ns_private::get(*pp->RootNS);
+
+        const size_t n = batch->deferred.size();
+        if (n != batch->mdes.sessionCount()) {
+            fprintf(stderr, "qore_aot_script_end_batch: internal: "
+                "deferred=%zu vs sessions=%zu mismatch\n",
+                n, batch->mdes.sessionCount());
+            return 4;
+        }
+
+        for (size_t i = 0; i < n; ++i) {
+            auto& d = batch->deferred[i];
+            std::unordered_map<std::string, const QoreAOTFunc*> func_map;
+            if (d.functions) {
+                for (int j = 0; j < d.num_functions; ++j) {
+                    if (d.functions[j].name && d.functions[j].fn_ptr) {
+                        func_map[d.functions[j].name] = &d.functions[j];
+                    }
+                }
+            }
+            std::vector<AOTInitFuncExecInfo> init_func_contexts;
+            int registered = 0;
+            auto& session = batch->mdes.session(i);
+            registerAOTFunctionsFromSlotMaps(session.getReader(), root_ns,
+                tpgm, func_map, registered, &init_func_contexts);
+            if (registered < d.num_functions) {
+                registerAOTFunctionsInNamespace(root_ns, tpgm, func_map,
+                    registered);
+            }
+            printd(1, "qore_aot_script_end_batch(%s): registered %d/%d "
+                "pre-compiled functions (%d init funcs)\n",
+                d.label.c_str(), registered, d.num_functions,
+                (int)init_func_contexts.size());
+
+            if (!init_func_contexts.empty()) {
+                std::vector<AOTInitFuncDescriptor> init_descriptors;
+                std::string init_err;
+                if (readInitFuncs(d.metadata,
+                        static_cast<uint32_t>(d.metadata_len),
+                        init_descriptors, init_err)) {
+                    if (!init_descriptors.empty()) {
+                        ExceptionSink tch_xsink;
+                        ProgramThreadCountContextHelper tch(&tch_xsink,
+                            tpgm, false);
+                        if (tch_xsink.isException()) {
+                            tch_xsink.handleExceptions();
+                        } else {
+                            executeInitFunctions(tpgm, init_func_contexts,
+                                init_descriptors, d.label.c_str(),
+                                /*shadow_pgm=*/nullptr);
+                        }
+                    }
+                } else {
+                    fprintf(stderr, "qore_aot_script_end_batch(%s): "
+                        "init-func descriptor read failed: %s\n",
+                        d.label.c_str(), init_err.c_str());
+                }
+            }
+        }
+    }
+
+    return rc;
 }

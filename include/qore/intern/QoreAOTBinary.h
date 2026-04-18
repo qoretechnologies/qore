@@ -1339,6 +1339,12 @@ public:
 
     //! Number of blobs currently in-session.
     size_t sessionCount() const { return sessions.size(); }
+
+    //! Access a specific session by insertion index (slice 10g).
+    //! Used by the batch-register end path to pull each session's
+    //! reader for per-blob registerAOTFunctionsFromSlotMaps + init
+    //! execution.  Index must be < sessionCount().
+    QoreAOTBinaryDeserializer& session(size_t i) { return *sessions[i]; }
 };
 
 // ---- IR Function Serialization (Phase 5) ----

@@ -155,6 +155,50 @@ DLLEXPORT int qore_aot_script_register(QoreProgram* tpgm,
         const char* label,
         const struct QoreAOTFunc* functions, int num_functions);
 
+//! Begin a batch of deferred script registrations on @p tpgm
+//! (Phase 4 slice 10g).
+/**
+    Between `qore_aot_script_begin_batch(pgm)` and
+    `qore_aot_script_end_batch(pgm)`, every call to
+    `qore_aot_script_register(pgm, …)` only loads the blob's
+    declaration shells into the program — class bodies, inheritance,
+    and member types are NOT resolved yet, and no function-pointer
+    registration or init-expression execution runs.
+
+    `qore_aot_script_end_batch(pgm)` flushes the batch: runs one
+    cross-blob resolution pass (so inheritance between classes from
+    different blobs resolves regardless of register call order),
+    then registers pre-compiled function pointers and runs init
+    expressions for every accumulated blob.
+
+    Use when the host wants **order-independent registration** of
+    a set of `.qo`s — e.g. when several `.qo`s may inherit from or
+    reference types in their siblings, and the host would rather
+    not maintain a topological call order.
+
+    Without begin/end_batch, each `qore_aot_script_register` call
+    is self-contained: phase 1 + phase 2 + registration + init run
+    immediately.  That mode works but requires the host to call
+    register fns in dependency order (matching Qore's module load
+    order).
+
+    Multiple begin calls without an intervening end replace the
+    prior batch (with a warning) — a host error but non-fatal.
+    A program destroyed mid-batch cleans up via the normal
+    AbstractQoreProgramExternalData teardown.
+
+    @param tpgm the target QoreProgram (must not be null).
+ */
+DLLEXPORT void qore_aot_script_begin_batch(QoreProgram* tpgm);
+
+//! Flush a batch of deferred script registrations.
+//! See `qore_aot_script_begin_batch` for the semantics.
+//!
+//! @return 0 on success (including the no-batch-active case),
+//!         non-zero if resolution or registration fails.  Errors
+//!         are printed to stderr.
+DLLEXPORT int qore_aot_script_end_batch(QoreProgram* tpgm);
+
 //! Call a Qore function by name.
 /** Looks up @a fn_name at the program's top-level namespace and
     invokes it with @a args (which may be NULL for a zero-arg call).
