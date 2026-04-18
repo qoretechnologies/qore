@@ -72,6 +72,11 @@ static const char* context_dir = nullptr;
 // freshly-computed metadata glue into the output `.qmod`.  See
 // design/aot-phase4-qo-object-files.md.
 static bool from_objects = false;
+// Phase 4 slice 7: -a / --archive mode.  Combined with --context=DIR
+// + positional .qo inputs, produces a `.qoa` static archive (ar rcs)
+// exposing `qore_qoa_register_all(QoreProgram*)`.  Target use case:
+// static linkage into a C++ host (e.g. qorus-core).
+static bool archive_mode = false;
 static bool include_source = false;
 static bool verbose = false;
 static bool show_help = false;
@@ -102,6 +107,9 @@ static void print_usage(const char* prog) {
     printf("      --from-objects     Aggregate mode: positional args are per-file .qo\n"
            "                         inputs; requires -m and --context=DIR; produces a\n"
            "                         standard .qmod by linking the .qo's + fresh glue\n");
+    printf("  -a, --archive          Archive mode: positional args are per-file .qo inputs;\n"
+           "                         requires --context=DIR; produces a .qoa static archive\n"
+           "                         (ar rcs) exposing qore_qoa_register_all() for a C++ host\n");
     printf("  -S, --static           Link statically against libqore\n");
     printf("  -t, --target=TRIPLE    Target triple for cross-compilation\n");
     printf("      --show-targets     Show supported target architectures and quit\n");
@@ -152,6 +160,7 @@ static struct option long_options[] = {
     {"big-fn-threshold",  required_argument, nullptr, 'B'},
     {"context",           required_argument, nullptr, 'C'},
     {"from-objects",      no_argument,       nullptr, 'F'},
+    {"archive",           no_argument,       nullptr, 'a'},
     {"verbose",           no_argument,       nullptr, 'v'},
     {"help",              no_argument,       nullptr, 'h'},
     {"version",           no_argument,       nullptr, 'V'},
@@ -160,7 +169,7 @@ static struct option long_options[] = {
 
 static int parse_options_cmdline(int argc, char** argv) {
     int opt;
-    while ((opt = getopt_long(argc, argv, "o:O:mcSt:TgvhV", long_options, nullptr)) != -1) {
+    while ((opt = getopt_long(argc, argv, "o:O:mcSt:TagvhV", long_options, nullptr)) != -1) {
         switch (opt) {
             case 'o':
                 output_path = optarg;
@@ -217,6 +226,9 @@ static int parse_options_cmdline(int argc, char** argv) {
                 break;
             case 'F':
                 from_objects = true;
+                break;
+            case 'a':
+                archive_mode = true;
                 break;
             case 'v':
                 verbose = true;
@@ -326,6 +338,76 @@ int main(int argc, char** argv) {
 
     if (show_targets) {
         QoreAOT::printSupportedTargets();
+        return 0;
+    }
+
+    // Phase 4 slice 7: -a / --archive mode.  Same input shape as
+    // --from-objects but produces a `.qoa` static archive instead of a
+    // `.qmod`.  Must be checked before the --from-objects branch so
+    // `-a -m` doesn't fall through to the .qmod aggregator.
+    if (archive_mode) {
+        if (from_objects) {
+            fprintf(stderr,
+                "error: -a/--archive and --from-objects are mutually exclusive\n");
+            return 1;
+        }
+        if (!context_dir) {
+            fprintf(stderr,
+                "error: -a/--archive requires --context=DIR pointing at the "
+                "split-module source directory\n");
+            return 1;
+        }
+        if (!is_directory(context_dir)) {
+            fprintf(stderr, "error: --context=%s is not a directory\n",
+                context_dir);
+            return 1;
+        }
+        if (optind >= argc) {
+            fprintf(stderr,
+                "error: -a/--archive requires at least one .qo input\n");
+            return 1;
+        }
+
+        std::vector<std::string> object_paths;
+        for (int i = optind; i < argc; ++i) {
+            char* resolved = realpath(argv[i], nullptr);
+            if (resolved) {
+                object_paths.emplace_back(resolved);
+                free(resolved);
+            } else {
+                object_paths.emplace_back(argv[i]);
+            }
+        }
+
+        std::string output;
+        if (output_path) {
+            output = output_path;
+        } else {
+            std::string dir_str(context_dir);
+            while (!dir_str.empty() && dir_str.back() == '/') {
+                dir_str.pop_back();
+            }
+            size_t slash = dir_str.rfind('/');
+            std::string basename = (slash != std::string::npos)
+                ? dir_str.substr(slash + 1) : dir_str;
+            output = basename + ".qoa";
+        }
+
+        qore_init(QL_GPL, "UTF-8", true);
+        std::string error;
+        bool ok = QoreAOT::archiveModuleFromObjects(
+            context_dir, object_paths, output, PO_DEFAULT, error,
+            opt_level, target_triple, include_source);
+        if (!ok) {
+            fprintf(stderr, "error: %s\n", error.c_str());
+            qore_cleanup();
+            return 1;
+        }
+        printf("%s: archived %zu .qo input%s into .qoa (O%d%s)\n",
+            output.c_str(), object_paths.size(),
+            object_paths.size() == 1 ? "" : "s", opt_level,
+            include_source ? "" : ", source-stripped");
+        qore_cleanup();
         return 0;
     }
 

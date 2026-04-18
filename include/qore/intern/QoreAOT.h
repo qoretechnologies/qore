@@ -580,6 +580,54 @@ public:
                                          const char* target_triple = nullptr,
                                          bool include_source = false);
 
+    //! Phase 4 slice 7: package a set of per-file `.qo` files into a
+    //! `.qoa` static archive with a single `qore_qoa_register_all()`
+    //! entry point, suitable for static linkage into a C++ host
+    //! (e.g. qorus-core).
+    /**
+        Runs the same metadata-only aggregation as
+        `compileModuleFromObjects` but emits the glue `.o` with
+        `generateModuleABIV2(compile_only=true)` — prefixed
+        module-info globals, the module descriptor, and (from slice 3)
+        `qore_<mod>_register` — AND additionally exports a
+        `qore_qoa_register_all(QoreProgram*)` symbol that delegates to
+        `qore_aot_register_into_program`.
+
+        The glue `.o` and every input `.qo` are bundled into a single
+        `ar rcs` archive at `output_path`.  A C++ host links the
+        resulting `.qoa` alongside `-lqore` and calls
+        `qore_qoa_register_all(pgm)` once to register the module's
+        contents into a `QoreProgram`.
+
+        The prefixed globals keep multiple independent `.qo` files
+        within the archive from colliding on module-info symbols
+        (slice 2 convention).  Linking multiple `.qoa` archives into
+        one host would collide on the single
+        `qore_qoa_register_all` name — a known limitation for the
+        slice 7 MVP; multi-archive integration is deferred.
+
+        @param dir_path source directory for the split module (same
+                        convention as `compileModuleFromObjects`)
+        @param object_paths list of `.qo` files covering the module's
+                        `.qm` + each `.qc`/`.ql`
+        @param output_path path for the output `.qoa`
+        @param parse_options parse options to seed the compile program
+        @param error error message on failure
+        @param opt_level LLVM optimization level 0-3 (default: 2)
+        @param target_triple target triple for cross-compilation
+                        (nullptr = native)
+        @param include_source embed source text for runtime fallback
+        @return true on success, false on failure
+    */
+    static bool archiveModuleFromObjects(const char* dir_path,
+                                         const std::vector<std::string>& object_paths,
+                                         const std::string& output_path,
+                                         const QoreParseOptions& parse_options,
+                                         std::string& error,
+                                         int opt_level = 2,
+                                         const char* target_triple = nullptr,
+                                         bool include_source = false);
+
     //! Phase 4 slice 4: compile ONE file of a split module to a `.qo`.
     /** The full split-module directory @a dir_path is parsed so
         cross-file type references resolve, but only items whose AST

@@ -5390,6 +5390,467 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
     return true;
 }
 
+// Phase 4 slice 7: package a list of objects into a Unix `ar` archive
+// via `ar rcs <archive> <obj1> <obj2> …`.  Produces a standard static
+// library suitable for `-l<name>` or direct path linkage in a C++
+// host's link line.  Cross-compile: `ar` is target-agnostic for simple
+// archive creation, but we still honor the escape used elsewhere.
+static bool createStaticArchive(const std::vector<std::string>& obj_paths,
+        const std::string& archive_path, std::string& error,
+        const char* target_triple = nullptr) {
+    if (target_triple) {
+        printf("cross-compiled archive for target '%s' — build manually\n",
+            target_triple);
+        return true;
+    }
+    if (obj_paths.empty()) {
+        error = "archive requires at least one input object";
+        return false;
+    }
+
+    // ar rcs archive.qoa input1.o input2.o ...
+    // -r: replace/insert; -c: create archive silently; -s: write symbol index.
+    // Existing archive is overwritten — remove first to avoid ar appending
+    // stale entries from a previous build.
+    remove(archive_path.c_str());
+
+    std::string cmd = "ar rcs " + archive_path;
+    for (const std::string& p : obj_paths) {
+        cmd += " " + p;
+    }
+    printd(2, "AOT: archive command: %s\n", cmd.c_str());
+    int rc = system(cmd.c_str());
+    if (rc != 0) {
+        error = "ar command failed with exit code " + std::to_string(rc);
+        return false;
+    }
+    return true;
+}
+
+// Phase 4 slice 7: emit the `qore_qoa_register_all(QoreProgram*)`
+// entry point into a glue module that has already been populated by
+// `generateModuleABIV2(compile_only=true)`.  Thin wrapper: delegates
+// to `qore_aot_register_into_program(pgm, <mod>_qore_module_desc,
+// "<aot-static>")`, reusing slice 3's static-registration bridge.
+//
+// Per design doc §qcc flag: -a the function is named exactly
+// `qore_qoa_register_all` — no module prefix.  Multiple .qoa archives
+// in one host would collide on this symbol (known slice 7 limitation
+// — deferred to later multi-archive work).
+static void emitQoaRegisterAllFunction(llvm::LLVMContext& ctx,
+        llvm::Module& module, const std::string& sanitized_mod_name) {
+    auto* void_type = llvm::Type::getVoidTy(ctx);
+    auto* ptr_type = llvm::PointerType::get(ctx, 0);
+
+    // Locate the desc fn emitted earlier by generateModuleABIV2.
+    std::string desc_fn_name = sanitized_mod_name + "_qore_module_desc";
+    llvm::Function* desc_fn = module.getFunction(desc_fn_name);
+    assert(desc_fn && "module desc fn must be emitted before qore_qoa_register_all");
+
+    // Declare qore_aot_register_into_program bridge.
+    auto* bridge_fn_type = llvm::FunctionType::get(void_type,
+        {ptr_type, ptr_type, ptr_type}, false);
+    auto bridge_fn = module.getOrInsertFunction("qore_aot_register_into_program",
+        bridge_fn_type);
+
+    // Private label for diagnostic path (same "<aot-static>" cookie slice 3 uses).
+    auto* path_data = llvm::ConstantDataArray::getString(ctx, "<aot-static>", true);
+    auto* path_gv = new llvm::GlobalVariable(module, path_data->getType(), true,
+        llvm::GlobalValue::PrivateLinkage, path_data,
+        "qore_qoa_register_all_path");
+
+    // Exported `qore_qoa_register_all(QoreProgram*)`.
+    auto* fn_type = llvm::FunctionType::get(void_type, {ptr_type}, false);
+    auto* fn = llvm::Function::Create(fn_type, llvm::Function::ExternalLinkage,
+        "qore_qoa_register_all", module);
+    fn->setDLLStorageClass(llvm::GlobalValue::DLLExportStorageClass);
+
+    auto* entry_bb = llvm::BasicBlock::Create(ctx, "entry", fn);
+    llvm::IRBuilder<> builder(entry_bb);
+    llvm::Value* pgm_arg = &*fn->arg_begin();
+    builder.CreateCall(bridge_fn, {pgm_arg, desc_fn, path_gv});
+    builder.CreateRetVoid();
+}
+
+// Phase 4 slice 7: aggregator variant that produces a `.qoa` static
+// archive suitable for static linkage into a C++ host.  Mirrors
+// `compileModuleFromObjects` but swaps two things: the glue emits
+// prefixed module-info globals + a `qore_qoa_register_all` entry
+// point, and final packaging uses `ar rcs` instead of `ld -shared`.
+bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
+                                       const std::vector<std::string>& object_paths,
+                                       const std::string& output_path,
+                                       const QoreParseOptions& parse_options,
+                                       std::string& error,
+                                       int opt_level,
+                                       const char* target_triple,
+                                       bool include_source) {
+    if (object_paths.empty()) {
+        error = "-a/--archive requires at least one .qo input";
+        return false;
+    }
+
+    std::string dir_str(dir_path);
+    while (!dir_str.empty() && dir_str.back() == '/') {
+        dir_str.pop_back();
+    }
+    if (dir_str.empty()) {
+        error = "empty directory path";
+        return false;
+    }
+
+    std::string mod_name;
+    {
+        size_t slash = dir_str.rfind('/');
+        mod_name = (slash != std::string::npos) ? dir_str.substr(slash + 1) : dir_str;
+    }
+    if (mod_name.empty()) {
+        error = "cannot determine module name from directory path";
+        return false;
+    }
+
+    std::string qm_path = dir_str + "/" + mod_name + ".qm";
+    std::string main_source = QoreDir::get_file_content(qm_path.c_str());
+    if (main_source.empty()) {
+        struct stat st;
+        if (stat(qm_path.c_str(), &st) != 0) {
+            error = "main module file not found: " + qm_path;
+            return false;
+        }
+        error = "main module file is empty: " + qm_path;
+        return false;
+    }
+
+    QoreAOTModuleInfo mod_info;
+    if (!parseModuleMetadata(main_source.c_str(), (int)main_source.size(),
+                             qm_path.c_str(), mod_info, error)) {
+        return false;
+    }
+    if (mod_info.name != mod_name) {
+        error = "module name '" + mod_info.name + "' in " + qm_path
+            + " does not match directory name '" + mod_name + "'";
+        return false;
+    }
+
+    printd(2, "AOT archive: name='%s' version='%s' inputs=%zu dir='%s'\n",
+        mod_info.name.c_str(), mod_info.version.c_str(),
+        object_paths.size(), dir_str.c_str());
+
+    QoreParseOptions mod_po = parse_options | QoreParseOptions(PO_IN_MODULE
+        | PO_NO_TOP_LEVEL_STATEMENTS | PO_REQUIRE_PROTOTYPES | PO_REQUIRE_OUR);
+
+    ExceptionSink xsink;
+    ExceptionSink wsink;
+    QoreProgramHelper qpgm(mod_po, xsink);
+    if (xsink.isException()) {
+        xsink.handleExceptions();
+        error = "failed to create QoreProgram for archive parsing";
+        return false;
+    }
+
+    qpgm->setScriptPath(qm_path.c_str());
+
+    ValueHolder init_c_holder(nullptr);
+    {
+        QoreUserModuleDefContextHelper mod_ctx(mod_info.name.c_str(),
+            qm_path.c_str(), *qpgm, xsink);
+
+        qpgm->parsePending(main_source.c_str(), qm_path.c_str(),
+            &xsink, &wsink, QP_WARN_DEFAULT);
+        if (xsink.isException()) {
+            mod_ctx.close();
+            xsink.handleExceptions();
+            error = "parse error in main module file: " + qm_path;
+            return false;
+        }
+
+        QoreString regexClassesFunc(".+\\.(qc|ql)$");
+        QoreDir moduleDir(&xsink, QCS_DEFAULT, dir_str.c_str());
+        if (xsink.isException()) {
+            mod_ctx.close();
+            xsink.handleExceptions();
+            error = "failed to open module directory: " + dir_str;
+            return false;
+        }
+        ReferenceHolder<QoreListNode> fileList(
+            moduleDir.list(&xsink, S_IFREG, &regexClassesFunc), &xsink);
+        if (xsink.isException()) {
+            mod_ctx.close();
+            xsink.handleExceptions();
+            error = "failed to list files in module directory: " + dir_str;
+            return false;
+        }
+
+        std::string combined_source = main_source;
+        if (fileList && fileList->size() > 0) {
+            for (size_t i = 0; i < fileList->size(); ++i) {
+                const QoreStringNode* filename =
+                    fileList->retrieveEntry(i).get<const QoreStringNode>();
+                if (!filename) {
+                    continue;
+                }
+                std::string file_path = dir_str + "/" + filename->c_str();
+                std::string file_source = QoreDir::get_file_content(file_path.c_str());
+                if (file_source.empty()) {
+                    continue;
+                }
+                qpgm->parsePending(file_source.c_str(), file_path.c_str(),
+                    &xsink, &wsink, QP_WARN_DEFAULT);
+                if (xsink.isException()) {
+                    mod_ctx.close();
+                    xsink.handleExceptions();
+                    error = "parse error in component file: " + file_path;
+                    return false;
+                }
+                if (!combined_source.empty() && combined_source.back() != '\n') {
+                    combined_source += '\n';
+                }
+                combined_source += "# __AOT_FILE_BREAK__\n";
+                combined_source += file_source;
+            }
+        }
+
+        qpgm->parseCommit(&xsink);
+        if (xsink.isException()) {
+            mod_ctx.close();
+            xsink.handleExceptions();
+            error = "parse commit failed: " + mod_name;
+            return false;
+        }
+
+        if (mod_ctx.hasInit()) {
+            init_c_holder = mod_ctx.init_c.refSelf();
+        }
+        mod_ctx.close();
+
+        if (wsink.isException()) {
+            wsink.handleWarnings();
+        }
+
+        llvm::InitializeNativeTarget();
+        llvm::InitializeNativeTargetAsmPrinter();
+        llvm::InitializeNativeTargetAsmParser();
+
+        llvm::LLVMContext ctx;
+        auto module = std::make_unique<llvm::Module>(
+            "qore_aot_qoa_" + mod_info.name, ctx);
+
+        std::vector<AOTCompiledFunc> compiled_funcs;
+        std::vector<AOTCompiledInitFunc> compiled_init_funcs;
+        int total_funcs = 0;
+        int compiled_count = 0;
+        int failed_count = 0;
+        size_t total_ir_insts_all = 0;
+
+        llvm::DIBuilder di_builder(*module);
+        auto* di_file = di_builder.createFile("<aot>", ".");
+        auto* di_cu = di_builder.createCompileUnit(
+            llvm::dwarf::DW_LANG_lo_user, di_file, "Qore AOT", false, "", 0);
+        if (!module->getModuleFlag("Dwarf Version")) {
+            module->addModuleFlag(llvm::Module::Warning, "Dwarf Version", 5);
+        }
+        if (!module->getModuleFlag("Debug Info Version")) {
+            module->addModuleFlag(llvm::Module::Warning, "Debug Info Version",
+                llvm::DEBUG_METADATA_VERSION);
+        }
+
+        qore_program_private* pp = qore_program_private::get(**qpgm);
+        qore_ns_private* root_ns = qore_ns_private::get(*pp->RootNS);
+
+        AOTConstantReverseMap const_reverse_map = buildConstantReverseMap(root_ns);
+
+        compileNamespaceFunctions(root_ns, *qpgm, ctx, *module, di_builder, di_cu,
+            compiled_funcs, compiled_init_funcs, total_funcs, compiled_count,
+            failed_count, total_ir_insts_all, &const_reverse_map, nullptr,
+            mod_info.name.c_str(), /*compile_file=*/nullptr,
+            /*metadata_only=*/true);
+
+        if (init_c_holder) {
+            compileModuleInitClosureAsInitFunc(*init_c_holder, mod_info.name.c_str(),
+                *qpgm, ctx, *module, di_builder, di_cu, compiled_init_funcs,
+                &const_reverse_map);
+        }
+
+        reportAOTCompileStats("archive aggregator (metadata-only)",
+            compiled_count, total_funcs, failed_count, compiled_funcs);
+
+        {
+            QoreAOTBinaryWriter writer;
+            QoreAOTBinaryHeader hdr{};
+            hdr.magic = QORE_AOT_BINARY_MAGIC;
+            hdr.version = QORE_AOT_BINARY_VERSION;
+            hdr.flags = QORE_AOT_FLAG_IS_MODULE;
+            const QoreParseOptions& final_po = qpgm->getParseOptions();
+            hdr.parse_options_lo = final_po.getLo();
+            hdr.label_offset = writer.strings.add(qm_path.c_str());
+            hdr.max_opcode_id = QORE_IR_MAX_OPCODE;
+            hdr.qore_version_major = QORE_VERSION_MAJOR;
+            hdr.qore_version_minor = QORE_VERSION_MINOR;
+            hdr.qore_version_patch = QORE_VERSION_PATCH;
+            hdr.parse_options_hi = final_po.getHi();
+            hdr.source_hash = computeSourceHash(qm_path.c_str());
+            hdr.feature_flags = computeFeatureFlags(compiled_funcs);
+
+            std::vector<std::string> reexport_mods;
+            std::vector<std::string> all_deps = extractAllDependencies(
+                combined_source.c_str(), (int)combined_source.size(), &reexport_mods);
+            serializeDependencies(writer, all_deps);
+            serializeReexportModules(writer, reexport_mods);
+
+            if (!serializeNamespaceTree(writer, root_ns, mod_info.name.c_str())) {
+                error = "failed to serialize aggregated namespace tree";
+                return false;
+            }
+
+            std::vector<AOTCompiledFuncWithSlots> func_slots;
+            for (auto& cf : compiled_funcs) {
+                AOTCompiledFuncWithSlots fws;
+                fws.name = cf.name;
+                fws.num_locals = cf.num_locals;
+                fws.num_globals = cf.num_globals;
+                fws.num_exprs = cf.num_exprs;
+                fws.num_stmts = cf.num_stmts;
+                fws.num_regex_cases = cf.num_regex_cases;
+                fws.num_lv_path_insts = cf.num_lv_path_insts;
+                fws.slot_ids = cf.slot_ids;
+                for (auto& hir : cf.handler_irs) {
+                    fws.handler_irs.push_back(hir.get());
+                }
+                fws.aot_locs = cf.aot_locs;
+                func_slots.push_back(std::move(fws));
+            }
+            for (auto& cif : compiled_init_funcs) {
+                AOTCompiledFuncWithSlots fws;
+                fws.name = cif.name;
+                fws.num_locals = cif.num_locals;
+                fws.num_globals = cif.num_globals;
+                fws.num_exprs = cif.num_exprs;
+                fws.num_stmts = cif.num_stmts;
+                fws.num_regex_cases = cif.num_regex_cases;
+                fws.num_lv_path_insts = cif.num_lv_path_insts;
+                fws.slot_ids = cif.slot_ids;
+                func_slots.push_back(std::move(fws));
+            }
+            if (!serializeSlotMaps(writer, func_slots, &const_reverse_map, error)) {
+                return false;
+            }
+            if (!compiled_init_funcs.empty()) {
+                serializeInitFuncs(writer, compiled_init_funcs);
+            }
+            {
+                bool has_fallback_funcs = std::any_of(func_slots.begin(),
+                    func_slots.end(), funcNeedsFallback);
+                if (has_fallback_funcs || include_source) {
+                    serializeFallbackSources(writer, func_slots,
+                        combined_source.c_str(), (int)combined_source.size());
+                }
+            }
+
+            std::vector<uint8_t> metadata;
+            hdr.section_count = 0;
+            if (!writer.finalize(hdr, metadata)) {
+                error = "failed to finalize aggregated metadata";
+                return false;
+            }
+
+            printf("AOT: archive metadata blob: %d bytes", (int)metadata.size());
+            const uint32_t AOT_HEADER_BYTES = 60;
+            if (!include_source && metadata.size() > AOT_HEADER_BYTES) {
+                std::vector<uint8_t> post_header(metadata.begin() + AOT_HEADER_BYTES,
+                    metadata.end());
+                std::vector<uint8_t> compressed_post;
+                std::string compress_error;
+                if (compressMetadata(post_header, compressed_post, compress_error)) {
+                    int compressed_total = AOT_HEADER_BYTES
+                        + (int)compressed_post.size();
+                    printf(" (compressed to %d bytes, %.1f%%)\n", compressed_total,
+                        100.0 * compressed_total / (int)metadata.size());
+                    metadata[34] = 1;
+                    metadata.resize(AOT_HEADER_BYTES);
+                    metadata.insert(metadata.end(), compressed_post.begin(),
+                        compressed_post.end());
+                } else {
+                    printf("\n");
+                }
+            } else {
+                printf("\n");
+            }
+
+            for (auto& cif : compiled_init_funcs) {
+                AOTCompiledFunc cf;
+                cf.name = cif.name;
+                cf.llvm_symbol = cif.llvm_symbol;
+                cf.num_locals = cif.num_locals;
+                cf.num_globals = cif.num_globals;
+                cf.num_exprs = cif.num_exprs;
+                cf.num_stmts = cif.num_stmts;
+                cf.num_regex_cases = cif.num_regex_cases;
+                cf.slot_ids = cif.slot_ids;
+                cf.feature_flags = cif.feature_flags;
+                compiled_funcs.push_back(std::move(cf));
+            }
+
+            // Archive glue uses compile_only=true emission: prefixed
+            // module-info globals, the `<mod>_qore_module_desc`
+            // function, and slice 3's `qore_<mod>_register`.  Prefixed
+            // globals keep independent `.qo`s inside the archive from
+            // colliding with each other on module-info symbols.
+            generateModuleABIV2(ctx, *module, metadata, qm_path.c_str(),
+                qpgm->getParseOptions(), mod_info, compiled_funcs,
+                /*compile_only=*/true);
+
+            // Slice 7: single public entry point for C++ hosts.
+            // Delegates to qore_aot_register_into_program via the
+            // module's desc fn.
+            {
+                std::string sanitized = mod_info.name;
+                for (char& c : sanitized) {
+                    if (c == '-') c = '_';
+                }
+                emitQoaRegisterAllFunction(ctx, *module, sanitized);
+            }
+        }
+
+        di_builder.finalize();
+
+        std::string verify_error;
+        llvm::raw_string_ostream verify_os(verify_error);
+        if (llvm::verifyModule(*module, &verify_os)) {
+            verify_os.flush();
+            error = "LLVM module verification failed: " + verify_error;
+            return false;
+        }
+
+        if (getenv("QORE_DUMP_LLVM_IR")) {
+            module->print(llvm::errs(), nullptr);
+        }
+
+        std::string glue_obj = output_path + ".agg.o";
+        if (!emitObjectFile(*module, glue_obj, error, opt_level, target_triple)) {
+            return false;
+        }
+
+        std::vector<std::string> ar_inputs;
+        ar_inputs.reserve(object_paths.size() + 1);
+        ar_inputs.push_back(glue_obj);
+        for (const std::string& p : object_paths) {
+            ar_inputs.push_back(p);
+        }
+
+        if (!createStaticArchive(ar_inputs, output_path, error, target_triple)) {
+            remove(glue_obj.c_str());
+            return false;
+        }
+
+        if (!target_triple) {
+            remove(glue_obj.c_str());
+        }
+    }
+
+    QMM.removeUserModuleDependency(mod_info.name.c_str());
+    return true;
+}
+
 // Returns true if an Invoke instruction's expression slot can be skipped because
 // the LLVM codegen handles it natively without the AST expression.
 static bool shouldSkipInvokeExprSlot(const QoreIRInvokeInstruction* ii) {
