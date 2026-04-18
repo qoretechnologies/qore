@@ -32,6 +32,8 @@
 #include "qore/intern/QoreJITIncludes.h"
 #include "qore/intern/QoreJITException.h"
 
+#include <time.h>
+
 #include "qore/intern/QoreAOT.h"
 #include "qore/intern/QoreAOTBinary.h"
 #include "qore/intern/qore_program_private.h"
@@ -7398,6 +7400,31 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
     const char* mod_name,
     const QoreAOTFunc* functions, int num_functions
 ) {
+    // Phase 1.5 load-time profiling (temporary): QORE_AOT_LOAD_TRACE=1
+    // emits per-phase wall-clock timing so we can see where module
+    // load spends its budget — expectation is near-instant
+    // deserialize + register, with any 5-second blocks indicating
+    // AST fallback re-parse of the embedded source.
+    static const bool _aot_trace = getenv("QORE_AOT_LOAD_TRACE") != nullptr;
+    struct timespec _aot_t_start;
+    struct timespec _aot_t_prev;
+    if (_aot_trace) {
+        clock_gettime(CLOCK_MONOTONIC, &_aot_t_start);
+        _aot_t_prev = _aot_t_start;
+    }
+#define AOT_TRACE(LABEL) do { \
+    if (_aot_trace) { \
+        struct timespec _n; clock_gettime(CLOCK_MONOTONIC, &_n); \
+        double _d = (_n.tv_sec - _aot_t_prev.tv_sec)*1e3 \
+                  + (_n.tv_nsec - _aot_t_prev.tv_nsec)/1e6; \
+        double _t = (_n.tv_sec - _aot_t_start.tv_sec)*1e3 \
+                  + (_n.tv_nsec - _aot_t_start.tv_nsec)/1e6; \
+        fprintf(stderr, "[aot-load] %-40s +%7.1f ms  (total %7.1f ms)\n", \
+            LABEL, _d, _t); \
+        _aot_t_prev = _n; \
+    } \
+} while (0)
+    AOT_TRACE("entry");
     printd(5, "AOT v3 ENTRY '%s': num_functions=%d functions=%p\n",
         mod_name, num_functions, (const void*)functions);
     // Construct full 128-bit parse options from lo+hi components
@@ -7446,6 +7473,7 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
         }
     }
 
+    AOT_TRACE("deps loaded");
     printd(5, "AOT module v3 '%s': loaded %d dependencies\n", mod_name, (int)deps.size());
 
     // Deserialize namespace tree from metadata (replaces source parsing).
@@ -7487,6 +7515,7 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
             return err;
         }
     }
+    AOT_TRACE("deserializeIntoProgram done");
 
     // Advisory checks for source staleness and feature compatibility
     {
@@ -7544,6 +7573,7 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
             registerAOTFunctionsInNamespace(root_ns, local_pgm, func_map, registered);
         }
 
+        AOT_TRACE("registerAOTFunctionsFromSlotMaps done");
         printd(1, "AOT module v3 '%s': registered %d/%d pre-compiled functions\n",
             mod_name, registered, num_functions);
 
@@ -7602,12 +7632,18 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
 
     // Parse fallback source if available to recover values that can't be serialized
     // (e.g., object constants, closure constants, static member initializers).
+    AOT_TRACE("pre fallback-source parse");
+    if (_aot_trace && deserializer.hasFallbackSource()) {
+        fprintf(stderr, "[aot-load] fallback source size = %zu bytes\n",
+            deserializer.getFallbackSourceLen());
+    }
     if (deserializer.hasFallbackSource()) {
         ExceptionSink wsink;
         QoreProgram* fallback_pgm = new QoreProgram(parse_options & ~PO_NO_TOP_LEVEL_STATEMENTS);
         fallback_pgm->setScriptPath(label);
         fallback_pgm->parse(deserializer.getFallbackSource(), label, &xsink, &wsink,
             QP_WARN_DEFAULT);
+        AOT_TRACE("fallback source parsed");
         if (wsink.isException()) {
             wsink.handleWarnings();
         }

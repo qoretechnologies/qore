@@ -1185,7 +1185,18 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
 
     strdeque_t::const_iterator w = moduleDirList.begin();
     while (w != moduleDirList.end()) {
-        // try to find module with supported api tags
+        // Per module directory, the preference order is:
+        //   1. `<name>-api-<x>.<y>.qmod` (binary, matching an active API version)
+        //   2. `<name>.qmod`             (binary, no API suffix — AOT-compiled user
+        //                                 modules land here)
+        //   3. `<name>.qm`               (user module source)
+        //   4. `<name>/`                 (split module folder, handled below)
+        // Binary forms (2) MUST be preferred over (3): when an AOT-compiled module
+        // is deployed alongside its source, the host expects the compiled artifact
+        // to win.  Prior to this structure, the `.qm` check was nested inside the
+        // API-version loop and intercepted the lookup before the bare `.qmod`
+        // fallthrough at ai==qore_mod_api_list_len, causing AOT builds to be
+        // silently ignored (Phase 1.5 investigation, 2026-04-18).
         for (unsigned ai = 0; ai <= qore_mod_api_list_len; ++ai) {
             // build path to binary module
             str.clear();
@@ -1208,23 +1219,21 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
                     load_opt & QMLO_REINJECT ? mpgm : nullptr, load_opt, mod_desc_func);
                 return qore_check_load_module_intern(mi, op, version, pgm, xsink) ? nullptr : mi;
             }
+        }
 
-            // build path to user module
-            str.clear();
-            str.sprintf("%s" QORE_DIR_SEP_STR "%s.qm", (*w).c_str(), name);
-
-            //printd(5, "ModuleManager::loadModule(%s) trying user module: %s\n", name, str.c_str());
-            if (!stat(str.c_str(), &sb)) {
-                // see if this is a relative path; if so normalize it; we cannot send a relative path to
-                // loadUserModuleFromPath(), since it will try to normalize the path using the current program's
-                // directory as the cwd
-                if (!q_absolute_path(str.c_str())) {
-                    q_normalize_path(str);
-                }
-                mi = loadUserModuleFromPath(xsink, wsink, str.c_str(), name, pgm, reexport, pholder.release(),
-                    load_opt & QMLO_REINJECT ? mpgm : nullptr, load_opt, warning_mask);
-                return qore_check_load_module_intern(mi, op, version, pgm, xsink) ? nullptr : mi;
+        // No `.qmod` form exists in this directory — try the `.qm` source.
+        str.clear();
+        str.sprintf("%s" QORE_DIR_SEP_STR "%s.qm", (*w).c_str(), name);
+        if (!stat(str.c_str(), &sb)) {
+            // see if this is a relative path; if so normalize it; we cannot send a relative path to
+            // loadUserModuleFromPath(), since it will try to normalize the path using the current program's
+            // directory as the cwd
+            if (!q_absolute_path(str.c_str())) {
+                q_normalize_path(str);
             }
+            mi = loadUserModuleFromPath(xsink, wsink, str.c_str(), name, pgm, reexport, pholder.release(),
+                load_opt & QMLO_REINJECT ? mpgm : nullptr, load_opt, warning_mask);
+            return qore_check_load_module_intern(mi, op, version, pgm, xsink) ? nullptr : mi;
         }
 
         // check whether it is a module folder
