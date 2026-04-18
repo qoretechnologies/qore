@@ -7699,3 +7699,93 @@ extern "C" DLLEXPORT void qore_aot_register_into_program(QoreProgram* tpgm,
         xsink.handleExceptions();
     }
 }
+
+// Phase 4 slice 10d: script-context register path.  Called by the
+// glue object that qcc emits for `qcc -o binary *.qo` (slice 10d).
+// Differs from qore_aot_register_into_program / qore_aot_module_init_v3:
+//
+//   * NO shadow module program created.  Metadata is deserialized
+//     straight into the caller's @p tpgm via
+//     QoreAOTBinaryDeserializer::deserializeIntoProgram.
+//   * NO entry is added to aot_module_map — this is not a module.
+//   * NO %requires / user-feature registration — cross-file
+//     dependencies within the script are resolved via the metadata
+//     blob alone.
+//   * Non-public classes stay visible to tpgm (the module-merge
+//     public-filter path is bypassed entirely).
+//
+// Runs the standard three-step sequence exactly once:
+//   1. deserializeIntoProgram — rebuilds namespace tree + classes +
+//      functions + methods in tpgm.
+//   2. registerAOTFunctionsFromSlotMaps (+ namespace-walk fallback)
+//      — wires pre-compiled function pointers to their variants.
+//   3. (no init-funcs handling yet — slice 10d MVP; NS/CLASS_CONSTANT /
+//      STATIC_VAR init expressions are deferred to a follow-up).
+//
+// @param tpgm the target QoreProgram (caller-owned)
+// @param metadata serialized binary metadata blob (uncompressed)
+// @param metadata_len length of @p metadata in bytes
+// @param label label for diagnostics (source path)
+// @param functions array of pre-compiled function descriptors
+// @param num_functions entries in @p functions
+// @return 0 on success; non-zero on deserialization or registration
+//         failure.  Errors are printed to stderr via ExceptionSink.
+extern "C" DLLEXPORT int qore_aot_script_register(QoreProgram* tpgm,
+        const uint8_t* metadata, int metadata_len,
+        const char* label,
+        const QoreAOTFunc* functions, int num_functions) {
+    if (!tpgm || !metadata || metadata_len <= 0) {
+        return 1;
+    }
+
+    ExceptionSink xsink;
+
+    {
+        // ProgramRuntimeParseContextHelper is required so
+        // UserVariantBase::UserVariantBase (called during method
+        // deserialization) can read parse_get_parse_options().
+        // Same invariant qore_aot_module_init_v3 observes.
+        ProgramRuntimeParseContextHelper pch(&xsink, tpgm);
+        if (xsink.isException()) {
+            xsink.handleExceptions();
+            return 2;
+        }
+
+        QoreAOTBinaryDeserializer deserializer;
+        std::string deser_error;
+        if (!deserializer.deserializeIntoProgram(tpgm, metadata,
+                static_cast<uint32_t>(metadata_len), deser_error)) {
+            fprintf(stderr, "qore_aot_script_register(%s): metadata "
+                "deserialization failed: %s\n",
+                label ? label : "<script>", deser_error.c_str());
+            return 3;
+        }
+
+        // Register pre-compiled function pointers.  Slot-map + namespace-
+        // walk fallback cover both slice 4-style per-file .qo's (slot-map
+        // only) and plain script .qo's.
+        if (num_functions > 0 && functions) {
+            std::unordered_map<std::string, const QoreAOTFunc*> func_map;
+            for (int i = 0; i < num_functions; ++i) {
+                if (functions[i].name && functions[i].fn_ptr) {
+                    func_map[functions[i].name] = &functions[i];
+                }
+            }
+
+            qore_program_private* pp = qore_program_private::get(*tpgm);
+            qore_ns_private* root_ns = qore_ns_private::get(*pp->RootNS);
+            int registered = 0;
+            registerAOTFunctionsFromSlotMaps(deserializer.getReader(), root_ns,
+                tpgm, func_map, registered);
+            if (registered < num_functions) {
+                registerAOTFunctionsInNamespace(root_ns, tpgm, func_map,
+                    registered);
+            }
+            printd(1, "qore_aot_script_register(%s): registered %d/%d "
+                "pre-compiled functions\n",
+                label ? label : "<script>", registered, num_functions);
+        }
+    }
+
+    return 0;
+}

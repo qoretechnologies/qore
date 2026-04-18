@@ -109,6 +109,52 @@ DLLEXPORT QoreProgram* qore_create_program(int64_t parse_options);
 */
 DLLEXPORT void qore_destroy_program(QoreProgram* pgm);
 
+//! Forward declaration for the AOT function descriptor carried by a
+//! `.qo`-produced glue object.  Full layout lives in
+//! `qore/intern/QoreAOT.h`; public hosts only need it as an opaque
+//! pointer type passed straight through to `qore_aot_script_register`.
+struct QoreAOTFunc;
+
+//! Register a script-context `.qo`'s contents into a QoreProgram.
+/** Called by the glue object that `qcc -o <binary>` emits for a
+    script-style application (Phase 4 slice 10).  Deserializes the
+    given metadata blob into the target program's namespace tree
+    (classes, typedefs, hashdecls, enums, constants, globals,
+    functions, methods — public AND non-public), then wires
+    pre-compiled function pointers via the supplied descriptor array.
+
+    Unlike `qore_qoa_register_all` (slice 7, module archive), this is
+    NOT a module registration: no entry is added to the module map,
+    no shadow program is created, no `%requires` bookkeeping runs.
+    The contents land directly on @p tpgm as if they had been parsed
+    from source.
+
+    Hosts calling this from a custom `main()` typically:
+    ```c
+    QoreProgram* pgm = qore_create_program(PO_NEW_STYLE | PO_STRICT_ARGS);
+    extern const QoreAOTFunc my_script_funcs[];
+    extern const int my_script_num_funcs;
+    extern const unsigned char my_script_metadata[];
+    extern const int my_script_metadata_len;
+    qore_aot_script_register(pgm, my_script_metadata,
+        my_script_metadata_len, "my_script", my_script_funcs,
+        my_script_num_funcs);
+    ```
+
+    @param tpgm the target program (created e.g. via qore_create_program)
+    @param metadata serialized `QoreAOTBinary` blob
+    @param metadata_len byte length of @p metadata
+    @param label label for diagnostic messages (source path or name)
+    @param functions array of pre-compiled function descriptors
+    @param num_functions entries in @p functions
+    @return 0 on success; non-zero on deserialization / registration
+            failure.  Error details are printed to stderr.
+*/
+DLLEXPORT int qore_aot_script_register(QoreProgram* tpgm,
+        const unsigned char* metadata, int metadata_len,
+        const char* label,
+        const struct QoreAOTFunc* functions, int num_functions);
+
 //! Call a Qore function by name.
 /** Looks up @a fn_name at the program's top-level namespace and
     invokes it with @a args (which may be NULL for a zero-arg call).

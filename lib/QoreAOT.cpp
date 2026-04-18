@@ -3332,6 +3332,150 @@ static std::string fileBasenameNoExt(const std::string& path) {
     return base;
 }
 
+//! Phase 4 slice 10d: emit per-file script register entry symbols
+//! into a script-context `.qo`.
+/**
+    Produces three exported symbols alongside the existing slice 5
+    fragment accessors:
+
+    - `qore_<sanapp>_<sanfile>_script_funcs` — private global holding
+      an array of QoreAOTFunc descriptors (one per compiled
+      function in this file).  Exported so the register entry
+      can pass it to `qore_aot_script_register`.
+    - `qore_<sanapp>_<sanfile>_script_num_funcs` — exported i32
+      giving the descriptor count.
+    - `qore_<sanapp>_<sanfile>_script_register(QoreProgram*)` —
+      exported fn.  Thin wrapper around
+      `qore_aot_script_register(pgm, blob, len, label, funcs, n)`
+      using this file's own metadata blob + func table.  Called
+      once per file by the host's `main()` (or slice 10d's
+      glue-generated `qore_app_register_all`).
+
+    Emitted only for script-mode `.qo`s (compileScriptFile path),
+    not for module-fragment `.qo`s (compileSeparatedModuleFile
+    path) — those already carry the slice 7 register symbol.
+*/
+static void emitScriptRegisterSymbols(llvm::LLVMContext& ctx,
+        llvm::Module& module, const std::string& mod_name,
+        const std::string& file_basename_san,
+        llvm::GlobalVariable* blob_gv, size_t blob_size,
+        const std::vector<AOTCompiledFunc>& compiled_funcs) {
+    auto* i32_type = llvm::Type::getInt32Ty(ctx);
+    auto* i64_type = llvm::Type::getInt64Ty(ctx);
+    auto* ptr_type = llvm::PointerType::get(ctx, 0);
+    auto* void_type = llvm::Type::getVoidTy(ctx);
+
+    const std::string sanmod = sanitizeCIdentifier(mod_name);
+    const std::string prefix_public = "qore_" + sanmod + "_" + file_basename_san;
+
+    // Build the function descriptor table.  Layout must match
+    // QoreAOTFunc in include/qore/intern/QoreAOT.h:
+    //   struct QoreAOTFunc {
+    //       const char* name;             // ptr
+    //       AotFunctionPtr fn_ptr;        // ptr
+    //       int num_locals;               // i32
+    //       int num_globals;              // i32
+    //       int num_exprs;                // i32
+    //       int num_stmts;                // i32
+    //       int num_regex_cases = 0;      // i32
+    //   };
+    auto* func_entry_type = llvm::StructType::get(ctx,
+        {ptr_type, ptr_type, i32_type, i32_type, i32_type, i32_type, i32_type});
+
+    std::vector<llvm::Constant*> entries;
+    for (const auto& cf : compiled_funcs) {
+        // Name string as private global.
+        llvm::Constant* name_str = llvm::ConstantDataArray::getString(
+            ctx, cf.name, true);
+        auto* name_gv = new llvm::GlobalVariable(module, name_str->getType(),
+            true, llvm::GlobalValue::PrivateLinkage, name_str,
+            "qore_aot_script_fname_" + cf.llvm_symbol);
+
+        llvm::Function* fn = module.getFunction(cf.llvm_symbol);
+        if (!fn) {
+            // Compiled function skipped during emission — leave
+            // slot as null so registerAOTFunctionsFromSlotMaps
+            // falls through to whatever else has it.
+            continue;
+        }
+
+        llvm::Constant* entry = llvm::ConstantStruct::get(func_entry_type, {
+            name_gv, fn,
+            llvm::ConstantInt::get(i32_type, cf.num_locals),
+            llvm::ConstantInt::get(i32_type, cf.num_globals),
+            llvm::ConstantInt::get(i32_type, cf.num_exprs),
+            llvm::ConstantInt::get(i32_type, cf.num_stmts),
+            llvm::ConstantInt::get(i32_type, cf.num_regex_cases),
+        });
+        entries.push_back(entry);
+    }
+
+    llvm::GlobalVariable* func_table_gv = nullptr;
+    int num_funcs = static_cast<int>(entries.size());
+    if (num_funcs > 0) {
+        auto* table_type = llvm::ArrayType::get(func_entry_type, num_funcs);
+        auto* init = llvm::ConstantArray::get(table_type, entries);
+        func_table_gv = new llvm::GlobalVariable(module, table_type, true,
+            llvm::GlobalValue::PrivateLinkage, init,
+            prefix_public + "_script_funcs");
+    }
+
+    // Exported num_funcs constant.
+    auto* count_gv = new llvm::GlobalVariable(module, i32_type, true,
+        llvm::GlobalValue::ExternalLinkage,
+        llvm::ConstantInt::get(i32_type, num_funcs),
+        prefix_public + "_script_num_funcs");
+    count_gv->setDLLStorageClass(llvm::GlobalValue::DLLExportStorageClass);
+
+    // Declare qore_aot_script_register bridge.
+    auto* bridge_fn_type = llvm::FunctionType::get(i32_type,
+        {ptr_type, ptr_type, i32_type, ptr_type, ptr_type, i32_type}, false);
+    auto bridge_fn = module.getOrInsertFunction("qore_aot_script_register",
+        bridge_fn_type);
+
+    // Private label string for diagnostics.
+    auto* label_data = llvm::ConstantDataArray::getString(ctx,
+        file_basename_san, true);
+    auto* label_gv = new llvm::GlobalVariable(module, label_data->getType(),
+        true, llvm::GlobalValue::PrivateLinkage, label_data,
+        "qore_aot_script_label_" + file_basename_san);
+
+    // Build the register function.
+    auto* fn_type = llvm::FunctionType::get(void_type, {ptr_type}, false);
+    auto* fn = llvm::Function::Create(fn_type, llvm::Function::ExternalLinkage,
+        prefix_public + "_script_register", module);
+    fn->setDLLStorageClass(llvm::GlobalValue::DLLExportStorageClass);
+
+    auto* entry_bb = llvm::BasicBlock::Create(ctx, "entry", fn);
+    llvm::IRBuilder<> builder(entry_bb);
+    llvm::Value* pgm_arg = &*fn->arg_begin();
+
+    llvm::Value* blob_ptr = builder.CreateInBoundsGEP(blob_gv->getValueType(),
+        blob_gv, {builder.getInt64(0), builder.getInt64(0)});
+    llvm::Value* label_ptr = builder.CreateInBoundsGEP(label_data->getType(),
+        label_gv, {builder.getInt64(0), builder.getInt64(0)});
+    llvm::Value* funcs_ptr;
+    if (func_table_gv) {
+        auto* table_type = llvm::ArrayType::get(func_entry_type, num_funcs);
+        funcs_ptr = builder.CreateInBoundsGEP(table_type, func_table_gv,
+            {builder.getInt64(0), builder.getInt64(0)});
+    } else {
+        funcs_ptr = llvm::ConstantPointerNull::get(
+            llvm::cast<llvm::PointerType>(ptr_type));
+    }
+
+    builder.CreateCall(bridge_fn, {
+        pgm_arg,
+        blob_ptr,
+        builder.getInt32(static_cast<int>(blob_size)),
+        label_ptr,
+        funcs_ptr,
+        builder.getInt32(num_funcs)
+    });
+    builder.CreateRetVoid();
+    (void)i64_type;
+}
+
 //! Phase 4 slice 5: emit the exported fragment symbols for a per-file
 //! `.qo`.
 /**
@@ -4919,6 +5063,27 @@ bool QoreAOT::compileScriptFile(const char* target_file,
     const std::string file_san = mod_name_san;
     emitFragmentSymbols(ctx, *module, app_name, file_san, metadata_blob,
         /*fragment_order=*/0);
+
+    // Phase 4 slice 10d: additionally emit the per-file script
+    // register entry point (`qore_<sanapp>_<sanfile>_script_register`)
+    // that wraps qore_aot_script_register with this file's metadata +
+    // function table.  The host's main() calls this to register the
+    // file's contents into a QoreProgram — analogous to slice 7's
+    // qore_qoa_register_all but per-file and module-free.
+    {
+        // Look up the blob GV by the name emitFragmentSymbols just
+        // emitted.  The sanitizer + prefix scheme is identical.
+        const std::string blob_name = "qore_aot_" + sanitizeCIdentifier(app_name)
+            + "_" + file_san + "_fragment_blob";
+        llvm::GlobalVariable* blob_gv = module->getNamedGlobal(blob_name);
+        if (!blob_gv) {
+            error = "internal: fragment blob global '" + blob_name
+                + "' not found after emitFragmentSymbols";
+            return false;
+        }
+        emitScriptRegisterSymbols(ctx, *module, app_name, file_san, blob_gv,
+            metadata_blob.size(), compiled_funcs);
+    }
 
     di_builder.finalize();
 
