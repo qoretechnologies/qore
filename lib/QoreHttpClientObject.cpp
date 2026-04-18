@@ -8659,8 +8659,15 @@ QoreHashNode* QoreHttpClientObject::sendWithSendCallback(const char* meth, const
 void QoreHttpClientObject::sendWithRecvCallback(const char* meth, const char* mpath, const QoreHashNode* headers,
         const void* data, unsigned size, bool getbody, QoreHashNode* info, int timeout_ms,
         const ResolvedCallReferenceNode* recv_callback, QoreObject* obj, ExceptionSink* xsink) {
-    http_priv->send_internal(xsink, "sendWithRecvCallback", meth, mpath, headers, nullptr, data, size, nullptr,
-        getbody, info, timeout_ms, recv_callback, obj);
+    // send_internal returns a QoreHashNode* that the recv-callback path
+    // discards — the callback already consumed the response.  Wrap in
+    // ReferenceHolder so the hash (and its transitively-owned header /
+    // body values) is deref'd on return instead of leaking.
+    ReferenceHolder<QoreHashNode> rv(
+        http_priv->send_internal(xsink, "sendWithRecvCallback", meth, mpath, headers,
+            nullptr, data, size, nullptr,
+            getbody, info, timeout_ms, recv_callback, obj),
+        xsink);
 }
 
 void QoreHttpClientObject::sendWithRecvCallback(const char* meth, const char* mpath, const QoreHashNode* headers,
@@ -8671,8 +8678,13 @@ void QoreHttpClientObject::sendWithRecvCallback(const char* meth, const char* mp
     if (*xsink) {
         return;
     }
-    http_priv->send_internal(xsink, "sendWithRecvCallback", meth, mpath, headers, *tstr, tstr->c_str(), tstr->size(),
-        nullptr, getbody, info, timeout_ms, recv_callback, obj);
+    // See comment in the other overload — wrap the unused return to avoid
+    // leaking the response hash.
+    ReferenceHolder<QoreHashNode> rv(
+        http_priv->send_internal(xsink, "sendWithRecvCallback", meth, mpath, headers,
+            *tstr, tstr->c_str(), tstr->size(),
+            nullptr, getbody, info, timeout_ms, recv_callback, obj),
+        xsink);
 }
 
 void QoreHttpClientObject::sendWithOutputStream(const char* meth, const char* mpath, const QoreHashNode* headers,
