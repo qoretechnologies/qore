@@ -33,6 +33,8 @@
 
 #include "qore/Qore.h"
 #include "qore/intern/QC_SocketPollOperationBase.h"
+#include "qore/intern/QC_DelegatingPollOperation.h"
+#include "qore/intern/RSet.h"
 
 /** @cond INTERNAL */
 class DelegatingPollOperationPriv : public SocketPollOperationBase {
@@ -83,6 +85,42 @@ public:
             counter_obj->deref(xsink);
             counter_obj = nullptr;
         }
+    }
+
+    //! DGC custom scanner for the four raw refs this priv holds
+    /** @c inner_obj, @c counter_obj, and @c on_complete_code all hold
+        strong refs to data structures the normal QoreObject data/cdmap
+        scan cannot see (they live in C++ member fields, not in any
+        qclass's @c internal_members).  Without this scanner, any cycle
+        that routes through one of these refs is invisible to DGC and
+        the whole graph leaks.
+
+        The concrete trigger for this scanner is a closure supplied as
+        @c on_complete with captured outer-scope variables: the
+        closure's @c ResolvedCallReferenceNode holds the captured
+        environment, which can transitively point back through other
+        Qore objects into the @c DelegatingPollOperation itself.  With
+        no scanner, 420 KB / 1.16 MB of parse-tree allocations were
+        leaked per submit in @c AsyncSocketIo.qtest's main test.
+
+        See @c design/dgc.md Pattern B.
+
+        @param obj the @c RObject wrapping this private data
+        @param rsh the scanner helper
+        @return @c true if a lock error forces the scan transaction to
+            abort (per the @c scanCheck contract); always @c false here
+    */
+    DLLLOCAL bool scanMembers(RObject& obj, RSetHelper& rsh) {
+        if (inner_obj && obj.scanCheck(rsh, inner_obj)) {
+            return true;
+        }
+        if (counter_obj && obj.scanCheck(rsh, counter_obj)) {
+            return true;
+        }
+        if (on_complete_code && obj.scanCheck(rsh, on_complete_code)) {
+            return true;
+        }
+        return false;
     }
 
     DLLLOCAL bool goalReached() const override {
@@ -168,6 +206,19 @@ protected:
         return "delegating";
     }
 };
+
+// DGC dispatch entry point — see QC_DelegatingPollOperation.h.
+bool qore_delegating_poll_op_scan_members(QoreObject& qobj, RObject& obj,
+        RSetHelper& rsh, ExceptionSink* xsink) {
+    ReferenceHolder<DelegatingPollOperationPriv> priv(
+        reinterpret_cast<DelegatingPollOperationPriv*>(
+            qobj.getReferencedPrivateData(CID_DELEGATINGPOLLOPERATION, xsink)),
+        xsink);
+    if (*xsink || !*priv) {
+        return false;
+    }
+    return (*priv)->scanMembers(obj, rsh);
+}
 /** @endcond */
 
 //! C++ delegating poll operation that wraps any AbstractPollOperation
@@ -236,6 +287,14 @@ DelegatingPollOperation::constructor(AbstractPollOperation inner, *code on_compl
     self->setPrivate(CID_DELEGATINGPOLLOPERATION,
         new DelegatingPollOperationPriv(self, inner_obj, inner_base, on_complete_ref, counter_obj));
 
+    // DGC custom scanner gate — the priv holds ref'd inner_obj /
+    // counter_obj / on_complete_code in raw C++ pointers that the
+    // normal data/cdmap scan cannot see.  incScanPrivateData() tells
+    // the scanner to dispatch to qore_delegating_poll_op_scan_members
+    // on every cycle check for this object.  See design/dgc.md
+    // Pattern B.  Dec is in the destructor below.
+    qore_object_private::get(*self)->incScanPrivateData();
+
     // Release extra refs (constructor took ownership)
     if (inner_base) {
         inner_base->deref(xsink);
@@ -252,6 +311,7 @@ DelegatingPollOperation::constructor(AbstractPollOperation inner, *code on_compl
 /** Releases all internal references.
 */
 DelegatingPollOperation::destructor() {
+    qore_object_private::get(*self)->decScanPrivateData();
     poll->cleanup(xsink);
     poll->deref(xsink);
 }

@@ -43,6 +43,7 @@
 #include "qore/intern/QoreQueueIntern.h"
 #include "qore/intern/QC_TreeMap.h"
 #include "qore/intern/QC_Http2ClientPollOperationBase.h"
+#include "qore/intern/QC_DelegatingPollOperation.h"
 #include "qore/intern/qore_type_safe_ref_helper_priv.h"
 #include "qore/intern/qore_program_private.h"
 
@@ -414,6 +415,17 @@ bool qore_object_private::scanMembers(RSetHelper& rsh) {
                 if ((*h2pop)->scanMembers(*this, rsh)) {
                     return true;
                 }
+            }
+        }
+        if (xsink) {
+            xsink.clear();
+        }
+        {
+            // DelegatingPollOperation — scan inner_obj, counter_obj,
+            // on_complete_code held as raw C++ pointers in the priv.
+            // See design/dgc.md Pattern B.
+            if (qore_delegating_poll_op_scan_members(*obj, *this, rsh, &xsink)) {
+                return true;
             }
         }
         if (xsink) {
