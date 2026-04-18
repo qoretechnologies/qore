@@ -1218,6 +1218,25 @@ int QuicSession::writePacketsLocked(QuicPacketBatch& packets, ExceptionSink* xsi
                 if (h3_conn_) {
                     nghttp3_conn_shutdown_stream_write(h3_conn_, stream_id);
                 }
+                // The peer asked us to stop sending (STOP_SENDING or RESET_STREAM).
+                // Mark the stream so subsequent sendStreamData() calls raise a
+                // typed QUIC-STREAM-RESET exception instead of silently queuing
+                // more data that nghttp3 will now discard.  Without this, a
+                // tight producer loop (e.g. DataStream-v1 retry-until-error) would
+                // fill the staging buffer indefinitely without ever observing
+                // the peer-initiated termination.
+                {
+                    auto sit = streams_.find(stream_id);
+                    if (sit != streams_.end()) {
+                        sit->second->peer_stop_sending = true;
+                        // error code unknown at this point (ngtcp2 handled the
+                        // incoming frame internally); leave peer_close_error_code
+                        // at its default 0 — NGHTTP3_H3_REQUEST_CANCELLED style
+                        // context is encoded in the response body the peer sent
+                        // alongside the reset.
+                        sit->second->state = QuicStreamState::Closed;
+                    }
+                }
                 continue;
             case NGTCP2_ERR_WRITE_MORE:
                 assert(ndatalen >= 0);
@@ -2017,6 +2036,19 @@ int QuicSession::sendStreamData(int64_t stream_id, const void* data, size_t len,
             return -1;
         }
     }
+    // The streams_ entry may already have been erased (streamCloseCallback runs
+    // after h3ResetStreamCallback and removes the entry).  Check the standalone
+    // peer_reset_streams_ map — if the peer reset this stream, we must still
+    // surface QUIC-STREAM-RESET rather than the generic QUIC-HTTP3-ERROR below.
+    {
+        auto pit = peer_reset_streams_.find(stream_id);
+        if (pit != peer_reset_streams_.end()) {
+            xsink->raiseException("QUIC-STREAM-RESET",
+                "stream %" PRId64 " was reset by peer (error code %" PRIu64 ")",
+                stream_id, pit->second);
+            return -1;
+        }
+    }
 
     auto it = streaming_body_data_.find(stream_id);
     if (it == streaming_body_data_.end()) {
@@ -2024,8 +2056,16 @@ int QuicSession::sendStreamData(int64_t stream_id, const void* data, size_t len,
             (long long)getSessionId(), (long long)stream_id);
         printd(1, "QuicSession::sendStreamData() stream_id=" QLLD " NOT FOUND in streaming_body_data_\n",
             stream_id);
-        xsink->raiseException("QUIC-HTTP3-ERROR",
-            "no streaming response for stream %" PRId64, stream_id);
+        // If the stream has been closed (by any path — reset or graceful
+        // FIN), surface QUIC-STREAM-RESET so producer loops can distinguish
+        // "peer closed the stream" from an internal logic error.
+        if (closed_streams_.count(stream_id) > 0) {
+            xsink->raiseException("QUIC-STREAM-RESET",
+                "stream %" PRId64 " was closed by peer", stream_id);
+        } else {
+            xsink->raiseException("QUIC-HTTP3-ERROR",
+                "no streaming response for stream %" PRId64, stream_id);
+        }
         return -1;
     }
 
@@ -2546,6 +2586,7 @@ bool QuicSession::isStreamFullyAcked(int64_t stream_id) const {
 void QuicSession::removeClosedStream(int64_t stream_id) {
     std::lock_guard<std::recursive_mutex> lock(mtx_);
     closed_streams_.erase(stream_id);
+    peer_reset_streams_.erase(stream_id);
 }
 
 uint64_t QuicSession::getBytesInFlight() const {
@@ -3982,6 +4023,10 @@ int QuicSession::h3StopSendingCallback(nghttp3_conn* /* conn */, int64_t stream_
             it->second->peer_close_error_code = app_error_code;
             it->second->state = QuicStreamState::Closed;
         }
+        // Also record the reset in a standalone map so sendStreamData() can
+        // still raise QUIC-STREAM-RESET after streamCloseCallback() has erased
+        // the stream from streams_.
+        session->peer_reset_streams_[stream_id] = app_error_code;
     }
     int rv = ngtcp2_conn_shutdown_stream_read(session->conn_, 0, stream_id, app_error_code);
     // During shutdown, ngtcp2 may have already closed the stream
@@ -4009,6 +4054,8 @@ int QuicSession::h3ResetStreamCallback(nghttp3_conn* /* conn */, int64_t stream_
             it->second->peer_close_error_code = app_error_code;
             it->second->state = QuicStreamState::Closed;
         }
+        // Also record the reset for sendStreamData() — see h3StopSendingCallback()
+        session->peer_reset_streams_[stream_id] = app_error_code;
     }
     int rv = ngtcp2_conn_shutdown_stream_write(session->conn_, 0, stream_id, app_error_code);
     // During shutdown, ngtcp2 may have already closed the stream
