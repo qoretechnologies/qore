@@ -6465,6 +6465,86 @@ extern "C" DLLEXPORT void qore_rt_ref_foreach_cleanup(uint64_t state_ptr, Except
     delete state;
 }
 
+// --- Phase 2B Step 5: Iterator category throwing wrappers ---
+
+extern "C" DLLEXPORT __attribute__((noinline)) void* qore_rt_iterator_create_throwing(
+        uint64_t iterable_bits, void* iterator_func, ExceptionSink* xsink) {
+    void* result = qore_rt_iterator_create(iterable_bits, iterator_func, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) void* qore_rt_iterator_create_aot_throwing(
+        QoreAOTContext* ctx, int32_t slot, uint64_t iterable_bits, ExceptionSink* xsink) {
+    void* result = qore_rt_iterator_create_aot(ctx, slot, iterable_bits, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) void* qore_rt_iterator_create_reverse_throwing(
+        uint64_t iterable_bits, ExceptionSink* xsink) {
+    void* result = qore_rt_iterator_create_reverse(iterable_bits, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) int64_t qore_rt_iterator_next_throwing(
+        void* iter_ptr, uint64_t* out_value, ExceptionSink* xsink) {
+    int64_t result = qore_rt_iterator_next(iter_ptr, out_value, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_ref_foreach_init_throwing(
+        uint64_t parse_ref_bits, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_ref_foreach_init(parse_ref_bits, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_ref_foreach_get_entry_throwing(
+        uint64_t state_ptr, int64_t index, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_ref_foreach_get_entry(state_ptr, index, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) void qore_rt_ref_foreach_record_throwing(
+        uint64_t state_ptr, uint64_t value_bits, ExceptionSink* xsink) {
+    qore_rt_ref_foreach_record(state_ptr, value_bits, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) void qore_rt_ref_foreach_finalize_throwing(
+        uint64_t state_ptr, int64_t fill_remaining, ExceptionSink* xsink) {
+    qore_rt_ref_foreach_finalize(state_ptr, fill_remaining, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) void qore_rt_ref_foreach_cleanup_throwing(
+        uint64_t state_ptr, ExceptionSink* xsink) {
+    qore_rt_ref_foreach_cleanup(state_ptr, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+}
+
 // --- Direct dot-eval method call (pre-evaluated base + args) ---
 
 static QoreListNode* buildArgListFromNanBoxed(uint64_t* args, int nargs, ExceptionSink* xsink) {

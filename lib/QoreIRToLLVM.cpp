@@ -8882,9 +8882,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 error = "unsupported iterable type for IteratorCreateReverse";
                 return false;
             }
-            auto helper = module.getOrInsertFunction("qore_rt_iterator_create_reverse",
-                    llvm::FunctionType::get(ptr_type, {i64_type, ptr_type}, false));
-            llvm::Value* result = builder->CreateCall(helper, {iterable_boxed, xsink_arg});
+            auto ft = llvm::FunctionType::get(ptr_type,
+                    {i64_type, ptr_type}, false);
+            auto helper = module.getOrInsertFunction("qore_rt_iterator_create_reverse", ft);
+            auto helper_throwing = module.getOrInsertFunction(
+                    "qore_rt_iterator_create_reverse_throwing", ft);
+            llvm::Value* result = emitMaybeInvoke(helper, helper_throwing,
+                    {iterable_boxed, xsink_arg}, module, llvm_func, inst);
             values[inst->result.id] = result;
             // Iterator pointer is NOT nanboxed — it's an opaque ptr
 
@@ -11064,10 +11068,15 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     uint64_t func_bits = reinterpret_cast<uint64_t>(iter_inst->iterator_func);
                     slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(func_bits);
                 }
-                auto helper = module.getOrInsertFunction("qore_rt_iterator_create_aot",
-                        llvm::FunctionType::get(ptr_type, {ptr_type, i32_type, i64_type, ptr_type}, false));
-                result = builder->CreateCall(helper, {aot_ctx_arg,
-                        llvm::ConstantInt::get(i32_type, slot), iterable_boxed, xsink_arg});
+                auto ft = llvm::FunctionType::get(ptr_type,
+                        {ptr_type, i32_type, i64_type, ptr_type}, false);
+                auto helper = module.getOrInsertFunction("qore_rt_iterator_create_aot", ft);
+                auto helper_throwing = module.getOrInsertFunction(
+                        "qore_rt_iterator_create_aot_throwing", ft);
+                result = emitMaybeInvoke(helper, helper_throwing,
+                        {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot),
+                         iterable_boxed, xsink_arg},
+                        module, llvm_func, inst);
             } else {
                 // JIT mode: embed iterator_func pointer directly
                 llvm::Value* iter_func_ptr;
@@ -11081,9 +11090,14 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             llvm::ConstantInt::get(i64_type, 0), ptr_type);
                 }
                 // Call qore_rt_iterator_create(iterable, iterator_func, xsink) -> ptr
-                auto helper = module.getOrInsertFunction("qore_rt_iterator_create",
-                        llvm::FunctionType::get(ptr_type, {i64_type, ptr_type, ptr_type}, false));
-                result = builder->CreateCall(helper, {iterable_boxed, iter_func_ptr, xsink_arg});
+                auto ft = llvm::FunctionType::get(ptr_type,
+                        {i64_type, ptr_type, ptr_type}, false);
+                auto helper = module.getOrInsertFunction("qore_rt_iterator_create", ft);
+                auto helper_throwing = module.getOrInsertFunction(
+                        "qore_rt_iterator_create_throwing", ft);
+                result = emitMaybeInvoke(helper, helper_throwing,
+                        {iterable_boxed, iter_func_ptr, xsink_arg},
+                        module, llvm_func, inst);
             }
             // Store the iterator pointer as the result
             values[inst->result.id] = result;
@@ -11148,9 +11162,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             }
             // Call qore_rt_iterator_next(iter_ptr, out_val_ptr, xsink) -> i64 (1=done, 0=continue)
             // Always writes to out_val_ptr (VAL_NOTHING on done/exception, value on continue)
-            auto helper = module.getOrInsertFunction("qore_rt_iterator_next",
-                    llvm::FunctionType::get(i64_type, {ptr_type, ptr_type, ptr_type}, false));
-            llvm::Value* done_flag = builder->CreateCall(helper, {iter_ptr, out_val_ptr, xsink_arg});
+            auto iter_next_ft = llvm::FunctionType::get(i64_type,
+                    {ptr_type, ptr_type, ptr_type}, false);
+            auto helper = module.getOrInsertFunction("qore_rt_iterator_next", iter_next_ft);
+            auto helper_throwing = module.getOrInsertFunction(
+                    "qore_rt_iterator_next_throwing", iter_next_ft);
+            llvm::Value* done_flag = emitMaybeInvoke(helper, helper_throwing,
+                    {iter_ptr, out_val_ptr, xsink_arg}, module, llvm_func, inst);
             // Check for exception
             emitExceptionCheck(module, llvm_func, inst);
             // Restore iterator pointer in cleanup alloca if NOT done (iterator still alive)
@@ -11202,9 +11220,12 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 std::memcpy(&bits, &expr_val, sizeof(bits));
                 parse_ref_bits_val = llvm::ConstantInt::get(i64_type, bits);
             }
-            auto helper = module.getOrInsertFunction("qore_rt_ref_foreach_init",
-                    llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false));
-            llvm::Value* result = builder->CreateCall(helper, {parse_ref_bits_val, xsink_arg});
+            auto rfi_ft = llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false);
+            auto helper = module.getOrInsertFunction("qore_rt_ref_foreach_init", rfi_ft);
+            auto helper_throwing = module.getOrInsertFunction(
+                    "qore_rt_ref_foreach_init_throwing", rfi_ft);
+            llvm::Value* result = emitMaybeInvoke(helper, helper_throwing,
+                    {parse_ref_bits_val, xsink_arg}, module, llvm_func, inst);
             values[inst->result.id] = result;
             // State handle is an opaque uint64_t, not nanboxed
             emitExceptionCheck(module, llvm_func, inst);
@@ -11232,9 +11253,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 error = "RefForeachGetEntry: index must be i64";
                 return false;
             }
-            auto helper = module.getOrInsertFunction("qore_rt_ref_foreach_get_entry",
-                    llvm::FunctionType::get(i64_type, {i64_type, i64_type, ptr_type}, false));
-            llvm::Value* result = builder->CreateCall(helper, {state_val, index_val, xsink_arg});
+            auto rfge_ft = llvm::FunctionType::get(i64_type,
+                    {i64_type, i64_type, ptr_type}, false);
+            auto helper = module.getOrInsertFunction("qore_rt_ref_foreach_get_entry", rfge_ft);
+            auto helper_throwing = module.getOrInsertFunction(
+                    "qore_rt_ref_foreach_get_entry_throwing", rfge_ft);
+            llvm::Value* result = emitMaybeInvoke(helper, helper_throwing,
+                    {state_val, index_val, xsink_arg}, module, llvm_func, inst);
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(result, inst->result.id, llvm_func);
@@ -11261,9 +11286,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 error = "RefForeachRecord: unsupported value type";
                 return false;
             }
-            auto helper = module.getOrInsertFunction("qore_rt_ref_foreach_record",
-                    llvm::FunctionType::get(void_type, {i64_type, i64_type, ptr_type}, false));
-            builder->CreateCall(helper, {state_val, value_boxed, xsink_arg});
+            auto rfr_ft = llvm::FunctionType::get(void_type,
+                    {i64_type, i64_type, ptr_type}, false);
+            auto helper = module.getOrInsertFunction("qore_rt_ref_foreach_record", rfr_ft);
+            auto helper_throwing = module.getOrInsertFunction(
+                    "qore_rt_ref_foreach_record_throwing", rfr_ft);
+            emitMaybeInvoke(helper, helper_throwing,
+                    {state_val, value_boxed, xsink_arg}, module, llvm_func, inst);
             emitExceptionCheck(module, llvm_func, inst);
             return true;
         }
@@ -11273,9 +11302,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             if (!state_val) { return false; }
             auto* fill_val = getVal(inst->operands[1].id, error);
             if (!fill_val) { return false; }
-            auto helper = module.getOrInsertFunction("qore_rt_ref_foreach_finalize",
-                    llvm::FunctionType::get(void_type, {i64_type, i64_type, ptr_type}, false));
-            builder->CreateCall(helper, {state_val, fill_val, xsink_arg});
+            auto rff_ft = llvm::FunctionType::get(void_type,
+                    {i64_type, i64_type, ptr_type}, false);
+            auto helper = module.getOrInsertFunction("qore_rt_ref_foreach_finalize", rff_ft);
+            auto helper_throwing = module.getOrInsertFunction(
+                    "qore_rt_ref_foreach_finalize_throwing", rff_ft);
+            emitMaybeInvoke(helper, helper_throwing,
+                    {state_val, fill_val, xsink_arg}, module, llvm_func, inst);
             emitExceptionCheck(module, llvm_func, inst);
             return true;
         }
@@ -11283,9 +11316,12 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             // operands: state
             auto* state_val = getVal(inst->operands[0].id, error);
             if (!state_val) { return false; }
-            auto helper = module.getOrInsertFunction("qore_rt_ref_foreach_cleanup",
-                    llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
-            builder->CreateCall(helper, {state_val, xsink_arg});
+            auto rfc_ft = llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false);
+            auto helper = module.getOrInsertFunction("qore_rt_ref_foreach_cleanup", rfc_ft);
+            auto helper_throwing = module.getOrInsertFunction(
+                    "qore_rt_ref_foreach_cleanup_throwing", rfc_ft);
+            emitMaybeInvoke(helper, helper_throwing,
+                    {state_val, xsink_arg}, module, llvm_func, inst);
             emitExceptionCheck(module, llvm_func, inst);
             return true;
         }
