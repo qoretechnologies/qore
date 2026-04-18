@@ -8673,9 +8673,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 llvm::Value* cn_ptr = llvm::ConstantInt::get(i64_type,
                         reinterpret_cast<uint64_t>(ccinst->closure_node));
                 llvm::Value* cn_as_ptr = builder->CreateIntToPtr(cn_ptr, ptr_type);
-                auto helper = module.getOrInsertFunction("qore_rt_create_closure",
-                        llvm::FunctionType::get(i64_type, {ptr_type, ptr_type}, false));
-                result = builder->CreateCall(helper, {cn_as_ptr, xsink_arg});
+                auto cc_ft = llvm::FunctionType::get(i64_type,
+                        {ptr_type, ptr_type}, false);
+                auto helper = module.getOrInsertFunction("qore_rt_create_closure", cc_ft);
+                auto helper_throwing = module.getOrInsertFunction(
+                        "qore_rt_create_closure_throwing", cc_ft);
+                result = emitMaybeInvoke(helper, helper_throwing,
+                        {cn_as_ptr, xsink_arg}, module, llvm_func, inst);
             }
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
@@ -8704,9 +8708,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 uint64_t bits;
                 std::memcpy(&bits, &expr_val, sizeof(bits));
                 llvm::Value* expr_const = llvm::ConstantInt::get(i64_type, bits);
-                auto helper = module.getOrInsertFunction("qore_rt_create_call_ref",
-                        llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false));
-                result = builder->CreateCall(helper, {expr_const, xsink_arg});
+                auto cr_ft = llvm::FunctionType::get(i64_type,
+                        {i64_type, ptr_type}, false);
+                auto helper = module.getOrInsertFunction("qore_rt_create_call_ref", cr_ft);
+                auto helper_throwing = module.getOrInsertFunction(
+                        "qore_rt_create_call_ref_throwing", cr_ft);
+                result = emitMaybeInvoke(helper, helper_throwing,
+                        {expr_const, xsink_arg}, module, llvm_func, inst);
             }
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
@@ -8735,9 +8743,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 uint64_t bits;
                 std::memcpy(&bits, &expr_val, sizeof(bits));
                 llvm::Value* expr_const = llvm::ConstantInt::get(i64_type, bits);
-                auto helper = module.getOrInsertFunction("qore_rt_create_method_ref",
-                        llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false));
-                result = builder->CreateCall(helper, {expr_const, xsink_arg});
+                auto mr_ft = llvm::FunctionType::get(i64_type,
+                        {i64_type, ptr_type}, false);
+                auto helper = module.getOrInsertFunction("qore_rt_create_method_ref", mr_ft);
+                auto helper_throwing = module.getOrInsertFunction(
+                        "qore_rt_create_method_ref_throwing", mr_ft);
+                result = emitMaybeInvoke(helper, helper_throwing,
+                        {expr_const, xsink_arg}, module, llvm_func, inst);
             }
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
@@ -8807,9 +8819,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 llvm::Value* node_ptr = llvm::ConstantInt::get(i64_type,
                         reinterpret_cast<uint64_t>(prinst->node));
                 llvm::Value* node_as_ptr = builder->CreateIntToPtr(node_ptr, ptr_type);
-                auto helper = module.getOrInsertFunction("qore_rt_create_parse_ref",
-                        llvm::FunctionType::get(i64_type, {ptr_type, ptr_type}, false));
-                result = builder->CreateCall(helper, {node_as_ptr, xsink_arg});
+                auto pr_ft = llvm::FunctionType::get(i64_type,
+                        {ptr_type, ptr_type}, false);
+                auto helper = module.getOrInsertFunction("qore_rt_create_parse_ref", pr_ft);
+                auto helper_throwing = module.getOrInsertFunction(
+                        "qore_rt_create_parse_ref_throwing", pr_ft);
+                result = emitMaybeInvoke(helper, helper_throwing,
+                        {node_as_ptr, xsink_arg}, module, llvm_func, inst);
             }
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
@@ -8837,9 +8853,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 llvm::Value* node_ptr = llvm::ConstantInt::get(i64_type,
                         reinterpret_cast<uint64_t>(nhdinst->node));
                 llvm::Value* node_as_ptr = builder->CreateIntToPtr(node_ptr, ptr_type);
-                auto helper = module.getOrInsertFunction("qore_rt_new_hash_decl",
-                        llvm::FunctionType::get(i64_type, {ptr_type, ptr_type}, false));
-                result = builder->CreateCall(helper, {node_as_ptr, xsink_arg});
+                auto nhd_ft = llvm::FunctionType::get(i64_type,
+                        {ptr_type, ptr_type}, false);
+                auto helper = module.getOrInsertFunction("qore_rt_new_hash_decl", nhd_ft);
+                auto helper_throwing = module.getOrInsertFunction(
+                        "qore_rt_new_hash_decl_throwing", nhd_ft);
+                result = emitMaybeInvoke(helper, helper_throwing,
+                        {node_as_ptr, xsink_arg}, module, llvm_func, inst);
             }
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
@@ -8867,9 +8887,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 llvm::Value* node_ptr = llvm::ConstantInt::get(i64_type,
                         reinterpret_cast<uint64_t>(nchinst->node));
                 llvm::Value* node_as_ptr = builder->CreateIntToPtr(node_ptr, ptr_type);
-                auto helper = module.getOrInsertFunction("qore_rt_new_complex_hash",
-                        llvm::FunctionType::get(i64_type, {ptr_type, ptr_type}, false));
-                result = builder->CreateCall(helper, {node_as_ptr, xsink_arg});
+                auto nch_ft = llvm::FunctionType::get(i64_type,
+                        {ptr_type, ptr_type}, false);
+                auto helper = module.getOrInsertFunction("qore_rt_new_complex_hash", nch_ft);
+                auto helper_throwing = module.getOrInsertFunction(
+                        "qore_rt_new_complex_hash_throwing", nch_ft);
+                result = emitMaybeInvoke(helper, helper_throwing,
+                        {node_as_ptr, xsink_arg}, module, llvm_func, inst);
             }
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
@@ -8897,9 +8921,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 llvm::Value* node_ptr = llvm::ConstantInt::get(i64_type,
                         reinterpret_cast<uint64_t>(nclinst->node));
                 llvm::Value* node_as_ptr = builder->CreateIntToPtr(node_ptr, ptr_type);
-                auto helper = module.getOrInsertFunction("qore_rt_new_complex_list",
-                        llvm::FunctionType::get(i64_type, {ptr_type, ptr_type}, false));
-                result = builder->CreateCall(helper, {node_as_ptr, xsink_arg});
+                auto ncl_ft = llvm::FunctionType::get(i64_type,
+                        {ptr_type, ptr_type}, false);
+                auto helper = module.getOrInsertFunction("qore_rt_new_complex_list", ncl_ft);
+                auto helper_throwing = module.getOrInsertFunction(
+                        "qore_rt_new_complex_list_throwing", ncl_ft);
+                result = emitMaybeInvoke(helper, helper_throwing,
+                        {node_as_ptr, xsink_arg}, module, llvm_func, inst);
             }
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
@@ -8916,17 +8944,26 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 uint64_t expr_bits;
                 std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
                 int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
-                auto helper = module.getOrInsertFunction("qore_rt_vrn_construct_aot",
-                        llvm::FunctionType::get(i64_type, {ptr_type, i32_type, ptr_type}, false));
-                result = builder->CreateCall(helper, {aot_ctx_arg,
-                        llvm::ConstantInt::get(i32_type, slot), xsink_arg});
+                auto vc_aot_ft = llvm::FunctionType::get(i64_type,
+                        {ptr_type, i32_type, ptr_type}, false);
+                auto helper = module.getOrInsertFunction(
+                        "qore_rt_vrn_construct_aot", vc_aot_ft);
+                auto helper_throwing = module.getOrInsertFunction(
+                        "qore_rt_vrn_construct_aot_throwing", vc_aot_ft);
+                result = emitMaybeInvoke(helper, helper_throwing,
+                        {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), xsink_arg},
+                        module, llvm_func, inst);
             } else {
                 llvm::Value* vrn_ptr = llvm::ConstantInt::get(i64_type,
                         reinterpret_cast<uint64_t>(vrninst->vrn));
                 llvm::Value* vrn_as_ptr = builder->CreateIntToPtr(vrn_ptr, ptr_type);
-                auto helper = module.getOrInsertFunction("qore_rt_vrn_construct",
-                        llvm::FunctionType::get(i64_type, {ptr_type, ptr_type}, false));
-                result = builder->CreateCall(helper, {vrn_as_ptr, xsink_arg});
+                auto vc_ft = llvm::FunctionType::get(i64_type,
+                        {ptr_type, ptr_type}, false);
+                auto helper = module.getOrInsertFunction("qore_rt_vrn_construct", vc_ft);
+                auto helper_throwing = module.getOrInsertFunction(
+                        "qore_rt_vrn_construct_throwing", vc_ft);
+                result = emitMaybeInvoke(helper, helper_throwing,
+                        {vrn_as_ptr, xsink_arg}, module, llvm_func, inst);
             }
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
@@ -8946,21 +8983,29 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 // AOT: resolve hashdecl by namespace path at runtime
                 std::string hd_path = nhdfh_inst->hd->getNamespacePath();
                 llvm::Value* hd_path_str = builder->CreateGlobalString(hd_path, "hd_path");
-                auto helper = module.getOrInsertFunction("qore_rt_new_hash_decl_from_hash_by_path",
-                        llvm::FunctionType::get(i64_type,
-                            {ptr_type, i64_type, i32_type, ptr_type}, false));
-                result = builder->CreateCall(helper,
-                        {hd_path_str, hash_boxed, rtcheck, xsink_arg});
+                auto nhdfhp_ft = llvm::FunctionType::get(i64_type,
+                        {ptr_type, i64_type, i32_type, ptr_type}, false);
+                auto helper = module.getOrInsertFunction(
+                        "qore_rt_new_hash_decl_from_hash_by_path", nhdfhp_ft);
+                auto helper_throwing = module.getOrInsertFunction(
+                        "qore_rt_new_hash_decl_from_hash_by_path_throwing", nhdfhp_ft);
+                result = emitMaybeInvoke(helper, helper_throwing,
+                        {hd_path_str, hash_boxed, rtcheck, xsink_arg},
+                        module, llvm_func, inst);
             } else {
                 // JIT: direct pointer is valid within the same process
                 llvm::Value* hd_ptr = llvm::ConstantInt::get(i64_type,
                         reinterpret_cast<uint64_t>(nhdfh_inst->hd));
                 llvm::Value* hd_as_ptr = builder->CreateIntToPtr(hd_ptr, ptr_type);
-                auto helper = module.getOrInsertFunction("qore_rt_new_hash_decl_from_hash",
-                        llvm::FunctionType::get(i64_type,
-                            {ptr_type, i64_type, i32_type, ptr_type}, false));
-                result = builder->CreateCall(helper,
-                        {hd_as_ptr, hash_boxed, rtcheck, xsink_arg});
+                auto nhdfh_ft = llvm::FunctionType::get(i64_type,
+                        {ptr_type, i64_type, i32_type, ptr_type}, false);
+                auto helper = module.getOrInsertFunction(
+                        "qore_rt_new_hash_decl_from_hash", nhdfh_ft);
+                auto helper_throwing = module.getOrInsertFunction(
+                        "qore_rt_new_hash_decl_from_hash_throwing", nhdfh_ft);
+                result = emitMaybeInvoke(helper, helper_throwing,
+                        {hd_as_ptr, hash_boxed, rtcheck, xsink_arg},
+                        module, llvm_func, inst);
             }
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
@@ -10713,10 +10758,15 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 const QoreTypeInfo* ti = io_node->getInstanceTypeInfo();
                 std::string type_path = ti ? QoreTypeInfo::getPath(ti) : "";
                 llvm::Value* type_path_ptr = builder->CreateGlobalStringPtr(type_path);
-                auto helper = module.getOrInsertFunction("qore_rt_instanceof_by_type_path",
-                    llvm::FunctionType::get(i64_type, {i64_type, ptr_type, ptr_type}, false));
-                llvm::Value* result = builder->CreateCall(helper,
-                    {val_boxed, type_path_ptr, xsink_arg});
+                auto iobtp_ft = llvm::FunctionType::get(i64_type,
+                        {i64_type, ptr_type, ptr_type}, false);
+                auto helper = module.getOrInsertFunction(
+                        "qore_rt_instanceof_by_type_path", iobtp_ft);
+                auto helper_throwing = module.getOrInsertFunction(
+                        "qore_rt_instanceof_by_type_path_throwing", iobtp_ft);
+                llvm::Value* result = emitMaybeInvoke(helper, helper_throwing,
+                        {val_boxed, type_path_ptr, xsink_arg},
+                        module, llvm_func, inst);
                 values[inst->result.id] = result;
                 nanboxed_values.insert(inst->result.id);
                 return true;
@@ -10726,10 +10776,15 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             uint64_t expr_bits;
             std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
             int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
-            auto aot_helper = module.getOrInsertFunction("qore_rt_invoke_expr_aot",
-                    llvm::FunctionType::get(i64_type, {ptr_type, i32_type, ptr_type}, false));
-            llvm::Value* result = builder->CreateCall(aot_helper, {aot_ctx_arg,
-                    llvm::ConstantInt::get(i32_type, slot), xsink_arg});
+            auto aot_ie_ft = llvm::FunctionType::get(i64_type,
+                    {ptr_type, i32_type, ptr_type}, false);
+            auto aot_helper = module.getOrInsertFunction(
+                    "qore_rt_invoke_expr_aot", aot_ie_ft);
+            auto aot_helper_throwing = module.getOrInsertFunction(
+                    "qore_rt_invoke_expr_aot_throwing", aot_ie_ft);
+            llvm::Value* result = emitMaybeInvoke(aot_helper, aot_helper_throwing,
+                    {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), xsink_arg},
+                    module, llvm_func, inst);
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(result, inst->result.id, llvm_func);
@@ -10825,21 +10880,31 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 if (aot_mode) {
                     // AOT: embed method name, resolve at runtime
                     llvm::Value* name_ptr = builder->CreateGlobalStringPtr(method_name);
-                    auto helper = module.getOrInsertFunction("qore_rt_background_self_call_aot",
-                        llvm::FunctionType::get(i64_type,
-                            {ptr_type, ptr_type, i32_type, ptr_type}, false));
-                    result = builder->CreateCall(helper, {name_ptr, args_array,
-                        llvm::ConstantInt::get(i32_type, actual_nargs), xsink_arg});
+                    auto bg_aot_ft = llvm::FunctionType::get(i64_type,
+                            {ptr_type, ptr_type, i32_type, ptr_type}, false);
+                    auto helper = module.getOrInsertFunction(
+                            "qore_rt_background_self_call_aot", bg_aot_ft);
+                    auto helper_throwing = module.getOrInsertFunction(
+                            "qore_rt_background_self_call_aot_throwing", bg_aot_ft);
+                    result = emitMaybeInvoke(helper, helper_throwing,
+                            {name_ptr, args_array,
+                             llvm::ConstantInt::get(i32_type, actual_nargs), xsink_arg},
+                            module, llvm_func, inst);
                 } else {
                     // JIT: embed SelfFunctionCallNode pointer directly
                     llvm::Value* sfcn_ptr = builder->CreateIntToPtr(
                         llvm::ConstantInt::get(i64_type, reinterpret_cast<uint64_t>(sfcn)),
                         ptr_type);
-                    auto helper = module.getOrInsertFunction("qore_rt_background_self_call",
-                        llvm::FunctionType::get(i64_type,
-                            {ptr_type, ptr_type, i32_type, ptr_type}, false));
-                    result = builder->CreateCall(helper, {sfcn_ptr, args_array,
-                        llvm::ConstantInt::get(i32_type, actual_nargs), xsink_arg});
+                    auto bg_ft = llvm::FunctionType::get(i64_type,
+                            {ptr_type, ptr_type, i32_type, ptr_type}, false);
+                    auto helper = module.getOrInsertFunction(
+                            "qore_rt_background_self_call", bg_ft);
+                    auto helper_throwing = module.getOrInsertFunction(
+                            "qore_rt_background_self_call_throwing", bg_ft);
+                    result = emitMaybeInvoke(helper, helper_throwing,
+                            {sfcn_ptr, args_array,
+                             llvm::ConstantInt::get(i32_type, actual_nargs), xsink_arg},
+                            module, llvm_func, inst);
                 }
             } else {
                 // Full AST fallback path
@@ -11158,11 +11223,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* stmt_ptr = llvm::ConstantInt::get(i64_type,
                     reinterpret_cast<uint64_t>(sinst->stmt));
             llvm::Value* stmt_as_ptr = builder->CreateIntToPtr(stmt_ptr, ptr_type);
-            auto helper = module.getOrInsertFunction("qore_rt_exec_statement",
-                    llvm::FunctionType::get(i64_type,
-                        {llvm::Type::getInt32Ty(ctx), ptr_type, ptr_type}, false));
-            llvm::Value* result = builder->CreateCall(helper,
-                    {opcode_val, stmt_as_ptr, xsink_arg});
+            auto es_ft = llvm::FunctionType::get(i64_type,
+                    {llvm::Type::getInt32Ty(ctx), ptr_type, ptr_type}, false);
+            auto helper = module.getOrInsertFunction("qore_rt_exec_statement", es_ft);
+            auto helper_throwing = module.getOrInsertFunction(
+                    "qore_rt_exec_statement_throwing", es_ft);
+            llvm::Value* result = emitMaybeInvoke(helper, helper_throwing,
+                    {opcode_val, stmt_as_ptr, xsink_arg}, module, llvm_func, inst);
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
             // Context executes through the AST path and can modify locals
@@ -11177,11 +11244,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* stmt_ptr = llvm::ConstantInt::get(i64_type,
                     reinterpret_cast<uint64_t>(sinst->stmt));
             llvm::Value* stmt_as_ptr = builder->CreateIntToPtr(stmt_ptr, ptr_type);
-            auto helper = module.getOrInsertFunction("qore_rt_exec_statement",
-                    llvm::FunctionType::get(i64_type,
-                        {llvm::Type::getInt32Ty(ctx), ptr_type, ptr_type}, false));
-            llvm::Value* result = builder->CreateCall(helper,
-                    {opcode_val, stmt_as_ptr, xsink_arg});
+            auto es_ft = llvm::FunctionType::get(i64_type,
+                    {llvm::Type::getInt32Ty(ctx), ptr_type, ptr_type}, false);
+            auto helper = module.getOrInsertFunction("qore_rt_exec_statement", es_ft);
+            auto helper_throwing = module.getOrInsertFunction(
+                    "qore_rt_exec_statement_throwing", es_ft);
+            llvm::Value* result = emitMaybeInvoke(helper, helper_throwing,
+                    {opcode_val, stmt_as_ptr, xsink_arg}, module, llvm_func, inst);
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
             // Summarize executes through the AST path and can modify locals

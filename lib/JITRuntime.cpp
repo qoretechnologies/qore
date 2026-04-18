@@ -8085,3 +8085,144 @@ extern "C" DLLEXPORT uint64_t qore_rt_background_self_call_aot(
     QoreValue(call_node).discard(xsink); // decrements refcount and frees the node
     return toBits(result);
 }
+
+// --- Phase 2B Step 5: specialized helpers throwing wrappers ---
+// (placed at end of file - all base helpers are defined above)
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_create_closure_throwing(
+        const QoreClosureParseNode* cn, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_create_closure(cn, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_create_call_ref_throwing(
+        uint64_t expr_bits, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_create_call_ref(expr_bits, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_create_method_ref_throwing(
+        uint64_t expr_bits, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_create_method_ref(expr_bits, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_create_parse_ref_throwing(
+        const ParseReferenceNode* node, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_create_parse_ref(node, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_new_hash_decl_throwing(
+        const NewHashDeclNode* node, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_new_hash_decl(node, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_new_complex_hash_throwing(
+        const NewComplexHashNode* node, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_new_complex_hash(node, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_new_complex_list_throwing(
+        const NewComplexListNode* node, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_new_complex_list(node, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_vrn_construct_throwing(
+        const VarRefNewObjectNode* vrn, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_vrn_construct(vrn, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_vrn_construct_aot_throwing(
+        QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_vrn_construct_aot(ctx, idx, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_new_hash_decl_from_hash_throwing(
+        const TypedHashDecl* hd, uint64_t hash_bits, int32_t runtime_check,
+        ExceptionSink* xsink) {
+    uint64_t result = qore_rt_new_hash_decl_from_hash(hd, hash_bits, runtime_check, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_new_hash_decl_from_hash_by_path_throwing(
+        const char* hd_path, uint64_t hash_bits, int32_t runtime_check,
+        ExceptionSink* xsink) {
+    uint64_t result = qore_rt_new_hash_decl_from_hash_by_path(hd_path, hash_bits,
+            runtime_check, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_exec_statement_throwing(
+        int opcode, const AbstractStatement* stmt, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_exec_statement(opcode, stmt, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_instanceof_by_type_path_throwing(
+        uint64_t val_bits, const char* type_path, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_instanceof_by_type_path(val_bits, type_path, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_background_self_call_throwing(
+        const SelfFunctionCallNode* sfcn, uint64_t* args, int nargs, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_background_self_call(sfcn, args, nargs, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_background_self_call_aot_throwing(
+        const char* method_name, uint64_t* args, int nargs, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_background_self_call_aot(method_name, args, nargs, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
