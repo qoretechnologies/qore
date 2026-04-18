@@ -8294,3 +8294,44 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_switch_case_matc
     }
     return result;
 }
+
+// --- Phase 2B Step 5: Fast-path slow-route throwing wrappers ---
+// These are called on the slow path inside emitAny*FastPath helpers when
+// the fast int/float checks fail; they can raise exceptions via the
+// runtime IR interpreter.
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_binary_op_throwing(
+        int opcode, uint64_t left, uint64_t right, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_binary_op(opcode, left, right, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_unary_op_throwing(
+        int opcode, uint64_t operand, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_unary_op(opcode, operand, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_comparison_op_throwing(
+        int opcode, uint64_t left, uint64_t right, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_comparison_op(opcode, left, right, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_ternary_op_throwing(
+        int opcode, uint64_t a, uint64_t b, uint64_t c, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_ternary_op(opcode, a, b, c, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
