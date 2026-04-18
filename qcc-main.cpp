@@ -64,6 +64,10 @@ static bool show_targets = false;
 // Phase 1 compile-time opt:
 static bool strip_debug_info = false;
 static const char* time_trace_path = nullptr;
+// Phase 5a: OptimizeNone+NoInline for functions exceeding this block count
+// (0 = disabled). Trades runtime optimization for dramatic compile-time
+// savings on large functions (e.g. HttpServer::handleRequest 905 BBs).
+static int big_fn_threshold = 0;
 
 static void print_usage(const char* prog) {
     printf("Qore Code Compiler (qcc) v%s\n", QCC_VERSION);
@@ -82,6 +86,9 @@ static void print_usage(const char* prog) {
     printf("  -g                     Emit DWARF debug info (default)\n");
     printf("      --time-trace[=PATH]  Emit Chrome-format trace of opt+codegen passes\n");
     printf("                         (default PATH: qcc.trace.json; view at chrome://tracing)\n");
+    printf("      --big-fn-threshold=N  Mark functions >= N IR blocks as OptimizeNone+NoInline\n");
+    printf("                         (trades ~5-10%% runtime for up to 30x compile speedup;\n");
+    printf("                         recommended: 200-300 for HTTP server / large qmods; 0 = off)\n");
     printf("  -v, --verbose          Verbose output\n");
     printf("  -h, --help             Show this help message\n");
     printf("  -V, --version          Show version information\n");
@@ -116,6 +123,7 @@ static struct option long_options[] = {
     {"strip-source",      no_argument,       nullptr, 'P'},
     {"strip-debug-info",  no_argument,       nullptr, 'D'},
     {"time-trace",        optional_argument, nullptr, 'Y'},
+    {"big-fn-threshold",  required_argument, nullptr, 'B'},
     {"verbose",           no_argument,       nullptr, 'v'},
     {"help",              no_argument,       nullptr, 'h'},
     {"version",           no_argument,       nullptr, 'V'},
@@ -165,6 +173,13 @@ static int parse_options_cmdline(int argc, char** argv) {
                 break;
             case 'Y':
                 time_trace_path = optarg ? optarg : "qcc.trace.json";
+                break;
+            case 'B':
+                big_fn_threshold = atoi(optarg);
+                if (big_fn_threshold < 0) {
+                    fprintf(stderr, "error: --big-fn-threshold must be >= 0\n");
+                    return 1;
+                }
                 break;
             case 'v':
                 verbose = true;
@@ -252,6 +267,11 @@ int main(int argc, char** argv) {
     }
     if (time_trace_path) {
         setenv("QORE_AOT_TIME_TRACE", time_trace_path, 1);
+    }
+    if (big_fn_threshold > 0) {
+        char buf[32];
+        snprintf(buf, sizeof(buf), "%d", big_fn_threshold);
+        setenv("QORE_AOT_BIG_FN_THRESHOLD", buf, 1);
     }
 
     if (show_help) {
