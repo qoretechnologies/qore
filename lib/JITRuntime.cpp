@@ -5152,6 +5152,152 @@ extern "C" DLLEXPORT void qore_rt_store_closure_aot(QoreAOTContext* ctx, int32_t
     qore_rt_assign_local(ctx->locals[idx], val, xsink);
 }
 
+// --- Phase 2B Step 5: Local access category throwing wrappers ---
+
+extern "C" DLLEXPORT __attribute__((noinline)) void qore_rt_assign_local_throwing(
+        LocalVar* var, uint64_t value, ExceptionSink* xsink) {
+    qore_rt_assign_local(var, value, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) void qore_rt_assign_local_no_coerce_throwing(
+        LocalVar* var, uint64_t value, ExceptionSink* xsink) {
+    qore_rt_assign_local_no_coerce(var, value, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_load_local_throwing(
+        LocalVar* var, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_load_local(var, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_load_global_throwing(
+        Var* var, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_load_global(var, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) void qore_rt_store_global_throwing(
+        Var* var, uint64_t value, ExceptionSink* xsink) {
+    qore_rt_store_global(var, value, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_load_thread_local_throwing(
+        Var* var, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_load_thread_local(var, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) void qore_rt_store_thread_local_throwing(
+        Var* var, uint64_t value, ExceptionSink* xsink) {
+    qore_rt_store_thread_local(var, value, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_load_static_var_throwing(
+        QoreVarInfo* vi, const char* var_name, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_load_static_var(vi, var_name, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_load_constant_throwing(
+        const RuntimeConstantRefNode* node, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_load_constant(node, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) void qore_rt_assign_local_aot_throwing(
+        QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink) {
+    qore_rt_assign_local_aot(ctx, idx, val, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) void qore_rt_assign_local_no_coerce_aot_throwing(
+        QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink) {
+    qore_rt_assign_local_no_coerce_aot(ctx, idx, val, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_load_global_aot_throwing(
+        QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_load_global_aot(ctx, idx, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) void qore_rt_store_global_aot_throwing(
+        QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink) {
+    qore_rt_store_global_aot(ctx, idx, val, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_load_thread_local_aot_throwing(
+        QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_load_thread_local_aot(ctx, idx, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) void qore_rt_store_thread_local_aot_throwing(
+        QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink) {
+    qore_rt_store_thread_local_aot(ctx, idx, val, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_load_closure_aot_throwing(
+        QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_load_closure_aot(ctx, idx, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) void qore_rt_store_closure_aot_throwing(
+        QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink) {
+    qore_rt_store_closure_aot(ctx, idx, val, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+}
+
 extern "C" DLLEXPORT uint64_t qore_rt_invoke_expr_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink) {
     assert(ctx && idx >= 0 && idx < ctx->num_exprs);
     return qore_rt_invoke_expr(ctx->exprs[idx], xsink);
