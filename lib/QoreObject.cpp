@@ -42,6 +42,7 @@
 #include "qore/intern/QoreClosureNode.h"
 #include "qore/intern/QoreQueueIntern.h"
 #include "qore/intern/QC_TreeMap.h"
+#include "qore/intern/QC_Http2ClientPollOperationBase.h"
 #include "qore/intern/qore_type_safe_ref_helper_priv.h"
 #include "qore/intern/qore_program_private.h"
 
@@ -393,6 +394,24 @@ bool qore_object_private::scanMembers(RSetHelper& rsh) {
             ReferenceHolder<TreeMapData> tm(TreeMapData::get(*obj, &xsink), &xsink);
             if (!xsink && *tm) {
                 if (tm->scanMembers(*this, rsh)) {
+                    return true;
+                }
+            }
+        }
+        if (xsink) {
+            xsink.clear();
+        }
+        {
+            // HTTP/2 client poll op — scan stream_queues and
+            // pending_stream_registrations for ref'd queue_obj / notifier_obj
+            // QoreObject pointers that live in C++ containers invisible to
+            // the normal data/cdmap walk.  See design/dgc.md Pattern B.
+            ReferenceHolder<Http2ClientPollOperationPriv> h2pop(
+                reinterpret_cast<Http2ClientPollOperationPriv*>(
+                    getReferencedPrivateData(CID_HTTP2CLIENTPOLLOPERATIONBASE, &xsink)),
+                &xsink);
+            if (!xsink && *h2pop) {
+                if ((*h2pop)->scanMembers(*this, rsh)) {
                     return true;
                 }
             }

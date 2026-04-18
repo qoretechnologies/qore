@@ -92,6 +92,46 @@ Http2ClientPollOperationPriv::~Http2ClientPollOperationPriv() {
     }
 }
 
+bool Http2ClientPollOperationPriv::scanMembers(RObject& obj, RSetHelper& rsh) {
+    // DGC custom scanner (Pattern B in design/dgc.md).
+    //
+    // stream_queues and pending_stream_registrations store ref'd QoreObject
+    // refs (queue_obj, notifier_obj) in C++ maps that the normal
+    // data/cdmap scan cannot see — without this scanner those refs would
+    // be DGC-invisible, blocking collection of any cycle that crosses the
+    // Queue/EventNotifier.
+    //
+    // Non-blocking: trylock both stream_lock and sq_lock.  If either is
+    // contended we return false and let the scanner try again in the next
+    // cycle — blocking here could deadlock with an app thread holding the
+    // lock and waiting on the same QoreObject's rsection lock (held by the
+    // scanner).  See qore_queue_private::scanMembers for the reference
+    // implementation of this pattern.
+    if (stream_lock.trylock() == 0) {
+        AutoLocker al(stream_lock, true);
+        for (auto& [sid, info] : stream_queues) {
+            if (info.queue_obj && obj.scanCheck(rsh, info.queue_obj)) {
+                return true;
+            }
+            if (info.notifier_obj && obj.scanCheck(rsh, info.notifier_obj)) {
+                return true;
+            }
+        }
+    }
+    if (sq_lock.trylock() == 0) {
+        AutoLocker al(sq_lock, true);
+        for (auto& [sid, info] : pending_stream_registrations) {
+            if (info.queue_obj && obj.scanCheck(rsh, info.queue_obj)) {
+                return true;
+            }
+            if (info.notifier_obj && obj.scanCheck(rsh, info.notifier_obj)) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 void Http2ClientPollOperationPriv::cleanup(ExceptionSink* xsink) {
     // Clean up stream queues
     clearStreamQueues(xsink);
@@ -1178,12 +1218,20 @@ Http2ClientPollOperationBase::constructor(Socket[QoreSocketObject] sock, string 
         new Http2ClientPollOperationPriv(self, sock_ptr, connect_ptr,
             ssl_required, proxy_tunnel,
             target_host->c_str(), (int)target_port, conn_priv));
+
+    // DGC custom scanner gate — priv holds ref'd queue_obj / notifier_obj
+    // in stream_queues/pending_stream_registrations that the normal
+    // data/cdmap scan cannot see.  incScanPrivateData() tells the scanner
+    // to dispatch to Http2ClientPollOperationPriv::scanMembers on every
+    // cycle check for this object.  See design/dgc.md Pattern B.
+    qore_object_private::get(*self)->incScanPrivateData();
 }
 
 //! Destroys the object
 /** Releases all internal references.
 */
 Http2ClientPollOperationBase::destructor() {
+    qore_object_private::get(*self)->decScanPrivateData();
     priv->cleanup(xsink);
     priv->deref(xsink);
 }

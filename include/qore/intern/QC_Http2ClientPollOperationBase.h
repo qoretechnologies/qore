@@ -37,6 +37,7 @@
 #include "qore/intern/QC_SocketPollOperation.h"
 #include "qore/intern/AsyncCompletionAction.h"
 #include "qore/intern/QC_AbstractHttpPollConnection.h"
+#include "qore/intern/RSet.h"
 
 #include <atomic>
 #include <string>
@@ -331,6 +332,26 @@ public:
     //! Cleanup all referenced objects (must be called before destructor)
     DLLLOCAL void cleanup(ExceptionSink* xsink);
 
+    //! Custom cycle scanner for stream_queues / pending_stream_registrations
+    //! QoreObject refs that live in C++ containers invisible to the normal
+    //! data/cdmap scan.
+    /** Walks @ref stream_queues and @ref pending_stream_registrations
+        and reports each ref'd @c queue_obj / @c notifier_obj via
+        @c RObject::scanCheck().  Uses @c trylock on both @c stream_lock
+        and @c sq_lock and returns false on contention — mirrors the
+        non-blocking pattern of @ref qore_queue_private::scanMembers (a
+        deadlock or a blocking wait here would freeze cycle detection).
+
+        @param obj the @c RObject wrapping this private data (i.e. the
+            Qore @c Http2ClientPollOperation object)
+        @param rsh the scanner helper
+        @return @c true if a lock error forces the scan transaction to
+            be aborted (per the scanCheck contract)
+
+        @since %Qore 2.3
+    */
+    DLLLOCAL bool scanMembers(RObject& obj, RSetHelper& rsh);
+
 protected:
     DLLLOCAL const char* getStateImpl() const override;
 
@@ -485,5 +506,9 @@ private:
 };
 
 DLLLOCAL QoreClass* initHttp2ClientPollOperationBaseClass(QoreNamespace& qorens);
+
+//! Class ID — defined by the generated QPP code (qore_classid_t storage in
+//! the generated .cpp file, initialised from the registered class).
+DLLLOCAL extern qore_classid_t CID_HTTP2CLIENTPOLLOPERATIONBASE;
 
 #endif // _QORE_CLASS_HTTP2CLIENTPOLLOPERATIONBASE_H
