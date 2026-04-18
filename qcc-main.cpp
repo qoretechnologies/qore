@@ -67,7 +67,9 @@ static const char* time_trace_path = nullptr;
 // Phase 5a: OptimizeNone+NoInline for functions exceeding this block count
 // (0 = disabled). Trades runtime optimization for dramatic compile-time
 // savings on large functions (e.g. HttpServer::handleRequest 905 BBs).
-static int big_fn_threshold = 0;
+// Default 200 validated on HS (46x compile speedup, ~1-7% runtime cost)
+// and SqlUtil (1.70x speedup); OpenApi3 unaffected (no functions >= 200).
+static int big_fn_threshold = 200;
 
 static void print_usage(const char* prog) {
     printf("Qore Code Compiler (qcc) v%s\n", QCC_VERSION);
@@ -87,8 +89,8 @@ static void print_usage(const char* prog) {
     printf("      --time-trace[=PATH]  Emit Chrome-format trace of opt+codegen passes\n");
     printf("                         (default PATH: qcc.trace.json; view at chrome://tracing)\n");
     printf("      --big-fn-threshold=N  Mark functions >= N IR blocks as OptimizeNone+NoInline\n");
-    printf("                         (trades ~5-10%% runtime for up to 30x compile speedup;\n");
-    printf("                         recommended: 200-300 for HTTP server / large qmods; 0 = off)\n");
+    printf("                         (trades ~1-7%% runtime for up to 46x compile speedup;\n");
+    printf("                         default: 200; 0 = off)\n");
     printf("  -v, --verbose          Verbose output\n");
     printf("  -h, --help             Show this help message\n");
     printf("  -V, --version          Show version information\n");
