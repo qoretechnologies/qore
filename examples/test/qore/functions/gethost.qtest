@@ -29,7 +29,10 @@ public class GetHostTest inherits QUnit::Test {
         string ipValRgx = "([0-9]|[1-9][0-9]|1[0-9]{2}|2([0-4][0-9]|5[0-5]))";
         string ipRegex = ipValRgx + "\\." + ipValRgx + "\\." + ipValRgx + "\\." + ipValRgx;
         string simpleIp6Regex = "((([0-9]|[abcdef]){1,4}):|:)+(([0-9]|[abcdef]){1,4})";
-        string ip = gethostbyname("google.com");
+        *string ip = gethostbyname("google.com");
+        if (!exists ip) {
+            testSkip("DNS resolution for google.com unavailable in this environment");
+        }
         assertTrue(ip.regex(ipRegex) || ip.regex(simpleIp6Regex));
     }
 

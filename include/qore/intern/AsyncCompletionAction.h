@@ -41,6 +41,7 @@
 #include "qore/QoreString.h"
 
 #include <memory>
+#include <mutex>
 
 //! Pushes the result to a QoreChannel (non-blocking trySend for I/O thread)
 /** Used for streaming responses (SSE, gRPC, WebSocket, A2A). The I/O thread
@@ -60,6 +61,17 @@ public:
     }
 
     DLLLOCAL void execute(QoreValue output, ExceptionSink* xsink) override {
+        std::lock_guard<std::mutex> lg(mtx);
+        if (frame_state) {
+            // After installFrameState(): body bytes flow into the frame
+            // decoder instead of the channel.  Serialized with the install
+            // via mtx, so no pre-swap dispatch can leak into the channel
+            // after the install returns, and no post-swap dispatch can be
+            // ordered before the residual drain.
+            feedHashBodyLocked(output, frame_state.get());
+            output.discard(xsink);
+            return;
+        }
         if (!channel->trySend(output)) {
             // Backpressure: channel full — discard and log
             output.discard(xsink);
@@ -70,6 +82,11 @@ public:
     DLLLOCAL bool isStreaming() const override { return true; }
 
     DLLLOCAL void complete(ExceptionSink* xsink) override {
+        std::lock_guard<std::mutex> lg(mtx);
+        if (frame_state) {
+            frame_state->pushCloseSentinel();
+            return;
+        }
         if (channel) {
             channel->close();
         }
@@ -77,6 +94,18 @@ public:
 
     DLLLOCAL void executeError(const char* err, const char* desc,
             ExceptionSink* xsink) override {
+        std::lock_guard<std::mutex> lg(mtx);
+        if (frame_state) {
+            Queue* q = frame_state->getMsgQueue();
+            if (q) {
+                ReferenceHolder<QoreHashNode> err_hash(new QoreHashNode(autoTypeInfo), xsink);
+                err_hash->setKeyValue("err", new QoreStringNode(err), xsink);
+                err_hash->setKeyValue("desc", new QoreStringNode(desc), xsink);
+                q->pushAndTakeRef(err_hash.release());
+                q->pushAndTakeRef(QoreValue());  // NOTHING sentinel
+            }
+            return;
+        }
         // Push error as a hash so the receiver can distinguish errors from data
         ReferenceHolder<QoreHashNode> err_hash(new QoreHashNode(autoTypeInfo), xsink);
         err_hash->setKeyValue("err", new QoreStringNode(err), xsink);
@@ -90,14 +119,67 @@ public:
     }
 
     DLLLOCAL void cleanup(ExceptionSink* xsink) override {
+        std::lock_guard<std::mutex> lg(mtx);
+        frame_state.reset();  // drops any installed msg_queue ref
         if (channel) {
             channel->deref(xsink);
             channel = nullptr;
         }
     }
 
+    //! Installs a WebSocket frame-state decoder on this ChannelAction
+    /** Drains any items already buffered in the channel (feeding their body
+        bytes into the frame state first, so the decoder sees pre-swap bytes
+        before any post-install execute() chunks), then publishes the frame
+        state.  All three steps are serialized against execute(), complete()
+        and executeError() via a per-action mutex, so in-flight dispatches
+        that were targeting the old channel path cannot leak bytes past the
+        install.
+
+        @param fs the frame state (ownership transferred); holds one
+               msg_queue ref that is dropped in cleanup()/destructor
+        @param xsink exception sink
+    */
+    DLLLOCAL void installFrameState(std::unique_ptr<WebSocketStreamFrameState> fs,
+            ExceptionSink* xsink) {
+        std::lock_guard<std::mutex> lg(mtx);
+        // Drain anything the I/O thread already pushed before this call.
+        // feedHashBodyLocked() extracts body bytes and hands them to the
+        // decoder; non-body hashes (headers-only, metadata) are discarded.
+        if (channel) {
+            while (true) {
+                bool has_value = false;
+                QoreValue item = channel->tryRecv(has_value);
+                if (!has_value) {
+                    break;
+                }
+                feedHashBodyLocked(item, fs.get());
+                item.discard(xsink);
+            }
+        }
+        frame_state = std::move(fs);
+    }
+
 private:
+    std::mutex mtx;
     QoreChannel* channel;
+    std::unique_ptr<WebSocketStreamFrameState> frame_state;
+
+    //! Extracts the \c body binary from a response hash and feeds it into
+    //! the decoder; called with \c mtx held.
+    DLLLOCAL static void feedHashBodyLocked(QoreValue v,
+            WebSocketStreamFrameState* fs) {
+        if (!fs || v.getType() != NT_HASH) {
+            return;
+        }
+        QoreValue body_val = v.get<const QoreHashNode>()->getKeyValue("body");
+        if (body_val.getType() == NT_BINARY) {
+            const BinaryNode* data = body_val.get<const BinaryNode>();
+            if (data && data->size() > 0) {
+                fs->feedData(data->getPtr(), data->size());
+            }
+        }
+    }
 };
 
 //! Notifies an EventNotifier (signal only, no data)
