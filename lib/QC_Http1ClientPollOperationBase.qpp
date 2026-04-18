@@ -1932,6 +1932,10 @@ void Http1ClientPollOperationPriv::notifyPendingStreams(const char* err, const c
 }
 
 void Http1ClientPollOperationPriv::fireReadyCallback(ExceptionSink* xsink) {
+    // Read connection_priv under stream_lock to race-free disarm against
+    // closeConnection's disarmConnectionPriv — matches the pattern used
+    // by abort() / setError() above and by the H2 / H3 equivalents.
+    AutoLocker al(stream_lock);
     if (connection_priv) {
         connection_priv->onConnectionReady();  // Pure C++, no evalMethod, I/O-thread safe
     }
