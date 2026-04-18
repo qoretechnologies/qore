@@ -147,6 +147,29 @@ keeps the boundaries clean.
   scopes already give us the attribution for free under
   `%strong-encapsulation`.
 
+**File attribution is already present on the relevant entry types**
+(verified 2026-04-18):
+- `ConstantEntry::loc->file`
+  (`include/qore/intern/ConstantList.h:94`, `QoreLibIntern.h:381`).
+- `qore_class_private::loc->file`
+  (`include/qore/intern/QoreClassIntern.h:1401`).
+- `QoreMemberInfoBase::loc->file`
+  (`include/qore/intern/QoreClassIntern.h:936`).
+- `BCANode::loc->file`, and others.
+
+Per-file filtering is therefore a one-line predicate additive to the
+existing `shouldSkipModuleItem` filter in
+`lib/QoreAOT.cpp::compileNamespaceFunctions` (around `:1550-1632`):
+
+```cpp
+if (compile_file && strcmp(ce->loc->file, compile_file) != 0) {
+    continue;  // belongs to another file in the same module
+}
+```
+
+No AST-walking pass is needed; no additional bookkeeping. The
+filter just consumes already-stored location info.
+
 **What remains:**
 - `--context=dir/` mode must still agree on which files belong to the
   module, because the `%module{...}` block lives in one file while
@@ -288,6 +311,83 @@ mirroring gcc/clang. Each `.qo` depends on its source file plus any
 `%requires`-d modules and (for per-file mode) the module's `.qm`
 metadata file. A touched `.qc` invalidates only its own `.qo`.
 
+### What a per-file `.qo` actually carries
+
+Per Q1 resolution above, the runtime init path is one-shot per
+module — so a per-file `.qo` cannot be directly runnable on its own
+(except when it *is* the whole module). Each per-file `.qo` contains:
+
+1. **Compiled LLVM functions** (unchanged from today's emission) —
+   methods, functions, init-expressions declared in this file, with
+   private linkage under the `Qore$<Mod>$<Class>$<Method>` scheme.
+2. **A metadata fragment** serialized using the existing binary format
+   (`QoreAOTBinary`), describing only this file's contributions:
+   classes, functions, constants, statics, init-func descriptors.
+   Stored as a private global blob, plus a thin accessor:
+   ```c
+   // Fragment format: 60-byte header + sections for this file only.
+   extern "C" const void* qore_<mod>_<file>_fragment_data(size_t* out_len);
+   ```
+3. **A fragment-info symbol** (weak or external) listing the file's
+   declaration order within the module:
+   ```c
+   extern "C" const int qore_<mod>_<file>_fragment_order;  // 0-based
+   ```
+   This lets the link-time aggregator reconstruct parse order even
+   if files are listed on the qcc command line in a different order.
+
+Per-file `.qo`s are **intermediate artifacts**; they are not loadable
+by libqore on their own. This mirrors how `.o` files are intermediates
+for `.so`/executables in C/C++.
+
+### Link-time aggregation (`qcc -m --from-objects`, `qcc -a`)
+
+Both flags follow the same aggregator pipeline:
+
+1. **Read fragments.** For each input `.qo`, dlsym / objcopy-extract
+   the `qore_<...>_fragment_data` blob and the `_fragment_order`
+   integer.
+2. **Sort by fragment_order.** Deterministic ordering across build
+   systems and file-listing quirks.
+3. **Merge fragments into one metadata blob** in parse order:
+   concatenate sections (CLASSES, FUNCTIONS, NS_CONSTANTS,
+   CLASS_CONSTANTS, STATIC_VARS, INIT_FUNCS, …), fix up any
+   offset fields, write a new 60-byte header with aggregated
+   counts. No semantics change — just byte-level concatenation of
+   per-section payloads in the correct order.
+4. **Emit the final artifact:**
+   - `qcc -m --from-objects` → build a standard `.qmod` using the
+     aggregated metadata blob plus all per-file `.qo`s linked into a
+     single shared object. Calls the normal `generateModuleABIV2`
+     path with the combined metadata.
+   - `qcc -a` → build a Unix `ar` archive of the per-file `.qo`s
+     plus one synthesized glue object containing:
+     - The aggregated metadata blob as `qore_<mod>_metadata_blob`.
+     - An exported `qore_qoa_register_all(QoreProgram*)` that calls
+       `qore_aot_module_init_v3` once with the aggregated blob.
+
+The aggregator is a *pure qcc-side transformation*. Libqore and the
+runtime deserializer are unchanged.
+
+**Invariant for the fragment format:** a fragment uses the **same
+binary format** as a monolithic blob, just with narrower content. That
+keeps the merge step trivial (concatenate per-section payloads in
+parse order; bump counts; rewrite the header) and means no new format
+version.
+
+**Verification:** build `X.qmod` both ways — monolithic (`qcc -m`)
+and fragmented-then-merged (`qcc -c` per file + `qcc -m --from-objects`)
+— and assert **semantic equivalence**: same set of declared classes,
+functions, constants, statics; same init-function ordering (file by
+file in parse order); identical runtime behavior under a qtest
+harness. Byte-identical metadata blobs are NOT required — whole-module
+compilation interleaves per-file contributions during a single
+namespace-tree DFS, whereas the aggregator concatenates per-file
+contributions as whole blocks. Both are valid under the existing init
+semantics (pre-existing whole-module builds tolerate the DFS order, so
+file-sequential order is also tolerable as long as parse-order
+dependencies hold).
+
 ## qcc flag: `-a` (archive / link-time aggregation)
 
 Two archive targets share the same aggregator:
@@ -424,20 +524,43 @@ system — those come later.
    should reset them — need to confirm no leak of state between
    QoreProgram instances.
 
-6. **Per-file vs whole-module metadata.** Can `qore_aot_module_init_v3`
-   be called repeatedly (once per `.qo` within the same module) to
-   append that file's contributions, or does it assume one-shot
-   per-module registration? If one-shot, qcc needs to synthesize an
-   aggregated metadata blob at `-m --from-objects` time — which is
-   straightforward but must be specified.
+6. ~~**Per-file vs whole-module metadata.**~~ **RESOLVED (2026-04-18):**
+   `qore_aot_module_init_v3` is **one-shot per module** — it (a)
+   creates a fresh `QoreProgram`, (b) deserializes the whole metadata
+   blob into it, (c) unconditionally overwrites `aot_module_map[name]`
+   (`lib/QoreAOTRuntime.cpp:7651`). The binary format has a single
+   60-byte header per blob (`include/qore/intern/QoreAOTBinary.h:62`)
+   — no "append to existing namespace" section type.
 
-7. **Cross-file init dependencies.** A class constant in file B that
-   references a constant in file A is legal under
-   `%strong-encapsulation` (both are fully-qualified references). The
-   init-expr runs at register time, so as long as A's register ran
-   first, the lookup succeeds. qcc must encode parse order in the
-   aggregate glue — confirm this matches current
-   `executeInitFunctions` ordering.
+   **Consequence for Phase 4 design:** use **link-time aggregation**
+   (not runtime append). Each per-file `.qo` carries a *metadata
+   fragment* describing only its own contributions; `qcc -a` and
+   `qcc -m --from-objects` concatenate the fragments into one
+   monolithic blob at link time. The runtime init path is unchanged.
+   This is a qcc-side change only — no ABI or runtime refactor
+   required. Adding runtime append support would be a major refactor
+   (metadata format + deserializer + init runner) and is not justified
+   for the MVP.
+
+7. ~~**Cross-file init dependencies.**~~ **RESOLVED (2026-04-18):**
+   `executeInitFunctions` processes descriptors in their serialized
+   order, which is the compile-time collection order (namespace
+   traversal + class iteration in `compileNamespaceFunctions`,
+   `lib/QoreAOT.cpp:1550-1632`). Serialization preserves the order
+   (`QoreAOTBinary.h:989-990`); runtime iterates the descriptors
+   vector without sorting (`QoreAOTRuntime.cpp:7123-7381`).
+
+   **Consequence for Phase 4 design:** as long as qcc aggregates
+   fragments in source declaration order, current init semantics are
+   preserved. The `deps` field on `AOTCompiledInitFunc`
+   (`QoreAOTBinary.h:959`) is present but unused at runtime — we rely
+   on linear parse order, no topological sort.
+
+   **Footgun (pre-existing, not introduced by Phase 4):** if init A
+   depends on the result of init B but A is declared before B in the
+   source, behavior is undefined — B's constant is still unbound
+   when A runs. This applies today to whole-module builds; per-file
+   `.qo` inherits the same constraint.
 
 ## Deliverables
 
