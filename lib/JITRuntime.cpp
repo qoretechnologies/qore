@@ -2153,6 +2153,107 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_access(uint64_t list_val, int64
     return toBits(QoreValue());
 }
 
+// --- Phase 2B Step 5: Hash/List operations throwing wrappers ---
+
+extern "C" DLLEXPORT __attribute__((noinline)) void qore_rt_hash_set_key_value_throwing(
+        uint64_t hash_bits, uint64_t key_bits, uint64_t value_bits, ExceptionSink* xsink) {
+    qore_rt_hash_set_key_value(hash_bits, key_bits, value_bits, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_hash_key_access_throwing(
+        uint64_t hash_val, const char* key, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_hash_key_access(hash_val, key, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_hash_key_store_cow_throwing(
+        LocalVar* var, uint64_t hash_bits, const char* key,
+        uint64_t value_bits, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_hash_key_store_cow(var, hash_bits, key, value_bits, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_hash_key_store_cow_aot_throwing(
+        QoreAOTContext* ctx, uint32_t local_slot, uint64_t hash_bits, const char* key,
+        uint64_t value_bits, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_hash_key_store_cow_aot(ctx, local_slot, hash_bits, key,
+            value_bits, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_hash_key_store_dynamic_cow_throwing(
+        LocalVar* var, uint64_t hash_bits, uint64_t key_bits,
+        uint64_t value_bits, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_hash_key_store_dynamic_cow(var, hash_bits, key_bits,
+            value_bits, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_hash_key_store_dynamic_cow_aot_throwing(
+        QoreAOTContext* ctx, uint32_t local_slot, uint64_t hash_bits, uint64_t key_bits,
+        uint64_t value_bits, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_hash_key_store_dynamic_cow_aot(ctx, local_slot, hash_bits,
+            key_bits, value_bits, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_list_push_throwing(
+        uint64_t list_bits, uint64_t val_bits, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_list_push(list_bits, val_bits, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_list_index_access_throwing(
+        uint64_t list_val, int64_t index, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_list_index_access(list_val, index, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_list_index_store_cow_throwing(
+        LocalVar* var, uint64_t list_bits, int64_t index,
+        uint64_t val_bits, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_list_index_store_cow(var, list_bits, index, val_bits, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_list_index_store_cow_aot_throwing(
+        QoreAOTContext* ctx, uint32_t local_slot, uint64_t list_bits, int64_t index,
+        uint64_t val_bits, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_list_index_store_cow_aot(ctx, local_slot, list_bits,
+            index, val_bits, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
 // Runtime type check: returns 1 if value is NT_LIST or NT_OBJECT, 0 otherwise
 // Used by select to determine if the result should be returned as a list or unwrapped
 extern "C" DLLEXPORT int64_t qore_rt_is_collection_type(uint64_t val) {
