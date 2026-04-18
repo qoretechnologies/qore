@@ -1467,6 +1467,19 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         if (detail) {
             desc += sprintf(": %s", detail);
         }
+
+        # Fail-fast path: if the H2 (TCP) attempt reported SOCKET-CONNECT-ERROR,
+        # the endpoint is definitively refused at the kernel level (ECONNREFUSED
+        # or similar).  H3 over UDP can't recover this because the remote host
+        # has rejected the port — retrying via the outer isConnectionError loop
+        # just wastes another connect_timeout per attempt (seen in
+        # asyncModeConnectionRefusedTest: 2×10s = 20s, 5s over the 15s budget).
+        # Propagate the underlying SOCKET-CONNECT-ERROR, which is NOT in
+        # isConnectionError(), so the retry loop fails fast.
+        if (h2_err.err == "SOCKET-CONNECT-ERROR") {
+            throw h2_err.err, desc;
+        }
+
         throw "HTTPCLIENT-CONNECT-ERROR", desc;
     }
 
