@@ -7,8 +7,6 @@
 # `Helper` via the standard namespace-tree walk.
 
 %modern
-%strict-args
-%require-types
 
 int sub compute() {
     Helper h();

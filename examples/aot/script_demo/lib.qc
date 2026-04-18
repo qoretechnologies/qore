@@ -10,8 +10,6 @@
 # dispatches into compute() via the slice 8 public C API.
 
 %modern
-%strict-args
-%require-types
 
 class Helper {
     int multiply(int a, int b) {
