@@ -3921,20 +3921,29 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     llvm::Value* coerced;
                     if (aot_mode) {
                         int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(key);
-                        auto coerce_fn = module.getOrInsertFunction("qore_rt_coerce_value_aot",
-                                llvm::FunctionType::get(i64_type,
-                                        {ptr_type, i32_type, i64_type, ptr_type, ptr_type}, false));
-                        coerced = builder->CreateCall(coerce_fn,
+                        auto cv_aot_ft = llvm::FunctionType::get(i64_type,
+                                {ptr_type, i32_type, i64_type, ptr_type, ptr_type}, false);
+                        auto coerce_fn = module.getOrInsertFunction(
+                                "qore_rt_coerce_value_aot", cv_aot_ft);
+                        auto coerce_fn_throwing = module.getOrInsertFunction(
+                                "qore_rt_coerce_value_aot_throwing", cv_aot_ft);
+                        coerced = emitMaybeInvoke(coerce_fn, coerce_fn_throwing,
                                 {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot),
-                                 boxed, cleanup, xsink_arg});
+                                 boxed, cleanup, xsink_arg},
+                                module, llvm_func, inst);
                     } else {
-                        auto coerce_fn = module.getOrInsertFunction("qore_rt_coerce_value",
-                                llvm::FunctionType::get(i64_type, {ptr_type, i64_type, ptr_type, ptr_type}, false));
+                        auto cv_ft = llvm::FunctionType::get(i64_type,
+                                {ptr_type, i64_type, ptr_type, ptr_type}, false);
+                        auto coerce_fn = module.getOrInsertFunction(
+                                "qore_rt_coerce_value", cv_ft);
+                        auto coerce_fn_throwing = module.getOrInsertFunction(
+                                "qore_rt_coerce_value_throwing", cv_ft);
                         llvm::Value* ti_ptr = llvm::ConstantInt::get(i64_type,
                                 reinterpret_cast<uint64_t>(linst->local->getTypeInfo()));
                         llvm::Value* ti_as_ptr = builder->CreateIntToPtr(ti_ptr, ptr_type);
-                        coerced = builder->CreateCall(coerce_fn,
-                                {ti_as_ptr, boxed, cleanup, xsink_arg});
+                        coerced = emitMaybeInvoke(coerce_fn, coerce_fn_throwing,
+                                {ti_as_ptr, boxed, cleanup, xsink_arg},
+                                module, llvm_func, inst);
                     }
                     emitExceptionCheck(module, llvm_func, inst);
                     boxed = coerced;
@@ -10969,31 +10978,46 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     llvm::Value* type_path_ptr = builder->CreateGlobalStringPtr(type_path);
                     llvm::Value* or_nothing_val = llvm::ConstantInt::get(i64_type,
                             cast_node->isOrNothing() ? 1 : 0);
-                    auto helper = module.getOrInsertFunction("qore_rt_cast_by_type_path",
-                            llvm::FunctionType::get(i64_type,
-                                {i64_type, ptr_type, i64_type, ptr_type}, false));
-                    result = builder->CreateCall(helper,
-                            {inner_boxed, type_path_ptr, or_nothing_val, xsink_arg});
+                    auto cbtp_ft = llvm::FunctionType::get(i64_type,
+                            {i64_type, ptr_type, i64_type, ptr_type}, false);
+                    auto helper = module.getOrInsertFunction(
+                            "qore_rt_cast_by_type_path", cbtp_ft);
+                    auto helper_throwing = module.getOrInsertFunction(
+                            "qore_rt_cast_by_type_path_throwing", cbtp_ft);
+                    result = emitMaybeInvoke(helper, helper_throwing,
+                            {inner_boxed, type_path_ptr, or_nothing_val, xsink_arg},
+                            module, llvm_func, inst);
                 } else {
                     // Fallback to expr slot if cast node is unavailable
                     QoreValue expr_val = expr_inst->expr;
                     uint64_t expr_bits;
                     std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
                     int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
-                    auto helper = module.getOrInsertFunction("qore_rt_cast_with_inner_aot",
-                            llvm::FunctionType::get(i64_type,
-                                {ptr_type, i32_type, i64_type, ptr_type}, false));
-                    result = builder->CreateCall(helper, {aot_ctx_arg,
-                            llvm::ConstantInt::get(i32_type, slot), inner_boxed, xsink_arg});
+                    auto cwi_aot_ft = llvm::FunctionType::get(i64_type,
+                            {ptr_type, i32_type, i64_type, ptr_type}, false);
+                    auto helper = module.getOrInsertFunction(
+                            "qore_rt_cast_with_inner_aot", cwi_aot_ft);
+                    auto helper_throwing = module.getOrInsertFunction(
+                            "qore_rt_cast_with_inner_aot_throwing", cwi_aot_ft);
+                    result = emitMaybeInvoke(helper, helper_throwing,
+                            {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot),
+                             inner_boxed, xsink_arg},
+                            module, llvm_func, inst);
                 }
             } else {
                 QoreValue expr_val = expr_inst->expr;
                 uint64_t expr_bits;
                 std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
                 llvm::Value* expr_const = llvm::ConstantInt::get(i64_type, expr_bits);
-                auto helper = module.getOrInsertFunction("qore_rt_cast_with_inner",
-                        llvm::FunctionType::get(i64_type, {i64_type, i64_type, ptr_type}, false));
-                result = builder->CreateCall(helper, {expr_const, inner_boxed, xsink_arg});
+                auto cwi_ft = llvm::FunctionType::get(i64_type,
+                        {i64_type, i64_type, ptr_type}, false);
+                auto helper = module.getOrInsertFunction(
+                        "qore_rt_cast_with_inner", cwi_ft);
+                auto helper_throwing = module.getOrInsertFunction(
+                        "qore_rt_cast_with_inner_throwing", cwi_ft);
+                result = emitMaybeInvoke(helper, helper_throwing,
+                        {expr_const, inner_boxed, xsink_arg},
+                        module, llvm_func, inst);
             }
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
