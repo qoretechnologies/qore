@@ -7331,10 +7331,14 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 uint64_t expr_bits;
                 std::memcpy(&expr_bits, &enum_val, sizeof(expr_bits));
                 int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
-                auto helper = module.getOrInsertFunction("qore_rt_invoke_expr_aot",
-                        llvm::FunctionType::get(i64_type, {ptr_type, i32_type, ptr_type}, false));
-                result = builder->CreateCall(helper, {aot_ctx_arg,
-                        llvm::ConstantInt::get(i32_type, slot), xsink_arg});
+                auto ie_ft = llvm::FunctionType::get(i64_type,
+                        {ptr_type, i32_type, ptr_type}, false);
+                auto helper = module.getOrInsertFunction("qore_rt_invoke_expr_aot", ie_ft);
+                auto helper_throwing = module.getOrInsertFunction(
+                        "qore_rt_invoke_expr_aot_throwing", ie_ft);
+                result = emitMaybeInvoke(helper, helper_throwing,
+                        {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), xsink_arg},
+                        module, llvm_func, inst);
             } else {
                 llvm::Value* member_ptr = llvm::ConstantInt::get(i64_type,
                         reinterpret_cast<uint64_t>(cinst->constant.enum_member));
@@ -8562,10 +8566,14 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 uint64_t expr_bits;
                 std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
                 int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
-                auto helper = module.getOrInsertFunction("qore_rt_invoke_expr_aot",
-                        llvm::FunctionType::get(i64_type, {ptr_type, i32_type, ptr_type}, false));
-                result = builder->CreateCall(helper, {aot_ctx_arg,
-                        llvm::ConstantInt::get(i32_type, slot), xsink_arg});
+                auto ie_ft = llvm::FunctionType::get(i64_type,
+                        {ptr_type, i32_type, ptr_type}, false);
+                auto helper = module.getOrInsertFunction("qore_rt_invoke_expr_aot", ie_ft);
+                auto helper_throwing = module.getOrInsertFunction(
+                        "qore_rt_invoke_expr_aot_throwing", ie_ft);
+                result = emitMaybeInvoke(helper, helper_throwing,
+                        {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), xsink_arg},
+                        module, llvm_func, inst);
             } else {
                 // JIT: pass QoreVarInfo* and var_name directly
                 llvm::Value* vi_ptr = llvm::ConstantInt::get(i64_type,
@@ -8596,10 +8604,14 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 uint64_t expr_bits;
                 std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
                 int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
-                auto helper = module.getOrInsertFunction("qore_rt_invoke_expr_aot",
-                        llvm::FunctionType::get(i64_type, {ptr_type, i32_type, ptr_type}, false));
-                result = builder->CreateCall(helper, {aot_ctx_arg,
-                        llvm::ConstantInt::get(i32_type, slot), xsink_arg});
+                auto ie_ft = llvm::FunctionType::get(i64_type,
+                        {ptr_type, i32_type, ptr_type}, false);
+                auto helper = module.getOrInsertFunction("qore_rt_invoke_expr_aot", ie_ft);
+                auto helper_throwing = module.getOrInsertFunction(
+                        "qore_rt_invoke_expr_aot_throwing", ie_ft);
+                result = emitMaybeInvoke(helper, helper_throwing,
+                        {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), xsink_arg},
+                        module, llvm_func, inst);
             } else if (lcinst->node) {
                 llvm::Value* node_ptr = llvm::ConstantInt::get(i64_type,
                         reinterpret_cast<uint64_t>(lcinst->node));
@@ -8636,10 +8648,14 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 uint64_t expr_bits;
                 std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
                 int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
-                auto helper = module.getOrInsertFunction("qore_rt_invoke_expr_aot",
-                        llvm::FunctionType::get(i64_type, {ptr_type, i32_type, ptr_type}, false));
-                result = builder->CreateCall(helper, {aot_ctx_arg,
-                        llvm::ConstantInt::get(i32_type, slot), xsink_arg});
+                auto ie_ft = llvm::FunctionType::get(i64_type,
+                        {ptr_type, i32_type, ptr_type}, false);
+                auto helper = module.getOrInsertFunction("qore_rt_invoke_expr_aot", ie_ft);
+                auto helper_throwing = module.getOrInsertFunction(
+                        "qore_rt_invoke_expr_aot_throwing", ie_ft);
+                result = emitMaybeInvoke(helper, helper_throwing,
+                        {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), xsink_arg},
+                        module, llvm_func, inst);
             } else {
                 llvm::Value* cn_ptr = llvm::ConstantInt::get(i64_type,
                         reinterpret_cast<uint64_t>(ccinst->closure_node));
@@ -8662,10 +8678,14 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 uint64_t expr_bits;
                 std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
                 int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
-                auto helper = module.getOrInsertFunction("qore_rt_invoke_expr_aot",
-                        llvm::FunctionType::get(i64_type, {ptr_type, i32_type, ptr_type}, false));
-                result = builder->CreateCall(helper, {aot_ctx_arg,
-                        llvm::ConstantInt::get(i32_type, slot), xsink_arg});
+                auto ie_ft = llvm::FunctionType::get(i64_type,
+                        {ptr_type, i32_type, ptr_type}, false);
+                auto helper = module.getOrInsertFunction("qore_rt_invoke_expr_aot", ie_ft);
+                auto helper_throwing = module.getOrInsertFunction(
+                        "qore_rt_invoke_expr_aot_throwing", ie_ft);
+                result = emitMaybeInvoke(helper, helper_throwing,
+                        {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), xsink_arg},
+                        module, llvm_func, inst);
             } else {
                 QoreValue expr_val = crinst->expr;
                 uint64_t bits;
@@ -8689,10 +8709,14 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 uint64_t expr_bits;
                 std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
                 int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
-                auto helper = module.getOrInsertFunction("qore_rt_invoke_expr_aot",
-                        llvm::FunctionType::get(i64_type, {ptr_type, i32_type, ptr_type}, false));
-                result = builder->CreateCall(helper, {aot_ctx_arg,
-                        llvm::ConstantInt::get(i32_type, slot), xsink_arg});
+                auto ie_ft = llvm::FunctionType::get(i64_type,
+                        {ptr_type, i32_type, ptr_type}, false);
+                auto helper = module.getOrInsertFunction("qore_rt_invoke_expr_aot", ie_ft);
+                auto helper_throwing = module.getOrInsertFunction(
+                        "qore_rt_invoke_expr_aot_throwing", ie_ft);
+                result = emitMaybeInvoke(helper, helper_throwing,
+                        {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), xsink_arg},
+                        module, llvm_func, inst);
             } else {
                 QoreValue expr_val = mrinst->expr;
                 uint64_t bits;
@@ -8788,10 +8812,14 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 uint64_t expr_bits;
                 std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
                 int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
-                auto helper = module.getOrInsertFunction("qore_rt_invoke_expr_aot",
-                        llvm::FunctionType::get(i64_type, {ptr_type, i32_type, ptr_type}, false));
-                result = builder->CreateCall(helper, {aot_ctx_arg,
-                        llvm::ConstantInt::get(i32_type, slot), xsink_arg});
+                auto ie_ft = llvm::FunctionType::get(i64_type,
+                        {ptr_type, i32_type, ptr_type}, false);
+                auto helper = module.getOrInsertFunction("qore_rt_invoke_expr_aot", ie_ft);
+                auto helper_throwing = module.getOrInsertFunction(
+                        "qore_rt_invoke_expr_aot_throwing", ie_ft);
+                result = emitMaybeInvoke(helper, helper_throwing,
+                        {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), xsink_arg},
+                        module, llvm_func, inst);
             } else {
                 llvm::Value* node_ptr = llvm::ConstantInt::get(i64_type,
                         reinterpret_cast<uint64_t>(nhdinst->node));
@@ -8814,10 +8842,14 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 uint64_t expr_bits;
                 std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
                 int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
-                auto helper = module.getOrInsertFunction("qore_rt_invoke_expr_aot",
-                        llvm::FunctionType::get(i64_type, {ptr_type, i32_type, ptr_type}, false));
-                result = builder->CreateCall(helper, {aot_ctx_arg,
-                        llvm::ConstantInt::get(i32_type, slot), xsink_arg});
+                auto ie_ft = llvm::FunctionType::get(i64_type,
+                        {ptr_type, i32_type, ptr_type}, false);
+                auto helper = module.getOrInsertFunction("qore_rt_invoke_expr_aot", ie_ft);
+                auto helper_throwing = module.getOrInsertFunction(
+                        "qore_rt_invoke_expr_aot_throwing", ie_ft);
+                result = emitMaybeInvoke(helper, helper_throwing,
+                        {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), xsink_arg},
+                        module, llvm_func, inst);
             } else {
                 llvm::Value* node_ptr = llvm::ConstantInt::get(i64_type,
                         reinterpret_cast<uint64_t>(nchinst->node));
@@ -8840,10 +8872,14 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 uint64_t expr_bits;
                 std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
                 int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
-                auto helper = module.getOrInsertFunction("qore_rt_invoke_expr_aot",
-                        llvm::FunctionType::get(i64_type, {ptr_type, i32_type, ptr_type}, false));
-                result = builder->CreateCall(helper, {aot_ctx_arg,
-                        llvm::ConstantInt::get(i32_type, slot), xsink_arg});
+                auto ie_ft = llvm::FunctionType::get(i64_type,
+                        {ptr_type, i32_type, ptr_type}, false);
+                auto helper = module.getOrInsertFunction("qore_rt_invoke_expr_aot", ie_ft);
+                auto helper_throwing = module.getOrInsertFunction(
+                        "qore_rt_invoke_expr_aot_throwing", ie_ft);
+                result = emitMaybeInvoke(helper, helper_throwing,
+                        {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), xsink_arg},
+                        module, llvm_func, inst);
             } else {
                 llvm::Value* node_ptr = llvm::ConstantInt::get(i64_type,
                         reinterpret_cast<uint64_t>(nclinst->node));
@@ -10563,15 +10599,23 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* result;
             if (aot_mode) {
                 int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
-                auto helper = module.getOrInsertFunction("qore_rt_invoke_expr_aot",
-                        llvm::FunctionType::get(i64_type, {ptr_type, i32_type, ptr_type}, false));
-                result = builder->CreateCall(helper, {aot_ctx_arg,
-                        llvm::ConstantInt::get(i32_type, slot), xsink_arg});
+                auto ie_ft = llvm::FunctionType::get(i64_type,
+                        {ptr_type, i32_type, ptr_type}, false);
+                auto helper = module.getOrInsertFunction("qore_rt_invoke_expr_aot", ie_ft);
+                auto helper_throwing = module.getOrInsertFunction(
+                        "qore_rt_invoke_expr_aot_throwing", ie_ft);
+                result = emitMaybeInvoke(helper, helper_throwing,
+                        {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), xsink_arg},
+                        module, llvm_func, inst);
             } else {
                 llvm::Value* expr_const = llvm::ConstantInt::get(i64_type, expr_bits);
-                auto helper = module.getOrInsertFunction("qore_rt_invoke_expr",
-                        llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false));
-                result = builder->CreateCall(helper, {expr_const, xsink_arg});
+                auto ie_ft = llvm::FunctionType::get(i64_type,
+                        {i64_type, ptr_type}, false);
+                auto helper = module.getOrInsertFunction("qore_rt_invoke_expr", ie_ft);
+                auto helper_throwing = module.getOrInsertFunction(
+                        "qore_rt_invoke_expr_throwing", ie_ft);
+                result = emitMaybeInvoke(helper, helper_throwing,
+                        {expr_const, xsink_arg}, module, llvm_func, inst);
             }
             reloadAllLocalsFromRuntime(module, llvm_func);
             values[inst->result.id] = result;
@@ -10862,15 +10906,23 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             // Fallback: no operands available, use qore_rt_invoke_expr
             if (aot_mode) {
                 int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
-                auto helper = module.getOrInsertFunction("qore_rt_invoke_expr_aot",
-                        llvm::FunctionType::get(i64_type, {ptr_type, i32_type, ptr_type}, false));
-                result = builder->CreateCall(helper, {aot_ctx_arg,
-                        llvm::ConstantInt::get(i32_type, slot), xsink_arg});
+                auto ie_ft = llvm::FunctionType::get(i64_type,
+                        {ptr_type, i32_type, ptr_type}, false);
+                auto helper = module.getOrInsertFunction("qore_rt_invoke_expr_aot", ie_ft);
+                auto helper_throwing = module.getOrInsertFunction(
+                        "qore_rt_invoke_expr_aot_throwing", ie_ft);
+                result = emitMaybeInvoke(helper, helper_throwing,
+                        {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), xsink_arg},
+                        module, llvm_func, inst);
             } else {
                 llvm::Value* expr_const = llvm::ConstantInt::get(i64_type, expr_bits);
-                auto helper = module.getOrInsertFunction("qore_rt_invoke_expr",
-                        llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false));
-                result = builder->CreateCall(helper, {expr_const, xsink_arg});
+                auto ie_ft = llvm::FunctionType::get(i64_type,
+                        {i64_type, ptr_type}, false);
+                auto helper = module.getOrInsertFunction("qore_rt_invoke_expr", ie_ft);
+                auto helper_throwing = module.getOrInsertFunction(
+                        "qore_rt_invoke_expr_throwing", ie_ft);
+                result = emitMaybeInvoke(helper, helper_throwing,
+                        {expr_const, xsink_arg}, module, llvm_func, inst);
             }
             // Reload after fallback — AST eval can modify any local
             reloadAllLocalsFromRuntime(module, llvm_func);
@@ -10951,15 +11003,23 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* result;
             if (aot_mode) {
                 int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
-                auto helper = module.getOrInsertFunction("qore_rt_invoke_expr_aot",
-                        llvm::FunctionType::get(i64_type, {ptr_type, i32_type, ptr_type}, false));
-                result = builder->CreateCall(helper, {aot_ctx_arg,
-                        llvm::ConstantInt::get(i32_type, slot), xsink_arg});
+                auto ie_ft = llvm::FunctionType::get(i64_type,
+                        {ptr_type, i32_type, ptr_type}, false);
+                auto helper = module.getOrInsertFunction("qore_rt_invoke_expr_aot", ie_ft);
+                auto helper_throwing = module.getOrInsertFunction(
+                        "qore_rt_invoke_expr_aot_throwing", ie_ft);
+                result = emitMaybeInvoke(helper, helper_throwing,
+                        {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), xsink_arg},
+                        module, llvm_func, inst);
             } else {
                 llvm::Value* expr_const = llvm::ConstantInt::get(i64_type, expr_bits);
-                auto helper = module.getOrInsertFunction("qore_rt_invoke_expr",
-                        llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false));
-                result = builder->CreateCall(helper, {expr_const, xsink_arg});
+                auto ie_ft = llvm::FunctionType::get(i64_type,
+                        {i64_type, ptr_type}, false);
+                auto helper = module.getOrInsertFunction("qore_rt_invoke_expr", ie_ft);
+                auto helper_throwing = module.getOrInsertFunction(
+                        "qore_rt_invoke_expr_throwing", ie_ft);
+                result = emitMaybeInvoke(helper, helper_throwing,
+                        {expr_const, xsink_arg}, module, llvm_func, inst);
             }
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);

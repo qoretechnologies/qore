@@ -5404,6 +5404,26 @@ extern "C" DLLEXPORT uint64_t qore_rt_invoke_expr_aot(QoreAOTContext* ctx, int32
     return qore_rt_invoke_expr(ctx->exprs[idx], xsink);
 }
 
+// --- Phase 2B Step 5: invoke_expr throwing wrappers ---
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_invoke_expr_throwing(
+        uint64_t expr_bits, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_invoke_expr(expr_bits, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_invoke_expr_aot_throwing(
+        QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_invoke_expr_aot(ctx, idx, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
 extern "C" DLLEXPORT uint64_t qore_rt_vrn_construct_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink) {
     assert(ctx && idx >= 0 && idx < ctx->num_exprs);
     QoreValue expr = fromBits(ctx->exprs[idx]);
