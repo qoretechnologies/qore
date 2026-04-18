@@ -4161,8 +4161,19 @@ bool serializeIRFunction(QoreAOTBinaryWriter& writer, const QoreIRFunction& func
 #include "qore/intern/FunctionList.h"
 #include "qore/intern/Variable.h"
 
-bool QoreAOTBinaryDeserializer::deserializeIntoProgram(QoreProgram* in_pgm, const uint8_t* data,
-        uint32_t size, std::string& error) {
+// Phase 4 slice 10: split the existing all-in-one deserializeIntoProgram
+// into two phases so the new QoreAOTBinaryMultiDeserializer can run
+// phase 1 (shell creation) for every blob before running phase 2
+// (cross-blob resolution) once.  Single-blob callers keep the same
+// entry point (deserializeIntoProgram) — it just chains both phases.
+
+// Phase 1: shells only — namespaces, class declarations, hashdecl /
+// enum / typedef stubs.  NO resolution passes run.  After this,
+// pgm's namespace tree has every declared type present as a shell;
+// cross-blob base-class / member-type lookups (via pgm->findClass)
+// will succeed in subsequent phase-2 runs regardless of load order.
+bool QoreAOTBinaryDeserializer::openAndDeserializeShells(QoreProgram* in_pgm,
+        const uint8_t* data, uint32_t size, std::string& error) {
     pgm = in_pgm;
 
     // Open and validate the binary blob
@@ -4173,18 +4184,15 @@ bool QoreAOTBinaryDeserializer::deserializeIntoProgram(QoreProgram* in_pgm, cons
     // Create type resolver for this program
     type_resolver = new QoreAOTTypeResolver(pgm);
 
-    // Deserialize in dependency order
+    // Deserialize shells in dependency order (no resolution passes here).
     if (!deserializeNamespaces(error)) {
         return false;
     }
     if (!deserializeClasses(error)) {
         return false;
     }
-    // Resolve class base classes after all classes are created (two-pass)
-    if (!resolveClassBases(error)) {
-        return false;
-    }
-    // Deserialize hashdecls and enums before static members so type references resolve
+    // Deserialize hashdecls / enums / typedef stubs before any
+    // resolution so phase 2 sees every type name.
     if (!deserializeHashDecls(error)) {
         return false;
     }
@@ -4192,6 +4200,21 @@ bool QoreAOTBinaryDeserializer::deserializeIntoProgram(QoreProgram* in_pgm, cons
         return false;
     }
     if (!deserializeTypedefs(error)) {
+        return false;
+    }
+    return true;
+}
+
+// Phase 2: resolution — base classes, member types, constants,
+// globals, functions, methods, class commit, fallback sources,
+// index rebuild, deferred BCA resolution.  Expected to run AFTER
+// openAndDeserializeShells has completed for every blob in the
+// current batch.
+bool QoreAOTBinaryDeserializer::resolveAll(std::string& error) {
+    // Resolve class base classes (looks up bases via pgm->findClass,
+    // so blobs from a sibling session are reachable after all shells
+    // exist).
+    if (!resolveClassBases(error)) {
         return false;
     }
     // Resolve typedefs first (multi-pass for forward refs), then enum base types and hashdecl members
@@ -4307,6 +4330,17 @@ bool QoreAOTBinaryDeserializer::deserializeIntoProgram(QoreProgram* in_pgm, cons
         hasFallbackSource() ? " (with source fallback)" : "");
 
     return true;
+}
+
+// Phase 4 slice 10: single-blob entry point preserved as a chain of
+// phase-1 + phase-2 so existing callers (qore_aot_module_init_v3 and
+// friends in QoreAOTRuntime.cpp) remain unchanged.
+bool QoreAOTBinaryDeserializer::deserializeIntoProgram(QoreProgram* in_pgm,
+        const uint8_t* data, uint32_t size, std::string& error) {
+    if (!openAndDeserializeShells(in_pgm, data, size, error)) {
+        return false;
+    }
+    return resolveAll(error);
 }
 
 bool QoreAOTBinaryDeserializer::deserializeNamespaces(std::string& error) {

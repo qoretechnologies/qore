@@ -1189,6 +1189,32 @@ class QoreAOTBinaryDeserializer {
     bool commitDeserializedClasses(std::string& error);
 
 public:
+    //! Phase 4 slice 10: phase-1 entry point — open blob, create type
+    //! resolver, create ONLY the shells (namespaces, classes,
+    //! hashdecls, enums, typedefs).  Does NOT run any resolution
+    //! passes.  After calling this on N blobs against the same
+    //! program, call resolveAll() on each session to finish.
+    /** Used by `QoreAOTBinaryMultiDeserializer` to enable cross-blob
+        reference resolution: all shells across all input blobs land
+        in the program's namespace tree before any resolution pass
+        runs, so pgm->findClass cross-references resolve regardless
+        of blob order.
+        @param in_pgm the target program
+        @param data blob bytes
+        @param size blob byte count
+        @param error error string on failure
+        @return true on success
+    */
+    bool openAndDeserializeShells(QoreProgram* in_pgm, const uint8_t* data,
+            uint32_t size, std::string& error);
+
+    //! Phase 4 slice 10: phase-2 entry point — run all resolution
+    //! passes on a session previously opened via
+    //! openAndDeserializeShells.  Must be called after every session
+    //! in a multi-blob batch has completed its shells-phase, so
+    //! pgm->findClass can find cross-blob declarations.
+    bool resolveAll(std::string& error);
+
     ~QoreAOTBinaryDeserializer() {
         delete type_resolver;
         // Clean up any pending QoreValues that weren't transferred to the namespace tree
@@ -1243,6 +1269,76 @@ public:
         }
         return false;
     }
+};
+
+//! Phase 4 slice 10: multi-blob AOT metadata deserializer.
+/** Loads N binary metadata blobs into a single QoreProgram with
+    DEFERRED resolution — phase 1 (shell creation) runs per blob as it
+    arrives, then phase 2 (cross-blob reference resolution) runs once
+    after every blob is in.  This lets a caller load a set of per-file
+    `.qo`s into a compile program without worrying about topological
+    order between them — a class in blob A can inherit from a class in
+    blob B regardless of which addBlob() was called first, because both
+    classes' shells land in the program's namespace tree before
+    resolveClassBases / resolveInstanceMembers / etc. runs.
+
+    Used by:
+    - slice 10c's `qcc -c -L<dir>` (preload sibling `.qo`s' decls into
+      the compile program before parsing a target source);
+    - (future) slice 6b's source-less aggregator (merge fragment
+      blobs without re-parsing source).
+
+    The existing single-blob entry point
+    `QoreAOTBinaryDeserializer::deserializeIntoProgram` is preserved
+    as a 1-blob shortcut (internally: openAndDeserializeShells +
+    resolveAll), so existing runtime callers (qore_aot_module_init_v3
+    etc.) are unchanged.
+*/
+class QoreAOTBinaryMultiDeserializer {
+    QoreProgram* pgm = nullptr;
+    std::vector<std::unique_ptr<QoreAOTBinaryDeserializer>> sessions;
+
+public:
+    //! Create a multi-deserializer bound to a target program.
+    explicit QoreAOTBinaryMultiDeserializer(QoreProgram* in_pgm)
+            : pgm(in_pgm) {
+    }
+
+    //! Phase 1: open a new blob and create its shells (namespaces,
+    //! class declarations, hashdecl/enum/typedef stubs) in the
+    //! target program.  Does NOT run resolution passes — call
+    //! resolveAll() after every desired blob has been added.
+    /** @return true on success; false on blob-open or shell-phase
+                failure (error populated) */
+    bool addBlob(const uint8_t* data, uint32_t size, std::string& error) {
+        auto deser = std::make_unique<QoreAOTBinaryDeserializer>();
+        if (!deser->openAndDeserializeShells(pgm, data, size, error)) {
+            return false;
+        }
+        sessions.push_back(std::move(deser));
+        return true;
+    }
+
+    //! Phase 2: run all resolution passes for every blob added since
+    //! construction.  Must be called exactly once after all
+    //! addBlob()s, before any user code depends on the deserialized
+    //! declarations being complete.
+    /** Cross-blob references are handled by the existing
+        `pgm->findClass` / `runtimeFindClass` lookup paths — each
+        resolution pass walks the shared program namespace tree, so
+        blob A's class finding blob B's base class "just works" as
+        long as both shells have been created. */
+    bool resolveAll(std::string& error) {
+        for (auto& sess : sessions) {
+            if (!sess->resolveAll(error)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    //! Number of blobs currently in-session.
+    size_t sessionCount() const { return sessions.size(); }
 };
 
 // ---- IR Function Serialization (Phase 5) ----
