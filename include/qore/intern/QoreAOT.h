@@ -479,6 +479,23 @@ public:
                               const char* target_triple = nullptr,
                               bool include_source = false);
 
+    //! Phase 4: same as compileModule but with the `compile_only` knob to
+    //! emit a `.qo` (ELF relocatable) instead of a `.qmod` shared object.
+    /** Distinct overload (not a default arg) so the original mangled symbol
+        stays intact for ABI compatibility with already-installed binaries
+        that link against libqore (notably /usr/bin/qore built with
+        BIND_NOW).
+     */
+    static bool compileModule(const char* source_text, int source_len,
+                              const char* label,
+                              const std::string& output_path,
+                              const QoreParseOptions& parse_options,
+                              std::string& error,
+                              int opt_level,
+                              const char* target_triple,
+                              bool include_source,
+                              bool compile_only);
+
     //! Compile a split (separated) .qm user module directory to a native shared library
     /** Supports modules where code is spread across multiple files:
         - A main .qm file: {dir}/{basename}.qm
@@ -501,6 +518,17 @@ public:
                                        int opt_level = 2,
                                        const char* target_triple = nullptr,
                                        bool include_source = false);
+
+    //! Phase 4: same as compileSeparatedModule with the `compile_only` knob.
+    //! See the compileModule overload for ABI-compat rationale.
+    static bool compileSeparatedModule(const char* dir_path,
+                                       const std::string& output_path,
+                                       const QoreParseOptions& parse_options,
+                                       std::string& error,
+                                       int opt_level,
+                                       const char* target_triple,
+                                       bool include_source,
+                                       bool compile_only);
 
     //! Print supported LLVM target architectures to stdout
     static void printSupportedTargets();

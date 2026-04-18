@@ -243,7 +243,8 @@ static bool read_file(const char* path, std::string& content) {
     return true;
 }
 
-static std::string get_default_output(const char* input_path, bool is_module) {
+static std::string get_default_output(const char* input_path, bool is_module,
+        bool compile_only_mode = false) {
     std::string output = input_path;
 
     // Strip directory path for basename
@@ -258,8 +259,10 @@ static std::string get_default_output(const char* input_path, bool is_module) {
         output = output.substr(0, dot);
     }
 
-    // Add .qmod extension for modules
-    if (is_module) {
+    // Phase 4: -c emits a relocatable .qo regardless of source kind
+    if (compile_only_mode) {
+        output += ".qo";
+    } else if (is_module) {
         output += ".qmod";
     }
 
@@ -355,12 +358,14 @@ int main(int argc, char** argv) {
         fprintf(stderr, "warning: --static is ignored when compiling modules\n");
     }
 
-    // Phase 4: -c compile-only is under construction. Flag wiring lands
-    // ahead of the .qo emission path so downstream changes can plug in
-    // cleanly. See design/aot-phase4-qo-object-files.md.
-    if (compile_only) {
-        fprintf(stderr, "error: -c/--compile-only is not yet implemented "
-                "(Phase 4; see design/aot-phase4-qo-object-files.md)\n");
+    // Phase 4: -c (compile-only) only makes sense when something module-shaped
+    // is being compiled — a .qm, a split-module directory, or a per-file
+    // fragment thereof. Reject script (executable) inputs early so users get
+    // a clear error rather than a confusing failure deeper down.
+    if (compile_only && !module_mode) {
+        fprintf(stderr, "error: -c/--compile-only requires a module input "
+                "(.qm file or split-module directory); see "
+                "design/aot-phase4-qo-object-files.md\n");
         return 1;
     }
 
@@ -381,9 +386,9 @@ int main(int argc, char** argv) {
             std::string basename = (last_slash != std::string::npos)
                 ? dir_str.substr(last_slash + 1)
                 : dir_str;
-            output = basename + ".qmod";
+            output = basename + (compile_only ? ".qo" : ".qmod");
         } else {
-            output = get_default_output(source_file, module_mode);
+            output = get_default_output(source_file, module_mode, compile_only);
         }
     }
 
@@ -433,11 +438,13 @@ int main(int argc, char** argv) {
                 error,
                 opt_level,
                 target_triple,
-                include_source)) {
+                include_source,
+                compile_only)) {
             fprintf(stderr, "error: %s\n", error.c_str());
             rc = 1;
         } else {
-            printf("%s: compiled split module (O%d%s)\n", output.c_str(), opt_level,
+            printf("%s: compiled split module (O%d%s%s)\n", output.c_str(), opt_level,
+                compile_only ? ", relocatable .qo" : "",
                 include_source ? "" : ", source-stripped");
         }
     } else if (module_mode) {
@@ -450,11 +457,13 @@ int main(int argc, char** argv) {
                 error,
                 opt_level,
                 target_triple,
-                include_source)) {
+                include_source,
+                compile_only)) {
             fprintf(stderr, "error: %s\n", error.c_str());
             rc = 1;
         } else {
-            printf("%s: compiled module (O%d%s)\n", output.c_str(), opt_level,
+            printf("%s: compiled module (O%d%s%s)\n", output.c_str(), opt_level,
+                compile_only ? ", relocatable .qo" : "",
                 include_source ? "" : ", source-stripped");
         }
     } else {

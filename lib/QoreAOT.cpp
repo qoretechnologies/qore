@@ -3174,16 +3174,37 @@ static void emitModuleDescFunction(llvm::LLVMContext& ctx, llvm::Module& module,
 
 //! Generate LLVM IR for binary module ABI symbols
 /** Embeds serialized metadata blob and calls qore_aot_module_init_v3.
+
+    When @a compile_only is true the legacy unprefixed module-info globals
+    (qore_module_name, qore_module_version, qore_module_init, ...) are
+    replaced by per-module-prefixed names (qore_<sanitized>_module_name,
+    qore_<sanitized>_module_init, ...) so multiple .qo objects can be
+    linked together without ELF symbol collisions. The hyphen-sanitized
+    module name matches the convention used by emitModuleDescFunction's
+    `<name>_qore_module_desc` symbol.
 */
 static void generateModuleABIV2(llvm::LLVMContext& ctx, llvm::Module& module,
         const std::vector<uint8_t>& metadata, const char* label,
         const QoreParseOptions& parse_options, const QoreAOTModuleInfo& mod_info,
-        const std::vector<AOTCompiledFunc>& compiled_funcs) {
+        const std::vector<AOTCompiledFunc>& compiled_funcs,
+        bool compile_only = false) {
     auto* i8_type = llvm::Type::getInt8Ty(ctx);
     auto* i32_type = llvm::Type::getInt32Ty(ctx);
     auto* i64_type = llvm::Type::getInt64Ty(ctx);
     auto* ptr_type = llvm::PointerType::get(ctx, 0);
     auto* void_type = llvm::Type::getVoidTy(ctx);
+
+    // Sanitize module name for use as a C-symbol prefix when compile_only
+    // (matches emitModuleDescFunction's hyphen→underscore convention).
+    std::string mod_prefix;
+    if (compile_only) {
+        mod_prefix = "qore_" + mod_info.name + "_";
+        for (char& c : mod_prefix) {
+            if (c == '-') {
+                c = '_';
+            }
+        }
+    }
 
     // Helper to create a global exported C string
     auto createExportedString = [&](const std::string& name, const std::string& value) {
@@ -3194,13 +3215,16 @@ static void generateModuleABIV2(llvm::LLVMContext& ctx, llvm::Module& module,
         return gv;
     };
 
-    // Module descriptor globals (exported symbols for dlsym)
-    createExportedString("qore_module_name", mod_info.name);
-    createExportedString("qore_module_version", mod_info.version);
-    createExportedString("qore_module_description", mod_info.desc);
-    createExportedString("qore_module_author", mod_info.author);
-    createExportedString("qore_module_url", mod_info.url.empty() ? "" : mod_info.url);
-    createExportedString("qore_module_license_str", mod_info.license);
+    // Module descriptor globals (exported symbols for dlsym).
+    // For .qmod (compile_only=false): keep the legacy unprefixed names so
+    // existing introspection tooling still finds them. For .qo: prefix to
+    // avoid multi-module link collisions.
+    createExportedString(mod_prefix + "qore_module_name", mod_info.name);
+    createExportedString(mod_prefix + "qore_module_version", mod_info.version);
+    createExportedString(mod_prefix + "qore_module_description", mod_info.desc);
+    createExportedString(mod_prefix + "qore_module_author", mod_info.author);
+    createExportedString(mod_prefix + "qore_module_url", mod_info.url.empty() ? "" : mod_info.url);
+    createExportedString(mod_prefix + "qore_module_license_str", mod_info.license);
 
     // Module API version (exported int globals)
     auto createExportedInt = [&](const std::string& name, int value) {
@@ -3210,13 +3234,14 @@ static void generateModuleABIV2(llvm::LLVMContext& ctx, llvm::Module& module,
         gv->setDLLStorageClass(llvm::GlobalValue::DLLExportStorageClass);
         return gv;
     };
-    createExportedInt("qore_module_api_major", QORE_MODULE_API_MAJOR);
-    createExportedInt("qore_module_api_minor", QORE_MODULE_API_MINOR);
+    createExportedInt(mod_prefix + "qore_module_api_major", QORE_MODULE_API_MAJOR);
+    createExportedInt(mod_prefix + "qore_module_api_minor", QORE_MODULE_API_MINOR);
 
     // License enum
     auto* license_gv = new llvm::GlobalVariable(module, i32_type, true,
         llvm::GlobalValue::ExternalLinkage,
-        llvm::ConstantInt::get(i32_type, getLicenseEnum(mod_info.license)), "qore_module_license");
+        llvm::ConstantInt::get(i32_type, getLicenseEnum(mod_info.license)),
+        mod_prefix + "qore_module_license");
     license_gv->setDLLStorageClass(llvm::GlobalValue::DLLExportStorageClass);
 
     // Embed metadata blob as a private global constant
@@ -3370,26 +3395,27 @@ static void generateModuleABIV2(llvm::LLVMContext& ctx, llvm::Module& module,
         builder.CreateRetVoid();
     }
 
-    // Export global function pointer variables (as binary modules expect)
-    // qore_module_init: qore_module_init_t (function pointer)
+    // Export global function pointer variables (as legacy binary modules
+    // expect). Prefixed in compile_only mode to avoid linker collisions when
+    // multiple .qo objects are linked together.
     {
         new llvm::GlobalVariable(module, ptr_type, true,
-            llvm::GlobalValue::ExternalLinkage, init_impl_fn, "qore_module_init");
+            llvm::GlobalValue::ExternalLinkage, init_impl_fn,
+            mod_prefix + "qore_module_init");
     }
-
-    // qore_module_ns_init: qore_module_ns_init_t (function pointer)
     {
         new llvm::GlobalVariable(module, ptr_type, true,
-            llvm::GlobalValue::ExternalLinkage, ns_init_impl_fn, "qore_module_ns_init");
+            llvm::GlobalValue::ExternalLinkage, ns_init_impl_fn,
+            mod_prefix + "qore_module_ns_init");
     }
-
-    // qore_module_delete: qore_module_delete_t (function pointer)
     {
         new llvm::GlobalVariable(module, ptr_type, true,
-            llvm::GlobalValue::ExternalLinkage, del_impl_fn, "qore_module_delete");
+            llvm::GlobalValue::ExternalLinkage, del_impl_fn,
+            mod_prefix + "qore_module_delete");
     }
 
-    // Generate API 2.0 module descriptor function
+    // Generate API 2.0 module descriptor function (already per-module-named:
+    // emits `<sanitized_name>_qore_module_desc`).
     emitModuleDescFunction(ctx, module, init_impl_fn, ns_init_impl_fn, del_impl_fn, mod_info);
 }
 
@@ -3423,6 +3449,10 @@ static bool linkSharedLib(const std::string& obj_path, const std::string& so_pat
     return true;
 }
 
+// Phase 4 ABI-compat shim: pre-existing 8-arg overload forwards to the new
+// 9-arg overload with compile_only=false. Keeps the original mangled symbol
+// alive so installed binaries linked against libqore (e.g. /usr/bin/qore
+// built with BIND_NOW) keep loading after a fresh libqore.so install.
 bool QoreAOT::compileModule(const char* source_text, int source_len,
                              const char* label,
                              const std::string& output_path,
@@ -3431,6 +3461,19 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
                              int opt_level,
                              const char* target_triple,
                              bool include_source) {
+    return compileModule(source_text, source_len, label, output_path, parse_options,
+        error, opt_level, target_triple, include_source, false);
+}
+
+bool QoreAOT::compileModule(const char* source_text, int source_len,
+                             const char* label,
+                             const std::string& output_path,
+                             const QoreParseOptions& parse_options,
+                             std::string& error,
+                             int opt_level,
+                             const char* target_triple,
+                             bool include_source,
+                             bool compile_only) {
     // Step 1: Parse module metadata from source
     QoreAOTModuleInfo mod_info;
     if (!parseModuleMetadata(source_text, source_len, label, mod_info, error)) {
@@ -3700,7 +3743,7 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
         // %new-style / %require-types / etc added by the source are preserved
         // at module load time.  mod_po is only the initial seed.
         generateModuleABIV2(ctx, *module, *use_metadata, label, qpgm->getParseOptions(),
-            mod_info, compiled_funcs);
+            mod_info, compiled_funcs, compile_only);
     }
 
     // Finalize shared debug info after all functions are lowered
@@ -3719,24 +3762,40 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
         module->print(llvm::errs(), nullptr);
     }
 
-    // Step 5: Emit PIC object file
-    std::string obj_path = output_path + ".o";
+    // Step 5: Emit PIC object file. In compile_only (.qo) mode the object
+    // file IS the final artifact; otherwise it's an intermediate that gets
+    // linked into a .so.
+    std::string obj_path = compile_only ? output_path : (output_path + ".o");
     if (!emitObjectFile(*module, obj_path, error, opt_level, target_triple)) {
         return false;
     }
 
-    // Step 6: Link as shared library
-    if (!linkSharedLib(obj_path, output_path, error, target_triple)) {
-        remove(obj_path.c_str());
-        return false;
-    }
+    if (!compile_only) {
+        // Step 6: Link as shared library
+        if (!linkSharedLib(obj_path, output_path, error, target_triple)) {
+            remove(obj_path.c_str());
+            return false;
+        }
 
-    // Clean up object file (keep for cross-compilation)
-    if (!target_triple) {
-        remove(obj_path.c_str());
+        // Clean up object file (keep for cross-compilation)
+        if (!target_triple) {
+            remove(obj_path.c_str());
+        }
     }
 
     return true;
+}
+
+// Phase 4 ABI-compat shim: see compileModule shim above.
+bool QoreAOT::compileSeparatedModule(const char* dir_path,
+                                     const std::string& output_path,
+                                     const QoreParseOptions& parse_options,
+                                     std::string& error,
+                                     int opt_level,
+                                     const char* target_triple,
+                                     bool include_source) {
+    return compileSeparatedModule(dir_path, output_path, parse_options, error,
+        opt_level, target_triple, include_source, false);
 }
 
 bool QoreAOT::compileSeparatedModule(const char* dir_path,
@@ -3745,7 +3804,8 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
                                      std::string& error,
                                      int opt_level,
                                      const char* target_triple,
-                                     bool include_source) {
+                                     bool include_source,
+                                     bool compile_only) {
     // Step 1: Extract module name from directory basename (handle trailing slash)
     std::string dir_str(dir_path);
     // Remove trailing slashes
@@ -4122,7 +4182,7 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
             // Pass the program's final parse options — see comment in the
             // single-file module path.
             generateModuleABIV2(ctx, *module, *use_metadata, qm_path.c_str(),
-                qpgm->getParseOptions(), mod_info, compiled_funcs);
+                qpgm->getParseOptions(), mod_info, compiled_funcs, compile_only);
         }
 
         // Finalize shared debug info after all functions are lowered
@@ -4141,21 +4201,25 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
             module->print(llvm::errs(), nullptr);
         }
 
-        // Step 11: Emit PIC object file
-        std::string obj_path = output_path + ".o";
+        // Step 11: Emit PIC object file. In compile_only (.qo) mode the
+        // object file IS the final artifact; otherwise it's an intermediate
+        // that gets linked into a .so.
+        std::string obj_path = compile_only ? output_path : (output_path + ".o");
         if (!emitObjectFile(*module, obj_path, error, opt_level, target_triple)) {
             return false;
         }
 
-        // Step 12: Link as shared library
-        if (!linkSharedLib(obj_path, output_path, error, target_triple)) {
-            remove(obj_path.c_str());
-            return false;
-        }
+        if (!compile_only) {
+            // Step 12: Link as shared library
+            if (!linkSharedLib(obj_path, output_path, error, target_triple)) {
+                remove(obj_path.c_str());
+                return false;
+            }
 
-        // Clean up object file (keep for cross-compilation)
-        if (!target_triple) {
-            remove(obj_path.c_str());
+            // Clean up object file (keep for cross-compilation)
+            if (!target_triple) {
+                remove(obj_path.c_str());
+            }
         }
     }
 
