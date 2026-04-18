@@ -5364,27 +5364,43 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         // returns only the first match in AOT.
                         llvm::Value* global_val = llvm::ConstantInt::get(i32_type,
                             re->isGlobal() ? 1 : 0);
-                        auto helper = module.getOrInsertFunction("qore_rt_regex_op_by_pattern",
-                            llvm::FunctionType::get(i64_type,
-                                {i32_type, ptr_type, i64_type, i32_type, i64_type, ptr_type}, false));
-                        result = builder->CreateCall(helper, {opcode_val, pattern_ptr,
-                            options_val, global_val, operand_boxed, xsink_arg});
+                        auto robp_ft = llvm::FunctionType::get(i64_type,
+                                {i32_type, ptr_type, i64_type, i32_type, i64_type, ptr_type},
+                                false);
+                        auto helper = module.getOrInsertFunction(
+                                "qore_rt_regex_op_by_pattern", robp_ft);
+                        auto helper_throwing = module.getOrInsertFunction(
+                                "qore_rt_regex_op_by_pattern_throwing", robp_ft);
+                        result = emitMaybeInvoke(helper, helper_throwing,
+                                {opcode_val, pattern_ptr, options_val, global_val,
+                                 operand_boxed, xsink_arg},
+                                module, llvm_func, inst);
                     } else {
                         // Fallback to slot-based dispatch
                         int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
-                        auto helper = module.getOrInsertFunction("qore_rt_regex_op_with_operand_aot",
-                            llvm::FunctionType::get(i64_type,
-                                {ptr_type, i32_type, i32_type, i64_type, ptr_type}, false));
-                        result = builder->CreateCall(helper, {aot_ctx_arg, opcode_val,
-                            llvm::ConstantInt::get(i32_type, slot), operand_boxed, xsink_arg});
+                        auto rowo_aot_ft = llvm::FunctionType::get(i64_type,
+                                {ptr_type, i32_type, i32_type, i64_type, ptr_type}, false);
+                        auto helper = module.getOrInsertFunction(
+                                "qore_rt_regex_op_with_operand_aot", rowo_aot_ft);
+                        auto helper_throwing = module.getOrInsertFunction(
+                                "qore_rt_regex_op_with_operand_aot_throwing", rowo_aot_ft);
+                        result = emitMaybeInvoke(helper, helper_throwing,
+                                {aot_ctx_arg, opcode_val,
+                                 llvm::ConstantInt::get(i32_type, slot),
+                                 operand_boxed, xsink_arg},
+                                module, llvm_func, inst);
                     }
                 } else {
                     llvm::Value* expr_const = llvm::ConstantInt::get(i64_type, expr_bits);
-                    auto helper = module.getOrInsertFunction("qore_rt_regex_op_with_operand",
-                            llvm::FunctionType::get(i64_type,
-                                {i32_type, i64_type, i64_type, ptr_type}, false));
-                    result = builder->CreateCall(helper, {opcode_val, expr_const, operand_boxed,
-                            xsink_arg});
+                    auto rowo_ft = llvm::FunctionType::get(i64_type,
+                            {i32_type, i64_type, i64_type, ptr_type}, false);
+                    auto helper = module.getOrInsertFunction(
+                            "qore_rt_regex_op_with_operand", rowo_ft);
+                    auto helper_throwing = module.getOrInsertFunction(
+                            "qore_rt_regex_op_with_operand_throwing", rowo_ft);
+                    result = emitMaybeInvoke(helper, helper_throwing,
+                            {opcode_val, expr_const, operand_boxed, xsink_arg},
+                            module, llvm_func, inst);
                 }
                 // Regex ops don't modify locals — no reload needed
 
@@ -10549,27 +10565,43 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         // returns only the first match in AOT.
                         llvm::Value* global_val = llvm::ConstantInt::get(i32_type,
                             re->isGlobal() ? 1 : 0);
-                        auto helper = module.getOrInsertFunction("qore_rt_regex_op_by_pattern",
-                            llvm::FunctionType::get(i64_type,
-                                {i32_type, ptr_type, i64_type, i32_type, i64_type, ptr_type}, false));
-                        result = builder->CreateCall(helper, {opcode_val, pattern_ptr,
-                            options_val, global_val, operand_boxed, xsink_arg});
+                        auto robp_ft = llvm::FunctionType::get(i64_type,
+                                {i32_type, ptr_type, i64_type, i32_type, i64_type, ptr_type},
+                                false);
+                        auto helper = module.getOrInsertFunction(
+                                "qore_rt_regex_op_by_pattern", robp_ft);
+                        auto helper_throwing = module.getOrInsertFunction(
+                                "qore_rt_regex_op_by_pattern_throwing", robp_ft);
+                        result = emitMaybeInvoke(helper, helper_throwing,
+                                {opcode_val, pattern_ptr, options_val, global_val,
+                                 operand_boxed, xsink_arg},
+                                module, llvm_func, inst);
                     } else {
                         // Fallback to slot-based dispatch
                         int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
-                        auto helper = module.getOrInsertFunction("qore_rt_regex_op_with_operand_aot",
-                            llvm::FunctionType::get(i64_type,
-                                {ptr_type, i32_type, i32_type, i64_type, ptr_type}, false));
-                        result = builder->CreateCall(helper, {aot_ctx_arg, opcode_val,
-                            llvm::ConstantInt::get(i32_type, slot), operand_boxed, xsink_arg});
+                        auto rowo_aot_ft = llvm::FunctionType::get(i64_type,
+                                {ptr_type, i32_type, i32_type, i64_type, ptr_type}, false);
+                        auto helper = module.getOrInsertFunction(
+                                "qore_rt_regex_op_with_operand_aot", rowo_aot_ft);
+                        auto helper_throwing = module.getOrInsertFunction(
+                                "qore_rt_regex_op_with_operand_aot_throwing", rowo_aot_ft);
+                        result = emitMaybeInvoke(helper, helper_throwing,
+                                {aot_ctx_arg, opcode_val,
+                                 llvm::ConstantInt::get(i32_type, slot),
+                                 operand_boxed, xsink_arg},
+                                module, llvm_func, inst);
                     }
                 } else {
                     llvm::Value* expr_const = llvm::ConstantInt::get(i64_type, expr_bits);
-                    auto helper = module.getOrInsertFunction("qore_rt_regex_op_with_operand",
-                            llvm::FunctionType::get(i64_type,
-                                {i32_type, i64_type, i64_type, ptr_type}, false));
-                    result = builder->CreateCall(helper, {opcode_val, expr_const, operand_boxed,
-                            xsink_arg});
+                    auto rowo_ft = llvm::FunctionType::get(i64_type,
+                            {i32_type, i64_type, i64_type, ptr_type}, false);
+                    auto helper = module.getOrInsertFunction(
+                            "qore_rt_regex_op_with_operand", rowo_ft);
+                    auto helper_throwing = module.getOrInsertFunction(
+                            "qore_rt_regex_op_with_operand_throwing", rowo_ft);
+                    result = emitMaybeInvoke(helper, helper_throwing,
+                            {opcode_val, expr_const, operand_boxed, xsink_arg},
+                            module, llvm_func, inst);
                 }
             } else {
                 // Fallback to qore_rt_invoke_expr if no operands
@@ -10622,10 +10654,14 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         reinterpret_cast<uint64_t>(regex_inst->regex_case));
             }
 
-            auto helper = module.getOrInsertFunction("qore_rt_switch_regex_match",
-                    llvm::FunctionType::get(i64_type, {i64_type, i64_type, ptr_type}, false));
-            llvm::Value* result = builder->CreateCall(helper,
-                    {regex_case_ptr, operand_boxed, xsink_arg});
+            auto srm_ft = llvm::FunctionType::get(i64_type,
+                    {i64_type, i64_type, ptr_type}, false);
+            auto helper = module.getOrInsertFunction("qore_rt_switch_regex_match", srm_ft);
+            auto helper_throwing = module.getOrInsertFunction(
+                    "qore_rt_switch_regex_match_throwing", srm_ft);
+            llvm::Value* result = emitMaybeInvoke(helper, helper_throwing,
+                    {regex_case_ptr, operand_boxed, xsink_arg},
+                    module, llvm_func, inst);
 
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
@@ -11665,19 +11701,28 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 if (case_val.hasNode()) {
                     // Node value: load from expression slot at runtime
                     int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(case_bits);
-                    auto helper = module.getOrInsertFunction("qore_rt_switch_case_match_value_aot",
-                            llvm::FunctionType::get(i64_type,
-                                {ptr_type, i32_type, i64_type, ptr_type}, false));
-                    result = builder->CreateCall(helper,
+                    auto scmva_ft = llvm::FunctionType::get(i64_type,
+                            {ptr_type, i32_type, i64_type, ptr_type}, false);
+                    auto helper = module.getOrInsertFunction(
+                            "qore_rt_switch_case_match_value_aot", scmva_ft);
+                    auto helper_throwing = module.getOrInsertFunction(
+                            "qore_rt_switch_case_match_value_aot_throwing", scmva_ft);
+                    result = emitMaybeInvoke(helper, helper_throwing,
                             {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot),
-                             switch_boxed, xsink_arg});
+                             switch_boxed, xsink_arg},
+                            module, llvm_func, inst);
                 } else {
                     // Immediate value: safe to embed as constant (no pointers)
                     llvm::Value* case_const = llvm::ConstantInt::get(i64_type, case_bits);
-                    auto helper = module.getOrInsertFunction("qore_rt_switch_case_match_value",
-                            llvm::FunctionType::get(i64_type, {i64_type, i64_type, ptr_type}, false));
-                    result = builder->CreateCall(helper,
-                            {case_const, switch_boxed, xsink_arg});
+                    auto scmv_ft = llvm::FunctionType::get(i64_type,
+                            {i64_type, i64_type, ptr_type}, false);
+                    auto helper = module.getOrInsertFunction(
+                            "qore_rt_switch_case_match_value", scmv_ft);
+                    auto helper_throwing = module.getOrInsertFunction(
+                            "qore_rt_switch_case_match_value_throwing", scmv_ft);
+                    result = emitMaybeInvoke(helper, helper_throwing,
+                            {case_const, switch_boxed, xsink_arg},
+                            module, llvm_func, inst);
                 }
                 values[inst->result.id] = result;
                 nanboxed_values.insert(inst->result.id);
@@ -11686,10 +11731,14 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 auto* case_node_ptr = llvm::ConstantInt::get(i64_type,
                     reinterpret_cast<uint64_t>(case_inst->case_node));
                 auto* case_node_val = builder->CreateIntToPtr(case_node_ptr, ptr_type);
-                auto helper = module.getOrInsertFunction("qore_rt_switch_case_match",
-                        llvm::FunctionType::get(i64_type, {ptr_type, i64_type, ptr_type}, false));
-                auto* result = builder->CreateCall(helper,
-                        {case_node_val, switch_boxed, xsink_arg});
+                auto scm_ft = llvm::FunctionType::get(i64_type,
+                        {ptr_type, i64_type, ptr_type}, false);
+                auto helper = module.getOrInsertFunction("qore_rt_switch_case_match", scm_ft);
+                auto helper_throwing = module.getOrInsertFunction(
+                        "qore_rt_switch_case_match_throwing", scm_ft);
+                auto* result = emitMaybeInvoke(helper, helper_throwing,
+                        {case_node_val, switch_boxed, xsink_arg},
+                        module, llvm_func, inst);
                 values[inst->result.id] = result;
                 nanboxed_values.insert(inst->result.id);
             }

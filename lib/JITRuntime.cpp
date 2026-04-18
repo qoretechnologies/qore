@@ -8226,3 +8226,71 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_background_self_
     }
     return result;
 }
+
+// --- Phase 2B Step 5: Regex/switch throwing wrappers ---
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_switch_regex_match_throwing(
+        uint64_t regex_case_ptr, uint64_t switch_val_bits, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_switch_regex_match(regex_case_ptr, switch_val_bits, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_regex_op_with_operand_throwing(
+        int32_t opcode, uint64_t expr_bits, uint64_t operand_bits, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_regex_op_with_operand(opcode, expr_bits, operand_bits, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_regex_op_with_operand_aot_throwing(
+        QoreAOTContext* ctx, int32_t opcode, int32_t slot, uint64_t operand_bits,
+        ExceptionSink* xsink) {
+    uint64_t result = qore_rt_regex_op_with_operand_aot(ctx, opcode, slot, operand_bits, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_regex_op_by_pattern_throwing(
+        int32_t opcode, const char* pattern, int64_t options, int32_t global,
+        uint64_t operand_bits, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_regex_op_by_pattern(opcode, pattern, options, global,
+            operand_bits, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_switch_case_match_throwing(
+        const void* case_node_ptr, uint64_t switch_val_bits, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_switch_case_match(case_node_ptr, switch_val_bits, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_switch_case_match_value_throwing(
+        uint64_t case_val_bits, uint64_t switch_val_bits, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_switch_case_match_value(case_val_bits, switch_val_bits, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_switch_case_match_value_aot_throwing(
+        QoreAOTContext* ctx, int32_t case_slot, uint64_t switch_val_bits, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_switch_case_match_value_aot(ctx, case_slot, switch_val_bits, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
