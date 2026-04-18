@@ -68,6 +68,19 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
         */
         int pending_offset = 0;
 
+        #! Optional callback to wake the I/O thread after queuing outgoing data
+        /** Called from @ref queueEvent(), @ref queueRawEvent(), and
+            @ref queueRawString() so the async I/O controller re-runs
+            @ref continuePoll() promptly and drains the @ref event_channel.
+            Without this, events queued by a Qore-side handler thread while
+            the socket has no POLLIN activity would sit in the channel until
+            the next incoming event (effectively forever for server-push
+            SSE), because the controller only re-submits the poll op on
+            completion.
+
+            @see @ref AsyncSocketIo::AsyncSocketIoController::wake()
+        */
+        *code<nothing()> wake_callback;
     }
 
     #! Creates the poll operation
@@ -75,6 +88,20 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
     */
     constructor(Socket sock) {
         self.sock = sock;
+    }
+
+    #! Sets the wake callback used to notify the I/O controller after queuing data
+    /** The HTTP server framework calls this after @ref ServerSentEventHandler::setupAsyncSseConnection()
+        returns, passing a closure that calls @ref AsyncSocketIo::AsyncSocketIoController::wakeSocket()
+        on the SSE socket.  Without this, queued events are never sent because the async I/O
+        controller has no trigger to re-run @ref continuePoll().
+
+        @param cb the wake callback
+
+        @since %HttpServerAsyncIo 1.2
+    */
+    setWakeCallback(*code<nothing()> cb) {
+        wake_callback = cb;
     }
 
     #! Returns the goal of the operation
@@ -163,6 +190,9 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
             "id": id,
             "retry": retry,
         });
+        if (wake_callback) {
+            wake_callback();
+        }
     }
 
     #! Queues a raw SSE message
@@ -170,6 +200,9 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
     */
     queueRawEvent(hash<auto> event) {
         event_channel.send(event);
+        if (wake_callback) {
+            wake_callback();
+        }
     }
 
     #! Queues a pre-formatted SSE string for sending
@@ -177,6 +210,9 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
     */
     queueRawString(string data) {
         event_channel.send(data);
+        if (wake_callback) {
+            wake_callback();
+        }
     }
 
     #! Formats an SSE event according to the spec

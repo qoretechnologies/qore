@@ -3314,6 +3314,17 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                     HttpServerAsyncIo::HttpSseStreamPollOperation poll_op =
                         call_object_method(handler, "setupAsyncSseConnection", s, cx, hdr,
                             string(cx.id));
+                    # Wire a wake callback so that events queued by a Qore-side
+                    # handler thread (e.g. via ServerSentEventConnection::send())
+                    # immediately trigger the async controller to re-run
+                    # continuePoll() and drain the event_channel.  Without
+                    # this, server-push SSE events sit in the channel until
+                    # the client sends something — which it never does.
+                    *AsyncSocketIo::AsyncSocketIoController ctrl = cx.async_ctrl;
+                    if (ctrl) {
+                        Socket sse_sock = s;
+                        poll_op.setWakeCallback(sub () { ctrl.wakeSocket(sse_sock); });
+                    }
                     # Tell the async controller to manage this socket as an SSE stream
                     async_response_out.code = rv."code";
                     async_response_out.hdr = rv.hdr;
