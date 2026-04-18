@@ -620,7 +620,8 @@ public:
             std::string& error,
             int opt_level = 2,
             const char* target_triple = nullptr,
-            bool include_source = false);
+            bool include_source = false,
+            const std::vector<std::string>& require_modules = {});
 
     //! Phase 4 slice 10: compile one file of a Qore application to a
     //! `.qo` in script-context mode (no module wrapper, no `.qm`).
@@ -668,7 +669,8 @@ public:
                                   std::string& error,
                                   int opt_level = 2,
                                   const char* target_triple = nullptr,
-                                  bool include_source = false);
+                                  bool include_source = false,
+                                  const std::vector<std::string>& require_modules = {});
 
     //! Phase 4 slice 7: package a set of per-file `.qo` files into a
     //! `.qoa` static archive with a single `qore_qoa_register_all()`

@@ -4964,6 +4964,26 @@ static bool emitScriptQoFromParsedProgram(QoreProgram* qpgm,
 }
 
 // Phase 4 slice 10i: batch-compile N sources sharing one parse cycle.
+// Phase 4 slice 11a: preload a list of Qore modules into the given
+// program before parsing.  Mirrors the runtime-load pattern used by
+// Qorus binaries (qctl_main.cpp `req_modules[]`) — types from these
+// modules become visible to the parser so sources that reference
+// them without `%requires` directives compile cleanly.
+static bool loadRequireModules(QoreProgram* pgm,
+        const std::vector<std::string>& require_modules,
+        std::string& error) {
+    for (const std::string& mod : require_modules) {
+        SimpleRefHolder<QoreStringNode> err(
+            MM.parseLoadModule(mod.c_str(), pgm));
+        if (err) {
+            error = "cannot load required module '" + mod + "': ";
+            error += err->getBuffer();
+            return false;
+        }
+    }
+    return true;
+}
+
 bool QoreAOT::compileScriptFilesBatch(
         const std::vector<std::string>& target_files,
         const std::string& output_dir,
@@ -4971,7 +4991,8 @@ bool QoreAOT::compileScriptFilesBatch(
         std::string& error,
         int opt_level,
         const char* target_triple,
-        bool include_source) {
+        bool include_source,
+        const std::vector<std::string>& require_modules) {
     if (target_files.empty()) {
         error = "compileScriptFilesBatch: target_files is empty";
         return false;
@@ -5043,6 +5064,12 @@ bool QoreAOT::compileScriptFilesBatch(
     // diagnostics).
     qpgm->setScriptPath(entries.front().canon.c_str());
 
+    // Phase 4 slice 11a: preload external modules before parsing so
+    // sources that reference their types without `%requires` compile.
+    if (!loadRequireModules(*qpgm, require_modules, error)) {
+        return false;
+    }
+
     for (auto& e : entries) {
         qpgm->parsePending(e.source.c_str(), e.canon.c_str(),
             &xsink, &wsink, QP_WARN_DEFAULT);
@@ -5093,7 +5120,8 @@ bool QoreAOT::compileScriptFile(const char* target_file,
                                 std::string& error,
                                 int opt_level,
                                 const char* target_triple,
-                                bool include_source) {
+                                bool include_source,
+                                const std::vector<std::string>& require_modules) {
     if (!target_file || !*target_file) {
         error = "compileScriptFile: target_file is required";
         return false;
@@ -5130,6 +5158,12 @@ bool QoreAOT::compileScriptFile(const char* target_file,
         return false;
     }
     qpgm->setScriptPath(target_canon.c_str());
+
+    // Phase 4 slice 11a: preload external modules before parsing so
+    // sources that reference their types without `%requires` compile.
+    if (!loadRequireModules(*qpgm, require_modules, error)) {
+        return false;
+    }
 
     // Phase 4 slice 10c: preload sibling `.qo`s from -L paths.
     // Each path is scanned for `*.qo` files (non-recursive).  For

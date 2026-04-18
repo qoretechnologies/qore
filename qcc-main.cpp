@@ -78,6 +78,14 @@ static const char* batch_output_dir = nullptr;
 // target source's cross-file references resolve at parse time.
 // Semantically analogous to C's `-L<dir>` for linker library search.
 static std::vector<std::string> script_lib_dirs;
+// Phase 4 slice 11a: -l/--load=<mod> modules preloaded into the
+// compile program before parsing.  Mirrors the runtime-load pattern
+// used by Qorus binaries (e.g. qctl_main.cpp req_modules[]) and
+// matches `qore -l <mod>` CLI convention.  Types from these modules
+// become visible to the parser so sources that reference them
+// without %requires directives compile cleanly.  Repeatable;
+// loaded in declaration order via MM.parseLoadModule.
+static std::vector<std::string> load_modules;
 // Phase 4 slice 6: --from-objects signals aggregator mode — the
 // positional inputs are per-file `.qo` objects (produced by
 // `qcc -c --context=DIR <file>`) that get linked together plus a
@@ -122,11 +130,18 @@ static void print_usage(const char* prog) {
            "                         refs in the target source resolve at parse time\n"
            "                         (C-style: .qo ~ .o + .h).  Enables `qcc -c <file>`\n"
            "                         for plain multi-file Qore apps with no .qm.\n");
-    printf("      --output-dir=DIR   Batch-mode output directory.  Required when `-c`\n"
-           "                         is given multiple source files: they share one\n"
-           "                         parse cycle and emit <basename>.qo into DIR.\n"
-           "                         Much faster than per-file `qcc -c` for large\n"
-           "                         app-style source sets (no O(N^2) sibling preload).\n");
+    printf("      --output-dir=DIR   Output directory for `-c` compile.  With multiple\n"
+           "                         sources (batch mode) this is required and all\n"
+           "                         .qo files land in DIR sharing one parse cycle.\n"
+           "                         With a single source this is an alternative to\n"
+           "                         `-o <file>` — writes <basename>.qo into DIR.\n"
+           "                         Mutually exclusive with `-o`.\n");
+    printf("  -l, --load=MOD         Load Qore module MOD into the compile program\n"
+           "                         before parsing sources.  Use when sources reference\n"
+           "                         types from external modules without %%requires\n"
+           "                         directives (the host loads the module at runtime).\n"
+           "                         May be repeated; modules load in declaration order.\n"
+           "                         Matches `qore -l <mod>` CLI convention.\n");
     printf("      --from-objects     Aggregate mode: positional args are per-file .qo\n"
            "                         inputs; requires -m and --context=DIR; produces a\n"
            "                         standard .qmod by linking the .qo's + fresh glue\n");
@@ -183,6 +198,7 @@ static struct option long_options[] = {
     {"big-fn-threshold",  required_argument, nullptr, 'B'},
     {"context",           required_argument, nullptr, 'C'},
     {"library-path",      required_argument, nullptr, 'L'},
+    {"load",              required_argument, nullptr, 'l'},
     // long-only options (no short form): use values > 255 so they
     // don't collide with char short codes.
     {"output-dir",        required_argument, nullptr, 0x100},
@@ -196,7 +212,7 @@ static struct option long_options[] = {
 
 static int parse_options_cmdline(int argc, char** argv) {
     int opt;
-    while ((opt = getopt_long(argc, argv, "o:O:mcSt:TL:agvhV", long_options, nullptr)) != -1) {
+    while ((opt = getopt_long(argc, argv, "o:O:mcSt:TL:l:agvhV", long_options, nullptr)) != -1) {
         switch (opt) {
             case 'o':
                 output_path = optarg;
@@ -253,6 +269,9 @@ static int parse_options_cmdline(int argc, char** argv) {
                 break;
             case 'L':
                 script_lib_dirs.emplace_back(optarg);
+                break;
+            case 'l':
+                load_modules.emplace_back(optarg);
                 break;
             case 0x100:  // --output-dir
                 batch_output_dir = optarg;
@@ -558,7 +577,8 @@ int main(int argc, char** argv) {
         std::string error;
         bool ok = QoreAOT::compileScriptFilesBatch(
             batch_sources, batch_output_dir, PO_DEFAULT, error,
-            opt_level, target_triple, include_source);
+            opt_level, target_triple, include_source,
+            load_modules);
         if (!ok) {
             fprintf(stderr, "error: %s\n", error.c_str());
             qore_cleanup();
@@ -677,6 +697,15 @@ int main(int argc, char** argv) {
         return 1;
     }
 
+    // Phase 4 slice 10j: reject `-o` mixed with `--output-dir` for
+    // single-file compile (same rule as batch mode above).  They are
+    // mutually exclusive output-naming strategies.
+    if (output_path && batch_output_dir) {
+        fprintf(stderr, "error: -o <file> and --output-dir=<dir> are "
+                "mutually exclusive\n");
+        return 1;
+    }
+
     // Determine output path
     std::string output;
     if (output_path) {
@@ -699,6 +728,18 @@ int main(int argc, char** argv) {
             // Per-file mode: default output is input-basename.qo
             // (same shape as normal single-file compile-only mode).
             output = get_default_output(source_file, module_mode, compile_only);
+        }
+        // Phase 4 slice 10j: honor `--output-dir=DIR` for single-file
+        // compile too (previously only applied to batch mode on ≥2
+        // positional sources, making single-file builds silently write
+        // `.qo`s to the current directory).  CMake build systems need
+        // a consistent output location regardless of source count.
+        if (batch_output_dir) {
+            std::string dir_str(batch_output_dir);
+            while (!dir_str.empty() && dir_str.back() == '/') {
+                dir_str.pop_back();
+            }
+            output = dir_str + "/" + output;
         }
     }
 
@@ -750,7 +791,8 @@ int main(int argc, char** argv) {
                 error,
                 opt_level,
                 target_triple,
-                include_source)) {
+                include_source,
+                load_modules)) {
             fprintf(stderr, "error: %s\n", error.c_str());
             rc = 1;
         } else {
