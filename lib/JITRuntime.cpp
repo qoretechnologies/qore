@@ -5911,6 +5911,220 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_ternary_aot(
     return qore_rt_lv_path_ternary(ctx->lv_path_insts[slot], dyn_vals, a_bits, b_bits, c_bits, xsink);
 }
 
+// --- Phase 2B Step 5: Lvalue ops category throwing wrappers ---
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_lvalue_load_throwing(
+        uint64_t lvalue_bits, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_lvalue_load(lvalue_bits, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_lvalue_store_throwing(
+        uint64_t lvalue_bits, uint64_t value_bits, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_lvalue_store(lvalue_bits, value_bits, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_lvalue_store_weak_throwing(
+        uint64_t lvalue_bits, uint64_t value_bits, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_lvalue_store_weak(lvalue_bits, value_bits, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_lvalue_unary_throwing(
+        int opcode, uint64_t lvalue_bits, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_lvalue_unary(opcode, lvalue_bits, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_lvalue_binary_throwing(
+        int opcode, uint64_t lvalue_bits, uint64_t value_bits, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_lvalue_binary(opcode, lvalue_bits, value_bits, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_lvalue_ternary_throwing(
+        int opcode, uint64_t lvalue_bits, uint64_t first_bits, uint64_t second_bits,
+        uint64_t third_bits, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_lvalue_ternary(opcode, lvalue_bits, first_bits,
+            second_bits, third_bits, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_lv_path_ternary_throwing(
+        QoreIRLValuePathInstruction* inst, uint64_t* dyn_vals,
+        uint64_t a_bits, uint64_t b_bits, uint64_t c_bits, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_lv_path_ternary(inst, dyn_vals, a_bits, b_bits,
+            c_bits, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_lv_path_assign_throwing(
+        QoreIRLValuePathInstruction* inst, uint64_t* dyn_vals,
+        uint64_t rhs_bits, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_lv_path_assign(inst, dyn_vals, rhs_bits, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_lv_path_compound_throwing(
+        QoreIRLValuePathInstruction* inst, uint64_t* dyn_vals,
+        uint64_t rhs_bits, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_lv_path_compound(inst, dyn_vals, rhs_bits, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_lv_path_unary_throwing(
+        QoreIRLValuePathInstruction* inst, uint64_t* dyn_vals, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_lv_path_unary(inst, dyn_vals, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_lv_path_binary_mut_throwing(
+        QoreIRLValuePathInstruction* inst, uint64_t* dyn_vals,
+        uint64_t rhs_bits, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_lv_path_binary_mut(inst, dyn_vals, rhs_bits, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_lvalue_load_aot_throwing(
+        QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_lvalue_load_aot(ctx, idx, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_lvalue_store_aot_throwing(
+        QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_lvalue_store_aot(ctx, idx, val, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_lvalue_store_weak_aot_throwing(
+        QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_lvalue_store_weak_aot(ctx, idx, val, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_lvalue_unary_aot_throwing(
+        int op, QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_lvalue_unary_aot(op, ctx, idx, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_lvalue_binary_aot_throwing(
+        int op, QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_lvalue_binary_aot(op, ctx, idx, val, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_lvalue_ternary_aot_throwing(
+        int op, QoreAOTContext* ctx, int32_t idx, uint64_t first, uint64_t second,
+        uint64_t third, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_lvalue_ternary_aot(op, ctx, idx, first, second, third,
+            xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_lv_path_ternary_aot_throwing(
+        QoreAOTContext* ctx, int32_t slot, uint64_t* dyn_vals,
+        uint64_t a_bits, uint64_t b_bits, uint64_t c_bits, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_lv_path_ternary_aot(ctx, slot, dyn_vals, a_bits,
+            b_bits, c_bits, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_lv_path_assign_aot_throwing(
+        QoreAOTContext* ctx, int32_t slot, uint64_t* dyn_vals,
+        uint64_t rhs_bits, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_lv_path_assign_aot(ctx, slot, dyn_vals, rhs_bits, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_lv_path_compound_aot_throwing(
+        QoreAOTContext* ctx, int32_t slot, uint64_t* dyn_vals,
+        uint64_t rhs_bits, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_lv_path_compound_aot(ctx, slot, dyn_vals, rhs_bits, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_lv_path_unary_aot_throwing(
+        QoreAOTContext* ctx, int32_t slot, uint64_t* dyn_vals, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_lv_path_unary_aot(ctx, slot, dyn_vals, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_lv_path_binary_mut_aot_throwing(
+        QoreAOTContext* ctx, int32_t slot, uint64_t* dyn_vals,
+        uint64_t rhs_bits, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_lv_path_binary_mut_aot(ctx, slot, dyn_vals, rhs_bits, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
 extern "C" DLLEXPORT uint64_t qore_rt_call_with_args_aot(QoreAOTContext* ctx, int32_t slot, uint64_t* args, int nargs,
         ExceptionSink* xsink) {
     assert(ctx && slot >= 0 && slot < ctx->num_exprs);
