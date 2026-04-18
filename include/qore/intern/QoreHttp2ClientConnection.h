@@ -210,6 +210,23 @@ protected:
     DLLLOCAL QoreHashNode* getReferencedErrorInfo() override;
 
 private:
+    //! @name QoreObject refs — standalone C++ lifecycle, NOT DGC-visible
+    /** @c sock_obj and @c poll_op_obj hold strong refs on the socket /
+        poll-op QoreObjects.  They are raw, not stored in any qclass's
+        @c internal_members slot — because @c Http2ClientConnection is
+        itself a pure C++ class (not wrapped in a QoreObject) and so is
+        not a participant in DGC cycle collection.
+
+        Lifetime is managed by the @ref Http2ClientConnection destructor,
+        which derefs both when the connection is released.  See
+        @c design/dgc.md — Pattern A (internal_members) does not apply
+        here because there is no enclosing QoreObject whose data/cdmap
+        the scanner could walk.  If a future refactor wraps this class
+        in a @c qclass, both refs should move into @c internal_members
+        at that point.
+
+        @{
+    */
     //! The socket QoreObject (ref'd).
     QoreObject* sock_obj = nullptr;
 
@@ -221,6 +238,7 @@ private:
 
     //! The poll op priv (raw pointer — ownership via @ref poll_op_obj).
     Http2ClientPollOperationPriv* poll_op_priv = nullptr;
+    //! @}
 
     //! True once the poll op has been submitted to the controller.
     bool submitted_to_controller = false;
