@@ -9101,3 +9101,46 @@ void QoreAOT::printSupportedTargets() {
     printf("  %-30s %s\n", "aarch64-apple-darwin", "macOS ARM64");
     printf("  %-30s %s\n", "x86_64-apple-darwin", "macOS x86-64");
 }
+
+// Phase 4 slice 8: public C API implementation.
+// Declarations live in include/qore/QoreAOT.h and are the
+// minimum-viable entry points for a C/C++ host embedding
+// AOT-compiled Qore modules without pulling in libqore's private
+// headers.
+//
+// Intentionally narrow: create a program, (optionally) call one
+// function, destroy. Hosts needing richer interop keep using the
+// C++ QoreProgram API.
+
+extern "C" DLLEXPORT QoreProgram* qore_create_program(int64_t parse_options) {
+    // Delegate to the standard QoreProgram constructor.  QoreParseOptions
+    // has an implicit ctor from int64 that zero-fills the high 64 bits —
+    // matches common.h's PO_* flag layout.
+    return new QoreProgram(QoreParseOptions(parse_options));
+}
+
+extern "C" DLLEXPORT void qore_destroy_program(QoreProgram* pgm) {
+    if (!pgm) {
+        return;
+    }
+    ExceptionSink xsink;
+    pgm->waitForTerminationAndDeref(&xsink);
+    if (xsink.isException()) {
+        // Host has no sink of its own — print and swallow.
+        xsink.handleExceptions();
+    }
+}
+
+extern "C" DLLEXPORT int qore_run_callable(QoreProgram* pgm, const char* fn_name,
+        const QoreListNode* args) {
+    if (!pgm || !fn_name) {
+        return -1;
+    }
+    ExceptionSink xsink;
+    ValueHolder result(pgm->callFunction(fn_name, args, &xsink), &xsink);
+    if (xsink.isException()) {
+        xsink.handleExceptions();
+        return 1;
+    }
+    return 0;
+}
