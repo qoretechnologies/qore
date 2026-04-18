@@ -66,6 +66,13 @@ static bool compile_only = false;
 // module so the parser has the full directory as context while the
 // AOT writer emits only the target file's contributions.
 static const char* context_dir = nullptr;
+// Phase 4 slice 10c: -L<dir> directories for sibling `.qo` preload
+// when compiling a single-file script with `-c` + script context (no
+// module wrapper).  Each directory is scanned for `*.qo`; their
+// fragment metadata is preloaded into the compile program so the
+// target source's cross-file references resolve at parse time.
+// Semantically analogous to C's `-L<dir>` for linker library search.
+static std::vector<std::string> script_lib_dirs;
 // Phase 4 slice 6: --from-objects signals aggregator mode — the
 // positional inputs are per-file `.qo` objects (produced by
 // `qcc -c --context=DIR <file>`) that get linked together plus a
@@ -104,6 +111,12 @@ static void print_usage(const char* prog) {
     printf("      --context=DIR      Directory context for per-file .qo compilation\n"
            "                         (parses the full split-module dir but emits only\n"
            "                          the input file's contributions; requires -c)\n");
+    printf("  -L DIR                 Script-mode sibling .qo search path.  May be\n"
+           "                         repeated.  Each dir is scanned for *.qo; their\n"
+           "                         fragment decls are preloaded so cross-file type\n"
+           "                         refs in the target source resolve at parse time\n"
+           "                         (C-style: .qo ~ .o + .h).  Enables `qcc -c <file>`\n"
+           "                         for plain multi-file Qore apps with no .qm.\n");
     printf("      --from-objects     Aggregate mode: positional args are per-file .qo\n"
            "                         inputs; requires -m and --context=DIR; produces a\n"
            "                         standard .qmod by linking the .qo's + fresh glue\n");
@@ -159,6 +172,7 @@ static struct option long_options[] = {
     {"time-trace",        optional_argument, nullptr, 'Y'},
     {"big-fn-threshold",  required_argument, nullptr, 'B'},
     {"context",           required_argument, nullptr, 'C'},
+    {"library-path",      required_argument, nullptr, 'L'},
     {"from-objects",      no_argument,       nullptr, 'F'},
     {"archive",           no_argument,       nullptr, 'a'},
     {"verbose",           no_argument,       nullptr, 'v'},
@@ -169,7 +183,7 @@ static struct option long_options[] = {
 
 static int parse_options_cmdline(int argc, char** argv) {
     int opt;
-    while ((opt = getopt_long(argc, argv, "o:O:mcSt:TagvhV", long_options, nullptr)) != -1) {
+    while ((opt = getopt_long(argc, argv, "o:O:mcSt:TL:agvhV", long_options, nullptr)) != -1) {
         switch (opt) {
             case 'o':
                 output_path = optarg;
@@ -223,6 +237,9 @@ static int parse_options_cmdline(int argc, char** argv) {
                 break;
             case 'C':
                 context_dir = optarg;
+                break;
+            case 'L':
+                script_lib_dirs.emplace_back(optarg);
                 break;
             case 'F':
                 from_objects = true;
@@ -513,6 +530,24 @@ int main(int argc, char** argv) {
     // Check if input is a directory (split module)
     bool is_split_module = is_directory(source_file);
 
+    // Phase 4 slice 10c: script-context mode.  When `-c` is used and
+    // the input is neither a `.qm` nor a directory AND no
+    // `--context=DIR` is supplied, compile as a plain script file.
+    // Optional `-L <dir>` inputs preload sibling `.qo` decls so
+    // cross-file refs resolve at parse time.
+    bool script_mode = false;
+    if (compile_only && !context_dir && !is_split_module) {
+        size_t len = strlen(source_file);
+        bool is_qm = (len > 3 && strcmp(source_file + len - 3, ".qm") == 0);
+        if (!is_qm) {
+            script_mode = true;
+            if (verbose) {
+                printf("Script-context .qo mode (target=%s, %zu -L paths)\n",
+                    source_file, script_lib_dirs.size());
+            }
+        }
+    }
+
     // Phase 4 slice 4: --context=DIR opts the caller into per-file .qo
     // compilation. The input must be a single file in that directory
     // (either the module's `.qm` or one of its `.qc`/`.ql` components);
@@ -561,14 +596,22 @@ int main(int argc, char** argv) {
         fprintf(stderr, "warning: --static is ignored when compiling modules\n");
     }
 
-    // Phase 4: -c (compile-only) only makes sense when something module-shaped
-    // is being compiled — a .qm, a split-module directory, or a per-file
-    // fragment thereof. Reject script (executable) inputs early so users get
-    // a clear error rather than a confusing failure deeper down.
-    if (compile_only && !module_mode) {
-        fprintf(stderr, "error: -c/--compile-only requires a module input "
-                "(.qm file or split-module directory); see "
-                "design/aot-phase4-qo-object-files.md\n");
+    // Phase 4: -c (compile-only) applies to module inputs (.qm / split
+    // dir / per-file fragment thereof) and, as of slice 10c, also to
+    // plain script files (arbitrary .q/.qc/.ql sources).  Only reject
+    // the combination if we're in neither mode.
+    if (compile_only && !module_mode && !script_mode) {
+        fprintf(stderr, "error: -c/--compile-only requires either a module "
+                "input (.qm / split-module dir / .qc fragment with --context), "
+                "or a script-mode source file (.q/.qc/.ql with optional -L<dir> "
+                "preload paths)\n");
+        return 1;
+    }
+
+    // -L is meaningful only in script-context compile.
+    if (!script_lib_dirs.empty() && !script_mode) {
+        fprintf(stderr, "error: -L <dir> is only meaningful with script-mode "
+                "compile (-c on a .q/.qc/.ql source)\n");
         return 1;
     }
 
@@ -634,7 +677,27 @@ int main(int argc, char** argv) {
     int rc = 0;
     std::string error;
 
-    if (per_file_mode) {
+    if (script_mode) {
+        // Phase 4 slice 10c: compile a single script-style source with
+        // optional sibling-.qo decl preload.
+        if (!QoreAOT::compileScriptFile(
+                source_file,
+                script_lib_dirs,
+                output,
+                PO_DEFAULT,
+                error,
+                opt_level,
+                target_triple,
+                include_source)) {
+            fprintf(stderr, "error: %s\n", error.c_str());
+            rc = 1;
+        } else {
+            printf("%s: compiled script-context .qo (O%d, %zu -L path%s%s)\n",
+                output.c_str(), opt_level, script_lib_dirs.size(),
+                script_lib_dirs.size() == 1 ? "" : "s",
+                include_source ? "" : ", source-stripped");
+        }
+    } else if (per_file_mode) {
         // Phase 4 slice 4: compile a single file from a split module
         // directory.  The directory is the parse context; the file is the
         // sole source of emitted metadata and native functions.

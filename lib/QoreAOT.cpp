@@ -246,6 +246,12 @@ static std::vector<std::string> extractAllDependencies(const char* source, int s
     std::vector<std::string>* reexport_deps = nullptr,
     std::unordered_set<std::string>* local_module_names = nullptr);
 
+// Phase 4 slice 10: llvm::object::ObjectFile for reading fragment
+// metadata out of `.qo` ELF symbol tables at compile time (`-L<dir>`
+// preload path).
+#include <llvm/Object/Binary.h>
+#include <llvm/Object/ObjectFile.h>
+#include <llvm/Object/ELFObjectFile.h>
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/IRBuilder.h>
@@ -3367,11 +3373,21 @@ static void emitFragmentSymbols(llvm::LLVMContext& ctx, llvm::Module& module,
     const std::string prefix_private = "qore_aot_" + sanmod + "_" + sanfile;
     const std::string prefix_public = "qore_" + sanmod + "_" + sanfile;
 
-    // Private global: the raw fragment bytes.
+    // Phase 4 slice 10: exported global holding the raw fragment bytes.
+    // Linkage bumped from PrivateLinkage → ExternalLinkage so the
+    // slice-10c compile-time preloader (qcc -c -L<dir>) can read the
+    // blob directly from the `.qo`'s ELF symbol table without having
+    // to dlopen the object — private-linkage symbols don't appear in
+    // the symbol table at all, so they're invisible to
+    // llvm::object::ObjectFile consumers.  No new security surface:
+    // the blob bytes were already reachable via the exported
+    // fragment_data accessor function.
     llvm::Constant* blob_init = llvm::ConstantDataArray::get(ctx,
         llvm::ArrayRef<uint8_t>(fragment_metadata.data(), fragment_metadata.size()));
     auto* blob_gv = new llvm::GlobalVariable(module, blob_init->getType(), true,
-        llvm::GlobalValue::PrivateLinkage, blob_init, prefix_private + "_fragment_blob");
+        llvm::GlobalValue::ExternalLinkage, blob_init,
+        prefix_private + "_fragment_blob");
+    blob_gv->setDLLStorageClass(llvm::GlobalValue::DLLExportStorageClass);
 
     // Exported i32 global: fragment_order.
     auto* order_gv = new llvm::GlobalVariable(module, i32_type, true,
@@ -4518,6 +4534,409 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
     // (the module being compiled is not actually loaded, so any dependencies
     // created by trySetUserModuleDependency need to be removed)
     QMM.removeUserModuleDependency(mod_info.name.c_str());
+
+    return true;
+}
+
+// Phase 4 slice 10c: extract fragment blob bytes from a `.qo` ELF
+// object by scanning its symbol table for `*_fragment_blob` entries
+// and reading each matching symbol's section slice.  Used by the
+// `-L<dir>` preload path in `compileScriptFile` to feed sibling
+// metadata into the multi-file deserializer without having to dlopen
+// the object.  Caller keeps the returned byte vectors alive for the
+// duration of deserialization.
+struct QoreAOTExtractedFragment {
+    std::string symbol_name;       // qore_aot_<mod>_<file>_fragment_blob
+    std::vector<uint8_t> bytes;    // raw blob contents
+};
+
+static bool readQoFragmentBlobs(const std::string& qo_path,
+        std::vector<QoreAOTExtractedFragment>& out, std::string& error) {
+    auto binary_or = llvm::object::createBinary(qo_path);
+    if (!binary_or) {
+        std::string msg;
+        llvm::raw_string_ostream os(msg);
+        os << llvm::toString(binary_or.takeError());
+        os.flush();
+        error = "cannot open '" + qo_path + "' as a relocatable object: " + msg;
+        return false;
+    }
+
+    llvm::object::Binary* binary = binary_or->getBinary();
+    auto* obj = llvm::dyn_cast<llvm::object::ObjectFile>(binary);
+    if (!obj) {
+        error = "'" + qo_path + "' is not a recognized object file";
+        return false;
+    }
+
+    for (const llvm::object::SymbolRef& sym : obj->symbols()) {
+        auto name_or = sym.getName();
+        if (!name_or) {
+            llvm::consumeError(name_or.takeError());
+            continue;
+        }
+        llvm::StringRef name = *name_or;
+        // Fragment blobs use the prefix scheme from emitFragmentSymbols:
+        //   qore_aot_<sanmod>_<sanfile>_fragment_blob
+        if (!name.ends_with("_fragment_blob")) {
+            continue;
+        }
+        if (!name.starts_with("qore_aot_")) {
+            continue;
+        }
+
+        auto sec_or = sym.getSection();
+        if (!sec_or) {
+            llvm::consumeError(sec_or.takeError());
+            continue;
+        }
+        llvm::object::section_iterator sec_it = *sec_or;
+        if (sec_it == obj->section_end()) {
+            continue;
+        }
+
+        auto addr_or = sym.getAddress();
+        if (!addr_or) {
+            llvm::consumeError(addr_or.takeError());
+            continue;
+        }
+        uint64_t sym_addr = *addr_or;
+        uint64_t sec_addr = sec_it->getAddress();
+        auto contents_or = sec_it->getContents();
+        if (!contents_or) {
+            llvm::consumeError(contents_or.takeError());
+            continue;
+        }
+        llvm::StringRef contents = *contents_or;
+
+        uint64_t offset = sym_addr - sec_addr;
+        uint64_t size = llvm::object::ELFSymbolRef(sym).getSize();
+        if (offset + size > contents.size()) {
+            error = "fragment blob symbol '" + name.str() + "' exceeds section "
+                "bounds in '" + qo_path + "'";
+            return false;
+        }
+
+        QoreAOTExtractedFragment frag;
+        frag.symbol_name = name.str();
+        const uint8_t* p = reinterpret_cast<const uint8_t*>(contents.data() + offset);
+        frag.bytes.assign(p, p + size);
+        out.push_back(std::move(frag));
+    }
+
+    return true;
+}
+
+// Phase 4 slice 10c: compile a single Qore source file in script
+// context mode (no module wrapper, no `.qm` required).  Sibling
+// `.qo`s found in @p library_paths are preloaded into the compile
+// program via QoreAOTBinaryMultiDeserializer so cross-file type
+// references in @p target_file resolve at parse time.  Emits a `.qo`
+// whose fragment metadata describes only the target's contributions
+// (slice 5 format, ExternalLinkage blob for downstream preload).
+bool QoreAOT::compileScriptFile(const char* target_file,
+                                const std::vector<std::string>& library_paths,
+                                const std::string& output_path,
+                                const QoreParseOptions& parse_options,
+                                std::string& error,
+                                int opt_level,
+                                const char* target_triple,
+                                bool include_source) {
+    if (!target_file || !*target_file) {
+        error = "compileScriptFile: target_file is required";
+        return false;
+    }
+
+    // Canonicalize target_file so the per-file filter in
+    // compileNamespaceFunctions matches what the parser records on
+    // each AST node's loc->file.
+    std::string target_canon;
+    {
+        char* r = realpath(target_file, nullptr);
+        if (!r) {
+            error = std::string("cannot resolve target file: ") + target_file;
+            return false;
+        }
+        target_canon = r;
+        free(r);
+    }
+
+    std::string source_text = QoreDir::get_file_content(target_canon.c_str());
+    if (source_text.empty()) {
+        error = "target source file is empty or unreadable: " + target_canon;
+        return false;
+    }
+
+    QoreParseOptions po = parse_options;
+
+    ExceptionSink xsink;
+    ExceptionSink wsink;
+    QoreProgramHelper qpgm(po, xsink);
+    if (xsink.isException()) {
+        xsink.handleExceptions();
+        error = "failed to create QoreProgram for script-context compile";
+        return false;
+    }
+    qpgm->setScriptPath(target_canon.c_str());
+
+    // Phase 4 slice 10c: preload sibling `.qo`s from -L paths.
+    // Each path is scanned for `*.qo` files (non-recursive).  For
+    // every `.qo` whose `_fragment_blob` symbol we can read, the blob
+    // is handed to the multi-file deserializer; after every `-L`
+    // directory has been walked, resolveAll() runs one cross-blob
+    // resolution pass.  Memory note: the blob bytes are copied into
+    // the deserializer's internal reader (std::vector copy on
+    // QoreAOTBinaryReader::open), so extracted_frags can go out of
+    // scope after resolveAll returns.
+    std::vector<QoreAOTExtractedFragment> extracted_frags;
+    if (!library_paths.empty()) {
+        // Scan each -L dir.
+        for (const std::string& libdir : library_paths) {
+            ExceptionSink scan_xsink;
+            QoreString regex(".+\\.qo$");
+            QoreDir dir(&scan_xsink, QCS_DEFAULT, libdir.c_str());
+            if (scan_xsink.isException()) {
+                scan_xsink.handleExceptions();
+                error = "cannot open -L directory: " + libdir;
+                return false;
+            }
+            ReferenceHolder<QoreListNode> files(
+                dir.list(&scan_xsink, S_IFREG, &regex), &scan_xsink);
+            if (scan_xsink.isException()) {
+                scan_xsink.handleExceptions();
+                error = "cannot list -L directory: " + libdir;
+                return false;
+            }
+            if (!files) {
+                continue;
+            }
+            for (size_t i = 0; i < files->size(); ++i) {
+                const QoreStringNode* fn =
+                    files->retrieveEntry(i).get<const QoreStringNode>();
+                if (!fn) {
+                    continue;
+                }
+                std::string qo_path = libdir + "/" + fn->c_str();
+                if (!readQoFragmentBlobs(qo_path, extracted_frags, error)) {
+                    return false;
+                }
+            }
+        }
+
+        // Phase 1 + Phase 2 via multi-deserializer.  Must run under a
+        // ProgramRuntimeParseContextHelper so deserializer-driven
+        // UserVariantBase construction can call
+        // parse_get_parse_options() (same invariant the runtime
+        // module-init path observes — see QoreAOTRuntime.cpp:6911).
+        if (!extracted_frags.empty()) {
+            ExceptionSink pch_xsink;
+            ProgramRuntimeParseContextHelper pch(&pch_xsink, *qpgm);
+            if (pch_xsink.isException()) {
+                pch_xsink.handleExceptions();
+                error = "failed to set parse context for sibling preload";
+                return false;
+            }
+            QoreAOTBinaryMultiDeserializer mdes(*qpgm);
+            bool preload_failed = false;
+            std::string deser_error;
+            for (auto& frag : extracted_frags) {
+                if (!mdes.addBlob(frag.bytes.data(),
+                        static_cast<uint32_t>(frag.bytes.size()),
+                        deser_error)) {
+                    error = "preload of '" + frag.symbol_name + "' failed: "
+                        + deser_error;
+                    preload_failed = true;
+                    break;
+                }
+            }
+            if (!preload_failed) {
+                std::string resolve_error;
+                if (!mdes.resolveAll(resolve_error)) {
+                    error = "sibling .qo cross-resolution failed: "
+                        + resolve_error;
+                    preload_failed = true;
+                }
+            }
+            if (preload_failed) {
+                return false;
+            }
+        }
+    }
+
+    // Parse + commit the target source.  With siblings preloaded,
+    // `class Foo inherits Bar` (where Bar is in a sibling `.qo`)
+    // resolves via parseFindClassIntern's namespace-tree walk.
+    qpgm->parsePending(source_text.c_str(), target_canon.c_str(), &xsink,
+        &wsink, QP_WARN_DEFAULT);
+    if (xsink.isException()) {
+        xsink.handleExceptions();
+        error = "parse error in target file: " + target_canon;
+        return false;
+    }
+    qpgm->parseCommit(&xsink, &wsink, QP_WARN_DEFAULT);
+    if (xsink.isException()) {
+        xsink.handleExceptions();
+        error = "parse commit failed: " + target_canon;
+        return false;
+    }
+    if (wsink.isException()) {
+        wsink.handleWarnings();
+    }
+
+    // LLVM codegen setup.
+    llvm::InitializeNativeTarget();
+    llvm::InitializeNativeTargetAsmPrinter();
+    llvm::InitializeNativeTargetAsmParser();
+
+    llvm::LLVMContext ctx;
+    std::string mod_name_san = sanitizeCIdentifier(fileBasenameNoExt(target_canon));
+    auto module = std::make_unique<llvm::Module>(
+        "qore_aot_script_" + mod_name_san, ctx);
+
+    std::vector<AOTCompiledFunc> compiled_funcs;
+    std::vector<AOTCompiledInitFunc> compiled_init_funcs;
+    int total_funcs = 0;
+    int compiled_count = 0;
+    int failed_count = 0;
+    size_t total_ir_insts_all = 0;
+
+    llvm::DIBuilder di_builder(*module);
+    auto* di_file = di_builder.createFile("<aot>", ".");
+    auto* di_cu = di_builder.createCompileUnit(
+        llvm::dwarf::DW_LANG_lo_user, di_file, "Qore AOT", false, "", 0);
+    if (!module->getModuleFlag("Dwarf Version")) {
+        module->addModuleFlag(llvm::Module::Warning, "Dwarf Version", 5);
+    }
+    if (!module->getModuleFlag("Debug Info Version")) {
+        module->addModuleFlag(llvm::Module::Warning, "Debug Info Version",
+            llvm::DEBUG_METADATA_VERSION);
+    }
+
+    qore_program_private* pp = qore_program_private::get(**qpgm);
+    qore_ns_private* root_ns = qore_ns_private::get(*pp->RootNS);
+    AOTConstantReverseMap const_reverse_map = buildConstantReverseMap(root_ns);
+
+    // compile_file filter restricts emitted code to items declared
+    // in target_canon.  Sibling items (preloaded from -L) already
+    // have their LLVM code in their own .qo's, so we do not re-emit
+    // them here.
+    compileNamespaceFunctions(root_ns, *qpgm, ctx, *module, di_builder, di_cu,
+        compiled_funcs, compiled_init_funcs, total_funcs, compiled_count,
+        failed_count, total_ir_insts_all, &const_reverse_map, nullptr,
+        /*compile_module=*/nullptr, /*compile_file=*/target_canon.c_str(),
+        /*metadata_only=*/false);
+
+    reportAOTCompileStats("script-context .qo", compiled_count, total_funcs,
+        failed_count, compiled_funcs);
+
+    // Build the fragment metadata blob covering just this file's
+    // contributions (slice 5 format).  No module-info globals, no
+    // register fn.
+    std::vector<uint8_t> metadata_blob;
+    {
+        QoreAOTBinaryWriter writer;
+        QoreAOTBinaryHeader hdr{};
+        hdr.magic = QORE_AOT_BINARY_MAGIC;
+        hdr.version = QORE_AOT_BINARY_VERSION;
+        hdr.flags = 0;  // not a module
+        const QoreParseOptions& final_po = qpgm->getParseOptions();
+        hdr.parse_options_lo = final_po.getLo();
+        hdr.parse_options_hi = final_po.getHi();
+        hdr.label_offset = writer.strings.add(target_canon.c_str());
+        hdr.max_opcode_id = QORE_IR_MAX_OPCODE;
+        hdr.qore_version_major = QORE_VERSION_MAJOR;
+        hdr.qore_version_minor = QORE_VERSION_MINOR;
+        hdr.qore_version_patch = QORE_VERSION_PATCH;
+        hdr.source_hash = computeSourceHash(target_canon.c_str());
+        hdr.feature_flags = computeFeatureFlags(compiled_funcs);
+
+        if (!serializeNamespaceTree(writer, root_ns, nullptr, nullptr,
+                target_canon.c_str())) {
+            error = "failed to serialize script namespace tree";
+            return false;
+        }
+
+        std::vector<AOTCompiledFuncWithSlots> func_slots;
+        for (auto& cf : compiled_funcs) {
+            AOTCompiledFuncWithSlots fws;
+            fws.name = cf.name;
+            fws.num_locals = cf.num_locals;
+            fws.num_globals = cf.num_globals;
+            fws.num_exprs = cf.num_exprs;
+            fws.num_stmts = cf.num_stmts;
+            fws.num_regex_cases = cf.num_regex_cases;
+            fws.num_lv_path_insts = cf.num_lv_path_insts;
+            fws.slot_ids = cf.slot_ids;
+            for (auto& hir : cf.handler_irs) {
+                fws.handler_irs.push_back(hir.get());
+            }
+            fws.aot_locs = cf.aot_locs;
+            func_slots.push_back(std::move(fws));
+        }
+        for (auto& cif : compiled_init_funcs) {
+            AOTCompiledFuncWithSlots fws;
+            fws.name = cif.name;
+            fws.num_locals = cif.num_locals;
+            fws.num_globals = cif.num_globals;
+            fws.num_exprs = cif.num_exprs;
+            fws.num_stmts = cif.num_stmts;
+            fws.num_regex_cases = cif.num_regex_cases;
+            fws.num_lv_path_insts = cif.num_lv_path_insts;
+            fws.slot_ids = cif.slot_ids;
+            func_slots.push_back(std::move(fws));
+        }
+        if (!serializeSlotMaps(writer, func_slots, &const_reverse_map, error)) {
+            return false;
+        }
+        if (!compiled_init_funcs.empty()) {
+            serializeInitFuncs(writer, compiled_init_funcs);
+        }
+        {
+            bool has_fallback_funcs = std::any_of(func_slots.begin(),
+                func_slots.end(), funcNeedsFallback);
+            if (has_fallback_funcs || include_source) {
+                serializeFallbackSources(writer, func_slots,
+                    source_text.c_str(), (int)source_text.size());
+            }
+        }
+
+        hdr.section_count = 0;
+        if (!writer.finalize(hdr, metadata_blob)) {
+            error = "failed to finalize script metadata";
+            return false;
+        }
+    }
+
+    printf("AOT: script .qo fragment blob: %d bytes (uncompressed)\n",
+        (int)metadata_blob.size());
+
+    // Emit fragment symbols (slice 5).  App-name = sanitized
+    // basename of the target file so different files in the same
+    // app get distinct symbols.  Order stays 0 for script mode
+    // (slice 5's alphabetical ordering doesn't apply — there's no
+    // single `.qm` primary in script context).
+    const std::string app_name = mod_name_san;  // reuse basename as app label
+    const std::string file_san = mod_name_san;
+    emitFragmentSymbols(ctx, *module, app_name, file_san, metadata_blob,
+        /*fragment_order=*/0);
+
+    di_builder.finalize();
+
+    std::string verify_error;
+    llvm::raw_string_ostream verify_os(verify_error);
+    if (llvm::verifyModule(*module, &verify_os)) {
+        verify_os.flush();
+        error = "LLVM module verification failed: " + verify_error;
+        return false;
+    }
+
+    if (getenv("QORE_DUMP_LLVM_IR")) {
+        module->print(llvm::errs(), nullptr);
+    }
+
+    if (!emitObjectFile(*module, output_path, error, opt_level, target_triple)) {
+        return false;
+    }
 
     return true;
 }

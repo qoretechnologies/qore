@@ -580,6 +580,54 @@ public:
                                          const char* target_triple = nullptr,
                                          bool include_source = false);
 
+    //! Phase 4 slice 10: compile one file of a Qore application to a
+    //! `.qo` in script-context mode (no module wrapper, no `.qm`).
+    /**
+        Enables a C/C++-style build model for multi-file Qore
+        applications (e.g. Qorus's qctl):
+
+        ```
+        qcc -c -L<build-dir> -o foo.qo foo.qc
+        ```
+
+        Sibling `.qo` files discovered under each `-L` directory are
+        preloaded via `QoreAOTBinaryMultiDeserializer` so that
+        cross-file type references in @p target_file (inheritance,
+        member access, typed expressions) resolve at parse time.
+        Parse context is otherwise plain `%modern` defaults — no
+        PO_IN_MODULE, no module-context helper, no `.qm` required.
+
+        The output `.qo` carries:
+        - compiled LLVM native code for items declared in @p target_file;
+        - a fragment metadata blob describing just those items
+          (slice 5 format, ExternalLinkage so slice-10c preload in
+          downstream compiles can read it from the ELF symbol table);
+        - fragment accessor symbols (slice 5).
+
+        @param target_file absolute path of the source file to compile
+        @param library_paths directories scanned for sibling `.qo`s
+                        to preload before parsing (C's `-L` semantic)
+        @param output_path path for the output `.qo`
+        @param parse_options parse options to seed the compile program
+                        (PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES
+                        suggested; `%modern` directive in the source
+                        will OR-merge additional bits)
+        @param error error message on failure
+        @param opt_level LLVM optimization level 0-3 (default: 2)
+        @param target_triple target triple for cross-compilation
+                        (nullptr = native)
+        @param include_source embed source text for runtime fallback
+        @return true on success, false on failure
+    */
+    static bool compileScriptFile(const char* target_file,
+                                  const std::vector<std::string>& library_paths,
+                                  const std::string& output_path,
+                                  const QoreParseOptions& parse_options,
+                                  std::string& error,
+                                  int opt_level = 2,
+                                  const char* target_triple = nullptr,
+                                  bool include_source = false);
+
     //! Phase 4 slice 7: package a set of per-file `.qo` files into a
     //! `.qoa` static archive with a single `qore_qoa_register_all()`
     //! entry point, suitable for static linkage into a C++ host
