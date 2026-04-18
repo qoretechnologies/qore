@@ -11404,6 +11404,26 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             return true;
         }
 
+        // Phase 1.5 init-expression outlining: invoke an AOT-emitted
+        // helper function by LLVM symbol name.  Helper ABI matches the
+        // standard AOT init-function signature (ptr ctx, ptr xsink) →
+        // i64 nan-boxed value.  After the call, propagate any thrown
+        // exception through the same xsink-based mechanism used by
+        // other AOT helper calls.
+        case QoreIROpcode::CallAOTHelper: {
+            const auto* cah = static_cast<const QoreIRCallAOTHelperInstruction*>(inst);
+            auto* helper_ft = llvm::FunctionType::get(i64_type,
+                    {ptr_type, ptr_type}, false);
+            auto helper = module.getOrInsertFunction(cah->helper_name, helper_ft);
+            llvm::Value* result = builder->CreateCall(helper,
+                    {aot_ctx_arg, xsink_arg});
+            emitExceptionCheck(module, llvm_func, inst);
+            values[inst->result.id] = result;
+            nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(result, inst->result.id, llvm_func);
+            return true;
+        }
+
         // === Scope enter/exit for on_exit handler management ===
         case QoreIROpcode::ScopeEnter: {
             const auto* sinst = static_cast<const QoreIRScopeEnterInstruction*>(inst);

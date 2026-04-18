@@ -951,6 +951,14 @@ QoreIRInstruction* QoreIRBuilder::createPushTempMark(const QoreProgramLocation* 
     return inst;
 }
 
+QoreIRCallAOTHelperInstruction* QoreIRBuilder::createCallAOTHelper(
+        const std::string& helper_name, const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRCallAOTHelperInstruction>(helper_name);
+    inst->loc = loc;
+    inst->result = getFunction()->createValue();
+    return inst;
+}
+
 QoreIRGuardInstruction* QoreIRBuilder::createGuardInt(QoreIRValue value, QoreIRBasicBlock* exception_target,
         const QoreProgramLocation* loc) {
     auto inst = block->appendInstruction<QoreIRGuardInstruction>(QoreIROpcode::GuardInt);

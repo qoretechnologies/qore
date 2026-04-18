@@ -590,6 +590,26 @@ enum class QoreIROpcode : uint16_t {
     DiscardTemps        = 358,  //!< drain cleanup back to nearest PushTempMark
     PushTempMark        = 359,  //!< push UINT32_MAX sentinel onto cleanup
 
+    //! Call an AOT-emitted helper function by LLVM symbol name.
+    //! Used by the init-expression outlining pass (Phase 1.5 of the
+    //! Qorus AOT migration) to split a pathologically large init-expr
+    //! LLVM function — e.g. a `public const` bound to a 100-element
+    //! hash literal — into many small helper functions plus a thin
+    //! outer init that stitches their results into the aggregate.
+    //!
+    //! Helper ABI matches the AOT function signature
+    //! (`int64_t (ptr ctx, ptr xsink)`): result is a nan-boxed
+    //! QoreValue, exception propagation via the passed-in xsink.
+    //! No operands are consumed by the call itself — the helper is
+    //! self-contained (its own IR function was lowered separately
+    //! in the same module).  The result SSA id receives the helper's
+    //! return value.
+    //!
+    //! Not expected in the IR interpreter path — outlining runs only
+    //! during AOT `.qo`/`.qmod` compilation.  The interpreter handler
+    //! raises a runtime error if ever encountered.
+    CallAOTHelper       = 360,
+
     // NOTE: When adding new opcodes, assign the next sequential ID (360, 361, ...)
     // QORE_IR_MAX_OPCODE is derived automatically from the last enum value below.
 };
@@ -1874,6 +1894,23 @@ public:
     }
 
     QoreValue expr;  //!< ParseReferenceNode expression
+};
+
+//! Call an AOT-emitted helper function by LLVM symbol name.
+/** Produced by the init-expression outlining pass to split a large
+    init-function body across multiple LLVM functions.  Helper fns
+    have the AOT ABI (ptr ctx, ptr xsink) → int64_t nan-boxed value.
+    The call instruction carries only the symbol name; no operands
+    are consumed because the helper is self-contained.
+*/
+class QoreIRCallAOTHelperInstruction : public QoreIRInstruction {
+public:
+    explicit QoreIRCallAOTHelperInstruction(std::string n_helper_name)
+            : QoreIRInstruction(QoreIROpcode::CallAOTHelper),
+              helper_name(std::move(n_helper_name)) {
+    }
+
+    std::string helper_name;  //!< LLVM symbol name of the target helper fn
 };
 
 class QoreIRBasicBlock {

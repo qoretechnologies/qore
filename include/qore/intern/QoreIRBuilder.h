@@ -250,6 +250,14 @@ public:
     //! Emit PushTempMark to start a statement-scoped cleanup region.  Pairs
     //! with a later DiscardTemps that drains back to this mark.
     QoreIRInstruction* createPushTempMark(const QoreProgramLocation* loc = nullptr);
+
+    //! Emit a call to an AOT-emitted helper function by LLVM symbol name.
+    //! Only appears in AOT-compiled IR produced by the init-expression
+    //! outlining pass; the JIT interpreter treats this as a hard error
+    //! (outlined IR is never re-executed through the interpreter).
+    QoreIRCallAOTHelperInstruction* createCallAOTHelper(
+            const std::string& helper_name,
+            const QoreProgramLocation* loc = nullptr);
     QoreIRGuardInstruction* createGuardInt(QoreIRValue value, QoreIRBasicBlock* exception_target,
         const QoreProgramLocation* loc = nullptr);
     QoreIRGuardInstruction* createGuardFloat(QoreIRValue value, QoreIRBasicBlock* exception_target,

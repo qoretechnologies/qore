@@ -5901,6 +5901,17 @@ load_local_done:
                 ++ip;
                 break;
             }
+            case QoreIROpcode::CallAOTHelper: {
+                // CallAOTHelper is emitted only by the AOT init-expression
+                // outlining pass (Phase 1.5).  The IR interpreter should
+                // never encounter it — outlined IR is LLVM-lowered only.
+                if (xsink) {
+                    xsink->raiseException("IR-INTERPRETER-ERROR",
+                            "unexpected CallAOTHelper in interpreter path "
+                            "(AOT-only opcode)");
+                }
+                return false;
+            }
             case QoreIROpcode::DiscardTemps: {
                 // Drain cleanup back to (and including) the nearest PushTempMark
                 // sentinel so expression temps are destructed at end of
