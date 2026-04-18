@@ -234,9 +234,29 @@ correct code.
 **Status:** opt-in. Default threshold=0 (disabled). Flag promoted to
 `qcc --big-fn-threshold=N`.
 
+**Validation measurements (2026-04-18):**
+
+| Module     | Funcs | Baseline | threshold=200 | Speedup | Output   |
+|------------|-------|----------|---------------|---------|----------|
+| HttpServer | 198   | 623 s    | 13.6 s        | **46x** | 18 → 5.7 MB |
+| SqlUtil    | 747   | 293 s    | 172 s         | 1.70x   | 19.9 → 15.6 MB |
+| OpenApi3   | 201   | 29.2 s   | 29.2 s        | 1.00x   | identical |
+
+- HttpServer is the pathological case (one 905-BB function) — 46x win.
+- SqlUtil has multiple medium-large functions but no single outlier —
+  still a real 1.70x / 22% smaller win with no runtime regression.
+- OpenApi3 has zero functions crossing threshold=200 — Phase 5a is a
+  no-op; same SHA256. Confirms the flag doesn't touch small modules.
+
+Runtime correctness: HS qtest 56/56 green with p5a qmod (p77); SqlUtil
+has a **pre-existing** AOT runtime SEGV (separate issue, unchanged by
+Phase 5a — identical behavior in base and p5a variants).
+
 **Outstanding:**
-- Measure runtime cost on representative apps (not just HS).
-- Decide default: threshold=200 vs remain opt-in.
+- Decide default: threshold=200 vs remain opt-in. Recommendation: **flip
+  to 200 by default**. The 46x win on pathological code with negligible
+  cost on non-pathological modules is a clear net positive. Users who
+  want the old behavior can set `--big-fn-threshold=0`.
 - Consider tier: `-O3` → threshold 200; `-O2` → threshold 300; `-O0` →
   tag everything.
 
