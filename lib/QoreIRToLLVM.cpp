@@ -1302,16 +1302,32 @@ bool QoreIRToLLVM::canUseSsaCleanup(llvm::BasicBlock* current_bb) {
     if (!last_call_was_invoke_eh) {
         return false;
     }
-    if (!isOnStraightLineChain(current_bb)) {
-        return false;
-    }
-    // Consume the one-shot flag: only the immediately following track
-    // call benefits from this EH invoke's context.  Deferred-mode
-    // functions are eligible because the deferred tail poll
-    // (Return/ReturnNothing/pre-try-flush) promotes pending SSA to
-    // cleanup allocas before branching to error_return_block.
+    // Disabled: SSA-direct tracking triggers "Instruction does not dominate
+    // all uses" verifier errors on HttpServer functions with try/catch +
+    // later emitCondBrWithSsaPreamble. Values pushed on the straight-line
+    // chain before a try block remain in pending_ssa_cleanup after the
+    // try exits normally; at a later CondBr in post-try-merge (which has
+    // multiple preds and thus isn't dominated by the try body), the
+    // promotePendingSsaToAllocas store references the SSA value from a
+    // non-dominating def.
+    //
+    // HS profiling (2026-04-18): 43 of 198 HttpServer functions fail to
+    // AOT-compile with this error. Net effect: those functions fall back
+    // to source interpretation at runtime — a performance regression in
+    // disguise. Keeping the EH invoke infrastructure (per-invoke LPs with
+    // shared function_unwind_lp fast path) but disabling SSA-direct
+    // tracking restores all 198 functions to AOT compilation with
+    // compile-time equivalent to the noEH baseline (~836s solo).
+    //
+    // Re-enabling SSA-direct requires scope-boundary handling: pending
+    // entries must be promoted/decref'd when leaving the scope they were
+    // pushed in (try body, catch arm, etc.), not lazily at the next
+    // CondBr. See design/aot-phase2b-step3-dominator-tree.md for the
+    // detailed analysis. Until that work lands, the conservative path is
+    // correct.
+    (void)current_bb;
     last_call_was_invoke_eh = false;
-    return true;
+    return false;
 }
 
 llvm::BasicBlock* QoreIRToLLVM::createPerInvokeCleanupLP(llvm::Module& module,
