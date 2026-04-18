@@ -4984,6 +4984,48 @@ static bool loadRequireModules(QoreProgram* pgm,
     return true;
 }
 
+// Phase 4 slice 11b: parse a list of stub files into the given
+// program before target parsing.  Stubs declare namespaces,
+// typedefs, and constants that the host synthesizes in C++ at
+// runtime (e.g. `QNS = new QoreNamespace("Qorus")` +
+// `init_omqlib_functions(*QNS)` in `qctl_main.cpp`); mirroring them
+// as Qore source lets the parser resolve bareword references.
+// Stubs are NOT emitted as `.qo`s — the per-file fragment filter
+// excludes them because each target's output filter matches its
+// canonical path, not the stub's.  parsePending accumulates decls;
+// parseCommit is deferred to the target-parse path.
+static bool parseStubFiles(QoreProgram* pgm,
+        const std::vector<std::string>& stub_files,
+        std::string& error) {
+    for (const std::string& stub_path : stub_files) {
+        char* r = realpath(stub_path.c_str(), nullptr);
+        if (!r) {
+            error = "cannot resolve stub file: " + stub_path;
+            return false;
+        }
+        std::string canon = r;
+        free(r);
+        std::string src = QoreDir::get_file_content(canon.c_str());
+        if (src.empty()) {
+            error = "stub file is empty or unreadable: " + canon;
+            return false;
+        }
+        ExceptionSink xsink;
+        ExceptionSink wsink;
+        pgm->parsePending(src.c_str(), canon.c_str(),
+            &xsink, &wsink, QP_WARN_DEFAULT);
+        if (xsink.isException()) {
+            xsink.handleExceptions();
+            error = "parse error in stub file: " + canon;
+            return false;
+        }
+        if (wsink.isException()) {
+            wsink.handleWarnings();
+        }
+    }
+    return true;
+}
+
 bool QoreAOT::compileScriptFilesBatch(
         const std::vector<std::string>& target_files,
         const std::string& output_dir,
@@ -4992,7 +5034,8 @@ bool QoreAOT::compileScriptFilesBatch(
         int opt_level,
         const char* target_triple,
         bool include_source,
-        const std::vector<std::string>& require_modules) {
+        const std::vector<std::string>& require_modules,
+        const std::vector<std::string>& stub_files) {
     if (target_files.empty()) {
         error = "compileScriptFilesBatch: target_files is empty";
         return false;
@@ -5070,6 +5113,14 @@ bool QoreAOT::compileScriptFilesBatch(
         return false;
     }
 
+    // Phase 4 slice 11b: parse stub files into the program before
+    // targets so their declarations (namespaces, constants, etc.)
+    // are visible to target parsing.  Stubs contribute no `.qo`
+    // output; the fragment filter later excludes them.
+    if (!parseStubFiles(*qpgm, stub_files, error)) {
+        return false;
+    }
+
     for (auto& e : entries) {
         qpgm->parsePending(e.source.c_str(), e.canon.c_str(),
             &xsink, &wsink, QP_WARN_DEFAULT);
@@ -5121,7 +5172,8 @@ bool QoreAOT::compileScriptFile(const char* target_file,
                                 int opt_level,
                                 const char* target_triple,
                                 bool include_source,
-                                const std::vector<std::string>& require_modules) {
+                                const std::vector<std::string>& require_modules,
+                                const std::vector<std::string>& stub_files) {
     if (!target_file || !*target_file) {
         error = "compileScriptFile: target_file is required";
         return false;
@@ -5162,6 +5214,12 @@ bool QoreAOT::compileScriptFile(const char* target_file,
     // Phase 4 slice 11a: preload external modules before parsing so
     // sources that reference their types without `%requires` compile.
     if (!loadRequireModules(*qpgm, require_modules, error)) {
+        return false;
+    }
+
+    // Phase 4 slice 11b: parse stub files into the program before
+    // target parsing (same rationale as batch mode).
+    if (!parseStubFiles(*qpgm, stub_files, error)) {
         return false;
     }
 

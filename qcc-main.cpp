@@ -86,6 +86,17 @@ static std::vector<std::string> script_lib_dirs;
 // without %requires directives compile cleanly.  Repeatable;
 // loaded in declaration order via MM.parseLoadModule.
 static std::vector<std::string> load_modules;
+// Phase 4 slice 11b: --stub=<file> declarative-only sources parsed
+// into the compile program before target sources.  The host
+// synthesizes namespaces, functions, or constants in C++ at runtime
+// (e.g. `QoreNamespace* QNS = new QoreNamespace("Qorus")` +
+// injection helpers); the stub file mirrors those declarations in
+// Qore syntax so the parser can resolve bareword references at
+// compile time.  Stubs are NOT emitted as `.qo`s — their per-file
+// contributions are excluded because the fragment filter matches
+// each target's canonical path, not the stub's path.  Repeatable;
+// parsed in declaration order before targets.
+static std::vector<std::string> stub_files;
 // Phase 4 slice 6: --from-objects signals aggregator mode — the
 // positional inputs are per-file `.qo` objects (produced by
 // `qcc -c --context=DIR <file>`) that get linked together plus a
@@ -142,6 +153,14 @@ static void print_usage(const char* prog) {
            "                         directives (the host loads the module at runtime).\n"
            "                         May be repeated; modules load in declaration order.\n"
            "                         Matches `qore -l <mod>` CLI convention.\n");
+    printf("      --stub=FILE        Preload a declarative Qore source file into the\n"
+           "                         compile program before targets — its namespaces,\n"
+           "                         typedefs, and constants become visible to the\n"
+           "                         parser, but no `.qo` is emitted for the stub.\n"
+           "                         Use when the host synthesizes decls in C++ at\n"
+           "                         runtime (namespaces, injected functions) that\n"
+           "                         target sources reference by bare name.  Repeatable;\n"
+           "                         parsed in declaration order before targets.\n");
     printf("      --from-objects     Aggregate mode: positional args are per-file .qo\n"
            "                         inputs; requires -m and --context=DIR; produces a\n"
            "                         standard .qmod by linking the .qo's + fresh glue\n");
@@ -202,6 +221,7 @@ static struct option long_options[] = {
     // long-only options (no short form): use values > 255 so they
     // don't collide with char short codes.
     {"output-dir",        required_argument, nullptr, 0x100},
+    {"stub",              required_argument, nullptr, 0x101},
     {"from-objects",      no_argument,       nullptr, 'F'},
     {"archive",           no_argument,       nullptr, 'a'},
     {"verbose",           no_argument,       nullptr, 'v'},
@@ -275,6 +295,9 @@ static int parse_options_cmdline(int argc, char** argv) {
                 break;
             case 0x100:  // --output-dir
                 batch_output_dir = optarg;
+                break;
+            case 0x101:  // --stub
+                stub_files.emplace_back(optarg);
                 break;
             case 'F':
                 from_objects = true;
@@ -578,7 +601,7 @@ int main(int argc, char** argv) {
         bool ok = QoreAOT::compileScriptFilesBatch(
             batch_sources, batch_output_dir, PO_DEFAULT, error,
             opt_level, target_triple, include_source,
-            load_modules);
+            load_modules, stub_files);
         if (!ok) {
             fprintf(stderr, "error: %s\n", error.c_str());
             qore_cleanup();
@@ -792,7 +815,8 @@ int main(int argc, char** argv) {
                 opt_level,
                 target_triple,
                 include_source,
-                load_modules)) {
+                load_modules,
+                stub_files)) {
             fprintf(stderr, "error: %s\n", error.c_str());
             rc = 1;
         } else {
