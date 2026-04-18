@@ -70,6 +70,39 @@ public:
     */
     virtual BinaryNode* handleBinaryFrame(const BinaryNode* data,
         ExceptionSink* xsink) = 0;
+
+    //! Raw-bytes entry point — called before handleTextFrame/handleBinaryFrame
+    /** Implementations that can process raw frame bytes without needing a
+        QoreStringNode / BinaryNode wrapper (e.g., echo) should override this
+        to avoid the wrapper allocation and copy.
+
+        Default implementation wraps the bytes and calls
+        handleTextFrame / handleBinaryFrame for backward compatibility.
+
+        @param opcode WSOP_TEXT or WSOP_BINARY
+        @param data pointer to the (already-reassembled) message payload
+        @param len length of the payload in bytes
+        @param xsink exception sink
+        @return pre-encoded response frame(s) to send, or nullptr for no response.
+                Caller takes ownership (must deref).
+
+        @since %Qore 2.3
+    */
+    DLLLOCAL virtual BinaryNode* handleFrameRaw(WsOpcode opcode,
+            const void* data, size_t len, ExceptionSink* xsink) {
+        if (opcode == WSOP_TEXT) {
+            SimpleRefHolder<QoreStringNode> text(new QoreStringNode(
+                reinterpret_cast<const char*>(data), len, QCS_UTF8));
+            return handleTextFrame(*text, xsink);
+        } else if (opcode == WSOP_BINARY) {
+            SimpleRefHolder<BinaryNode> bin(new BinaryNode());
+            if (data && len) {
+                bin->append(data, len);
+            }
+            return handleBinaryFrame(*bin, xsink);
+        }
+        return nullptr;
+    }
 };
 
 //! Built-in echo handler: reflects text/binary frames back to the sender
@@ -85,6 +118,10 @@ public:
 
     DLLLOCAL BinaryNode* handleBinaryFrame(const BinaryNode* data,
             ExceptionSink* xsink) override;
+
+    //! Fast-path echo: encode raw bytes directly — no wrapper allocation
+    DLLLOCAL BinaryNode* handleFrameRaw(WsOpcode opcode, const void* data,
+            size_t len, ExceptionSink* xsink) override;
 };
 
 //! C++ private data for HttpWebSocketPollOperationBase

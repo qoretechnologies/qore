@@ -57,6 +57,13 @@ BinaryNode* WsEchoFrameHandler::handleBinaryFrame(const BinaryNode* data,
         data->getPtr(), data->size(), true, false);
 }
 
+BinaryNode* WsEchoFrameHandler::handleFrameRaw(WsOpcode opcode,
+        const void* data, size_t len, ExceptionSink* xsink) {
+    // Encode directly from raw bytes — skips the QoreStringNode / BinaryNode
+    // wrapper allocation + copy that the default implementation performs.
+    return WebSocketFrameEncoder::encode(opcode, data, len, true, false);
+}
+
 // ============================================================
 // HttpWebSocketPollOperationPriv implementation
 // ============================================================
@@ -490,20 +497,12 @@ void HttpWebSocketPollOperationPriv::handleFrame(const WsFrame& frame, Exception
 
         // I/O-thread fast path: handle the frame in C++ without context switch
         if (io_frame_handler) {
-            BinaryNode* response = nullptr;
-            if (msg_opcode == WSOP_TEXT) {
-                SimpleRefHolder<QoreStringNode> text(new QoreStringNode(
-                    reinterpret_cast<const char*>(msg_data), msg_len, QCS_UTF8));
-                response = io_frame_handler->handleTextFrame(*text, xsink);
-            } else if (msg_opcode == WSOP_BINARY) {
-                // Must copy the data — frame.payload still owns the pointer and will
-                // be deref'd after handleFrame() returns (line 370).
-                SimpleRefHolder<BinaryNode> bin(new BinaryNode());
-                if (msg_data && msg_len) {
-                    bin->append(msg_data, msg_len);
-                }
-                response = io_frame_handler->handleBinaryFrame(*bin, xsink);
-            }
+            // Raw-bytes dispatch: handlers that can process raw bytes (e.g., echo)
+            // override handleFrameRaw() to skip wrapper allocation + copy.  The
+            // base-class default wraps the bytes in a QoreStringNode/BinaryNode
+            // and calls handleTextFrame/handleBinaryFrame for backward compat.
+            BinaryNode* response = io_frame_handler->handleFrameRaw(
+                static_cast<WsOpcode>(msg_opcode), msg_data, msg_len, xsink);
             if (response && !*xsink) {
                 if (*pending_send) {
                     pending_send->append(response);
