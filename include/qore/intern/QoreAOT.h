@@ -580,6 +580,48 @@ public:
                                          const char* target_triple = nullptr,
                                          bool include_source = false);
 
+    //! Phase 4 slice 10i: batch-compile a list of Qore application
+    //! sources into one `.qo` per file, sharing a single parse cycle.
+    /**
+        Eliminates the O(N²) sibling-preload overhead of calling
+        `compileScriptFile` N times (each invocation would re-parse
+        every sibling `.qo`'s metadata).  Instead:
+
+        1. Parse every source in @p target_files into a single
+           QoreProgram (one `parsePending` per file, one
+           `parseCommit`).  Cross-file references resolve through
+           the standard parser name-walk — no `.qo` preload needed.
+        2. For each source: compile its contributions with the
+           per-file filter (slice 4's `compile_file`), emit fragment
+           + register symbols (slice 5 / 10d), write
+           `<output_dir>/<basename>.qo`.
+
+        Functional output is identical to N separate
+        `compileScriptFile` calls, just much faster at scale.  A
+        qctl-shape build (24 files) does 1 parse instead of 24 with
+        576 metadata preload ops.
+
+        @param target_files absolute or relative paths of source
+                files to compile together
+        @param output_dir directory for output `.qo` files
+                (created if missing; `<basename>.qo` per target)
+        @param parse_options parse options to seed the compile program
+        @param error error message on failure
+        @param opt_level LLVM optimization level 0-3 (default: 2)
+        @param target_triple target triple for cross-compilation
+                (nullptr = native)
+        @param include_source embed source text for runtime fallback
+        @return true on success, false on failure
+    */
+    static bool compileScriptFilesBatch(
+            const std::vector<std::string>& target_files,
+            const std::string& output_dir,
+            const QoreParseOptions& parse_options,
+            std::string& error,
+            int opt_level = 2,
+            const char* target_triple = nullptr,
+            bool include_source = false);
+
     //! Phase 4 slice 10: compile one file of a Qore application to a
     //! `.qo` in script-context mode (no module wrapper, no `.qm`).
     /**

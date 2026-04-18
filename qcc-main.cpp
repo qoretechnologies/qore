@@ -66,6 +66,11 @@ static bool compile_only = false;
 // module so the parser has the full directory as context while the
 // AOT writer emits only the target file's contributions.
 static const char* context_dir = nullptr;
+// Phase 4 slice 10i: --output-dir=<dir> for batch-mode script compile.
+// When the user passes multiple positional sources in `-c` script
+// mode, qcc parses them all into one QoreProgram (one parse cycle,
+// no per-file sibling preload) and emits <basename>.qo into this dir.
+static const char* batch_output_dir = nullptr;
 // Phase 4 slice 10c: -L<dir> directories for sibling `.qo` preload
 // when compiling a single-file script with `-c` + script context (no
 // module wrapper).  Each directory is scanned for `*.qo`; their
@@ -117,6 +122,11 @@ static void print_usage(const char* prog) {
            "                         refs in the target source resolve at parse time\n"
            "                         (C-style: .qo ~ .o + .h).  Enables `qcc -c <file>`\n"
            "                         for plain multi-file Qore apps with no .qm.\n");
+    printf("      --output-dir=DIR   Batch-mode output directory.  Required when `-c`\n"
+           "                         is given multiple source files: they share one\n"
+           "                         parse cycle and emit <basename>.qo into DIR.\n"
+           "                         Much faster than per-file `qcc -c` for large\n"
+           "                         app-style source sets (no O(N^2) sibling preload).\n");
     printf("      --from-objects     Aggregate mode: positional args are per-file .qo\n"
            "                         inputs; requires -m and --context=DIR; produces a\n"
            "                         standard .qmod by linking the .qo's + fresh glue\n");
@@ -173,6 +183,9 @@ static struct option long_options[] = {
     {"big-fn-threshold",  required_argument, nullptr, 'B'},
     {"context",           required_argument, nullptr, 'C'},
     {"library-path",      required_argument, nullptr, 'L'},
+    // long-only options (no short form): use values > 255 so they
+    // don't collide with char short codes.
+    {"output-dir",        required_argument, nullptr, 0x100},
     {"from-objects",      no_argument,       nullptr, 'F'},
     {"archive",           no_argument,       nullptr, 'a'},
     {"verbose",           no_argument,       nullptr, 'v'},
@@ -240,6 +253,9 @@ static int parse_options_cmdline(int argc, char** argv) {
                 break;
             case 'L':
                 script_lib_dirs.emplace_back(optarg);
+                break;
+            case 0x100:  // --output-dir
+                batch_output_dir = optarg;
                 break;
             case 'F':
                 from_objects = true;
@@ -504,6 +520,52 @@ int main(int argc, char** argv) {
         fprintf(stderr, "error: no source file specified\n");
         fprintf(stderr, "Try '%s --help' for more information.\n", argv[0]);
         return 1;
+    }
+
+    // Phase 4 slice 10i: batch-compile mode.  When `-c` is used with
+    // multiple positional source files (and no module-ish flag), parse
+    // them into one QoreProgram (one parse cycle) and emit one `.qo`
+    // per source into --output-dir.  This avoids compileScriptFile's
+    // O(N^2) sibling-preload cost when the build system invokes qcc
+    // per-file.
+    if (compile_only && !context_dir && (optind + 1 < argc)) {
+        if (!batch_output_dir) {
+            fprintf(stderr, "error: multiple source files require "
+                "--output-dir=<dir> (batch-compile mode)\n");
+            return 1;
+        }
+        if (output_path) {
+            fprintf(stderr, "error: -o <file> is single-output; use "
+                "--output-dir=<dir> with multiple sources\n");
+            return 1;
+        }
+        if (!script_lib_dirs.empty()) {
+            fprintf(stderr, "error: -L <dir> is per-file-compile only; "
+                "not needed in batch mode (sources share one parse)\n");
+            return 1;
+        }
+
+        std::vector<std::string> batch_sources;
+        for (int i = optind; i < argc; ++i) {
+            batch_sources.emplace_back(argv[i]);
+        }
+        if (verbose) {
+            printf("Batch script-context .qo mode: %zu sources → %s\n",
+                batch_sources.size(), batch_output_dir);
+        }
+
+        qore_init(QL_GPL, "UTF-8", true);
+        std::string error;
+        bool ok = QoreAOT::compileScriptFilesBatch(
+            batch_sources, batch_output_dir, PO_DEFAULT, error,
+            opt_level, target_triple, include_source);
+        if (!ok) {
+            fprintf(stderr, "error: %s\n", error.c_str());
+            qore_cleanup();
+            return 1;
+        }
+        qore_cleanup();
+        return 0;
     }
 
     const char* source_file = argv[optind];

@@ -4771,6 +4771,314 @@ static bool readQoFragmentBlobs(const std::string& qo_path,
     return true;
 }
 
+// Phase 4 slice 10i: emit the per-file `.qo` artifact for one source
+// file after the shared batch QoreProgram has been parsed.  Factored
+// out of compileScriptFile so compileScriptFilesBatch can reuse it
+// without re-parsing.  Takes an already-committed @p qpgm plus the
+// target file's canonical path; emits LLVM + fragment + register
+// symbols into a fresh llvm::Module, writes `.qo` to @p output_path.
+//
+// Only the parse/commit steps are shared across batch targets; the
+// LLVM module is per-target because each `.qo` is a distinct ELF
+// relocatable with its own debug info, fragment symbols, and
+// register entry.
+static bool emitScriptQoFromParsedProgram(QoreProgram* qpgm,
+        const std::string& target_canon,
+        const std::string& source_text_for_fallback,
+        const std::string& output_path,
+        int opt_level, const char* target_triple, bool include_source,
+        std::string& error) {
+    llvm::InitializeNativeTarget();
+    llvm::InitializeNativeTargetAsmPrinter();
+    llvm::InitializeNativeTargetAsmParser();
+
+    llvm::LLVMContext ctx;
+    std::string mod_name_san = sanitizeCIdentifier(fileBasenameNoExt(target_canon));
+    auto module = std::make_unique<llvm::Module>(
+        "qore_aot_script_" + mod_name_san, ctx);
+
+    std::vector<AOTCompiledFunc> compiled_funcs;
+    std::vector<AOTCompiledInitFunc> compiled_init_funcs;
+    int total_funcs = 0;
+    int compiled_count = 0;
+    int failed_count = 0;
+    size_t total_ir_insts_all = 0;
+
+    llvm::DIBuilder di_builder(*module);
+    auto* di_file = di_builder.createFile("<aot>", ".");
+    auto* di_cu = di_builder.createCompileUnit(
+        llvm::dwarf::DW_LANG_lo_user, di_file, "Qore AOT", false, "", 0);
+    if (!module->getModuleFlag("Dwarf Version")) {
+        module->addModuleFlag(llvm::Module::Warning, "Dwarf Version", 5);
+    }
+    if (!module->getModuleFlag("Debug Info Version")) {
+        module->addModuleFlag(llvm::Module::Warning, "Debug Info Version",
+            llvm::DEBUG_METADATA_VERSION);
+    }
+
+    qore_program_private* pp = qore_program_private::get(*qpgm);
+    qore_ns_private* root_ns = qore_ns_private::get(*pp->RootNS);
+    AOTConstantReverseMap const_reverse_map = buildConstantReverseMap(root_ns);
+
+    compileNamespaceFunctions(root_ns, qpgm, ctx, *module, di_builder, di_cu,
+        compiled_funcs, compiled_init_funcs, total_funcs, compiled_count,
+        failed_count, total_ir_insts_all, &const_reverse_map, nullptr,
+        /*compile_module=*/nullptr, /*compile_file=*/target_canon.c_str(),
+        /*metadata_only=*/false);
+
+    reportAOTCompileStats("script-context .qo (batch)",
+        compiled_count, total_funcs, failed_count, compiled_funcs);
+
+    // Build the fragment metadata blob.
+    std::vector<uint8_t> metadata_blob;
+    {
+        QoreAOTBinaryWriter writer;
+        QoreAOTBinaryHeader hdr{};
+        hdr.magic = QORE_AOT_BINARY_MAGIC;
+        hdr.version = QORE_AOT_BINARY_VERSION;
+        hdr.flags = 0;
+        const QoreParseOptions& final_po = qpgm->getParseOptions();
+        hdr.parse_options_lo = final_po.getLo();
+        hdr.parse_options_hi = final_po.getHi();
+        hdr.label_offset = writer.strings.add(target_canon.c_str());
+        hdr.max_opcode_id = QORE_IR_MAX_OPCODE;
+        hdr.qore_version_major = QORE_VERSION_MAJOR;
+        hdr.qore_version_minor = QORE_VERSION_MINOR;
+        hdr.qore_version_patch = QORE_VERSION_PATCH;
+        hdr.source_hash = computeSourceHash(target_canon.c_str());
+        hdr.feature_flags = computeFeatureFlags(compiled_funcs);
+
+        if (!serializeNamespaceTree(writer, root_ns, nullptr, nullptr,
+                target_canon.c_str())) {
+            error = "failed to serialize script namespace tree for "
+                + target_canon;
+            return false;
+        }
+
+        std::vector<AOTCompiledFuncWithSlots> func_slots;
+        for (auto& cf : compiled_funcs) {
+            AOTCompiledFuncWithSlots fws;
+            fws.name = cf.name;
+            fws.num_locals = cf.num_locals;
+            fws.num_globals = cf.num_globals;
+            fws.num_exprs = cf.num_exprs;
+            fws.num_stmts = cf.num_stmts;
+            fws.num_regex_cases = cf.num_regex_cases;
+            fws.num_lv_path_insts = cf.num_lv_path_insts;
+            fws.slot_ids = cf.slot_ids;
+            for (auto& hir : cf.handler_irs) {
+                fws.handler_irs.push_back(hir.get());
+            }
+            fws.aot_locs = cf.aot_locs;
+            func_slots.push_back(std::move(fws));
+        }
+        for (auto& cif : compiled_init_funcs) {
+            AOTCompiledFuncWithSlots fws;
+            fws.name = cif.name;
+            fws.num_locals = cif.num_locals;
+            fws.num_globals = cif.num_globals;
+            fws.num_exprs = cif.num_exprs;
+            fws.num_stmts = cif.num_stmts;
+            fws.num_regex_cases = cif.num_regex_cases;
+            fws.num_lv_path_insts = cif.num_lv_path_insts;
+            fws.slot_ids = cif.slot_ids;
+            func_slots.push_back(std::move(fws));
+        }
+        if (!serializeSlotMaps(writer, func_slots, &const_reverse_map, error)) {
+            return false;
+        }
+        if (!compiled_init_funcs.empty()) {
+            serializeInitFuncs(writer, compiled_init_funcs);
+        }
+        {
+            bool has_fallback_funcs = std::any_of(func_slots.begin(),
+                func_slots.end(), funcNeedsFallback);
+            if (has_fallback_funcs || include_source) {
+                serializeFallbackSources(writer, func_slots,
+                    source_text_for_fallback.c_str(),
+                    (int)source_text_for_fallback.size());
+            }
+        }
+
+        hdr.section_count = 0;
+        if (!writer.finalize(hdr, metadata_blob)) {
+            error = "failed to finalize script metadata for " + target_canon;
+            return false;
+        }
+    }
+
+    // Merge init funcs into compiled_funcs BEFORE register-symbol
+    // emission (slice 10f).
+    for (auto& cif : compiled_init_funcs) {
+        AOTCompiledFunc cf;
+        cf.name = cif.name;
+        cf.llvm_symbol = cif.llvm_symbol;
+        cf.num_locals = cif.num_locals;
+        cf.num_globals = cif.num_globals;
+        cf.num_exprs = cif.num_exprs;
+        cf.num_stmts = cif.num_stmts;
+        cf.num_regex_cases = cif.num_regex_cases;
+        cf.slot_ids = cif.slot_ids;
+        cf.feature_flags = cif.feature_flags;
+        compiled_funcs.push_back(std::move(cf));
+    }
+
+    const std::string app_name = mod_name_san;
+    const std::string file_san = mod_name_san;
+    emitFragmentSymbols(ctx, *module, app_name, file_san, metadata_blob,
+        /*fragment_order=*/0);
+
+    {
+        const std::string blob_name = "qore_aot_" + sanitizeCIdentifier(app_name)
+            + "_" + file_san + "_fragment_blob";
+        llvm::GlobalVariable* blob_gv = module->getNamedGlobal(blob_name);
+        if (!blob_gv) {
+            error = "internal: fragment blob global '" + blob_name
+                + "' not found after emitFragmentSymbols";
+            return false;
+        }
+        emitScriptRegisterSymbols(ctx, *module, app_name, file_san, blob_gv,
+            metadata_blob.size(), compiled_funcs);
+    }
+
+    di_builder.finalize();
+
+    std::string verify_error;
+    llvm::raw_string_ostream verify_os(verify_error);
+    if (llvm::verifyModule(*module, &verify_os)) {
+        verify_os.flush();
+        error = "LLVM module verification failed for " + target_canon + ": "
+            + verify_error;
+        return false;
+    }
+
+    if (getenv("QORE_DUMP_LLVM_IR")) {
+        module->print(llvm::errs(), nullptr);
+    }
+
+    if (!emitObjectFile(*module, output_path, error, opt_level, target_triple)) {
+        return false;
+    }
+
+    return true;
+}
+
+// Phase 4 slice 10i: batch-compile N sources sharing one parse cycle.
+bool QoreAOT::compileScriptFilesBatch(
+        const std::vector<std::string>& target_files,
+        const std::string& output_dir,
+        const QoreParseOptions& parse_options,
+        std::string& error,
+        int opt_level,
+        const char* target_triple,
+        bool include_source) {
+    if (target_files.empty()) {
+        error = "compileScriptFilesBatch: target_files is empty";
+        return false;
+    }
+
+    // Normalize output dir (strip trailing slash).
+    std::string out_dir = output_dir;
+    while (out_dir.size() > 1 && out_dir.back() == '/') {
+        out_dir.pop_back();
+    }
+    if (out_dir.empty()) {
+        out_dir = ".";
+    }
+    {
+        struct stat st;
+        if (stat(out_dir.c_str(), &st) != 0 || !S_ISDIR(st.st_mode)) {
+            error = "output directory does not exist: " + out_dir;
+            return false;
+        }
+    }
+
+    // Canonicalize + read all target files.  Keep source text alive
+    // so fallback serialization per-file has the right bytes.
+    struct SrcEntry {
+        std::string canon;
+        std::string source;
+        std::string out_path;
+    };
+    std::vector<SrcEntry> entries;
+    entries.reserve(target_files.size());
+    for (const std::string& f : target_files) {
+        char* r = realpath(f.c_str(), nullptr);
+        if (!r) {
+            error = std::string("cannot resolve target file: ") + f;
+            return false;
+        }
+        SrcEntry e;
+        e.canon = r;
+        free(r);
+        e.source = QoreDir::get_file_content(e.canon.c_str());
+        if (e.source.empty()) {
+            error = "target source file is empty or unreadable: " + e.canon;
+            return false;
+        }
+        std::string bn = e.canon;
+        size_t slash = bn.rfind('/');
+        if (slash != std::string::npos) {
+            bn = bn.substr(slash + 1);
+        }
+        size_t dot = bn.rfind('.');
+        if (dot != std::string::npos && dot > 0) {
+            bn = bn.substr(0, dot);
+        }
+        e.out_path = out_dir + "/" + bn + ".qo";
+        entries.push_back(std::move(e));
+    }
+
+    // Single shared QoreProgram — parse every source into it.
+    QoreParseOptions po = parse_options;
+    ExceptionSink xsink;
+    ExceptionSink wsink;
+    QoreProgramHelper qpgm(po, xsink);
+    if (xsink.isException()) {
+        xsink.handleExceptions();
+        error = "failed to create QoreProgram for batch compile";
+        return false;
+    }
+    // Use the FIRST target's path as the script path (primarily for
+    // diagnostics).
+    qpgm->setScriptPath(entries.front().canon.c_str());
+
+    for (auto& e : entries) {
+        qpgm->parsePending(e.source.c_str(), e.canon.c_str(),
+            &xsink, &wsink, QP_WARN_DEFAULT);
+        if (xsink.isException()) {
+            xsink.handleExceptions();
+            error = "parse error in target file: " + e.canon;
+            return false;
+        }
+    }
+    qpgm->parseCommit(&xsink, &wsink, QP_WARN_DEFAULT);
+    if (xsink.isException()) {
+        xsink.handleExceptions();
+        error = "parse commit failed in batch compile";
+        return false;
+    }
+    if (wsink.isException()) {
+        wsink.handleWarnings();
+    }
+
+    // Now emit one .qo per target using the shared parsed program.
+    for (auto& e : entries) {
+        std::string per_err;
+        if (!emitScriptQoFromParsedProgram(*qpgm, e.canon, e.source,
+                e.out_path, opt_level, target_triple, include_source,
+                per_err)) {
+            error = per_err;
+            return false;
+        }
+        printf("%s: batch-compiled script-context .qo (O%d%s)\n",
+            e.out_path.c_str(), opt_level,
+            include_source ? "" : ", source-stripped");
+    }
+
+    return true;
+}
+
 // Phase 4 slice 10c: compile a single Qore source file in script
 // context mode (no module wrapper, no `.qm` required).  Sibling
 // `.qo`s found in @p library_paths are preloaded into the compile
