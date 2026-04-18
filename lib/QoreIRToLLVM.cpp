@@ -3632,9 +3632,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto* val = getVal(inst->operands[0].id, error);
             if (!val) { return false; }
             llvm::Value* val_boxed = boxValue(val, inst->operands[0].id);
-            auto helper = module.getOrInsertFunction("qore_rt_sprintf",
-                    llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false));
-            llvm::Value* result = builder->CreateCall(helper, {val_boxed, xsink_arg});
+            auto sp_ft = llvm::FunctionType::get(i64_type,
+                    {i64_type, ptr_type}, false);
+            auto helper = module.getOrInsertFunction("qore_rt_sprintf", sp_ft);
+            auto helper_throwing = module.getOrInsertFunction(
+                    "qore_rt_sprintf_throwing", sp_ft);
+            llvm::Value* result = emitMaybeInvoke(helper, helper_throwing,
+                    {val_boxed, xsink_arg}, module, llvm_func, inst);
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(result, inst->result.id, llvm_func);
@@ -9449,10 +9453,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 // qore_rt_make_list() will infer type from actual values when typeInfo is null
                 ti_arg = llvm::ConstantPointerNull::get(llvm::dyn_cast<llvm::PointerType>(ptr_type));
             }
-            auto helper = module.getOrInsertFunction("qore_rt_make_list",
-                    llvm::FunctionType::get(i64_type,
-                        {ptr_type, llvm::Type::getInt32Ty(ctx), ptr_type, ptr_type}, false));
-            llvm::Value* list_result = builder->CreateCall(helper, {arr, count_val, ti_arg, xsink_arg});
+            auto ml_ft = llvm::FunctionType::get(i64_type,
+                    {ptr_type, llvm::Type::getInt32Ty(ctx), ptr_type, ptr_type}, false);
+            auto helper = module.getOrInsertFunction("qore_rt_make_list", ml_ft);
+            auto helper_throwing = module.getOrInsertFunction(
+                    "qore_rt_make_list_throwing", ml_ft);
+            llvm::Value* list_result = emitMaybeInvoke(helper, helper_throwing,
+                    {arr, count_val, ti_arg, xsink_arg}, module, llvm_func, inst);
             values[inst->result.id] = list_result;
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(list_result, inst->result.id, llvm_func);
@@ -9489,10 +9496,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 // qore_rt_make_hash() will infer type from actual values when typeInfo is null
                 ti_arg = llvm::ConstantPointerNull::get(llvm::dyn_cast<llvm::PointerType>(ptr_type));
             }
-            auto helper = module.getOrInsertFunction("qore_rt_make_hash",
-                    llvm::FunctionType::get(i64_type,
-                        {ptr_type, llvm::Type::getInt32Ty(ctx), ptr_type, ptr_type}, false));
-            llvm::Value* hash_result = builder->CreateCall(helper, {arr, count_val, ti_arg, xsink_arg});
+            auto mh_ft = llvm::FunctionType::get(i64_type,
+                    {ptr_type, llvm::Type::getInt32Ty(ctx), ptr_type, ptr_type}, false);
+            auto helper = module.getOrInsertFunction("qore_rt_make_hash", mh_ft);
+            auto helper_throwing = module.getOrInsertFunction(
+                    "qore_rt_make_hash_throwing", mh_ft);
+            llvm::Value* hash_result = emitMaybeInvoke(helper, helper_throwing,
+                    {arr, count_val, ti_arg, xsink_arg}, module, llvm_func, inst);
             values[inst->result.id] = hash_result;
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(hash_result, inst->result.id, llvm_func);
@@ -9538,12 +9548,16 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 // qore_rt_make_hash_const_keys() will infer type from actual values when typeInfo is null
                 ti_arg = llvm::ConstantPointerNull::get(llvm::dyn_cast<llvm::PointerType>(ptr_type));
             }
-            auto helper = module.getOrInsertFunction("qore_rt_make_hash_const_keys",
-                    llvm::FunctionType::get(i64_type,
-                        {ptr_type, ptr_type, llvm::Type::getInt32Ty(ctx), ptr_type, ptr_type}, false));
-            llvm::Value* hash_result = builder->CreateCall(helper,
+            auto mhck_ft = llvm::FunctionType::get(i64_type,
+                    {ptr_type, ptr_type, llvm::Type::getInt32Ty(ctx), ptr_type, ptr_type},
+                    false);
+            auto helper = module.getOrInsertFunction("qore_rt_make_hash_const_keys", mhck_ft);
+            auto helper_throwing = module.getOrInsertFunction(
+                    "qore_rt_make_hash_const_keys_throwing", mhck_ft);
+            llvm::Value* hash_result = emitMaybeInvoke(helper, helper_throwing,
                     {keys_arr, vals_arr, llvm::ConstantInt::get(llvm::Type::getInt32Ty(ctx), count),
-                     ti_arg, xsink_arg});
+                     ti_arg, xsink_arg},
+                    module, llvm_func, inst);
             values[inst->result.id] = hash_result;
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(hash_result, inst->result.id, llvm_func);

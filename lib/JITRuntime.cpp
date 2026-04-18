@@ -1811,6 +1811,45 @@ extern "C" DLLEXPORT uint64_t qore_rt_make_enum(int64_t member_ptr) {
     return toBits(QoreValue::makeEnum(member));
 }
 
+// --- Phase 2B Step 5: Container construction throwing wrappers ---
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_make_list_throwing(
+        uint64_t* vals, int count, const QoreTypeInfo* typeInfo, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_make_list(vals, count, typeInfo, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_make_hash_throwing(
+        uint64_t* kv_pairs, int count, const QoreTypeInfo* typeInfo, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_make_hash(kv_pairs, count, typeInfo, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_make_hash_const_keys_throwing(
+        const char** keys, uint64_t* vals, int count,
+        const QoreTypeInfo* typeInfo, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_make_hash_const_keys(keys, vals, count, typeInfo, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_sprintf_throwing(
+        uint64_t val_bits, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_sprintf(val_bits, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
 // --- Specialized access helpers (Phase 5b optimizations) ---
 
 extern "C" DLLEXPORT uint64_t qore_rt_hash_key_access(uint64_t hash_val, const char* key, ExceptionSink* xsink) {
