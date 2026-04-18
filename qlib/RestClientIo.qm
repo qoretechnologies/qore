@@ -411,6 +411,13 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             #! Logger
             *LoggerInterface logger;
 
+            #! Per-instance request-timeout override in milliseconds (protected by config_lock)
+            /** When set to a positive value, applied to every @ref mgr.request() call made
+                by this instance, taking precedence over the manager's default.  0 or unset
+                means "no override" — the manager default is used.
+            */
+            int request_timeout_override = 0;
+
             # --- OAuth2 config (protected by config_lock) ---
 
             #! OAuth2 grant type (e.g., "client_credentials", "password")
@@ -1054,6 +1061,88 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             mgr.setLogger(logger);
         }
 
+        #! Sets the per-request timeout override
+        /** When set to a non-zero value, every subsequent request uses @a timeout_ms
+            instead of the connection manager's default.  Setting it to 0 clears the
+            override and restores the manager default.
+
+            Matches the semantics of @ref Qore::HTTPClient::setTimeout() on the
+            synchronous client.
+
+            @param timeout_ms new per-request timeout; 0 clears the override
+
+            @since RestClientIo 1.1
+        */
+        nothing setTimeout(timeout timeout_ms = 0) {
+            AutoWriteLock al(config_lock);
+            request_timeout_override = timeout_ms;
+        }
+
+        #! Returns the per-instance request-timeout override, or NOTHING if unset
+        /** Subclasses that bypass @ref restDoRequestIntern() and call
+            @c mgr.request() directly (e.g. @ref DataStreamClient::DataStreamClientIo)
+            should pass this value to honor @ref setTimeout().
+
+            @since RestClientIo 1.1
+        */
+        private *timeout getRequestTimeoutOverride() {
+            AutoReadLock al(config_lock);
+            return request_timeout_override > 0 ? request_timeout_override : NOTHING;
+        }
+
+        #! Returns the effective request timeout in milliseconds
+        /** Returns the per-instance override if set, otherwise the connection
+            manager's default.
+
+            @since RestClientIo 1.1
+        */
+        int getTimeout() {
+            AutoReadLock al(config_lock);
+            if (request_timeout_override > 0) {
+                return request_timeout_override;
+            }
+            return mgr.getRequestTimeout();
+        }
+
+        #! Sets the default connection timeout used for NEW connections
+        /** Existing pooled connections are not affected — only future connection
+            attempts observe the new value.
+
+            @param timeout_ms new connection timeout; 0 (the default) is a no-op
+
+            @since RestClientIo 1.1
+        */
+        nothing setConnectTimeout(timeout timeout_ms = 0) {
+            if (timeout_ms > 0) {
+                mgr.setConnectTimeout(timeout_ms);
+            }
+        }
+
+        #! Returns the connection timeout in milliseconds
+        /** @since RestClientIo 1.1 */
+        int getConnectTimeout() {
+            return mgr.getConnectTimeout();
+        }
+
+        #! Returns the configured HTTP version
+        /** Returns one of \c "1.1", \c "2.0", \c "3.0", or \c "auto" — matching the
+            string values accepted by the @c http_version constructor option.
+
+            Note: with \c "auto" the actual per-request protocol is negotiated via
+            Happy Eyeballs / Alt-Svc; this method reports the configured mode, not
+            the last-negotiated protocol.
+
+            @since RestClientIo 1.1
+        */
+        string getHttpVersion() {
+            switch (mgr.getProtocolMode()) {
+                case "h1": return "1.1";
+                case "h2": return "2.0";
+                case "h3": return "3.0";
+                default: return "auto";
+            }
+        }
+
         #! Sets whether any response content type is allowed
         /** When True, deserialization errors are silently ignored and the raw body is
             returned instead of throwing a \c DESERIALIZATION-ERROR exception.
@@ -1342,8 +1431,19 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
             log(LoggerLevel::DEBUG, "%s() %s %s%s", raw ? "restDoRawRequest" : "restDoRequest",
                 method, url, path);
 
+            # Snapshot the per-instance request-timeout override — passed to every
+            # mgr.request() call below so setTimeout() state is honored
+            *timeout req_to;
+            {
+                AutoReadLock al(config_lock);
+                if (request_timeout_override > 0) {
+                    req_to = request_timeout_override;
+                }
+            }
+
             # 2. Make HTTP request via multiplexed connection manager
-            hash<auto> raw_resp = mgr.request(url, method, path, hdr, prepared.serialized_body);
+            hash<auto> raw_resp = mgr.request(url, method, path, hdr,
+                prepared.serialized_body, req_to);
 
             # 3. If 401 and OAuth2 configured, try to refresh token and retry once
             if (raw_resp.status_code == 401 && canRetryAuth()) {
@@ -1363,7 +1463,8 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
                 prepared = raw
                     ? prepareRawRequest(method, \path, body, \hdr)
                     : prepareRequest(method, \path, body, \hdr);
-                raw_resp = mgr.request(url, method, path, hdr, prepared.serialized_body);
+                raw_resp = mgr.request(url, method, path, hdr,
+                    prepared.serialized_body, req_to);
             }
 
             # 4. Deserialize
@@ -1383,7 +1484,8 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
                 prepared = raw
                     ? prepareRawRequest(method, \path, body, \hdr)
                     : prepareRequest(method, \path, body, \hdr);
-                raw_resp = mgr.request(url, method, path, hdr, prepared.serialized_body);
+                raw_resp = mgr.request(url, method, path, hdr,
+                    prepared.serialized_body, req_to);
                 resp = buildResponse(raw_resp, prepared.error_passthru,
                     prepared.allow_any_response, method, path, hdr,
                     prepared.serialized_body);
@@ -1981,6 +2083,19 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
             }
 
             if (!req_error_passthru && raw.status_code >= 300) {
+                # Unwrap server-produced typed errors: Qorus and similar
+                # services return error responses as {err, desc, arg}
+                # hashes so callers can catch specific typed exceptions
+                # (e.g. SQLUTIL-ERROR) instead of generic REST-RESPONSE-ERROR.
+                # Mirrors the behaviour of the synchronous
+                # @ref RestClient::RestClient "RestClient" class.
+                if (resp_body.typeCode() == NT_HASH && resp_body.err) {
+                    auto desc = resp_body.desc;
+                    if (desc.typeCode() == NT_STRING) {
+                        trim desc;
+                    }
+                    throw resp_body.err, desc, resp_body.arg;
+                }
                 throw "REST-RESPONSE-ERROR",
                     sprintf("HTTP %d response received", raw.status_code),
                     <RestClient::RestResponseInfo>{

@@ -850,7 +850,18 @@ WebSocketClient ws(\event(), {
                 return;
             }
         }
-        delivery_thread_counter.waitForZero();
+        # Defense-in-depth: bounded wait with a diagnostic warning rather than an
+        # unbounded waitForZero().  The root-cause fix in scheduleDelivery() makes
+        # this timeout unreachable in normal operation, but bugs in any future code
+        # path that bumps this counter without a matching dec would hang the
+        # destructor forever.  A bounded wait + logError turns "hang forever" into
+        # "log + proceed with destruction" (still buggy but diagnosable).
+        if (delivery_thread_counter.waitForZero(30s)) {
+            logError("destructor timed out after 30s waiting for delivery tasks; "
+                "proceeding with destruction (counter=%d, delivery_pending=%d) — this "
+                "indicates a bug: a delivery task was accounted for but never decremented",
+                delivery_thread_counter.getCount(), delivery_pending);
+        }
     }
 
     #! returns the URL given in the constructor
@@ -2197,15 +2208,23 @@ ws.setEventQueue();
         # pool has proper lifecycle management (stopped in module del handler).
         # NOTE: the method reference must be evaluated here (not in the pool thread)
         # because \deliverPendingMessages() needs 'self' which may be invalid by the time
-        # the pool thread starts
+        # the pool thread starts.
+        # NOTE: delivery_thread_counter is copied to a local `cnt` and the ThreadPool
+        # closure captures `cnt` — NOT the member — so the closure can evaluate its
+        # arguments without needing the (weak) self reference.  If we passed
+        # `delivery_thread_counter` directly to the closure, the pool worker would look
+        # the member up via weak self at invocation time, and if self had just become
+        # invalid (destructor running concurrently) the closure would throw
+        # OBJECT-ALREADY-DELETED BEFORE reaching deliverInBackground(), stranding the
+        # counter increment and hanging the destructor forever on waitForZero().
         delivery_thread_counter.inc();
         code<nothing()> deliver = \deliverPendingMessages();
+        Counter cnt = delivery_thread_counter;
         try {
             AsyncSocketIo::AsyncSocketIoController controller =
                 AsyncSocketIo::getGlobalAsyncIoController();
             controller.submitTask(sub () {
-                WebSocketClientWithSerialization::deliverInBackground(deliver,
-                    delivery_thread_counter);
+                WebSocketClientWithSerialization::deliverInBackground(deliver, cnt);
             });
         } catch (hash<ExceptionInfo> ex) {
             # Controller may be stopped during shutdown

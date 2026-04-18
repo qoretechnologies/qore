@@ -250,9 +250,27 @@ public class Http1ClientStreamHandle inherits HttpClientStreamHandle {
                 sprintf("stream %d has been closed", stream_id);
         }
 
+        # @ref Qore::Thread::Channel::recv() treats timeout_ms <= 0 as infinite
+        # wait.  A caller that passes 0 explicitly wants a non-blocking peek
+        # (matching the other HTTP reader APIs where 0 means "return NOTHING
+        # if no data is pending"); route through tryRecv() in that case so
+        # drain loops (e.g. DataStreamClientIo.sendDSv1Stream) don't hang.
         try {
             timeout wait_timeout = timeout_ms ?? -1;
-            auto rv = data_channel.recv(wait_timeout);
+            auto rv;
+            if (wait_timeout == 0ms) {
+                *hash<auto> tr = data_channel.tryRecv();
+                if (!exists tr) {
+                    return NOTHING;
+                }
+                if (!tr.has_value) {
+                    throw "HTTPCLIENT-STREAM-CLOSED",
+                        sprintf("stream %d has been closed", stream_id);
+                }
+                rv = tr.value;
+            } else {
+                rv = data_channel.recv(wait_timeout);
+            }
             # The poll operation pushes raw output hashes to the channel.
             # Extract body data and detect end_stream/error for the caller.
             if (rv.typeCode() == NT_HASH) {

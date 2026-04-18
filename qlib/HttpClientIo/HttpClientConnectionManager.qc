@@ -1989,6 +1989,47 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         self.logger = logger;
     }
 
+    #! Sets the default connection timeout for NEW connections
+    /** Existing pooled connections are not affected; only future connect attempts
+        (including H3 setup after a stale-connection close) observe the new value.
+
+        @param ct the new connect timeout (must be positive)
+
+        @since HttpClientIo 1.1
+    */
+    setConnectTimeout(timeout ct) {
+        opts.connect_timeout = ct;
+    }
+
+    #! Returns the default connection timeout in milliseconds
+    /** @since HttpClientIo 1.1 */
+    timeout getConnectTimeout() {
+        return opts.connect_timeout;
+    }
+
+    #! Sets the default request timeout applied when the caller does not pass one
+    /** Per-request overrides passed to @ref request() still take precedence.
+
+        @param rt the new default request timeout (must be positive)
+
+        @since HttpClientIo 1.1
+    */
+    setRequestTimeout(timeout rt) {
+        opts.request_timeout = rt;
+    }
+
+    #! Returns the default request timeout in milliseconds
+    /** @since HttpClientIo 1.1 */
+    timeout getRequestTimeout() {
+        return opts.request_timeout;
+    }
+
+    #! Returns the configured protocol mode (@c "auto", @c "h1", @c "h2", @c "h3")
+    /** @since HttpClientIo 1.1 */
+    string getProtocolMode() {
+        return opts.protocol;
+    }
+
     #! Internal: logging helper
     private log(int level, string fmt) {
         if (logger) {
