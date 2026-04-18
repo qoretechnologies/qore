@@ -82,6 +82,14 @@ void Http2ClientPollOperationPriv::initAdoptedMultiplex(ExceptionSink* xsink) {
     // installs it as current_op, transitions h2_state to READING, and
     // (because ssl_required is true on the adopt-socket path) confirms
     // h2 and fires the ready callback.  Requires self to be set.
+    //
+    // HTTP/2 sends many small frames as separate writes; without TCP_NODELAY,
+    // Nagle + delayed-ACK interaction adds ~40ms per request on sequential
+    // workloads.  The adopted socket inherits from the NEGOTIATE H1
+    // connection, which did not set NODELAY, so set it here.
+    if (sock_obj) {
+        sock_obj->setNoDelay(1);
+    }
     startMultiplex(xsink);
 }
 
@@ -256,6 +264,11 @@ QoreHashNode* Http2ClientPollOperationPriv::handleConnecting(ExceptionSink* xsin
     if (current_op->goalReached()) {
         ASYNC_IO_TRACE("H2 handleConnecting: TCP connected to %s:%d ssl=%d\n",
             target_host.c_str(), target_port, (int)ssl_required);
+        // HTTP/2 sends many small frames as separate writes; without
+        // TCP_NODELAY, Nagle + delayed-ACK interaction adds ~40ms per
+        // request on sequential workloads (see legacy setNoDelay at
+        // QoreHttpClientObject::connect_unlocked for context).
+        sock_obj->setNoDelay(1);
         if (proxy_tunnel) {
             startProxyConnect(xsink);
         } else if (ssl_required) {
