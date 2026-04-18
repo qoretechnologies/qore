@@ -2428,6 +2428,11 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     // Phase 5c: Set up DWARF debug info
     di_file_cache.clear();
 
+    // Phase 1 (compile-time opt roadmap): skip DWARF entirely when
+    // emit_debug_info is disabled.  Saves per-function LLVM work for
+    // DISubprogram/DILocation creation + backend DWARF table emission.
+    // di_sp stays null, which makes setDebugLocation a no-op.
+    if (emit_debug_info) {
     if (shared_di_builder) {
         // Multi-function module: use shared DIBuilder and compile unit
         active_di_builder = shared_di_builder;
@@ -2436,6 +2441,10 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         // Single-function module: create owned DIBuilder and compile unit
         di_builder = std::make_unique<llvm::DIBuilder>(module);
         active_di_builder = di_builder.get();
+    }
+    } else {
+        active_di_builder = nullptr;
+        di_cu = nullptr;
     }
 
     // Find the first valid source file from the function's instructions
@@ -2456,6 +2465,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         }
     }
 
+    if (emit_debug_info) {
     llvm::DIFile* di_file = getDIFile(func_file);
 
     if (!shared_di_builder) {
@@ -2495,6 +2505,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     if (!module.getModuleFlag("Debug Info Version")) {
         module.addModuleFlag(llvm::Module::Warning, "Debug Info Version",
                 llvm::DEBUG_METADATA_VERSION);
+    }
     }
 
     // Create LLVM basic blocks for all IR blocks

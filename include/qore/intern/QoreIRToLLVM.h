@@ -117,6 +117,14 @@ public:
         shared_di_cu = cu;
     }
 
+    //! Control whether DWARF debug info is emitted (default: true).
+    //! When false, skip DISubprogram creation and setCurrentDebugLocation
+    //! is a no-op.  Caller at the module level is also responsible for
+    //! skipping DIBuilder/DICompileUnit creation + finalization.
+    void setEmitDebugInfo(bool v) {
+        emit_debug_info = v;
+    }
+
     //! Enable deferred exception checking for init functions.
     //! When set, skip per-instruction exception checks and emit a single consolidated
     //! check at function end.  This reduces BasicBlock count from 200+ to ~3 for
@@ -442,6 +450,9 @@ private:
     llvm::Module* current_module = nullptr;
 
     // Phase 5c: Debug info (DWARF)
+    // Controls whether DWARF is emitted (-g / --strip-debug-info).
+    // Default true to match existing behavior; qcc flag flips it.
+    bool emit_debug_info = true;
     // Owned DIBuilder for single-function-per-module case
     std::unique_ptr<llvm::DIBuilder> di_builder;
     // Shared DIBuilder/CU for multi-function-per-module case (AOT/batch)

@@ -159,6 +159,17 @@
 // Defined in Function.cpp - collects all local variables from a StatementBlock and nested blocks
 extern void collectAllStatementLocals(const StatementBlock* block, std::vector<LocalVar*>& locals);
 
+//! AOT compile-time optimization Phase 1: emit_debug_info flag.
+//! Returns true if DWARF debug info should be emitted (default: true).
+//! Opt-out via QORE_AOT_NO_DEBUG_INFO=1 (qcc --strip-debug-info flag sets this).
+//! Stripping debug info skips per-function DISubprogram + DILocation creation +
+//! backend DWARF table emission, measurably speeding up AOT compile for
+//! Release-tier builds.
+static bool aotEmitDebugInfo() {
+    static const bool strip = getenv("QORE_AOT_NO_DEBUG_INFO") != nullptr;
+    return !strip;
+}
+
 //! Check if an AOT function is eligible for self-recursive Approach B fast entry.
 //! Criteria: has self-recursive calls, all params IR-only, no closures/references/varargs.
 static bool isAOTSelfRecursiveEligible(const QoreIRFunction* ir_func,
@@ -246,6 +257,7 @@ static std::vector<std::string> extractAllDependencies(const char* source, int s
 #include <llvm/Passes/StandardInstrumentations.h>
 #include <llvm/Support/FileSystem.h>
 #include <llvm/Support/TargetSelect.h>
+#include <llvm/Support/TimeProfiler.h>
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/Target/TargetMachine.h>
 #include <llvm/Target/TargetOptions.h>
@@ -802,6 +814,7 @@ static bool compileModuleInitClosureAsInitFunc(const QoreValue& init_c, const ch
     }
     lowerer.setDeferredExceptionChecking(!mi_has_obe);
     lowerer.setSharedDebugInfo(&di_builder, di_cu);
+    lowerer.setEmitDebugInfo(aotEmitDebugInfo());
     if (getenv("QORE_AOT_DUMP_IR")) {
         fprintf(stderr, "=== IR for module init %s ===\n", init_name.c_str());
         QoreIRPrinter::print(*ir_func, std::cerr);
@@ -1020,6 +1033,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                 QoreIRToLLVM lowerer(ctx);
                 lowerer.setAOTMode(&slots);
                 lowerer.setSharedDebugInfo(&di_builder, di_cu);
+    lowerer.setEmitDebugInfo(aotEmitDebugInfo());
                 // Enable deferred exception checking to reduce BasicBlock count.
                 // This prevents LLVM SimplifyCFG from hanging on functions with 200+ BBs.
                 // Safe: only defers checks for code outside try blocks; code inside try blocks
@@ -1114,6 +1128,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                     QoreIRToLLVM fast_lowerer(ctx);
                     fast_lowerer.setAOTMode(&slots);
                     fast_lowerer.setSharedDebugInfo(&di_builder, di_cu);
+                    fast_lowerer.setEmitDebugInfo(aotEmitDebugInfo());
                     fast_lowerer.setDeferredExceptionChecking(!has_obe);  // See comment above
                     fast_lowerer.setFastEntryMode(fast_entry_name, &param_map);
                     fast_lowerer.setAOTSelfRecursiveFastEntry(fast_entry_name);
@@ -1261,6 +1276,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                     QoreIRToLLVM lowerer(ctx);
                     lowerer.setAOTMode(&slots);
                     lowerer.setSharedDebugInfo(&di_builder, di_cu);
+    lowerer.setEmitDebugInfo(aotEmitDebugInfo());
                     // See comment in function compilation above about OnBlockExit guard
                     bool has_obe = false;
                     for (const auto& bb : ir_func->blocks) {
@@ -1415,6 +1431,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
         lowerer.setAOTMode(&slots);
         lowerer.setDeferredExceptionChecking(true);
         lowerer.setSharedDebugInfo(&di_builder, di_cu);
+    lowerer.setEmitDebugInfo(aotEmitDebugInfo());
         std::string llvm_error;
         if (getenv("QORE_AOT_DUMP_IR")) {
             fprintf(stderr, "=== IR for init %s ===\n", init_name.c_str());
@@ -1626,8 +1643,54 @@ static llvm::OptimizationLevel getOptimizationLevel(int opt_level) {
 }
 
 //! Emit an LLVM module to a native object file
+//! AOT compile-time optimization Phase 1: Chrome-trace profiler integration.
+//! When QORE_AOT_TIME_TRACE is set (either to a path or to "1"), LLVM's
+//! TimeProfiler emits a Chrome-format JSON trace of every middle-end AND
+//! backend pass run during opt + codegen. Open at chrome://tracing to see
+//! per-function × per-pass timing.
+//!
+//! Default path: $QORE_AOT_TIME_TRACE if it looks like a path, else
+//! "$PWD/qcc.trace.json".  `llvm::timeTraceProfilerInitialize` is safe to
+//! call multiple times if already initialized (no-op).
+struct TimeTraceRAII {
+    bool active = false;
+    std::string out_path;
+
+    TimeTraceRAII() {
+        const char* env = getenv("QORE_AOT_TIME_TRACE");
+        if (!env) {
+            return;
+        }
+        active = true;
+        out_path = (env[0] == '\0' || (env[0] == '1' && env[1] == '\0'))
+            ? std::string("qcc.trace.json")
+            : std::string(env);
+        // 200us granularity — balances trace file size vs detail.
+        llvm::timeTraceProfilerInitialize(200, "qcc");
+    }
+
+    ~TimeTraceRAII() {
+        if (!active) {
+            return;
+        }
+        std::error_code ec;
+        llvm::raw_fd_ostream os(out_path, ec, llvm::sys::fs::OF_Text);
+        if (!ec) {
+            llvm::timeTraceProfilerWrite(os);
+            fprintf(stderr, "AOT time-trace: wrote %s\n", out_path.c_str());
+        } else {
+            fprintf(stderr, "AOT time-trace: failed to open '%s': %s\n",
+                    out_path.c_str(), ec.message().c_str());
+        }
+        llvm::timeTraceProfilerCleanup();
+    }
+};
+
 static bool emitObjectFile(llvm::Module& module, const std::string& path, std::string& error,
         int opt_level = 3, const char* target_triple = nullptr) {
+    // Phase 1 instrumentation: Chrome trace for opt + codegen.
+    TimeTraceRAII time_trace;
+
     std::string triple;
     if (target_triple) {
         triple = target_triple;
@@ -1810,7 +1873,17 @@ static bool emitObjectFile(llvm::Module& module, const std::string& path, std::s
         fflush(stderr);
     }
 
-    emit_pm.run(module);
+    // Phase 1 instrumentation: wrap backend codegen in a TimeTraceScope so the
+    // bulk of compile time (SelectionDAG + MachineInstr passes + RegAlloc +
+    // assembly emission) appears as a single coarse event in the Chrome trace.
+    // Sub-phases within the backend emit their own scopes if they call
+    // llvm::TimeTraceScope — legacy backend passes don't, but the total here
+    // gives us a clear picture of backend vs middle-end split.
+    {
+        llvm::TimeTraceScope backend_scope("BackendCodegen",
+                module.getName().str());
+        emit_pm.run(module);
+    }
 
     if (debug_opt) {
         fprintf(stderr, "AOT: Code generation completed, flushing output\n");
@@ -2221,6 +2294,7 @@ bool QoreAOT::compile(QoreProgram* pgm,
                 QoreIRToLLVM llvm_lowerer(ctx);
                 llvm_lowerer.setAOTMode(&slots);
                 llvm_lowerer.setSharedDebugInfo(&di_builder, di_cu);
+                llvm_lowerer.setEmitDebugInfo(aotEmitDebugInfo());
                 // See comment in function compilation above about OnBlockExit guard
                 bool has_obe = false;
                 for (const auto& bb : ir_func->blocks) {

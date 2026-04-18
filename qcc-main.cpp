@@ -61,6 +61,9 @@ static bool verbose = false;
 static bool show_help = false;
 static bool show_version = false;
 static bool show_targets = false;
+// Phase 1 compile-time opt:
+static bool strip_debug_info = false;
+static const char* time_trace_path = nullptr;
 
 static void print_usage(const char* prog) {
     printf("Qore Code Compiler (qcc) v%s\n", QCC_VERSION);
@@ -75,6 +78,10 @@ static void print_usage(const char* prog) {
     printf("      --show-targets     Show supported target architectures and quit\n");
     printf("      --include-source   Include source text for runtime fallback\n");
     printf("      --strip-source     Strip source text (default)\n");
+    printf("      --strip-debug-info Strip DWARF debug info (faster compile, no debugger)\n");
+    printf("  -g                     Emit DWARF debug info (default)\n");
+    printf("      --time-trace[=PATH]  Emit Chrome-format trace of opt+codegen passes\n");
+    printf("                         (default PATH: qcc.trace.json; view at chrome://tracing)\n");
     printf("  -v, --verbose          Verbose output\n");
     printf("  -h, --help             Show this help message\n");
     printf("  -V, --version          Show version information\n");
@@ -99,23 +106,25 @@ static void print_version() {
 }
 
 static struct option long_options[] = {
-    {"output",         required_argument, nullptr, 'o'},
-    {"opt-level",      required_argument, nullptr, 'O'},
-    {"module",         no_argument,       nullptr, 'm'},
-    {"static",         no_argument,       nullptr, 'S'},
-    {"target",         required_argument, nullptr, 't'},
-    {"show-targets",   no_argument,       nullptr, 'T'},
-    {"include-source", no_argument,       nullptr, 'I'},
-    {"strip-source",   no_argument,       nullptr, 'P'},
-    {"verbose",        no_argument,       nullptr, 'v'},
-    {"help",           no_argument,       nullptr, 'h'},
-    {"version",        no_argument,       nullptr, 'V'},
-    {nullptr,          0,                 nullptr, 0}
+    {"output",            required_argument, nullptr, 'o'},
+    {"opt-level",         required_argument, nullptr, 'O'},
+    {"module",            no_argument,       nullptr, 'm'},
+    {"static",            no_argument,       nullptr, 'S'},
+    {"target",            required_argument, nullptr, 't'},
+    {"show-targets",      no_argument,       nullptr, 'T'},
+    {"include-source",    no_argument,       nullptr, 'I'},
+    {"strip-source",      no_argument,       nullptr, 'P'},
+    {"strip-debug-info",  no_argument,       nullptr, 'D'},
+    {"time-trace",        optional_argument, nullptr, 'Y'},
+    {"verbose",           no_argument,       nullptr, 'v'},
+    {"help",              no_argument,       nullptr, 'h'},
+    {"version",           no_argument,       nullptr, 'V'},
+    {nullptr,             0,                 nullptr, 0}
 };
 
 static int parse_options_cmdline(int argc, char** argv) {
     int opt;
-    while ((opt = getopt_long(argc, argv, "o:O:mSt:TvhV", long_options, nullptr)) != -1) {
+    while ((opt = getopt_long(argc, argv, "o:O:mSt:TgvhV", long_options, nullptr)) != -1) {
         switch (opt) {
             case 'o':
                 output_path = optarg;
@@ -145,6 +154,17 @@ static int parse_options_cmdline(int argc, char** argv) {
             case 'P':
                 // strip-source is the default; this is a no-op for backward compatibility
                 include_source = false;
+                break;
+            case 'D':
+                strip_debug_info = true;
+                break;
+            case 'g':
+                // -g: explicitly request debug info (default, but overrides --strip-debug-info
+                // when both given)
+                strip_debug_info = false;
+                break;
+            case 'Y':
+                time_trace_path = optarg ? optarg : "qcc.trace.json";
                 break;
             case 'v':
                 verbose = true;
@@ -223,6 +243,15 @@ int main(int argc, char** argv) {
     // Parse command-line options
     if (parse_options_cmdline(argc, argv) != 0) {
         return 1;
+    }
+
+    // Phase 1 compile-time opt: flags propagated to QoreAOT via env vars
+    // (AOT layer already reads several QORE_AOT_* vars; this extends the set).
+    if (strip_debug_info) {
+        setenv("QORE_AOT_NO_DEBUG_INFO", "1", 1);
+    }
+    if (time_trace_path) {
+        setenv("QORE_AOT_TIME_TRACE", time_trace_path, 1);
     }
 
     if (show_help) {
