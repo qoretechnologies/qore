@@ -942,7 +942,14 @@ AbstractPrivateData* qore_object_private::tryGetReferencedPrivateData(qore_class
 void qore_object_private::doDeleteIntern(ExceptionSink* xsink) {
     printd(5, "qore_object_private::doDeleteIntern() execing destructor() obj: %p\n", obj);
 
-    // increment reference count temporarily for destructor
+    // keep the object alive across both ref pathways during destruction: private data (e.g.
+    // SocketPollOperationBase) may hold a self weak reference that is released while the user
+    // destructor runs — without this tRef/tDeref bracket, tRefs can reach zero mid-destructor
+    // and trigger a reentrant deleteObject() before data/cdmap/rset are cleared.
+    // The ON_BLOCK_EXIT_OBJ guard keeps the decrement exception-safe.
+    tRef();
+    ON_BLOCK_EXIT_OBJ(*this, &qore_object_private::tDeref);
+
     {
         AutoLocker slr(rlck);
         ++obj->references;
