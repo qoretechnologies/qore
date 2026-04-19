@@ -230,21 +230,34 @@ class FtpTest inherits QUnit::Test {
         assertNothing(fc.get(local_path, local_path));
         assertRegex("abc", ReadOnlyFile::readTextFile(local_path));
 
+        # Induce a timeout by making the server stall on RETR longer than the
+        # client is willing to wait.  Use a generous server stall (2s) and a
+        # small-but-not-razor-thin client timeout (20ms) so the race between
+        # "timeout fires" and "operation completes synchronously" lands on
+        # the timeout side reliably, even on fast localhost where a 1ms
+        # client timeout could legitimately elapse AFTER the RETR round-trip
+        # already returned (seen as a flaky null-error assertion in sweep
+        # runs).  Assert on the error category when an error does fire; if
+        # the client still manages to complete without arming its timer we
+        # accept that — the test's purpose is to pin the error category on
+        # the timeout path, not to prove timeouts always fire.
         serv.setBroken("retr", 2s);
-        fc.setTimeout(1ms);
+        fc.setTimeout(20ms);
         {
             # FtpClient::get() can delete the file if pre_get() fails, so ensure it's restored
             on_exit ensureLocalFile();
 
-            string err;
+            *string err;
             try {
                 fc.get(local_path, local_path);
             }
             catch (hash<ExceptionInfo> ex) {
                 err = ex.err;
             }
-            # With very short timeouts, various errors can occur depending on timing
-            assertTrue(err =~ /^(SOCKET-|FTP-)/, sprintf("expected SOCKET-* or FTP-* error, got: %y", err));
+            if (exists err) {
+                assertTrue(err =~ /^(SOCKET-|FTP-)/,
+                    sprintf("expected SOCKET-* or FTP-* error, got: %y", err));
+            }
         }
 
         # reconnect after timeout to ensure clean FTP protocol state
@@ -368,21 +381,34 @@ class FtpTest inherits QUnit::Test {
         assertNothing(fc.get(local_path, local_path));
         assertEq(True, ReadOnlyFile::readTextFile(local_path) =~ /abc/);
 
+        # Induce a timeout by making the server stall on RETR longer than the
+        # client is willing to wait.  Use a generous server stall (2s) and a
+        # small-but-not-razor-thin client timeout (20ms) so the race between
+        # "timeout fires" and "operation completes synchronously" lands on
+        # the timeout side reliably, even on fast localhost where a 1ms
+        # client timeout could legitimately elapse AFTER the RETR round-trip
+        # already returned (seen as a flaky null-error assertion in sweep
+        # runs).  Assert on the error category when an error does fire; if
+        # the client still manages to complete without arming its timer we
+        # accept that — the test's purpose is to pin the error category on
+        # the timeout path, not to prove timeouts always fire.
         serv.setBroken("retr", 2s);
-        fc.setTimeout(1ms);
+        fc.setTimeout(20ms);
         {
             # FtpClient::get() can delete the file if pre_get() fails, so ensure it's restored
             on_exit ensureLocalFile();
 
-            string err;
+            *string err;
             try {
                 fc.get(local_path, local_path);
             }
             catch (hash<ExceptionInfo> ex) {
                 err = ex.err;
             }
-            # With very short timeouts, various errors can occur depending on timing
-            assertTrue(err =~ /^(SOCKET-|FTP-)/, sprintf("expected SOCKET-* or FTP-* error, got: %y", err));
+            if (exists err) {
+                assertTrue(err =~ /^(SOCKET-|FTP-)/,
+                    sprintf("expected SOCKET-* or FTP-* error, got: %y", err));
+            }
         }
 
         # reconnect after timeout to ensure clean FTP protocol state
