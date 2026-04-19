@@ -127,6 +127,16 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         #! Protocol cache: "host:port" -> "h2" or "h3"
         hash<string, string> protocol_cache;
 
+        #! Alt-Svc alt port map: origin "host:port" -> alt_port
+        /** Populated by checkAltSvc() when the server advertises an h3
+            alternative on a port different from the origin TCP port.
+            createConnection() rewrites Http3ClientConnection's url_info.port
+            to alt_port so the QUIC handshake targets the advertised UDP
+            port, not the origin TCP port.  Absent entry means alt_port
+            equals origin port (the common case).
+        */
+        hash<string, int> alt_svc_port_map;
+
         #! Last H3 probe times: "host:port" -> timestamp
         hash<string, date> h3_probe_times;
 
@@ -1288,9 +1298,20 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
             # Record probe time
             h3_probe_times{key} = now_us();
 
+            # Apply Alt-Svc port rewrite: when the server advertised h3 on a
+            # port different from the origin TCP port, connect QUIC to the
+            # advertised alt port instead of the origin port.
+            hash<auto> h3_url_info = url_info;
+            if (alt_svc_port_map.hasKey(key)) {
+                int alt_port = alt_svc_port_map{key};
+                h3_url_info.port = alt_port;
+                log(LoggerLevel::DEBUG,
+                    "Alt-Svc: using h3 alt-port %d for origin %s", alt_port, key);
+            }
             try {
-                log(LoggerLevel::DEBUG, "creating new HTTP/3 connection to %s", key);
-                Http3ClientConnection conn(url_info, opts.connect_timeout, logger,
+                log(LoggerLevel::DEBUG, "creating new HTTP/3 connection to %s:%d",
+                    h3_url_info.host, h3_url_info.port);
+                Http3ClientConnection conn(h3_url_info, opts.connect_timeout, logger,
                     opts.max_streams_per_connection, opts.ssl_verify_mode, opts.accept_all_certs,
                     opts.client_cert, opts.client_pk);
                 cacheProtocol(key, "h3");
@@ -1793,12 +1814,26 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
                     alt_host, alt_port, origin_host);
                 continue;
             }
-            # Use the origin host for the pool key — this is the same format
-            # used by acquireStream() → getConnection() for pool lookups
-            string key = sprintf("%s:%d", origin_host, alt_port);
-            log(LoggerLevel::DEBUG, "Alt-Svc: H3 advertised at %s, caching h3", key);
+            # Cache key MUST be the origin (host:origin_port), not the Alt-Svc
+            # alternative port.  getConnection() / getProtocol() look up by
+            # (url_info.host, url_info.port) = origin port; a cache keyed by
+            # alt_port would never match a subsequent request to the origin.
+            # When alt_port != origin_port we also record alt_port separately
+            # so createConnection() can rewrite the H3 target.
+            string key = sprintf("%s:%d", origin_host, url_info.port);
+            log(LoggerLevel::DEBUG,
+                "Alt-Svc: H3 advertised for origin %s via alt-port %d, caching h3",
+                key, alt_port);
             AutoWriteLock al(pool_lock);
             cacheProtocol(key, "h3");
+            if (alt_port != url_info.port) {
+                alt_svc_port_map{key} = alt_port;
+            } else {
+                # Alt-Svc port equals origin port — no rewrite needed;
+                # remove any stale entry in case it was set by a prior
+                # Alt-Svc response pointing elsewhere.
+                remove alt_svc_port_map{key};
+            }
             # Drain existing non-H3 connections so subsequent requests use H3.
             # setDraining() prevents new streams while in-flight streams complete.
             if (pool.hasKey(key)) {
