@@ -1907,8 +1907,17 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
             bool skip_inline = has_unconditional && has_error;
 
             if (!skip_inline) {
-                // Phase 1: Inline handlers at fall-through exit
-                if (!lowerHandlersAtExit(false, error, block_handler_start)) {
+                // Phase 1: Inline handlers at fall-through exit.  The
+                // Scope entry that owns these handlers is at
+                // cleanup_stack.size()-1 (it gets popped below); pass
+                // barrier_depth = cleanup_stack.size() so a non-local
+                // exit inside a handler body clamps target_depth past
+                // the firing Scope entry — without the barrier,
+                // `return`/`break`/`continue` inside an on_exit body
+                // triggers infinite re-inlining.
+                if (!lowerHandlersAtExit(false, error, block_handler_start,
+                        /*end_index=*/SIZE_MAX,
+                        /*barrier_depth=*/cleanup_stack.size())) {
                     return false;
                 }
             }
@@ -1977,6 +1986,25 @@ bool QoreIRLowering::emitBlockCleanups(size_t target_depth, std::string& error, 
     // we reach the target depth.  Handles: ScopeExit (on_exit handlers), Lvars
     // (block-scoped locals), RefForeachRecord (pop $#, load var, record), and
     // RefForeach (finalize/write-back).
+    //
+    // A HandlerBarrier entry (pushed by lowerHandlersAtExit around a
+    // handler body being inlined) acts as a hard floor: when we
+    // encounter one on the walk, raise `target_depth` to just below it
+    // so the Scope entry that fired this handler is not revisited.
+    // Without the clamp, a non-local exit inside the handler body would
+    // recursively re-enter `lowerHandlersAtExit` on the same handler
+    // range and infinite-recurse (see 8fb555ac1 for the symmetric fix
+    // on TryStatement / RefForeach).  The barrier's own `handler_start`
+    // records the depth the creator of the barrier wants to clamp to.
+    for (size_t j = cleanup_stack.size(); j > target_depth; --j) {
+        if (cleanup_stack[j - 1].type == BlockCleanupEntry::HandlerBarrier) {
+            const size_t clamp_to = cleanup_stack[j - 1].handler_start;
+            if (clamp_to > target_depth) {
+                target_depth = clamp_to;
+            }
+            break;  // only the innermost barrier matters
+        }
+    }
     for (size_t i = cleanup_stack.size(); i > target_depth; --i) {
         // Copy by value: lowerHandlersAtExit() can trigger cleanup_stack reallocation
         // (when inlining handler bodies that push to cleanup_stack), which would
@@ -2006,7 +2034,17 @@ bool QoreIRLowering::emitBlockCleanups(size_t target_depth, std::string& error, 
                         break;
                     }
                 }
-                if (!lowerHandlersAtExit(is_error, error, entry.handler_start, handler_end)) {
+                // barrier_depth = i means: while the handler body is
+                // inlined, any `emitBlockCleanups` invoked from a
+                // non-local exit inside that body must clamp its
+                // target_depth up to `i` — so the walk excludes
+                // cleanup_stack[i-1] (this firing Scope entry) and
+                // everything below it.  Remaining outer entries are
+                // fired by the current outer emitBlockCleanups when
+                // this iteration returns.  This is what prevents the
+                // infinite re-inlining cycle.
+                if (!lowerHandlersAtExit(is_error, error, entry.handler_start, handler_end,
+                        /*barrier_depth=*/i)) {
                     return false;
                 }
                 // Phase 2a: Pop scope_stack without re-executing handlers (inline_lowered=true)
@@ -2040,6 +2078,11 @@ bool QoreIRLowering::emitBlockCleanups(size_t target_depth, std::string& error, 
                 builder.createRefForeachFinalize(entry.ref_foreach_state, fill, entry.loc);
                 break;
             }
+            case BlockCleanupEntry::HandlerBarrier:
+                // Sentinel — already handled by the pre-walk clamp above;
+                // the main loop's target_depth got raised past any barrier
+                // so we should never visit one here.  Guard anyway.
+                break;
         }
     }
     return true;
@@ -2598,7 +2641,21 @@ int QoreIRLowering::compileAllHandlerIRs(std::string& error) {
 }
 
 bool QoreIRLowering::lowerHandlersAtExit(bool is_error, std::string& error, size_t start_index,
-        size_t end_index) {
+        size_t end_index, size_t barrier_depth) {
+    // Debug-only sanity assert: a correct fix puts natural depth well
+    // under this.  Real-world deeply-nested handlers in the qwf corpus
+    // stay under 8 once the HandlerBarrier mechanism prevents the
+    // re-entry cycle; tripping it signals a regression, not a runaway
+    // that should be silently absorbed into source fallback.
+    static thread_local int handler_depth = 0;
+    struct DepthGuard {
+        int& d;
+        DepthGuard(int& d) : d(d) { ++d; }
+        ~DepthGuard() { --d; }
+    } guard(handler_depth);
+    assert(handler_depth <= 32 && "IR handler-inlining depth exploded — "
+            "likely cleanup-emit cycle; see BlockCleanupEntry::HandlerBarrier");
+
     // Lower handlers in [start_index, end_index) in LIFO order.
     // Handlers are executed in reverse registration order (innermost to outermost).
     // end_index defaults to SIZE_MAX meaning "through the end of block_handlers"
@@ -2618,9 +2675,46 @@ bool QoreIRLowering::lowerHandlersAtExit(bool is_error, std::string& error, size
             continue;
         }
 
+        // Push a HandlerBarrier sentinel on cleanup_stack at `barrier_depth`
+        // so any `emitBlockCleanups` invoked from a non-local exit
+        // (return/break/continue) *inside* the handler body's lowering
+        // clamps its walk at the barrier — preventing the firing Scope
+        // entry (which still lives on cleanup_stack at/above this depth
+        // and still lists this handler in its handler_start range) from
+        // being re-entered, which would re-fire this same handler and
+        // recurse unboundedly.  Symmetric to the TryStatement /
+        // RefForeach anchors added in 8fb555ac1 (that fix kept outer
+        // Scope entries from claiming inner-scope handlers; this one
+        // keeps an in-flight handler from claiming its own Scope).
+        //
+        // SIZE_MAX means "caller didn't compute a barrier" — e.g.
+        // compileAllHandlerIRs's isolated instance with an empty
+        // cleanup_stack where there's nothing to protect against.  In
+        // that case we skip the barrier entirely.
+        const bool have_barrier = (barrier_depth != SIZE_MAX);
+        if (have_barrier) {
+            BlockCleanupEntry barrier;
+            barrier.type = BlockCleanupEntry::HandlerBarrier;
+            barrier.handler_start = barrier_depth;
+            barrier.loc = handler.code ? handler.code->loc : nullptr;
+            cleanup_stack.push_back(barrier);
+        }
+
         // Lower the handler code block inline using the current parse context
         // This gives the handler natural access to parent block's scope
-        if (!lowerStatementBlock(handler.code, error)) {
+        bool ok = lowerStatementBlock(handler.code, error);
+
+        if (have_barrier) {
+            // The barrier must still be on top — handler bodies push
+            // their own entries above it and are responsible for popping
+            // them before returning.  Assert loudly if someone violated
+            // that.
+            assert(!cleanup_stack.empty()
+                && cleanup_stack.back().type == BlockCleanupEntry::HandlerBarrier
+                && "HandlerBarrier disturbed by handler body");
+            cleanup_stack.pop_back();
+        }
+        if (!ok) {
             return false;
         }
     }
@@ -4537,6 +4631,12 @@ QoreIRValue QoreIRLowering::lowerAssignment(const QoreValue& expr, std::string& 
     auto* assign = dynamic_cast<const QoreAssignmentOperatorNode*>(node);
     if (!assign) {
         return QoreIRValue();
+    }
+    if (getenv("QORE_AOT_TRACE_LOWER_ASSIGN")) {
+        fprintf(stderr, "[aot-trace] lowerAssignment file=%s line=%d\n",
+            assign->loc ? assign->loc->getFile() : "?",
+            assign->loc ? assign->loc->start_line : 0);
+        fflush(stderr);
     }
 
     // Range lvalue (e.g., list[0..2] = x) - delegate entire expression to AST before lowering RHS
@@ -7789,6 +7889,15 @@ QoreIRValue QoreIRLowering::lowerParseHash(const QoreValue& expr, std::string& e
 
 QoreIRValue QoreIRLowering::lowerParseList(const QoreValue& expr, std::string& error) {
     const AbstractQoreNode* node = expr.getInternalNode();
+    // Phase 3b diag: trace the pre-dynamic_cast pointer so a crashing
+    // input at this site reveals the file + line of the triggering
+    // expression instead of a bare SIGSEGV.  Gated on
+    // QORE_AOT_TRACE_LOWER_PARSELIST.
+    if (node && getenv("QORE_AOT_TRACE_LOWER_PARSELIST")) {
+        fprintf(stderr, "[aot-trace] lowerParseList node=%p type=%d\n",
+            (const void*)node, (int)expr.getType());
+        fflush(stderr);
+    }
     auto* list = dynamic_cast<const QoreParseListNode*>(node);
     if (!list) {
         return QoreIRValue();

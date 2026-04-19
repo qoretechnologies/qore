@@ -340,10 +340,19 @@ private:
     /** Lowers handler code inline into the IR in LIFO order.
      *  @param is_error true if this is an error/exception exit
      *  @param start_index start index in block_handlers (for multi-block context)
+     *  @param end_index end index in block_handlers (SIZE_MAX = through the end)
+     *  @param barrier_depth cleanup_stack depth to set as a hard floor while a
+     *    handler body is being inlined — any `emitBlockCleanups` invoked from a
+     *    non-local exit (return/break/continue) inside the handler body clamps
+     *    its walk at this depth so the firing Scope entry (which still owns
+     *    this handler range) can't re-enter `lowerHandlersAtExit` on the same
+     *    handlers.  SIZE_MAX = no barrier.  Implemented via a
+     *    HandlerBarrier entry pushed on cleanup_stack for the duration of the
+     *    handler body lowering.
      *  @return false if lowering failed
      */
     bool lowerHandlersAtExit(bool is_error, std::string& error, size_t start_index = 0,
-            size_t end_index = SIZE_MAX);
+            size_t end_index = SIZE_MAX, size_t barrier_depth = SIZE_MAX);
 
     QoreIRBuilder& builder;
     QoreParseContext* parse_context = nullptr;
@@ -360,7 +369,14 @@ private:
     //! Entry in the block cleanup stack for interleaved cleanup of on_exit handlers,
     //! block-scoped local variables, and reference foreach state on break/continue/return
     struct BlockCleanupEntry {
-        enum Type { Scope, Lvars, RefForeachRecord, RefForeach };
+        //! HandlerBarrier is a sentinel pushed around a handler body being
+        //! inlined by lowerHandlersAtExit().  It has no cleanup effect, but
+        //! emitBlockCleanups() treats it as a hard floor — the walk stops
+        //! at the barrier so a non-local exit inside the handler body can
+        //! not reach back past the firing Scope entry and re-enter the same
+        //! handler range (infinite-recursion guard; symmetric to the
+        //! TryStatement/RefForeach anchors added in 8fb555ac1).
+        enum Type { Scope, Lvars, RefForeachRecord, RefForeach, HandlerBarrier };
         Type type;
         uint32_t scope_id = 0;                    //!< scope ID for Scope entries
         size_t handler_start = 0;                 //!< index into block_handlers at scope entry (for inline lowering)

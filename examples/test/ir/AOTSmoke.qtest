@@ -43,6 +43,8 @@ class AOTSmokeTest inherits QUnit::Test {
         addTestCase("AOT list operations", \testListOps());
         addTestCase("AOT nested function calls", \testNestedFunctionCalls());
         addTestCase("AOT on_exit blocks", \testOnExitBlocks());
+        addTestCase("AOT handler re-inlining cycle guard",
+            \testHandlerRecursionGuard());
         addTestCase("AOT type conversions", \testTypeConversions());
         # AOT opt-level, cross-compilation, and static linking tests
         addTestCase("AOT optimization levels", \testAOTOptLevels());
@@ -846,6 +848,110 @@ printf(\"rv: %s\\n\", rv2);
         assertTrue(result.all_precompiled, "on_exit: all pre-compiled: " + result.compile_out);
         string interp_out = runInterpreted(code);
         assertEq(interp_out, result.run_out, "on_exit blocks output matches interpreter");
+    }
+
+    testHandlerRecursionGuard() {
+        # Regression: a return/break/continue inside an on_exit or
+        # on_success body caused `emitBlockCleanups` to walk back to the
+        # still-live Scope entry owning the firing handler, re-entering
+        # `lowerHandlersAtExit` on the same handler range, infinite-recursing
+        # the lowerer until SIGSEGV (or stack overflow at runtime in the
+        # AOT-compiled body).  Fixed by pushing a HandlerBarrier sentinel on
+        # cleanup_stack around the handler body lowering so nested
+        # emitBlockCleanups invocations clamp target_depth past the firing
+        # Scope entry.  Patterns exercised here replicate what
+        # WorkflowExecutionInstance.qc has and what the qwf batch hit.
+        string code = "%modern
+# nested on_exit/on_success with early return inside on_success body
+hash<auto> sub run_a(*hash eh) {
+    hash<auto> rv = {\"status\": \"init\"};
+    {
+        on_success {
+            hash<auto> rv_s = {};
+            if (eh) {
+                # hash-slice on local var inside handler — the exact shape
+                # that tripped the original lowerParseList SIGSEGV.
+                rv_s.error = eh.(\"error\", \"description\", \"info\");
+            }
+            return rv_s;
+        }
+        on_exit {
+            rv = {\"status\": \"cleaned\"};
+        }
+        on_success
+            ;
+        on_exit {
+            rv = {\"status\": \"cleaned2\"};
+        }
+    }
+    return rv;
+}
+
+# on_exit body that itself contains an early return
+# (Qore's parser rejects break/continue from inside an on_exit targeting an
+# enclosing loop; `return` is the only cross-scope exit that's legal here.)
+int sub run_b(bool fast_exit) {
+    int counter = 0;
+    foreach int i in (xrange(5)) {
+        on_exit {
+            counter++;
+            if (fast_exit && i == 2) {
+                return counter + 100;
+            }
+        }
+    }
+    return counter;
+}
+
+# 3-deep nested on_exit where innermost body returns
+int sub run_c() {
+    int side_effect = 0;
+    {
+        on_exit { side_effect++; }
+        {
+            on_exit { side_effect++; }
+            {
+                on_exit {
+                    if (side_effect == 0) {
+                        return side_effect + 10;
+                    }
+                }
+                side_effect += 1;
+            }
+        }
+    }
+    return side_effect;
+}
+
+# exception thrown inside an on_exit handler — unwind must still work
+int sub run_d() {
+    int x = 0;
+    try {
+        on_exit {
+            x += 1;
+        }
+        throw \"BOOM\", \"oops\";
+    } catch (hash<ExceptionInfo> ex) {
+        x += 10;
+    }
+    return x;
+}
+
+hash<auto> rv_a1 = run_a(NOTHING);
+printf(\"a1: %y\\n\", rv_a1);
+hash<auto> rv_a2 = run_a({\"error\": \"e\", \"description\": \"d\", \"info\": \"i\", \"x\": \"ignored\"});
+printf(\"a2: %y\\n\", rv_a2);
+printf(\"b-nofast: %d\\n\", run_b(False));
+printf(\"b-fast: %d\\n\", run_b(True));
+printf(\"c: %d\\n\", run_c());
+printf(\"d: %d\\n\", run_d());
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "handler-recursion: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out,
+            "handler-recursion AOT output matches interpreter");
     }
 
     testTypeConversions() {

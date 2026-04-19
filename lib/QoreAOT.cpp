@@ -5816,7 +5816,13 @@ bool QoreAOT::compileScriptFilesBatch(
     }
 
     // Now emit one .qo per target using the shared parsed program.
+    const bool trace_emit = getenv("QORE_AOT_TRACE_BATCH_EMIT") != nullptr;
     for (auto& e : entries) {
+        if (trace_emit) {
+            fprintf(stderr, "[aot-trace] emit start: %s\n",
+                e.canon.c_str());
+            fflush(stderr);
+        }
         std::string per_err;
         if (!emitScriptQoFromParsedProgram(*qpgm, e.canon, e.source,
                 e.out_path, opt_level, target_triple, include_source,
