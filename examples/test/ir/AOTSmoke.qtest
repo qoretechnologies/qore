@@ -45,6 +45,8 @@ class AOTSmokeTest inherits QUnit::Test {
         addTestCase("AOT on_exit blocks", \testOnExitBlocks());
         addTestCase("AOT handler re-inlining cycle guard",
             \testHandlerRecursionGuard());
+        addTestCase("AOT cross-module same-name dispatch",
+            \testCrossModuleSameName());
         addTestCase("AOT type conversions", \testTypeConversions());
         # AOT opt-level, cross-compilation, and static linking tests
         addTestCase("AOT optimization levels", \testAOTOptLevels());
@@ -1147,6 +1149,108 @@ printf(\"sum: %d\\n\", sum);
             "so_path": so_path,
             "compiled": is_file(so_path),
         };
+    }
+
+    testCrossModuleSameName() {
+        # Regression: two AOT .qmods that each define a function with the
+        # SAME BASE NAME (and signature) emitted identical bare LLVM
+        # symbols — `dlopen(..., RTLD_GLOBAL)` then interposed one body
+        # onto the other's function-table slot, so a wrapper `OMQ::foo`
+        # that calls `Util::foo` ended up running `OMQ::foo` again,
+        # blowing the C++ stack (pre-HandlerBarrier) or corrupting the
+        # arg flow (post-HandlerBarrier, producing a `<block return>`
+        # type error or a `<nothing>::substr()` pseudo-method failure
+        # as the cross-module body saw NOTHING in its first parameter).
+        # Fixed by prefixing the LLVM symbol with `_qaot_<module>_` so
+        # same-named functions across modules get distinct symbols.
+        # The AOT function-table entry's `name` field stays unqualified
+        # so the runtime register path's variant-key reconstruction
+        # keeps working.
+        string tmp_dir = sprintf("/tmp/aot_xmod_name_%d", getpid());
+        mkdir(tmp_dir);
+        on_exit {
+            backquote(sprintf("rm -rf %s", tmp_dir));
+        }
+
+        # Module A: defines ModA::shared_fn
+        string mod_a = "%modern
+module ModA { version = \"1.0\"; desc = \"A\"; author = \"t\"; license = \"MIT\"; }
+public namespace ModA {
+    public string sub shared_fn(string s) {
+        return \"A:\" + s;
+    }
+}
+";
+        # Module B: `%requires ModA`, defines ModB::shared_fn wrapping A's.
+        # Same base name, same signature — must NOT collide at load time.
+        string mod_b = "%modern
+%requires ModA
+module ModB { version = \"1.0\"; desc = \"B\"; author = \"t\"; license = \"MIT\"; }
+public namespace ModB {
+    public string sub shared_fn(string s) {
+        return ModA::shared_fn(s) + \":B\";
+    }
+}
+";
+        string a_qm = tmp_dir + "/ModA.qm";
+        string b_qm = tmp_dir + "/ModB.qm";
+        {
+            File f();
+            f.open2(a_qm, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write(mod_a);
+            f.close();
+        }
+        {
+            File f();
+            f.open2(b_qm, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write(mod_b);
+            f.close();
+        }
+
+        hash<auto> ra = compileModuleFile(a_qm, tmp_dir + "/ModA.qmod");
+        assertTrue(ra.compiled, "ModA compiled: " + ra.compile_out);
+        # B requires A — qcc needs QORE_MODULE_DIR=tmp_dir to find
+        # ModA.qmod for the `%requires ModA` directive.  Drive qcc
+        # directly (compileModuleFile doesn't thread env vars through).
+        string compile_b_cmd = sprintf("QORE_LIBDIR=%s QORE_MODULE_DIR=%s "
+            "%s -b --compile-module --output %s/ModB.qmod %s 2>&1",
+            libqore_dir, tmp_dir, qore_bin, tmp_dir, b_qm);
+        string b_out = backquote(compile_b_cmd);
+        hash<auto> rb = {
+            "compile_out": b_out,
+            "so_path": tmp_dir + "/ModB.qmod",
+            "compiled": is_file(tmp_dir + "/ModB.qmod"),
+        };
+        assertTrue(rb.compiled, "ModB compiled: " + rb.compile_out);
+
+        # Symbols must be distinct (prefixed).
+        string nm_a = backquote(sprintf("nm -D %s/ModA.qmod 2>/dev/null | "
+            "grep ' T _qaot_ModA_shared_fn' || true", tmp_dir));
+        string nm_b = backquote(sprintf("nm -D %s/ModB.qmod 2>/dev/null | "
+            "grep ' T _qaot_ModB_shared_fn' || true", tmp_dir));
+        assertTrue(nm_a.size() > 0,
+            "ModA.qmod exports _qaot_ModA_shared_fn symbol");
+        assertTrue(nm_b.size() > 0,
+            "ModB.qmod exports _qaot_ModB_shared_fn symbol");
+
+        # Run a script that loads both modules and calls each — a correct
+        # dispatch yields ModA direct="A:x" and ModB wrapper="A:y:B".
+        string test_code = "%modern
+%requires ModA
+%requires ModB
+printf(\"%s\\n\", ModA::shared_fn(\"x\"));
+printf(\"%s\\n\", ModB::shared_fn(\"y\"));
+";
+        hash<auto> paths = writeTempScript(test_code);
+        on_exit {
+            unlink(paths.src);
+        }
+
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s "
+            "%s -b --enable-debug %s 2>&1",
+            libqore_dir, tmp_dir, qore_bin, paths.src));
+        assertEq("A:x\nA:y:B\n", out,
+            "cross-module same-name dispatch produces correct results: " + out);
     }
 
     testAOTModuleCompile() {

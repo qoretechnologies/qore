@@ -307,6 +307,12 @@ static std::string getLibqoreDir() {
     return "";
 }
 
+// Forward decl — implementation follows sanitizeCIdentifier below.  See
+// the definition for full rationale; needed here so the module / method
+// compile sites (line ~1534, ~1840) can prepend the prefix to
+// `ir_func->name` before LLVM function lookup.
+static std::string aotSymbolPrefix(const char* compile_module);
+
 //! Generate a unique variant key that includes parameter types to distinguish overloads
 /** Format: "name(type1,type2,...)" - uses type paths for parameter types
     @param name the base function/method name
@@ -1530,8 +1536,17 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
             int rc = tryLowerFunction(uvb, fname, pgm, ir_func, lower_error, func);
 
             if (rc == 0 && ir_func) {
-                // Use variant key as LLVM symbol name to distinguish overloaded variants
-                ir_func->name = variant_key;
+                // LLVM symbol name = `_qaot_<mod>_` + variant_key.  The
+                // per-module prefix keeps the dynamic linker from
+                // interposing same-named symbols across `.qmod`s loaded
+                // with RTLD_GLOBAL (see `aotSymbolPrefix` for the full
+                // failure mode).  The unqualified `variant_key` stays
+                // the AOT function-table entry's `name` field at line
+                // ~1729 below (`cf.name = variant_key;`) so the
+                // runtime's `registerAOTFunctionsFromSlotMaps`
+                // reconstruction via `getVariantKey(plain_name,
+                // variant)` still matches.
+                ir_func->name = aotSymbolPrefix(compile_module) + variant_key;
 
                 // Skip if another variant with the same LLVM function name was already compiled
                 llvm::Function* existing = module.getFunction(ir_func->name);
@@ -1836,8 +1851,13 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                 int rc = tryLowerFunction(uvb, method_name.c_str(), pgm, ir_func, lower_error);
 
                 if (rc == 0 && ir_func) {
-                    // Use variant key as LLVM symbol name to distinguish overloaded variants
-                    ir_func->name = variant_key;
+                    // Per-module prefix for method LLVM symbol names — see
+                    // the parallel function path above for the full rationale
+                    // (prevents cross-`.qmod` same-name symbol interposition
+                    // under RTLD_GLOBAL).  `cf.name = variant_key;` below
+                    // stays unqualified so the runtime slot-map register
+                    // path still matches.
+                    ir_func->name = aotSymbolPrefix(compile_module) + variant_key;
 
                     // Skip if another variant with the same LLVM function name was already compiled
                     llvm::Function* existing = module.getFunction(ir_func->name);
@@ -3874,6 +3894,36 @@ static std::string sanitizeCIdentifier(const std::string& name) {
         }
     }
     return out;
+}
+
+//! Per-module LLVM symbol name prefix so AOT-compiled same-named
+//! functions in different `.qmod`s don't collide under RTLD_GLOBAL.
+//! Keeps the AOT function-table entry's `name` field (unqualified
+//! `variant_key`) intact so runtime `registerAOTFunctionsFromSlotMaps`
+//! reconstruction via `getVariantKey(plain_name, variant)` still
+//! matches; only the LLVM symbol (`ir_func->name`, `cf.llvm_symbol`)
+//! gets the prefix.
+//!
+//! Without this, two `.qmod`s that each define
+//! `substitute_env_vars(string)` (one in `OMQ`, one in `Util`) emit
+//! identical bare LLVM symbols.  Whichever `.qmod` loads second has
+//! its function-table `fn_ptr` slot interposed to the first's body
+//! address — calling the wrapper ends up running the wrappee's body
+//! (or vice versa), producing the `<block return> expects 'string',
+//! got no value` / `<nothing>::substr()` symptoms observed in
+//! `qrest -h` when `QorusClientBase.qmod` wraps `Util::…`.
+//!
+//! Returns an empty string for callers with no module context
+//! (script-context compile, compile-all test paths) — those can't
+//! load multiple same-named artifacts into one program anyway.
+static std::string aotSymbolPrefix(const char* compile_module) {
+    if (!compile_module || !*compile_module) {
+        return std::string();
+    }
+    // `_qaot_<sanmod>_` — underscores only, guaranteed valid in every
+    // toolchain's symbol table.  The `_qaot_` marker is distinct
+    // enough to survive nm/objdump searches for diagnostics.
+    return std::string("_qaot_") + sanitizeCIdentifier(compile_module) + "_";
 }
 
 //! Phase 4 slice 5: extract a filename basename without extension.
