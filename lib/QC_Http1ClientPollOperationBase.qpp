@@ -1629,10 +1629,13 @@ void Http1ClientPollOperationPriv::abort(ExceptionSink* xsink) {
         current_op->abort(xsink);
     }
     notifyPendingStreams("HTTP1-ABORT", "connection aborted", xsink);
-    if (connection_priv) {
-        connection_priv->setClosed();
+    {
+        AutoLocker al(stream_lock);
+        if (connection_priv) {
+            connection_priv->setClosed();
+        }
+        connection_priv = nullptr;
     }
-    connection_priv = nullptr;
     // Note: do NOT close socket or delete current_op here to avoid
     // use-after-free if a driver thread is still inside continuePoll
 }
@@ -1656,10 +1659,13 @@ void Http1ClientPollOperationPriv::setError(const char* err, const char* desc,
         sock_obj->close();
     }
     notifyPendingStreams(err, desc, xsink);
-    if (connection_priv) {
-        connection_priv->setClosed();
+    {
+        AutoLocker al(stream_lock);
+        if (connection_priv) {
+            connection_priv->setClosed();
+        }
+        connection_priv = nullptr;
     }
-    connection_priv = nullptr;
 }
 
 void Http1ClientPollOperationPriv::notifyPendingStreams(const char* err, const char* desc,
