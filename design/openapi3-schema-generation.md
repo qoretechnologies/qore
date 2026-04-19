@@ -55,6 +55,7 @@ hash<HttpHandlerResponseInfo> get(hash<auto> cx, *hash<auto> ah) {
 | `@examples` | Usage examples as a bullet list (output as `x-examples` extension) | No |
 | `@note` | Behavioral notes/caveats (appended to description; multi-line with `\`) | No |
 | `@x-ai-summary` | AI-specific summary override for embedding text (output as `x-ai-summary` extension) | No |
+| `@x-ai-tool-name` | LLM-facing tool-name override for MCP/agent gateways (output as `x-ai-tool-name` extension) | No |
 | `@content_type` | Response MIME type override (e.g., `application/x-yaml` for file downloads) | No |
 | `@ENDSCHEMA` | Marks the end of schema documentation | Yes |
 
@@ -575,6 +576,32 @@ semantic search without changing the public API docs:
     @ENDSCHEMA
 */
 ```
+
+### @x-ai-tool-name
+
+Override the LLM-facing tool name that MCP / agent gateways derive from the
+operation.  Gateways consuming the generated schema (e.g., Qorus's
+`QorusOpenApiGateway`) build default tool names from the HTTP verb + path — the
+default transform produces readable names for most endpoints (`list-services`,
+`create-apikeys`, `enable-services-by-id`) but some operations benefit from a
+hand-picked alias: to resolve a name collision the default can't auto-fix, to
+shorten an awkward multi-segment path, or to use a domain-specific verb that
+reads more naturally than the HTTP method.
+
+```qore
+/** @REST PUT /workflows/{id_or_name}/orders/{id}/retry
+    @SCHEMA
+    @summary Retry a blocked workflow order
+
+    @x-ai-tool-name retry-workflow-order
+
+    @ENDSCHEMA
+*/
+```
+
+The annotation is single-line (no backslash continuation) and the value is
+passed through verbatim to the `x-ai-tool-name` extension on the operation.
+Gateways fall back to the default transform when the annotation is absent.
 
 ### @content_type
 
