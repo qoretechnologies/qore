@@ -54,6 +54,18 @@ public class AbstractSseConnection {
     */
     abstract queueRawEvent(hash<auto> event);
 
+    #! Queues a pre-formatted SSE text frame for sending
+    /** The string must already be formatted per the SSE spec (e.g., from
+        @ref ServerSentEventHandler::encodeMessage()).  Used by
+        @ref ServerSentEventConnection::sendEncoded() to deliver events across
+        all HTTP protocol versions through a uniform write path.
+
+        @param data the pre-formatted SSE frame text
+
+        @since %HttpServerAsyncIo 1.3
+    */
+    abstract queueRawString(string data);
+
     #! Returns True if the connection is still open
     abstract bool isOpen();
 
@@ -95,6 +107,10 @@ public class Http1SseConnection inherits AbstractSseConnection {
 
     queueRawEvent(hash<auto> event) {
         poll_op.queueRawEvent(event);
+    }
+
+    queueRawString(string data) {
+        poll_op.queueRawString(data);
     }
 
     bool isOpen() {
