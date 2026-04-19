@@ -6182,6 +6182,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                                     raw_hdrs.refSelf(), xsink);
                             }
                             setConnMgrResponseUri(info, h, xsink);
+                            set_body_content_type_info(xsink, **ans, *info);
                         }
 
                         if (recv_callback) {
@@ -6371,6 +6372,10 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                         }
                     }
                     setConnMgrResponseUri(info, *raw_resp, xsink);
+                    // Populate body-content-type — legacy sync path sets
+                    // this via set_body_content_type_info; the conn_mgr
+                    // response-translation equivalent was missing.
+                    set_body_content_type_info(xsink, **ans, *info);
                 }
 
                 if (!ans->is_unique()) {
@@ -6463,6 +6468,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                             info->setKeyValue("response-headers-raw", raw_hdrs.refSelf(), xsink);
                         }
                         setConnMgrResponseUri(info, h, xsink);
+                        set_body_content_type_info(xsink, **ans, *info);
                     }
 
                     // Determine response transfer-encoding and content-encoding
@@ -6755,6 +6761,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                                 raw_hdrs.refSelf(), xsink);
                         }
                         setConnMgrResponseUri(info, h, xsink);
+                        set_body_content_type_info(xsink, **ans, *info);
                     }
 
                     // Check for redirect
@@ -6816,6 +6823,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                     }
                 }
                 setConnMgrResponseUri(info, *raw_resp, xsink);
+                set_body_content_type_info(xsink, **ans, *info);
             }
 
             if (!ans->is_unique()) {
