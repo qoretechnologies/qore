@@ -189,8 +189,12 @@ class FileLocationHandlerFtp inherits AbstractFileLocationHandler {
 
                 Qore::InputStream is = pipe.getInputStream();
                 f.put(is, file);
-                is.close();
             } catch (hash<ExceptionInfo> ex) {
+                # Record the error so OutputStreamWrapper::waitForIo()
+                # can rethrow; previously this was silently dropped,
+                # leaving callers to misinterpret stale read-backs as
+                # the put result.
+                rv.setIoError(ex);
             }
         }();
 

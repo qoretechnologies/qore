@@ -202,8 +202,10 @@ class FileLocationHandlerSftp inherits AbstractFileLocationHandler {
 
                 Qore::InputStream is = pipe.getInputStream();
                 sftp.put(is, file);
-                is.close();
             } catch (hash<ExceptionInfo> ex) {
+                # Record the error so OutputStreamWrapper::waitForIo()
+                # can rethrow it to the caller — see FTP handler comment.
+                rv.setIoError(ex);
             }
         }();
 

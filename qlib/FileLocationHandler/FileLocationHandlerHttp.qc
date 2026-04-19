@@ -253,8 +253,10 @@ class FileLocationHandlerHttp inherits AbstractFileLocationHandler {
 
                 Qore::InputStream is = pipe.getInputStream();
                 hc.sendChunked(new BinaryOutputStream(), is, opts.method ? opts.method.upr() : "POST", NOTHING, path);
-                is.close();
             } catch (hash<ExceptionInfo> ex) {
+                # Record the error so OutputStreamWrapper::waitForIo()
+                # can rethrow it to the caller — see FTP handler comment.
+                rv.setIoError(ex);
             }
         }();
 
