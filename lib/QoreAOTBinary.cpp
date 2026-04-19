@@ -95,12 +95,13 @@ static thread_local const std::unordered_map<std::string, QoreClass*>*
 // class but not committed into the vlist yet). A post-pass after
 // commitDeserializedClasses resolves the QoreMethod* and patches the default
 // arg slot in place.
-struct PendingStaticMethodDefault {
-    std::string class_path;
-    std::string method_name;
-    UserVariantBase* uvb = nullptr;
-    uint32_t param_index = 0;
-};
+//
+// The struct is defined in QoreAOTBinary.h as a nested type on
+// QoreAOTBinaryDeserializer so its storage can persist across the
+// phase-split boundaries in batch mode (between
+// deserializeFunctionsAndMethods and finalize, potentially with
+// other sessions' phases running in between).
+using PendingStaticMethodDefault = QoreAOTBinaryDeserializer::PendingStaticMethodDefault;
 static thread_local std::vector<PendingStaticMethodDefault>*
     g_aot_pending_static_method_defaults = nullptr;
 
@@ -4279,7 +4280,10 @@ bool QoreAOTBinaryDeserializer::openAndDeserializeShells(QoreProgram* in_pgm,
 // index rebuild, deferred BCA resolution.  Expected to run AFTER
 // openAndDeserializeShells has completed for every blob in the
 // current batch.
-bool QoreAOTBinaryDeserializer::resolveAll(std::string& error) {
+// Phase-split 2a.  Resolves types and members; no method variants
+// are added or committed here, so it is safe to interleave across
+// sessions in batch mode.
+bool QoreAOTBinaryDeserializer::resolveTypesAndMembers(std::string& error) {
     // Resolve class base classes (looks up bases via pgm->findClass,
     // so blobs from a sibling session are reachable after all shells
     // exist).
@@ -4317,12 +4321,24 @@ bool QoreAOTBinaryDeserializer::resolveAll(std::string& error) {
     if (!deserializeGlobals(error)) {
         return false;
     }
+    return true;
+}
+
+// Phase-split 2b.  Deserializes functions and methods into this
+// session's classes.  Methods land in each class's pending hm/shm
+// maps; parseCommit is NOT called here.
+//
+// In batch mode, the MultiDeserializer runs this phase on ALL
+// sessions before any session's commitClasses, so a derived class's
+// recursive parseCommit walk can't finalize a base class before its
+// methods have been added in a sibling session.
+bool QoreAOTBinaryDeserializer::deserializeFunctionsAndMethods(std::string& error) {
     // Install pending-static-method-default context for the function/method
     // deserialization phase. Param defaults like
     // `string b = MultiPartMessage::getBoundary()` inside MultiPartMessage's
     // own constructor need deferred resolution because the referenced static
-    // method has not been committed to the class vlist yet.
-    std::vector<PendingStaticMethodDefault> pending_smd;
+    // method has not been committed to the class vlist yet.  The vector
+    // is a session member (`pending_smd`) so it survives into finalize().
     struct StaticMethodDefaultsRAII {
         StaticMethodDefaultsRAII(std::vector<PendingStaticMethodDefault>* p) {
             g_aot_pending_static_method_defaults = p;
@@ -4338,10 +4354,26 @@ bool QoreAOTBinaryDeserializer::resolveAll(std::string& error) {
     if (!deserializeMethods(error)) {
         return false;
     }
-    // Commit all newly deserialized classes (set initialized + commit pending method variants)
-    if (!commitDeserializedClasses(error)) {
-        return false;
-    }
+    return true;
+}
+
+// Phase-split 2c.  Commits all newly deserialized classes in this
+// session.  Requires every class's method map to already be
+// populated — in batch mode the MultiDeserializer ensures 2b has
+// run on ALL sessions before calling 2c on any of them.
+//
+// Single-session callers invoke the full 4-sub-phase sequence
+// (prepare → commit → importAbstract → validate).  Multi-session
+// callers bypass this and interleave the sub-phases across sessions
+// via the MultiDeserializer — see `QoreAOTBinaryMultiDeserializer::resolveAll`.
+bool QoreAOTBinaryDeserializer::commitClasses(std::string& error) {
+    return commitDeserializedClasses(error);
+}
+
+// Phase-split 2d.  Resolves deferred static-method defaults,
+// fallback sources, rebuilds root-namespace indexes, and resolves
+// the BCA (base-class constructor argument) expression blobs.
+bool QoreAOTBinaryDeserializer::finalize(std::string& error) {
     {
         qore_program_private* pp = qore_program_private::get(*pgm);
         for (const auto& pd : pending_smd) {
@@ -4373,6 +4405,7 @@ bool QoreAOTBinaryDeserializer::resolveAll(std::string& error) {
                     &loc_builtin, m, (QoreParseListNode*)nullptr));
             }
         }
+        pending_smd.clear();
     }
     if (!deserializeFallbackSources(error)) {
         return false;
@@ -4399,6 +4432,13 @@ bool QoreAOTBinaryDeserializer::resolveAll(std::string& error) {
         hasFallbackSource() ? " (with source fallback)" : "");
 
     return true;
+}
+
+bool QoreAOTBinaryDeserializer::resolveAll(std::string& error) {
+    return resolveTypesAndMembers(error)
+        && deserializeFunctionsAndMethods(error)
+        && commitClasses(error)
+        && finalize(error);
 }
 
 // Phase 4 slice 10: single-blob entry point preserved as a chain of
@@ -6453,6 +6493,28 @@ bool QoreAOTBinaryDeserializer::importInheritedMembers(std::string& error) {
 }
 
 bool QoreAOTBinaryDeserializer::commitDeserializedClasses(std::string& error) {
+    // Single-session wrapper — runs all 4 sub-phases in order.
+    // Multi-session callers bypass this and interleave sub-phases
+    // across sessions via the MultiDeserializer.
+    if (!commitClassesPrepare(error)) return false;
+    if (!commitClassesDoCommit(error)) return false;
+    if (!commitClassesImportAbstract(error)) return false;
+    if (!commitClassesValidate(error)) return false;
+    return true;
+}
+
+// Sub-phase 2c-1: set initialized + has_new_user_changes on each
+// class and run parseAddAncestors.  No parseCommit fires here.
+//
+// In batch mode (multi-session), the MultiDeserializer runs this on
+// ALL sessions before any session calls commitClassesDoCommit.
+// This guarantees that when session X's parseCommit recurses into a
+// base class owned by session Y, the base already has
+// `has_new_user_changes=true` and its methods have been handed to
+// parseAddAncestors — so the recursive parseCommit's method-commit
+// loop actually runs instead of silently skipping (which was the
+// root of the ADPwDPC/QWf empty-class cascade).
+bool QoreAOTBinaryDeserializer::commitClassesPrepare(std::string& error) {
     // Use topological order (bases before derived) computed in resolveClassBases().
     // If topo_order is empty (no classes or resolveClassBases not called), fall back
     // to sequential order for backward compatibility.
@@ -6464,7 +6526,7 @@ bool QoreAOTBinaryDeserializer::commitDeserializedClasses(std::string& error) {
         order = fallback_order;
     }
 
-    // First pass: commit all newly deserialized classes (moves pending variants to vlist)
+    // Pre-commit pass: set flags + parseAddAncestors on every class.
     for (uint32_t i : order) {
         if (i >= class_list.size() || preexisting_classes.count(i)) {
             continue;  // already initialized and committed
@@ -6513,12 +6575,53 @@ bool QoreAOTBinaryDeserializer::commitDeserializedClasses(std::string& error) {
                 priv->parseAddStaticAncestors(mi.second);
             }
         }
+    }
+
+    return true;
+}
+
+// Sub-phase 2c-2: call parseCommit on every newly deserialized
+// class in topological order.  In multi-session mode this runs on
+// all sessions AFTER every session has completed
+// commitClassesPrepare — so recursive parseCommit walks through
+// sibling sessions' classes find prepared method maps and bind
+// priv->constructor / destructor / copy correctly.
+bool QoreAOTBinaryDeserializer::commitClassesDoCommit(std::string& error) {
+    auto& order = topo_order;
+    std::vector<uint32_t> fallback_order;
+    if (order.empty() && !class_list.empty()) {
+        fallback_order.resize(class_list.size());
+        std::iota(fallback_order.begin(), fallback_order.end(), 0);
+        order = fallback_order;
+    }
+    for (uint32_t i : order) {
+        if (i >= class_list.size() || preexisting_classes.count(i)) {
+            continue;
+        }
+        QoreClass* qc = class_list[i];
+        if (!qc) {
+            continue;
+        }
+        qore_class_private* priv = qore_class_private::get(*qc);
         // Commits all pending method variants (hm, shm maps); handles base-class recursion
         priv->parseCommit();
         printd(5, "AOT deser: committed class '%s' constructor=%p hm.size=%d\n",
             qc->getName(), (void*)priv->constructor, (int)priv->hm.size());
     }
+    return true;
+}
 
+// Sub-phase 2c-3: import abstract methods from parent classes into
+// derived classes.  Must run after all sessions' parseCommit so
+// `parseHasVariantWithSignature` sees the fully committed vlist.
+bool QoreAOTBinaryDeserializer::commitClassesImportAbstract(std::string& error) {
+    auto& order = topo_order;
+    std::vector<uint32_t> fallback_order;
+    if (order.empty() && !class_list.empty()) {
+        fallback_order.resize(class_list.size());
+        std::iota(fallback_order.begin(), fallback_order.end(), 0);
+        order = fallback_order;
+    }
     // Second pass: import abstract methods from parent classes and resolve them.
     // This must happen AFTER parseCommit() because concrete variants are in the
     // pending list until committed — parseHasVariantWithSignature() only searches
@@ -6563,7 +6666,18 @@ bool QoreAOTBinaryDeserializer::commitDeserializedClasses(std::string& error) {
             }
         }
     }
+    return true;
+}
 
+// Sub-phase 2c-4: verify base-class reachability.
+bool QoreAOTBinaryDeserializer::commitClassesValidate(std::string& error) {
+    auto& order = topo_order;
+    std::vector<uint32_t> fallback_order;
+    if (order.empty() && !class_list.empty()) {
+        fallback_order.resize(class_list.size());
+        std::iota(fallback_order.begin(), fallback_order.end(), 0);
+        order = fallback_order;
+    }
     // Validation pass: verify every base class is reachable via getClass().
     // Catches hierarchy bugs at load time instead of deep in object construction.
     for (uint32_t i : order) {

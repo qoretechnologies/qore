@@ -53,6 +53,7 @@ class qore_ns_private;
 class QoreIRFunction;
 class LocalVar;
 class Var;
+class UserVariantBase;
 class QoreParseListNode;
 struct QoreProgramLocation;
 
@@ -1199,6 +1200,22 @@ class QoreAOTBinaryDeserializer {
     };
     std::vector<PendingBCA> pending_bcas;
 
+public:
+    // Static-method default-arg fixups for params like
+    //   `string b = MultiPartMessage::getBoundary()`
+    // The referenced static method is not in the vlist yet during
+    // function/method deserialization, so the ref is captured here
+    // and resolved in finalize() after commitClasses().
+    struct PendingStaticMethodDefault {
+        std::string class_path;
+        std::string method_name;
+        UserVariantBase* uvb = nullptr;
+        uint32_t param_index = 0;
+    };
+
+private:
+    std::vector<PendingStaticMethodDefault> pending_smd;
+
     bool deserializeNamespaces(std::string& error);
     bool deserializeClasses(std::string& error);
     bool resolveClassBases(std::string& error);
@@ -1245,7 +1262,59 @@ public:
     //! openAndDeserializeShells.  Must be called after every session
     //! in a multi-blob batch has completed its shells-phase, so
     //! pgm->findClass can find cross-blob declarations.
+    /** For single-blob callers, this is the complete phase 2.
+        For multi-blob batch callers, prefer the phase-split helpers
+        below; they let the MultiDeserializer interleave sub-phases
+        across sessions so a derived class's parseCommit can't fire
+        before its base class's methods have been deserialized in a
+        sibling session. */
     bool resolveAll(std::string& error);
+
+    //! Phase-split 2a — resolve base classes, types, members.
+    /** Must run before deserializeFunctionsAndMethods() on this
+        session.  Safe to interleave across sessions since it only
+        reads cross-blob shells; no class commits occur here. */
+    bool resolveTypesAndMembers(std::string& error);
+
+    //! Phase-split 2b — deserialize functions and methods.
+    /** Adds method variants to every class's pending method map
+        (hm/shm).  No parseCommit fires here.  Must run after
+        resolveTypesAndMembers() on this session. */
+    bool deserializeFunctionsAndMethods(std::string& error);
+
+    //! Phase-split 2c — commit all newly deserialized classes.
+    /** Calls parseCommit on each class in this session's class_list,
+        which binds priv->constructor via checkAssignSpecial and moves
+        pending method variants into the committed vlist.  Relies on
+        every class's method map being populated — in batch mode, the
+        MultiDeserializer runs 2b across ALL sessions before running
+        2c on any session, so parseCommit's recursive base-class walk
+        cannot finalize a sibling-session class before its methods
+        were added. */
+    bool commitClasses(std::string& error);
+
+    //! Sub-phases of commitClasses, exposed so the MultiDeserializer
+    //! can interleave across sessions.
+    /** Order: prepare → doCommit → importAbstract → validate.
+        - prepare: set initialized + has_new_user_changes,
+          parseAddAncestors on each method.  No parseCommit.
+        - doCommit: parseCommit on each class in topo order.
+        - importAbstract: lift parent abstract methods into ahm
+          where derived classes don't override them.  Runs after
+          doCommit because it checks the committed vlist.
+        - validate: confirm base-class reachability.
+        Must run in this order per session.  In batch mode,
+        MultiDeserializer runs prepare across all sessions, then
+        doCommit across all sessions, etc. */
+    bool commitClassesPrepare(std::string& error);
+    bool commitClassesDoCommit(std::string& error);
+    bool commitClassesImportAbstract(std::string& error);
+    bool commitClassesValidate(std::string& error);
+
+    //! Phase-split 2d — resolve pending static-method defaults,
+    //! fallback sources, rebuild indexes, and resolve BCA expression
+    //! blobs.  Must run last. */
+    bool finalize(std::string& error);
 
     ~QoreAOTBinaryDeserializer() {
         delete type_resolver;
@@ -1359,10 +1428,67 @@ public:
         `pgm->findClass` / `runtimeFindClass` lookup paths — each
         resolution pass walks the shared program namespace tree, so
         blob A's class finding blob B's base class "just works" as
-        long as both shells have been created. */
+        long as both shells have been created.
+
+        The phase-2 sub-steps are interleaved across sessions so
+        every class's method map is populated before any session
+        commits its classes.  Without the interleave, a sibling
+        session that owns a derived class could trigger a recursive
+        parseCommit on its base class (owned by a LATER session)
+        before that base's methods are deserialized — silently
+        committing the base as empty, losing its constructor, and
+        breaking base-class-constructor-argument delegation at
+        runtime. */
     bool resolveAll(std::string& error) {
+        // 2a: types and members — safe per-session since class
+        // shells are all in place from addBlob.
         for (auto& sess : sessions) {
-            if (!sess->resolveAll(error)) {
+            if (!sess->resolveTypesAndMembers(error)) {
+                return false;
+            }
+        }
+        // 2b: function and method deserialization — every class's
+        // method map gets populated here.  Must finish across all
+        // sessions before ANY session commits.
+        for (auto& sess : sessions) {
+            if (!sess->deserializeFunctionsAndMethods(error)) {
+                return false;
+            }
+        }
+        // 2c: commit classes — interleaved across sessions so a
+        // session's parseCommit (which recurses into its bases'
+        // parseCommit) can walk cross-session classes with their
+        // method maps fully prepared.  Four sub-phases:
+        //   1. prepare: set initialized + has_new_user_changes,
+        //      parseAddAncestors per method
+        //   2. doCommit: parseCommit on each class in topo order
+        //   3. importAbstract: lift parent abstract methods into
+        //      ahm where the derived class doesn't override them
+        //   4. validate: confirm base-class reachability
+        for (auto& sess : sessions) {
+            if (!sess->commitClassesPrepare(error)) {
+                return false;
+            }
+        }
+        for (auto& sess : sessions) {
+            if (!sess->commitClassesDoCommit(error)) {
+                return false;
+            }
+        }
+        for (auto& sess : sessions) {
+            if (!sess->commitClassesImportAbstract(error)) {
+                return false;
+            }
+        }
+        for (auto& sess : sessions) {
+            if (!sess->commitClassesValidate(error)) {
+                return false;
+            }
+        }
+        // 2d: finalize — pending static-method defaults, fallback
+        // sources, index rebuild, BCA resolution.
+        for (auto& sess : sessions) {
+            if (!sess->finalize(error)) {
                 return false;
             }
         }
