@@ -631,11 +631,36 @@ private:
         return false;
     }
 
+    //! Per-key cancel cond with refcount.  The cond is deleted only when the
+    //! LAST holder (map entry + any active waiters) drops its ref — destroying
+    //! it earlier is UB on macOS if a waiter is still inside pthread_cond_wait
+    //! (between "woken by broadcast" and "returned to caller"), which deadlocks
+    //! the waiter.
+    struct CancelCond {
+        QoreCondition cond;
+        int refs = 0;  //!< protected by AsyncIoControllerPriv::m
+    };
+
+    //! Remove cancel_cond_map[key] (if present), broadcast its cond, and drop
+    //! the map's ref.  Caller must hold m.
+    DLLLOCAL void signalCancelLocked(const std::string& key) {
+        auto it = cancel_cond_map.find(key);
+        if (it == cancel_cond_map.end()) {
+            return;
+        }
+        CancelCond* cc = it->second;
+        cancel_cond_map.erase(it);
+        cc->cond.broadcast();
+        if (--cc->refs == 0) {
+            delete cc;
+        }
+    }
+
     // --- Mutex-protected state (rare paths: startup, shutdown, cancel wait) ---
     mutable QoreThreadLock m;
     bool autostop_flag;
     bool shutting_down;
-    std::unordered_map<std::string, QoreCondition*> cancel_cond_map;
+    std::unordered_map<std::string, CancelCond*> cancel_cond_map;
     QoreCondition io_cond;
     bool io_waiting;
     bool io_exiting;
