@@ -40,6 +40,8 @@
 %requires ../../../../qlib/RestClient.qm
 %requires ../../../../qlib/AsyncSocketIo
 %requires ../../../../qlib/HttpClientIo
+%requires ../../../../qlib/HttpClientStreamingIo
+%requires ../../../../qlib/HttpServerAsyncIo
 %requires ../../../../qlib/HttpServer.qm
 %requires ../../../../qlib/RestClientIo.qm
 

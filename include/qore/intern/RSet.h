@@ -547,9 +547,12 @@ public:
     }
 
     // mark for final dereferencing
+    // another thread is already destroying the object; we hand off deletion responsibility to it,
+    // so clear del to prevent derefDone() from tripping the "deleter vs. waiter" invariant
     DLLLOCAL void finalDeref(qore_object_private* obj) {
         assert(!qo);
         qo = obj;
+        del = false;
     }
 
     // mark that we will be deleting the object
