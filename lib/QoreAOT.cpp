@@ -1472,7 +1472,6 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
     // it does implicitly — the child walk just calls back into
     // compileNamespaceFunctions, which will itself walk past the module
     // shell check.
-    (void)ns->getModuleName();
 
     // Walk functions
     for (auto i = ns->func_list.begin(), e = ns->func_list.end(); i != e; ++i) {
