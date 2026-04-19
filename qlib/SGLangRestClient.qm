@@ -153,7 +153,7 @@ public class SGLangRestClientBase {
         options that would otherwise be rejected by the underlying REST client.
     */
     static hash<auto> getOptions(hash<auto> opts) {
-        hash<auto> rv = DefaultOptions + opts;
+        hash<auto!> rv = DefaultOptions + opts;
         # set default_path for RestClientIo (uses this instead of setConnectionPath)
         if (!rv.default_path) {
             rv.default_path = "/" + (opts.api ?? DefaultApiVersion);

@@ -83,10 +83,7 @@ public class Http3SseStream inherits AbstractSseConnection {
     }
 
     queueEvent(*string event_type, string data, *string id, *int retry) {
-        if (!stream_open) {
-            throw "SSE-CLOSED", "SSE stream is closed";
-        }
-        event_queue.push({
+        queueRawEvent({
             "type": event_type,
             "data": data,
             "id": id,
@@ -95,10 +92,30 @@ public class Http3SseStream inherits AbstractSseConnection {
     }
 
     queueRawEvent(hash<auto> event) {
+        queueRawString(Http2SseStream::formatSseEvent(event));
+    }
+
+    #! Pushes a pre-formatted SSE text frame onto the HTTP/3 stream
+    /** Writes the frame as DATA on the QUIC stream.  Safe to call from any
+        thread.  Handles QUIC stream-level backpressure by waking the I/O
+        controller and blocking on
+        @ref Qore::Socket::waitForQuicStreamDrain().
+
+        @param data the pre-formatted SSE frame text
+    */
+    queueRawString(string data) {
         if (!stream_open) {
             throw "SSE-CLOSED", "SSE stream is closed";
         }
-        event_queue.push(event);
+        while (sock.submitQuicStreamData(session_id, stream_id, data, False) == 1) {
+            if (wake_callback) {
+                wake_callback();
+            }
+            sock.waitForQuicStreamDrain(session_id, stream_id, 5s);
+        }
+        if (wake_callback) {
+            wake_callback();
+        }
     }
 
     bool isOpen() {

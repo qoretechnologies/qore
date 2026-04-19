@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file ServerSentEventConnection.qc Qore handler definition for the HttpServer module for providing SSE connections
 
-/*  ServerSentEventHandler.qc Copyright 2025 Qore Technologies, s.r.o.
+/*  ServerSentEventHandler.qc Copyright 2025 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -230,6 +230,90 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
         ServerSentEventConnection conn = getConnectionImpl(sock, cx, hdr, cid);
         conn.setAsyncPollOp(poll_op);
 
+        registerAndInvokeHooks(conn, cid, hdr);
+
+        return poll_op;
+    }
+
+    #! Sets up an async SSE connection on an HTTP/2 stream
+    /** Creates the connection object, registers it, and wires it to an
+        @ref HttpServerAsyncIo::Http2SseStream that writes DATA frames on the
+        given stream.
+
+        The caller is responsible for having already submitted the response
+        headers via @ref Qore::Socket::submitHttp2StreamingResponseHeaders()
+        before invoking this method (so that the SSE stream is open and
+        headers don't get submitted twice).
+
+        @param sock the socket the HTTP/2 session is running on
+        @param cx call context hash
+        @param hdr incoming request headers
+        @param cid connection ID (typically cx.id + stream ID)
+        @param stream_id the HTTP/2 stream ID reserved for this SSE response
+        @param wake_callback closure that wakes the async I/O controller after
+            each event is written (so the nghttp2 session flushes promptly)
+
+        @return the SSE stream adapter wired to the connection
+
+        @since %ServerSentEventHandler 1.2
+    */
+    HttpServerAsyncIo::Http2SseStream setupAsyncSseConnectionHttp2(Socket sock, hash<auto> cx,
+            hash<auto> hdr, string cid, int stream_id, *code<nothing()> wake_callback) {
+        logDebug("ServerSentEventHandler::setupAsyncSseConnectionHttp2() cid: %y stream: %d",
+            cid, stream_id);
+
+        HttpServerAsyncIo::Http2SseStream sse_stream(sock, stream_id, wake_callback, True);
+
+        ServerSentEventConnection conn = getConnectionImpl(sock, cx, hdr, cid);
+        conn.setAsyncSseConnection(sse_stream);
+
+        registerAndInvokeHooks(conn, cid, hdr);
+
+        return sse_stream;
+    }
+
+    #! Sets up an async SSE connection on an HTTP/3 stream
+    /** Creates the connection object, registers it, and wires it to an
+        @ref HttpServerAsyncIo::Http3SseStream that writes DATA on the given
+        QUIC stream.
+
+        The caller is responsible for having already submitted the response
+        headers via @ref Qore::Socket::submitQuicResponseStreaming() before
+        invoking this method.
+
+        @param sock the socket the QUIC session is running on
+        @param cx call context hash
+        @param hdr incoming request headers
+        @param cid connection ID (typically cx.id + stream ID)
+        @param session_id the QUIC session ID
+        @param stream_id the HTTP/3 stream ID reserved for this SSE response
+        @param wake_callback closure that wakes the async I/O controller after
+            each event is written
+
+        @return the SSE stream adapter wired to the connection
+
+        @since %ServerSentEventHandler 1.2
+    */
+    HttpServerAsyncIo::Http3SseStream setupAsyncSseConnectionHttp3(Socket sock, hash<auto> cx,
+            hash<auto> hdr, string cid, int session_id, int stream_id,
+            *code<nothing()> wake_callback) {
+        logDebug("ServerSentEventHandler::setupAsyncSseConnectionHttp3() cid: %y session: %d stream: %d",
+            cid, session_id, stream_id);
+
+        HttpServerAsyncIo::Http3SseStream sse_stream(sock, session_id, stream_id, wake_callback);
+
+        ServerSentEventConnection conn = getConnectionImpl(sock, cx, hdr, cid);
+        conn.setAsyncSseConnection(sse_stream);
+
+        registerAndInvokeHooks(conn, cid, hdr);
+
+        return sse_stream;
+    }
+
+    #! Registers a new connection and invokes replay/registered/registeredImpl hooks
+    /** Internal helper shared by all three \c setupAsyncSseConnection*() variants.
+    */
+    private registerAndInvokeHooks(ServerSentEventConnection conn, string cid, hash<auto> hdr) {
         {
             rwl.writeLock();
             on_exit rwl.writeUnlock();
@@ -250,8 +334,6 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
             rethrow;
         }
         connectionRegisteredImpl(conn);
-
-        return poll_op;
     }
 
     #! Encode a message for sending

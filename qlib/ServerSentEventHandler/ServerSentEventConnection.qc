@@ -56,8 +56,15 @@ public class ServerSentEventConnection {
     }
 
     private {
-        #! Async SSE poll operation for event delivery via the I/O controller
-        *HttpServerAsyncIo::HttpSseStreamPollOperation poll_op;
+        #! Async SSE connection used to deliver events via the I/O controller
+        /** Protocol-neutral abstraction; concrete type depends on the HTTP
+            version of the underlying stream:
+            - HTTP/1.x: @ref HttpServerAsyncIo::Http1SseConnection wrapping an
+              @ref HttpServerAsyncIo::HttpSseStreamPollOperation
+            - HTTP/2:   @ref HttpServerAsyncIo::Http2SseStream
+            - HTTP/3:   @ref HttpServerAsyncIo::Http3SseStream
+        */
+        *HttpServerAsyncIo::AbstractSseConnection sse_conn;
     }
 
     private:internal {
@@ -78,22 +85,51 @@ public class ServerSentEventConnection {
         self.sock = sock;
     }
 
-    #! Sets the async poll operation for event delivery
-    /** @param op the poll operation to use for sending SSE events via the async I/O controller
+    #! Sets the async SSE connection for event delivery (HTTP/1.x convenience wrapper)
+    /** Wraps the H1-specific @ref HttpServerAsyncIo::HttpSseStreamPollOperation
+        in an @ref HttpServerAsyncIo::Http1SseConnection adapter and stores it
+        as the protocol-neutral SSE connection.
+
+        @param op the HTTP/1.x poll operation to use for sending SSE events
     */
     setAsyncPollOp(HttpServerAsyncIo::HttpSseStreamPollOperation op) {
-        poll_op = op;
+        sse_conn = new HttpServerAsyncIo::Http1SseConnection(op);
     }
 
-    #! Returns the async poll operation, if set
+    #! Returns the HTTP/1.x async poll operation, if this connection uses one
+    /** @return the underlying poll operation for H1 SSE connections, or
+            NOTHING if this connection is HTTP/2, HTTP/3, or not yet wired up
+    */
     *HttpServerAsyncIo::HttpSseStreamPollOperation getAsyncPollOp() {
-        return poll_op;
+        if (sse_conn instanceof HttpServerAsyncIo::Http1SseConnection) {
+            return cast<HttpServerAsyncIo::Http1SseConnection>(sse_conn).getPollOperation();
+        }
+        return NOTHING;
+    }
+
+    #! Sets the async SSE connection for event delivery
+    /** Used for HTTP/2 and HTTP/3 SSE where the underlying transport is a
+        multiplexed stream, not a dedicated HTTP/1.x poll operation.  For
+        HTTP/1.x use @ref setAsyncPollOp() which wraps the poll operation in
+        an @ref HttpServerAsyncIo::Http1SseConnection.
+
+        @param conn the protocol-neutral SSE connection
+
+        @since %ServerSentEventHandler 1.2
+    */
+    setAsyncSseConnection(HttpServerAsyncIo::AbstractSseConnection conn) {
+        sse_conn = conn;
+    }
+
+    #! Returns the async SSE connection, if set
+    *HttpServerAsyncIo::AbstractSseConnection getAsyncSseConnection() {
+        return sse_conn;
     }
 
     #! Pushes an already-encoded message for sending via the async I/O controller
     sendEncoded(string msg) {
-        if (poll_op) {
-            poll_op.queueRawString(msg);
+        if (sse_conn) {
+            sse_conn.queueRawString(msg);
         }
     }
 
@@ -119,8 +155,8 @@ public class ServerSentEventConnection {
     #! Stops the connection
     stop() {
         stop_flag = True;
-        if (poll_op) {
-            poll_op.abort();
+        if (sse_conn) {
+            sse_conn.abort();
         }
     }
 }

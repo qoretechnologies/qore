@@ -26,50 +26,94 @@
 public namespace HttpServerAsyncIo {
 
 #! SSE connection over HTTP/2 stream
-/** This class manages a Server-Sent Events stream over an HTTP/2 connection.
-    Unlike HTTP/1.x SSE which uses chunked transfer encoding, HTTP/2 SSE uses
-    DATA frames on the stream.
+/** Pushes Server-Sent Events over an HTTP/2 stream as DATA frames.  The
+    stream is kept open (no END_STREAM flag) until explicitly closed,
+    allowing the server to push events incrementally.
 
-    The stream is kept open (no END_STREAM flag) until explicitly closed,
-    allowing the server to send events incrementally.
+    Unlike @ref HttpSseStreamPollOperation (which queues events for an I/O
+    thread loop to drain), this class writes DATA frames directly on the
+    calling thread via @ref Qore::Socket::sendHttp2StreamData(), then wakes
+    the async I/O controller so the nghttp2 session's \c sendPendingData()
+    flushes them to the socket.  The write is thread-safe because
+    \c sendHttp2StreamData() acquires the HTTP/2 session lock internally.
 
+    Backpressure from @ref Qore::Socket::sendHttp2StreamData() is handled
+    by waking the controller and blocking on
+    @ref Qore::Socket::waitForHttp2StreamDrain().
+
+    @since %HttpServerAsyncIo 1.3 unified with @ref HttpSseStreamPollOperation
+    via @ref AbstractSseConnection
 */
 public class Http2SseStream inherits AbstractSseConnection {
-    private {
-        #! The HTTP/2 poll operation managing this connection
-        Http2PollOperation poll_op;
+    public {
+        #! Default timeout for waitForHttp2StreamDrain on backpressure
+        const DefaultDrainTimeout = 5s;
+    }
 
-        #! The stream ID for this SSE stream
+    private {
+        #! Socket the HTTP/2 session is running on
+        Socket sock;
+
+        #! The HTTP/2 stream ID for this SSE stream
         int stream_id;
 
-        #! Channel of events to send
-        Channel event_channel(-1);
+        #! Optional callback to wake the async I/O controller after each write
+        /** Called after @ref queueRawString() and @ref queueRawEvent() submit
+            data so that the I/O thread flushes queued DATA frames promptly.
+            Without this, events sit in the nghttp2 send buffer until the next
+            frame-read cycle — effectively forever for a server-push SSE
+            connection with no client traffic.
 
-        #! True if the stream is open
+            @see @ref AsyncSocketIo::AsyncSocketIoController::wakeSocket()
+        */
+        *code<nothing()> wake_callback;
+
+        #! True while the stream is open
         bool stream_open = True;
 
-        #! True if response headers have been sent
+        #! True once response headers have been submitted
         bool headers_sent = False;
     }
 
-    #! Creates an SSE stream over HTTP/2
-    /** @param poll_op the HTTP/2 poll operation for the connection
+    #! Creates an SSE stream over HTTP/2 using an existing poll operation
+    /** Legacy constructor; kept for compatibility with callers that already
+        hold the @ref Http2PollOperation.  Prefer the socket-based constructor
+        for new code.
+
+        @param poll_op the HTTP/2 poll operation for the connection
         @param stream_id the HTTP/2 stream ID to use for SSE
     */
     constructor(Http2PollOperation poll_op, int stream_id) {
-        self.poll_op = poll_op;
+        self.sock = poll_op.getSocket();
         self.stream_id = stream_id;
+    }
+
+    #! Creates an SSE stream over HTTP/2 directly on a socket
+    /** @param sock the socket the HTTP/2 session is running on
+        @param stream_id the HTTP/2 stream ID to use for SSE
+        @param wake_callback optional callback to wake the async I/O controller
+            after each write
+        @param headers_already_sent set to True if the caller already submitted
+            the response headers (via @ref Qore::Socket::submitHttp2StreamingResponseHeaders());
+            in that case @ref sendHeaders() must not be called again
+
+        @since %HttpServerAsyncIo 1.3
+    */
+    constructor(Socket sock, int stream_id, *code<nothing()> wake_callback,
+            bool headers_already_sent = False) {
+        self.sock = sock;
+        self.stream_id = stream_id;
+        self.wake_callback = wake_callback;
+        self.headers_sent = headers_already_sent;
     }
 
     string getProtocol() {
         return "http2";
     }
 
+    #! Queues a structured SSE event for sending
     queueEvent(*string event_type, string data, *string id, *int retry) {
-        if (!stream_open) {
-            throw "SSE-CLOSED", "SSE stream is closed";
-        }
-        event_channel.send({
+        queueRawEvent({
             "type": event_type,
             "data": data,
             "id": id,
@@ -77,35 +121,79 @@ public class Http2SseStream inherits AbstractSseConnection {
         });
     }
 
+    #! Queues a raw SSE event hash for sending
     queueRawEvent(hash<auto> event) {
+        queueRawString(formatSseEvent(event));
+    }
+
+    #! Pushes a pre-formatted SSE text frame onto the HTTP/2 stream
+    /** Writes the frame as one or more HTTP/2 DATA frames.  Safe to call from
+        any thread.  Blocks briefly under HTTP/2 flow-control backpressure
+        (up to @ref DefaultDrainTimeout per iteration) and wakes the I/O
+        controller after every submission.
+
+        @param data the pre-formatted SSE frame text
+    */
+    queueRawString(string data) {
         if (!stream_open) {
             throw "SSE-CLOSED", "SSE stream is closed";
         }
-        event_channel.send(event);
+        binary bin = binary(data);
+        while (True) {
+            try {
+                sock.sendHttp2StreamData(stream_id, bin, False);
+                break;
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "HTTP2-FLOW-CONTROL") {
+                    if (wake_callback) {
+                        wake_callback();
+                    }
+                    sock.waitForHttp2StreamDrain(stream_id, DefaultDrainTimeout);
+                    continue;
+                }
+                rethrow;
+            }
+        }
+        if (wake_callback) {
+            wake_callback();
+        }
     }
 
     bool isOpen() {
-        return stream_open && poll_op.getSocket().isOpen();
+        return stream_open && sock.isOpen();
     }
 
     bool isDisconnected() {
-        return !stream_open || !poll_op.getSocket().isOpen();
+        return !stream_open || !sock.isOpen();
     }
 
+    #! Returns 0 — events are written synchronously, there is no internal queue
     int getQueueSize() {
-        return event_channel.size();
+        return 0;
     }
 
     close() {
+        if (!stream_open) {
+            return;
+        }
         stream_open = False;
-        # Send END_STREAM on the HTTP/2 stream
-        # This is handled by the poll operation when we stop sending data
+        try {
+            sock.sendHttp2StreamData(stream_id, NOTHING, True);
+            if (wake_callback) {
+                wake_callback();
+            }
+        } catch () {
+            # Ignore errors on close
+        }
     }
 
     abort() {
         stream_open = False;
         try {
-            poll_op.abort();
+            sock.resetHttp2Stream(stream_id);
+            if (wake_callback) {
+                wake_callback();
+            }
         } catch () {
             # Ignore errors on abort
         }
@@ -116,36 +204,30 @@ public class Http2SseStream inherits AbstractSseConnection {
         return stream_id;
     }
 
-    #! Returns the underlying poll operation
-    Http2PollOperation getPollOperation() {
-        return poll_op;
+    #! Returns the underlying socket
+    Socket getSocket() {
+        return sock;
     }
 
-    #! Sends response headers to start the SSE stream
-    /** This must be called before sending any events.
-        Sends a 200 response with Content-Type: text/event-stream
+    #! Submits the response headers that start the SSE stream
+    /** Must not be called if the constructor was invoked with
+        \c headers_already_sent = True.
+
+        @param extra_headers additional response headers to include alongside
+            \c Content-Type: text/event-stream
     */
     sendHeaders(*hash<auto> extra_headers) {
         if (headers_sent) {
             throw "SSE-HEADERS-SENT", "SSE headers already sent";
         }
-
         hash<auto> headers = extra_headers ?? {};
-        headers."Content-Type" = "text/event-stream";
-        headers."Cache-Control" = "no-cache";
-        headers."Connection" = "keep-alive";
-
-        # Start streaming response (no body yet, no END_STREAM)
-        poll_op.startSendResponse(200, headers);
+        headers."content-type" = "text/event-stream";
+        headers."cache-control" = "no-cache";
+        sock.submitHttp2StreamingResponseHeaders(stream_id, 200, headers);
         headers_sent = True;
-    }
-
-    #! Gets the next event from the queue (for sending)
-    /** @return event hash or NOTHING if queue is empty
-    */
-    *hash<auto> getNextEvent() {
-        auto result = event_channel.tryRecv();
-        return exists result ? result.value : NOTHING;
+        if (wake_callback) {
+            wake_callback();
+        }
     }
 
     #! Formats an SSE event according to the spec

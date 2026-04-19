@@ -918,6 +918,16 @@ set(QORE_QPP_EXECUTABLE ${CMAKE_BINARY_DIR}/qpp)
 target_link_libraries(qpp ${CMAKE_CXX_IMPLICIT_LINK_LIBRARIES})
 
 # libqore generators
+
+# Extend LIBQORE_QPP_SRC with optional sources BEFORE the wrap + QPP_GENERATED_FILES
+# target are created, so the generated .cpp files are part of the build graph.
+# Allocation tracking adds ql_alloc_tracking.qpp when -DENABLE_ALLOC_TRACKING=ON.
+# (The corresponding AllocTracking.cpp and QORE_HAVE_ALLOC_TRACKING define are set
+# later — see the matching if-block in this file.)
+if (ENABLE_ALLOC_TRACKING AND Backtrace_FOUND)
+    set(LIBQORE_QPP_SRC ${LIBQORE_QPP_SRC} lib/ql_alloc_tracking.qpp)
+endif ()
+
 qore_wrap_qpp_value(LIBQORE_QPP_CPP_SRC DOXLIST QPP_DOX_SRC METALIST QPP_META_SRC ${LIBQORE_QPP_SRC})
 qore_wrap_qpp_value(PSEUDO_QPP_CPP_SRC DOXLIST QPP_DOX_SRC METALIST QPP_META_SRC ${PSEUDO_QPP_SRC})
 
@@ -1228,9 +1238,12 @@ set(LIBQORE_CPP_SRC ${LIBQORE_CPP_SRC}
 # Allocation tracking (malloc/free interposer for leak detection)
 # Must be a separate compilation unit (not in SCU) because it defines global malloc/free symbols
 # Only built when -DENABLE_ALLOC_TRACKING=ON (adds overhead to every malloc/free call)
+# NOTE: LIBQORE_QPP_SRC is extended with lib/ql_alloc_tracking.qpp earlier in this file
+# (just before the main qore_wrap_qpp_value() call), so that the QPP generator produces
+# ql_alloc_tracking.cpp as part of the QPP_GENERATED_FILES target.  Without that hoist,
+# the SCU compile fails at include time because no build rule exists for the file.
 if (ENABLE_ALLOC_TRACKING AND Backtrace_FOUND)
     set(LIBQORE_CPP_SRC ${LIBQORE_CPP_SRC} lib/AllocTracking.cpp)
-    set(LIBQORE_QPP_SRC ${LIBQORE_QPP_SRC} lib/ql_alloc_tracking.qpp)
     add_definitions(-DQORE_HAVE_ALLOC_TRACKING)
 endif ()
 
@@ -2088,7 +2101,7 @@ qore_user_module("qlib/QoreMLUtils" "modules/ml/ml")
 qore_user_module("qlib/QoreTokenizerUtils" "modules/tokenizer/tokenizer")
 qore_user_module("qlib/QoreLlmUtils" "")
 qore_user_module("qlib/QoreStructuredExtraction" "QoreLlmUtils")
-qore_user_module("qlib/QoreGuardrails" "")
+qore_user_module("qlib/QoreGuardrails" "QoreLlmUtils")
 qore_user_module("qlib/QoreOcrUtils" "")
 qore_user_module("qlib/QoreVisionExtraction" "QoreLlmUtils")
 qore_user_module("qlib/QoreAgentStrategies" "QoreLlmUtils")
