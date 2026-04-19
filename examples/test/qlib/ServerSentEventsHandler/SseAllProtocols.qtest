@@ -1,0 +1,260 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  SseAllProtocols.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    End-to-end Server-Sent Events regression coverage for all three HTTP
+    transports.  Each case goes through the real
+    @ref ServerSentEventHandler::ServerSentEventHandler setup path
+    (including the @ref HttpServer::HttpServer response dispatch), connects a
+    client, has the server push events after connection registration, and
+    asserts the client receives them within a short timeout.  A regression
+    in any of the three per-protocol wake paths will stall the \c readEvent()
+    call and fail the test.
+*/
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Mime.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/HttpServerUtil.qm
+%requires ../../../../qlib/AsyncSocketIo
+%requires ../../../../qlib/HttpServerAsyncIo
+%requires ../../../../qlib/HttpServer.qm
+%requires ../../../../qlib/ServerSentEventHandler
+%requires ../../../../qlib/HttpClientIo
+%requires ../../../../qlib/HttpClientStreamingIo
+
+%exec-class SseAllProtocolsTest
+
+#! Minimal SSE handler that records connections so the test can push events
+class RecordingSseHandler inherits ServerSentEventHandler::ServerSentEventHandler {
+    public {
+        #! Counter signalled when a new connection registers
+        Counter registered(1);
+
+        #! Most-recently-registered connection (so the test can push events)
+        *ServerSentEventHandler::ServerSentEventConnection last_conn;
+    }
+
+    # "data": "none" — SSE payloads are already-formed strings, no re-serialization
+    constructor() : ServerSentEventHandler::ServerSentEventHandler({"data": "none"}) {
+    }
+
+    connectionRegisteredImpl(ServerSentEventHandler::ServerSentEventConnection conn) {
+        last_conn = conn;
+        registered.dec();
+    }
+}
+
+class SseAllProtocolsTest inherits Test {
+    private {
+        *Logger::Logger mLogger;
+        HttpServer::HttpServer server;
+        RecordingSseHandler handler();
+        int h1_port;
+        int h2_port;
+        int h3_port;
+
+        # Reused throughout: self-signed cert + key good enough for loopback TLS
+        const CertPem = "-----BEGIN CERTIFICATE-----
+MIIDCTCCAfGgAwIBAgIUahuuRGDlubXWYmiPhjVeT66vtNYwDQYJKoZIhvcNAQEL
+BQAwFDESMBAGA1UEAwwJbG9jYWxob3N0MB4XDTI2MDIyMjE5MjIwMVoXDTM2MDIy
+MDE5MjIwMVowFDESMBAGA1UEAwwJbG9jYWxob3N0MIIBIjANBgkqhkiG9w0BAQEF
+AAOCAQ8AMIIBCgKCAQEAjZNfLFUyyo02MjZjouaR11FybkZNwDWBG/bhkpTVyj/x
+QKlwKf20LbGSCmMIYHaFnODMg6u6E6sfRJVk+ofwVHBN/Ug+mvoL1zlNJanMdXLH
+7oUsUILY6bVUDPm1ACZmFJsAc9jfHfkluJ6vfYG+DOJbyB0nsMfO9/fvrwndQPUQ
+k9eMq2VfDohni4ijk5BWD/P9UmrciZUNOaNISay469Le5ZrtfGt9An1+Ye3TckJC
+tTF4q7+V+GC88w5QtLd1AMQGf/1ax5cwqQv9SSFvhnwj9o3V3Wkz1dq4XA/9rSA1
+ecPHh/tJeGuvbD11Hyr9LTYjQ+DIel0DV0ZDHdc5vwIDAQABo1MwUTAdBgNVHQ4E
+FgQUYBBsVylVinbbAzTbUt0jRM6mJvwwHwYDVR0jBBgwFoAUYBBsVylVinbbAzTb
+Ut0jRM6mJvwwDwYDVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOCAQEAfIAE
+EPvLO+gOnm366xJabLr2Sw3hfmvCq/zSTlPcrB9jdBlOLpMmKcdGiOOCNmzg9+BX
+YNX+I6+MNOGp0j3afWlVwEjiMD66ydSMPEQw0FTzvpIjFN3fHo/MJzFbingRLrk8
+LCo94GmjMBYG+50M8MCKE6EzqfmoYT9fiMJcyJwwdptOWf0URNYKKrG1wRlX4+o8
+uNjQ3VwynI95fAw9WcR/ZtP0pkmCor/hKaYgVRsSGjD78Fu0Uuhm/pCAOuObpEHj
+5eoTlaWC3pZzGA67piqlEDOWiRi9Mo2CzG0t5fmQ83KB51ImauKdYB21whxjkZ+5
+BjwMC4hqSD+bzO2B+A==
+-----END CERTIFICATE-----";
+
+        const KeyPem = "-----BEGIN PRIVATE KEY-----
+MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCNk18sVTLKjTYy
+NmOi5pHXUXJuRk3ANYEb9uGSlNXKP/FAqXAp/bQtsZIKYwhgdoWc4MyDq7oTqx9E
+lWT6h/BUcE39SD6a+gvXOU0lqcx1csfuhSxQgtjptVQM+bUAJmYUmwBz2N8d+SW4
+nq99gb4M4lvIHSewx8739++vCd1A9RCT14yrZV8OiGeLiKOTkFYP8/1SatyJlQ05
+o0hJrLjr0t7lmu18a30CfX5h7dNyQkK1MXirv5X4YLzzDlC0t3UAxAZ//VrHlzCp
+C/1JIW+GfCP2jdXdaTPV2rhcD/2tIDV5w8eH+0l4a69sPXUfKv0tNiND4Mh6XQNX
+RkMd1zm/AgMBAAECggEAATo1WYTgPK75DiS4PBR5UDS7DryvoN/LNOsGLUdQC9b+
+aEaacSrAvKKs9vJr2KuTtfahn0SbsjRKFZtL9aYRuHxZbhLfGWiF4MGflcOBQRq+
+eVFl6clwnaS+S/cq5rZD1/WODUhkisslqhI/cubvNwe2rvyduE510LgxYkLuIZ7a
++SCQz1XyPyhb8eVrWIZiprufjqXvDy01MC74l3ZYqaq1hr1oKi0ZDHI95Os7gtwQ
+4HQ3qdJsmYfbaf1223REp8gybnshsxkyjhKRU3nG7ZvgrRRMFkJvfHZ8VcS3cvsK
+ccKBJg7376+VDtc+RHUcBMyVZ881y4Rq2t6ssYVJVQKBgQDFq+N7ZGKOtQChSIXn
+ju/gP5WzSKJFaZhdkSggHi1K+PkuCZ1SXzKD3CPibreSUx9hzoZAAmTjzOfwhVZ7
+5HDqhrKfkWNeThAdXlglhNX5LVKhhmBsNGawANO8Pmq+pueWhK/76XgiGcOknyt6
+NH1ZE/QZpFeZB2binEhf6leYGwKBgQC3WgF2eaj2c4pugq13oZ9BHms5nsbYQgj8
+1H2C1wsgJNiz4tq6xFdvjiaw+r1OrCFrl9nz7npFc7uohtrRxXr7sq5nwMPO3QAP
+VxzyZ/TFP/FI70Avz6x+xX7HIlptpQ1mWacsdrvtoIG1c8veEJTyA4JgjoMhdDer
+JuPze+ZHLQKBgAzuLIhCzcul/W+Pberyx7A0mJdMtgiyWpwsRaKsNqxD0xD24gqk
+XYqQmOxT78Arnc7pEpEXVwArxDRQlJKwI87DluWnPgfKNXWmWT/DC7gsBc65Go+Z
+ceorc65JqvPjuRx4e4aQBCK+6rRXESICUvzDuGEBBhXljQ5fyMA1dRtnAoGAQSFH
+w74Ttvf0BK2G0SgoWglkLWOpXsiWSLlynDenTBPKppu+9vkn1gi41cU72eZrOL0I
+Pw5HgMRLtOGyeTGdLiuaqGBhLepzSv+22KT03dyI6U+TjWhH7gBZuIMLfEdVKzZN
+nA3RU+fgK4SmtotNXWrBtWrqScfuvm1iK+unMUECgYBrwc1rU/GI9tH4MWvBX99n
+pmFneeIUuXJajOsh7jUyTxcrHl+4kkgHDExuFMNPHfrIG8xCj43fjzxD/spz3xRS
++Ki3i3lYOFNhTUCREt5Xx23hkksK6j7SYlfY0IV2UruWt/UubpsfEqxC1Uk07NTo
+l50Xb2GWQesIt9k5jF5IOw==
+-----END PRIVATE KEY-----";
+    }
+
+    constructor() : Test("SseAllProtocolsTest", "1.0") {
+        addTestCase("H1 SSE events flow end-to-end", \testHttp1Sse());
+        addTestCase("H2 SSE events flow end-to-end", \testHttp2Sse());
+        addTestCase("H3 SSE events flow end-to-end", \testHttp3Sse());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        mLogger = new Logger("sse-all-protocols", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            mLogger.addAppender(new StdoutAppender());
+        }
+
+        server = new HttpServer(<HttpServerOptionInfo>{
+            "logger": mLogger,
+            "debug": True,
+        });
+        server.setDefaultHandler("sse", handler);
+        server.waitForAsyncIo();
+
+        # H1 plaintext listener
+        h1_port = server.addListener(<HttpListenerOptionInfo>{
+            "service": 0,
+        }).port;
+
+        # H2 over TLS (ALPN)
+        h2_port = server.addListener(<HttpListenerOptionInfo>{
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+            "http_version": "2.0",
+        }).port;
+
+        # H3 over QUIC
+        h3_port = server.addListener(<HttpListenerOptionInfo>{
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+            "enable_h3": True,
+        }).port;
+
+        server.waitForAsyncIo();
+    }
+
+    globalTearDown() {
+        if (server) {
+            server.stop();
+            delete server;
+        }
+    }
+
+    #! Reset per-test state on the shared handler
+    private resetHandler() {
+        handler.registered = new Counter(1);
+        handler.last_conn = NOTHING;
+    }
+
+    #! Drives one end-to-end SSE round trip: connect, push, read, assert
+    private runSseFlow(string label, HttpClientIo::HttpClientConnectionManager mgr, string url) {
+        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireAndStartStreaming(
+            url, "GET", "/", {"Accept": "text/event-stream"});
+        on_exit stream.cancel();
+
+        HttpClientStreamingIo::SseStreamReader reader(stream);
+
+        # The handler registers the connection in connectionRegisteredImpl(),
+        # so wait for that before pushing events.
+        assertEq(0, handler.registered.waitForZero(5s),
+            label + ": connection should register on server");
+
+        # Push two events from the server, from a different thread than the
+        # client read loop so we actually exercise the cross-thread wake
+        # path rather than an accidental synchronous delivery.
+        handler.last_conn.send(<SseMessageInfo>{
+            "event": "one",
+            "data": "hello",
+        });
+        handler.last_conn.send(<SseMessageInfo>{
+            "event": "two",
+            "data": "world",
+        });
+
+        *hash<SseMessageInfo> evt1 = reader.readEvent(5s);
+        assertEq(True, exists evt1, label + ": first event received");
+        assertEq("one", evt1.event, label + ": first event name");
+        assertEq("hello", evt1.data, label + ": first event data");
+
+        *hash<SseMessageInfo> evt2 = reader.readEvent(5s);
+        assertEq(True, exists evt2, label + ": second event received");
+        assertEq("two", evt2.event, label + ": second event name");
+        assertEq("world", evt2.data, label + ": second event data");
+    }
+
+    testHttp1Sse() {
+        resetHandler();
+        HttpClientIo::HttpClientConnectionManager mgr(
+            <HttpClientIo::HttpClientConnectionManagerOptions>{
+                "protocol": "h1",
+                "request_timeout": 10s,
+                "connect_timeout": 5s,
+            });
+        on_exit delete mgr;
+        runSseFlow("H1", mgr, sprintf("http://127.0.0.1:%d/", h1_port));
+    }
+
+    testHttp2Sse() {
+        resetHandler();
+        HttpClientIo::HttpClientConnectionManager mgr(
+            <HttpClientIo::HttpClientConnectionManagerOptions>{
+                "protocol": "h2",
+                "accept_all_certs": True,
+                "request_timeout": 10s,
+                "connect_timeout": 5s,
+            });
+        on_exit delete mgr;
+        runSseFlow("H2", mgr, sprintf("https://127.0.0.1:%d/", h2_port));
+    }
+
+    testHttp3Sse() {
+        resetHandler();
+        HttpClientIo::HttpClientConnectionManager mgr(
+            <HttpClientIo::HttpClientConnectionManagerOptions>{
+                "protocol": "h3",
+                "accept_all_certs": True,
+                "request_timeout": 10s,
+                "connect_timeout": 5s,
+            });
+        on_exit delete mgr;
+        runSseFlow("H3", mgr, sprintf("https://127.0.0.1:%d/", h3_port));
+    }
+}
