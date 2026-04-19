@@ -1374,8 +1374,24 @@ public:
 
     //! Phase-split 2d — resolve pending static-method defaults,
     //! fallback sources, rebuild indexes, and resolve BCA expression
-    //! blobs.  Must run last. */
+    //! blobs.  Must run last.
+    /** Single-blob callers invoke this directly.  The multi-deserializer
+        instead splits it around a single cross-session index rebuild via
+        `finalizePreIndex()` / `finalizePostIndex()` to avoid the O(N*T)
+        rebuild (132 sessions × full-tree walk) that dominated the
+        finalize phase. */
     bool finalize(std::string& error);
+
+    //! Per-session finalize work that does NOT require rebuilt indexes
+    //! (pending static-method defaults + fallback source deserialization).
+    //! Used by the multi-deserializer before the single cross-session
+    //! index rebuild.
+    bool finalizePreIndex(std::string& error);
+
+    //! Per-session finalize work that requires rebuilt indexes (BCA
+    //! expression resolution).  Used by the multi-deserializer AFTER
+    //! the single cross-session index rebuild.
+    bool finalizePostIndex(std::string& error);
 
     ~QoreAOTBinaryDeserializer() {
         delete type_resolver;
@@ -1542,6 +1558,9 @@ public:
                 (unsigned long)g_aot_dm_sig_us);
             fprintf(stderr, "[aot-timing]      (addUserMethod                 %8lu us)\n",
                 (unsigned long)g_aot_dm_add_us);
+            extern uint64_t g_aot_dm_sig_setup_us;
+            fprintf(stderr, "[aot-timing]         (of signature: setupFromAOTMetadata %8lu us)\n",
+                (unsigned long)g_aot_dm_sig_setup_us);
             fflush(stderr);
         }
     }
@@ -1659,10 +1678,22 @@ public:
             }
         });
         // 2d: finalize — pending static-method defaults, fallback
-        // sources, index rebuild, BCA resolution.
+        // sources, single cross-session index rebuild, BCA resolution.
+        //
+        // The per-session single-blob `finalize()` used to rebuild the
+        // entire root namespace index each time; with N sessions that
+        // was O(N * tree_size) — dominant in batch mode.  Split into
+        // pre-index + post-index halves so a single rebuild covers the
+        // whole batch.
         AOT_PHASE_TIME(10, {
             for (auto& sess : sessions) {
-                if (!sess->finalize(error)) return false;
+                if (!sess->finalizePreIndex(error)) return false;
+            }
+            if (!sessions.empty()) {
+                rebuildRootIndexesOnce();
+            }
+            for (auto& sess : sessions) {
+                if (!sess->finalizePostIndex(error)) return false;
             }
         });
 #undef AOT_PHASE_TIME
@@ -1677,6 +1708,13 @@ public:
     //! reader for per-blob registerAOTFunctionsFromSlotMaps + init
     //! execution.  Index must be < sessionCount().
     QoreAOTBinaryDeserializer& session(size_t i) { return *sessions[i]; }
+
+private:
+    //! Rebuild the target program's root namespace indexes once for
+    //! the entire batch (replaces the per-session rebuild that ran in
+    //! each finalize()).  Implemented in QoreAOTBinary.cpp to keep
+    //! qore_program_private and qore_root_ns_private out of this header.
+    void rebuildRootIndexesOnce();
 };
 
 // ---- IR Function Serialization (Phase 5) ----

@@ -4478,7 +4478,7 @@ bool QoreAOTBinaryDeserializer::commitClasses(std::string& error) {
 // Phase-split 2d.  Resolves deferred static-method defaults,
 // fallback sources, rebuilds root-namespace indexes, and resolves
 // the BCA (base-class constructor argument) expression blobs.
-bool QoreAOTBinaryDeserializer::finalize(std::string& error) {
+bool QoreAOTBinaryDeserializer::finalizePreIndex(std::string& error) {
     {
         qore_program_private* pp = qore_program_private::get(*pgm);
         for (const auto& pd : pending_smd) {
@@ -4515,16 +4515,10 @@ bool QoreAOTBinaryDeserializer::finalize(std::string& error) {
     if (!deserializeFallbackSources(error)) {
         return false;
     }
+    return true;
+}
 
-    // Rebuild root namespace indexes (fmap, varmap, clmap, etc.) so that
-    // runtime lookups like runtimeFindFunctionEntry() can find the
-    // deserialized functions, classes, etc.
-    {
-        qore_program_private* pp_idx = qore_program_private::get(*pgm);
-        qore_root_ns_private* rpriv = static_cast<qore_root_ns_private*>(
-            qore_ns_private::get(*pp_idx->RootNS));
-        rpriv->rebuildAllIndexes();
-    }
+bool QoreAOTBinaryDeserializer::finalizePostIndex(std::string& error) {
     // Resolve deferred BCA (base class constructor argument) EXPR_TREE blobs.
     // Must run after commitDeserializedClasses + rebuildAllIndexes so all
     // methods and classes are findable by the EXPR_TREE handlers.
@@ -4537,6 +4531,29 @@ bool QoreAOTBinaryDeserializer::finalize(std::string& error) {
         hasFallbackSource() ? " (with source fallback)" : "");
 
     return true;
+}
+
+bool QoreAOTBinaryDeserializer::finalize(std::string& error) {
+    if (!finalizePreIndex(error)) {
+        return false;
+    }
+    // Rebuild root namespace indexes (fmap, varmap, clmap, etc.) so that
+    // runtime lookups like runtimeFindFunctionEntry() can find the
+    // deserialized functions, classes, etc.
+    {
+        qore_program_private* pp_idx = qore_program_private::get(*pgm);
+        qore_root_ns_private* rpriv = static_cast<qore_root_ns_private*>(
+            qore_ns_private::get(*pp_idx->RootNS));
+        rpriv->rebuildAllIndexes();
+    }
+    return finalizePostIndex(error);
+}
+
+void QoreAOTBinaryMultiDeserializer::rebuildRootIndexesOnce() {
+    qore_program_private* pp_idx = qore_program_private::get(*pgm);
+    qore_root_ns_private* rpriv = static_cast<qore_root_ns_private*>(
+        qore_ns_private::get(*pp_idx->RootNS));
+    rpriv->rebuildAllIndexes();
 }
 
 bool QoreAOTBinaryDeserializer::resolveAll(std::string& error) {
