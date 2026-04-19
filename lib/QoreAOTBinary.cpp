@@ -4218,15 +4218,33 @@ bool QoreAOTBinaryDeserializer::openAndDeserializeShells(QoreProgram* in_pgm,
     if (!deserializeNamespaces(error)) {
         return false;
     }
+    // Enums first: enum member VALUES are primitive (int / string) so they
+    // never reference classes or hashdecls.  By registering them before
+    // classes and hashdecls we let NESTED VT_ENUM references inside class
+    // instance-member defaults and hashdecl member defaults resolve
+    // immediately via QoreProgram::findEnum during reader.readValue,
+    // instead of failing with "enum not found" when the enum hasn't been
+    // deserialized yet.
+    //
+    // The deferred-resolution hooks for enum defaults (see
+    // readDeferredMemberDefault's VT_ENUM branch and the
+    // pending_enum_* fields on PendingInstanceMember /
+    // PendingHashdeclMember) only fire for the OUTERMOST value tag;
+    // an enum ref buried inside a VT_LIST / VT_HASH literal default
+    // falls through to readValue which calls findEnum directly.
+    // Previous order was: classes -> hashdecls -> enums -> typedefs,
+    // which broke exactly that shape — e.g.
+    // `qlib/GeneratorDataProvider/GeneratorRecordIterator.qc:91`
+    // has `list<auto> fields = DefaultFields;` where DefaultFields
+    // is a const list of hashes each containing
+    // `GeneratorFieldType::Int`/`::String`/`::Float`.
+    if (!deserializeEnums(error)) {
+        return false;
+    }
     if (!deserializeClasses(error)) {
         return false;
     }
-    // Deserialize hashdecls / enums / typedef stubs before any
-    // resolution so phase 2 sees every type name.
     if (!deserializeHashDecls(error)) {
-        return false;
-    }
-    if (!deserializeEnums(error)) {
         return false;
     }
     if (!deserializeTypedefs(error)) {
