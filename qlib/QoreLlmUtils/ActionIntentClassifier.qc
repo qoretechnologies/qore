@@ -99,6 +99,24 @@ public class ActionIntentClassifier {
         */
         const IntentActionRequested = "action-requested";
 
+        #! The user's turn is ambiguously phrased between informational and action
+        /** The model cannot tell from the text alone whether the user
+            wants the system to take an action or is merely exploring
+            the option.  Typical triggers: meta-questions about whether
+            to act (\c "should I delete X?"), exploratory phrasings
+            (\c "would it be a good idea to create a workflow?"),
+            hypothetical framings (\c "if I were to update the job,
+            what would happen?").
+
+            Callers must NOT dispatch destructive tools when the current
+            turn classifies here; the canonical handling is to surface
+            the ambiguity to the user and request an explicit
+            imperative before acting.  Treating this label as "refuse
+            destructive dispatch" is the safe baseline; richer UIs can
+            pause the pipeline and ask the user to confirm.
+        */
+        const IntentConfirmationRequired = "confirmation-required";
+
         #! Canonical output prefix — clients parse response text for this
         const IntentOutputPrefix = "INTENT:";
     }
@@ -143,27 +161,37 @@ public class ActionIntentClassifier {
     */
     public static string getPromptFragment() {
         return IntentOutputPrefix + " " + IntentReadOnly + "|"
-            + IntentActionRequested + "\n\n"
+            + IntentActionRequested + "|" + IntentConfirmationRequired
+            + "\n\n"
             + "INTENT semantics:\n"
             + "- `" + IntentReadOnly + "` — the user is asking for "
             + "information, guidance, or current system state; no state "
             + "changes, even if tool calls are needed to gather data.  "
             + "Applies to every how-to / design / conceptual / "
-            + "status-check / data-lookup phrasing in any language.  Use "
-            + "this when unsure — erring on the safe side only blocks "
-            + "legitimate imperatives that a retry with clearer phrasing "
-            + "(\"please delete X\") will resolve.\n"
-            + "- `" + IntentActionRequested + "` — the user unambiguously "
-            + "wants the system to change state.  Imperative mood in the "
-            + "user's own language (English: 'create X', 'please delete "
-            + "Y', 'set Z to 30s'; equivalent constructions in other "
-            + "languages); requests for one-shot execution; confirmed "
-            + "continuations from a prior action ('yes, go ahead and "
-            + "delete it').  The safety gate uses this label as its "
-            + "primary signal for whether destructive tools may "
-            + "dispatch, so an incorrect `" + IntentActionRequested
-            + "` label on a how-to question is a real bug — be "
-            + "conservative.\n";
+            + "status-check / data-lookup phrasing in any language.  "
+            + "Prefer this label when the user is clearly asking a "
+            + "question rather than issuing a command.\n"
+            + "- `" + IntentActionRequested + "` — the user "
+            + "unambiguously wants the system to change state.  "
+            + "Imperative mood in the user's own language (English: "
+            + "'create X', 'please delete Y', 'set Z to 30s'; equivalent "
+            + "constructions in other languages); requests for one-shot "
+            + "execution; confirmed continuations from a prior action "
+            + "('yes, go ahead and delete it').  The safety gate uses "
+            + "this label as its primary signal for whether destructive "
+            + "tools may dispatch, so an incorrect `"
+            + IntentActionRequested + "` label on a how-to question is "
+            + "a real bug — be conservative.\n"
+            + "- `" + IntentConfirmationRequired + "` — the phrasing is "
+            + "ambiguous between asking about acting and asking for the "
+            + "action to be taken.  Typical triggers: meta-questions "
+            + "about whether to act ('should I delete X?'), exploratory "
+            + "phrasings ('would it be a good idea to create a "
+            + "workflow?'), hypothetical framings ('if I update the "
+            + "job, what happens?').  Use this ONLY when you cannot "
+            + "confidently choose between the other two labels — an "
+            + "over-use blocks legitimate commands and frustrates the "
+            + "user.\n";
     }
 
     #! Extracts the intent label from an arbitrary LLM response body
@@ -175,13 +203,13 @@ public class ActionIntentClassifier {
         default-block policy).
 
         @param response_text the LLM's full response body
-        @return \c "read-only" or \c "action-requested" on a successful
-            parse; NOTHING when the line is missing or the label is
-            unrecognized
+        @return one of \c "read-only", \c "action-requested", or
+            \c "confirmation-required" on a successful parse; NOTHING
+            when the line is missing or the label is unrecognized
     */
     public static *string parseIntentFromResponse(string response_text) {
         *list<auto> match = (response_text =~
-            x/INTENT:\s*(read-only|action-requested)/i);
+            x/INTENT:\s*(read-only|action-requested|confirmation-required)/i);
         if (!match[0].val()) {
             return;
         }
@@ -199,12 +227,12 @@ public class ActionIntentClassifier {
 
         @param user_message the raw user turn to classify
 
-        @return the parsed intent label (\c "read-only" or
-            \c "action-requested") on success; NOTHING when the backend
-            call fails, the response is empty, or the LLM emitted
-            something the parser couldn't interpret.  Callers should
-            treat NOTHING as "classification unavailable" and fall back
-            to a safer default.
+        @return the parsed intent label (\c "read-only",
+            \c "action-requested", or \c "confirmation-required") on
+            success; NOTHING when the backend call fails, the response
+            is empty, or the LLM emitted something the parser couldn't
+            interpret.  Callers should treat NOTHING as "classification
+            unavailable" and fall back to a safer default.
     */
     public *string classify(string user_message) {
         string user_prompt = StandaloneSystemPrompt
