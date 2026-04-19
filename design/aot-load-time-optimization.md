@@ -62,35 +62,110 @@ For 11 blobs × ~500 classes × ~50 methods each = ~275,000
 per-method operations plus the cross-session walks.  Each phase
 iterates the session list and the per-session class list.
 
-### Rough decomposition of the 2.2s qwf load
+### Measured decomposition of the 2.32s qwf load
 
-Approximate splits (per `QORE_AOT_TRACE_*` sampling during
-investigation — not profiler-accurate, but order-of-magnitude):
+Instrumented via `QORE_AOT_PHASE_TIMING=1` env var (commit
+091e1a653).  Totals across all 132 sessions, 5-run medians,
+microseconds (`us`):
 
-| Phase | Time share | Notes |
+| Phase | Time | % of resolveAll |
 |---|---|---|
-| dlopen+ELF section load | <50 ms | free |
-| addBlob × 11 (phase 1) | ~250 ms | namespace + class shell deser |
-| resolveClassBases × 11 | ~150 ms | topo sort + `addBaseClass` per class |
-| rebuildBaseClassSmlPhase | ~100 ms | `BCSMList::addBaseClassesToSubclass` for every class×base pair |
-| resolveInstanceMembers / importInheritedMembers | ~400 ms | member map copy + init expr resolve |
-| deserializeFunctionsAndMethods | ~600 ms | method variant objects + signatures |
-| commitClassesDoCommit (parseCommit) | ~500 ms | `parseAddAncestors` + method vlist commit + `checkAssignSpecial` |
-| commitClassesImportAbstract + Validate | ~100 ms | abstract method merge + base-reachability check |
-| finalize (BCA + indexes) | ~100 ms | last-pass fix-ups |
+| addBlob (phase-1 shells, per session) | 68 ms | 6.4% |
+| resolveTypesAndMembers | 27 ms | 2.5% |
+| rebuildBaseClassSml | 0.4 ms | 0.0% |
+| importInheritedMembers | 1 ms | 0.1% |
+| resolveStaticsAndConstants | 30 ms | 2.8% |
+| **deserializeFunctionsAndMethods** | **776 ms** | **72.3%** |
+| — deserializeFunctions (sub) | 4 ms | 0.4% |
+| — **deserializeMethods** (sub) | **779 ms** | **72.6%** |
+| commitClassesPrepare | 2 ms | 0.2% |
+| commitClassesDoCommit (parseCommit) | 5 ms | 0.4% |
+| commitClassesImportAbstract | 0.5 ms | 0.0% |
+| commitClassesValidate | 0.3 ms | 0.0% |
+| finalize | 163 ms | 15.2% |
+| **TOTAL resolveAll** | **1073 ms** | 100% |
+| registerAOTFunctions (post) | 130 ms | — |
+| executeInitFunctions (post) | 19 ms | — |
 
-Totals ~2250 ms, matching measured 2.20s median.
+(qwf wall-clock --help: ~2.32 s.  Resolve + register + init
+totals 1222 ms = 53% of wall-clock.  Remainder ~1100 ms in
+binary startup + qore_init + req_modules[] loading ×36 modules
++ command-line parse + cleanup.)
 
-The two hot bands are **method deserialization** (~600 ms) and
-**parseCommit** (~500 ms).  Both are per-method-variant.
+**The hot path is `deserializeMethods`** — 779 ms, 73% of
+resolveAll, 33% of wall-clock.  parseCommit and the cross-
+session phase-sync machinery are collectively <1%.  Prior
+estimates were way off.
 
-## Optimization proposals, ordered by expected ROI
+## Optimization proposals (revised by real measurements)
 
-### 1. Parallel method deserialization across sessions (est. 30-40% gain)
+The original plan's ordering was based on estimates that turned
+out to be wrong.  parseCommit is 0.4% of resolveAll, not 23%.
+Revised priorities based on measured time:
 
-The 7-phase `resolveAll` is currently serial over sessions.  Phases
-that don't share mutable class state across sessions can run
-concurrently.  Candidates:
+### 1. Optimize `deserializeMethods` internals (dominant hot path)
+
+779 ms across 132 sessions = ~6 ms/session or ~30 μs/method
+variant.  Sub-phases inside each variant:
+- `readAndSetupVariantSignature` — reads return type path, params,
+  per-param type paths and defaults.  Each type path triggers
+  `QoreAOTTypeResolver::resolve` which hits a per-session cache
+  (not shared across sessions — same builtin paths like `string`
+  resolved 132 times via 60-entry linear-scan table).
+- `new UserMethodVariant`/`UserConstructorVariant` allocation.
+- Optional BCA blob read + pbca collection.
+- `qore_class_private::addUserMethod` insertion into hm/shm.
+
+Concrete sub-tactics, each worth investigation:
+
+1a. **Share type resolver cache across sessions** (plausibly
+    5-15% of deserializeMethods).  Move the `cache` out of the
+    per-session `QoreAOTTypeResolver` into the MultiDeserializer
+    (or a process-global cache for builtin types that never
+    change).  132 sessions currently re-walk the 60-entry
+    builtin linear scan for every common type path.
+
+1b. **Intern common type paths at serialize time** (plausibly
+    10-20%).  The `.qo` metadata currently stores full type paths
+    as strings (`"*string"`, `"*hash<string, int>"`).  Replace
+    with a per-blob type-table: first occurrence defines index,
+    subsequent occurrences reference.  Shrinks metadata size
+    (wins in disk read + zlib) and lets `resolve()` become an
+    array lookup for the most common cases.
+
+1c. **Fast-path for parameter defaults = `has_default == 0`**
+    (unknown gain, likely small).  The common no-default case
+    still goes through the value-reader switch.  A one-byte
+    early-out would save per-parameter dispatch.
+
+1d. **Batch-allocate variants per session** (5-10%).  Each
+    variant goes through `new`; replacing with a per-session
+    arena (destroyed in `~QoreAOTBinaryDeserializer`) reduces
+    allocator pressure for ~25,000 small objects.
+
+1e. **Skip abstract method body setup** (modest).  Abstract
+    method variants have no body — the metadata still goes
+    through the full UserMethodVariant construction.  An abstract
+    fast-path that only builds the signature could save per-
+    abstract-variant cost.
+
+### 2. Finalize phase (163 ms, 15%)
+
+`finalize` runs pending_smd fixup, deserializeFallbackSources,
+rebuildAllIndexes, resolveBCAExpressions.  The index rebuild
+(fmap/varmap/clmap) walks the entire namespace tree.  For 500+
+classes it's non-trivial.  Candidates:
+
+- Incremental index update during phase 1 (each `addBlob` appends
+  to the indexes directly instead of rebuilding from scratch).
+  Needs audit — current rebuild may exist for a reason
+  (deduplication across blobs?).
+
+### 3. Parallel method deserialization across sessions (potential 30-40%)
+
+The 7-phase `resolveAll` is currently serial over sessions.
+Phases that don't share mutable class state across sessions can
+run concurrently.  Candidates:
 
 - `deserializeFunctionsAndMethods` — each session owns its own
   hm/shm maps.  Methods go into separate class structures.  **No
@@ -206,21 +281,30 @@ CMakeLists.txt until AOT load time closes the gap.
 
 Low cost (cmake plumbing only) — no Qore-side work needed.
 
-## Recommended sequencing
+## Recommended sequencing (revised)
 
-1. **Measure precisely first**.  Add a `QORE_AOT_PHASE_TIMING` env
-   that logs wall-clock per phase.  This validates the rough
-   decomposition above and pinpoints the true hot spots.
-2. **Implement (2)** — pre-committed variants.  Smallest risk with
-   largest clean win; contained to `QoreAOTBinary.cpp`.  Expected
-   ~300 ms on qwf.
-3. **Implement (1)** — parallel per-session deser.  Requires
-   thread-safety audit but ~700 ms win is worth it.
-4. **Re-measure**.  If AOT ≤ source-parse at this point, done.
-5. If still off, investigate (3) compact format.
-6. Defer (4) lazy commit and (5) SML short-circuit unless
-   profiling specifically calls for them.
-7. Always keep (6) source-parse fallback available.
+1. **Done** — per-phase instrumentation shipped (commit 091e1a653).
+   Data reported above; `deserializeMethods` is the dominant hot
+   path at 73% of resolveAll.
+2. **Next: profile inside `deserializeMethods`** — split
+   `readAndSetupVariantSignature` vs variant allocation vs
+   addUserMethod insertion.  Confirms which sub-tactic to try
+   first.
+3. **Low-risk quick wins**:
+   - (1a) shared type resolver cache across sessions;
+   - (1d) per-session arena allocator for method variants.
+   Expected combined: 20-30% drop in `deserializeMethods` → ~200 ms.
+4. **Medium effort, larger win**:
+   - (1b) intern type paths in `.qo` metadata (format bump);
+   - (3) parallelize `deserializeFunctionsAndMethods` across
+     sessions after thread-safety audit.
+5. **Re-measure** at each step.  Target: resolveAll total ≤ 500 ms
+   on qwf (half of current 1073 ms).
+6. If still off: (2) finalize index rebuild optimization.
+7. Defer (4) lazy commit and (5) SML short-circuit unless
+   profiling specifically calls for them.  The current measurements
+   suggest they'd be <1% wins.
+8. Always keep (6) source-parse fallback available.
 
 ## Acceptance criteria
 
