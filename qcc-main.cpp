@@ -212,6 +212,12 @@ static const char* time_trace_path = nullptr;
 // Default 200 validated on HS (46x compile speedup, ~1-7% runtime cost)
 // and SqlUtil (1.70x speedup); OpenApi3 unaffected (no functions >= 200).
 static int big_fn_threshold = 200;
+// Tracks whether `--big-fn-threshold=N` was explicitly passed on the
+// command line.  Needed so the CLI default (200) doesn't silently
+// clobber a user-set QORE_AOT_BIG_FN_THRESHOLD env var — getopt can't
+// distinguish "user passed --big-fn-threshold=200" from "unset, using
+// default 200", so a separate bool carries that intent.
+static bool big_fn_threshold_cli_explicit = false;
 // Phase 4 slice 10h: --depfile=FILE emits a Make-format dependency
 // file after a successful compile, listing every source file the
 // target output (re)builds against.  cmake wires it via
@@ -389,6 +395,7 @@ static int parse_options_cmdline(int argc, char** argv) {
                     fprintf(stderr, "error: --big-fn-threshold must be >= 0\n");
                     return 1;
                 }
+                big_fn_threshold_cli_explicit = true;
                 break;
             case 'C':
                 context_dir = optarg;
@@ -504,10 +511,19 @@ int main(int argc, char** argv) {
     if (time_trace_path) {
         setenv("QORE_AOT_TIME_TRACE", time_trace_path, 1);
     }
+    // Propagate the CLI flag's value to QORE_AOT_BIG_FN_THRESHOLD so
+    // the IR-to-LLVM lowerer picks it up.  Overwrite the env only when
+    // the user explicitly passed --big-fn-threshold on the command line;
+    // otherwise leave any pre-existing shell-env value alone.  This
+    // keeps the CLI default (200) from silently clobbering
+    // `QORE_AOT_BIG_FN_THRESHOLD=50 qcc ...`, while still letting
+    // `qcc --big-fn-threshold=N` take effect in shells that have a
+    // different value set.
     if (big_fn_threshold > 0) {
         char buf[32];
         snprintf(buf, sizeof(buf), "%d", big_fn_threshold);
-        setenv("QORE_AOT_BIG_FN_THRESHOLD", buf, 1);
+        setenv("QORE_AOT_BIG_FN_THRESHOLD", buf,
+               big_fn_threshold_cli_explicit ? 1 : 0);
     }
 
     if (show_help) {

@@ -2330,6 +2330,14 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     // Gated by QORE_AOT_BIG_FN_THRESHOLD (default disabled; set to a BB
     // count like 300 to enable). Set to 0 to disable entirely. This is an
     // experiment — if it helps, Phase 5 outlining becomes less urgent.
+    // Preliminary IR-block-count check — tags functions like
+    // HttpServer::handleRequest whose IR already has hundreds of blocks.
+    // Doesn't catch cases where the IR is structurally small but lowers
+    // to a huge LLVM function (e.g. module-init closures whose IR is a
+    // single block but unfurls into >1000 LLVM BBs via exception-aware
+    // invokes + landingpad/continuation BBs per registration call).  A
+    // post-lowering pass at the end of lowerFunction re-checks against
+    // llvm_func->size() and can retro-tag those.
     {
         static const size_t big_fn_threshold = []() {
             const char* s = getenv("QORE_AOT_BIG_FN_THRESHOLD");
@@ -2339,7 +2347,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             llvm_func->addFnAttr(llvm::Attribute::OptimizeNone);
             llvm_func->addFnAttr(llvm::Attribute::NoInline);
             if (getenv("QORE_AOT_DEBUG")) {
-                fprintf(stderr, "AOT: OptimizeNone for '%s' (%zu blocks >= threshold %zu)\n",
+                fprintf(stderr, "AOT: OptimizeNone for '%s' (IR %zu blocks >= threshold %zu)\n",
                         fn_name.c_str(), func.blocks.size(), big_fn_threshold);
             }
         }
@@ -3100,6 +3108,37 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     // Reset per-function state
     current_ir_func = nullptr;
     current_module = nullptr;
+
+    // Post-lowering big-fn check: some functions start with a modest IR
+    // block count but explode in LLVM due to exception-aware invokes and
+    // slot-call expansion.  The flagship case is Qore user module init
+    // closures: a single IR block with N registration calls lowers to
+    // ~20-30 LLVM BBs per call (each call site gets a landingpad BB and
+    // a continuation BB, plus type-dispatch branches from slot
+    // expansion).  ZohoInventoryDataProvider's module init is IR-size 1
+    // but LLVM-size 1482 BBs / 38145 insts, which causes LLVM's
+    // O3 pipeline to hang indefinitely (SelectionDAG+RegAlloc
+    // super-linearity).  Re-check against the final LLVM BB count and
+    // retro-tag if needed so the OptimizeNone attribute applies even
+    // for IR-compact-but-LLVM-huge functions.
+    if (!llvm_func->hasFnAttribute(llvm::Attribute::OptimizeNone)) {
+        static const size_t big_fn_threshold = []() {
+            const char* s = getenv("QORE_AOT_BIG_FN_THRESHOLD");
+            return s ? static_cast<size_t>(std::atoi(s)) : size_t(0);
+        }();
+        if (big_fn_threshold > 0 && llvm_func->size() >= big_fn_threshold) {
+            llvm_func->addFnAttr(llvm::Attribute::OptimizeNone);
+            llvm_func->addFnAttr(llvm::Attribute::NoInline);
+            if (getenv("QORE_AOT_DEBUG")) {
+                fprintf(stderr,
+                    "AOT: OptimizeNone for '%s' (LLVM %zu blocks >= threshold %zu, IR was %zu blocks)\n",
+                    fn_name.c_str(),
+                    (size_t)llvm_func->size(),
+                    big_fn_threshold,
+                    func.blocks.size());
+            }
+        }
+    }
 
     // Commit the function - don't clean it up on return
     func_cleanup.committed = true;
