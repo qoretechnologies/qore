@@ -1443,11 +1443,36 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
         compiled_keys = &local_keys;
     }
 
-    // Skip namespaces that belong to a different module
-    const char* ns_module = ns->getModuleName();
-    if (shouldSkipModuleItem(ns_module, compile_module)) {
-        return;
-    }
+    // Cross-module namespaces (e.g. `::OMQ`, `::Qore`, `::Priv`) carry the
+    // module name of whichever module FIRST created the shell, not of the
+    // items subsequently declared inside.  When QorusClientBase.qm adds
+    // `class ThreadLocalData { ... }` under `public namespace OMQ { }`,
+    // the OMQ namespace shell itself was created by some other module (or
+    // by the Qore runtime) so `ns->getModuleName()` != "QorusClientBase" —
+    // but the `ThreadLocalData` class legitimately belongs to
+    // QorusClientBase and `qc->getModuleName()` reflects that accurately.
+    //
+    // Pre-fix logic returned early on a namespace-level module mismatch,
+    // silently skipping every class / function / constant inside.  For
+    // QorusClientBase this dropped ~100 classes (ThreadLocalData,
+    // QorusSystemRestHelperBase, UserApi, ...) from the .qmod; the class
+    // `OMQ::ThreadLocalData` then couldn't be resolved by
+    // deserializeGlobals when it tried to bind the global `tld` at
+    // .qmod load time.
+    //
+    // The per-item filters below (functions, classes, constants — each
+    // checks `item->getModuleName()`) catch cross-module items correctly
+    // without needing the namespace-level shortcut.  Performance cost of
+    // walking-and-filtering vs skipping-whole-subtree is negligible
+    // because the per-item check is a strcmp against a string pool
+    // pointer.
+    //
+    // Note: the recursion at the bottom of this function into child
+    // namespaces (`ns->nsl`) must also drop the early-return guard, which
+    // it does implicitly — the child walk just calls back into
+    // compileNamespaceFunctions, which will itself walk past the module
+    // shell check.
+    (void)ns->getModuleName();
 
     // Walk functions
     for (auto i = ns->func_list.begin(), e = ns->func_list.end(); i != e; ++i) {

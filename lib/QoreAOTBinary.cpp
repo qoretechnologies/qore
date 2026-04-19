@@ -1874,15 +1874,21 @@ static void collectItems(AOTSerializeState& state, qore_ns_private* ns, uint32_t
         QoreNamespace* child_ns = ni->second;
         if (child_ns) {
             qore_ns_private* child_priv = qore_ns_private::get(*child_ns);
-            // Filter out namespaces from reexported dependencies
-            const char* ns_module = child_priv->getModuleName();
-            printd(5, "AOT serialize: checking namespace '%s' from module '%s' (current_module='%s') skip=%d\n",
-                child_ns->getName(), ns_module ? ns_module : "n/a",
-                current_module ? current_module : "n/a",
-                shouldSkipReexportedItem(ns_module, current_module, keep_modules));
-            if (shouldSkipReexportedItem(ns_module, current_module, keep_modules)) {
-                continue;
-            }
+            // Cross-module namespace shells (e.g. ::OMQ, ::Qore, ::Priv)
+            // carry the module name of whichever module FIRST created
+            // the shell — not of every item subsequently added to it.
+            // A user module declaring new classes under an existing
+            // namespace (e.g. `public namespace OMQ { class ThreadLocalData { ... } }`
+            // in QorusClientBase.qm) legitimately owns those classes
+            // even though ns->getModuleName() reflects the shell's
+            // original creator.
+            //
+            // Filtering at the namespace level silently drops all such
+            // items; the per-item filters below
+            // (`shouldSkipReexportedItem(class_module, ...)` etc) already
+            // catch real cross-module items using each item's own
+            // `getModuleName()`, which IS accurate.  Matching fix on
+            // the compile-walker side in QoreAOT.cpp.
             collectItems(state, child_priv, ns_idx, current_module, keep_modules, compile_file);
         }
     }
