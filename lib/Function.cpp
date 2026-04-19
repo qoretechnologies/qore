@@ -785,9 +785,16 @@ void UserSignature::setupFromAOTMetadata(
         selfid = pp->createLocalVar("self", classTypeInfo->getTypeInfo());
     }
 
-    // Create argv local var - always created (matches parseInitPushLocalVars behavior)
-    // evalTiered() unconditionally instantiates argvid
-    argvid = pp->createLocalVar("argv", autoListOrNothingTypeInfo);
+    // argv local var — interned across every AOT-deserialized variant.
+    // Runtime identifies locals by (LocalVar*, stack frame), so sharing
+    // one pointer is safe even under concurrent invocation: each call
+    // instantiates its own frame-local slot via the thread-local stack.
+    // Removes ~N (one-per-variant) deque emplaces on the hot path (qwf:
+    // 656 k variants).
+    if (!pp->shared_aot_argv) {
+        pp->shared_aot_argv = pp->createLocalVar("argv", autoListOrNothingTypeInfo);
+    }
+    argvid = pp->shared_aot_argv;
 
     // Set flags
     varargs = hasVarargs;

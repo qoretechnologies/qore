@@ -395,6 +395,15 @@ class qore_program_private_base {
 public:
     LocalVariableList local_var_list;
 
+    //! Interned `argv` LocalVar shared across every AOT-deserialized variant.
+    //! Every variant passes the identical `("argv", autoListOrNothingTypeInfo)`
+    //! pair to createLocalVar — in qwf that's 656 k variants × 1 = 656 k
+    //! emplaces on the shared deque.  Sharing one LocalVar is safe because
+    //! runtime evaluation identifies variables by (LocalVar*, stack frame),
+    //! and argv is instantiated per-call on the thread-local stack, so the
+    //! shared pointer never aliases between concurrent invocations.
+    LocalVar* shared_aot_argv = nullptr;
+
     // for the thread counter, used only with plock
     QoreCondition pcond;
     ptid_map_t tidmap;           // map of tids -> thread count in program object
