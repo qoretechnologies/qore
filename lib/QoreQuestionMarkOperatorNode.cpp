@@ -29,6 +29,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/StatementBlock.h"
 
 QoreString QoreQuestionMarkOperatorNode::question_mark_str("question mark (?:) operator expression");
 
@@ -66,6 +67,16 @@ int QoreQuestionMarkOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext
         parse_context.typeInfo->doNonBooleanWarning(loc, "the initial expression with the '?:' operator is ");
     }
 
+    // Track narrowed types across the two branches.  The condition
+    // may narrow auto-typed locals (e.g. `x.foo` narrowing `x` to
+    // hash via QoreHashObjectDereferenceOperatorNode); that
+    // narrowing is legitimate in the true branch but must NOT leak
+    // into the false branch, where the condition was falsy and the
+    // narrowing predicate did not hold.  Mirrors
+    // IfStatement::parseInitImpl's use of NarrowedTypeHelper.
+    NarrowedTypeHelper nth;
+    nth.saveState();
+
     parse_context.typeInfo = nullptr;
     {
         QoreParseContextAnalysisHelper ah(parse_context);
@@ -75,6 +86,8 @@ int QoreQuestionMarkOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext
         left_analysis = parse_context.analysis;
     }
     const QoreTypeInfo* leftTypeInfo = parse_context.typeInfo;
+    // Snapshot true-branch narrowing and reset for the false branch
+    nth.recordBranchAndRestore();
 
     parse_context.typeInfo = nullptr;
     {
@@ -85,6 +98,9 @@ int QoreQuestionMarkOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext
         right_analysis = parse_context.analysis;
     }
     const QoreTypeInfo* rightTypeInfo = parse_context.typeInfo;
+    // Snapshot false-branch narrowing and merge with the true branch
+    nth.recordBranchAndRestore();
+    nth.mergeAndApply();
 
     // see if all arguments are constant values, then eval immediately and substitute this node with the result
     if (!err && e[0].isValue() && e[1].isValue() && e[2].isValue()) {
