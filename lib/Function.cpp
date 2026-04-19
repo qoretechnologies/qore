@@ -755,31 +755,29 @@ int UserSignature::pushParam(VarRefNode* v, QoreValue defArg, bool needs_types) 
 void UserSignature::setupFromAOTMetadata(
         QoreProgram* pgm,
         const QoreTypeInfo* retType,
-        const std::vector<std::string>& paramNames,
-        const std::vector<const QoreTypeInfo*>& paramTypes,
-        const std::vector<QoreValue>& defaults,
+        std::vector<std::string>&& paramNames,
+        std::vector<const QoreTypeInfo*>&& paramTypes,
+        std::vector<QoreValue>&& defaults,
         bool hasVarargs,
         const QoreClass* classTypeInfo) {
-    // Set return type
     returnTypeInfo = retType;
 
-    // Set parameter types and names
-    typeList = paramTypes;
-    names = paramNames;
+    const size_t nparams = paramTypes.size();
 
-    // Set default arguments (ref values for storage)
-    defaultArgList.resize(paramTypes.size());
-    for (size_t i = 0; i < defaults.size() && i < paramTypes.size(); ++i) {
-        defaultArgList[i] = defaults[i].refSelf();
-    }
-
-    // Create LocalVar* for each parameter via the program's local var allocator
     qore_program_private* pp = qore_program_private::get(*pgm);
-    lv.resize(paramTypes.size());
-    for (size_t i = 0; i < paramTypes.size(); ++i) {
+    lv.resize(nparams);
+    for (size_t i = 0; i < nparams; ++i) {
         const char* pname = i < paramNames.size() ? paramNames[i].c_str() : "";
         lv[i] = pp->createLocalVar(pname, paramTypes[i]);
     }
+
+    typeList = std::move(paramTypes);
+    names = std::move(paramNames);
+
+    // Take ownership of default-arg references (caller's vector is moved-from,
+    // so no refSelf/discard round-trip is needed).
+    defaultArgList = std::move(defaults);
+    defaultArgList.resize(nparams);
 
     // Create selfid local var for methods (matches parseInitPushLocalVars behavior)
     // Each method variant needs its own selfid that will be instantiated on the stack

@@ -253,9 +253,9 @@ public:
     DLLLOCAL void setupFromAOTMetadata(
         QoreProgram* pgm,
         const QoreTypeInfo* retType,
-        const std::vector<std::string>& paramNames,
-        const std::vector<const QoreTypeInfo*>& paramTypes,
-        const std::vector<QoreValue>& defaults,
+        std::vector<std::string>&& paramNames,
+        std::vector<const QoreTypeInfo*>&& paramTypes,
+        std::vector<QoreValue>&& defaults,
         bool hasVarargs,
         const QoreClass* classTypeInfo = nullptr);
 

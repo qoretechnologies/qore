@@ -1973,8 +1973,9 @@ static QoreAOTContext* buildContextFromSlotMap(
                     const_cast<AbstractQoreFunctionVariant*>(ucf->first()));
                 UserSignature* closure_sig = closure_variant->getUserSignature();
                 closure_sig->setupFromAOTMetadata(
-                    pgm, ret_type, param_names, param_types, defaults, closure_has_varargs,
-                    closure_class);
+                    pgm, ret_type,
+                    std::move(param_names), std::move(param_types), std::move(defaults),
+                    closure_has_varargs, closure_class);
 
                 // Build enclosing locals map so IR deserialization reuses the same
                 // LocalVar* objects that the parent function and closure signature use.

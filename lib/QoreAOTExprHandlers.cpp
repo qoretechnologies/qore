@@ -663,8 +663,9 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
         const_cast<AbstractQoreFunctionVariant*>(ucf->first()));
     UserSignature* closure_sig = closure_variant->getUserSignature();
     closure_sig->setupFromAOTMetadata(
-        ctx.pgm, ret_type, param_names, param_types, defaults, closure_has_varargs,
-        closure_class);
+        ctx.pgm, ret_type,
+        std::move(param_names), std::move(param_types), std::move(defaults),
+        closure_has_varargs, closure_class);
 
     // Build enclosing locals map for IR deserialization
     std::unordered_map<std::string, LocalVar*> enclosing_locals;

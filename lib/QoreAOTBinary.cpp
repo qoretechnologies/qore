@@ -4457,6 +4457,11 @@ uint64_t g_aot_dm_sig_us = 0;
 uint64_t g_aot_dm_add_us = 0;
 uint64_t g_aot_dm_variants = 0;
 
+// Finer-grained split of readAndSetupVariantSignature — the
+// per-param read loop vs the final setupFromAOTMetadata call.
+uint64_t g_aot_dm_sig_paramread_us = 0;
+uint64_t g_aot_dm_sig_setup_us = 0;
+
 // Phase-split 2c.  Commits all newly deserialized classes in this
 // session.  Requires every class's method map to already be
 // populated — in batch mode the MultiDeserializer ensures 2b has
@@ -6256,15 +6261,25 @@ static bool readAndSetupVariantSignature(
         ret_ti = autoTypeInfo;
     }
 
+    // Split timing: param-read loop above vs setup call below
+    static auto now_us_fn = [] () -> uint64_t {
+        struct timespec ts;
+        clock_gettime(CLOCK_MONOTONIC, &ts);
+        return (uint64_t)ts.tv_sec * 1000000ULL + ts.tv_nsec / 1000ULL;
+    };
+    static const bool time_on_sub = getenv("QORE_AOT_PHASE_TIMING") != nullptr;
+    uint64_t t_setup0 = time_on_sub ? now_us_fn() : 0;
+
     // Set up the variant's signature from metadata.  Only signature-
     // level ellipsis (`...`) flows into signature.varargs; the
     // QCF_USES_EXTRA_ARGS flag alone does NOT inflate the signature.
     UserSignature* sig = uvb->getUserSignature();
-    sig->setupFromAOTMetadata(pgm, ret_ti, param_names, param_types, param_defaults, sig_has_ellipsis, classTypeInfo);
+    sig->setupFromAOTMetadata(pgm, ret_ti,
+        std::move(param_names), std::move(param_types), std::move(param_defaults),
+        sig_has_ellipsis, classTypeInfo);
 
-    // Clean up default values (they were ref'd by setupFromAOTMetadata)
-    for (auto& dv : param_defaults) {
-        dv.discard(nullptr);
+    if (time_on_sub) {
+        g_aot_dm_sig_setup_us += now_us_fn() - t_setup0;
     }
 
     return true;
