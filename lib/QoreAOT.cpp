@@ -3851,6 +3851,25 @@ static std::string fileBasenameNoExt(const std::string& path) {
     return base;
 }
 
+//! Variant that keeps the source extension as part of the basename.
+//! Used by `compileSeparatedModuleFile` (slice 4 per-file) so that a
+//! split module's primary `.qm` and any secondary `.qc`/`.ql` files
+//! sharing a basename don't collide on `<basename>.qo` or
+//! `qore_<sanmod>_<sanfile>_*` symbols.  Example:
+//!     qlib/DataProvider/DataProvider.qm → "DataProvider.qm"
+//!     qlib/DataProvider/DataProvider.qc → "DataProvider.qc"
+//! After `sanitizeCIdentifier` the symbols become
+//! `qore_DataProvider_DataProvider_qm_…` and
+//! `qore_DataProvider_DataProvider_qc_…` — disambiguated.
+static std::string fileBasenameKeepExt(const std::string& path) {
+    std::string base = path;
+    size_t slash = base.rfind('/');
+    if (slash != std::string::npos) {
+        base = base.substr(slash + 1);
+    }
+    return base;
+}
+
 //! Phase 4 slice 10d: emit per-file script register entry symbols
 //! into a script-context `.qo`.
 /**
@@ -6333,11 +6352,17 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
             failed_count, total_ir_insts_all, &const_reverse_map, nullptr,
             mod_info.name.c_str(), target_canon.c_str());
 
-        if (init_c_holder) {
-            compileModuleInitClosureAsInitFunc(*init_c_holder, mod_info.name.c_str(),
-                *qpgm, ctx, *module, di_builder, di_cu, compiled_init_funcs,
-                &const_reverse_map);
-        }
+        // Per-file `.qo`s are intermediates for the slice-6 aggregator
+        // (`qcc -m --from-objects`), not standalone `.qmod`s.  The
+        // aggregator's glue re-emits `__module_init::<mod>` from its
+        // own re-parse; if the primary `.qo` also emits it, linking
+        // the two produces a duplicate-symbol error.  Skip the
+        // module-init closure lowering here regardless of primary /
+        // secondary — the aggregator owns this symbol in per-file
+        // builds.  (Single-file module compile via `qcc -c foo.qm`
+        // without `--context` takes a different code path —
+        // `compileModule` — and still emits it there.)
+        (void)init_c_holder;
 
         reportAOTCompileStats(
             is_primary ? "per-file .qo (primary)" : "per-file .qo (secondary)",
@@ -6443,8 +6468,18 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
         // (`qore_<sanmod>_<sanfile>_fragment_data` +
         // `..._fragment_order`) so slice 6's link-time aggregator can
         // extract and merge fragments across a module's `.qo`s.
+        //
+        // Use the EXTENSION-INCLUSIVE basename here — see
+        // `fileBasenameKeepExt` — so a split module's primary `.qm` and
+        // its same-named secondary `.qc` (e.g.
+        // `qlib/DataProvider/DataProvider.{qm,qc}`) don't collide on
+        // identical symbol names.  After sanitization the pair emit as
+        // `qore_DataProvider_DataProvider_qm_…` and
+        // `…_qc_…`.  The aggregator (slice 6) reads fragment symbols
+        // by enumerating `qore_aot_<sanmod>_<sanfile>_fragment_blob`
+        // exports so it picks up both automatically.
         const std::string file_basename_san = sanitizeCIdentifier(
-            fileBasenameNoExt(target_canon));
+            fileBasenameKeepExt(target_canon));
         emitFragmentSymbols(ctx, *module, mod_info.name, file_basename_san,
             uncompressed_metadata, fragment_order);
 

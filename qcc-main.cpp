@@ -747,9 +747,25 @@ int main(int argc, char** argv) {
                 ? dir_str.substr(last_slash + 1)
                 : dir_str;
             output = basename + (compile_only ? ".qo" : ".qmod");
+        } else if (per_file_mode) {
+            // Per-file split-module compile (slice 4, `--context=DIR`).
+            // Preserve the source extension in the output name so primary
+            // (`.qm`) and secondary (`.qc` / `.ql`) files that share a
+            // basename don't collide — e.g. `DataProvider.qm → DataProvider.qm.qo`
+            // and `DataProvider.qc → DataProvider.qc.qo`.  Mirrors the
+            // symbol-mangling change in `compileSeparatedModuleFile`
+            // that uses the full basename (extension included) for
+            // `qore_<sanmod>_<sanfile>_*` symbols.
+            std::string basename(source_file);
+            size_t slash = basename.rfind('/');
+            if (slash != std::string::npos) {
+                basename = basename.substr(slash + 1);
+            }
+            output = basename + ".qo";
         } else {
-            // Per-file mode: default output is input-basename.qo
-            // (same shape as normal single-file compile-only mode).
+            // Script-mode / single-file default: strip extension and
+            // append `.qo` (e.g. `foo.qc → foo.qo`).  Script mode has no
+            // primary/secondary split so there's no collision risk.
             output = get_default_output(source_file, module_mode, compile_only);
         }
         // Phase 4 slice 10j: honor `--output-dir=DIR` for single-file
