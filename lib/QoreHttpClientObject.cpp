@@ -6211,6 +6211,10 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                         }
 
                         if (info) {
+                            // set_body_content_type_info must run BEFORE
+                            // refSelf() of ans — see comment in non-
+                            // streaming path for the refcount reason.
+                            set_body_content_type_info(xsink, **ans, *info);
                             info->setKeyValue("response-headers", ans->refSelf(), xsink);
                             QoreValue raw_hdrs = h->getKeyValue("headers_raw");
                             if (raw_hdrs.getType() == NT_HASH) {
@@ -6218,7 +6222,6 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                                     raw_hdrs.refSelf(), xsink);
                             }
                             setConnMgrResponseUri(info, h, xsink);
-                            set_body_content_type_info(xsink, **ans, *info);
                         }
 
                         if (recv_callback) {
@@ -6395,6 +6398,12 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                 code = (int)ans->getKeyValue("status_code").getAsBigInt();
 
                 if (info) {
+                    // set_body_content_type_info mutates the headers hash
+                    // (folds multi-value headers) via get_string_header_node,
+                    // so it must run BEFORE we refSelf() ans into the info
+                    // hash — otherwise ans has reference_count() > 1 and
+                    // setKeyValue trips its uniqueness assertion.
+                    set_body_content_type_info(xsink, **ans, *info);
                     info->setKeyValue("response-headers", ans->refSelf(), xsink);
                     if (*xsink) {
                         return nullptr;
@@ -6408,10 +6417,6 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                         }
                     }
                     setConnMgrResponseUri(info, *raw_resp, xsink);
-                    // Populate body-content-type — legacy sync path sets
-                    // this via set_body_content_type_info; the conn_mgr
-                    // response-translation equivalent was missing.
-                    set_body_content_type_info(xsink, **ans, *info);
                 }
 
                 if (!ans->is_unique()) {
@@ -6498,13 +6503,18 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                     }
 
                     if (info) {
+                        // set_body_content_type_info must run BEFORE
+                        // refSelf() of ans — ans has reference_count() > 1
+                        // after response-headers is set, which trips the
+                        // setKeyValue uniqueness assertion in
+                        // get_string_header_node's multi-value fold.
+                        set_body_content_type_info(xsink, **ans, *info);
                         info->setKeyValue("response-headers", ans->refSelf(), xsink);
                         QoreValue raw_hdrs = h->getKeyValue("headers_raw");
                         if (raw_hdrs.getType() == NT_HASH) {
                             info->setKeyValue("response-headers-raw", raw_hdrs.refSelf(), xsink);
                         }
                         setConnMgrResponseUri(info, h, xsink);
-                        set_body_content_type_info(xsink, **ans, *info);
                     }
 
                     // Determine response transfer-encoding and content-encoding
@@ -6790,6 +6800,10 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                     }
 
                     if (info) {
+                        // set_body_content_type_info BEFORE refSelf() — see
+                        // comment on the analogous guard elsewhere in this
+                        // function for the refcount/assertion rationale.
+                        set_body_content_type_info(xsink, **ans, *info);
                         info->setKeyValue("response-headers", ans->refSelf(), xsink);
                         QoreValue raw_hdrs = h->getKeyValue("headers_raw");
                         if (raw_hdrs.getType() == NT_HASH) {
@@ -6797,7 +6811,6 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                                 raw_hdrs.refSelf(), xsink);
                         }
                         setConnMgrResponseUri(info, h, xsink);
-                        set_body_content_type_info(xsink, **ans, *info);
                     }
 
                     // Check for redirect
@@ -6905,6 +6918,9 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
             code = (int)ans->getKeyValue("status_code").getAsBigInt();
 
             if (info) {
+                // set_body_content_type_info BEFORE refSelf() of ans — see
+                // comment on the analogous guards in the streaming paths.
+                set_body_content_type_info(xsink, **ans, *info);
                 info->setKeyValue("response-headers", ans->refSelf(), xsink);
                 if (*xsink) {
                     return nullptr;
@@ -6918,7 +6934,6 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                     }
                 }
                 setConnMgrResponseUri(info, *raw_resp, xsink);
-                set_body_content_type_info(xsink, **ans, *info);
             }
 
             if (!ans->is_unique()) {
@@ -8017,6 +8032,23 @@ public:
         // READY (then submit the request) or CLOSED (surface error).
         if (phase == Phase::WAITING_CONNECT) {
             return continueWaitingConnect(xsink);
+        }
+
+        // User-initiated disconnect while a request is in flight: the
+        // HTTPClient::disconnect() path sets user_disconnect_in_progress
+        // and calls conn_mgr->closeAll().  The Promise rejection that
+        // closeAll triggers is asynchronous — a tight loop calling
+        // continuePoll() right after disconnect() may still see the
+        // future as not-done.  Surface SOCKET-NOT-OPEN immediately so the
+        // caller's contract (legacy poll API throws SOCKET-NOT-OPEN after
+        // disconnect) is preserved regardless of timing.
+        if (priv_ref && priv_ref->user_disconnect_in_progress.load(
+                std::memory_order_acquire)) {
+            xsink->raiseException("SOCKET-NOT-OPEN",
+                "HTTPClient was disconnected during poll operation");
+            done = true;
+            phase = Phase::DONE;
+            return nullptr;
         }
 
         if (future && future->isDone()) {
