@@ -4280,9 +4280,10 @@ bool QoreAOTBinaryDeserializer::openAndDeserializeShells(QoreProgram* in_pgm,
 // index rebuild, deferred BCA resolution.  Expected to run AFTER
 // openAndDeserializeShells has completed for every blob in the
 // current batch.
-// Phase-split 2a.  Resolves types and members; no method variants
-// are added or committed here, so it is safe to interleave across
-// sessions in batch mode.
+// Phase-split 2a.  Resolves types, bases, and each session's OWN
+// members.  Does not import inherited base-class members — that
+// must wait until sibling sessions have finished their own
+// resolveInstanceMembers (cross-session sync point).
 bool QoreAOTBinaryDeserializer::resolveTypesAndMembers(std::string& error) {
     // Resolve class base classes (looks up bases via pgm->findClass,
     // so blobs from a sibling session are reachable after all shells
@@ -4305,10 +4306,28 @@ bool QoreAOTBinaryDeserializer::resolveTypesAndMembers(std::string& error) {
     if (!resolveInstanceMembers(error)) {
         return false;
     }
-    // Import inherited members from base classes (must be after resolveInstanceMembers)
-    if (!importInheritedMembers(error)) {
-        return false;
-    }
+    return true;
+}
+
+// Phase-split 2a-b.  Import inherited members from base classes
+// into derived classes.  Must run AFTER every session's
+// resolveInstanceMembers — otherwise a derived class in session X
+// may copy an empty member list from a base class owned by session
+// Y whose members haven't been registered yet.
+//
+// This is the silent failure mode that caused `zctx` (member of
+// AbstractQorusClientProcess, inherited all the way up to QWf) to
+// be missing from QWf's `member_init_list` at construction time —
+// `initMembers` had no entry for it, `zctx` was NOTHING, and
+// AbstractQorusClientProcess::constructor's `zctx.setOption(...)`
+// raised `<nothing>::setOption()`.
+bool QoreAOTBinaryDeserializer::importInheritedMembersPhase(std::string& error) {
+    return importInheritedMembers(error);
+}
+
+// Phase-split 2a-c.  Static members, class constants, global
+// constants, top-level globals.  Safe to interleave per session.
+bool QoreAOTBinaryDeserializer::resolveStaticsAndConstants(std::string& error) {
     if (!resolveStaticMembers(error)) {
         return false;
     }
@@ -4436,6 +4455,8 @@ bool QoreAOTBinaryDeserializer::finalize(std::string& error) {
 
 bool QoreAOTBinaryDeserializer::resolveAll(std::string& error) {
     return resolveTypesAndMembers(error)
+        && importInheritedMembersPhase(error)
+        && resolveStaticsAndConstants(error)
         && deserializeFunctionsAndMethods(error)
         && commitClasses(error)
         && finalize(error);

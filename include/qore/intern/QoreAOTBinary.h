@@ -1270,11 +1270,22 @@ public:
         sibling session. */
     bool resolveAll(std::string& error);
 
-    //! Phase-split 2a — resolve base classes, types, members.
-    /** Must run before deserializeFunctionsAndMethods() on this
-        session.  Safe to interleave across sessions since it only
-        reads cross-blob shells; no class commits occur here. */
+    //! Phase-split 2a — resolve base classes, types, and this
+    //! session's OWN members (no inherited imports yet).
+    /** Must run before importInheritedMembersPhase() on ANY
+        session, because that phase reads members from base
+        classes that may live in sibling sessions. */
     bool resolveTypesAndMembers(std::string& error);
+
+    //! Phase-split 2a-import — copy base-class members into derived
+    //! classes.  Batch mode: must wait until every session has
+    //! finished resolveTypesAndMembers() so base classes' member
+    //! maps are populated. */
+    bool importInheritedMembersPhase(std::string& error);
+
+    //! Phase-split 2a-post — static members, class constants,
+    //! global constants, top-level globals.
+    bool resolveStaticsAndConstants(std::string& error);
 
     //! Phase-split 2b — deserialize functions and methods.
     /** Adds method variants to every class's pending method map
@@ -1440,10 +1451,30 @@ public:
         breaking base-class-constructor-argument delegation at
         runtime. */
     bool resolveAll(std::string& error) {
-        // 2a: types and members — safe per-session since class
-        // shells are all in place from addBlob.
+        // 2a: types, bases, and each session's OWN members.  Safe
+        // per-session — class shells are already in place from
+        // addBlob and type lookups go through pgm->findClass.
         for (auto& sess : sessions) {
             if (!sess->resolveTypesAndMembers(error)) {
+                return false;
+            }
+        }
+        // 2a-import: copy base-class members into derived classes.
+        // Must run across all sessions only AFTER every session
+        // has finished resolveTypesAndMembers — otherwise a
+        // derived class could import an empty member list from a
+        // sibling session's base class whose members haven't been
+        // registered yet (leaks past as a missing member_init_list
+        // entry at runtime, e.g. `zctx` inherited through 5 layers
+        // being NOTHING at AbstractQorusClientProcess::constructor).
+        for (auto& sess : sessions) {
+            if (!sess->importInheritedMembersPhase(error)) {
+                return false;
+            }
+        }
+        // 2a-post: static members, class constants, globals.
+        for (auto& sess : sessions) {
+            if (!sess->resolveStaticsAndConstants(error)) {
                 return false;
             }
         }
