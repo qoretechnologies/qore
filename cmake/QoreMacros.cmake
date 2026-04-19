@@ -416,13 +416,22 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
     # whole-dir avoids.  Revisit per-file mode after the slice-4 fix and
     # add an opt-in option for dev-loop incremental builds.
     set(_qmod_dep ${_qmod_out}.d)
+    # Depend on the actual built FILES ($<TARGET_FILE:X>) rather than the
+    # bare target names — CMake's Makefile generator uses file-mtime for
+    # both forms, but naming the files explicitly documents intent and
+    # avoids surprise if a future cmake version treats target-level
+    # dependencies more coarsely.  The `DEPENDS qcc libqore` form also
+    # propagates custom-target re-evaluation to every .qmod rule even
+    # when the actual .so/.bin mtime didn't change; the file form is
+    # strictly mtime-driven so rebuilds happen only when libqore.so or
+    # qcc's binary actually changed (e.g. after a libqore relink).
     add_custom_command(
         OUTPUT ${_qmod_out}
         COMMAND ${CMAKE_COMMAND} -E make_directory ${_qmod_out_dir}
         COMMAND ${CMAKE_COMMAND} -E env ${QORE_QM_METADATA_ENV}
             $<TARGET_FILE:qcc> -m ${_source_root}
             --depfile=${_qmod_dep} -o ${_qmod_out}
-        DEPENDS ${ARGN} qcc libqore
+        DEPENDS ${ARGN} $<TARGET_FILE:qcc> $<TARGET_FILE:libqore>
         DEPFILE ${_qmod_dep}
         COMMENT "AOT compile ${_name}.qmod"
         VERBATIM

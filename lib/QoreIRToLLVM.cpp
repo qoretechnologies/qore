@@ -5637,15 +5637,25 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                 args_array, llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
                     }
                 } else if (aot_mode && inv->invoke_opcode == QoreIROpcode::CallDirect) {
-                    // AOT CallDirect: check for self-recursive fast entry first
+                    // AOT CallDirect: check for self-recursive fast entry first.
+                    // Must compare QoreFunction IDENTITY (pointer), not base
+                    // names — otherwise a caller in namespace `OMQ2` whose
+                    // body invokes `Util::substitute_env_vars` matched the
+                    // base-name-only check against its own ir_func->name
+                    // `substitute_env_vars(string)`, emitted a direct LLVM
+                    // call to `OMQ2::substitute_env_vars(string)_fast`, and
+                    // infinite-recursed in the compiled body.  The
+                    // FunctionEntry (FE) held by the FunctionCallNode
+                    // uniquely identifies the resolved target; compare FE
+                    // pointer to the current function's FE.
                     bool is_self_rec = false;
                     if (!aot_self_recursive_fast_entry.empty()) {
                         const auto* call = dynamic_cast<const FunctionCallNode*>(
                                 inv->expr.getInternalNode());
-                        if (call && call->getFunction()
+                        if (call && call->getFunctionEntry()
                                 && current_ir_func
-                                && std::string(call->getFunction()->getName())
-                                    == current_ir_func->name) {
+                                && aot_self_recursive_fe
+                                && call->getFunctionEntry() == aot_self_recursive_fe) {
                             is_self_rec = true;
                         }
                     }

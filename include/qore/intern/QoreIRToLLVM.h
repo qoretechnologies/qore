@@ -40,6 +40,7 @@
 #include "qore/intern/QoreIR.h"
 
 class LocalVar;
+class FunctionEntry;
 
 #include <llvm/IR/DIBuilder.h>
 #include <llvm/IR/DebugInfoMetadata.h>
@@ -104,8 +105,15 @@ public:
     //! Set the name of an AOT self-recursive fast entry function.
     //! When set, self-recursive CallDirect instructions in AOT mode emit direct
     //! LLVM calls to this function instead of going through qore_rt_call_direct_aot.
-    void setAOTSelfRecursiveFastEntry(const std::string& name) {
+    //!
+    //! @p fe identifies the function whose fast-entry @p name refers to;
+    //! self-recursion is detected by FE pointer equality rather than base
+    //! name, avoiding cross-namespace mis-matches (`OMQ::foo` → `Util::foo`
+    //! previously tripped the self-recursion path because base names match).
+    void setAOTSelfRecursiveFastEntry(const std::string& name,
+            const FunctionEntry* fe = nullptr) {
         aot_self_recursive_fast_entry = name;
+        aot_self_recursive_fe = fe;
     }
 
     //! Set shared debug info for multi-function module compilation (AOT/batch).
@@ -191,6 +199,12 @@ private:
     // AOT self-recursive fast entry: when set, self-recursive CallDirect in AOT mode
     // emits direct LLVM calls to this function instead of qore_rt_call_direct_aot.
     std::string aot_self_recursive_fast_entry;
+    // FunctionEntry pointer of the function whose fast-entry the above
+    // name refers to; `is_self_rec` matches on FE identity (pointer
+    // equality) rather than base-name string equality, so a call to a
+    // same-named function in another namespace (e.g. `OMQ::foo` calling
+    // `Util::foo`) is not mis-identified as self-recursion.
+    const FunctionEntry* aot_self_recursive_fe = nullptr;
 
     // IR builder
     std::unique_ptr<llvm::IRBuilder<>> builder;

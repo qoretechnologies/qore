@@ -249,6 +249,17 @@ public:
         return fe ? fe->getFunction() : nullptr;
     }
 
+    //! Accessor for AOT serialization: lets the writer emit the
+    //! namespace-qualified name of the resolved function so runtime
+    //! deserialization finds the same target even when the caller's
+    //! own scope declares a wrapper function of the same base name
+    //! (e.g. `OMQ::substitute_env_vars` wrapping `Util::substitute_env_vars`
+    //! — without the qualified emission, bare-name lookup at runtime
+    //! resolved to the self-same wrapper and infinite-recursed).
+    DLLLOCAL const FunctionEntry* getFunctionEntry() const {
+        return fe;
+    }
+
     // FIXME: delete when unresolved function call node implemented properly
     DLLLOCAL char* takeName() {
         char* str = c_str;

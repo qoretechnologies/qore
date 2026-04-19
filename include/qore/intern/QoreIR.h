@@ -1980,6 +1980,14 @@ public:
     }
 
     std::string name;
+    //! Source QoreFunction this IR was lowered from — used by
+    //! createCallDirect to identify self-recursion by pointer equality
+    //! rather than base-name comparison.  Without this, a caller in
+    //! namespace `OMQ` that invokes `Util::foo` was misidentified as
+    //! self-recursion because both `current_func->getName()` and
+    //! `callee->getName()` equal `"foo"`; the LLVM emitter then issued
+    //! a direct call to its own fast entry and infinite-recursed.
+    const QoreFunction* source_qf = nullptr;
     std::vector<std::unique_ptr<QoreIRBasicBlock>> blocks;
 
     // Maximum value ID assigned in this function (used to right-size value vector in interpreter)

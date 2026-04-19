@@ -330,6 +330,7 @@ std::string getVariantKey(const char* name, const AbstractQoreFunctionVariant* v
     return key;
 }
 
+
 QoreAOTContext::~QoreAOTContext() {
     // Deref all held expression values (we took a ref in buildAOTContext)
     for (int i = 0; i < num_exprs; ++i) {
@@ -560,7 +561,8 @@ static bool funcNeedsFallback(const AOTCompiledFuncWithSlots& f) {
     @return 0 = success, -1 = lowering failed
 */
 static int tryLowerFunction(UserVariantBase* uvb, const char* name, QoreProgram* pgm,
-        QoreIRFunction*& ir_func, std::string& error) {
+        QoreIRFunction*& ir_func, std::string& error,
+        const QoreFunction* source_qf = nullptr) {
     StatementBlock* statements = uvb->getStatementBlock();
     if (!statements) {
         error = "no statement block";
@@ -568,6 +570,15 @@ static int tryLowerFunction(UserVariantBase* uvb, const char* name, QoreProgram*
     }
 
     ir_func = new QoreIRFunction(name);
+    // Set source_qf BEFORE QoreIRBuilder lowers statements — the
+    // createCallDirect() check relies on it to identify self-recursion
+    // by pointer identity rather than base-name string compare (the
+    // latter collides across namespaces — `OMQ::foo` and `Util::foo`
+    // both have base name `foo`, so bare-name comparison mis-flags
+    // cross-namespace calls as self-recursion and the LLVM emitter
+    // then issues a direct call to own fast entry → infinite
+    // C++-level recursion).
+    ir_func->source_qf = source_qf;
 
     // Record pre-instantiated locals from signature
     UserSignature* sig = uvb->getUserSignature();
@@ -1516,7 +1527,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
             }
             QoreIRFunction* ir_func = nullptr;
             std::string lower_error;
-            int rc = tryLowerFunction(uvb, fname, pgm, ir_func, lower_error);
+            int rc = tryLowerFunction(uvb, fname, pgm, ir_func, lower_error, func);
 
             if (rc == 0 && ir_func) {
                 // Use variant key as LLVM symbol name to distinguish overloaded variants
@@ -1632,7 +1643,12 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                     }
                     lowerer.setDeferredExceptionChecking(!has_obe);
                     if (!fast_entry_name.empty()) {
-                        lowerer.setAOTSelfRecursiveFastEntry(fast_entry_name);
+                        // Pass FE so the self-recursion check in the
+                        // lowerer compares pointer identity — base-name
+                        // comparison mis-identifies cross-namespace
+                        // calls to same-named wrappers as self-recursion
+                        // (e.g. `OMQ::foo` → `Util::foo`).
+                        lowerer.setAOTSelfRecursiveFastEntry(fast_entry_name, fe);
                     }
                     // Debug: dump IR before LLVM lowering if requested
                     if (getenv("QORE_AOT_DUMP_IR")) {
@@ -1681,7 +1697,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                         fast_lowerer.setEmitDebugInfo(aotEmitDebugInfo());
                         fast_lowerer.setDeferredExceptionChecking(!has_obe);  // See comment above
                         fast_lowerer.setFastEntryMode(fast_entry_name, &param_map);
-                        fast_lowerer.setAOTSelfRecursiveFastEntry(fast_entry_name);
+                        fast_lowerer.setAOTSelfRecursiveFastEntry(fast_entry_name, fe);
                         std::string fast_error;
                         if (!fast_lowerer.lowerFunction(*ir_func, module, fast_error)) {
                             // Fast entry failure is non-fatal — standard entry still works
@@ -9230,7 +9246,25 @@ class ExprTreeSerializer {
         // FunctionCallNode: function call with args
         if (auto* fc = dynamic_cast<const FunctionCallNode*>(node)) {
             writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_FUNC_CALL));
-            writeStr(fc->getName());
+            // Emit namespace-qualified name (see write_expr_func_call
+            // in QoreAOTExprHandlers.cpp for rationale — without
+            // qualification, a caller in OMQ that invokes
+            // `Util::substitute_env_vars` round-tripped as the bare
+            // "substitute_env_vars" and the runtime reader found
+            // `OMQ::substitute_env_vars` (the wrapper itself),
+            // infinite-recursing).
+            const FunctionEntry* fe = fc->getFunctionEntry();
+            if (fe && fe->getNamespace()) {
+                std::string qualified;
+                fe->getNamespace()->getPath(qualified);
+                if (!qualified.empty()) {
+                    qualified += "::";
+                }
+                qualified += fe->getName();
+                writeStr(qualified.c_str());
+            } else {
+                writeStr(fc->getName());
+            }
             // Count and serialize args
             size_t count_pos = buf.size();
             writeU16(0); // placeholder for num_children
@@ -10116,7 +10150,22 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
     // FunctionCallNode: regular function call
     if (auto* call = dynamic_cast<const FunctionCallNode*>(node)) {
         id.kind = AOTExprKind::FUNC_CALL;
-        id.ref1 = call->getName();
+        // Namespace-qualified identity so slot resolution at runtime
+        // lands on the same function the parser resolved at compile
+        // time — bare name would let a caller-scope same-named
+        // wrapper hijack the lookup.
+        const FunctionEntry* fe = call->getFunctionEntry();
+        if (fe && fe->getNamespace()) {
+            std::string qualified;
+            fe->getNamespace()->getPath(qualified);
+            if (!qualified.empty()) {
+                qualified += "::";
+            }
+            qualified += fe->getName();
+            id.ref1 = std::move(qualified);
+        } else {
+            id.ref1 = call->getName();
+        }
         return id;
     }
 

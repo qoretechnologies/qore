@@ -2898,7 +2898,22 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
     // FunctionCallNode: regular function call
     if (auto* call = dynamic_cast<const FunctionCallNode*>(node)) {
         writer.writeU8(static_cast<uint8_t>(AOTExprKind::FUNC_CALL));
-        writer.writeStringRef(call->getName());
+        // Emit namespace-qualified name so runtime lookup lands on
+        // the exact function the parser resolved, not a same-named
+        // wrapper in the caller's scope (see write_expr_func_call in
+        // QoreAOTExprHandlers.cpp for the full rationale).
+        const FunctionEntry* fe = call->getFunctionEntry();
+        if (fe && fe->getNamespace()) {
+            std::string qualified;
+            fe->getNamespace()->getPath(qualified);
+            if (!qualified.empty()) {
+                qualified += "::";
+            }
+            qualified += fe->getName();
+            writer.writeStringRef(qualified.c_str());
+        } else {
+            writer.writeStringRef(call->getName());
+        }
         return true;
     }
 

@@ -725,9 +725,24 @@ QoreIRCallDirectInstruction* QoreIRBuilder::createCallDirect(const QoreFunction*
     inst->operands = args;
     // Check if any argument is a reference type (may be modified by callee)
     inst->has_ref_args = checkRefArgs(variant);
-    // Check if this is a self-recursive call (callee has same name as current function)
-    if (qf && func && func->name == qf->getName()) {
-        inst->is_self_recursive = true;
+    // Self-recursion check: compare QoreFunction pointer identity when
+    // available (e.g. AOT module compile flows populate
+    // `func->source_qf` via tryLowerFunction).  Falls back to base-name
+    // comparison when source_qf is unset (JIT / runtime closures that
+    // don't route through tryLowerFunction).  Pointer compare is the
+    // correct discriminator — base-name compare mis-flags cross-
+    // namespace same-name wrappers (e.g. `OMQ::foo` → `Util::foo`)
+    // as self-recursive and the LLVM emitter then issues a direct
+    // call to the caller's own fast entry, infinite-recursing at
+    // C++ level.
+    if (qf && func) {
+        if (func->source_qf) {
+            if (qf == func->source_qf) {
+                inst->is_self_recursive = true;
+            }
+        } else if (func->name == qf->getName()) {
+            inst->is_self_recursive = true;
+        }
     }
     return inst;
 }

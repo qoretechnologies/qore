@@ -54,7 +54,30 @@ static bool write_expr_func_call(AOTExprWriteCtx& ctx) {
     const AbstractQoreNode* node = ctx.expr.getInternalNode();
     if (auto* call = dynamic_cast<const FunctionCallNode*>(node)) {
         ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::FUNC_CALL));
-        ctx.writer.writeStringRef(call->getName());
+        // Emit the namespace-qualified name, not the bare base name.
+        // Without qualification, a caller in namespace `OMQ` whose body
+        // calls `Util::substitute_env_vars` serialized the same bare
+        // string `"substitute_env_vars"` the runtime reader resolved
+        // inside the current scope — which found `OMQ::substitute_env_vars`
+        // (the calling wrapper itself) → infinite recursion, stack
+        // overflow (observed live in `qrest -h` → `substitute_env_vars`
+        // / `QorusClientBase.qmod`).  Qualified emission pins the
+        // resolution to the same function the parser resolved at
+        // compile time.
+        const FunctionEntry* fe = call->getFunctionEntry();
+        if (fe && fe->getNamespace()) {
+            std::string qualified;
+            fe->getNamespace()->getPath(qualified);  // unanchored, e.g. "Util"
+            if (!qualified.empty()) {
+                qualified += "::";
+            }
+            qualified += fe->getName();
+            ctx.writer.writeStringRef(qualified.c_str());
+        } else {
+            // No resolved FE (rare — e.g. unresolved parse node) —
+            // fall back to the bare name.  Reader tolerates both.
+            ctx.writer.writeStringRef(call->getName());
+        }
         return true;
     }
     return false;
@@ -66,6 +89,10 @@ static QoreValue read_expr_func_call(AOTExprReadCtx& ctx) {
         return QoreValue();
     }
     qore_program_private* pp = qore_program_private::get(*ctx.pgm);
+    // `runtimeFindFunctionEntry` already routes `"Foo::bar"` through
+    // NamedScope (qualified) and bare names through flat lookup —
+    // perfect for the writer's new qualified-name emission and still
+    // correct for legacy bare-name blobs (pre-fix AOT artifacts).
     const FunctionEntry* fe = qore_root_ns_private::runtimeFindFunctionEntry(
         *pp->RootNS, func_name);
     if (!fe) {
