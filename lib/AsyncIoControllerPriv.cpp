@@ -244,6 +244,57 @@ void AsyncIoControllerPriv::cleanupAbandonedCommand(Command& cmd, ExceptionSink*
     // exiting in shutdown).
     switch (cmd.cmd) {
         case IoCommand::SubmitOp: {
+            // Dispatch a canceled onComplete / result-queue push BEFORE
+            // freeing refs so synchronous callers waiting on the op (e.g.
+            // FtpDataPollOperation::waitForCompletion, any submit-then-
+            // waitForCompletion pattern) aren't silently stranded.
+            // Without this, the submit_spop_obj is deref'd here but its
+            // onComplete handler is never invoked, and the caller blocks
+            // on its sync condition until its configured timeout (which
+            // can be unbounded for -1 timeout callers, causing permanent
+            // hangs).  Matches what doCancelIntern() does for in-flight
+            // ops that are already in the cache.
+            QoreHashNode* result = nullptr;
+            if (cmd.submit_spop_obj || cmd.submit_queue) {
+                ExceptionSink hash_xsink;
+                ReferenceHolder<QoreHashNode> r(
+                    new QoreHashNode(hashdeclSocketPollResultInfo, &hash_xsink),
+                    xsink);
+                if (hash_xsink) {
+                    xsink->assimilate(hash_xsink);
+                } else {
+                    if (cmd.submit_sock_obj) {
+                        r->setKeyValue("sock",
+                            cmd.submit_sock_obj->refSelf(), xsink);
+                    }
+                    if (cmd.submit_spop_obj) {
+                        r->setKeyValue("spop",
+                            cmd.submit_spop_obj->refSelf(), xsink);
+                    }
+                    r->setKeyValue("canceled", true, xsink);
+                    if (cmd.submit_other) {
+                        r->setKeyValue("other",
+                            cmd.submit_other->refSelf(), xsink);
+                    }
+                    result = r.release();
+                }
+            }
+            if (result) {
+                // deliverResult takes ownership of spop_obj ref (ref'd
+                // here) and result; we null cmd.submit_spop_obj so the
+                // cleanup below doesn't double-deref.
+                QoreObject* spop_obj = cmd.submit_spop_obj;
+                if (spop_obj) {
+                    spop_obj->ref();
+                }
+                deliverResult(cmd.submit_queue, spop_obj,
+                    cmd.submit_has_qore_on_complete, result, xsink);
+                // deliverResult consumed queue ref when spop_obj is null,
+                // or kept queue if spop_obj was used for onComplete.
+                // In both cases it drops the original queue ref — clear
+                // the cmd field to avoid double-deref.
+                cmd.submit_queue = nullptr;
+            }
             if (cmd.submit_sock_obj) {
                 cmd.submit_sock_obj->deref(xsink);
                 cmd.submit_sock_obj = nullptr;
