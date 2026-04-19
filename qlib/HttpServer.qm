@@ -2383,13 +2383,16 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             smap{nsock} = remove smap{sock};
         }
 
-        # Add the listener to the async I/O controller
-        # Must be done AFTER registration to avoid race condition
-        asyncIo.addListener(l, asyncTarget, l.isSsl(), l.getSslCertificateObject(),
-            l.getSslPrivateKeyObject(), l.getHttpVersion(), l.getSslVerifyFlags(),
-            l.getSslAcceptAllCerts(), l.getGetRemoteCerts(), l.getMaxRequestBodySize(), l);
-
-        # Auto-create QUIC listener for TLS listeners
+        # Auto-create the paired QUIC listener and populate the per-listener
+        # Alt-Svc entry BEFORE the TCP listener starts accepting connections.
+        # If we did this after asyncIo.addListener(), there would be a race
+        # window where a client could connect, send a request, and receive a
+        # response that omits the Alt-Svc header (because listener_alt_svc
+        # hasn't been populated yet).  This was observed intermittently in
+        # HttpServerHttp3Integration.qtest::testHttpClientHttp3Disabled: a
+        # fast client completed the handshake + request before the QUIC
+        # setup + updateAltSvcHeader() sequence finished on the server
+        # thread.
         if (enable_h3 && info.cert && info.key && (info.enable_h3 ?? True)) {
             try {
                 # Use the actual listener socket info to get the resolved address
@@ -2418,6 +2421,13 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                     id, ex.err, ex.desc);
             }
         }
+
+        # Add the TCP listener to the async I/O controller — start accepting.
+        # Done AFTER QUIC + Alt-Svc setup so the first TCP response already
+        # carries the Alt-Svc header (see comment above).
+        asyncIo.addListener(l, asyncTarget, l.isSsl(), l.getSslCertificateObject(),
+            l.getSslPrivateKeyObject(), l.getHttpVersion(), l.getSslVerifyFlags(),
+            l.getSslAcceptAllCerts(), l.getGetRemoteCerts(), l.getMaxRequestBodySize(), l);
 
         return l;
     }
