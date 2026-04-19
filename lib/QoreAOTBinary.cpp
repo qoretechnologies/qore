@@ -6455,6 +6455,13 @@ bool QoreAOTBinaryDeserializer::deserializeMethods(std::string& error) {
             // Collect BCA (Base Class Constructor Arguments) raw blob data
             // for deferred deserialization. EXPR_TREE blobs may reference
             // static methods of the same class that haven't been added yet.
+            //
+            // If `skip_class` is true, `mvb` will be deleted below without
+            // being handed to `addUserMethod` — so even though we must
+            // still advance `ptr` past the BCA bytes (stream format is
+            // fixed), we must NOT record a pbca entry whose `ucv` points
+            // at the about-to-be-freed variant.  We read-and-discard
+            // instead to preserve the post-loop stream position.
             if (is_constructor && ptr < end) {
                 uint8_t has_bca = QoreAOTBinaryReader::readU8(ptr);
                 if (has_bca) {
@@ -6513,7 +6520,12 @@ bool QoreAOTBinaryDeserializer::deserializeMethods(std::string& error) {
                             }
                             pbca.entries.push_back(std::move(entry));
                         }
-                        pending_bcas.push_back(std::move(pbca));
+                        // Only record the pbca when mvb will survive the
+                        // method-add step below.  If skip_class fires, mvb
+                        // is freed and pbca.ucv would dangle.
+                        if (!skip_class) {
+                            pending_bcas.push_back(std::move(pbca));
+                        }
                     }
                 }
             }
