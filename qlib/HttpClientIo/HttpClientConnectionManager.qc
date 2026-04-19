@@ -1440,16 +1440,46 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
                 }
                 return h2conn;
             }
-            # Both already failed but neither is ready — fall through to poll
+            # Race: H2 setClosed() can fire between submit and registerReadyNotifier,
+            # so race_notifier gets queued only on H3.  If H2 failed with
+            # SOCKET-CONNECT-ERROR (TCP refused), the port is definitively closed
+            # — H3 over UDP won't recover.  Skip the poll (which would wait up to
+            # connect_timeout for H3's own timeout to expire) and fall straight
+            # through to error handling so asyncModeConnectionRefusedTest
+            # fast-fails in ~100ms instead of 10s.
+            if (!h2_pending && !h2conn.isReady()) {
+                *hash<auto> h2_err_early = h2conn.getPollOperation().getError();
+                if (h2_err_early.err == "SOCKET-CONNECT-ERROR") {
+                    log(LoggerLevel::DEBUG,
+                        "happy eyeballs: H2 failed fast with SOCKET-CONNECT-ERROR for %s,"
+                        " aborting H3", key);
+                    try { controller.cancel(h3conn.getSocket()); } catch () {}
+                    try { h3conn.close(); } catch () {}
+                    try { h2conn.close(); } catch () {}
+                    string desc_fast = sprintf("could not connect to %s: %s", key,
+                        h2_err_early.desc);
+                    throw "SOCKET-CONNECT-ERROR", desc_fast;
+                }
+            }
         }
 
-        timeout remaining = opts.connect_timeout - HappyEyeballsStaggerMs;
-        if (remaining <= 0ms) {
-            remaining = opts.connect_timeout;
+        # If BOTH H3 and H2 already failed (neither pending, neither ready),
+        # skip the poll entirely — race_notifier will never fire, and blocking
+        # up to connect_timeout here would be wasted time.
+        bool both_already_closed = !h3_pending && !h2_pending
+            && !h3conn.isReady() && !h2conn.isReady();
+        if (!both_already_closed) {
+            timeout remaining = opts.connect_timeout - HappyEyeballsStaggerMs;
+            if (remaining <= 0ms) {
+                remaining = opts.connect_timeout;
+            }
+            Socket::poll((<SocketPollInfo>{"events": SOCK_POLLIN, "socket": race_notifier},),
+                remaining);
+            race_notifier.acknowledge();
+        } else {
+            log(LoggerLevel::DEBUG,
+                "happy eyeballs: both H3 and H2 already closed for %s, skipping poll", key);
         }
-        Socket::poll((<SocketPollInfo>{"events": SOCK_POLLIN, "socket": race_notifier},),
-            remaining);
-        race_notifier.acknowledge();
 
         # Determine winner
         if (h3conn.isReady()) {
