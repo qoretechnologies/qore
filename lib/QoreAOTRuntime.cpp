@@ -4114,6 +4114,13 @@ static void registerAOTFunctionsFromSlotMaps(
             num_funcs, (int)func_map.size(), init_count);
     }
 
+    // Per-blob cache: slot-map entries are emitted in class-grouped order,
+    // so consecutive entries repeatedly hit the same class path.  Cache the
+    // last resolved class so ~5 entries per class skip the runtimeFindClass
+    // namespace walk.
+    std::string last_class_name;
+    const QoreClass* last_qc = nullptr;
+
     for (uint32_t f = 0; f < num_funcs; ++f) {
         const uint8_t* entry_start = ptr;
         // Read entry size prefix to know where next entry should end
@@ -4195,10 +4202,17 @@ static void registerAOTFunctionsFromSlotMaps(
             // methods to produce empty objects.
             bool skip_special_method = false;
 
-            qore_program_private* pp = qore_program_private::get(*pgm);
-            const qore_ns_private* found_ns = nullptr;
-            const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
-                *pp->RootNS, class_name.c_str(), found_ns);
+            const QoreClass* qc;
+            if (last_qc && class_name == last_class_name) {
+                qc = last_qc;
+            } else {
+                qore_program_private* pp = qore_program_private::get(*pgm);
+                const qore_ns_private* found_ns = nullptr;
+                qc = qore_root_ns_private::runtimeFindClass(
+                    *pp->RootNS, class_name.c_str(), found_ns);
+                last_qc = qc;
+                last_class_name = class_name;
+            }
             printd(5, "AOT slot-reg: method '%s'::'%s' class=%p\n",
                 class_name.c_str(), method_name.c_str(), (void*)qc);
             if (qc && !skip_special_method) {
