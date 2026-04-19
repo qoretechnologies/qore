@@ -9,6 +9,7 @@
 #
 # QORE_EXECUTABLE - qore interpret executable
 # QORE_QPP_EXECUTABLE - qore qpp executable
+# QORE_QCC_EXECUTABLE - qore AOT compiler (qcc) executable
 
 
 if (CMAKE_VERSION VERSION_LESS 2.8.3)
@@ -72,6 +73,9 @@ if (CMAKE_CURRENT_LIST_DIR STREQUAL _qore_build_cmake_dir)
     else()
         set(QORE_QPP_EXECUTABLE "@CMAKE_BINARY_DIR@/qpp${CMAKE_EXECUTABLE_SUFFIX}")
     endif()
+    if(NOT DEFINED QORE_QCC_EXECUTABLE)
+        set(QORE_QCC_EXECUTABLE "@CMAKE_BINARY_DIR@/qcc${CMAKE_EXECUTABLE_SUFFIX}")
+    endif()
     set(QORE_QDX_EXECUTABLE "@CMAKE_SOURCE_DIR@/doxygen/qdx")
     set(QORE_QM_METADATA_EXECUTABLE "@CMAKE_SOURCE_DIR@/bin/qore-extract-qm-metadata")
     if(DEFINED QJAR_EXECUTABLE)
@@ -88,6 +92,10 @@ else()
         set(QORE_QPP_EXECUTABLE ${QPP_EXECUTABLE})
     else()
         set(QORE_QPP_EXECUTABLE @CMAKE_INSTALL_FULL_BINDIR@/qpp${CMAKE_EXECUTABLE_SUFFIX})
+    endif()
+    # allow the qcc executable to be overridden (for example, when cross-compiling)
+    if(NOT DEFINED QORE_QCC_EXECUTABLE)
+        set(QORE_QCC_EXECUTABLE @CMAKE_INSTALL_FULL_BINDIR@/qcc${CMAKE_EXECUTABLE_SUFFIX})
     endif()
     set(QORE_QDX_EXECUTABLE @CMAKE_INSTALL_FULL_BINDIR@/qdx)
     set(QORE_QM_METADATA_EXECUTABLE @CMAKE_INSTALL_FULL_BINDIR@/qore-extract-qm-metadata)
