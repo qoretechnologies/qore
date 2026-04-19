@@ -192,7 +192,18 @@ class FtpServer {
                         continue;
                     }
                 }
-                dcnt.waitForZero();
+                # Poll for data-accept completion; abort on shutdown so
+                # serv.shutdown() doesn't hang when the client never
+                # opens the data connection (e.g. after a failed put).
+                while (dcnt.getCount() > 0) {
+                    if (quit) {
+                        dataquit = True;
+                    }
+                    dcnt.waitForZero(PollInterval);
+                }
+                if (quit) {
+                    return;
+                }
                 ftpSend(ns, 150, "Opening BINARY mode data connection for %s.", file);
 
                 if (doBroken("stor", data))
@@ -217,7 +228,15 @@ class FtpServer {
                     ftpSend(ns, 425, "Use EPASV first.");
                     continue;
                 }
-                dcnt.waitForZero();
+                while (dcnt.getCount() > 0) {
+                    if (quit) {
+                        dataquit = True;
+                    }
+                    dcnt.waitForZero(PollInterval);
+                }
+                if (quit) {
+                    return;
+                }
                 ftpSend(ns, 150, "Opening BINARY mode data connection for %s.", file);
 
                 if (doBroken("retr", data))
@@ -257,7 +276,15 @@ class FtpServer {
                     ftpSend(ns, 425, "Use EPASV first.");
                     continue;
                 }
-                dcnt.waitForZero();
+                while (dcnt.getCount() > 0) {
+                    if (quit) {
+                        dataquit = True;
+                    }
+                    dcnt.waitForZero(PollInterval);
+                }
+                if (quit) {
+                    return;
+                }
                 ftpSend(ns, 150, "Here comes the directory listing.");
 
                 if (doBroken("nlst", data))
