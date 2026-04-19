@@ -195,6 +195,15 @@ static std::vector<std::string> stub_files;
 // AOT-compiled sources honor the same `%ifdef` / `%ifndef` surface
 // the runtime sees.  Repeatable; applied in declaration order.
 static std::vector<std::string> parse_defines;
+// Phase 4 slice 11f: --parse-option=NAME OR's a `PO_*` flag into the
+// compile program's parse options.  Mirrors the runtime
+// `qpgm->parseSetParseOptions(QORUS_PARSE_OPTIONS)` pattern Qorus
+// main.cpp files use to extend the initial `new QoreProgram(po)` set
+// (e.g. PO_ALLOW_INJECTION so cross-module `Program::loadApplyTo*`
+// calls type-check at parse time).  Without this, methods whose
+// `[dom=...]` mask names PO_ALLOW_* report "parse options do not
+// allow access" during AOT compile.  Repeatable.
+static std::vector<std::string> parse_option_flags;
 // Phase 4 slice 6: --from-objects signals aggregator mode — the
 // positional inputs are per-file `.qo` objects (produced by
 // `qcc -c --context=DIR <file>`) that get linked together plus a
@@ -273,6 +282,12 @@ static void print_usage(const char* prog) {
            "                         runtime (namespaces, injected functions) that\n"
            "                         target sources reference by bare name.  Repeatable;\n"
            "                         parsed in declaration order before targets.\n");
+    printf("      --parse-option=NAME  OR a `PO_*` flag into the compile program's parse\n"
+           "                         options (e.g. PO_ALLOW_INJECTION, PO_NO_CHILD_PO_RESTRICTIONS).\n"
+           "                         Mirrors the runtime `qpgm->parseSetParseOptions(...)` calls\n"
+           "                         Qorus main.cpp files issue so method-domain checks line up\n"
+           "                         between AOT and runtime paths.  Repeatable; see the name\n"
+           "                         lookup table in QoreAOT.cpp for supported flags.\n");
     printf("      --define=NAME[=VAL]  Set a parser define (NAME=VAL, default VAL=True)\n"
            "                         applied via QoreProgram::parseDefine before any source\n"
            "                         parses.  Mirrors the runtime `qpgm->parseDefine(...)`\n"
@@ -351,6 +366,7 @@ static struct option long_options[] = {
     {"stub",              required_argument, nullptr, 0x101},
     {"depfile",           required_argument, nullptr, 0x102},
     {"define",            required_argument, nullptr, 0x103},
+    {"parse-option",      required_argument, nullptr, 0x104},
     {"from-objects",      no_argument,       nullptr, 'F'},
     {"archive",           no_argument,       nullptr, 'a'},
     {"verbose",           no_argument,       nullptr, 'v'},
@@ -434,6 +450,9 @@ static int parse_options_cmdline(int argc, char** argv) {
                 break;
             case 0x103:  // --define
                 parse_defines.emplace_back(optarg);
+                break;
+            case 0x104:  // --parse-option
+                parse_option_flags.emplace_back(optarg);
                 break;
             case 'F':
                 from_objects = true;
@@ -756,7 +775,8 @@ int main(int argc, char** argv) {
         bool ok = QoreAOT::compileScriptFilesBatch(
             batch_sources, batch_output_dir, PO_DEFAULT, error,
             opt_level, target_triple, include_source,
-            load_modules, stub_files, parse_defines);
+            load_modules, stub_files, parse_defines,
+            parse_option_flags);
         if (!ok) {
             fprintf(stderr, "error: %s\n", error.c_str());
             qore_cleanup();

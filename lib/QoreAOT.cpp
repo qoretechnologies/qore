@@ -5625,6 +5625,44 @@ static bool parseStubFiles(QoreProgram* pgm,
     return true;
 }
 
+// Phase 4 slice 11f: translate a `PO_*` flag name into its numeric
+// value.  Returns true when @p name matches a known flag; @p out is
+// set to the numeric value.  Covers the subset Qorus AOT needs; add
+// entries here as new names become load-bearing.
+static bool resolveParseOptionFlag(const std::string& name,
+        QoreParseOptions& out) {
+    static const struct {
+        const char* name;
+        QoreParseOptions value;
+    } kTable[] = {
+        // Broad bundles.
+        {"PO_MODERN",                     PO_MODERN},
+        {"PO_NEW_STYLE",                  PO_NEW_STYLE},
+        // Individual flags Qorus uses (QORUS_PARSE_OPTIONS + the
+        // initial `new QoreProgram(po)` set in each main.cpp).
+        {"PO_REQUIRE_OUR",                PO_REQUIRE_OUR},
+        {"PO_NO_CHILD_PO_RESTRICTIONS",   PO_NO_CHILD_PO_RESTRICTIONS},
+        {"PO_ALLOW_INJECTION",            PO_ALLOW_INJECTION},
+        {"PO_ALLOW_DEBUGGER",             PO_ALLOW_DEBUGGER},
+        {"PO_ALLOW_WEAK_REFERENCES",      PO_ALLOW_WEAK_REFERENCES},
+        {"PO_REQUIRE_TYPES",              PO_REQUIRE_TYPES},
+        {"PO_STRICT_ARGS",                PO_STRICT_ARGS},
+        {"PO_STRONG_ENCAPSULATION",       PO_STRONG_ENCAPSULATION},
+        {"PO_ALLOW_BARE_REFS",            PO_ALLOW_BARE_REFS},
+        {"PO_ASSUME_LOCAL",               PO_ASSUME_LOCAL},
+        {"PO_BROKEN_NARROWED_TYPES",      PO_BROKEN_NARROWED_TYPES},
+        {"PO_BROKEN_LIST_PARSING",        PO_BROKEN_LIST_PARSING},
+        {"PO_NO_MODULES",                 PO_NO_MODULES},
+    };
+    for (const auto& e : kTable) {
+        if (name == e.name) {
+            out = e.value;
+            return true;
+        }
+    }
+    return false;
+}
+
 bool QoreAOT::compileScriptFilesBatch(
         const std::vector<std::string>& target_files,
         const std::string& output_dir,
@@ -5635,7 +5673,8 @@ bool QoreAOT::compileScriptFilesBatch(
         bool include_source,
         const std::vector<std::string>& require_modules,
         const std::vector<std::string>& stub_files,
-        const std::vector<std::string>& parse_defines) {
+        const std::vector<std::string>& parse_defines,
+        const std::vector<std::string>& parse_option_flags) {
     if (target_files.empty()) {
         error = "compileScriptFilesBatch: target_files is empty";
         return false;
@@ -5696,6 +5735,19 @@ bool QoreAOT::compileScriptFilesBatch(
 
     // Single shared QoreProgram — parse every source into it.
     QoreParseOptions po = parse_options;
+    // Phase 4 slice 11f: apply `--parse-option=NAME` additions
+    // before QoreProgram construction so method-domain checks
+    // (e.g. PO_ALLOW_INJECTION-gated `Program::loadApplyTo*`)
+    // align with what the runtime host installs via
+    // `qpgm->parseSetParseOptions(...)`.
+    for (const std::string& flag : parse_option_flags) {
+        QoreParseOptions add;
+        if (!resolveParseOptionFlag(flag, add)) {
+            error = "unknown --parse-option name: '" + flag + "'";
+            return false;
+        }
+        po |= add;
+    }
     ExceptionSink xsink;
     ExceptionSink wsink;
     QoreProgramHelper qpgm(po, xsink);
