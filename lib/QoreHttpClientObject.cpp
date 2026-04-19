@@ -7712,8 +7712,11 @@ public:
     }
 
     ~HttpClientConnMgrPollOp() override {
+        // Refcount is 0 at dtor — no other thread can hold a reference, so
+        // we skip op_lock here.  Acquiring it would be wasted work and also
+        // risk asserting under a debug mutex if the lock is ever promoted.
         ExceptionSink xsink;
-        clearPending(&xsink);
+        clearPendingUnlocked(&xsink);
         if (future) {
             future->deref(&xsink);
             future = nullptr;
@@ -7740,8 +7743,12 @@ public:
         pending_headers, pending_body, pending_promise refs were consumed by
         the WAITING_CONNECT constructor; they are owned by the poll op until
         cleared here.
+
+        @par Lock contract
+        Must be called with @ref op_lock held.  See op_lock comment for the
+        race this closes.
     */
-    void clearPending(ExceptionSink* xsink) {
+    void clearPendingUnlocked(ExceptionSink* xsink) {
         if (pending_conn && pending_mgr) {
             pending_mgr->releaseConnection(pending_conn);
         }
@@ -7772,6 +7779,17 @@ public:
     }
 
     QoreHashNode* continuePoll(ExceptionSink* xsink) override {
+        // Serialize against concurrent abort().  The I/O controller's
+        // Phase 2 uses a raw @c spop_base pointer captured during Phase 1,
+        // so @c this stays alive until Phase 3 — but another thread can
+        // still invoke abort() on us (e.g., via DelegatingPollOperation
+        // dispatched abort from the controller's shutdown or an application
+        // cancel path that routes evalMethod through a worker).  Without
+        // this lock a racing abort nulls @ref pending_conn between
+        // continueWaitingConnect's isReady() check and its pending_conn
+        // deref — ASAN-confirmed SEGV at pending_conn=NULL in
+        // continueWaitingConnect under QORE_IO_THREADS>=2.
+        AutoLocker al(op_lock);
         // Check if HTTPClient has been deleted (matches legacy semantics
         // where continuePoll on a poll op with a deleted client throws).
         if (client_obj && !client_obj->isValid()) {
@@ -7788,7 +7806,7 @@ public:
                 pending_conn = nullptr;
             }
             pending_mgr = nullptr;
-            clearPending(xsink);
+            clearPendingUnlocked(xsink);
             return nullptr;
         }
 
@@ -7918,7 +7936,7 @@ public:
             xsink->raiseException(err_str, "%s", desc_str);
             done = true;
             phase = Phase::DONE;
-            clearPending(xsink);
+            clearPendingUnlocked(xsink);
             return nullptr;
         }
 
@@ -7931,7 +7949,7 @@ public:
                 "in a decided state");
             done = true;
             phase = Phase::DONE;
-            clearPending(xsink);
+            clearPendingUnlocked(xsink);
             return nullptr;
         }
 
@@ -7956,7 +7974,7 @@ public:
             // NOT release the stream reservation — clearPending does that.
             done = true;
             phase = Phase::DONE;
-            clearPending(xsink);
+            clearPendingUnlocked(xsink);
             return nullptr;
         }
 
@@ -7969,15 +7987,16 @@ public:
         pending_conn->deref(xsink);
         pending_conn = nullptr;
         pending_mgr = nullptr;
-        clearPending(xsink);
+        clearPendingUnlocked(xsink);
         phase = Phase::WAITING_RESPONSE;
         return getSocketPollInfoHash(xsink, SOCK_POLLIN);
     }
 
     void abort(ExceptionSink* xsink) override {
+        AutoLocker al(op_lock);
         done = true;
         phase = Phase::DONE;
-        clearPending(xsink);
+        clearPendingUnlocked(xsink);
         cleanup(xsink);
     }
 
@@ -8072,6 +8091,15 @@ private:
     QoreHashNode* pending_headers = nullptr;
     BinaryNode* pending_body = nullptr;
     QorePromise* pending_promise = nullptr;
+
+    //! Serializes continuePoll() vs abort()/clearPendingUnlocked() so a
+    //! concurrent cancel can't null pending_* fields mid-continuePoll.  The
+    //! public abort() method is reachable on any thread via
+    //! evalMethod("abort") dispatch (e.g., from the I/O controller's
+    //! shutdown/cancel worker path); continuePoll() runs on the owning I/O
+    //! thread.  Uncontended in the common case — the lock serialises only
+    //! cross-thread cancels against in-flight polls on the same op.
+    mutable QoreThreadLock op_lock;
 };
 
 QoreObject* qore_httpclient_priv::startPollSendRecvConnMgr(ExceptionSink* xsink, QoreObject* self,
@@ -8112,6 +8140,27 @@ QoreObject* qore_httpclient_priv::startPollSendRecvConnMgr(ExceptionSink* xsink,
     if (!conn || *xsink) {
         return nullptr;
     }
+    // Hold a strong ref for the duration of this function.  The pool holds
+    // its own ref, but the I/O thread may fire onConnectionClosed → deref
+    // at any time — even between isClosed()/isReady() calls and
+    // registerReadyNotifier — so without this extra ref the connection can
+    // be freed under us.  Mirrors the comment block at
+    // HttpClientConnectionManagerBase::request() for the sync path.
+    //
+    // The ref is EXPLICITLY RELEASED (not deref'd) into the poll op via
+    // conn_local_ref_held==false once ownership transfers on each branch:
+    // fast-path synchronous submit drops the ref at the end; slow-path
+    // WAITING_CONNECT transfers the ref to the poll op's pending_conn slot.
+    bool conn_local_ref_held = true;
+    conn->ref();
+    auto release_local_conn_ref = [&]() {
+        if (conn_local_ref_held) {
+            ExceptionSink rel_xsink;
+            conn->deref(&rel_xsink);
+            rel_xsink.clear();
+            conn_local_ref_held = false;
+        }
+    };
 
     // Create EventNotifier + Promise + Future.  The notifier is used for
     // BOTH connection-ready signaling (WAITING_CONNECT phase) and response
@@ -8120,6 +8169,7 @@ QoreObject* qore_httpclient_priv::startPollSendRecvConnMgr(ExceptionSink* xsink,
         new QoreEventNotifier(xsink), xsink);
     if (*xsink || !notifier_holder->isValid()) {
         mgr.releaseConnection(conn);
+        release_local_conn_ref();
         return nullptr;
     }
     QoreEventNotifier* notifier_raw = *notifier_holder;
@@ -8129,6 +8179,7 @@ QoreObject* qore_httpclient_priv::startPollSendRecvConnMgr(ExceptionSink* xsink,
     ReferenceHolder<QoreFuture> future_holder(promise_holder->getFuture(xsink), xsink);
     if (*xsink) {
         mgr.releaseConnection(conn);
+        release_local_conn_ref();
         return nullptr;
     }
 
@@ -8160,6 +8211,7 @@ QoreObject* qore_httpclient_priv::startPollSendRecvConnMgr(ExceptionSink* xsink,
         }
         xsink->raiseException(err_str, "%s", desc_str);
         mgr.closeAndEvict(conn, xsink);
+        release_local_conn_ref();
         return nullptr;
     }
 
@@ -8175,6 +8227,7 @@ QoreObject* qore_httpclient_priv::startPollSendRecvConnMgr(ExceptionSink* xsink,
             *nh, data, size, action, xsink);
         if (*xsink || stream_id < 0) {
             mgr.releaseConnection(conn);
+            release_local_conn_ref();
             return nullptr;
         }
         poller = new HttpClientConnMgrPollOp(future_raw, notifier_for_op,
@@ -8191,9 +8244,14 @@ QoreObject* qore_httpclient_priv::startPollSendRecvConnMgr(ExceptionSink* xsink,
         bool queued = conn->registerReadyNotifier(notifier_raw, *notifier_obj);
         if (!queued) {
             // Race: the connection decided state between our check and the
-            // register call.  Drop our extra refs and retry the decision.
-            notifier_raw->deref(xsink);
-            notifier_obj->deref(xsink);
+            // register call.  registerReadyNotifier() consumes the refs we
+            // passed in regardless of outcome (on failure the priv derefs
+            // them internally before returning false — see
+            // AbstractHttpPollConnectionPriv::registerReadyNotifier).
+            // Do NOT deref again here: that was a double-deref, observed as
+            // a PromiseNotifierAction ctor SIGABRT in concurrent-submit
+            // under QORE_IO_THREADS>=2 when this slow path raced with
+            // onConnectionReady.
             if (conn->isClosed()) {
                 ReferenceHolder<QoreHashNode> err_info(
                     conn->getReferencedErrorInfo(), xsink);
@@ -8211,6 +8269,7 @@ QoreObject* qore_httpclient_priv::startPollSendRecvConnMgr(ExceptionSink* xsink,
                 }
                 xsink->raiseException(err_str, "%s", desc_str);
                 mgr.closeAndEvict(conn, xsink);
+                release_local_conn_ref();
                 return nullptr;
             }
             // READY now — fall into the fast-path synchronous submit.
@@ -8220,6 +8279,7 @@ QoreObject* qore_httpclient_priv::startPollSendRecvConnMgr(ExceptionSink* xsink,
                 msgpath, *nh, data, size, action, xsink);
             if (*xsink || stream_id < 0) {
                 mgr.releaseConnection(conn);
+                release_local_conn_ref();
                 return nullptr;
             }
             poller = new HttpClientConnMgrPollOp(future_raw, notifier_for_op,
@@ -8243,6 +8303,13 @@ QoreObject* qore_httpclient_priv::startPollSendRecvConnMgr(ExceptionSink* xsink,
                 future_raw, notifier_for_op, this, self);
         }
     }
+
+    // Release our local ref on the connection now that ownership has
+    // transferred to the poll op (WAITING_CONNECT ctor did pending_conn->ref())
+    // or the request has been submitted (fast paths above).  Must run before
+    // returning — doing it after rv.release() is also fine, but we drop it
+    // here to minimise the window where we still hold it unnecessarily.
+    release_local_conn_ref();
 
     // Wrap in SocketPollOperation QoreObject
     SocketPollOperationBase* p = *poller;
@@ -8366,9 +8433,10 @@ QoreObject* qore_httpclient_priv::startPollConnectConnMgr(ExceptionSink* xsink, 
     notifier_obj->ref();
     bool queued = conn->registerReadyNotifier(notifier_raw, *notifier_obj);
     if (!queued) {
-        // Already decided (ready or failed) between our check and registration
-        notifier_raw->deref(xsink);
-        notifier_obj->deref(xsink);
+        // Already decided (ready or failed) between our check and registration.
+        // registerReadyNotifier() consumes the refs we passed in regardless of
+        // outcome — see AbstractHttpPollConnectionPriv::registerReadyNotifier.
+        // Do NOT deref again here.
         mgr.releaseConnection(conn);
         if (conn->isReady()) {
             // Ready now — create a poll op that completes on first continuePoll
