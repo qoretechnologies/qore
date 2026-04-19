@@ -1541,9 +1541,9 @@ const QoreTypeInfo* QoreAOTTypeResolver::resolve(const char* path, std::string& 
         return nullptr;  // null/empty = no type constraint (auto)
     }
 
-    // Check cache first
-    auto it = cache.find(path);
-    if (it != cache.end()) {
+    // Check cache first (may be owned or shared across sibling sessions)
+    auto it = cache_ptr->find(path);
+    if (it != cache_ptr->end()) {
         return it->second;
     }
 
@@ -1556,7 +1556,7 @@ const QoreTypeInfo* QoreAOTTypeResolver::resolve(const char* path, std::string& 
     }
 
     if (result) {
-        cache[path] = result;
+        (*cache_ptr)[path] = result;
         return result;
     }
 
@@ -4448,6 +4448,15 @@ bool QoreAOTBinaryDeserializer::deserializeFunctionsAndMethods(std::string& erro
 uint64_t g_aot_sum_funcs_us = 0;
 uint64_t g_aot_sum_methods_us = 0;
 
+// Deeper breakdown inside deserializeMethods — three sub-phases
+// per variant: (a) allocate MethodVariantBase + dynamic_cast,
+// (b) readAndSetupVariantSignature (type resolve + signature
+// setup + default value read), (c) BCA read + addUserMethod.
+uint64_t g_aot_dm_alloc_us = 0;
+uint64_t g_aot_dm_sig_us = 0;
+uint64_t g_aot_dm_add_us = 0;
+uint64_t g_aot_dm_variants = 0;
+
 // Phase-split 2c.  Commits all newly deserialized classes in this
 // session.  Requires every class's method map to already be
 // populated — in batch mode the MultiDeserializer ensures 2b has
@@ -6407,6 +6416,19 @@ bool QoreAOTBinaryDeserializer::deserializeMethods(std::string& error) {
 
     uint32_t count = QoreAOTBinaryReader::readU32(ptr);
 
+    // Fine-grained sub-timing for the per-variant inner loop.
+    // Gated by QORE_AOT_PHASE_TIMING; totals across all sessions
+    // go into globals and are printed in the MultiDeserializer's
+    // destructor.
+    const bool time_on = getenv("QORE_AOT_PHASE_TIMING") != nullptr;
+    auto now_us = [] () -> uint64_t {
+        struct timespec ts;
+        clock_gettime(CLOCK_MONOTONIC, &ts);
+        return (uint64_t)ts.tv_sec * 1000000ULL + ts.tv_nsec / 1000ULL;
+    };
+    uint64_t local_alloc_us = 0, local_sig_us = 0, local_add_us = 0;
+    uint64_t local_variants = 0;
+
     for (uint32_t i = 0; i < count; ++i) {
         uint32_t class_idx = QoreAOTBinaryReader::readU32(ptr);
         const char* method_name = reader.readStringRef(ptr);
@@ -6438,6 +6460,7 @@ bool QoreAOTBinaryDeserializer::deserializeMethods(std::string& error) {
             bool is_destructor = method_name && strcmp(method_name, "destructor") == 0;
             bool is_copy = method_name && strcmp(method_name, "copy") == 0;
 
+            uint64_t t_alloc0 = time_on ? now_us() : 0;
             MethodVariantBase* mvb;
             if (is_constructor) {
                 mvb = new UserConstructorVariant(
@@ -6460,11 +6483,19 @@ bool QoreAOTBinaryDeserializer::deserializeMethods(std::string& error) {
             bool needs_extra_args_flag = false;
             UserVariantBase* umv = dynamic_cast<UserVariantBase*>(mvb);
             assert(umv);
+            uint64_t t_sig0 = time_on ? now_us() : 0;
+            if (time_on) {
+                local_alloc_us += t_sig0 - t_alloc0;
+            }
             if (!readAndSetupVariantSignature(reader, type_resolver, pgm, ptr, end,
                     umv, sig_has_ellipsis, needs_extra_args_flag, error, qc)) {
                 delete mvb;
                 return false;
             }
+            if (time_on) {
+                local_sig_us += now_us() - t_sig0;
+            }
+            local_variants++;
 
             // See deserializeFunctions counterpart above: the flag is
             // independent of signature-level ellipsis.  Separating the
@@ -6565,7 +6596,11 @@ bool QoreAOTBinaryDeserializer::deserializeMethods(std::string& error) {
             // method which checks signature.hasVarargs() directly
 
             // Add method to class
+            uint64_t t_add0 = time_on ? now_us() : 0;
             qore_class_private::addUserMethod(*qc, method_name, mvb, is_static != 0);
+            if (time_on) {
+                local_add_us += now_us() - t_add0;
+            }
         }
 
         printd(5, "AOT deser: %s method '%s::%s' (%s) with %d variant(s)\n",
@@ -6573,6 +6608,12 @@ bool QoreAOTBinaryDeserializer::deserializeMethods(std::string& error) {
             qc->getName(), method_name, is_static ? "static" : "instance", num_variants);
     }
 
+    if (time_on) {
+        g_aot_dm_alloc_us += local_alloc_us;
+        g_aot_dm_sig_us   += local_sig_us;
+        g_aot_dm_add_us   += local_add_us;
+        g_aot_dm_variants += local_variants;
+    }
     return true;
 }
 

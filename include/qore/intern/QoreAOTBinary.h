@@ -521,9 +521,23 @@ public:
 };
 
 //! Type resolver: maps type path strings back to const QoreTypeInfo* pointers at runtime
+/** In batch mode (multiple AOT blobs registered into one Program),
+    every session's methods reference the same builtin types (`string`,
+    `*hash<auto>`, etc.) — without a shared cache, each session redoes
+    the linear-scan against the 60-entry builtin table plus the
+    namespace-walk for class types.  On qwf (132 sessions, ~3.3M param
+    type lookups) this is ~77% of `deserializeMethods`.
+
+    `QoreAOTBinaryMultiDeserializer` creates one cache map and hands
+    its pointer to every session via `setSharedCache()`.  Each
+    session's resolve() then reads/writes the same map, so each path
+    is looked up at most once per batch. */
 class QoreAOTTypeResolver {
+    using cache_t = std::unordered_map<std::string, const QoreTypeInfo*>;
+
     QoreProgram* pgm;
-    std::unordered_map<std::string, const QoreTypeInfo*> cache;
+    cache_t owned_cache;
+    cache_t* cache_ptr = &owned_cache;  // default: own our own cache
 
 public:
     explicit QoreAOTTypeResolver(QoreProgram* pgm) : pgm(pgm) {}
@@ -534,6 +548,10 @@ public:
         @return the resolved type, or nullptr on failure
     */
     const QoreTypeInfo* resolve(const char* path, std::string& error);
+
+    //! Swap in a caller-owned cache (for cross-session sharing).
+    //! The caller must keep the map alive for the resolver's lifetime.
+    void setSharedCache(cache_t* shared) { cache_ptr = shared ? shared : &owned_cache; }
 
 private:
     const QoreTypeInfo* resolveBuiltin(const char* path);
@@ -1260,6 +1278,18 @@ public:
     bool openAndDeserializeShells(QoreProgram* in_pgm, const uint8_t* data,
             uint32_t size, std::string& error);
 
+    //! Swap in a caller-owned type-cache map so this session's
+    //! resolver shares lookup results with sibling sessions.
+    //! Must be called after openAndDeserializeShells() but before
+    //! any resolve() call — typically right after addBlob in the
+    //! MultiDeserializer.  The caller owns the map and must keep it
+    //! alive for the session's lifetime.
+    void setSharedTypeCache(std::unordered_map<std::string, const QoreTypeInfo*>* shared) {
+        if (type_resolver) {
+            type_resolver->setSharedCache(shared);
+        }
+    }
+
     //! Phase 4 slice 10: phase-2 entry point — run all resolution
     //! passes on a session previously opened via
     //! openAndDeserializeShells.  Must be called after every session
@@ -1430,6 +1460,14 @@ class QoreAOTBinaryMultiDeserializer {
     QoreProgram* pgm = nullptr;
     std::vector<std::unique_ptr<QoreAOTBinaryDeserializer>> sessions;
 
+    // Shared type-resolver cache across all sessions in the batch.
+    // Every addBlob() injects a pointer to this map into the
+    // session's type_resolver, so the first session pays for each
+    // path lookup and subsequent sessions hit the cache.  Shrinks
+    // readAndSetupVariantSignature time from O(sessions × paths)
+    // to O(paths) on the hot path.
+    std::unordered_map<std::string, const QoreTypeInfo*> shared_type_cache_;
+
     // Phase-timing accumulators (microseconds).  Populated only
     // when QORE_AOT_PHASE_TIMING env var is set.  Totals across
     // all sessions for each named phase.
@@ -1488,10 +1526,22 @@ public:
             // Sub-breakdown of deserializeFuncsMethods (across all sessions)
             extern uint64_t g_aot_sum_funcs_us;
             extern uint64_t g_aot_sum_methods_us;
+            extern uint64_t g_aot_dm_alloc_us;
+            extern uint64_t g_aot_dm_sig_us;
+            extern uint64_t g_aot_dm_add_us;
+            extern uint64_t g_aot_dm_variants;
             fprintf(stderr, "[aot-timing]   (of which: deserializeFunctions   %8lu us)\n",
                 (unsigned long)g_aot_sum_funcs_us);
             fprintf(stderr, "[aot-timing]   (of which: deserializeMethods     %8lu us)\n",
                 (unsigned long)g_aot_sum_methods_us);
+            fprintf(stderr, "[aot-timing]      deserializeMethods variants: %lu\n",
+                (unsigned long)g_aot_dm_variants);
+            fprintf(stderr, "[aot-timing]      (variant alloc + dynamic_cast  %8lu us)\n",
+                (unsigned long)g_aot_dm_alloc_us);
+            fprintf(stderr, "[aot-timing]      (readAndSetupVariantSignature  %8lu us)\n",
+                (unsigned long)g_aot_dm_sig_us);
+            fprintf(stderr, "[aot-timing]      (addUserMethod                 %8lu us)\n",
+                (unsigned long)g_aot_dm_add_us);
             fflush(stderr);
         }
     }
@@ -1508,6 +1558,9 @@ public:
         if (!deser->openAndDeserializeShells(pgm, data, size, error)) {
             return false;
         }
+        // Install the shared type-resolver cache so this session's
+        // lookups share results with sibling sessions in the batch.
+        deser->setSharedTypeCache(&shared_type_cache_);
         sessions.push_back(std::move(deser));
         if (timingEnabled()) {
             timings_[0].us_total += nowMicros() - t0;
