@@ -1277,6 +1277,23 @@ public:
         classes that may live in sibling sessions. */
     bool resolveTypesAndMembers(std::string& error);
 
+    //! Phase-split 2a-sml — re-propagate the super-class map list
+    //! (`scl->sml`) on each class in this session, using the
+    //! now-fully-populated base-class scls from sibling sessions.
+    /** During `resolveClassBases`, `addBaseClass` walks the base's
+        `scl->sml` to propagate grandparents into the derived
+        class's sml.  If the base is owned by a sibling session
+        whose `resolveClassBases` hasn't run yet, its sml is
+        incomplete and grandparents never reach the derived
+        class — so `processMemberInitializationList` later emits
+        an empty `member_init_list` for the grandparents' local
+        members.  This phase re-invokes
+        `BCSMList::addBaseClassesToSubclass` (which is idempotent
+        via duplicate-ID skip in `BCSMList::add`) once every
+        session's bases are attached, completing the cross-session
+        sml. */
+    bool rebuildBaseClassSmlPhase(std::string& error);
+
     //! Phase-split 2a-import — copy base-class members into derived
     //! classes.  Batch mode: must wait until every session has
     //! finished resolveTypesAndMembers() so base classes' member
@@ -1456,6 +1473,19 @@ public:
         // addBlob and type lookups go through pgm->findClass.
         for (auto& sess : sessions) {
             if (!sess->resolveTypesAndMembers(error)) {
+                return false;
+            }
+        }
+        // 2a-sml: re-propagate super-class map lists now that
+        // every session has attached its direct bases.  Without
+        // this, a derived class in session X whose base was not
+        // yet resolved when X's resolveClassBases ran would have
+        // sml=[direct base only] — grandparents missing — and
+        // `processMemberInitializationList` would not emit their
+        // local members into the derived class's
+        // member_init_list at parseCommit time.
+        for (auto& sess : sessions) {
+            if (!sess->rebuildBaseClassSmlPhase(error)) {
                 return false;
             }
         }

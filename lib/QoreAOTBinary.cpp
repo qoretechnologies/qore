@@ -4309,6 +4309,54 @@ bool QoreAOTBinaryDeserializer::resolveTypesAndMembers(std::string& error) {
     return true;
 }
 
+// Phase-split 2a-sml.  Re-propagate super-class map list entries
+// across sibling sessions.
+//
+// `resolveClassBases` calls `qc->addBaseClass(base, ...)` which
+// reaches into `base->priv->scl->sml` to copy the base's
+// ancestors into `qc->priv->scl->sml`.  If `base` is owned by a
+// session whose own `resolveClassBases` hasn't run yet, its sml
+// is incomplete — grandparents of `qc` never arrive.
+// `processMemberInitializationList` later iterates sml to build
+// `member_init_list`, so missing sml entries mean missing
+// inherited-member init.
+//
+// This phase re-walks every newly deserialized class's scl and
+// re-invokes `BCSMList::addBaseClassesToSubclass` from each base.
+// `BCSMList::add` is idempotent (line 3557-3558 of QoreClass.cpp
+// returns 0 if the target class ID is already in the sml), so
+// the pass safely completes the cross-session sml without
+// duplicates.
+bool QoreAOTBinaryDeserializer::rebuildBaseClassSmlPhase(std::string& error) {
+    for (size_t i = 0; i < class_list.size(); ++i) {
+        if (preexisting_classes.count(static_cast<uint32_t>(i))) {
+            continue;
+        }
+        QoreClass* qc = class_list[i];
+        if (!qc) {
+            continue;
+        }
+        qore_class_private* priv = qore_class_private::get(*qc);
+        if (!priv->scl) {
+            continue;
+        }
+        for (auto* bcn : *priv->scl) {
+            QoreClass* base = bcn->sclass;
+            if (!base) {
+                continue;
+            }
+            qore_class_private* base_priv = qore_class_private::get(*base);
+            if (!base_priv->scl || !base_priv->scl->valid) {
+                continue;
+            }
+            // Re-propagate base's ancestors into qc's sml. Safe
+            // to call repeatedly — BCSMList::add skips duplicates.
+            base_priv->scl->addBaseClassesToSubclass(base, qc, bcn->is_virtual);
+        }
+    }
+    return true;
+}
+
 // Phase-split 2a-b.  Import inherited members from base classes
 // into derived classes.  Must run AFTER every session's
 // resolveInstanceMembers — otherwise a derived class in session X
@@ -4455,6 +4503,7 @@ bool QoreAOTBinaryDeserializer::finalize(std::string& error) {
 
 bool QoreAOTBinaryDeserializer::resolveAll(std::string& error) {
     return resolveTypesAndMembers(error)
+        && rebuildBaseClassSmlPhase(error)
         && importInheritedMembersPhase(error)
         && resolveStaticsAndConstants(error)
         && deserializeFunctionsAndMethods(error)
