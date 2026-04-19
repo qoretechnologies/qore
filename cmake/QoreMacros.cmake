@@ -377,6 +377,82 @@ MACRO (QORE_BINARY_MODULE_INTERN2 _module_name _version _install_suffix _mod_suf
     endif (DOXYGEN_FOUND)
 ENDMACRO (QORE_BINARY_MODULE_INTERN2)
 
+# Emit AOT-build rules for a user module producing a .qmod via qcc.
+#
+# Gated on QORE_BUILD_AOT_MODULES; only useful when qcc is a build target
+# (i.e. when building Qore itself) or an external importable target.
+#
+# Args (positional):
+#   _name        module base name (e.g. Util, DataProvider)
+#   _is_dir      "1" for split-dir modules (qlib/<name>/), "0" for single-file
+#   _source_root for _is_dir=1: absolute path to the module directory
+#                for _is_dir=0: absolute path to the primary .qm file
+# Variadic:     absolute paths of all .qm + .qc source files in the module
+#
+# The .qmod lands in ${QORE_USER_MODULES_DIR} at install time; per the
+# .qmod-vs-.qm precedence rule in ModuleManager, it wins over the sibling
+# .qm source.
+MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
+    if (NOT TARGET qcc)
+        message(FATAL_ERROR "QORE_BUILD_AOT_MODULES=ON requires a qcc target")
+    endif()
+
+    set(_qmod_out_dir ${CMAKE_BINARY_DIR}/qlib-qmod)
+    set(_qmod_out ${_qmod_out_dir}/${_name}.qmod)
+
+    if ("${_is_dir}" STREQUAL "1")
+        # Split-dir module: per-file qcc -c, then qcc -m --from-objects.
+        set(_qo_dir ${CMAKE_BINARY_DIR}/qlib-qo/${_name})
+        set(_qo_outputs "")
+        foreach (_src ${ARGN})
+            get_filename_component(_src_ext ${_src} EXT)
+            if (NOT ("${_src_ext}" STREQUAL ".qm" OR "${_src_ext}" STREQUAL ".qc"))
+                continue()
+            endif()
+            get_filename_component(_src_name ${_src} NAME)
+            set(_qo_out ${_qo_dir}/${_src_name}.qo)
+            add_custom_command(
+                OUTPUT ${_qo_out}
+                COMMAND ${CMAKE_COMMAND} -E make_directory ${_qo_dir}
+                COMMAND ${CMAKE_COMMAND} -E env ${QORE_QM_METADATA_ENV}
+                    $<TARGET_FILE:qcc> -c --context=${_source_root}
+                    --output-dir=${_qo_dir} ${_src}
+                DEPENDS ${_src} qcc libqore
+                COMMENT "AOT compile ${_name}: ${_src_name}"
+                VERBATIM
+            )
+            list(APPEND _qo_outputs ${_qo_out})
+        endforeach()
+
+        add_custom_command(
+            OUTPUT ${_qmod_out}
+            COMMAND ${CMAKE_COMMAND} -E make_directory ${_qmod_out_dir}
+            COMMAND ${CMAKE_COMMAND} -E env ${QORE_QM_METADATA_ENV}
+                $<TARGET_FILE:qcc> -m --from-objects
+                --context=${_source_root}
+                -o ${_qmod_out} ${_qo_outputs}
+            DEPENDS ${_qo_outputs} qcc libqore
+            COMMENT "AOT aggregate ${_name}.qmod"
+            VERBATIM
+        )
+    else()
+        # Single-file module: direct qcc -m.
+        add_custom_command(
+            OUTPUT ${_qmod_out}
+            COMMAND ${CMAKE_COMMAND} -E make_directory ${_qmod_out_dir}
+            COMMAND ${CMAKE_COMMAND} -E env ${QORE_QM_METADATA_ENV}
+                $<TARGET_FILE:qcc> -m ${_source_root} -o ${_qmod_out}
+            DEPENDS ${_source_root} qcc libqore
+            COMMENT "AOT compile ${_name}.qmod"
+            VERBATIM
+        )
+    endif()
+
+    add_custom_target(${_name}-qmod ALL DEPENDS ${_qmod_out})
+
+    install(FILES ${_qmod_out} DESTINATION ${QORE_USER_MODULES_DIR})
+ENDMACRO (QORE_USER_MODULE_AOT_RULES)
+
 # Install qore native/user module (.qm file) into the proper location.
 #
 # NOTE: this macro is for the library only
@@ -569,6 +645,17 @@ MACRO (QORE_USER_MODULE _module_file _mod_deps)
                         ${QORE_METADATA_DIR}/${QORE_QM_METADATA_SUBDIR})
         endif()
     endif()
+
+    # AOT: build a .qmod alongside the .qm source when enabled
+    if (QORE_BUILD_AOT_MODULES AND TARGET qcc)
+        if (IS_DIRECTORY ${CMAKE_SOURCE_DIR}/qlib/${f})
+            QORE_USER_MODULE_AOT_RULES(${f} 1
+                ${CMAKE_SOURCE_DIR}/qlib/${f} ${_mod_targets})
+        else()
+            QORE_USER_MODULE_AOT_RULES(${f} 0
+                ${CMAKE_SOURCE_DIR}/${_module_file} ${_mod_targets})
+        endif()
+    endif()
 ENDMACRO (QORE_USER_MODULE)
 
 # Install qore native/user module (.qm file) into proper location.
@@ -715,6 +802,17 @@ MACRO (QORE_EXTERNAL_USER_MODULE _module_file _mod_deps)
             install(FILES ${_ext_qm_meta_files}
                     DESTINATION
                         ${QORE_METADATA_DIR}/${_external_module_name})
+        endif()
+    endif()
+
+    # AOT: build a .qmod alongside the .qm source when enabled
+    if (QORE_BUILD_AOT_MODULES AND TARGET qcc)
+        if (IS_DIRECTORY ${CMAKE_SOURCE_DIR}/qlib/${f})
+            QORE_USER_MODULE_AOT_RULES(${f} 1
+                ${CMAKE_SOURCE_DIR}/qlib/${f} ${_mod_targets})
+        else()
+            QORE_USER_MODULE_AOT_RULES(${f} 0
+                ${CMAKE_SOURCE_DIR}/${_module_file} ${_mod_targets})
         endif()
     endif()
 ENDMACRO (QORE_EXTERNAL_USER_MODULE)

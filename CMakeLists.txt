@@ -55,6 +55,10 @@ option(QORE_OPTIMIZE_DEBUG_BUILDS
        "Use debug-friendly compiler optimization for debug builds"
        ON)
 
+option(QORE_BUILD_AOT_MODULES
+       "Build AOT-compiled .qmod artifacts alongside each user module via qcc (Phase 4)"
+       OFF)
+
 STRING(LENGTH ${VERSION_MINOR} MINOR_LEN)
 if (${MINOR_LEN} EQUAL 1)
     set(VERSION_FORMATTED_MINOR 0${VERSION_MINOR})
