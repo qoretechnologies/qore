@@ -492,6 +492,13 @@ private:
         int cached_events = 0;          //!< Cached poll events for Phase 3 fast path
         uint32_t cached_fd_gen = 0;     //!< Cached fd generation for QUIC migration detection
         uint64_t last_queued_gen = 0;   //!< Phase 1 generation when last queued (duplicate prevention)
+        //! Back-ref to the owning controller (not ref'd; outlives pinfo).
+        //! Used by cleanup() to erase the submit-time obj_to_sock_hash entry
+        //! before deref'ing sock_obj — without this the map can accumulate
+        //! dangling pointer keys when an op completes before Phase 3's
+        //! updateEventLoopRegistration would normally tie map lifetime to
+        //! socket_refcounts.
+        class AsyncIoControllerPriv* controller = nullptr;
 
         DLLLOCAL PollInfo() : timeout_date_us(0), sock_obj(nullptr), sock(nullptr),
             spop_obj(nullptr), poll_info(nullptr), timeout_us(DEFAULT_IO_TIMEOUT_US),

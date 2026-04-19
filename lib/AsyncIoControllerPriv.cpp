@@ -162,6 +162,12 @@ bool qore_is_async_io_controller_singleton(AsyncIoControllerPriv* ctrl) {
 //! must be avoided on the I/O thread to prevent deadlock.
 static thread_local bool on_async_io_thread = false;
 
+//! Thread-local index of the current I/O thread into AsyncIoControllerPriv::io_threads.
+//! -1 when not on an I/O thread.  Used by cancelByOwner/cancelByProgram to access
+//! the current thread's own cache directly (safe — I/O-thread-local invariant) while
+//! dispatching to other threads' caches via cmdq (avoids cross-thread cache races).
+static thread_local int current_io_thread_idx = -1;
+
 bool qore_on_async_io_thread() {
     return on_async_io_thread;
 }
@@ -187,6 +193,20 @@ void AsyncIoControllerPriv::PollInfo::cleanup(ExceptionSink* xsink) {
     // Clear controller back-reference before dereffing
     if (spop_base) {
         spop_base->setIoController(nullptr, nullptr);
+    }
+    // Erase the submit-time obj_to_sock_hash entry while sock_obj is still
+    // a valid pointer.  Phase 3's updateEventLoopRegistration path already
+    // erases entries when socket_refcounts[hash] drops to 0, but when an op
+    // completes on its first continuePoll (goal=1 before Phase 3 registers),
+    // updateEventLoopRegistration never runs and the entry we added in
+    // submit() would otherwise become dangling once sock_obj is freed.
+    //
+    // Erasing here is safe for the multi-op-on-one-socket case: the fallback
+    // in wakeSocketByObject recomputes the hash from the socket's private
+    // data, so an erased-then-needed entry just pays a lookup.
+    if (controller && sock_obj) {
+        AutoLocker al(controller->sock_route_lock);
+        controller->obj_to_sock_hash.erase(sock_obj);
     }
     if (sock_obj) {
         sock_obj->deref(xsink);
@@ -1089,6 +1109,7 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
         pinfo.has_qore_on_complete = has_qore_on_complete;
         pinfo.spop_base = spop_base;
         spop_base_holder.release();
+        pinfo.controller = this;
 
         // Publish sock_hash → thread_idx BEFORE releasing submit_seq so a
         // concurrent wakeSocketByObject can never see the op as submitted
@@ -1285,26 +1306,92 @@ int AsyncIoControllerPriv::cancelByOwner(const QoreStringNode* owner, ExceptionS
     bool cancel_done = false;
 
     if (on_async_io_thread) {
-        // I/O thread — access cache directly across all contexts
-        for (auto& tp : io_threads) {
+        // I/O thread — process our OWN cache directly (I/O-thread-local
+        // invariant), and dispatch CancelOwner commands to the other I/O
+        // threads for their caches.  Previously this branch iterated and
+        // erased from every io_threads[i]->cache without a lock, racing
+        // against those threads' Phase 1/2/3 cache access.  Keep the
+        // direct path for our own thread to avoid deadlocking on ourselves
+        // (our cmdq isn't drained while we're executing this call).
+        std::atomic<int> actual_count{0};
+        std::atomic<int> pending_threads{0};
+        int my_idx = current_io_thread_idx;
+
+        // First, count pending-threads for the remote dispatches so the
+        // condvar protocol in processCommands::CancelOwner signals us
+        // correctly when they've all reported in.
+        int remote_count = 0;
+        for (size_t i = 0; i < io_threads.size(); ++i) {
+            if ((int)i != my_idx) {
+                ++remote_count;
+            }
+        }
+        bool wait_remote = false;
+        if (remote_count > 0) {
+            AutoLocker al(m);
+            if (anyThreadRunning() && !io_exiting) {
+                pending_threads.store(remote_count, std::memory_order_relaxed);
+                for (size_t i = 0; i < io_threads.size(); ++i) {
+                    if ((int)i == my_idx) {
+                        continue;
+                    }
+                    Command cmd;
+                    cmd.cmd = IoCommand::CancelOwner;
+                    cmd.owner = owner_str;
+                    cmd.done_cond = &done_cond;
+                    cmd.cancel_done_flag = &cancel_done;
+                    cmd.cancel_count = &actual_count;
+                    cmd.pending_threads = &pending_threads;
+                    io_threads[i]->cmdq.push(std::move(cmd));
+                    ++submit_seq;
+                }
+                wait_remote = true;
+            }
+        }
+        if (wait_remote) {
+            for (size_t i = 0; i < io_threads.size(); ++i) {
+                if ((int)i != my_idx) {
+                    io_threads[i]->notifier->notify();
+                }
+            }
+        }
+
+        // Process our own cache directly — we own it, no lock needed.
+        if (my_idx >= 0 && (size_t)my_idx < io_threads.size()) {
+            IoThreadContext& tp = *io_threads[my_idx];
             std::vector<std::string> keys;
-            for (auto& [key, pinfo] : tp->cache) {
+            for (auto& [key, pinfo] : tp.cache) {
                 if (pinfo.owner == owner_str) {
                     keys.push_back(key);
                 }
             }
             for (auto& key : keys) {
-                auto it = tp->cache.find(key);
-                if (it != tp->cache.end()) {
+                auto it = tp.cache.find(key);
+                if (it != tp.cache.end()) {
                     ASYNC_IO_TRACE("cache.erase CANCEL_BY_OWNER_DIRECT key='%s' owner='%s'\n",
                         key.c_str(), owner_str.c_str());
                     direct_pinfos.push_back(it->second);
                     it->second = PollInfo();
-                    tp->cache.erase(it);
-                    tp->cache_size.fetch_sub(1, std::memory_order_relaxed);
+                    tp.cache.erase(it);
+                    tp.cache_size.fetch_sub(1, std::memory_order_relaxed);
                     ++cache_count;
                 }
             }
+            // Match CancelOwner cmd semantics: record the owner as recently
+            // cancelled so a racing SubmitOp on this thread is rejected.
+            tp.cancelled_owners[owner_str] = 2;
+        }
+
+        // Wait for remote I/O threads' CancelOwner commands to finish so
+        // the returned count is accurate.  This can deadlock only if a
+        // remote I/O thread blocks indefinitely inside continuePoll (a
+        // separate contract — continuePoll must be non-blocking).
+        if (wait_remote) {
+            AutoLocker al(m);
+            while (!cancel_done) {
+                done_cond.wait(m);
+            }
+            cache_count += actual_count.load(std::memory_order_relaxed);
         }
     } else {
         // Worker thread — send CancelOwner to all I/O threads and wait for actual count
@@ -1385,24 +1472,80 @@ void AsyncIoControllerPriv::cancelByProgram(QoreProgram* pgm, ExceptionSink* xsi
     std::vector<PollInfo> cancel_pinfos;
 
     if (on_async_io_thread) {
-        // I/O thread — access cache directly across all contexts
-        for (auto& tp : io_threads) {
+        // I/O thread — process our OWN cache directly and dispatch
+        // CancelByProgram commands to other I/O threads for theirs.
+        // Previously this branch iterated every io_threads[i]->cache
+        // without a lock, racing against those threads' Phase 1/2/3
+        // cache access.  Own-cache access is safe (I/O-thread-local
+        // invariant); remote caches must go through cmdq.
+        QoreCondition done_cond;
+        bool cancel_done = false;
+        QoreThreadLock pinfos_lock;
+        std::atomic<int> pending_threads{0};
+        int my_idx = current_io_thread_idx;
+
+        int remote_count = 0;
+        for (size_t i = 0; i < io_threads.size(); ++i) {
+            if ((int)i != my_idx) {
+                ++remote_count;
+            }
+        }
+        bool wait_remote = false;
+        if (remote_count > 0) {
+            AutoLocker al(m);
+            if (anyThreadRunning() && !io_exiting) {
+                pending_threads.store(remote_count, std::memory_order_relaxed);
+                for (size_t i = 0; i < io_threads.size(); ++i) {
+                    if ((int)i == my_idx) {
+                        continue;
+                    }
+                    Command cmd;
+                    cmd.cmd = IoCommand::CancelByProgram;
+                    cmd.pgm = pgm;
+                    cmd.cancel_pinfos = &cancel_pinfos;
+                    cmd.cancel_pinfos_lock = &pinfos_lock;
+                    cmd.pending_threads = &pending_threads;
+                    cmd.done_cond = &done_cond;
+                    cmd.cancel_done_flag = &cancel_done;
+                    io_threads[i]->cmdq.push(std::move(cmd));
+                    ++submit_seq;
+                }
+                wait_remote = true;
+            }
+        }
+        if (wait_remote) {
+            for (size_t i = 0; i < io_threads.size(); ++i) {
+                if ((int)i != my_idx) {
+                    io_threads[i]->notifier->notify();
+                }
+            }
+        }
+
+        if (my_idx >= 0 && (size_t)my_idx < io_threads.size()) {
+            IoThreadContext& tp = *io_threads[my_idx];
             std::vector<std::string> keys;
-            for (auto& [key, pinfo] : tp->cache) {
+            for (auto& [key, pinfo] : tp.cache) {
                 if (pinfo.spop_obj && pinfo.spop_obj->getProgram() == pgm) {
                     keys.push_back(key);
                 }
             }
             for (auto& key : keys) {
-                auto it = tp->cache.find(key);
-                if (it != tp->cache.end()) {
+                auto it = tp.cache.find(key);
+                if (it != tp.cache.end()) {
                     ASYNC_IO_TRACE("cache.erase CANCEL_BY_PROGRAM_DIRECT key='%s' owner='%s'\n",
                         key.c_str(), it->second.owner.c_str());
                     cancel_pinfos.push_back(it->second);
                     it->second = PollInfo();
-                    tp->cache.erase(it);
-                    tp->cache_size.fetch_sub(1, std::memory_order_relaxed);
+                    tp.cache.erase(it);
+                    tp.cache_size.fetch_sub(1, std::memory_order_relaxed);
                 }
+            }
+        }
+
+        if (wait_remote) {
+            AutoLocker al(m);
+            while (!cancel_done) {
+                done_cond.wait(m);
             }
         }
     } else {
@@ -2060,6 +2203,7 @@ void AsyncIoControllerPriv::ioThreadEntry(ExceptionSink* xsink, void* arg) {
     on_async_io_thread = true;
     IoThreadStartInfo* start_info = static_cast<IoThreadStartInfo*>(arg);
     AsyncIoControllerPriv* self = start_info->ctrl;
+    current_io_thread_idx = start_info->thread_idx;
     IoThreadContext& t = *self->io_threads[start_info->thread_idx];
     delete start_info;
     self->ioThread(t, xsink);
@@ -2068,6 +2212,7 @@ void AsyncIoControllerPriv::ioThreadEntry(ExceptionSink* xsink, void* arg) {
         self->log(QORE_LOG_LEVEL_ERROR, "I/O thread exception");
         xsink->clear();
     }
+    current_io_thread_idx = -1;
     self->deref(xsink);
 }
 
@@ -3654,6 +3799,7 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                             pinfo.owner = cmd.owner;
                             pinfo.has_qore_abort = cmd.submit_has_qore_abort;
                             pinfo.has_qore_on_complete = cmd.submit_has_qore_on_complete;
+                            pinfo.controller = this;
                             // Null command fields to prevent double-deref on
                             // command destruction — pinfo.cleanup() owns them now.
                             cmd.submit_sock_obj = nullptr;
@@ -3721,6 +3867,7 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                     pinfo.timeout_date_us = 0;
                     pinfo.has_qore_abort = cmd.submit_has_qore_abort;
                     pinfo.has_qore_on_complete = cmd.submit_has_qore_on_complete;
+                    pinfo.controller = this;
 
                     // Set controller back-reference so wakeIoThread() works
                     if (pinfo.spop_base) {
