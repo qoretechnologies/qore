@@ -404,6 +404,12 @@ public:
     //! shared pointer never aliases between concurrent invocations.
     LocalVar* shared_aot_argv = nullptr;
 
+    //! Interned `self` LocalVar per class.  All variants of a given class's
+    //! methods pass the same `("self", classTypeInfo)` pair — sharing one
+    //! per class removes ~(methods-per-class) emplaces × (classes) off the
+    //! hot path.  Same safety argument as shared_aot_argv.
+    std::unordered_map<const QoreClass*, LocalVar*> shared_aot_self;
+
     // for the thread counter, used only with plock
     QoreCondition pcond;
     ptid_map_t tidmap;           // map of tids -> thread count in program object

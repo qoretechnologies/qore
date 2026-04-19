@@ -779,10 +779,18 @@ void UserSignature::setupFromAOTMetadata(
     defaultArgList = std::move(defaults);
     defaultArgList.resize(nparams);
 
-    // Create selfid local var for methods (matches parseInitPushLocalVars behavior)
-    // Each method variant needs its own selfid that will be instantiated on the stack
+    // selfid per class — interned across every method variant of a class
+    // using the program-scoped cache.  Same safety argument as the argv
+    // intern above (LocalVar* is the identity, thread-local stack holds
+    // the per-call value).  AOT doesn't need the `is_self` flag that
+    // parseInitPushLocalVars sets — the pre-AOT setupFromAOTMetadata
+    // path never called setSelf() either.
     if (classTypeInfo) {
-        selfid = pp->createLocalVar("self", classTypeInfo->getTypeInfo());
+        LocalVar*& cached = pp->shared_aot_self[classTypeInfo];
+        if (!cached) {
+            cached = pp->createLocalVar("self", classTypeInfo->getTypeInfo());
+        }
+        selfid = cached;
     }
 
     // argv local var — interned across every AOT-deserialized variant.
