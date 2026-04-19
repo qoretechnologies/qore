@@ -1090,6 +1090,19 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
         pinfo.spop_base = spop_base;
         spop_base_holder.release();
 
+        // Publish sock_hash → thread_idx BEFORE releasing submit_seq so a
+        // concurrent wakeSocketByObject can never see the op as submitted
+        // but still find no route.  See wakeSocket() for the race this
+        // closes: updateEventLoopRegistration only runs in Phase 3 after
+        // the first continuePoll, but submitRequestWithAction (and other
+        // wake sources) can fire as soon as this submit returns.
+        {
+            std::string sh = getSocketHash(sock);
+            AutoLocker al(sock_route_lock);
+            sock_to_thread[sh] = t.thread_idx;
+            obj_to_sock_hash[sock_obj] = sh;
+        }
+
         ++submit_seq;
     } else {
         // Worker thread: package data into SubmitOp command
@@ -1111,6 +1124,15 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
         cmd.submit_has_qore_abort = has_qore_abort;
         cmd.submit_has_qore_on_complete = has_qore_on_complete;
 
+        // Compute socket hash BEFORE publishing the cmd so it is read while
+        // the sock pointer is still safe to deref: once target->cmdq.push()
+        // happens and m is released, the I/O thread may pick up the cmd,
+        // move sock into the cache's PollInfo, run the first continuePoll,
+        // complete the op, and cleanup() the PollInfo — all before this
+        // thread reaches the sock_route_lock block below.  That sequence
+        // drops sock's last ref, making sock->getUniqueHash() a UAF.
+        std::string sock_hash = sock->getUniqueHash();
+
         {
             AutoLocker al(m);
             target = &getThreadForKey(uh);
@@ -1119,6 +1141,19 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
             // mutation and the I/O thread's empty checks are synchronized by m,
             // so a command visible to the I/O thread has a visible sequence bump.
             ++submit_seq;
+        }
+        // Publish sock_hash → target thread BEFORE notifying, so a concurrent
+        // wakeSocketByObject firing as soon as the submitter returns always
+        // finds the correct route.  Without this, wakeSocket() would default
+        // to thread 0 on a cache miss and silently drop the wake when the op
+        // lives on any other thread — see the block comment below in
+        // wakeSocket(); this was the root cause of the intermittent 10s
+        // SOCKET-TIMEOUT failures in AsyncSocketIo.qtest::concurrent-submit
+        // under QORE_IO_THREADS>=2.
+        {
+            AutoLocker al(sock_route_lock);
+            sock_to_thread[sock_hash] = target->thread_idx;
+            obj_to_sock_hash[sock_obj] = sock_hash;
         }
         target->notifier->notify();
         ASYNC_IO_TRACE("worker submit: ++submit_seq(%d)+pushed+notified key='%s'\n",
@@ -2656,6 +2691,23 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                         // Push operation timeout to heap for Phase 1 Step C
                         if (pinfo.timeout_us >= 0 && pinfo.timeout_date_us > 0) {
                             t.timeout_heap.push({pinfo.timeout_date_us, result.key});
+                            // Ensure poll wakes in time for this deadline.
+                            // Phase 1 Step C computed poll_deadline_us BEFORE this
+                            // re-push.  For a timeout=0 op (or any already-expired
+                            // deadline), Step A pushed the deadline, Step C popped it
+                            // and called try_queue(timed_out=true) which returned
+                            // false because Step A had already queued with
+                            // timed_out=false — the heap entry was dropped.  Without
+                            // this update poll_deadline_us stays 0 and poll() blocks
+                            // indefinitely, so Step C never gets a chance to fire the
+                            // timeout on the next iteration.  Observed as
+                            // immediateTimeoutTest hanging with QORE_IO_THREADS>=2
+                            // when the assigned I/O thread has no other work to
+                            // drive its poll deadline.
+                            if (poll_deadline_us == 0
+                                    || pinfo.timeout_date_us < poll_deadline_us) {
+                                poll_deadline_us = pinfo.timeout_date_us;
+                            }
                         }
 
                         // Protocol-level poll timeout (QUIC timers, heartbeat)
@@ -3561,8 +3613,8 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                 }
 
                 case IoCommand::SubmitOp: {
-                    ASYNC_IO_TRACE("processCmd SubmitOp key='%s' owner='%s'\n",
-                        cmd.key.c_str(), cmd.owner.c_str());
+                    ASYNC_IO_TRACE("processCmd SubmitOp key='%s' owner='%s' thread_idx=%d\n",
+                        cmd.key.c_str(), cmd.owner.c_str(), t.thread_idx);
                     // Reject stale re-submissions for recently-cancelled keys
                     auto ck_it = t.cancelled_keys.find(cmd.key);
                     if (ck_it != t.cancelled_keys.end()) {
