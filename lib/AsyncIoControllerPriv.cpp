@@ -2074,8 +2074,24 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                     // is in the cache but before updateEventLoopRegistration()
                     // has populated sock_hash_to_keys.  Do not drop that wake:
                     // scan the cache once on the miss and queue matching ops.
+                    //
+                    // Match against cached_sock_hash (the current poll socket,
+                    // updated each ContinuePollResult) — not pinfo.sock, which
+                    // is frozen at SubmitOp time and goes stale as soon as the
+                    // first continuePoll() returns a different poll socket
+                    // (e.g., EventNotifier-based waits that allocate a fresh
+                    // notifier each cycle).  During the submit→first-result
+                    // window cached_sock_hash is empty; fall back to the
+                    // submit-time socket's hash in that case so the original
+                    // race that motivated the fallback is still covered.
                     for (auto& [key, pinfo] : t.cache) {
-                        if (pinfo.sock && getSocketHash(pinfo.sock) == sock_hash) {
+                        std::string h;
+                        if (!pinfo.cached_sock_hash.empty()) {
+                            h = pinfo.cached_sock_hash;
+                        } else if (pinfo.sock) {
+                            h = getSocketHash(pinfo.sock);
+                        }
+                        if (!h.empty() && h == sock_hash) {
                             try_queue(key, false, ready);
                         }
                     }
