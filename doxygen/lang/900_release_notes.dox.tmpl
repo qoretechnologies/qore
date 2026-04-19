@@ -1893,12 +1893,6 @@ cargo install tree-sitter-cli@0.26.5
       (<a href="https://github.com/qoretechnologies/qore/issues/2647">issue 2647</a>)
     - fixed parsing of namespaced typed hash literals like \c <Qore::StatInfo>{} and \c <::Qore::StatInfo>{}
       (<a href="https://github.com/qoretechnologies/qore/issues/5147">issue 5147</a>)
-    - fixed a cancel-vs-destroy race in the HTTP/1, HTTP/2, and HTTP/3 async client connections where
-      the I/O thread's \c abort() could dereference a destroyed connection's internal lock via the raw
-      \c connection_priv back-pointer, causing a \c pthread_mutex_lock assertion in debug builds.
-      \c closeConnection() now disarms the back-pointer under the poll operation's \c stream_lock before
-      cancellation, and \c abort(), \c setError(), and \c fireReadyCallback() read the back-pointer under
-      the same lock
 
     @section qore_2_2_1 Qore 2.2.1
 
