@@ -361,13 +361,47 @@ Low cost (cmake plumbing only) — no Qore-side work needed.
    full namespace walk was already fast, but the cache costs
    essentially nothing when it misses.
 
-**State after step 10:** qwf `--help` ≈ 1.80 s (source-parse baseline)
-on trimmed mean of 20 runs.  Acceptance criterion reached.
+11. **Done** — (1c) intern the shared `argv` LocalVar across all
+   AOT-deserialized variants (commit f73147c5d).  Every variant of
+   every function/method passes the identical `("argv",
+   autoListOrNothingTypeInfo)` to createLocalVar — 656 k deque
+   emplaces in qwf collapse to one.  Safe because the runtime
+   identifies locals by `(LocalVar*, stack frame)` and each
+   invocation pushes its own argv slot onto the thread-local
+   stack.  Wall-clock 1.82 → 1.75 s trimmed mean.
 
-11. **Re-measure** at each step.  Target: wall-clock on qwf `--help`
-   ≤ source-parse baseline (1.80 s).  Reached.  Further wins depend
-   on the larger-scale items below (param-name interning, per-blob
-   string tables, parallelization).
+12. **Done** — (1d) intern per-class `self` LocalVar (commit
+   c0210a5fe).  Every method variant of a given class passes the
+   identical `("self", classTypeInfo)` — keyed cache on
+   qore_program_private::shared_aot_self.  Wall-clock 1.75 → 1.74 s.
+
+**State after step 12:** qwf `--help` ≈ 1.71 s (trimmed mean of 15
+runs, down from 1.97 s start-of-session and below 1.80 s source-parse
+baseline).
+
+13. **Attempted, reverted** — heterogeneous `string_view` lookup on
+   the type-resolver cache (to skip implicit `std::string`
+   construction on 3.3 M cache-hit lookups).  No measurable wall-
+   clock change despite extensive variance noise across runs —
+   `std::unordered_map::find(std::string_view)` with transparent
+   `is_transparent` hash/equal didn't beat the implicit-conversion
+   path on libstdc++.  Reverted.
+
+14. **Attempted, reverted** — `name+sig → UVB*` fast-path map built
+   during deserializeMethods to skip the namespace walk + per-
+   variant signature rebuild in registerAOTFunctionsFromSlotMaps.
+   94.9 % hit rate measured, but register wall-clock identical —
+   `buildContextFromSlotMap` (slot-map data read + context
+   construction) dominates the register phase, and the UVB-find
+   sub-step was already cheap.  Reverted to keep the code simple.
+
+**Remaining hot phases** (qwf, ~536 ms `resolveAll` + 120 ms post-
+register): `deserializeFuncsMethods` (65–80 %, bounded by per-
+variant alloc + 3.3 M type-path resolves), `buildContextFromSlotMap`
+(inside the ~120 ms post-register, per-entry slot-map parse +
+QoreAOTContext creation).  Further wins likely need format changes
+(per-blob type-path interning) or parallelization, not incremental
+per-hot-call optimization.
 
 8. Defer lazy commit and SML short-circuit — measurements confirmed
    they'd be <1% wins.
@@ -383,24 +417,33 @@ three.
 
 | Binary | Source-parse | AOT (pre-opt) | AOT (current) |
 |--------|--------------|---------------|---------------|
-| qwf    | 1.80 s       | 1.97 s        | ~1.80 s       |
+| qwf    | 1.80 s       | 1.97 s        | ~1.71 s       |
 | qsvc   | 1.86 s       | —             | — (untested)  |
 | qjob   | 1.35 s       | —             | — (untested)  |
 
-qwf reached parity via:
+qwf reached sub-baseline via:
  - shared type-resolver cache across batch sessions (e42d2b6a5)
  - safe_dslist → deque<LocalVar> arena (54fdd0e74)
  - move-semantics in setupFromAOTMetadata (ecbeae7b1)
  - single cross-session rebuildAllIndexes (290feb2b2)
  - last-class cache in slot-map register (76bc14d23)
+ - interned shared argv LocalVar (f73147c5d)
+ - interned per-class self LocalVar (c0210a5fe)
 
-Total AOT resolveAll time: 917 → 536 ms.  Finalize phase alone:
-165 → 2.5 ms.  Remaining hot phases: deserializeFuncsMethods
-(80% of resolveAll — bounded by per-param type resolve + LocalVar
-emplace) and post-resolveAll registerAOTFunctions (~120 ms —
-bounded by signature matching against UVB variants).  Both need
-deeper refactors (param-name interning, UVB map built during
-deserialization) for further wins.
+Total AOT resolveAll time: 917 → ~536 ms.  Finalize phase alone:
+165 → 2.5 ms.  Wall-clock: 1.97 → 1.71 s trimmed mean of 15 runs
+(below the 1.80 s source-parse baseline).
+
+Remaining hot phases: `deserializeFuncsMethods` (65–80 % of
+resolveAll — bounded by per-variant `new` allocation + 3.3 M type-
+path resolves + per-variant param LocalVar emplaces) and post-
+resolveAll `registerAOTFunctions` (~120 ms — dominated by
+`buildContextFromSlotMap` per-entry slot-map parse + context
+creation, not the UVB-find step).  Tried a `name+sig → UVB*` fast-
+path map (94.9 % hit rate measured) but it produced no wall-clock
+improvement — register time is bounded by ctx build, not UVB
+lookup.  Further wins likely need format changes (per-blob type-
+path / param-name interning) or parallelization.
 
 ## Tracking
 
