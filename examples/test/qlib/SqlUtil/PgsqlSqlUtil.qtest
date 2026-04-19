@@ -328,6 +328,7 @@ class PgsqlTest inherits SqlTestBase {
             addTestCase("pgvector ivfflat index", \pgvectorIvfflatIndexTest());
             addTestCase("pg_get_indexdef parser", \pgIndexDefParserTest());
             addTestCase("populate column backfill", \populateColumnTest());
+            addTestCase("tables populate FK ordering", \tablesPopulateFkOrderingTest());
         }
 
         set_return_value(main());
@@ -851,6 +852,105 @@ class PgsqlTest inherits SqlTestBase {
             if (tc.checkExistence()) {
                 tc.drop();
             }
+        }
+    }
+
+    # Verifies that Tables::populate() applies the template to a parent table
+    # even when a referring child appears *before* the parent in the input hash.
+    # Before the topological-sort fix, a child-first iteration caused the parent
+    # to be pre-cached from the live DB during FK resolution, then silently
+    # skipped on its own turn — producing a DB-shaped cache entry for the parent.
+    tablesPopulateFkOrderingTest() {
+        if (!table) {
+            testSkip("no DB connection");
+        }
+
+        AbstractDatasource ds = getDatasource();
+        on_exit ds.rollback();
+
+        string parent_name = "pgsql_fk_order_parent";
+        string child_name  = "pgsql_fk_order_child";
+
+        # clean slate
+        code drop_if_exists = sub (string n) {
+            PgsqlTable t(ds, n);
+            if (t.checkExistence()) {
+                t.dropCommit();
+            }
+        };
+        drop_if_exists(child_name);
+        drop_if_exists(parent_name);
+
+        # DB state: OLD schema with an extra column the new template doesn't have
+        ds.execRaw(sprintf("create table %s (id numeric(14) primary key, legacy varchar(80))",
+            parent_name));
+        ds.execRaw(sprintf(
+            "create table %s (id numeric(14) primary key, parent_id numeric(14), "
+            "constraint fk_%s_parent foreign key (parent_id) references %s(id))",
+            child_name, child_name, parent_name));
+        ds.commit();
+
+        on_exit {
+            drop_if_exists(child_name);
+            drop_if_exists(parent_name);
+        }
+
+        # template: new schema drops "legacy", adds "display"
+        hash<auto> t_parent = {
+            "columns": {
+                "id":      {"qore_type": SqlUtil::NUMERIC, "size": 14, "notnull": True},
+                "display": {"qore_type": SqlUtil::VARCHAR, "size": 120},
+            },
+            "primary_key": {"name": "pk_" + parent_name, "columns": "id"},
+        };
+        hash<auto> t_child = {
+            "columns": {
+                "id":        {"qore_type": SqlUtil::NUMERIC, "size": 14, "notnull": True},
+                "parent_id": {"qore_type": SqlUtil::NUMERIC, "size": 14},
+            },
+            "primary_key": {"name": "pk_" + child_name, "columns": "id"},
+            "foreign_constraints": {
+                ("fk_" + child_name + "_parent"): {
+                    "columns": "parent_id", "table": parent_name, "target_columns": "id",
+                },
+            },
+        };
+
+        list expected_parent_cols = ("display", "id");
+
+        # child-before-parent input order (the failure case pre-fix)
+        {
+            Tables tc();
+            tc.populate(ds, {(child_name): t_child, (parent_name): t_parent});
+            assertEq(expected_parent_cols, sort(tc{parent_name}.describe().keys()),
+                "parent cached from template with child-first ordering");
+        }
+
+        # parent-before-child input order (always worked)
+        {
+            Tables tc();
+            tc.populate(ds, {(parent_name): t_parent, (child_name): t_child});
+            assertEq(expected_parent_cols, sort(tc{parent_name}.describe().keys()),
+                "parent cached from template with parent-first ordering");
+        }
+
+        # end-to-end: AbstractDatabase::getAlignSql() with a child-first template
+        # hash must emit DROP for the parent's legacy column and ADD for the new one.
+        # Pre-fix, the parent's cache entry was DB-shaped, so column alignment
+        # reported AC_Unchanged for every parent column and emitted no DDL.
+        {
+            AbstractDatabase db = (new Database(ds)).getDatabase();
+            hash<auto> schema_hash = {
+                "tables": {
+                    (child_name):  t_child,
+                    (parent_name): t_parent,
+                },
+            };
+            Tables tc();
+            list<string> sql = db.getAlignSql(schema_hash, ("force": True), tc);
+            string joined = sql.join("\n");
+            assertTrue(joined =~ /legacy/i, "alignment SQL drops legacy column on parent");
+            assertTrue(joined =~ /display/i, "alignment SQL adds display column on parent");
         }
     }
 
