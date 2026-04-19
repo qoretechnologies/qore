@@ -287,6 +287,14 @@ qore-openapi3-gen -f json -t "My API" -s "https://api.example.com" src/*.qclass
       - @ref OpenApi3::OperationObject "OperationObject": inherits
         @ref RestSchemaValidator::AbstractOperationObject "AbstractOperationObject"
       (<a href="https://github.com/qorelanguage/qore/issues/5006">issue 5006</a>)
+    - Schema tokenizer now recognises \c \@x-ai-tool-name in \c \@SCHEMA
+      blocks and emits it as the \c x-ai-tool-name extension on the
+      generated OpenAPI operation.  Consumers (MCP / LLM-agent gateways
+      that derive tool names from operationIds) use this extension to
+      override the default verb+path name transform for individual
+      endpoints where the auto-derived name is awkward, collides with
+      another endpoint, or misses a domain-specific verb that reads more
+      naturally than the HTTP method.
 */
 
 #! main namespace for all public %OpenApi3 declarations

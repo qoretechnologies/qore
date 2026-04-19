@@ -66,6 +66,13 @@ module QoreGuardrails {
       LLM-based prompt injection classification
     - @ref QoreGuardrails::TopicRestrictionRule "TopicRestrictionRule" --
       LLM-based topic boundary enforcement
+    - @ref QoreGuardrails::ToxicityDetector "ToxicityDetector" -- LLM-based
+      toxicity classification with configurable thresholds
+    - @ref QoreGuardrails::HallucinationDetector "HallucinationDetector" --
+      LLM-based grounding check against provided source texts
+    - @ref QoreGuardrails::ActionIntentRule "ActionIntentRule" -- LLM-based
+      action-intent classification that fails when the user's phrasing is
+      ambiguous or clearly informational, gating destructive tool dispatches
     - @ref QoreGuardrails::OutputFormatEnforcer "OutputFormatEnforcer" --
       pattern-based output validation (length, forbidden patterns)
 
@@ -99,6 +106,25 @@ if (!result.passed) {
     - New public hashdecl @ref QoreGuardrails::RuleTypeInfo "RuleTypeInfo"
       carries the registry entry shape — type name, display name,
       description, default direction, and config schema.
+    - New @ref QoreGuardrails::ActionIntentRule "ActionIntentRule" rule type
+      wraps @ref QoreLlmUtils::ActionIntentClassifier as an operator-editable
+      guardrail; classifies each user turn as \c read-only,
+      \c action-requested, or \c confirmation-required and fails when the
+      classified label is in the configured \c block_intents set (defaults
+      to just \c confirmation-required so ambiguous phrasings surface
+      explicitly while clear commands and clear questions pass through).
+      Registered as rule type \c "action_intent" in
+      @ref QoreGuardrails::GuardrailEngine "GuardrailEngine".
+    - @ref QoreLlmUtils is now a hard dependency of the module; the
+      previous \c %try-module / \c NoLlmUtils conditional-compilation
+      fallback has been removed since QoreLlmUtils ships with the Qore
+      distribution.  Every LLM-capable rule
+      (@ref QoreGuardrails::PromptInjectionDetector "PromptInjectionDetector",
+      @ref QoreGuardrails::TopicRestrictionRule "TopicRestrictionRule",
+      @ref QoreGuardrails::ToxicityDetector "ToxicityDetector",
+      @ref QoreGuardrails::HallucinationDetector "HallucinationDetector",
+      and @ref QoreGuardrails::ActionIntentRule "ActionIntentRule") uses
+      QoreLlmUtils unconditionally.
 
     @subsection qoreguardrails_1_0 QoreGuardrails Module Version 1.0
     - Initial release with @ref QoreGuardrails::GuardrailEngine "GuardrailEngine",
