@@ -33,10 +33,12 @@
 #include <qore/Qore.h>
 #include "qore/intern/QoreAOT.h"
 
+#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <cerrno>
+#include <dirent.h>
 #include <string>
 #include <vector>
 #include <getopt.h>
@@ -48,6 +50,94 @@ static const char* QCC_VERSION = "1.0";
 static bool is_directory(const char* path) {
     struct stat st;
     return (stat(path, &st) == 0 && S_ISDIR(st.st_mode));
+}
+
+// Phase 4 slice 10h: write a Make-format dependency file at `path`.
+// Target (LHS) is `output`; deps are `source` plus, when `context` is
+// non-null, every `.qm`/`.qc`/`.ql` under it — the set the parser actually
+// opens in `--context=DIR` mode per `compileSeparatedModuleFile`.
+// Consumed by cmake's `add_custom_command(... DEPFILE ...)` so sibling-
+// file edits in split-module dirs retrigger the affected per-file `.qo`.
+// Only spaces and backslashes in paths are escaped — Make handles both.
+static bool write_depfile(const char* path, const std::string& output,
+                          const std::string& source, const char* context) {
+    // Canonicalize so the relative vs absolute spelling of the same file
+    // (e.g. primary passed by qcc as realpath + same file re-emerging
+    // from an opendir(context) scan with a relative prefix) dedupes
+    // cleanly.  realpath failure falls through to the input spelling.
+    auto canon = [](const std::string& s) -> std::string {
+        if (s.empty()) {
+            return s;
+        }
+        char* r = realpath(s.c_str(), nullptr);
+        if (!r) {
+            return s;
+        }
+        std::string out = r;
+        free(r);
+        return out;
+    };
+
+    std::vector<std::string> deps;
+    if (!source.empty()) {
+        deps.push_back(canon(source));
+    }
+
+    if (context) {
+        DIR* d = opendir(context);
+        if (!d) {
+            fprintf(stderr, "error: --depfile: cannot open context dir '%s': %s\n",
+                context, strerror(errno));
+            return false;
+        }
+        struct dirent* ent;
+        while ((ent = readdir(d)) != nullptr) {
+            size_t len = strlen(ent->d_name);
+            bool keep = false;
+            if (len > 3) {
+                const char* tail = ent->d_name + len - 3;
+                if (!strcmp(tail, ".qm") || !strcmp(tail, ".qc") || !strcmp(tail, ".ql")) {
+                    keep = true;
+                }
+            }
+            if (!keep) {
+                continue;
+            }
+            std::string full = canon(std::string(context) + "/" + ent->d_name);
+            if (std::find(deps.begin(), deps.end(), full) == deps.end()) {
+                deps.emplace_back(std::move(full));
+            }
+        }
+        closedir(d);
+        std::sort(deps.begin(), deps.end());
+    }
+
+    FILE* f = fopen(path, "w");
+    if (!f) {
+        fprintf(stderr, "error: --depfile: cannot open '%s' for writing: %s\n",
+            path, strerror(errno));
+        return false;
+    }
+
+    auto escape = [](const std::string& s) {
+        std::string out;
+        out.reserve(s.size());
+        for (char c : s) {
+            if (c == ' ' || c == '\\') {
+                out += '\\';
+            }
+            out += c;
+        }
+        return out;
+    };
+
+    fprintf(f, "%s:", escape(output).c_str());
+    for (const auto& dep : deps) {
+        fprintf(f, " \\\n    %s", escape(dep).c_str());
+    }
+    fputc('\n', f);
+    fclose(f);
+    return true;
 }
 
 // Program options
@@ -122,6 +212,14 @@ static const char* time_trace_path = nullptr;
 // Default 200 validated on HS (46x compile speedup, ~1-7% runtime cost)
 // and SqlUtil (1.70x speedup); OpenApi3 unaffected (no functions >= 200).
 static int big_fn_threshold = 200;
+// Phase 4 slice 10h: --depfile=FILE emits a Make-format dependency
+// file after a successful compile, listing every source file the
+// target output (re)builds against.  cmake wires it via
+// add_custom_command(... DEPFILE ${out}.d) so a touch on any sibling
+// `.qc` in a split-dir module's --context=DIR retriggers the
+// affected `.qo`.  GCC's `-MMD -MF <path>` pair maps onto this
+// single long option.
+static const char* depfile_path = nullptr;
 
 static void print_usage(const char* prog) {
     printf("Qore Code Compiler (qcc) v%s\n", QCC_VERSION);
@@ -161,6 +259,13 @@ static void print_usage(const char* prog) {
            "                         runtime (namespaces, injected functions) that\n"
            "                         target sources reference by bare name.  Repeatable;\n"
            "                         parsed in declaration order before targets.\n");
+    printf("      --depfile=FILE     Emit Make-format dependency file at FILE after a\n"
+           "                         successful compile.  Lists the output, a colon, and\n"
+           "                         every source the parser opens (the target source\n"
+           "                         plus, in `--context=DIR` mode, all sibling .qm/.qc/.ql).\n"
+           "                         Equivalent to GCC's `-MMD -MF FILE`.  Intended for\n"
+           "                         cmake's `add_custom_command(... DEPFILE ...)` so\n"
+           "                         incremental builds retrigger on sibling-file edits.\n");
     printf("      --from-objects     Aggregate mode: positional args are per-file .qo\n"
            "                         inputs; requires -m and --context=DIR; produces a\n"
            "                         standard .qmod by linking the .qo's + fresh glue\n");
@@ -222,6 +327,7 @@ static struct option long_options[] = {
     // don't collide with char short codes.
     {"output-dir",        required_argument, nullptr, 0x100},
     {"stub",              required_argument, nullptr, 0x101},
+    {"depfile",           required_argument, nullptr, 0x102},
     {"from-objects",      no_argument,       nullptr, 'F'},
     {"archive",           no_argument,       nullptr, 'a'},
     {"verbose",           no_argument,       nullptr, 'v'},
@@ -298,6 +404,9 @@ static int parse_options_cmdline(int argc, char** argv) {
                 break;
             case 0x101:  // --stub
                 stub_files.emplace_back(optarg);
+                break;
+            case 0x102:  // --depfile
+                depfile_path = optarg;
                 break;
             case 'F':
                 from_objects = true;
@@ -553,6 +662,16 @@ int main(int argc, char** argv) {
             output.c_str(), object_paths.size(),
             object_paths.size() == 1 ? "" : "s", opt_level,
             include_source ? "" : ", source-stripped");
+        // slice 10h: aggregator re-parses every source in --context for
+        // metadata extraction.  Per-.qo depfiles (emitted by the per-file
+        // rule) cover the common case, but a new file added to the dir
+        // without a matching `qcc -c` rule would be invisible without
+        // this fallback.  Write empty-source + context depfile.
+        if (depfile_path
+                && !write_depfile(depfile_path, output, std::string(), context_dir)) {
+            qore_cleanup();
+            return 1;
+        }
         qore_cleanup();
         return 0;
     }
@@ -840,6 +959,12 @@ int main(int argc, char** argv) {
                 output.c_str(), opt_level, script_lib_dirs.size(),
                 script_lib_dirs.size() == 1 ? "" : "s",
                 include_source ? "" : ", source-stripped");
+            // slice 10h: deps = target source only (script mode has no
+            // --context dir; -L preload is a linker-style decl path,
+            // not a parser-opened source set).  Not yet wired in cmake.
+            if (depfile_path && !write_depfile(depfile_path, output, source_file, nullptr)) {
+                rc = 1;
+            }
         }
     } else if (per_file_mode) {
         // Phase 4 slice 4: compile a single file from a split module
@@ -859,6 +984,12 @@ int main(int argc, char** argv) {
         } else {
             printf("%s: compiled per-file .qo (O%d%s)\n", output.c_str(), opt_level,
                 include_source ? "" : ", source-stripped");
+            // slice 10h: deps = target source + every sibling .qm/.qc/.ql
+            // in --context=DIR (matches compileSeparatedModuleFile's dir scan).
+            if (depfile_path
+                    && !write_depfile(depfile_path, output, source_file, context_dir)) {
+                rc = 1;
+            }
         }
     } else if (is_split_module) {
         // Compile split module directory
@@ -877,6 +1008,13 @@ int main(int argc, char** argv) {
             printf("%s: compiled split module (O%d%s%s)\n", output.c_str(), opt_level,
                 compile_only ? ", relocatable .qo" : "",
                 include_source ? "" : ", source-stripped");
+            // slice 10h: source_file is the split-module directory itself;
+            // pass it as `context` so every .qm/.qc/.ql inside counts as a dep.
+            // Leave `source` empty so the target dir is not double-listed.
+            if (depfile_path
+                    && !write_depfile(depfile_path, output, std::string(), source_file)) {
+                rc = 1;
+            }
         }
     } else if (module_mode) {
         // Compile single-file module
@@ -896,6 +1034,10 @@ int main(int argc, char** argv) {
             printf("%s: compiled module (O%d%s%s)\n", output.c_str(), opt_level,
                 compile_only ? ", relocatable .qo" : "",
                 include_source ? "" : ", source-stripped");
+            // slice 10h: deps = just the .qm file
+            if (depfile_path && !write_depfile(depfile_path, output, source_file, nullptr)) {
+                rc = 1;
+            }
         }
     } else {
         // Create program and parse

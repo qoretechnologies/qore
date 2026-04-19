@@ -411,38 +411,51 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
             endif()
             get_filename_component(_src_name ${_src} NAME)
             set(_qo_out ${_qo_dir}/${_src_name}.qo)
+            set(_qo_dep ${_qo_out}.d)
+            # slice 10h: --depfile=<out>.d lets qcc list every .qm/.qc it
+            # actually opened in --context=DIR; cmake's DEPFILE keyword
+            # consumes that on the next build so sibling-file edits
+            # retrigger the right .qo.
             add_custom_command(
                 OUTPUT ${_qo_out}
                 COMMAND ${CMAKE_COMMAND} -E make_directory ${_qo_dir}
                 COMMAND ${CMAKE_COMMAND} -E env ${QORE_QM_METADATA_ENV}
                     $<TARGET_FILE:qcc> -c --context=${_source_root}
-                    --output-dir=${_qo_dir} ${_src}
+                    --output-dir=${_qo_dir}
+                    --depfile=${_qo_dep} ${_src}
                 DEPENDS ${_src} qcc libqore
+                DEPFILE ${_qo_dep}
                 COMMENT "AOT compile ${_name}: ${_src_name}"
                 VERBATIM
             )
             list(APPEND _qo_outputs ${_qo_out})
         endforeach()
 
+        set(_qmod_dep ${_qmod_out}.d)
         add_custom_command(
             OUTPUT ${_qmod_out}
             COMMAND ${CMAKE_COMMAND} -E make_directory ${_qmod_out_dir}
             COMMAND ${CMAKE_COMMAND} -E env ${QORE_QM_METADATA_ENV}
                 $<TARGET_FILE:qcc> -m --from-objects
                 --context=${_source_root}
+                --depfile=${_qmod_dep}
                 -o ${_qmod_out} ${_qo_outputs}
             DEPENDS ${_qo_outputs} qcc libqore
+            DEPFILE ${_qmod_dep}
             COMMENT "AOT aggregate ${_name}.qmod"
             VERBATIM
         )
     else()
         # Single-file module: direct qcc -m.
+        set(_qmod_dep ${_qmod_out}.d)
         add_custom_command(
             OUTPUT ${_qmod_out}
             COMMAND ${CMAKE_COMMAND} -E make_directory ${_qmod_out_dir}
             COMMAND ${CMAKE_COMMAND} -E env ${QORE_QM_METADATA_ENV}
-                $<TARGET_FILE:qcc> -m ${_source_root} -o ${_qmod_out}
+                $<TARGET_FILE:qcc> -m ${_source_root}
+                --depfile=${_qmod_dep} -o ${_qmod_out}
             DEPENDS ${_source_root} qcc libqore
+            DEPFILE ${_qmod_dep}
             COMMENT "AOT compile ${_name}.qmod"
             VERBATIM
         )
