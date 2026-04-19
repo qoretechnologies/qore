@@ -72,9 +72,7 @@ class TestObserver inherits DataProvider::Observer {
             "event_id": event_id,
             "data": data_,
         };
-        if (events.size() >= expected_count) {
-            cond.broadcast();
-        }
+        cond.broadcast();
     }
 
     bool waitForEvents(timeout t = 10s) {
@@ -104,6 +102,7 @@ class SseObservableTest inherits Test {
     }
 
     constructor() : Test("SseObservableTest", "1.0") {
+        addTestCase("TestObserver wakes for partial wait counts", \testObserverPartialWaitWakes());
         addTestCase("SseObservable receives events via Observer pattern", \testObserverReceivesEvents());
         addTestCase("SseObservable receives multiple events", \testObserverMultipleEvents());
         addTestCase("SseObservable stopEvents cancels stream", \testStopEvents());
@@ -127,6 +126,23 @@ class SseObservableTest inherits Test {
             server.stop();
             delete server;
         }
+    }
+
+    testObserverPartialWaitWakes() {
+        TestObserver observer(3);
+        Counter done(1);
+        background sub () {
+            usleep(100ms);
+            observer.update("one", {});
+            observer.update("two", {});
+            done.dec();
+        }();
+
+        date start = now_us();
+        assertTrue(observer.waitForCount(2, 3s), "partial-count wait returned");
+        int elapsed_us = (now_us() - start).durationMicroseconds();
+        assertLt(2000000, elapsed_us, "partial-count wait woke before timeout");
+        assertEq(0, done.waitForZero(2s), "producer completed");
     }
 
     testObserverReceivesEvents() {
@@ -168,7 +184,8 @@ class SseObservableTest inherits Test {
         obs.observersReady();
 
         # Wait for connected + greeting before sending a second event
-        assertTrue(observer.waitForCount(2, 10s), "greeting arrived");
+        bool got_greeting = observer.waitForCount(2, 10s);
+        assertTrue(got_greeting, "greeting arrived");
 
         # Send a second event from the server
         handler.sendAll(<SseMessageInfo>{
@@ -204,7 +221,8 @@ class SseObservableTest inherits Test {
         obs.observersReady();
 
         # Wait for connected + greeting before stopping
-        assertTrue(observer.waitForCount(2, 10s), "greeting arrived before stop");
+        bool got_initial = observer.waitForCount(2, 10s);
+        assertTrue(got_initial, "greeting arrived before stop");
 
         # Stop the observable
         obs.stopEvents();

@@ -27,7 +27,7 @@ public namespace HttpServerAsyncIo {
 
 #! Poll operation for Server-Sent Events streaming
 /** This poll operation manages an SSE (Server-Sent Events) connection by:
-    - Monitoring for client disconnect (POLLIN for close/error detection)
+    - Waiting for queued events with an EventNotifier
     - Providing a thread-safe queue for sending events
     - Sending queued events when the socket is writable
 
@@ -56,6 +56,9 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
         #! Channel of events to send
         Channel event_channel(-1);
 
+        #! Notifier signaled when events are queued
+        EventNotifier notifier();
+
         #! Error info if state is ERROR
         *hash<ExceptionInfo> error_info;
 
@@ -68,17 +71,10 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
         */
         int pending_offset = 0;
 
-        #! Optional callback to wake the I/O thread after queuing outgoing data
-        /** Called from @ref queueEvent(), @ref queueRawEvent(), and
-            @ref queueRawString() so the async I/O controller re-runs
-            @ref continuePoll() promptly and drains the @ref event_channel.
-            Without this, events queued by a Qore-side handler thread while
-            the socket has no POLLIN activity would sit in the channel until
-            the next incoming event (effectively forever for server-push
-            SSE), because the controller only re-submits the poll op on
-            completion.
-
-            @see @ref AsyncSocketIo::AsyncSocketIoController::wake()
+        #! Optional callback retained for API compatibility
+        /** SSE queue wakeups are driven by @ref notifier.  This callback is no
+            longer needed for normal operation, but the setter remains so older
+            callers can keep wiring it without changing behavior.
         */
         *code<nothing()> wake_callback;
     }
@@ -92,9 +88,8 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
 
     #! Sets the wake callback used to notify the I/O controller after queuing data
     /** The HTTP server framework calls this after @ref ServerSentEventHandler::setupAsyncSseConnection()
-        returns, passing a closure that calls @ref AsyncSocketIo::AsyncSocketIoController::wakeSocket()
-        on the SSE socket.  Without this, queued events are never sent because the async I/O
-        controller has no trigger to re-run @ref continuePoll().
+        returns.  Wakeups are now provided by the EventNotifier registered in
+        @ref continuePoll(); this method is retained for source compatibility.
 
         @param cb the wake callback
 
@@ -133,47 +128,46 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
             return NOTHING;
         }
 
-        # Client disconnect detection is handled by the async I/O controller:
-        # - H2 SSE: the H2 session detects RST_STREAM or GOAWAY via frame callbacks
-        # - H1 SSE: the controller detects EOF via EPOLLHUP on the socket
-        # Do NOT probe the raw socket here — for H2, isDataAvailable() returns
-        # true when H2 control frames (SETTINGS_ACK, WINDOW_UPDATE) are pending,
-        # which is normal and NOT a disconnect.  For H1, recv() would consume
-        # bytes that belong to the HTTP framing layer.
+        notifier.acknowledge();
 
-        # Send pending data using send2() which guarantees full delivery
-        if (pending_data) {
-            try {
-                sock.send2(pending_data, DefaultSocketSendTimeout);
-                remove pending_data;
-                pending_offset = 0;
-            } catch (hash<ExceptionInfo> ex) {
-                state = STATE_DISCONNECTED;
-                return NOTHING;
+        # Do not register the client socket for read readiness while an H1 SSE
+        # stream is idle.  A closed peer makes the fd permanently readable, and
+        # this Qore poll operation does not consume from it.  EventNotifier
+        # wakeups are enough to flush queued events; send2() reports a disconnect
+        # when the next event is written.
+
+        # Send queued data using send2(), which guarantees full delivery. Since
+        # send2() blocks with a bounded timeout, flush data in this worker call
+        # instead of depending on a follow-up POLLOUT wake to make progress.
+        while (True) {
+            if (pending_data) {
+                try {
+                    sock.send2(pending_data, DefaultSocketSendTimeout);
+                    remove pending_data;
+                    pending_offset = 0;
+                } catch (hash<ExceptionInfo> ex) {
+                    state = STATE_DISCONNECTED;
+                    return NOTHING;
+                }
+                continue;
             }
-        }
 
-        # Check event channel for more data to send
-        {
             auto result = event_channel.tryRecv();
-            if (exists result) {
-                # String values are pre-formatted; hash values need SSE formatting
-                pending_data = result.value.typeCode() == NT_STRING
-                    ? result.value
-                    : formatSseEvent(result.value);
-                pending_offset = 0;
-                # Request write poll
-                return <SocketPollInfo>{
-                    "events": SOCK_POLLOUT | SOCK_POLLIN,
-                    "socket": sock,
-                };
+            if (!exists result) {
+                break;
             }
+
+            # String values are pre-formatted; hash values need SSE formatting
+            pending_data = result.value.typeCode() == NT_STRING
+                ? result.value
+                : formatSseEvent(result.value);
+            pending_offset = 0;
         }
 
-        # No data to send - just monitor for disconnect
+        # No data to send - wait until queueEvent()/queueRaw*() signals us.
         return <SocketPollInfo>{
             "events": SOCK_POLLIN,
-            "socket": sock,
+            "socket": notifier,
         };
     }
 
@@ -190,9 +184,7 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
             "id": id,
             "retry": retry,
         });
-        if (wake_callback) {
-            wake_callback();
-        }
+        notifier.notify();
     }
 
     #! Queues a raw SSE message
@@ -200,9 +192,7 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
     */
     queueRawEvent(hash<auto> event) {
         event_channel.send(event);
-        if (wake_callback) {
-            wake_callback();
-        }
+        notifier.notify();
     }
 
     #! Queues a pre-formatted SSE string for sending
@@ -210,9 +200,7 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
     */
     queueRawString(string data) {
         event_channel.send(data);
-        if (wake_callback) {
-            wake_callback();
-        }
+        notifier.notify();
     }
 
     #! Formats an SSE event according to the spec
@@ -268,6 +256,7 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
     #! Aborts the operation and closes the connection
     abort() {
         state = STATE_DISCONNECTED;
+        notifier.notify();
         try {
             sock.close();
         } catch () {

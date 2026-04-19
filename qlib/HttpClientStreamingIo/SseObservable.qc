@@ -30,8 +30,9 @@ public namespace HttpClientStreamingIo {
     SSE events are parsed on the I/O thread (via C++ SseAction) and delivered to
     observers as parsed SseMessageInfo hashes — zero thread hops for parsing.
 
-    The read loop runs on the AsyncIoController worker pool, reading from the
-    Queue populated by the I/O thread and notifying observers.
+    The EventNotifier is polled by the AsyncIoController; when it fires, the
+    Queue populated by the I/O thread is drained without blocking and observers
+    are notified.
 
     @par Example: Observing SSE events
     @code{.py}
@@ -62,6 +63,76 @@ obs.observersReady();
 
     @since %HttpClientStreamingIo 1.0
 */
+
+namespace Priv {
+
+class SseNotifierPollOperation inherits Qore::AbstractPollOperation {
+    private {
+        EventNotifier notifier;
+        code<bool()> drain;
+        code<nothing()> done;
+        bool complete = False;
+    }
+
+    constructor(EventNotifier notifier, code<bool()> drain, code<nothing()> done) {
+        self.notifier = notifier;
+        self.drain = drain;
+        self.done = done;
+    }
+
+    string getGoal() {
+        return "sse-events";
+    }
+
+    string getState() {
+        return complete ? "complete" : "waiting";
+    }
+
+    bool goalReached() {
+        return complete;
+    }
+
+    *hash<SocketPollInfo> continuePoll() {
+        if (complete) {
+            return NOTHING;
+        }
+
+        try {
+            notifier.acknowledge();
+            if (drain()) {
+                complete = True;
+                done();
+                return NOTHING;
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            complete = True;
+            done();
+            rethrow;
+        }
+
+        return <SocketPollInfo>{
+            "socket": notifier,
+            "events": SOCK_POLLIN,
+        };
+    }
+
+    abort() {
+        if (!complete) {
+            complete = True;
+            done();
+        }
+    }
+
+    onComplete(hash<SocketPollResultInfo> result) {
+        if (!complete) {
+            complete = True;
+            done();
+        }
+    }
+}
+
+} # namespace Priv
+
 public class SseObservable inherits DataProvider::DelayedObservable {
     private {
         #! Connection manager
@@ -88,7 +159,7 @@ public class SseObservable inherits DataProvider::DelayedObservable {
         #! Data serialization: "json" or "none"
         string serialization = "none";
 
-        #! I/O timeout for Queue reads
+        #! I/O timeout retained for compatibility with the original options
         timeout timeout_ms = 30s;
 
         #! Stop flag
@@ -97,11 +168,29 @@ public class SseObservable inherits DataProvider::DelayedObservable {
         #! Mutex for thread safety
         Mutex m();
 
+        #! Signals notifier poll operation state changes
+        Condition stop_cond();
+
         #! The stream handle (for cancellation)
         *HttpClientIo::HttpClientStreamHandle stream;
 
         #! The SSE event Queue (populated by SseAction on I/O thread)
         *Queue sse_queue;
+
+        #! EventNotifier signaled when SSE queue entries are available
+        *EventNotifier notifier;
+
+        #! True while the notifier poll operation is active
+        bool notifier_active = False;
+
+        #! Notifier delivery worker thread ID
+        *int tid;
+
+        #! True after EVENT_SSE_CLOSED has been delivered
+        bool closed = False;
+
+        #! Async I/O controller key for the notifier poll operation
+        *string poll_key;
     }
 
     #! Creates an SSE Observable
@@ -134,13 +223,14 @@ public class SseObservable inherits DataProvider::DelayedObservable {
     }
 
     #! Called when all observers have been added — starts the SSE stream
-    /** Acquires a stream, calls startSseStreaming(), and dispatches the
-        read loop to the AsyncIoController's worker pool.
+    /** Acquires a stream, calls startSseStreamingWithNotifier(), and submits
+        the notifier poll operation to the AsyncIoController.
     */
     observersReady() {
         {
             AutoLock al(m);
             stop = False;
+            closed = False;
         }
 
         stream = mgr.acquireStream(url);
@@ -149,26 +239,101 @@ public class SseObservable inherits DataProvider::DelayedObservable {
             "Accept": "text/event-stream",
         } + (headers ?? {});
 
-        sse_queue = stream.startSseStreaming(method, path, req_headers, body);
+        hash<auto> sse_info = stream.startSseStreamingWithNotifier(method, path, req_headers, body);
+        sse_queue = sse_info.queue;
+        notifier = sse_info.notifier;
 
         notifyObservers(EVENT_SSE_CONNECTED, {});
 
-        # Dispatch the read loop to the async I/O controller's worker pool
-        AsyncSocketIo::AsyncSocketIoController controller =
-            AsyncSocketIo::getGlobalAsyncIoController();
-        controller.submitTask(sub () {
-            readLoop();
-        });
+        bool stopped_reentrantly;
+        {
+            AutoLock al(m);
+            stopped_reentrantly = stop;
+        }
+        if (stopped_reentrantly) {
+            # stopEvents() was called reentrantly from the connected observer
+            notifyClosed();
+            return;
+        }
+
+        {
+            AutoLock al(m);
+            notifier_active = True;
+            remove tid;
+            poll_key = sprintf("HttpClientStreamingIo::SseObservable:%s", self.uniqueHash());
+        }
+
+        try {
+            AsyncSocketIo::AsyncSocketIoController controller =
+                AsyncSocketIo::getGlobalAsyncIoController();
+            Priv::SseNotifierPollOperation poll_op(notifier, \drainNotifierEvents(), \notifierDone());
+            controller.submit(<SocketPollOperationInfo>{
+                "sock": notifier,
+                "spop": poll_op,
+                "owner": self.uniqueHash(),
+                "key": poll_key,
+                "has_on_complete": True,
+            }, True);
+        } catch (hash<ExceptionInfo> ex) {
+            {
+                AutoLock al(m);
+                notifier_active = False;
+                stop_cond.broadcast();
+            }
+            if (stream) {
+                stream.cancel();
+            }
+            notifyClosed();
+            rethrow;
+        }
     }
 
     #! Stops the SSE event stream
     stopEvents() {
+        *HttpClientIo::HttpClientStreamHandle local_stream;
+        *Queue local_sse_queue;
+        *EventNotifier local_notifier;
+        bool wait_for_notifier;
+        bool wake_notifier;
+        bool notify_without_wait;
+
         {
             AutoLock al(m);
             stop = True;
+            local_stream = stream;
+            local_sse_queue = sse_queue;
+            local_notifier = notifier;
         }
-        if (stream) {
-            stream.cancel();
+        if (local_stream) {
+            local_stream.cancel();
+        }
+
+        {
+            AutoLock al(m);
+            while (tid && tid != gettid()) {
+                stop_cond.wait(m);
+            }
+            wait_for_notifier = notifier_active && (!tid || tid != gettid());
+            wake_notifier = notifier_active && !tid;
+            notify_without_wait = !notifier_active && local_stream;
+        }
+        if (wake_notifier && local_sse_queue) {
+            try {
+                local_sse_queue.push();
+            } catch (hash<ExceptionInfo> ex) {
+            }
+        }
+        if (wake_notifier && local_notifier) {
+            local_notifier.notify();
+        }
+
+        if (wait_for_notifier) {
+            AutoLock al(m);
+            while (notifier_active) {
+                stop_cond.wait(m);
+            }
+        } else if (notify_without_wait) {
+            notifyClosed();
         }
     }
 
@@ -178,43 +343,48 @@ public class SseObservable inherits DataProvider::DelayedObservable {
         return stop;
     }
 
-    #! The read loop — runs on the worker pool thread
-    /** Reads parsed SSE events from the Queue, optionally deserializes JSON,
-        and notifies observers.
+    #! Drains queued SSE events after notifier wakeup
+    /** Reads parsed SSE events from the Queue without blocking, optionally
+        deserializes JSON, and notifies observers.
     */
-    private readLoop() {
+    private bool drainNotifierEvents() {
+        {
+            AutoLock al(m);
+            tid = gettid();
+        }
         on_exit {
             if (self) {
-                notifyObservers(EVENT_SSE_CLOSED, {});
+                AutoLock al(m);
+                remove tid;
+                stop_cond.broadcast();
             }
+        }
+        on_error {
+            notifyClosed();
         }
 
         while (True) {
-            if (!self) {
-                return;
-            }
+            bool stopped;
             {
                 AutoLock al(m);
-                if (stop) {
-                    return;
-                }
+                stopped = stop;
+            }
+            if (stopped) {
+                notifyClosed();
+                return True;
             }
 
-            auto evt;
-            try {
-                evt = sse_queue.get(timeout_ms);
-            } catch (hash<ExceptionInfo> ex) {
-                if (ex.err == "QUEUE-TIMEOUT") {
-                    # Timeout — loop and retry
-                    continue;
-                }
-                # Any other Queue error terminates the read loop
-                return;
+            auto item = sse_queue.tryGet();
+            if (!exists item) {
+                return False;
             }
+
+            auto evt = item.value;
 
             # NOTHING sentinel means stream ended
             if (!exists evt) {
-                return;
+                notifyClosed();
+                return True;
             }
 
             if (evt.typeCode() != NT_HASH) {
@@ -225,28 +395,53 @@ public class SseObservable inherits DataProvider::DelayedObservable {
             # vs parsed SseMessageInfo hash — distinguish by hasKey("err")
             hash<auto> evt_hash = cast<hash<auto>>(evt);
             if (evt_hash.hasKey("err")) {
-                # Error from SseAction — terminate the read loop
-                return;
+                notifyClosed();
+                return True;
             }
 
             # Parsed SseMessageInfo hash
-            {
-                try {
-                    if (evt_hash.data.val()) {
-                        evt_hash.data = deserializeData(evt_hash.data);
-                    }
-                    if (evt_hash.id =~ /^[0-9]+$/) {
-                        evt_hash.id = evt_hash.id.toInt();
-                    }
-                } catch (hash<ExceptionInfo> ex) {
-                    continue;
+            try {
+                if (evt_hash.data.val()) {
+                    evt_hash.data = deserializeData(evt_hash.data);
                 }
-
-                if (!self) {
-                    return;
+                if (evt_hash.id =~ /^[0-9]+$/) {
+                    evt_hash.id = evt_hash.id.toInt();
                 }
-                notifyObservers(EVENT_SSE_DATA, evt_hash);
+            } catch (hash<ExceptionInfo> ex) {
+                continue;
             }
+
+            if (!self) {
+                return True;
+            }
+            notifyObservers(EVENT_SSE_DATA, evt_hash);
+        }
+    }
+
+    private notifyClosed() {
+        bool do_notify = False;
+        {
+            AutoLock al(m);
+            if (!closed) {
+                closed = True;
+                do_notify = True;
+            }
+        }
+        if (do_notify) {
+            notifyObservers(EVENT_SSE_CLOSED, {});
+        }
+    }
+
+    private notifierDone() {
+        {
+            AutoLock al(m);
+            notifier_active = False;
+            remove tid;
+            remove stream;
+            remove sse_queue;
+            remove notifier;
+            remove poll_key;
+            stop_cond.broadcast();
         }
     }
 

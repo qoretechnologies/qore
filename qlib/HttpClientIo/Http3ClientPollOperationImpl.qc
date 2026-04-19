@@ -509,7 +509,7 @@ public class Http3ClientPollOperation inherits Http3ClientPollOperationBase, Htt
         @return the stream ID
     */
     int submitRequestWithQueue(string method, string path, *hash<auto> headers, *data body,
-            Queue queue, int max_streams) {
+            Queue queue, int max_streams, *EventNotifier notifier) {
         if (!self.isReady()) {
             throw "HTTP3-STATE-ERROR", sprintf("cannot submit request in state: %y", self.getState());
         }
@@ -552,7 +552,7 @@ public class Http3ClientPollOperation inherits Http3ClientPollOperationBase, Htt
         self.endSubmitOk(stream_id);
 
         # Register Queue as the SSE completion action
-        *hash<auto> reg_result = self.registerStreamWithQueue(stream_id, queue);
+        *hash<auto> reg_result = self.registerStreamWithQueue(stream_id, queue, notifier);
         if (reg_result.need_cancel) {
             try {
                 int sid = self.getSessionId();
@@ -565,15 +565,8 @@ public class Http3ClientPollOperation inherits Http3ClientPollOperationBase, Htt
                     self.getState());
         }
 
-        # Note: buffered responses for SSE are raw binary chunks — the SseAction
-        # will parse them on the I/O thread; for buffered data that arrived during
-        # the submit-to-registration window, we need to push them to the queue
-        # manually since they weren't processed by the SseAction
-        if (reg_result.buffered) {
-            foreach auto resp in (reg_result.buffered) {
-                queue.push(resp);
-            }
-        }
+        # Buffered responses that arrived during the submit-to-registration
+        # window are replayed through SseAction by registerStreamWithQueue().
 
         return stream_id;
     }
