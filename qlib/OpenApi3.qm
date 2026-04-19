@@ -5272,6 +5272,13 @@ public hashdecl SchemaBlockInfo {
     #! AI-specific summary override from \@x-ai-summary (used for embedding text when
     #! \@summary cannot be changed for backward compatibility)
     *string ai_summary;
+    #! AI-specific tool name override from \@x-ai-tool-name (emitted as the
+    #! \c x-ai-tool-name extension on the generated OpenAPI operation).
+    #! MCP gateways use this as the LLM-facing tool name when the
+    #! auto-derived name from the HTTP verb + path would be unfriendly or
+    #! collide.  When absent, gateways fall back to their default
+    #! verb+resource transform.
+    *string ai_tool_name;
     #! Response content type override from \@content_type (e.g., \c "application/x-yaml"
     #! for file downloads).  When set, the response content type in the generated OpenAPI
     #! spec uses this value instead of the default \c application/json + YAML pair.
@@ -5307,6 +5314,7 @@ public class OpenApi3SchemaTokenizer {
         const TokenExamples = "@examples";
         const TokenNote = "@note";
         const TokenAiSummary = "@x-ai-summary";
+        const TokenAiToolName = "@x-ai-tool-name";
         const TokenContentType = "@content_type";
 
         #! Pattern to match \@REST method declarations with optional path
@@ -5413,6 +5421,14 @@ public class OpenApi3SchemaTokenizer {
                 string val = regex_subst(trimmed, "^@x-ai-summary\\s+", "");
                 rv.ai_summary = val;
                 state = "ai_summary";
+                continue;
+            }
+            if (trimmed =~ /^@x-ai-tool-name\s+/) {
+                # Tool name is a single-line identifier; trim to normalise
+                # accidental trailing whitespace.  Continuation is not
+                # supported — names must fit on one line.
+                rv.ai_tool_name = trim(regex_subst(trimmed,
+                    "^@x-ai-tool-name\\s+", ""));
                 continue;
             }
             if (trimmed =~ /^@content_type\s+/) {
@@ -5865,6 +5881,10 @@ public class OpenApi3SchemaGenerator {
         # Add x-ai-summary extension if AI summary override is defined
         if (method_info.schema.ai_summary) {
             operation."x-ai-summary" = method_info.schema.ai_summary;
+        }
+        # Add x-ai-tool-name extension for LLM-facing tool-name override
+        if (method_info.schema.ai_tool_name) {
+            operation."x-ai-tool-name" = method_info.schema.ai_tool_name;
         }
         # Append notes to description if present
         if (method_info.schema.notes) {
