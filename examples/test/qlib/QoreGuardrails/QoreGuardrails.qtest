@@ -433,12 +433,12 @@ public class QoreGuardrailsTest inherits QUnit::Test {
         hash<string, hash<RuleTypeInfo>> reg = GuardrailEngine::getRuleTypeRegistry();
         # Every built-in rule type has an entry
         foreach string t in ("pii", "prompt_injection", "topic_restriction",
-                "output_format", "toxicity", "hallucination") {
+                "output_format", "toxicity", "hallucination", "action_intent") {
             assertTrue(exists reg{t}, sprintf("registry must contain %y", t));
             assertEq(t, reg{t}.type,
                 sprintf("registry[%y].type must equal %y", t, t));
         }
-        assertEq(6, reg.size(), "registry must contain exactly 6 built-in rule types");
+        assertEq(7, reg.size(), "registry must contain exactly 7 built-in rule types");
     }
 
     registryEntryShapeTest() {
