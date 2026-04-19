@@ -529,16 +529,35 @@ QoreHashNode* Http1ClientPollOperationPriv::handleIdle(ExceptionSink* xsink) {
             ExceptionSink idle_xsink;
             int idle_rc = sock_obj->checkIdleData(&idle_xsink);
             if (idle_rc < 0 || idle_xsink) {
-                // EOF or SSL error — server closed the connection
+                // EOF or SSL error — preserve the underlying error category
+                // (e.g. SOCKET-SSL-ERROR when the TLS handshake or an
+                // in-flight TLS record surfaced a validation failure).  The
+                // previous code always reported HTTP1-CONNECTION-CLOSED,
+                // swallowing the SSL error class — callers expecting the
+                // typed SOCKET-SSL-ERROR (HTTPClient self-signed cert test)
+                // saw only the generic "server closed" message.
                 ASYNC_IO_TRACE("H1 handleIdle: checkIdleData rc=%d before send, server closed fd=%d\n",
                     idle_rc, fd);
-                idle_xsink.clear();
                 {
                     AutoLocker al(stream_lock);
                     pending_request_data = req_data;
                     streaming_active = is_streaming;
                 }
-                setError("HTTP1-CONNECTION-CLOSED", "server closed the keep-alive connection", xsink);
+                if (idle_xsink) {
+                    const QoreStringNode* err_str = idle_xsink.getExceptionErr()
+                        .get<const QoreStringNode>();
+                    const QoreStringNode* desc_str = idle_xsink.getExceptionDesc()
+                        .get<const QoreStringNode>();
+                    std::string err = err_str ? err_str->c_str()
+                        : "HTTP1-CONNECTION-CLOSED";
+                    std::string desc = desc_str ? desc_str->c_str()
+                        : "server closed the keep-alive connection";
+                    idle_xsink.clear();
+                    setError(err.c_str(), desc.c_str(), xsink);
+                } else {
+                    setError("HTTP1-CONNECTION-CLOSED",
+                        "server closed the keep-alive connection", xsink);
+                }
                 return nullptr;
             }
             if (idle_rc > 0) {
@@ -591,9 +610,22 @@ QoreHashNode* Http1ClientPollOperationPriv::handleIdle(ExceptionSink* xsink) {
         if (idle_rc < 0 || idle_xsink) {
             ASYNC_IO_TRACE("H1 handleIdle: checkIdleData rc=%d, closing fd=%d (no pending req)\n",
                 idle_rc, fd);
-            idle_xsink.clear();
             sock_obj->close();
-            setError("HTTP1-CONNECTION-CLOSED", "server closed the connection", xsink);
+            if (idle_xsink) {
+                const QoreStringNode* err_str = idle_xsink.getExceptionErr()
+                    .get<const QoreStringNode>();
+                const QoreStringNode* desc_str = idle_xsink.getExceptionDesc()
+                    .get<const QoreStringNode>();
+                std::string err = err_str ? err_str->c_str()
+                    : "HTTP1-CONNECTION-CLOSED";
+                std::string desc = desc_str ? desc_str->c_str()
+                    : "server closed the connection";
+                idle_xsink.clear();
+                setError(err.c_str(), desc.c_str(), xsink);
+            } else {
+                setError("HTTP1-CONNECTION-CLOSED",
+                    "server closed the connection", xsink);
+            }
             return nullptr;
         }
         if (idle_rc > 0) {
