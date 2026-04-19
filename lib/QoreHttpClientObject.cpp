@@ -1375,7 +1375,8 @@ struct qore_httpclient_priv {
                 && gm != HTTP2_MODE_DISABLED && !ld;
             HttpClientProtocol want_proto;
             if (http3_mode.load(std::memory_order_relaxed)
-                    == HTTP3_MODE_REQUIRED) {
+                    == HTTP3_MODE_REQUIRED
+                    || (http3_active && connection.ssl)) {
                 want_proto = HttpClientProtocol::H3;
             } else if (h2_hard) {
                 want_proto = HttpClientProtocol::H2;
@@ -1417,7 +1418,8 @@ struct qore_httpclient_priv {
                     && global_mode != HTTP2_MODE_DISABLED && !lib_disabled;
 
                 if (http3_mode.load(std::memory_order_relaxed)
-                        == HTTP3_MODE_REQUIRED) {
+                        == HTTP3_MODE_REQUIRED
+                        || (http3_active && connection.ssl)) {
                     opts.protocol = HttpClientProtocol::H3;
                 } else if (h2_hard) {
                     opts.protocol = HttpClientProtocol::H2;
@@ -5946,6 +5948,30 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
             }
         }
 
+        // Alt-Svc HTTP/3 opportunistic upgrade: if we cached an h3
+        // Alt-Svc entry for this origin (from a prior H1/H2 response
+        // over TLS), reset the conn_mgr with the H3 protocol so
+        // subsequent dispatches use QUIC.  The conn_mgr itself has a
+        // fixed protocol per instance and doesn't auto-migrate, so
+        // the upgrade happens here at the per-request boundary.  On
+        // QUIC failure the Alt-Svc cache entry is marked with a 5
+        // minute backoff in mgr.request's error handling so repeated
+        // requests don't keep retrying H3.
+        bool attempted_h3_upgrade = false;
+        if (!http3_active && http3_mode != HTTP3_MODE_DISABLED
+                && this_connection.ssl) {
+            auto alt = lookupAltSvc(this_connection.host.c_str(),
+                this_connection.port);
+            if (alt.has_value()) {
+                // Drop the existing (H1/H2/NEG) conn_mgr so getConnMgr()
+                // below allocates a fresh H3 conn_mgr.
+                conn_mgr.reset();
+                http3_active = true;
+                http2_active = false;
+                attempted_h3_upgrade = true;
+            }
+        }
+
         // Submit request via conn_mgr
         HttpClientConnectionManagerBase& mgr = getConnMgr(xsink);
         if (*xsink) {
@@ -6063,10 +6089,20 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                     }
                 }
             } else if (is) {
-                // InputStream path
+                // InputStream path — use InputStream::read() directly (not
+                // readHelper) to match the legacy sync path and avoid the
+                // caller-thread check: StreamPipe is explicitly designed for
+                // cross-thread producer/consumer use, where the caller on the
+                // background thread reads from a pipe whose producer runs on
+                // the foreground thread.  readHelper() would reject that
+                // with STREAM-THREAD-ERROR, silently swallowed by the
+                // background-thread try/catch and leaving the send empty.
                 size_t chunk_size = max_chunk_size > 0 ? max_chunk_size : 65536;
+                SimpleRefHolder<BinaryNode> buf(new BinaryNode);
+                buf->preallocate(chunk_size);
                 while (true) {
-                    SimpleRefHolder<BinaryNode> buf(is->readHelper(chunk_size, xsink));
+                    int64 r = is->read(const_cast<void*>(buf->getPtr()),
+                        chunk_size, xsink);
                     if (*xsink) {
                         conn->pushSendData(nullptr, 0, xsink);
                         if (channel_raw) {
@@ -6075,10 +6111,10 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                         }
                         return nullptr;
                     }
-                    if (!buf || buf->empty()) {
+                    if (r <= 0) {
                         break;
                     }
-                    conn->pushSendData(buf->getPtr(), buf->size(), xsink);
+                    conn->pushSendData(buf->getPtr(), (size_t)r, xsink);
                     if (*xsink) {
                         conn->pushSendData(nullptr, 0, xsink);
                         if (channel_raw) {
@@ -6798,7 +6834,66 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                     msgpath, *nh, body_ptr, body_len, timeout_ms, xsink),
                 xsink);
             if (!raw_resp || *xsink) {
+                // If this was an Alt-Svc-driven H3 upgrade attempt,
+                // mark the Alt-Svc entry with a backoff and retry
+                // over H1/H2.  The legacy sync path does the same on
+                // connectQuic failure (sendMessageAndGetResponse).
+                if (attempted_h3_upgrade
+                        && http3_mode != HTTP3_MODE_REQUIRED) {
+                    markAltSvcFailed(this_connection.host.c_str(),
+                        this_connection.port);
+                    http3_active = false;
+                    conn_mgr.reset();
+                    xsink->clear();
+                    continue;
+                }
                 return nullptr;
+            }
+            // Surface stream-level errors (e.g., H2 RST_STREAM, H3
+            // STREAM-RESET) as a typed exception so callers see the real
+            // failure instead of a partial hash with no status line.  When
+            // the peer resets the stream before sending HEADERS, the
+            // Promise is resolved with an end_stream-only marker hash —
+            // the getAsBigInt() coercion below would otherwise produce
+            // code==0 and the caller would get a confusing empty hash.
+            {
+                QoreValue err_val = raw_resp->getKeyValue("err");
+                if (!err_val.isNullOrNothing()) {
+                    const char* err_str = err_val.getType() == NT_STRING
+                        ? err_val.get<const QoreStringNode>()->c_str()
+                        : "HTTP-CLIENT-RECEIVE-ERROR";
+                    QoreValue desc_val = raw_resp->getKeyValue("desc");
+                    const char* desc_str = desc_val.getType() == NT_STRING
+                        ? desc_val.get<const QoreStringNode>()->c_str()
+                        : "request failed";
+                    xsink->raiseException(err_str, desc_str);
+                    return nullptr;
+                }
+                QoreValue sc_val = raw_resp->getKeyValue("status_code");
+                if (sc_val.isNullOrNothing() || sc_val.getAsBigInt() <= 0) {
+                    // No status line — the connection/stream ended before
+                    // a response header arrived.  For H2 the most likely
+                    // cause is a RST_STREAM from the server (e.g., body
+                    // size limit); for H1 it's a premature close.
+                    QoreValue proto = raw_resp->getKeyValue("protocol");
+                    const char* proto_str = proto.getType() == NT_STRING
+                        ? proto.get<const QoreStringNode>()->c_str()
+                        : "h1";
+                    if (!strcmp(proto_str, "h2")) {
+                        xsink->raiseException("HTTP-CLIENT-RECEIVE-ERROR",
+                            "HTTP/2 stream ended before response headers "
+                            "received (likely RST_STREAM from peer)");
+                    } else if (!strcmp(proto_str, "h3")) {
+                        xsink->raiseException("HTTP-CLIENT-RECEIVE-ERROR",
+                            "HTTP/3 stream ended before response headers "
+                            "received (likely STREAM-RESET from peer)");
+                    } else {
+                        xsink->raiseException("HTTP-CLIENT-RECEIVE-ERROR",
+                            "connection closed before response headers "
+                            "received");
+                    }
+                    return nullptr;
+                }
             }
 
             // Transform to legacy flat format
@@ -6948,6 +7043,19 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
             } else if (!strcmp(p, "h3")) {
                 http3_active = true;
             }
+        }
+    }
+
+    // Parse Alt-Svc for future HTTP/3 upgrades (mirrors the legacy
+    // sendMessageAndGetResponse parseAltSvc call).  Without this, the
+    // conn_mgr dispatch path never populates the alt_svc_cache and
+    // subsequent requests do not auto-upgrade to HTTP/3, even when the
+    // server advertises h3 support.
+    if (http3_mode != HTTP3_MODE_DISABLED) {
+        QoreValue alt_svc_val = ans->getKeyValue("alt-svc");
+        if (alt_svc_val.getType() == NT_STRING) {
+            parseAltSvc(alt_svc_val.get<const QoreStringNode>()->c_str(),
+                this_connection.host.c_str(), this_connection.port);
         }
     }
 

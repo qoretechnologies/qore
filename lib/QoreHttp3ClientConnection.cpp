@@ -248,13 +248,23 @@ QoreHashNode* Http3ClientConnection::submitRequest(const char* method, const cha
         return nullptr;
     }
 
-    // Create Promise + Future for sync-over-async
-    ReferenceHolder<QorePromise> promise(new QorePromise(), xsink);
-    ReferenceHolder<QoreFuture> future(promise->getFuture(xsink), xsink);
+    // Return {future, stream_id} shape to match H1/H2 so
+    // HttpClientConnectionManagerBase::request can await the response
+    // uniformly via q_future_get_blocking.  The earlier variant blocked
+    // on the Future internally and returned the response hash directly,
+    // which mgr.request rejected with "submitRequest result missing
+    // 'future' key".
+    ReferenceHolder<QorePromise> promise_holder(new QorePromise(), xsink);
+    QorePromise* promise_raw = *promise_holder;
+    ReferenceHolder<QoreFuture> future_holder(promise_holder->getFuture(xsink), xsink);
     if (*xsink) {
         return nullptr;
     }
-    PromiseAction* action = new PromiseAction(promise.release());
+    QoreProgram* pgm = getProgram();
+    ReferenceHolder<QoreObject> future_obj(
+        new QoreObject(QC_FUTUREIMPL, pgm, future_holder.release()), xsink);
+
+    PromiseAction* action = new PromiseAction(promise_raw, /* promise_obj */ nullptr);
 
     int64_t stream_id = poll_op_priv->submitRequest(method, path, headers,
         body, body_len, /* streaming */ false, action,
@@ -289,16 +299,11 @@ QoreHashNode* Http3ClientConnection::submitRequest(const char* method, const cha
         return nullptr;
     }
 
-    // Block on Future
-    QoreObject* future_obj = new QoreObject(QC_FUTUREIMPL, getProgram(), future.release());
-    ValueHolder result(q_future_get_blocking(future_obj, -1, xsink), xsink);
-    if (*xsink) {
-        return nullptr;
-    }
-    if (result->getType() == NT_HASH) {
-        return result.release().get<QoreHashNode>();
-    }
-    return nullptr;
+    ReferenceHolder<QoreHashNode> result(new QoreHashNode(autoTypeInfo), xsink);
+    result->setKeyValue("stream_id", QoreValue((int64)stream_id), xsink);
+    result->setKeyValue("future", future_obj.release(), xsink);
+    promise_holder.release()->deref(xsink);
+    return result.release();
 }
 
 int64_t Http3ClientConnection::submitRequestWithAction(const char* method, const char* path,

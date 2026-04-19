@@ -1906,27 +1906,26 @@ int QoreFtpClient::put(InputStream *is, const char* remotename, ExceptionSink* x
         return -1;
 
     if (priv->use_async && priv->ctrl_op) {
-        // Read InputStream into memory for async dispatch
+        // Read InputStream into memory for async dispatch.
+        // Use is->read() directly (not readHelper and without the
+        // reassign/unassign thread dance): callers commonly wire a
+        // StreamPipe in a producer/consumer pattern where the pipe's
+        // InputStream was constructed in a different thread from the
+        // one executing this put().  readHelper() / reassignThread()
+        // both reject that; PipeInputStream::read itself is internally
+        // synchronized and thread-safe, matching the sync path at
+        // sendFromInputStream() below.
         SimpleRefHolder<BinaryNode> buf(new BinaryNode);
-        is->reassignThread(xsink);
-        if (*xsink) {
-            return -1;
-        }
         char chunk[65536];
         while (true) {
             int64_t nread = is->read(chunk, sizeof(chunk), xsink);
             if (*xsink) {
-                is->unassignThread(xsink);
                 return -1;
             }
             if (nread <= 0) {
                 break;
             }
             buf->append(chunk, static_cast<size_t>(nread));
-        }
-        is->unassignThread(xsink);
-        if (*xsink) {
-            return -1;
         }
         int rv = priv->putAsyncBlocking((*buf)->getPtr(), (*buf)->size(), remotename, xsink);
         sl.unlock();
