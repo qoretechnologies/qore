@@ -76,6 +76,20 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
 
         #! Epoch microseconds of the last successful send (or construction)
         int last_send_us = clock_getmicros();
+
+        #! Optional callback to wake the I/O thread after queuing outgoing data
+        /** Called from @ref queueEvent(), @ref queueRawEvent(), and
+            @ref queueRawString() so the async I/O controller re-runs
+            @ref continuePoll() promptly and drains the @ref event_channel.
+            Without this, events queued by a Qore-side handler thread while
+            the socket has no POLLIN activity would sit in the channel until
+            the next incoming event (effectively forever for server-push
+            SSE), because the controller only re-submits the poll op on
+            completion.
+
+            @see @ref AsyncSocketIo::AsyncSocketIoController::wake()
+        */
+        *code<nothing()> wake_callback;
     }
 
     #! Creates the poll operation
@@ -99,6 +113,20 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
     setHeartbeat(int interval_ms, string msg = ":hb\n\n") {
         heartbeat_ms = interval_ms;
         heartbeat_msg = msg;
+    }
+
+    #! Sets the wake callback used to notify the I/O controller after queuing data
+    /** The HTTP server framework calls this after @ref ServerSentEventHandler::setupAsyncSseConnection()
+        returns, passing a closure that calls @ref AsyncSocketIo::AsyncSocketIoController::wakeSocket()
+        on the SSE socket.  Without this, queued events are never sent because the async I/O
+        controller has no trigger to re-run @ref continuePoll().
+
+        @param cb the wake callback
+
+        @since %HttpServerAsyncIo 1.2
+    */
+    setWakeCallback(*code<nothing()> cb) {
+        wake_callback = cb;
     }
 
     #! Returns the goal of the operation
@@ -207,11 +235,7 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
             "id": id,
             "retry": retry,
         });
-        # Wake the controller so the poll op runs even if it was parked on
-        # POLLIN waiting for a client disconnect: without this, queued events
-        # sit until the next spontaneous POLLIN (e.g., client close) and the
-        # fan-out stalls indefinitely.
-        Qore::AsyncIoController::wakeSocket(sock);
+        wakeAfterQueue();
     }
 
     #! Queues a raw SSE message
@@ -219,7 +243,7 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
     */
     queueRawEvent(hash<auto> event) {
         event_channel.send(event);
-        Qore::AsyncIoController::wakeSocket(sock);
+        wakeAfterQueue();
     }
 
     #! Queues a pre-formatted SSE string for sending
@@ -227,7 +251,23 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
     */
     queueRawString(string data) {
         event_channel.send(data);
-        Qore::AsyncIoController::wakeSocket(sock);
+        wakeAfterQueue();
+    }
+
+    #! Notifies the I/O controller that new data is available.
+    /** Uses @ref wake_callback if set (preferred — the HTTP server plugs
+        its own controller in via @ref setWakeCallback()); otherwise
+        falls back to the process-wide async I/O controller singleton so
+        standalone callers (tests, samples) don't stall while a handler
+        thread queues events onto a socket that is otherwise waiting on
+        POLLIN for a client disconnect.
+    */
+    private wakeAfterQueue() {
+        if (wake_callback) {
+            wake_callback();
+        } else {
+            Qore::AsyncIoController::wakeSocket(sock);
+        }
     }
 
     #! Formats an SSE event according to the spec

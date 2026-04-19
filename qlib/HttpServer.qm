@@ -3300,7 +3300,17 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             return;
         }
         if (rv.hdr."Content-Type" == MimeTypeSse) {
-            # SSE response — set up async SSE connection via the I/O controller
+            # SSE response — set up async SSE connection via the I/O controller.
+            # The write path depends on the HTTP version:
+            # - HTTP/1.x: HttpSseStreamPollOperation queues events for the I/O
+            #   controller's Sse state to drain via chunked encoding
+            # - HTTP/2: Http2SseStream pushes DATA frames directly via
+            #   sendHttp2StreamData(); the nghttp2 session's sendPendingData()
+            #   (driven by h2op on the I/O thread) flushes them to the socket
+            # - HTTP/3: Http3SseStream pushes DATA on the QUIC stream via
+            #   submitQuicStreamData()
+            bool sse_is_http2 = cx."header-info".http2 ?? False;
+            bool sse_is_http3 = cx."header-info".http3 ?? False;
             if (rv.close) {
                 listener.logError("cid %d: SSE response returned from handler %y, but the connection "
                     "close flag is set", cx.id, cx.handler_name);
@@ -3308,12 +3318,68 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                 listener.logError("cid %d: SSE response returned from handler %y, but the handler does "
                     "not inherit AbstractHttpSocketHandlerInterface (class: %y)", cx.id, cx.handler_name,
                     handler.className());
+            } else if (sse_is_http2 || sse_is_http3) {
+                # HTTP/2 / HTTP/3 SSE: multiplexed streams — submit response
+                # headers directly on the stream and hand the stream to a
+                # protocol-specific SSE writer.  The handler now owns this
+                # stream lifecycle, so mark request_helper as dedicated; the
+                # async I/O controller's multiplexed-result dispatcher will
+                # leave the stream alone.
+                try {
+                    int stream_id = cx."header-info".stream_id;
+                    hash<auto> resp_hdr = rv.hdr ?? {};
+                    # HTTP/2 and HTTP/3 do not use chunked Transfer-Encoding
+                    remove resp_hdr."Transfer-Encoding";
+                    *AsyncSocketIo::AsyncSocketIoController ctrl = cx.async_ctrl;
+                    Socket sse_sock = s;
+                    *code<nothing()> wake_cb;
+                    if (ctrl) {
+                        wake_cb = sub () { ctrl.wakeSocket(sse_sock); };
+                    }
+                    string cid = sprintf("%d:%d", cx.id, stream_id);
+                    if (sse_is_http3) {
+                        int session_id = cx."header-info".session_id;
+                        s.submitQuicResponseStreaming(session_id, stream_id,
+                            rv."code" ?? 200, resp_hdr);
+                        call_object_method(handler, "setupAsyncSseConnectionHttp3",
+                            s, cx, hdr, cid, session_id, stream_id, wake_cb);
+                    } else {
+                        s.submitHttp2StreamingResponseHeaders(stream_id,
+                            rv."code" ?? 200, resp_hdr);
+                        call_object_method(handler, "setupAsyncSseConnectionHttp2",
+                            s, cx, hdr, cid, stream_id, wake_cb);
+                    }
+                    # Tell the controller this stream is owned by the handler
+                    request_helper.setDedicated();
+                    # Wake the I/O thread to flush the HEADERS frame now (and
+                    # any DATA queued by the connection's registered() hook)
+                    if (ctrl) {
+                        ctrl.wakeSocket(s);
+                    }
+                } catch (hash<ExceptionInfo> ex) {
+                    listener.logError("cid %d: error setting up %s SSE connection for handler %y: %s: %s",
+                        cx.id, sse_is_http3 ? "HTTP/3" : "HTTP/2", cx.handler_name, ex.err, ex.desc);
+                }
             } else if (async_response_out) {
-                # Use call_object_method since HttpServer doesn't require ServerSentEventHandler
+                # HTTP/1.x SSE path — use the poll-op state machine in the
+                # async I/O controller.  See setupAsyncSseConnection() for the
+                # H1 poll loop; setWakeCallback() wires the async controller
+                # to re-run continuePoll() when events are queued.
                 try {
                     HttpServerAsyncIo::HttpSseStreamPollOperation poll_op =
                         call_object_method(handler, "setupAsyncSseConnection", s, cx, hdr,
                             string(cx.id));
+                    # Wire a wake callback so that events queued by a Qore-side
+                    # handler thread (e.g. via ServerSentEventConnection::send())
+                    # immediately trigger the async controller to re-run
+                    # continuePoll() and drain the event_channel.  Without
+                    # this, server-push SSE events sit in the channel until
+                    # the client sends something — which it never does.
+                    *AsyncSocketIo::AsyncSocketIoController ctrl = cx.async_ctrl;
+                    if (ctrl) {
+                        Socket sse_sock = s;
+                        poll_op.setWakeCallback(sub () { ctrl.wakeSocket(sse_sock); });
+                    }
                     # Tell the async controller to manage this socket as an SSE stream
                     async_response_out.code = rv."code";
                     async_response_out.hdr = rv.hdr;
