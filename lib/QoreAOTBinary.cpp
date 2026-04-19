@@ -1900,22 +1900,52 @@ static void writeVariantSignature(QoreAOTBinaryWriter& writer, const AbstractQor
     uint32_t np = sig->numParams();
     writer.writeU32(np);
 
-    // flags: bit 0 = varargs
-    uint16_t flags = 0;
-    // IMPORTANT: use variant->hasVarargs() which checks BOTH the signature
-    // ellipsis (`...`) AND the variant's QCF_USES_EXTRA_ARGS flag.  The
-    // signature-only `sig->hasVarargs()` would miss functions like
-    // `sub zip()` whose body references `argv` — the parser sets the
-    // QCF_USES_EXTRA_ARGS flag on the VARIANT at parse time (via
-    // get_pop_argv_ref()), not on the signature.  Losing this bit in the
-    // AOT binary causes downstream callers to fail overload resolution:
-    // e.g. `zip(l1, l2)` at %strict-args errors with "no variant matching"
-    // because the deserialized variant is seen as strictly zero-arg.
+    // flags:
+    //   bit  0 = effective varargs  (v->hasVarargs(), OR of sig-ellipsis and QCF_USES_EXTRA_ARGS)
+    //   bit  1 = is_user
+    //   bit  2 = signature literally has the `...` ellipsis (sig->hasVarargs())
+    //   bit 15 = format marker: "bits 2+ are meaningful" (new-format qmod)
+    //
+    // Bits 0 and 2 together let the reader separate two distinct
+    // concepts that the pre-bit-2 format conflated:
+    //
+    //   * `sub zip() { ...argv... }` — body uses `$argv`/`$N` so the
+    //     parser sets QCF_USES_EXTRA_ARGS on the VARIANT, but the
+    //     SIGNATURE has no ellipsis.  Flag must round-trip so overload
+    //     resolution finds the variant for callers that pass more args
+    //     than the declared signature (Function.cpp:1208 assertion,
+    //     fixed in c6f92f071).
+    //
+    //   * `f(...)` — signature literally declares an ellipsis.  The
+    //     SIGNATURE must carry the ellipsis flag so that
+    //     isSignatureIdentical() comparisons (abstract/concrete method
+    //     matching in qore_class_private::parseCommit / AOT abstract-
+    //     resolution) correctly report the signature shape.
+    //
+    // The pre-format-marker writer set bit 0 to the OR of the two
+    // concepts and the reader set BOTH sig->varargs and
+    // QCF_USES_EXTRA_ARGS from that single bit.  That spuriously
+    // promoted "body uses argv" into "signature has ellipsis", breaking
+    // abstract-override matching whenever a concrete override's body
+    // references $argv/$N — e.g. `RestPingPollOperation::continuePoll()`
+    // with `on_error rethrow $1.err, ...` AOT-serialized with its
+    // signature sprouting a spurious `(...)` so the class stayed
+    // abstract on .qmod load, which in turn broke
+    // `MewsRestClient`/`SalesforceRestClient`/etc. init.
+    //
+    // Bit 15 is a format marker so new readers can distinguish new
+    // qmods (interpret bits 0 and 2 independently) from old qmods
+    // (fall back to the old conflated-bit-0 semantics, preserving
+    // bug-compatible behavior for unrebuilt artifacts).
+    uint16_t flags = 0x8000;   // bit 15: new-format marker
     if (v->hasVarargs()) {
         flags |= 0x0001;
     }
     if (v->isUser()) {
         flags |= 0x0002;
+    }
+    if (sig->hasVarargs()) {
+        flags |= 0x0004;
     }
     writer.writeU16(flags);
 
@@ -5679,7 +5709,8 @@ static bool readAndSetupVariantSignature(
         QoreProgram* pgm,
         const uint8_t*& ptr, const uint8_t* end,
         UserVariantBase* uvb,
-        bool& has_varargs,
+        bool& sig_has_ellipsis,
+        bool& needs_extra_args_flag,
         std::string& error,
         const QoreClass* classTypeInfo = nullptr) {
     // return type path
@@ -5688,9 +5719,33 @@ static bool readAndSetupVariantSignature(
     // num params
     uint32_t np = QoreAOTBinaryReader::readU32(ptr);
 
-    // flags: bit 0 = varargs, bit 1 = is_user
+    // flags: see writeVariantSignature for the bit layout
+    //   bit  0 = effective varargs (v->hasVarargs())
+    //   bit  1 = is_user
+    //   bit  2 = signature literally has `...` (sig->hasVarargs())
+    //   bit 15 = new-format marker — bits 2+ are meaningful
+    //
+    // Pre-marker qmods used bit 0 as the OR of both concepts, and
+    // setting both sig->varargs and QCF_USES_EXTRA_ARGS from it
+    // spuriously inflated concrete variants' signatures with `...`
+    // when the body referenced $argv/$N.  New format splits them.
     uint16_t sig_flags = QoreAOTBinaryReader::readU16(ptr);
-    has_varargs = (sig_flags & 0x0001) != 0;
+    bool new_format = (sig_flags & 0x8000) != 0;
+    bool bit0 = (sig_flags & 0x0001) != 0;
+    bool bit2 = (sig_flags & 0x0004) != 0;
+    if (new_format) {
+        // bit 2 tells us precisely whether the signature had `...`;
+        // bit 0 - bit 2 is the QCF_USES_EXTRA_ARGS flag alone.
+        sig_has_ellipsis = bit2;
+        needs_extra_args_flag = bit0;
+    } else {
+        // Old format: bit 0 conflates; preserve pre-fix behavior for
+        // unrebuilt qmods so existing `sub zip(){...argv...}` callers
+        // don't regress.  The concrete-abstract mismatch for modules
+        // with $argv-in-concrete-override remains until they're rebuilt.
+        sig_has_ellipsis = bit0;
+        needs_extra_args_flag = bit0;
+    }
 
     // Read params
     std::vector<std::string> param_names;
@@ -5892,9 +5947,11 @@ static bool readAndSetupVariantSignature(
         ret_ti = autoTypeInfo;
     }
 
-    // Set up the variant's signature from metadata
+    // Set up the variant's signature from metadata.  Only signature-
+    // level ellipsis (`...`) flows into signature.varargs; the
+    // QCF_USES_EXTRA_ARGS flag alone does NOT inflate the signature.
     UserSignature* sig = uvb->getUserSignature();
-    sig->setupFromAOTMetadata(pgm, ret_ti, param_names, param_types, param_defaults, has_varargs, classTypeInfo);
+    sig->setupFromAOTMetadata(pgm, ret_ti, param_names, param_types, param_defaults, sig_has_ellipsis, classTypeInfo);
 
     // Clean up default values (they were ref'd by setupFromAOTMetadata)
     for (auto& dv : param_defaults) {
@@ -5995,9 +6052,10 @@ bool QoreAOTBinaryDeserializer::deserializeFunctions(std::string& error) {
             UserFunctionVariant* ufv = new UserFunctionVariant(
                 nullptr, 0, 0, QoreValue(), nullptr, false);
 
-            bool has_varargs = false;
+            bool sig_has_ellipsis = false;
+            bool needs_extra_args_flag = false;
             if (!readAndSetupVariantSignature(reader, type_resolver, pgm, ptr, end,
-                    ufv, has_varargs, error)) {
+                    ufv, sig_has_ellipsis, needs_extra_args_flag, error)) {
                 // variant ownership transfers to addPendingVariant or cleanup
                 ufv->deref();
                 // function can't be deleted directly; add it to namespace empty
@@ -6005,9 +6063,13 @@ bool QoreAOTBinaryDeserializer::deserializeFunctions(std::string& error) {
                 return false;
             }
 
-            // Sync QCF_USES_EXTRA_ARGS flag with signature varargs state; the constructor
-            // couldn't set this because the signature was populated after construction
-            if (has_varargs) {
+            // Set QCF_USES_EXTRA_ARGS on the variant.  This flag is
+            // independent of signature.varargs (which was already set
+            // from sig_has_ellipsis inside readAndSetupVariantSignature):
+            // it marks bodies that reference `$argv`/`$N` even when the
+            // declared signature has no ellipsis, so overload resolution
+            // can still route callers passing extra args here.
+            if (needs_extra_args_flag) {
                 ufv->setFlag(QCF_USES_EXTRA_ARGS);
             }
 
@@ -6094,17 +6156,23 @@ bool QoreAOTBinaryDeserializer::deserializeMethods(std::string& error) {
                     QCF_NO_FLAGS, is_abstract);
             }
 
-            bool has_varargs = false;
+            bool sig_has_ellipsis = false;
+            bool needs_extra_args_flag = false;
             UserVariantBase* umv = dynamic_cast<UserVariantBase*>(mvb);
             assert(umv);
             if (!readAndSetupVariantSignature(reader, type_resolver, pgm, ptr, end,
-                    umv, has_varargs, error, qc)) {
+                    umv, sig_has_ellipsis, needs_extra_args_flag, error, qc)) {
                 delete mvb;
                 return false;
             }
 
-            // Sync QCF_USES_EXTRA_ARGS flag with signature varargs state
-            if (has_varargs) {
+            // See deserializeFunctions counterpart above: the flag is
+            // independent of signature-level ellipsis.  Separating the
+            // two is what makes abstract/concrete method matching work
+            // for concrete overrides whose bodies reference $argv/$N
+            // (e.g. RestPingPollOperation::continuePoll with `on_error
+            // rethrow $1.err, ...`).
+            if (needs_extra_args_flag) {
                 mvb->setFlag(QCF_USES_EXTRA_ARGS);
             }
 
