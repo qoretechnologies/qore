@@ -6415,9 +6415,12 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 if (!state_val) { return false; }
                 auto* index_val = getVal(inv->operands[1].id, error);
                 if (!index_val) { return false; }
+                // Index may flow through a nan-boxed PHI (loop counter); unbox
+                // to plain i64 before passing to the runtime helper.
+                llvm::Value* index_unboxed = ensureIntTypeInline(index_val, inv->operands[1].id);
                 auto helper = module.getOrInsertFunction("qore_rt_ref_foreach_get_entry",
                         llvm::FunctionType::get(i64_type, {i64_type, i64_type, ptr_type}, false));
-                result = builder->CreateCall(helper, {state_val, index_val, xsink_arg});
+                result = builder->CreateCall(helper, {state_val, index_unboxed, xsink_arg});
                 // Result is nanboxed — handled by common tail below
 
             } else if (inv->invoke_opcode == QoreIROpcode::RangeSliceAny
@@ -11773,18 +11776,20 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             if (!state_val) { return false; }
             auto* index_val = getVal(inst->operands[1].id, error);
             if (!index_val) { return false; }
-            // Ensure index is i64 (it may be a typed int that needs unboxing)
             if (index_val->getType() != i64_type) {
                 error = "RefForeachGetEntry: index must be i64";
                 return false;
             }
+            // Index may flow through a nan-boxed PHI (loop counter); unbox
+            // to plain i64 before passing to the runtime helper.
+            llvm::Value* index_unboxed = ensureIntTypeInline(index_val, inst->operands[1].id);
             auto rfge_ft = llvm::FunctionType::get(i64_type,
                     {i64_type, i64_type, ptr_type}, false);
             auto helper = module.getOrInsertFunction("qore_rt_ref_foreach_get_entry", rfge_ft);
             auto helper_throwing = module.getOrInsertFunction(
                     "qore_rt_ref_foreach_get_entry_throwing", rfge_ft);
             llvm::Value* result = emitMaybeInvoke(helper, helper_throwing,
-                    {state_val, index_val, xsink_arg}, module, llvm_func, inst);
+                    {state_val, index_unboxed, xsink_arg}, module, llvm_func, inst);
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(result, inst->result.id, llvm_func);

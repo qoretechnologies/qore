@@ -6975,6 +6975,13 @@ extern "C" DLLEXPORT uint64_t qore_rt_ref_foreach_get_entry(uint64_t state_ptr, 
         // Scalar: return the value (first and only iteration)
         entry = state->tlist.refSelf();
     }
+    if (getenv("QORE_AOT_TRACE_REF_FOREACH")) {
+        fprintf(stderr, "[ref-foreach] get_entry state=%p l_tlist=%p index=%ld "
+            "entry_type=%d\n",
+            (void*)state, (const void*)(state ? state->l_tlist : nullptr),
+            (long)index, (int)entry.getType());
+        fflush(stderr);
+    }
     return toBits(entry);
 }
 

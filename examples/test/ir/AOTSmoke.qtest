@@ -49,6 +49,8 @@ class AOTSmokeTest inherits QUnit::Test {
             \testCrossModuleSameName());
         addTestCase("AOT ref foreach ParseNode pointer",
             \testRefForeachParseNode());
+        addTestCase("AOT ref foreach narrowed element type",
+            \testRefForeachNarrowedElement());
         addTestCase("AOT type conversions", \testTypeConversions());
         # AOT opt-level, cross-compilation, and static linking tests
         addTestCase("AOT optimization levels", \testAOTOptLevels());
@@ -881,6 +883,45 @@ printf(\"%d\\n\", count((\"a\", \"b\", \"c\")));
         string interp_out = runInterpreted(code);
         assertEq(interp_out, result.run_out,
             "ref-foreach AOT output matches interpreter");
+    }
+
+    testRefForeachNarrowedElement() {
+        # Regression: `RefForeachGetEntry` passes a loop-counter PHI
+        # (marked nanboxed_values) as an i64 index to the runtime
+        # helper.  Physical LLVM type is i64 for both nanboxed and
+        # native values, so the previous emit code's type check
+        # passed, but the bits were the NaN-box tag
+        # 0xFFF9000000000000 for integer 0.  `getReferencedEntry`
+        # saw a huge negative index, returned NOTHING, the loop
+        # accumulator filled with NOTHING, and the final write-back
+        # failed the element-type check with
+        # `<lvalue> expects type 'hash<auto>', but got no value`.
+        # Fix: unbox the index via `ensureIntTypeInline` before
+        # passing to `qore_rt_ref_foreach_get_entry`.
+        string code = "%modern
+*list<hash<auto>> sub run() {
+    # heterogeneous values force hash<auto>, not narrowed hash<string>
+    hash<auto> a = {\"domain\": \"a\", \"keyname\": \"x\", \"count\": 1};
+    hash<auto> b = {\"domain\": \"b\", \"keyname\": \"y\", \"count\": 2};
+    *list<hash<auto>> rows = (a, b);
+    foreach hash<auto> row in (\\rows) {
+        # body touches row to exercise the per-iter write-back
+        row.touched = True;
+    }
+    return rows;
+}
+*list<hash<auto>> result = run();
+printf(\"%d\\n\", elements result);
+foreach hash<auto> r in (result) {
+    printf(\"%s=%y\\n\", r.keyname, r.touched);
+}
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "narrowed ref-foreach: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out,
+            "narrowed ref-foreach AOT output matches interpreter");
     }
 
     testHandlerRecursionGuard() {
