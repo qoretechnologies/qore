@@ -47,6 +47,8 @@ class AOTSmokeTest inherits QUnit::Test {
             \testHandlerRecursionGuard());
         addTestCase("AOT cross-module same-name dispatch",
             \testCrossModuleSameName());
+        addTestCase("AOT ref foreach ParseNode pointer",
+            \testRefForeachParseNode());
         addTestCase("AOT type conversions", \testTypeConversions());
         # AOT opt-level, cross-compilation, and static linking tests
         addTestCase("AOT optimization levels", \testAOTOptLevels());
@@ -850,6 +852,35 @@ printf(\"rv: %s\\n\", rv2);
         assertTrue(result.all_precompiled, "on_exit: all pre-compiled: " + result.compile_out);
         string interp_out = runInterpreted(code);
         assertEq(interp_out, result.run_out, "on_exit blocks output matches interpreter");
+    }
+
+    testRefForeachParseNode() {
+        # Regression: AOT-lowered `RefForeachInit` called
+        # `qore_rt_invoke_expr_aot` which EVALUATES the expression
+        # slot — for a `ParseReferenceNode` that means
+        # `evalToRef()` returns a `ReferenceNode*`.  The callee
+        # `qore_rt_ref_foreach_init` then `reinterpret_cast`'d that
+        # as `ParseReferenceNode*` and SIGSEGV'd on the wrong
+        # vtable when dispatching `evalToRef()` a second time.
+        # Fix: pass the raw ParseReferenceNode* bits from the AOT
+        # slot via `qore_rt_get_expr_bits_aot` (no evaluation),
+        # matching the JIT path's embedded-constant semantics.
+        string code = "%modern
+int sub count(*list<auto> rows) {
+    int n = 0;
+    foreach auto row in (\\rows) {
+        ++n;
+    }
+    return n;
+}
+printf(\"%d\\n\", count((\"a\", \"b\", \"c\")));
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "ref-foreach: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out,
+            "ref-foreach AOT output matches interpreter");
     }
 
     testHandlerRecursionGuard() {

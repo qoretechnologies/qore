@@ -5511,6 +5511,23 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_invoke_expr_aot_
     return result;
 }
 
+//! Return the raw QoreValue bits of an expression slot without evaluating.
+//!
+//! Used by AOT-lowered `RefForeachInit`, which needs the
+//! `ParseReferenceNode*` POINTER to hand to
+//! `qore_rt_ref_foreach_init` (the helper does its own
+//! `evalToRef` inside).  The historical AOT path used
+//! `qore_rt_invoke_expr_aot` here, which `eval()`s the expression
+//! and returned a `ReferenceNode*` — `qore_rt_ref_foreach_init`
+//! then `reinterpret_cast`ed that as a `ParseReferenceNode*` and
+//! called `evalToRef` on it, SIGSEGVing in the vtable because
+//! `ReferenceNode`'s vtable has no `evalToRef`.  Equivalent to
+//! JIT mode which embeds the pointer bits as a constant.
+extern "C" DLLEXPORT uint64_t qore_rt_get_expr_bits_aot(QoreAOTContext* ctx, int32_t idx) {
+    assert(ctx && idx >= 0 && idx < ctx->num_exprs);
+    return ctx->exprs[idx];
+}
+
 extern "C" DLLEXPORT uint64_t qore_rt_vrn_construct_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink) {
     assert(ctx && idx >= 0 && idx < ctx->num_exprs);
     QoreValue expr = fromBits(ctx->exprs[idx]);

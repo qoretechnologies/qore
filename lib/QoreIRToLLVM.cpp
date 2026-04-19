@@ -6380,20 +6380,22 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 }
 
             } else if (inv->invoke_opcode == QoreIROpcode::RefForeachInit) {
-                // RefForeachInit invoke: initialize reference foreach state
+                // RefForeachInit invoke: initialize reference foreach state.
+                // See the non-invoke RefForeachInit path (case block below)
+                // for the full rationale — the callee needs the raw
+                // ParseReferenceNode* bits, not an evaluation of the node.
                 llvm::Value* parse_ref_bits_val;
                 if (aot_mode) {
-                    // AOT: use expression slot for the ParseReferenceNode
                     QoreValue expr_val = inv->expr;
                     uint64_t expr_bits;
                     std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
                     int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
-                    auto aot_helper = module.getOrInsertFunction("qore_rt_invoke_expr_aot",
+                    auto aot_helper = module.getOrInsertFunction("qore_rt_get_expr_bits_aot",
                             llvm::FunctionType::get(i64_type,
-                                {ptr_type, i32_type, ptr_type}, false));
-                    llvm::Value* ref_val = builder->CreateCall(aot_helper, {aot_ctx_arg,
-                            llvm::ConstantInt::get(i32_type, slot), xsink_arg});
-                    parse_ref_bits_val = ref_val;
+                                {ptr_type, i32_type}, false));
+                    llvm::Value* bits_val = builder->CreateCall(aot_helper, {aot_ctx_arg,
+                            llvm::ConstantInt::get(i32_type, slot)});
+                    parse_ref_bits_val = bits_val;
                 } else {
                     // JIT: pass the ParseReferenceNode QoreValue bits directly
                     QoreValue expr_val = inv->expr;
@@ -11714,17 +11716,28 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             const auto* rfi = static_cast<const QoreIRRefForeachInitInstruction*>(inst);
             llvm::Value* parse_ref_bits_val;
             if (aot_mode) {
-                // AOT: use expression slot for the ParseReferenceNode
+                // AOT: load the ParseReferenceNode* POINTER bits from the
+                // expression slot — NOT an evaluation of the node.
+                // `qore_rt_ref_foreach_init` does the `evalToRef` itself
+                // (needs the parse node to construct a runtime
+                // ReferenceNode with correct lvalue semantics).  Matches
+                // the JIT path's `llvm::ConstantInt::get(bits)`, just
+                // indirected through the AOT slot table so the address
+                // survives load-time relocation.  Historical bug:
+                // called `qore_rt_invoke_expr_aot` here, which
+                // `eval()`s the node and returned a `ReferenceNode*`
+                // — the callee then `reinterpret_cast`ed that as a
+                // `ParseReferenceNode*` and SIGSEGV'd on the wrong
+                // vtable entry for `evalToRef`.
                 QoreValue expr_val = rfi->expr;
                 uint64_t expr_bits;
                 std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
                 int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
-                auto helper = module.getOrInsertFunction("qore_rt_invoke_expr_aot",
-                        llvm::FunctionType::get(i64_type, {ptr_type, i32_type, ptr_type}, false));
-                // Evaluate the ParseReferenceNode via AOT to get a runtime reference
-                llvm::Value* ref_val = builder->CreateCall(helper, {aot_ctx_arg,
-                        llvm::ConstantInt::get(i32_type, slot), xsink_arg});
-                parse_ref_bits_val = ref_val;
+                auto helper = module.getOrInsertFunction("qore_rt_get_expr_bits_aot",
+                        llvm::FunctionType::get(i64_type, {ptr_type, i32_type}, false));
+                llvm::Value* bits_val = builder->CreateCall(helper, {aot_ctx_arg,
+                        llvm::ConstantInt::get(i32_type, slot)});
+                parse_ref_bits_val = bits_val;
             } else {
                 // JIT: pass the ParseReferenceNode QoreValue bits directly as a constant
                 QoreValue expr_val = rfi->expr;

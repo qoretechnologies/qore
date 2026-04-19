@@ -518,6 +518,12 @@ void qore_rt_store_closure_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val, E
 //! Invoke an expression via AOT context slot
 uint64_t qore_rt_invoke_expr_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink);
 
+//! Return the raw QoreValue bits of an expression slot without evaluating
+//! the node.  Used where the caller needs the AST pointer itself (e.g.
+//! AOT-lowered `RefForeachInit` needs the `ParseReferenceNode*` to hand
+//! to `qore_rt_ref_foreach_init`, which calls `evalToRef` internally).
+uint64_t qore_rt_get_expr_bits_aot(QoreAOTContext* ctx, int32_t idx);
+
 //! Construct value for VarRefNewObjectNode via AOT context slot (construct-only, no assignment)
 uint64_t qore_rt_vrn_construct_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink);
 
