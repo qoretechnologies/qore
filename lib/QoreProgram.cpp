@@ -811,9 +811,8 @@ void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
         statementIds.shrink_to_fit();
         reverseStatementIds.clear();
 
-        for (auto var : local_var_list) {
-            delete var;
-        }
+        // deque-backed arena: clearing destroys LocalVars in-place;
+        // no manual delete loop needed.
         local_var_list.clear();
 
         // clear program location
@@ -1475,9 +1474,11 @@ int qore_program_private::setGlobalVarValue(const char* name, QoreValue val, Exc
 }
 
 LocalVar* qore_program_private::createLocalVar(const char* name, const QoreTypeInfo* typeInfo) {
-   LocalVar* lv = new LocalVar(name, typeInfo);
-   local_var_list.push_back(lv);
-   return lv;
+   // emplace into the deque-backed arena; returns a stable pointer
+   // that stays valid for the Program's lifetime.  Avoids the per-
+   // LocalVar `new`+list-node allocation of the prior safe_dslist
+   // implementation — hot path in AOT deserialization.
+   return local_var_list.emplace(name, typeInfo);
 }
 
 void qore_program_private::addStatementToIndexIntern(name_section_sline_statement_map_t* statementIndex, const char* key, AbstractStatement *statement, int offs, const char* section, int sectionOffs) {

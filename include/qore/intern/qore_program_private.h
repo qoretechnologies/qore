@@ -37,6 +37,8 @@
 extern QoreListNode* ARGV, * QORE_ARGV;
 extern QoreHashNode* ENV;
 
+#include <deque>
+
 #include "qore/intern/ParserSupport.h"
 #include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/QoreNamespaceIntern.h"
@@ -87,21 +89,49 @@ private:
     qore_ns_private* ns;
 };
 
-// local variable container
-typedef safe_dslist<LocalVar*> local_var_list_t;
-
 // expression type
 typedef StatementBlock* q_exp_t;
 
-class LocalVariableList : public local_var_list_t {
+// Local-variable arena: owns the LocalVar objects created via
+// `qore_program_private::createLocalVar` for the lifetime of the
+// Program.  Previously a `safe_dslist<LocalVar*>` with per-element
+// `new LocalVar` + list-node allocation; replaced with a
+// `std::deque<LocalVar>` because:
+//
+//   1. AOT batch loading allocates millions of LocalVars during
+//      `setupFromAOTMetadata` (~5 per variant × 656k variants for
+//      qwf), and the per-element malloc+list-push was ~30% of
+//      readAndSetupVariantSignature time.
+//   2. `std::deque` gives stable pointers across push_back (unlike
+//      `std::vector`), so existing consumers that hold `LocalVar*`
+//      keep working.  Deque allocates chunks (~4KB) rather than
+//      one allocation per LocalVar → amortized O(1) without the
+//      per-element allocator overhead.
+//   3. Deque's destructor destroys the LocalVars in-place when the
+//      Program ends — replaces the manual `for (auto v : ...) delete v`
+//      loop in the old `LocalVariableList` dtor.
+//
+// Thread-safety note: this container was a `safe_dslist` with
+// whatever concurrency guarantees that gave.  In practice the only
+// caller that mutates is `createLocalVar`, which is only invoked
+// during parse/AOT-deserialization (single-threaded boot phase).
+// No runtime thread iterates the arena during user execution.
+class LocalVariableList : private std::deque<LocalVar> {
 public:
-    DLLLOCAL LocalVariableList() {
+    using std::deque<LocalVar>::size;
+    using std::deque<LocalVar>::empty;
+    using std::deque<LocalVar>::begin;
+    using std::deque<LocalVar>::end;
+    using std::deque<LocalVar>::iterator;
+    using std::deque<LocalVar>::const_iterator;
+
+    DLLLOCAL LocalVar* emplace(const char* name, const QoreTypeInfo* typeInfo) {
+        std::deque<LocalVar>::emplace_back(name, typeInfo);
+        return &std::deque<LocalVar>::back();
     }
 
-    DLLLOCAL ~LocalVariableList() {
-        for (local_var_list_t::iterator i = begin(), e = end(); i != e; ++i) {
-            delete *i;
-        }
+    DLLLOCAL void clear() {
+        std::deque<LocalVar>::clear();
     }
 };
 
