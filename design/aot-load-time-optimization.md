@@ -337,9 +337,37 @@ Low cost (cmake plumbing only) — no Qore-side work needed.
      size + avoids repeated `std::string` construction during read.
    - Intern param names per-blob.
 
-7. **Re-measure** at each step.  Target: wall-clock on qwf `--help`
-   ≤ source-parse baseline (1.80 s).  Currently 2.14 s; need to close
-   ~340 ms.
+7. **Done** — (1b) `safe_dslist<LocalVar*>` → `std::deque<LocalVar>`
+   arena (commit 54fdd0e74).  Removed ~4M `new LocalVar` allocations
+   and list-node overhead, cutting createLocalVar cost on the hot
+   path.
+
+8. **Done** — (3a) move-semantics for `setupFromAOTMetadata`
+   (commit ecbeae7b1).  Rvalue-reference the 3 param vectors so
+   `typeList`/`names`/`defaultArgList` acquire ownership without
+   copying; removes the refSelf/discard round-trip for default args.
+   setupFromAOTMetadata 209→183 ms (-12%).
+
+9. **Done** — (2a) single cross-session root-index rebuild
+   (commit 290feb2b2).  The per-session `finalize()` used to call
+   `qore_root_ns_private::rebuildAllIndexes()` for every blob — 132
+   full-tree walks in qwf's batch.  Split into `finalizePreIndex()`
+   (no index needed) / `finalizePostIndex()` (index needed) with a
+   single rebuild in the multi-deserializer.  finalize phase
+   165 → 2.5 ms; wall-clock 1.97 → 1.81 s trimmed mean.
+
+10. **Done** — (5a) cache last-resolved class in slot-map register
+   loop (commit 76bc14d23).  Negligible measured effect because the
+   full namespace walk was already fast, but the cache costs
+   essentially nothing when it misses.
+
+**State after step 10:** qwf `--help` ≈ 1.80 s (source-parse baseline)
+on trimmed mean of 20 runs.  Acceptance criterion reached.
+
+11. **Re-measure** at each step.  Target: wall-clock on qwf `--help`
+   ≤ source-parse baseline (1.80 s).  Reached.  Further wins depend
+   on the larger-scale items below (param-name interning, per-blob
+   string tables, parallelization).
 
 8. Defer lazy commit and SML short-circuit — measurements confirmed
    they'd be <1% wins.
@@ -350,6 +378,29 @@ Low cost (cmake plumbing only) — no Qore-side work needed.
 qwf / qsvc / qjob `--help` median startup <= current source-parse
 baseline (1.80 / 1.86 / 1.35 s).  Stretch goal: <= 1.0s for all
 three.
+
+### Status (2026-04-19)
+
+| Binary | Source-parse | AOT (pre-opt) | AOT (current) |
+|--------|--------------|---------------|---------------|
+| qwf    | 1.80 s       | 1.97 s        | ~1.80 s       |
+| qsvc   | 1.86 s       | —             | — (untested)  |
+| qjob   | 1.35 s       | —             | — (untested)  |
+
+qwf reached parity via:
+ - shared type-resolver cache across batch sessions (e42d2b6a5)
+ - safe_dslist → deque<LocalVar> arena (54fdd0e74)
+ - move-semantics in setupFromAOTMetadata (ecbeae7b1)
+ - single cross-session rebuildAllIndexes (290feb2b2)
+ - last-class cache in slot-map register (76bc14d23)
+
+Total AOT resolveAll time: 917 → 536 ms.  Finalize phase alone:
+165 → 2.5 ms.  Remaining hot phases: deserializeFuncsMethods
+(80% of resolveAll — bounded by per-param type resolve + LocalVar
+emplace) and post-resolveAll registerAOTFunctions (~120 ms —
+bounded by signature matching against UVB variants).  Both need
+deeper refactors (param-name interning, UVB map built during
+deserialization) for further wins.
 
 ## Tracking
 
