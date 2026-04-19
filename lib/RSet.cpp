@@ -274,7 +274,8 @@ robject_dereference_helper::robject_dereference_helper(RObject* obj, bool real) 
 robject_dereference_helper::~robject_dereference_helper() {
     o->derefDone(del);
 
-    if (del && qo) {
+    // qo is set only by finalDeref(), which also clears del; tDeref() still owes the weak-ref release
+    if (qo) {
         qo->tDeref();
     }
 }

@@ -107,15 +107,6 @@ public:
     DLLLOCAL void abort(ExceptionSink* xsink) override;
     DLLLOCAL QoreValue getOutput() const override;
 
-    //! Disarms the raw connection_priv back-pointer under stream_lock.
-    /** @see Http2ClientPollOperationPriv::disarmConnectionPriv
-        @since %Qore 2.3
-    */
-    DLLLOCAL void disarmConnectionPriv() {
-        AutoLocker al(stream_lock);
-        connection_priv = nullptr;
-    }
-
     // --- Stream management (called from Qore app thread) ---
 
     //! Phase 1: advisory capacity check under lock
