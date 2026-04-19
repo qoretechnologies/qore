@@ -2245,19 +2245,52 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     common_cleanup_phi_preds.clear();
     common_cleanup_phi_values.clear();
     {
-        // Phase E (2026-04-18 p75): EH is default-on for aot_mode.
-        // Validated via full qmod test sweep (427+ tests green) + runtime
-        // micro-benchmark showing only 1-3% runtime cost for 25% compile
-        // time improvement + full 198/198 function AOT coverage on
-        // HttpServer (vs 155/43 with the original check-based path).
-        // Opt-out via `QORE_AOT_NO_EH=1`. The legacy `QORE_AOT_EH=1`
-        // explicit-enable is still honored for forward compatibility.
+        // Phase E (2026-04-18 p75) originally enabled invoke-based EH by
+        // default in aot_mode, claiming "25% compile time improvement"
+        // and "1-3% runtime cost" on HttpServer.  The invoke-based path
+        // emits one LLVM `invoke` (BB-terminating) per potentially-
+        // throwing runtime helper call; all invokes share a single
+        // function-level landingpad, but LLVM still splits the CFG
+        // into one continuation block per invoke site.
+        //
+        // Scale-up to the qlib AOT build (2026-04-19) surfaced the
+        // downside: module-init closures with many registration calls
+        // (e.g. ZohoInventoryDataProvider init has 64
+        // `registerFactory`/`registerAction` statements that lower to
+        // ~1478 invokes in a single LLVM function) hit LLVM
+        // SimplifyCFG's super-linear per-BB behavior and push compile
+        // time past 60 minutes.  The already-wired
+        // QORE_AOT_EH_MAX_CALLS per-function gate would downgrade
+        // those to the check-based path, but (a) its default was 0
+        // (disabled) and (b) even at 100 the IR-opcode count for the
+        // Zoho closure doesn't exceed it — one IR opcode can expand
+        // to many LLVM invokes via the runtime helpers.  A threshold
+        // on IR opcodes is the wrong layer to gate at.
+        //
+        // Re-measured runtime cost: `parse_to_qore_value` (a tagged
+        // hot-path function) shows ~0% delta between invoke-based
+        // full-O3 and check-based full-O3 (79.5 µs vs 80.8 µs per call
+        // across 300K-call runs — within noise, check-based actually
+        // slightly faster on median).  Per-call cost is dominated by
+        // Qore value-semantics overhead (refcount, type dispatch,
+        // marshaling) — LLVM's function-level optimizations don't
+        // move the needle when every call is into opaque runtime
+        // helpers.  The original "1-3% runtime cost" claim may have
+        // held for a specific micro-benchmark but doesn't generalize.
+        //
+        // Flip the default: check-based EH is now the default in
+        // aot_mode.  Invoke-based remains available via explicit
+        // `QORE_AOT_EH=1` for experimentation.  QORE_AOT_NO_EH kept
+        // for compat (same behavior as the new default).  The
+        // per-function QORE_AOT_EH_MAX_CALLS gate is still honored
+        // when invoke-based is explicitly enabled.
         static const bool env_no_eh = getenv("QORE_AOT_NO_EH") != nullptr;
+        static const bool env_explicit_eh = getenv("QORE_AOT_EH") != nullptr;
         static const int env_eh_max_calls = []() {
             const char* s = getenv("QORE_AOT_EH_MAX_CALLS");
-            return s ? std::atoi(s) : 0;  // 0 = no threshold by default
+            return s ? std::atoi(s) : 100;
         }();
-        aot_eh_enabled = !env_no_eh && aot_mode;
+        aot_eh_enabled = !env_no_eh && env_explicit_eh && aot_mode;
         if (aot_eh_enabled && env_eh_max_calls > 0) {
             int call_like = 0;
             for (const auto& block : func.blocks) {
