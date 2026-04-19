@@ -286,25 +286,64 @@ Low cost (cmake plumbing only) — no Qore-side work needed.
 1. **Done** — per-phase instrumentation shipped (commit 091e1a653).
    Data reported above; `deserializeMethods` is the dominant hot
    path at 73% of resolveAll.
-2. **Next: profile inside `deserializeMethods`** — split
-   `readAndSetupVariantSignature` vs variant allocation vs
-   addUserMethod insertion.  Confirms which sub-tactic to try
-   first.
-3. **Low-risk quick wins**:
-   - (1a) shared type resolver cache across sessions;
-   - (1d) per-session arena allocator for method variants.
-   Expected combined: 20-30% drop in `deserializeMethods` → ~200 ms.
-4. **Medium effort, larger win**:
-   - (1b) intern type paths in `.qo` metadata (format bump);
-   - (3) parallelize `deserializeFunctionsAndMethods` across
-     sessions after thread-safety audit.
-5. **Re-measure** at each step.  Target: resolveAll total ≤ 500 ms
-   on qwf (half of current 1073 ms).
-6. If still off: (2) finalize index rebuild optimization.
-7. Defer (4) lazy commit and (5) SML short-circuit unless
-   profiling specifically calls for them.  The current measurements
-   suggest they'd be <1% wins.
-8. Always keep (6) source-parse fallback available.
+2. **Done** — finer breakdown inside `deserializeMethods` (commit
+   091e1a653).  656,841 variants, sub-phase split:
+   - `readAndSetupVariantSignature`: 566 ms (77%)
+   - variant alloc + dynamic_cast: 84 ms (11%)
+   - addUserMethod: 4 ms (<1%)
+3. **Done** — (1a) shared type-resolver cache across batch sessions
+   (commit e42d2b6a5).  `readAndSetupVariantSignature` 566→480 ms
+   (-15%); qwf wall-clock 2.32→2.14 s (-8% trimmed mean).
+4. **Next opportunities inside `readAndSetupVariantSignature`**
+   (480 ms remaining):
+
+   - **LocalVar allocation loop in `setupFromAOTMetadata`**
+     (Function.cpp:776-792).  Every variant allocates (params +
+     self + argv) LocalVars individually via
+     `pp->createLocalVar()` → `new LocalVar` + push into
+     `local_var_list`.  For ~656k variants with avg ~5 params,
+     that's ~4M `new` allocations, estimated 150-300 ms.  Options:
+     - Bulk-allocate from a program-scoped arena.  Reduces allocator
+       pressure but requires careful lifetime handling.
+     - Intern the always-present `argv` LocalVar (identical
+       `("argv", autoListOrNothingTypeInfo)` across all AOT-
+       deserialized methods).  Saves one LocalVar per variant,
+       ~656k fewer allocations, ~40-70 ms.  Low risk; argv is read-
+       only at runtime.
+   - **Default-arg handling** — 7 branches of `has_default` switch
+     inside the param loop.  Most params have `has_default == 0`
+     (no default); unclear how many hit the expensive branches.
+     Instrument per-branch counts to quantify.
+   - **Signature string build** — `addAbstractParameterSignature(str)`
+     at the tail of `setupFromAOTMetadata`.  Walks typeList to build
+     a human-readable sig string used for error messages and
+     parseCheckDuplicateSignature.  Not needed for AOT since there's
+     no duplicate-signature check.  Could be deferred.
+
+5. **Parallelize `deserializeFunctionsAndMethods` across sessions**
+   (expected 30-40% of resolveAll if thread-safe).  Requires:
+   - Confirming `createLocalVar` + `local_var_list.push_back` is
+     thread-safe (almost certainly not; needs a mutex or per-thread
+     arena).
+   - Confirming `pp->findClass` / `runtimeFindClass` are thread-safe
+     (they read the namespace tree while AOT sessions might not be
+     mutating it during method-deser phase).
+   - Confirming `type_resolver->resolve` with shared cache is thread-
+     safe (currently uses unordered_map without sync — needs shared
+     mutex or a lock-free variant).
+
+6. **Medium effort, format changes**:
+   - Intern type paths per-blob (format bump).  Reduces metadata
+     size + avoids repeated `std::string` construction during read.
+   - Intern param names per-blob.
+
+7. **Re-measure** at each step.  Target: wall-clock on qwf `--help`
+   ≤ source-parse baseline (1.80 s).  Currently 2.14 s; need to close
+   ~340 ms.
+
+8. Defer lazy commit and SML short-circuit — measurements confirmed
+   they'd be <1% wins.
+9. Always keep source-parse fallback available as a cmake option.
 
 ## Acceptance criteria
 
