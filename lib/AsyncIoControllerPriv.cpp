@@ -2097,10 +2097,9 @@ QoreHashNode* AsyncIoControllerPriv::getInfo(ExceptionSink* xsink) {
         }
 
         if (info_result) {
-            // Extract cache_keys from the GetInfo result
-            QoreValue keys_val = info_result->getKeyValue("cache_keys");
-            if (keys_val.getType() == NT_LIST) {
-                rv->setKeyValue("cache_keys", keys_val.refSelf(), xsink);
+            QoreValue val = info_result->getKeyValue("cache_keys");
+            if (!val.isNullOrNothing()) {
+                rv->setKeyValue("cache_keys", val.refSelf(), xsink);
             }
             info_result->deref(xsink);
         } else {
@@ -2524,11 +2523,21 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                     bool ready = false) {
                 for (auto& sock_hash : hashes) {
                     auto sit = t.sock_hash_to_keys.find(sock_hash);
-                    if (sit == t.sock_hash_to_keys.end()) {
+                    if (sit != t.sock_hash_to_keys.end()) {
+                        for (auto& key : sit->second) {
+                            try_queue(key, false, ready);
+                        }
                         continue;
                     }
-                    for (auto& key : sit->second) {
-                        try_queue(key, false, ready);
+
+                    // A WakeSocket command can arrive while the target operation
+                    // is in the cache but before updateEventLoopRegistration()
+                    // has populated sock_hash_to_keys.  Do not drop that wake:
+                    // scan the cache once on the miss and queue matching ops.
+                    for (auto& [key, pinfo] : t.cache) {
+                        if (pinfo.sock && getSocketHash(pinfo.sock) == sock_hash) {
+                            try_queue(key, false, ready);
+                        }
                     }
                 }
             };
@@ -2807,9 +2816,9 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                 // getAndClearDataReadyStreams() is called by the worker after
                 // continuePoll() (see DT_CONTINUE_POLL handler) and dispatched
                 // via enqueueStreamDataDispatch() without returning to the I/O thread.
+                ensureCallDispatcher();
                 {
                     AutoLocker al(m);
-                    ensureCallDispatcher();
                     auto it = t.cache.find(op.key);
                     if (it != t.cache.end()) {
                         it->second.continue_poll_in_flight = true;
@@ -4102,19 +4111,51 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                             t.cache.erase(it);
                             t.cache_size.fetch_sub(1, std::memory_order_relaxed);
                         } else {
-                            // Still pending — target the socket for immediate
-                            // re-poll so the op is included in the next Phase 1
-                            // even if epoll hasn't fired yet.  This is essential
-                            // after unregisterFromEventLoop(): application-level
-                            // data may be buffered in SSL/HTTP/2 layers (not the
-                            // kernel buffer), so epoll alone won't trigger.
+                            // Still pending — target socket-backed Qore ops for
+                            // immediate re-poll only when there is work that the
+                            // OS readiness API may not deliver promptly: pending
+                            // writes/connect completion or application-level data
+                            // buffered in SSL/HTTP/2 layers (not the kernel buffer).
+                            //
+                            // Plain read waits, including EventNotifier waits, must
+                            // sleep on the fd. Re-queuing them here turns an event
+                            // wait into a busy loop that can starve the operation
+                            // expected to make progress.
                             if (cmd.continue_poll_result) {
                                 std::string sh;
                                 int ev = 0;
                                 ExceptionSink sh_xsink;
-                                getSocketFromPollInfo(cmd.continue_poll_result,
+                                QoreObject* poll_sock = getSocketFromPollInfo(cmd.continue_poll_result,
                                     sh, ev, &sh_xsink);
-                                if (!sh.empty()) {
+                                bool event_notifier = false;
+                                bool has_pending_data = false;
+                                if (poll_sock) {
+                                    ExceptionSink en_xsink;
+                                    AbstractPrivateData* en =
+                                        poll_sock->getReferencedPrivateData(CID_EVENTNOTIFIER, &en_xsink);
+                                    if (en) {
+                                        event_notifier = true;
+                                        en->deref(&en_xsink);
+                                    }
+                                    if (en_xsink) {
+                                        en_xsink.clear();
+                                    }
+
+                                    ExceptionSink pd_xsink;
+                                    AbstractPollableIoObjectBase* ps =
+                                        static_cast<AbstractPollableIoObjectBase*>(
+                                            poll_sock->getReferencedPrivateData(
+                                                CID_ABSTRACTPOLLABLEIOOBJECTBASE, &pd_xsink));
+                                    if (ps) {
+                                        has_pending_data = ps->hasPendingData();
+                                        ps->deref(&pd_xsink);
+                                    }
+                                    if (pd_xsink) {
+                                        pd_xsink.clear();
+                                    }
+                                }
+                                if (!event_notifier && !sh.empty()
+                                        && ((ev & SOCK_POLLOUT) || has_pending_data)) {
                                     t.wake_socket_hashes.insert(sh);
                                 }
                                 if (sh_xsink) {

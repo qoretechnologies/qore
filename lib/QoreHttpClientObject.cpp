@@ -7059,15 +7059,21 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
         }
     }
 
-    // Process content-type (skip for streaming path — already done in channel bridge)
-    if (!recv_callback && !os) {
+    // Process content-type (skip for streaming paths — recv_callback, os,
+    // AND sendAndStream's `streaming` flag all have their content-type
+    // processing done inside the channel bridge loop above.  Calling it
+    // again here would trip the reference_count()==1 assertion in
+    // setKeyValue("_qore_orig_content_type", ...) because the channel
+    // bridge already refSelf'd `ans` into the info hash.
+    if (!recv_callback && !os && !streaming) {
         if (processContentType(xsink, **ans)) {
             return nullptr;
         }
     }
 
     // Handle body content-encoding (skip for streaming — body already delivered)
-    QoreValue body_val = (!recv_callback && !os) ? ans->getKeyValue("body") : QoreValue();
+    QoreValue body_val = (!recv_callback && !os && !streaming)
+        ? ans->getKeyValue("body") : QoreValue();
     if (!body_val.isNullOrNothing() && body_val.getType() == NT_BINARY) {
         const BinaryNode* bin = body_val.get<const BinaryNode>();
         if (bin && bin->size()) {

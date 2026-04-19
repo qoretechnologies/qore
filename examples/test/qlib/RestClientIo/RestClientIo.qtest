@@ -3489,12 +3489,16 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         # HttpClientConnectionManager when it rejects a request on a
         # non-ready connection (seen on Ubuntu ARM64) — or HTTP1-ABORT
         # when the in-flight request is aborted by the peer-initiated
-        # close (seen on Ubuntu amd64 and Alpine arm64).
+        # close (seen on Ubuntu amd64 and Alpine arm64) — or
+        # HTTPCLIENT-CONNECT-ERROR when waitForReady() observes the
+        # closed connection before submitRequest (wraps the underlying
+        # HTTP1-CONNECTION-CLOSED in its desc).
         try {
             rest.restGet("/api/test");
             assertEq(True, False, "expected exception from mTLS rejection");
         } catch (hash<ExceptionInfo> ex) {
             assertTrue(ex.err == "HTTPCLIENT-REQUEST-ERROR"
+                || ex.err == "HTTPCLIENT-CONNECT-ERROR"
                 || ex.err == "HTTP1-CONNECTION-CLOSED"
                 || ex.err == "HTTP1-UNEXPECTED-DATA"
                 || ex.err == "HTTP1-STATE-ERROR"

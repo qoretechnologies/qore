@@ -884,6 +884,8 @@ public class HttpClientStreamHandle {
         @param path request path
         @param headers request headers (optional)
         @param body request body (optional)
+        @param notifier optional EventNotifier signaled after parsed events,
+               errors, or the end sentinel are pushed to the Queue
 
         @return the Queue that will receive parsed SSE events
 
@@ -893,9 +895,24 @@ public class HttpClientStreamHandle {
 
         @since %HttpClientIo 1.4
     */
-    Queue startSseStreaming(string method, string path, *hash<auto> headers, *data body) {
+    Queue startSseStreaming(string method, string path, *hash<auto> headers, *data body,
+            *EventNotifier notifier) {
         throw "HTTPCLIENT-STREAMING-NOT-SUPPORTED",
             "SSE streaming is not supported by " + conn.getProtocol();
+    }
+
+    #! Starts an SSE streaming request with notifier wakeups for queued events
+    /** @return a hash with \c queue and \c notifier keys
+
+        @see startSseStreaming()
+    */
+    hash<auto> startSseStreamingWithNotifier(string method, string path, *hash<auto> headers, *data body) {
+        EventNotifier notifier();
+        Queue queue = startSseStreaming(method, path, headers, body, notifier);
+        return {
+            "queue": queue,
+            "notifier": notifier,
+        };
     }
 
     #! Send a QUIC DATAGRAM frame on this stream's datagram channel (RFC 9221/9297)

@@ -1194,7 +1194,17 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvHeader(ExceptionSink* xsin
             }
             current_op->setSelf(*self);
             req_state = ReqState::RECV_BODY_CLOSE;
-            return handleRecvBodyClose(xsink);
+            QoreHashNode* rv = handleRecvBodyClose(xsink);
+            if (rv && streaming_active_io) {
+                // The header readiness event has been consumed, and the first
+                // SSE body bytes can arrive while the controller is switching
+                // this H1 operation from header parsing to close-delimited body
+                // reads.  Queue one explicit self-wake after the body-read poll
+                // info is installed so the handoff is checked once without
+                // falling back to periodic polling.
+                wakeIoThread(xsink);
+            }
+            return rv;
         } else if (streaming_active_io) {
             // No Content-Length, not chunked, not Connection: close, but streaming —
             // treat as read-until-close (SSE servers, etc.)
@@ -1209,7 +1219,12 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvHeader(ExceptionSink* xsin
             }
             current_op->setSelf(*self);
             req_state = ReqState::RECV_BODY_CLOSE;
-            return handleRecvBodyClose(xsink);
+            QoreHashNode* rv = handleRecvBodyClose(xsink);
+            if (rv) {
+                // See the connection_close branch above.
+                wakeIoThread(xsink);
+            }
+            return rv;
         } else {
             // No Content-Length, not chunked, not Connection: close — treat as no body
             return dispatchResponse(xsink);
@@ -2463,13 +2478,15 @@ int Http1ClientPollOperationBase::submitRequestStreaming(string method, string p
     @param body optional request body
     @param queue Queue for parsed SSE event delivery
     @param max_streams maximum concurrent streams
+    @param notifier optional EventNotifier signaled after queue updates
 
     @return the stream ID assigned to this request
 
     @since %Qore 2.3
 */
 int Http1ClientPollOperationBase::submitRequestSse(string method, string path,
-        *hash<auto> headers, *data body, Queue[Queue] queue, int max_streams) {
+        *hash<auto> headers, *data body, Queue[Queue] queue, int max_streams,
+        *EventNotifier[QoreEventNotifier] notifier) {
     const void* body_ptr = nullptr;
     size_t body_len = 0;
     if (body) {
@@ -2494,10 +2511,20 @@ int Http1ClientPollOperationBase::submitRequestSse(string method, string path,
         }
     }
 
+    QoreEventNotifier* notifier_ptr = nullptr;
+    QoreObject* notifier_obj_ptr = nullptr;
+    if (notifier) {
+        notifier_ptr = notifier.release();
+        notifier_obj_ptr = const_cast<QoreObject*>(obj_notifier);
+    }
+
     // Create SseAction — priv takes ownership; release from QPP holder
     Queue* queue_ptr = queue.release();
-    SseAction* action = new SseAction(queue_ptr);
+    SseAction* action = new SseAction(queue_ptr, notifier_ptr, notifier_obj_ptr);
     queue_ptr->deref(xsink);  // SseAction refs the queue itself
+    if (notifier_ptr) {
+        notifier_ptr->deref(xsink);  // SseAction refs the notifier itself
+    }
     return (int)priv->submitRequest(method->c_str(), path->c_str(), headers,
         body_ptr, body_len, true, action, (int)max_streams, false, xsink);
 }

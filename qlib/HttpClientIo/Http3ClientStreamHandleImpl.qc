@@ -244,7 +244,8 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
     #! Starts an SSE streaming request with I/O-thread event parsing
     /** @see HttpClientStreamHandle::startSseStreaming() for full documentation
     */
-    Queue startSseStreaming(string method, string path, *hash<auto> headers, *data body) {
+    Queue startSseStreaming(string method, string path, *hash<auto> headers, *data body,
+            *EventNotifier notifier) {
         {
             AutoLock al(lock);
             if (state != HttpClientStreamState::Pending) {
@@ -284,7 +285,7 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
         log(LoggerLevel::DEBUG, "starting SSE streaming request: %s %s", method, path);
 
         try {
-            stream_id = h3conn.submitRequestSse(method, path, headers, body, queue);
+            stream_id = h3conn.submitRequestSse(method, path, headers, body, queue, notifier);
             @assert(stream_id >= 0);
             releaseReservationIfHeld();
         } catch (hash<ExceptionInfo> ex) {

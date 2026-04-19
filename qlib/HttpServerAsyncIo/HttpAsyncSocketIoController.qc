@@ -1797,9 +1797,9 @@ public class HttpAsyncSocketIoController {
             case HttpConnectionState::Sse: {
                 if (!cinfo.stream_op) return;
                 op = cinfo.stream_op;
-                # Use short timeout to allow periodic polling for queued SSE events
-                # (the event channel is checked on each continuePoll() call)
-                timeout = 250ms;
+                # SSE queue wakeups are delivered by HttpSseStreamPollOperation's
+                # EventNotifier; no periodic polling timeout is needed.
+                timeout = -1s;
                 break;
             }
             case HttpConnectionState::WebSocket: {

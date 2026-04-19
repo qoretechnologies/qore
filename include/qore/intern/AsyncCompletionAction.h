@@ -285,9 +285,24 @@ public:
     //! Creates an SSE action that pushes parsed events to a Queue
     /** @param queue the target Queue (will be ref'd)
     */
-    DLLLOCAL SseAction(Queue* queue) : queue(queue) {
+    DLLLOCAL SseAction(Queue* queue) : SseAction(queue, nullptr, nullptr) {
+    }
+
+    //! Creates an SSE action that pushes parsed events to a Queue and signals a notifier
+    /** @param queue the target Queue (will be ref'd)
+        @param notifier optional EventNotifier to signal after queue updates (will be ref'd)
+        @param notifier_obj optional EventNotifier object to keep the notifier fd valid (will be ref'd)
+    */
+    DLLLOCAL SseAction(Queue* queue, QoreEventNotifier* notifier, QoreObject* notifier_obj)
+        : queue(queue), notifier(notifier), notifier_obj(notifier_obj) {
         assert(queue);
         queue->ref();
+        if (notifier) {
+            notifier->ref();
+        }
+        if (notifier_obj) {
+            notifier_obj->ref();
+        }
     }
 
     //! Receives a body data chunk, accumulates and parses SSE events
@@ -297,24 +312,37 @@ public:
 
     //! Pushes NOTHING sentinel to the Queue (stream complete)
     DLLLOCAL void complete(ExceptionSink* xsink) override {
+        std::lock_guard<std::mutex> lg(mtx);
         if (queue) {
             queue->pushAndTakeRef(QoreValue());
+            notify();
         }
     }
 
     //! Pushes an error hash to the Queue
     DLLLOCAL void executeError(const char* err, const char* desc,
             ExceptionSink* xsink) override {
+        std::lock_guard<std::mutex> lg(mtx);
         if (queue) {
             ReferenceHolder<QoreHashNode> err_hash(new QoreHashNode(autoTypeInfo), xsink);
             err_hash->setKeyValue("err", new QoreStringNode(err), xsink);
             err_hash->setKeyValue("desc", new QoreStringNode(desc), xsink);
             queue->pushAndTakeRef(err_hash.release());
             queue->pushAndTakeRef(QoreValue());  // sentinel
+            notify();
         }
     }
 
     DLLLOCAL void cleanup(ExceptionSink* xsink) override {
+        std::lock_guard<std::mutex> lg(mtx);
+        if (notifier_obj) {
+            notifier_obj->deref(xsink);
+            notifier_obj = nullptr;
+        }
+        if (notifier) {
+            notifier->deref(xsink);
+            notifier = nullptr;
+        }
         if (queue) {
             queue->deref(xsink);
             queue = nullptr;
@@ -322,7 +350,16 @@ public:
     }
 
 private:
+    DLLLOCAL void notify() {
+        if (notifier) {
+            notifier->notify();
+        }
+    }
+
     Queue* queue;           //!< ref'd Queue for event delivery
+    QoreEventNotifier* notifier = nullptr; //!< optional notifier for event wakeups
+    QoreObject* notifier_obj = nullptr; //!< ref'd EventNotifier object keeping fd valid
+    std::mutex mtx;         //!< serializes buffered replay with I/O-thread delivery
     QoreString sse_buffer;  //!< accumulated SSE text (UTF-8)
 };
 

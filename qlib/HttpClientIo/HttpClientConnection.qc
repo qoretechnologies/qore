@@ -377,6 +377,7 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
     cancelRequest(int stream_id) {
         log(LoggerLevel::DEBUG, "cancelling request: stream_id=%d", stream_id);
         cancelRequestImpl(stream_id);
+        notifyPendingData();
     }
 
     #! Wakes the I/O controller or poll notifier to flush pending writes

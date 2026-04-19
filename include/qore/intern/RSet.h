@@ -116,7 +116,11 @@ public:
     // decrements rref
     DLLLOCAL void derefRealIntern();
 
-    DLLLOCAL void derefDone(bool del);
+    // wait_only=true means: we do not claim deleter status (so the "deleter vs. waiter" invariant
+    // is not tripped) but we still wait for other in-progress derefs to complete — used by the
+    // handed-off path in robject_dereference_helper so a following tDeref() does not fire
+    // deleteObject() while another thread is still in its deref window
+    DLLLOCAL void derefDone(bool del, bool wait_only = false);
 
     DLLLOCAL int refs() const {
         return references;
@@ -520,7 +524,8 @@ protected:
     int refs;
     bool del,
         do_scan = false,
-        deferred_scan;
+        deferred_scan,
+        handed_off = false;
 
 public:
     DLLLOCAL robject_dereference_helper(RObject* obj, bool real = false);
@@ -547,12 +552,14 @@ public:
     }
 
     // mark for final dereferencing
-    // another thread is already destroying the object; we hand off deletion responsibility to it,
-    // so clear del to prevent derefDone() from tripping the "deleter vs. waiter" invariant
+    // another thread is already destroying the object: we hand off deletion responsibility
+    // and the destructor will report del=false to derefDone so the waiter-vs-deleter invariant
+    // in RObject::derefDone() is not tripped; the tDeref() still owes the original weak-ref
+    // release and is unchanged
     DLLLOCAL void finalDeref(qore_object_private* obj) {
         assert(!qo);
         qo = obj;
-        del = false;
+        handed_off = true;
     }
 
     // mark that we will be deleting the object

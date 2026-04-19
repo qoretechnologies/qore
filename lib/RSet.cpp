@@ -115,15 +115,17 @@ int RObject::deref(bool real, bool& do_scan, bool& rescan) {
     return rv_refs;
 }
 
-void RObject::derefDone(bool del) {
+void RObject::derefDone(bool del, bool wait_only) {
     AutoLocker al(rlck);
     // decrement the in progress count, if it's the last thread, and there are waiting threads, then wake one up
     if ((!--ref_inprogress) && ref_waiting) {
         // we have to use broadcast here because the condition variable is shared
         rcond.broadcast();
         assert(!del);
-    } else if (del) {
-        // if we are going to delete the object, then wait for all other in-progress calls to complete first
+    } else if (del || wait_only) {
+        // either we will delete the object ourselves, or we handed off deletion but still need
+        // other in-progress derefs to complete before our caller performs its weak-ref release
+        // (otherwise that release can trigger deleteObject() while another thread is mid-deref)
         while (ref_inprogress) {
             ++ref_waiting;
             rcond.wait(rlck);
@@ -272,10 +274,13 @@ robject_dereference_helper::robject_dereference_helper(RObject* obj, bool real) 
 }
 
 robject_dereference_helper::~robject_dereference_helper() {
-    o->derefDone(del);
+    // if finalDeref() handed off deletion, we do not claim deleter status (avoids the
+    // waiter-vs-deleter assertion in derefDone), but we still wait for other in-progress
+    // derefs to finish before the qo->tDeref() below, otherwise tDeref() can race with a
+    // concurrent deref and trigger deleteObject() while another thread is mid-access
+    o->derefDone(del && !handed_off, handed_off);
 
-    // qo is set only by finalDeref(), which also clears del; tDeref() still owes the weak-ref release
-    if (qo) {
+    if (del && qo) {
         qo->tDeref();
     }
 }

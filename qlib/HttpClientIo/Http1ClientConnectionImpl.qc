@@ -180,9 +180,9 @@ public class Http1ClientConnection inherits HttpClientConnection {
         @return the stream ID
     */
     int submitRequestSse(string method, string path, *hash<auto> headers,
-            *data body, Queue queue) {
+            *data body, Queue queue, *EventNotifier notifier) {
         int sid = poll_op.submitRequestSse(method, path, headers, body, queue,
-            max_concurrent_streams);
+            max_concurrent_streams, notifier);
         # Wake the I/O controller so it processes the queued request
         *object ctl;
         {

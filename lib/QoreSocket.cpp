@@ -1794,10 +1794,7 @@ SocketRecvPacketPollState::SocketRecvPacketPollState(ExceptionSink* xsink, qore_
         bin(new BinaryNode) {
     // first take any data in the socket buffer
     if (sock->buflen) {
-        if (bin->writeTo(0, sock->rbuf + sock->bufoffset, sock->buflen)) {
-            xsink->outOfMemory();
-            return;
-        }
+        bin->append(sock->rbuf + sock->bufoffset, sock->buflen);
         sock->buflen = 0;
         sock->bufoffset = 0;
         //printd(5, "SocketRecvPacketPollState::SocketRecvPacketPollState() wrote %d bytes of memory from buffer to "
@@ -3087,6 +3084,8 @@ QoreHashNode* parseSseEvent(ExceptionSink* xsink, const QoreString& buf) {
 // --- SseAction implementation ---
 
 void SseAction::execute(QoreValue output, ExceptionSink* xsink) {
+    std::lock_guard<std::mutex> lg(mtx);
+
     // Extract body binary from the streaming data hash
     if (output.getType() == NT_HASH) {
         QoreValue body_val = output.get<QoreHashNode>()->getKeyValue("body");
@@ -3098,6 +3097,8 @@ void SseAction::execute(QoreValue output, ExceptionSink* xsink) {
         }
     }
     output.discard(xsink);
+
+    bool pushed = false;
 
     // Parse complete SSE events (terminated by double newline)
     while (true) {
@@ -3119,7 +3120,12 @@ void SseAction::execute(QoreValue output, ExceptionSink* xsink) {
         QoreHashNode* evt = parseSseEvent(xsink, event_text);
         if (evt && queue) {
             queue->pushAndTakeRef(evt);
+            pushed = true;
         }
+    }
+
+    if (pushed) {
+        notify();
     }
 }
 

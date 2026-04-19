@@ -30,8 +30,9 @@ public namespace HttpClientStreamingIo {
     SSE events are parsed on the I/O thread (via C++ SseAction) and delivered to
     observers as parsed SseMessageInfo hashes — zero thread hops for parsing.
 
-    The read loop runs on the AsyncIoController worker pool, reading from the
-    Queue populated by the I/O thread and notifying observers.
+    The EventNotifier is polled by the AsyncIoController; when it fires, the
+    Queue populated by the I/O thread is drained without blocking and observers
+    are notified.
 
     @par Example: Observing SSE events
     @code{.py}
@@ -62,6 +63,89 @@ obs.observersReady();
 
     @since %HttpClientStreamingIo 1.0
 */
+
+namespace Priv {
+
+class SseNotifierPollOperation inherits Qore::AbstractPollOperation {
+    private {
+        EventNotifier notifier;
+        code<bool()> drain;
+        code<nothing()> done;
+        bool complete = False;
+        #! If > 0, arms poll_timeout_ms so continuePoll is called even when
+        #! no notifier wakeup arrives — lets drainNotifierEvents() detect
+        #! dead streams via its idle-timeout check.
+        int idle_timeout_ms = 0;
+    }
+
+    constructor(EventNotifier notifier, code<bool()> drain, code<nothing()> done,
+            int idle_timeout_ms = 0) {
+        self.notifier = notifier;
+        self.drain = drain;
+        self.done = done;
+        self.idle_timeout_ms = idle_timeout_ms;
+    }
+
+    string getGoal() {
+        return "sse-events";
+    }
+
+    string getState() {
+        return complete ? "complete" : "waiting";
+    }
+
+    bool goalReached() {
+        return complete;
+    }
+
+    *hash<SocketPollInfo> continuePoll() {
+        if (complete) {
+            return NOTHING;
+        }
+
+        try {
+            notifier.acknowledge();
+            if (drain()) {
+                complete = True;
+                done();
+                return NOTHING;
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            complete = True;
+            done();
+            rethrow;
+        }
+
+        hash<SocketPollInfo> rv = <SocketPollInfo>{
+            "socket": notifier,
+            "events": SOCK_POLLIN,
+        };
+        if (idle_timeout_ms > 0) {
+            # Divide the idle window so drain() fires halfway through — gives
+            # drainNotifierEvents() a chance to detect the boundary without
+            # arming on the exact expiry and racing with an in-flight event.
+            rv.poll_timeout_ms = idle_timeout_ms / 2;
+        }
+        return rv;
+    }
+
+    abort() {
+        if (!complete) {
+            complete = True;
+            done();
+        }
+    }
+
+    onComplete(hash<SocketPollResultInfo> result) {
+        if (!complete) {
+            complete = True;
+            done();
+        }
+    }
+}
+
+} # namespace Priv
+
 public class SseObservable inherits DataProvider::DelayedObservable {
     private {
         #! Connection manager
@@ -88,7 +172,7 @@ public class SseObservable inherits DataProvider::DelayedObservable {
         #! Data serialization: "json" or "none"
         string serialization = "none";
 
-        #! I/O timeout for Queue reads
+        #! I/O timeout retained for compatibility with the original options
         timeout timeout_ms = 30s;
 
         #! Idle-timeout deadline; if no SSE traffic (events or heartbeat comments)
@@ -110,11 +194,29 @@ public class SseObservable inherits DataProvider::DelayedObservable {
         #! Mutex for thread safety
         Mutex m();
 
+        #! Signals notifier poll operation state changes
+        Condition stop_cond();
+
         #! The stream handle (for cancellation)
         *HttpClientIo::HttpClientStreamHandle stream;
 
         #! The SSE event Queue (populated by SseAction on I/O thread)
         *Queue sse_queue;
+
+        #! EventNotifier signaled when SSE queue entries are available
+        *EventNotifier notifier;
+
+        #! True while the notifier poll operation is active
+        bool notifier_active = False;
+
+        #! Notifier delivery worker thread ID
+        *int tid;
+
+        #! True after EVENT_SSE_CLOSED has been delivered
+        bool closed = False;
+
+        #! Async I/O controller key for the notifier poll operation
+        *string poll_key;
     }
 
     #! Creates an SSE Observable
@@ -161,13 +263,14 @@ public class SseObservable inherits DataProvider::DelayedObservable {
     }
 
     #! Called when all observers have been added — starts the SSE stream
-    /** Acquires a stream, calls startSseStreaming(), and dispatches the
-        read loop to the AsyncIoController's worker pool.
+    /** Acquires a stream, calls startSseStreamingWithNotifier(), and submits
+        the notifier poll operation to the AsyncIoController.
     */
     observersReady() {
         {
             AutoLock al(m);
             stop = False;
+            closed = False;
         }
 
         stream = mgr.acquireStream(url);
@@ -176,26 +279,105 @@ public class SseObservable inherits DataProvider::DelayedObservable {
             "Accept": "text/event-stream",
         } + (headers ?? {});
 
-        sse_queue = stream.startSseStreaming(method, path, req_headers, body);
+        hash<auto> sse_info = stream.startSseStreamingWithNotifier(method, path, req_headers, body);
+        sse_queue = sse_info.queue;
+        notifier = sse_info.notifier;
 
         notifyObservers(EVENT_SSE_CONNECTED, {});
 
-        # Dispatch the read loop to the async I/O controller's worker pool
-        AsyncSocketIo::AsyncSocketIoController controller =
-            AsyncSocketIo::getGlobalAsyncIoController();
-        controller.submitTask(sub () {
-            readLoop();
-        });
+        bool stopped_reentrantly;
+        {
+            AutoLock al(m);
+            stopped_reentrantly = stop;
+        }
+        if (stopped_reentrantly) {
+            # stopEvents() was called reentrantly from the connected observer
+            notifyClosed();
+            return;
+        }
+
+        {
+            AutoLock al(m);
+            notifier_active = True;
+            remove tid;
+            poll_key = sprintf("HttpClientStreamingIo::SseObservable:%s", self.uniqueHash());
+        }
+
+        try {
+            AsyncSocketIo::AsyncSocketIoController controller =
+                AsyncSocketIo::getGlobalAsyncIoController();
+            Priv::SseNotifierPollOperation poll_op(notifier, \drainNotifierEvents(),
+                \notifierDone(), idle_timeout_ms);
+            # Prime the idle-timeout deadline so the first drain pass has a
+            # reference point; reset on every received event inside the drain.
+            last_event_us = clock_getmicros();
+            controller.submit(<SocketPollOperationInfo>{
+                "sock": notifier,
+                "spop": poll_op,
+                "owner": self.uniqueHash(),
+                "key": poll_key,
+                "has_on_complete": True,
+            }, True);
+        } catch (hash<ExceptionInfo> ex) {
+            {
+                AutoLock al(m);
+                notifier_active = False;
+                stop_cond.broadcast();
+            }
+            if (stream) {
+                stream.cancel();
+            }
+            notifyClosed();
+            rethrow;
+        }
     }
 
     #! Stops the SSE event stream
     stopEvents() {
+        *HttpClientIo::HttpClientStreamHandle local_stream;
+        *Queue local_sse_queue;
+        *EventNotifier local_notifier;
+        bool wait_for_notifier;
+        bool wake_notifier;
+        bool notify_without_wait;
+
         {
             AutoLock al(m);
             stop = True;
+            local_stream = stream;
+            local_sse_queue = sse_queue;
+            local_notifier = notifier;
         }
-        if (stream) {
-            stream.cancel();
+        if (local_stream) {
+            local_stream.cancel();
+        }
+
+        {
+            AutoLock al(m);
+            while (tid && tid != gettid()) {
+                stop_cond.wait(m);
+            }
+            wait_for_notifier = notifier_active && (!tid || tid != gettid());
+            wake_notifier = notifier_active && !tid;
+            notify_without_wait = !notifier_active && local_stream;
+        }
+        if (wake_notifier && local_sse_queue) {
+            try {
+                local_sse_queue.push();
+            } catch (hash<ExceptionInfo> ex) {
+            }
+        }
+        if (wake_notifier && local_notifier) {
+            local_notifier.notify();
+        }
+
+        if (wait_for_notifier) {
+            AutoLock al(m);
+            while (notifier_active) {
+                stop_cond.wait(m);
+            }
+        } else if (notify_without_wait) {
+            notifyClosed();
         }
     }
 
@@ -205,25 +387,27 @@ public class SseObservable inherits DataProvider::DelayedObservable {
         return stop;
     }
 
-    #! The read loop — runs on the worker pool thread
-    /** Reads parsed SSE events from the Queue, optionally deserializes JSON,
-        and notifies observers.
+    #! Drains queued SSE events after notifier wakeup
+    /** Reads parsed SSE events from the Queue without blocking, optionally
+        deserializes JSON, and notifies observers.
 
-        @par Idle-timeout detection
-        When \c idle_timeout_ms > 0, the loop tracks the wall-clock interval
-        since the last received SSE message (data event or heartbeat comment).
-        If the interval exceeds \c idle_timeout_ms, the stream is treated as
-        dead and the loop returns via @ref EVENT_SSE_CLOSED with
-        \c reason = \c "idle-timeout".
+        Also resets the @ref last_event_us deadline on every received item so
+        the SseNotifierPollOperation's idle-timeout tick can detect dead
+        streams and close the loop when \c idle_timeout_ms > 0.
     */
-    private readLoop() {
-        hash<auto> close_info = {};
+    private bool drainNotifierEvents() {
+        {
+            AutoLock al(m);
+            tid = gettid();
+        }
+        # Runs on every invocation (wakeup AND timeout tick); track whether
+        # the caller is terminating so we cancel the stream only then.
+        # Returning True signals poll_op.complete — we must release the
+        # stream at that point.  Returning False keeps the poll op in the
+        # waiting state and the stream handle must stay live.
+        bool terminate = False;
         on_exit {
-            # Always cancel the underlying stream so the poll op completes
-            # and its SseAction releases its queue ref.  Without this, a
-            # loop exit on idle-timeout or NOTHING sentinel would leave the
-            # poll op running with a dangling queue ref.
-            if (stream) {
+            if (terminate && stream) {
                 try {
                     stream.cancel();
                 } catch (hash<ExceptionInfo> ex) {
@@ -231,56 +415,54 @@ public class SseObservable inherits DataProvider::DelayedObservable {
                 }
             }
             if (self) {
-                notifyObservers(EVENT_SSE_CLOSED, close_info);
+                AutoLock al(m);
+                remove tid;
+                stop_cond.broadcast();
             }
         }
-
-        last_event_us = clock_getmicros();
+        on_error {
+            terminate = True;
+            notifyClosed();
+        }
 
         while (True) {
-            if (!self) {
-                return;
-            }
+            bool stopped;
             {
                 AutoLock al(m);
-                if (stop) {
-                    return;
-                }
+                stopped = stop;
+            }
+            if (stopped) {
+                notifyClosed();
+                terminate = True;
+                return True;
             }
 
-            # If an idle timeout is configured, bound the Queue wait so we can
-            # detect dead streams even when no traffic arrives.
-            timeout wait_ms = timeout_ms;
-            if (idle_timeout_ms > 0) {
-                int elapsed_ms = (clock_getmicros() - last_event_us) / 1000;
-                int remaining_ms = idle_timeout_ms - elapsed_ms;
-                if (remaining_ms <= 0) {
-                    close_info = {"reason": "idle-timeout"};
-                    return;
+            auto item = sse_queue.tryGet();
+            if (!exists item) {
+                # Nothing queued — check idle-timeout before returning to
+                # the notifier wait.  The poll op arms poll_timeout_ms so
+                # continuePoll fires again after the interval elapses;
+                # here we terminate the loop if that interval passed.
+                if (idle_timeout_ms > 0 && last_event_us > 0
+                        && (clock_getmicros() - last_event_us) / 1000
+                            >= idle_timeout_ms) {
+                    notifyObservers(EVENT_SSE_CLOSED,
+                        {"reason": "idle-timeout"});
+                    terminate = True;
+                    return True;
                 }
-                if (remaining_ms < wait_ms) {
-                    wait_ms = remaining_ms;
-                }
+                return False;
             }
 
-            auto evt;
-            try {
-                evt = sse_queue.get(wait_ms);
-            } catch (hash<ExceptionInfo> ex) {
-                if (ex.err == "QUEUE-TIMEOUT") {
-                    # Loop; idle-timeout check at the top handles dead streams
-                    continue;
-                }
-                # Any other Queue error terminates the read loop
-                return;
-            }
-
-            # Reset idle deadline on any received event, including error hashes
+            auto evt = item.value;
+            # Reset idle deadline on any received event (including errors)
             last_event_us = clock_getmicros();
 
             # NOTHING sentinel means stream ended
             if (!exists evt) {
-                return;
+                notifyClosed();
+                terminate = True;
+                return True;
             }
 
             if (evt.typeCode() != NT_HASH) {
@@ -291,8 +473,9 @@ public class SseObservable inherits DataProvider::DelayedObservable {
             # vs parsed SseMessageInfo hash — distinguish by hasKey("err")
             hash<auto> evt_hash = cast<hash<auto>>(evt);
             if (evt_hash.hasKey("err")) {
-                # Error from SseAction — terminate the read loop
-                return;
+                notifyClosed();
+                terminate = True;
+                return True;
             }
 
             # Comment-only SSE message (heartbeat) — no data/event/id/retry
@@ -300,7 +483,8 @@ public class SseObservable inherits DataProvider::DelayedObservable {
                     && !evt_hash.id.val() && !evt_hash.retry.val()) {
                 if (emit_heartbeat) {
                     if (!self) {
-                        return;
+                        terminate = True;
+                        return True;
                     }
                     notifyObservers(EVENT_SSE_HEARTBEAT, evt_hash);
                 }
@@ -308,23 +492,49 @@ public class SseObservable inherits DataProvider::DelayedObservable {
             }
 
             # Parsed SseMessageInfo hash
-            {
-                try {
-                    if (evt_hash.data.val()) {
-                        evt_hash.data = deserializeData(evt_hash.data);
-                    }
-                    if (evt_hash.id =~ /^[0-9]+$/) {
-                        evt_hash.id = evt_hash.id.toInt();
-                    }
-                } catch (hash<ExceptionInfo> ex) {
-                    continue;
+            try {
+                if (evt_hash.data.val()) {
+                    evt_hash.data = deserializeData(evt_hash.data);
                 }
-
-                if (!self) {
-                    return;
+                if (evt_hash.id =~ /^[0-9]+$/) {
+                    evt_hash.id = evt_hash.id.toInt();
                 }
-                notifyObservers(EVENT_SSE_DATA, evt_hash);
+            } catch (hash<ExceptionInfo> ex) {
+                continue;
             }
+
+            if (!self) {
+                terminate = True;
+                return True;
+            }
+            notifyObservers(EVENT_SSE_DATA, evt_hash);
+        }
+    }
+
+    private notifyClosed() {
+        bool do_notify = False;
+        {
+            AutoLock al(m);
+            if (!closed) {
+                closed = True;
+                do_notify = True;
+            }
+        }
+        if (do_notify) {
+            notifyObservers(EVENT_SSE_CLOSED, {});
+        }
+    }
+
+    private notifierDone() {
+        {
+            AutoLock al(m);
+            notifier_active = False;
+            remove tid;
+            remove stream;
+            remove sse_queue;
+            remove notifier;
+            remove poll_key;
+            stop_cond.broadcast();
         }
     }
 

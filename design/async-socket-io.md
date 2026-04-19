@@ -87,6 +87,27 @@ iteration.  The re-check approach adds just enough delay (a few instructions bet
 in `processCommands` and `cmdq.empty()` in the main loop) for the producer's `next.store()` to
 complete in the common case, while preserving the correct `acknowledge()` semantics.
 
+### Async I/O Trace Instrumentation
+
+`ASYNC_IO_TRACE(...)` logging is compiled out by default in optimized builds. Setting the runtime
+environment variable alone is not enough unless the build was configured with trace instrumentation.
+
+Enable tracing in any build type, including `Release` or `RelWithDebInfo`, by configuring CMake with:
+
+```sh
+cmake -S . -B build -DENABLE_ASYNC_IO_TRACE=ON
+cmake --build build
+```
+
+Then enable trace output for a run with:
+
+```sh
+QORE_ASYNC_IO_TRACE=1 QORE_MODULE_DIR=qlib build/qore -penable-debug <test-or-program>
+```
+
+Trace output is written to stderr and can be large. For race diagnosis, redirect it to a log file
+and keep `QORE_MODULE_DIR=qlib` set so tests load the in-tree qlib sources being debugged.
+
 ### Commands
 
 Commands are members of the `IoCommand` enum:
