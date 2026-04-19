@@ -38,6 +38,7 @@
 #include "qore/intern/QC_Http2ClientPollOperationBase.h"
 #include "qore/intern/QC_SocketPollOperation.h"
 #include "qore/intern/QC_Socket.h"
+#include "qore/intern/QoreObjectIntern.h"
 #include "qore/intern/QC_FutureImpl.h"
 #include "qore/intern/AsyncIoControllerPriv.h"
 
@@ -161,6 +162,17 @@ int Http2ClientConnection::buildAndSubmit(ExceptionSink* xsink) {
     ReferenceHolder<QoreObject> poll_obj_holder(
         new QoreObject(QC_HTTP2CLIENTPOLLOPERATIONBASE, pgm, priv_holder.release()), xsink);
 
+    // Enable the DGC custom scanner gate for this object — the QPP
+    // destructor at QC_Http2ClientPollOperationBase.qpp:1245 always calls
+    // decScanPrivateData(), so the scan_private_data counter must be
+    // incremented here to balance it.  The QPP constructor does the
+    // matching increment on the Qore-level `new Http2ClientPollOperation`
+    // path, but that path is NOT taken when we create the QoreObject
+    // directly from C++ as above — bypassing the QPP ctor leaves the
+    // counter at 0 and the destructor's assertion trips under Debug builds.
+    // See commit 53585cdba1 (H2 DGC scanner) for the scanner contract.
+    qore_object_private::get(**poll_obj_holder)->incScanPrivateData();
+
     // 6. Set up self references.
     priv_raw->setSelf(*poll_obj_holder);
     connect_ptr->setSelf(*poll_obj_holder);
@@ -206,6 +218,12 @@ int Http2ClientConnection::buildAndSubmitAdopted(QoreObject* adopted_sock_obj,
 
     ReferenceHolder<QoreObject> poll_obj_holder(
         new QoreObject(QC_HTTP2CLIENTPOLLOPERATIONBASE, pgm, priv_holder.release()), xsink);
+
+    // Enable the DGC custom scanner gate — see the matching comment in
+    // buildAndSubmit() above; the QPP destructor's decScanPrivateData()
+    // requires a matching increment when the QoreObject is created
+    // directly from C++ instead of via the QPP constructor.
+    qore_object_private::get(**poll_obj_holder)->incScanPrivateData();
 
     priv_raw->setSelf(*poll_obj_holder);
 
