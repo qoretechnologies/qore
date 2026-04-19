@@ -34,7 +34,10 @@
 
 #include <cassert>
 #include <cstdint>
+#include <cstdio>
+#include <cstdlib>
 #include <cstring>
+#include <ctime>
 #include <string>
 #include <functional>
 #include <memory>
@@ -1427,10 +1430,70 @@ class QoreAOTBinaryMultiDeserializer {
     QoreProgram* pgm = nullptr;
     std::vector<std::unique_ptr<QoreAOTBinaryDeserializer>> sessions;
 
+    // Phase-timing accumulators (microseconds).  Populated only
+    // when QORE_AOT_PHASE_TIMING env var is set.  Totals across
+    // all sessions for each named phase.
+    struct PhaseTiming {
+        const char* name;
+        uint64_t us_total = 0;
+    };
+    PhaseTiming timings_[12] = {
+        {"addBlob",                  0},
+        {"resolveTypesAndMembers",   0},
+        {"rebuildBaseClassSml",      0},
+        {"importInheritedMembers",   0},
+        {"resolveStaticsAndConsts",  0},
+        {"deserializeFuncsMethods",  0},
+        {"commitClassesPrepare",     0},
+        {"commitClassesDoCommit",    0},
+        {"commitClassesImportAbs",   0},
+        {"commitClassesValidate",    0},
+        {"finalize",                 0},
+        {"TOTAL",                    0},
+    };
+    static bool timingEnabled() {
+        static int cached = -1;
+        if (cached < 0) {
+            cached = getenv("QORE_AOT_PHASE_TIMING") ? 1 : 0;
+        }
+        return cached != 0;
+    }
+    static uint64_t nowMicros() {
+        struct timespec ts;
+        clock_gettime(CLOCK_MONOTONIC, &ts);
+        return (uint64_t)ts.tv_sec * 1000000ULL + ts.tv_nsec / 1000ULL;
+    }
+
 public:
     //! Create a multi-deserializer bound to a target program.
     explicit QoreAOTBinaryMultiDeserializer(QoreProgram* in_pgm)
             : pgm(in_pgm) {
+    }
+
+    ~QoreAOTBinaryMultiDeserializer() {
+        if (timingEnabled()) {
+            uint64_t total = 0;
+            for (int i = 0; i < 11; ++i) {
+                total += timings_[i].us_total;
+            }
+            timings_[11].us_total = total;
+            fprintf(stderr, "[aot-timing] ===== phase totals (usec) "
+                "sessions=%zu =====\n", sessions.size());
+            for (int i = 0; i < 12; ++i) {
+                fprintf(stderr, "[aot-timing]   %-26s %8lu us (%5.1f %%)\n",
+                    timings_[i].name,
+                    (unsigned long)timings_[i].us_total,
+                    total ? 100.0 * timings_[i].us_total / total : 0.0);
+            }
+            // Sub-breakdown of deserializeFuncsMethods (across all sessions)
+            extern uint64_t g_aot_sum_funcs_us;
+            extern uint64_t g_aot_sum_methods_us;
+            fprintf(stderr, "[aot-timing]   (of which: deserializeFunctions   %8lu us)\n",
+                (unsigned long)g_aot_sum_funcs_us);
+            fprintf(stderr, "[aot-timing]   (of which: deserializeMethods     %8lu us)\n",
+                (unsigned long)g_aot_sum_methods_us);
+            fflush(stderr);
+        }
     }
 
     //! Phase 1: open a new blob and create its shells (namespaces,
@@ -1440,11 +1503,15 @@ public:
     /** @return true on success; false on blob-open or shell-phase
                 failure (error populated) */
     bool addBlob(const uint8_t* data, uint32_t size, std::string& error) {
+        uint64_t t0 = timingEnabled() ? nowMicros() : 0;
         auto deser = std::make_unique<QoreAOTBinaryDeserializer>();
         if (!deser->openAndDeserializeShells(pgm, data, size, error)) {
             return false;
         }
         sessions.push_back(std::move(deser));
+        if (timingEnabled()) {
+            timings_[0].us_total += nowMicros() - t0;
+        }
         return true;
     }
 
@@ -1468,91 +1535,84 @@ public:
         breaking base-class-constructor-argument delegation at
         runtime. */
     bool resolveAll(std::string& error) {
-        // 2a: types, bases, and each session's OWN members.  Safe
-        // per-session — class shells are already in place from
-        // addBlob and type lookups go through pgm->findClass.
-        for (auto& sess : sessions) {
-            if (!sess->resolveTypesAndMembers(error)) {
-                return false;
+        // Phase-sync invariants documented at each sub-phase.
+        // Timing (via QORE_AOT_PHASE_TIMING) validates where
+        // load-time is actually spent.  Reported in the dtor.
+        const bool time_on = timingEnabled();
+#define AOT_PHASE_TIME(idx, body)                                    \
+        do {                                                         \
+            uint64_t _t0 = time_on ? nowMicros() : 0;                \
+            body;                                                    \
+            if (time_on) {                                           \
+                timings_[idx].us_total += nowMicros() - _t0;         \
+            }                                                        \
+        } while (0)
+
+        // 2a: types, bases, and each session's OWN members.
+        AOT_PHASE_TIME(1, {
+            for (auto& sess : sessions) {
+                if (!sess->resolveTypesAndMembers(error)) return false;
             }
-        }
+        });
         // 2a-sml: re-propagate super-class map lists now that
-        // every session has attached its direct bases.  Without
-        // this, a derived class in session X whose base was not
-        // yet resolved when X's resolveClassBases ran would have
-        // sml=[direct base only] — grandparents missing — and
-        // `processMemberInitializationList` would not emit their
-        // local members into the derived class's
-        // member_init_list at parseCommit time.
-        for (auto& sess : sessions) {
-            if (!sess->rebuildBaseClassSmlPhase(error)) {
-                return false;
+        // every session has attached its direct bases.
+        AOT_PHASE_TIME(2, {
+            for (auto& sess : sessions) {
+                if (!sess->rebuildBaseClassSmlPhase(error)) return false;
             }
-        }
-        // 2a-import: copy base-class members into derived classes.
-        // Must run across all sessions only AFTER every session
-        // has finished resolveTypesAndMembers — otherwise a
-        // derived class could import an empty member list from a
-        // sibling session's base class whose members haven't been
-        // registered yet (leaks past as a missing member_init_list
-        // entry at runtime, e.g. `zctx` inherited through 5 layers
-        // being NOTHING at AbstractQorusClientProcess::constructor).
-        for (auto& sess : sessions) {
-            if (!sess->importInheritedMembersPhase(error)) {
-                return false;
+        });
+        // 2a-import: copy base-class members into derived classes
+        // only AFTER every session has finished resolveTypesAndMembers.
+        AOT_PHASE_TIME(3, {
+            for (auto& sess : sessions) {
+                if (!sess->importInheritedMembersPhase(error)) return false;
             }
-        }
+        });
         // 2a-post: static members, class constants, globals.
-        for (auto& sess : sessions) {
-            if (!sess->resolveStaticsAndConstants(error)) {
-                return false;
+        AOT_PHASE_TIME(4, {
+            for (auto& sess : sessions) {
+                if (!sess->resolveStaticsAndConstants(error)) return false;
             }
-        }
+        });
         // 2b: function and method deserialization — every class's
         // method map gets populated here.  Must finish across all
         // sessions before ANY session commits.
-        for (auto& sess : sessions) {
-            if (!sess->deserializeFunctionsAndMethods(error)) {
-                return false;
+        AOT_PHASE_TIME(5, {
+            for (auto& sess : sessions) {
+                if (!sess->deserializeFunctionsAndMethods(error)) return false;
             }
-        }
-        // 2c: commit classes — interleaved across sessions so a
-        // session's parseCommit (which recurses into its bases'
-        // parseCommit) can walk cross-session classes with their
-        // method maps fully prepared.  Four sub-phases:
-        //   1. prepare: set initialized + has_new_user_changes,
-        //      parseAddAncestors per method
-        //   2. doCommit: parseCommit on each class in topo order
-        //   3. importAbstract: lift parent abstract methods into
-        //      ahm where the derived class doesn't override them
-        //   4. validate: confirm base-class reachability
-        for (auto& sess : sessions) {
-            if (!sess->commitClassesPrepare(error)) {
-                return false;
+        });
+        // 2c: commit classes — 4 sub-phases interleaved across
+        // sessions so a session's parseCommit walk can find
+        // sibling sessions' classes prepared.
+        AOT_PHASE_TIME(6, {
+            for (auto& sess : sessions) {
+                if (!sess->commitClassesPrepare(error)) return false;
             }
-        }
-        for (auto& sess : sessions) {
-            if (!sess->commitClassesDoCommit(error)) {
-                return false;
+        });
+        AOT_PHASE_TIME(7, {
+            for (auto& sess : sessions) {
+                if (!sess->commitClassesDoCommit(error)) return false;
             }
-        }
-        for (auto& sess : sessions) {
-            if (!sess->commitClassesImportAbstract(error)) {
-                return false;
+        });
+        AOT_PHASE_TIME(8, {
+            for (auto& sess : sessions) {
+                if (!sess->commitClassesImportAbstract(error)) return false;
             }
-        }
-        for (auto& sess : sessions) {
-            if (!sess->commitClassesValidate(error)) {
-                return false;
+        });
+        AOT_PHASE_TIME(9, {
+            for (auto& sess : sessions) {
+                if (!sess->commitClassesValidate(error)) return false;
             }
-        }
+        });
         // 2d: finalize — pending static-method defaults, fallback
         // sources, index rebuild, BCA resolution.
-        for (auto& sess : sessions) {
-            if (!sess->finalize(error)) {
-                return false;
+        AOT_PHASE_TIME(10, {
+            for (auto& sess : sessions) {
+                if (!sess->finalize(error)) return false;
             }
-        }
+        });
+#undef AOT_PHASE_TIME
         return true;
     }
 

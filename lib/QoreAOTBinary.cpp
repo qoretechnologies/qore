@@ -4415,14 +4415,38 @@ bool QoreAOTBinaryDeserializer::deserializeFunctionsAndMethods(std::string& erro
         }
     };
     StaticMethodDefaultsRAII smd_raii(&pending_smd);
+    bool time_on = getenv("QORE_AOT_PHASE_TIMING") != nullptr;
+    auto now_us = [] () -> uint64_t {
+        struct timespec ts;
+        clock_gettime(CLOCK_MONOTONIC, &ts);
+        return (uint64_t)ts.tv_sec * 1000000ULL + ts.tv_nsec / 1000ULL;
+    };
+    uint64_t t0 = time_on ? now_us() : 0;
     if (!deserializeFunctions(error)) {
         return false;
     }
+    uint64_t t1 = time_on ? now_us() : 0;
     if (!deserializeMethods(error)) {
         return false;
     }
+    uint64_t t2 = time_on ? now_us() : 0;
+    if (time_on) {
+        // Per-session sub-breakdown of the dominant deserializeFuncsMethods
+        // bucket.  Across 132 sessions (qwf), methods-only vs functions-only
+        // reveals which pass to attack first.
+        extern uint64_t g_aot_sum_funcs_us;
+        extern uint64_t g_aot_sum_methods_us;
+        g_aot_sum_funcs_us += (t1 - t0);
+        g_aot_sum_methods_us += (t2 - t1);
+    }
     return true;
 }
+
+// Sub-timing accumulators across all sessions.  Printed (if
+// QORE_AOT_PHASE_TIMING is on) at the end of the process via a
+// one-shot atexit hook installed on first use.
+uint64_t g_aot_sum_funcs_us = 0;
+uint64_t g_aot_sum_methods_us = 0;
 
 // Phase-split 2c.  Commits all newly deserialized classes in this
 // session.  Requires every class's method map to already be

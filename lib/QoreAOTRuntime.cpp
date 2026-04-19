@@ -8008,6 +8008,20 @@ extern "C" DLLEXPORT int qore_aot_script_end_batch(QoreProgram* tpgm) {
     ExceptionSink xsink;
     int rc = 0;
 
+    // Phase-timing instrumentation (post-resolveAll register +
+    // init-func execution passes).  MultiDeserializer reports its
+    // own resolveAll phase breakdown via QORE_AOT_PHASE_TIMING in
+    // its destructor; these counters cover the work that happens
+    // AFTER resolveAll but inside end_batch.
+    const bool time_on = getenv("QORE_AOT_PHASE_TIMING") != nullptr;
+    auto now_us = [] () -> uint64_t {
+        struct timespec ts;
+        clock_gettime(CLOCK_MONOTONIC, &ts);
+        return (uint64_t)ts.tv_sec * 1000000ULL + ts.tv_nsec / 1000ULL;
+    };
+    uint64_t us_register = 0;
+    uint64_t us_init = 0;
+
     {
         ProgramRuntimeParseContextHelper pch(&xsink, tpgm);
         if (xsink.isException()) {
@@ -8050,11 +8064,15 @@ extern "C" DLLEXPORT int qore_aot_script_end_batch(QoreProgram* tpgm) {
             std::vector<AOTInitFuncExecInfo> init_func_contexts;
             int registered = 0;
             auto& session = batch->mdes.session(i);
+            uint64_t t0 = time_on ? now_us() : 0;
             registerAOTFunctionsFromSlotMaps(session.getReader(), root_ns,
                 tpgm, func_map, registered, &init_func_contexts);
             if (registered < d.num_functions) {
                 registerAOTFunctionsInNamespace(root_ns, tpgm, func_map,
                     registered);
+            }
+            if (time_on) {
+                us_register += now_us() - t0;
             }
             printd(1, "qore_aot_script_end_batch(%s): registered %d/%d "
                 "pre-compiled functions (%d init funcs)\n",
@@ -8074,9 +8092,13 @@ extern "C" DLLEXPORT int qore_aot_script_end_batch(QoreProgram* tpgm) {
                         if (tch_xsink.isException()) {
                             tch_xsink.handleExceptions();
                         } else {
+                            uint64_t t1 = time_on ? now_us() : 0;
                             executeInitFunctions(tpgm, init_func_contexts,
                                 init_descriptors, d.label.c_str(),
                                 /*shadow_pgm=*/nullptr);
+                            if (time_on) {
+                                us_init += now_us() - t1;
+                            }
                         }
                     }
                 } else {
@@ -8086,6 +8108,13 @@ extern "C" DLLEXPORT int qore_aot_script_end_batch(QoreProgram* tpgm) {
                 }
             }
         }
+    }
+
+    if (time_on) {
+        fprintf(stderr, "[aot-timing] post-resolveAll: "
+            "registerAOTFunctions=%lu us  executeInitFunctions=%lu us\n",
+            (unsigned long)us_register, (unsigned long)us_init);
+        fflush(stderr);
     }
 
     return rc;
