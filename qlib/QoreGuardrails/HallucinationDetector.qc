@@ -54,10 +54,8 @@ if (!result.passed) {
 */
 public class HallucinationDetector inherits AbstractGuardrailRule {
     private {
-%ifndef NoLlmUtils
         #! LLM backend for grounding classification
         *QoreLlmUtils::LlmBackend llm;
-%endif
         #! Key in the context hash holding the list of source texts
         string sources_ctx_key;
         #! Minimum grounding score to pass (0.0-1.0)
@@ -78,12 +76,10 @@ public class HallucinationDetector inherits AbstractGuardrailRule {
         sources_ctx_key = params.sources_ctx_key ?? "sources";
         min_grounding_score = params.min_grounding_score ?? 0.5;
 
-%ifndef NoLlmUtils
         if (llm_config) {
             llm = new QoreLlmUtils::LlmBackend(
                 cast<hash<QoreLlmUtils::LlmBackendConfig>>(llm_config));
         }
-%endif
     }
 
     string getRuleName() {
@@ -156,7 +152,6 @@ public class HallucinationDetector inherits AbstractGuardrailRule {
             return result;
         }
 
-%ifndef NoLlmUtils
         if (llm) {
             try {
                 return checkGrounding(text, sources, start);
@@ -170,7 +165,6 @@ public class HallucinationDetector inherits AbstractGuardrailRule {
                 }
             }
         }
-%endif
 
         if (getFailClosed()) {
             hash<GuardrailResult> result = makeFailResult(
@@ -183,7 +177,6 @@ public class HallucinationDetector inherits AbstractGuardrailRule {
         return result;
     }
 
-%ifndef NoLlmUtils
     #! Uses LLM to check if the response is grounded in sources
     private hash<GuardrailResult> checkGrounding(string text, list<string> sources,
             date start) {
@@ -252,7 +245,6 @@ public class HallucinationDetector inherits AbstractGuardrailRule {
         result.duration_ms = getElapsedMs(start);
         return result;
     }
-%endif
 }
 
 } # namespace QoreGuardrails

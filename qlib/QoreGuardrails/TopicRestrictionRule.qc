@@ -39,10 +39,8 @@ public class TopicRestrictionRule inherits AbstractGuardrailRule {
     private {
         #! Allowed topics list
         list<string> allowed_topics;
-%ifndef NoLlmUtils
         #! LLM backend for classification
         *QoreLlmUtils::LlmBackend llm;
-%endif
     }
 
     #! Creates a topic restriction rule
@@ -61,12 +59,10 @@ public class TopicRestrictionRule inherits AbstractGuardrailRule {
         }
         allowed_topics = params.allowed_topics;
 
-%ifndef NoLlmUtils
         if (llm_config) {
             llm = new QoreLlmUtils::LlmBackend(
                 cast<hash<QoreLlmUtils::LlmBackendConfig>>(llm_config));
         }
-%endif
     }
 
     string getRuleName() {
@@ -109,11 +105,9 @@ public class TopicRestrictionRule inherits AbstractGuardrailRule {
     hash<GuardrailResult> evaluate(string text, *hash<auto> ctx) {
         date start = now_us();
 
-%ifndef NoLlmUtils
         if (llm) {
             return classifyTopic(text, start);
         }
-%endif
 
         # Without LLM, cannot classify topics
         if (getFailClosed()) {
@@ -127,7 +121,6 @@ public class TopicRestrictionRule inherits AbstractGuardrailRule {
         return result;
     }
 
-%ifndef NoLlmUtils
     #! Uses LLM to classify whether the query is within allowed topics
     private hash<GuardrailResult> classifyTopic(string text, date start) {
         string topics_str = (map sprintf("\"%s\"", $1), allowed_topics).join(", ");
@@ -183,7 +176,6 @@ public class TopicRestrictionRule inherits AbstractGuardrailRule {
         result.duration_ms = getElapsedMs(start);
         return result;
     }
-%endif
 }
 
 } # namespace QoreGuardrails

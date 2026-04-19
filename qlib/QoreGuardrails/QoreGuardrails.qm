@@ -27,10 +27,7 @@
 %modern
 
 %requires(reexport) DataProvider
-
-%try-module QoreLlmUtils
-%define NoLlmUtils
-%endtry
+%requires QoreLlmUtils
 
 %try-module json
 %define NoJson
