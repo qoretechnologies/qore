@@ -1317,42 +1317,69 @@ int AsyncIoControllerPriv::cancelByOwner(const QoreStringNode* owner, ExceptionS
         std::atomic<int> pending_threads{0};
         int my_idx = current_io_thread_idx;
 
-        // First, count pending-threads for the remote dispatches so the
-        // condvar protocol in processCommands::CancelOwner signals us
-        // correctly when they've all reported in.
-        int remote_count = 0;
-        for (size_t i = 0; i < io_threads.size(); ++i) {
-            if ((int)i != my_idx) {
-                ++remote_count;
-            }
-        }
+        // Dispatch CancelOwner to every LIVE remote I/O thread.  Dead
+        // slots (tid==0) get their caches walked directly under m — a
+        // cmd pushed to a dead cmdq would never be processed and
+        // pending_threads would never drain, hanging done_cond.  The
+        // current thread handles its own cache below.
+        std::vector<IoThreadContext*> live_remote;
         bool wait_remote = false;
-        if (remote_count > 0) {
+        {
             AutoLocker al(m);
             if (anyThreadRunning() && !io_exiting) {
-                pending_threads.store(remote_count, std::memory_order_relaxed);
                 for (size_t i = 0; i < io_threads.size(); ++i) {
                     if ((int)i == my_idx) {
                         continue;
                     }
-                    Command cmd;
-                    cmd.cmd = IoCommand::CancelOwner;
-                    cmd.owner = owner_str;
-                    cmd.done_cond = &done_cond;
-                    cmd.cancel_done_flag = &cancel_done;
-                    cmd.cancel_count = &actual_count;
-                    cmd.pending_threads = &pending_threads;
-                    io_threads[i]->cmdq.push(std::move(cmd));
-                    ++submit_seq;
+                    IoThreadContext& tp = *io_threads[i];
+                    if (tp.tid) {
+                        live_remote.push_back(&tp);
+                    } else {
+                        // Dead thread — walk its cache directly.
+                        std::vector<std::string> keys;
+                        for (auto& [key, pinfo] : tp.cache) {
+                            if (pinfo.owner == owner_str) {
+                                keys.push_back(key);
+                            }
+                        }
+                        for (auto& key : keys) {
+                            auto it = tp.cache.find(key);
+                            if (it != tp.cache.end()
+                                    && it->second.owner == owner_str) {
+                                ASYNC_IO_TRACE("cache.erase CANCEL_BY_OWNER_DEAD_THREAD "
+                                    "key='%s' owner='%s'\n",
+                                    key.c_str(), owner_str.c_str());
+                                direct_pinfos.push_back(it->second);
+                                it->second = PollInfo();
+                                tp.cache.erase(it);
+                                tp.cache_size.fetch_sub(1, std::memory_order_relaxed);
+                                ++cache_count;
+                            }
+                        }
+                        tp.cancelled_owners[owner_str] = 2;
+                    }
                 }
-                wait_remote = true;
+                if (!live_remote.empty()) {
+                    pending_threads.store((int)live_remote.size(),
+                        std::memory_order_relaxed);
+                    for (auto* tp : live_remote) {
+                        Command cmd;
+                        cmd.cmd = IoCommand::CancelOwner;
+                        cmd.owner = owner_str;
+                        cmd.done_cond = &done_cond;
+                        cmd.cancel_done_flag = &cancel_done;
+                        cmd.cancel_count = &actual_count;
+                        cmd.pending_threads = &pending_threads;
+                        tp->cmdq.push(std::move(cmd));
+                        ++submit_seq;
+                    }
+                    wait_remote = true;
+                }
             }
         }
         if (wait_remote) {
-            for (size_t i = 0; i < io_threads.size(); ++i) {
-                if ((int)i != my_idx) {
-                    io_threads[i]->notifier->notify();
-                }
+            for (auto* tp : live_remote) {
+                tp->notifier->notify();
             }
         }
 
@@ -1394,40 +1421,78 @@ int AsyncIoControllerPriv::cancelByOwner(const QoreStringNode* owner, ExceptionS
             cache_count += actual_count.load(std::memory_order_relaxed);
         }
     } else {
-        // Worker thread — send CancelOwner to all I/O threads and wait for actual count
+        // Worker thread — push CancelOwner to every LIVE I/O thread
+        // (tid != 0) and record the owner as cancelled on any dead-thread
+        // contexts so a racing resubmit is rejected.  See cancelByProgram
+        // for the same pattern / rationale: a blind push to dead slots
+        // would strand the cmd in the dead cmdq and hang done_cond.
         std::atomic<int> actual_count{0};
         std::atomic<int> pending_threads{0};
+        std::vector<IoThreadContext*> live_targets;
         {
             AutoLocker al(m);
             if (anyThreadRunning() && !io_exiting) {
-                pending_threads.store((int)io_threads.size(), std::memory_order_relaxed);
                 for (auto& tp : io_threads) {
-                    Command cmd;
-                    cmd.cmd = IoCommand::CancelOwner;
-                    cmd.owner = owner_str;
-                    cmd.done_cond = &done_cond;
-                    cmd.cancel_done_flag = &cancel_done;
-                    cmd.cancel_count = &actual_count;
-                    cmd.pending_threads = &pending_threads;
-                    tp->cmdq.push(std::move(cmd));
-                    // Bump submit_seq so the I/O thread's pre-poll catch-up
-                    // covers this CancelOwner — see Cancel for details.
-                    ++submit_seq;
+                    if (tp->tid) {
+                        live_targets.push_back(tp.get());
+                    } else {
+                        // Dead thread — directly walk its cache while
+                        // tid==0 under m (startIntern also takes m).
+                        std::vector<std::string> keys;
+                        for (auto& [key, pinfo] : tp->cache) {
+                            if (pinfo.owner == owner_str) {
+                                keys.push_back(key);
+                            }
+                        }
+                        for (auto& key : keys) {
+                            auto it = tp->cache.find(key);
+                            if (it != tp->cache.end()
+                                    && it->second.owner == owner_str) {
+                                ASYNC_IO_TRACE("cache.erase CANCEL_BY_OWNER_DEAD_THREAD "
+                                    "key='%s' owner='%s'\n",
+                                    key.c_str(), owner_str.c_str());
+                                direct_pinfos.push_back(it->second);
+                                it->second = PollInfo();
+                                tp->cache.erase(it);
+                                tp->cache_size.fetch_sub(1, std::memory_order_relaxed);
+                                ++cache_count;
+                            }
+                        }
+                        tp->cancelled_owners[owner_str] = 2;
+                    }
                 }
-                do_signal = true;
+                if (!live_targets.empty()) {
+                    pending_threads.store((int)live_targets.size(),
+                        std::memory_order_relaxed);
+                    for (auto* tp : live_targets) {
+                        Command cmd;
+                        cmd.cmd = IoCommand::CancelOwner;
+                        cmd.owner = owner_str;
+                        cmd.done_cond = &done_cond;
+                        cmd.cancel_done_flag = &cancel_done;
+                        cmd.cancel_count = &actual_count;
+                        cmd.pending_threads = &pending_threads;
+                        tp->cmdq.push(std::move(cmd));
+                        // Bump submit_seq so the I/O thread's pre-poll
+                        // catch-up covers this CancelOwner —
+                        // see Cancel for details.
+                        ++submit_seq;
+                    }
+                    do_signal = true;
+                }
             }
         }
 
         if (do_signal) {
-            for (auto& tp : io_threads) {
+            for (auto* tp : live_targets) {
                 tp->notifier->notify();
             }
-            // Wait for all I/O threads to complete
+            // Wait for all live I/O threads to complete
             AutoLocker al(m);
             while (!cancel_done) {
                 done_cond.wait(m);
             }
-            cache_count = actual_count.load(std::memory_order_relaxed);
+            cache_count += actual_count.load(std::memory_order_relaxed);
         }
     }
 
@@ -1484,40 +1549,65 @@ void AsyncIoControllerPriv::cancelByProgram(QoreProgram* pgm, ExceptionSink* xsi
         std::atomic<int> pending_threads{0};
         int my_idx = current_io_thread_idx;
 
-        int remote_count = 0;
-        for (size_t i = 0; i < io_threads.size(); ++i) {
-            if ((int)i != my_idx) {
-                ++remote_count;
-            }
-        }
+        // Dispatch CancelByProgram to every LIVE remote I/O thread; walk
+        // dead remote caches directly under m.  Mirrors cancelByOwner
+        // above — see that comment for the dead-cmdq-hang rationale.
+        std::vector<IoThreadContext*> live_remote;
         bool wait_remote = false;
-        if (remote_count > 0) {
+        {
             AutoLocker al(m);
             if (anyThreadRunning() && !io_exiting) {
-                pending_threads.store(remote_count, std::memory_order_relaxed);
                 for (size_t i = 0; i < io_threads.size(); ++i) {
                     if ((int)i == my_idx) {
                         continue;
                     }
-                    Command cmd;
-                    cmd.cmd = IoCommand::CancelByProgram;
-                    cmd.pgm = pgm;
-                    cmd.cancel_pinfos = &cancel_pinfos;
-                    cmd.cancel_pinfos_lock = &pinfos_lock;
-                    cmd.pending_threads = &pending_threads;
-                    cmd.done_cond = &done_cond;
-                    cmd.cancel_done_flag = &cancel_done;
-                    io_threads[i]->cmdq.push(std::move(cmd));
-                    ++submit_seq;
+                    IoThreadContext& tp = *io_threads[i];
+                    if (tp.tid) {
+                        live_remote.push_back(&tp);
+                    } else {
+                        std::vector<std::string> keys;
+                        for (auto& [key, pinfo] : tp.cache) {
+                            if (pinfo.spop_obj
+                                    && pinfo.spop_obj->getProgram() == pgm) {
+                                keys.push_back(key);
+                            }
+                        }
+                        for (auto& key : keys) {
+                            auto it = tp.cache.find(key);
+                            if (it != tp.cache.end()) {
+                                ASYNC_IO_TRACE("cache.erase CANCEL_BY_PROGRAM_DEAD_THREAD "
+                                    "key='%s' owner='%s'\n",
+                                    key.c_str(), it->second.owner.c_str());
+                                cancel_pinfos.push_back(it->second);
+                                it->second = PollInfo();
+                                tp.cache.erase(it);
+                                tp.cache_size.fetch_sub(1, std::memory_order_relaxed);
+                            }
+                        }
+                    }
                 }
-                wait_remote = true;
+                if (!live_remote.empty()) {
+                    pending_threads.store((int)live_remote.size(),
+                        std::memory_order_relaxed);
+                    for (auto* tp : live_remote) {
+                        Command cmd;
+                        cmd.cmd = IoCommand::CancelByProgram;
+                        cmd.pgm = pgm;
+                        cmd.cancel_pinfos = &cancel_pinfos;
+                        cmd.cancel_pinfos_lock = &pinfos_lock;
+                        cmd.pending_threads = &pending_threads;
+                        cmd.done_cond = &done_cond;
+                        cmd.cancel_done_flag = &cancel_done;
+                        tp->cmdq.push(std::move(cmd));
+                        ++submit_seq;
+                    }
+                    wait_remote = true;
+                }
             }
         }
         if (wait_remote) {
-            for (size_t i = 0; i < io_threads.size(); ++i) {
-                if ((int)i != my_idx) {
-                    io_threads[i]->notifier->notify();
-                }
+            for (auto* tp : live_remote) {
+                tp->notifier->notify();
             }
         }
 
@@ -1549,32 +1639,70 @@ void AsyncIoControllerPriv::cancelByProgram(QoreProgram* pgm, ExceptionSink* xsi
             }
         }
     } else {
-        // Worker thread — send CancelByProgram to all I/O threads
+        // Worker thread — send CancelByProgram to every LIVE I/O thread
+        // (tid != 0) and access the dead-thread caches directly under the
+        // main mutex.  With QORE_IO_THREADS > 1, one thread can autostop
+        // (tid → 0) while others are still running, so anyThreadRunning()
+        // returns true but a blind push to every io_threads[] slot would
+        // strand the cmd in the dead slot's cmdq forever — pending_threads
+        // would never reach 0 and cancelByProgram would hang indefinitely.
         QoreCondition done_cond;
         bool cancel_done = false;
         bool do_signal = false;
         QoreThreadLock pinfos_lock;
         std::atomic<int> pending_threads{0};
+        std::vector<IoThreadContext*> live_targets;
         {
             AutoLocker al(m);
             if (anyThreadRunning() && !io_exiting) {
-                // Send to all I/O threads (program may have ops on any thread)
-                pending_threads.store((int)io_threads.size(), std::memory_order_relaxed);
                 for (auto& tp : io_threads) {
-                    Command cmd;
-                    cmd.cmd = IoCommand::CancelByProgram;
-                    cmd.pgm = pgm;
-                    cmd.cancel_pinfos = &cancel_pinfos;
-                    cmd.cancel_pinfos_lock = &pinfos_lock;
-                    cmd.pending_threads = &pending_threads;
-                    cmd.done_cond = &done_cond;
-                    cmd.cancel_done_flag = &cancel_done;
-                    tp->cmdq.push(std::move(cmd));
-                    // Bump submit_seq so the I/O thread's pre-poll catch-up
-                    // covers this CancelByProgram — see Cancel for details.
-                    ++submit_seq;
+                    if (tp->tid) {
+                        live_targets.push_back(tp.get());
+                    } else {
+                        // Dead thread — scan its cache directly.  Safe while
+                        // tid==0 holding m: startIntern() is the only way
+                        // for it to come back to life and also takes m.
+                        std::vector<std::string> keys;
+                        for (auto& [key, pinfo] : tp->cache) {
+                            if (pinfo.spop_obj
+                                    && pinfo.spop_obj->getProgram() == pgm) {
+                                keys.push_back(key);
+                            }
+                        }
+                        for (auto& key : keys) {
+                            auto it = tp->cache.find(key);
+                            if (it != tp->cache.end()) {
+                                ASYNC_IO_TRACE("cache.erase CANCEL_BY_PROGRAM_DEAD_THREAD "
+                                    "key='%s' owner='%s'\n",
+                                    key.c_str(), it->second.owner.c_str());
+                                cancel_pinfos.push_back(it->second);
+                                it->second = PollInfo();
+                                tp->cache.erase(it);
+                                tp->cache_size.fetch_sub(1, std::memory_order_relaxed);
+                            }
+                        }
+                    }
                 }
-                do_signal = true;
+                if (!live_targets.empty()) {
+                    pending_threads.store((int)live_targets.size(),
+                        std::memory_order_relaxed);
+                    for (auto* tp : live_targets) {
+                        Command cmd;
+                        cmd.cmd = IoCommand::CancelByProgram;
+                        cmd.pgm = pgm;
+                        cmd.cancel_pinfos = &cancel_pinfos;
+                        cmd.cancel_pinfos_lock = &pinfos_lock;
+                        cmd.pending_threads = &pending_threads;
+                        cmd.done_cond = &done_cond;
+                        cmd.cancel_done_flag = &cancel_done;
+                        tp->cmdq.push(std::move(cmd));
+                        // Bump submit_seq so the I/O thread's pre-poll
+                        // catch-up covers this CancelByProgram —
+                        // see Cancel for details.
+                        ++submit_seq;
+                    }
+                    do_signal = true;
+                }
             } else {
                 // I/O thread not running — direct access is safe
                 for (auto& tp : io_threads) {
@@ -1600,10 +1728,10 @@ void AsyncIoControllerPriv::cancelByProgram(QoreProgram* pgm, ExceptionSink* xsi
         }
 
         if (do_signal) {
-            for (auto& tp : io_threads) {
+            for (auto* tp : live_targets) {
                 tp->notifier->notify();
             }
-            // Wait for all I/O threads to complete the command
+            // Wait for all live I/O threads to complete the command
             AutoLocker al(m);
             while (!cancel_done) {
                 done_cond.wait(m);
