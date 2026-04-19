@@ -524,9 +524,11 @@ public class AsyncSocketIoTest inherits QUnit::Test {
         });
         assertTrue(exists info.ex, "expected an exception for closed server response");
         # The error code depends on the I/O path: the legacy path raises
-        # SOCKET-HTTP-ERROR, the conn_mgr path may raise SOCKET-TIMEOUT
-        # or HTTP1-READ-ERROR when the server closes before responding.
-        assertTrue(info.ex.err =~ /^(SOCKET-HTTP-ERROR|SOCKET-TIMEOUT|HTTP1-READ-ERROR)$/,
+        # SOCKET-HTTP-ERROR, the conn_mgr path may raise SOCKET-TIMEOUT,
+        # HTTP1-READ-ERROR, or SOCKET-CLOSED when the server closes
+        # before responding (SOCKET-CLOSED surfaces when the pre-connect
+        # routed through conn_mgr detects EOF before Send completes).
+        assertTrue(info.ex.err =~ /^(SOCKET-HTTP-ERROR|SOCKET-TIMEOUT|HTTP1-READ-ERROR|SOCKET-CLOSED)$/,
             sprintf("error should indicate connection failure; got: %s: %s",
                 info.ex.err, info.ex.desc));
 

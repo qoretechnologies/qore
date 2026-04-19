@@ -1892,6 +1892,46 @@ struct qore_httpclient_priv {
         }
     }
 
+    //! Pre-populate the conn_mgr pool for HTTPClient::connect().
+    /** Returns 0 on success, -1 on error (with xsink set).  Called from
+        QoreHttpClientObject::connect() when use_conn_mgr is active so
+        the legacy HTTPClient::connect() API still does what callers
+        expect (fail fast on unreachable server, warm up the socket) but
+        uses the conn_mgr pool instead of the legacy msock — so the
+        first subsequent send() reuses the same TCP connection.
+
+        Acquires a connection with the configured connect timeout,
+        then releases its stream reservation so the next request can
+        take it.  @a proxy_connection is checked first so the correct
+        scheme/host/port is used for proxied setups.
+    */
+    DLLLOCAL int connectViaConnMgr(ExceptionSink* xsink) {
+        if (!connection.has_url()) {
+            xsink->raiseException("HTTPCLIENT-CONNECT-ERROR",
+                "no URL set — cannot connect");
+            return -1;
+        }
+        // Scheme follows the origin: it decides TLS-vs-plain for the
+        // conn_mgr pool, and HTTPS-through-proxy is a CONNECT tunnel to
+        // the origin that conn_mgr handles internally from the
+        // proxy_info it was configured with in getConnMgr().
+        const char* scheme = connection.ssl ? "https" : "http";
+        HttpClientConnectionManagerBase& mgr = getConnMgr(xsink);
+        if (*xsink) {
+            return -1;
+        }
+        HttpClientConnectionBase* conn = mgr.acquireConnection(scheme,
+            connection.host.c_str(), connection.port, xsink);
+        if (!conn || *xsink) {
+            return -1;
+        }
+        // Release the stream reservation taken by acquireConnection.  The
+        // connection stays in the pool; the next send() finds it ready and
+        // reserves a stream of its own.
+        mgr.releaseConnection(conn);
+        return 0;
+    }
+
     //! Clears the streaming receive channel, closing it if open
     DLLLOCAL void clearStreamingChannel() {
         if (streaming_recv_channel) {
@@ -1964,9 +2004,24 @@ struct qore_httpclient_priv {
         AutoLocker al(msock->m);
 
         if (!msock->socket->isOpen()) {
-            xsink->raiseException("PERSISTENCE-ERROR", "HTTPClient::setPersistent() can only be called once an "
-                "initial connection has been established; currently there is no connection to the server");
-            return;
+            // setPersistent() is a legacy feature that sticks a single
+            // msock connection across repeated send() calls.  It has no
+            // meaning for the conn_mgr pool (which already keeps
+            // connections alive across requests).  If the caller asks
+            // for persistence on a client whose connect() went through
+            // conn_mgr, drop back to the legacy path: disable conn_mgr
+            // for this instance and open an msock connection now.
+            // Subsequent send()s route through send_internal's legacy
+            // branch, which is what setPersistent() callers expect.
+            if (use_conn_mgr) {
+                use_conn_mgr = false;
+                // Tear down any conn_mgr state so stale pooled
+                // connections don't linger for this client.
+                resetConnMgr();
+            }
+            if (connect_unlocked(xsink, connection)) {
+                return;
+            }
         }
 
         if (!persistent) {
@@ -5032,6 +5087,22 @@ int QoreHttpClientObject::connect(ExceptionSink* xsink) {
 
     if (priv->checkNonBlock(xsink)) {
         return -1;
+    }
+
+    // When the conn_mgr is the active dispatch path (use_conn_mgr &&
+    // !poll_apis_used), connect() pre-populates the conn_mgr pool instead
+    // of opening the legacy msock.  Every subsequent non-WS send() goes
+    // through the same pool entry, so there is a single TCP connection
+    // per logical session — no more "warm-up msock + real conn_mgr
+    // connection" double-connect that hangs single-accept test servers
+    // and wastes a socket slot on real peers.  WS upgrade and poll-API
+    // paths still use msock, so they stay on the legacy connect_unlocked
+    // path below.
+    if (http_priv->use_conn_mgr && !http_priv->poll_apis_used
+            && http_priv->connection.has_url()) {
+        // Drop any stale msock state (prior disconnect/reconnect cycle).
+        http_priv->disconnect_unlocked();
+        return http_priv->connectViaConnMgr(xsink);
     }
 
     http_priv->disconnect_unlocked();
