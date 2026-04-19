@@ -7345,20 +7345,107 @@ int num = l.size();
         populate(AbstractDatasource ds, hash<auto> tables, *hash<auto> opt) {
             delete h;
             AbstractDatabase::checkDriverOptions(\tables, ds.getDriverName());
+
+            # validate table descriptions up-front
             foreach string name in (keys tables) {
-                if (h.hasKey(name))
-                    continue;
                 if (tables{name}.typeCode() != NT_HASH) {
                     throw "ALIGN-TABLE-ERROR",
                             sprintf("table '%s' schema definition has to be hash, but it's %s",
                                     name, tables{name}.type());
                 }
+            }
+
+            # Process tables in foreign-key topological order: a table is set up only after
+            # every other in-hash table it references via a foreign constraint.  This ensures
+            # the cache entry consulted by Table::setupTable() -> addForeignConstraintUnlocked()
+            # for FK target lookups is already the template-built parent.  Otherwise FK
+            # resolution falls through to Tables::get(), which describes the parent from the
+            # live DB and inserts the DB-shaped table into the cache; the original single-pass
+            # loop then skipped setupTable() for that parent on its turn, silently conflating
+            # "cached from template" with "cached from DB" and producing zero-change alignment
+            # output for structurally divergent tables.
+            foreach string name in (sortByForeignKeyDependency(tables, ds.getDriverName())) {
                 hash th = tables{name} - "rename";
                 # create table template
                 Table t(ds, th, name, opt + ("table_cache": self));
                 # store in table_cache
                 h{name} = t.getTable();
             }
+        }
+
+        #! returns the keys of \a tables in foreign-key dependency order (referenced tables first)
+        /** Only considers FK targets that are themselves keys of \a tables; external references
+            (FKs pointing at tables not in the hash) do not affect ordering and continue to be
+            resolved from the live database during setupTable().
+
+            Self-references do not contribute to ordering.
+
+            @throw ALIGN-TABLE-ERROR an FK cycle among in-hash tables was detected; no single
+            ordering would let every FK target be template-resolved from the cache
+        */
+        private static list<string> sortByForeignKeyDependency(hash<auto> tables, string drv) {
+            hash<string, bool> in_hash = {};
+            foreach string n in (keys tables) {
+                in_hash{n} = True;
+            }
+            list<string> order = ();
+            hash<string, bool> done = {};
+            hash<string, bool> visiting = {};
+            foreach string name in (keys tables) {
+                Tables::visitForeignKeyDependencies(name, tables, drv, in_hash, \order, \done,
+                    \visiting);
+            }
+            return order;
+        }
+
+        #! depth-first visitor for sortByForeignKeyDependency(); appends \a name to \a order only after all its in-hash FK targets have been appended
+        private static visitForeignKeyDependencies(string name, hash<auto> tables, string drv,
+                hash<string, bool> in_hash, reference<list<string>> order,
+                reference<hash<string, bool>> done, reference<hash<string, bool>> visiting) {
+            if (done{name}) {
+                return;
+            }
+            if (visiting{name}) {
+                throw "ALIGN-TABLE-ERROR",
+                        sprintf("foreign-constraint cycle detected among template tables "
+                                "involving %y; cannot order setupTable() calls so every FK "
+                                "target resolves from the template cache", name);
+            }
+            visiting{name} = True;
+            foreach string dep in (Tables::getTemplateForeignKeyTargets(tables{name}, drv)) {
+                if (dep == name || !in_hash{dep}) {
+                    continue;
+                }
+                Tables::visitForeignKeyDependencies(dep, tables, drv, in_hash, \order, \done,
+                    \visiting);
+            }
+            remove visiting{name};
+            done{name} = True;
+            order += name;
+        }
+
+        #! returns the referenced-table names declared by the FK entries of a template table description, applying the same driver-override promotion as setupTable()
+        /** The source description is not mutated.
+        */
+        private static list<string> getTemplateForeignKeyTargets(hash<auto> tdesc, string drv) {
+            *hash<auto> fc = tdesc.foreign_constraints;
+            if (!fc) {
+                return ();
+            }
+            # apply driver-specific foreign_constraints overrides non-destructively
+            AbstractDatabase::checkDriverOptions(\fc, drv);
+            list<string> targets = ();
+            foreach string fkname in (keys fc) {
+                auto fkdesc = fc{fkname};
+                if (fkdesc.typeCode() != NT_HASH) {
+                    continue;
+                }
+                *string tgt = fkdesc.table;
+                if (tgt.val()) {
+                    targets += tgt;
+                }
+            }
+            return targets;
         }
 
         #! populates the object from tables in the database
