@@ -80,10 +80,8 @@ public class PromptInjectionDetector inherits AbstractGuardrailRule {
     private {
         #! Confidence threshold for pattern-based detection
         float pattern_threshold;
-%ifndef NoLlmUtils
         #! Optional LLM backend for classification
         *QoreLlmUtils::LlmBackend llm;
-%endif
     }
 
     #! Creates a prompt injection detector
@@ -96,12 +94,10 @@ public class PromptInjectionDetector inherits AbstractGuardrailRule {
     constructor(string severity = GS_CRITICAL, *hash<auto> params,
             *hash<auto> llm_config) : AbstractGuardrailRule(severity) {
         pattern_threshold = params.pattern_threshold ?? 0.5;
-%ifndef NoLlmUtils
         if (llm_config) {
             llm = new QoreLlmUtils::LlmBackend(
                 cast<hash<QoreLlmUtils::LlmBackendConfig>>(llm_config));
         }
-%endif
     }
 
     string getRuleName() {
@@ -180,18 +176,15 @@ public class PromptInjectionDetector inherits AbstractGuardrailRule {
         }
 
         # LLM-based classification (if available)
-%ifndef NoLlmUtils
         if (llm) {
             return classifyWithLlm(text, start);
         }
-%endif
 
         hash<GuardrailResult> result = makePassResult();
         result.duration_ms = getElapsedMs(start);
         return result;
     }
 
-%ifndef NoLlmUtils
     #! Uses LLM to classify potential injection
     private hash<GuardrailResult> classifyWithLlm(string text, date start) {
         string system_prompt =
@@ -250,7 +243,6 @@ public class PromptInjectionDetector inherits AbstractGuardrailRule {
         result.duration_ms = getElapsedMs(start);
         return result;
     }
-%endif
 }
 
 } # namespace QoreGuardrails

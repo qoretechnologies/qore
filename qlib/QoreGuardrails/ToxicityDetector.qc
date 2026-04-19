@@ -62,10 +62,8 @@ public class ToxicityDetector inherits AbstractGuardrailRule {
         float onnx_threshold;
         #! LLM confidence threshold
         float llm_threshold;
-%ifndef NoLlmUtils
         #! Optional LLM backend
         *QoreLlmUtils::LlmBackend llm;
-%endif
     }
 
     #! Creates a ToxicityDetector
@@ -84,12 +82,10 @@ public class ToxicityDetector inherits AbstractGuardrailRule {
         onnx_threshold = params.onnx_threshold ?? 0.7;
         llm_threshold = params.llm_threshold ?? 0.7;
 
-%ifndef NoLlmUtils
         if ((mode == "llm" || mode == "both") && llm_config) {
             llm = new QoreLlmUtils::LlmBackend(
                 cast<hash<QoreLlmUtils::LlmBackendConfig>>(llm_config));
         }
-%endif
     }
 
     string getRuleName() {
@@ -190,7 +186,6 @@ public class ToxicityDetector inherits AbstractGuardrailRule {
         date start = now_us();
 
         # LLM-based classification
-%ifndef NoLlmUtils
         if ((mode == "llm" || mode == "both") && llm) {
             try {
                 return classifyWithLlm(text, start);
@@ -204,7 +199,6 @@ public class ToxicityDetector inherits AbstractGuardrailRule {
                 }
             }
         }
-%endif
 
         # No detection available
         if (getFailClosed()) {
@@ -218,7 +212,6 @@ public class ToxicityDetector inherits AbstractGuardrailRule {
         return result;
     }
 
-%ifndef NoLlmUtils
     #! Uses LLM to classify toxicity
     private hash<GuardrailResult> classifyWithLlm(string text, date start) {
         string system_prompt =
@@ -264,7 +257,6 @@ public class ToxicityDetector inherits AbstractGuardrailRule {
         result.duration_ms = getElapsedMs(start);
         return result;
     }
-%endif
 }
 
 } # namespace QoreGuardrails

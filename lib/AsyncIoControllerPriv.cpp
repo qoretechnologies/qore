@@ -286,13 +286,9 @@ void AsyncIoControllerPriv::cleanupAbandonedCommand(Command& cmd, ExceptionSink*
             break;
         }
         case IoCommand::Cancel: {
-            // Signal cancel waiter if present so waitCancel() returns
-            auto cit = cancel_cond_map.find(cmd.key);
-            if (cit != cancel_cond_map.end()) {
-                cit->second->broadcast();
-                delete cit->second;
-                cancel_cond_map.erase(cit);
-            }
+            // Signal cancel waiter if present so waitCancel() returns.
+            // Uses the refcounted CancelCond helper — caller holds m.
+            signalCancelLocked(cmd.key);
             break;
         }
         case IoCommand::CancelByProgram:
@@ -787,9 +783,14 @@ AsyncIoControllerPriv::AsyncIoControllerPriv(bool autostop, ExceptionSink* xsink
 AsyncIoControllerPriv::~AsyncIoControllerPriv() {
     {
         AutoLocker al(m);
-        for (auto& [key, cond] : cancel_cond_map) {
-            cond->broadcast();
-            delete cond;
+        // Broadcast+drop-map-ref for every pending cancel wait; each entry's
+        // remaining refs (held by active waiters) will be dropped by those
+        // waiters as they exit waitCancel().
+        for (auto& [key, cc] : cancel_cond_map) {
+            cc->cond.broadcast();
+            if (--cc->refs == 0) {
+                delete cc;
+            }
         }
         cancel_cond_map.clear();
     }
@@ -1251,8 +1252,15 @@ bool AsyncIoControllerPriv::cancelByKey(const QoreStringNode* key, ExceptionSink
         AutoLocker al(m);
         IoThreadContext& target = getThreadForKey(uh);
         if (anyThreadRunning() && !io_exiting) {
-            if (!cancel_cond_map.count(uh)) {
-                cancel_cond_map[uh] = new QoreCondition();
+            auto it = cancel_cond_map.find(uh);
+            if (it == cancel_cond_map.end()) {
+                // unique_ptr makes this exception-safe: if emplace throws
+                // bad_alloc, the CancelCond is destroyed; release() runs only
+                // after the map took ownership.
+                std::unique_ptr<CancelCond> cc(new CancelCond);
+                cc->refs = 1;  // the map holds one ref
+                cancel_cond_map.emplace(uh, cc.get());
+                cc.release();
             }
             Command cmd;
             cmd.cmd = IoCommand::Cancel;
@@ -2375,6 +2383,13 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
             break;  // Quit command received
         }
 
+        // Snapshot submit_seq AFTER processCommands drained the cmdq: this is
+        // the number of submits we've actually processed this iteration.  Any
+        // submit that arrives during Phase 1/2/3 below will be drained on the
+        // NEXT iteration — we must NOT advance processed_seq past it, or
+        // waitForProcessing() will wake up before the late submit is in cache.
+        int processed_target_this_iter = submit_seq.load(std::memory_order_acquire);
+
         // Re-check cmdq after processCommands returns.  Producers mutate cmdq
         // while holding m, so taking the same lock here gives a reliable view
         // before we do normal I/O work or go back to kqueue/epoll.
@@ -2529,13 +2544,16 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                 // Stale entry (deadline was updated) — discard
             }
 
-            // Update processed sequence counter (lock for condition broadcast)
+            // Update processed sequence counter (lock for condition broadcast).
+            // Use the value captured AFTER processCommands — NOT the live
+            // submit_seq — so waitForProcessing() doesn't wake up before a
+            // SubmitOp that arrived during Phase 1/2/3 has been processed.
             {
                 AutoLocker al(m);
-                ASYNC_IO_TRACE("advance processed_seq: %d -> %d (submit_seq=%d) main-loop\n",
-                    (int)processed_seq, (int)submit_seq.load(), (int)submit_seq.load());
-                processed_seq = submit_seq;
-                processed_cond.broadcast();
+                if (processed_seq < processed_target_this_iter) {
+                    processed_seq = processed_target_this_iter;
+                    processed_cond.broadcast();
+                }
             }
         }
 
@@ -2817,15 +2835,10 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                     dd.result = result_hash;
                     deferred_deliveries.push_back(std::move(dd));
 
-                    // Signal cancel waiters (cancel_cond_map is shared — brief lock)
+                    // Signal any cancel waiter for this key.
                     {
                         AutoLocker al(m);
-                        auto cit = cancel_cond_map.find(result.key);
-                        if (cit != cancel_cond_map.end()) {
-                            cit->second->broadcast();
-                            delete cit->second;
-                            cancel_cond_map.erase(cit);
-                        }
+                        signalCancelLocked(result.key);
                     }
 
                     // Close the socket when the operation indicates the connection
@@ -3476,12 +3489,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                     // Without this, waitCancel() hangs forever on ARM where weak
                     // memory ordering can delay visibility of the cmdq push,
                     // allowing the auto-stop check to see an empty queue.
-                    auto cit = cancel_cond_map.find(pending_cmd.key);
-                    if (cit != cancel_cond_map.end()) {
-                        cit->second->broadcast();
-                        delete cit->second;
-                        cancel_cond_map.erase(cit);
-                    }
+                    signalCancelLocked(pending_cmd.key);
                 } else if ((pending_cmd.cmd == IoCommand::CancelByProgram
                             || pending_cmd.cmd == IoCommand::CancelOwner)
                         && pending_cmd.pending_threads) {
@@ -3525,11 +3533,16 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
             // were pushed but not visible to drain() due to the Vyukov
             // MPSC push visibility window (tail.exchange done, next.store
             // pending).  Without this, waitCancel() blocks forever.
-            for (auto& [key, cond] : cancel_cond_map) {
-                cond->broadcast();
-                delete cond;
+            // Signal any cancel waiters that weren't cleared by Cancel
+            // commands in the drained batch (handles the Vyukov MPSC
+            // push-visibility window where the Cancel command wasn't
+            // visible to drain but the cond_map entry was already created).
+            // Copy the key — signalCancelLocked erases the map entry, which
+            // would dangle the begin()->first reference.
+            while (!cancel_cond_map.empty()) {
+                const std::string key = cancel_cond_map.begin()->first;
+                signalCancelLocked(key);
             }
-            cancel_cond_map.clear();
         }
     }
 
@@ -3591,9 +3604,8 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
             auto& cmd = batch[batch_idx];
             switch (cmd.cmd) {
                 case IoCommand::Quit: {
-                    // Collect PollInfo copies and cancel conditions under lock
+                    // Collect PollInfo copies under lock
                     std::vector<PollInfo> quit_pinfos;
-                    std::vector<QoreCondition*> quit_conds;
                     {
                         AutoLocker al(m);
                         std::vector<std::string> keys;
@@ -3613,13 +3625,7 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                                 t.cache.erase(it);
                                 t.cache_size.fetch_sub(1, std::memory_order_relaxed);
 
-                                auto cit = cancel_cond_map.find(key);
-                                if (cit != cancel_cond_map.end()) {
-                                    quit_conds.push_back(cit->second);
-                                    cancel_cond_map.erase(cit);
-                                } else {
-                                    quit_conds.push_back(nullptr);
-                                }
+                                signalCancelLocked(key);
                             }
                         }
 
@@ -3630,13 +3636,9 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                     }
 
                     // Deliver cancel results outside lock (prevents callback deadlock)
-                    for (size_t i = 0; i < quit_pinfos.size(); ++i) {
-                        doCancelIntern(quit_pinfos[i], xsink);
-                        quit_pinfos[i].cleanup(xsink);
-                        if (quit_conds[i]) {
-                            quit_conds[i]->broadcast();
-                            delete quit_conds[i];
-                        }
+                    for (auto& pinfo : quit_pinfos) {
+                        doCancelIntern(pinfo, xsink);
+                        pinfo.cleanup(xsink);
                     }
                     // Release resources on commands that followed Quit in
                     // this batch — they would otherwise be silently
@@ -3656,7 +3658,6 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
 
                 case IoCommand::Cancel: {
                     PollInfo pinfo_copy;
-                    QoreCondition* cond = nullptr;
                     bool found = false;
 
                     // Cache access is I/O-thread-only (no lock)
@@ -3673,14 +3674,10 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                         t.cache_size.fetch_sub(1, std::memory_order_relaxed);
                     }
 
-                    // cancel_cond_map is shared — brief lock
+                    // Signal any waiter on this key — brief lock.
                     {
                         AutoLocker al(m);
-                        auto cit = cancel_cond_map.find(cmd.key);
-                        if (cit != cancel_cond_map.end()) {
-                            cond = cit->second;
-                            cancel_cond_map.erase(cit);
-                        }
+                        signalCancelLocked(cmd.key);
                     }
 
                     if (found) {
@@ -3689,10 +3686,6 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                         }
                         doCancelIntern(pinfo_copy, xsink);
                         pinfo_copy.cleanup(xsink);
-                    }
-                    if (cond) {
-                        cond->broadcast();
-                        delete cond;
                     }
                     break;
                 }
@@ -3712,7 +3705,6 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                     int local_count = 0;
                     for (auto& key : keys) {
                         PollInfo pinfo_copy;
-                        QoreCondition* cond = nullptr;
                         bool found = false;
 
                         {
@@ -3729,11 +3721,7 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                                 t.cache_size.fetch_sub(1, std::memory_order_relaxed);
                                 ++local_count;
 
-                                auto cit = cancel_cond_map.find(key);
-                                if (cit != cancel_cond_map.end()) {
-                                    cond = cit->second;
-                                    cancel_cond_map.erase(cit);
-                                }
+                                signalCancelLocked(key);
                             }
                         }
 
@@ -3741,10 +3729,6 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                             t.cancelled_keys[key] = 2;
                             doCancelIntern(pinfo_copy, xsink);
                             pinfo_copy.cleanup(xsink);
-                        }
-                        if (cond) {
-                            cond->broadcast();
-                            delete cond;
                         }
                     }
 
@@ -3813,12 +3797,7 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                             // Signal any pending cancel waiters for this key
                             {
                                 AutoLocker al(m);
-                                auto cit = cancel_cond_map.find(key);
-                                if (cit != cancel_cond_map.end()) {
-                                    cit->second->broadcast();
-                                    delete cit->second;
-                                    cancel_cond_map.erase(cit);
-                                }
+                                signalCancelLocked(key);
                             }
                         }
                     }
@@ -4058,11 +4037,9 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                             dd.has_on_complete = pinfo.has_qore_on_complete;
                             dd.result = result_hash;
 
-                            auto cit = cancel_cond_map.find(cmd.key);
-                            if (cit != cancel_cond_map.end()) {
-                                cit->second->broadcast();
-                                delete cit->second;
-                                cancel_cond_map.erase(cit);
+                            {
+                                AutoLocker al(m);
+                                signalCancelLocked(cmd.key);
                             }
 
                             ASYNC_IO_TRACE("cache.erase IO_CMD_CONTINUE_POLL_RESULT key='%s' "
@@ -4649,8 +4626,28 @@ bool AsyncIoControllerPriv::enqueueCmdLocked(IoCommand cmd, const std::string& k
 
 void AsyncIoControllerPriv::waitCancel(const std::string& key) {
     AutoLocker al(m);
-    while (cancel_cond_map.count(key)) {
-        cancel_cond_map[key]->wait(m);
+    auto it = cancel_cond_map.find(key);
+    if (it == cancel_cond_map.end()) {
+        return;  // already processed
+    }
+    // Pin the cond across the wait so it survives even if the map entry is
+    // erased (and map ref dropped) while we're still inside pthread_cond_wait.
+    CancelCond* cc = it->second;
+    ++cc->refs;
+    // Wait until OUR cc is erased from the map.  We cannot use
+    // `cancel_cond_map.count(key)` alone: a different cancelByKey() for the
+    // same key may insert a new cc while we sleep, leaving the count at 1
+    // pointing at the replacement — we would then wait on our (no-longer-
+    // broadcast) cc forever.
+    while (true) {
+        auto cur = cancel_cond_map.find(key);
+        if (cur == cancel_cond_map.end() || cur->second != cc) {
+            break;
+        }
+        cc->cond.wait(m);
+    }
+    if (--cc->refs == 0) {
+        delete cc;
     }
 }
 

@@ -129,8 +129,9 @@ public class GuardrailEngine {
 
         @return a hash keyed by rule-type string
             (\c "pii", \c "prompt_injection", \c "topic_restriction",
-            \c "output_format", \c "toxicity", \c "hallucination") where
-            each value is a @ref RuleTypeInfo describing that rule type
+            \c "output_format", \c "toxicity", \c "hallucination",
+            \c "action_intent") where each value is a
+            @ref RuleTypeInfo describing that rule type
 
         @par Example
         @code{.py}
@@ -241,6 +242,28 @@ foreach hash<RuleTypeInfo> info in (registry.iterator()) {
                 "default_direction": GD_OUTPUT,
                 "config_schema": HallucinationDetector::getConfigSchema(),
             },
+            "action_intent": <RuleTypeInfo>{
+                "type": "action_intent",
+                "display_name": "Action-Intent Classification",
+                "short_desc": "Classifies the user turn as read-only, "
+                    "action-requested, or confirmation-required; fails "
+                    "the rule when the classified intent is in the "
+                    "configured block list",
+                "desc": "Asks an LLM to classify the user's intent "
+                    "against a canonical three-label taxonomy.  "
+                    "Typical use is to refuse destructive tool "
+                    "dispatches when the user's phrasing is ambiguous "
+                    "(`confirmation-required`) or clearly "
+                    "informational (`read-only`).  Adds one LLM round-"
+                    "trip per evaluation; for callers that already run "
+                    "a classifier LLM call (planning prompts etc.), "
+                    "prefer embedding "
+                    "`QoreLlmUtils::ActionIntentClassifier::getPromptFragment()` "
+                    "directly and reading the `INTENT:` label off the "
+                    "existing response instead of adding this rule.",
+                "default_direction": GD_INPUT,
+                "config_schema": ActionIntentRule::getConfigSchema(),
+            },
         };
     }
 
@@ -321,10 +344,14 @@ foreach hash<RuleTypeInfo> info in (registry.iterator()) {
             case "hallucination":
                 return new HallucinationDetector(config.severity, config.params,
                     global_options.llm_config);
+            case "action_intent":
+                return new ActionIntentRule(config.severity, config.params,
+                    global_options.llm_config);
         }
         throw "GUARDRAIL-CONFIG-ERROR",
             sprintf("unknown rule type %y; expected: pii, prompt_injection, "
-                "topic_restriction, output_format, toxicity, hallucination",
+                "topic_restriction, output_format, toxicity, hallucination, "
+                "action_intent",
                 config.type);
     }
 }
