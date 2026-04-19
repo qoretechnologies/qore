@@ -5244,6 +5244,107 @@ bool QoreAOTBinaryDeserializer::resolveHashdeclMembers(std::string& error) {
         typed_hash_decl_private* hdp = typed_hash_decl_private::get(*hd);
 
         for (auto& phm : entry.second) {
+            // Resolve deferred enum member default.  At hashdecl-read time
+            // enums haven't been deserialized yet; now that deserializeEnums
+            // has run, look up the enum member and materialise the value.
+            if (!phm.pending_enum_path.empty()) {
+                const QoreNamespace* pns = nullptr;
+                const QoreEnumDecl* ed = getProgram()->findEnum(
+                    phm.pending_enum_path.c_str(), pns);
+                if (ed) {
+                    const QoreEnumMember* member = ed->findMember(
+                        phm.pending_enum_member.c_str());
+                    if (member) {
+                        phm.default_val = QoreValue::makeEnum(member);
+                    } else {
+                        printd(0, "AOT deser: enum member '%s::%s' not found "
+                            "for hashdecl '%s' member '%s'\n",
+                            phm.pending_enum_path.c_str(),
+                            phm.pending_enum_member.c_str(),
+                            hd->getName(), phm.name.c_str());
+                    }
+                } else {
+                    printd(0, "AOT deser: enum '%s' not found for hashdecl "
+                        "'%s' member '%s'\n",
+                        phm.pending_enum_path.c_str(), hd->getName(),
+                        phm.name.c_str());
+                }
+                phm.pending_enum_path.clear();
+                phm.pending_enum_member.clear();
+            }
+
+            // Resolve deferred VT_NEW_OBJECT: build the ScopedObjectCallNode
+            // for `Class(args)` defaults now that the class is registered.
+            if (!phm.pending_new_class_path.empty()) {
+                qore_program_private* pp = qore_program_private::get(*pgm);
+                const qore_ns_private* found_ns = nullptr;
+                const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
+                    *pp->RootNS, phm.pending_new_class_path.c_str(), found_ns);
+                if (qc) {
+                    QoreParseListNode* parse_args = nullptr;
+                    if (!phm.pending_new_args.empty()) {
+                        parse_args = new QoreParseListNode(&loc_builtin);
+                        for (auto& a : phm.pending_new_args) {
+                            parse_args->add(a, &loc_builtin);
+                        }
+                        phm.pending_new_args.clear();
+                    }
+                    phm.default_val = QoreValue(new ScopedObjectCallNode(
+                        &loc_builtin, qc, parse_args));
+                } else {
+                    printd(0, "AOT deser: class '%s' not found for hashdecl "
+                        "'%s' member '%s' default\n",
+                        phm.pending_new_class_path.c_str(), hd->getName(),
+                        phm.name.c_str());
+                    for (auto& a : phm.pending_new_args) {
+                        a.discard(nullptr);
+                    }
+                    phm.pending_new_args.clear();
+                }
+                phm.pending_new_class_path.clear();
+            }
+
+            // Resolve deferred VT_NEW_COMPLEX_DEFAULT: build the type-default
+            // node (`hash<X>()`, `list<X>()`, `hash<string, X>()`) now that
+            // the referenced element/value type is registered.
+            if (phm.pending_complex_default_kind >= 0) {
+                QoreParseListNode* parse_args = nullptr;
+                if (!phm.pending_complex_default_args.empty()) {
+                    parse_args = new QoreParseListNode(&loc_builtin);
+                    for (auto& a : phm.pending_complex_default_args) {
+                        parse_args->add(a, &loc_builtin);
+                    }
+                    phm.pending_complex_default_args.clear();
+                }
+                const QoreTypeInfo* inner_ti = type_resolver->resolve(
+                    phm.pending_complex_default_path.c_str(), error);
+                if (!error.empty() || !inner_ti) {
+                    printd(0, "AOT deser: complex default inner type '%s' "
+                        "unresolved for hashdecl '%s' member '%s': %s\n",
+                        phm.pending_complex_default_path.c_str(),
+                        hd->getName(), phm.name.c_str(),
+                        error.c_str());
+                    error.clear();
+                    if (parse_args) {
+                        parse_args->deref(nullptr);
+                    }
+                } else {
+                    // For now we just zero-initialise; the parser treats
+                    // `X()` as the zero-value of X in this context, which
+                    // matches pre-AOT semantics for empty constructor args
+                    // on a complex/typed container.  (A fuller fix would
+                    // synthesise a ComplexTypeNode mirroring how the parser
+                    // emits these.)  Keep the literal zero-value and let
+                    // parse_args fall away.
+                    if (parse_args) {
+                        parse_args->deref(nullptr);
+                    }
+                    phm.default_val = QoreValue();
+                }
+                phm.pending_complex_default_kind = -1;
+                phm.pending_complex_default_path.clear();
+            }
+
             const QoreTypeInfo* mti = type_resolver->resolve(phm.type_path.c_str(), error);
             if (!error.empty()) {
                 // Fall back to auto type when the type can't be resolved
@@ -5349,11 +5450,27 @@ bool QoreAOTBinaryDeserializer::deserializeHashDecls(std::string& error) {
         uint16_t flags = QoreAOTBinaryReader::readU16(ptr);
         const char* parent_path = reader.readStringRef(ptr);
 
-        // Read members first to collect info
+        // Read members first to collect info.  The default-value path uses
+        // readDeferredMemberDefault so that VT_ENUM references — which the
+        // generic readValue would try to resolve immediately — are deferred
+        // to resolveHashdeclMembers.  Hashdecls are deserialized BEFORE
+        // enums in openAndDeserializeShells; without the deferral a member
+        // like `string http_version = HttpVersionMode::Auto;` in
+        // `hashdecl HttpListenerInfo` fails with "enum not found" at load
+        // time.
+        // Local MemberInfo mirrors PendingHashdeclMember's deferred-resolution
+        // fields so readDeferredMemberDefault instantiates against it.
         struct MemberInfo {
             std::string name;
             std::string type_path;
             QoreValue default_val;
+            std::string pending_enum_path;
+            std::string pending_enum_member;
+            std::string pending_new_class_path;
+            std::vector<QoreValue> pending_new_args;
+            int8_t pending_complex_default_kind = -1;
+            std::string pending_complex_default_path;
+            std::vector<QoreValue> pending_complex_default_args;
         };
         std::vector<MemberInfo> members;
 
@@ -5365,9 +5482,10 @@ bool QoreAOTBinaryDeserializer::deserializeHashDecls(std::string& error) {
             mi.type_path = reader.readStringRef(ptr);
             uint8_t has_default = QoreAOTBinaryReader::readU8(ptr);
             if (has_default) {
-                mi.default_val = reader.readValue(ptr, end, error);
-                if (!error.empty()) {
-                    error = "hashdecl '" + std::string(name ? name : "(null)") + "' member '" + mi.name + "' default: " + error;
+                if (!readDeferredMemberDefault(reader, ptr, end, error,
+                        mi.default_val, mi)) {
+                    error = "hashdecl '" + std::string(name ? name : "(null)")
+                        + "' member '" + mi.name + "' default: " + error;
                     return false;
                 }
             }
@@ -5413,7 +5531,9 @@ bool QoreAOTBinaryDeserializer::deserializeHashDecls(std::string& error) {
             rpriv->thdmap.update(hd->getName(), ns_list[ns_idx], hd);
         }
 
-        // Store members for later resolution (after all hashdecls/enums/typedefs exist)
+        // Store members for later resolution (after all hashdecls/enums/typedefs exist).
+        // Carry the deferred-resolution fields (pending_enum_*, pending_new_*,
+        // pending_complex_default_*) through to resolveHashdeclMembers.
         std::vector<PendingHashdeclMember> pending_members;
         pending_members.reserve(members.size());
         for (auto& mi : members) {
@@ -5421,6 +5541,13 @@ bool QoreAOTBinaryDeserializer::deserializeHashDecls(std::string& error) {
             phm.name = std::move(mi.name);
             phm.type_path = std::move(mi.type_path);
             phm.default_val = mi.default_val;
+            phm.pending_enum_path = std::move(mi.pending_enum_path);
+            phm.pending_enum_member = std::move(mi.pending_enum_member);
+            phm.pending_new_class_path = std::move(mi.pending_new_class_path);
+            phm.pending_new_args = std::move(mi.pending_new_args);
+            phm.pending_complex_default_kind = mi.pending_complex_default_kind;
+            phm.pending_complex_default_path = std::move(mi.pending_complex_default_path);
+            phm.pending_complex_default_args = std::move(mi.pending_complex_default_args);
             pending_members.push_back(std::move(phm));
         }
         pending_hashdecl_members.push_back({hd, std::move(pending_members)});

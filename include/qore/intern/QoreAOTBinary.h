@@ -1126,11 +1126,38 @@ class QoreAOTBinaryDeserializer {
     };
     std::vector<std::vector<PendingClassConstant>> pending_class_constants;
 
-    // Pending hashdecl member info for two-pass resolution
+    // Pending hashdecl member info for two-pass resolution.
+    //
+    // The deferred-resolution fields below mirror PendingInstanceMember so
+    // the shared `readDeferredMemberDefault` template can be instantiated
+    // against this struct.  Hashdecls are deserialized BEFORE enums
+    // AND before all classes/hashdecls in the module are committed
+    // (see openAndDeserializeShells ordering), so member defaults that
+    // reference an enum value, a class constructor, or a complex-type
+    // default (`hash<X>()`, `list<X>()`, `hash<string, X>()`) need to
+    // wait until resolveHashdeclMembers to produce a final QoreValue.
     struct PendingHashdeclMember {
         std::string name;
         std::string type_path;
         QoreValue default_val;
+
+        // Deferred VT_ENUM: pending_enum_path::pending_enum_member.
+        // Resolved via QoreProgram::findEnum + QoreEnumDecl::findMember.
+        std::string pending_enum_path;
+        std::string pending_enum_member;
+
+        // Deferred VT_NEW_OBJECT: the member init was `Class(args)` where
+        // Class was not yet registered at hashdecl-read time.  Resolved
+        // into a ScopedObjectCallNode after all classes exist.
+        std::string pending_new_class_path;
+        std::vector<QoreValue> pending_new_args;
+
+        // Deferred VT_NEW_COMPLEX_DEFAULT: kind 0=complex list,
+        // 1=complex hash, 2=hashdecl.  path is the element/value/hashdecl
+        // type path; args are the constructor args (owned).
+        int8_t pending_complex_default_kind = -1;
+        std::string pending_complex_default_path;
+        std::vector<QoreValue> pending_complex_default_args;
     };
     // Map from hashdecl pointer to pending members
     std::vector<std::pair<TypedHashDecl*, std::vector<PendingHashdeclMember>>> pending_hashdecl_members;
