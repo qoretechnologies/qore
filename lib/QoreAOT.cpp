@@ -5333,6 +5333,43 @@ static bool readQoFragmentBlobs(const std::string& qo_path,
     return true;
 }
 
+// Phase 4 slice 11e: strip `%include` lines from a source buffer.
+// In batch-compile mode every target file is listed explicitly on
+// the qcc command line, so a `%include` that names a sibling target
+// would re-parse declarations the batch is already committing —
+// producing duplicate-symbol errors from the parser.  Replace each
+// matching line with an empty line so diagnostic line numbers line
+// up with the on-disk file.  Matches only at line start (optionally
+// preceded by whitespace) to avoid consuming `%include` substrings
+// inside string or regex literals.
+static std::string stripIncludeDirectives(const std::string& src) {
+    std::string out;
+    out.reserve(src.size());
+    size_t i = 0;
+    while (i < src.size()) {
+        size_t eol = src.find('\n', i);
+        size_t line_end = (eol == std::string::npos) ? src.size() : eol;
+        size_t ws = i;
+        while (ws < line_end && (src[ws] == ' ' || src[ws] == '\t')) {
+            ++ws;
+        }
+        bool is_include = (line_end - ws >= 8)
+            && src.compare(ws, 8, "%include") == 0
+            && (line_end - ws == 8 || src[ws + 8] == ' '
+                || src[ws + 8] == '\t');
+        if (!is_include) {
+            out.append(src, i, line_end - i);
+        }
+        if (eol != std::string::npos) {
+            out.push_back('\n');
+            i = eol + 1;
+        } else {
+            i = line_end;
+        }
+    }
+    return out;
+}
+
 // Phase 4 slice 10i: emit the per-file `.qo` artifact for one source
 // file after the shared batch QoreProgram has been parsed.  Factored
 // out of compileScriptFile so compileScriptFilesBatch can reuse it
@@ -5597,7 +5634,8 @@ bool QoreAOT::compileScriptFilesBatch(
         const char* target_triple,
         bool include_source,
         const std::vector<std::string>& require_modules,
-        const std::vector<std::string>& stub_files) {
+        const std::vector<std::string>& stub_files,
+        const std::vector<std::string>& parse_defines) {
     if (target_files.empty()) {
         error = "compileScriptFilesBatch: target_files is empty";
         return false;
@@ -5642,6 +5680,7 @@ bool QoreAOT::compileScriptFilesBatch(
             error = "target source file is empty or unreadable: " + e.canon;
             return false;
         }
+        e.source = stripIncludeDirectives(e.source);
         std::string bn = e.canon;
         size_t slash = bn.rfind('/');
         if (slash != std::string::npos) {
@@ -5668,6 +5707,28 @@ bool QoreAOT::compileScriptFilesBatch(
     // Use the FIRST target's path as the script path (primarily for
     // diagnostics).
     qpgm->setScriptPath(entries.front().canon.c_str());
+
+    // Phase 4 slice 11e: apply --define=NAME[=VALUE] before any
+    // source parses so `%ifdef`/`%ifndef` sections resolve the same
+    // way under AOT as they do at runtime (e.g. qdsp defines
+    // NO_ORACLE when oracle-datasource-pool is off — AOT must match
+    // or classes inside `%ifndef NO_ORACLE` fail to resolve types
+    // from the oracle module we haven't loaded).  Default value is
+    // the Qore literal `True` to mirror bin/qdsp-style
+    // `qpgm->parseDefine("NAME", true)` idioms.
+    for (const std::string& def : parse_defines) {
+        std::string name;
+        QoreValue val;
+        size_t eq = def.find('=');
+        if (eq == std::string::npos) {
+            name = def;
+            val = QoreValue(true);
+        } else {
+            name = def.substr(0, eq);
+            val = QoreValue(new QoreStringNode(def.substr(eq + 1)));
+        }
+        qpgm->parseDefine(name.c_str(), val);
+    }
 
     // Phase 4 slice 11a: preload external modules before parsing so
     // sources that reference their types without `%requires` compile.

@@ -622,7 +622,8 @@ public:
             const char* target_triple = nullptr,
             bool include_source = false,
             const std::vector<std::string>& require_modules = {},
-            const std::vector<std::string>& stub_files = {});
+            const std::vector<std::string>& stub_files = {},
+            const std::vector<std::string>& parse_defines = {});
 
     //! Phase 4 slice 10: compile one file of a Qore application to a
     //! `.qo` in script-context mode (no module wrapper, no `.qm`).

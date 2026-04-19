@@ -187,6 +187,14 @@ static std::vector<std::string> load_modules;
 // each target's canonical path, not the stub's path.  Repeatable;
 // parsed in declaration order before targets.
 static std::vector<std::string> stub_files;
+// Phase 4 slice 11e: --define=NAME[=VALUE] preparser defines applied
+// via `qpgm->parseDefine()` before any source is parsed.  Mirrors the
+// runtime `qpgm->parseDefine(...)` calls emitted by Qorus main.cpp
+// files (e.g. `qpgm->parseDefine("NO_ORACLE", true)` in
+// exec/qdsp_main.cpp when oracle-datasource-pool is off) so
+// AOT-compiled sources honor the same `%ifdef` / `%ifndef` surface
+// the runtime sees.  Repeatable; applied in declaration order.
+static std::vector<std::string> parse_defines;
 // Phase 4 slice 6: --from-objects signals aggregator mode — the
 // positional inputs are per-file `.qo` objects (produced by
 // `qcc -c --context=DIR <file>`) that get linked together plus a
@@ -265,6 +273,14 @@ static void print_usage(const char* prog) {
            "                         runtime (namespaces, injected functions) that\n"
            "                         target sources reference by bare name.  Repeatable;\n"
            "                         parsed in declaration order before targets.\n");
+    printf("      --define=NAME[=VAL]  Set a parser define (NAME=VAL, default VAL=True)\n"
+           "                         applied via QoreProgram::parseDefine before any source\n"
+           "                         parses.  Mirrors the runtime `qpgm->parseDefine(...)`\n"
+           "                         calls Qorus main.cpp files issue so `%%ifdef` /\n"
+           "                         `%%ifndef` sections stay in sync between AOT and\n"
+           "                         runtime paths (e.g. `--define=NO_ORACLE` excludes\n"
+           "                         the oracle-only block in QorusOracleDatasourcePool.qc).\n"
+           "                         Repeatable; applied in declaration order.\n");
     printf("      --depfile=FILE     Emit Make-format dependency file at FILE after a\n"
            "                         successful compile.  Lists the output, a colon, and\n"
            "                         every source the parser opens (the target source\n"
@@ -334,6 +350,7 @@ static struct option long_options[] = {
     {"output-dir",        required_argument, nullptr, 0x100},
     {"stub",              required_argument, nullptr, 0x101},
     {"depfile",           required_argument, nullptr, 0x102},
+    {"define",            required_argument, nullptr, 0x103},
     {"from-objects",      no_argument,       nullptr, 'F'},
     {"archive",           no_argument,       nullptr, 'a'},
     {"verbose",           no_argument,       nullptr, 'v'},
@@ -414,6 +431,9 @@ static int parse_options_cmdline(int argc, char** argv) {
                 break;
             case 0x102:  // --depfile
                 depfile_path = optarg;
+                break;
+            case 0x103:  // --define
+                parse_defines.emplace_back(optarg);
                 break;
             case 'F':
                 from_objects = true;
@@ -736,7 +756,7 @@ int main(int argc, char** argv) {
         bool ok = QoreAOT::compileScriptFilesBatch(
             batch_sources, batch_output_dir, PO_DEFAULT, error,
             opt_level, target_triple, include_source,
-            load_modules, stub_files);
+            load_modules, stub_files, parse_defines);
         if (!ok) {
             fprintf(stderr, "error: %s\n", error.c_str());
             qore_cleanup();
