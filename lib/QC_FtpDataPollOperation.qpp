@@ -494,6 +494,11 @@ FtpDataPollOperation::constructor(string host, int port, bool secure_data = Fals
     // NOTE: data_sock in the priv is a raw (non-owning) pointer
     self->setPrivate(CID_FTPDATAPOLLOPERATION,
         new FtpDataPollOperationPriv(self, sock_priv, connect_op, (bool)secure_data));
+
+    // Wire self into the connect op so getReferencedSocketObject can fetch
+    // the "sock" member when continuePoll drives it; see
+    // QC_FtpControlPollOperation.qpp ctor for the same pattern.
+    connect_op->setSelf(self);
 }
 
 //! Creates a send (STOR) data poll operation
@@ -532,6 +537,9 @@ FtpDataPollOperation::constructor(string host, int port, binary data, bool secur
     // NOTE: data_sock in the priv is a raw (non-owning) pointer
     self->setPrivate(CID_FTPDATAPOLLOPERATION,
         new FtpDataPollOperationPriv(self, sock_priv, connect_op, (bool)secure_data, send_bin));
+
+    // Wire self into the connect op (see receive-variant ctor above).
+    connect_op->setSelf(self);
 }
 
 //! Destroys the object, releasing internal resources

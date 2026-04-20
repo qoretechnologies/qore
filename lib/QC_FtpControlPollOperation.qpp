@@ -54,19 +54,12 @@ FtpControlPollOperationPriv::FtpControlPollOperationPriv(QoreObject* self,
       secure_data(secure_data),
       ftp_user(user ? user : "anonymous"),
       ftp_pass(pass ? pass : "qore@nohost.com") {
-    // ctrl_sock and connect_op are ref'd by the caller; ownership transferred
-    // connect_op needs setSelf() before continuePoll() so that
-    // SocketPollOperationBase::getReferencedSocketObject() can fetch the
-    // "sock" member via `self->getReferencedMemberNoMethod("sock", ...)`.
-    // Without this, the assert(self) at SocketPollOperationBase.h:99 fires
-    // on the first continuePoll from handleConnecting() (seen as SIGABRT in
-    // FtpClientIo.qtest testControlPollOperationLogin under CI load).
-    // The subsequent state-transition helpers (startSendData, startRecvLine,
-    // startSslUpgrade) already do this for their own inner ops; the initial
-    // connect_op was just missing the same wiring.
-    if (current_op) {
-        current_op->setSelf(self);
-    }
+    // ctrl_sock and connect_op are ref'd by the caller; ownership transferred.
+    // The caller is responsible for calling connect_op->setSelf(self) after
+    // the ftp priv's QoreObject wrapper is fully created (it is *this*'s self,
+    // but the QPP layer requires the setSelf wiring at the caller to match
+    // the pattern used by other inner-op paths — see
+    // QoreFtpClient.cpp:608 and the FtpControlPollOperation ctor in this file).
 }
 
 FtpControlPollOperationPriv::~FtpControlPollOperationPriv() {
@@ -698,6 +691,18 @@ FtpControlPollOperation::constructor(string host, int port = 21, bool secure = F
         pass ? pass->c_str() : nullptr);
 
     self->setPrivate(CID_FTPCONTROLPOLLOPERATION, ftp_priv);
+
+    // Wire the self reference into the inner connect op so that
+    // SocketPollOperationBase::getReferencedSocketObject() can fetch the
+    // "sock" member via `self->getReferencedMemberNoMethod("sock", ...)`
+    // when the first continuePoll() drives the connect.  Without this,
+    // the assert(self) at SocketPollOperationBase.h:99 fires as SIGABRT
+    // under Debug (seen in FtpClientIo.qtest::testControlPollOperationLogin
+    // and FtpClientDataProvider / FtpPoller / get_file_from_url tests on
+    // Ubuntu/Alpine amd64/arm64 shards).  QoreFtpClient.cpp:608 already
+    // does the same wiring for its async-login path; this QPP direct-
+    // construction path was just missing it.
+    connect_op->setSelf(self);
 }
 
 //! Destroys the object, releasing internal resources
