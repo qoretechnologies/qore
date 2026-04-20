@@ -55,6 +55,18 @@ FtpControlPollOperationPriv::FtpControlPollOperationPriv(QoreObject* self,
       ftp_user(user ? user : "anonymous"),
       ftp_pass(pass ? pass : "qore@nohost.com") {
     // ctrl_sock and connect_op are ref'd by the caller; ownership transferred
+    // connect_op needs setSelf() before continuePoll() so that
+    // SocketPollOperationBase::getReferencedSocketObject() can fetch the
+    // "sock" member via `self->getReferencedMemberNoMethod("sock", ...)`.
+    // Without this, the assert(self) at SocketPollOperationBase.h:99 fires
+    // on the first continuePoll from handleConnecting() (seen as SIGABRT in
+    // FtpClientIo.qtest testControlPollOperationLogin under CI load).
+    // The subsequent state-transition helpers (startSendData, startRecvLine,
+    // startSslUpgrade) already do this for their own inner ops; the initial
+    // connect_op was just missing the same wiring.
+    if (current_op) {
+        current_op->setSelf(self);
+    }
 }
 
 FtpControlPollOperationPriv::~FtpControlPollOperationPriv() {
