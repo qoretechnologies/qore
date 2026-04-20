@@ -5718,6 +5718,7 @@ static bool resolveParseOptionFlag(const std::string& name,
         // Individual flags Qorus uses (QORUS_PARSE_OPTIONS + the
         // initial `new QoreProgram(po)` set in each main.cpp).
         {"PO_REQUIRE_OUR",                PO_REQUIRE_OUR},
+        {"PO_REQUIRE_PROTOTYPES",         PO_REQUIRE_PROTOTYPES},
         {"PO_NO_CHILD_PO_RESTRICTIONS",   PO_NO_CHILD_PO_RESTRICTIONS},
         {"PO_ALLOW_INJECTION",            PO_ALLOW_INJECTION},
         {"PO_ALLOW_DEBUGGER",             PO_ALLOW_DEBUGGER},
