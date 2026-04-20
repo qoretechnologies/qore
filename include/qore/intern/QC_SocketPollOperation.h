@@ -472,6 +472,12 @@ private:
     SimpleRefHolder<InputStream> input_stream;
     QoreObject* input_stream_obj = nullptr;  //!< Strong ref to InputStream QoreObject (prevents GC)
     int64 chunk_size;
+    //! Declared Content-Length from response headers (-1 = not declared).  Used to
+    //! detect short-stream bugs (InputStream EOFs before Content-Length) so the
+    //! server can send RST_STREAM instead of an END_STREAM with partial data,
+    //! matching the H1 behavior (HTTP-STREAM-ERROR + connection close).
+    int64_t content_length = -1;
+    int64_t bytes_sent = 0;
     bool eof = false;
     bool is_pollable;
     bool need_reassign = true;

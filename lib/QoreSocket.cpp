@@ -8220,7 +8220,9 @@ SocketHttp2SendStreamingResponsePollOperation::SocketHttp2SendStreamingResponseP
     }
     set_non_block = true;
 
-    // Build headers map
+    // Build headers map; extract Content-Length for short-stream detection
+    // so EOF before the declared length can be reported to the peer via
+    // RST_STREAM (matching the H1 "server closes the connection" behavior).
     strcase_str_map_t hdr_map;
     if (headers) {
         ConstHashIterator hi(headers);
@@ -8228,7 +8230,15 @@ SocketHttp2SendStreamingResponsePollOperation::SocketHttp2SendStreamingResponseP
             const char* key = hi.getKey();
             QoreValue val = hi.get();
             if (val.getType() == NT_STRING) {
-                hdr_map[key] = val.get<const QoreStringNode>()->c_str();
+                const char* str_val = val.get<const QoreStringNode>()->c_str();
+                hdr_map[key] = str_val;
+                if (!strcasecmp(key, "content-length")) {
+                    char* endptr = nullptr;
+                    long long cl = strtoll(str_val, &endptr, 10);
+                    if (endptr != str_val && cl >= 0) {
+                        content_length = cl;
+                    }
+                }
             }
         }
     }
@@ -8290,6 +8300,30 @@ QoreHashNode* SocketHttp2SendStreamingResponsePollOperation::continuePoll(Except
         switch (ss_state) {
             case SS_READ_CHUNK: {
                 if (eof) {
+                    // If a Content-Length was declared and we've sent fewer
+                    // bytes than promised, the InputStream ran out early.
+                    // Send RST_STREAM with INTERNAL_ERROR so the client sees
+                    // a concrete H2 stream error instead of an END_STREAM
+                    // carrying truncated data (which would otherwise be
+                    // indistinguishable from a valid short response and
+                    // surface as FUTURE-TIMEOUT on the client when the H2
+                    // layer keeps waiting for the declared byte count).
+                    // Mirrors the H1 behavior at QoreSocket.cpp:7376-7382
+                    // (HTTP-STREAM-ERROR + Phase::Error + connection close).
+                    if (content_length >= 0 && bytes_sent < content_length) {
+                        ExceptionSink rst_xsink;
+                        session->submitRstStream(stream_id,
+                            NGHTTP2_INTERNAL_ERROR, &rst_xsink);
+                        if (!rst_xsink) {
+                            session->sendPendingDataBlocking(100, &rst_xsink);
+                        }
+                        rst_xsink.clear();
+                        xsink->raiseException("HTTP-STREAM-ERROR",
+                            "InputStream provided " QLLD " bytes but "
+                            "Content-Length is " QLLD,
+                            bytes_sent, content_length);
+                        return nullptr;
+                    }
                     // Send END_STREAM
                     int rv = session->sendStreamData(stream_id, nullptr, 0, true, xsink);
                     if (*xsink) return nullptr;
@@ -8376,14 +8410,16 @@ QoreHashNode* SocketHttp2SendStreamingResponsePollOperation::continuePoll(Except
             }
 
             case SS_SEND_CHUNK: {
+                size_t chunk_bytes = current_chunk->size();
                 // Send the chunk as HTTP/2 DATA frames (not end_stream)
                 int rv = session->sendStreamData(stream_id, current_chunk->getPtr(),
-                    current_chunk->size(), false, xsink);
+                    chunk_bytes, false, xsink);
                 if (*xsink) return nullptr;
                 if (rv != 0) {
                     xsink->raiseException("HTTP2-ERROR", "failed to send stream data");
                     return nullptr;
                 }
+                bytes_sent += (int64_t)chunk_bytes;
                 current_chunk = nullptr;
                 ss_state = SS_FLUSH;
                 continue;
