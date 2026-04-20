@@ -2289,7 +2289,7 @@ public class HttpAsyncSocketIoController {
 
             if (has_body && !has_expect) {
                 try {
-                    int cl = content_length;
+                    softint cl = content_length;
                     bool conn_close = (output.hdr.connection =~ /close/i);
                     AbstractPollOperation body_op = cinfo.sock.startPollReadHttpBody(cl, False,
                         conn_close);
