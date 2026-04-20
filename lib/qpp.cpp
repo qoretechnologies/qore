@@ -69,6 +69,7 @@ const char usage_str[] = "usage: %s [options] <input file(s)...>\n"
     " -j, --javadoc=arg      javadoc output directory name\n"
     " -m, --metadata=arg     JSON metadata output file name\n"
     " -o, --output=arg       cpp output file name\n"
+    " -s, --stub-output=arg  Qore-syntax compile-time stub (.stub.qc) output file name\n"
     " -t, --table=arg        process the given file for doxygen tables (|!...)\n"
     " -u, --unit=arg         qtest (QUnit) output file name\n"
     " -v, --verbose          increases verbosity level\n";
@@ -80,6 +81,7 @@ static const option pgm_opts[] = {
     {"javadoc", required_argument, nullptr, 'j'},
     {"metadata", required_argument, nullptr, 'm'},
     {"output", required_argument, nullptr, 'o'},
+    {"stub-output", required_argument, nullptr, 's'},
     {"table", required_argument, nullptr, 't'},
     {"unit", required_argument, nullptr, 'u'},
     {"verbose", optional_argument, nullptr, 'v'},
@@ -100,6 +102,7 @@ static struct qpp_opts {
     std::string javadoc_fn;
     std::string metadata_fn;
     std::string unit_test_fn;
+    std::string stub_fn;
     std::string table_fn;
     int verbose;
 
@@ -222,6 +225,63 @@ static void replace(std::string& str, const char* orig, const char* newstr) {
 
         // Advance index forward so the next iteration doesn't pick it up as well
         index += newlen;
+    }
+}
+
+// Emit a synthetic method-body expression whose return value satisfies
+// the declared return type of a qpp-generated stub.  Stub bodies are
+// never executed at runtime (the C++ impl is bound via
+// `QC_*->addMethod(...)` before the parser sees any caller), so the
+// body only needs to type-check at compile time.
+//
+// Rules:
+//  - Nullable types (`*int`, `*hash<auto>`, ...) or untyped / `auto` /
+//    `any` / `data` / `nothing`: empty body — implicit NOTHING.
+//  - `int` / `softint` / `timeout` / `float` / `softfloat` / `number` /
+//    `softnumber`: `return 0`.
+//  - `bool` / `softbool`: `return False`.
+//  - `string` / `softstring`: `return ""`.
+//  - `hash` (any `<...>` variant): `return {}`.
+//  - `list` / `softlist` (any `<...>` variant): `return ()`.
+//  - `binary` / `softbinary`: `return <>` (empty binary literal).
+//  - `date` / `softdate`: `return 1970-01-01T00:00:00Z`.
+//  - Anything else (class names, `object`, `code`, `reference`, ...):
+//    `throw "STUB"` — unreachable at runtime, satisfies the parser.
+static void emit_stub_default_body(FILE* fp, const std::string& return_type) {
+    if (return_type.empty() || return_type[0] == '*') {
+        fputs("{}", fp);
+        return;
+    }
+
+    // strip type parameters: `hash<auto>` -> `hash`
+    std::string base = return_type;
+    size_t lt = base.find('<');
+    if (lt != std::string::npos) {
+        base = base.substr(0, lt);
+    }
+    // strip `soft` prefix: `softint` -> `int`, `softlist` -> `list`, ...
+    if (base.size() > 4 && base.compare(0, 4, "soft") == 0) {
+        base = base.substr(4);
+    }
+
+    if (base == "int" || base == "timeout" || base == "float" || base == "number") {
+        fputs("{ return 0; }", fp);
+    } else if (base == "bool") {
+        fputs("{ return False; }", fp);
+    } else if (base == "string") {
+        fputs("{ return \"\"; }", fp);
+    } else if (base == "hash") {
+        fputs("{ return {}; }", fp);
+    } else if (base == "list") {
+        fputs("{ return (); }", fp);
+    } else if (base == "binary") {
+        fputs("{ return <>; }", fp);
+    } else if (base == "date") {
+        fputs("{ return 1970-01-01T00:00:00Z; }", fp);
+    } else if (base == "auto" || base == "any" || base == "data" || base == "nothing") {
+        fputs("{}", fp);
+    } else {
+        fputs("{ throw \"STUB\"; }", fp);
     }
 }
 
@@ -2458,6 +2518,22 @@ public:
         return 0;
     }
 
+    // Emit a `public const Name = value;` line; value comes through
+    // get_dox_value which strips the `{...}` wrapper qpp uses for raw
+    // C++ values, leaving a Qore expression.
+    int serializeStub(FILE* fp) const {
+        fputs("public const ", fp);
+        fputs(name.c_str(), fp);
+        fputs(" = ", fp);
+        std::string qv;
+        if (get_dox_value(value, qv)) {
+            return -1;
+        }
+        fputs(qv.c_str(), fp);
+        fputs(";\n", fp);
+        return 0;
+    }
+
     void serializeMetadataConstantJson(FILE* fp, const std::string& ns_path, bool& first) const {
         if (!first) {
             fputc(',', fp);
@@ -3167,6 +3243,28 @@ public:
         return 0;
     }
 
+    // Emit a `public <ret> sub <name>(params) <body>` line — namespace-
+    // level function stub.  Return type defaults to `nothing` when
+    // omitted in the qpp source.  The body is synthetic (see
+    // emit_stub_default_body).
+    int serializeStub(FILE* fp) const {
+        if (doconly) {
+            return 0;
+        }
+        fputs("public ", fp);
+        fputs(return_type.empty() ? "nothing" : return_type.c_str(), fp);
+        fputs(" sub ", fp);
+        fputs(name.c_str(), fp);
+        fputc('(', fp);
+        if (serializeQoreParams(fp)) {
+            return -1;
+        }
+        fputs(") ", fp);
+        emit_stub_default_body(fp, return_type);
+        fputc('\n', fp);
+        return 0;
+    }
+
     int serializeDox(FILE* fp) {
         serialize_dox_comment(fp, docs, dom, flags);
 
@@ -3268,6 +3366,32 @@ public:
         }
         for (unsigned i = 0; i < ns_size; ++i) {
             fprintf(fp, "}\n");
+        }
+    }
+
+    // Emit Qore-syntax `public namespace X { [public namespace Y { ...` for
+    // every segment of a `::`-separated ns path.  Returns the number of
+    // brace pairs opened so the caller can close them in matching order.
+    // ns="" (i.e. root `Qore`) opens nothing.
+    int outputQoreNamespaceStart(FILE* fp) {
+        if (ns.empty()) {
+            return 0;
+        }
+        std::vector<std::string> ns_list = getNamespacePath(ns);
+        int count = 0;
+        for (auto& i : ns_list) {
+            if (i.empty()) {
+                continue;
+            }
+            fprintf(fp, "public namespace %s {\n", i.c_str());
+            ++count;
+        }
+        return count;
+    }
+
+    void outputQoreNamespaceEnd(FILE* fp, int count) {
+        for (int i = 0; i < count; ++i) {
+            fputs("}\n", fp);
         }
     }
 
@@ -3712,6 +3836,29 @@ public:
             i.second->serializeMetadataConstantJson(fp, ns, first);
         }
     }
+
+    // Emit all functions and constants in this @defgroup as Qore-syntax
+    // stubs wrapped in the group's `ns=...` namespace.  Groups with no
+    // functions or constants emit nothing (tlist-only groups are
+    // C++-side documentation and don't need compile-time stubs).
+    int serializeStub(FILE* fp) {
+        if (fmap.empty() && cmap.empty()) {
+            return 0;
+        }
+        int ns_depth = outputQoreNamespaceStart(fp);
+        for (auto& i : fmap) {
+            if (i.second->serializeStub(fp)) {
+                return -1;
+            }
+        }
+        for (auto& i : cmap) {
+            if (i.second->serializeStub(fp)) {
+                return -1;
+            }
+        }
+        outputQoreNamespaceEnd(fp, ns_depth);
+        return 0;
+    }
 };
 
 typedef std::vector<Group*> grouplist_t;
@@ -3852,6 +3999,15 @@ public:
         }
     }
 
+    int serializeStub(FILE* fp) {
+        for (unsigned i = 0; i < grouplist.size(); ++i) {
+            if (grouplist[i]->serializeStub(fp)) {
+                return -1;
+            }
+        }
+        return 0;
+    }
+
     void serializeMetadataConstantsJson(FILE* fp, bool& first) const {
         for (unsigned i = 0; i < grouplist.size(); ++i) {
             grouplist[i]->serializeMetadataConstantsJson(fp, first);
@@ -3877,6 +4033,16 @@ public:
     virtual int serializeJavadoc() = 0;
     virtual int serializeUnitTest(FILE* fp) = 0;
     virtual strlist_t precalculateUnitTest() = 0;
+    // Emits a Qore-syntax compile-time declaration into the .stub.qc
+    // output.  Used by qcc to resolve references to classes / hashdecls /
+    // enums that are implemented in C++ when parsing ahead-of-time.  The
+    // body of each method is synthetic — just enough to type-check — so
+    // a stub can be parsed standalone without any C++ backing.
+    //
+    // Default: no-op (TextElement has nothing to emit).
+    virtual int serializeStub(FILE* /*fp*/) {
+        return 0;
+    }
 };
 
 struct HashDeclInfo {
@@ -4131,6 +4297,35 @@ public:
                 return -1;
         fputs("};\n", fp);
         outputNamespaceEnd(fp);
+        return 0;
+    }
+
+    // Emit a Qore-syntax `public hashdecl Name [inherits Parent] { ... }`
+    // stub with each member's type/name/default-expr (the default is
+    // kept verbatim — qpp's input already holds valid Qore syntax).
+    virtual int serializeStub(FILE* fp) override {
+        int ns_depth = outputQoreNamespaceStart(fp);
+
+        fputs("public hashdecl ", fp);
+        fputs(name.c_str(), fp);
+        if (!parent_name.empty()) {
+            fputs(" inherits ", fp);
+            fputs(parent_name.c_str(), fp);
+        }
+        fputs(" {\n", fp);
+        for (auto& i : hdmap) {
+            fputs("    ", fp);
+            fputs(i.second.type.c_str(), fp);
+            fputc(' ', fp);
+            fputs(i.first.c_str(), fp);
+            if (!i.second.value.empty()) {
+                fputs(" = ", fp);
+                fputs(i.second.value.c_str(), fp);
+            }
+            fputs(";\n", fp);
+        }
+        fputs("}\n", fp);
+        outputQoreNamespaceEnd(fp, ns_depth);
         return 0;
     }
 
@@ -4444,6 +4639,48 @@ public:
 
         fputs("};\n", fp);
         outputNamespaceEnd(fp);
+        return 0;
+    }
+
+    // Emit a Qore-syntax `public enum Name : base { A = v, ... }` stub.
+    // For `int`-based enums the grammar allows omitting the base type;
+    // every other base (`string`/`float`/`number`) needs an explicit
+    // colon annotation.
+    virtual int serializeStub(FILE* fp) override {
+        int ns_depth = outputQoreNamespaceStart(fp);
+
+        fputs("public enum ", fp);
+        fputs(name.c_str(), fp);
+        if (baseType != "int") {
+            fprintf(fp, " : %s", baseType.c_str());
+        }
+        fputs(" {\n", fp);
+        bool first = true;
+        for (auto& m : members) {
+            if (!first) {
+                fputs(",\n", fp);
+            }
+            first = false;
+            fprintf(fp, "    %s", m.first.c_str());
+            // computed_value is always populated (handles auto-increment);
+            // value may be empty for auto-assigned members.
+            if (!m.second.computed_value.empty()) {
+                fputs(" = ", fp);
+                if (baseType == "string") {
+                    // computed_value for string base is a bare C++ expr
+                    // like "abc"; emit verbatim (qpp parses Qore-syntax
+                    // strings already).
+                    fputs(m.second.computed_value.c_str(), fp);
+                } else {
+                    fputs(m.second.computed_value.c_str(), fp);
+                }
+            }
+        }
+        if (!first) {
+            fputs("\n", fp);
+        }
+        fputs("}\n", fp);
+        outputQoreNamespaceEnd(fp, ns_depth);
         return 0;
     }
 
@@ -4834,6 +5071,62 @@ public:
 
     void serializeUnitTestStatic(FILE* fp, const char* cname) const {
         serializeQorePrototypeComment(fp, cname, 8, "#");
+    }
+
+    // Emit one method as a Qore-syntax member of the class stub — access
+    // modifiers first, then return type (or blank for implicit nothing),
+    // then `name(params)` and either `;` (abstract) or a synthetic body
+    // (see emit_stub_default_body).  constructor / destructor / copy are
+    // emitted by their literal keyword with no return type.
+    int serializeStubMethod(FILE* fp) const {
+        if (doconly) {
+            return 0;
+        }
+
+        fputs("    ", fp);
+
+        if (attr & QCA_ABSTRACT) fputs("abstract ", fp);
+        if (attr & QCA_STATIC) fputs("static ", fp);
+        if (attr & QCA_PRIVATE) fputs("private ", fp);
+        if (attr & QCA_PRIVATE_INTERNAL) fputs("private:internal ", fp);
+        if (attr & QCA_SYNCHRONIZED) fputs("synchronized ", fp);
+
+        if (name == "constructor") {
+            fputs("constructor(", fp);
+            if (serializeQoreParams(fp)) {
+                return -1;
+            }
+            fputs(") {}\n", fp);
+            return 0;
+        }
+        if (name == "destructor") {
+            fputs("destructor() {}\n", fp);
+            return 0;
+        }
+        if (name == "copy") {
+            fputs("copy() {}\n", fp);
+            return 0;
+        }
+
+        if (!return_type.empty()) {
+            fputs(return_type.c_str(), fp);
+            fputc(' ', fp);
+        }
+        fputs(name.c_str(), fp);
+        fputc('(', fp);
+        if (serializeQoreParams(fp)) {
+            return -1;
+        }
+        fputc(')', fp);
+
+        if (attr & QCA_ABSTRACT) {
+            fputs(";\n", fp);
+        } else {
+            fputc(' ', fp);
+            emit_stub_default_body(fp, return_type);
+            fputc('\n', fp);
+        }
+        return 0;
     }
 
     void serializeMetadataMethodJson(FILE* fp, const std::string& class_name, bool& first) const {
@@ -5649,6 +5942,73 @@ public:
         return 0;
     }
 
+    // Emit a Qore-syntax class declaration — enough signature detail for
+    // qcc's parser to resolve member / method / inheritance references
+    // without any C++ backing.  Bodies of concrete methods are synthetic
+    // (see emit_stub_default_body); abstract methods end in `;`.
+    // Pseudo-classes (name starts with '<') are skipped — they're only
+    // meaningful against a live runtime.
+    virtual int serializeStub(FILE* fp) override {
+        if (is_pseudo) {
+            return 0;
+        }
+
+        int ns_depth = outputQoreNamespaceStart(fp);
+
+        fputs("public class ", fp);
+        fputs(name.c_str(), fp);
+        if (!vparents.empty()) {
+            fputs(" inherits ", fp);
+            for (unsigned i = 0; i < vparents.size(); ++i) {
+                if (i) {
+                    fputs(", ", fp);
+                }
+                fputs(vparents[i].c_str(), fp);
+            }
+        }
+        fputs(" {\n", fp);
+
+        // Group same-access members into one `public { ... }` /
+        // `private { ... }` / `private:internal { ... }` block each, so
+        // the stub mirrors how qpp's `public_members=` etc. nest them.
+        auto emit_member_block = [&](const char* access_kw, const paramlist_t& list) {
+            if (list.empty()) {
+                return;
+            }
+            fprintf(fp, "    %s {\n", access_kw);
+            for (const Param& p : list) {
+                fputs("        ", fp);
+                if (p.is_static) {
+                    fputs("static ", fp);
+                }
+                fputs(p.type.c_str(), fp);
+                fputc(' ', fp);
+                fputs(p.name.c_str(), fp);
+                fputs(";\n", fp);
+            }
+            fputs("    }\n", fp);
+        };
+        emit_member_block("public", public_members);
+        emit_member_block("private", private_members);
+        emit_member_block("private:internal", internal_members);
+
+        for (mmap_t::const_iterator i = normal_mmap.begin(), e = normal_mmap.end(); i != e; ++i) {
+            if (i->second->serializeStubMethod(fp)) {
+                return -1;
+            }
+        }
+        for (mmap_t::const_iterator i = static_mmap.begin(), e = static_mmap.end(); i != e; ++i) {
+            if (i->second->serializeStubMethod(fp)) {
+                return -1;
+            }
+        }
+
+        fputs("}\n", fp);
+
+        outputQoreNamespaceEnd(fp, ns_depth);
+        return 0;
+    }
+
     void serializeMetadataJson(FILE* fp, bool& first) {
         if (!first) {
             fputc(',', fp);
@@ -5749,7 +6109,7 @@ typedef std::vector<AbstractElement*> source_t;
 class Code {
 protected:
     const char* fileName;
-    std::string cppFileName, doxFileName, rootName, unitTestFileName;
+    std::string cppFileName, doxFileName, rootName, unitTestFileName, stubFileName;
     // argument to fopen()
     const char* cpp_open_flag,* dox_open_flag;
     unsigned lineNumber;
@@ -6123,6 +6483,14 @@ public:
         if (!opts.unit_test_fn.empty()) {
             unitTestFileName = opts.unit_test_fn;
         }
+        // The stub file is only written when `--stub-output=` is given.
+        // We don't default to a sibling .stub.qc path because most qpp
+        // callers (core libqore, modules/*) don't need stubs — they
+        // build against a live Qore and never enter an AOT pipeline
+        // that consumes them.  Opt-in only.
+        if (!opts.stub_fn.empty()) {
+            stubFileName = opts.stub_fn;
+        }
 
         if (parse())
             valid = false;
@@ -6265,6 +6633,61 @@ public:
         groups.serializeConstantDox(fp, true);
         fclose(fp);
 
+        return 0;
+    }
+
+    // Emit a Qore-syntax compile-time stub file (.stub.qc) suitable for
+    // `qcc --stub=<path>` consumption.  Contains the declaration of
+    // every class / hashdecl / enum / namespace-level function /
+    // namespace-level constant this qpp file defines — with synthetic
+    // method bodies so the file is standalone-parseable without any
+    // C++ backing.  Called only when `--stub-output=` was given.
+    int serializeStub() {
+        if (stubFileName.empty()) {
+            return 0;
+        }
+        // Honour the same append-on-subsequent-file semantics as the
+        // .cpp/.dox outputs: when qpp is invoked with one -o/--stub-
+        // output covering multiple .qpp inputs, the first iteration
+        // creates and the rest append.  The caller (cmake's
+        // qore_wrap_qpp_value) always uses one qpp invocation per
+        // .qpp file, so this is defensive for the multi-file CLI path
+        // only.
+        FILE* fp = fopen(stubFileName.c_str(), cpp_open_flag);
+        if (!fp) {
+            error("%s: %s\n", stubFileName.c_str(), strerror(errno));
+            return -1;
+        }
+        log(LL_INFO, "creating stub file %s -> %s\n", fileName, stubFileName.c_str());
+
+        // Header: identify source + declare parse directives that
+        // match the conventions used by Qorus' hand-written stubs
+        // (and the Qore-source they replace).  qcc's --stub= reader
+        // parses each file independently, so each stub must carry
+        // its own directives.
+        fprintf(fp, "# Auto-generated from %s by qpp --stub-output.\n", fileName);
+        fputs("# DO NOT EDIT; this file regenerates on every build.\n", fp);
+        fputs("\n", fp);
+        fputs("%new-style\n", fp);
+        fputs("%strict-args\n", fp);
+        fputs("%require-types\n", fp);
+        fputs("\n", fp);
+
+        for (source_t::const_iterator i = source.begin(), e = source.end(); i != e; ++i) {
+            if ((*i)->serializeStub(fp)) {
+                valid = false;
+                fclose(fp);
+                return -1;
+            }
+        }
+
+        if (groups.serializeStub(fp)) {
+            valid = false;
+            fclose(fp);
+            return -1;
+        }
+
+        fclose(fp);
         return 0;
     }
 
@@ -6585,7 +7008,7 @@ void process_command_line(int& argc, char**& argv) {
     pn = basename(argv[0]);
 
     int ch;
-    while ((ch = getopt_long(argc, argv, "d:D:hj:m:o:t:u:v:V", pgm_opts, nullptr)) != -1) {
+    while ((ch = getopt_long(argc, argv, "d:D:hj:m:o:s:t:u:v:V", pgm_opts, nullptr)) != -1) {
         //log(LL_INFO, "ch=%c optarg=%p (%s)\n", ch, optarg, optarg ? optarg : "(null)");
 
         switch (ch) {
@@ -6612,6 +7035,10 @@ void process_command_line(int& argc, char**& argv) {
 
             case 'o':
                 opts.output_fn = optarg;
+                break;
+
+            case 's':
+                opts.stub_fn = optarg;
                 break;
 
             case 't':
@@ -6677,6 +7104,10 @@ int main(int argc, char* argv[]) {
 
         // create metadata output file
         if (code.serializeMetadata())
+            return -1;
+
+        // create Qore-syntax compile-time stub output (--stub-output=)
+        if (code.serializeStub())
             return -1;
     }
 
