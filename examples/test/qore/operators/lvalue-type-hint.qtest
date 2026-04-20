@@ -16,6 +16,7 @@ class Test inherits QUnit::Test {
         addTestCase("hash literal AST-mode softening",            \literalSoftening());
         addTestCase("concrete body type wins over hint",          \concreteBodyWins());
         addTestCase("hint ignored when lvalue is not hash<K,V>",  \hintIgnoredForAutoHash());
+        addTestCase("hash.iterator() yields typed $1 in map body", \hashIteratorElementType());
         set_return_value(main());
     }
 
@@ -90,5 +91,20 @@ class Test inherits QUnit::Test {
         list<hash<auto>> src = ({"name": "a", "value": 1},);
         h = map {$1.name: $1.value}, src.iterator();
         assertEq(1, h.a);
+    }
+
+    # `$1` typing through `hash<K,V>::iterator()` — the pseudo-method
+    # declares `AbstractIterator` as static return type but at runtime
+    # creates a HashIterator (Pseudo_QC_Hash.qpp:303-305).
+    # getIteratorElementType now surfaces the value type anyway.
+    hashIteratorElementType() {
+        hash<string, int> src = {"a": 1, "b": 2, "c": 3};
+        # Before: $1 was `auto`, so assigning to `list<int>` required a cast.
+        # Now: $1 is `int`, direct assignment works.
+        list<int> values = map $1, src.iterator();
+        assertEq((1, 2, 3), values);
+        # Arithmetic on narrowed $1 works in typed lvalue contexts
+        list<int> doubled = map $1 * 2, src.iterator();
+        assertEq((2, 4, 6), doubled);
     }
 }

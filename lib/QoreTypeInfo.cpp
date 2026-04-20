@@ -3049,6 +3049,15 @@ const QoreTypeInfo* QoreTypeInfo::getIteratorElementType(const QoreClass* iterat
         if (!strcmp(className, "HashIterator") || !strcmp(className, "HashReverseIterator")) {
             return hashValueType;
         }
+        // AbstractIterator from `<hash>::iterator()` — the pseudo-method
+        // declares AbstractIterator as its static return type but at
+        // runtime creates a HashIterator (Pseudo_QC_Hash.qpp:303-305).
+        // Surface the value type anyway so the common `map {...},
+        // h.iterator()` pattern sees $1 typed correctly rather than
+        // degrading through the abstract-base signature.
+        if (!strcmp(className, "AbstractIterator")) {
+            return hashValueType;
+        }
     }
 
     // Handle list iterators
@@ -3063,6 +3072,14 @@ const QoreTypeInfo* QoreTypeInfo::getIteratorElementType(const QoreClass* iterat
         if (!strcmp(className, "ListIterator") || !strcmp(className, "ListReverseIterator")) {
             return listElementType;
         }
+        // NOTE: the AbstractIterator-on-list branch is intentionally
+        // omitted — narrowing $1 to the list element type in that
+        // case regressed foldr over `list.iterator()` (see
+        // operators.qtest:311).  `<list>` literals already get
+        // proper typing via the getUniqueReturnComplexList fast path
+        // at the top of getImplicitArgTypeForIterator, so this only
+        // fires for the `.iterator()` method-call form where the
+        // regression lives.  Needs investigation before enabling.
     }
 
     return nullptr;
