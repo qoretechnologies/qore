@@ -141,10 +141,29 @@ public class AftershipDataProviderBase inherits DataProvider::AbstractDataProvid
                 if (retry(ex, \retries)) {
                     continue;
                 }
-                rethrow ex.err, sprintf("%s (request path: %y)", ex.desc,
-                    ex.arg.request_path ?? path), ex.arg;
+                rethrow ex.err, getApiErrorDesc(ex, path), ex.arg;
             }
         }
+    }
+
+    #! Returns an enriched error description that includes the Aftership API error message if available
+    /** Aftership errors use a meta envelope: \c {"meta":{"code":N,"type":"...","message":"..."},"data":{}}
+
+        \c meta.code is often an Aftership-specific 4-digit code (e.g. 4001, 4005) that distinguishes among
+        multiple causes sharing the same HTTP status; it is surfaced only when it differs from the HTTP status.
+    */
+    private string getApiErrorDesc(hash<ExceptionInfo> ex, string path) {
+        string desc = ex.desc;
+        *string msg = DataProvider::DataProviderErrorUtil::firstStringAt(ex.arg.body, ("meta.message",));
+        if (msg.val()) {
+            auto code = DataProvider::DataProviderErrorUtil::firstValueAt(ex.arg.body, ("meta.code",));
+            if (code.typeCode() == NT_INT && code != ex.arg.status_code) {
+                desc = sprintf("%s: %s (code %d)", desc, msg, code);
+            } else {
+                desc = sprintf("%s: %s", desc, msg);
+            }
+        }
+        return sprintf("%s (request path: %y)", desc, ex.arg.request_path ?? path);
     }
 
     #! Returns True if the error indicates that the operation should be retried

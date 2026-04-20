@@ -178,9 +178,69 @@ public class FreshsalesDataProviderBase inherits DataProvider::AbstractDataProvi
                 if (retryRequest(ex, \retries)) {
                     continue;
                 }
-                rethrow;
+                rethrow ex.err, getApiErrorDesc(ex), ex.arg;
             }
         }
+    }
+
+    #! Returns an enriched error description that includes the Freshsales API error message if available
+    /** Freshsales uses three distinct error envelopes depending on where the error originates:
+        - Endpoint/validation: \c {"errors": {"code": <status>, "message": ["<msg1>", ...]}}
+        - Malformed JSON at the gateway: \c {"status": <status>, "error": "..."}
+        - Auth failure: \c {"login": "failed", "message": "Incorrect or expired API key"}
+
+        The standard \c errors.message field is a list but may arrive as a scalar string. An
+        accompanying numeric \c code is surfaced only when it differs from the HTTP status.
+    */
+    private string getApiErrorDesc(hash<ExceptionInfo> ex) {
+        string desc = ex.desc;
+        auto body = ex.arg.body;
+        if (body.typeCode() != NT_HASH) {
+            return desc;
+        }
+
+        *string msg;
+        auto code_val;
+        # Shape 1: nested errors.{code, message}
+        if (body.errors.typeCode() == NT_HASH) {
+            msg = formatFreshsalesMessage(body.errors.message);
+            code_val = body.errors.code;
+        } else {
+            # Shape 2 / 3: top-level {status, error} or {login, message} — prefer error, then message
+            msg = DataProvider::DataProviderErrorUtil::firstStringAt(body, ("error", "message"));
+            code_val = body.status;
+        }
+
+        if (!msg.val()) {
+            return desc;
+        }
+        if (code_val.typeCode() == NT_INT && code_val != ex.arg.status_code) {
+            desc += sprintf(": %s (code: %d)", msg, code_val);
+        } else if (code_val.typeCode() == NT_STRING && code_val.val()) {
+            desc += sprintf(": %s (code: %s)", msg, code_val);
+        } else {
+            desc += ": " + msg;
+        }
+        return desc;
+    }
+
+    #! Formats the \c errors.message field (string or list) into a single display string
+    private *string formatFreshsalesMessage(auto msg) {
+        switch (msg.typeCode()) {
+            case NT_STRING:
+                return msg.val() ? msg : NOTHING;
+            case NT_LIST: {
+                if (!msg) {
+                    return NOTHING;
+                }
+                list<string> parts = ();
+                foreach auto m in (msg) {
+                    push parts, m.typeCode() == NT_STRING ? m : sprintf("%y", m);
+                }
+                return parts.size() == 1 ? parts[0] : "[" + join("; ", parts) + "]";
+            }
+        }
+        return NOTHING;
     }
 
     #! Checks if a request should be retried

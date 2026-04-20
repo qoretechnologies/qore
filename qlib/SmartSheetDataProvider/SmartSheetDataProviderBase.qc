@@ -181,9 +181,50 @@ public class SmartSheetDataProviderBase inherits DataProvider::AbstractDataProvi
                 if (retryRequest(ex, \retries)) {
                     continue;
                 }
-                rethrow;
+                rethrow ex.err, getApiErrorDesc(ex), ex.arg;
             }
         }
+    }
+
+    #! Returns an enriched error description that includes the Smartsheet API error message if available
+    /** Smartsheet errors use a consistent flat envelope: \c {"errorCode": <int>, "message": "...",
+        "refId": "...", "detail": {...}}. \c errorCode is a Smartsheet-specific numeric identifier
+        (e.g. \c 1002 invalid token, \c 1006 not found, \c 1012 missing required attribute, \c 1133
+        non-unique column titles). \c detail is a context hash whose keys vary by error (e.g.
+        \c {"columnTitle": "FIRST COLUMN"}). \c refId is skipped — useful for support but noise in
+        the typical dev error message.
+    */
+    private string getApiErrorDesc(hash<ExceptionInfo> ex) {
+        string desc = ex.desc;
+        auto body = ex.arg.body;
+        if (body.typeCode() != NT_HASH) {
+            return desc;
+        }
+        *string message = DataProvider::DataProviderErrorUtil::firstStringAt(body, ("message",));
+        if (!message.val()) {
+            return desc;
+        }
+        string primary = message;
+        auto error_code = body.errorCode;
+        if (error_code.typeCode() == NT_INT) {
+            primary += sprintf(" (errorCode: %d)", error_code);
+        } else if (error_code.typeCode() == NT_STRING && error_code.val()) {
+            primary += sprintf(" (errorCode: %s)", error_code);
+        }
+        desc += ": " + primary;
+
+        if (body.detail.typeCode() == NT_HASH && body.detail) {
+            list<string> parts = ();
+            foreach string k in (keys body.detail) {
+                auto v = body.detail{k};
+                string vstr = v.typeCode() == NT_STRING ? v : sprintf("%y", v);
+                push parts, sprintf("%s: %s", k, vstr);
+            }
+            if (parts) {
+                desc += " [" + join("; ", parts) + "]";
+            }
+        }
+        return desc;
     }
 
     #! Checks if a request should be retried

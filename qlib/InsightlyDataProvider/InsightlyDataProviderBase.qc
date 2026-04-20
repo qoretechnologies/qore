@@ -202,9 +202,67 @@ public class InsightlyDataProviderBase inherits DataProvider::AbstractDataProvid
                 if (retryRequest(ex, \retries)) {
                     continue;
                 }
-                rethrow;
+                rethrow ex.err, getApiErrorDesc(ex), ex.arg;
             }
         }
+    }
+
+    #! Returns an enriched error description that includes the Insightly API error message if available
+    /** Insightly returns error bodies in several inconsistent shapes depending on the endpoint and
+        error class (all observed live):
+        - List with uppercase keys: \c [{"FIELD_NAME": "...", "MESSAGE": "..."}]  (validation)
+        - List with TitleCase keys: \c [{"Name": "...", "Message": "..."}]  (malformed JSON)
+        - Plain text string: \c "Field 'ownerUserId' must contain a valid id"
+        - Plain number (echoed ID) or empty body
+
+        The helper normalises all the JSON-ish shapes and ignores anything that's not meaningful.
+    */
+    private string getApiErrorDesc(hash<ExceptionInfo> ex) {
+        string desc = ex.desc;
+        auto body = ex.arg.body;
+        switch (body.typeCode()) {
+            case NT_LIST: {
+                if (!body) {
+                    return desc;
+                }
+                list<string> parts = ();
+                foreach auto e in (body) {
+                    if (e.typeCode() != NT_HASH) {
+                        push parts, sprintf("%y", e);
+                        continue;
+                    }
+                    *string field = DataProvider::DataProviderErrorUtil::firstStringAt(
+                        e, ("FIELD_NAME", "field_name", "Field", "field", "Name"));
+                    *string msg = DataProvider::DataProviderErrorUtil::firstStringAt(
+                        e, ("MESSAGE", "Message", "message", "msg"));
+                    string part = field ?? "";
+                    if (msg.val()) {
+                        part = part.val() ? part + ": " + msg : msg;
+                    }
+                    if (part.val()) {
+                        push parts, part;
+                    }
+                }
+                if (parts) {
+                    desc += ": " + (parts.size() == 1 ? parts[0] : "[" + join("; ", parts) + "]");
+                }
+                return desc;
+            }
+            case NT_STRING:
+                if (body.val()) {
+                    desc += ": " + body;
+                }
+                return desc;
+            case NT_HASH: {
+                *string msg = DataProvider::DataProviderErrorUtil::firstStringAt(
+                    body, ("message", "Message", "MESSAGE", "error", "Error", "ERROR"));
+                if (msg.val()) {
+                    desc += ": " + msg;
+                }
+                return desc;
+            }
+        }
+        return desc;
     }
 
     #! Checks if a request should be retried

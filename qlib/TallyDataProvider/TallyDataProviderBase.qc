@@ -164,10 +164,68 @@ public class TallyDataProviderBase inherits DataProvider::AbstractDataProvider {
                 if (retry(ex, \retries)) {
                     continue;
                 }
-                rethrow ex.err, sprintf("%s (request path: %y)", ex.desc,
-                    ex.arg.request_path ?? path), ex.arg;
+                rethrow ex.err, getApiErrorDesc(ex, path), ex.arg;
             }
         }
+    }
+
+    #! Returns an enriched error description that includes the Tally API error message if available
+    /** Tally runs on NestJS and uses its standard exception envelope:
+        \c {"statusCode": <int>, "message": "<string>" | [<strings or {property, message} hashes>],
+        "error": "Bad Request" | "Unauthorized" | ...}. The \c message field is polymorphic:
+        scalar on auth/simple errors, list of strings from \c ValidationPipe, or list of
+        \c {property, message} hashes from custom class-validator configurations.
+
+        Tally also returns bare plain-text bodies (e.g. \c "Unauthorized") on auth failures; those
+        surface as-is.
+    */
+    private string getApiErrorDesc(hash<ExceptionInfo> ex, string path) {
+        string desc = ex.desc;
+        auto body = ex.arg.body;
+        switch (body.typeCode()) {
+            case NT_STRING:
+                if (body.val()) {
+                    desc += ": " + body;
+                }
+                break;
+            case NT_HASH: {
+                *string err_type = DataProvider::DataProviderErrorUtil::firstStringAt(body, ("error",));
+                auto message = body.message;
+                string msg_str;
+                if (message.typeCode() == NT_STRING && message.val()) {
+                    msg_str = message;
+                } else if (message.typeCode() == NT_LIST && message) {
+                    list<string> parts = ();
+                    foreach auto m in (message) {
+                        if (m.typeCode() == NT_STRING) {
+                            push parts, m;
+                        } else if (m.typeCode() == NT_HASH) {
+                            *string prop = DataProvider::DataProviderErrorUtil::firstStringAt(m, ("property",));
+                            *string mmsg = DataProvider::DataProviderErrorUtil::firstStringAt(m, ("message",));
+                            string p = prop ?? "";
+                            if (mmsg.val()) {
+                                p = p.val() ? p + ": " + mmsg : mmsg;
+                            }
+                            if (p.val()) {
+                                push parts, p;
+                            }
+                        } else {
+                            push parts, sprintf("%y", m);
+                        }
+                    }
+                    if (parts) {
+                        msg_str = parts.size() == 1 ? parts[0] : "[" + join("; ", parts) + "]";
+                    }
+                }
+                if (msg_str.val()) {
+                    desc += ": " + msg_str;
+                } else if (err_type.val()) {
+                    desc += ": " + err_type;
+                }
+                break;
+            }
+        }
+        return sprintf("%s (request path: %y)", desc, ex.arg.request_path ?? path);
     }
 
     #! Returns True if the error indicates that the operation should be retried
