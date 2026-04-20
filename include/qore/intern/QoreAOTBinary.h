@@ -1490,6 +1490,14 @@ public:
     //! Get the reader for access to header info after deserialization
     const QoreAOTBinaryReader& getReader() const { return reader; }
 
+    //! Expose the session's type resolver so the slot-map register
+    //! phase can reuse its warmed cache (populated during
+    //! deserializeFunctionsAndMethods).  Body-local slot resolutions
+    //! for common type paths (`any`, `int`, `*hash<auto>`, ...) hit
+    //! the same cache the variant signatures populated, avoiding
+    //! ~3 M cold parser round-trips in qwf-scale batches.
+    QoreAOTTypeResolver* getTypeResolver() const { return type_resolver; }
+
     //! Check if any functions need source fallback
     bool hasFallbackSource() const { return fallback_source != nullptr; }
 

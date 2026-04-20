@@ -1000,7 +1000,8 @@ static QoreAOTContext* buildContextFromSlotMap(
         const uint8_t*& ptr, const uint8_t* end,
         UserVariantBase* uvb, QoreProgram* pgm,
         const QoreAOTFunc& aot_func, const char* name,
-        const uint8_t* entry_end = nullptr) {
+        const uint8_t* entry_end = nullptr,
+        QoreAOTTypeResolver* shared_type_resolver = nullptr) {
     // Read the per-function slot map header
     // Format: name_ref(u32), num_locals(u16), num_globals(u16), num_exprs(u16),
     //         num_stmts(u16), num_regex_cases(u16), num_body_locals(u16), has_unsupported(u8), padding(u8)
@@ -1072,6 +1073,16 @@ static QoreAOTContext* buildContextFromSlotMap(
         }
     }
 
+    // Single type resolver across every local slot in this function.
+    // When the caller hands us its own (typically the deserializer
+    // session's resolver — already warmed by reading every variant
+    // signature's type path), body-local resolutions for common types
+    // hit a cache populated across the whole batch.  Falls back to a
+    // function-scope resolver when the caller doesn't share one.
+    QoreAOTTypeResolver local_type_resolver(pgm);
+    QoreAOTTypeResolver* ctx_type_resolver = shared_type_resolver
+        ? shared_type_resolver : &local_type_resolver;
+
     // Read and resolve local slot identities
     for (int i = 0; i < num_locals; ++i) {
         const char* lname = reader.readStringRef(ptr);
@@ -1123,10 +1134,9 @@ static QoreAOTContext* buildContextFromSlotMap(
             if (!lv) {
                 // Toplevel or not found in AST — create a new LocalVar
                 std::string type_error;
-                QoreAOTTypeResolver type_resolver(pgm);
                 const QoreTypeInfo* ti = nullptr;
                 if (ltype && *ltype) {
-                    ti = type_resolver.resolve(ltype, type_error);
+                    ti = ctx_type_resolver->resolve(ltype, type_error);
                     if (!type_error.empty()) {
                         type_error.clear();
                     }
@@ -4084,7 +4094,8 @@ static void registerAOTFunctionsFromSlotMaps(
         QoreProgram* pgm,
         std::unordered_map<std::string, const QoreAOTFunc*>& func_map,
         int& registered,
-        std::vector<AOTInitFuncExecInfo>* init_func_contexts = nullptr) {
+        std::vector<AOTInitFuncExecInfo>* init_func_contexts = nullptr,
+        QoreAOTTypeResolver* shared_type_resolver = nullptr) {
     const QoreAOTSectionHeader* sec = reader.findSection(QoreAOTSectionType::SLOT_MAPS);
     if (!sec) {
         printd(0, "AOT v2: no SLOT_MAPS section found\n");
@@ -4491,8 +4502,12 @@ static void registerAOTFunctionsFromSlotMaps(
             continue;
         }
 
-        // Build context from slot map
-        QoreAOTContext* ctx = buildContextFromSlotMap(reader, ptr, end, uvb, pgm, *aot_func, func_name, entry_end);
+        // Build context from slot map — pass the shared type resolver
+        // so body-local slot resolutions hit a cache warmed by
+        // deserializeFunctionsAndMethods (same session) instead of
+        // cold-resolving each type path per slot.
+        QoreAOTContext* ctx = buildContextFromSlotMap(reader, ptr, end, uvb, pgm, *aot_func,
+            func_name, entry_end, shared_type_resolver);
         // Debug: trace init function context building
         if (init_func_contexts && (strncmp(func_name, "__const_init::", 14) == 0
                 || strncmp(func_name, "__svar_init::", 13) == 0)) {
@@ -5504,7 +5519,7 @@ extern "C" DLLEXPORT int qore_aot_run_v2(
                 "toplevel=%p\n", (int)func_map.size(), (void*)toplevel_func);
             registerAOTFunctionsFromSlotMaps(
                 deserializer.getReader(), root_ns, *qpgm, func_map, registered,
-                &init_func_contexts);
+                &init_func_contexts, deserializer.getTypeResolver());
             printd(2, "AOT v2: after slot map registration: %d registered, %d remaining, "
                 "%d init functions\n",
                 registered, (int)func_map.size(), (int)init_func_contexts.size());
@@ -6196,7 +6211,7 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
                 "toplevel=%p, debug=%d\n", (int)func_map.size(), (void*)toplevel_func, debug);
             registerAOTFunctionsFromSlotMaps(
                 deserializer.getReader(), root_ns, *qpgm, func_map, registered,
-                &init_func_contexts);
+                &init_func_contexts, deserializer.getTypeResolver());
             printd(2, "AOT v3: after slot map registration: %d registered, %d remaining, "
                 "%d init functions\n",
                 registered, (int)func_map.size(), (int)init_func_contexts.size());
@@ -6960,7 +6975,7 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v2(
         int registered = 0;
         qore_ns_private* root_ns = qore_ns_private::get(*pp->RootNS);
         registerAOTFunctionsFromSlotMaps(deserializer.getReader(), root_ns,
-            local_pgm, func_map, registered);
+            local_pgm, func_map, registered, nullptr, deserializer.getTypeResolver());
 
         // Fall back to namespace walk for any functions not registered from slot maps
         // (e.g., functions that had no slot map entry)
@@ -7592,7 +7607,7 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
         int registered = 0;
         qore_ns_private* root_ns = qore_ns_private::get(*pp->RootNS);
         registerAOTFunctionsFromSlotMaps(deserializer.getReader(), root_ns,
-            local_pgm, func_map, registered);
+            local_pgm, func_map, registered, nullptr, deserializer.getTypeResolver());
 
         // Fall back to namespace walk for any functions not registered from slot maps
         // (e.g., functions that had no slot map entry)
@@ -8081,7 +8096,8 @@ extern "C" DLLEXPORT int qore_aot_script_end_batch(QoreProgram* tpgm) {
             auto& session = batch->mdes.session(i);
             uint64_t t0 = time_on ? now_us() : 0;
             registerAOTFunctionsFromSlotMaps(session.getReader(), root_ns,
-                tpgm, func_map, registered, &init_func_contexts);
+                tpgm, func_map, registered, &init_func_contexts,
+                session.getTypeResolver());
             if (registered < d.num_functions) {
                 registerAOTFunctionsInNamespace(root_ns, tpgm, func_map,
                     registered);
