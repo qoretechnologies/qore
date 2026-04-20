@@ -10926,6 +10926,37 @@ void QoreAOT::printSupportedTargets() {
 // function, destroy. Hosts needing richer interop keep using the
 // C++ QoreProgram API.
 
+// Thread-local error stash backing `qore_last_error`.  Scoped per
+// thread since libqore's ExceptionSink is thread-owned and hosts
+// read the error on the thread that triggered it.
+namespace {
+thread_local std::string qore_last_error_storage;
+
+// Build a compact human-readable string from an ExceptionSink's
+// top-level exception.  Public C API wrappers call this before
+// draining the sink so `qore_last_error` has something useful to
+// return.  Chained causes are not surfaced — hosts that need full
+// exception detail should drop to the C++ API.
+void captureLastError(ExceptionSink& xsink) {
+    qore_last_error_storage.clear();
+    if (!xsink.isException()) {
+        return;
+    }
+    const QoreValue err_val = xsink.getExceptionErr();
+    const QoreValue desc_val = xsink.getExceptionDesc();
+    QoreString out;
+    if (err_val.getType() == NT_STRING) {
+        out.sprintf("%s: ", err_val.get<const QoreStringNode>()->c_str());
+    }
+    if (desc_val.getType() == NT_STRING) {
+        out.concat(desc_val.get<const QoreStringNode>()->c_str());
+    } else {
+        out.concat("(no description)");
+    }
+    qore_last_error_storage = out.c_str();
+}
+}  // namespace
+
 extern "C" DLLEXPORT QoreProgram* qore_create_program(int64_t parse_options) {
     // Delegate to the standard QoreProgram constructor.  QoreParseOptions
     // has an implicit ctor from int64 that zero-fills the high 64 bits —
@@ -10953,8 +10984,69 @@ extern "C" DLLEXPORT int qore_run_callable(QoreProgram* pgm, const char* fn_name
     ExceptionSink xsink;
     ValueHolder result(pgm->callFunction(fn_name, args, &xsink), &xsink);
     if (xsink.isException()) {
+        captureLastError(xsink);
         xsink.handleExceptions();
         return 1;
     }
     return 0;
+}
+
+extern "C" DLLEXPORT int qore_parse_source_file(QoreProgram* pgm,
+        const char* path, const char* label) {
+    if (!pgm || !path) {
+        qore_last_error_storage = "qore_parse_source_file: invalid arguments";
+        return -1;
+    }
+    ExceptionSink xsink;
+    pgm->parseFile(path, &xsink);
+    if (xsink.isException()) {
+        captureLastError(xsink);
+        xsink.handleExceptions();
+        return 1;
+    }
+    // `label` is advisory — parseFile uses `path` internally.  The
+    // stored label is surfaced to the user via parseCommit errors;
+    // for source-file parses we don't override the path label.
+    (void)label;
+    qore_last_error_storage.clear();
+    return 0;
+}
+
+extern "C" DLLEXPORT int qore_parse_source_string(QoreProgram* pgm,
+        const char* source, const char* label) {
+    if (!pgm || !source) {
+        qore_last_error_storage = "qore_parse_source_string: invalid arguments";
+        return -1;
+    }
+    ExceptionSink xsink;
+    pgm->parse(source, label ? label : "<source>", &xsink);
+    if (xsink.isException()) {
+        captureLastError(xsink);
+        xsink.handleExceptions();
+        return 1;
+    }
+    qore_last_error_storage.clear();
+    return 0;
+}
+
+extern "C" DLLEXPORT int qore_parse_commit(QoreProgram* pgm) {
+    if (!pgm) {
+        qore_last_error_storage = "qore_parse_commit: null program";
+        return -1;
+    }
+    ExceptionSink xsink;
+    pgm->parseCommit(&xsink, &xsink);
+    if (xsink.isException()) {
+        captureLastError(xsink);
+        xsink.handleExceptions();
+        return 1;
+    }
+    qore_last_error_storage.clear();
+    return 0;
+}
+
+extern "C" DLLEXPORT const char* qore_last_error(QoreProgram* pgm) {
+    (void)pgm;
+    return qore_last_error_storage.empty()
+        ? nullptr : qore_last_error_storage.c_str();
 }

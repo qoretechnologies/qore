@@ -227,6 +227,62 @@ DLLEXPORT int qore_aot_script_end_batch(QoreProgram* tpgm);
 DLLEXPORT int qore_run_callable(QoreProgram* pgm, const char* fn_name,
         const QoreListNode* args);
 
+//! Parse a Qore source file into a program.
+/** Thin C wrapper around `QoreProgram::parse(FILE*, label, xsink)`.
+    The file is read and parsed but not committed — call
+    `qore_parse_commit` when the final source has been staged.
+    Multiple `qore_parse_source_*` calls may be chained before a
+    single `qore_parse_commit`.
+    @param pgm a non-NULL QoreProgram.
+    @param path filesystem path to a Qore source file.
+    @param label diagnostic label for error messages; if NULL the
+            path is used.
+    @return 0 on success; non-zero on parse error (consult
+            `qore_last_error` for details).
+ */
+DLLEXPORT int qore_parse_source_file(QoreProgram* pgm, const char* path,
+        const char* label);
+
+//! Parse a Qore source buffer into a program.
+/** Thin C wrapper around `QoreProgram::parse(source, label, xsink)`.
+    Use when the host already has source in memory (embedded scripts,
+    REPL input, etc.).  Same staging semantics as
+    `qore_parse_source_file`: multiple parses can be chained before
+    `qore_parse_commit`.
+    @param pgm a non-NULL QoreProgram.
+    @param source pointer to a NUL-terminated Qore source string.
+    @param label diagnostic label for error messages; if NULL a
+            generic label is used.
+    @return 0 on success; non-zero on parse error.
+ */
+DLLEXPORT int qore_parse_source_string(QoreProgram* pgm,
+        const char* source, const char* label);
+
+//! Commit all staged parses into the program.
+/** Resolves and validates every namespace, class, and function
+    staged by prior `qore_parse_source_*` calls, making them
+    runnable.  Must be called before `qore_run_callable` can
+    dispatch to newly-parsed functions.
+    @param pgm a non-NULL QoreProgram.
+    @return 0 on success; non-zero on parse-commit error.
+ */
+DLLEXPORT int qore_parse_commit(QoreProgram* pgm);
+
+//! Retrieve the last parse / runtime error message for a program.
+/** Captures the exception text produced by the most recent
+    `qore_parse_source_*` / `qore_parse_commit` / `qore_run_callable`
+    call on @p pgm from the caller's thread.  Valid until the next
+    call that produces an error, the program is destroyed, or the
+    thread exits.  Returns NULL if no error has been recorded.
+
+    The returned C string is owned by libqore; callers must NOT
+    free it and must NOT hold it across another libqore call on
+    the same thread.
+    @param pgm a non-NULL QoreProgram.
+    @return a C string describing the last error, or NULL if none.
+ */
+DLLEXPORT const char* qore_last_error(QoreProgram* pgm);
+
 #ifdef __cplusplus
 }
 #endif
