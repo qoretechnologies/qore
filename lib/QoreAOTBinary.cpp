@@ -6078,20 +6078,22 @@ static bool readAndSetupVariantSignature(
         needs_extra_args_flag = bit0;
     }
 
-    // Read params
+    // Read params — reserve+emplace rather than resize+assign so we
+    // skip the up-front default-construction of `np` empty strings per
+    // variant (~3.3 M skipped default-constructions in qwf batch).
     std::vector<std::string> param_names;
     std::vector<const QoreTypeInfo*> param_types;
     std::vector<QoreValue> param_defaults;
-    param_names.resize(np);
-    param_types.resize(np);
-    param_defaults.resize(np);
+    param_names.reserve(np);
+    param_types.reserve(np);
+    param_defaults.resize(np);  // sparse by has_default — keep indexed
 
     for (uint32_t j = 0; j < np; ++j) {
         const char* pname = reader.readStringRef(ptr);
         const char* ptype_path = reader.readStringRef(ptr);
         uint8_t has_default = QoreAOTBinaryReader::readU8(ptr);
 
-        param_names[j] = pname ? pname : "";
+        param_names.emplace_back(pname ? pname : "");
 
         const QoreTypeInfo* pti = type_resolver->resolve(ptype_path, error);
         if (!error.empty()) {
@@ -6100,11 +6102,11 @@ static bool readAndSetupVariantSignature(
             // the type checks baked in, so this only affects variant matching.
             printd(0, "AOT: cannot resolve type '%s' for parameter '%s': %s "
                 "(falling back to auto)\n",
-                ptype_path ? ptype_path : "(null)", param_names[j].c_str(), error.c_str());
+                ptype_path ? ptype_path : "(null)", param_names.back().c_str(), error.c_str());
             error.clear();
             pti = autoTypeInfo;
         }
-        param_types[j] = pti;
+        param_types.push_back(pti);
 
         if (has_default == 1) {
             // Constant default value
