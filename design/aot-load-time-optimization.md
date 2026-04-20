@@ -461,13 +461,34 @@ qwf / qsvc / qjob `--help` median startup <= current source-parse
 baseline (1.80 / 1.86 / 1.35 s).  Stretch goal: <= 1.0s for all
 three.
 
-### Status (2026-04-19)
+### Status (2026-04-20)
 
 | Binary | Source-parse | AOT (pre-opt) | AOT (current) |
 |--------|--------------|---------------|---------------|
 | qwf    | 1.80 s       | 1.97 s        | ~1.59 s       |
+| qctl   | 6.6 s        | 240 ms (P1.5) | ~250 ms warm / ~440 ms cold |
 | qsvc   | 1.86 s       | —             | — (untested)  |
 | qjob   | 1.35 s       | —             | — (untested)  |
+
+**qctl measurement (task #13):** full-stack AOT at parity with the
+Phase 1.5 baseline — the session's optimizations deliver zero wall-
+clock movement on qctl because qctl's AOT phase is already tiny
+relative to its non-AOT startup overhead:
+
+| Phase                  | Time   |
+|------------------------|--------|
+| resolveAll (24 sessions, 90 k variants) | 39 ms |
+| post-resolveAll register + init-func    | 7.5 ms |
+| **Total AOT**          | **~46 ms** |
+| Non-AOT (libqore init, qmod dlopen, source parse) | ~200 ms |
+| Wall-clock (warm)      | ~250 ms |
+
+The TYPE_TABLE / LocalVar-intern / shared-resolver optimizations
+scale linearly with variant count — qwf saw 380 ms because it has
+~7× more variants (656 k vs 90 k).  qctl has already hit the AOT
+floor; further wins require attacking non-AOT startup.  The bimodal
+wall-clock (250 ms warm / 440 ms cold) is environmental (fs cache)
+and reproduces identically on the pre-session deployed qctl binary.
 
 qwf reached sub-baseline via:
  - shared type-resolver cache across batch sessions (e42d2b6a5)
