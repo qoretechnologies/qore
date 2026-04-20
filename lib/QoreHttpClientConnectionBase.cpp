@@ -154,6 +154,16 @@ bool HttpClientConnectionBase::waitForReadyOrError(int64_t timeout_ms, Exception
         return true;
     }
 
+    // The wait may have returned because the connection moved CONNECTING →
+    // READY → CLOSED faster than this thread could observe the READY tick
+    // (e.g. peer drops the accepted socket immediately).  In that case the
+    // connect itself succeeded — report success here.  Callers that need a
+    // usable connection (send/recv) re-check isClosed() after this returns
+    // and surface the closure error themselves.
+    if (wasReady()) {
+        return true;
+    }
+
     // Either we timed out or the state transitioned to CLOSED / DRAINING
     // without ever reaching READY.  Distinguish CLOSED (raise error) from
     // timeout (return false quietly).

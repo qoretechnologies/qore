@@ -171,6 +171,18 @@ public:
         return state.load(std::memory_order_acquire) == READY;
     }
 
+    //! True if the connection was ever ready (i.e., the connect handshake completed)
+    /** Latched on the CONNECTING → READY transition by @ref onConnectionReady; never
+        cleared.  Lets a `startPollConnect` caller distinguish "connect succeeded but
+        peer closed quickly" (success) from "connect failed before ever readying"
+        (failure) when racing with @ref setClosed.
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT bool wasReady() const {
+        return was_ready.load(std::memory_order_acquire);
+    }
+
     DLLEXPORT bool isClosed() const {
         return state.load(std::memory_order_acquire) == CLOSED;
     }
@@ -208,6 +220,9 @@ public:
 private:
     //! Connection state — values match Qore HttpClientConnectionState enum
     std::atomic<int> state{CONNECTING};
+
+    //! Latched true on the first CONNECTING → READY transition; never cleared.
+    std::atomic<bool> was_ready{false};
 
     //! Lock for state transitions + condition broadcasts
     QoreThreadLock lock;

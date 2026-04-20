@@ -45,6 +45,9 @@ void AbstractHttpPollConnectionPriv::onConnectionReady() {
     {
         AutoLocker al(lock);
         if (state.load(std::memory_order_acquire) == CONNECTING) {
+            // Latch was_ready BEFORE the state transition so any reader that
+            // observes state != CONNECTING also observes was_ready == true.
+            was_ready.store(true, std::memory_order_release);
             state.store(READY, std::memory_order_release);
             ready_cond.broadcast();
             to_notify = std::move(ready_notifiers);
