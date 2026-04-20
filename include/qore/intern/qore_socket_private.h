@@ -716,6 +716,19 @@ struct qore_socket_private {
     // issue #3053: client target for SNI
     std::string client_target;
     SSLSocketHelper* ssl = nullptr;
+    //! Serialises close_internal() SSL shutdown across concurrent callers.
+    /** Two paths can reach close_internal() on the same socket without
+        holding any shared lock: the I/O thread running an H2 client
+        abort → current_op->abort → socket->close, and an app-thread
+        disconnect / HTTPClient destructor calling socket->close directly.
+        Without serialisation they both read ssl != nullptr, both call
+        ssl->shutdown(), and the second touches a freed OpenSSL SSL*
+        (backtrace in CI job 170545: EVP_CIPHER_CTX_get0_cipher SIGSEGV
+        inside SSL_shutdown on a freed cipher ctx).  Taking this lock only
+        around the ssl shutdown/deref block is sufficient — the rest of
+        close_internal() is either idempotent or already guarded by its
+        own locks. */
+    QoreThreadLock ssl_close_m;
     //! ALPN protocols for TLS negotiation (HTTP/2 support)
     std::vector<std::string> alpn_protocols;
     Queue* event_queue = nullptr,   //!< event queue
@@ -1203,11 +1216,19 @@ struct qore_socket_private {
         }
         h2_stream_complete_callback = nullptr;
         if (sock >= 0) {
-            // if an SSL connection has been established, shut it down first
-            if (ssl) {
-                ssl->shutdown();
-                ssl->deref();
-                ssl = nullptr;
+            // if an SSL connection has been established, shut it down first.
+            // Serialise the shutdown/deref pair so concurrent close callers
+            // cannot both see ssl != nullptr and both invoke shutdown on
+            // the same OpenSSL SSL* (one side derefs it to 0 → SSL_free,
+            // the other side crashes inside SSL_shutdown on freed state —
+            // see ssl_close_m comment).
+            {
+                AutoLocker al(ssl_close_m);
+                if (ssl) {
+                    ssl->shutdown();
+                    ssl->deref();
+                    ssl = nullptr;
+                }
             }
 
             if (!socketname.empty()) {

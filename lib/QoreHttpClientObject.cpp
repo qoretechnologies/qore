@@ -8471,11 +8471,15 @@ QoreObject* qore_httpclient_priv::startPollSendRecvConnMgr(ExceptionSink* xsink,
 
     if (conn->isClosed()) {
         // Rare: the connection transitioned to CLOSED between async acquire
-        // and here.  Surface the protocol error if available.
+        // and here.  Surface the protocol error as a DEFERRED error on the
+        // returned poll op rather than raising synchronously — callers
+        // expect the error to surface through drivePoll(), not from the
+        // start* call itself.  Mirrors the deferred-error pattern in
+        // startPollConnectConnMgr (SOCKET-CONNECT-ERROR test case).
         ReferenceHolder<QoreHashNode> err_info(
             conn->getReferencedErrorInfo(), xsink);
-        const char* err_str = "HTTP-CLIENT-CONNECT-ERROR";
-        const char* desc_str = "connection closed before poll send/recv request";
+        std::string err_str = "HTTP-CLIENT-CONNECT-ERROR";
+        std::string desc_str = "connection closed before poll send/recv request";
         if (err_info) {
             QoreValue ev = err_info->getKeyValue("err");
             QoreValue dv = err_info->getKeyValue("desc");
@@ -8486,10 +8490,24 @@ QoreObject* qore_httpclient_priv::startPollSendRecvConnMgr(ExceptionSink* xsink,
                 desc_str = dv.get<const QoreStringNode>()->c_str();
             }
         }
-        xsink->raiseException(err_str, "%s", desc_str);
         mgr.closeAndEvict(conn, xsink);
         release_local_conn_ref();
-        return nullptr;
+
+        // Signal notifier so first drivePoll wakes up and sees deferred_err
+        notifier_holder->notify();
+
+        poller = new HttpClientConnMgrPollOp(err_str.c_str(), desc_str.c_str(),
+            notifier_for_op, this, self);
+
+        SocketPollOperationBase* p = *poller;
+        ReferenceHolder<QoreObject> rv(
+            new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), poller.release()), xsink);
+        if (!*xsink) {
+            p->setSelf(*rv);
+            rv->setValue("sock", notifier_obj.release(), xsink);
+            rv->setValue("goal", new QoreStringNode("received"), xsink);
+        }
+        return rv.release();
     }
 
     if (conn->isReady()) {
@@ -8530,10 +8548,15 @@ QoreObject* qore_httpclient_priv::startPollSendRecvConnMgr(ExceptionSink* xsink,
             // under QORE_IO_THREADS>=2 when this slow path raced with
             // onConnectionReady.
             if (conn->isClosed()) {
+                // Race: connection closed between the !queued check and
+                // this isClosed() branch.  Surface as DEFERRED error on the
+                // poll op, not synchronously — same rationale as the early
+                // isClosed() path above (SSE async connect test expects
+                // SOCKET-CONNECT-ERROR to come through drivePoll()).
                 ReferenceHolder<QoreHashNode> err_info(
                     conn->getReferencedErrorInfo(), xsink);
-                const char* err_str = "HTTP-CLIENT-CONNECT-ERROR";
-                const char* desc_str = "connection closed before poll send/recv request";
+                std::string err_str = "HTTP-CLIENT-CONNECT-ERROR";
+                std::string desc_str = "connection closed before poll send/recv request";
                 if (err_info) {
                     QoreValue ev = err_info->getKeyValue("err");
                     QoreValue dv = err_info->getKeyValue("desc");
@@ -8544,10 +8567,23 @@ QoreObject* qore_httpclient_priv::startPollSendRecvConnMgr(ExceptionSink* xsink,
                         desc_str = dv.get<const QoreStringNode>()->c_str();
                     }
                 }
-                xsink->raiseException(err_str, "%s", desc_str);
                 mgr.closeAndEvict(conn, xsink);
                 release_local_conn_ref();
-                return nullptr;
+
+                notifier_holder->notify();
+
+                poller = new HttpClientConnMgrPollOp(err_str.c_str(),
+                    desc_str.c_str(), notifier_for_op, this, self);
+
+                SocketPollOperationBase* p = *poller;
+                ReferenceHolder<QoreObject> rv(
+                    new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), poller.release()), xsink);
+                if (!*xsink) {
+                    p->setSelf(*rv);
+                    rv->setValue("sock", notifier_obj.release(), xsink);
+                    rv->setValue("goal", new QoreStringNode("received"), xsink);
+                }
+                return rv.release();
             }
             // READY now — fall into the fast-path synchronous submit.
             PromiseNotifierAction* action = new PromiseNotifierAction(
