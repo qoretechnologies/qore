@@ -3446,6 +3446,7 @@ int QoreFunction::parseCheckDuplicateSignatureCommitted(UserSignature* sig) {
 // this is called after types have been resolved and the types must be rechecked
 int QoreFunction::parseCompareResolvedSignature(const VList& vlist, const AbstractFunctionSignature* sig, const AbstractFunctionSignature*& vs) {
     unsigned vp = sig->getParamTypes();
+    unsigned sig_np = sig->numParams();
 
     // now check already-committed variants
     for (vlist_t::const_iterator i = vlist.begin(), e = vlist.end(); i != e; ++i) {
@@ -3461,8 +3462,35 @@ int QoreFunction::parseCompareResolvedSignature(const VList& vlist, const Abstra
 
         bool dup = true;
         bool ambiguous = false;
-        unsigned max = QORE_MAX(tp, vp);
+        // Must iterate over the full parameter count, not just typed params:
+        // an `auto`-typed trailing parameter counts as 0 toward getParamTypes()
+        // but IS a distinct parameter — ctor(string, string) vs
+        // ctor(string, string, auto) would otherwise only compare positions
+        // 0 and 1, falsely flagging the pair as duplicates.
+        unsigned vs_np = vs->numParams();
+        unsigned max = QORE_MAX(vs_np, sig_np);
         for (unsigned pi = 0; pi < max; ++pi) {
+            // Extra-param positions beyond one signature's declared list
+            // (see parseCheckDuplicateSignature for the full rationale):
+            // only treat as duplicate-compatible when the extra param has
+            // a default argument.
+            if (pi >= sig_np) {
+                if (!sig->hasDefaultArg(pi)) {
+                    dup = false;
+                    break;
+                }
+                ambiguous = true;
+                continue;
+            }
+            if (pi >= vs_np) {
+                if (!vs->hasDefaultArg(pi)) {
+                    dup = false;
+                    break;
+                }
+                ambiguous = true;
+                continue;
+            }
+
             const QoreTypeInfo* variantTypeInfo = vs->getParamTypeInfo(pi);
             bool variantHasDefaultArg = vs->hasDefaultArg(pi);
 
@@ -3547,6 +3575,34 @@ int QoreFunction::parseCheckDuplicateSignature(AbstractQoreFunctionVariant* vari
         bool recheck = false;
         unsigned max = QORE_MAX(np, vnp);
         for (unsigned pi = 0; pi < max; ++pi) {
+            // Detect extra-param positions: pi is beyond one signature's
+            // declared parameter list.  `getParamTypeInfo(out_of_range)`
+            // returns nullptr (same as the sentinel for `auto`), so a
+            // naive `paramTypesIdentical(nullptr, …, nullptr, …)` on an
+            // out-of-range pi against an `auto` param in the other
+            // signature would report them "identical" — falsely
+            // flagging e.g. `ctor(string, string)` + `ctor(string,
+            // string, auto)` as duplicates.  Only treat as duplicate
+            // here if the extra param has a default argument (call-
+            // compatible with the shorter signature), otherwise they
+            // are distinct overloads.
+            if (pi >= np) {
+                if (!sig->hasDefaultArg(pi)) {
+                    dup = false;
+                    break;
+                }
+                ambiguous = true;
+                continue;
+            }
+            if (pi >= vnp) {
+                if (!vs->hasDefaultArg(pi)) {
+                    dup = false;
+                    break;
+                }
+                ambiguous = true;
+                continue;
+            }
+
             const QoreTypeInfo* variantTypeInfo = vs->getParamTypeInfo(pi);
             const QoreParseTypeInfo* variantParseTypeInfo = variantTypeInfo ? nullptr : vs->getParseParamTypeInfo(pi);
             bool variantHasDefaultArg = vs->hasDefaultArg(pi);
