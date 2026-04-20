@@ -3072,14 +3072,10 @@ const QoreTypeInfo* QoreTypeInfo::getIteratorElementType(const QoreClass* iterat
         if (!strcmp(className, "ListIterator") || !strcmp(className, "ListReverseIterator")) {
             return listElementType;
         }
-        // NOTE: the AbstractIterator-on-list branch is intentionally
-        // omitted — narrowing $1 to the list element type in that
-        // case regressed foldr over `list.iterator()` (see
-        // operators.qtest:311).  `<list>` literals already get
-        // proper typing via the getUniqueReturnComplexList fast path
-        // at the top of getImplicitArgTypeForIterator, so this only
-        // fires for the `.iterator()` method-call form where the
-        // regression lives.  Needs investigation before enabling.
+        // DEBUG: re-enable AbstractIterator-on-list to probe regression
+        if (!strcmp(className, "AbstractIterator")) {
+            return listElementType;
+        }
     }
 
     return nullptr;

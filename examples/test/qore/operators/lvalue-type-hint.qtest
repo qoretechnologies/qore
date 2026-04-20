@@ -17,6 +17,7 @@ class Test inherits QUnit::Test {
         addTestCase("concrete body type wins over hint",          \concreteBodyWins());
         addTestCase("hint ignored when lvalue is not hash<K,V>",  \hintIgnoredForAutoHash());
         addTestCase("hash.iterator() yields typed $1 in map body", \hashIteratorElementType());
+        addTestCase("list.iterator() yields typed $1 + fold safety",  \listIteratorElementType());
         set_return_value(main());
     }
 
@@ -106,5 +107,23 @@ class Test inherits QUnit::Test {
         # Arithmetic on narrowed $1 works in typed lvalue contexts
         list<int> doubled = map $1 * 2, src.iterator();
         assertEq((2, 4, 6), doubled);
+    }
+
+    # `$1` typing through `list<T>::iterator()` — same declared-vs-actual
+    # gap as the hash case.  This branch needed a fix in
+    # analyzeFoldPattern (QoreIRLowering.cpp) to avoid mis-triggering
+    # list-specialized fold opcodes (FoldlDiffInt / FoldlSumInt / ...)
+    # when the source is an iterator object instead of a list.
+    listIteratorElementType() {
+        list<int> nums = (2, 3, 4);
+        # Map body sees $1 as int now (was auto).
+        list<int> doubled = map $1 * 2, nums.iterator();
+        assertEq((4, 6, 8), doubled);
+        # foldr over an iterator still works (regression guard for
+        # the analyzeFoldPattern list-type check).
+        int sub1 = foldr $1 - $2, nums.iterator();
+        assertEq(-1, sub1);
+        int sub2 = foldl $1 - $2, nums.iterator();
+        assertEq(-5, sub2);
     }
 }

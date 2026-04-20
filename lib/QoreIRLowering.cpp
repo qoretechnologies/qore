@@ -8795,6 +8795,28 @@ static QoreIROpcode analyzeFoldPattern(const QoreValue& fold_expr, const QoreTyp
         return QoreIROpcode::FoldlAny;
     }
 
+    // Specialized opcodes (FoldlSumInt, FoldlDiffInt, FoldlMinInt, ...)
+    // assume the source is a list — they iterate the list in one shot
+    // from the runtime helper.  When the source is an object (typically
+    // `.iterator()` call) or any non-list, the specialized opcode
+    // misinterprets the input and produces garbage (zero for int ops).
+    //
+    // Guard here: only allow specialization when `list_type` is actually
+    // a list (complex or bare-list return).  Otherwise fall through to
+    // native lowering which handles iterators via the proper loop.
+    //
+    // Regression history: surfaced by the Option B parser change
+    // (Qore commit 282da15f1 + follow-up) that started narrowing $1
+    // for `list.iterator()` sources to the list element type — the
+    // resulting `int - int` body matched the FoldlDiffInt pattern
+    // but the source object was an AbstractIterator, causing
+    // `foldr $1 - $2, (2,3,4).iterator()` to return 0 instead of -1.
+    if (list_type) {
+        if (QoreTypeInfo::parseReturns(list_type, NT_LIST) == QTI_NOT_EQUAL) {
+            return QoreIROpcode::FoldlAny;
+        }
+    }
+
     // Check for Plus operator: $1 + $2
     if (auto* plus_op = dynamic_cast<const QorePlusOperatorNode*>(node)) {
         QoreValue left = plus_op->getLeft();
