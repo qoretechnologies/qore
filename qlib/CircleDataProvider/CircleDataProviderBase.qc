@@ -187,9 +187,63 @@ public class CircleDataProviderBase inherits DataProvider::AbstractDataProvider 
                 if (retryRequest(ex, \retries)) {
                     continue;
                 }
-                rethrow;
+                rethrow ex.err, getApiErrorDesc(ex), ex.arg;
             }
         }
+    }
+
+    #! Returns an enriched error description that includes the Circle API error message if available
+    /** Circle errors follow the OpenAPI-defined \c error schema:
+        \c {"success": false, "message": "<prose>", "error_details": <string|object|array|null>}.
+
+        \c error_details is polymorphic: often a nested \c {"message": "..."} hash on 404s, an
+        ActiveModel-style \c {"field": ["err1", ...]} hash on 422s, a plain string describing the
+        concrete validation failure, or empty/\c null.
+    */
+    private string getApiErrorDesc(hash<ExceptionInfo> ex) {
+        string desc = ex.desc;
+        *string msg = DataProvider::DataProviderErrorUtil::firstStringAt(ex.arg.body, ("message",));
+        if (msg.val()) {
+            desc = sprintf("%s: %s", desc, msg);
+        }
+        if (ex.arg.body.typeCode() == NT_HASH) {
+            *string details = formatErrorDetails(ex.arg.body.error_details);
+            if (details.val()) {
+                desc += sprintf(" (%s)", details);
+            }
+        }
+        return desc;
+    }
+
+    #! Renders Circle's polymorphic \c error_details field into a compact string, or \c NOTHING
+    private *string formatErrorDetails(auto ed) {
+        switch (ed.typeCode()) {
+            case NT_STRING:
+                return ed.val() ? ed : NOTHING;
+            case NT_HASH: {
+                if (!ed) {
+                    return NOTHING;
+                }
+                *string nested = DataProvider::DataProviderErrorUtil::firstStringAt(ed, ("message",));
+                if (nested.val() && keys ed == ("message",)) {
+                    return nested;
+                }
+                list<string> parts = ();
+                foreach string field in (keys ed) {
+                    auto v = ed{field};
+                    if (v.typeCode() == NT_LIST && v) {
+                        list<string> msgs = map $1.typeCode() == NT_STRING ? $1 : sprintf("%y", $1), v;
+                        push parts, sprintf("%s: %s", field, join(", ", msgs));
+                    } else if (v.typeCode() == NT_STRING && v.val()) {
+                        push parts, sprintf("%s: %s", field, v);
+                    }
+                }
+                return parts ? join("; ", parts) : NOTHING;
+            }
+            case NT_LIST:
+                return ed ? sprintf("%y", ed) : NOTHING;
+        }
+        return NOTHING;
     }
 
     #! Checks if a request should be retried
