@@ -404,9 +404,68 @@ public class ConstantContactDataProviderBase inherits DataProvider::AbstractData
                 if (retryRequest(ex, \retries)) {
                     continue;
                 }
-                rethrow;
+                rethrow ex.err, getApiErrorDesc(ex), ex.arg;
             }
         }
+    }
+
+    #! Returns an enriched error description that includes the ConstantContact API error message if available
+    /** ConstantContact V3 error bodies are polymorphic: typically \c [{"error_key": "...",
+        "error_message": "..."}, ...] (a list, for endpoint errors like 404/422) but may also
+        be a bare \c {"error_key": "unauthorized", "error_message": "Unauthorized"} hash on
+        auth failures. Both shapes are normalised here.
+    */
+    private string getApiErrorDesc(hash<ExceptionInfo> ex) {
+        string desc = ex.desc;
+        list<auto> entries;
+        switch (ex.arg.body.typeCode()) {
+            case NT_LIST:
+                entries = ex.arg.body;
+                break;
+            case NT_HASH:
+                entries = (ex.arg.body,);
+                break;
+            default:
+                return desc;
+        }
+        list<string> parts = ();
+        foreach auto e in (entries) {
+            *string p = formatErrorEntry(e);
+            if (p.val()) {
+                push parts, p;
+            }
+        }
+        if (!parts) {
+            return desc;
+        }
+        desc += ": " + parts[0];
+        if (parts.size() > 1) {
+            list<string> rest = ();
+            int idx = 0;
+            foreach string p in (parts) {
+                if (idx++ > 0) {
+                    push rest, p;
+                }
+            }
+            desc += " [" + join("; ", rest) + "]";
+        }
+        return desc;
+    }
+
+    #! Formats a single ConstantContact error entry as "<message> (key: <key>)", or just one part
+    private *string formatErrorEntry(auto e) {
+        *string msg = DataProvider::DataProviderErrorUtil::firstStringAt(e, ("error_message",));
+        *string key = DataProvider::DataProviderErrorUtil::firstStringAt(e, ("error_key",));
+        if (msg.val() && key.val()) {
+            return sprintf("%s (key: %s)", msg, key);
+        }
+        if (msg.val()) {
+            return msg;
+        }
+        if (key.val()) {
+            return key;
+        }
+        return NOTHING;
     }
 
     #! Checks if a request should be retried
