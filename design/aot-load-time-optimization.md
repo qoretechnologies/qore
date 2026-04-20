@@ -375,9 +375,26 @@ Low cost (cmake plumbing only) — no Qore-side work needed.
    identical `("self", classTypeInfo)` — keyed cache on
    qore_program_private::shared_aot_self.  Wall-clock 1.75 → 1.74 s.
 
-**State after step 12:** qwf `--help` ≈ 1.71 s (trimmed mean of 15
-runs, down from 1.97 s start-of-session and below 1.80 s source-parse
-baseline).
+15. **Done** — (4a) defer signature-text build to `getSignatureText()`
+    (commit ddf6e2a49).  `setupFromAOTMetadata` used to eagerly build
+    the human-readable param signature string via
+    `addAbstractParameterSignature` — 656 k std::string builds per
+    qwf batch, almost none of them queried at runtime.  Made `str`
+    mutable, lazy-built in `getSignatureText()` when non-empty
+    signature+empty cache.  Source-parse paths unchanged (`resolve()`
+    still builds eagerly, short-circuits the lazy check).
+    setupFromAOTMetadata 148 → 118 ms; wall-clock 1.74 → 1.70 s.
+
+16. **Done** — (4b) skip default-construction of param_names/types
+    vectors (commit 2035abfa5).  `readAndSetupVariantSignature` used
+    `resize(np)` + indexed assignment in the read loop; switched to
+    `reserve(np)` + emplace_back / push_back so the np empty
+    std::strings + null pointers per variant are never created.
+    Marginal wall-clock effect but cleaner code.
+
+**State after step 16:** qwf `--help` ≈ 1.70 s (trimmed mean of 20
+runs, down from 1.97 s start-of-session and 100 ms below the 1.80 s
+source-parse baseline).
 
 13. **Attempted, reverted** — heterogeneous `string_view` lookup on
    the type-resolver cache (to skip implicit `std::string`
@@ -417,7 +434,7 @@ three.
 
 | Binary | Source-parse | AOT (pre-opt) | AOT (current) |
 |--------|--------------|---------------|---------------|
-| qwf    | 1.80 s       | 1.97 s        | ~1.71 s       |
+| qwf    | 1.80 s       | 1.97 s        | ~1.70 s       |
 | qsvc   | 1.86 s       | —             | — (untested)  |
 | qjob   | 1.35 s       | —             | — (untested)  |
 
@@ -429,6 +446,17 @@ qwf reached sub-baseline via:
  - last-class cache in slot-map register (76bc14d23)
  - interned shared argv LocalVar (f73147c5d)
  - interned per-class self LocalVar (c0210a5fe)
+ - lazy signature-text build (ddf6e2a49)
+ - reserve+emplace for param vectors (2035abfa5)
+
+### Parallelization note
+
+The cluster-interface processes were designed single-threaded, and
+the shared state that deserialization touches (qore_program_private's
+local_var_list deque, the RootNS tree, the type-resolver cache) is
+not thread-safe.  Cross-session parallelism would need either per-
+thread arenas with merge-at-end or coarse locks that eliminate most
+of the speedup.  Not pursued in this session.
 
 Total AOT resolveAll time: 917 → ~536 ms.  Finalize phase alone:
 165 → 2.5 ms.  Wall-clock: 1.97 → 1.71 s trimmed mean of 15 runs
