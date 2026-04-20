@@ -88,8 +88,9 @@ constexpr uint64_t QORE_AOT_FEAT_FAST_CALL       = 1ULL << 5;  //!< CallMethodDi
 constexpr uint64_t QORE_AOT_FEAT_COMPLEX_RETURN  = 1ULL << 6;  //!< reserved, set to 0 for now
 constexpr uint64_t QORE_AOT_FEAT_HASH_KEY_STORE  = 1ULL << 7;  //!< HashKeyStore opcode (333)
 constexpr uint64_t QORE_AOT_FEAT_LIST_INDEX_STORE = 1ULL << 8;  //!< ListIndexStore opcode (335)
+constexpr uint64_t QORE_AOT_FEAT_TYPE_TABLE      = 1ULL << 9;  //!< per-blob pre-resolved type-path table (TYPE_TABLE section)
 //! Mask of all currently supported features
-constexpr uint64_t QORE_AOT_SUPPORTED_FEATURES   = 0x1FFULL;
+constexpr uint64_t QORE_AOT_SUPPORTED_FEATURES   = 0x3FFULL;
 
 //! Section type IDs
 enum class QoreAOTSectionType : uint16_t {
@@ -110,6 +111,7 @@ enum class QoreAOTSectionType : uint16_t {
     REEXPORT_MODULES = 15,  //!< Modules that should be reexported (for strip-source modules)
     PROGRAM_METADATA = 16,  //!< Program-level metadata (exec-class name, etc.)
     INIT_FUNCS       = 17,  //!< Init functions for constants/static vars with lowered init expressions
+    TYPE_TABLE       = 18,  //!< Per-blob interned type-path table (bulk-resolved at shell phase)
 };
 
 //! Value type tags for serialized constant values
@@ -257,6 +259,47 @@ public:
     //! as VT_CONST_REF entries. Set before calling section writers that serialize
     //! user constant values.
     const AOTConstantReverseMap* const_reverse_map = nullptr;
+
+    //! Per-blob type-path interner — when non-empty, `writeVariantSignature`
+    //! emits a `u32` index into this table instead of the legacy inline
+    //! string.  The TYPE_TABLE section is written at the tail of
+    //! serialization (see writeTypeTableSection) and the module header has
+    //! the `QORE_AOT_FEAT_TYPE_TABLE` feature bit set so readers know to
+    //! use the table.  Eliminates ~3.3 M per-param hash lookups in qwf.
+    std::vector<std::string> type_path_table;
+    std::unordered_map<std::string, uint32_t> type_path_index;
+
+    //! Intern a type path.  Returns a u32 index that the reader dereferences
+    //! against the TYPE_TABLE section.  Empty/null path gets index 0
+    //! (reserved — resolves to nullptr/no-constraint).
+    uint32_t internTypePath(const char* path) {
+        if (!path || !*path) {
+            // Reserve index 0 for "empty" so readers can treat 0 as the
+            // auto/no-constraint sentinel without consulting the table.
+            if (type_path_table.empty()) {
+                type_path_table.emplace_back();
+                type_path_index.emplace(std::string(), 0u);
+            }
+            return 0;
+        }
+        if (type_path_table.empty()) {
+            type_path_table.emplace_back();
+            type_path_index.emplace(std::string(), 0u);
+        }
+        auto it = type_path_index.find(path);
+        if (it != type_path_index.end()) {
+            return it->second;
+        }
+        uint32_t idx = static_cast<uint32_t>(type_path_table.size());
+        type_path_table.emplace_back(path);
+        type_path_index.emplace(type_path_table.back(), idx);
+        return idx;
+    }
+
+    //! Emit the TYPE_TABLE section: u32 count, then count × StringRef.
+    //! Called once after all functions/methods have been serialized so
+    //! the table contains every path referenced in variant signatures.
+    void writeTypeTableSection();
 
 private:
     std::vector<uint8_t> buffer;
@@ -1236,6 +1279,27 @@ public:
 
 private:
     std::vector<PendingStaticMethodDefault> pending_smd;
+
+    //! Pre-resolved per-blob type table.  Populated at the start of
+    //! phase 2b (deserializeFunctionsAndMethods) by reading the
+    //! TYPE_TABLE section and resolving every entry via `type_resolver`.
+    //! When non-empty, `readAndSetupVariantSignature` pulls return /
+    //! param types by index instead of via per-param hash-lookup —
+    //! cuts ~3.3 M resolver calls on qwf's 656 k variants.  Empty when
+    //! loading a pre-feature-flag .qmod or a blob with no variants.
+    std::vector<const QoreTypeInfo*> type_table_resolved;
+
+    //! Set when the blob's header advertises QORE_AOT_FEAT_TYPE_TABLE.
+    //! Signatures emit a u32 index rather than an inline string for
+    //! return + param types.  Decided at `openAndDeserializeShells`
+    //! time from the parsed header.
+    bool uses_type_table = false;
+
+    //! Resolve every entry in the TYPE_TABLE section into
+    //! type_table_resolved.  No-op when the section is absent.  Must
+    //! run after shells across all sibling sessions exist so
+    //! cross-blob complex types resolve correctly.
+    bool resolveTypeTable(std::string& error);
 
     bool deserializeNamespaces(std::string& error);
     bool deserializeClasses(std::string& error);

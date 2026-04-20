@@ -450,6 +450,11 @@ static uint64_t computeFeatureFlags(const std::vector<AOTCompiledFunc>& funcs) {
     for (const auto& cf : funcs) {
         flags |= cf.feature_flags;
     }
+    // Every AOT binary produced by this compiler emits per-blob type-
+    // table-indexed variant signatures (see writeVariantSignature +
+    // QoreAOTBinaryWriter::internTypePath).  Advertise that capability
+    // unconditionally so readers dispatch to the fast index path.
+    flags |= QORE_AOT_FEAT_TYPE_TABLE;
     return flags;
 }
 

@@ -1900,8 +1900,13 @@ static void writeVariantSignature(QoreAOTBinaryWriter& writer, const AbstractQor
     const AbstractFunctionSignature* sig = const_cast<AbstractQoreFunctionVariant*>(v)->getSignature();
     assert(sig);
 
-    // return type path
-    writer.writeStringRef(getTypePath(sig->getReturnTypeInfo()));
+    // return type path — emitted as a u32 index into the per-blob
+    // TYPE_TABLE (see QoreAOTBinaryWriter::internTypePath).  At read
+    // time the deserializer uses this index for an O(1) array lookup
+    // against a pre-resolved `const QoreTypeInfo*` table instead of a
+    // hash lookup on the path string per param (cf. the original
+    // `writer.writeStringRef(getTypePath(...))` path).
+    writer.writeU32(writer.internTypePath(getTypePath(sig->getReturnTypeInfo())));
 
     // num params
     uint32_t np = sig->numParams();
@@ -1963,8 +1968,9 @@ static void writeVariantSignature(QoreAOTBinaryWriter& writer, const AbstractQor
         const char* pname = sig->getName(i);
         writer.writeStringRef(pname ? pname : "");
 
-        // param type path
-        writer.writeStringRef(getTypePath(sig->getParamTypeInfo(i)));
+        // param type path — u32 index into per-blob TYPE_TABLE (see
+        // return-type comment above).
+        writer.writeU32(writer.internTypePath(getTypePath(sig->getParamTypeInfo(i))));
 
         // default argument
         bool has_default = sig->hasDefaultArg(i);
@@ -4233,6 +4239,13 @@ bool QoreAOTBinaryDeserializer::openAndDeserializeShells(QoreProgram* in_pgm,
         return false;
     }
 
+    // Decide whether to use the per-blob TYPE_TABLE fast path.  The
+    // writer advertises QORE_AOT_FEAT_TYPE_TABLE unconditionally for
+    // binaries produced by the current compiler; older blobs don't
+    // have the bit and fall back to inline-string type paths.
+    uses_type_table = (reader.getHeader().feature_flags
+        & QORE_AOT_FEAT_TYPE_TABLE) != 0;
+
     // Create type resolver for this program
     type_resolver = new QoreAOTTypeResolver(pgm);
 
@@ -4399,6 +4412,50 @@ bool QoreAOTBinaryDeserializer::resolveStaticsAndConstants(std::string& error) {
 // sessions before any session's commitClasses, so a derived class's
 // recursive parseCommit walk can't finalize a base class before its
 // methods have been added in a sibling session.
+bool QoreAOTBinaryDeserializer::resolveTypeTable(std::string& error) {
+    if (!uses_type_table) {
+        return true;
+    }
+    const QoreAOTSectionHeader* sec = reader.findSection(QoreAOTSectionType::TYPE_TABLE);
+    if (!sec) {
+        // Feature flag set but no section present — writer advertised the
+        // capability and happened to emit no variants (interner never got
+        // called).  That's fine: leave type_table_resolved empty and the
+        // read path will never consult it because np will be 0 for every
+        // variant and the return-type index will be 0 (= empty/nullptr).
+        return true;
+    }
+    const uint8_t* ptr = reader.getSectionData(*sec);
+    if (!ptr) {
+        error = "invalid TYPE_TABLE section data";
+        return false;
+    }
+    uint32_t count = QoreAOTBinaryReader::readU32(ptr);
+    type_table_resolved.resize(count);
+    for (uint32_t i = 0; i < count; ++i) {
+        const char* path = reader.readStringRef(ptr);
+        if (!path || !*path) {
+            // Index 0 (or any other empty-string entry) → no type
+            // constraint / auto.
+            type_table_resolved[i] = nullptr;
+            continue;
+        }
+        std::string resolve_error;
+        const QoreTypeInfo* ti = type_resolver->resolve(path, resolve_error);
+        if (!resolve_error.empty()) {
+            // Match the per-param fallback in readAndSetupVariantSignature:
+            // missing types degrade to `auto` rather than aborting the
+            // entire binary load, since the compiled code has the actual
+            // checks baked in and this only affects variant matching.
+            printd(2, "AOT type-table: cannot resolve '%s': %s (falling back to auto)\n",
+                path, resolve_error.c_str());
+            ti = autoTypeInfo;
+        }
+        type_table_resolved[i] = ti;
+    }
+    return true;
+}
+
 bool QoreAOTBinaryDeserializer::deserializeFunctionsAndMethods(std::string& error) {
     // Install pending-static-method-default context for the function/method
     // deserialization phase. Param defaults like
@@ -4415,6 +4472,17 @@ bool QoreAOTBinaryDeserializer::deserializeFunctionsAndMethods(std::string& erro
         }
     };
     StaticMethodDefaultsRAII smd_raii(&pending_smd);
+
+    // Resolve the per-blob TYPE_TABLE once up front so
+    // readAndSetupVariantSignature can look up return/param types by
+    // index.  Safe at this point: all sibling sessions' shells are
+    // populated (phase 1 is complete across the whole batch) and
+    // phase 2a (resolveTypesAndMembers) has linked base classes +
+    // typedefs, so complex type paths like `*hash<X::Y>` resolve.
+    if (!resolveTypeTable(error)) {
+        return false;
+    }
+
     bool time_on = getenv("QORE_AOT_PHASE_TIMING") != nullptr;
     auto now_us = [] () -> uint64_t {
         struct timespec ts;
@@ -6043,9 +6111,21 @@ static bool readAndSetupVariantSignature(
         bool& sig_has_ellipsis,
         bool& needs_extra_args_flag,
         std::string& error,
-        const QoreClass* classTypeInfo = nullptr) {
-    // return type path
-    const char* ret_type_path = reader.readStringRef(ptr);
+        const QoreClass* classTypeInfo = nullptr,
+        const std::vector<const QoreTypeInfo*>* type_table = nullptr) {
+    // Return type — when a per-blob type table is provided, the
+    // serialized form is a `u32` index into it; otherwise fall back
+    // to the legacy inline string + per-lookup resolve path.
+    const QoreTypeInfo* ret_ti_preresolved = nullptr;
+    const char* ret_type_path = nullptr;
+    if (type_table) {
+        uint32_t idx = QoreAOTBinaryReader::readU32(ptr);
+        if (idx < type_table->size()) {
+            ret_ti_preresolved = (*type_table)[idx];
+        }
+    } else {
+        ret_type_path = reader.readStringRef(ptr);
+    }
 
     // num params
     uint32_t np = QoreAOTBinaryReader::readU32(ptr);
@@ -6090,21 +6170,31 @@ static bool readAndSetupVariantSignature(
 
     for (uint32_t j = 0; j < np; ++j) {
         const char* pname = reader.readStringRef(ptr);
-        const char* ptype_path = reader.readStringRef(ptr);
+        const char* ptype_path = nullptr;  // only populated on the legacy path
+        const QoreTypeInfo* pti = nullptr;
+        if (type_table) {
+            uint32_t idx = QoreAOTBinaryReader::readU32(ptr);
+            if (idx < type_table->size()) {
+                pti = (*type_table)[idx];
+            }
+        } else {
+            ptype_path = reader.readStringRef(ptr);
+        }
         uint8_t has_default = QoreAOTBinaryReader::readU8(ptr);
 
         param_names.emplace_back(pname ? pname : "");
 
-        const QoreTypeInfo* pti = type_resolver->resolve(ptype_path, error);
-        if (!error.empty()) {
-            // Fall back to auto type when the type can't be resolved (e.g., module-private
-            // types that were filtered from the metadata). The compiled code already has
-            // the type checks baked in, so this only affects variant matching.
-            printd(0, "AOT: cannot resolve type '%s' for parameter '%s': %s "
-                "(falling back to auto)\n",
-                ptype_path ? ptype_path : "(null)", param_names.back().c_str(), error.c_str());
-            error.clear();
-            pti = autoTypeInfo;
+        if (!type_table) {
+            pti = type_resolver->resolve(ptype_path, error);
+            if (!error.empty()) {
+                // Fall back to auto type when the type can't be resolved
+                // (e.g., module-private types filtered from metadata).
+                printd(0, "AOT: cannot resolve type '%s' for parameter '%s': %s "
+                    "(falling back to auto)\n",
+                    ptype_path ? ptype_path : "(null)", param_names.back().c_str(), error.c_str());
+                error.clear();
+                pti = autoTypeInfo;
+            }
         }
         param_types.push_back(pti);
 
@@ -6270,14 +6360,20 @@ static bool readAndSetupVariantSignature(
         }
     }
 
-    // Resolve return type
-    const QoreTypeInfo* ret_ti = type_resolver->resolve(ret_type_path, error);
-    if (!error.empty()) {
-        // Fall back to auto type when the return type can't be resolved
-        printd(2, "AOT deser: cannot resolve return type '%s': %s (falling back to auto)\n",
-            ret_type_path ? ret_type_path : "(null)", error.c_str());
-        error.clear();
-        ret_ti = autoTypeInfo;
+    // Resolve return type — type-table path already pre-resolved at
+    // phase 2b entry (see resolveTypeTable); legacy path still does
+    // per-variant hash lookup here.
+    const QoreTypeInfo* ret_ti;
+    if (type_table) {
+        ret_ti = ret_ti_preresolved;
+    } else {
+        ret_ti = type_resolver->resolve(ret_type_path, error);
+        if (!error.empty()) {
+            printd(2, "AOT deser: cannot resolve return type '%s': %s (falling back to auto)\n",
+                ret_type_path ? ret_type_path : "(null)", error.c_str());
+            error.clear();
+            ret_ti = autoTypeInfo;
+        }
     }
 
     // Split timing: param-read loop above vs setup call below
@@ -6335,16 +6431,24 @@ bool QoreAOTBinaryDeserializer::deserializeFunctions(std::string& error) {
             // Skip reading variants (must match exact format of readAndSetupVariantSignature)
             for (uint32_t v = 0; v < num_variants; ++v) {
                 // Read variant data matching the format in readAndSetupVariantSignature:
-                // 1. ret_type_path (StringRef)
-                reader.readStringRef(ptr);
+                // 1. ret_type (u32 index when type-table is in use, else StringRef)
+                if (uses_type_table) {
+                    (void)QoreAOTBinaryReader::readU32(ptr);  // ret type index
+                } else {
+                    reader.readStringRef(ptr);
+                }
                 // 2. num_params (U32)
                 uint32_t num_params = QoreAOTBinaryReader::readU32(ptr);
                 // 3. sig_flags (U16)
                 QoreAOTBinaryReader::readU16(ptr);
-                // 4. For each param: name, type_path, has_default, and optionally value
+                // 4. For each param: name, type, has_default, and optionally value
                 for (uint32_t p = 0; p < num_params; ++p) {
                     reader.readStringRef(ptr);  // param name
-                    reader.readStringRef(ptr);  // param type path
+                    if (uses_type_table) {
+                        (void)QoreAOTBinaryReader::readU32(ptr);  // param type index
+                    } else {
+                        reader.readStringRef(ptr);               // param type path
+                    }
                     uint8_t has_default = QoreAOTBinaryReader::readU8(ptr);
                     if (has_default == 1) {
                         // Constant default: skip value
@@ -6397,8 +6501,10 @@ bool QoreAOTBinaryDeserializer::deserializeFunctions(std::string& error) {
 
             bool sig_has_ellipsis = false;
             bool needs_extra_args_flag = false;
+            const std::vector<const QoreTypeInfo*>* tt =
+                uses_type_table ? &type_table_resolved : nullptr;
             if (!readAndSetupVariantSignature(reader, type_resolver, pgm, ptr, end,
-                    ufv, sig_has_ellipsis, needs_extra_args_flag, error)) {
+                    ufv, sig_has_ellipsis, needs_extra_args_flag, error, nullptr, tt)) {
                 // variant ownership transfers to addPendingVariant or cleanup
                 ufv->deref();
                 // function can't be deleted directly; add it to namespace empty
@@ -6521,8 +6627,10 @@ bool QoreAOTBinaryDeserializer::deserializeMethods(std::string& error) {
             if (time_on) {
                 local_alloc_us += t_sig0 - t_alloc0;
             }
+            const std::vector<const QoreTypeInfo*>* tt =
+                uses_type_table ? &type_table_resolved : nullptr;
             if (!readAndSetupVariantSignature(reader, type_resolver, pgm, ptr, end,
-                    umv, sig_has_ellipsis, needs_extra_args_flag, error, qc)) {
+                    umv, sig_has_ellipsis, needs_extra_args_flag, error, qc, tt)) {
                 delete mvb;
                 return false;
             }
@@ -7004,10 +7112,33 @@ bool serializeNamespaceTree(QoreAOTBinaryWriter& writer, qore_ns_private* root_n
     writeFunctionsSection(writer, state);
     writeMethodsSection(writer, state);
 
+    // After every variant signature has been emitted, flush the per-blob
+    // type-path table (TYPE_TABLE section).  Must come after
+    // writeFunctions/Methods so the table contains every path the
+    // variants referenced via writer.internTypePath().
+    writer.writeTypeTableSection();
+
     // Drop the non-owning CRM pointer — program_crm goes out of scope next.
     writer.const_reverse_map = nullptr;
 
     return true;
+}
+
+void QoreAOTBinaryWriter::writeTypeTableSection() {
+    // Skip emission when the interner was never touched (no variant wrote
+    // through the new path, or the module has no user variants) — absence
+    // of the section signals to the reader that the old string-based
+    // format is in effect.
+    if (type_path_table.empty()) {
+        return;
+    }
+    uint32_t idx = beginSection(QoreAOTSectionType::TYPE_TABLE);
+    const uint32_t count = static_cast<uint32_t>(type_path_table.size());
+    writeU32(count);
+    for (uint32_t i = 0; i < count; ++i) {
+        writeStringRef(type_path_table[i].c_str());
+    }
+    endSection(idx);
 }
 
 void serializeDependencies(QoreAOTBinaryWriter& writer, const std::vector<std::string>& dependencies) {
