@@ -189,9 +189,43 @@ public class BitlyDataProviderBase inherits DataProvider::AbstractDataProvider {
                 if (retryRequest(ex, \retries)) {
                     continue;
                 }
-                rethrow;
+                rethrow ex.err, getApiErrorDesc(ex), ex.arg;
             }
         }
+    }
+
+    #! Returns an enriched error description that includes the Bitly API error message if available
+    /** Bitly errors follow the OpenAPI-defined \c Error schema:
+        \c {"message": "<CODE>", "description": "<prose>", "resource": "...", "errors": [{"field": "...",
+        "error_code": "...", "message": "..."}]}. \c message carries an all-caps code (e.g. \c UNAUTHORIZED,
+        \c INVALID_ARG_LONG_URL), while \c description carries human-readable prose; either or both may be
+        present. \c errors[] is populated for field-level validation failures.
+    */
+    private string getApiErrorDesc(hash<ExceptionInfo> ex) {
+        string desc = ex.desc;
+        *string msg = DataProvider::DataProviderErrorUtil::firstStringAt(ex.arg.body, ("message",));
+        *string prose = DataProvider::DataProviderErrorUtil::firstStringAt(ex.arg.body, ("description",));
+        *string resource = DataProvider::DataProviderErrorUtil::firstStringAt(ex.arg.body, ("resource",));
+        string primary;
+        if (msg.val() && prose.val()) {
+            primary = sprintf("%s: %s", msg, prose);
+        } else if (prose.val()) {
+            primary = prose;
+        } else if (msg.val()) {
+            primary = msg;
+        }
+        if (primary.val()) {
+            desc = resource.val()
+                ? sprintf("%s: %s (resource: %s)", desc, primary, resource)
+                : sprintf("%s: %s", desc, primary);
+        }
+        if (ex.arg.body.typeCode() == NT_HASH) {
+            *string field_errs = DataProvider::DataProviderErrorUtil::formatFieldErrors(ex.arg.body.errors);
+            if (field_errs.val()) {
+                desc += " " + field_errs;
+            }
+        }
+        return desc;
     }
 
     #! Checks if a request should be retried
