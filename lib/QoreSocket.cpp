@@ -2018,7 +2018,20 @@ int SocketRecvPollState::continuePoll(ExceptionSink* xsink) {
             if (*xsink) {
                 return -1;
             }
-            if (rc >= 0) {
+            if (rc == 0) {
+                // EOF — peer closed the connection before we got the requested size.
+                // Returning 0 here would be misinterpreted as "success, done"; returning
+                // SOCK_POLLIN would spin in a tight re-poll loop (poll wakes immediately
+                // on a closed fd → recv returns 0 → we'd return SOCK_POLLIN again).
+                // Report SOCKET-CLOSED so the caller can surface a real error — seen
+                // under load as HttpServerAsyncStreamingResponse.qtest Content-Length
+                // mismatch producing FUTURE-TIMEOUT instead of SOCKET/HTTP error.
+                xsink->raiseException("SOCKET-CLOSED",
+                    "peer closed the connection after " QLLD " of " QLLD " bytes read",
+                    (int64)received, (int64)size);
+                return -1;
+            }
+            if (rc > 0) {
                 received += rc;
                 if (received == size) {
                     bin->setSize(size);
