@@ -670,7 +670,7 @@ public class DataProviderTypeCache inherits Qore::Serializable {
         }
 
         for (int i = 0, int e = type_path.size() - 1; i < e; ++i) {
-            if (!(type_entry = type_entry.getChild())) {
+            if (!(type_entry = type_entry.getChild(type_path[i]))) {
                 return;
             }
         }
