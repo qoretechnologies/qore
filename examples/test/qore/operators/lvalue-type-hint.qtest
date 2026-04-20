@@ -13,6 +13,7 @@ class Test inherits QUnit::Test {
         addTestCase("map operator + or-nothing lvalue",           \mapOrNothing());
         addTestCase("map operator + softening runtime coercion",  \mapSoftening());
         addTestCase("hash literal narrows to typed-hash lvalue",  \literalNarrowing());
+        addTestCase("hash literal AST-mode softening",            \literalSoftening());
         addTestCase("concrete body type wins over hint",          \concreteBodyWins());
         addTestCase("hint ignored when lvalue is not hash<K,V>",  \hintIgnoredForAutoHash());
         set_return_value(main());
@@ -55,6 +56,20 @@ class Test inherits QUnit::Test {
         any v = 99;
         h = {"k": v};
         assertEq(99, h.k);
+    }
+
+    # AST-mode softening through the hash-literal path: the narrowed
+    # vtype must be used to construct the QoreHashNode so setKeyValue
+    # triggers per-value acceptInputKey coercion (string "42" -> 42).
+    # Without the evalImpl fix, this test would observe h.k == "42"
+    # (string) under AST eval because the hash would be built with
+    # autoTypeInfo and no softening would fire.
+    literalSoftening() {
+        hash<string, softint> h;
+        any s = "42";
+        h = {"k": s};
+        assertEq(42, h.k);
+        assertEq("integer", h.k.type());
     }
 
     # When the body's value expression has a concrete non-auto type,

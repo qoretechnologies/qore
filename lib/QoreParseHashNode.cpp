@@ -178,8 +178,25 @@ int QoreParseHashNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_con
 
 QoreValue QoreParseHashNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
     assert(keys.size() == values.size());
-    // complex type will be added before returning if applicable
-    ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
+
+    // Use the parse-time narrowed value type when available so
+    // setKeyValue triggers per-value softening (softint, softstring,
+    // ...) on insert — matches what the IR lowering path already
+    // does via `createMakeHashConstKeys(..., parse_ti)` at
+    // lib/QoreIRLowering.cpp:7869.  Without this, AST-mode execution
+    // would build a hash<auto> at runtime even when the parser
+    // narrowed the node's typeInfo via the lvalue-hint channel — see
+    // design/parser-lvalue-type-propagation.md.  Falls back to
+    // autoTypeInfo when the parser left vtype as auto/null/any, and
+    // the tail block below derives complexTypeInfo from runtime-
+    // inferred values as before (issue #2106).
+    const bool parse_time_narrowed = (this->vtype
+        && this->vtype != autoTypeInfo
+        && this->vtype != anyTypeInfo);
+
+    ReferenceHolder<QoreHashNode> h(
+        new QoreHashNode(parse_time_narrowed ? this->vtype : autoTypeInfo),
+        xsink);
 
     // issue #2106 we must calculate the runtime type again because lvalues can return NOTHING despite their declared
     // type
@@ -230,12 +247,19 @@ QoreValue QoreParseHashNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) c
 
     ValueHolder rv(h.release(), xsink);
 
-    // issue #2791: when performing type folding, do not set to type "any" but rather use "auto"
-    if (!vtype || vtype == anyTypeInfo) {
-        vtype = autoTypeInfo;
+    // When the parser narrowed the value type, the hash was
+    // constructed with the narrowed `complexTypeInfo` and
+    // setKeyValue already softened values on insert — preserving it
+    // here keeps AST-mode behaviour aligned with IR/AOT.  Otherwise
+    // fall back to deriving from the runtime-inferred vtype (issue
+    // #2791: use "auto" rather than "any").
+    if (!parse_time_narrowed) {
+        if (!vtype || vtype == anyTypeInfo) {
+            vtype = autoTypeInfo;
+        }
+        const QoreTypeInfo* ti = qore_get_complex_hash_type(vtype);
+        qore_hash_private::get(*rv->get<QoreHashNode>())->complexTypeInfo = ti;
     }
-    const QoreTypeInfo* ti = qore_get_complex_hash_type(vtype);
-    qore_hash_private::get(*rv->get<QoreHashNode>())->complexTypeInfo = ti;
 
     return rv.release();
 }
