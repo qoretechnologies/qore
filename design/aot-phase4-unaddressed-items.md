@@ -20,7 +20,7 @@ binary (item 6).
 
 | # | Item | Kind | Effort | User-visible impact | Recommended order |
 |---|---|---|---|---|---|
-| 1 | Cross-`.qo` runtime-eval'd constants | Functional gap | ~1–2 days | Real bug when pattern hit; today works around via `%requires` | **First** |
+| 1 | Cross-`.qo` runtime-eval'd constants | Functional gap | ~1–2 days | **Done** — Phase A landed | ~~First~~ ✓ |
 | 6 | qorus-core Phase 5 AOT migration | Feature | ~2–3 days | Completes Phase 0 elimination | **Second** |
 | 5 | Public C ABI for parsing | API ergonomics | ~0.5 day | Cleaner host-embedding | **Third** |
 | 2 | `qcc -o binary *.qo` auto-linker | Workflow | ~1 day | Removes hand-written C++ main + g++ invocation | **Fourth** |
@@ -30,6 +30,14 @@ binary (item 6).
 ---
 
 ## 1. Cross-`.qo` runtime-evaluated constants
+
+**Status: implemented** — see commit(s) landing on feature/5164_jit
+(format feature bit `QORE_AOT_FEAT_CONST_PENDING`, ConstantEntry
+bit `aot_shell_pending`, deserializer wraps val in
+`RuntimeConstantRefNode(aot_deferred=true)` when pending).
+Regression coverage lives in `examples/aot/script_demo/` (main.q +
+lib.qc — cross-file `Local::Magic` + `LibConsts::Answer`);
+`examples/aot/qo_script_test.sh` asserts correctness.
 
 ### Problem
 

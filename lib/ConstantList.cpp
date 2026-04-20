@@ -47,7 +47,8 @@ const char* ClassNs::getName() const {
 ConstantEntry::ConstantEntry(const QoreProgramLocation* loc, const char* n, QoreValue val, const QoreTypeInfo* ti,
         bool n_pub, bool n_init, bool n_builtin, ClassAccess n_access)
         : loc(loc), name(n), typeInfo(ti), val(val), in_init(false), pub(n_pub),
-        init(n_init), builtin(n_builtin), delayed_eval(false), has_init_expr(false), access(n_access) {
+        init(n_init), builtin(n_builtin), delayed_eval(false), has_init_expr(false),
+        aot_shell_pending(false), access(n_access) {
     QoreProgram* pgm = getProgram();
     if (pgm)
         pwo = qore_program_private::getParseWarnOptions(pgm);
@@ -66,6 +67,7 @@ ConstantEntry::ConstantEntry(const ConstantEntry& old)
         typeInfo(old.typeInfo), val(old.val.refSelf()),
         in_init(false), pub(old.pub), init(true), builtin(old.builtin), delayed_eval(old.delayed_eval),
         has_init_expr(old.has_init_expr),
+        aot_shell_pending(old.aot_shell_pending),
         saved_val(old.saved_val.refSelf()),
         access(old.access), from_module(old.from_module) {
     assert(!old.in_init);

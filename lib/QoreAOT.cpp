@@ -455,6 +455,12 @@ static uint64_t computeFeatureFlags(const std::vector<AOTCompiledFunc>& funcs) {
     // QoreAOTBinaryWriter::internTypePath).  Advertise that capability
     // unconditionally so readers dispatch to the fast index path.
     flags |= QORE_AOT_FEAT_TYPE_TABLE;
+    // Writers also tag each deserialized constant shell with a pending-
+    // init-func byte (writeConstantsSection / class constants); readers
+    // wrap pending constants in a RuntimeConstantRefNode so references
+    // from sibling `.qo`s defer to the init-func's populated value
+    // instead of folding to NOTHING at parse time.
+    flags |= QORE_AOT_FEAT_CONST_PENDING;
     return flags;
 }
 

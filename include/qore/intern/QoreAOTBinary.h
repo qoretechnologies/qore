@@ -89,8 +89,9 @@ constexpr uint64_t QORE_AOT_FEAT_COMPLEX_RETURN  = 1ULL << 6;  //!< reserved, se
 constexpr uint64_t QORE_AOT_FEAT_HASH_KEY_STORE  = 1ULL << 7;  //!< HashKeyStore opcode (333)
 constexpr uint64_t QORE_AOT_FEAT_LIST_INDEX_STORE = 1ULL << 8;  //!< ListIndexStore opcode (335)
 constexpr uint64_t QORE_AOT_FEAT_TYPE_TABLE      = 1ULL << 9;  //!< per-blob pre-resolved type-path table (TYPE_TABLE section)
+constexpr uint64_t QORE_AOT_FEAT_CONST_PENDING   = 1ULL << 10; //!< per-constant pending-init-func flag in CONSTANTS / CLASSES
 //! Mask of all currently supported features
-constexpr uint64_t QORE_AOT_SUPPORTED_FEATURES   = 0x3FFULL;
+constexpr uint64_t QORE_AOT_SUPPORTED_FEATURES   = 0x7FFULL;
 
 //! Section type IDs
 enum class QoreAOTSectionType : uint16_t {
@@ -1187,6 +1188,7 @@ class QoreAOTBinaryDeserializer {
         std::string name;
         std::string type_path;
         uint8_t access;
+        bool pending_init = false;  //!< init-func has not yet populated the value
         QoreValue value;
     };
     std::vector<std::vector<PendingClassConstant>> pending_class_constants;

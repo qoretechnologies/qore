@@ -101,7 +101,8 @@ public:
         init : 1,         // already initialized
         builtin : 1,      // builtin vs user
         delayed_eval : 1, // delayed evaluation
-        has_init_expr : 1 // had a delayed-eval init expression (for AOT)
+        has_init_expr : 1, // had a delayed-eval init expression (for AOT)
+        aot_shell_pending : 1 // AOT-deserialized shell whose init-func has not run
         ;
 
     DLLLOCAL ConstantEntry(const QoreProgramLocation* loc, const char* n, QoreValue v,
@@ -149,6 +150,7 @@ public:
         saved_val.discard(xsink);
         saved_val = result.refSelf();
         init = true;
+        aot_shell_pending = false;
     }
 
     DLLLOCAL int parseInit(ClassNs ptr);

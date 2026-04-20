@@ -2283,6 +2283,11 @@ static void writeClassesSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
                     writer.writeStringRef(ce->getName());
                     writer.writeStringRef(getTypePath(ce->typeInfo));
                     writer.writeU8(static_cast<uint8_t>(ce->getAccess()));
+                    // QORE_AOT_FEAT_CONST_PENDING: 1 if the constant had a
+                    // non-literal init expression (value is not foldable
+                    // until the __const_init::<path>::<name> init-func runs
+                    // at register time).
+                    writer.writeU8(ce->hasInitExpr() ? 1 : 0);
                     if (ce->hasInitExpr()) {
                         // Class constants with init expressions get NOTHING placeholder
                         writer.writeValue(QoreValue());
@@ -2439,6 +2444,12 @@ static void writeConstantsSection(QoreAOTBinaryWriter& writer, const AOTSerializ
         writer.writeU32(ci.ns_idx);
         writer.writeU8(static_cast<uint8_t>(ce->getAccess()));
         writer.writeU8(ce->isPublic() ? 1 : 0);
+        // QORE_AOT_FEAT_CONST_PENDING: 1 if the constant had a
+        // non-literal init expression (value is not foldable until the
+        // __const_init::<ns>::<name> init-func runs at register time).
+        // Readers wrap pending constants in a RuntimeConstantRefNode so
+        // references from sibling `.qo`s defer evaluation.
+        writer.writeU8(ce->hasInitExpr() ? 1 : 0);
         if (ce->hasInitExpr()) {
             // Constants with init expressions will be initialized at runtime
             // by their lowered init function — serialize NOTHING as placeholder
@@ -4924,10 +4935,13 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
         if (!class_already_existed) {
             class_constants.reserve(num_consts);
         }
+        const bool has_const_pending_flag =
+            (reader.getHeader().feature_flags & QORE_AOT_FEAT_CONST_PENDING) != 0;
         for (uint32_t j = 0; j < num_consts; ++j) {
             const char* cname = reader.readStringRef(ptr);
             const char* ctype_path = reader.readStringRef(ptr);
             uint8_t caccess = QoreAOTBinaryReader::readU8(ptr);
+            uint8_t cpending = has_const_pending_flag ? QoreAOTBinaryReader::readU8(ptr) : 0;
             QoreValue cval = reader.readValue(ptr, end, error);
             if (!error.empty()) {
                 error = "class constant '" + std::string(cname ? cname : "(null)") + "': " + error;
@@ -4939,6 +4953,7 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
                 pcc.name = cname;
                 pcc.type_path = ctype_path ? ctype_path : "";
                 pcc.access = caccess;
+                pcc.pending_init = (cpending != 0);
                 pcc.value = cval;
                 class_constants.push_back(std::move(pcc));
             } else if (cval.hasNode()) {
@@ -5499,6 +5514,20 @@ bool QoreAOTBinaryDeserializer::resolveClassConstants(std::string& error) {
             priv->addUserConstant(pcc.name.c_str(), pcc.value,
                 static_cast<ClassAccess>(pcc.access), ti);
 
+            if (pcc.pending_init) {
+                // Pending init-func: parser-time references must defer to
+                // runtime.  Look the new ConstantEntry back up and swap its
+                // val for a self-referential RuntimeConstantRefNode; the
+                // init-func populates saved_val when it runs at register time.
+                ConstantEntry* ce = priv->constlist.findEntry(pcc.name.c_str());
+                if (ce) {
+                    ce->aot_shell_pending = true;
+                    ce->val.discard(nullptr);
+                    ce->val = new RuntimeConstantRefNode(&loc_builtin, ce,
+                        /*aot_deferred=*/true);
+                }
+            }
+
             printd(5, "AOT deser: added constant '%s' to class '%s'\n",
                 pcc.name.c_str(), qc->getName());
         }
@@ -5988,12 +6017,16 @@ bool QoreAOTBinaryDeserializer::deserializeConstants(std::string& error) {
 
     uint32_t count = QoreAOTBinaryReader::readU32(ptr);
 
+    const bool has_pending_flag =
+        (reader.getHeader().feature_flags & QORE_AOT_FEAT_CONST_PENDING) != 0;
+
     for (uint32_t i = 0; i < count; ++i) {
         const char* name = reader.readStringRef(ptr);
         const char* type_path = reader.readStringRef(ptr);
         uint32_t ns_idx = QoreAOTBinaryReader::readU32(ptr);
         uint8_t access = QoreAOTBinaryReader::readU8(ptr);
         uint8_t is_pub = QoreAOTBinaryReader::readU8(ptr);
+        uint8_t pending = has_pending_flag ? QoreAOTBinaryReader::readU8(ptr) : 0;
         QoreValue val = reader.readValue(ptr, end, error);
         if (!error.empty()) {
             error = "namespace constant '" + std::string(name ? name : "(null)") + "': " + error;
@@ -6043,6 +6076,16 @@ bool QoreAOTBinaryDeserializer::deserializeConstants(std::string& error) {
         ConstantEntry* ce = new ConstantEntry(&loc_builtin, name, val,
             final_ti, is_pub != 0, true, false,
             static_cast<ClassAccess>(access));
+        if (pending) {
+            // Pending init-func: parser-time references to this constant must
+            // defer to runtime (when the init-func populates saved_val) instead
+            // of folding the NOTHING placeholder.  Swap val for a self-
+            // referential RuntimeConstantRefNode; setRuntimeValue() will replace
+            // it once the init-func runs.
+            ce->aot_shell_pending = true;
+            ce->val.discard(nullptr);
+            ce->val = new RuntimeConstantRefNode(&loc_builtin, ce, /*aot_deferred=*/true);
+        }
         ns_list[ns_idx]->constant.addEntry(name, ce);
     }
 
