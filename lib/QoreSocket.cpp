@@ -2004,6 +2004,25 @@ int SocketRecvPollState::continuePoll(ExceptionSink* xsink) {
                 // do another read
                 continue;
             }
+            // rc == 0 && real_io == 0 is SSL_ERROR_ZERO_RETURN / peer-initiated
+            // close-notify (see SSLSocketHelper::doNonBlockingIo handling).
+            // Reporting "0 = success" here would let the caller take the
+            // output buffer which is only `received` bytes of valid data
+            // followed by `size - received` bytes of uninitialized memory
+            // preallocated by preallocate(size) — the caller has no way to
+            // detect the short read.  Surface it as SOCKET-CLOSED so the H1
+            // client body-read gets a real error (matching the non-SSL path
+            // below).  Seen in HttpServerAsyncStreamingResponse.qtest
+            // testH1ShortStream where the server streams 100 bytes + close
+            // with a declared Content-Length of 10000 — the client was
+            // reporting a 10000-byte body containing 9900 bytes of
+            // uninitialized memory (INVALID-ENCODING on any string decode).
+            if (rc == 0 && received < size) {
+                xsink->raiseException("SOCKET-CLOSED",
+                    "peer closed the SSL connection after " QLLD " of " QLLD
+                    " bytes read", (int64)received, (int64)size);
+                return -1;
+            }
             return rc;
         } else {
             rc = ::recv(sock->sock,
@@ -8702,6 +8721,29 @@ void SocketHttp2ClientMultiplexPollOperation::onStreamComplete(int32_t stream_id
         ExceptionSink* xsink) {
     // Build response hash from stream info
     ReferenceHolder<QoreHashNode> response(new QoreHashNode(autoTypeInfo), xsink);
+
+    // If the stream was reset by the peer (RST_STREAM with non-zero error
+    // code), surface it as an err/desc pair so the conn_mgr response path
+    // (send_internal_conn_mgr) raises a proper exception instead of letting
+    // the partial body bubble up as a successful short response (observed as
+    // FUTURE-TIMEOUT with a Content-Length mismatch, because the H1 body
+    // reader would otherwise spin waiting for the declared byte count).
+    if (stream->reset && stream->error_code != 0) {
+        char errbuf[64];
+        snprintf(errbuf, sizeof(errbuf), "HTTP/2 stream %d reset by peer "
+            "(error_code=%u)", stream_id, stream->error_code);
+        response->setKeyValue("err", new QoreStringNode("HTTP2-STREAM-RESET"),
+            xsink);
+        response->setKeyValue("desc", new QoreStringNode(errbuf), xsink);
+        response->setKeyValue("stream_id", stream_id, xsink);
+        // Also mark the stream as ended so the waiter stops polling.
+        response->setKeyValue("end_stream", true, xsink);
+        {
+            AutoLocker al(response_lock);
+            completed_responses.push_back(response.release());
+        }
+        return;
+    }
 
     response->setKeyValue("stream_id", stream_id, xsink);
     response->setKeyValue("status_code", stream->status_code, xsink);

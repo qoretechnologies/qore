@@ -939,6 +939,32 @@ int QoreSocketObject::submitHttp2StreamingResponseWithStream(int32_t stream_id, 
         return rv;
     }
 
+    // Extract Content-Length from headers if declared, so the session can
+    // enforce it and send RST_STREAM on short-stream (InputStream EOFs
+    // before the promised bytes are delivered).  Without this the peer
+    // receives END_STREAM on a truncated body and waits forever for the
+    // missing bytes (FUTURE-TIMEOUT on the HTTP client).
+    int64_t content_length = -1;
+    if (headers) {
+        ConstHashIterator hi(headers);
+        while (hi.next()) {
+            if (!strcasecmp(hi.getKey(), "content-length")) {
+                QoreValue v = hi.get();
+                if (v.getType() == NT_STRING) {
+                    const char* s = v.get<const QoreStringNode>()->c_str();
+                    char* endptr = nullptr;
+                    long long cl = strtoll(s, &endptr, 10);
+                    if (endptr != s && cl >= 0) {
+                        content_length = cl;
+                    }
+                } else if (v.getType() == NT_INT) {
+                    content_length = v.getAsBigInt();
+                }
+                break;
+            }
+        }
+    }
+
     // Transfer ownership of InputStream to the session for I/O thread reading
     // The handler thread unassigns before calling; I/O thread will reassign on first read
     body->unassignThread(xsink);
@@ -946,7 +972,7 @@ int QoreSocketObject::submitHttp2StreamingResponseWithStream(int32_t stream_id, 
         return -1;
     }
 
-    session->setStreamInputStream(stream_id, body, xsink);
+    session->setStreamInputStream(stream_id, body, xsink, content_length);
     return *xsink ? -1 : 0;
 }
 

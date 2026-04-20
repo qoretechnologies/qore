@@ -752,6 +752,15 @@ private:
         std::unique_ptr<char[]> pending_iouring_buf;
         //! Length of data in pending_iouring_buf
         size_t pending_iouring_len = 0;
+        //! Declared Content-Length from response headers (-1 if not declared)
+        //! and cumulative bytes sent.  Used to detect short-stream bugs (the
+        //! InputStream EOFs before the declared byte count) so the server
+        //! can send RST_STREAM instead of END_STREAM with partial data,
+        //! preventing the H2 client from waiting for the promised bytes and
+        //! eventually surfacing FUTURE-TIMEOUT.  Matches the H1 behavior
+        //! in SocketSendStreamAndReadHeaderPollOperation.
+        int64_t content_length = -1;
+        int64_t bytes_sent = 0;
 
         StreamInputStreamInfo() = default;
         StreamInputStreamInfo(InputStream* is)
@@ -812,7 +821,8 @@ public:
     //! Store an InputStream for a stream (I/O thread will read from it)
     /** @since %Qore 2.3
     */
-    DLLLOCAL void setStreamInputStream(int32_t stream_id, InputStream* is, ExceptionSink* xsink);
+    DLLLOCAL void setStreamInputStream(int32_t stream_id, InputStream* is, ExceptionSink* xsink,
+        int64_t content_length = -1);
 
     //! Returns true if there are active InputStreams being processed
     /** @since %Qore 2.3

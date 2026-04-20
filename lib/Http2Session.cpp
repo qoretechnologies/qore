@@ -2317,13 +2317,15 @@ int Http2Session::submitConnectResponse(int32_t stream_id, int status_code,
     return 0;
 }
 
-void Http2Session::setStreamInputStream(int32_t stream_id, InputStream* is, ExceptionSink* xsink) {
+void Http2Session::setStreamInputStream(int32_t stream_id, InputStream* is, ExceptionSink* xsink,
+        int64_t content_length) {
     std::lock_guard<std::recursive_mutex> lg(m);
-    stream_input_streams_.emplace(stream_id, StreamInputStreamInfo(is));
+    auto [it, inserted] = stream_input_streams_.emplace(stream_id, StreamInputStreamInfo(is));
+    it->second.content_length = content_length;
     has_active_input_streams_.store(true, std::memory_order_release);
-    printd(5, "Http2Session::setStreamInputStream() stream_id=%d pollable=%d fd=%d\n",
-        stream_id, stream_input_streams_[stream_id].is_pollable,
-        stream_input_streams_[stream_id].stream_fd);
+    printd(5, "Http2Session::setStreamInputStream() stream_id=%d pollable=%d fd=%d cl=" QLLD "\n",
+        stream_id, it->second.is_pollable, it->second.stream_fd,
+        (long long)content_length);
 }
 
 int Http2Session::waitForStreamDrain(int32_t stream_id, int timeout_ms) {
@@ -2470,12 +2472,21 @@ void Http2Session::processStreamInputStreams(ExceptionSink* xsink) {
                 continue;
             }
             if (count == 0) {
-                // EOF
+                // EOF — if Content-Length was declared and we are short,
+                // send RST_STREAM instead of END_STREAM so the client
+                // detects the truncation instead of waiting for the
+                // promised byte count (FUTURE-TIMEOUT on the wire).
                 info.eof = true;
-                sendStreamData(stream_id, nullptr, 0, true, xsink);
+                if (info.content_length >= 0
+                        && info.bytes_sent < info.content_length) {
+                    submitRstStream(stream_id, NGHTTP2_INTERNAL_ERROR, xsink);
+                } else {
+                    sendStreamData(stream_id, nullptr, 0, true, xsink);
+                }
             } else {
                 chunk->setSize(count);
                 sendStreamData(stream_id, chunk->getPtr(), count, false, xsink);
+                info.bytes_sent += (int64_t)count;
             }
         } else {
             // Non-pollable (memory streams) — readHelper never blocks
@@ -2486,9 +2497,17 @@ void Http2Session::processStreamInputStreams(ExceptionSink* xsink) {
             }
             if (!chunk || !chunk->size()) {
                 info.eof = true;
-                sendStreamData(stream_id, nullptr, 0, true, xsink);
+                // Short-stream detection (see is_pollable branch above).
+                if (info.content_length >= 0
+                        && info.bytes_sent < info.content_length) {
+                    submitRstStream(stream_id, NGHTTP2_INTERNAL_ERROR, xsink);
+                } else {
+                    sendStreamData(stream_id, nullptr, 0, true, xsink);
+                }
             } else {
-                sendStreamData(stream_id, chunk->getPtr(), chunk->size(), false, xsink);
+                size_t cs = chunk->size();
+                sendStreamData(stream_id, chunk->getPtr(), cs, false, xsink);
+                info.bytes_sent += (int64_t)cs;
             }
         }
         if (*xsink) {
