@@ -2113,7 +2113,8 @@ static void writeVariantSignature(QoreAOTBinaryWriter& writer, const AbstractQor
                     const char* mname = smcn->getName();
                     if (no_args && qc && mname && *mname) {
                         writer.writeU8(6);  // expression default: static method call
-                        writer.writeStringRef(qc->getPath());
+                        // getNamespacePath(): see QoreAOT.cpp NewObjectCallNode.
+                        writer.writeStringRef(qc->getNamespacePath().c_str());
                         writer.writeStringRef(mname);
                         continue;
                     }
@@ -2746,7 +2747,10 @@ static void writeMethodsSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
                                             bca->classid, access, true);
                                     }
                                 }
-                                writer.writeStringRef(base_cls ? base_cls->getPath() : "");
+                                // getNamespacePath() walks the live namespace tree; see QoreAOT.cpp
+                                // NewObjectCallNode note.
+                                writer.writeStringRef(base_cls
+                                    ? base_cls->getNamespacePath().c_str() : "");
 
                                 // Serialize args as individual EXPR_TREE blobs
                                 const QoreListNode* args = bca->getArgs();
@@ -2941,7 +2945,8 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
         const QoreMethod* method = call->getMethod();
         if (method) {
             const QoreClass* qc = method->getClass();
-            writer.writeStringRef(qc ? qc->getPath() : "");
+            // getNamespacePath(): see QoreAOT.cpp NewObjectCallNode.
+            writer.writeStringRef(qc ? qc->getNamespacePath().c_str() : "");
         } else {
             writer.writeStringRef("");
         }
@@ -2958,7 +2963,8 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
         const QoreMethod* method = call->getMethod();
         if (method) {
             const QoreClass* qc = method->getClass();
-            writer.writeStringRef(qc ? qc->getPath() : "");
+            // getNamespacePath(): see QoreAOT.cpp NewObjectCallNode.
+            writer.writeStringRef(qc ? qc->getNamespacePath().c_str() : "");
         } else {
             writer.writeStringRef("");
         }
@@ -2984,7 +2990,8 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
         const QoreClass* qc = QoreTypeInfo::getUniqueReturnClass(vrn->getTypeInfo());
         if (qc) {
             writer.writeU8(static_cast<uint8_t>(AOTExprKind::NEW_OBJECT));
-            writer.writeStringRef(qc->getPath());
+            // getNamespacePath(): see QoreAOT.cpp NewObjectCallNode.
+            writer.writeStringRef(qc->getNamespacePath().c_str());
             const QoreListNode* args = vrn->getArgs();
             if (args && args->size() > 0) {
                 writer.writeU8(static_cast<uint8_t>(args->size()));
@@ -3083,7 +3090,8 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
     if (auto* socn = dynamic_cast<const ScopedObjectCallNode*>(node)) {
         if (socn->oc) {
             writer.writeU8(static_cast<uint8_t>(AOTExprKind::SCOPED_NEW_OBJECT));
-            writer.writeStringRef(socn->oc->getPath());
+            // getNamespacePath(): see QoreAOT.cpp NewObjectCallNode.
+            writer.writeStringRef(socn->oc->getNamespacePath().c_str());
             // Try evaluated args first, fall back to parse args
             const QoreListNode* args = socn->getArgs();
             if (args && args->size() > 0 && args->size() <= 255) {
@@ -3109,7 +3117,8 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
     if (auto* no = dynamic_cast<const NewObjectCallNode*>(node)) {
         writer.writeU8(static_cast<uint8_t>(AOTExprKind::NEW_OBJECT));
         const QoreClass* qc = no->getClass();
-        writer.writeStringRef(qc ? qc->getPath() : "");
+        // getNamespacePath(): see QoreAOT.cpp NewObjectCallNode.
+        writer.writeStringRef(qc ? qc->getNamespacePath().c_str() : "");
         // Serialize constructor args if available
         const QoreListNode* args = no->getArgs();
         if (args && args->size() > 0 && args->size() <= 255) {
@@ -3342,7 +3351,8 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
         const QoreClass* qc = QoreTypeInfo::getUniqueReturnClass(cc->getCastTypeInfo());
         if (qc) {
             writer.writeU8(static_cast<uint8_t>(AOTExprKind::CAST_CLASS));
-            writer.writeStringRef(qc->getPath());
+            // getNamespacePath(): see QoreAOT.cpp NewObjectCallNode.
+            writer.writeStringRef(qc->getNamespacePath().c_str());
             writer.writeU8(cc->isOrNothing() ? 1 : 0);
             return true;
         }
@@ -3529,7 +3539,8 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
         if (mc) {
             writer.writeU8(static_cast<uint8_t>(AOTExprKind::DOT_EVAL_TARGET));
             const QoreClass* qc = mc->getClass();
-            writer.writeStringRef(qc ? qc->getPath() : "");
+            // getNamespacePath(): see QoreAOT.cpp NewObjectCallNode.
+            writer.writeStringRef(qc ? qc->getNamespacePath().c_str() : "");
             writer.writeStringRef(mc->getName() ? mc->getName() : "");
             writer.writeU8(mc->isPseudo() ? 1 : 0);
             // Target expression (left-hand side of the dot)

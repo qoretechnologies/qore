@@ -113,7 +113,7 @@ static bool write_expr_self_method_call(AOTExprWriteCtx& ctx) {
         const QoreMethod* method = call->getMethod();
         if (method) {
             const QoreClass* qc = method->getClass();
-            ctx.writer.writeStringRef(qc ? qc->getPath() : "");
+            ctx.writer.writeStringRef(qc ? qc->getNamespacePath().c_str() : "");
         } else {
             ctx.writer.writeStringRef("");
         }
@@ -168,7 +168,7 @@ static bool write_expr_static_method_call(AOTExprWriteCtx& ctx) {
         const QoreMethod* method = call->getMethod();
         if (method) {
             const QoreClass* qc = method->getClass();
-            ctx.writer.writeStringRef(qc ? qc->getPath() : "");
+            ctx.writer.writeStringRef(qc ? qc->getNamespacePath().c_str() : "");
         } else {
             ctx.writer.writeStringRef("");
         }
@@ -275,7 +275,7 @@ static bool write_expr_new_object(AOTExprWriteCtx& ctx) {
         const QoreClass* qc = QoreTypeInfo::getUniqueReturnClass(vrn->getTypeInfo());
         if (qc) {
             ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::NEW_OBJECT));
-            ctx.writer.writeStringRef(qc->getPath());
+            ctx.writer.writeStringRef(qc->getNamespacePath().c_str());
             const QoreListNode* args = vrn->getArgs();
             if (args && args->size() > 0) {
                 ctx.writer.writeU8(static_cast<uint8_t>(args->size()));
@@ -292,7 +292,7 @@ static bool write_expr_new_object(AOTExprWriteCtx& ctx) {
     if (auto* no = dynamic_cast<const NewObjectCallNode*>(node)) {
         ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::NEW_OBJECT));
         const QoreClass* qc = no->getClass();
-        ctx.writer.writeStringRef(qc ? qc->getPath() : "");
+        ctx.writer.writeStringRef(qc ? qc->getNamespacePath().c_str() : "");
         ctx.writer.writeU8(0);
         return true;
     }
@@ -890,7 +890,7 @@ static bool write_expr_scoped_new_object(AOTExprWriteCtx& ctx) {
     if (auto* socn = dynamic_cast<const ScopedObjectCallNode*>(node)) {
         if (socn->oc) {
             ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::SCOPED_NEW_OBJECT));
-            ctx.writer.writeStringRef(socn->oc->getPath());
+            ctx.writer.writeStringRef(socn->oc->getNamespacePath().c_str());
             const QoreListNode* args = socn->getArgs();
             uint8_t num_args = args && args->size() <= 255 ? static_cast<uint8_t>(args->size()) : 0;
             ctx.writer.writeU8(num_args);
@@ -1450,7 +1450,7 @@ static bool write_expr_cast_class(AOTExprWriteCtx& ctx) {
         const QoreClass* qc = QoreTypeInfo::getUniqueReturnClass(cc->getCastTypeInfo());
         if (qc) {
             ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::CAST_CLASS));
-            ctx.writer.writeStringRef(qc->getPath());
+            ctx.writer.writeStringRef(qc->getNamespacePath().c_str());
             ctx.writer.writeU8(cc->isOrNothing() ? 1 : 0);
             return true;
         }

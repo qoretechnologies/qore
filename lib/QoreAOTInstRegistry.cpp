@@ -629,7 +629,7 @@ static bool writeCallMethodDirect(AOTInstWriteCtx& ctx) {
     } else {
         ctx.writer.writeU8(0);
     }
-    ctx.writer.writeStringRef(ci->qc ? ci->qc->getPath() : "");
+    ctx.writer.writeStringRef(ci->qc ? ci->qc->getNamespacePath().c_str() : "");
     ctx.writer.writeStringRef(ci->method ? ci->method->getName() : "");
     ctx.writer.writeU8(ci->has_ref_args ? 1 : 0);
     return true;
@@ -691,7 +691,7 @@ static bool writeInvokeMethodDirect(AOTInstWriteCtx& ctx) {
     } else {
         ctx.writer.writeU8(0);
     }
-    ctx.writer.writeStringRef(ci->qc ? ci->qc->getPath() : "");
+    ctx.writer.writeStringRef(ci->qc ? ci->qc->getNamespacePath().c_str() : "");
     ctx.writer.writeStringRef(ci->method ? ci->method->getName() : "");
     ctx.writer.writeU8(ci->has_ref_args ? 1 : 0);
     auto it_n = ctx.block_idx.find(ci->normal_target);
@@ -755,7 +755,7 @@ static bool writeCallStaticDirect(AOTInstWriteCtx& ctx) {
     if (!ctx.writeExpr(ctx.writer, ci->expr)) {
         return false;
     }
-    ctx.writer.writeStringRef(ci->method ? ci->method->getClass()->getPath() : "");
+    ctx.writer.writeStringRef(ci->method ? ci->method->getClass()->getNamespacePath().c_str() : "");
     ctx.writer.writeStringRef(ci->method ? ci->method->getName() : "");
     ctx.writer.writeU8(ci->has_ref_args ? 1 : 0);
     return true;
@@ -804,7 +804,7 @@ static bool writeDotEvalMethodDirect(AOTInstWriteCtx& ctx) {
     if (!ctx.writeExpr(ctx.writer, QoreValue())) {
         return false;
     }
-    ctx.writer.writeStringRef(ci->qc ? ci->qc->getPath() : "");
+    ctx.writer.writeStringRef(ci->qc ? ci->qc->getNamespacePath().c_str() : "");
     // Use resolved method name or fallback_method_name (always set during IR lowering)
     const char* mname = ci->method ? ci->method->getName() : ci->fallback_method_name;
     ctx.writer.writeStringRef(mname ? mname : "");
@@ -864,7 +864,7 @@ static bool writeInvokeDotEvalMethodDirect(AOTInstWriteCtx& ctx) {
     if (!ctx.writeExpr(ctx.writer, QoreValue())) {
         return false;
     }
-    ctx.writer.writeStringRef(ci->qc ? ci->qc->getPath() : "");
+    ctx.writer.writeStringRef(ci->qc ? ci->qc->getNamespacePath().c_str() : "");
     // Always write method name — extract from AST when method ptr is null
     // Use resolved method name or fallback_method_name (always set during IR lowering)
     const char* mname = ci->method ? ci->method->getName() : ci->fallback_method_name;
@@ -1292,7 +1292,7 @@ static bool writeNewObject(AOTInstWriteCtx& ctx) {
     // The class/variant are the only metadata needed — args are IR operands
     // (handled by the generic instruction write path).
     auto* ni = static_cast<const QoreIRNewObjectInstruction*>(ctx.inst);
-    const char* class_path = ni->qc ? ni->qc->getPath() : "";
+    const char* class_path = ni->qc ? ni->qc->getNamespacePath().c_str() : "";
     // Strip leading :: from qc->getPath() so it matches runtime lookups
     if (class_path[0] == ':' && class_path[1] == ':') {
         class_path += 2;
