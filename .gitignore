@@ -163,3 +163,16 @@ fontconfig/
 
 # do not ignore the following directories (matched by patterns above)
 !examples/test/qore/
+
+# compiled qmods + test binaries from out-of-tree builds leaking into source tree
+/*.qmod
+/autolock_test
+/examples/test/ir/JITSmoke
+/examples/test/ir/AOTSmoke
+
+# local crash-dump output
+/crash-dumps/core.*
+/crash-dumps/backtrace-*.txt
+
+# compile_all_modules.sh output
+/qlib-bin/
