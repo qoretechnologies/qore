@@ -1,5 +1,19 @@
 # Option B — propagate lvalue hint into map/foreach body `$1` type
 
+## Status: **Implemented** (Qore commits `282da15f1` + `3b70e959d`)
+
+Both hash and list iterator forms now narrow `$1` in map/foreach/fold
+bodies through `.iterator()` calls.  The fold-pattern specialization
+guard (`analyzeFoldPattern` in `QoreIRLowering.cpp`) was the key
+fix blocking the list-iterator branch — it was greedily matching
+`$1 - $2` as a list-specialized opcode without checking that the
+source was actually a list.
+
+AOTSmoke 93/93, JITSmoke 156/156, all 15 operator tests, 9 cases in
+`lvalue-type-hint.qtest`.
+
+
+
 ## Goal
 
 Extend the lvalue-hint channel we landed in `72b91b78c` so that
