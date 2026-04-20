@@ -18,14 +18,14 @@ binary (item 6).
 
 ## Priority summary
 
-| # | Item | Kind | Effort | User-visible impact | Recommended order |
+| # | Item | Kind | Effort | User-visible impact | Status |
 |---|---|---|---|---|---|
-| 1 | Cross-`.qo` runtime-eval'd constants | Functional gap | ~1–2 days | **Done** — Phase A landed | ~~First~~ ✓ |
-| 6 | qorus-core Phase 5 AOT migration | Feature | ~2–3 days | Completes Phase 0 elimination | **Second** |
-| 5 | Public C ABI for parsing | API ergonomics | ~0.5 day | Cleaner host-embedding | **Third** |
-| 2 | `qcc -o binary *.qo` auto-linker | Workflow | ~1 day | Removes hand-written C++ main + g++ invocation | **Fourth** |
-| 3 | `%requires` link-time union | Perf nicety | ~1 day | Shaves module-load dup overhead | **Fifth** |
-| 4 | Parser-level forward decls | Build-topo relaxation | ~3–5 days | Parallel/order-agnostic .qo builds | **Defer** |
+| 1 | Cross-`.qo` runtime-eval'd constants | Functional gap | ~1–2 days | **Done** — Phase A landed (commit `beaca911b`) | ✓ |
+| 6 | qorus-core Phase 5 AOT migration | Feature | ~2–3 days | **Done** structurally — Phase B (Qorus `be3113fc3`); runtime smoke blocked on env (xml module) | ✓* |
+| 5 | Public C ABI for parsing | API ergonomics | ~0.5 day | **Done** — Phase C/5 landed (commit `0cd54f908`) | ✓ |
+| 2 | `qcc -o binary *.qo` auto-linker | Workflow | ~1 day | Removes hand-written C++ main + g++ invocation | Pending |
+| 3 | `%requires` link-time union | Perf nicety | ~1 day | Shaves module-load dup overhead | Pending |
+| 4 | Parser-level forward decls | Build-topo relaxation | ~3–5 days | Parallel/order-agnostic .qo builds | Deferred |
 
 ---
 
@@ -146,6 +146,12 @@ fold as before.
 ---
 
 ## 2. `qcc -o binary *.qo` auto-linker
+
+**Status: pending** — no changes landed yet.  The value-add is
+mostly ergonomic (~20 lines of boilerplate eliminated per project);
+the existing hand-written C++ main pattern (see
+`examples/aot/qoa_link_test.cpp`, now using only the public C ABI)
+is fully functional.
 
 ### Problem
 
@@ -318,6 +324,13 @@ the dep graph is shallow enough that full topo-order works.
 
 ## 5. Public C ABI for parsing
 
+**Status: implemented** — commit `0cd54f908`.
+`include/qore/QoreAOT.h` now exposes `qore_parse_source_file`,
+`qore_parse_source_string`, `qore_parse_commit`, `qore_last_error`
+as thin public C wrappers.  `examples/aot/qoa_link_test.cpp` uses
+them exclusively (no more C++ staging helper).  Baselines green
+(AOTSmoke 93/93, JITSmoke 156/156, all slice harnesses).
+
 ### Problem
 
 Slice 8 shipped `qore_create_program` / `qore_destroy_program` /
@@ -370,6 +383,18 @@ this need.
 ---
 
 ## 6. qorus-core Phase 5 AOT migration
+
+**Status: structurally implemented** — Qorus commit `be3113fc3`,
+requires Qore `f777b22df` (PO_REQUIRE_PROTOTYPES in PO_MODERN).
+Cmake configures clean; the QORUS_CORE_MAIN batch aggregates 13
+source groups emitting ~575 register calls across 13 QO_AGG
+targets; qorus_core_main.cpp rewritten to use
+`qore_aot_script_begin_batch` / `end_batch` wrapping the
+aggregator entry points.  QORUS_CORE_MODULES_X stays on Phase 0
+(runtime .qm registration).  Runtime smoke (`qorus-core --version`)
+is blocked on the current dev env missing the xml binary module
+(WebContentUtil depends on it).  Install `qore-xml-module` to
+unblock end-to-end validation.
 
 ### Problem
 
@@ -466,29 +491,32 @@ from the qwf/qsvc/qjob batches), then `CORE_*_QORE_SRC`, then
 
 Proposed sequence:
 
-**Phase A — real functional fix (1–2 days)**
-1. Item 1 (cross-`.qo` runtime-eval'd constants).  Lands before the
-   rest because it's the only item that's a functional gap.
+**Phase A — real functional fix (1–2 days)** — ✓ **done**
+1. Item 1 (cross-`.qo` runtime-eval'd constants).  Landed in
+   commit `beaca911b`.
 
-**Phase B — big-ticket migration (2–3 days)**
-2. Item 6 (qorus-core Phase 5).  Completes the Phase 0 elimination
-   story.  Independent of item 1.
+**Phase B — big-ticket migration (2–3 days)** — ✓ **structurally done**
+2. Item 6 (qorus-core Phase 5).  Landed in Qorus `be3113fc3` +
+   Qore `f777b22df`.  Runtime smoke blocked on env (xml module).
 
-**Phase C — API + workflow polish (1.5 days total)**
-3. Item 5 (public C ABI for parsing, ~0.5 day).
-4. Item 2 (`qcc -o binary` auto-linker, ~1 day).
+**Phase C — API + workflow polish (1.5 days total)** — **partially done**
+3. Item 5 (public C ABI for parsing).  Landed in commit `0cd54f908`.
+4. Item 2 (`qcc -o binary` auto-linker).  Pending — deferred to a
+   later session.  Pragmatic break: Item 2 is pure ergonomics and
+   the existing hand-written C++ main (now using only the public
+   C ABI — see `examples/aot/qoa_link_test.cpp`) is a clean
+   alternative.
 
-**Phase D — optional perf nicety**
-5. Item 3 (`%requires` link-time union, ~1 day).  Land only if
-   post-migration startup benchmarks show module-load idempotency
-   as a measurable fraction.
+**Phase D — optional perf nicety** — pending
+5. Item 3 (`%requires` link-time union).  Land only if post-
+   migration startup benchmarks show module-load idempotency as a
+   measurable fraction.
 
 **Deferred indefinitely**
 6. Item 4 (parser-level forward decls).  Revisit only if build-
    parallelism bottlenecks appear on a module bigger than
    DataProvider's current 134-file set.
 
-**Total Phase A-C effort: ~4–6 engineer-days.**
+**Remaining Phase C-D effort: ~2 engineer-days** (Items 2 + 3).
 
 Items are independent; can be executed in parallel or reordered.
-Item 1 is the one real bug.
