@@ -1341,8 +1341,12 @@ class TempFile {
         string path;
     }
 
+    # Use a per-instance unique filename so parallel test runs (or overlapping
+    # helper threads that touch the same /tmp path) don't race on a shared name
+    # and race each other's unlink() in the destructor.
     constructor(string name, data content) {
-        path = sprintf("%s%s%s", tmp_location(), DirSep, name);
+        path = sprintf("%s%s%s.%s", tmp_location(), DirSep,
+            get_random_string(12), name);
         File f();
         f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
         f.write(content);
