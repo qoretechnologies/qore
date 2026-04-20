@@ -485,6 +485,21 @@ protected:
         if (ce->saved_val) {
             return ce->saved_val.eval(needs_deref, xsink);
         }
+        // AOT pending shell: ce->val is a self-referential RuntimeConstantRefNode
+        // set up by QoreAOTBinaryDeserializer::deserializeConstants so sibling
+        // `.qo` references defer to runtime.  Evaluating ce->val here would
+        // re-enter evalImpl → infinite recursion → stack overflow.  The
+        // legitimate consumer is post-init-func dispatch (saved_val populated,
+        // handled above); any other eval path is a programmer error (typically
+        // parse-time fold of an unpopulated pending constant) and must raise
+        // rather than loop.
+        if (ce->aot_shell_pending) {
+            xsink->raiseException("AOT-PENDING-CONSTANT",
+                "cannot evaluate AOT-deserialized constant '%s' before its "
+                "__const_init function has populated the value",
+                ce->getName());
+            return QoreValue();
+        }
         return ce->val.eval(needs_deref, xsink);
     }
 
