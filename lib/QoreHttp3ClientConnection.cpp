@@ -83,9 +83,23 @@ static int resolveAddressFamily(const char* host) {
 
 Http3ClientConnection::Http3ClientConnection(const char* target_host, int target_port,
         int max_concurrent_streams, ExceptionSink* xsink,
-        HttpClientConnectionManagerBase* mgr)
+        HttpClientConnectionManagerBase* mgr,
+        int ssl_verify_mode,
+        bool ssl_accept_all_certs,
+        QoreSSLCertificate* client_cert,
+        QoreSSLPrivateKey* client_key)
     : HttpClientConnectionBase(target_host, target_port, /* ssl_required (always for H3) */ true),
-      max_concurrent_streams_(max_concurrent_streams) {
+      max_concurrent_streams_(max_concurrent_streams),
+      ssl_verify_mode_(ssl_verify_mode),
+      ssl_accept_all_certs_(ssl_accept_all_certs),
+      client_cert_(client_cert),
+      client_key_(client_key) {
+    if (client_cert_) {
+        client_cert_->ref();
+    }
+    if (client_key_) {
+        client_key_->ref();
+    }
     if (mgr) {
         setManager(mgr);
     }
@@ -104,6 +118,14 @@ Http3ClientConnection::~Http3ClientConnection() {
     if (sock_obj) {
         sock_obj->deref(&xsink);
         sock_obj = nullptr;
+    }
+    if (client_cert_) {
+        client_cert_->deref();
+        client_cert_ = nullptr;
+    }
+    if (client_key_) {
+        client_key_->deref();
+        client_key_ = nullptr;
     }
     poll_op_priv = nullptr;
     sock_priv = nullptr;
@@ -130,6 +152,33 @@ int Http3ClientConnection::buildAndSubmit(ExceptionSink* xsink) {
                 target_host.c_str(), target_port);
         }
         return -1;
+    }
+
+    // 1b. Propagate HTTPClient's SSL config onto the fresh UDP socket —
+    //     QuicSession::createClient reads ssl_verify_mode /
+    //     accept_all_certs / cert / pk directly from this socket during
+    //     the TLS 1.3 handshake that is integrated into QUIC.  Without
+    //     this, H3 auto-upgrade always handshakes with SSL_VERIFY_NONE,
+    //     breaking mTLS (clientCertTest) and other verify-mode paths.
+    if (ssl_verify_mode_) {
+        sock_priv_raw->setSslVerifyMode(ssl_verify_mode_);
+    }
+    if (ssl_accept_all_certs_) {
+        sock_priv_raw->acceptAllCertificates(true);
+    }
+    if (client_cert_ && client_key_) {
+        client_cert_->ref();
+        client_key_->ref();
+        sock_priv_raw->setCertificateAndPrivateKey(client_cert_, client_key_);
+    } else {
+        if (client_cert_) {
+            client_cert_->ref();
+            sock_priv_raw->setCertificate(client_cert_);
+        }
+        if (client_key_) {
+            client_key_->ref();
+            sock_priv_raw->setPrivateKey(client_key_);
+        }
     }
 
     ReferenceHolder<QoreObject> sock_obj_holder(

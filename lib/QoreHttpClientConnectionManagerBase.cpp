@@ -434,7 +434,9 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::createConnection(
                 return nullptr;
             }
             conn = new Http3ClientConnection(host, port,
-                opts_.max_streams_per_connection, xsink, this);
+                opts_.max_streams_per_connection, xsink, this,
+                opts_.ssl_verify_mode, opts_.accept_all_certs,
+                opts_.client_cert, opts_.client_key);
             break;
         case HttpClientProtocol::NEGOTIATE:
         negotiate_case: {

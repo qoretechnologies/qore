@@ -39,6 +39,8 @@
 
 class QoreSocketObject;
 class Http3ClientPollOperationPriv;
+class QoreSSLCertificate;
+class QoreSSLPrivateKey;
 
 //! HTTP/3 (QUIC) C++ client connection.
 /** Wraps a @ref Http3ClientPollOperationPriv over a UDP socket with a
@@ -67,10 +69,20 @@ public:
         @param max_concurrent_streams advisory stream cap (0 = unlimited)
         @param xsink exception sink
         @param mgr optional owning manager — registered before I/O submission
+        @param ssl_verify_mode OpenSSL verify mode bitmask; default
+            SSL_VERIFY_NONE — applied to the fresh H3 UDP socket before the
+            QUIC handshake so `QuicSession::createClient` picks it up.
+        @param ssl_accept_all_certs pass through to the socket (matches H1/H2)
+        @param client_cert optional mTLS client certificate (ref'd by ctor)
+        @param client_key optional mTLS client private key (ref'd by ctor)
     */
     DLLLOCAL Http3ClientConnection(const char* target_host, int target_port,
         int max_concurrent_streams, ExceptionSink* xsink,
-        HttpClientConnectionManagerBase* mgr = nullptr);
+        HttpClientConnectionManagerBase* mgr = nullptr,
+        int ssl_verify_mode = 0,
+        bool ssl_accept_all_certs = false,
+        QoreSSLCertificate* client_cert = nullptr,
+        QoreSSLPrivateKey* client_key = nullptr);
 
     DLLLOCAL virtual ~Http3ClientConnection();
 
@@ -158,6 +170,19 @@ private:
     bool submitted_to_controller = false;
     int max_concurrent_streams_ = 0;
     std::string owner_str;
+
+    //! SSL configuration applied to the fresh H3 UDP socket in buildAndSubmit
+    /** Propagated from HttpClientConnectionManagerBase::ssl_config so the
+        QUIC handshake (which reads the socket's ssl_verify_mode /
+        accept-all-certs / cert / pk) honors the user's HTTPClient settings.
+        H3 creates a brand-new UDP socket rather than reusing the HTTPClient
+        msock; without this plumbing the handshake always ran with
+        SSL_VERIFY_NONE.
+    */
+    int ssl_verify_mode_ = 0;
+    bool ssl_accept_all_certs_ = false;
+    QoreSSLCertificate* client_cert_ = nullptr;
+    QoreSSLPrivateKey* client_key_ = nullptr;
 
     //! Stream ID for the active streaming send request (-1 = none)
     int64_t streaming_send_stream_id = -1;
