@@ -486,19 +486,30 @@ private:
         GetInfo,             //!< Snapshot cache info on the I/O thread
     };
 
+    //! Forward declaration — full definition below (requires PollInfo)
+    struct AsyncOpCompletion;
+
     //! Command queue entry
     struct Command {
         IoCommand cmd = IoCommand::WakeSocket;
         std::string key;                //!< For Cancel / ContinuePollResult / SubmitOp: the cache key
         std::string owner;              //!< For CancelOwner / SubmitOp: the owner string
-        QoreCondition* done_cond = nullptr; //!< For CancelOwner/CancelByProgram/GetInfo: signaled when done
-        bool* cancel_done_flag = nullptr; //!< For CancelOwner/CancelByProgram: set to true under lock before broadcast
+        //! For CancelOwner/CancelByProgram/GetInfo: shared completion object.
+        /** When non-null, owns one ref on the referenced AsyncOpCompletion.
+            The ref is released when the command is processed (normal path
+            in processCmd) or cleaned up (abandoned path in
+            cleanupAbandonedCommand / I/O-thread-exit drain).  Replaces
+            the former raw-pointer group (done_cond / cancel_done_flag /
+            pending_threads / cancel_count / info_result / cancel_pinfos)
+            — see AsyncOpCompletion docs. */
+        AsyncOpCompletion* completion = nullptr;
+        //! For Cancel: counter receiving the match result (0 or 1).
+        /** Raw pointer is safe here because the fetch_add in the I/O
+            thread is published before signalCancelLocked, and the
+            caller only reads the value after waitCancel() returns —
+            establishing a happens-before relationship. */
+        std::atomic<int>* cancel_count = nullptr;
         QoreProgram* pgm = nullptr;       //!< For CancelByProgram: the program being destroyed
-        void* cancel_pinfos = nullptr; //!< For CancelByProgram: std::vector<PollInfo>* (forward decl workaround)
-        QoreThreadLock* cancel_pinfos_lock = nullptr; //!< For CancelByProgram: protects cancel_pinfos vector
-        std::atomic<int>* pending_threads = nullptr; //!< For CancelByProgram/GetInfo: count of threads remaining
-        std::atomic<int>* cancel_count = nullptr; //!< For CancelOwner: actual count of canceled operations
-        QoreHashNode** info_result = nullptr; //!< For GetInfo: pointer to result hash
         int64_t timer_deadline_us = 0;  //!< For AddTimer: absolute deadline in microseconds
         int64_t timer_id = 0;           //!< For AddTimer/CancelTimer: timer ID
         QoreHashNode* continue_poll_result = nullptr;  //!< For ContinuePollResult: new poll info (or nullptr)
@@ -561,6 +572,108 @@ private:
 
         //! Clean up all references
         DLLLOCAL void cleanup(ExceptionSink* xsink);
+    };
+
+    //! Shared completion state for cross-thread async I/O commands.
+    /** Used by CancelOwner / CancelByProgram / GetInfo where a caller
+        submits one command per I/O thread and waits for all of them to
+        complete.
+
+        Before this class existed, the caller put a stack-local
+        QoreCondition + bool flag + std::atomic<int> counter into the
+        Command and passed them by raw pointer.  That had a
+        use-after-return window: if the caller's wait returned (flag set
+        + broadcast by the last I/O thread under the controller mutex)
+        and the caller's stack frame went out of scope before every
+        other cleanup path (Quit drain, abandoned-cmd drain) finished
+        touching the same cond/flag/counter, that cleanup path wrote to
+        stale stack memory.  On arm64 this manifested as a single-bit
+        flip of a stack-saved return address (`a_inc(&cond->_c_seq)` on
+        a stale pointer whose offset 8 landed on a saved `x30` slot) and
+        a later SIGBUS in an unrelated function's epilogue.
+
+        Lifetime:
+        - Caller allocates with `new AsyncOpCompletion(N)`, which sets
+          `pending_threads = N` and starts with refcount = 1 (the
+          caller's own ref).
+        - For each of the N commands dispatched, the caller calls
+          `ROreference()` to add one ref before pushing the command.
+        - When an I/O thread finishes processing its command (or drains
+          it in cleanup), it calls `completeOne()` to decrement
+          `pending_threads` (signaling the waiter if it was the last),
+          then `deref()` to drop its own ref.
+        - When the caller's wait returns, it consumes any outputs
+          (`info_result`, `cancel_pinfos`), then calls `deref()`.
+        - The object is destroyed when the last holder releases.
+
+        Skip-broadcast optimization: if an I/O thread sees
+        `is_unique()` in `completeOne()`, it holds the only ref — the
+        caller has already released and no one is waiting, so the
+        broadcast is skipped. */
+    struct AsyncOpCompletion : public QoreReferenceCounter {
+        //! Signaled when `done` transitions to true (the last completeOne)
+        QoreCondition cond;
+        //! Set to true under the controller mutex by the last completeOne
+        bool done = false;
+        //! Number of I/O threads still expected to call completeOne
+        std::atomic<int> pending_threads{0};
+        //! Accumulated count (CancelOwner: operations cancelled)
+        std::atomic<int> cancel_count{0};
+        //! Result hash (GetInfo); ref'd by the builder, consumed by caller
+        QoreHashNode* info_result = nullptr;
+        //! Accumulated PollInfos (CancelByProgram), guarded by pinfos_lock
+        std::vector<PollInfo> cancel_pinfos;
+        //! Protects cancel_pinfos against concurrent appends from I/O threads
+        QoreThreadLock pinfos_lock;
+
+        //! Build a completion for a fan-out of @a n_pending I/O threads.
+        /** Starts with refcount = 1 (the caller's initial ref).  For
+            each command pushed, the caller must call ROreference(). */
+        DLLLOCAL explicit AsyncOpCompletion(int n_pending) {
+            pending_threads.store(n_pending, std::memory_order_relaxed);
+        }
+
+        //! Called by an I/O thread when it finishes processing its cmd.
+        /** Decrements pending_threads and signals the waiter if this was
+            the last.  Caller must hold the controller mutex m.  If this
+            object is held uniquely (refcount == 1), the caller has
+            already released and no broadcast is needed.
+            @return true if this was the last decrement */
+        DLLLOCAL bool completeOne() {
+            if (is_unique()) {
+                pending_threads.fetch_sub(1, std::memory_order_relaxed);
+                return true;
+            }
+            if (pending_threads.fetch_sub(1, std::memory_order_acq_rel) == 1) {
+                done = true;
+                cond.broadcast();
+                return true;
+            }
+            return false;
+        }
+
+        //! Wait until done == true.  Caller must hold mutex m.
+        DLLLOCAL void waitForCompletion(QoreThreadLock& lck) {
+            while (!done) {
+                cond.wait(lck);
+            }
+        }
+
+        //! Atomic deref; deletes on last ref.
+        DLLLOCAL void deref() {
+            if (ROdereference()) {
+                delete this;
+            }
+        }
+
+        //! Public alias for ROreference()
+        using QoreReferenceCounter::ROreference;
+
+    protected:
+        DLLLOCAL ~AsyncOpCompletion() {
+            // Caller must have consumed info_result before last deref.
+            assert(!info_result);
+        }
     };
 
     //! Deferred delivery info
@@ -818,8 +931,7 @@ private:
     /** @return true if the notifier should be signaled
     */
     DLLLOCAL bool enqueueCmdLocked(IoCommand cmd, const std::string& key = std::string(),
-        const std::string& owner = std::string(), QoreCondition* done_cond = nullptr,
-        bool* cancel_done_flag = nullptr);
+        const std::string& owner = std::string());
 
     //! Wait for a cancel to complete
     DLLLOCAL void waitCancel(const std::string& key);

@@ -345,31 +345,24 @@ void AsyncIoControllerPriv::cleanupAbandonedCommand(Command& cmd, ExceptionSink*
         case IoCommand::CancelByProgram:
         case IoCommand::CancelOwner:
         case IoCommand::GetInfo: {
-            // Multi-thread commands: decrement pending_threads; last signals
-            if (cmd.pending_threads) {
-                if (cmd.pending_threads->fetch_sub(1, std::memory_order_acq_rel) == 1) {
-                    if (cmd.cancel_done_flag) {
-                        *cmd.cancel_done_flag = true;
-                    }
-                    if (cmd.done_cond) {
-                        cmd.done_cond->broadcast();
-                    }
-                }
-            } else if (cmd.done_cond) {
-                if (cmd.cancel_done_flag) {
-                    *cmd.cancel_done_flag = true;
-                }
-                cmd.done_cond->broadcast();
+            // Multi-thread commands: completion->completeOne() decrements
+            // pending_threads and signals the waiter if this was the last,
+            // or skips the signal if the completion is uniquely held (caller
+            // already released).  Caller of cleanupAbandonedCommand must
+            // hold m — completeOne() assumes that.
+            if (cmd.completion) {
+                cmd.completion->completeOne();
+                cmd.completion->deref();
+                cmd.completion = nullptr;
             }
             break;
         }
         default:
             // WakeSocket, AddTimer, CancelTimer, Quit — no ref-holding fields
-            if (cmd.done_cond) {
-                if (cmd.cancel_done_flag) {
-                    *cmd.cancel_done_flag = true;
-                }
-                cmd.done_cond->broadcast();
+            if (cmd.completion) {
+                cmd.completion->completeOne();
+                cmd.completion->deref();
+                cmd.completion = nullptr;
             }
             break;
     }
@@ -1474,8 +1467,6 @@ int AsyncIoControllerPriv::cancelByOwner(const QoreStringNode* owner, ExceptionS
     std::vector<PollInfo> direct_pinfos;
 
     int cache_count = 0;
-    QoreCondition done_cond;
-    bool cancel_done = false;
 
     if (on_async_io_thread) {
         // I/O thread — process our OWN cache directly (I/O-thread-local
@@ -1485,14 +1476,21 @@ int AsyncIoControllerPriv::cancelByOwner(const QoreStringNode* owner, ExceptionS
         // against those threads' Phase 1/2/3 cache access.  Keep the
         // direct path for our own thread to avoid deadlocking on ourselves
         // (our cmdq isn't drained while we're executing this call).
-        std::atomic<int> actual_count{0};
-        std::atomic<int> pending_threads{0};
         int my_idx = current_io_thread_idx;
+
+        // Shared completion for the fan-out.  Heap-allocated and
+        // refcounted so it outlives both this caller and any late-
+        // completing I/O thread cleanup path — see AsyncOpCompletion
+        // docs for the UAF this avoids.  Set pending_threads to 0
+        // initially; we bump it to the actual target count before
+        // pushing cmds.  Caller holds one ref (the initial ref count);
+        // each cmd pushed carries one additional ref.
+        AsyncOpCompletion* completion = nullptr;
 
         // Dispatch CancelOwner to every LIVE remote I/O thread.  Dead
         // slots (tid==0) get their caches walked directly under m — a
         // cmd pushed to a dead cmdq would never be processed and
-        // pending_threads would never drain, hanging done_cond.  The
+        // pending_threads would never drain, hanging the waiter.  The
         // current thread handles its own cache below.
         std::vector<IoThreadContext*> live_remote;
         bool wait_remote = false;
@@ -1532,16 +1530,13 @@ int AsyncIoControllerPriv::cancelByOwner(const QoreStringNode* owner, ExceptionS
                     }
                 }
                 if (!live_remote.empty()) {
-                    pending_threads.store((int)live_remote.size(),
-                        std::memory_order_relaxed);
+                    completion = new AsyncOpCompletion((int)live_remote.size());
                     for (auto* tp : live_remote) {
                         Command cmd;
                         cmd.cmd = IoCommand::CancelOwner;
                         cmd.owner = owner_str;
-                        cmd.done_cond = &done_cond;
-                        cmd.cancel_done_flag = &cancel_done;
-                        cmd.cancel_count = &actual_count;
-                        cmd.pending_threads = &pending_threads;
+                        completion->ROreference();  // one ref per cmd
+                        cmd.completion = completion;
                         tp->cmdq.push(std::move(cmd));
                         ++submit_seq;
                     }
@@ -1586,20 +1581,29 @@ int AsyncIoControllerPriv::cancelByOwner(const QoreStringNode* owner, ExceptionS
         // remote I/O thread blocks indefinitely inside continuePoll (a
         // separate contract — continuePoll must be non-blocking).
         if (wait_remote) {
-            AutoLocker al(m);
-            while (!cancel_done) {
-                done_cond.wait(m);
+            {
+                AutoLocker al(m);
+                completion->waitForCompletion(m);
+                cache_count += completion->cancel_count.load(
+                    std::memory_order_relaxed);
             }
-            cache_count += actual_count.load(std::memory_order_relaxed);
+            // Release the caller's ref outside the lock.  If any I/O
+            // thread cleanup still holds a ref, the object lives until
+            // they deref too.
+            completion->deref();
+        } else if (completion) {
+            // No live_remote after all (race with I/O-thread exit) — drop
+            // the initial caller ref; cmd refs are handled by the cleanup
+            // paths that drain abandoned cmds.
+            completion->deref();
         }
     } else {
         // Worker thread — push CancelOwner to every LIVE I/O thread
         // (tid != 0) and record the owner as cancelled on any dead-thread
         // contexts so a racing resubmit is rejected.  See cancelByProgram
         // for the same pattern / rationale: a blind push to dead slots
-        // would strand the cmd in the dead cmdq and hang done_cond.
-        std::atomic<int> actual_count{0};
-        std::atomic<int> pending_threads{0};
+        // would strand the cmd in the dead cmdq and hang the waiter.
+        AsyncOpCompletion* completion = nullptr;
         std::vector<IoThreadContext*> live_targets;
         {
             AutoLocker al(m);
@@ -1634,16 +1638,13 @@ int AsyncIoControllerPriv::cancelByOwner(const QoreStringNode* owner, ExceptionS
                     }
                 }
                 if (!live_targets.empty()) {
-                    pending_threads.store((int)live_targets.size(),
-                        std::memory_order_relaxed);
+                    completion = new AsyncOpCompletion((int)live_targets.size());
                     for (auto* tp : live_targets) {
                         Command cmd;
                         cmd.cmd = IoCommand::CancelOwner;
                         cmd.owner = owner_str;
-                        cmd.done_cond = &done_cond;
-                        cmd.cancel_done_flag = &cancel_done;
-                        cmd.cancel_count = &actual_count;
-                        cmd.pending_threads = &pending_threads;
+                        completion->ROreference();  // one ref per cmd
+                        cmd.completion = completion;
                         tp->cmdq.push(std::move(cmd));
                         // Bump submit_seq so the I/O thread's pre-poll
                         // catch-up covers this CancelOwner —
@@ -1659,12 +1660,16 @@ int AsyncIoControllerPriv::cancelByOwner(const QoreStringNode* owner, ExceptionS
             for (auto* tp : live_targets) {
                 tp->notifier->notify();
             }
-            // Wait for all live I/O threads to complete
-            AutoLocker al(m);
-            while (!cancel_done) {
-                done_cond.wait(m);
+            {
+                // Wait for all live I/O threads to complete
+                AutoLocker al(m);
+                completion->waitForCompletion(m);
+                cache_count += completion->cancel_count.load(
+                    std::memory_order_relaxed);
             }
-            cache_count += actual_count.load(std::memory_order_relaxed);
+            completion->deref();  // release caller ref
+        } else if (completion) {
+            completion->deref();
         }
     }
 
@@ -1715,11 +1720,13 @@ void AsyncIoControllerPriv::cancelByProgram(QoreProgram* pgm, ExceptionSink* xsi
         // without a lock, racing against those threads' Phase 1/2/3
         // cache access.  Own-cache access is safe (I/O-thread-local
         // invariant); remote caches must go through cmdq.
-        QoreCondition done_cond;
-        bool cancel_done = false;
-        QoreThreadLock pinfos_lock;
-        std::atomic<int> pending_threads{0};
         int my_idx = current_io_thread_idx;
+
+        // Shared completion (ref-counted; outlives both this caller
+        // and any late cleanup path).  live_remote I/O threads append
+        // their pinfos into completion->cancel_pinfos under
+        // completion->pinfos_lock.
+        AsyncOpCompletion* completion = nullptr;
 
         // Dispatch CancelByProgram to every LIVE remote I/O thread; walk
         // dead remote caches directly under m.  Mirrors cancelByOwner
@@ -1759,17 +1766,13 @@ void AsyncIoControllerPriv::cancelByProgram(QoreProgram* pgm, ExceptionSink* xsi
                     }
                 }
                 if (!live_remote.empty()) {
-                    pending_threads.store((int)live_remote.size(),
-                        std::memory_order_relaxed);
+                    completion = new AsyncOpCompletion((int)live_remote.size());
                     for (auto* tp : live_remote) {
                         Command cmd;
                         cmd.cmd = IoCommand::CancelByProgram;
                         cmd.pgm = pgm;
-                        cmd.cancel_pinfos = &cancel_pinfos;
-                        cmd.cancel_pinfos_lock = &pinfos_lock;
-                        cmd.pending_threads = &pending_threads;
-                        cmd.done_cond = &done_cond;
-                        cmd.cancel_done_flag = &cancel_done;
+                        completion->ROreference();  // one ref per cmd
+                        cmd.completion = completion;
                         tp->cmdq.push(std::move(cmd));
                         ++submit_seq;
                     }
@@ -1805,10 +1808,21 @@ void AsyncIoControllerPriv::cancelByProgram(QoreProgram* pgm, ExceptionSink* xsi
         }
 
         if (wait_remote) {
-            AutoLocker al(m);
-            while (!cancel_done) {
-                done_cond.wait(m);
+            {
+                AutoLocker al(m);
+                completion->waitForCompletion(m);
+                // Merge remote-thread pinfos into our accumulator.
+                // Access is safe here: all live_remote threads have
+                // already done their appends (done==true implies last
+                // completeOne ran).  No further appenders exist.
+                for (auto& p : completion->cancel_pinfos) {
+                    cancel_pinfos.push_back(std::move(p));
+                }
+                completion->cancel_pinfos.clear();
             }
+            completion->deref();  // release caller ref
+        } else if (completion) {
+            completion->deref();
         }
     } else {
         // Worker thread — send CancelByProgram to every LIVE I/O thread
@@ -1818,11 +1832,8 @@ void AsyncIoControllerPriv::cancelByProgram(QoreProgram* pgm, ExceptionSink* xsi
         // returns true but a blind push to every io_threads[] slot would
         // strand the cmd in the dead slot's cmdq forever — pending_threads
         // would never reach 0 and cancelByProgram would hang indefinitely.
-        QoreCondition done_cond;
-        bool cancel_done = false;
         bool do_signal = false;
-        QoreThreadLock pinfos_lock;
-        std::atomic<int> pending_threads{0};
+        AsyncOpCompletion* completion = nullptr;
         std::vector<IoThreadContext*> live_targets;
         {
             AutoLocker al(m);
@@ -1856,17 +1867,13 @@ void AsyncIoControllerPriv::cancelByProgram(QoreProgram* pgm, ExceptionSink* xsi
                     }
                 }
                 if (!live_targets.empty()) {
-                    pending_threads.store((int)live_targets.size(),
-                        std::memory_order_relaxed);
+                    completion = new AsyncOpCompletion((int)live_targets.size());
                     for (auto* tp : live_targets) {
                         Command cmd;
                         cmd.cmd = IoCommand::CancelByProgram;
                         cmd.pgm = pgm;
-                        cmd.cancel_pinfos = &cancel_pinfos;
-                        cmd.cancel_pinfos_lock = &pinfos_lock;
-                        cmd.pending_threads = &pending_threads;
-                        cmd.done_cond = &done_cond;
-                        cmd.cancel_done_flag = &cancel_done;
+                        completion->ROreference();  // one ref per cmd
+                        cmd.completion = completion;
                         tp->cmdq.push(std::move(cmd));
                         // Bump submit_seq so the I/O thread's pre-poll
                         // catch-up covers this CancelByProgram —
@@ -1904,10 +1911,17 @@ void AsyncIoControllerPriv::cancelByProgram(QoreProgram* pgm, ExceptionSink* xsi
                 tp->notifier->notify();
             }
             // Wait for all live I/O threads to complete the command
-            AutoLocker al(m);
-            while (!cancel_done) {
-                done_cond.wait(m);
+            {
+                AutoLocker al(m);
+                completion->waitForCompletion(m);
+                for (auto& p : completion->cancel_pinfos) {
+                    cancel_pinfos.push_back(std::move(p));
+                }
+                completion->cancel_pinfos.clear();
             }
+            completion->deref();
+        } else if (completion) {
+            completion->deref();
         }
     }
 
@@ -2175,23 +2189,21 @@ QoreHashNode* AsyncIoControllerPriv::getInfo(ExceptionSink* xsink) {
         }
         rv->setKeyValue("cache_keys", keys.release(), xsink);
     } else {
-        // Worker thread — send synchronous GetInfo command to get cache keys
+        // Worker thread — send synchronous GetInfo command to each I/O
+        // thread.  Shared completion is heap-allocated and ref-counted
+        // (one ref per cmd, one for the caller); last holder destroys.
         QoreHashNode* info_result = nullptr;
-        QoreCondition done_cond;
-        bool done = false;
-        std::atomic<int> pending_threads{0};
+        AsyncOpCompletion* completion = nullptr;
         bool do_signal = false;
         {
             AutoLocker al(m);
             if (anyThreadRunning() && !io_exiting) {
-                pending_threads.store((int)io_threads.size(), std::memory_order_relaxed);
+                completion = new AsyncOpCompletion((int)io_threads.size());
                 for (auto& tp : io_threads) {
                     Command cmd;
                     cmd.cmd = IoCommand::GetInfo;
-                    cmd.info_result = &info_result;
-                    cmd.pending_threads = &pending_threads;
-                    cmd.done_cond = &done_cond;
-                    cmd.cancel_done_flag = &done;
+                    completion->ROreference();  // one ref per cmd
+                    cmd.completion = completion;
                     tp->cmdq.push(std::move(cmd));
                 }
                 do_signal = true;
@@ -2203,10 +2215,16 @@ QoreHashNode* AsyncIoControllerPriv::getInfo(ExceptionSink* xsink) {
             for (auto& tp : io_threads) {
                 tp->notifier->notify();
             }
-            AutoLocker al(m);
-            while (!done) {
-                done_cond.wait(m);
+            {
+                AutoLocker al(m);
+                completion->waitForCompletion(m);
+                // Move info_result out of the completion before we
+                // release our ref — the last-completing I/O thread
+                // populated it under m.
+                info_result = completion->info_result;
+                completion->info_result = nullptr;
             }
+            completion->deref();
         }
 
         if (info_result) {
@@ -2276,7 +2294,7 @@ int64_t AsyncIoControllerPriv::addTimer(const DateTimeNode* deadline, QoreValue 
         cmd.cmd = IoCommand::AddTimer;
         cmd.timer_deadline_us = deadline_us;
         cmd.timer_id = id;
-        cmd.done_cond = nullptr;
+        // (completion is nullptr by default — AddTimer/CancelTimer have no waiter)
 
         if (io_exiting || !ctx().tid) {
             startIntern(xsink);
@@ -2327,7 +2345,7 @@ bool AsyncIoControllerPriv::cancelTimer(int64_t id, ExceptionSink* xsink) {
             Command cmd;
             cmd.cmd = IoCommand::CancelTimer;
             cmd.timer_id = id;
-            cmd.done_cond = nullptr;
+            // (completion is nullptr by default — AddTimer/CancelTimer have no waiter)
             cmd.timer_deadline_us = 0;
             ctx().cmdq.push(cmd);
             do_signal = true;
@@ -3687,32 +3705,20 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                     // allowing the auto-stop check to see an empty queue.
                     signalCancelLocked(pending_cmd.key);
                 } else if ((pending_cmd.cmd == IoCommand::CancelByProgram
-                            || pending_cmd.cmd == IoCommand::CancelOwner)
-                        && pending_cmd.pending_threads) {
-                    // Multi-thread command: decrement counter; only last thread signals
-                    if (pending_cmd.pending_threads->fetch_sub(1, std::memory_order_acq_rel) == 1) {
-                        if (pending_cmd.cancel_done_flag) {
-                            *pending_cmd.cancel_done_flag = true;
-                        }
-                        if (pending_cmd.done_cond) {
-                            pending_cmd.done_cond->broadcast();
-                        }
-                    }
-                } else if (pending_cmd.cmd == IoCommand::GetInfo && pending_cmd.pending_threads) {
-                    // Multi-thread command: decrement counter; only last thread signals
-                    if (pending_cmd.pending_threads->fetch_sub(1, std::memory_order_acq_rel) == 1) {
-                        if (pending_cmd.cancel_done_flag) {
-                            *pending_cmd.cancel_done_flag = true;
-                        }
-                        if (pending_cmd.done_cond) {
-                            pending_cmd.done_cond->broadcast();
-                        }
-                    }
-                } else if (pending_cmd.done_cond) {
-                    if (pending_cmd.cancel_done_flag) {
-                        *pending_cmd.cancel_done_flag = true;
-                    }
-                    pending_cmd.done_cond->broadcast();
+                            || pending_cmd.cmd == IoCommand::CancelOwner
+                            || pending_cmd.cmd == IoCommand::GetInfo)
+                        && pending_cmd.completion) {
+                    // Multi-thread command: decrement pending_threads;
+                    // only the last thread broadcasts (or skips if the
+                    // completion is uniquely held — caller already gone).
+                    // We hold m at this point (AutoLocker al(m) above).
+                    pending_cmd.completion->completeOne();
+                    pending_cmd.completion->deref();
+                    pending_cmd.completion = nullptr;
+                } else if (pending_cmd.completion) {
+                    pending_cmd.completion->completeOne();
+                    pending_cmd.completion->deref();
+                    pending_cmd.completion = nullptr;
                 }
                 // Clean up refcounted fields from ContinuePollResult commands
                 if (pending_cmd.cmd == IoCommand::ContinuePollResult) {
@@ -3870,6 +3876,20 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                         t.cache_size.fetch_sub(1, std::memory_order_relaxed);
                     }
 
+                    // Publish cancel count BEFORE signalling, so the waiter
+                    // reading found_count after waitCancel() returns sees a
+                    // value consistent with the signal.  Reversing this
+                    // order left a window where the waiter could wake,
+                    // return from cancel(), and have its stack frame
+                    // reused before this fetch_add ran — on arm64 the
+                    // subsequent fetch_add would increment a stale 4-byte
+                    // word on the reused stack (matching the observed
+                    // SIGBUS signature: +1 on a stack-saved return addr).
+                    if (found && cmd.cancel_count) {
+                        cmd.cancel_count->fetch_add(1,
+                            std::memory_order_relaxed);
+                    }
+
                     // Signal any waiter on this key — brief lock.
                     {
                         AutoLocker al(m);
@@ -3877,9 +3897,6 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                     }
 
                     if (found) {
-                        if (cmd.cancel_count) {
-                            cmd.cancel_count->fetch_add(1, std::memory_order_relaxed);
-                        }
                         doCancelIntern(pinfo_copy, xsink);
                         pinfo_copy.cleanup(xsink);
                     }
@@ -3937,28 +3954,21 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                     // I/O-thread-only — no locking needed.
                     t.cancelled_owners[cmd.owner] = 2;
 
-                    // Report actual cancel count
-                    if (cmd.cancel_count) {
-                        cmd.cancel_count->fetch_add(local_count, std::memory_order_relaxed);
+                    // Report actual cancel count into the shared completion.
+                    if (cmd.completion) {
+                        cmd.completion->cancel_count.fetch_add(local_count,
+                            std::memory_order_relaxed);
                     }
 
-                    // Signal done — last thread to finish signals the caller
-                    if (cmd.pending_threads) {
-                        if (cmd.pending_threads->fetch_sub(1, std::memory_order_acq_rel) == 1) {
-                            AutoLocker al(m);
-                            if (cmd.cancel_done_flag) {
-                                *cmd.cancel_done_flag = true;
-                            }
-                            if (cmd.done_cond) {
-                                cmd.done_cond->broadcast();
-                            }
-                        }
-                    } else if (cmd.done_cond) {
+                    // Signal done — completeOne() handles both the
+                    // last-thread-broadcasts case and the skip-broadcast
+                    // case when the completion is uniquely held.  Must be
+                    // called under m (acquired here).
+                    if (cmd.completion) {
                         AutoLocker al(m);
-                        if (cmd.cancel_done_flag) {
-                            *cmd.cancel_done_flag = true;
-                        }
-                        cmd.done_cond->broadcast();
+                        cmd.completion->completeOne();
+                        cmd.completion->deref();
+                        cmd.completion = nullptr;
                     }
                     break;
                 }
@@ -3984,10 +3994,11 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                             t.cache.erase(it);
                             t.cache_size.fetch_sub(1, std::memory_order_relaxed);
 
-                            // Append to shared vector under lock
-                            {
-                                AutoLocker al2(*cmd.cancel_pinfos_lock);
-                                static_cast<std::vector<PollInfo>*>(cmd.cancel_pinfos)->push_back(pinfo_copy);
+                            // Append to the completion's shared vector
+                            // (guarded by its own pinfos_lock).
+                            if (cmd.completion) {
+                                AutoLocker al2(cmd.completion->pinfos_lock);
+                                cmd.completion->cancel_pinfos.push_back(pinfo_copy);
                             }
 
                             // Signal any pending cancel waiters for this key
@@ -3999,12 +4010,11 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                     }
 
                     // Decrement pending thread count; last thread signals done
-                    if (cmd.pending_threads->fetch_sub(1, std::memory_order_acq_rel) == 1) {
+                    if (cmd.completion) {
                         AutoLocker al(m);
-                        if (cmd.cancel_done_flag) {
-                            *cmd.cancel_done_flag = true;
-                        }
-                        cmd.done_cond->broadcast();
+                        cmd.completion->completeOne();
+                        cmd.completion->deref();
+                        cmd.completion = nullptr;
                     }
                     break;
                 }
@@ -4017,26 +4027,40 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                         keys->push(new QoreStringNode(key), &info_xsink);
                     }
 
-                    // Store as a hash with cache_keys
-                    // Last thread to complete builds the final result
-                    if (cmd.pending_threads->fetch_sub(1, std::memory_order_acq_rel) == 1) {
-                        // We're the last thread — build result from all threads
-                        ReferenceHolder<QoreListNode> all_keys(new QoreListNode(stringTypeInfo), &info_xsink);
-                        // Add our own keys
-                        for (qore_size_t i = 0; i < keys->size(); ++i) {
-                            all_keys->push(keys->getReferencedEntry(i), &info_xsink);
-                        }
-                        // For multi-thread: other threads would need to contribute
-                        // For now with single I/O thread this is sufficient
-                        QoreHashNode* result = new QoreHashNode(autoTypeInfo);
-                        result->setKeyValue("cache_keys", all_keys.release(), &info_xsink);
-                        *cmd.info_result = result;
-
+                    // The last I/O thread to complete installs the final
+                    // result into the shared completion.  We can't peek
+                    // pending_threads (racy: two threads could both see 1
+                    // between atomic decrements), so we build the result
+                    // under m after atomically claiming "last" via the
+                    // same fetch_sub that completeOne() would do — but do
+                    // it inline here to preserve ordering: install result
+                    // BEFORE broadcast so the waiter sees it.  For the
+                    // multi-thread case, per-thread keys would need to be
+                    // merged; currently only one I/O thread is active per
+                    // GetInfo, so a single-thread result is sufficient.
+                    if (cmd.completion) {
                         AutoLocker al(m);
-                        if (cmd.cancel_done_flag) {
-                            *cmd.cancel_done_flag = true;
+                        bool is_last;
+                        if (cmd.completion->is_unique()) {
+                            // No waiter: skip the broadcast and the
+                            // result build entirely (nothing to hand to).
+                            cmd.completion->pending_threads.fetch_sub(1,
+                                std::memory_order_relaxed);
+                            is_last = false;
+                        } else {
+                            is_last = cmd.completion->pending_threads
+                                .fetch_sub(1, std::memory_order_acq_rel) == 1;
+                            if (is_last) {
+                                QoreHashNode* result = new QoreHashNode(autoTypeInfo);
+                                result->setKeyValue("cache_keys",
+                                    keys.release(), &info_xsink);
+                                cmd.completion->info_result = result;
+                                cmd.completion->done = true;
+                                cmd.completion->cond.broadcast();
+                            }
                         }
-                        cmd.done_cond->broadcast();
+                        cmd.completion->deref();
+                        cmd.completion = nullptr;
                     }
                     break;
                 }
@@ -4823,7 +4847,7 @@ void AsyncIoControllerPriv::releaseFdIfOwner(IoThreadContext& t, int old_fd,
 }
 
 bool AsyncIoControllerPriv::enqueueCmdLocked(IoCommand cmd, const std::string& key,
-        const std::string& owner, QoreCondition* done_cond, bool* cancel_done_flag) {
+        const std::string& owner) {
     // Caller must hold lock
     if (io_exiting || !ctx().tid) {
         // Need to restart
@@ -4848,8 +4872,6 @@ bool AsyncIoControllerPriv::enqueueCmdLocked(IoCommand cmd, const std::string& k
         c.cmd = cmd;
         c.key = key;
         c.owner = owner;
-        c.done_cond = done_cond;
-        c.cancel_done_flag = cancel_done_flag;
         target.cmdq.push(std::move(c));
     }
     return true;
