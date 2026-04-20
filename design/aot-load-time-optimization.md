@@ -392,8 +392,21 @@ Low cost (cmake plumbing only) — no Qore-side work needed.
     std::strings + null pointers per variant are never created.
     Marginal wall-clock effect but cleaner code.
 
-**State after step 16:** qwf `--help` ≈ 1.70 s (trimmed mean of 20
-runs, down from 1.97 s start-of-session and 100 ms below the 1.80 s
+17. **Done** — (6a) format bump: per-blob TYPE_TABLE section
+    (commit 4939be6ed).  New section type + feature flag
+    `QORE_AOT_FEAT_TYPE_TABLE`; `writeVariantSignature` interns
+    every return / param type path in a per-blob table and emits a
+    `u32` index.  At phase 2b entry, `resolveTypeTable` walks the
+    table once and caches `const QoreTypeInfo*` per index.  The
+    hot-path `readAndSetupVariantSignature` then pulls types by
+    index instead of per-param hash lookup — eliminates ~3.3 M
+    resolver lookups on qwf's 656 k variants.  Back-compat path for
+    older .qmods (no feature bit) still uses inline strings.
+    readAndSetupVariantSignature 285 → 195 ms (-32 %), wall-clock
+    1.70 → 1.64 s trimmed mean.
+
+**State after step 17:** qwf `--help` ≈ 1.64 s (trimmed mean of 15
+runs, down from 1.97 s start-of-session and 160 ms below the 1.80 s
 source-parse baseline).
 
 13. **Attempted, reverted** — heterogeneous `string_view` lookup on
@@ -434,7 +447,7 @@ three.
 
 | Binary | Source-parse | AOT (pre-opt) | AOT (current) |
 |--------|--------------|---------------|---------------|
-| qwf    | 1.80 s       | 1.97 s        | ~1.70 s       |
+| qwf    | 1.80 s       | 1.97 s        | ~1.64 s       |
 | qsvc   | 1.86 s       | —             | — (untested)  |
 | qjob   | 1.35 s       | —             | — (untested)  |
 
@@ -448,6 +461,7 @@ qwf reached sub-baseline via:
  - interned per-class self LocalVar (c0210a5fe)
  - lazy signature-text build (ddf6e2a49)
  - reserve+emplace for param vectors (2035abfa5)
+ - per-blob TYPE_TABLE format bump (4939be6ed)
 
 ### Parallelization note
 
