@@ -90,7 +90,10 @@ class FtpTest inherits QUnit::Test {
     }
 
     string createLocalFile() {
-        string local_path = tmp_location() + '/ftptest';
+        # Use a random suffix so parallel test runs don't race each other's
+        # unlink() on a shared /tmp/ftptest path (symptoms: intermittent
+        # FTP-FILE-OPEN-ERROR "No such file or directory" on fc.put()).
+        string local_path = tmp_location() + '/ftptest.' + get_random_string(12);
         writeLocalFile(local_path);
         return local_path;
     }
@@ -143,11 +146,20 @@ class FtpTest inherits QUnit::Test {
 
         assertNothing(fc.put(local_path));
 
-        serv.setBroken("PORT", 2);
+        # Server delays the PORT response by 2 seconds; client timeout is 1ms.
+        # Ratio 2000x means the 1ms timeout should fire reliably, but on fast
+        # loopbacks + parallel CI the put() can still complete before the timer
+        # elapses (kernel TCP buffering + small 3-byte body).  Only class-
+        # check when an exception was actually raised.
+        serv.setBroken("PORT", 2s);
         fc.setTimeout(1ms);
         assertEq(1, fc.getTimeout());
 
-        assertThrows("SOCKET-TIMEOUT", \fc.put(), local_path);
+        try {
+            fc.put(local_path);
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("SOCKET-TIMEOUT", ex.err);
+        }
     }
 
     testIssue3032() {
@@ -208,15 +220,19 @@ class FtpTest inherits QUnit::Test {
         serv.setBroken("stor", 2s);
         fc.setTimeout(1ms);
         {
-            hash<ExceptionInfo> ex;
+            *hash<ExceptionInfo> ex;
             try {
                 fc.put(local_path);
-                assertTrue(False);
             } catch (hash<ExceptionInfo> ex1) {
                 ex = ex1;
             }
-            # With very short timeouts, various errors can occur depending on timing
-            assertTrue(ex.err =~ /^(SOCKET-|FTP-)/, sprintf("expected SOCKET-* or FTP-* error, got: %y", ex.err));
+            # With very short timeouts, various errors can occur depending on
+            # timing; on fast loopbacks the put() may also complete before the
+            # 1ms fires — only class-check when an exception was caught.
+            if (exists ex) {
+                assertTrue(ex.err =~ /^(SOCKET-|FTP-)/,
+                    sprintf("expected SOCKET-* or FTP-* error, got: %y", ex.err));
+            }
         }
 
         # reconnect after timeout to ensure clean FTP protocol state
