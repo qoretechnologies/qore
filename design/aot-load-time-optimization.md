@@ -405,9 +405,27 @@ Low cost (cmake plumbing only) — no Qore-side work needed.
     readAndSetupVariantSignature 285 → 195 ms (-32 %), wall-clock
     1.70 → 1.64 s trimmed mean.
 
-**State after step 17:** qwf `--help` ≈ 1.64 s (trimmed mean of 15
-runs, down from 1.97 s start-of-session and 160 ms below the 1.80 s
-source-parse baseline).
+18. **Done** — (6b) share type resolver across slot-map register
+    phase (commit 3797ae247).  `buildContextFromSlotMap` used to
+    allocate a fresh `QoreAOTTypeResolver` per body-local slot
+    inside its inner branch (cold cache, full parser round-trip
+    per resolve) — 3 M on qwf.  Hoist to function scope, and plumb
+    an optional `shared_type_resolver` from
+    `registerAOTFunctionsFromSlotMaps` down.  Callers now pass the
+    session's own resolver whose cache was warmed during
+    `deserializeFunctionsAndMethods`, so body-local types like
+    `any`/`int`/`*hash<auto>` hit warm cache on first touch.
+    Register phase 114-120 → 108-112 ms; wall-clock 1.64 → 1.59 s
+    trimmed mean.
+
+**State after step 18:** qwf `--help` ≈ 1.59 s (trimmed mean of 15
+runs, down from 1.97 s start-of-session and ~210 ms below the 1.80 s
+source-parse baseline).  NAME_TABLE analog was considered and
+rejected — the wire format's string pool already interns shared
+names via pool offsets; a NAME_TABLE index layer on top would yield
+no runtime speedup unless paired with a storage-type change
+(`UserSignature::names` → `vector<const char*>` into the stable
+metadata buffer), which is a multi-call-site refactor.
 
 13. **Attempted, reverted** — heterogeneous `string_view` lookup on
    the type-resolver cache (to skip implicit `std::string`
@@ -447,7 +465,7 @@ three.
 
 | Binary | Source-parse | AOT (pre-opt) | AOT (current) |
 |--------|--------------|---------------|---------------|
-| qwf    | 1.80 s       | 1.97 s        | ~1.64 s       |
+| qwf    | 1.80 s       | 1.97 s        | ~1.59 s       |
 | qsvc   | 1.86 s       | —             | — (untested)  |
 | qjob   | 1.35 s       | —             | — (untested)  |
 
@@ -462,6 +480,7 @@ qwf reached sub-baseline via:
  - lazy signature-text build (ddf6e2a49)
  - reserve+emplace for param vectors (2035abfa5)
  - per-blob TYPE_TABLE format bump (4939be6ed)
+ - shared type resolver in slot-map register (3797ae247)
 
 ### Parallelization note
 
