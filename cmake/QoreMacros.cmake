@@ -53,13 +53,28 @@ endif ()
 #
 #  _cpp_files : output list of filenames created in CMAKE_CURRENT_BINARY_DIR.
 #
+# Optional one-value keyword args:
+#  DOXLIST   : output list variable — receives the generated .dox.h paths.
+#  METALIST  : output list variable — receives the generated .meta.json
+#              metadata paths (used for `qore_install_qpp_metadata`).
+#  STUBLIST  : output list variable — receives the generated .stub.qc
+#              compile-time Qore-syntax stub paths.  When set, qpp is
+#              invoked with `--stub-output=<path>` so the stub file is
+#              built alongside the .cpp.  Stubs are consumed by qcc's
+#              `--stub=<path>` flag in AOT pipelines that need Qore-
+#              syntax declarations of the C++-backed classes qpp emits.
+#              Omit the keyword (or pass an empty target variable) to
+#              skip stub generation entirely — most core/library callers
+#              that don't feed an AOT pipeline should leave this unset.
+#
 # usage:
 # set(MY_QPP foo.qpp bar.qpp)
 # qore_wrap_qpp_value(MY_CPP ${MY_QPP})
+# qore_wrap_qpp_value(MY_CPP DOXLIST MY_DOX METALIST MY_META STUBLIST MY_STUB ${MY_QPP})
 #
 MACRO (QORE_WRAP_QPP_VALUE _cpp_files)
     set(options)
-    set(oneValueArgs DOXLIST METALIST)
+    set(oneValueArgs DOXLIST METALIST STUBLIST)
     set(multiValueArgs OPTIONS)
 
     cmake_parse_arguments(_WRAP_QPP "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
@@ -71,9 +86,22 @@ MACRO (QORE_WRAP_QPP_VALUE _cpp_files)
         SET(_doxfile ${CMAKE_CURRENT_BINARY_DIR}/${_outfile}.dox.h)
         SET(_metafile ${CMAKE_CURRENT_BINARY_DIR}/${_outfile}.meta.json)
 
-        ADD_CUSTOM_COMMAND(OUTPUT ${_cppfile} ${_doxfile} ${_metafile}
+        # Stub output is opt-in: the caller must pass STUBLIST <var> to
+        # activate it, otherwise qpp is not told to produce a stub and
+        # no .stub.qc file is listed as an OUTPUT.  Callers outside AOT
+        # pipelines don't need stubs and shouldn't pay the generation
+        # cost (or the extra dependency edge).
+        SET(_stub_arg)
+        SET(_stub_outputs)
+        IF(_WRAP_QPP_STUBLIST)
+            SET(_stubfile ${CMAKE_CURRENT_BINARY_DIR}/${_outfile}.stub.qc)
+            SET(_stub_arg --stub-output=${_stubfile})
+            SET(_stub_outputs ${_stubfile})
+        ENDIF(_WRAP_QPP_STUBLIST)
+
+        ADD_CUSTOM_COMMAND(OUTPUT ${_cppfile} ${_doxfile} ${_metafile} ${_stub_outputs}
                            COMMAND ${QORE_QPP_EXECUTABLE}
-                           ARGS --javadoc=${CMAKE_CURRENT_BINARY_DIR}/java --output=${_cppfile} --dox-output=${_doxfile} --metadata=${_metafile} ${_infile}
+                           ARGS --javadoc=${CMAKE_CURRENT_BINARY_DIR}/java --output=${_cppfile} --dox-output=${_doxfile} --metadata=${_metafile} ${_stub_arg} ${_infile}
                            MAIN_DEPENDENCY ${_infile}
                            WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
                            VERBATIM
@@ -85,6 +113,9 @@ MACRO (QORE_WRAP_QPP_VALUE _cpp_files)
         IF(_WRAP_QPP_METALIST)
            SET(${_WRAP_QPP_METALIST} ${${_WRAP_QPP_METALIST}} ${_metafile})
         ENDIF(_WRAP_QPP_METALIST)
+        IF(_WRAP_QPP_STUBLIST)
+           SET(${_WRAP_QPP_STUBLIST} ${${_WRAP_QPP_STUBLIST}} ${_stubfile})
+        ENDIF(_WRAP_QPP_STUBLIST)
         #MESSAGE(STATUS "DEBUG D: " _WRAP_QPP_DOXLIST " ${D}:" ${_WRAP_QPP_DOXLIST} " ${${D}}:" ${${_WRAP_QPP_DOXLIST}})
     ENDFOREACH (it)
 
