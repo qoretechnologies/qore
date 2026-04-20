@@ -1,5 +1,13 @@
 # Parser lvalue-type propagation for map + hash-literal narrowing
 
+## Status: **Implemented** (Qore commit `72b91b78c`, Qorus `abe83195d`)
+
+Workflow.qc casts removed.  AOTSmoke 93/93, JITSmoke 156/156, all 15
+operator tests green, new `lvalue-type-hint.qtest` (6 cases) green.
+
+qwf --help runs clean against current libqore without the `cast<>`
+workaround.
+
 ## Motivation
 
 `Workflow.qc:170-173` currently needs an explicit `cast<>` workaround:
