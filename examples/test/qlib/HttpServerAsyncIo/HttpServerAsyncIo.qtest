@@ -102,6 +102,49 @@ class InstrumentedTarget inherits HttpAsyncTarget {
     }
 }
 
+#! Target that captures the pre-read request body for body-read regression testing
+class BodyCaptureTarget inherits HttpAsyncTarget {
+    public {
+        #! Body received by the handler (set from info.header_info.body)
+        *binary received_body;
+        #! True once onHttpRequest has been called
+        bool request_received = False;
+        #! Counter decremented after the handler captures the body
+        *Counter handler_done;
+    }
+
+    hash<HttpRequestResultInfo> onHttpRequest(hash<HttpConnectionInfo> info) {
+        received_body = info.header_info.body;
+        request_received = True;
+        info.sock.send("HTTP/1.0 200 OK\r\nContent-Length: 2\r\n\r\nOK");
+        if (handler_done) {
+            handler_done.dec();
+        }
+        return <HttpRequestResultInfo>{
+            "close": True,
+        };
+    }
+
+    onIdleTimeout(Socket sock, *HttpServer::HttpListenerInterface listener, hash<auto> cx) {
+        try { sock.close(); } catch () {}
+    }
+
+    onError(Socket sock, hash<ExceptionInfo> ex, *HttpServer::HttpListenerInterface listener, *hash<auto> cx) {
+        try { sock.close(); } catch () {}
+    }
+
+    onSseDisconnect(Socket sock, *HttpServer::HttpListenerInterface listener, hash<auto> cx) {
+        try { sock.close(); } catch () {}
+    }
+
+    onWebSocketFrame(Socket sock, hash<WebSocketFrameInfo> frame, *HttpServer::HttpListenerInterface listener, hash<auto> cx) {
+    }
+
+    onWebSocketClose(Socket sock, int code, string reason, *HttpServer::HttpListenerInterface listener, hash<auto> cx) {
+        try { sock.close(); } catch () {}
+    }
+}
+
 public class HttpServerAsyncIoTest inherits QUnit::Test {
     public {
         # Test SSL certificate (self-signed for testing)
@@ -172,6 +215,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         addTestCase("external controller", \externalControllerTest());
         addTestCase("stop with in-flight handlers", \stopWithInFlightHandlersTest());
         addTestCase("stop during SSL handshake", \stopDuringSslHandshakeTest());
+        addTestCase("POST Content-Length body pre-read", \postBodyReadTest());
         set_return_value(main());
     }
 
@@ -845,5 +889,55 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             io_ctrl.stop();
         }
         assertTrue(True, "stop with in-flight handlers completed without leaks");
+    }
+
+    #! Regression test: HTTP/1.x POST with Content-Length must drive the async
+    #! body-read path in handleHeaderComplete() and deliver the body bytes to
+    #! the handler via info.header_info.body.
+    #!
+    #! Guards against the string->int type-narrowing bug where the
+    #! content-length header value (always a string) was assigned to a strict
+    #! `int` lvalue, throwing RUNTIME-TYPE-ERROR inside the try/catch at
+    #! HttpAsyncSocketIoController.qc:~2292 and silently falling through to
+    #! the handler without pre-reading the body.
+    postBodyReadTest() {
+        BodyCaptureTarget target();
+        Counter done(1);
+        target.handler_done = done;
+
+        AsyncSocketIoController io_ctrl(False);
+        on_exit io_ctrl.stop();
+        HttpAsyncSocketIoController ctrl(io_ctrl);
+        ctrl.start();
+        on_exit delete ctrl;
+
+        Socket server();
+        server.bind("127.0.0.1:0");
+        server.listen();
+        int port = server.getSocketInfo().port;
+        on_exit server.close();
+
+        ctrl.addListener(server, target);
+
+        binary body = binary("Hello, async body read!");
+
+        Socket c();
+        c.connect("127.0.0.1:" + port, 2s);
+        c.send(sprintf("POST /echo HTTP/1.0\r\nHost: localhost\r\nContent-Length: %d\r\n\r\n",
+            body.size()));
+        c.send(body);
+        # Drain the response so the handler can finish cleanly
+        c.recv(4096, 2s);
+        c.close();
+
+        # Deterministic sync: wait for the handler to run, no polling
+        done.waitForZero(5s);
+
+        assertTrue(target.request_received, "handler should have been invoked");
+        assertEq(body, target.received_body,
+            "handler must receive the full POST body pre-read by the I/O controller "
+            "(missing body => string->int regression in handleHeaderComplete)");
+
+        ctrl.removeListener(server);
     }
 }

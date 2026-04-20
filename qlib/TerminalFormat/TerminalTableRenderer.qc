@@ -153,7 +153,8 @@ public class TerminalTableRenderer {
         list<string> headers = columns;
         list<list<string>> rows = ();
         foreach hash<auto> row in (data) {
-            rows += (map row{$1}.toString(), columns,);
+            softlist<string> cells = map row{$1}.toString(), columns;
+            rows += (cells,);
         }
         return render(headers, rows);
     }
