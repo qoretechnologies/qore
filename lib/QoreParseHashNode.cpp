@@ -123,6 +123,20 @@ int QoreParseHashNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_con
     // issue #2791: when performing type folding, do not set to type "any" but rather use "auto"
     if (vtype && vtype != anyTypeInfo) {
         typeInfo = parse_context.typeInfo = qore_get_complex_hash_type(vtype);
+    } else if (parse_context.expected_type_info
+            && QoreTypeInfo::getComplexHashValueType(parse_context.expected_type_info)) {
+        // Inference would otherwise lock to autoHashTypeInfo; use the
+        // lvalue's expected hash value-type as the narrowing target
+        // when the caller supplied a hint.  Runtime coercion (softint,
+        // softstring, per-value acceptInputKey softening) happens
+        // during the hash store path, so adopting the expected type
+        // is safe: if values don't fit at runtime, the existing accept
+        // logic raises.  `getComplexHashValueType` peels the or-nothing
+        // wrapper so `*hash<K,V>` lvalues narrow too.
+        // See design/parser-lvalue-type-propagation.md.
+        const QoreTypeInfo* hv = QoreTypeInfo::getComplexHashValueType(parse_context.expected_type_info);
+        vtype = hv;
+        typeInfo = parse_context.typeInfo = qore_get_complex_hash_type(hv);
     } else {
         typeInfo = autoHashTypeInfo;
         // issue #3740: must set to auto type info to avoid type stripping

@@ -66,10 +66,23 @@ int QoreAssignmentOperatorNode::parseInitIntern(QoreParseContext& parse_context,
     }
 
     parse_context.typeInfo = nullptr;
+    // Forward the lvalue's declared type as an inference hint to the
+    // rvalue.  Consumers (map operator, hash literal) use it to narrow
+    // when their own inference would otherwise land on `auto` — see
+    // QoreParseContext::expected_type_info documentation.  The hint
+    // never overrides concrete types; the authoritative compatibility
+    // check is parseAccepts() below.
+    //
+    // Restore `expected_type_info` to its prior value so the hint
+    // doesn't leak to sibling expressions when we unwind from nested
+    // assignments (e.g., `a = b = map ...`).
+    const QoreTypeInfo* prev_expected = parse_context.expected_type_info;
+    parse_context.expected_type_info = ti;
     QoreParseAnalysis right_analysis;
     if (parse_init_value(right, parse_context) && !err) {
         err = -1;
     }
+    parse_context.expected_type_info = prev_expected;
     right_analysis = parse_context.analysis;
 
     // check for illegal assignment to $self

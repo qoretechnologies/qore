@@ -180,6 +180,18 @@ struct QoreParseContext {
     int lvids = 0;
     const QoreTypeInfo* typeInfo = nullptr;
     QoreParseAnalysis analysis;
+    //! Optional, non-binding hint: when the surrounding context has a
+    //! concrete declared target type (assignment lvalue, function param,
+    //! return type, ...) and the rvalue's own inference would otherwise
+    //! land on `auto`, sub-expressions that understand the hint may
+    //! narrow to match.  NEVER mandatory — every consumer must fall back
+    //! to its own inference when the hint is null or incompatible.  The
+    //! authoritative type-check still happens at the assignment site via
+    //! `QoreTypeInfo::parseAccepts()`; this field only tightens upstream
+    //! inference when it would otherwise default to auto.
+    //!
+    //! Motivation + scope: see `design/parser-lvalue-type-propagation.md`.
+    const QoreTypeInfo* expected_type_info = nullptr;
 
     DLLLOCAL QoreParseContext(QoreProgram* pgm = getProgram()) : pgm(pgm) {
     }

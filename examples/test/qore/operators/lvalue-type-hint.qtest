@@ -1,0 +1,79 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%requires ../../../../qlib/QUnit.qm
+
+%exec-class Test
+
+class Test inherits QUnit::Test {
+    constructor() : QUnit::Test("parser lvalue-type hint narrowing", "1.0") {
+        addTestCase("map operator narrows to typed-hash lvalue",  \mapNarrowing());
+        addTestCase("map operator + or-nothing lvalue",           \mapOrNothing());
+        addTestCase("map operator + softening runtime coercion",  \mapSoftening());
+        addTestCase("hash literal narrows to typed-hash lvalue",  \literalNarrowing());
+        addTestCase("concrete body type wins over hint",          \concreteBodyWins());
+        addTestCase("hint ignored when lvalue is not hash<K,V>",  \hintIgnoredForAutoHash());
+        set_return_value(main());
+    }
+
+    # Primary regression: the Workflow.qc pattern that previously
+    # required a cast<hash<K,V>>(...) workaround.
+    mapNarrowing() {
+        hash<string, int> h;
+        list<hash<auto>> src = (
+            {"name": "a", "id": 1},
+            {"name": "b", "id": 2},
+        );
+        h = map {$1.name: $1.id}, src.iterator();
+        assertEq(1, h.a);
+        assertEq(2, h.b);
+        assertEq("integer", h.a.type());
+    }
+
+    # Or-nothing form — the actual Workflow.qc case uses *hash<...>.
+    mapOrNothing() {
+        *hash<string, int> h;
+        list<hash<auto>> src = ({"name": "x", "id": 7},);
+        h = map {$1.name: $1.id}, src.iterator();
+        assertEq(7, h.x);
+    }
+
+    # softint value-type coerces string ids to int at runtime.
+    mapSoftening() {
+        *hash<string, softint> h;
+        list<hash<auto>> src = ({"name": "s", "id": "42"},);
+        h = map {$1.name: $1.id}, src.iterator();
+        assertEq(42, h.s);
+        assertEq("integer", h.s.type());
+    }
+
+    # Parse-time narrowing for plain hash literals.
+    literalNarrowing() {
+        hash<string, int> h;
+        any v = 99;
+        h = {"k": v};
+        assertEq(99, h.k);
+    }
+
+    # When the body's value expression has a concrete non-auto type,
+    # that wins over the hint.  Verified indirectly: a concrete-string
+    # body assigned into a hash<string, int> lvalue must parse-error.
+    concreteBodyWins() {
+        Program p();
+        assertThrows("PARSE-TYPE-ERROR",
+            sub () {
+                p.parse("hash<string, int> sub f() { hash<string, int> h; "
+                    "h = {\"a\": \"definitely a string\"}; return h; }", "t");
+            });
+    }
+
+    # `hash<auto>` lvalue triggers no-op narrowing (hint is just auto).
+    hintIgnoredForAutoHash() {
+        hash<auto> h;
+        list<hash<auto>> src = ({"name": "a", "value": 1},);
+        h = map {$1.name: $1.value}, src.iterator();
+        assertEq(1, h.a);
+    }
+}

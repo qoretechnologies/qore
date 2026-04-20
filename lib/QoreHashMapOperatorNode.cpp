@@ -48,7 +48,8 @@ int QoreHashMapOperatorNode::getAsString(QoreString& str, int foff, ExceptionSin
 }
 
 const QoreTypeInfo* QoreHashMapOperatorNode::setReturnTypeInfo(const QoreTypeInfo*& returnTypeInfo,
-        const QoreTypeInfo* expTypeInfo2, const QoreTypeInfo* iteratorTypeInfo) {
+        const QoreTypeInfo* expTypeInfo2, const QoreTypeInfo* iteratorTypeInfo,
+        const QoreTypeInfo* expectedTypeInfo) {
     const QoreTypeInfo* typeInfo;
 
     // this operator returns no value if the iterator expression has no value
@@ -60,6 +61,21 @@ const QoreTypeInfo* QoreHashMapOperatorNode::setReturnTypeInfo(const QoreTypeInf
             typeInfo = qore_get_complex_hash_or_nothing_type(expTypeInfo2);
         } else
             typeInfo = returnTypeInfo;
+    } else if (expectedTypeInfo
+            && QoreTypeInfo::getComplexHashValueType(expectedTypeInfo)) {
+        // The body value expression's own inference landed on auto
+        // (common when the iterator's getValue returns auto — e.g.
+        // AbstractIterator-typed sources).  When the caller supplied
+        // an lvalue hint like `hash<string, softint>` or its
+        // `*hash<...>` or-nothing form, use its value type to narrow
+        // the map's return type.  `getComplexHashValueType` peels
+        // the or-nothing wrapper; `getUniqueReturnComplexHash`
+        // wouldn't (it requires `return_vec.size() == 1`).  Runtime
+        // softening (acceptInputKey on store) handles per-value
+        // coercion.  See design/parser-lvalue-type-propagation.md.
+        const QoreTypeInfo* hv = QoreTypeInfo::getComplexHashValueType(expectedTypeInfo);
+        returnTypeInfo = qore_get_complex_hash_type(hv);
+        typeInfo = or_nothing ? qore_get_complex_hash_or_nothing_type(hv) : returnTypeInfo;
     } else {
         returnTypeInfo = hashTypeInfo;
         // this operator returns no value if the iterator expression has no value
@@ -78,7 +94,15 @@ int QoreHashMapOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& par
     fh.unsetFlags(PF_RETURN_VALUE_IGNORED);
 
     assert(!parse_context.typeInfo);
-    // check iterator expression
+    // Snapshot the lvalue hint (if any) so we can pass it to
+    // setReturnTypeInfo below.  The hint is cleared before each
+    // sub-expression parse (typeInfo/expected_type_info are both
+    // per-parse_init_value outputs/inputs) so we save it first.
+    const QoreTypeInfo* expected_hint = parse_context.expected_type_info;
+
+    // check iterator expression — no hint: the iterator's type is
+    // whatever the source produces, independent of the lvalue.
+    parse_context.expected_type_info = nullptr;
     int err = parse_init_value(e[2], parse_context);
     const QoreTypeInfo* iteratorTypeInfo = parse_context.typeInfo;
 
@@ -90,20 +114,28 @@ int QoreHashMapOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& par
 
         ParseImplicitArgTypeHelper pia(implicitArgType);
 
-        // check key expression
+        // check key expression — no hint propagation; keys are almost
+        // always strings and the hash-literal's own key coercion
+        // handles runtime softening.
         parse_context.typeInfo = nullptr;
+        parse_context.expected_type_info = nullptr;
         if (parse_init_value(e[0], parse_context) && !err) {
             err = -1;
         }
-        // check value expression2
+        // check value expression — no downward propagation of the
+        // full hash hint into the body (the body's type needs to be
+        // its own inference).  The hint instead kicks in at
+        // setReturnTypeInfo to narrow when the body landed on auto.
         parse_context.typeInfo = nullptr;
+        parse_context.expected_type_info = nullptr;
         if (parse_init_value(e[1], parse_context) && !err) {
             err = -1;
         }
         expTypeInfo2 = parse_context.typeInfo;
     }
 
-    parse_context.typeInfo = setReturnTypeInfo(returnTypeInfo, expTypeInfo2, iteratorTypeInfo);
+    parse_context.typeInfo = setReturnTypeInfo(returnTypeInfo, expTypeInfo2,
+        iteratorTypeInfo, expected_hint);
     return err;
 }
 
