@@ -1,0 +1,1103 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore BaseLinkerDataProvider module definition
+
+/*  BaseLinkerDataProvider.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 2.0
+# assume local scope for variables, do not use "$" signs
+%modern
+
+%requires(reexport) DataProvider
+%requires(reexport) BaseLinkerRestClient
+%requires RestClientIo
+%requires json
+%requires Util
+%requires Logger
+%requires Mime
+
+module BaseLinkerDataProvider {
+    version = "1.0";
+    desc = "BaseLinker e-commerce multichannel integration data provider";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        # Register the data provider factory
+        DataProvider::registerFactory(new BaseLinkerDataProviderFactory());
+
+        # Register the application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": BaseLinkerDataProvider::AppName,
+            "display_name": BaseLinkerDataProvider::AppDisplayName,
+            "short_desc": "BaseLinker multichannel e-commerce integration",
+            "desc": "BaseLinker is a Polish multichannel e-commerce platform that unifies orders, "
+                "inventory, shipping labels, and courier packages across marketplaces such as "
+                "Allegro, Amazon, eBay, and Shopify.\n\n"
+                "**Features:**\n"
+                "- Manage orders across all connected marketplaces and shops\n"
+                "- Update order statuses, payments, and line items\n"
+                "- Handle order returns with refunds\n"
+                "- Maintain inventory catalogs, products, stock levels, and prices\n"
+                "- Create courier packages and retrieve shipping labels\n"
+                "- Poll BaseLinker's journal for event-based workflow triggers\n\n"
+                "**Authentication:**\n"
+                "BaseLinker uses a static API token passed in the `X-BLToken` HTTP header. "
+                "Tokens can be generated in the BaseLinker panel under "
+                "*My Account → API → Generate a new token*.\n\n"
+                "**Rate limit:** 100 requests per minute per token. The module retries "
+                "rate-limited calls with exponential backoff (up to 3 attempts).",
+            "scheme": "baselinkerrest",
+            "logo": BaseLinkerDataProvider::BaseLinkerLogo,
+            "logo_file_name": "baselinker-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::Ecommerce,),
+        });
+
+        # ============================================================
+        # ORDERS
+        # ============================================================
+
+        # List Orders
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BaseLinkerDataProvider::AppName,
+            "path": "/orders",
+            "action": "list-orders",
+            "groups": "Orders",
+            "display_name": "List Orders",
+            "short_desc": "List BaseLinker orders with cursor pagination",
+            "desc": "Returns a stream of BaseLinker orders via `getOrders`. Supports cursor "
+                "pagination through `id_from`/`date_from` and filters by status, email, and "
+                "source channel. Page size is fixed by BaseLinker at 100 orders per call.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": BaseLinkerOrdersDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("OrdersList", new BaseLinkerOrderDataType(), True);
+            },
+        });
+
+        # Get Order
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BaseLinkerDataProvider::AppName,
+            "path": "/orders",
+            "action": "get-order",
+            "groups": "Orders",
+            "display_name": "Get Order",
+            "short_desc": "Get a single order by ID",
+            "desc": "Retrieve a single BaseLinker order by its `order_id` via `getOrders`.",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "order_id": <ActionOptionInfo>{
+                    "display_name": "Order ID",
+                    "short_desc": "BaseLinker order identifier",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "ref_data": "orders",
+                },
+            },
+        });
+
+        # Add Order
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BaseLinkerDataProvider::AppName,
+            "path": "/add-order",
+            "action": "add-order",
+            "groups": "Orders",
+            "display_name": "Add Order",
+            "short_desc": "Create a new order",
+            "desc": "Create a new order in BaseLinker via `addOrder`. Returns the new "
+                "`order_id` on success.",
+            "action_code": DPAT_API,
+            "action_val": "addOrder",
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                BaseLinkerAddOrderRequestDataType::Fields),
+            "get_output_type": AbstractDataProviderType sub () {
+                return new BaseLinkerSuccessIdResponseDataType();
+            },
+        });
+
+        # Set Order Fields
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BaseLinkerDataProvider::AppName,
+            "path": "/set-order-fields",
+            "action": "set-order-fields",
+            "groups": "Orders",
+            "display_name": "Set Order Fields",
+            "short_desc": "Update fields on an existing order",
+            "desc": "Update one or more fields on an existing BaseLinker order via "
+                "`setOrderFields`. Only supplied fields are modified.",
+            "action_code": DPAT_API,
+            "action_val": "setOrderFields",
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                BaseLinkerSetOrderFieldsRequestDataType::Fields),
+            "get_output_type": AbstractDataProviderType sub () {
+                return AbstractDataProviderType::get(AutoHashType);
+            },
+        });
+
+        # Set Order Status
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BaseLinkerDataProvider::AppName,
+            "path": "/set-order-status",
+            "action": "set-order-status",
+            "groups": "Orders",
+            "display_name": "Set Order Status",
+            "short_desc": "Change the status of an order",
+            "desc": "Change the status of a BaseLinker order via `setOrderStatus`. The new "
+                "`status_id` must be one of the statuses configured in BaseLinker.",
+            "action_code": DPAT_API,
+            "action_val": "setOrderStatus",
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                BaseLinkerSetOrderStatusRequestDataType::Fields),
+            "get_output_type": AbstractDataProviderType sub () {
+                return AbstractDataProviderType::get(AutoHashType);
+            },
+        });
+
+        # Set Order Payment
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BaseLinkerDataProvider::AppName,
+            "path": "/set-order-payment",
+            "action": "set-order-payment",
+            "groups": "Orders",
+            "display_name": "Set Order Payment",
+            "short_desc": "Record a payment against an order",
+            "desc": "Record a payment for a BaseLinker order via `setOrderPayment`.",
+            "action_code": DPAT_API,
+            "action_val": "setOrderPayment",
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                BaseLinkerSetOrderPaymentRequestDataType::Fields),
+            "get_output_type": AbstractDataProviderType sub () {
+                return AbstractDataProviderType::get(AutoHashType);
+            },
+        });
+
+        # Delete Order
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BaseLinkerDataProvider::AppName,
+            "path": "/delete-order",
+            "action": "delete-order",
+            "groups": "Orders",
+            "display_name": "Delete Order",
+            "short_desc": "Delete one or more orders",
+            "desc": "Delete a BaseLinker order (or list of orders) via `deleteOrders`.",
+            "action_code": DPAT_API,
+            "action_val": "deleteOrders",
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                BaseLinkerDeleteOrdersRequestDataType::Fields),
+            "get_output_type": AbstractDataProviderType sub () {
+                return AbstractDataProviderType::get(AutoHashType);
+            },
+        });
+
+        # ============================================================
+        # ORDER PRODUCTS (Line Items)
+        # ============================================================
+
+        # Add Order Product
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BaseLinkerDataProvider::AppName,
+            "path": "/add-order-product",
+            "action": "add-order-product",
+            "groups": "Orders / Line Items",
+            "display_name": "Add Order Product",
+            "short_desc": "Add a product line to an order",
+            "desc": "Add a product line item to an existing BaseLinker order via "
+                "`addOrderProduct`.",
+            "action_code": DPAT_API,
+            "action_val": "addOrderProduct",
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                BaseLinkerAddOrderProductRequestDataType::Fields),
+            "get_output_type": AbstractDataProviderType sub () {
+                return new BaseLinkerSuccessIdResponseDataType();
+            },
+        });
+
+        # Set Order Product Fields
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BaseLinkerDataProvider::AppName,
+            "path": "/set-order-product-fields",
+            "action": "set-order-product-fields",
+            "groups": "Orders / Line Items",
+            "display_name": "Set Order Product Fields",
+            "short_desc": "Update a product line on an order",
+            "desc": "Update fields on a specific product line of a BaseLinker order via "
+                "`setOrderProductFields`.",
+            "action_code": DPAT_API,
+            "action_val": "setOrderProductFields",
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                BaseLinkerSetOrderProductFieldsRequestDataType::Fields),
+            "get_output_type": AbstractDataProviderType sub () {
+                return AbstractDataProviderType::get(AutoHashType);
+            },
+        });
+
+        # Delete Order Product
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BaseLinkerDataProvider::AppName,
+            "path": "/delete-order-product",
+            "action": "delete-order-product",
+            "groups": "Orders / Line Items",
+            "display_name": "Delete Order Product",
+            "short_desc": "Remove a product line from an order",
+            "desc": "Remove a product line from a BaseLinker order via `deleteOrderProduct`.",
+            "action_code": DPAT_API,
+            "action_val": "deleteOrderProduct",
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                BaseLinkerDeleteOrderProductRequestDataType::Fields),
+            "get_output_type": AbstractDataProviderType sub () {
+                return AbstractDataProviderType::get(AutoHashType);
+            },
+        });
+
+        # ============================================================
+        # ORDER RETURNS
+        # ============================================================
+
+        # List Order Returns
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BaseLinkerDataProvider::AppName,
+            "path": "/order-returns",
+            "action": "list-order-returns",
+            "groups": "Order Returns",
+            "display_name": "List Order Returns",
+            "short_desc": "List BaseLinker order returns",
+            "desc": "Returns a stream of BaseLinker order returns via `getOrderReturns`. "
+                "Supports cursor pagination through `id_from` and filters by status and "
+                "confirmation date.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": BaseLinkerOrderReturnsDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("OrderReturnsList", new BaseLinkerOrderReturnDataType(),
+                    True);
+            },
+        });
+
+        # Get Order Return
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BaseLinkerDataProvider::AppName,
+            "path": "/order-returns",
+            "action": "get-order-return",
+            "groups": "Order Returns",
+            "display_name": "Get Order Return",
+            "short_desc": "Get a single order return by ID",
+            "desc": "Retrieve a single BaseLinker order return by its `order_return_id`.",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "order_return_id": <ActionOptionInfo>{
+                    "display_name": "Order Return ID",
+                    "short_desc": "BaseLinker order return identifier",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "ref_data": "order_returns",
+                },
+            },
+        });
+
+        # Add Order Return
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BaseLinkerDataProvider::AppName,
+            "path": "/add-order-return",
+            "action": "add-order-return",
+            "groups": "Order Returns",
+            "display_name": "Add Order Return",
+            "short_desc": "Create a new order return",
+            "desc": "Create a new BaseLinker order return via `addOrderReturn`. Returns the new "
+                "`order_return_id` on success.",
+            "action_code": DPAT_API,
+            "action_val": "addOrderReturn",
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                BaseLinkerAddOrderReturnRequestDataType::Fields),
+            "get_output_type": AbstractDataProviderType sub () {
+                return new BaseLinkerSuccessIdResponseDataType();
+            },
+        });
+
+        # Set Order Return Fields
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BaseLinkerDataProvider::AppName,
+            "path": "/set-order-return-fields",
+            "action": "set-order-return-fields",
+            "groups": "Order Returns",
+            "display_name": "Set Order Return Fields",
+            "short_desc": "Update fields on an existing order return",
+            "desc": "Update one or more fields on a BaseLinker order return via "
+                "`setOrderReturnFields`.",
+            "action_code": DPAT_API,
+            "action_val": "setOrderReturnFields",
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                BaseLinkerSetOrderReturnFieldsRequestDataType::Fields),
+            "get_output_type": AbstractDataProviderType sub () {
+                return AbstractDataProviderType::get(AutoHashType);
+            },
+        });
+
+        # Set Order Return Status
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BaseLinkerDataProvider::AppName,
+            "path": "/set-order-return-status",
+            "action": "set-order-return-status",
+            "groups": "Order Returns",
+            "display_name": "Set Order Return Status",
+            "short_desc": "Change the status of an order return",
+            "desc": "Change the status of a BaseLinker order return via "
+                "`setOrderReturnStatus`.",
+            "action_code": DPAT_API,
+            "action_val": "setOrderReturnStatus",
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                BaseLinkerSetOrderReturnStatusRequestDataType::Fields),
+            "get_output_type": AbstractDataProviderType sub () {
+                return AbstractDataProviderType::get(AutoHashType);
+            },
+        });
+
+        # Set Order Return Refund
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BaseLinkerDataProvider::AppName,
+            "path": "/set-order-return-refund",
+            "action": "set-order-return-refund",
+            "groups": "Order Returns",
+            "display_name": "Set Order Return Refund",
+            "short_desc": "Record a refund against an order return",
+            "desc": "Record a refund on a BaseLinker order return via "
+                "`setOrderReturnRefund`.",
+            "action_code": DPAT_API,
+            "action_val": "setOrderReturnRefund",
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                BaseLinkerSetOrderReturnRefundRequestDataType::Fields),
+            "get_output_type": AbstractDataProviderType sub () {
+                return AbstractDataProviderType::get(AutoHashType);
+            },
+        });
+
+        # ============================================================
+        # INVENTORY
+        # ============================================================
+
+        # List Inventories
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BaseLinkerDataProvider::AppName,
+            "path": "/inventories",
+            "action": "list-inventories",
+            "groups": "Inventory",
+            "display_name": "List Inventories",
+            "short_desc": "List BaseLinker inventories (catalogs)",
+            "desc": "List all BaseLinker inventories (catalogs) via `getInventories`.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": BaseLinkerInventoriesDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("InventoryList", new BaseLinkerInventoryDataType(),
+                    True);
+            },
+        });
+
+        # List Inventory Products
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BaseLinkerDataProvider::AppName,
+            "path": "/inventory-products",
+            "action": "list-inventory-products",
+            "groups": "Inventory",
+            "display_name": "List Inventory Products",
+            "short_desc": "List products in a BaseLinker inventory",
+            "desc": "List products in a BaseLinker inventory via "
+                "`getInventoryProductsList`. Supports page-number pagination and filters by "
+                "category, EAN, SKU, name, price range, and stock range.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": BaseLinkerInventoryProductsDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("InventoryProductList",
+                    new BaseLinkerInventoryProductDataType(), True);
+            },
+        });
+
+        # Get Inventory Product
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BaseLinkerDataProvider::AppName,
+            "path": "/inventory-products",
+            "action": "get-inventory-product",
+            "groups": "Inventory",
+            "display_name": "Get Inventory Product",
+            "short_desc": "Get a single inventory product by ID",
+            "desc": "Retrieve a single BaseLinker inventory product by its `product_id`.",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "inventory_id": <ActionOptionInfo>{
+                    "display_name": "Inventory ID",
+                    "short_desc": "BaseLinker inventory identifier",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "inventories",
+                },
+                "product_id": <ActionOptionInfo>{
+                    "display_name": "Product ID",
+                    "short_desc": "BaseLinker inventory product identifier",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "inventory_products",
+                    "depends_on": ("inventory_id",),
+                },
+            },
+        });
+
+        # Add Inventory Product (single upsert)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BaseLinkerDataProvider::AppName,
+            "path": "/add-inventory-product",
+            "action": "add-inventory-product",
+            "groups": "Inventory",
+            "display_name": "Add / Update Inventory Product",
+            "short_desc": "Create or update a BaseLinker inventory product",
+            "desc": "Upsert a BaseLinker inventory product via `addInventoryProduct`. Omit "
+                "`product_id` to create a new product; supply it (together with "
+                "`inventory_id`) to update an existing product.",
+            "action_code": DPAT_API,
+            "action_val": "addInventoryProduct",
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                BaseLinkerAddInventoryProductRequestDataType::Fields),
+            "get_output_type": AbstractDataProviderType sub () {
+                return new BaseLinkerSuccessIdResponseDataType();
+            },
+        });
+
+        # Delete Inventory Product
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BaseLinkerDataProvider::AppName,
+            "path": "/delete-inventory-product",
+            "action": "delete-inventory-product",
+            "groups": "Inventory",
+            "display_name": "Delete Inventory Product",
+            "short_desc": "Delete a BaseLinker inventory product",
+            "desc": "Delete a BaseLinker inventory product via `deleteInventoryProduct`.",
+            "action_code": DPAT_API,
+            "action_val": "deleteInventoryProduct",
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                BaseLinkerDeleteInventoryProductRequestDataType::Fields),
+            "get_output_type": AbstractDataProviderType sub () {
+                return AbstractDataProviderType::get(AutoHashType);
+            },
+        });
+
+        # List Inventory Stock
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BaseLinkerDataProvider::AppName,
+            "path": "/inventory-stock",
+            "action": "list-inventory-stock",
+            "groups": "Inventory",
+            "display_name": "List Inventory Stock",
+            "short_desc": "List stock levels for inventory products",
+            "desc": "List BaseLinker inventory product stock levels via "
+                "`getInventoryProductsStock`. Each row contains a `product_id` keyed hash of "
+                "warehouse → quantity.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": BaseLinkerInventoryStockDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("InventoryStockList",
+                    new BaseLinkerInventoryStockDataType(), True);
+            },
+        });
+
+        # Update Inventory Stock (bulk)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BaseLinkerDataProvider::AppName,
+            "path": "/update-inventory-stock",
+            "action": "update-inventory-stock",
+            "groups": "Inventory",
+            "display_name": "Update Inventory Stock",
+            "short_desc": "Bulk update stock levels (up to 1000 products per call)",
+            "desc": "Bulk-update BaseLinker inventory stock via "
+                "`updateInventoryProductsStock`. Accepts up to 1000 product entries per call.",
+            "action_code": DPAT_API,
+            "action_val": "updateInventoryProductsStock",
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                BaseLinkerUpdateInventoryProductsStockRequestDataType::Fields),
+            "get_output_type": AbstractDataProviderType sub () {
+                return AbstractDataProviderType::get(AutoHashType);
+            },
+        });
+
+        # List Inventory Prices
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BaseLinkerDataProvider::AppName,
+            "path": "/inventory-prices",
+            "action": "list-inventory-prices",
+            "groups": "Inventory",
+            "display_name": "List Inventory Prices",
+            "short_desc": "List prices for inventory products",
+            "desc": "List BaseLinker inventory product prices via "
+                "`getInventoryProductsPrices`. Each row contains a `product_id` keyed hash of "
+                "price-group → price.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": BaseLinkerInventoryPricesDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("InventoryPriceList",
+                    new BaseLinkerInventoryPriceDataType(), True);
+            },
+        });
+
+        # Update Inventory Prices (bulk)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BaseLinkerDataProvider::AppName,
+            "path": "/update-inventory-prices",
+            "action": "update-inventory-prices",
+            "groups": "Inventory",
+            "display_name": "Update Inventory Prices",
+            "short_desc": "Bulk update prices (up to 1000 products per call)",
+            "desc": "Bulk-update BaseLinker inventory prices via "
+                "`updateInventoryProductsPrices`. Accepts up to 1000 product entries per "
+                "call.",
+            "action_code": DPAT_API,
+            "action_val": "updateInventoryProductsPrices",
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                BaseLinkerUpdateInventoryProductsPricesRequestDataType::Fields),
+            "get_output_type": AbstractDataProviderType sub () {
+                return AbstractDataProviderType::get(AutoHashType);
+            },
+        });
+
+        # ============================================================
+        # SHIPPING
+        # ============================================================
+
+        # List Order Packages
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BaseLinkerDataProvider::AppName,
+            "path": "/order-packages",
+            "action": "list-order-packages",
+            "groups": "Shipping",
+            "display_name": "List Order Packages",
+            "short_desc": "List courier packages for an order",
+            "desc": "List courier packages (shipments) associated with a BaseLinker order "
+                "via `getOrderPackages`.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": BaseLinkerCourierPackagesDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("CourierPackageList",
+                    new BaseLinkerCourierPackageDataType(), True);
+            },
+        });
+
+        # Create Package
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BaseLinkerDataProvider::AppName,
+            "path": "/create-package",
+            "action": "create-package",
+            "groups": "Shipping",
+            "display_name": "Create Courier Package",
+            "short_desc": "Create a courier package (shipment)",
+            "desc": "Create a courier package for a BaseLinker order via `createPackage`. "
+                "Returns the courier package identifier on success.",
+            "action_code": DPAT_API,
+            "action_val": "createPackage",
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                BaseLinkerCreatePackageRequestDataType::Fields),
+            "get_output_type": AbstractDataProviderType sub () {
+                return new BaseLinkerSuccessIdResponseDataType();
+            },
+        });
+
+        # Get Label
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BaseLinkerDataProvider::AppName,
+            "path": "/get-label",
+            "action": "get-label",
+            "groups": "Shipping",
+            "display_name": "Get Courier Label",
+            "short_desc": "Retrieve a shipping label",
+            "desc": "Retrieve a shipping label for a courier package via `getLabel`. "
+                "The label is returned as a base64-encoded blob (typically a PDF).",
+            "action_code": DPAT_API,
+            "action_val": "getLabel",
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                BaseLinkerGetLabelRequestDataType::Fields),
+            "get_output_type": AbstractDataProviderType sub () {
+                return new BaseLinkerCourierLabelDataType();
+            },
+        });
+
+        # Delete Courier Package
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BaseLinkerDataProvider::AppName,
+            "path": "/delete-courier-package",
+            "action": "delete-courier-package",
+            "groups": "Shipping",
+            "display_name": "Delete Courier Package",
+            "short_desc": "Delete a courier package",
+            "desc": "Delete a courier package (shipment) via `deleteCourierPackage`.",
+            "action_code": DPAT_API,
+            "action_val": "deleteCourierPackage",
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                BaseLinkerDeleteCourierPackageRequestDataType::Fields),
+            "get_output_type": AbstractDataProviderType sub () {
+                return AbstractDataProviderType::get(AutoHashType);
+            },
+        });
+
+        # ============================================================
+        # SHIPPING — METADATA
+        # ============================================================
+
+        # List Couriers
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BaseLinkerDataProvider::AppName,
+            "path": "/couriers",
+            "action": "list-couriers",
+            "groups": "Shipping — Metadata",
+            "display_name": "List Couriers",
+            "short_desc": "List configured couriers",
+            "desc": "List the couriers configured for this BaseLinker account via "
+                "`getCouriersList`.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": BaseLinkerCouriersDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("CourierList", new BaseLinkerCourierDataType(), True);
+            },
+        });
+
+        # List Courier Services
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BaseLinkerDataProvider::AppName,
+            "path": "/courier-services",
+            "action": "list-courier-services",
+            "groups": "Shipping — Metadata",
+            "display_name": "List Courier Services",
+            "short_desc": "List services for a courier",
+            "desc": "List available services (product/tier options) for a given courier via "
+                "`getCourierServices`.",
+            "action_code": DPAT_FIND,
+            "options": {
+                "courier_code": <ActionOptionInfo>{
+                    "display_name": "Courier Code",
+                    "short_desc": "BaseLinker courier code",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "couriers",
+                },
+            },
+        });
+
+        # List Courier Accounts
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BaseLinkerDataProvider::AppName,
+            "path": "/courier-accounts",
+            "action": "list-courier-accounts",
+            "groups": "Shipping — Metadata",
+            "display_name": "List Courier Accounts",
+            "short_desc": "List courier-account credentials",
+            "desc": "List the courier-account credentials configured for a given courier via "
+                "`getCourierAccounts`.",
+            "action_code": DPAT_FIND,
+            "options": {
+                "courier_code": <ActionOptionInfo>{
+                    "display_name": "Courier Code",
+                    "short_desc": "BaseLinker courier code",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "couriers",
+                },
+            },
+        });
+
+        # List Courier Fields
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BaseLinkerDataProvider::AppName,
+            "path": "/courier-fields",
+            "action": "list-courier-fields",
+            "groups": "Shipping — Metadata",
+            "display_name": "List Courier Fields",
+            "short_desc": "List the custom-field schema for a courier",
+            "desc": "List the custom-field schema (required/optional inputs) for a given "
+                "courier via `getCourierFields`. Useful when programmatically constructing "
+                "`createPackage` payloads.",
+            "action_code": DPAT_FIND,
+            "options": {
+                "courier_code": <ActionOptionInfo>{
+                    "display_name": "Courier Code",
+                    "short_desc": "BaseLinker courier code",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "couriers",
+                },
+            },
+        });
+
+        # ============================================================
+        # ORDERS — METADATA
+        # ============================================================
+
+        # List Order Statuses
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BaseLinkerDataProvider::AppName,
+            "path": "/order-statuses",
+            "action": "list-order-statuses",
+            "groups": "Orders — Metadata",
+            "display_name": "List Order Statuses",
+            "short_desc": "List BaseLinker order statuses",
+            "desc": "List the order statuses configured in BaseLinker via "
+                "`getOrderStatusList`.",
+            "action_code": DPAT_FIND,
+            "options": {},
+        });
+
+        # List Order Sources
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BaseLinkerDataProvider::AppName,
+            "path": "/order-sources",
+            "action": "list-order-sources",
+            "groups": "Orders — Metadata",
+            "display_name": "List Order Sources",
+            "short_desc": "List BaseLinker order sources",
+            "desc": "List the order sources (marketplaces/shops) configured in BaseLinker via "
+                "`getOrderSources`.",
+            "action_code": DPAT_FIND,
+            "options": {},
+        });
+
+        # ============================================================
+        # EVENTS (polling-based, 22 total)
+        # ============================================================
+
+        # Order Created
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BaseLinkerDataProvider::AppName,
+            "path": "/events/" + EVENT_ORDER_CREATED,
+            "action": EVENT_ORDER_CREATED,
+            "groups": "Events",
+            "display_name": "Order Created",
+            "short_desc": "Emitted when a new order is created",
+            "desc": "Polls BaseLinker's journal (`getJournalList`) for `log_type` 1 (order "
+                "created) and emits an event for each new log entry.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_ORDER_CREATED,
+        });
+
+        # Order Downloaded
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BaseLinkerDataProvider::AppName,
+            "path": "/events/" + EVENT_ORDER_DOWNLOADED,
+            "action": EVENT_ORDER_DOWNLOADED,
+            "groups": "Events",
+            "display_name": "Order Downloaded",
+            "short_desc": "Emitted when an order is downloaded from a shop",
+            "desc": "Polls BaseLinker's journal for `log_type` 2 (order downloaded).",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_ORDER_DOWNLOADED,
+        });
+
+        # Order Paid
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BaseLinkerDataProvider::AppName,
+            "path": "/events/" + EVENT_ORDER_PAID,
+            "action": EVENT_ORDER_PAID,
+            "groups": "Events",
+            "display_name": "Order Paid",
+            "short_desc": "Emitted when an order is paid",
+            "desc": "Polls BaseLinker's journal for `log_type` 3 (order paid).",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_ORDER_PAID,
+        });
+
+        # Order Removed
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BaseLinkerDataProvider::AppName,
+            "path": "/events/" + EVENT_ORDER_REMOVED,
+            "action": EVENT_ORDER_REMOVED,
+            "groups": "Events",
+            "display_name": "Order Removed",
+            "short_desc": "Emitted when an order is removed",
+            "desc": "Polls BaseLinker's journal for `log_type` 4 (order removed).",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_ORDER_REMOVED,
+        });
+
+        # Orders Merged
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BaseLinkerDataProvider::AppName,
+            "path": "/events/" + EVENT_ORDERS_MERGED,
+            "action": EVENT_ORDERS_MERGED,
+            "groups": "Events",
+            "display_name": "Orders Merged",
+            "short_desc": "Emitted when two or more orders are merged",
+            "desc": "Polls BaseLinker's journal for `log_type` 5 (orders merged).",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_ORDERS_MERGED,
+        });
+
+        # Order Split
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BaseLinkerDataProvider::AppName,
+            "path": "/events/" + EVENT_ORDER_SPLIT,
+            "action": EVENT_ORDER_SPLIT,
+            "groups": "Events",
+            "display_name": "Order Split",
+            "short_desc": "Emitted when an order is split",
+            "desc": "Polls BaseLinker's journal for `log_type` 6 (order split).",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_ORDER_SPLIT,
+        });
+
+        # Invoice Issued
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BaseLinkerDataProvider::AppName,
+            "path": "/events/" + EVENT_INVOICE_ISSUED,
+            "action": EVENT_INVOICE_ISSUED,
+            "groups": "Events",
+            "display_name": "Invoice Issued",
+            "short_desc": "Emitted when an invoice is issued",
+            "desc": "Polls BaseLinker's journal for `log_type` 7 (invoice issued).",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_INVOICE_ISSUED,
+        });
+
+        # Receipt Issued
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BaseLinkerDataProvider::AppName,
+            "path": "/events/" + EVENT_RECEIPT_ISSUED,
+            "action": EVENT_RECEIPT_ISSUED,
+            "groups": "Events",
+            "display_name": "Receipt Issued",
+            "short_desc": "Emitted when a receipt is issued",
+            "desc": "Polls BaseLinker's journal for `log_type` 8 (receipt issued).",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_RECEIPT_ISSUED,
+        });
+
+        # Package Created
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BaseLinkerDataProvider::AppName,
+            "path": "/events/" + EVENT_PACKAGE_CREATED,
+            "action": EVENT_PACKAGE_CREATED,
+            "groups": "Events",
+            "display_name": "Package Created",
+            "short_desc": "Emitted when a courier package is created",
+            "desc": "Polls BaseLinker's journal for `log_type` 9 (package created).",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_PACKAGE_CREATED,
+        });
+
+        # Package Deleted
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BaseLinkerDataProvider::AppName,
+            "path": "/events/" + EVENT_PACKAGE_DELETED,
+            "action": EVENT_PACKAGE_DELETED,
+            "groups": "Events",
+            "display_name": "Package Deleted",
+            "short_desc": "Emitted when a courier package is deleted",
+            "desc": "Polls BaseLinker's journal for `log_type` 10 (package deleted).",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_PACKAGE_DELETED,
+        });
+
+        # Delivery Data Edited
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BaseLinkerDataProvider::AppName,
+            "path": "/events/" + EVENT_DELIVERY_DATA_EDITED,
+            "action": EVENT_DELIVERY_DATA_EDITED,
+            "groups": "Events",
+            "display_name": "Delivery Data Edited",
+            "short_desc": "Emitted when delivery data on an order is edited",
+            "desc": "Polls BaseLinker's journal for `log_type` 11 (delivery data edited).",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_DELIVERY_DATA_EDITED,
+        });
+
+        # Order Product Added
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BaseLinkerDataProvider::AppName,
+            "path": "/events/" + EVENT_ORDER_PRODUCT_ADDED,
+            "action": EVENT_ORDER_PRODUCT_ADDED,
+            "groups": "Events",
+            "display_name": "Order Product Added",
+            "short_desc": "Emitted when a product is added to an order",
+            "desc": "Polls BaseLinker's journal for `log_type` 12 (order product added).",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_ORDER_PRODUCT_ADDED,
+        });
+
+        # Order Product Edited
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BaseLinkerDataProvider::AppName,
+            "path": "/events/" + EVENT_ORDER_PRODUCT_EDITED,
+            "action": EVENT_ORDER_PRODUCT_EDITED,
+            "groups": "Events",
+            "display_name": "Order Product Edited",
+            "short_desc": "Emitted when an order product is edited",
+            "desc": "Polls BaseLinker's journal for `log_type` 13 (order product edited).",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_ORDER_PRODUCT_EDITED,
+        });
+
+        # Order Product Removed
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BaseLinkerDataProvider::AppName,
+            "path": "/events/" + EVENT_ORDER_PRODUCT_REMOVED,
+            "action": EVENT_ORDER_PRODUCT_REMOVED,
+            "groups": "Events",
+            "display_name": "Order Product Removed",
+            "short_desc": "Emitted when a product is removed from an order",
+            "desc": "Polls BaseLinker's journal for `log_type` 14 (order product removed).",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_ORDER_PRODUCT_REMOVED,
+        });
+
+        # Blacklist Added
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BaseLinkerDataProvider::AppName,
+            "path": "/events/" + EVENT_BLACKLIST_ADDED,
+            "action": EVENT_BLACKLIST_ADDED,
+            "groups": "Events",
+            "display_name": "Blacklist Entry Added",
+            "short_desc": "Emitted when a buyer is added to the blacklist",
+            "desc": "Polls BaseLinker's journal for `log_type` 15 (blacklist entry added).",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_BLACKLIST_ADDED,
+        });
+
+        # Order Data Edited
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BaseLinkerDataProvider::AppName,
+            "path": "/events/" + EVENT_ORDER_DATA_EDITED,
+            "action": EVENT_ORDER_DATA_EDITED,
+            "groups": "Events",
+            "display_name": "Order Data Edited",
+            "short_desc": "Emitted when general order data is edited",
+            "desc": "Polls BaseLinker's journal for `log_type` 16 (order data edited).",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_ORDER_DATA_EDITED,
+        });
+
+        # Order Copied
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BaseLinkerDataProvider::AppName,
+            "path": "/events/" + EVENT_ORDER_COPIED,
+            "action": EVENT_ORDER_COPIED,
+            "groups": "Events",
+            "display_name": "Order Copied",
+            "short_desc": "Emitted when an order is copied",
+            "desc": "Polls BaseLinker's journal for `log_type` 17 (order copied).",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_ORDER_COPIED,
+        });
+
+        # Order Status Changed
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BaseLinkerDataProvider::AppName,
+            "path": "/events/" + EVENT_ORDER_STATUS_CHANGED,
+            "action": EVENT_ORDER_STATUS_CHANGED,
+            "groups": "Events",
+            "display_name": "Order Status Changed",
+            "short_desc": "Emitted when the status of an order changes",
+            "desc": "Polls BaseLinker's journal for `log_type` 18 (order status changed).",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_ORDER_STATUS_CHANGED,
+        });
+
+        # Invoice Deleted
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BaseLinkerDataProvider::AppName,
+            "path": "/events/" + EVENT_INVOICE_DELETED,
+            "action": EVENT_INVOICE_DELETED,
+            "groups": "Events",
+            "display_name": "Invoice Deleted",
+            "short_desc": "Emitted when an invoice is deleted",
+            "desc": "Polls BaseLinker's journal for `log_type` 19 (invoice deleted).",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_INVOICE_DELETED,
+        });
+
+        # Receipt Deleted
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BaseLinkerDataProvider::AppName,
+            "path": "/events/" + EVENT_RECEIPT_DELETED,
+            "action": EVENT_RECEIPT_DELETED,
+            "groups": "Events",
+            "display_name": "Receipt Deleted",
+            "short_desc": "Emitted when a receipt is deleted",
+            "desc": "Polls BaseLinker's journal for `log_type` 20 (receipt deleted).",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_RECEIPT_DELETED,
+        });
+
+        # Invoice Edited
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BaseLinkerDataProvider::AppName,
+            "path": "/events/" + EVENT_INVOICE_EDITED,
+            "action": EVENT_INVOICE_EDITED,
+            "groups": "Events",
+            "display_name": "Invoice Edited",
+            "short_desc": "Emitted when an invoice is edited",
+            "desc": "Polls BaseLinker's journal for `log_type` 21 (invoice edited).",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_INVOICE_EDITED,
+        });
+
+        # Package Status Changed
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BaseLinkerDataProvider::AppName,
+            "path": "/events/" + EVENT_PACKAGE_STATUS_CHANGED,
+            "action": EVENT_PACKAGE_STATUS_CHANGED,
+            "groups": "Events",
+            "display_name": "Package Status Changed",
+            "short_desc": "Emitted when a courier package status changes",
+            "desc": "Polls BaseLinker's journal for `log_type` 22 (package status changed).",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_PACKAGE_STATUS_CHANGED,
+        });
+    };
+}
+
+/** @mainpage BaseLinkerDataProvider Module
+
+    @tableofcontents
+
+    @section baselinker_dataproviderintro BaseLinkerDataProvider Module Introduction
+
+    The %BaseLinkerDataProvider module provides a data provider API for BaseLinker,
+    a Polish multichannel e-commerce platform that unifies orders, inventory,
+    shipping labels, and courier packages across marketplaces such as Allegro,
+    Amazon, eBay, and Shopify.
+
+    The module exposes:
+    - Order management — list, get, create, update, delete, status/payment changes
+    - Order line items — add, edit, remove
+    - Order returns — list, create, update, status changes, refunds
+    - Inventory — catalogs, products (upsert), stock (bulk update), prices (bulk update)
+    - Shipping — list packages, create package, retrieve label, delete package
+    - Metadata — couriers, courier services/accounts/fields, order statuses/sources
+    - Event triggers — 22 polling-based event providers derived from `getJournalList`
+
+    All API calls are made via BaseLinker's single-endpoint RPC protocol
+    (`POST /connector.php` with form-encoded `method`/`parameters`); the module
+    hides this mechanism behind a conventional data-provider surface.
+
+    **Rate limit:** 100 requests per minute per token. The base class reactively
+    retries rate-limited calls with exponential backoff (up to 3 attempts with
+    1s/2s/4s sleep between attempts).
+
+    **Event retention:** BaseLinker's journal retains log entries for 3 days. Pick
+    a polling interval well below that (default 120s) and ensure pollers keep up
+    with traffic.
+
+    @section baselinker_dataprovider_relnotes Release Notes
+
+    @subsection baselinker_dataprovider_v1_0 BaseLinkerDataProvider v1.0
+    - the initial version of the %BaseLinkerDataProvider module
+*/

@@ -1,0 +1,374 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file BaseLinkerRestClient.qm Qore user module for calling BaseLinker REST API services
+
+/*  BaseLinkerRestClient.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum qore version
+%requires qore >= 2.0
+
+# assume local scope for variables, do not use "$" signs
+%modern
+
+%requires(reexport) Mime >= 1.3
+%requires(reexport) RestClient >= 1.3.1
+%requires(reexport) RestClientIo
+%requires(reexport) ConnectionProvider >= 1.4
+
+module BaseLinkerRestClient {
+    version = "1.0";
+    desc = "User module for calling BaseLinker REST API services";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        ConnectionSchemeCache::registerScheme("baselinkerrest",
+            BaseLinkerRestConnection::ConnectionScheme);
+    };
+}
+
+/** @mainpage BaseLinkerRestClient Module
+
+    @tableofcontents
+
+    @section baselinkerrestclientintro BaseLinkerRestClient Introduction
+
+    The %BaseLinkerRestClient module provides an API for calling BaseLinker REST API services.
+
+    To use this module, use \c "%requires BaseLinkerRestClient" in your code.
+
+    All the public symbols in the module are defined in the BaseLinkerRestClient namespace.
+
+    The main classes are:
+    - @ref BaseLinkerRestClient::BaseLinkerRestClient "BaseLinkerRestClient":
+      this class provides the REST client API for communication with the BaseLinker API;
+      it handles API token authentication via the \c X-BLToken header
+    - @ref BaseLinkerRestClient::BaseLinkerRestClientIo "BaseLinkerRestClientIo":
+      async-I/O-capable REST client for use with data providers
+    - @ref BaseLinkerRestClient::BaseLinkerRestConnection "BaseLinkerRestConnection":
+      provides a connection object to BaseLinker services (based on the
+      @ref connectionproviderintro "ConnectionProvider" module)
+
+    @section baselinkerrestclient_design API Design Notes
+
+    BaseLinker exposes an RPC-over-HTTP API: every operation is a POST to a single
+    endpoint (\c https://api.baselinker.com/connector.php) with a form-encoded body
+    of the form:
+
+    @verbatim
+method=<methodName>&parameters=<URL-encoded JSON>
+    @endverbatim
+
+    Authentication is performed by sending the raw API token in the \c X-BLToken
+    HTTP header (no \c Bearer prefix).
+
+    @section baselinkerrestclientrelnotes Release Notes
+
+    @subsection baselinkerrestclientv1_0 BaseLinkerRestClient v1.0
+    - the initial version of the %BaseLinkerRestClient module
+*/
+
+#! the BaseLinkerRestClient namespace contains all the objects in the BaseLinkerRestClient module
+public namespace BaseLinkerRestClient {
+
+#! Common base class for BaseLinkerRestClient functionality
+public class BaseLinkerRestClientBase {
+    public {
+        #! BaseLinker API base URL (the single RPC endpoint)
+        const DefaultApiUrl = "https://api.baselinker.com/connector.php";
+
+        #! Default "data" option value
+        /** BaseLinker responses are JSON, but request bodies are form-encoded; the
+            client is configured with \c "data" = \c "json" so response bodies are
+            decoded as JSON. Data providers build the form-encoded request body
+            themselves and send it as a raw string with the appropriate
+            \c Content-Type header.
+        */
+        const DefaultData = "json";
+
+        #! Default ping method (BaseLinker has no GET-able health endpoint)
+        const DefaultPingMethod = "POST";
+
+        #! Default ping path
+        /** Empty — the base URL already points at the single \c /connector.php
+            endpoint, so the ping hits the endpoint root.
+        */
+        const DefaultPingPath = "";
+
+        #! Default ping headers
+        /** The authentication header (\c X-BLToken) is merged in automatically by
+            @ref BaseLinkerRestClientBase::getOptions().
+        */
+        const DefaultPingHeaders = {
+            "Content-Type": MimeTypeFormUrlEncoded,
+            "Accept": MimeTypeJson,
+        };
+
+        #! Default ping body
+        /** A minimal valid RPC call; a successful response is HTTP 200 with a
+            JSON body carrying \c "status": \c "SUCCESS".
+        */
+        const DefaultPingBody = "method=getInventories&parameters=";
+
+        #! Default headers for all requests
+        const DefaultHeaders = {
+            "Accept": MimeTypeJson,
+        };
+
+        #! Default constructor options
+        const DefaultOptions = {
+            "data": DefaultData,
+            "headers": DefaultHeaders,
+            "ping_headers": DefaultPingHeaders,
+            "ping_method": DefaultPingMethod,
+            "ping_path": DefaultPingPath,
+            "ping_body": DefaultPingBody,
+        };
+
+        #! Default connection URL
+        const DefaultConnectionUrl = "baselinkerrests://api.baselinker.com/connector.php";
+    }
+
+    #! returns options for the BaseLinkerRestClient constructor
+    static hash<auto> getOptions(hash<auto> opts) {
+        hash<auto> rv = DefaultOptions + opts;
+
+        # Set URL
+        if (!rv.url) {
+            rv.url = DefaultApiUrl;
+        }
+
+        # Set API token authentication via X-BLToken header
+        if (opts.apikey) {
+            rv.headers."X-BLToken" = opts.apikey;
+            remove rv.apikey;
+        }
+
+        return rv;
+    }
+}
+
+#! This class provides the REST client API for communication with BaseLinker servers
+/** BaseLinker exposes an RPC-over-HTTP API at
+    \c https://api.baselinker.com/connector.php. All operations are POSTs to this
+    single endpoint with a form-encoded body of the shape
+    \c method=<name>&parameters=<URL-encoded JSON>.
+
+    @par Authentication:
+    - API token sent via the \c X-BLToken HTTP header (raw token, no \c Bearer prefix)
+    - Token obtained from BaseLinker panel: \c Account \c and \c other →
+      \c My \c account → \c API
+
+    @par API Structure:
+    - Base URL: https://api.baselinker.com/connector.php (single endpoint)
+    - Unversioned API
+    - Responses are JSON with \c "status": \c "SUCCESS" or \c "status": \c "ERROR"
+*/
+public class BaseLinkerRestClient inherits RestClient::RestClient, BaseLinkerRestClientBase {
+    #! creates the object with the given options
+    /**
+        @par Example:
+        @code{.py}
+BaseLinkerRestClient baselinker({"apikey": ENV.BASELINKER_API_KEY});
+        @endcode
+
+        @param opts valid options are all the options for the @ref RestClient::RestClient "RestClient"
+        class plus:
+        - \c apikey: the BaseLinker API token
+
+        @param do_not_connect if \c False (the default), then a connection will be immediately
+        established to the remote server
+
+        @throw RESTCLIENT-ERROR invalid option passed to constructor, unsupported data
+        serialization, etc
+    */
+    constructor(hash<auto> opts, *softbool do_not_connect)
+            : RestClient(BaseLinkerRestClientBase::getOptions(opts), do_not_connect) {
+        setAssumedEncoding("UTF-8");
+    }
+}
+
+#! Class for BaseLinker REST connections; returns @ref BaseLinkerRestClient objects
+public class BaseLinkerRestConnection inherits RestClient::RestConnection {
+    public {
+        #! Connection entry info
+        const ConnectionScheme = <ConnectionSchemeInfo>{
+            "display_name": "BaseLinker REST Connection",
+            "short_desc": "A connection to the BaseLinker REST API",
+            "desc": "A connection to the BaseLinker REST API for managing orders, products, "
+                "inventories, couriers, and external storage integrations.\n\n"
+                "BaseLinker exposes an RPC-over-HTTP API: every operation is a POST to a "
+                "single endpoint (`https://api.baselinker.com/connector.php`) with a "
+                "form-encoded body of the form `method=<name>&parameters=<URL-encoded JSON>`.\n\n"
+                "Authentication is performed by sending the raw API token in the `X-BLToken` "
+                "HTTP header (no `Bearer` prefix).\n\n"
+                "**To obtain your API token:**\n"
+                "1. Log in to your BaseLinker panel\n"
+                "2. Open **Account and other** → **My account**\n"
+                "3. Open the **API** tab\n"
+                "4. Generate a new token and copy its value\n\n"
+                "**Note:** The token is sent on every request as the `X-BLToken` header.",
+            "cls": Class::forName("BaseLinkerRestConnection"),
+            "schemes": {
+                "baselinkerrest": True,
+            },
+            "base_scheme_map": {
+                "https": "baselinkerrest",
+            },
+            "required_options": "apikey",
+            "options": RestConnection::ConnectionScheme.options + {
+                "apikey": <ConnectionOptionInfo>{
+                    "display_name": "API Token",
+                    "short_desc": "BaseLinker API token for authentication",
+                    "type": "string",
+                    "desc": "The BaseLinker API token used for authentication. It is sent on "
+                        "every request as the `X-BLToken` HTTP header (raw token, no "
+                        "`Bearer` prefix).\n\n"
+                        "**To obtain your API token:**\n"
+                        "1. Log in to your BaseLinker panel\n"
+                        "2. Open **Account and other** → **My account**\n"
+                        "3. Open the **API** tab\n"
+                        "4. Generate a new token and copy its value",
+                    "sensitive": True,
+                    "preselected": True,
+                },
+                "url": RestConnection::ConnectionScheme.options."url"
+                + <ConnectionOptionInfo>{
+                    "default_value": BaseLinkerRestClientBase::DefaultApiUrl,
+                    "desc": "The URL of the BaseLinker RPC endpoint. The default "
+                        "(`https://api.baselinker.com/connector.php`) is correct for all "
+                        "production usage; override only for local mock testing.",
+                },
+                "data": RestConnection::ConnectionScheme.options."data"
+                + <ConnectionOptionInfo>{
+                    "default_value": BaseLinkerRestClientBase::DefaultData,
+                },
+                "ping_headers": RestConnection::ConnectionScheme.options."ping_headers"
+                + <ConnectionOptionInfo>{
+                    "default_value": BaseLinkerRestClientBase::DefaultPingHeaders,
+                },
+                "ping_method": RestConnection::ConnectionScheme.options."ping_method"
+                + <ConnectionOptionInfo>{
+                    "default_value": BaseLinkerRestClientBase::DefaultPingMethod,
+                },
+                "ping_path": RestConnection::ConnectionScheme.options."ping_path"
+                + <ConnectionOptionInfo>{
+                    "default_value": BaseLinkerRestClientBase::DefaultPingPath,
+                },
+                "ping_body": RestConnection::ConnectionScheme.options."ping_body"
+                + <ConnectionOptionInfo>{
+                    "default_value": BaseLinkerRestClientBase::DefaultPingBody,
+                },
+            },
+            "messages": (
+                <UiMessageInfo>{
+                    "title": "How to Obtain Your API Token",
+                    "intent": "info",
+                    "content": "This integration requires a **BaseLinker API token**.\n\n"
+                        "**Steps to generate a token:**\n"
+                        "1. Log in to your BaseLinker panel\n"
+                        "2. Open **Account and other** → **My account**\n"
+                        "3. Open the **API** tab\n"
+                        "4. Click to generate a new token and copy its value\n\n"
+                        "**How it is used:**\n"
+                        "- The token is sent on every request as the `X-BLToken` HTTP header\n"
+                        "- No `Bearer` prefix is used — the token is sent raw\n"
+                        "- Every BaseLinker call is a POST to a single RPC endpoint "
+                        "(`/connector.php`) with a form-encoded body",
+                },
+            ),
+        };
+    }
+
+    #! creates the BaseLinkerRestConnection object
+    constructor(string name, string description,
+            string url = BaseLinkerRestClientBase::DefaultConnectionUrl,
+            hash<auto> attributes = {}, hash<auto> options = {})
+            : RestConnection(name, description, url, attributes, options) {
+    }
+
+    #! creates the BaseLinkerRestConnection object
+    constructor(hash<auto> config, *hash<auto> attr)
+            : RestConnection(BaseLinkerRestConnection::getConfig(config), attr) {
+    }
+
+    #! returns config for @ref BaseLinkerRestConnection::constructor()
+    private static hash<auto> getConfig(hash<auto> config) {
+        return config + {
+            "url": config.url ?? BaseLinkerRestClientBase::DefaultConnectionUrl,
+        };
+    }
+
+    #! returns \c "baselinkerrest"
+    string getType() {
+        return "baselinkerrest";
+    }
+
+    #! returns @ref True as this connection returns a data provider with the @ref getDataProvider()
+    #! method
+    bool hasDataProvider() {
+        return True;
+    }
+
+    #! Returns the data provider application name this connection serves, if any
+    *string getAppName() {
+        return "BaseLinker";
+    }
+
+    #! returns a data provider object for this connection
+    DataProvider::AbstractDataProvider getDataProvider(*hash<auto> constructor_options) {
+        # to avoid circular dependencies, this object loads the BaseLinkerDataProvider and creates
+        # the data provider object dynamically
+        load_module("BaseLinkerDataProvider");
+        return create_object("BaseLinkerDataProvider", getAsync());
+    }
+
+    #! Sets child data provider capabilities
+    private setChildCapabilities() {
+        children_can_support_records = True;
+        children_can_support_apis = True;
+        children_can_support_observers = True;
+    }
+
+    #! returns a @ref BaseLinkerRestClient object
+    private BaseLinkerRestClient getImpl(bool connect = True, *hash<auto> rtopts) {
+        return new BaseLinkerRestClient(getConnectionOptions(rtopts), !connect);
+    }
+
+    #! Returns an async-I/O-capable connection object
+    private object getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
+        return new BaseLinkerRestClientIo(getConnectionOptions(rtopts));
+    }
+
+    #! Returns the ConnectionSchemeInfo hash for this object
+    private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
+        return ConnectionScheme;
+    }
+}
+
+#! REST client for BaseLinker REST API using multiplexed HTTP connections
+public class BaseLinkerRestClientIo inherits RestClientIo::RestClientIo, BaseLinkerRestClientBase {
+    #! Creates the object with the given options
+    constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
+            : RestClientIo(BaseLinkerRestClientBase::getOptions(opts), shared_mgr) {
+    }
+}
+}
