@@ -29,6 +29,9 @@ public class TerminalFormatTest inherits QUnit::Test {
         addTestCase("Table: edge cases", \tableEdgeCases(), NOTHING);
         addTestCase("Table: render vs renderLines", \tableRenderApi(), NOTHING);
 
+        addTestCase("TerminalColor: multibyte strip/visible", \terminalColorMultibyte(), NOTHING);
+        addTestCase("Markdown: multibyte pipe-table cells", \markdownTablesMultibyte(), NOTHING);
+
         set_return_value(main());
     }
 
@@ -416,5 +419,52 @@ public class TerminalFormatTest inherits QUnit::Test {
         TerminalTableRenderer dflt();
         assertTrue(dflt.render(headers, rows).val(),
             "default ctor: produces non-empty output");
+    }
+
+    terminalColorMultibyte() {
+        # Regression: Util::TerminalColor::stripAnsi() indexed with character
+        # positions but looped against text.size() (byte count). Multi-byte
+        # UTF-8 content made the loop run past the last character and
+        # text[i] returned NOTHING, raising RUNTIME-TYPE-ERROR.
+
+        # Pure multibyte, no ANSI
+        string s = "café — test";
+        assertEq(11, s.length(), "sanity: 11 characters");
+        assertTrue(s.size() > s.length(), "sanity: byte size > char length");
+        assertEq(s, Util::TerminalColor::stripAnsi(s),
+            "multibyte: no ANSI → unchanged");
+        assertEq(11, Util::TerminalColor::visibleLength(s),
+            "multibyte: visible length == character length");
+
+        # Multibyte interleaved with ANSI escape sequences
+        string ansi = "\033[31mcafé\033[0m — \033[1mtest\033[0m";
+        assertEq("café — test", Util::TerminalColor::stripAnsi(ansi),
+            "multibyte + ANSI: ANSI stripped, chars preserved");
+        assertEq(11, Util::TerminalColor::visibleLength(ansi),
+            "multibyte + ANSI: visible length ignores escapes");
+
+        # padRight/padLeft compute padding against visible length
+        assertEq(20, Util::TerminalColor::stripAnsi(
+            Util::TerminalColor::padRight(s, 20, ".")).length(),
+            "padRight: multibyte padded to visible width");
+        assertEq(20, Util::TerminalColor::stripAnsi(
+            Util::TerminalColor::padLeft(s, 20, ".")).length(),
+            "padLeft: multibyte padded to visible width");
+    }
+
+    markdownTablesMultibyte() {
+        # Regression for qonsole crash: rendering a pipe table whose cells
+        # contained multi-byte characters (em-dash, accented letters, etc.)
+        # drove renderTable → TerminalColor::visibleLength → stripAnsi past
+        # the character range and raised RUNTIME-TYPE-ERROR.
+        TerminalMarkdownRenderer r = md();
+
+        string tbl = "| Name | Note |\n| --- | --- |\n| café | — |\n| foo | naïve |";
+        list<string> lines = r.renderLines(tbl);
+        assertEq(4, lines.size(), "multibyte table: 4 lines");
+        assertTrue(regex(lines[0], "Name"), "multibyte table: Name header");
+        assertTrue(regex(lines[2], "café"), "multibyte table: café cell");
+        assertTrue(regex(lines[2], "—"), "multibyte table: em-dash cell");
+        assertTrue(regex(lines[3], "naïve"), "multibyte table: naïve cell");
     }
 }
