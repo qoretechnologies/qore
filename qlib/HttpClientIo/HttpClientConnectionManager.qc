@@ -882,11 +882,24 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
             shutdown = True;
         }
 
+        string owner_id = self.uniqueHash();
         try {
-            controller.cancelByOwner(self.uniqueHash());
+            controller.cancelByOwner(owner_id);
         } catch (hash<ExceptionInfo> ex) {
             log(LoggerLevel::DEBUG, "closeAll: cancelByOwner error: %s: %s", ex.err, ex.desc);
         }
+
+        # Barrier: wait for every dispatcher worker running a callback tagged
+        # with this manager's owner id to exit before returning.
+        # handleConnectionResult() — invoked from those callbacks — acquires
+        # pool_lock on a worker; without this barrier, a worker triggered by
+        # an in-flight stream error (e.g. H1 mid-stream cancel from a
+        # stream.cancel() above this destructor) can still be inside the
+        # write lock when the destructor destroys it, producing
+        # "LOCK-ERROR: TID N deleted RWLock while TID M was holding the lock".
+        # Per-owner (not global) so a manager destructor doesn't block on
+        # unrelated long-running callbacks on the shared controller.
+        controller.flushCallbacksByOwner(owner_id);
 
         # Copy the pool and release the lock before closing connections
         hash<string, list<HttpClientConnection>> pool_copy;

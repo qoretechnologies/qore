@@ -253,6 +253,13 @@ Do+Sl1gfqlpgpszQaOMjR4M=
     }
 
     constructor() : Test("HttpClientIoTest", "1.0") {
+        # Install signal handler early to debug hangs: `kill -USR1 <pid>` dumps
+        # all Qore thread call stacks to stdout.
+        @debug {
+            set_signal_handler(SIGUSR1, sub (int sig) {
+                printf("=== SIGUSR1 Thread Stacks ===\n%Y\n", get_all_thread_call_stacks());
+            });
+        }
         # Module and definition tests
         addTestCase("module load test", \testModuleLoad());
         addTestCase("unified hashdecl and enum definitions", \testUnifiedDefinitions());
