@@ -289,6 +289,60 @@ static bool idchar(const char c) {
     return isalnum(c) || c == '_';
 }
 
+// Heuristic for detecting a file-scope signature line that is
+// syntactically an abstract method declaration but lacks the
+// `ClassName::` prefix qpp's method parser requires.  True when the
+// line:
+//   - starts with one of the method-attribute keywords that precede a
+//     return type (abstract/public/private/static/synchronized); AND
+//   - contains the word "abstract" as a standalone token (not part of
+//     an identifier); AND
+//   - contains a `(`, indicating a parameter list.
+// Used by Code::parse()'s orphan-abstract fallback — see the comment
+// at the call site for semantics.
+static bool is_orphan_abstract_line(const std::string& line) {
+    if (line.find('(') == std::string::npos) {
+        return false;
+    }
+    // Accept leading whitespace; then require one of the attribute
+    // keywords to anchor the line.  Without anchoring we'd match any
+    // stray `abstract` token in a comment or string.
+    size_t i = 0;
+    while (i < line.size() && (line[i] == ' ' || line[i] == '\t')) {
+        ++i;
+    }
+    static const char* const anchors[] = {
+        "abstract ", "public ", "private ", "static ", "synchronized ", nullptr
+    };
+    bool anchored = false;
+    for (const char* const* a = anchors; *a; ++a) {
+        size_t alen = strlen(*a);
+        if (line.compare(i, alen, *a) == 0) {
+            anchored = true;
+            break;
+        }
+    }
+    if (!anchored) {
+        return false;
+    }
+    // Require `abstract` somewhere before the `(` as a full token.
+    size_t paren = line.find('(');
+    size_t pos = 0;
+    while (pos < paren) {
+        size_t at = line.find("abstract", pos);
+        if (at == std::string::npos || at >= paren) {
+            return false;
+        }
+        bool lbound = (at == 0) || !idchar(line[at - 1]);
+        bool rbound = (at + 8 >= line.size()) || !idchar(line[at + 8]);
+        if (lbound && rbound) {
+            return true;
+        }
+        pos = at + 1;
+    }
+    return false;
+}
+
 static bool idnschar(const char c) {
     return isalnum(c) || c == '_' || c == ':';
 }
@@ -2518,9 +2572,16 @@ public:
         return 0;
     }
 
-    // Emit a `public const Name = value;` line; value comes through
-    // get_dox_value which strips the `{...}` wrapper qpp uses for raw
-    // C++ values, leaving a Qore expression.
+    // Emit a `public const Name = value;` line.  Values are processed
+    // to produce parseable Qore:
+    //   - `{dox} ...` — strip the `{dox}` wrapper (get_dox_value).
+    //   - Plain identifier that classifies as T_INT but has no digits
+    //     (i.e. an all-uppercase C macro like `RLIMIT_NOFILE`): emit
+    //     `0` as a parseable placeholder.  The runtime const still
+    //     carries the macro's real value via the .cpp emitter's
+    //     separate `((int64)RLIMIT_NOFILE)` path, so the stub only
+    //     needs to parse — its value doesn't drive runtime behaviour.
+    //   - Otherwise: emit verbatim (get_dox_value pass-through).
     int serializeStub(FILE* fp) const {
         fputs("public const ", fp);
         fputs(name.c_str(), fp);
@@ -2529,7 +2590,25 @@ public:
         if (get_dox_value(value, qv)) {
             return -1;
         }
-        fputs(qv.c_str(), fp);
+        // Detect C-macro identifiers after {dox}-stripping.
+        bool looks_like_c_macro = false;
+        if (!qv.empty() && get_val_type(qv) == T_INT) {
+            bool any_digit = false;
+            for (char c : qv) {
+                if (isdigit(static_cast<unsigned char>(c))) {
+                    any_digit = true;
+                    break;
+                }
+            }
+            if (!any_digit) {
+                looks_like_c_macro = true;
+            }
+        }
+        if (looks_like_c_macro) {
+            fputs("0", fp);
+        } else {
+            fputs(qv.c_str(), fp);
+        }
         fputs(";\n", fp);
         return 0;
     }
@@ -2609,7 +2688,17 @@ protected:
     ReturnType rt;
     unsigned line;
     bool has_return, doconly,   // only for documentation
-        valid;
+        valid,
+        // When true, this element is emitted ONLY into the `.stub.qc`
+        // output; it is skipped in `.cpp` codegen (method body +
+        // binding), javadoc, and unit-test outputs.  Used for file-
+        // scope orphan abstract declarations that qpp's parser would
+        // otherwise drop: those methods need to be visible to the
+        // compile-time stub parser (so callers against the base class
+        // resolve) but their `addAbstractMethod` slot must stay unset
+        // at runtime so derived classes with incompatible signatures
+        // can override freely.  See parse() for the detection rule.
+        stub_only;
 
     void serializeArgs(FILE* fp, const char* cname = 0, bool rv = true) const {
         for (unsigned i = 0; i < params.size(); ++i) {
@@ -3086,11 +3175,13 @@ protected:
 public:
     CodeBase(const std::string& fn, const std::string& n_name, attr_t n_attr, const paramlist_t& n_params,
             const std::string& n_docs, const std::string& n_return_type, const strlist_t& n_flags,
-            const strlist_t& n_dom, const std::string& n_code, unsigned n_line, bool n_doconly)
+            const strlist_t& n_dom, const std::string& n_code, unsigned n_line, bool n_doconly,
+            bool n_stub_only = false)
             : fileName(fn), name(n_name), vname(name), docs(n_docs),
         return_type(n_return_type), code(n_code), flags(n_flags),
         dom(n_dom), attr(n_attr), params(n_params), rt(RT_ANY),
-        line(n_line), has_return(false), doconly(n_doconly), valid(true) {
+        line(n_line), has_return(false), doconly(n_doconly), valid(true),
+        stub_only(n_stub_only) {
         if (return_type == "int" || return_type == "softint")
             rt = RT_INT;
         else if (return_type == "bool" || return_type == "softbool")
@@ -4049,8 +4140,21 @@ struct HashDeclInfo {
     std::string comment;
     std::string type;
     std::string value;
+    // True when the qpp source declared the member as `Type name();`
+    // — a default-construction initializer.  Qore's hashdecl grammar
+    // auto-invokes the default constructor for the member's type when
+    // the containing hashdecl is instantiated, so the parenthesised
+    // form is semantically distinct from `Type name;` (no default
+    // init, member stays NOTHING until assigned).  Preserved so the
+    // Qore-syntax stub round-trips the qpp source faithfully.
+    bool default_construct = false;
 
-    HashDeclInfo(std::string&& comment, std::string&& type, std::string&& value) : comment(comment), type(type), value(value) {
+    HashDeclInfo(std::string&& comment, std::string&& type, std::string&& value)
+        : comment(comment), type(type), value(value) {
+    }
+
+    HashDeclInfo(std::string&& comment, std::string&& type, std::string&& value, bool dc)
+        : comment(comment), type(type), value(value), default_construct(dc) {
     }
 
     int serializeCpp(FILE* fp, const char* name, const std::string& hdname) {
@@ -4220,13 +4324,15 @@ public:
                 //log(LL_DEBUG, "B line: '%s'\n", line.c_str());
 
                 std::string exp;
-                if (getKeyExp(line, exp, fileName, lineNumber, fp))
+                bool default_construct = false;
+                if (getKeyExp(line, exp, default_construct, fileName, lineNumber, fp))
                     return;
 
                 //log(LL_DEBUG, "A line: '%s', exp: '%s'\n", line.c_str(), exp.c_str());
 
                 // save hashdecl
-                hdmap.insert(hdmap_t::value_type(name, HashDeclInfo(std::move(cdoc), std::move(type), std::move(exp))));
+                hdmap.insert(hdmap_t::value_type(name, HashDeclInfo(std::move(cdoc), std::move(type),
+                    std::move(exp), default_construct)));
                 //log(LL_DEBUG, "hashdecl '%s' %s = '%s'; %s\n", this->name.c_str(), name.c_str(), exp.c_str(), cdoc.c_str());
                 continue;
             }
@@ -4301,8 +4407,16 @@ public:
     }
 
     // Emit a Qore-syntax `public hashdecl Name [inherits Parent] { ... }`
-    // stub with each member's type/name/default-expr (the default is
-    // kept verbatim — qpp's input already holds valid Qore syntax).
+    // stub with each member's type/name/initializer.  Three forms:
+    //   - `Type name;`      (plain — no initializer)
+    //   - `Type name();`    (default-construct — Qore auto-invokes
+    //                        the member type's default constructor
+    //                        when the containing hashdecl is
+    //                        instantiated; distinct from the plain
+    //                        form, which leaves the member as
+    //                        NOTHING)
+    //   - `Type name = val;` (explicit initializer expression,
+    //                        passed through from qpp verbatim)
     virtual int serializeStub(FILE* fp) override {
         int ns_depth = outputQoreNamespaceStart(fp);
 
@@ -4321,6 +4435,8 @@ public:
             if (!i.second.value.empty()) {
                 fputs(" = ", fp);
                 fputs(i.second.value.c_str(), fp);
+            } else if (i.second.default_construct) {
+                fputs("()", fp);
             }
             fputs(";\n", fp);
         }
@@ -4437,7 +4553,8 @@ protected:
         return 0;
     }
 
-    int getKeyExp(std::string& line, std::string& exp, const char* fileName, unsigned& lineNumber, FILE* fp) {
+    int getKeyExp(std::string& line, std::string& exp, bool& default_construct,
+            const char* fileName, unsigned& lineNumber, FILE* fp) {
         //log(LL_DEBUG, "line: '%s'\n", line.c_str());
         // trim off trailing newline and spaces
         line.erase(line.size() - 1);
@@ -4461,6 +4578,23 @@ protected:
             trim(line);
 
             exp = line;
+        } else {
+            // No `=`: distinguish `Type name;` from `Type name();`.
+            // The latter is Qore syntax for "default-construct this
+            // member when the containing hashdecl is instantiated",
+            // and must round-trip into the .stub.qc output to preserve
+            // observed runtime behaviour (qore -Me 'hashdecl T {
+            // Mutex m(); } hash<T> h(); printf("%Y\n", h);' ->
+            // m: {<Mutex object>}).
+            std::string probe = line;
+            // strip trailing `;`
+            if (!probe.empty() && probe.back() == ';') {
+                probe.pop_back();
+            }
+            trim(probe);
+            if (probe == "()") {
+                default_construct = true;
+            }
         }
         return 0;
     }
@@ -5023,8 +5157,8 @@ protected:
     }
 
 public:
-    Method(const std::string& fn, const std::string& n_name, attr_t n_attr, const paramlist_t& n_params, const std::string& n_docs, const std::string& n_return_type, const strlist_t& n_flags, const strlist_t& n_dom, const std::string& n_code, unsigned n_line, bool n_doconly, const char* n_pseudo_arg) :
-               CodeBase(fn, n_name, n_attr, n_params, n_docs, n_return_type, n_flags, n_dom, n_code, n_line, n_doconly) {
+    Method(const std::string& fn, const std::string& n_name, attr_t n_attr, const paramlist_t& n_params, const std::string& n_docs, const std::string& n_return_type, const strlist_t& n_flags, const strlist_t& n_dom, const std::string& n_code, unsigned n_line, bool n_doconly, const char* n_pseudo_arg, bool n_stub_only = false) :
+               CodeBase(fn, n_name, n_attr, n_params, n_docs, n_return_type, n_flags, n_dom, n_code, n_line, n_doconly, n_stub_only) {
         if (n_pseudo_arg && n_pseudo_arg[0]) {
             pseudo_arg = n_pseudo_arg;
             std::string::size_type i = pseudo_arg.find('=');
@@ -5200,6 +5334,14 @@ public:
         if (doconly)
             return;
 
+        // stub_only methods never get a C++ body — the Method exists
+        // solely to populate the `.stub.qc` output.  Skip here so the
+        // class's init function doesn't end up referencing unresolved
+        // class-name types (e.g. Qore-source classes not visible to
+        // qpp) in its type-vector emission.
+        if (stub_only)
+            return;
+
         if (name == "constructor") {
             serializeCppConstructor(fp, cname);
             return;
@@ -5257,6 +5399,14 @@ public:
         if (doconly)
             return 0;
 
+        // stub_only methods have no `addMethod` / `addAbstractMethod`
+        // binding: the runtime class keeps its abstract slot unset so
+        // incompatible derived overrides can co-exist (the whole
+        // reason stub_only exists — see parse()'s orphan-abstract
+        // handler).
+        if (stub_only)
+            return 0;
+
         if (name == "constructor")
             return serializeCppConstructorBinding(fp, cname, UC);
 
@@ -5307,7 +5457,7 @@ public:
     void serializeStaticCppMethod(FILE* fp, const char* cname, const char* arg) const {
         assert(attr & QCA_STATIC);
 
-        if (doconly)
+        if (doconly || stub_only)
             return;
 
         serializeQorePrototypeComment(fp, cname);
@@ -5327,7 +5477,7 @@ public:
     int serializeStaticCppBinding(FILE* fp, const char* cname, const char* UC) const {
         assert(attr & QCA_STATIC);
 
-        if (doconly)
+        if (doconly || stub_only)
             return 0;
 
         fputc('\n', fp);
@@ -5613,7 +5763,8 @@ public:
     }
 
     int addMethod(const std::string& mname, attr_t attr, const std::string& return_type, const paramlist_t& params,
-            const strmap_t& flags, const std::string& code, const std::string& doc, unsigned line) {
+            const strmap_t& flags, const std::string& code, const std::string& doc, unsigned line,
+            bool stub_only = false) {
         log(LL_DETAIL, "adding method %s%s'%s'::'%s'()\n", return_type.c_str(), return_type.empty() ? "" : " ",
             name.c_str(), mname.c_str());
 
@@ -5647,7 +5798,8 @@ public:
 
         mmap_t& mmap = (attr & QCA_STATIC) ? static_mmap : normal_mmap;
 
-        Method* m = new Method(fileName, mname, attr, params, doc, return_type, cf, dom, code, line, doconly, is_pseudo ? arg.c_str() : 0);
+        Method* m = new Method(fileName, mname, attr, params, doc, return_type, cf, dom, code, line, doconly,
+                is_pseudo ? arg.c_str() : 0, stub_only);
         mmap.insert(mmap_t::value_type(mname, m));
         return !*m;
     }
@@ -6360,6 +6512,58 @@ protected:
                         }
                         continue;
                     }
+                } else {
+                    // Orphan abstract fallback: a file-scope signature
+                    // line without the `::` prefix that qpp normally
+                    // requires.  If the line parses as an abstract
+                    // method declaration and there's a preceding
+                    // qclass, associate it with that class as a
+                    // stub-only method — skipped in .cpp codegen but
+                    // emitted in the Qore-syntax stub.  Used for
+                    // declarations whose abstract slot must stay
+                    // unset at runtime (e.g. Qorus'
+                    // AbstractQorusCoreServiceBase::callMethodImpl
+                    // where two derived classes have incompatible
+                    // signatures that only co-exist while the slot
+                    // is empty).
+                    std::string trimmed = sc;
+                    trim_end(trimmed);
+                    if (!trimmed.empty() && trimmed.back() == ';'
+                            && is_orphan_abstract_line(trimmed)) {
+                        // Find the most recent qclass declared in this
+                        // file; orphan abstracts only bind to the
+                        // preceding class, never across class
+                        // boundaries.
+                        ClassElement* host = nullptr;
+                        for (auto rit = source.rbegin(); rit != source.rend(); ++rit) {
+                            host = dynamic_cast<ClassElement*>(*rit);
+                            if (host) {
+                                break;
+                            }
+                        }
+                        if (host) {
+                            // Inject `ClassName::` before the method
+                            // name so parseMethod's `::`-based extraction
+                            // works unchanged.
+                            size_t paren = trimmed.find('(');
+                            if (paren != std::string::npos) {
+                                size_t i = paren;
+                                while (i > 0 && (idchar(trimmed[i-1]) || trimmed[i-1] == ':')) {
+                                    --i;
+                                }
+                                std::string cls_prefix = host->getName();
+                                cls_prefix += "::";
+                                trimmed.insert(i, cls_prefix);
+                                sc = trimmed;
+                                if (parseMethod(sc, fp, str, /*abstract=*/true,
+                                        /*stub_only=*/true)) {
+                                    valid = false;
+                                    break;
+                                }
+                                continue;
+                            }
+                        }
+                    }
                 }
 
                 continue;
@@ -6381,7 +6585,8 @@ protected:
         return rc;
     }
 
-    int parseMethod(std::string& sc, FILE* fp, std::string& doc, bool abstract = false) {
+    int parseMethod(std::string& sc, FILE* fp, std::string& doc, bool abstract = false,
+            bool stub_only = false) {
         unsigned sl = lineNumber;
         if (!abstract) {
             if (read_until_close(fileName, lineNumber, sc, fp)) {
@@ -6454,7 +6659,7 @@ protected:
         if (parse_params_and_flags(fileName, lineNumber, flags, params, attr, sc, p, dn, abstract))
             return -1;
 
-        return ci->second->addMethod(mn, attr, return_type, params, flags, sc, doc, sl);
+        return ci->second->addMethod(mn, attr, return_type, params, flags, sc, doc, sl, stub_only);
     }
 
 public:
