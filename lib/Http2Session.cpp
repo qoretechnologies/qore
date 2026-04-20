@@ -977,17 +977,21 @@ int Http2Session::sendPendingDataBlocking(int timeout_ms, ExceptionSink* xsink) 
 }
 
 int Http2Session::receiveData(int timeout_ms, ExceptionSink* xsink) {
-    if (http2DebugEnabled()) {
-        fprintf(stderr, "HTTP2 DEBUG: receiveData() session=%p isServer=%d tid=%d about to lock\n",
-            this, is_server, q_gettid());
-        fflush(stderr);
-    }
-    std::lock_guard<std::recursive_mutex> lg(m);
-    if (http2DebugEnabled()) {
-        fprintf(stderr, "HTTP2 DEBUG: receiveData() session=%p isServer=%d tid=%d locked\n",
-            this, is_server, q_gettid());
-        fflush(stderr);
-    }
+    // Do NOT hold Http2Session::m during the blocking brecv call.
+    //
+    // Lock-order deadlock rationale (macOS Http2.qtest hang seen on
+    // job 170360): two worker-path/IO-path contention points take the
+    // two mutexes in opposite orders:
+    //   - IO thread (this function):   Http2Session::m  →  socket->priv->m (via brecv)
+    //   - worker (submitHttp2Request): socket->priv->m  →  Http2Session::m
+    // With brecv holding session->m across its internal waitReleasingLock
+    // poll wait, a concurrent submitHttp2Request from a worker thread can
+    // hold the socket outer mutex while waiting for session->m, while
+    // the IO thread holds session->m and needs the socket outer mutex to
+    // resume its brecv — classic deadlock.
+    //
+    // brecv does not touch nghttp2_session state; only
+    // nghttp2_session_mem_recv below does, and we reacquire m for that.
     char* buf;
     printd(5, "receiveData() ENTRY fd=%d isServer=%d timeout_ms=%d\n", sock->sock, is_server, timeout_ms);
     // Use suppress_exception=true to avoid exception on timeout
@@ -1035,6 +1039,11 @@ int Http2Session::receiveData(int timeout_ms, ExceptionSink* xsink) {
         }
     }
 
+    // Now acquire m for the stateful nghttp2 call; brecv above did I/O
+    // without holding it to avoid the lock-order deadlock with worker-
+    // thread submitHttp2Request (see the comment at entry of this
+    // function).
+    std::lock_guard<std::recursive_mutex> lg(m);
     ssize_t rv = nghttp2_session_mem_recv(session, reinterpret_cast<uint8_t*>(buf), len);
     printd(5, "receiveData() nghttp2_session_mem_recv rv=%zd (input len=%zd)\n", rv, len);
     if (rv < 0) {

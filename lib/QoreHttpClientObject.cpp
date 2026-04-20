@@ -6236,7 +6236,13 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                                 cb_arg->setKeyValue("obj", obj->refSelf(), xsink);
                             }
                             args->push(cb_arg, xsink);
-                            rv = recv_callback->execValue(*args, xsink);
+                            // Must NOT reassign `rv` here — `h = rv->get<QoreHashNode>()`
+                            // above aliases the hash held by rv; operator= on a
+                            // ValueHolder discards the current value, freeing the hash
+                            // and turning `h` into a dangling pointer.  Use a local
+                            // holder so the callback return value is properly cleaned
+                            // up without touching the per-iteration channel recv hash.
+                            ValueHolder cb_rv(recv_callback->execValue(*args, xsink), xsink);
                             if (*xsink) {
                                 channel->close();
                                 return nullptr;
@@ -6303,7 +6309,13 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                             cb_arg->setKeyValue("data", body_val.refSelf(), xsink);
                             cb_arg->setKeyValue("chunked", true, xsink);
                             args->push(cb_arg, xsink);
-                            rv = recv_callback->execValue(*args, xsink);
+                            // Must NOT reassign `rv` here — `h = rv->get<QoreHashNode>()`
+                            // above aliases the hash held by rv; operator= on a
+                            // ValueHolder discards the current value, freeing the hash
+                            // and turning `h` into a dangling pointer.  Use a local
+                            // holder so the callback return value is properly cleaned
+                            // up without touching the per-iteration channel recv hash.
+                            ValueHolder cb_rv(recv_callback->execValue(*args, xsink), xsink);
                             if (*xsink) {
                                 channel->close();
                                 return nullptr;
@@ -6335,7 +6347,13 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                                 cb_arg->setKeyValue("obj", obj->refSelf(), xsink);
                             }
                             args->push(cb_arg, xsink);
-                            rv = recv_callback->execValue(*args, xsink);
+                            // Must NOT reassign `rv` here — `h = rv->get<QoreHashNode>()`
+                            // above aliases the hash held by rv; operator= on a
+                            // ValueHolder discards the current value, freeing the hash
+                            // and turning `h` into a dangling pointer.  Use a local
+                            // holder so the callback return value is properly cleaned
+                            // up without touching the per-iteration channel recv hash.
+                            ValueHolder cb_rv(recv_callback->execValue(*args, xsink), xsink);
                             if (*xsink) {
                                 channel->close();
                                 return nullptr;
@@ -6556,7 +6574,10 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                             cb_arg->setKeyValue("obj", obj->refSelf(), xsink);
                         }
                         args->push(cb_arg, xsink);
-                        rv = recv_callback->execValue(*args, xsink);
+                        // See comment on the 3-space-indent sibling site below —
+                        // do NOT reassign `rv` (which aliases the per-iteration
+                        // channel recv hash referenced by `h`).
+                        ValueHolder cb_rv(recv_callback->execValue(*args, xsink), xsink);
                         if (*xsink) {
                             channel->close();
                             return nullptr;
@@ -6635,7 +6656,13 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                             cb_arg->setKeyValue("data", cb_data, xsink);
                             cb_arg->setKeyValue("chunked", true, xsink);
                             args->push(cb_arg, xsink);
-                            rv = recv_callback->execValue(*args, xsink);
+                            // Must NOT reassign `rv` here — `h = rv->get<QoreHashNode>()`
+                            // above aliases the hash held by rv; operator= on a
+                            // ValueHolder discards the current value, freeing the hash
+                            // and turning `h` into a dangling pointer.  Use a local
+                            // holder so the callback return value is properly cleaned
+                            // up without touching the per-iteration channel recv hash.
+                            ValueHolder cb_rv(recv_callback->execValue(*args, xsink), xsink);
                             if (*xsink) {
                                 channel->close();
                                 return nullptr;
@@ -6675,7 +6702,10 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                         cb_arg->setKeyValue("data", cb_data, xsink);
                         cb_arg->setKeyValue("chunked", false, xsink);
                         args->push(cb_arg, xsink);
-                        rv = recv_callback->execValue(*args, xsink);
+                        // See comment on the 3-space-indent sibling site below —
+                        // do NOT reassign `rv` (which aliases the per-iteration
+                        // channel recv hash referenced by `h`).
+                        ValueHolder cb_rv(recv_callback->execValue(*args, xsink), xsink);
                         if (*xsink) {
                             channel->close();
                             return nullptr;
@@ -6704,7 +6734,10 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                             cb_arg->setKeyValue("obj", obj->refSelf(), xsink);
                         }
                         args->push(cb_arg, xsink);
-                        rv = recv_callback->execValue(*args, xsink);
+                        // See comment on the 3-space-indent sibling site below —
+                        // do NOT reassign `rv` (which aliases the per-iteration
+                        // channel recv hash referenced by `h`).
+                        ValueHolder cb_rv(recv_callback->execValue(*args, xsink), xsink);
                         if (*xsink) {
                             channel->close();
                             return nullptr;
