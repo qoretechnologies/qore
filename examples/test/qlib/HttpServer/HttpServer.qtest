@@ -1708,12 +1708,19 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         # 1. HTTPClient with HTTP/2 enabled
         # 2. HTTPS connection (HTTP/2 requires TLS for ALPN)
 
-        # Create HTTPClient with HTTP/2 auto mode
+        # Pin the client to HTTP/2 explicitly.  The async server advertises
+        # H3 via Alt-Svc (enable_h3 defaults to True on the shared async
+        # SSL listener), and with http_version="auto" the client auto-
+        # upgrades to H3 after the first response — isHttp2Active() then
+        # goes False even though the connection is perfectly healthy (it's
+        # now H3-active).  The keep-alive burst at the bottom of this
+        # test checks that H2 state survives across 5+ requests, which
+        # requires the client to actually stay on H2.
         HTTPClient h2client({
             "url": asyncSslUrl,
             "timeout": 10s,
             "ssl_verify_cert": False,  # Self-signed cert
-            "http_version": "auto",    # Enable HTTP/2 if available
+            "http_version": "2.0",     # H2 only — no Alt-Svc auto-upgrade to H3
         });
 
         # Check if HTTP/2 mode is supported
@@ -1722,8 +1729,10 @@ OKKqgBjNAlYDdPhOy8O8Agk=
             return;
         }
 
-        # Verify HTTP/2 mode settings
-        assertEq("auto", h2client.getHttp2Mode());
+        # Verify HTTP/2 mode settings — http_version=2.0 maps to REQUIRED
+        # (see the rationale in the constructor above for why we pin to
+        # H2 instead of AUTO).
+        assertEq("required", h2client.getHttp2Mode());
         assertTrue(h2client.isHttp2Enabled());
 
         # Connect and make request
@@ -2223,10 +2232,17 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         server.setHandler("h2-handler", "/h2", MimeTypeText, handler);
         server.setDefaultHandler("h2-handler", handler);
 
+        # Disable enable_h3 on the test listener: this test exercises the
+        # HTTP/2 keep-alive path specifically.  With the default enable_h3=True,
+        # the server auto-creates a paired QUIC listener and advertises H3 via
+        # Alt-Svc, and the client auto-upgrades to H3 after the first response —
+        # isHttp2Active() then goes False (it's now H3-active) and the test's
+        # H2 keep-alive assertion trips on what is really a valid H3 upgrade.
         hash<auto> linfo = server.addListener(<HttpListenerOptionInfo>{
             "service": 0,
             "cert": new SSLCertificate(CertPem),
             "key": new SSLPrivateKey(KeyPem),
+            "enable_h3": False,
         });
         assertTrue(server.waitForAsyncIo(5s), "async I/O ready");
 
