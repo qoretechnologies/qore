@@ -826,9 +826,10 @@ void UserSignature::setupFromAOTMetadata(
         }
     }
 
-    // Build signature string
-    str.clear();
-    addAbstractParameterSignature(str);
+    // Intentionally skip the eager signature-string build here: at ~656 k
+    // variants in qwf that's one std::string construction per variant and
+    // most are never queried.  `getSignatureText()` lazy-builds on demand.
+    assert(str.empty());
 }
 
 void UserSignature::parseInitPushLocalVars(const QoreTypeInfo* classTypeInfo) {

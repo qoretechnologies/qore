@@ -117,6 +117,14 @@ public:
     }
 
     DLLLOCAL const char* getSignatureText() const {
+        // Lazy build — populated on first request.  The AOT deserialization
+        // path skips the eager build in setupFromAOTMetadata because most
+        // of the 656 k variants' signature text is never queried at
+        // runtime.  Source-parse paths still build eagerly via resolve(),
+        // so they short-circuit through the empty-check below.
+        if (str.empty() && (!typeList.empty() || varargs)) {
+            addAbstractParameterSignature(str);
+        }
         return str.c_str();
     }
 
@@ -186,8 +194,8 @@ protected:
     arg_vec_t defaultArgList;
     name_vec_t names;
 
-    // parameter signature string
-    std::string str;
+    // parameter signature string (lazy — see getSignatureText)
+    mutable std::string str;
 
     // varargs flag
     bool varargs = false;
