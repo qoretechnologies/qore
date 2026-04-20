@@ -510,7 +510,9 @@ Proposed sequence:
 **Phase D — optional perf nicety** — pending
 5. Item 3 (`%requires` link-time union).  Land only if post-
    migration startup benchmarks show module-load idempotency as a
-   measurable fraction.
+   measurable fraction.  **Benchmarking should precede
+   implementation** — if the 5×-per-binary module-load overhead is
+   sub-millisecond, skip the engineering.
 
 **Deferred indefinitely**
 6. Item 4 (parser-level forward decls).  Revisit only if build-
