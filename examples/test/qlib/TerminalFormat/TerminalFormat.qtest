@@ -1,0 +1,420 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/TerminalFormat
+
+%exec-class TerminalFormatTest
+
+public class TerminalFormatTest inherits QUnit::Test {
+    constructor() : Test("TerminalFormat Test", "1.0") {
+        addTestCase("Markdown: plain and empty", \markdownPlain(), NOTHING);
+        addTestCase("Markdown: headings", \markdownHeadings(), NOTHING);
+        addTestCase("Markdown: inline formatting", \markdownInline(), NOTHING);
+        addTestCase("Markdown: inline in headings", \markdownInlineInHeadings(), NOTHING);
+        addTestCase("Markdown: fenced code blocks", \markdownCodeBlocks(), NOTHING);
+        addTestCase("Markdown: lists", \markdownLists(), NOTHING);
+        addTestCase("Markdown: blockquotes", \markdownBlockquotes(), NOTHING);
+        addTestCase("Markdown: horizontal rules", \markdownHorizontalRules(), NOTHING);
+        addTestCase("Markdown: pipe tables", \markdownTables(), NOTHING);
+        addTestCase("Markdown: render vs renderLines", \markdownRenderApi(), NOTHING);
+
+        addTestCase("Table: basic rendering", \tableBasic(), NOTHING);
+        addTestCase("Table: width calculation", \tableWidths(), NOTHING);
+        addTestCase("Table: right alignment", \tableRightAlign(), NOTHING);
+        addTestCase("Table: renderFromHashes", \tableFromHashes(), NOTHING);
+        addTestCase("Table: edge cases", \tableEdgeCases(), NOTHING);
+        addTestCase("Table: render vs renderLines", \tableRenderApi(), NOTHING);
+
+        set_return_value(main());
+    }
+
+    # -------- TerminalMarkdownRenderer --------
+
+    private TerminalMarkdownRenderer md() {
+        return new TerminalMarkdownRenderer(True);
+    }
+
+    markdownPlain() {
+        TerminalMarkdownRenderer r = md();
+
+        assertEq("hello world", r.render("hello world"), "plain text unchanged");
+        assertEq("", r.render(""), "empty string renders as empty");
+
+        # Blank lines preserved, no inline markers applied
+        list<string> lines = r.renderLines("first\n\nsecond");
+        assertEq(3, lines.size(), "blank line preserved");
+        assertEq("first", lines[0], "line 0");
+        assertEq("", lines[1], "blank line 1");
+        assertEq("second", lines[2], "line 2");
+
+        # Whitespace-only line treated as empty
+        list<string> ws = r.renderLines("a\n   \nb");
+        assertEq(3, ws.size(), "ws line preserved as blank");
+        assertEq("", ws[1], "ws-only line rendered as empty");
+    }
+
+    markdownHeadings() {
+        TerminalMarkdownRenderer r = md();
+
+        # H1 → uppercase
+        assertEq("HELLO", r.render("# hello"), "H1 uppercases");
+
+        # H2-H6 keep original case
+        assertEq("Section", r.render("## Section"), "H2 keeps case");
+        assertEq("Sub", r.render("### Sub"), "H3 keeps case");
+        assertEq("Four", r.render("#### Four"), "H4 keeps case");
+        assertEq("Five", r.render("##### Five"), "H5 keeps case");
+        assertEq("Six", r.render("###### Six"), "H6 keeps case");
+
+        # Seven hashes is not a heading (parser caps at 6)
+        string h7 = r.render("####### nope");
+        assertTrue(regex(h7, "#######"), "7 hashes is not a heading");
+
+        # Heading must have space after hashes
+        assertEq("#notheading", r.render("#notheading"), "no space → not heading");
+    }
+
+    markdownInline() {
+        TerminalMarkdownRenderer r = md();
+
+        # Bold, italic, bold-italic — markers stripped, content kept
+        assertEq("bold", r.render("**bold**"), "bold markers stripped");
+        assertEq("italic", r.render("*italic*"), "italic markers stripped");
+        assertEq("both", r.render("***both***"), "bold-italic markers stripped");
+
+        # Inline code
+        assertEq("code", r.render("`code`"), "inline code markers stripped");
+
+        # Links → "text (url)"
+        assertEq("Qore (https://qore.org)", r.render("[Qore](https://qore.org)"),
+            "link renders as text (url)");
+
+        # Multiple inline markers on a single line
+        assertEq("hello bold and code end",
+            r.render("hello **bold** and `code` end"),
+            "mixed inline formatting");
+
+        # No ANSI codes with no_color=True
+        assertFalse(regex(r.render("**bold** *italic* `code`"), "\033"),
+            "no ANSI codes when no_color=True");
+    }
+
+    markdownInlineInHeadings() {
+        # Regression for 9eff954bd: inline markdown must be applied in headings
+        # so the raw markers don't leak into rendered output.
+        TerminalMarkdownRenderer r = md();
+
+        # H1 also uppercases content AFTER marker stripping
+        string h1 = r.render("# hello **world**");
+        assertEq("HELLO WORLD", h1, "H1: inline markers stripped, then uppercased");
+        assertFalse(regex(h1, "\\*"), "H1: no literal asterisks");
+
+        # H2 with bold
+        assertEq("Section title", r.render("## Section **title**"),
+            "H2: bold markers stripped");
+
+        # H3 with inline code
+        assertEq("Using foo()", r.render("### Using `foo()`"),
+            "H3: inline code markers stripped");
+
+        # Heading with a link
+        assertEq("See Qore (https://qore.org)",
+            r.render("## See [Qore](https://qore.org)"),
+            "heading: link rendered");
+    }
+
+    markdownCodeBlocks() {
+        TerminalMarkdownRenderer r = md();
+
+        # Basic fenced block — contents indented, markers removed
+        list<string> lines = r.renderLines("```\nint x = 1;\nint y = 2;\n```");
+        assertEq(2, lines.size(), "code block: 2 content lines");
+        assertEq("  int x = 1;", lines[0], "code block line 0 indented");
+        assertEq("  int y = 2;", lines[1], "code block line 1 indented");
+
+        # Language tag is accepted (and ignored visually)
+        list<string> lang_lines = r.renderLines("```qore\nprint();\n```");
+        assertEq(1, lang_lines.size(), "language tag: 1 content line");
+        assertEq("  print();", lang_lines[0], "language tag content rendered");
+
+        # Unclosed code block: consumes rest of input without error
+        list<string> unc = r.renderLines("```\nno close");
+        assertEq(1, unc.size(), "unclosed: single line");
+        assertEq("  no close", unc[0], "unclosed: content rendered");
+
+        # Inline markers inside a code block are NOT processed
+        list<string> raw = r.renderLines("```\n**keep stars**\n```");
+        assertEq(1, raw.size(), "raw stars: 1 line");
+        assertEq("  **keep stars**", raw[0], "code block preserves markdown markers");
+    }
+
+    markdownLists() {
+        TerminalMarkdownRenderer r = md();
+
+        # Unordered with dash
+        assertEq("• one", r.render("- one"), "UL with -");
+        # Unordered with asterisk
+        assertEq("• two", r.render("* two"), "UL with *");
+        # Indentation preserved
+        assertEq("  • nested", r.render("  - nested"), "UL preserves indent");
+
+        # Inline formatting inside list items
+        assertEq("• bold item", r.render("- **bold** item"),
+            "UL: inline formatting applied");
+
+        # Ordered list
+        assertEq("1. first", r.render("1. first"), "OL first item");
+        assertEq("42. answer", r.render("42. answer"), "OL multi-digit");
+        assertEq("  3. nested", r.render("  3. nested"), "OL preserves indent");
+
+        # Multi-line list
+        list<string> many = r.renderLines("- a\n- b\n- c");
+        assertEq(3, many.size(), "multi-line UL");
+        assertEq("• a", many[0], "UL 0");
+        assertEq("• b", many[1], "UL 1");
+        assertEq("• c", many[2], "UL 2");
+    }
+
+    markdownBlockquotes() {
+        TerminalMarkdownRenderer r = md();
+
+        assertEq("│ quoted", r.render("> quoted"), "blockquote");
+        # Space after > is optional
+        assertEq("│ tight", r.render(">tight"), "blockquote no space");
+        # Inline formatting inside blockquote
+        assertEq("│ bold quote", r.render("> **bold** quote"),
+            "blockquote: inline formatting applied");
+    }
+
+    markdownHorizontalRules() {
+        TerminalMarkdownRenderer r = md();
+
+        # strmul("─", 40) produces 40 U+2500 runes (box drawing); length() counts runes.
+        string hr1 = r.render("---");
+        assertEq(40, hr1.length(), "HR width is 40 runes");
+        assertTrue(regex(hr1, "─"), "HR contains box-drawing char");
+
+        assertTrue(regex(r.render("***"), "─"), "HR with *** produces box-drawing");
+        assertTrue(regex(r.render("___"), "─"), "HR with ___ produces box-drawing");
+
+        # Longer runs also count
+        assertTrue(regex(r.render("----------"), "─"), "HR with long ---");
+
+        # Trailing whitespace allowed
+        assertTrue(regex(r.render("---   "), "─"), "HR with trailing ws");
+    }
+
+    markdownTables() {
+        TerminalMarkdownRenderer r = md();
+
+        # Table with header separator: bold header, dim separator below
+        string tbl = "| Name | Value |\n| --- | --- |\n| foo | 1 |\n| bar | 22 |";
+        list<string> lines = r.renderLines(tbl);
+        # Header + separator + 2 data rows = 4 lines
+        assertEq(4, lines.size(), "table with separator: 4 lines");
+
+        # Header cells present (padded to column widths)
+        assertTrue(regex(lines[0], "Name"), "table header: Name");
+        assertTrue(regex(lines[0], "Value"), "table header: Value");
+
+        # Separator line (dim-less in no_color mode) uses box-drawing chars
+        assertTrue(regex(lines[1], "─"), "table: separator uses box drawing");
+
+        # Data rows
+        assertTrue(regex(lines[2], "foo"), "table row 0: foo");
+        assertTrue(regex(lines[2], "1"), "table row 0: 1");
+        assertTrue(regex(lines[3], "bar"), "table row 1: bar");
+        assertTrue(regex(lines[3], "22"), "table row 1: 22");
+
+        # Column widths should fit widest visible value: "Value" (5) wider than
+        # "1"/"22" (1/2) → values padded out to 5 wide.
+        # "Name" (4) wider than "foo"/"bar" (3) → padded to 4.
+        # First row: "Name" + 2 gap + "Value" = at least 4+2+5 = 11 chars
+        assertTrue(lines[0].length() >= 11, sprintf("table header width >= 11 (got %d)",
+            lines[0].length()));
+
+        # Regression for 9eff954bd: cell widths must be based on VISIBLE length
+        # after inline rendering, not on raw markdown source.
+        # "**foo**" becomes "foo" (3 visible), not 7.
+        string itbl = "| A | B |\n| --- | --- |\n| **foo** | x |\n| baz | y |";
+        list<string> ilines = r.renderLines(itbl);
+        assertEq(4, ilines.size(), "inline table: 4 lines");
+        # First data row should contain just "foo" (markers stripped)
+        assertTrue(regex(ilines[2], "foo"), "inline table: foo rendered");
+        assertFalse(regex(ilines[2], "\\*\\*foo"), "inline table: no literal ** markers");
+
+        # Table without separator row: no bolding, no separator line
+        string ns = "| a | b |\n| c | d |";
+        list<string> nslines = r.renderLines(ns);
+        assertEq(2, nslines.size(), "table without separator: 2 lines");
+    }
+
+    markdownRenderApi() {
+        TerminalMarkdownRenderer r = md();
+
+        # render() joins with newline; renderLines() returns list
+        list<string> lines = r.renderLines("# title\n\nbody");
+        assertEq(3, lines.size(), "renderLines: 3 entries");
+        assertEq(lines.join("\n"), r.render("# title\n\nbody"),
+            "render = renderLines joined with newline");
+
+        # Default constructor (color enabled) still constructs and renders;
+        # color emission depends on TTY detection. We don't assert exact bytes
+        # because that varies by environment.
+        TerminalMarkdownRenderer dflt();
+        assertTrue(dflt.render("hello").val(), "default ctor: produces non-empty output");
+    }
+
+    # -------- TerminalTableRenderer --------
+
+    private TerminalTableRenderer tbl() {
+        return new TerminalTableRenderer(True);
+    }
+
+    tableBasic() {
+        TerminalTableRenderer r = tbl();
+
+        list<string> headers = ("Name", "ID");
+        list<auto> rows = (
+            ("alice", "1"),
+            ("bob", "22"),
+        );
+        list<string> lines = r.renderLines(headers, rows);
+
+        # header + separator + 2 data rows = 4 lines
+        assertEq(4, lines.size(), "table: 4 lines");
+
+        # Header cells
+        assertTrue(regex(lines[0], "Name"), "table: Name header");
+        assertTrue(regex(lines[0], "ID"), "table: ID header");
+
+        # Separator uses box-drawing chars
+        assertTrue(regex(lines[1], "─"), "table: separator has box-drawing");
+
+        # Data rows
+        assertTrue(regex(lines[2], "alice"), "table: alice");
+        assertTrue(regex(lines[2], "1"), "table: 1");
+        assertTrue(regex(lines[3], "bob"), "table: bob");
+        assertTrue(regex(lines[3], "22"), "table: 22");
+
+        # No ANSI codes with no_color=True
+        foreach string line in (lines) {
+            assertFalse(regex(line, "\033"),
+                sprintf("no ANSI in line: %s", line));
+        }
+    }
+
+    tableWidths() {
+        TerminalTableRenderer r = tbl();
+
+        # Widest value should drive column width.
+        list<string> headers = ("A", "B");
+        list<auto> rows = (
+            ("short", "xx"),
+            ("much-longer", "y"),
+        );
+        list<string> lines = r.renderLines(headers, rows);
+
+        # "much-longer" is 11 chars; column A must be at least that wide.
+        # Header line length >= 11 (col A) + 2 (gap) + 2 (col B, "xx") = 15
+        assertTrue(lines[0].length() >= 15,
+            sprintf("widths: header line >= 15 (got %d)", lines[0].length()));
+
+        # Row with "short" should be padded to match "much-longer" width, so
+        # the row length equals the header length exactly (assuming no ANSI).
+        assertEq(lines[0].length(), lines[2].length(),
+            "widths: short row padded to header width");
+    }
+
+    tableRightAlign() {
+        TerminalTableRenderer r = tbl();
+
+        list<string> headers = ("name", "qty");
+        list<auto> rows = (
+            ("a", "1"),
+            ("b", "100"),
+        );
+        # Right-align column index 1 (qty)
+        hash<string, bool> right = {"1": True};
+        list<string> lines = r.renderLines(headers, rows, right);
+
+        # Width of column 1 = 3 (from "100"). Row "1" is 1 char → padded with
+        # 2 leading spaces when right-aligned.
+        # The row is: padCell("a", w0) + "  " + padCell("1", 3, True)
+        # → "a..." + "  " + "  1"
+        assertTrue(regex(lines[2], "  1\$"), "right-align: '1' right-padded");
+        # "100" on its own line should end without leading space pad (width exact)
+        assertTrue(regex(lines[3], "100\$"), "right-align: '100' ends the line");
+    }
+
+    tableFromHashes() {
+        TerminalTableRenderer r = tbl();
+
+        list<hash<auto>> data = (
+            {"name": "alice", "age": 30},
+            {"name": "bob", "age": 25},
+        );
+        string out = r.renderFromHashes(data);
+
+        assertTrue(regex(out, "name"), "fromHashes: name header");
+        assertTrue(regex(out, "age"), "fromHashes: age header");
+        assertTrue(regex(out, "alice"), "fromHashes: alice value");
+        assertTrue(regex(out, "30"), "fromHashes: 30 value");
+
+        # Explicit columns subset (and ordering)
+        string out2 = r.renderFromHashes(data, ("age",));
+        assertTrue(regex(out2, "age"), "fromHashes subset: age header");
+        assertTrue(regex(out2, "30"), "fromHashes subset: 30");
+        assertTrue(regex(out2, "25"), "fromHashes subset: 25");
+        assertFalse(regex(out2, "alice"), "fromHashes subset: name column omitted");
+
+        # Empty data returns empty string
+        assertEq("", r.renderFromHashes(()), "fromHashes: empty data");
+    }
+
+    tableEdgeCases() {
+        TerminalTableRenderer r = tbl();
+
+        # Empty rows list: just header and separator
+        list<string> lines = r.renderLines(("H1", "H2"), ());
+        assertEq(2, lines.size(), "empty rows: header + separator");
+        assertTrue(regex(lines[0], "H1"), "empty rows: H1 header");
+        assertTrue(regex(lines[1], "─"), "empty rows: separator line");
+
+        # Row shorter than headers: missing cells become empty
+        list<string> sh = r.renderLines(("A", "B", "C"), (("only-a",),));
+        assertEq(3, sh.size(), "short row: 3 lines");
+        assertTrue(regex(sh[2], "only-a"), "short row: 'only-a' in data row");
+
+        # Row given as a scalar (not a list): accepted as single-column value
+        list<string> scalar = r.renderLines(("X",), ("value",));
+        assertEq(3, scalar.size(), "scalar row: 3 lines");
+        assertTrue(regex(scalar[2], "value"), "scalar row: value rendered");
+
+        # Non-string cell values converted via toString()
+        list<string> mixed = r.renderLines(("N", "B"), ((42, True),));
+        assertTrue(regex(mixed[2], "42"), "non-string cell: int converted");
+        # bool True.toString() yields "1" in Qore
+        assertTrue(regex(mixed[2], "1"), "non-string cell: bool converted");
+    }
+
+    tableRenderApi() {
+        TerminalTableRenderer r = tbl();
+
+        list<string> headers = ("a", "b");
+        list<auto> rows = (("1", "2"),);
+
+        list<string> lines = r.renderLines(headers, rows);
+        string joined = r.render(headers, rows);
+        assertEq(lines.join("\n"), joined, "render = renderLines joined");
+
+        # Default constructor still works; output byte content depends on TTY
+        TerminalTableRenderer dflt();
+        assertTrue(dflt.render(headers, rows).val(),
+            "default ctor: produces non-empty output");
+    }
+}
