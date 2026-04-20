@@ -1,5 +1,29 @@
 # Phase 4 — migrate `qorus` top-level launcher to AOT
 
+## Status: **Implemented** (Qorus commits `e036d24f3` + `2980fb305`)
+
+`qorus --version` runs clean against current libqore + new AOT path;
+`qore_aot_script_end_batch` returns 0, parseCommit succeeds, the
+binary links cleanly with no unresolved Phase 0 symbols.
+
+`--help` is not a supported flag on the qorus launcher (the old
+Phase 0 binary went straight to cluster init and failed at DB read;
+the new Phase 4 binary reaches the same cluster-init stage and
+fails in a different spot — neither path had --help argparsing).
+Not a migration regression; if added later it'd be a separate
+feature in qorus_main.cpp to mirror the qctl/qwf pattern.
+
+Cleanup follow-ups deferred:
+ - Remove the unused `qorus_qore2cpp(QORUS_QORE_SRC_X ...)` call
+   that still generates the Phase 0 x_<file>.qX.cpp files (no
+   longer linked into qorus target but other consumers of
+   `QORUS_SHARED_LIB` / `QORUS_CORE_MASTER_*_LIB` still need them).
+ - Real cluster-startup smoke test in a dev environment with DB
+   available — the migration itself is correct but full end-to-end
+   verification needs ostart/ostop.
+
+
+
 ## Goal
 
 Eliminate the Phase 0 source-embed pattern from the top-level
