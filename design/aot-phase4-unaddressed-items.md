@@ -23,7 +23,7 @@ binary (item 6).
 | 1 | Cross-`.qo` runtime-eval'd constants | Functional gap | ~1–2 days | **Done** — Phase A landed (commit `beaca911b`) | ✓ |
 | 6 | qorus-core Phase 5 AOT migration | Feature | ~2–3 days | **Done** structurally — Phase B (Qorus `be3113fc3`); runtime smoke blocked on env (xml module) | ✓* |
 | 5 | Public C ABI for parsing | API ergonomics | ~0.5 day | **Done** — Phase C/5 landed (commit `0cd54f908`) | ✓ |
-| 2 | `qcc -o binary *.qo` auto-linker | Workflow | ~1 day | Removes hand-written C++ main + g++ invocation | Pending |
+| 2 | `qcc -o binary *.qo` auto-linker | Workflow | ~1 day | **Done** — Phase C/2 landed | ✓ |
 | 3 | `%requires` link-time union | Perf nicety | ~1 day | Shaves module-load dup overhead | Pending |
 | 4 | Parser-level forward decls | Build-topo relaxation | ~3–5 days | Parallel/order-agnostic .qo builds | Deferred |
 
@@ -147,11 +147,14 @@ fold as before.
 
 ## 2. `qcc -o binary *.qo` auto-linker
 
-**Status: pending** — no changes landed yet.  The value-add is
-mostly ergonomic (~20 lines of boilerplate eliminated per project);
-the existing hand-written C++ main pattern (see
-`examples/aot/qoa_link_test.cpp`, now using only the public C ABI)
-is fully functional.
+**Status: implemented** — `qcc -o <binary> [-e <fn>] *.qo` now
+detects a pure `.qo` positional input set, emits a `<binary>.main.cpp`
+glue (qore_init → create_program → begin_batch → per-.qo
+`qore_<san>_<san>_script_register` → end_batch → run entry fn →
+destroy), then invokes `$CXX` (fallback `g++`) to link against
+`-lqore`.  Harness `examples/aot/qo_link_test.sh` proves end-to-end
+(`.qc` + `.q` → two `.qo`'s → standalone binary without any
+host-written C++).  Baselines green.
 
 ### Problem
 
@@ -499,13 +502,10 @@ Proposed sequence:
 2. Item 6 (qorus-core Phase 5).  Landed in Qorus `be3113fc3` +
    Qore `f777b22df`.  Runtime smoke blocked on env (xml module).
 
-**Phase C — API + workflow polish (1.5 days total)** — **partially done**
+**Phase C — API + workflow polish (1.5 days total)** — ✓ **done**
 3. Item 5 (public C ABI for parsing).  Landed in commit `0cd54f908`.
-4. Item 2 (`qcc -o binary` auto-linker).  Pending — deferred to a
-   later session.  Pragmatic break: Item 2 is pure ergonomics and
-   the existing hand-written C++ main (now using only the public
-   C ABI — see `examples/aot/qoa_link_test.cpp`) is a clean
-   alternative.
+4. Item 2 (`qcc -o binary` auto-linker).  Landed — harness at
+   `examples/aot/qo_link_test.sh`.
 
 **Phase D — optional perf nicety** — pending
 5. Item 3 (`%requires` link-time union).  Land only if post-

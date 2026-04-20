@@ -52,6 +52,45 @@ static bool is_directory(const char* path) {
     return (stat(path, &st) == 0 && S_ISDIR(st.st_mode));
 }
 
+// Phase C Item 2: mirror `QoreAOT::sanitizeCIdentifier` for the
+// link-mode glue emission.  Replace every char outside [A-Za-z0-9_]
+// with `_` so the file basename becomes a valid C identifier —
+// matches the register-fn name qcc -c emits per .qo.
+static std::string sanitize_c_identifier(const std::string& s) {
+    std::string out;
+    out.reserve(s.size());
+    for (char c : s) {
+        if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z')
+                || (c >= '0' && c <= '9') || c == '_') {
+            out.push_back(c);
+        } else {
+            out.push_back('_');
+        }
+    }
+    return out;
+}
+
+// Strip directory + extension, returning the file basename suitable
+// for use as a C identifier (after sanitize).  `/tmp/foo/bar.qo`
+// → `bar`.
+static std::string basename_no_ext(const std::string& path) {
+    size_t slash = path.find_last_of("/\\");
+    std::string name = (slash == std::string::npos) ? path
+            : path.substr(slash + 1);
+    size_t dot = name.find_last_of('.');
+    if (dot != std::string::npos && dot > 0) {
+        name = name.substr(0, dot);
+    }
+    return name;
+}
+
+// Check whether a path ends in `.qo`.  Link mode requires every
+// positional input to match.
+static bool has_qo_extension(const char* path) {
+    size_t n = std::strlen(path);
+    return n > 3 && std::strcmp(path + n - 3, ".qo") == 0;
+}
+
 // Phase 4 slice 10h: write a Make-format dependency file at `path`.
 // Target (LHS) is `output`; deps are `source` plus, when `context` is
 // non-null, every `.qm`/`.qc`/`.ql` under it — the set the parser actually
@@ -243,6 +282,12 @@ static bool big_fn_threshold_cli_explicit = false;
 // affected `.qo`.  GCC's `-MMD -MF <path>` pair maps onto this
 // single long option.
 static const char* depfile_path = nullptr;
+// Phase C Item 2: --entry=<fn> names the Qore function the emitted
+// C++ main() dispatches to after registering every `.qo` input.
+// Only meaningful in link mode (`qcc -o <binary> *.qo`).  Defaults
+// to "main" — hosts that use a different convention override via
+// `-e <fn>`.
+static const char* entry_fn = "main";
 
 static void print_usage(const char* prog) {
     printf("Qore Code Compiler (qcc) v%s\n", QCC_VERSION);
@@ -321,6 +366,10 @@ static void print_usage(const char* prog) {
     printf("      --big-fn-threshold=N  Mark functions >= N IR blocks as OptimizeNone+NoInline\n");
     printf("                         (trades ~1-7%% runtime for up to 46x compile speedup;\n");
     printf("                         default: 200; 0 = off)\n");
+    printf("  -e, --entry=FN         Qore function the emitted C++ main() calls after\n"
+           "                         registering all `.qo` inputs (link mode only;\n"
+           "                         default: main).  Only meaningful with\n"
+           "                         `qcc -o <binary> *.qo`.\n");
     printf("  -v, --verbose          Verbose output\n");
     printf("  -h, --help             Show this help message\n");
     printf("  -V, --version          Show version information\n");
@@ -328,6 +377,7 @@ static void print_usage(const char* prog) {
     printf("Examples:\n");
     printf("  %s script.q                    # Compile to 'script' executable\n", prog);
     printf("  %s -o myapp script.q           # Compile to 'myapp' executable\n", prog);
+    printf("  %s -o myapp main.qo lib.qo     # Link-mode: .qo's -> 'myapp' binary\n", prog);
     printf("  %s -m MyModule.qm              # Compile single-file module to 'MyModule.qmod'\n", prog);
     printf("  %s -m qlib/DataProvider        # Compile split module directory\n", prog);
     printf("  %s -S -o myapp script.q        # Static link (no libqore.so dependency)\n", prog);
@@ -369,6 +419,7 @@ static struct option long_options[] = {
     {"parse-option",      required_argument, nullptr, 0x104},
     {"from-objects",      no_argument,       nullptr, 'F'},
     {"archive",           no_argument,       nullptr, 'a'},
+    {"entry",             required_argument, nullptr, 'e'},
     {"verbose",           no_argument,       nullptr, 'v'},
     {"help",              no_argument,       nullptr, 'h'},
     {"version",           no_argument,       nullptr, 'V'},
@@ -377,7 +428,7 @@ static struct option long_options[] = {
 
 static int parse_options_cmdline(int argc, char** argv) {
     int opt;
-    while ((opt = getopt_long(argc, argv, "o:O:mcSt:TL:l:agvhV", long_options, nullptr)) != -1) {
+    while ((opt = getopt_long(argc, argv, "o:O:mcSt:TL:l:age:vhV", long_options, nullptr)) != -1) {
         switch (opt) {
             case 'o':
                 output_path = optarg;
@@ -459,6 +510,9 @@ static int parse_options_cmdline(int argc, char** argv) {
                 break;
             case 'a':
                 archive_mode = true;
+                break;
+            case 'e':
+                entry_fn = optarg;
                 break;
             case 'v':
                 verbose = true;
@@ -577,6 +631,147 @@ int main(int argc, char** argv) {
 
     if (show_targets) {
         QoreAOT::printSupportedTargets();
+        return 0;
+    }
+
+    // Phase C Item 2: link-mode — `qcc -o <binary> *.qo` emits a
+    // synthesised C++ main (qore_init → create_program → begin_batch
+    // → per-.qo qore_<sanfile>_<sanfile>_script_register calls →
+    // end_batch → run entry fn → destroy_program → cleanup) and
+    // invokes $CXX (fallback g++) to link the .qo set + -lqore into
+    // a standalone executable.  Replaces the hand-written C++ main
+    // pattern `examples/aot/qoa_link_test.cpp` documents.
+    //
+    // Entered when: `-o <file>` is set, all positional inputs end
+    // in `.qo`, and no competing mode is active (-c, -m, -a, -F).
+    if (output_path && !compile_only && !module_mode && !archive_mode
+            && !from_objects && optind < argc
+            && has_qo_extension(argv[optind])) {
+        // All positional inputs must be .qo files.
+        std::vector<std::string> object_paths;
+        for (int i = optind; i < argc; ++i) {
+            if (!has_qo_extension(argv[i])) {
+                fprintf(stderr, "error: link-mode input '%s' must end "
+                    "in .qo (mix of .q and .qo not supported)\n", argv[i]);
+                return 1;
+            }
+            char* resolved = realpath(argv[i], nullptr);
+            if (resolved) {
+                object_paths.emplace_back(resolved);
+                free(resolved);
+            } else {
+                fprintf(stderr, "error: cannot resolve '%s': %s\n",
+                    argv[i], strerror(errno));
+                return 1;
+            }
+        }
+
+        // Emit the glue main.cpp next to the final binary so a
+        // developer can inspect it with --verbose or rebuild by hand.
+        std::string glue_path = std::string(output_path) + ".main.cpp";
+        FILE* glue = fopen(glue_path.c_str(), "w");
+        if (!glue) {
+            fprintf(stderr, "error: cannot write '%s': %s\n",
+                glue_path.c_str(), strerror(errno));
+            return 1;
+        }
+        fprintf(glue,
+            "// Auto-generated by qcc %s — do not edit.\n"
+            "// Link-mode C++ host for %zu .qo input%s (Phase C Item 2).\n"
+            "#include <qore/Qore.h>\n"
+            "#include <qore/QoreAOT.h>\n"
+            "#include <stdio.h>\n\n",
+            QCC_VERSION, object_paths.size(),
+            object_paths.size() == 1 ? "" : "s");
+
+        // Collect sanitized basenames for the extern decl + call
+        // pattern `qore_<san>_<san>_script_register` that `qcc -c`
+        // emits per .qo.
+        std::vector<std::string> sans;
+        sans.reserve(object_paths.size());
+        fprintf(glue, "extern \"C\" {\n");
+        for (const auto& op : object_paths) {
+            std::string san = sanitize_c_identifier(basename_no_ext(op));
+            fprintf(glue,
+                "    void qore_%s_%s_script_register(QoreProgram*);\n",
+                san.c_str(), san.c_str());
+            sans.push_back(std::move(san));
+        }
+        fprintf(glue, "}\n\n");
+
+        fprintf(glue,
+            "int main(int /*argc*/, char** /*argv*/) {\n"
+            "    qore_init(QL_GPL, \"UTF-8\", true);\n"
+            "    QoreProgram* pgm = qore_create_program(\n"
+            "        PO_NEW_STYLE | PO_STRICT_ARGS);\n"
+            "    if (!pgm) {\n"
+            "        fprintf(stderr, \"qore_create_program failed\\n\");\n"
+            "        qore_cleanup();\n"
+            "        return 1;\n"
+            "    }\n"
+            "    qore_aot_script_begin_batch(pgm);\n");
+        for (const auto& san : sans) {
+            fprintf(glue,
+                "    qore_%s_%s_script_register(pgm);\n",
+                san.c_str(), san.c_str());
+        }
+        fprintf(glue,
+            "    int rc = qore_aot_script_end_batch(pgm);\n"
+            "    if (rc != 0) {\n"
+            "        fprintf(stderr, \"batch flush failed: %%s\\n\",\n"
+            "            qore_last_error(pgm));\n"
+            "        qore_destroy_program(pgm);\n"
+            "        qore_cleanup();\n"
+            "        return 1;\n"
+            "    }\n"
+            "    rc = qore_run_callable(pgm, \"%s\", NULL);\n"
+            "    if (rc != 0) {\n"
+            "        fprintf(stderr, \"entry %s returned %%d: %%s\\n\",\n"
+            "            rc, qore_last_error(pgm));\n"
+            "    }\n"
+            "    qore_destroy_program(pgm);\n"
+            "    qore_cleanup();\n"
+            "    return rc;\n"
+            "}\n",
+            entry_fn, entry_fn);
+        fclose(glue);
+
+        if (verbose) {
+            printf("qcc link: emitted glue main %s (%zu .qo inputs, "
+                "entry fn: %s)\n", glue_path.c_str(),
+                object_paths.size(), entry_fn);
+        }
+
+        // Invoke the C++ compiler to link the glue + .qo set +
+        // -lqore into the final binary.  Prefer $CXX, fall back to
+        // g++.  No shell interpolation — build the argv and call
+        // execvp via system()'s shell (quoting preserved by the
+        // \"...\"wrapping).
+        std::string cxx;
+        if (const char* env_cxx = std::getenv("CXX")) {
+            cxx = env_cxx;
+        } else {
+            cxx = "g++";
+        }
+        std::string cmd = cxx + " -std=c++17";
+        cmd += " \"" + glue_path + "\"";
+        for (const auto& op : object_paths) {
+            cmd += " \"" + op + "\"";
+        }
+        cmd += " -lqore -o \"";
+        cmd += output_path;
+        cmd += "\"";
+        if (verbose) {
+            printf("qcc link: %s\n", cmd.c_str());
+        }
+        int link_rc = std::system(cmd.c_str());
+        if (link_rc != 0) {
+            fprintf(stderr, "error: link step failed (rc=%d): %s\n",
+                link_rc, cmd.c_str());
+            return 1;
+        }
+        printf("%s: link-mode binary (%zu .qo inputs, entry: %s)\n",
+            output_path, object_paths.size(), entry_fn);
         return 0;
     }
 
