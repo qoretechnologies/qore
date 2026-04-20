@@ -123,10 +123,15 @@ public class QdrantSearchQueryRequestDataType inherits DataProvider::HashDataTyp
                     "object for multi-stage search pipelines",
             },
             "query": {
-                "type": AutoListOrNothingType,
+                "type": AbstractDataProviderType::anyType,
                 "display_name": "Query",
-                "short_desc": "Query vector",
-                "desc": "The query vector to use for the search",
+                "short_desc": "Query vector, sparse-vector body, point ID, or fusion operator",
+                "desc": "The query payload — may be a dense vector (`list<float>`), a sparse "
+                    "vector body (`{indices, values}`), a point ID (`int`|`string`|`uuid`) "
+                    "for recommend/context searches, or a fusion operator "
+                    "(`{fusion: \"rrf\"}` or `{fusion: \"dbsf\"}`) when combining a "
+                    "`prefetch` pipeline. Untyped here because Qdrant's `/points/query` "
+                    "endpoint polymorphs on the body shape",
                 "example_value": (0.2, 0.1, 0.9, 0.7),
             },
             "using": {
