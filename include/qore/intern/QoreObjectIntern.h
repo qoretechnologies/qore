@@ -472,6 +472,14 @@ public:
     }
 
     DLLLOCAL virtual void deleteObject() {
+        // Defense in depth: firing deleteObject() while the object is still inside its own user
+        // destructor (data/cdmap/rset not yet cleared in doDeleteIntern) means a tDeref somewhere
+        // took tRefs to zero too early — almost always a self-weak-ref pattern in private data
+        // (the SocketPollOperationBase case).  Catch this specifically; the default
+        // ~qore_object_private asserts would also trip but with a less informative message.
+        assert(!(in_destructor && data) && "reentrant deleteObject during execDestructor — "
+            "a tDeref dropped tRefs to zero while the user destructor was still running; "
+            "suspect a self-weak-ref in private data (e.g. SocketPollOperationBase)");
         delete obj;
     }
 

@@ -229,7 +229,7 @@ public class Http2ClientConnection inherits HttpClientConnection {
         @return the stream ID
     */
     int submitRequestSse(string method, string path, *hash<auto> headers, *data body,
-            Queue queue) {
+            Queue queue, *EventNotifier notifier) {
         if (!self.isReady()) {
             throw "HTTPCLIENT-STATE-ERROR",
                 sprintf("connection not ready: state=%y", self.getConnectionState());
@@ -243,7 +243,7 @@ public class Http2ClientConnection inherits HttpClientConnection {
 
         log(LoggerLevel::DEBUG, "submitting SSE request: %s %s", method, path);
         int stream_id = poll_op.submitRequestSse(method, path, headers, body, queue,
-            max_concurrent_streams);
+            max_concurrent_streams, notifier);
 
         if (ctl) {
             ctl.wakeSocket(getSocket());

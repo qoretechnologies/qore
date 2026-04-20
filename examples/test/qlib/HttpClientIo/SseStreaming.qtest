@@ -23,14 +23,16 @@
 */
 
 %modern
-%requires HttpServer
-%requires HttpServerAsyncIo
-%requires ServerSentEventHandler
-%requires HttpClientIo
-%requires HttpClientStreamingIo
-%requires Mime
-%requires Logger
-%requires QUnit
+%requires ../../../../qlib/Mime.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/HttpServerUtil.qm
+%requires ../../../../qlib/AsyncSocketIo
+%requires ../../../../qlib/HttpClientIo
+%requires ../../../../qlib/HttpClientStreamingIo
+%requires ../../../../qlib/HttpServerAsyncIo
+%requires ../../../../qlib/HttpServer.qm
+%requires ../../../../qlib/ServerSentEventHandler
 
 %exec-class SseStreamingTest
 
@@ -57,6 +59,7 @@ class SseStreamingTest inherits Test {
     constructor() : Test("SseStreamingTest", "1.0") {
         addTestCase("SSE streaming receives events", \testSseReceivesEvents());
         addTestCase("SSE streaming multiple events", \testSseMultipleEvents());
+        addTestCase("SSE streaming notifier wakes on events", \testSseNotifierEvents());
         set_return_value(main());
     }
 
@@ -128,5 +131,56 @@ class SseStreamingTest inherits Test {
         assertEq("\"test-data\"", evt2.data);
 
         stream.cancel();
+    }
+
+    private hash<auto> waitForNotifiedEvent(Queue queue, EventNotifier notifier, EventLoop loop, string name) {
+        *list<hash<EventPollInfo>> events = loop.poll(5s);
+        assertTrue(exists events, name + " notifier fired");
+
+        notifier.acknowledge();
+
+        auto item = queue.tryGet();
+        assertTrue(exists item, name + " queue item available");
+        assertTrue(exists item.value, name + " queue item is not end-of-stream");
+        assertEq(NT_HASH, item.value.typeCode(), name + " queue item is an SSE hash");
+        return cast<hash<auto>>(item.value);
+    }
+
+    testSseNotifierEvents() {
+        string url = sprintf("http://localhost:%d/sse", port);
+        HttpClientIo::HttpClientConnectionManager mgr();
+
+        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(url);
+        hash<auto> info = stream.startSseStreamingWithNotifier(
+            "GET", "/sse", {"Accept": "text/event-stream"}, NOTHING);
+        Queue queue = info.queue;
+        EventNotifier notifier = info.notifier;
+
+        EventLoop loop();
+        loop.add(notifier, SOCK_POLLIN);
+
+        on_exit {
+            try {
+                loop.del(notifier);
+            } catch (hash<ExceptionInfo> ex) {
+            }
+            try {
+                stream.cancel();
+            } catch (hash<ExceptionInfo> ex) {
+            }
+        }
+
+        hash<auto> evt1 = waitForNotifiedEvent(queue, notifier, loop, "initial SSE event");
+        assertEq("hello", evt1.event);
+        assertEq("\"world\"", evt1.data);
+
+        handler.sendAll(<SseMessageInfo>{
+            "event": "update",
+            "data": "notify",
+        });
+
+        hash<auto> evt2 = waitForNotifiedEvent(queue, notifier, loop, "update SSE event");
+        assertEq("update", evt2.event);
+        assertEq("\"notify\"", evt2.data);
     }
 }

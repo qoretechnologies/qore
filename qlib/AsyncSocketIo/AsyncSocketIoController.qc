@@ -264,6 +264,24 @@ public class AsyncSocketIoController inherits LoggerWrapper {
         Qore::AsyncIoController::flushCallbacks();
     }
 
+    #! Waits for in-flight callbacks tagged with @a owner to drain
+    /** Narrowed-scope companion to @ref flushCallbacks() that only waits for callbacks
+        whose operations were submitted with the matching @a owner.  Safe to call from
+        a per-owner teardown path (e.g. a connection manager's destructor) where the
+        global flush would deadlock on unrelated long-running work on the shared
+        controller.
+
+        Marks the owner as shutting down for the duration of the wait: any callback
+        picked up by a worker while the mark is set is silently discarded.  The mark
+        is cleared before return so later submits by a new object reusing the owner
+        string are unaffected.
+
+        @param owner the owner identifier to wait for
+    */
+    flushCallbacksByOwner(string owner) {
+        Qore::AsyncIoController::flushCallbacksByOwner(owner);
+    }
+
     #! Sets the logger for the controller
     /** @param logger the logger to use for diagnostic output, or @ref nothing to disable logging
     */

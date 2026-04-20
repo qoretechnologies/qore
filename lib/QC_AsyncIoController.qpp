@@ -337,6 +337,33 @@ static nothing AsyncIoController::flushCallbacks() {
     ctrl->flushCallbacks();
 }
 
+//! Waits for in-flight callbacks tagged with the given owner to drain
+/** Narrowed-scope companion to @ref flushCallbacks() that only waits for
+    callbacks whose operations were submitted with the matching @a owner.
+    Safe to call from a per-owner teardown path (e.g. a connection manager's
+    destructor) where the global flush would deadlock on unrelated long-running
+    work on the shared controller.
+
+    Marks the owner as shutting down for the duration of the wait: any callback
+    picked up by a worker while the mark is set is silently discarded instead
+    of dispatched to user code.  The mark is cleared before return, so later
+    submits by a new object reusing the owner string are unaffected.
+
+    @param owner the owner identifier to wait for
+
+    @since %Qore 2.3
+*/
+static nothing AsyncIoController::flushCallbacksByOwner(string owner) {
+    QoreObject* obj;
+    AsyncIoControllerPriv* ctrl = get_singleton(obj, xsink);
+    if (!ctrl) {
+        return QoreValue();
+    }
+    ReferenceHolder<AsyncIoControllerPriv> ctrl_holder(ctrl, xsink);
+    ReferenceHolder<QoreObject> obj_holder(obj, xsink);
+    ctrl->flushCallbacksByOwner(std::string(owner->c_str()));
+}
+
 //! Waits for the global singleton's I/O thread to be ready
 /** @param to timeout for waiting; use 0 to wait indefinitely
     @return @ref True "True" if the I/O thread is ready within the timeout

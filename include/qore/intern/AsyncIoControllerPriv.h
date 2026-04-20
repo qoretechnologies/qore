@@ -99,6 +99,7 @@ public:
         std::string key;                     //!< For DT_CONTINUE_POLL: operation key
         std::string stream_key;              //!< For DT_STREAM_DATA_NOTIFY: stream key
         QoreProgram* pgm = nullptr;          //!< Program reference to prevent premature deletion
+        std::string owner;                   //!< Owner identifier for per-owner flush (empty if untracked)
     };
 
     //! Creates the dispatcher
@@ -112,14 +113,18 @@ public:
 
     //! Dispatch an abort() call asynchronously (fire-and-forget)
     /** @param spop_obj the AbstractPollOperation object (referenced — ownership transferred)
+        @param owner optional owner identifier for per-owner flush tracking
     */
-    DLLLOCAL void dispatchAbortAsync(QoreObject* spop_obj);
+    DLLLOCAL void dispatchAbortAsync(QoreObject* spop_obj,
+        const std::string& owner = std::string());
 
     //! Dispatch an onComplete(result) call asynchronously (fire-and-forget)
     /** @param spop_obj the AbstractPollOperation object (referenced — ownership transferred)
         @param result the SocketPollResultInfo hash (referenced — ownership transferred)
+        @param owner optional owner identifier for per-owner flush tracking
     */
-    DLLLOCAL void dispatchOnCompleteAsync(QoreObject* spop_obj, QoreHashNode* result);
+    DLLLOCAL void dispatchOnCompleteAsync(QoreObject* spop_obj, QoreHashNode* result,
+        const std::string& owner = std::string());
 
     //! Dispatch a code callback asynchronously (for timer events)
     /** @param callback the callback code (referenced — ownership transferred)
@@ -131,9 +136,11 @@ public:
     /** @param spop_obj the AbstractPollOperation object (referenced — ownership transferred)
         @param controller the AsyncIoControllerPriv to deliver the result to (referenced)
         @param key the operation key for result correlation
+        @param owner optional owner identifier for per-owner flush tracking
     */
     DLLLOCAL void dispatchContinuePollAsync(QoreObject* spop_obj,
-        AsyncIoControllerPriv* controller, const std::string& key);
+        AsyncIoControllerPriv* controller, const std::string& key,
+        const std::string& owner = std::string());
 
     //! Dispatch onStreamData(stream_key) asynchronously (fire-and-forget)
     /** Called by the I/O thread after stream data arrives.
@@ -142,8 +149,10 @@ public:
 
         @param spop_obj the poll operation object (referenced — ownership transferred)
         @param stream_key stream identifier (H2: "stream_id", H3: "session_id:stream_id")
+        @param owner optional owner identifier for per-owner flush tracking
     */
-    DLLLOCAL void dispatchStreamDataAsync(QoreObject* spop_obj, const std::string& stream_key);
+    DLLLOCAL void dispatchStreamDataAsync(QoreObject* spop_obj, const std::string& stream_key,
+        const std::string& owner = std::string());
 
     //! Dispatch onPollComplete() asynchronously (fire-and-forget)
     /** Called by the I/O thread after WebSocketClientPollOperationBase::continuePoll()
@@ -151,8 +160,10 @@ public:
         which the Qore subclass overrides to schedule delivery.
 
         @param spop_obj the WebSocketClientPollOperationBase object (referenced — ownership transferred)
+        @param owner optional owner identifier for per-owner flush tracking
     */
-    DLLLOCAL void dispatchPollCompleteAsync(QoreObject* spop_obj);
+    DLLLOCAL void dispatchPollCompleteAsync(QoreObject* spop_obj,
+        const std::string& owner = std::string());
 
     //! Stop all worker threads
     DLLLOCAL void stop(ExceptionSink* xsink);
@@ -185,6 +196,25 @@ public:
     */
     DLLLOCAL void waitForProgramIdle(QoreProgram* pgm);
 
+    //! Mark an owner as shutting down so workers skip callbacks for it
+    /** Workers that pick up items tagged with this owner will silently discard
+        them instead of calling the user callback (which may touch now-invalid
+        state on the owner object).
+    */
+    DLLLOCAL void markOwnerShuttingDown(const std::string& owner);
+
+    //! Remove an owner from the shutting-down set
+    DLLLOCAL void clearOwnerShuttingDown(const std::string& owner);
+
+    //! Wait for in-flight callbacks belonging to a specific owner to complete
+    /** Unlike waitForIdle() which waits for ALL callbacks, this only waits for
+        callbacks tagged with \a owner.  This avoids deadlock when the caller
+        holds a lock that callbacks from OTHER owners also need.
+
+        @param owner the owner identifier to wait for
+    */
+    DLLLOCAL void waitForOwnerIdle(const std::string& owner);
+
     //! Maximum worker cap — workers exit when idle, so a large cap is safe; this just
     //! prevents runaway thread creation under extreme load
     static constexpr int DEFAULT_WORKER_CAP = 4096;
@@ -206,6 +236,9 @@ private:
     std::unordered_set<QoreProgram*> shutting_down_programs;  //!< Programs being destroyed — skip callbacks
     std::unordered_map<QoreProgram*, int> active_per_program; //!< Per-program in-flight callback count
     QoreCondition pgm_idle_cond;                //!< Signaled when a program's active count reaches zero
+    std::unordered_set<std::string> shutting_down_owners;      //!< Owners being torn down — skip callbacks
+    std::unordered_map<std::string, int> active_per_owner;     //!< Per-owner in-flight callback count
+    QoreCondition owner_idle_cond;              //!< Signaled when an owner's active count reaches zero
 
     //! Enqueue a work item, starting a worker if needed
     DLLLOCAL void enqueue(AsyncWorkItem&& item);
@@ -314,6 +347,21 @@ public:
         have been delivered before stopping thread pools that depend on them.
     */
     DLLLOCAL void flushCallbacks();
+
+    //! Wait for in-flight callbacks belonging to a specific owner to drain
+    /** Narrowed-scope companion to @ref flushCallbacks() that only waits for
+        callbacks whose operations were submitted with the given \a owner.
+        Suitable for per-owner teardown paths (e.g. a connection manager's
+        destructor) where the global flush would deadlock on unrelated
+        long-running work on the shared controller.
+
+        Marks the owner as shutting down for the duration of the wait: any
+        callback picked up by a worker while the mark is set is silently
+        discarded instead of dispatched to user code.  The mark is cleared
+        before return, so subsequent unrelated submits by a new object using
+        the same owner string are unaffected.
+    */
+    DLLLOCAL void flushCallbacksByOwner(const std::string& owner);
 
     //! Start the I/O thread
     /** @param xsink for exception handling
@@ -520,6 +568,7 @@ private:
         QoreObject* spop_obj;              //!< Referenced or nullptr (for onComplete dispatch)
         bool has_on_complete;              //!< True if spop has onComplete() override
         QoreHashNode* result;              //!< Referenced
+        std::string owner;                 //!< Owner identifier for per-owner flush tracking
     };
 
     //! Timer info stored under lock
@@ -781,7 +830,8 @@ private:
                method adds its own ref before dispatching)
         @param stream_key the stream identifier to pass to onStreamData()
     */
-    DLLLOCAL void enqueueStreamDataDispatch(QoreObject* spop_obj, const std::string& stream_key);
+    DLLLOCAL void enqueueStreamDataDispatch(QoreObject* spop_obj, const std::string& stream_key,
+        const std::string& owner = std::string());
 
     //! Call abort on an AbstractPollOperation object
     DLLLOCAL static void callAbort(QoreObject* spop_obj, ExceptionSink* xsink);
@@ -792,7 +842,7 @@ private:
 
     //! Deliver a result via onComplete or queue (dispatches onComplete to worker thread)
     DLLLOCAL void deliverResult(Queue* queue, QoreObject* spop_obj, bool has_on_complete,
-        QoreHashNode* result, ExceptionSink* xsink);
+        QoreHashNode* result, ExceptionSink* xsink, const std::string& owner = std::string());
 
     //! Shared call dispatcher for async callback/abort delivery (lazily created, atomic for lock-free check)
     std::atomic<QoreCallDispatcher*> call_dispatcher{nullptr};
