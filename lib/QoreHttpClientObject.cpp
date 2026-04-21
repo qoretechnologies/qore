@@ -6325,24 +6325,19 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                         continue;
                     }
 
-                    // Check for end_stream
+                    // Check for end_stream — always fire a terminal
+                    // recv_callback with an "hdr" key (NOTHING when no
+                    // trailers) regardless of chunked vs fixed-length framing
+                    // (the conn_mgr streaming-send path delivers body bytes
+                    // through recv_callback for both cases, so the end-of-data
+                    // signal must be uniform).
                     QoreValue end_val = h->getKeyValue("end_stream");
                     if (!end_val.isNullOrNothing()) {
-                        bool is_chunked = false;
-                        if (ans) {
-                            const char* te = get_string_header(xsink, **ans,
-                                "transfer-encoding");
-                            if (te && strcasestr(te, "chunked")) {
-                                is_chunked = true;
-                            }
-                            if (*xsink) {
-                                xsink->clear();
-                            }
-                        }
-                        if (recv_callback && is_chunked) {
+                        if (recv_callback) {
                             ReferenceHolder<QoreListNode> args(
                                 new QoreListNode(autoTypeInfo), xsink);
                             QoreHashNode* cb_arg = new QoreHashNode(autoTypeInfo);
+                            cb_arg->setKeyValue("hdr", QoreValue(), xsink);
                             cb_arg->setKeyValue("send_aborted", false, xsink);
                             if (obj) {
                                 cb_arg->setKeyValue("obj", obj->refSelf(), xsink);
@@ -6712,24 +6707,17 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                             return nullptr;
                         }
                     }
-                    // Final callback only for chunked responses (matching
-                    // legacy readHttpChunkedBody[Binary] which calls
-                    // runHeaderCallback at end).  Content-length responses
-                    // only get the initial header callback.
-                    bool is_chunked = false;
-                    if (ans) {
-                        const char* te = get_string_header(xsink, **ans, "transfer-encoding");
-                        if (te && strcasestr(te, "chunked")) {
-                            is_chunked = true;
-                        }
-                        if (*xsink) {
-                            xsink->clear();
-                        }
-                    }
-                    if (recv_callback && is_chunked) {
+                    // Always fire a terminal recv_callback with an "hdr" key
+                    // (NOTHING when no trailers) to signal end-of-data.  The
+                    // conn_mgr streaming recv path delivers body bytes through
+                    // recv_callback for both chunked and fixed-length responses
+                    // (see the is_chunked=true data hash above), so the contract
+                    // is unified: consumers using h.hasKey("hdr") to detect EOD
+                    // (e.g. ds_get_recv) work regardless of framing.
+                    if (recv_callback) {
                         ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), xsink);
                         QoreHashNode* cb_arg = new QoreHashNode(autoTypeInfo);
-                        // hdr = NOTHING (no trailers)
+                        cb_arg->setKeyValue("hdr", QoreValue(), xsink);
                         cb_arg->setKeyValue("send_aborted", false, xsink);
                         if (obj) {
                             cb_arg->setKeyValue("obj", obj->refSelf(), xsink);
