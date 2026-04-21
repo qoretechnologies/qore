@@ -2052,6 +2052,13 @@ int64_t Http1ClientPollOperationPriv::submitRequest(const char* method, const ch
             if (key[0] == ':') {
                 continue;
             }
+            // When streaming-send adds its own "Transfer-Encoding: chunked"
+            // below, skip any user-supplied TE header — otherwise the peer
+            // sees it twice ("chunked, chunked"), which folds to a list and
+            // causes the request body not to be read as chunked.
+            if (streaming_send_flag && !strcasecmp(key, "transfer-encoding")) {
+                continue;
+            }
             QoreValue v = hi.get();
             // Handle list values by emitting multiple header lines
             if (v.getType() == NT_LIST) {
