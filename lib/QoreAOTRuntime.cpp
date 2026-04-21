@@ -4442,12 +4442,34 @@ static void registerAOTFunctionsFromSlotMaps(
             // builtins) to find the correct UserFunctionVariant.  We must avoid
             // runtimeFindFunction() because it checks Qore:: namespace first and may
             // return a builtin function that shadows the module's user function.
+            //
+            // **Module filter**: the slot map was emitted from this module's own
+            // functions (see compileNamespaceFunctions' `shouldSkipModuleItem`),
+            // so the found uvb must belong to this module.  A dependency module
+            // (e.g. PgsqlSqlUtilBase) may define a function of the same simple
+            // name (get_table) in a different namespace (PgsqlSqlUtilBase::) and
+            // get imported into this module's shadow pgm.  Without the filter,
+            // the DFS walks into the imported namespace first, finds the shared
+            // uvb (already registered by the dep's own slot-reg), sees
+            // hasCachedFunction()==true and skips — leaving the LOCAL
+            // get_table's uvb unregistered.  The runtime then dispatches to the
+            // local uvb with aot_fn=null and statements=null, producing "block
+            // missing return statement" errors.
+            const char* current_mod = get_module_context_name();
             std::function<UserVariantBase*(qore_ns_private*)> findFuncInTree =
                 [&](qore_ns_private* ns) -> UserVariantBase* {
                 // Search in this namespace's func_list
                 FunctionEntry* fe = ns->func_list.findNode(fname_str.c_str());
                 if (fe) {
                     QoreFunction* f = fe->getFunction();
+                    if (f && current_mod) {
+                        const char* fm = f->getModuleName();
+                        if (!fm || strcmp(fm, current_mod) != 0) {
+                            // imported from another module — skip this match,
+                            // keep walking child namespaces
+                            f = nullptr;
+                        }
+                    }
                     if (f) {
                         // Build the target signature suffix for matching
                         std::string target_sig;
