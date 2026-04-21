@@ -44,7 +44,7 @@ class Phase4bSmokeTest inherits QUnit::Test {
 
     private string runScript(string code, *string exec_mode, *string extra_opts) {
         string mode = exec_mode ?? "tiered";
-        TmpFile tmp(".q");
+        TmpFile tmp(NOTHING, ".q");
         tmp.file.write(code);
         tmp.file.close();
         string path = tmp.path;

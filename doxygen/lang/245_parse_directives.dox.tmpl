@@ -9,7 +9,7 @@
     The recommended parse directive for %Qore programming is @ref modern "%modern", which combines all the recommended parse options into a single directive:
     - @ref modern "%modern" - sets @ref new-style "%new-style", @ref strict-args "%strict-args", @ref require-types "%require-types", @ref strong-encapsulation "%strong-encapsulation", @ref no-summarize "%no-summarize", and enables all non-strict warnings
 
-    Alternatively, files with the \c .qr extension automatically enable @ref modern "%modern" mode without any parse directive.
+    Alternatively, files with any extension except \c .q (for example \c .qr, \c .qc, \c .qm, \c .qtest, \c .qsd, \c .qfd, \c .qrd, \c .qore), as well as files with no extension at all, automatically enable @ref modern "%modern" mode without any parse directive. Only files whose filename ends in exactly \c .q stay in legacy mode by default. The environment variable \c QORE_OLD_STYLE_DEFAULT (set to any non-empty value other than \c "0") globally disables this auto-enable, restoring the pre-2.4 opt-in-only default.
 
     @note The individual parse directives (@ref new-style "%new-style", @ref strict-args "%strict-args", @ref require-types "%require-types", @ref enable-all-warnings "%enable-all-warnings", @ref strict-warnings "%strict-warnings") are still supported for backward compatibility and fine-grained control.
 
@@ -73,7 +73,7 @@
     |@ref lock-options "%lock-options"|Prohibits further changes to parse options (equivalent to the <tt>-</tt><tt>-lock-options</tt> command line option)
     |@ref lock-warnings "%lock-warnings"|Prohibits further changes to the warning mask (equivalent to the <tt>-</tt><tt>-lock-warnings</tt> command line option)
     |@ref loose-args "%loose-args"|reverts the effect of the @ref strict-args "%strict-args" parse options
-    |@ref modern "%modern"|Sets @ref new-style "%new-style", @ref require-types "%require-types", @ref strict-args "%strict-args", @ref strong-encapsulation "%strong-encapsulation", @ref no-summarize "%no-summarize", and enables all non-strict warnings. This is the recommended parse directive for modern %Qore programming. Files with the \c .qr extension automatically enable this mode.<br><br>Since %Qore 2.3
+    |@ref modern "%modern"|Sets @ref new-style "%new-style", @ref require-types "%require-types", @ref strict-args "%strict-args", @ref strong-encapsulation "%strong-encapsulation", @ref no-summarize "%no-summarize", and enables all non-strict warnings. This is the recommended parse directive for modern %Qore programming. Files with any extension other than \c .q (including no extension) automatically enable this mode; set the environment variable \c QORE_OLD_STYLE_DEFAULT to disable the auto-enable globally.<br><br>Since %Qore 2.3
     |@ref loose-types "%loose-types"|Deprecated: support removed in %Qore 2.3; this directive has no effect
     |@ref new-style "%new-style"|Sets both @ref allow-bare-refs "%allow-bare-refs" and @ref assume-local "%assume-local". These two options together make programming in %Qore superficially more like programming in C++ or Java programs; use this if you dislike programming with the \c "$" sign, for example; see also @ref old-style "%old-style" <br><br>Since %Qore 0.8.1
     |@ref old-style "%old-style"|Resets default %Qore parsing behavior by setting @ref require-dollar "%require-dollar" and @ref assume-global "%assume-global"; this option is the opposite of @ref new-style "%new-style" <br><br>Since %Qore 0.8.4
@@ -1322,7 +1322,7 @@ sub validate_input(int value, int max_value) {
     This is the recommended parse directive for modern %Qore programming. It combines all the best practices into a single directive.
 
     @par File Extension:
-    Files with the \c .qr extension automatically enable \c %%modern mode without requiring any parse directive. This allows for cleaner code:
+    Starting with %Qore 2.4, files with any extension except \c .q automatically enable \c %%modern mode without requiring any parse directive. This includes conventional extensions such as \c .qr, \c .qc, \c .qm, \c .qtest, \c .qsd, \c .qfd, \c .qrd, \c .qore, as well as files with no extension at all. Only files whose filename ends in exactly \c .q stay in legacy mode by default, preserving backward compatibility for existing scripts.
 
     @code{.qore}
     # hello.qr - no parse directives needed!
@@ -1331,6 +1331,9 @@ sub validate_input(int value, int max_value) {
     }
     printf("%s\n", greet("World"));
     @endcode
+
+    @par Environment Override:
+    Setting the \c QORE_OLD_STYLE_DEFAULT environment variable to any non-empty value other than \c "0" disables the extension-based auto-enable globally; under this override, only the \c %%modern parse directive, the \c -M command-line flag, or an explicit @ref Qore::PO_MODERN programmatic option will enable modern mode. This escape hatch is intended for users rolling legacy code bases forward without renaming every source file to \c .q.
 
     @note
     - All examples in the %Qore documentation assume @ref modern "%modern" mode.
@@ -1822,7 +1825,7 @@ sub validate_input(int value, int max_value) {
     parse-option space; use the string name \c "no-summarize" with the @ref ParseOptions
     class when setting parse options programmatically.
 
-    @since %Qore 2.4
+    @since %Qore 2.3
 
     <hr>
     @section no-terminal-io %no-terminal-io

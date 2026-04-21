@@ -1,0 +1,88 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/FsUtil.qm
+
+%exec-class ModernDefaultTest
+
+class ModernDefaultTest inherits QUnit::Test {
+    constructor() : QUnit::Test("ModernDefaultTest", "1.0") {
+        addTestCase(".qtest file auto-enables %modern", \testQtestAutoModern());
+        addTestCase(".qr file auto-enables %modern", \testQrAutoModern());
+        addTestCase("no-extension file auto-enables %modern", \testNoExtAutoModern());
+        addTestCase(".q file stays legacy", \testDotQLegacy());
+        addTestCase("QORE_OLD_STYLE_DEFAULT=1 suppresses auto-enable", \testEnvEscapeHatch());
+        set_return_value(main());
+    }
+
+    # Source that requires %modern to parse (declares local without $)
+    private static string modernSrc() {
+        return "int x = 40 + 2;\nprintf(\"%d\\n\", x);\n";
+    }
+
+    # Source that requires legacy (bare $) to parse
+    private static string legacySrc() {
+        return "our int $x = 40 + 2;\nprintf(\"%d\\n\", $x);\n";
+    }
+
+    # Helper: writes @src into a tempfile with @suffix, runs qore against it in
+    # the current process's default exec mode (AST-safe), returns combined stdout+stderr.
+    private hash<auto> runFile(string src, *string suffix, *hash<string, string> env_over) {
+        string qore_bin = QORE_ARGV[0] ?? ARGV[0];
+        assertTrue(exists qore_bin, "no qore binary path available");
+
+        TmpFile tmp(NOTHING, suffix);
+        tmp.file.write(src);
+        tmp.file.close();
+
+        string env_prefix = "";
+        if (exists env_over) {
+            foreach string k in (keys env_over) {
+                env_prefix += sprintf("%s=%s ", k, env_over{k});
+            }
+        }
+
+        string cmd = sprintf("%s%s --exec-mode=ast %s 2>&1",
+            env_prefix, qore_bin, tmp.path);
+        string out = backquote(cmd);
+        return {
+            "path": tmp.path,
+            "stdout": out,
+        };
+    }
+
+    # .qtest extension: modern syntax parses without a %modern directive
+    testQtestAutoModern() {
+        hash<auto> r = runFile(modernSrc(), ".qtest");
+        assertEq("42\n", r.stdout, ".qtest should auto-enable %modern");
+    }
+
+    # .qr extension: preserves existing behavior
+    testQrAutoModern() {
+        hash<auto> r = runFile(modernSrc(), ".qr");
+        assertEq("42\n", r.stdout, ".qr should auto-enable %modern");
+    }
+
+    # No extension at all: still auto-enables
+    testNoExtAutoModern() {
+        hash<auto> r = runFile(modernSrc(), NOTHING);
+        assertEq("42\n", r.stdout, "no-extension file should auto-enable %modern");
+    }
+
+    # .q extension: must NOT auto-enable, so legacy $ syntax parses cleanly
+    testDotQLegacy() {
+        hash<auto> r = runFile(legacySrc(), ".q");
+        assertEq("42\n", r.stdout, ".q should stay legacy (no auto-modern)");
+    }
+
+    # QORE_OLD_STYLE_DEFAULT=1 disables auto-enable even for non-.q files.
+    # Legacy syntax should parse in a .qtest file when the env var is set.
+    testEnvEscapeHatch() {
+        hash<auto> r = runFile(legacySrc(), ".qtest",
+            {"QORE_OLD_STYLE_DEFAULT": "1"});
+        assertEq("42\n", r.stdout, "QORE_OLD_STYLE_DEFAULT=1 should suppress auto-enable");
+    }
+}

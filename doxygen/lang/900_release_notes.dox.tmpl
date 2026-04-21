@@ -2,47 +2,6 @@
 
     @tableofcontents
 
-    @section qore_2_4_0 Qore 2.4.0
-
-    @par Release Summary
-    New parse options for backward compatibility and other enhancements; see below for more information
-
-    @subsection qore_2_4_0_compatibility Changes That Can Affect Backwards-Compatibility
-
-    @par Soft Type NULL Value Handling
-    @parblock
-    %Qore now strictly rejects SQL NULL values for non-optional soft types
-    (@ref softint_type "softint", @ref softnumber_type "softnumber", @ref softstring_type "softstring",
-    @ref softbool_type "softbool", @ref softdate_type "softdate", @ref softlist_type "softlist",
-    @ref softhash_type "softhash", @ref softobject_type "softobject", @ref softcoding_type "softcoding",
-    @ref softbinary_type "softbinary"). In pre-2.4 versions, soft types accepted SQL NULL and treated it like
-    @ref nothing "NOTHING".
-
-    Code that relied on soft types accepting NULL will now encounter \c RUNTIME-TYPE-ERROR when NULL values
-    are passed to soft type parameters or assigned to soft type variables during type validation.
-
-    <b>Workarounds:</b>
-    - Use optional soft types (e.g., @ref softint_or_nothing_type "*softint") to accept NULL values
-    - Use the @ref broken-soft-types "%broken-soft-types" parse directive to restore pre-2.4 behavior (AST-only)
-    - Use @ref Qore::QoreParseOptions::BROKEN_SOFT_TYPES "QoreParseOptions::BROKEN_SOFT_TYPES" when setting up a
-      @ref Qore::Program "Program" object (AST-only)
-
-    <b>Note:</b> The @ref broken-soft-types "%broken-soft-types" option is AST-only and not supported in IR/JIT execution modes.
-    @endparblock
-
-    @par summarize Statement Rejected Under %modern
-    @parblock
-    The @ref context "summarize" statement is now rejected at parse time when @ref modern "%modern" is in effect.
-    \c %modern now implies the new @ref no-summarize "%no-summarize" parse option. Code that uses \c summarize
-    inside a program parsed with \c %modern, via the \c -M command-line flag, the \c .qr file extension, or
-    @ref Qore::PO_MODERN will now fail parse with a \c PARSE-EXCEPTION.
-
-    <b>Workarounds:</b>
-    - Drop \c %modern and use @ref new-style "%new-style" (plus other directives) directly — \c summarize
-      remains available without \c %modern
-    - Rewrite the \c summarize block as a plain @ref context "context" loop with manual grouping
-    @endparblock
-
     @section qore_2_3_0 Qore 2.3.0
 
     @par Release Summary
@@ -180,6 +139,69 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
       (for example: \c LoggerAppenderQueue(-1)) to explicitly
 \endif
       create an unlimited queue (not recommended for production)
+    @endparblock
+
+    @par Soft Type NULL Value Handling
+    @parblock
+    %Qore now strictly rejects SQL NULL values for non-optional soft types
+    (@ref softint_type "softint", @ref softnumber_type "softnumber", @ref softstring_type "softstring",
+    @ref softbool_type "softbool", @ref softdate_type "softdate", @ref softlist_type "softlist",
+    @ref softhash_type "softhash", @ref softobject_type "softobject", @ref softcoding_type "softcoding",
+    @ref softbinary_type "softbinary"). In pre-2.3 versions, soft types accepted SQL NULL and treated it like
+    @ref nothing "NOTHING".
+
+    Code that relied on soft types accepting NULL will now encounter \c RUNTIME-TYPE-ERROR when NULL values
+    are passed to soft type parameters or assigned to soft type variables during type validation.
+
+    <b>Workarounds:</b>
+    - Use optional soft types (e.g., @ref softint_or_nothing_type "*softint") to accept NULL values
+    - Use the @ref broken-soft-types "%broken-soft-types" parse directive to restore pre-2.3 behavior (AST-only)
+    - Use @ref Qore::QoreParseOptions::BROKEN_SOFT_TYPES "QoreParseOptions::BROKEN_SOFT_TYPES" when setting up a
+      @ref Qore::Program "Program" object (AST-only)
+
+    <b>Note:</b> The @ref broken-soft-types "%broken-soft-types" option is AST-only and not supported in IR/JIT execution modes.
+    @endparblock
+
+    @par %modern Is Now the Default for Non-.q Files
+    @parblock
+    Starting with %Qore 2.3, source files with any extension other than \c .q (for example \c .qr, \c .qc,
+    \c .qm, \c .qtest, \c .qsd, \c .qfd, \c .qrd, \c .qore), as well as files with no extension at all,
+    automatically enable @ref modern "%modern" mode (plus all non-strict warnings) during parsing. Only
+    files whose name ends in exactly \c .q stay in legacy mode by default, preserving the pre-2.3 behavior
+    for the large corpus of existing scripts.
+
+    Code that previously relied on files without explicit parse directives parsing in legacy mode will now
+    encounter parse errors such as "\c reference to variable ... with the '$' sign is not allowed when
+    parse option 'allow-bare-refs' is set" or "\c local variable ... declared without '$' prefix..." depending
+    on which style the legacy code assumed.
+
+    <b>Workarounds:</b>
+    - Rename the affected script to end in \c .q to opt it back into legacy mode
+    - Set the environment variable \c QORE_OLD_STYLE_DEFAULT to any non-empty value (for example \c 1) to
+      disable the extension-based auto-enable globally; under this setting only explicit \c \%modern
+      directives, the \c -M command-line flag, or a programmatic @ref Qore::PO_MODERN option will enable
+      modern mode. This is the recommended approach for users migrating large legacy code bases forward
+      without renaming every source file.
+    - Add an explicit \c \%old-style or \c \%require-dollar directive at the top of the script to override
+      the automatic \c \%new-style bits selectively
+
+    <b>Note:</b> This change only affects scripts loaded via the command-line binary and
+    @ref Qore::Program::parseFile "Program::parseFile()". Module loading via @ref Qore::load_module
+    "load_module()" or \c %%requires is unaffected — modules continue to control their own parse options
+    through directives inside the \c .qm file.
+    @endparblock
+
+    @par summarize Statement Rejected Under %modern
+    @parblock
+    The @ref context "summarize" statement is now rejected at parse time when @ref modern "%modern" is in effect.
+    \c %modern now implies the new @ref no-summarize "%no-summarize" parse option. Code that uses \c summarize
+    inside a program parsed with \c %modern, via the \c -M command-line flag, the \c .qr file extension, or
+    @ref Qore::PO_MODERN will now fail parse with a \c PARSE-EXCEPTION.
+
+    <b>Workarounds:</b>
+    - Drop \c %modern and use @ref new-style "%new-style" (plus other directives) directly — \c summarize
+      remains available without \c %modern
+    - Rewrite the \c summarize block as a plain @ref context "context" loop with manual grouping
     @endparblock
 
     @subsection qore_2_3_0_new_features New Features in Qore

@@ -5322,7 +5322,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
             return;
         }
 
-        TmpFile script(".q");
+        TmpFile script(NOTHING, ".q");
         script.file.write("%modern\n");
         script.file.write("string result = \"\";\n");
         script.file.write("try {\n");
@@ -5360,7 +5360,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
             return;
         }
 
-        TmpFile script(".q");
+        TmpFile script(NOTHING, ".q");
         script.file.write("%modern\n");
         script.file.write("string r2 = \"\";\n");
         script.file.write("try {\n");
@@ -5402,7 +5402,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
             return;
         }
 
-        TmpFile script(".q");
+        TmpFile script(NOTHING, ".q");
         script.file.write("%modern\n");
         script.file.write("string s = \"a\";\n");
         script.file.write("try {\n");
@@ -5440,7 +5440,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
             return;
         }
 
-        TmpFile script(".q");
+        TmpFile script(NOTHING, ".q");
         script.file.write("%modern\n");
         script.file.write("hash h = (\"x\": 1, \"y\": 2, \"z\": 3);\n");
         script.file.write("hash slice = h{(\"x\", \"z\")};\n");

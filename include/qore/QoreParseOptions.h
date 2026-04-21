@@ -192,7 +192,7 @@ public:
     //! extended option: disallow the \c summarize statement (bit 69)
     /** Enforced at parse time: when set, any \c summarize statement triggers a parse error.
         Included in \c PO_MODERN so modern code always rejects \c summarize.
-        @since %Qore 2.4
+        @since %Qore 2.3
     */
     DLLEXPORT static const QoreParseOptions NO_SUMMARIZE;
 

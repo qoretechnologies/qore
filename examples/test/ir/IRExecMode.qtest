@@ -25,7 +25,8 @@ class IRExecModeTest inherits QUnit::Test {
             return;
         }
 
-        TmpFile script();
+        # .q suffix: extension-based auto-enable treats .q as legacy, so no %modern.
+        TmpFile script(NOTHING, ".q");
         script.file.write("printf(\"ok\\n\");\n");  # No %modern directive
         script.file.close();
 
@@ -51,7 +52,8 @@ class IRExecModeTest inherits QUnit::Test {
             return;
         }
 
-        TmpFile script();
+        # .q suffix: extension-based auto-enable treats .q as legacy, so no %modern.
+        TmpFile script(NOTHING, ".q");
         script.file.write("printf(\"ok\\n\");\n");  # No %modern directive
         script.file.close();
 
@@ -77,7 +79,8 @@ class IRExecModeTest inherits QUnit::Test {
             return;
         }
 
-        TmpFile script();
+        # .q suffix: extension-based auto-enable treats .q as legacy, so no %modern.
+        TmpFile script(NOTHING, ".q");
         script.file.write("printf(\"ok\\n\");\n");  # No %modern directive
         script.file.close();
 

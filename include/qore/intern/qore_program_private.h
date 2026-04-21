@@ -679,6 +679,27 @@ public:
         }
     }
 
+    // Decide whether a filename should auto-enable %modern during parseFile().
+    // Returns false if the basename's extension is exactly ".q" (legacy is the
+    // only opt-out based on extension) or if the environment variable
+    // QORE_OLD_STYLE_DEFAULT is set to a non-empty, non-"0" value (global
+    // escape hatch for users migrating legacy codebases). Otherwise returns
+    // true, so all other extensions — .qr, .qc, .qm, .qtest, .qsd, .qfd, .qrd,
+    // .qore, or no extension at all — automatically get PO_MODERN.
+    DLLLOCAL static bool should_auto_enable_modern(const char* filename) {
+        const char* env = getenv("QORE_OLD_STYLE_DEFAULT");
+        if (env && *env && strcmp(env, "0") != 0) {
+            return false;
+        }
+        const char* base = strrchr(filename, '/');
+        base = base ? base + 1 : filename;
+        const char* dot = strrchr(base, '.');
+        if (dot && !strcmp(dot, ".q")) {
+            return false;
+        }
+        return true;
+    }
+
     DLLLOCAL void replaceParseOptionsIntern(const QoreParseOptions& po) {
         pwo.parse_options = po;
         applyParseOptionImplications();
@@ -1552,9 +1573,10 @@ public:
         }
         ON_BLOCK_EXIT(fclose, fp);
 
-        // check for .qr extension and auto-enable modern mode
-        size_t len = strlen(filename);
-        if (len > 3 && !strcmp(filename + len - 3, ".qr")) {
+        // Auto-enable %modern for every file except when the extension is exactly
+        // '.q' (legacy by design) or the QORE_OLD_STYLE_DEFAULT env var is set to
+        // disable the default globally.  See should_auto_enable_modern().
+        if (should_auto_enable_modern(filename)) {
             pwo.parse_options |= PO_MODERN;
             applyParseOptionImplications();
             pgm->setWarningMask(QP_WARN_ALL);

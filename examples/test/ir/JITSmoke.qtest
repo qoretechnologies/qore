@@ -184,7 +184,10 @@ class JITSmokeTest inherits QUnit::Test {
 
     private string runScript(string code, *string exec_mode) {
         string mode = exec_mode ?? "jit";
-        TmpFile tmp(".q");
+        # .q suffix — extension-based auto-enable treats .q as legacy, which is
+        # the semantics this harness relied on (JIT gating depends on whether the
+        # source file's effective parse options include %modern).
+        TmpFile tmp(NOTHING, ".q");
         tmp.file.write(code);
         tmp.file.close();
         string path = tmp.path;

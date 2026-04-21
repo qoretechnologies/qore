@@ -80,7 +80,7 @@ class JITSmokeTest inherits QUnit::Test {
 
     private string runScript(string code, *string exec_mode) {
         string mode = exec_mode ?? "jit";
-        TmpFile tmp(".q");
+        TmpFile tmp(NOTHING, ".q");
         tmp.file.write(code);
         tmp.file.close();
         string path = tmp.path;
