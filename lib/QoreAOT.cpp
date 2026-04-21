@@ -430,6 +430,11 @@ static uint64_t opcodeToFeatureFlag(QoreIROpcode op) {
         case QoreIROpcode::CallMethodDirect:
         case QoreIROpcode::InvokeMethodDirect:
         case QoreIROpcode::CallStaticDirect:   return QORE_AOT_FEAT_FAST_CALL;
+        // Native `context` statement IR lowering (140, 361-363)
+        case QoreIROpcode::Context:
+        case QoreIROpcode::ContextMaxPos:
+        case QoreIROpcode::ContextSetPos:
+        case QoreIROpcode::ContextDestroy:     return QORE_AOT_FEAT_CONTEXT_IR;
         default:                               return 0;
     }
 }

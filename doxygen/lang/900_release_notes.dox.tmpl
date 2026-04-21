@@ -396,6 +396,27 @@ qore --compile-module MyModule.qm --strip-source
     - Debug information (line numbers, variable names) is preserved for diagnostics
     @endparblock
 
+    @par Native IR Lowering for context Statement
+    @parblock
+    The @ref context "context" statement is now lowered to a native IR loop
+    instead of delegating back to AST execution via a runtime trampoline.
+    Under the IR interpreter and JIT/AOT backends, the loop header, body
+    block, break/continue/return handling, and exception unwind paths all
+    run as pure IR; only the opaque @c Context frame creation (which
+    evaluates the data hash plus any @c where/@c sortBy/@c sortDescendingBy
+    filters per row) remains in a runtime helper.
+
+    User-visible effect:
+    - No functional change — semantics are identical to AST mode
+    - %Qore modules using @c context can now be fully AOT-compiled to
+      @c .qmod (previously such modules required the AST fallback path)
+    - JIT-mode execution of @c context loops no longer bails through
+      @c qore_rt_exec_statement
+    - AOT binary format gains feature flag @c QORE_AOT_FEAT_CONTEXT_IR;
+      older readers will reject @c .qmod files emitted by this compiler
+      if they contain @c context statements
+    @endparblock
+
     @par Programmatic Execution Mode Control
     @parblock
     The @ref Qore::ExecMode "ExecMode" enum and @ref Qore::Program "Program" class methods provide

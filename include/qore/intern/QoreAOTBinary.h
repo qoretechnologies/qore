@@ -91,8 +91,9 @@ constexpr uint64_t QORE_AOT_FEAT_LIST_INDEX_STORE = 1ULL << 8;  //!< ListIndexSt
 constexpr uint64_t QORE_AOT_FEAT_TYPE_TABLE      = 1ULL << 9;  //!< per-blob pre-resolved type-path table (TYPE_TABLE section)
 constexpr uint64_t QORE_AOT_FEAT_CONST_PENDING   = 1ULL << 10; //!< per-constant pending-init-func flag in CONSTANTS / CLASSES
 constexpr uint64_t QORE_AOT_FEAT_SIG_LINES       = 1ULL << 11; //!< per-variant signature start/end line pair follows the flags u16 in writeVariantSignature
+constexpr uint64_t QORE_AOT_FEAT_CONTEXT_IR      = 1ULL << 12; //!< native IR lowering of `context` statement (Context carries name+exp+where+sort; ContextMaxPos/SetPos/Destroy opcodes present)
 //! Mask of all currently supported features
-constexpr uint64_t QORE_AOT_SUPPORTED_FEATURES   = 0xFFFULL;
+constexpr uint64_t QORE_AOT_SUPPORTED_FEATURES   = 0x1FFFULL;
 
 //! Section type IDs
 enum class QoreAOTSectionType : uint16_t {

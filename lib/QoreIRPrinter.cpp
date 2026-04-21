@@ -35,6 +35,7 @@
 #include <ostream>
 
 #include <qore/intern/QoreIR.h>
+#include <qore/intern/Context.h>  // CM_SORT_* constants (for context printer)
 #include <qore/intern/LocalVar.h>
 #include <qore/intern/NewComplexTypeNode.h>
 #include <qore/intern/Variable.h>
@@ -186,7 +187,10 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::IteratorNext: return "iterator.next";
         case QoreIROpcode::OnBlockExit: return "on.block.exit";
         case QoreIROpcode::ThreadExit: return "thread.exit";
-        case QoreIROpcode::Context: return "context";
+        case QoreIROpcode::Context: return "context.init";
+        case QoreIROpcode::ContextMaxPos: return "context.max_pos";
+        case QoreIROpcode::ContextSetPos: return "context.set_pos";
+        case QoreIROpcode::ContextDestroy: return "context.destroy";
         case QoreIROpcode::Summarize: return "summarize";
         case QoreIROpcode::EqInt: return "eq.int";
         case QoreIROpcode::EqFloat: return "eq.float";
@@ -727,6 +731,21 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
                 auto* rfi = dynamic_cast<const QoreIRRefForeachInitInstruction*>(inst.get());
                 if (rfi) {
                     out << " <expr>";
+                }
+            } else if (inst->opcode == QoreIROpcode::Context) {
+                auto* ci = dynamic_cast<const QoreIRContextInstruction*>(inst.get());
+                if (ci) {
+                    if (!ci->name.empty()) {
+                        out << " name=\"" << ci->name << "\"";
+                    }
+                    out << " exp=<expr>";
+                    if (ci->where_exp) {
+                        out << " where=<expr>";
+                    }
+                    if (ci->sort_exp) {
+                        out << (ci->sort_type == CM_SORT_DESCENDING
+                                ? " sort_desc=<expr>" : " sort_asc=<expr>");
+                    }
                 }
             } else if (inst->opcode == QoreIROpcode::SwitchInt) {
                 auto* sw = dynamic_cast<const QoreIRSwitchIntInstruction*>(inst.get());

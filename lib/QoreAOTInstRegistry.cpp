@@ -1959,6 +1959,98 @@ static std::unique_ptr<QoreIRInstruction> readRefForeachInit(
 }
 
 // ============================================================================
+// Group 51: Context - Native IR lowering of `context` statement
+// ============================================================================
+//
+// Carries the context name (string) plus three AST expressions:
+//   - exp:       context data expression (e.g. hash-of-lists)
+//   - where_exp: optional `where` filter (empty QoreValue = no filter)
+//   - sort_exp:  optional sort key expression
+// ...and an i8 sort_type (CM_SORT_ASCENDING / CM_SORT_DESCENDING / -1).
+//
+// Gated behind QORE_AOT_FEAT_CONTEXT_IR so older readers bail on
+// unexpected Context payloads.
+
+static bool writeContext(AOTInstWriteCtx& ctx) {
+    auto* ci = static_cast<const QoreIRContextInstruction*>(ctx.inst);
+    ctx.writer.writeStringRef(ci->name.c_str());
+    if (!ctx.writeExpr(ctx.writer, ci->exp)) {
+        return false;
+    }
+    // where_exp, sort_exp are optional; emit a flag byte so the reader
+    // can skip the expression slot entirely when absent.
+    uint8_t has_where = ci->where_exp ? 1 : 0;
+    ctx.writer.writeU8(has_where);
+    if (has_where) {
+        if (!ctx.writeExpr(ctx.writer, ci->where_exp)) {
+            return false;
+        }
+    }
+    uint8_t has_sort = ci->sort_exp ? 1 : 0;
+    ctx.writer.writeU8(has_sort);
+    if (has_sort) {
+        if (!ctx.writeExpr(ctx.writer, ci->sort_exp)) {
+            return false;
+        }
+    }
+    // sort_type is small (-1, CM_SORT_ASCENDING, CM_SORT_DESCENDING); store as u8
+    // with two's-complement roundtrip via int8_t.
+    ctx.writer.writeU8(static_cast<uint8_t>(static_cast<int8_t>(ci->sort_type)));
+    return true;
+}
+
+static std::unique_ptr<QoreIRInstruction> readContext(
+        uint16_t opcode_raw, QoreIRBasicBlock* exc_target,
+        const std::vector<QoreIRValue>& operands, uint32_t result_id,
+        AOTInstReadCtx& ctx) {
+    const char* name_cstr = ctx.reader.readStringRef(ctx.ptr);
+    std::string name = name_cstr ? name_cstr : "";
+
+    std::string error;
+    QoreValue exp = ctx.readExpr(ctx.reader, ctx.ptr, ctx.end, error);
+    if (!error.empty()) {
+        ctx.error = error;
+        return nullptr;
+    }
+
+    QoreValue where_exp;
+    uint8_t has_where = QoreAOTBinaryReader::readU8(ctx.ptr);
+    if (has_where) {
+        where_exp = ctx.readExpr(ctx.reader, ctx.ptr, ctx.end, error);
+        if (!error.empty()) {
+            exp.discard(nullptr);
+            ctx.error = error;
+            return nullptr;
+        }
+    }
+
+    QoreValue sort_exp;
+    uint8_t has_sort = QoreAOTBinaryReader::readU8(ctx.ptr);
+    if (has_sort) {
+        sort_exp = ctx.readExpr(ctx.reader, ctx.ptr, ctx.end, error);
+        if (!error.empty()) {
+            exp.discard(nullptr);
+            where_exp.discard(nullptr);
+            ctx.error = error;
+            return nullptr;
+        }
+    }
+
+    int sort_type = static_cast<int>(static_cast<int8_t>(QoreAOTBinaryReader::readU8(ctx.ptr)));
+
+    auto* ci = new QoreIRContextInstruction(std::move(name), exp, where_exp, sort_exp, sort_type);
+    ci->opcode = static_cast<QoreIROpcode>(opcode_raw);
+    ci->result = QoreIRValue(result_id);
+    ci->operands = operands;
+    ci->exception_target = exc_target;
+    // ctor takes refs on the expressions; drop the reader-side refs.
+    exp.discard(nullptr);
+    where_exp.discard(nullptr);
+    sort_exp.discard(nullptr);
+    return std::unique_ptr<QoreIRInstruction>(ci);
+}
+
+// ============================================================================
 // Group 47: SwitchRegexMatch - Regex match case
 // ============================================================================
 
@@ -2401,8 +2493,8 @@ const QoreIRInstGroupInfo AOT_INST_GROUP_REGISTRY[AOT_INST_GROUP_TABLE_SIZE] = {
     // Index 50: SwitchCaseMatch
     { "SwitchCaseMatch", 50, true, false, writeSwitchCaseMatch, readSwitchCaseMatch, "Switch case matching" },
 
-    // Index 51: Context holds raw ContextStatement* pointer - no serialization
-    UNUSED_ENTRY(51),
+    // Index 51: Context - native IR lowering (name + exp + where + sort)
+    { "Context", 51, true, false, writeContext, readContext, "Context frame init for `context` statement" },
 
     // Index 52: Summarize holds raw SummarizeStatement* pointer - no serialization
     UNUSED_ENTRY(52),

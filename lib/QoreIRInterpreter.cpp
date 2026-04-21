@@ -70,7 +70,7 @@
 // Compile-time guard: forces review of interpreter dispatch when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 359,
+static_assert(QORE_IR_MAX_OPCODE == 363,
     "New IR opcode added — review QoreIRInterpreter.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRToLLVM.cpp.");
 #include <qore/intern/QoreJIT.h>
@@ -499,14 +499,6 @@ bool QoreIRInterpreter::simulateInvoke(QoreIROpcode op, const QoreValue& expr, E
 int QoreIRInterpreter::execStatement(QoreIROpcode op, const AbstractStatement* stmt, QoreValue& return_value,
         ExceptionSink* xsink) {
     switch (op) {
-        case QoreIROpcode::Context:
-            if (!stmt) {
-                if (xsink) {
-                    xsink->raiseException("IR-INTERPRETER-ERROR", "context statement requires a statement");
-                }
-                return -1;
-            }
-            return const_cast<AbstractStatement*>(stmt)->exec(return_value, xsink);
         case QoreIROpcode::Summarize:
             if (!stmt) {
                 if (xsink) {
@@ -5661,12 +5653,18 @@ load_local_done:
                 break;
             }
             case QoreIROpcode::Context: {
+                // Native context init: push a Context frame and return its pointer.
                 auto* context_inst = static_cast<QoreIRContextInstruction*>(inst);
-                QoreValue stmt_return;
-                int rc = QoreIRInterpreter::execStatement(QoreIROpcode::Context, context_inst->stmt,
-                    stmt_return, xsink);
-                if (rc || (xsink && *xsink)) {
-                    if (inst->exception_target && xsink && *xsink) {
+                const char* name_cstr = context_inst->name.empty()
+                    ? nullptr : context_inst->name.c_str();
+                uint64_t state = qore_rt_context_init(name_cstr,
+                    toBits(context_inst->exp),
+                    toBits(context_inst->where_exp),
+                    toBits(context_inst->sort_exp),
+                    context_inst->sort_type, xsink);
+                if (xsink && *xsink) {
+                    if (inst->exception_target) {
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
                         prev_block = block;
                         block = inst->exception_target;
                         ip = 0;
@@ -5676,7 +5674,32 @@ load_local_done:
                     cleanupLocalCaches();
                     return false;
                 }
-                cleanupLocalCaches();
+                setValueSlotDirect(values, inst->result.id,
+                    QoreValue(static_cast<int64_t>(state)));
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::ContextMaxPos: {
+                QoreValue state_val = getIRValue(values, inst->operands[0]);
+                int64_t max_pos = qore_rt_context_max_pos(
+                    static_cast<uint64_t>(state_val.getAsBigInt()));
+                setValueSlotDirect(values, inst->result.id, QoreValue(max_pos));
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::ContextSetPos: {
+                QoreValue state_val = getIRValue(values, inst->operands[0]);
+                QoreValue idx_val = getIRValue(values, inst->operands[1]);
+                qore_rt_context_set_pos(
+                    static_cast<uint64_t>(state_val.getAsBigInt()),
+                    idx_val.getAsBigInt());
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::ContextDestroy: {
+                QoreValue state_val = getIRValue(values, inst->operands[0]);
+                qore_rt_context_destroy(
+                    static_cast<uint64_t>(state_val.getAsBigInt()), xsink);
                 ++ip;
                 break;
             }

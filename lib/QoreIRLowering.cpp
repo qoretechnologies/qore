@@ -137,6 +137,7 @@
 #include <qore/intern/DebugStatement.h>
 #include <qore/intern/AssertStatement.h>
 #include <qore/intern/ContextStatement.h>
+#include <qore/intern/Context.h>  // for CM_SORT_* constants
 #include <qore/intern/SummarizeStatement.h>
 #include <qore/intern/QoreOperatorNode.h>
 #include <qore/intern/ObjectMethodReferenceNode.h>
@@ -1259,10 +1260,184 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         return true;
     }
     if (auto* context_stmt = dynamic_cast<const ContextStatement*>(stmt)) {
-        auto* inst = builder.createContext(context_stmt, stmt->loc);
-        if (!exception_stack.empty()) {
-            inst->exception_target = exception_stack.back();
+        // Native IR lowering of `context` — mirrors the non-ref Foreach shape.
+        // ContextInit evaluates the context data hash + per-row where/sort
+        // filters inside the runtime Context ctor and returns an opaque
+        // Context* state handle.  The loop body is inlined here; control
+        // flow (break/continue/return) is native IR.
+        std::string name = context_stmt->name ? context_stmt->name : "";
+        QoreValue sort_exp;
+        int sort_type = -1;
+        if (context_stmt->sort_ascending) {
+            sort_exp = context_stmt->sort_ascending;
+            sort_type = CM_SORT_ASCENDING;
+        } else if (context_stmt->sort_descending) {
+            sort_exp = context_stmt->sort_descending;
+            sort_type = CM_SORT_DESCENDING;
         }
+        auto* init_inst = builder.createContext(name, context_stmt->exp,
+            context_stmt->where_exp, sort_exp, sort_type, stmt->loc);
+        if (!exception_stack.empty()) {
+            init_inst->exception_target = exception_stack.back();
+        }
+        QoreIRValue state = init_inst->result;
+
+        StatementBlock* code = context_stmt->code;
+        if (!code) {
+            // No body: still destroy to pop the thread-local stack frame
+            // (Context ctor pushed itself even when there's nothing to run).
+            builder.createContextDestroy(state, stmt->loc);
+            return true;
+        }
+
+        // Get iteration count from the state handle (no exceptions).
+        QoreIRValue max_pos = builder.createContextMaxPos(state, stmt->loc)->result;
+
+        // Create loop blocks.
+        QoreIRBasicBlock* preheader_block = createBlock("context.preheader");
+        QoreIRBasicBlock* header_block = createBlock("context.header");
+        QoreIRBasicBlock* body_block = createBlock("context.body");
+        QoreIRBasicBlock* latch_block = createBlock("context.latch");
+        QoreIRBasicBlock* break_handler_block = createBlock("context.break_handler");
+        QoreIRBasicBlock* exit_normal_block = createBlock("context.exit_normal");
+        QoreIRBasicBlock* catch_block = createBlock("context.catch");
+        QoreIRBasicBlock* merge_block = createBlock("context.merge");
+        if (!preheader_block || !header_block || !body_block || !latch_block
+                || !break_handler_block || !exit_normal_block || !catch_block
+                || !merge_block) {
+            error = "IR builder failed to create blocks for context loop";
+            return false;
+        }
+        header_block->is_loop_header = true;
+
+        // Push Context entry to cleanup_stack so return-from-body destroys
+        // the frame before unwinding.  Must sit BELOW the try Scope entry
+        // so the reverse-walk order on return is: body locals → Scope → Context.
+        BlockCleanupEntry context_entry;
+        context_entry.type = BlockCleanupEntry::Context;
+        context_entry.context_state = state;
+        context_entry.loc = stmt->loc;
+        cleanup_stack.push_back(context_entry);
+
+        // Set up try scope so exceptions from the body still run ContextDestroy.
+        uint32_t try_scope_id = ++scope_counter;
+        scope_stack.push_back(try_scope_id);
+        {
+            BlockCleanupEntry scope_entry;
+            scope_entry.type = BlockCleanupEntry::Scope;
+            scope_entry.scope_id = try_scope_id;
+            scope_entry.handler_start = block_handlers.size();
+            cleanup_stack.push_back(scope_entry);
+        }
+        builder.createScopeEnter(try_scope_id);
+
+        // Install exception handler override for the body.
+        QoreIRBasicBlock* prev_guard_override = guard_exception_target_override;
+        guard_exception_target_override = catch_block;
+        exception_stack.push_back(catch_block);
+        size_t try_scope_depth = scope_stack.size() - 1;
+        exception_scope_depth_stack.push_back(try_scope_depth);
+
+        // Branch to preheader.
+        builder.createBranch(preheader_block, stmt->loc);
+
+        // Preheader: init index counter.
+        builder.setBlock(preheader_block);
+        QoreIRValue init_index = builder.createConstInt(0, stmt->loc)->result;
+        builder.createBranch(header_block, stmt->loc);
+
+        // Header: PHI for index, compare with max_pos.
+        builder.setBlock(header_block);
+        auto* index_phi = builder.createPhi({}, stmt->loc);
+        QoreIRValue index_val = index_phi->result;
+        QoreIRValue cmp = builder.createBinaryOp(QoreIROpcode::LtInt,
+            index_val, max_pos, stmt->loc)->result;
+        builder.createBranchIf(cmp, body_block, exit_normal_block);
+
+        // Body: set the current row on the Context handle, then execute body.
+        builder.setBlock(body_block);
+        builder.createContextSetPos(state, index_val, stmt->loc);
+
+        // Install break/continue targets.
+        FlowTarget ft;
+        ft.break_target = break_handler_block;
+        ft.continue_target = latch_block;
+        ft.is_switch = false;
+        ft.catch_cleanup_depth = catch_cleanup_depth;
+        ft.cleanup_stack_depth = cleanup_stack.size();
+        flow_stack.push_back(ft);
+
+        ++loop_depth;
+        if (!lowerStatementBlock(code, error)) {
+            --loop_depth;
+            flow_stack.pop_back();
+            exception_stack.pop_back();
+            exception_scope_depth_stack.pop_back();
+            guard_exception_target_override = prev_guard_override;
+            scope_stack.pop_back();
+            cleanup_stack.pop_back();  // Scope
+            cleanup_stack.pop_back();  // Context
+            return false;
+        }
+        --loop_depth;
+        flow_stack.pop_back();
+
+        // Normal body exit falls through to latch.
+        if (!blockHasTerminator(builder.getBlock())) {
+            builder.createBranch(latch_block, stmt->loc);
+        }
+
+        // Latch: increment index, branch back to header.
+        builder.setBlock(latch_block);
+        QoreIRValue one = builder.createConstInt(1, stmt->loc)->result;
+        QoreIRValue next_index = builder.createBinaryOp(QoreIROpcode::AddInt,
+            index_val, one, stmt->loc)->result;
+        builder.createBranch(header_block, stmt->loc);
+
+        // Complete the PHI.
+        index_phi->incoming.push_back({init_index, preheader_block});
+        index_phi->incoming.push_back({next_index, latch_block});
+        index_phi->operands.push_back(init_index);
+        index_phi->operands.push_back(next_index);
+
+        // Pop exception handler.
+        exception_stack.pop_back();
+        exception_scope_depth_stack.pop_back();
+        guard_exception_target_override = prev_guard_override;
+
+        // Pop try Scope + Context cleanup entries (rest of the lowering
+        // emits them explicitly on each exit block).
+        scope_stack.pop_back();
+        cleanup_stack.pop_back();  // Scope
+        cleanup_stack.pop_back();  // Context
+
+        // Break handler: exit try scope, destroy, merge.
+        builder.setBlock(break_handler_block);
+        builder.createScopeExit(try_scope_id, false);
+        builder.createContextDestroy(state, stmt->loc);
+        builder.createBranch(merge_block);
+
+        // Normal exit: exit try scope, destroy, merge.
+        builder.setBlock(exit_normal_block);
+        builder.createScopeExit(try_scope_id, false);
+        builder.createContextDestroy(state, stmt->loc);
+        builder.createBranch(merge_block);
+
+        // Catch: landingpad, destroy, rethrow.
+        builder.setBlock(catch_block);
+        builder.createLandingPad(try_scope_depth, try_scope_id, stmt->loc);
+        builder.createContextDestroy(state, stmt->loc);
+        {
+            QoreIRBasicBlock* outer_handler = exception_stack.empty()
+                ? nullptr : exception_stack.back();
+            auto* rethrow_inst = builder.createRethrow(outer_handler, stmt->loc);
+            rethrow_inst->synthetic = true;
+        }
+
+        // Move merge block to end so LLVM lowering processes it after any
+        // invoke.cont blocks created during the body lowering.
+        builder.getFunction()->moveBlockToEnd(merge_block);
+        builder.setBlock(merge_block);
         return true;
     }
     if (auto* thread_exit_stmt = dynamic_cast<const ThreadExitStatement*>(stmt)) {
@@ -2076,6 +2251,12 @@ bool QoreIRLowering::emitBlockCleanups(size_t target_depth, std::string& error, 
                 QoreIRValue fill = builder.createConstInt(
                     (flags & CF_FILL_REMAINING) ? 1 : 0, entry.loc)->result;
                 builder.createRefForeachFinalize(entry.ref_foreach_state, fill, entry.loc);
+                break;
+            }
+            case BlockCleanupEntry::Context: {
+                // Destroy the Context frame (pops thread-local stack + frees).
+                // Fires on return-through-body for native `context` loops.
+                builder.createContextDestroy(entry.context_state, entry.loc);
                 break;
             }
             case BlockCleanupEntry::HandlerBarrier:

@@ -300,6 +300,14 @@ bool QoreJIT::registerRuntimeSymbols(std::string& error) {
     addSymbol("qore_rt_exec_statement", reinterpret_cast<void*>(&qore_rt_exec_statement));
     addSymbol("qore_rt_thread_exit", reinterpret_cast<void*>(&qore_rt_thread_exit));
 
+    // Native `context` statement helpers
+    addSymbol("qore_rt_context_init", reinterpret_cast<void*>(&qore_rt_context_init));
+    addSymbol("qore_rt_context_init_throwing",
+        reinterpret_cast<void*>(&qore_rt_context_init_throwing));
+    addSymbol("qore_rt_context_max_pos", reinterpret_cast<void*>(&qore_rt_context_max_pos));
+    addSymbol("qore_rt_context_set_pos", reinterpret_cast<void*>(&qore_rt_context_set_pos));
+    addSymbol("qore_rt_context_destroy", reinterpret_cast<void*>(&qore_rt_context_destroy));
+
     // Guard type helper
     addSymbol("qore_rt_guard_type", reinterpret_cast<void*>(&qore_rt_guard_type));
 

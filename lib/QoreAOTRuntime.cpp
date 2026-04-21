@@ -3750,8 +3750,9 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
             break;
         }
 
-        // These groups hold AST pointers; encountering them is a serialization error
-        case QoreIRInstGroup::Context:
+        // Summarize still holds a raw SummarizeStatement* pointer; encountering
+        // it on deserialization is a serialization error (Context is now native
+        // IR and handled via registry dispatch).
         case QoreIRInstGroup::Summarize:
             error = "unsupported AST-delegation instruction group " + std::to_string(group_byte);
             return nullptr;

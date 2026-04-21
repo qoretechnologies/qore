@@ -41,7 +41,7 @@ struct OpcodeInfo {
 #define OPCODE_MIN_OPERANDS(n) (-(static_cast<int>(n) + 2))
 
 //! Registry of all IR opcodes (in enum ID order)
-constexpr OpcodeInfo OPCODE_REGISTRY[360] = {
+constexpr OpcodeInfo OPCODE_REGISTRY[364] = {
     { "ConstInt"                      , false, false, false,  0, "Load constant value", false, false, "ConstantNode", true , false, false, false, false }, // 0
     { "ConstFloat"                    , false, false, false,  0, "Load constant value", false, false, "ConstantNode", true , false, false, false, false }, // 1
     { "ConstBool"                     , false, false, false,  0, "Load constant value", false, false, "ConstantNode", true , false, false, false, false }, // 2
@@ -182,7 +182,7 @@ constexpr OpcodeInfo OPCODE_REGISTRY[360] = {
     { "ScopeEnter"                    , false, false, false,  0, "ScopeEnter", false, true , "ParseNode", false, false, false, false, false }, // 137
     { "ScopeExit"                     , false, false, false,  0, "ScopeExit", false, true , "ParseNode", false, false, false, false, false }, // 138
     { "ThreadExit"                    , false, false, true ,  0, "ThreadExit", false, true , "ParseNode", false, false, false, false, false }, // 139
-    { "Context"                       , false, false, false,  0, "Context", false, true , "ParseNode", false, false, false, false, false }, // 140
+    { "Context"                       , false, false, false,  0, "ContextInit: create Context frame from data+where+sort", true , true , "ParseNode", true , false, false, false, false }, // 140
     { "Summarize"                     , false, false, false,  0, "Summarize", false, true , "ParseNode", false, false, false, false, false }, // 141
     { "EqInt"                         , false, true , false,  2, "EqInt", false, true , "ParseNode", true , false, true , false, true  }, // 142
     { "EqFloat"                       , false, true , false,  2, "EqFloat", false, true , "ParseNode", true , false, true , false, true  }, // 143
@@ -402,12 +402,16 @@ constexpr OpcodeInfo OPCODE_REGISTRY[360] = {
     { "LValuePathTernary"             , false, false, false, OPCODE_MIN_OPERANDS(3), "LValuePathTernary", true , true , "ParseNode", true , false, false, false, false }, // 357
     { "DiscardTemps"                  , false, false, false,  0, "Drain cleanup back to nearest PushTempMark", false, false, "ParseNode", false, false, false, false, false }, // 358
     { "PushTempMark"                  , false, false, false,  0, "Push sentinel marking start of statement-scoped cleanup region", false, false, "ParseNode", false, false, false, false, false }, // 359
+    { "CallAOTHelper"                 , false, false, false,  0, "Call AOT-emitted helper function by LLVM symbol name", true , true , "ParseNode", true , false, false, false, false }, // 360
+    { "ContextMaxPos"                 , false, true , false,  1, "Get max_pos (iteration count) from Context state handle", false, false, "ParseNode", true , false, false, false, false }, // 361
+    { "ContextSetPos"                 , false, false, false,  2, "Set current row position on Context state handle", true , false, "ParseNode", false, false, false, false, false }, // 362
+    { "ContextDestroy"                , false, false, false,  1, "Pop thread-local context stack + free Context frame", true , false, "ParseNode", false, false, false, false, false }, // 363
 };
 
 //! Static assertion to verify registry completeness
 static_assert(
-    sizeof(OPCODE_REGISTRY) / sizeof(OPCODE_REGISTRY[0]) == 360,
-    "OPCODE_REGISTRY has incorrect entry count - should be exactly 360"
+    sizeof(OPCODE_REGISTRY) / sizeof(OPCODE_REGISTRY[0]) == 364,
+    "OPCODE_REGISTRY has incorrect entry count - should be exactly 364"
 );
 
 //! ============================================================================

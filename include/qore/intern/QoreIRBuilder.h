@@ -285,7 +285,18 @@ public:
     QoreIRScopeEnterInstruction* createScopeEnter(uint32_t scope_id, const QoreProgramLocation* loc = nullptr);
     QoreIRScopeExitInstruction* createScopeExit(uint32_t scope_id, bool is_error = false,
         const QoreProgramLocation* loc = nullptr, bool inline_lowered = false);
-    QoreIRContextInstruction* createContext(const ContextStatement* stmt, const QoreProgramLocation* loc = nullptr);
+    //! Create a ContextInit instruction — initializes a Context frame on the
+    //! thread-local context stack and returns an opaque handle (0 on failure).
+    QoreIRContextInstruction* createContext(const std::string& name, const QoreValue& exp,
+        const QoreValue& where_exp, const QoreValue& sort_exp, int sort_type,
+        const QoreProgramLocation* loc = nullptr);
+    //! Query iteration count from a Context state handle.  Returns int64.
+    QoreIRInstruction* createContextMaxPos(QoreIRValue state, const QoreProgramLocation* loc = nullptr);
+    //! Set current row index on a Context state handle (before body execution).
+    QoreIRInstruction* createContextSetPos(QoreIRValue state, QoreIRValue index,
+        const QoreProgramLocation* loc = nullptr);
+    //! Pop + free a Context frame.  Must be emitted on every exit path.
+    QoreIRInstruction* createContextDestroy(QoreIRValue state, const QoreProgramLocation* loc = nullptr);
     QoreIRSummarizeInstruction* createSummarize(const SummarizeStatement* stmt,
         const QoreProgramLocation* loc = nullptr);
     QoreIRSwitchRegexMatchInstruction* createSwitchRegexMatch(const CaseNodeRegex* regex_case,

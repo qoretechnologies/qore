@@ -85,6 +85,7 @@
 #include <qore/intern/VarRefNode.h>
 #include <qore/intern/QoreCastOperatorNode.h>
 #include <qore/intern/QoreAOTBinary.h>
+#include <qore/intern/Context.h>  // Context class (for native `context` IR lowering helpers)
 
 // --- Runtime location tracking for LLVM-generated code ---
 // Returns pointer to the thread-local runtime_loc variable for per-line location updates.
@@ -7067,6 +7068,68 @@ extern "C" DLLEXPORT void qore_rt_ref_foreach_cleanup(uint64_t state_ptr, Except
     state->tlist.discard(xsink);
     state->vr->deref(xsink);
     delete state;
+}
+
+// --- Native `context` statement helpers (paired with IR opcodes 140, 361-363) ---
+//
+// Lifetime: qore_rt_context_init pushes a Context frame onto the thread-local
+// context stack (via `Context::Context`) and returns its pointer as uint64_t.
+// On failure (xsink set during hash evaluation / where filter / sort), the
+// helper cleans up (`Context::deref` pops stack + derefs hash) and returns 0.
+// Callers MUST call qore_rt_context_destroy on every success return.
+//
+// The Context ctor evaluates `where_exp` and `sort_exp` per-row internally
+// against itself (already on top of the stack) — those expressions are AST
+// trees passed through as opaque QoreValue bits.
+
+extern "C" DLLEXPORT uint64_t qore_rt_context_init(const char* name, uint64_t exp_bits,
+        uint64_t where_bits, uint64_t sort_bits, int sort_type, ExceptionSink* xsink) {
+    QoreValue exp = fromBits(exp_bits);
+    QoreValue where_exp = fromBits(where_bits);
+    QoreValue sort_exp = fromBits(sort_bits);
+
+    // `new Context(...)` pushes itself on the thread-local stack before
+    // evaluating exp/where/sort, matching AST semantics.  On failure,
+    // deref() pops the stack and frees (also derefs the data hash on !sub).
+    Context* ctx = new Context(const_cast<char*>(name && *name ? name : nullptr),
+        xsink, exp, where_exp, sort_type, sort_exp);
+    if (xsink && *xsink) {
+        ctx->deref(xsink);
+        return 0;
+    }
+    return reinterpret_cast<uint64_t>(ctx);
+}
+
+extern "C" DLLEXPORT int64_t qore_rt_context_max_pos(uint64_t state_ptr) {
+    Context* ctx = reinterpret_cast<Context*>(state_ptr);
+    return ctx ? static_cast<int64_t>(ctx->max_pos) : 0;
+}
+
+extern "C" DLLEXPORT void qore_rt_context_set_pos(uint64_t state_ptr, int64_t index) {
+    Context* ctx = reinterpret_cast<Context*>(state_ptr);
+    if (ctx) {
+        ctx->pos = static_cast<int>(index);
+    }
+}
+
+extern "C" DLLEXPORT void qore_rt_context_destroy(uint64_t state_ptr, ExceptionSink* xsink) {
+    Context* ctx = reinterpret_cast<Context*>(state_ptr);
+    if (ctx) {
+        ctx->deref(xsink);
+    }
+}
+
+// Throwing wrapper for invoke-based EH (QORE_AOT_EH=1).  Matches the pattern
+// used by qore_rt_ref_foreach_init_throwing / iterator_*_throwing.
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_context_init_throwing(
+        const char* name, uint64_t exp_bits, uint64_t where_bits, uint64_t sort_bits,
+        int sort_type, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_context_init(name, exp_bits, where_bits, sort_bits, sort_type,
+        xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
 }
 
 // --- Phase 2B Step 5: Iterator category throwing wrappers ---

@@ -498,7 +498,6 @@ bool QoreIRVerifier::verify(const QoreIRFunction& func, std::string& error) {
 //! StatementBlock::exec() and could access any local on the thread-local variable stack.
 static bool isDelegateToASTStatement(QoreIROpcode op) {
     switch (op) {
-        case QoreIROpcode::Context:       // Context statement delegates to AST
         case QoreIROpcode::Summarize:     // Summarize statement delegates to AST
         case QoreIROpcode::MapSelectAny:  // Delegate-to-AST functional operator
         case QoreIROpcode::HashMapAny:    // Delegate-to-AST functional operator

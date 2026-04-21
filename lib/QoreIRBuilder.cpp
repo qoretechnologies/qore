@@ -1102,9 +1102,34 @@ QoreIRScopeExitInstruction* QoreIRBuilder::createScopeExit(uint32_t scope_id, bo
     return inst;
 }
 
-QoreIRContextInstruction* QoreIRBuilder::createContext(const ContextStatement* stmt,
+QoreIRContextInstruction* QoreIRBuilder::createContext(const std::string& name, const QoreValue& exp,
+        const QoreValue& where_exp, const QoreValue& sort_exp, int sort_type,
         const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRContextInstruction>(stmt);
+    auto inst = block->appendInstruction<QoreIRContextInstruction>(name, exp, where_exp, sort_exp,
+        sort_type);
+    inst->loc = loc;
+    return inst;
+}
+
+QoreIRInstruction* QoreIRBuilder::createContextMaxPos(QoreIRValue state, const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::ContextMaxPos);
+    inst->operands.push_back(state);
+    inst->loc = loc;
+    return inst;
+}
+
+QoreIRInstruction* QoreIRBuilder::createContextSetPos(QoreIRValue state, QoreIRValue index,
+        const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::ContextSetPos);
+    inst->operands.push_back(state);
+    inst->operands.push_back(index);
+    inst->loc = loc;
+    return inst;
+}
+
+QoreIRInstruction* QoreIRBuilder::createContextDestroy(QoreIRValue state, const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::ContextDestroy);
+    inst->operands.push_back(state);
     inst->loc = loc;
     return inst;
 }

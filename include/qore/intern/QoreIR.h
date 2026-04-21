@@ -244,7 +244,15 @@ enum class QoreIROpcode : uint16_t {
     ScopeEnter          = 137,
     ScopeExit           = 138,
     ThreadExit          = 139,
+    //! Create a Context frame from the context hash expression, where/sort
+    //! modifiers, and optional name.  Result is an opaque Context* handle
+    //! (as i64) pushed on the thread-local context stack, or 0 on failure
+    //! (xsink set).  Evaluates the context expression and any where/sort
+    //! filters internally via the runtime Context class.
     Context             = 140,
+    //! \deprecated Only reached from AST-execution fallback.  Kept for
+    //! backward-compatible IR serialization of the `summarize` statement;
+    //! never emitted under %modern (which requires PO_NO_SUMMARIZE).
     Summarize           = 141,
 
     // Comparisons (142-171)
@@ -610,6 +618,19 @@ enum class QoreIROpcode : uint16_t {
     //! raises a runtime error if ever encountered.
     CallAOTHelper       = 360,
 
+    //! Context iteration helpers — paired with `Context` (140) for native
+    //! IR-lowered `context` statements.  State handle is the Context*
+    //! returned by `Context`.
+    //!
+    //! `ContextMaxPos(state) -> i64` — iteration count (max_pos).
+    //! `ContextSetPos(state, index) -> void` — set current row before body.
+    //! `ContextDestroy(state) -> void` — pop frame + release hash + free.
+    //! Destroy is exception-safe: must be emitted on every exit path
+    //! (normal, break, return, exception).
+    ContextMaxPos       = 361,
+    ContextSetPos       = 362,
+    ContextDestroy      = 363,
+
     // NOTE: When adding new opcodes, assign the next sequential ID (360, 361, ...)
     // QORE_IR_MAX_OPCODE is derived automatically from the last enum value below.
 };
@@ -618,8 +639,8 @@ enum class QoreIROpcode : uint16_t {
 //! NOTE: Both QoreIRInterpreter.cpp and QoreIRToLLVM.cpp have matching
 //! static_assert guards that will break when this value changes, forcing
 //! review of their dispatch switches.
-constexpr uint16_t QORE_IR_MAX_OPCODE = static_cast<uint16_t>(QoreIROpcode::PushTempMark);
-static_assert(QORE_IR_MAX_OPCODE == 359, "QORE_IR_MAX_OPCODE changed — update this assertion and "
+constexpr uint16_t QORE_IR_MAX_OPCODE = static_cast<uint16_t>(QoreIROpcode::ContextDestroy);
+static_assert(QORE_IR_MAX_OPCODE == 363, "QORE_IR_MAX_OPCODE changed — update this assertion and "
     "verify binary format compatibility");
 
 //! Include the central opcode registry (must come after QoreIROpcode enum definition)
@@ -1783,13 +1804,45 @@ public:
     bool inline_lowered = false;  //!< true if handlers were already inlined; just flush runtime vector
 };
 
+//! ContextInit — create a Context frame for a `context` statement.
+//!
+//! Carries the context name plus the context-data / where / sort AST
+//! expressions portably (round-trippable via AOT writeExpr).  The loop,
+//! body, and cleanup are emitted inline as IR basic blocks around this
+//! instruction (see `QoreIRLowering::lowerStatement`'s ContextStatement
+//! case — mirrors the non-ref foreach shape).
+//!
+//! The runtime helper (`qore_rt_context_init` for LLVM,
+//! `QoreIRInterpreter::execContextInit` for the interpreter) constructs
+//! a `Context` object, evaluates the where/sort filters per row internally
+//! against the thread-local context stack, and returns the Context*
+//! reinterpreted as i64.  0 means failure (xsink set).
 class QoreIRContextInstruction : public QoreIRInstruction {
 public:
-    explicit QoreIRContextInstruction(const ContextStatement* n_stmt)
-            : QoreIRInstruction(QoreIROpcode::Context), stmt(n_stmt) {
+    QoreIRContextInstruction(std::string n_name, const QoreValue& n_exp,
+            const QoreValue& n_where, const QoreValue& n_sort, int n_sort_type)
+            : QoreIRInstruction(QoreIROpcode::Context),
+              name(std::move(n_name)),
+              exp(n_exp),
+              where_exp(n_where),
+              sort_exp(n_sort),
+              sort_type(n_sort_type) {
+        exp.ref();
+        where_exp.ref();
+        sort_exp.ref();
     }
 
-    const ContextStatement* stmt = nullptr;
+    ~QoreIRContextInstruction() override {
+        exp.discard(nullptr);
+        where_exp.discard(nullptr);
+        sort_exp.discard(nullptr);
+    }
+
+    std::string name;        //!< context name (may be empty for anonymous contexts)
+    QoreValue exp;           //!< context data expression (AST tree)
+    QoreValue where_exp;     //!< optional `where` filter expression (empty = no filter)
+    QoreValue sort_exp;      //!< optional sort expression (empty = no sort)
+    int sort_type = -1;      //!< CM_SORT_ASCENDING, CM_SORT_DESCENDING, or -1 for none
 };
 
 class QoreIRSummarizeInstruction : public QoreIRInstruction {

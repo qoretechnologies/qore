@@ -409,6 +409,31 @@ void qore_rt_ref_foreach_finalize(uint64_t state_ptr, int64_t fill_remaining, Ex
 //! Clean up reference foreach state without write-back (exception/early-exit paths).
 void qore_rt_ref_foreach_cleanup(uint64_t state_ptr, ExceptionSink* xsink);
 
+// --- Native `context` statement helpers ---
+
+//! Create a Context frame from the data expression + optional where/sort filters.
+//! Pushes onto the thread-local context stack.  Returns Context* as uint64_t,
+//! or 0 on failure (xsink is set; no destroy needed).
+uint64_t qore_rt_context_init(const char* name, uint64_t exp_bits, uint64_t where_bits,
+    uint64_t sort_bits, int sort_type, ExceptionSink* xsink);
+
+//! Throwing wrapper (invoke-based EH path).  Calls qore_rt_context_init and
+//! throws QoreJITException on xsink-set failure so the LLVM invoke landingpad
+//! fires.
+uint64_t qore_rt_context_init_throwing(const char* name, uint64_t exp_bits, uint64_t where_bits,
+    uint64_t sort_bits, int sort_type, ExceptionSink* xsink);
+
+//! Get the iteration count (max_pos) from a Context state handle.  Nothrow.
+int64_t qore_rt_context_max_pos(uint64_t state_ptr);
+
+//! Set the current row position on a Context state handle.  Nothrow.
+void qore_rt_context_set_pos(uint64_t state_ptr, int64_t index);
+
+//! Pop + free a Context frame.  Safe on null / already-destroyed.  Nothrow
+//! (pending xsink on entry is preserved; the hash deref may enqueue a further
+//! exception but won't overwrite a pre-existing one).
+void qore_rt_context_destroy(uint64_t state_ptr, ExceptionSink* xsink);
+
 // --- Specialized access helpers (Phase 5b optimizations) ---
 
 //! Look up a key in a hash value; returns NaN-boxed result (with ref).

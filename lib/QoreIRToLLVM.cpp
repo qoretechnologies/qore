@@ -39,7 +39,7 @@
 // Compile-time guard: forces review of LLVM lowering when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 359,
+static_assert(QORE_IR_MAX_OPCODE == 363,
     "New IR opcode added — review QoreIRToLLVM.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRInterpreter.cpp.");
 #include "qore/intern/QoreLibIntern.h"
@@ -417,6 +417,24 @@ void QoreIRToLLVM::declareRuntimeHelpers(llvm::Module& module) {
             llvm::FunctionType::get(void_type, {i64_type, i64_type, ptr_type}, false));
     // ref_foreach_cleanup: (i64, ptr) -> void
     module.getOrInsertFunction("qore_rt_ref_foreach_cleanup",
+            llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+
+    // Native `context` statement helpers (paired with opcodes 140, 361-363).
+    // context_init:     (ptr, i64, i64, i64, i32, ptr) -> i64
+    module.getOrInsertFunction("qore_rt_context_init",
+            llvm::FunctionType::get(i64_type,
+                {ptr_type, i64_type, i64_type, i64_type, i32_type, ptr_type}, false));
+    module.getOrInsertFunction("qore_rt_context_init_throwing",
+            llvm::FunctionType::get(i64_type,
+                {ptr_type, i64_type, i64_type, i64_type, i32_type, ptr_type}, false));
+    // context_max_pos:  (i64) -> i64
+    module.getOrInsertFunction("qore_rt_context_max_pos",
+            llvm::FunctionType::get(i64_type, {i64_type}, false));
+    // context_set_pos:  (i64, i64) -> void
+    module.getOrInsertFunction("qore_rt_context_set_pos",
+            llvm::FunctionType::get(void_type, {i64_type, i64_type}, false));
+    // context_destroy:  (i64, ptr) -> void
+    module.getOrInsertFunction("qore_rt_context_destroy",
             llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
 }
 
@@ -11399,24 +11417,97 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             return true;
         }
         case QoreIROpcode::Context: {
-            const auto* sinst = static_cast<const QoreIRContextInstruction*>(inst);
-            llvm::Value* opcode_val = llvm::ConstantInt::get(llvm::Type::getInt32Ty(ctx),
-                    static_cast<int>(inst->opcode));
-            llvm::Value* stmt_ptr = llvm::ConstantInt::get(i64_type,
-                    reinterpret_cast<uint64_t>(sinst->stmt));
-            llvm::Value* stmt_as_ptr = builder->CreateIntToPtr(stmt_ptr, ptr_type);
-            auto es_ft = llvm::FunctionType::get(i64_type,
-                    {llvm::Type::getInt32Ty(ctx), ptr_type, ptr_type}, false);
-            auto helper = module.getOrInsertFunction("qore_rt_exec_statement", es_ft);
+            // Native ContextInit: call qore_rt_context_init with (name, exp_bits,
+            // where_bits, sort_bits, sort_type).  Returns the Context* as i64
+            // (0 on failure with xsink set).  This is a pure i64 — NOT nan-boxed.
+            const auto* cinst = static_cast<const QoreIRContextInstruction*>(inst);
+
+            // Name → global string pointer.
+            llvm::Value* name_ptr;
+            if (cinst->name.empty()) {
+                name_ptr = llvm::ConstantPointerNull::get(
+                        llvm::PointerType::get(ctx, 0));
+            } else {
+                name_ptr = builder->CreateGlobalStringPtr(cinst->name);
+            }
+
+            auto makeExprBits = [&](const QoreValue& expr) -> llvm::Value* {
+                uint64_t expr_bits;
+                std::memcpy(&expr_bits, &expr, sizeof(expr_bits));
+                if (aot_mode && expr_bits != 0) {
+                    // Route through the AOT expr-slot table so the pointer
+                    // survives deserialize/relocate.
+                    int32_t slot = const_cast<AOTSlotMap*>(aot_slots)
+                            ->getExprSlot(expr_bits);
+                    auto h = module.getOrInsertFunction(
+                            "qore_rt_get_expr_bits_aot",
+                            llvm::FunctionType::get(i64_type,
+                                {ptr_type, i32_type}, false));
+                    return builder->CreateCall(h, {aot_ctx_arg,
+                            llvm::ConstantInt::get(i32_type, slot)});
+                }
+                return llvm::ConstantInt::get(i64_type, expr_bits);
+            };
+
+            llvm::Value* exp_bits = makeExprBits(cinst->exp);
+            llvm::Value* where_bits = makeExprBits(cinst->where_exp);
+            llvm::Value* sort_bits = makeExprBits(cinst->sort_exp);
+            llvm::Value* sort_type_val = llvm::ConstantInt::get(
+                    llvm::Type::getInt32Ty(ctx), cinst->sort_type);
+
+            auto ci_ft = llvm::FunctionType::get(i64_type,
+                    {ptr_type, i64_type, i64_type, i64_type,
+                     llvm::Type::getInt32Ty(ctx), ptr_type}, false);
+            auto helper = module.getOrInsertFunction("qore_rt_context_init", ci_ft);
             auto helper_throwing = module.getOrInsertFunction(
-                    "qore_rt_exec_statement_throwing", es_ft);
+                    "qore_rt_context_init_throwing", ci_ft);
             llvm::Value* result = emitMaybeInvoke(helper, helper_throwing,
-                    {opcode_val, stmt_as_ptr, xsink_arg}, module, llvm_func, inst);
+                    {name_ptr, exp_bits, where_bits, sort_bits, sort_type_val, xsink_arg},
+                    module, llvm_func, inst);
             values[inst->result.id] = result;
-            nanboxed_values.insert(inst->result.id);
-            // Context executes through the AST path and can modify locals
+            // Context ctor may evaluate user expressions (where/sort) and
+            // thus touch thread-local locals (via %field refs in those
+            // expressions — they go through the AST expr path).  Reload.
             reloadAllLocalsFromRuntime(module, llvm_func);
             emitExceptionCheck(module, llvm_func, inst);
+            return true;
+        }
+        case QoreIROpcode::ContextMaxPos: {
+            // Pure i64 helper: no EH, no side effects.
+            auto* state_val = getVal(inst->operands[0].id, error);
+            if (!state_val) { return false; }
+            auto helper = module.getOrInsertFunction("qore_rt_context_max_pos",
+                    llvm::FunctionType::get(i64_type, {i64_type}, false));
+            llvm::Value* result = builder->CreateCall(helper, {state_val});
+            values[inst->result.id] = result;
+            return true;
+        }
+        case QoreIROpcode::ContextSetPos: {
+            auto* state_val = getVal(inst->operands[0].id, error);
+            if (!state_val) { return false; }
+            auto* index_val = getVal(inst->operands[1].id, error);
+            if (!index_val) { return false; }
+            if (index_val->getType() != i64_type) {
+                // Index may flow through a nan-boxed PHI (loop counter); unbox.
+                index_val = ensureIntTypeInline(index_val, inst->operands[1].id);
+            }
+            auto helper = module.getOrInsertFunction("qore_rt_context_set_pos",
+                    llvm::FunctionType::get(void_type,
+                        {i64_type, i64_type}, false));
+            builder->CreateCall(helper, {state_val, index_val});
+            // Result is void — emit a NOTHING placeholder so SSA bookkeeping stays sane.
+            values[inst->result.id] = llvm::ConstantInt::get(i64_type, VAL_NOTHING);
+            nanboxed_values.insert(inst->result.id);
+            return true;
+        }
+        case QoreIROpcode::ContextDestroy: {
+            auto* state_val = getVal(inst->operands[0].id, error);
+            if (!state_val) { return false; }
+            auto helper = module.getOrInsertFunction("qore_rt_context_destroy",
+                    llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+            builder->CreateCall(helper, {state_val, xsink_arg});
+            values[inst->result.id] = llvm::ConstantInt::get(i64_type, VAL_NOTHING);
+            nanboxed_values.insert(inst->result.id);
             return true;
         }
         case QoreIROpcode::Summarize: {
