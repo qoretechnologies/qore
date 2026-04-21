@@ -257,6 +257,15 @@ public:
         @param paramTypes resolved parameter type info pointers
         @param defaults default argument values (ref'd for storage)
         @param hasVarargs true if the function has varargs
+        @param classTypeInfo optional owning-class type info for methods
+        @param parseLocFile optional path of the source file that declared
+            this variant — plumbed through so `getParseLocation()->getFile()`
+            is non-null on AOT-deserialised signatures (used by
+            `xsink->overrideLocation()` in the block-missing-return path).
+            Pre-fix AOT signatures inherited `loc = getLocation(0, 0)` from
+            the default constructor, which has a null file; errors from
+            type-checked AOT returns then reported `:0 (Qore)` with no
+            filename — empty, unuseful.
     */
     DLLLOCAL void setupFromAOTMetadata(
         QoreProgram* pgm,
@@ -265,7 +274,8 @@ public:
         std::vector<const QoreTypeInfo*>&& paramTypes,
         std::vector<QoreValue>&& defaults,
         bool hasVarargs,
-        const QoreClass* classTypeInfo = nullptr);
+        const QoreClass* classTypeInfo = nullptr,
+        const char* parseLocFile = nullptr);
 
     DLLLOCAL virtual ~UserSignature() {
         for (ptype_vec_t::iterator i = parseTypeList.begin(), e = parseTypeList.end(); i != e; ++i)

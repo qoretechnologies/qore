@@ -6442,10 +6442,16 @@ static bool readAndSetupVariantSignature(
     // Set up the variant's signature from metadata.  Only signature-
     // level ellipsis (`...`) flows into signature.varargs; the
     // QCF_USES_EXTRA_ARGS flag alone does NOT inflate the signature.
+    //
+    // Plumb the binary's label (the module's .qm source path) as the
+    // variant's parse-location file so runtime errors that override the
+    // exception location via `sig->getParseLocation()` (e.g.
+    // block-missing-return) report the declaring source instead of the
+    // empty-file/line-0 default.
     UserSignature* sig = uvb->getUserSignature();
     sig->setupFromAOTMetadata(pgm, ret_ti,
         std::move(param_names), std::move(param_types), std::move(param_defaults),
-        sig_has_ellipsis, classTypeInfo);
+        sig_has_ellipsis, classTypeInfo, reader.getLabel());
 
     if (time_on_sub) {
         g_aot_dm_sig_setup_us += now_us_fn() - t_setup0;

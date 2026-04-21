@@ -759,12 +759,32 @@ void UserSignature::setupFromAOTMetadata(
         std::vector<const QoreTypeInfo*>&& paramTypes,
         std::vector<QoreValue>&& defaults,
         bool hasVarargs,
-        const QoreClass* classTypeInfo) {
+        const QoreClass* classTypeInfo,
+        const char* parseLocFile) {
     returnTypeInfo = retType;
 
     const size_t nparams = paramTypes.size();
 
     qore_program_private* pp = qore_program_private::get(*pgm);
+    // Override the default `loc = getLocation(0, 0)` (null-file, line 0)
+    // with a program-interned `(file, 0)` location when the caller knows the
+    // declaring source path.  The parser itself sets this to the function's
+    // real file+line via getLocation(first_line, last_line); AOT doesn't
+    // serialise per-variant declaration lines today, but the file alone is
+    // enough to make downstream `xsink->overrideLocation(*sig->getParseLocation())`
+    // produce a useful `<file>:0 (Qore)` instead of the current `:0 (Qore)`
+    // with no filename.  Callers that already know the file should pass it;
+    // those that don't keep the old behaviour.
+    if (parseLocFile && *parseLocFile) {
+        // Intern the file string in the program's string pool — `parseLocFile`
+        // typically points into the AOT binary reader's decompressed body,
+        // which is freed when the deserializer returns.  QoreProgramLocation
+        // stores a raw `const char*`, so without interning the location's
+        // `file` dangles.
+        const char* interned = pp->addString(parseLocFile);
+        QoreProgramLocation tmp(interned, 0, 0);
+        loc = pp->getLocation(tmp, 0, 0);
+    }
     lv.resize(nparams);
     for (size_t i = 0; i < nparams; ++i) {
         const char* pname = i < paramNames.size() ? paramNames[i].c_str() : "";
