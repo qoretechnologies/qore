@@ -275,7 +275,9 @@ public:
         std::vector<QoreValue>&& defaults,
         bool hasVarargs,
         const QoreClass* classTypeInfo = nullptr,
-        const char* parseLocFile = nullptr);
+        const char* parseLocFile = nullptr,
+        int parseLocFirstLine = 0,
+        int parseLocLastLine = 0);
 
     DLLLOCAL virtual ~UserSignature() {
         for (ptype_vec_t::iterator i = parseTypeList.begin(), e = parseTypeList.end(); i != e; ++i)

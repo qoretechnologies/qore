@@ -760,21 +760,21 @@ void UserSignature::setupFromAOTMetadata(
         std::vector<QoreValue>&& defaults,
         bool hasVarargs,
         const QoreClass* classTypeInfo,
-        const char* parseLocFile) {
+        const char* parseLocFile,
+        int parseLocFirstLine,
+        int parseLocLastLine) {
     returnTypeInfo = retType;
 
     const size_t nparams = paramTypes.size();
 
     qore_program_private* pp = qore_program_private::get(*pgm);
     // Override the default `loc = getLocation(0, 0)` (null-file, line 0)
-    // with a program-interned `(file, 0)` location when the caller knows the
-    // declaring source path.  The parser itself sets this to the function's
-    // real file+line via getLocation(first_line, last_line); AOT doesn't
-    // serialise per-variant declaration lines today, but the file alone is
-    // enough to make downstream `xsink->overrideLocation(*sig->getParseLocation())`
-    // produce a useful `<file>:0 (Qore)` instead of the current `:0 (Qore)`
-    // with no filename.  Callers that already know the file should pass it;
-    // those that don't keep the old behaviour.
+    // with a program-interned `(file, first_line, last_line)` location when
+    // the caller knows the declaring source path.  The parser sets this to
+    // the function's real file+line via getLocation(first_line, last_line);
+    // AOT plumbs the file and per-variant lines from writeVariantSignature
+    // (see QORE_AOT_FEAT_SIG_LINES) so `xsink->overrideLocation()` reports
+    // `<file>:<line> (Qore)` instead of `:0 (Qore)` with no filename.
     if (parseLocFile && *parseLocFile) {
         // Intern the file string in the program's string pool — `parseLocFile`
         // typically points into the AOT binary reader's decompressed body,
@@ -782,8 +782,8 @@ void UserSignature::setupFromAOTMetadata(
         // stores a raw `const char*`, so without interning the location's
         // `file` dangles.
         const char* interned = pp->addString(parseLocFile);
-        QoreProgramLocation tmp(interned, 0, 0);
-        loc = pp->getLocation(tmp, 0, 0);
+        QoreProgramLocation tmp(interned, parseLocFirstLine, parseLocLastLine);
+        loc = pp->getLocation(tmp, parseLocFirstLine, parseLocLastLine);
     }
     lv.resize(nparams);
     for (size_t i = 0; i < nparams; ++i) {

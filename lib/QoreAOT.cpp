@@ -462,6 +462,12 @@ static uint64_t computeFeatureFlags(const std::vector<AOTCompiledFunc>& funcs) {
     // from sibling `.qo`s defer to the init-func's populated value
     // instead of folding to NOTHING at parse time.
     flags |= QORE_AOT_FEAT_CONST_PENDING;
+    // Writers emit per-variant signature start/end line numbers (see
+    // writeVariantSignature after the flags u16).  Readers use them
+    // to populate `sig->getParseLocation()` so runtime exceptions with
+    // `xsink->overrideLocation(*sig->getParseLocation())` report the
+    // declaring source line instead of `:0 (Qore)`.
+    flags |= QORE_AOT_FEAT_SIG_LINES;
     return flags;
 }
 

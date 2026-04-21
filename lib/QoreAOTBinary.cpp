@@ -1961,6 +1961,23 @@ static void writeVariantSignature(QoreAOTBinaryWriter& writer, const AbstractQor
     }
     writer.writeU16(flags);
 
+    // Per-variant signature start/end lines — plumbed into the reader's
+    // setupFromAOTMetadata call so `sig->getParseLocation()` reports real
+    // line numbers instead of 0.  Gated on QORE_AOT_FEAT_SIG_LINES so older
+    // readers skip these bytes and newer readers expect them.  Stored as
+    // int16_t to match QoreProgramLineLocation's on-heap representation.
+    int16_t sig_first = 0, sig_last = 0;
+    if (UserVariantBase* uvb = const_cast<AbstractQoreFunctionVariant*>(v)->getUserVariantBase()) {
+        if (UserSignature* usig = uvb->getUserSignature()) {
+            if (const QoreProgramLocation* vloc = usig->getParseLocation()) {
+                sig_first = vloc->start_line;
+                sig_last  = vloc->end_line;
+            }
+        }
+    }
+    writer.writeU16(static_cast<uint16_t>(sig_first));
+    writer.writeU16(static_cast<uint16_t>(sig_last));
+
     // params
     const arg_vec_t& defaults = sig->getDefaultArgList();
     for (uint32_t i = 0; i < np; ++i) {
@@ -6212,6 +6229,16 @@ static bool readAndSetupVariantSignature(
         needs_extra_args_flag = bit0;
     }
 
+    // Per-variant signature start/end lines — present iff the blob
+    // advertises QORE_AOT_FEAT_SIG_LINES.  Older blobs (pre-feat) don't
+    // have these 4 bytes and continue to report line 0.
+    int16_t sig_first_line = 0;
+    int16_t sig_last_line  = 0;
+    if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_SIG_LINES) != 0) {
+        sig_first_line = static_cast<int16_t>(QoreAOTBinaryReader::readU16(ptr));
+        sig_last_line  = static_cast<int16_t>(QoreAOTBinaryReader::readU16(ptr));
+    }
+
     // Read params — reserve+emplace rather than resize+assign so we
     // skip the up-front default-construction of `np` empty strings per
     // variant (~3.3 M skipped default-constructions in qwf batch).
@@ -6451,7 +6478,8 @@ static bool readAndSetupVariantSignature(
     UserSignature* sig = uvb->getUserSignature();
     sig->setupFromAOTMetadata(pgm, ret_ti,
         std::move(param_names), std::move(param_types), std::move(param_defaults),
-        sig_has_ellipsis, classTypeInfo, reader.getLabel());
+        sig_has_ellipsis, classTypeInfo, reader.getLabel(),
+        sig_first_line, sig_last_line);
 
     if (time_on_sub) {
         g_aot_dm_sig_setup_us += now_us_fn() - t_setup0;
@@ -6501,6 +6529,11 @@ bool QoreAOTBinaryDeserializer::deserializeFunctions(std::string& error) {
                 uint32_t num_params = QoreAOTBinaryReader::readU32(ptr);
                 // 3. sig_flags (U16)
                 QoreAOTBinaryReader::readU16(ptr);
+                // 3a. sig start/end lines (2x U16) — only when feat advertised
+                if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_SIG_LINES) != 0) {
+                    QoreAOTBinaryReader::readU16(ptr);
+                    QoreAOTBinaryReader::readU16(ptr);
+                }
                 // 4. For each param: name, type, has_default, and optionally value
                 for (uint32_t p = 0; p < num_params; ++p) {
                     reader.readStringRef(ptr);  // param name
