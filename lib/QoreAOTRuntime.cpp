@@ -7138,6 +7138,15 @@ static void executeInitFunctions(
     // reference constants whose values come from regular init funcs (e.g.
     // DataProvider.qm's init closure references AutoType from Qore::Reflection
     // and assigns to AbstractDataProviderType::anyDataType).
+    // Fix-point retry: AOT constant init order is compile-time declaration order,
+    // which does not always match dependency order.  A later-declared constant
+    // can be referenced by an earlier-declared one (e.g. DataProvider's
+    // AbstractDataProviderTypeMap references QoreUnsignedByteDataType which
+    // itself depends on QoreIntDataTypeBase::SupportedOptions declared later).
+    // Inits that throw AOT-PENDING-CONSTANT are retried in subsequent rounds;
+    // we stop when a round executes zero descriptors (no forward progress), or
+    // after a small cap to avoid pathological loops.
+    std::vector<bool> desc_done(descriptors.size(), false);
     for (int pass = 0; pass < 2; ++pass) {
     const bool run_module_init = (pass == 1);
     // Between pass 0 (STATIC_VAR / NS_CONSTANT / CLASS_CONSTANT) and pass 1
@@ -7152,14 +7161,22 @@ static void executeInitFunctions(
         preInitStaticVarsInNamespace(root_ns, &local_xs);
         local_xs.clear();
     }
+    const int max_rounds = run_module_init ? 1 : 32;
+    for (int round = 0; round < max_rounds; ++round) {
+    int this_round_executed = 0;
     // Execute in descriptor order (matches compilation/parser order)
-    for (auto& desc : descriptors) {
+    for (size_t di = 0; di < descriptors.size(); ++di) {
+        if (desc_done[di]) {
+            continue;
+        }
+        const AOTInitFuncDescriptor& desc = descriptors[di];
         bool is_module_init = (desc.target_type == AOTCompiledInitFunc::MODULE_INIT);
         if (is_module_init != run_module_init) {
             continue;
         }
         auto it = exec_map.find(desc.name);
         if (it == exec_map.end()) {
+            desc_done[di] = true;
             continue;
         }
 
@@ -7234,14 +7251,28 @@ static void executeInitFunctions(
         if (xsink.isException()) {
             QoreValue err_val = xsink.getExceptionErr();
             QoreValue desc_val = xsink.getExceptionDesc();
-            printd(5, "AOT init: '%s' raised exception: %s: %s\n",
+            const bool is_pending = (err_val.getType() == NT_STRING
+                && !strcmp(err_val.get<const QoreStringNode>()->c_str(),
+                    "AOT-PENDING-CONSTANT"));
+            printd(5, "AOT init: '%s' raised exception: %s: %s%s\n",
                 desc.name.c_str(),
                 err_val.getType() == NT_STRING ? err_val.get<const QoreStringNode>()->c_str() : "?",
-                desc_val.getType() == NT_STRING ? desc_val.get<const QoreStringNode>()->c_str() : "?");
+                desc_val.getType() == NT_STRING ? desc_val.get<const QoreStringNode>()->c_str() : "?",
+                is_pending ? " (will retry)" : "");
             xsink.clear();
+            if (is_pending && !run_module_init) {
+                // Leave desc_done[di] false so a later round can retry once
+                // its dependencies have been populated.
+                continue;
+            }
+            desc_done[di] = true;
             ++failed;
             continue;
         }
+
+        // Mark completed before store so failed stores still advance.
+        desc_done[di] = true;
+        ++this_round_executed;
 
         // Convert raw result to QoreValue
         QoreValue result;
@@ -7423,7 +7454,26 @@ static void executeInitFunctions(
             }
         }
     }
+    // If no descriptor advanced this round, a real dep cycle or unresolvable
+    // pending constant exists; stop retrying — the next round would do the
+    // same work.  Deferred pending-constant descriptors left as !desc_done
+    // surface as the user-visible failure.
+    if (this_round_executed == 0) {
+        break;
+    }
+    }  // end round loop
     }  // end two-pass loop
+
+    // Any pass-0 descriptors still !desc_done after all rounds remained
+    // stuck on pending-constant deps.  Count them as failures so the
+    // caller's tally reflects real problems rather than silently passing.
+    for (size_t di = 0; di < descriptors.size(); ++di) {
+        if (!desc_done[di] && descriptors[di].target_type != AOTCompiledInitFunc::MODULE_INIT) {
+            printd(0, "AOT init: '%s' remained pending after %d rounds\n",
+                descriptors[di].name.c_str(), 32);
+            ++failed;
+        }
+    }
 
     // Clean up init function contexts
     for (auto& info : exec_infos) {
