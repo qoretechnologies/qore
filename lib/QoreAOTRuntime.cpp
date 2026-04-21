@@ -2813,8 +2813,18 @@ static QoreAOTContext* buildContextFromSlotMap(
                 uint16_t end_line = QoreAOTBinaryReader::readU16(ptr);
                 const char* loc_file = reader.readStringRef(ptr);
                 if (start_line > 0) {
+                    // Intern the file name in the program's string pool —
+                    // the reader's decompressed pool dies when the parent
+                    // QoreAOTBinaryDeserializer goes out of scope, but
+                    // QoreProgramLocation::file is a raw const char* and
+                    // the loc object itself outlives the deserializer via
+                    // the AOT context.  See the matching deser site in
+                    // deserializeIRInstruction for the full rationale.
+                    const char* interned_file = (loc_file && pgm)
+                        ? qore_program_private::get(*pgm)->addString(loc_file)
+                        : (loc_file ? loc_file : "");
                     ctx->locs[i] = new QoreProgramLocation(
-                        loc_file ? loc_file : "", start_line, end_line);
+                        interned_file, start_line, end_line);
                 }
             }
         }
@@ -3757,12 +3767,27 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
     inst->operands = std::move(operands);
     inst->exception_target = exc_target;
 
-    // Read source location (AOT location table)
+    // Read source location (AOT location table).
+    //
+    // readStringRef() returns a pointer INTO the binary reader's decompressed
+    // string pool, whose storage dies when the enclosing
+    // QoreAOTBinaryDeserializer goes out of scope at the end of its parent
+    // function (qore_aot_module_init_v3, etc.).  `QoreProgramLocation::file`
+    // is a raw `const char*` that does not copy — so without interning, the
+    // file pointer dangles the moment deserialization returns and any later
+    // exception throw reports garbage bytes for `ex.file` / callstack[*].file.
+    //
+    // Intern via qore_program_private::addString() so the string lives in the
+    // program's str_vec pool for the program's lifetime, matching how the
+    // parser's addFile() already stores filenames for JIT/source-parsed code.
     uint16_t start_line = QoreAOTBinaryReader::readU16(ptr);
     uint16_t end_line = QoreAOTBinaryReader::readU16(ptr);
     const char* loc_file = reader.readStringRef(ptr);
     if (start_line > 0 && owner_func) {
-        auto* loc = new QoreProgramLocation(loc_file ? loc_file : "", start_line, end_line);
+        const char* interned_file = (loc_file && pgm)
+            ? qore_program_private::get(*pgm)->addString(loc_file)
+            : (loc_file ? loc_file : "");
+        auto* loc = new QoreProgramLocation(interned_file, start_line, end_line);
         owner_func->owned_locations.push_back(loc);
         inst->loc = loc;
     }
