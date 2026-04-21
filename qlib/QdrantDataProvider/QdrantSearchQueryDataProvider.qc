@@ -116,11 +116,17 @@ public class QdrantSearchQueryRequestDataType inherits DataProvider::HashDataTyp
                 "example_value": "my-collection",
             },
             "prefetch": {
-                "type": AutoHashOrNothingType,
+                # Polymorphic at runtime: Qdrant accepts either a single
+                # query object (hash) or a list of query objects for
+                # hybrid/multi-stage retrieval (e.g. dense+sparse
+                # prefetch with server-side RRF fusion).  AbstractData-
+                # ProviderType::anyType preserves the shape untouched
+                # while still allowing the field to be omitted.
+                "type": AbstractDataProviderType::anyType,
                 "display_name": "Prefetch",
                 "short_desc": "Prefetch queries for hybrid search",
-                "desc": "Prefetch queries for hybrid search; can be a list of query objects or a single query "
-                    "object for multi-stage search pipelines",
+                "desc": "Prefetch queries for hybrid search; can be a list of query objects (for multi-stage "
+                    "pipelines such as RRF/DBSF fusion over dense+sparse arms) or a single query object",
             },
             "query": {
                 "type": AbstractDataProviderType::anyType,
