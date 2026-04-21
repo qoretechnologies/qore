@@ -3319,7 +3319,16 @@ public:
         if (get_qore_type(return_type, cppt))
             return -1;
 
-        fprintf(fp, "    ns.addBuiltinVariant(\"%s\", (%s)f_%s, ", name.c_str(), getFunctionType(), vname.c_str());
+        // Emit a scope with an RAII helper so the variant's ctor can
+        // pick up the declaring .qpp coordinates via the thread-local
+        // location stashed by QoreBuiltinSrcLocHelper.  The interning
+        // pool inside the helper guarantees the pointer stored on the
+        // variant outlives the RAII scope.
+        fprintf(fp, "    {\n");
+        fprintf(fp, "        QoreBuiltinSrcLocHelper _qpp_src_loc_h(\"%s\", %u);\n",
+            fileName.c_str(), line);
+        fprintf(fp, "        ns.addBuiltinVariant(\"%s\", (%s)f_%s, ",
+            name.c_str(), getFunctionType(), vname.c_str());
 
         flags_output_cpp(fp, flags, attr & QCA_USES_EXTRA_ARGS);
         fputs(", ", fp);
@@ -3330,6 +3339,7 @@ public:
             return -1;
 
         fputs(");\n", fp);
+        fputs("    }\n", fp);
 
         return 0;
     }
@@ -5050,7 +5060,12 @@ protected:
         fputc('\n', fp);
         serializeQoreConstructorPrototypeComment(fp, cname, 4);
 
-        fprintf(fp, "    QC_%s->%s(%s_%s, %s, ", UC, "addConstructor", cname, vname.c_str(), get_access(attr));
+        // Wrap in QoreBuiltinSrcLocHelper scope so reflection can report
+        // the declaring .qpp file+line — see serializeCppBinding above.
+        fprintf(fp, "    {\n");
+        fprintf(fp, "        QoreBuiltinSrcLocHelper _qpp_src_loc_h(\"%s\", %u);\n",
+            fileName.c_str(), line);
+        fprintf(fp, "        QC_%s->%s(%s_%s, %s, ", UC, "addConstructor", cname, vname.c_str(), get_access(attr));
         flags_output_cpp(fp, flags, attr & QCA_USES_EXTRA_ARGS);
         fputs(", ", fp);
         dom_output_cpp(fp, dom);
@@ -5059,6 +5074,7 @@ protected:
             return -1;
 
         fputs(");\n", fp);
+        fputs("    }\n", fp);
 
         return 0;
     }
@@ -5440,7 +5456,12 @@ public:
         if (get_qore_type(return_type, cppt))
             return -1;
 
-        fprintf(fp, "    QC_%s->", UC);
+        // Wrap addMethod / addAbstractMethod in a QoreBuiltinSrcLocHelper
+        // scope so reflection reports the declaring .qpp file+line.
+        fprintf(fp, "    {\n");
+        fprintf(fp, "        QoreBuiltinSrcLocHelper _qpp_src_loc_h(\"%s\", %u);\n",
+            fileName.c_str(), line);
+        fprintf(fp, "        QC_%s->", UC);
         if (attr & QCA_ABSTRACT)
             fprintf(fp, "addAbstractMethod(\"%s\", %s, ", name.c_str(), get_access(attr));
         else
@@ -5466,6 +5487,7 @@ public:
         }
 
         fputs(");\n", fp);
+        fputs("    }\n", fp);
 
         return 0;
     }
@@ -5504,7 +5526,13 @@ public:
         if (get_qore_type(return_type, cppt))
             return -1;
 
-        fprintf(fp, "    QC_%s->addStaticMethod(\"%s\", (%s)static_%s_%s, %s, ", UC, name.c_str(), getFunctionType(), cname, vname.c_str(), get_access(attr));
+        // Wrap addStaticMethod in a QoreBuiltinSrcLocHelper scope so
+        // reflection reports the declaring .qpp file+line.
+        fprintf(fp, "    {\n");
+        fprintf(fp, "        QoreBuiltinSrcLocHelper _qpp_src_loc_h(\"%s\", %u);\n",
+            fileName.c_str(), line);
+        fprintf(fp, "        QC_%s->addStaticMethod(\"%s\", (%s)static_%s_%s, %s, ",
+            UC, name.c_str(), getFunctionType(), cname, vname.c_str(), get_access(attr));
         flags_output_cpp(fp, flags, attr & QCA_USES_EXTRA_ARGS);
         fputs(", ", fp);
         dom_output_cpp(fp, dom);
@@ -5514,6 +5542,7 @@ public:
             return -1;
 
         fputs(");\n", fp);
+        fputs("    }\n", fp);
 
         return 0;
     }

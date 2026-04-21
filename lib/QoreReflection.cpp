@@ -213,8 +213,21 @@ const name_vec_t& QoreExternalVariant::getParamNames() const {
 }
 
 const QoreExternalProgramLocation* QoreExternalVariant::getSourceLocation() const {
-    const UserVariantBase* uvb = reinterpret_cast<const AbstractQoreFunctionVariant*>(this)->getUserVariantBase();
-    return reinterpret_cast<const QoreExternalProgramLocation*>(uvb ? uvb->getUserSignature()->getParseLocation() : &loc_builtin);
+    const AbstractQoreFunctionVariant* v = reinterpret_cast<const AbstractQoreFunctionVariant*>(this);
+    const UserVariantBase* uvb = v->getUserVariantBase();
+    if (uvb) {
+        return reinterpret_cast<const QoreExternalProgramLocation*>(
+            uvb->getUserSignature()->getParseLocation());
+    }
+    // Builtin variant — prefer the per-variant .qpp source location
+    // pushed by QoreBuiltinSrcLocHelper during registration.  Falls
+    // back to the `<builtin>,-1,-1` sentinel when no location was
+    // registered (hand-written addBuiltinVariant callers that don't
+    // wrap the call in the helper).
+    if (const QoreProgramLocation* bloc = v->getBuiltinSourceLocation()) {
+        return reinterpret_cast<const QoreExternalProgramLocation*>(bloc);
+    }
+    return reinterpret_cast<const QoreExternalProgramLocation*>(&loc_builtin);
 }
 
 const QoreMethod* QoreExternalMethodVariant::getMethod() const {

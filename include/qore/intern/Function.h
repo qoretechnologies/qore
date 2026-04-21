@@ -510,9 +510,32 @@ protected:
 class UserVariantBase;
 
 // describes the details of the function variant
+//! Returns the thread-local source location currently pushed by
+//! QoreBuiltinSrcLocHelper, or nullptr if none is active.  Used by
+//! builtin variant constructors to pick up the declaring `.qpp` source
+//! coordinates so reflection can report them instead of `loc_builtin`.
+DLLLOCAL const QoreProgramLocation* get_current_builtin_src_loc();
+
 class AbstractQoreFunctionVariant : protected QoreReferenceCounter {
 public:
-    DLLLOCAL AbstractQoreFunctionVariant(int64 n_flags, bool n_is_user = false) : flags(n_flags), is_user(n_is_user) {
+    DLLLOCAL AbstractQoreFunctionVariant(int64 n_flags, bool n_is_user = false)
+            : flags(n_flags), is_user(n_is_user) {
+        // Pick up the thread-local builtin source location if one has
+        // been pushed by a QoreBuiltinSrcLocHelper (qpp-emitted around
+        // every builtin registration).  User variants normally have no
+        // helper in scope, so this stays null and reflection falls back
+        // to getUserSignature()->getParseLocation() for them.
+        if (const QoreProgramLocation* tlsloc = get_current_builtin_src_loc()) {
+            builtin_src_loc = tlsloc;
+        }
+    }
+
+    //! Returns the location pushed by QoreBuiltinSrcLocHelper at ctor
+    //! time, or nullptr if none was active.  Reflection prefers this
+    //! over `&loc_builtin` so `FunctionVariant::getSourceLocation()`
+    //! points at the declaring .qpp file + line.
+    DLLLOCAL const QoreProgramLocation* getBuiltinSourceLocation() const {
+        return builtin_src_loc;
     }
 
     DLLLOCAL const QoreTypeInfo* parseGetReturnTypeInfo() const {
@@ -635,6 +658,12 @@ protected:
     // code flags
     int64 flags;
     bool is_user;
+
+    //! Declaring .qpp source location for builtin variants; nullptr when
+    //! no location is known (non-qpp-registered builtins).  Never owned
+    //! by the variant — always points at a static QoreProgramLocation
+    //! emitted by qpp at TU scope.
+    const QoreProgramLocation* builtin_src_loc = nullptr;
 
     DLLLOCAL virtual ~AbstractQoreFunctionVariant() {}
 

@@ -84,6 +84,7 @@ DLLEXPORT extern QoreCounter tp_thread_counter;
 #include <qore/QoreFile.h>
 #include <qore/QoreQueueHelper.h>
 #include <qore/QoreRWLock.h>
+#include <qore/QoreBuiltinSrcLoc.h>
 #include <qore/QoreNamespace.h>
 #include <qore/ExceptionSink.h>
 #include <qore/BinaryNode.h>

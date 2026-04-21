@@ -2169,6 +2169,83 @@ UserVariantExecHelper::~UserVariantExecHelper() {
     }
 }
 
+// Thread-local stack-top pointer for the "current builtin source location"
+// pushed by QoreBuiltinSrcLocHelper.  qpp emits one helper instance per
+// builtin-variant registration call (addBuiltinVariant / addMethod /
+// addConstructor / ...); the variant's base-class ctor reads this and
+// stashes it on the variant so reflection can report the real .qpp file
+// and line instead of the generic loc_builtin sentinel.
+static thread_local const QoreProgramLocation* t_builtin_src_loc = nullptr;
+
+const QoreProgramLocation* get_current_builtin_src_loc() {
+    return t_builtin_src_loc;
+}
+
+// Intern pool for QoreBuiltinSrcLocHelper source locations.  The helper
+// is stack-allocated (RAII scope) but the QoreProgramLocation pointer
+// it pushes is stashed on a variant that outlives the helper — so the
+// location object itself must have immortal lifetime.  Interning on
+// (file, line) bounds memory use by the number of distinct registration
+// sites in the library (a few thousand at most), regardless of how many
+// times the module is loaded/unloaded within a single process.
+namespace {
+struct BuiltinLocKey {
+    const char* file;
+    int line;
+    bool operator==(const BuiltinLocKey& o) const {
+        return line == o.line && file && o.file && strcmp(file, o.file) == 0;
+    }
+};
+struct BuiltinLocKeyHash {
+    size_t operator()(const BuiltinLocKey& k) const noexcept {
+        // file pointer stability isn't guaranteed across caller invocations
+        // (qpp emits string literals but modules may pass stack buffers) —
+        // hash by content for correctness.
+        size_t h = static_cast<size_t>(k.line) * 0x9E3779B97F4A7C15ULL;
+        if (k.file) {
+            for (const char* p = k.file; *p; ++p) {
+                h = (h * 131) + static_cast<unsigned char>(*p);
+            }
+        }
+        return h;
+    }
+};
+} // anonymous namespace
+
+static std::mutex g_builtin_loc_mutex;
+static std::unordered_map<BuiltinLocKey, const QoreProgramLocation*, BuiltinLocKeyHash>
+    g_builtin_loc_pool;
+
+static const QoreProgramLocation* intern_builtin_src_loc(const char* file, int line) {
+    if (!file) {
+        return nullptr;
+    }
+    std::lock_guard<std::mutex> lk(g_builtin_loc_mutex);
+    BuiltinLocKey key{file, line};
+    auto it = g_builtin_loc_pool.find(key);
+    if (it != g_builtin_loc_pool.end()) {
+        return it->second;
+    }
+    // Duplicate the file string — caller's buffer may be transient.
+    // Intentionally leaked (immortal pool lifetime, bounded by the
+    // number of unique registration sites).
+    char* file_copy = strdup(file);
+    auto* loc = new QoreProgramLocation(file_copy, line, line);
+    // Re-key with the stable file pointer so subsequent equality
+    // checks have a comparable stored key.
+    g_builtin_loc_pool.emplace(BuiltinLocKey{file_copy, line}, loc);
+    return loc;
+}
+
+QoreBuiltinSrcLocHelper::QoreBuiltinSrcLocHelper(const char* file, int line)
+        : saved(t_builtin_src_loc) {
+    t_builtin_src_loc = intern_builtin_src_loc(file, line);
+}
+
+QoreBuiltinSrcLocHelper::~QoreBuiltinSrcLocHelper() {
+    t_builtin_src_loc = static_cast<const QoreProgramLocation*>(saved);
+}
+
 UserVariantBase::UserVariantBase(StatementBlock *b, int n_sig_first_line, int n_sig_last_line, QoreValue params,
         RetTypeInfo* rv, bool synced)
         : signature(n_sig_first_line, n_sig_last_line, params, rv,
