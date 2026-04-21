@@ -254,6 +254,7 @@ static std::vector<std::string> extractAllDependencies(const char* source, int s
 #include <llvm/Object/ELFObjectFile.h>
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Module.h>
+#include <llvm/Transforms/Utils/ModuleUtils.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/PassInstrumentation.h>
@@ -4243,12 +4244,41 @@ static void generateModuleABIV2(llvm::LLVMContext& ctx, llvm::Module& module,
         }
     }
 
-    // Helper to create a global exported C string
+    // Helper to create a global exported C string.
+    //
+    // CRITICAL: we pin the global's address as significant and put it
+    // in `@llvm.used` so LLVM's optimizer cannot merge private
+    // `@.str.N` literals with it.  Without this, GlobalOpt promotes
+    // the exported global to `local_unnamed_addr` and ConstantMerge
+    // then folds any private string whose bytes happen to match —
+    // e.g. a literal `"SqlUtil"` in SqlUtil.qmod's own code gets
+    // replaced with a reference to `@qore_module_name`.  Under the
+    // module loader's default `RTLD_LAZY|RTLD_GLOBAL` (see
+    // ModuleManager.cpp `QORE_DLOPEN_FLAGS`), a later-loaded module
+    // that ALSO exports `qore_module_name` shadows the first copy, so
+    // the merged reference — a GOT-indirect load of
+    // `qore_module_name` — resolves via the dynamic linker to some
+    // OTHER module's export.
+    //
+    // Concrete failure observed: SqlUtil.qmod's
+    // `AbstractDatabase::loadModule` computes the driver-specific
+    // module name `mn = Pgsql + "SqlUtil" = "PgsqlSqlUtil"`.  LLVM
+    // merged the `"SqlUtil"` literal with `@qore_module_name`; Util
+    // module loaded first with its own `qore_module_name = "Util"`;
+    // SqlUtil's append then produced `"PgsqlUtil"`, and
+    // `load_module("PgsqlUtil")` failed with LOAD-MODULE-ERROR.
+    //
+    // `appendToUsed` adds the global to `@llvm.used`, which prevents
+    // *any* transformation (including GlobalOpt's unnamed-addr
+    // promotion).  Cheaper alternatives like setting
+    // `UnnamedAddr::None` didn't stick — GlobalOpt overrode it.
     auto createExportedString = [&](const std::string& name, const std::string& value) {
         auto* str_data = llvm::ConstantDataArray::getString(ctx, value, true);
         auto* gv = new llvm::GlobalVariable(module, str_data->getType(), true,
             llvm::GlobalValue::ExternalLinkage, str_data, name);
         gv->setDLLStorageClass(llvm::GlobalValue::DLLExportStorageClass);
+        gv->setUnnamedAddr(llvm::GlobalValue::UnnamedAddr::None);
+        llvm::appendToUsed(module, {gv});
         return gv;
     };
 
