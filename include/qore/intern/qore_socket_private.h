@@ -1216,6 +1216,24 @@ struct qore_socket_private {
         }
         h2_stream_complete_callback = nullptr;
         if (sock >= 0) {
+            // Cancel any in-flight I/O on this socket BEFORE touching the SSL
+            // state.  The SSL object is not thread-safe (see SSLSocketHelper.h
+            // line 70: "all operations must be already locked"), and a concurrent
+            // SSL_read/SSL_write on another thread colliding with the SSL_shutdown
+            // below corrupts the internal cipher context — SIGSEGV inside
+            // EVP_CIPHER_get_mode / EVP_CIPHER_CTX_get0_cipher has been observed
+            // under H2 teardown load (e.g. CI jobs 170545, 170659).
+            //
+            // A TCP-level shutdown(SHUT_RDWR) makes any pending/blocking SSL I/O
+            // on other threads return a fatal error (EPIPE/ECONNRESET/WANT_READ
+            // loops resolve to failure), so by the time SSL_shutdown runs below
+            // no other thread is still inside an SSL call on this context.  This
+            // is the "cancel I/O first, then shutdown" invariant.
+            //
+            // Ignore errors from the shutdown syscall: already-shutdown sockets
+            // return ENOTCONN, and we only need best-effort cancellation here.
+            ::shutdown(sock, SHUTDOWN_ARG);
+
             // if an SSL connection has been established, shut it down first.
             // Serialise the shutdown/deref pair so concurrent close callers
             // cannot both see ssl != nullptr and both invoke shutdown on
