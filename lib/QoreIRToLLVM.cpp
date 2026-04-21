@@ -2214,6 +2214,71 @@ bool QoreIRToLLVM::tryEmitDecomposedBackground(const QoreValue& expr_val,
         return true;
     };
 
+    // AOT slot-based call.  Captures the enclosing `expr_val` QoreValue (the
+    // full QoreBackgroundOperatorNode), looks up its slot, and emits a helper
+    // call with (ctx, slot, args, nargs, xsink).  Returns the boxed call
+    // result via *out.  Signature:
+    //   uint64_t helper(QoreAOTContext*, int32_t slot, uint64_t* args,
+    //                   int nargs, ExceptionSink*)
+    auto emit_aot_slot_call = [&](const char* normal_name, const char* throwing_name,
+            size_t args_first, size_t args_end, llvm::Value** out) -> bool {
+        QoreValue expr_copy = expr_val;
+        uint64_t expr_bits;
+        std::memcpy(&expr_bits, &expr_copy, sizeof(expr_bits));
+        int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
+        int nargs = (int)(args_end - args_first);
+        llvm::Value* args_array = build_args_array(args_first, args_end);
+        if (!args_array) { return false; }
+        auto ft = llvm::FunctionType::get(i64_type,
+            {ptr_type, i32_type, ptr_type, i32_type, ptr_type}, false);
+        auto helper = module.getOrInsertFunction(normal_name, ft);
+        if (throwing_ok) {
+            auto helper_throwing = module.getOrInsertFunction(throwing_name, ft);
+            *out = emitMaybeInvoke(helper, helper_throwing,
+                {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), args_array,
+                 llvm::ConstantInt::get(i32_type, nargs), xsink_arg},
+                module, llvm_func, inst);
+        } else {
+            *out = builder->CreateCall(helper,
+                {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), args_array,
+                 llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+        }
+        return true;
+    };
+
+    // AOT slot-based call with pre-evaluated receiver/callref.  Signature:
+    //   uint64_t helper(QoreAOTContext*, int32_t slot, uint64_t recv_or_callref,
+    //                   uint64_t* args, int nargs, ExceptionSink*)
+    auto emit_aot_slot_call_with_recv = [&](const char* normal_name,
+            const char* throwing_name, size_t recv_idx,
+            size_t args_first, size_t args_end, llvm::Value** out) -> bool {
+        auto* recv_val = getVal(operands[recv_idx].id, error_dummy);
+        if (!recv_val) { return false; }
+        llvm::Value* recv_boxed = boxValue(recv_val, operands[recv_idx].id);
+        QoreValue expr_copy = expr_val;
+        uint64_t expr_bits;
+        std::memcpy(&expr_bits, &expr_copy, sizeof(expr_bits));
+        int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
+        int nargs = (int)(args_end - args_first);
+        llvm::Value* args_array = build_args_array(args_first, args_end);
+        if (!args_array) { return false; }
+        auto ft = llvm::FunctionType::get(i64_type,
+            {ptr_type, i32_type, i64_type, ptr_type, i32_type, ptr_type}, false);
+        auto helper = module.getOrInsertFunction(normal_name, ft);
+        if (throwing_ok) {
+            auto helper_throwing = module.getOrInsertFunction(throwing_name, ft);
+            *out = emitMaybeInvoke(helper, helper_throwing,
+                {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), recv_boxed,
+                 args_array, llvm::ConstantInt::get(i32_type, nargs), xsink_arg},
+                module, llvm_func, inst);
+        } else {
+            *out = builder->CreateCall(helper,
+                {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), recv_boxed,
+                 args_array, llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+        }
+        return true;
+    };
+
     // background self.method(args) — supported in JIT and AOT (existing path)
     if (auto* sfcn = dynamic_cast<const SelfFunctionCallNode*>(inner)) {
         if (!sfcn->getMethod()) {
@@ -2250,13 +2315,6 @@ bool QoreIRToLLVM::tryEmitDecomposedBackground(const QoreValue& expr_val,
             sfcn, 0, actual_nargs, result_out);
     }
 
-    // All four new shapes embed an AST node pointer — only available in JIT mode.
-    // AOT mode falls back to AST eval so the spawned thread resolves the call
-    // from the serialized expression slot.
-    if (aot_mode) {
-        return false;
-    }
-
     // background foo(args) — free function call
     if (auto* fcn = dynamic_cast<const FunctionCallNode*>(inner)) {
         if (!fcn->getFunction()) {
@@ -2265,6 +2323,11 @@ bool QoreIRToLLVM::tryEmitDecomposedBackground(const QoreValue& expr_val,
         const QoreParseListNode* pargs = fcn->getParseArgs();
         const QoreListNode* fargs = fcn->getArgs();
         size_t actual_nargs = pargs ? pargs->size() : (fargs ? fargs->size() : 0);
+        if (aot_mode) {
+            return emit_aot_slot_call("qore_rt_background_function_call_aot",
+                "qore_rt_background_function_call_aot_throwing",
+                0, actual_nargs, result_out);
+        }
         return call_with_node_helper("qore_rt_background_function_call",
             "qore_rt_background_function_call_throwing",
             fcn, 0, actual_nargs, result_out);
@@ -2277,6 +2340,11 @@ bool QoreIRToLLVM::tryEmitDecomposedBackground(const QoreValue& expr_val,
         const QoreParseListNode* pargs = smcn->getParseArgs();
         const QoreListNode* sargs = smcn->getArgs();
         size_t actual_nargs = pargs ? pargs->size() : (sargs ? sargs->size() : 0);
+        if (aot_mode) {
+            return emit_aot_slot_call("qore_rt_background_static_method_call_aot",
+                "qore_rt_background_static_method_call_aot_throwing",
+                0, actual_nargs, result_out);
+        }
         return call_with_node_helper("qore_rt_background_static_method_call",
             "qore_rt_background_static_method_call_throwing",
             smcn, 0, actual_nargs, result_out);
@@ -2287,6 +2355,12 @@ bool QoreIRToLLVM::tryEmitDecomposedBackground(const QoreValue& expr_val,
         if (!m) {
             return false;
         }
+        if (aot_mode) {
+            return emit_aot_slot_call_with_recv("qore_rt_background_dot_eval_call_aot",
+                "qore_rt_background_dot_eval_call_aot_throwing",
+                /*recv_idx*/0, /*args_first*/1, /*args_end*/operands.size(),
+                result_out);
+        }
         return call_with_node_and_recv("qore_rt_background_dot_eval_call",
             "qore_rt_background_dot_eval_call_throwing",
             devn, /*recv_idx*/0, /*args_first*/1, /*args_end*/operands.size(),
@@ -2294,6 +2368,12 @@ bool QoreIRToLLVM::tryEmitDecomposedBackground(const QoreValue& expr_val,
     }
     // background callref(args) — call-ref in operands[0], args after
     if (auto* crcn = dynamic_cast<const CallReferenceCallNode*>(inner)) {
+        if (aot_mode) {
+            return emit_aot_slot_call_with_recv("qore_rt_background_call_ref_call_aot",
+                "qore_rt_background_call_ref_call_aot_throwing",
+                /*recv_idx*/0, /*args_first*/1, /*args_end*/operands.size(),
+                result_out);
+        }
         return call_with_node_and_recv("qore_rt_background_call_ref_call",
             "qore_rt_background_call_ref_call_throwing",
             crcn, /*recv_idx*/0, /*args_first*/1, /*args_end*/operands.size(),

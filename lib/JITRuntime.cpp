@@ -8275,6 +8275,92 @@ extern "C" DLLEXPORT uint64_t qore_rt_background_call_ref_call(
     return toBits(result);
 }
 
+// === AOT variants for the four new background shapes ===
+//
+// In AOT mode, the compiled code doesn't embed AST pointers (they're not stable
+// across runs).  Instead, the per-function QoreAOTContext holds a slot table
+// (`exprs[]`) populated at load time with freshly-deserialised expression
+// pointers.  Each AOT helper below reads the serialised QoreBackgroundOperatorNode
+// from the slot and dispatches on its inner-expression type — identical to the
+// JIT path but with the node sourced from the slot rather than a linker-embedded
+// pointer.  This lets AOT-loaded modules avoid the qore_rt_invoke_expr_aot AST
+// trampoline for backgrounded calls.
+
+extern "C" DLLEXPORT uint64_t qore_rt_background_function_call_aot(
+        QoreAOTContext* ctx, int32_t slot, uint64_t* args, int nargs, ExceptionSink* xsink) {
+    assert(ctx && slot >= 0 && slot < ctx->num_exprs);
+    QoreValue bg_expr = fromBits(ctx->exprs[slot]);
+    auto* bg_op = dynamic_cast<const QoreBackgroundOperatorNode*>(bg_expr.getInternalNode());
+    assert(bg_op);
+    auto* fcn = dynamic_cast<const FunctionCallNode*>(bg_op->getExp().getInternalNode());
+    assert(fcn);
+    QoreListNode* arg_list = bgBuildArgList(args, nargs);
+    FunctionCallNode* call_node = new FunctionCallNode(*fcn, arg_list);
+    QoreValue result = do_op_background(QoreValue(call_node), xsink);
+    QoreValue(call_node).discard(xsink);
+    return toBits(result);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_background_static_method_call_aot(
+        QoreAOTContext* ctx, int32_t slot, uint64_t* args, int nargs, ExceptionSink* xsink) {
+    assert(ctx && slot >= 0 && slot < ctx->num_exprs);
+    QoreValue bg_expr = fromBits(ctx->exprs[slot]);
+    auto* bg_op = dynamic_cast<const QoreBackgroundOperatorNode*>(bg_expr.getInternalNode());
+    assert(bg_op);
+    auto* smcn = dynamic_cast<const StaticMethodCallNode*>(bg_op->getExp().getInternalNode());
+    assert(smcn);
+    QoreListNode* arg_list = bgBuildArgList(args, nargs);
+    StaticMethodCallNode* call_node = new StaticMethodCallNode(*smcn, arg_list);
+    QoreValue result = do_op_background(QoreValue(call_node), xsink);
+    QoreValue(call_node).discard(xsink);
+    return toBits(result);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_background_dot_eval_call_aot(
+        QoreAOTContext* ctx, int32_t slot, uint64_t recv_bits,
+        uint64_t* args, int nargs, ExceptionSink* xsink) {
+    assert(ctx && slot >= 0 && slot < ctx->num_exprs);
+    QoreValue bg_expr = fromBits(ctx->exprs[slot]);
+    auto* bg_op = dynamic_cast<const QoreBackgroundOperatorNode*>(bg_expr.getInternalNode());
+    assert(bg_op);
+    auto* devn = dynamic_cast<const QoreDotEvalOperatorNode*>(bg_op->getExp().getInternalNode());
+    assert(devn);
+    MethodCallNode* source_m = devn->getMethodCall();
+    assert(source_m);
+    QoreValue recv = fromBits(recv_bits);
+    if (recv.hasNode()) {
+        recv.refSelf();
+    }
+    QoreListNode* arg_list = bgBuildArgList(args, nargs);
+    MethodCallNode* new_m = new MethodCallNode(*source_m, arg_list);
+    QoreDotEvalOperatorNode* call_node =
+        new QoreDotEvalOperatorNode(devn->loc, recv, new_m);
+    QoreValue result = do_op_background(QoreValue(call_node), xsink);
+    QoreValue(call_node).discard(xsink);
+    return toBits(result);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_background_call_ref_call_aot(
+        QoreAOTContext* ctx, int32_t slot, uint64_t callee_bits,
+        uint64_t* args, int nargs, ExceptionSink* xsink) {
+    assert(ctx && slot >= 0 && slot < ctx->num_exprs);
+    QoreValue bg_expr = fromBits(ctx->exprs[slot]);
+    auto* bg_op = dynamic_cast<const QoreBackgroundOperatorNode*>(bg_expr.getInternalNode());
+    assert(bg_op);
+    auto* crcn = dynamic_cast<const CallReferenceCallNode*>(bg_op->getExp().getInternalNode());
+    assert(crcn);
+    QoreValue callee = fromBits(callee_bits);
+    if (callee.hasNode()) {
+        callee.refSelf();
+    }
+    QoreListNode* arg_list = bgBuildArgList(args, nargs);
+    CallReferenceCallNode* call_node =
+        new CallReferenceCallNode(crcn->loc, callee, arg_list);
+    QoreValue result = do_op_background(QoreValue(call_node), xsink);
+    QoreValue(call_node).discard(xsink);
+    return toBits(result);
+}
+
 // --- Phase 2B Step 5: specialized helpers throwing wrappers ---
 // (placed at end of file - all base helpers are defined above)
 
@@ -8448,6 +8534,46 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_background_call_
         const CallReferenceCallNode* crcn, uint64_t callee_bits,
         uint64_t* args, int nargs, ExceptionSink* xsink) {
     uint64_t result = qore_rt_background_call_ref_call(crcn, callee_bits, args, nargs, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_background_function_call_aot_throwing(
+        QoreAOTContext* ctx, int32_t slot, uint64_t* args, int nargs, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_background_function_call_aot(ctx, slot, args, nargs, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_background_static_method_call_aot_throwing(
+        QoreAOTContext* ctx, int32_t slot, uint64_t* args, int nargs, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_background_static_method_call_aot(ctx, slot, args, nargs, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_background_dot_eval_call_aot_throwing(
+        QoreAOTContext* ctx, int32_t slot, uint64_t recv_bits,
+        uint64_t* args, int nargs, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_background_dot_eval_call_aot(ctx, slot, recv_bits,
+        args, nargs, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_background_call_ref_call_aot_throwing(
+        QoreAOTContext* ctx, int32_t slot, uint64_t callee_bits,
+        uint64_t* args, int nargs, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_background_call_ref_call_aot(ctx, slot, callee_bits,
+        args, nargs, xsink);
     if (xsink && *xsink) {
         throw QoreJITException();
     }
