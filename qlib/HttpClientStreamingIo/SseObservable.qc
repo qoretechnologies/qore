@@ -124,7 +124,11 @@ class SseNotifierPollOperation inherits Qore::AbstractPollOperation {
             # Divide the idle window so drain() fires halfway through — gives
             # drainNotifierEvents() a chance to detect the boundary without
             # arming on the exact expiry and racing with an in-flight event.
-            rv.poll_timeout_ms = idle_timeout_ms / 2;
+            # Clamp to 1ms minimum: idle_timeout_ms == 1 would round to 0 and
+            # omit poll_timeout_ms entirely, suppressing the periodic tick
+            # that detects dead streams.
+            int half = idle_timeout_ms / 2;
+            rv.poll_timeout_ms = half > 0 ? half : 1;
         }
         return rv;
     }

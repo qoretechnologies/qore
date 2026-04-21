@@ -224,7 +224,7 @@ public:
         @c PromiseNotifierAction that signals an @c EventNotifier when
         the response is ready.
 
-        Default implementation raises @c HTTPCLIENT-INTERNAL-ERROR;
+        Default implementation raises @c HTTPCLIENT-NOT-IMPLEMENTED;
         H1/H2 subclasses override to dispatch through their
         protocol-specific poll operation.  H3 is not yet supported.
 

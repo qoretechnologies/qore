@@ -1113,6 +1113,10 @@ ws.connect();
         async_io = True;
         async_owner = "wsc-" + get_random_string(12);
         async_close_sent = False;
+        # Reset close-cause state so each connection lifecycle sees only its
+        # own close reason; otherwise a later peer-initiated close on a
+        # reconnected session could surface a stale value to observers.
+        async_close_cause = "";
 
         # The HCIO connect (connectUnlocked + startAsyncIo) is driven by the
         # controller's I/O thread. The calling thread blocks at readData() on
@@ -2076,6 +2080,10 @@ ws.setEventQueue();
 
         async_owner = "wsc-" + get_random_string(12);
         async_close_sent = False;
+        # Reset close-cause state so each connection lifecycle sees only its
+        # own close reason; otherwise a later peer-initiated close on a
+        # reconnected session could surface a stale value to observers.
+        async_close_cause = "";
 
         if (hcio_stream) {
             if (transport == "http1") {
