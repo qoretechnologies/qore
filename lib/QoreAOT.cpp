@@ -10717,11 +10717,50 @@ void extractAOTSlotIdentities(const QoreIRFunction& func, const AOTSlotMap& slot
     }
 
     // Extract expression slot identities FIRST — ExprTreeSerializer may add
-    // new local/global vars to the slot map during classification
-    out.exprs.resize(slots.expr_slots.size());
+    // new local/global vars to the slot map during classification.
+    //
+    // Slot values need not be contiguous with size(): parts of the pipeline
+    // (e.g. IR optimisation passes) may remove entries without compacting.
+    // Resize to max(slot)+1 so indexed writes never go out of bounds.
+    {
+        int32_t max_slot = -1;
+        for (auto& [bits, slot] : slots.expr_slots) {
+            if (slot > max_slot) {
+                max_slot = slot;
+            }
+        }
+        out.exprs.resize(static_cast<size_t>(max_slot + 1));
+    }
     out.has_unsupported_exprs = false;
     out.has_closure_exprs = false;
-    for (auto& [bits, slot] : slots.expr_slots) {
+    // Snapshot (bits, slot) pairs before iterating: classifyExpression
+    // runs an ExprTreeSerializer dry-run that can call getExprSlot() and
+    // register additional expr slots, rehashing slots.expr_slots and
+    // invalidating live iterators.  Re-scan after classify loops so any
+    // newly-introduced slots get their own default-classified entries —
+    // a fresh iterator pass, no live-mutation risk.
+    std::unordered_set<int32_t> seen;
+    while (true) {
+        std::vector<std::pair<uint64_t, int32_t>> expr_snapshot;
+        expr_snapshot.reserve(slots.expr_slots.size());
+        for (auto& [bits, slot] : slots.expr_slots) {
+            if (seen.insert(slot).second) {
+                expr_snapshot.emplace_back(bits, slot);
+            }
+        }
+        if (expr_snapshot.empty()) {
+            break;
+        }
+        for (auto& [bits, slot] : expr_snapshot) {
+        // Grow the output on demand: classifyExpression may run an
+        // ExprTreeSerializer dry-run that calls getExprSlot() and
+        // registers additional expr slots mid-iteration.  The resize
+        // we did before the loop was based on the snapshot max; any
+        // new slot ids introduced by classifyExpression itself can
+        // exceed that bound, so bump the output vector as needed.
+        if (static_cast<size_t>(slot) >= out.exprs.size()) {
+            out.exprs.resize(static_cast<size_t>(slot) + 1);
+        }
         out.exprs[slot] = classifyExpression(bits, slots, const_reverse_map);
         if (out.exprs[slot].kind == AOTExprKind::GENERIC_EVAL) {
             out.has_unsupported_exprs = true;
@@ -10742,11 +10781,21 @@ void extractAOTSlotIdentities(const QoreIRFunction& func, const AOTSlotMap& slot
         } else if (out.exprs[slot].kind == AOTExprKind::CLOSURE_CREATE) {
             out.has_closure_exprs = true;
         }
+        }
     }
 
     // Extract local slot identities (indexed by slot) — after expression
-    // classification which may have added extra locals via ExprTreeSerializer
-    out.locals.resize(slots.local_slots.size());
+    // classification which may have added extra locals via ExprTreeSerializer.
+    // Slot indices may have gaps; size by max(slot)+1 to avoid OOB writes.
+    {
+        int32_t max_slot = -1;
+        for (auto& [ptr, slot] : slots.local_slots) {
+            if (slot > max_slot) {
+                max_slot = slot;
+            }
+        }
+        out.locals.resize(static_cast<size_t>(max_slot + 1));
+    }
     for (auto& [ptr, slot] : slots.local_slots) {
         const LocalVar* lv = reinterpret_cast<const LocalVar*>(ptr);
         AOTLocalSlotId& lid = out.locals[slot];
@@ -10772,8 +10821,16 @@ void extractAOTSlotIdentities(const QoreIRFunction& func, const AOTSlotMap& slot
         }
     }
 
-    // Extract global slot identities
-    out.globals.resize(slots.global_slots.size());
+    // Extract global slot identities (slots may have gaps — size by max+1)
+    {
+        int32_t max_slot = -1;
+        for (auto& [ptr, slot] : slots.global_slots) {
+            if (slot > max_slot) {
+                max_slot = slot;
+            }
+        }
+        out.globals.resize(static_cast<size_t>(max_slot + 1));
+    }
     for (auto& [ptr, slot] : slots.global_slots) {
         const Var* var = reinterpret_cast<const Var*>(ptr);
         AOTGlobalSlotId& gid = out.globals[slot];
@@ -10792,7 +10849,15 @@ void extractAOTSlotIdentities(const QoreIRFunction& func, const AOTSlotMap& slot
     }
 
     // Extract regex case identities
-    out.regex_cases.resize(slots.regex_case_slots.size());
+    {
+        int32_t max_slot = -1;
+        for (auto& [ptr, slot] : slots.regex_case_slots) {
+            if (slot > max_slot) {
+                max_slot = slot;
+            }
+        }
+        out.regex_cases.resize(static_cast<size_t>(max_slot + 1));
+    }
     for (auto& [ptr, slot] : slots.regex_case_slots) {
         const CaseNodeRegex* cnode = reinterpret_cast<const CaseNodeRegex*>(ptr);
         AOTRegexCaseSlotId& rcid = out.regex_cases[slot];
@@ -10804,7 +10869,15 @@ void extractAOTSlotIdentities(const QoreIRFunction& func, const AOTSlotMap& slot
     }
 
     // Extract LValuePath instruction identities
-    out.lv_path_insts.resize(slots.lv_path_slots.size());
+    {
+        int32_t max_slot = -1;
+        for (auto& [ptr, slot] : slots.lv_path_slots) {
+            if (slot > max_slot) {
+                max_slot = slot;
+            }
+        }
+        out.lv_path_insts.resize(static_cast<size_t>(max_slot + 1));
+    }
     for (auto& [ptr, slot] : slots.lv_path_slots) {
         const auto* pi = reinterpret_cast<const QoreIRLValuePathInstruction*>(ptr);
         AOTLVPathSlotId& lvid = out.lv_path_insts[slot];
