@@ -517,6 +517,24 @@ int QoreIRInterpreter::execStatement(QoreIROpcode op, const AbstractStatement* s
     return -1;
 }
 
+// Thread-local state for QORE_IR_TRACE_SILENT_FAIL=1 — populated before
+// each instruction dispatch in execute()'s main loop, read by
+// dumpLastSilentFail() at the caller's fallback path.  No cost when the
+// env var is off; ~2 word-stores per instruction when it's on (no
+// measurable overhead — the loop already touches these cachelines).
+static thread_local QoreIROpcode tls_last_silent_fail_opcode = QoreIROpcode::ConstNothing;
+static thread_local const QoreProgramLocation* tls_last_silent_fail_loc = nullptr;
+
+void QoreIRInterpreter::dumpLastSilentFail(const char* tag) {
+    const QoreProgramLocation* loc = tls_last_silent_fail_loc;
+    fprintf(stderr, "[ir-silent-fail:%s] opcode=%d @ %s:%d\n",
+        tag ? tag : "?",
+        static_cast<int>(tls_last_silent_fail_opcode),
+        loc ? (loc->getFile() ? loc->getFile() : "<unknown>") : "<no-loc>",
+        loc ? loc->start_line : 0);
+    fflush(stderr);
+}
+
 // Thread-local call frame pool — eliminates per-call heap allocation by
 // on_block_exit handler record (defined here so IRCallFrame can pool it)
 struct IROnBlockExitHandler {
@@ -547,6 +565,10 @@ struct IRCallFrame {
     // results that must be discarded at statement boundaries to prevent long-running
     // threads from holding references that block object destruction.
     std::vector<uint32_t> ephemeral_weak_ref_slots;
+
+    // (Reserved for potential future per-frame diagnostic state; the
+    // silent-fail trace uses a thread-local in QoreIRInterpreter.cpp so
+    // cross-frame failure propagation remains visible.)
 
     // Per-call containers pooled here to avoid per-call heap allocation.
     // After warm-up, clear() retains bucket arrays / capacity.
@@ -2484,6 +2506,13 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         QoreIRBasicBlock* current_block = block;
 next_instruction:
         QoreIRInstruction* inst = block->instructions[ip].get();
+        // Track the last instruction dispatched so silent-failure tracing
+        // (QORE_IR_TRACE_SILENT_FAIL=1) can identify which opcode returned
+        // `ok=false` without raising an xsink exception.  Thread-local so
+        // the caller (StatementBlock::execImpl / evalTiered fallback) can
+        // read it post-return without plumbing it through the return value.
+        tls_last_silent_fail_opcode = inst->opcode;
+        tls_last_silent_fail_loc = inst->loc;
         // Unified per-line overhead: only update runtime_loc, check ephemeral refs,
         // and fire debug events when the source line changes.  Multiple IR instructions
         // on the same source line share the same location, so we only need one check

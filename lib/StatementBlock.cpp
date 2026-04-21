@@ -981,6 +981,9 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
                 if (qore_program_private::get(*pgm)->ir_fallback_warn) {
                     printe("IR exec fallback to AST: execution failed\n");
                 }
+                if (getenv("QORE_IR_TRACE_SILENT_FAIL")) {
+                    QoreIRInterpreter::dumpLastSilentFail("toplevel");
+                }
                 qore_program_private::get(*pgm)->recordIRFallback("execution: runtime failure");
             }
         }

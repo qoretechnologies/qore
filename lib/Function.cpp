@@ -3299,6 +3299,9 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                     fell_back_to_ast = true;
                     printd(2, "UserVariantBase::evalTiered() IR execution failed for '%s', "
                         "falling back to AST\n", name);
+                    if (getenv("QORE_IR_TRACE_SILENT_FAIL")) {
+                        QoreIRInterpreter::dumpLastSilentFail(name ? name : "<fn>");
+                    }
                     static bool debug_deopt = [] {
                         const char* debug_env = getenv("QORE_IR_DEBUG");
                         return debug_env && strstr(debug_env, "deopt");

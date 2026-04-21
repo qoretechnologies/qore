@@ -85,6 +85,14 @@ public:
             bool suppress_guard_deopt = false,
             const IRDirectParams* direct_params = nullptr,
             std::vector<QoreValue>* parent_slot_cache = nullptr);
+
+    //! Emit a `[ir-silent-fail:<tag>]` line to stderr naming the last IR
+    //! opcode + source location that ran before `execute()` returned
+    //! `ok=false` without raising an xsink exception.  Gated on
+    //! QORE_IR_TRACE_SILENT_FAIL=1 at the caller.  Thread-local state is
+    //! populated by execute()'s instruction dispatch loop; it remains
+    //! valid until the next execute() call on this thread.
+    DLLLOCAL static void dumpLastSilentFail(const char* tag);
 };
 
 //! Compound +=/-= helpers — shared between IR interpreter and JIT runtime
