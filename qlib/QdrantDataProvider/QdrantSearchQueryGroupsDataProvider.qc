@@ -116,11 +116,13 @@ public class QdrantSearchQueryGroupsRequestDataType inherits DataProvider::HashD
                 "example_value": "my-collection",
             },
             "prefetch": {
-                "type": AutoHashOrNothingType,
+                # Polymorphic at runtime — see
+                # \c QdrantSearchQueryRequestDataType::prefetch.
+                "type": AbstractDataProviderType::anyType,
                 "display_name": "Prefetch",
                 "short_desc": "Prefetch queries for hybrid search",
-                "desc": "Prefetch queries for hybrid search; can be a list of query objects or a single query "
-                    "object for multi-stage search pipelines",
+                "desc": "Prefetch queries for hybrid search; can be a list of query objects (for multi-stage "
+                    "pipelines such as RRF/DBSF fusion over dense+sparse arms) or a single query object",
             },
             "query": {
                 "type": AutoListOrNothingType,
