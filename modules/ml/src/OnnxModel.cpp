@@ -57,34 +57,75 @@ QoreOnnxModel::QoreOnnxModel(const char* model_path, ExceptionSink* xsink)
 QoreOnnxModel::QoreOnnxModel(const char* model_path, const QoreHashNode* config,
     ExceptionSink* xsink) : active_provider("CPUExecutionProvider") {
     try {
-        // Read log severity from config (default: WARNING = 2)
-        OrtLoggingLevel log_level = ORT_LOGGING_LEVEL_WARNING;
-        QoreValue log_sev_val = config->getKeyValue("log_severity");
-        if (!log_sev_val.isNullOrNothing()) {
-            int64_t log_sev = log_sev_val.getAsBigInt();
-            if (log_sev < 0 || log_sev > 4) {
-                xsink->raiseException("ML-ONNX-ERROR",
-                    "invalid log_severity %lld; must be 0-4 (0=verbose, 1=info, 2=warning, "
-                    "3=error, 4=fatal)", (long long)log_sev);
-                return;
-            }
-            log_level = static_cast<OrtLoggingLevel>(log_sev);
-        }
-
-        env = std::make_unique<Ort::Env>(log_level, "qore-ml");
         Ort::SessionOptions session_options;
-
-        configureSession(session_options, config, xsink);
-        if (*xsink) {
+        if (!initEnvAndOptions(session_options, config, xsink)) {
             return;
         }
-
         session = std::make_unique<Ort::Session>(*env, model_path, session_options);
         loadMetadata(xsink);
     } catch (const Ort::Exception& e) {
         xsink->raiseException("ML-ONNX-ERROR", "failed to load ONNX model '%s': %s",
             model_path, e.what());
     }
+}
+
+QoreOnnxModel::QoreOnnxModel(const void* model_data, size_t model_data_len,
+    ExceptionSink* xsink) : active_provider("CPUExecutionProvider") {
+    try {
+        env = std::make_unique<Ort::Env>(ORT_LOGGING_LEVEL_WARNING, "qore-ml");
+        Ort::SessionOptions session_options;
+        session_options.SetIntraOpNumThreads(1);
+        autoDetectProvider(session_options);
+        // Ort::Session copies the buffer, so the caller's memory lifetime doesn't matter
+        session = std::make_unique<Ort::Session>(*env, model_data, model_data_len,
+            session_options);
+        loadMetadata(xsink);
+    } catch (const Ort::Exception& e) {
+        xsink->raiseException("ML-ONNX-ERROR",
+            "failed to load ONNX model from memory (%zu bytes): %s", model_data_len, e.what());
+    }
+}
+
+QoreOnnxModel::QoreOnnxModel(const void* model_data, size_t model_data_len,
+    const QoreHashNode* config, ExceptionSink* xsink)
+    : active_provider("CPUExecutionProvider") {
+    try {
+        Ort::SessionOptions session_options;
+        if (!initEnvAndOptions(session_options, config, xsink)) {
+            return;
+        }
+        session = std::make_unique<Ort::Session>(*env, model_data, model_data_len,
+            session_options);
+        loadMetadata(xsink);
+    } catch (const Ort::Exception& e) {
+        xsink->raiseException("ML-ONNX-ERROR",
+            "failed to load ONNX model from memory (%zu bytes): %s", model_data_len, e.what());
+    }
+}
+
+bool QoreOnnxModel::initEnvAndOptions(Ort::SessionOptions& session_options,
+    const QoreHashNode* config, ExceptionSink* xsink) {
+    // Read log severity from config (default: WARNING = 2)
+    OrtLoggingLevel log_level = ORT_LOGGING_LEVEL_WARNING;
+    QoreValue log_sev_val = config->getKeyValue("log_severity");
+    if (!log_sev_val.isNullOrNothing()) {
+        int64_t log_sev = log_sev_val.getAsBigInt();
+        if (log_sev < 0 || log_sev > 4) {
+            xsink->raiseException("ML-ONNX-ERROR",
+                "invalid log_severity %lld; must be 0-4 (0=verbose, 1=info, 2=warning, "
+                "3=error, 4=fatal)", (long long)log_sev);
+            return false;
+        }
+        log_level = static_cast<OrtLoggingLevel>(log_sev);
+    }
+
+    env = std::make_unique<Ort::Env>(log_level, "qore-ml");
+
+    configureSession(session_options, config, xsink);
+    if (*xsink) {
+        return false;
+    }
+    return true;
 }
 
 void QoreOnnxModel::configureSession(Ort::SessionOptions& opts, const QoreHashNode* config,

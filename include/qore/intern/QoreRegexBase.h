@@ -44,6 +44,20 @@
 //! Size of error buffer for PCRE2 error messages
 constexpr size_t qore_pcre2_errorbuf_size = 512;
 
+//! Returns true for PCRE2 match return codes that terminate an iteration without an internal bug.
+/** Covers @ref PCRE2_ERROR_NOMATCH and the full range of UTF-8 subject-validation errors
+    (@ref PCRE2_ERROR_UTF8_ERR1 through @ref PCRE2_ERROR_UTF8_ERR21). When the subject string is
+    tagged as UTF-8 but contains invalid byte sequences, pcre2_match() can return any code in that
+    range (we have observed @c -22 from HTTP bodies masked via @c http_mask_data). All such codes
+    indicate "we cannot match past this byte", so the match loop stops cleanly instead of
+    asserting.
+ */
+static inline bool qore_pcre2_expected_match_error(int rc) {
+    // PCRE2_ERROR_UTF8_ERR1 = -3 (highest), PCRE2_ERROR_UTF8_ERR21 = -23 (lowest) — see pcre2.h
+    return rc == PCRE2_ERROR_NOMATCH
+        || (rc <= PCRE2_ERROR_UTF8_ERR1 && rc >= PCRE2_ERROR_UTF8_ERR21);
+}
+
 #define check_re_options(a) (a & ~(PCRE2_CASELESS|PCRE2_DOTALL|PCRE2_EXTENDED|PCRE2_MULTILINE|PCRE2_UTF|PCRE2_UCP|PCRE2_UNGREEDY|PCRE2_DOLLAR_ENDONLY|PCRE2_ANCHORED|PCRE2_DUPNAMES))
 
 class QoreRegexBase {

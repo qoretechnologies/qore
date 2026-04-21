@@ -155,7 +155,7 @@ QoreListNode* QoreRegex::extractSubstrings(const QoreString* target, ExceptionSi
 
         if (rc < 1) {
 #ifdef DEBUG
-            if (rc != PCRE2_ERROR_NOMATCH && rc != PCRE2_ERROR_UTF8_ERR21) {
+            if (!qore_pcre2_expected_match_error(rc)) {
                 printd(0, "QoreRegex::extractSubstrings() Unknown error returned from pcre2_match(//, '%s') -> %d\n",
                     t->c_str(), rc);
                 assert(false);
@@ -239,7 +239,7 @@ QoreListNode* QoreRegex::extractWithPattern(const QoreString& target, bool inclu
 
         if (rc < 1) {
 #ifdef DEBUG
-            if (rc != PCRE2_ERROR_NOMATCH && rc != PCRE2_ERROR_UTF8_ERR21) {
+            if (!qore_pcre2_expected_match_error(rc)) {
                 printd(0, "QoreRegex::extractWithPattern() Unknown error returned from pcre2_match(//, '%s') -> %d\n",
                     t->c_str(), rc);
                 assert(false);

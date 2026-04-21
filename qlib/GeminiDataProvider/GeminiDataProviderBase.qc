@@ -272,9 +272,100 @@ public class GeminiDataProviderBase inherits DataProvider::AbstractDataProvider 
                 if (retry(ex, \retries)) {
                     continue;
                 }
-                rethrow;
+                rethrow ex.err, getApiErrorDesc(ex), ex.arg;
             }
         }
+    }
+
+    #! Returns an enriched error description that includes the Gemini API error message if available
+    /** Gemini uses the standard Google Cloud \c google.rpc error envelope:
+        \c {"error": {"code": <int>, "message": "<prose>", "status": "<UPPER_SNAKE>", "details": [ ... ]}}.
+        \c details is a list of typed entries such as \c BadRequest.fieldViolations[] (field-level
+        violations), \c ErrorInfo (reason/domain/metadata, e.g. \c API_KEY_INVALID), \c QuotaFailure,
+        and \c LocalizedMessage.
+    */
+    private string getApiErrorDesc(hash<ExceptionInfo> ex) {
+        string desc = ex.desc;
+        if (ex.arg.body.typeCode() != NT_HASH || ex.arg.body.error.typeCode() != NT_HASH) {
+            return desc;
+        }
+        auto err = ex.arg.body.error;
+        *string message = DataProvider::DataProviderErrorUtil::firstStringAt(err, ("message",));
+        *string status = DataProvider::DataProviderErrorUtil::firstStringAt(err, ("status",));
+
+        string primary;
+        if (message.val() && status.val()) {
+            primary = sprintf("%s (status: %s)", message, status);
+        } else if (message.val()) {
+            primary = message;
+        } else if (status.val()) {
+            primary = status;
+        }
+        if (!primary.val()) {
+            return desc;
+        }
+        if (err.code.typeCode() == NT_INT && err.code != ex.arg.status_code) {
+            primary = sprintf("%s (code: %d)", primary, err.code);
+        }
+        desc += ": " + primary;
+
+        *string details_str = formatGoogleDetails(err.details);
+        if (details_str.val()) {
+            desc += " " + details_str;
+        }
+        return desc;
+    }
+
+    #! Renders the Google Cloud \c google.rpc.* typed \c details[] list into a compact string
+    private *string formatGoogleDetails(auto details) {
+        if (details.typeCode() != NT_LIST || !details) {
+            return NOTHING;
+        }
+        list<string> parts = ();
+        foreach auto d in (details) {
+            if (d.typeCode() != NT_HASH) {
+                continue;
+            }
+            *string atype = d."@type".typeCode() == NT_STRING ? d."@type" : NOTHING;
+            if (atype.val() && atype =~ /BadRequest/i && d.fieldViolations.typeCode() == NT_LIST) {
+                foreach auto fv in (d.fieldViolations) {
+                    if (fv.typeCode() != NT_HASH) {
+                        continue;
+                    }
+                    *string f = DataProvider::DataProviderErrorUtil::firstStringAt(fv, ("field",));
+                    *string fdesc = DataProvider::DataProviderErrorUtil::firstStringAt(fv, ("description",));
+                    string part = f ?? "";
+                    if (fdesc.val()) {
+                        part = part.val() ? part + ": " + fdesc : fdesc;
+                    }
+                    if (part.val()) {
+                        push parts, part;
+                    }
+                }
+            } else if (atype.val() && atype =~ /ErrorInfo/i) {
+                *string reason = DataProvider::DataProviderErrorUtil::firstStringAt(d, ("reason",));
+                if (reason.val()) {
+                    push parts, "reason: " + reason;
+                }
+            } else if (atype.val() && atype =~ /QuotaFailure/i && d.violations.typeCode() == NT_LIST) {
+                foreach auto v in (d.violations) {
+                    if (v.typeCode() != NT_HASH) {
+                        continue;
+                    }
+                    *string s = DataProvider::DataProviderErrorUtil::firstStringAt(v, ("subject",));
+                    *string vdesc = DataProvider::DataProviderErrorUtil::firstStringAt(v, ("description",));
+                    string part = s ?? "";
+                    if (vdesc.val()) {
+                        part = part.val() ? part + ": " + vdesc : vdesc;
+                    }
+                    if (part.val()) {
+                        push parts, "quota " + part;
+                    }
+                }
+            }
+            # LocalizedMessage and other @types: skipped (redundant with error.message)
+        }
+        return parts ? "[" + join("; ", parts) + "]" : NOTHING;
     }
 
     #! Returns True if the error indicates that the operation should be retried

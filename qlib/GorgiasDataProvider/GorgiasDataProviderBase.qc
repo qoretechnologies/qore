@@ -187,9 +187,24 @@ public class GorgiasDataProviderBase inherits DataProvider::AbstractDataProvider
                 if (retryRequest(ex, \retries)) {
                     continue;
                 }
-                rethrow;
+                rethrow ex.err, getApiErrorDesc(ex), ex.arg;
             }
         }
+    }
+
+    #! Returns an enriched error description that includes the Gorgias API error message if available
+    /** Gorgias errors use a nested envelope: \c {"error": {"msg": "..."}}. The \c msg field carries
+        the human-readable reason (observed live on 401 responses). Defensively probes \c error.message
+        and a top-level \c message as alternative fields in case of shape variations.
+    */
+    private string getApiErrorDesc(hash<ExceptionInfo> ex) {
+        string desc = ex.desc;
+        *string msg = DataProvider::DataProviderErrorUtil::firstStringAt(
+            ex.arg.body, ("error.msg", "error.message", "message", "error"));
+        if (msg.val()) {
+            desc += ": " + msg;
+        }
+        return desc;
     }
 
     #! Checks if a request should be retried

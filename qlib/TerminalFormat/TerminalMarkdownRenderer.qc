@@ -162,14 +162,13 @@ public class TerminalMarkdownRenderer {
         }
         int level = parts[0].length();
         string text = parts[1];
-        switch (level) {
-            case 1:
-                return color.bold(text.upr());
-            case 2:
-                return color.bold(text);
-            default:
-                return color.bold(text);
+        # H1 uppercases first (before inline markers are consumed); all
+        # levels then run through renderInline so bold/italic/code/link
+        # markers inside the heading don't appear literally.
+        if (level == 1) {
+            text = text.upr();
         }
+        return color.bold(renderInline(text));
     }
 
     #! Renders a fenced code block
@@ -236,25 +235,31 @@ public class TerminalMarkdownRenderer {
             return ();
         }
 
-        # Calculate column widths
+        # Render each cell through inline formatting first so widths are
+        # computed on the visible (ANSI-stripped) length, not on the raw
+        # markdown source (which includes markers like ** or `).
+        list<list<string>> rendered_rows = map (map renderInline($1), $1), rows;
+
+        # Calculate column widths based on visible length
         int num_cols = rows[0].size();
         list<int> widths = map 0, range(num_cols);
-        foreach list<string> row in (rows) {
+        foreach list<string> row in (rendered_rows) {
             for (int c = 0; c < min(row.size(), num_cols); ++c) {
-                if (row[c].length() > widths[c]) {
-                    widths[c] = row[c].length();
+                int vlen = Util::TerminalColor::visibleLength(row[c]);
+                if (vlen > widths[c]) {
+                    widths[c] = vlen;
                 }
             }
         }
 
         # Render
         list<string> output = ();
-        for (int r = 0; r < rows.size(); ++r) {
-            list<string> cells = rows[r];
+        for (int r = 0; r < rendered_rows.size(); ++r) {
+            list<string> cells = rendered_rows[r];
             string formatted = "";
             for (int c = 0; c < num_cols; ++c) {
                 string cell = c < cells.size() ? cells[c] : "";
-                string padded = cell + strmul(" ", widths[c] - cell.length());
+                string padded = Util::TerminalColor::padRight(cell, widths[c]);
                 if (r == 0 && has_separator) {
                     padded = color.bold(padded);
                 }

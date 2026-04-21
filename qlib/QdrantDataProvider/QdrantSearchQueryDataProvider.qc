@@ -116,17 +116,28 @@ public class QdrantSearchQueryRequestDataType inherits DataProvider::HashDataTyp
                 "example_value": "my-collection",
             },
             "prefetch": {
-                "type": AutoHashOrNothingType,
+                # Polymorphic at runtime: Qdrant accepts either a single
+                # query object (hash) or a list of query objects for
+                # hybrid/multi-stage retrieval (e.g. dense+sparse
+                # prefetch with server-side RRF fusion).  AbstractData-
+                # ProviderType::anyType preserves the shape untouched
+                # while still allowing the field to be omitted.
+                "type": AbstractDataProviderType::anyType,
                 "display_name": "Prefetch",
                 "short_desc": "Prefetch queries for hybrid search",
-                "desc": "Prefetch queries for hybrid search; can be a list of query objects or a single query "
-                    "object for multi-stage search pipelines",
+                "desc": "Prefetch queries for hybrid search; can be a list of query objects (for multi-stage "
+                    "pipelines such as RRF/DBSF fusion over dense+sparse arms) or a single query object",
             },
             "query": {
-                "type": AutoListOrNothingType,
+                "type": AbstractDataProviderType::anyType,
                 "display_name": "Query",
-                "short_desc": "Query vector",
-                "desc": "The query vector to use for the search",
+                "short_desc": "Query vector, sparse-vector body, point ID, or fusion operator",
+                "desc": "The query payload — may be a dense vector (`list<float>`), a sparse "
+                    "vector body (`{indices, values}`), a point ID (`int`|`string`|`uuid`) "
+                    "for recommend/context searches, or a fusion operator "
+                    "(`{fusion: \"rrf\"}` or `{fusion: \"dbsf\"}`) when combining a "
+                    "`prefetch` pipeline. Untyped here because Qdrant's `/points/query` "
+                    "endpoint polymorphs on the body shape",
                 "example_value": (0.2, 0.1, 0.9, 0.7),
             },
             "using": {

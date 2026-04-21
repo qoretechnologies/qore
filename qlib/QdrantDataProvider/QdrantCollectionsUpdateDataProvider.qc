@@ -159,6 +159,23 @@ public class QdrantCollectionsUpdateRequestDataType inherits DataProvider::HashD
                 "desc": "Additional collection parameters to update (e.g. replication factor, write consistency "
                     "factor)",
             },
+            "vectors": {
+                "type": AutoHashOrNothingType,
+                "display_name": "Vectors",
+                "short_desc": "Add or update named dense vectors",
+                "desc": "Dense-vector configuration to add or update on the collection. Qdrant allows new "
+                    "named dense vectors to be added to an existing collection via PATCH; existing named "
+                    "vectors can have their HNSW / quantization / on-disk settings updated",
+                "example_value": {"dense": {"size": 1024, "distance": "Cosine"}},
+            },
+            "sparse_vectors": {
+                "type": AutoHashOrNothingType,
+                "display_name": "Sparse Vectors",
+                "short_desc": "Add or update sparse-vector configuration",
+                "desc": "Sparse-vector configuration to add or update on the collection. Used to enable BM25 / "
+                    "hybrid retrieval on a collection that was originally created with dense vectors only",
+                "example_value": {"text": {"modifier": "idf"}},
+            },
             "timeout": {
                 "type": IntOrNothingType,
                 "display_name": "Timeout",

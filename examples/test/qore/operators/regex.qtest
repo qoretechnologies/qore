@@ -23,6 +23,7 @@ class RegexTest inherits QUnit::Test {
         addTestCase("callback substitution", \testCallbackSubst());
         addTestCase("splitRegex limit", \testSplitRegexLimit());
         addTestCase("case escape sequences", \testCaseEscapes());
+        addTestCase("invalid UTF-8 subject", \testInvalidUtf8Subject());
         set_return_value(main());
     }
 
@@ -1143,5 +1144,47 @@ class RegexTest inherits QUnit::Test {
 
         # regex_subst function with case escapes
         assertEq("HELLO", regex_subst("hello", "(\\w+)", "\\U$1"));
+    }
+
+    testInvalidUtf8Subject() {
+        # Regression: pcre2_match() returns a UTF-8 validation error code
+        # (PCRE2_ERROR_UTF8_ERR1..ERR21, i.e. -3..-23) when a string tagged as
+        # UTF-8 contains invalid byte sequences. Previously, debug builds hit
+        # assert(false) at QoreRegexSubst.cpp:310 / QoreRegex.cpp:{158,242} for
+        # any code outside {NOMATCH, UTF8_ERR21}. Release builds silently
+        # returned the input unchanged. This test verifies all regex entry
+        # points no longer crash on invalid-UTF-8 subjects.
+
+        # Crafted string containing bare continuation bytes and a truncated
+        # 4-byte lead sequence — all invalid UTF-8 in the interior.
+        # Bytes: 0xFF 0xFE 0x80 0xC3 (missing continuation).
+        string bad = binary_to_string(<fffe80c3>);
+
+        # s/// with a pattern that matches "passXXX" style text — the same
+        # kind of call http_mask_data uses. With invalid-UTF-8 input the
+        # match simply finds nothing and the string is returned unchanged
+        # (no exception, no crash).
+        string s = bad;
+        s =~ s/((?:pass(?:[^a-zA-Z_]|(?:word)))"?[=:>\s]*).*/$1<masked>.../;
+        assertEq(bad, s, "invalid UTF-8: s/// returns input unchanged, does not crash");
+
+        # =~ // (match) — must not crash
+        assertFalse(bad =~ /password/, "invalid UTF-8: =~ // returns false, does not crash");
+        assertTrue(bad !~ /password/, "invalid UTF-8: !~ // returns true, does not crash");
+
+        # regex_subst function form — also goes through QoreRegexSubst::exec
+        assertEq(bad, regex_subst(bad, "password", "<masked>"),
+            "invalid UTF-8: regex_subst returns input unchanged, does not crash");
+
+        # Valid prefix followed by invalid bytes: subst still completes without
+        # crashing; behavior is best-effort per pcre2 semantics.
+        string mixed = "password=secret" + bad;
+        string masked = regex_subst(mixed, "(password[=:])", "$1<masked>");
+        assertTrue(masked.size() >= mixed.size() - bad.size(),
+            "invalid UTF-8 tail: regex_subst still produces output");
+
+        # regex_extract on invalid UTF-8
+        assertEq(NOTHING, regex_extract(bad, "(password)"),
+            "invalid UTF-8: regex_extract returns NOTHING, does not crash");
     }
 }

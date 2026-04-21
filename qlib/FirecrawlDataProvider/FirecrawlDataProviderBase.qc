@@ -131,9 +131,76 @@ public class FirecrawlDataProviderBase inherits DataProvider::AbstractDataProvid
                 if (retry(ex, \retries)) {
                     continue;
                 }
-                rethrow;
+                rethrow ex.err, getApiErrorDesc(ex), ex.arg;
             }
         }
+    }
+
+    #! Returns an enriched error description that includes the Firecrawl API error message if available
+    /** Firecrawl errors use a consistent body envelope: \c {"success": false, "error": "...",
+        "code": "MACHINE_CODE", "details": [...]}. \c details is a Zod-style list of validation
+        entries such as \c {"code": "...", "message": "...", "path": [...], "validation": "url",
+        "keys": [...]}.
+    */
+    private string getApiErrorDesc(hash<ExceptionInfo> ex) {
+        string desc = ex.desc;
+        *string formatted = formatFirecrawlBody(ex.arg.body);
+        if (formatted.val()) {
+            desc += ": " + formatted;
+        }
+        return desc;
+    }
+
+    #! Renders a Firecrawl error body into a compact string, or \c NOTHING
+    /** Shared by @ref getApiErrorDesc() (for HTTP 4xx/5xx) and @ref checkResponse() (for HTTP 200
+        responses whose JSON envelope signals failure via \c success=false). */
+    private *string formatFirecrawlBody(auto body) {
+        if (body.typeCode() != NT_HASH) {
+            return NOTHING;
+        }
+        *string err = DataProvider::DataProviderErrorUtil::firstStringAt(body, ("error",));
+        *string code = DataProvider::DataProviderErrorUtil::firstStringAt(body, ("code",));
+        string primary;
+        if (err.val() && code.val()) {
+            primary = sprintf("%s (code: %s)", err, code);
+        } else if (err.val()) {
+            primary = err;
+        } else if (code.val()) {
+            primary = code;
+        }
+        *string detail_str;
+        if (body.details.typeCode() == NT_LIST && body.details) {
+            list<string> parts = ();
+            foreach auto d in (body.details) {
+                if (d.typeCode() != NT_HASH) {
+                    push parts, sprintf("%y", d);
+                    continue;
+                }
+                string part = "";
+                if (d.path.typeCode() == NT_LIST && d.path) {
+                    list<string> segs = map $1.typeCode() == NT_STRING ? $1 : sprintf("%y", $1), d.path;
+                    part = join(".", segs);
+                }
+                *string msg = DataProvider::DataProviderErrorUtil::firstStringAt(d, ("message", "msg"));
+                *string dcode = DataProvider::DataProviderErrorUtil::firstStringAt(d, ("code",));
+                if (msg.val()) {
+                    part = part.val() ? part + ": " + msg : msg;
+                }
+                if (dcode.val()) {
+                    part = part.val() ? part + sprintf(" (code: %s)", dcode) : dcode;
+                }
+                if (part.val()) {
+                    push parts, part;
+                }
+            }
+            if (parts) {
+                detail_str = "[" + join("; ", parts) + "]";
+            }
+        }
+        if (primary.val() && detail_str.val()) {
+            return primary + " " + detail_str;
+        }
+        return primary.val() ? primary : detail_str;
     }
 
     #! Makes a POST request and polls for async job completion
@@ -224,7 +291,7 @@ public class FirecrawlDataProviderBase inherits DataProvider::AbstractDataProvid
     */
     private checkResponse(*hash<auto> response) {
         if (response.success == False) {
-            string err_msg = response.error ?? "Unknown API error";
+            string err_msg = formatFirecrawlBody(response) ?? "Unknown API error";
             throw "FIRECRAWL-API-ERROR", err_msg, response;
         }
     }
