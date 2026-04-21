@@ -1158,7 +1158,17 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvHeader(ExceptionSink* xsin
             || response_status_code == 304;
 
         if (no_body) {
-            return streaming_active_io ? dispatchStreamingEnd(xsink) : dispatchResponse(xsink);
+            if (streaming_active_io) {
+                // Deliver the header frame before end_stream so the channel
+                // consumer sees status_code; otherwise 204/304/HEAD/1xx
+                // streaming responses raise "no response received".
+                dispatchStreamingHeaders(xsink);
+                if (*xsink) {
+                    return nullptr;
+                }
+                return dispatchStreamingEnd(xsink);
+            }
+            return dispatchResponse(xsink);
         }
 
         // For streaming mode: dispatch headers-only callback before reading body
@@ -1210,7 +1220,16 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvHeader(ExceptionSink* xsin
             return handleRecvBodyLength(xsink);
         } else if (response_content_length == 0) {
             // Explicit zero-length body
-            return streaming_active_io ? dispatchStreamingEnd(xsink) : dispatchResponse(xsink);
+            if (streaming_active_io) {
+                // See 204/HEAD note above — channel consumer needs status_code
+                // before end_stream or it raises "no response received".
+                dispatchStreamingHeaders(xsink);
+                if (*xsink) {
+                    return nullptr;
+                }
+                return dispatchStreamingEnd(xsink);
+            }
+            return dispatchResponse(xsink);
         } else if (connection_close) {
             // No Content-Length, not chunked, but Connection: close — read until EOF
             if (!streaming_active_io) {
