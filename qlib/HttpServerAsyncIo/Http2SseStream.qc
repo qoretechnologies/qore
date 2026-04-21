@@ -151,6 +151,12 @@ public class Http2SseStream inherits AbstractSseConnection {
                     sock.waitForHttp2StreamDrain(stream_id, DefaultDrainTimeout);
                     continue;
                 }
+                # Any other failure (stream closed/reset, session gone, etc.) means the
+                # underlying HTTP/2 stream is effectively dead.  Flip stream_open so
+                # isOpen()/isDisconnected() report the true state and subsequent sends
+                # fail fast with SSE-CLOSED rather than surfacing raw transport errors
+                # to every caller.
+                stream_open = False;
                 rethrow;
             }
         }
