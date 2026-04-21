@@ -505,9 +505,17 @@ public:
 
     //! Records an IR fallback event for later reporting
     DLLLOCAL void recordIRFallback(const std::string& reason) const {
+        // Always bump the counter under ir_fallback_report so tests can
+        // observe + assert on the fallback surface.  Also emit on
+        // QORE_IR_TRACE_FALLBACK=1 so ad-hoc investigations can see
+        // every fallback event without needing the C++ API.
         if (ir_fallback_report) {
             AutoLocker al(ir_fallback_lock);
             ir_fallback_counts[reason]++;
+        }
+        if (getenv("QORE_IR_TRACE_FALLBACK")) {
+            fprintf(stderr, "[ir-fallback] %s\n", reason.c_str());
+            fflush(stderr);
         }
     }
 

@@ -1107,6 +1107,7 @@ QoreIRContextInstruction* QoreIRBuilder::createContext(const std::string& name, 
         const QoreProgramLocation* loc) {
     auto inst = block->appendInstruction<QoreIRContextInstruction>(name, exp, where_exp, sort_exp,
         sort_type);
+    inst->result = func->createValue();
     inst->loc = loc;
     return inst;
 }
@@ -1114,12 +1115,14 @@ QoreIRContextInstruction* QoreIRBuilder::createContext(const std::string& name, 
 QoreIRInstruction* QoreIRBuilder::createContextMaxPos(QoreIRValue state, const QoreProgramLocation* loc) {
     auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::ContextMaxPos);
     inst->operands.push_back(state);
+    inst->result = func->createValue();
     inst->loc = loc;
     return inst;
 }
 
 QoreIRInstruction* QoreIRBuilder::createContextSetPos(QoreIRValue state, QoreIRValue index,
         const QoreProgramLocation* loc) {
+    // Void — no result SSA assigned (OPCODE_REGISTRY marks produces_result=false).
     auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::ContextSetPos);
     inst->operands.push_back(state);
     inst->operands.push_back(index);
@@ -1128,6 +1131,7 @@ QoreIRInstruction* QoreIRBuilder::createContextSetPos(QoreIRValue state, QoreIRV
 }
 
 QoreIRInstruction* QoreIRBuilder::createContextDestroy(QoreIRValue state, const QoreProgramLocation* loc) {
+    // Void — no result SSA assigned.
     auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::ContextDestroy);
     inst->operands.push_back(state);
     inst->loc = loc;

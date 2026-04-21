@@ -11495,9 +11495,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     llvm::FunctionType::get(void_type,
                         {i64_type, i64_type}, false));
             builder->CreateCall(helper, {state_val, index_val});
-            // Result is void — emit a NOTHING placeholder so SSA bookkeeping stays sane.
-            values[inst->result.id] = llvm::ConstantInt::get(i64_type, VAL_NOTHING);
-            nanboxed_values.insert(inst->result.id);
+            // Void result — OPCODE_REGISTRY produces_result=false, no SSA value.
             return true;
         }
         case QoreIROpcode::ContextDestroy: {
@@ -11506,8 +11504,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto helper = module.getOrInsertFunction("qore_rt_context_destroy",
                     llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
             builder->CreateCall(helper, {state_val, xsink_arg});
-            values[inst->result.id] = llvm::ConstantInt::get(i64_type, VAL_NOTHING);
-            nanboxed_values.insert(inst->result.id);
+            // Void result — OPCODE_REGISTRY produces_result=false, no SSA value.
             return true;
         }
         case QoreIROpcode::Summarize: {

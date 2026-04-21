@@ -12,6 +12,7 @@
 #include <cmath>
 #include <cstdio>
 #include <string>
+#include <typeinfo>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -8924,7 +8925,23 @@ lvalue_path_unary_done:
                     bg_call->deref(xsink);
                     QoreValue(bg_call).discard(xsink);
                 } else {
-                    // Full AST fallback path
+                    // Full AST fallback path — the inner expression wasn't a
+                    // decomposable self.method(args) pattern, so we hand the
+                    // whole QoreBackgroundOperatorNode to do_op_background via
+                    // the AST eval path.  Tracing via QORE_IR_TRACE_BG_FALLBACK=1
+                    // surfaces which shapes still rely on this.
+                    if (getenv("QORE_IR_TRACE_BG_FALLBACK")) {
+                        const auto* bg_op = dynamic_cast<const QoreBackgroundOperatorNode*>(
+                            expr_inst->expr.getInternalNode());
+                        const AbstractQoreNode* inner = bg_op ? bg_op->getExp().getInternalNode()
+                                                              : nullptr;
+                        const QoreProgramLocation* loc = inst->loc;
+                        fprintf(stderr, "[bg-fallback] %s:%d inner_type=%s\n",
+                            loc ? (loc->getFile() ? loc->getFile() : "<unknown>") : "<no-loc>",
+                            loc ? loc->start_line : 0,
+                            inner ? typeid(*inner).name() : "<null>");
+                        fflush(stderr);
+                    }
                     res = evalAndRef(expr_inst->expr, xsink);
                 }
                 if (xsink && *xsink) {

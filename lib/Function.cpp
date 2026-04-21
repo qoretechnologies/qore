@@ -2425,9 +2425,18 @@ static void collectStatementLocals(const AbstractStatement* stmt, std::vector<Lo
         // evalTiered() pre-instantiates them on the TLS stack before IR execution.
         // Without this, the IR interpreter cannot find handler locals (ThreadLocalVariableData::find asserts).
         collectAllStatementLocals(obe_stmt->getCode(), locals);
+    } else if (auto* ctx_stmt = dynamic_cast<const ContextStatement*>(stmt)) {
+        // Native IR lowering (D2): the body block is inlined into the parent
+        // IR function, so its locals (and any lvars declared by the context's
+        // own exp / where / sort expressions) must be pre-instantiated.
+        // Without this, body-scope StoreLocal hits
+        // ThreadLocalVariableData::find's assertion when writing a local.
+        collectBlockLocals(ctx_stmt->lvars, locals);
+        collectAllStatementLocals(ctx_stmt->code, locals);
     }
-    // ContextStatement, SummarizeStatement, AssertStatement: these generate special
-    // IR opcodes that call into the AST, which handles their locals via LVListInstantiator. Skip them.
+    // SummarizeStatement, AssertStatement: these still generate special
+    // IR opcodes that call into the AST, which handles their locals via
+    // LVListInstantiator.  Skip them.
 }
 
 // Recursively collect all local variables from a StatementBlock and all nested blocks

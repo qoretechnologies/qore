@@ -109,6 +109,7 @@
 #include <qore/intern/BackquoteNode.h>
 #include <qore/intern/CallReferenceNode.h>
 #include <qore/intern/ComplexContextrefNode.h>
+#include <qore/intern/ContextRowNode.h>
 #include <qore/intern/ConstantList.h>
 #include <qore/intern/ContextrefNode.h>
 #include <qore/intern/FindNode.h>
@@ -3581,6 +3582,13 @@ QoreIRValue QoreIRLowering::lowerExpression(const QoreValue& expr, std::string& 
     if (auto* complex_ctx_ref = dynamic_cast<const ComplexContextrefNode*>(node)) {
         std::vector<QoreIRValue> operands;
         return lowerExprOpOrInvoke(QoreIROpcode::Call, expr, operands, complex_ctx_ref->loc, error);
+    }
+    // `%%` — whole current context row as a hash.  Route through the generic
+    // Call opcode like the other context references; its evalImpl dispatches
+    // through get_context_stack()->getRow().
+    if (auto* ctx_row = dynamic_cast<const ContextRowNode*>(node)) {
+        std::vector<QoreIRValue> operands;
+        return lowerExprOpOrInvoke(QoreIROpcode::Call, expr, operands, ctx_row->loc, error);
     }
     if (auto* self_ref = dynamic_cast<const SelfVarrefNode*>(node)) {
         if (!exception_stack.empty()) {
