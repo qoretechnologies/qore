@@ -2595,11 +2595,20 @@ void UserVariantBase::attemptIRLowering(const char* name) const {
     func->computeSlotIdsAndEmbed();
 
     // Phase A4: Compile all handler bodies to separate IR functions and attach to OnBlockExit instructions
-    // This must happen AFTER computeSlotIdsAndEmbed() so handlers can be compiled with correct parent context
+    // This must happen AFTER computeSlotIdsAndEmbed() so handlers can be compiled with correct parent context.
+    // A handler lowering failure now fails the whole function (no AST
+    // fallback mid-IR — see executeHandlerBody assert).
     std::string handler_compile_error;
     int handlers_compiled = lowering.compileAllHandlerIRs(handler_compile_error);
-    if (!handler_compile_error.empty()) {
-        printd(2, "UserVariantBase::attemptIRLowering() '%s' handler compilation: %s\n", name, handler_compile_error.c_str());
+    if (handlers_compiled < 0) {
+        ir_lower_failed = true;
+        delete func;
+        printd(2, "UserVariantBase::attemptIRLowering() '%s' handler compilation failed: %s\n",
+            name, handler_compile_error.c_str());
+        if (pgm) {
+            pgm->recordIRFallback((std::string("handler lowering: ") + handler_compile_error).c_str());
+        }
+        return;
     }
 
     // Classify locals as IR-only vs AST-visible for optimization

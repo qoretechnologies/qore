@@ -2866,10 +2866,14 @@ QoreIRFunction* lowerClosureForSerialization(const UserClosureVariant* variant) 
         return nullptr;
     }
 
-    // Compile handler IRs for try/catch blocks inside the closure
+    // Compile handler IRs for try/catch blocks inside the closure.
+    // Failure aborts closure IR lowering (the runtime asserts handler_ir
+    // is populated — see executeHandlerBody).
     std::string handler_error;
     if (lowering.compileAllHandlerIRs(handler_error) < 0) {
         printd(2, "AOT: closure handler IR compilation failed: %s\n", handler_error.c_str());
+        delete ir;
+        return nullptr;
     }
 
     // Collect body locals

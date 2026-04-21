@@ -1730,18 +1730,28 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
 // Returns true if execution encountered an error.
 static void executeHandlerBody(const IROnBlockExitHandler& handler, ExceptionSink* obe_xsink,
         std::vector<QoreValue>* parent_slot_cache = nullptr) {
-    if (handler.handler_ir) {
-        // Execute compiled handler via IR interpreter with parent slot cache for scope access
-        QoreValue rv;
-        QoreIRInterpreter::execute(*handler.handler_ir, rv, obe_xsink, nullptr, nullptr, nullptr,
-                                   &handler.handler_ir->pre_instantiated_cache, nullptr, nullptr, nullptr,
-                                   false, nullptr, parent_slot_cache);
-        rv.discard(obe_xsink);
-    } else if (handler.code) {
-        // AST fallback
-        QoreValue rv;
-        handler.code->exec(rv, obe_xsink);
+    // Every on_block_exit handler must have been compiled to IR by
+    // QoreIRLowering::compileAllHandlerIRs/compileBlockHandlerIRs before
+    // the enclosing IR function is executed — a handler-lowering failure
+    // now propagates as an outer-function lowering failure (the caller
+    // falls back to AST at the function boundary).  If we still reach
+    // here with a null handler_ir the invariant is broken; raise a
+    // runtime error instead of silently AST-executing mid-IR.
+    if (!handler.handler_ir) {
+        assert(false && "OBE handler missing compiled IR — find & fix the upstream "
+                        "lowering-failure propagation");
+        if (obe_xsink) {
+            obe_xsink->raiseException("IR-EXEC-ERROR",
+                "internal: on_block_exit handler has no compiled IR — compile-time "
+                "handler lowering must have failed silently");
+        }
+        return;
     }
+    QoreValue rv;
+    QoreIRInterpreter::execute(*handler.handler_ir, rv, obe_xsink, nullptr, nullptr, nullptr,
+                               &handler.handler_ir->pre_instantiated_cache, nullptr, nullptr, nullptr,
+                               false, nullptr, parent_slot_cache);
+    rv.discard(obe_xsink);
 }
 
 // Execute on_block_exit handlers in reverse order (LIFO), matching the AST's

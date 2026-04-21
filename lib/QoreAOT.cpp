@@ -656,15 +656,19 @@ static int tryLowerFunction(UserVariantBase* uvb, const char* name, QoreProgram*
         return -1;
     }
 
-    // Assign slot IDs and compile handler IR functions
+    // Assign slot IDs and compile handler IR functions.  Handler
+    // compilation failure now aborts the AOT lowering of this function
+    // (the runtime `executeHandlerBody` asserts handler_ir is populated).
     ir_func->computeSlotIdsAndEmbed();
     std::string handler_error;
     if (lowering.compileAllHandlerIRs(handler_error) < 0) {
-        // Handler compilation failure is non-fatal; log and continue
         if (getenv("QORE_AOT_DEBUG")) {
-            fprintf(stderr, "AOT-LOWER: handler IR compilation warning for '%s': %s\n",
+            fprintf(stderr, "AOT-LOWER: handler IR compilation failed for '%s': %s\n",
                     name, handler_error.c_str());
         }
+        delete ir_func;
+        ir_func = nullptr;
+        return -1;
     }
 
     // Collect ALL body locals from the statement tree (includes nested blocks from

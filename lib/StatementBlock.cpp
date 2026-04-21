@@ -885,11 +885,23 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
                     func->computeSlotIdsAndEmbed();
 
                     // Phase A4: Compile all handler bodies to separate IR functions and attach to OnBlockExit instructions
-                    // This must happen AFTER computeSlotIdsAndEmbed() so handlers can be compiled with correct parent context
+                    // This must happen AFTER computeSlotIdsAndEmbed() so handlers can be compiled with correct parent context.
+                    // Failure is fatal: the runtime asserts handler_ir is
+                    // populated, so we fall back to AST execution for the
+                    // whole top-level block instead.
                     std::string handler_compile_error;
                     int handlers_compiled = lowering.compileAllHandlerIRs(handler_compile_error);
-                    if (!handler_compile_error.empty()) {
-                        printd(1, "Top-level handler compilation: %s\n", handler_compile_error.c_str());
+                    if (handlers_compiled < 0) {
+                        toplevel_ir_failed = true;
+                        delete func;
+                        printd(1, "Top-level handler compilation failed: %s\n", handler_compile_error.c_str());
+                        if (qore_program_private::get(*pgm)->ir_fallback_warn) {
+                            printe("IR exec fallback to AST: handler lowering failed: %s\n",
+                                handler_compile_error.c_str());
+                        }
+                        qore_program_private::get(*pgm)->recordIRFallback(
+                            std::string("handler lowering: ") + handler_compile_error);
+                        return;
                     }
                     // NOTE: do NOT call func->computeIROnlyLocals() for top-level code.
                     // Top-level locals are accessible by any called function/sub through the

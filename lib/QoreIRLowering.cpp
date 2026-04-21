@@ -2119,14 +2119,17 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
             block_handlers.begin() + block_handler_start, block_handlers.end());
 
         // Compile only this block's handlers (not nested ones - they compile themselves)
-        // This prevents handler accumulation and keeps CFGs manageable
+        // This prevents handler accumulation and keeps CFGs manageable.
+        // On failure (-1) propagate as an outer-block lowering failure — the
+        // runtime no longer tolerates null handler_ir (see executeHandlerBody
+        // assert).  The enclosing caller will then fall back to AST for the
+        // whole function / top-level block.
         int compiled_count = compileBlockHandlerIRs(block_level_handlers, builder.getFunction(), error);
-        if (compiled_count < 0 && !error.empty()) {
-            // Handler compilation failure is non-fatal for block-level handlers
-            // Log but continue - handler will use AST fallback
+        if (compiled_count < 0) {
             if (getenv("QORE_DEBUG_HANDLERS")) {
-                fprintf(stderr, "Block-level handler IR compilation warning: %s\n", error.c_str());
+                fprintf(stderr, "Block-level handler IR compilation failed: %s\n", error.c_str());
             }
+            return false;
         }
     }
 
@@ -2633,8 +2636,14 @@ QoreIRFunction* QoreIRLowering::compileHandlerToIR(
 int QoreIRLowering::compileBlockHandlerIRs(const std::vector<InlineHandler>& handlers,
         QoreIRFunction* parent_func, std::string& error) {
     // Compile a specific set of handlers (for a block level) without accumulation
-    // This prevents pathological CFGs that occur when many handlers are compiled together
+    // This prevents pathological CFGs that occur when many handlers are compiled together.
+    //
+    // Returns the number of handlers successfully compiled on success, or -1
+    // if any handler failed to lower.  Callers must treat -1 as an
+    // outer-function lowering failure — there's no longer an AST fallback
+    // at the handler level (see executeHandlerBody's assert).
     int compiled_count = 0;
+    bool had_failure = false;
 
     if (!parent_func) {
         error = "no parent function available for handler compilation";
@@ -2679,14 +2688,24 @@ int QoreIRLowering::compileBlockHandlerIRs(const std::vector<InlineHandler>& han
         // Create temporary lowering context for the handler body
         QoreIRLowering handler_lowering(handler_builder, parse_context);
 
-        // Lower the handler body into the handler IR function
+        // Lower the handler body into the handler IR function.  Any failure
+        // here is an outer-function lowering failure — we no longer keep an
+        // AST fallback for OBE handlers.  Continue compiling the remaining
+        // handlers (so we surface every error in one pass) then report -1.
         std::string handler_error;
         if (!handler_lowering.lowerStatementBlock(handler.code, handler_error)) {
-            // Log failure but continue (non-fatal) - handler will use AST fallback
+            if (getenv("QORE_IR_TRACE_OBE_FALLBACK")) {
+                const QoreProgramLocation* loc = handler.code ? handler.code->loc : nullptr;
+                fprintf(stderr, "[obe-compile-fail:block] %s:%d: %s\n",
+                    loc ? (loc->getFile() ? loc->getFile() : "<unknown>") : "<no-loc>",
+                    loc ? loc->start_line : 0, handler_error.c_str());
+                fflush(stderr);
+            }
             if (!error.empty()) {
                 error += "; ";
             }
             error += "handler body lowering failed: " + handler_error;
+            had_failure = true;
             continue;
         }
 
@@ -2719,19 +2738,25 @@ int QoreIRLowering::compileBlockHandlerIRs(const std::vector<InlineHandler>& han
         compiled_count++;
     }
 
-    return compiled_count;
+    return had_failure ? -1 : compiled_count;
 }
 
 int QoreIRLowering::compileAllHandlerIRs(std::string& error) {
     // Phase B2: Handler IR compilation with parent slot inheritance
     // QoreIRVerifier has been updated to handle pre-seeded parent slots
-    // Handler functions can now be compiled with parent scope access
+    // Handler functions can now be compiled with parent scope access.
+    //
+    // Returns compiled count on success, or -1 if any handler fails to
+    // lower.  Callers must treat -1 as a function-level IR lowering
+    // failure (the runtime `executeHandlerBody` asserts handler_ir is
+    // populated — no AST fallback for OBE handlers).
     int compiled_count = 0;
+    bool had_failure = false;
     QoreIRFunction* parent_func = builder.getFunction();
 
     if (!parent_func) {
         error = "no parent function available for handler compilation";
-        return 0;
+        return -1;
     }
 
     // Iterate through all registered handlers for this lowering context
@@ -2774,14 +2799,23 @@ int QoreIRLowering::compileAllHandlerIRs(std::string& error) {
         // This will use the pre-seeded local_var_slots for scope access
         QoreIRLowering handler_lowering(handler_builder, parse_context);
 
-        // Lower the handler body into the handler IR function
+        // Lower the handler body into the handler IR function.  Any failure
+        // is now reported as an outer-function lowering failure — the
+        // runtime assert in executeHandlerBody forbids AST fallback mid-IR.
         std::string handler_error;
         if (!handler_lowering.lowerStatementBlock(handler.code, handler_error)) {
-            // Log failure but continue (non-fatal) - handler will use AST fallback
+            if (getenv("QORE_IR_TRACE_OBE_FALLBACK")) {
+                const QoreProgramLocation* loc = handler.code ? handler.code->loc : nullptr;
+                fprintf(stderr, "[obe-compile-fail] %s:%d: %s\n",
+                    loc ? (loc->getFile() ? loc->getFile() : "<unknown>") : "<no-loc>",
+                    loc ? loc->start_line : 0, handler_error.c_str());
+                fflush(stderr);
+            }
             if (!error.empty()) {
                 error += "; ";
             }
             error += "handler body lowering failed: " + handler_error;
+            had_failure = true;
             continue;
         }
 
@@ -2818,7 +2852,7 @@ int QoreIRLowering::compileAllHandlerIRs(std::string& error) {
     // Clear saved handlers after compilation to avoid polluting subsequent compilations
     saved_top_level_handlers.clear();
 
-    return compiled_count;
+    return had_failure ? -1 : compiled_count;
 }
 
 bool QoreIRLowering::lowerHandlersAtExit(bool is_error, std::string& error, size_t start_index,
