@@ -756,6 +756,22 @@ private:
         //! Entries auto-expire after 2 idle cycles.
         //! Key: owner string, Value: idle_cycles_remaining
         std::unordered_map<std::string, int> cancelled_owners;
+
+        //! Cancels deferred because continuePoll() was in flight on a worker
+        /** When Cancel arrives for an op whose continuePoll() has been
+            dispatched to a worker but its ContinuePollResult has not yet
+            returned, the cache entry is removed immediately (to block new
+            dispatches) but the abort (@c callAbort → socket close → SSL
+            shutdown) is stashed here and performed after the
+            @c ContinuePollResult arrives.  This guarantees no SSL operation
+            on a worker thread is concurrent with @c SSL_shutdown in
+            @c close_internal(), avoiding the OpenSSL context corruption
+            seen in CI job 170659 (SIGSEGV in @c EVP_CIPHER_get_mode).
+
+            I/O-thread-only.  Key: op key.  Value: the PollInfo copy whose
+            cleanup is still pending.
+         */
+        std::unordered_map<std::string, PollInfo> pending_aborts;
     };
 
     //! Get the I/O thread index for a given operation key (hash-based affinity)

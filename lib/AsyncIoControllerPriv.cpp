@@ -3671,6 +3671,19 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
         t.cache.clear();
         t.cache_size.store(0, std::memory_order_relaxed);
 
+        // Deferred aborts whose worker's ContinuePollResult never came back
+        // must still be delivered on exit — otherwise their abort() never
+        // fires and callers blocked on the poll op's Future hang forever.
+        // We pay the concurrent-SSL-access risk here (worker may still be
+        // running) but exit is already a best-effort teardown path, and the
+        // TCP-shutdown in close_internal() still terminates any in-flight
+        // SSL operations at the transport layer.
+        for (auto& [key, pinfo] : t.pending_aborts) {
+            exit_cancel_pinfos.push_back(pinfo);
+            pinfo = PollInfo();
+        }
+        t.pending_aborts.clear();
+
         // Drain the MPSC command queue and clean up pending commands.
         // Signal any pending CancelOwner/CancelByProgram done_cond waiters
         // so they don't hang when the I/O thread exits.
@@ -3897,8 +3910,19 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                     }
 
                     if (found) {
-                        doCancelIntern(pinfo_copy, xsink);
-                        pinfo_copy.cleanup(xsink);
+                        if (pinfo_copy.continue_poll_in_flight) {
+                            // Worker is currently executing continuePoll() on
+                            // this op — defer the abort until its
+                            // ContinuePollResult arrives.  The cache entry is
+                            // already erased above, so no new Phase-2 dispatch
+                            // will target this op; we just need to keep the
+                            // PollInfo alive so we can call doCancelIntern()
+                            // once the worker finishes.
+                            t.pending_aborts.emplace(cmd.key, std::move(pinfo_copy));
+                        } else {
+                            doCancelIntern(pinfo_copy, xsink);
+                            pinfo_copy.cleanup(xsink);
+                        }
                     }
                     break;
                 }
@@ -3940,8 +3964,15 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
 
                         if (found) {
                             t.cancelled_keys[key] = 2;
-                            doCancelIntern(pinfo_copy, xsink);
-                            pinfo_copy.cleanup(xsink);
+                            if (pinfo_copy.continue_poll_in_flight) {
+                                // Worker is currently running continuePoll() on
+                                // this op — defer the abort until ContinuePollResult
+                                // arrives (same rationale as IoCommand::Cancel).
+                                t.pending_aborts.emplace(key, std::move(pinfo_copy));
+                            } else {
+                                doCancelIntern(pinfo_copy, xsink);
+                                pinfo_copy.cleanup(xsink);
+                            }
                         }
                     }
 
@@ -4230,6 +4261,18 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                             }
                             if (cmd.continue_poll_ex) {
                                 cmd.continue_poll_ex->deref(xsink);
+                            }
+                            // If Cancel / CancelOwner deferred the abort while
+                            // this continuePoll was in flight, the worker has
+                            // now returned — run the deferred abort here so
+                            // callAbort → socket close → SSL_shutdown cannot
+                            // race with the worker's SSL operations.
+                            auto pit = t.pending_aborts.find(cmd.key);
+                            if (pit != t.pending_aborts.end()) {
+                                PollInfo deferred = std::move(pit->second);
+                                t.pending_aborts.erase(pit);
+                                doCancelIntern(deferred, xsink);
+                                deferred.cleanup(xsink);
                             }
                             break;
                         }
