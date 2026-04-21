@@ -92,8 +92,9 @@ constexpr uint64_t QORE_AOT_FEAT_TYPE_TABLE      = 1ULL << 9;  //!< per-blob pre
 constexpr uint64_t QORE_AOT_FEAT_CONST_PENDING   = 1ULL << 10; //!< per-constant pending-init-func flag in CONSTANTS / CLASSES
 constexpr uint64_t QORE_AOT_FEAT_SIG_LINES       = 1ULL << 11; //!< per-variant signature start/end line pair follows the flags u16 in writeVariantSignature
 constexpr uint64_t QORE_AOT_FEAT_CONTEXT_IR      = 1ULL << 12; //!< native IR lowering of `context` statement (Context carries name+exp+where+sort; ContextMaxPos/SetPos/Destroy opcodes present)
+constexpr uint64_t QORE_AOT_FEAT_LVPATH_SLICE    = 1ULL << 13; //!< LVPathStepKind::HashKeySlice / ListIndexSlice with slice_operand_ids vector (multi-key hash / multi-index list remove/delete)
 //! Mask of all currently supported features
-constexpr uint64_t QORE_AOT_SUPPORTED_FEATURES   = 0x1FFFULL;
+constexpr uint64_t QORE_AOT_SUPPORTED_FEATURES   = 0x3FFFULL;
 
 //! Section type IDs
 enum class QoreAOTSectionType : uint16_t {
@@ -948,6 +949,10 @@ struct AOTLVPathStepId {
     uint32_t slot_id;          //!< local/global slot for variable resolution
     std::string name;          //!< key name for HashKeyConst/SelfMember/GlobalVar etc.
     uint32_t operand_idx;      //!< dynamic operand index (UINT32_MAX if static)
+    //! For HashKeySlice / ListIndexSlice steps: SSA ids for each slice
+    //! sub-operand (multi-key hash slice / multi-index list slice).  Empty
+    //! for non-slice step kinds.  Gated by QORE_AOT_FEAT_LVPATH_SLICE.
+    std::vector<uint32_t> slice_operand_ids;
 };
 
 //! Identity for a LValuePath instruction slot

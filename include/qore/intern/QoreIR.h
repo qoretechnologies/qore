@@ -1066,6 +1066,8 @@ enum class LVPathStepKind : uint8_t {
     HashKeyConst   = 6,  //!< Navigate hash by constant string key
     HashKey        = 7,  //!< Navigate hash by dynamic key (IR operand)
     ListIndex      = 8,  //!< Navigate list by index (IR operand)
+    HashKeySlice   = 9,  //!< Multi-key hash slice h{"a","b",...} — terminal step only
+    ListIndexSlice = 10, //!< Multi-index list/string/binary slice l[1,3,5,...] — terminal step only
 };
 
 //! A single step in an lvalue navigation path
@@ -1082,6 +1084,19 @@ struct LVPathStep {
     // Operand index for dynamic navigation (HashKey, ListIndex)
     // References an operand in the instruction's operands vector
     uint32_t operand_idx = UINT32_MAX;
+
+    // For HashKeySlice / ListIndexSlice: SSA ids (compile time) of the N
+    // sub-expressions that form the slice selector list.  Consumed by the
+    // LLVM emitter / JIT runtime in declared order to read from the boxed
+    // dynamic-operand array.  For non-slice steps this vector is empty.
+    std::vector<uint32_t> slice_operand_ids;
+
+    // For slice steps at runtime (populated by patchLVPath in JIT/AOT or
+    // directly by the IR interpreter): resolved values ready for use.
+    // HashKeySlice: each QoreValue converts to a string key.
+    // ListIndexSlice: each QoreValue is either an integer index or a list
+    // (produced by a range operator) that expands to a sequence of indexes.
+    std::vector<QoreValue> slice_values;
 
     // Type info for type checking at this step
     const QoreTypeInfo* type_info = nullptr;
@@ -1164,6 +1179,20 @@ public:
     // LValuePathBinaryMut: operands[0] = RHS value; dynamic key/index operands follow
     // LValuePathTernary:   operands[0..2] = offset, length, replacement; dynamic key/index follow
 };
+
+//! Shared LValuePathUnary slice-terminal-step executors, called from both
+//! the IR interpreter (QoreIRInterpreter.cpp) and the JIT runtime helper
+//! (qore_rt_lv_path_unary in JITRuntime.cpp).  Precondition: `lvh` is
+//! already navigated to the parent container at path[..size-1].
+//! Returns the aggregated removed-content value (hash for HashKeySlice,
+//! list/string/binary for ListIndexSlice) on Remove, or NOTHING on Delete.
+class LValueHelper;  // forward
+DLLLOCAL QoreValue executeLVHashKeySliceRemove(LValueHelper& lvh, qore_type_t ct,
+        const LVPathStep& last_step, LVUnaryOp unary_op,
+        ExceptionSink* xsink);
+DLLLOCAL QoreValue executeLVListIndexSliceRemove(LValueHelper& lvh, qore_type_t ct,
+        const LVPathStep& last_step, LVUnaryOp unary_op,
+        ExceptionSink* xsink);
 
 //! List index access instruction - loads list[index] directly (no AST delegation)
 class QoreIRListIndexAccessInstruction : public QoreIRInstruction {

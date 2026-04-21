@@ -3088,8 +3088,16 @@ static bool isDynamicKeyHashSubscript(const QoreValue& expr,
 // On success, populates `path` and `dynamic_operands` (expressions to lower for dynamic keys/indices).
 // This handles ALL variable types (local, closure, global, thread-local, self member, static var)
 // and ALL navigation types (hash key const, hash key dynamic, list index).
+//
+// `allow_slice`: when true, multi-key hash slice (h{"a","b"}) and
+// multi-index list slice (l[1,3,5]) lvalues are accepted and encoded as
+// HashKeySlice / ListIndexSlice terminal steps.  Callers that don't
+// implement slice semantics at runtime (e.g. LValuePathAssign /
+// LValuePathCompound / LValuePathBinaryMut helpers) must pass false so
+// these shapes fall through to the existing AST-eval path.
 static bool extractLValuePath(const QoreValue& expr,
-        std::vector<LVPathStep>& path, std::vector<QoreValue>& dynamic_operands) {
+        std::vector<LVPathStep>& path, std::vector<QoreValue>& dynamic_operands,
+        bool allow_slice = false) {
     const AbstractQoreNode* node = expr.getInternalNode();
     if (!node) {
         return false;
@@ -3166,14 +3174,44 @@ static bool extractLValuePath(const QoreValue& expr,
     // Navigation: QoreHashObjectDereferenceOperatorNode (container{key})
     if (auto* hd = dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(node)) {
         const QoreValue right = hd->getRight();
-        // Multi-key hash slice (e.g. h{"a","b"}) — right side is a list; LValuePath
-        // only handles single-key navigation, so reject and let the caller fall back
-        // to the AST-eval path which handles multi-key remove/delete correctly.
+        // Multi-key hash slice (e.g. h{"a","b"}): lower each sub-expression as a
+        // dynamic operand and emit a HashKeySlice terminal step that carries the
+        // list of SSA ids.  The runtime (patchLVPath + LValuePathUnary executor)
+        // iterates the slice operands in declared order, mirroring the AST's
+        // LValueRemoveHelper::doRemove path over a hash list selector.
         if (right.hasNode() && (right.getType() == NT_LIST || right.getType() == NT_PARSE_LIST)) {
-            return false;
+            if (!allow_slice) {
+                // Callers that don't support slice semantics (e.g. compound /
+                // binary-mut ops) fall back to the AST-eval path.
+                return false;
+            }
+            if (!extractLValuePath(hd->getLeft(), path, dynamic_operands, allow_slice)) {
+                return false;
+            }
+            LVPathStep step;
+            step.kind = LVPathStepKind::HashKeySlice;
+            if (right.getType() == NT_PARSE_LIST) {
+                const QoreParseListNode* pln = right.get<const QoreParseListNode>();
+                const QoreParseListNode::nvec_t& vl = pln->getValues();
+                step.slice_operand_ids.reserve(vl.size());
+                for (const QoreValue& sub : vl) {
+                    dynamic_operands.push_back(sub);
+                    step.slice_operand_ids.push_back(UINT32_MAX);  // filled by caller
+                }
+            } else {
+                const QoreListNode* l = right.get<const QoreListNode>();
+                size_t n = l->size();
+                step.slice_operand_ids.reserve(n);
+                for (size_t i = 0; i < n; ++i) {
+                    dynamic_operands.push_back(l->retrieveEntry(i));
+                    step.slice_operand_ids.push_back(UINT32_MAX);
+                }
+            }
+            path.push_back(std::move(step));
+            return true;
         }
         // Recurse on left side (container)
-        if (!extractLValuePath(hd->getLeft(), path, dynamic_operands)) {
+        if (!extractLValuePath(hd->getLeft(), path, dynamic_operands, allow_slice)) {
             return false;
         }
         // Add hash key step
@@ -3194,14 +3232,44 @@ static bool extractLValuePath(const QoreValue& expr,
     // Navigation: QoreSquareBracketsOperatorNode (container[index])
     if (auto* sb = dynamic_cast<const QoreSquareBracketsOperatorNode*>(node)) {
         const QoreValue right = sb->getRight();
-        // Multi-index slice (e.g. l[1,3,5] or str[1,45,3..4,x,5]) — right side is a
-        // list or parse list; LValuePath only handles single-index navigation, so reject
-        // and let the caller fall back to the AST-eval path.
+        // Multi-index slice (e.g. l[1,3,5] or str[1,45,3..4,x,5]): lower each
+        // sub-expression as a dynamic operand and emit a ListIndexSlice
+        // terminal step.  Range operators inside the list are lowered to
+        // full expressions and expand to int lists at runtime — the
+        // LValuePathUnary executor iterates each operand, expanding nested
+        // lists, and collects indices into a reverse-sorted set before
+        // spliceSingle'ing each one (mirrors LValueRemoveHelper atomicity).
         if (right.hasNode() && (right.getType() == NT_LIST || right.getType() == NT_PARSE_LIST)) {
-            return false;
+            if (!allow_slice) {
+                return false;
+            }
+            if (!extractLValuePath(sb->getLeft(), path, dynamic_operands, allow_slice)) {
+                return false;
+            }
+            LVPathStep step;
+            step.kind = LVPathStepKind::ListIndexSlice;
+            if (right.getType() == NT_PARSE_LIST) {
+                const QoreParseListNode* pln = right.get<const QoreParseListNode>();
+                const QoreParseListNode::nvec_t& vl = pln->getValues();
+                step.slice_operand_ids.reserve(vl.size());
+                for (const QoreValue& sub : vl) {
+                    dynamic_operands.push_back(sub);
+                    step.slice_operand_ids.push_back(UINT32_MAX);
+                }
+            } else {
+                const QoreListNode* l = right.get<const QoreListNode>();
+                size_t n = l->size();
+                step.slice_operand_ids.reserve(n);
+                for (size_t i = 0; i < n; ++i) {
+                    dynamic_operands.push_back(l->retrieveEntry(i));
+                    step.slice_operand_ids.push_back(UINT32_MAX);
+                }
+            }
+            path.push_back(std::move(step));
+            return true;
         }
         // Recurse on left side (container)
-        if (!extractLValuePath(sb->getLeft(), path, dynamic_operands)) {
+        if (!extractLValuePath(sb->getLeft(), path, dynamic_operands, allow_slice)) {
             return false;
         }
         // Add list index step
@@ -7519,11 +7587,15 @@ QoreIRValue QoreIRLowering::lowerExtract(const QoreValue& expr, std::string& err
     if (!op) {
         return QoreIRValue();
     }
-    // Try LValuePathTernary for complex lvalues (hash member, self member, etc.)
+    // Try LValuePathTernary for complex lvalues (hash member, self member, etc.).
+    // Extract does not support slice lvalues — the parser already rejects them
+    // at parse time, but we also gate at extractLValuePath with allow_slice=false
+    // to prevent any future relaxation from silently corrupting runtime state.
     {
         std::vector<LVPathStep> lv_path;
         std::vector<QoreValue> dynamic_operands;
-        if (extractLValuePath(op->getLValue(), lv_path, dynamic_operands) && !lv_path.empty()) {
+        if (extractLValuePath(op->getLValue(), lv_path, dynamic_operands, /*allow_slice=*/false)
+                && !lv_path.empty()) {
             // Lower the ternary operands: offset, length, replacement
             QoreIRValue offset_val = lowerExpression(op->getOffset(), error);
             if (!offset_val.isValid()) {
@@ -7558,6 +7630,14 @@ QoreIRValue QoreIRLowering::lowerExtract(const QoreValue& expr, std::string& err
                     if (dyn_idx < dyn_vals.size()) {
                         step.operand_idx = dyn_vals[dyn_idx].id;
                         ++dyn_idx;
+                    }
+                } else if (step.kind == LVPathStepKind::HashKeySlice
+                        || step.kind == LVPathStepKind::ListIndexSlice) {
+                    for (uint32_t& sid : step.slice_operand_ids) {
+                        if (dyn_idx < dyn_vals.size()) {
+                            sid = dyn_vals[dyn_idx].id;
+                            ++dyn_idx;
+                        }
                     }
                 }
             }
@@ -8596,7 +8676,14 @@ QoreIRValue QoreIRLowering::tryEmitLValuePathOp(QoreIROpcode opcode, const QoreV
         LVBinaryMutOp binary_mut_op, const QoreValue& pattern_expr) {
     std::vector<LVPathStep> lv_path;
     std::vector<QoreValue> dynamic_operands;
-    if (!extractLValuePath(lvalue, lv_path, dynamic_operands)) {
+    // Slice lvalues (HashKeySlice / ListIndexSlice) are currently only
+    // supported at the runtime by LValuePathUnary's Remove/Delete paths.
+    // Any other opcode/unary-op combination must not accept slice lvalues —
+    // extractLValuePath will fall back to AST-eval for those shapes.
+    const bool allow_slice = (opcode == QoreIROpcode::LValuePathUnary
+            && (unary_op == LVUnaryOp::Remove
+                    || unary_op == LVUnaryOp::Delete));
+    if (!extractLValuePath(lvalue, lv_path, dynamic_operands, allow_slice)) {
         return QoreIRValue();
     }
     if (lv_path.empty()) {
@@ -8621,6 +8708,14 @@ QoreIRValue QoreIRLowering::tryEmitLValuePathOp(QoreIROpcode opcode, const QoreV
             if (dyn_idx < dyn_vals.size()) {
                 step.operand_idx = dyn_vals[dyn_idx].id;
                 ++dyn_idx;
+            }
+        } else if (step.kind == LVPathStepKind::HashKeySlice
+                || step.kind == LVPathStepKind::ListIndexSlice) {
+            for (uint32_t& sid : step.slice_operand_ids) {
+                if (dyn_idx < dyn_vals.size()) {
+                    sid = dyn_vals[dyn_idx].id;
+                    ++dyn_idx;
+                }
             }
         }
     }

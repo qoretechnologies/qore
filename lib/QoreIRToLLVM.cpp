@@ -12216,11 +12216,16 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         case QoreIROpcode::LValuePathTernary: {
             const auto* path_inst = static_cast<const QoreIRLValuePathInstruction*>(inst);
 
-            // Count dynamic operands (steps with operand_idx != UINT32_MAX)
+            // Count dynamic operands (single-value steps with operand_idx != UINT32_MAX,
+            // plus each SSA id inside slice steps)
             int num_dyn = 0;
             for (const auto& step : path_inst->path) {
                 if (step.operand_idx != UINT32_MAX) {
                     ++num_dyn;
+                }
+                if (step.kind == LVPathStepKind::HashKeySlice
+                        || step.kind == LVPathStepKind::ListIndexSlice) {
+                    num_dyn += static_cast<int>(step.slice_operand_ids.size());
                 }
             }
 
@@ -12240,6 +12245,17 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         llvm::Value* gep = builder->CreateGEP(i64_type, dyn_array,
                                 llvm::ConstantInt::get(i32_type, dyn_idx++));
                         builder->CreateStore(boxed, gep);
+                    }
+                    if (step.kind == LVPathStepKind::HashKeySlice
+                            || step.kind == LVPathStepKind::ListIndexSlice) {
+                        for (uint32_t sid : step.slice_operand_ids) {
+                            auto* dyn_val = getVal(sid, error);
+                            if (!dyn_val) { return false; }
+                            llvm::Value* boxed = boxValue(dyn_val, sid);
+                            llvm::Value* gep = builder->CreateGEP(i64_type, dyn_array,
+                                    llvm::ConstantInt::get(i32_type, dyn_idx++));
+                            builder->CreateStore(boxed, gep);
+                        }
                     }
                 }
             } else {

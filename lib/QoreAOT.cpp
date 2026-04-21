@@ -445,6 +445,26 @@ static uint64_t scanIRFeatureFlags(const QoreIRFunction& f) {
     for (const auto& block : f.blocks) {
         for (const auto& inst : block->instructions) {
             flags |= opcodeToFeatureFlag(inst->opcode);
+            // Per-instruction data may unlock a separate feature gate: LVPath
+            // instructions carry multi-slice step kinds when a slice lvalue
+            // (e.g. `remove h{"a","b"}`) was lowered natively.  Older readers
+            // cannot reconstruct slice_operand_ids from the wire format, so
+            // gate with QORE_AOT_FEAT_LVPATH_SLICE.
+            if (inst->opcode == QoreIROpcode::LValuePathAssign
+                    || inst->opcode == QoreIROpcode::LValuePathCompound
+                    || inst->opcode == QoreIROpcode::LValuePathUnary
+                    || inst->opcode == QoreIROpcode::LValuePathBinaryMut
+                    || inst->opcode == QoreIROpcode::LValuePathTernary) {
+                const auto* pi
+                        = static_cast<const QoreIRLValuePathInstruction*>(inst.get());
+                for (const auto& step : pi->path) {
+                    if (step.kind == LVPathStepKind::HashKeySlice
+                            || step.kind == LVPathStepKind::ListIndexSlice) {
+                        flags |= QORE_AOT_FEAT_LVPATH_SLICE;
+                        break;
+                    }
+                }
+            }
         }
     }
     return flags;
@@ -10971,6 +10991,10 @@ void extractAOTSlotIdentities(const QoreIRFunction& func, const AOTSlotMap& slot
             sid.slot_id = step.slot_id;
             sid.name = step.name;
             sid.operand_idx = step.operand_idx;
+            if (step.kind == LVPathStepKind::HashKeySlice
+                    || step.kind == LVPathStepKind::ListIndexSlice) {
+                sid.slice_operand_ids = step.slice_operand_ids;
+            }
             lvid.steps.push_back(std::move(sid));
         }
     }

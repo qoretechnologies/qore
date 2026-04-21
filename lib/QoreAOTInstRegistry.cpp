@@ -2236,6 +2236,17 @@ static bool writeLValuePath(AOTInstWriteCtx& ctx) {
         ctx.writer.writeU32(step.slot_id);
         ctx.writer.writeStringRef(step.name.c_str());
         ctx.writer.writeU32(step.operand_idx);
+        // Slice steps: serialize the SSA id vector so the reader can
+        // reconstruct slice_operand_ids.  Gated behind the LVPATH_SLICE
+        // feature flag at the binary level — older readers refuse to
+        // load these binaries before reaching this code.
+        if (step.kind == LVPathStepKind::HashKeySlice
+                || step.kind == LVPathStepKind::ListIndexSlice) {
+            ctx.writer.writeU32(static_cast<uint32_t>(step.slice_operand_ids.size()));
+            for (uint32_t sid : step.slice_operand_ids) {
+                ctx.writer.writeU32(sid);
+            }
+        }
     }
     return true;
 }
@@ -2259,6 +2270,16 @@ static std::unique_ptr<QoreIRInstruction> readLValuePath(
         const char* name = ctx.reader.readStringRef(ctx.ptr);
         step.name = name ? name : "";
         step.operand_idx = QoreAOTBinaryReader::readU32(ctx.ptr);
+        // Slice steps: read the SSA id vector that writeLValuePath
+        // serialized for HashKeySlice / ListIndexSlice.  See QORE_AOT_FEAT_LVPATH_SLICE.
+        if (step.kind == LVPathStepKind::HashKeySlice
+                || step.kind == LVPathStepKind::ListIndexSlice) {
+            uint32_t num_slice_ops = QoreAOTBinaryReader::readU32(ctx.ptr);
+            step.slice_operand_ids.reserve(num_slice_ops);
+            for (uint32_t k = 0; k < num_slice_ops; ++k) {
+                step.slice_operand_ids.push_back(QoreAOTBinaryReader::readU32(ctx.ptr));
+            }
+        }
         // Resolve ref_ptr from slot_to_local for closure-body / handler IR
         // paths. The main-function AOT context still resolves ref_ptr from
         // ctx->locals in buildContextFromSlotMap (QoreAOTRuntime.cpp), but
@@ -2275,7 +2296,7 @@ static std::unique_ptr<QoreIRInstruction> readLValuePath(
                 }
             }
         }
-        pi->path.push_back(step);
+        pi->path.push_back(std::move(step));
     }
     pi->result = QoreIRValue(result_id);
     pi->operands = operands;

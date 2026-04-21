@@ -3724,6 +3724,16 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
                 writer.writeU32(step.slot_id);
                 writer.writeStringRef(step.name.c_str());
                 writer.writeU32(step.operand_idx);
+                // Slice steps: serialize the SSA id vector (matches wire
+                // format of writeLValuePath in QoreAOTInstRegistry.cpp).
+                // Feature-gated via QORE_AOT_FEAT_LVPATH_SLICE.
+                if (step.kind == static_cast<uint8_t>(LVPathStepKind::HashKeySlice)
+                        || step.kind == static_cast<uint8_t>(LVPathStepKind::ListIndexSlice)) {
+                    writer.writeU32(static_cast<uint32_t>(step.slice_operand_ids.size()));
+                    for (uint32_t sid : step.slice_operand_ids) {
+                        writer.writeU32(sid);
+                    }
+                }
             }
         }
 

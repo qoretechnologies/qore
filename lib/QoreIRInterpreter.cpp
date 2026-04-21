@@ -1800,7 +1800,11 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
             return evalAndRef(inv->expr, xsink);
         }
 
-        // Lvalue-modifying opcodes: direct eval() — avoids evalExprNode() overhead
+        // Lvalue-modifying opcodes: direct eval() — avoids evalExprNode() overhead.
+        // These fire when tryEmitLValuePathOp rejected the lvalue shape (e.g. an
+        // exotic compound lvalue that extractLValuePath doesn't decompose yet).
+        // QORE_IR_TRACE_LVMUT_FALLBACK=1 surfaces every such hit on stderr to
+        // help catalogue remaining shapes needing native IR lowering.
         case QoreIROpcode::ExtractAny:
         case QoreIROpcode::ExtractList:
         case QoreIROpcode::ExtractString:
@@ -1821,8 +1825,18 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
         case QoreIROpcode::TransliterateString:
         case QoreIROpcode::PopAny:
         case QoreIROpcode::PushAny:
-        case QoreIROpcode::ListAssignAny:
+        case QoreIROpcode::ListAssignAny: {
+            static const bool trace_lvmut = getenv("QORE_IR_TRACE_LVMUT_FALLBACK") != nullptr;
+            if (trace_lvmut) {
+                const QoreProgramLocation* loc = inv->loc;
+                fprintf(stderr, "[ir-lvmut-fallback] opcode=%u loc=%s:%d\n",
+                        static_cast<unsigned>(inv->opcode),
+                        loc ? loc->getFileValue() : "?",
+                        loc ? loc->start_line : 0);
+                fflush(stderr);
+            }
             return evalAndRef(inv->expr, xsink);
+        }
 
         // BackgroundInt: decomposed path with pre-evaluated args
         case QoreIROpcode::BackgroundInt: {
@@ -6942,6 +6956,13 @@ load_local_done:
                     } else if (step.kind == LVPathStepKind::ListIndex && step.operand_idx != UINT32_MAX) {
                         QoreValue idx_val = getIRValue(values, QoreIRValue(step.operand_idx));
                         step.slot_id = static_cast<uint32_t>(idx_val.getAsBigInt());
+                    } else if (step.kind == LVPathStepKind::HashKeySlice
+                            || step.kind == LVPathStepKind::ListIndexSlice) {
+                        step.slice_values.clear();
+                        step.slice_values.reserve(step.slice_operand_ids.size());
+                        for (uint32_t sid : step.slice_operand_ids) {
+                            step.slice_values.push_back(getIRValue(values, QoreIRValue(sid)));
+                        }
                     }
                 }
                 QoreValue res;
@@ -7006,8 +7027,21 @@ load_local_done:
                                 }
                                 l->setEntry(idx, QoreValue(), xsink);
                             }
+                        } else if (last_step.kind == LVPathStepKind::HashKeySlice
+                                && (ct == NT_HASH || ct == NT_OBJECT)) {
+                            res = executeLVHashKeySliceRemove(lvh, ct, last_step,
+                                    path_inst->unary_op, xsink);
+                        } else if (last_step.kind == LVPathStepKind::ListIndexSlice
+                                && (ct == NT_LIST || ct == NT_STRING || ct == NT_BINARY)) {
+                            res = executeLVListIndexSliceRemove(lvh, ct, last_step,
+                                    path_inst->unary_op, xsink);
                         }
                         // NT_NOTHING or other parent types: nothing to remove, fall through
+                        if (xsink && *xsink) {
+                            cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                            cleanupLocalCaches();
+                            return false;
+                        }
                     } else if (xsink && *xsink) {
                         cleanupValues(values, cleanup, xsink, true, cleanup_log);
                         cleanupLocalCaches();

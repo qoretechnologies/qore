@@ -2600,6 +2600,17 @@ static QoreAOTContext* buildContextFromSlotMap(
                 const char* sname = reader.readStringRef(ptr);
                 step.name = sname ? sname : "";
                 step.operand_idx = QoreAOTBinaryReader::readU32(ptr);
+                // Slice steps carry an SSA id vector (HashKeySlice /
+                // ListIndexSlice) — matches writer's wire format.
+                if (step.kind == LVPathStepKind::HashKeySlice
+                        || step.kind == LVPathStepKind::ListIndexSlice) {
+                    uint32_t num_slice_ops = QoreAOTBinaryReader::readU32(ptr);
+                    step.slice_operand_ids.reserve(num_slice_ops);
+                    for (uint32_t k = 0; k < num_slice_ops; ++k) {
+                        step.slice_operand_ids.push_back(
+                                QoreAOTBinaryReader::readU32(ptr));
+                    }
+                }
                 // Resolve ref_ptr from context locals/globals
                 if ((step.kind == LVPathStepKind::LocalVar
                         || step.kind == LVPathStepKind::ClosureVar)
@@ -3573,6 +3584,17 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
                 const char* name = reader.readStringRef(ptr);
                 step.name = name ? name : "";
                 step.operand_idx = QoreAOTBinaryReader::readU32(ptr);
+                // Slice steps carry an SSA id vector (HashKeySlice /
+                // ListIndexSlice) — matches writer's wire format.
+                if (step.kind == LVPathStepKind::HashKeySlice
+                        || step.kind == LVPathStepKind::ListIndexSlice) {
+                    uint32_t num_slice_ops = QoreAOTBinaryReader::readU32(ptr);
+                    step.slice_operand_ids.reserve(num_slice_ops);
+                    for (uint32_t k = 0; k < num_slice_ops; ++k) {
+                        step.slice_operand_ids.push_back(
+                                QoreAOTBinaryReader::readU32(ptr));
+                    }
+                }
                 // Resolve local vars from AOT locals
                 if ((step.kind == LVPathStepKind::LocalVar || step.kind == LVPathStepKind::ClosureVar)
                         && step.slot_id != UINT32_MAX && step.slot_id < ctx->num_locals) {
@@ -3584,7 +3606,7 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
                     step.ref_ptr = qore_root_ns_private::runtimeFindGlobalVar(
                         *pp->RootNS, step.name.c_str());
                 }
-                pi->path.push_back(step);
+                pi->path.push_back(std::move(step));
             }
             inst.reset(pi);
             break;

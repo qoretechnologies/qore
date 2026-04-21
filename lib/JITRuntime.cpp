@@ -48,7 +48,9 @@
 } while(0)
 
 #include <cstring>
+#include <functional>
 #include <optional>
+#include <set>
 
 #include <qore/ExceptionSink.h>
 #include <qore/QoreValue.h>
@@ -86,6 +88,7 @@
 #include <qore/intern/QoreCastOperatorNode.h>
 #include <qore/intern/QoreAOTBinary.h>
 #include <qore/intern/Context.h>  // Context class (for native `context` IR lowering helpers)
+#include <qore/intern/QoreObjectIntern.h>  // qore_object_private::takeMembers for HashKeySlice over object
 
 // --- Runtime location tracking for LLVM-generated code ---
 // Returns pointer to the thread-local runtime_loc variable for per-line location updates.
@@ -5588,7 +5591,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_lvalue_ternary_aot(int op, QoreAOTContext*
 }
 
 // --- LValuePath runtime helpers ---
-// Copy path steps and patch dynamic operands from NaN-boxed array
+// Copy path steps and patch dynamic operands from NaN-boxed array.
+// Note: slice_values stores BORROWED QoreValues aliasing the dyn_vals array;
+// the caller must not use path_copy beyond the lifetime of dyn_vals.
 static void patchLVPath(std::vector<LVPathStep>& path_copy,
         const QoreIRLValuePathInstruction* inst,
         const uint64_t* dyn_vals) {
@@ -5602,6 +5607,13 @@ static void patchLVPath(std::vector<LVPathStep>& path_copy,
         } else if (step.kind == LVPathStepKind::ListIndex && step.operand_idx != UINT32_MAX) {
             QoreValue idx_val = fromBits(dyn_vals[dyn_idx++]);
             step.slot_id = static_cast<uint32_t>(idx_val.getAsBigInt());
+        } else if (step.kind == LVPathStepKind::HashKeySlice
+                || step.kind == LVPathStepKind::ListIndexSlice) {
+            step.slice_values.clear();
+            step.slice_values.reserve(step.slice_operand_ids.size());
+            for (size_t i = 0; i < step.slice_operand_ids.size(); ++i) {
+                step.slice_values.push_back(fromBits(dyn_vals[dyn_idx++]));
+            }
         }
     }
 }
@@ -5690,6 +5702,243 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_compound(
     return toBits(res);
 }
 
+// Shared helper for HashKeySlice terminal step: iterates the resolved
+// slice keys, removes each via takeKeyValue / takeMembers, and returns
+// the aggregated result hash (or NOTHING for Delete).
+// Callable from both the JIT runtime (qore_rt_lv_path_unary) and the
+// IR interpreter (QoreIRInterpreter.cpp LValuePathUnary dispatch).
+// Precondition: `lvh` is navigated to the parent container; `ct` is the
+// container's type (NT_HASH or NT_OBJECT); `last_step` is the terminal
+// HashKeySlice step with `slice_values` populated.
+QoreValue executeLVHashKeySliceRemove(LValueHelper& lvh, qore_type_t ct,
+        const LVPathStep& last_step, LVUnaryOp unary_op,
+        ExceptionSink* xsink) {
+    const bool is_delete = (unary_op == LVUnaryOp::Delete);
+    if (ct == NT_HASH) {
+        lvh.ensureUnique();
+        QoreHashNode* h = lvh.getValue().get<QoreHashNode>();
+        if (!h) {
+            return QoreValue();
+        }
+        qore_hash_private* hp = qore_hash_private::get(*h);
+        const unsigned old_count = qore_hash_private::getScanCount(*h);
+        ReferenceHolder<QoreHashNode> rvh(new QoreHashNode(autoTypeInfo), xsink);
+        for (const QoreValue& key_val : last_step.slice_values) {
+            QoreStringValueHelper mem(key_val, QCS_DEFAULT, xsink);
+            if (*xsink) {
+                return QoreValue();
+            }
+            bool exists;
+            QoreValue n = hp->takeKeyValueIntern(mem->c_str(), exists);
+            if (!exists) {
+                continue;
+            }
+            // note that no exception can occur here
+            rvh->setKeyValue(mem->c_str(), n, xsink);
+            if (*xsink) {
+                return QoreValue();
+            }
+        }
+        if (old_count && !qore_hash_private::getScanCount(*h)) {
+            lvh.setDelta(-1);
+        }
+        if (is_delete) {
+            return QoreValue();  // ReferenceHolder frees rvh
+        }
+        return rvh.release();
+    }
+    if (ct == NT_OBJECT) {
+        QoreObject* o = lvh.getValue().get<QoreObject>();
+        if (!o) {
+            return QoreValue();
+        }
+        // Build a plain QoreListNode of string keys so we can reuse
+        // qore_object_private::takeMembers (which handles class-context
+        // access checks + multi-class internal data + scan tracking).
+        ReferenceHolder<QoreListNode> key_list(new QoreListNode(autoTypeInfo), xsink);
+        for (const QoreValue& key_val : last_step.slice_values) {
+            key_list->push(key_val.refSelf(), xsink);
+            if (*xsink) {
+                return QoreValue();
+            }
+        }
+        QoreLValueGeneric rv;
+        qore_object_private::takeMembers(*o, rv, lvh, *key_list);
+        if (*xsink) {
+            rv.removeValue(true).discard(xsink);
+            return QoreValue();
+        }
+        QoreValue result = rv.removeValue(true);
+        if (is_delete) {
+            result.discard(xsink);
+            return QoreValue();
+        }
+        return result;
+    }
+    return QoreValue();
+}
+
+// Shared helper for ListIndexSlice terminal step: resolves indices from
+// `slice_values`, expanding any runtime-list operand (produced by a
+// range operator) into its integer components, then removes/deletes
+// each index from the list/string/binary container in reverse-sorted
+// order so earlier indexes are not shifted.
+// Returns the aggregated removed-content collection for Remove, or
+// NOTHING for Delete.
+QoreValue executeLVListIndexSliceRemove(LValueHelper& lvh, qore_type_t ct,
+        const LVPathStep& last_step, LVUnaryOp unary_op,
+        ExceptionSink* xsink) {
+    const bool is_delete = (unary_op == LVUnaryOp::Delete);
+
+    // Helper: push an int operand OR iterate a list operand (range-produced)
+    // pushing its entries onto the caller-provided ind-collector.  Matches
+    // the AST path's treatment of range operators inside slice lists.
+    auto each_index = [&](const QoreValue& operand,
+            const std::function<void(int64_t, bool /*is_range*/)>& cb) {
+        if (operand.getType() == NT_LIST) {
+            ConstListIterator li(operand.get<const QoreListNode>());
+            while (li.next()) {
+                cb(li.getValue().getAsBigInt(), true);
+            }
+        } else {
+            cb(operand.getAsBigInt(), false);
+        }
+    };
+
+    if (ct == NT_LIST) {
+        lvh.ensureUnique();
+        QoreListNode* l = lvh.getValue().get<QoreListNode>();
+        if (!l) {
+            return QoreValue();
+        }
+        const QoreTypeInfo* vtype = nullptr;
+        bool vcommon = false;
+        ReferenceHolder<QoreListNode> v(new QoreListNode(autoTypeInfo), xsink);
+        // Reverse-sorted set of indexes to remove (matches AST path).
+        std::set<int64_t, std::greater<int64_t>> iset;
+        size_t iter_i = 0;
+        for (const QoreValue& operand : last_step.slice_values) {
+            each_index(operand, [&](int64_t ind, bool is_range) {
+                QoreValue p{};
+                bool push;
+                if (ind >= 0 && ind < (int64_t)l->size()) {
+                    iset.insert(ind);
+                    p = l->getReferencedEntry(ind);
+                    push = true;
+                } else {
+                    push = !is_range
+                            || (runtime_get_parse_options() & PO_BROKEN_LIST_RANGE);
+                }
+                if (push) {
+                    if (!iter_i) {
+                        vtype = p.getTypeInfo();
+                        vcommon = true;
+                    } else if (vcommon
+                            && !QoreTypeInfo::matchCommonType(vtype, p.getTypeInfo())) {
+                        vcommon = false;
+                    }
+                    v->push(p, nullptr);
+                }
+                ++iter_i;
+            });
+        }
+        if (vtype && vtype != anyTypeInfo) {
+            qore_list_private::get(**v)->complexTypeInfo
+                    = qore_get_complex_list_type(vtype);
+        }
+        // Dereference removed entries outside the lvalue lock for safety,
+        // matching the AST path's `ReferenceHolder<QoreListNode> holder`.
+        ReferenceHolder<QoreListNode> holder(xsink);
+        for (auto& i : iset) {
+            QoreValue ve = qore_list_private::get(*l)->spliceSingle(i);
+            if (ve.isReferenceCounted()) {
+                if (!holder) {
+                    holder = new QoreListNode(autoTypeInfo);
+                }
+                holder->push(ve, xsink);
+            }
+        }
+        if (needs_scan(*v)) {
+            if (!qore_list_private::getScanCount(*l)) {
+                lvh.setDelta(-1);
+            }
+        }
+        if (is_delete) {
+            return QoreValue();
+        }
+        return v.release();
+    }
+    if (ct == NT_STRING) {
+        lvh.ensureUnique();
+        QoreStringNode* str = lvh.getValue().get<QoreStringNode>();
+        if (!str) {
+            return QoreValue();
+        }
+        SimpleRefHolder<QoreStringNode> v(new QoreStringNode(str->getEncoding()));
+        size_t len = str->length();
+        std::set<int64_t, std::greater<int64_t>> iset;
+        for (const QoreValue& operand : last_step.slice_values) {
+            bool had_error = false;
+            each_index(operand, [&](int64_t ind, bool /*is_range*/) {
+                if (had_error) return;
+                if (ind >= 0 && ind < (int64_t)len) {
+                    iset.insert(ind);
+                    int cp = str->getUnicodePoint(ind, xsink);
+                    if (*xsink) {
+                        had_error = true;
+                        return;
+                    }
+                    if (v->concatUnicode(cp, xsink)) {
+                        had_error = true;
+                    }
+                }
+            });
+            if (had_error) break;
+        }
+        // Collapse the string by splicing removed characters — isolate from any
+        // prior exception so partial removals still land.
+        {
+            ExceptionSink xsink2;
+            for (auto& i : iset) {
+                str->splice(i, 1, &xsink2);
+                if (xsink2) break;
+            }
+            if (xsink2) {
+                xsink->assimilate(xsink2);
+            }
+        }
+        if (is_delete) {
+            return QoreValue();
+        }
+        return v.release();
+    }
+    if (ct == NT_BINARY) {
+        lvh.ensureUnique();
+        BinaryNode* bin = lvh.getValue().get<BinaryNode>();
+        if (!bin) {
+            return QoreValue();
+        }
+        SimpleRefHolder<BinaryNode> v(new BinaryNode);
+        std::set<int64_t, std::greater<int64_t>> iset;
+        for (const QoreValue& operand : last_step.slice_values) {
+            each_index(operand, [&](int64_t ind, bool /*is_range*/) {
+                if (ind >= 0 && ind < (int64_t)bin->size()) {
+                    iset.insert(ind);
+                    bin->substr(**v, ind, 1);
+                }
+            });
+        }
+        for (auto& i : iset) {
+            bin->splice(i, 1);
+        }
+        if (is_delete) {
+            return QoreValue();
+        }
+        return v.release();
+    }
+    return QoreValue();
+}
+
 extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
         QoreIRLValuePathInstruction* inst, uint64_t* dyn_vals,
         ExceptionSink* xsink) {
@@ -5716,7 +5965,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
         bool last_is_hash = (last_step.kind == LVPathStepKind::HashKeyConst
                 || last_step.kind == LVPathStepKind::HashKey);
         bool last_is_list = (last_step.kind == LVPathStepKind::ListIndex);
-        if (last_is_hash || last_is_list) {
+        bool last_is_hash_slice = (last_step.kind == LVPathStepKind::HashKeySlice);
+        bool last_is_list_slice = (last_step.kind == LVPathStepKind::ListIndexSlice);
+        if (last_is_hash || last_is_list || last_is_hash_slice || last_is_list_slice) {
             LValueHelper lvh(xsink);
             // for_remove=true on the parent walk: don't vivify intermediate
             // containers just to remove a nested key that doesn't exist.
@@ -5746,6 +5997,15 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
                     }
                     l->setEntry(idx, QoreValue(), xsink);
                 }
+                handled_multistep_remove = true;
+            } else if (last_is_hash_slice && (ct == NT_HASH || ct == NT_OBJECT)) {
+                res = executeLVHashKeySliceRemove(lvh, ct, last_step,
+                        inst->unary_op, xsink);
+                handled_multistep_remove = true;
+            } else if (last_is_list_slice
+                    && (ct == NT_LIST || ct == NT_STRING || ct == NT_BINARY)) {
+                res = executeLVListIndexSliceRemove(lvh, ct, last_step,
+                        inst->unary_op, xsink);
                 handled_multistep_remove = true;
             } else if (ct == NT_NOTHING) {
                 // Parent slot is empty: there is nothing to remove.
