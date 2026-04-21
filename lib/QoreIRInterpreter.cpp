@@ -223,6 +223,7 @@ static QoreValue evalAndRef(QoreValue& val, ExceptionSink* xsink) {
     return evalAndRef(val.getInternalNode(), xsink);
 }
 
+
 // Overload for const QoreValue& (used in evalInvoke with const instruction)
 static QoreValue evalAndRef(const QoreValue& val, ExceptionSink* xsink) {
     if (!val.hasNode()) {
@@ -681,6 +682,123 @@ static inline QoreValue getIRValue(const IRValueSlots& values, QoreIRValue id) {
     // IR value IDs are guaranteed in-bounds.  Skip bounds check on the hot path.
     assert(id.isValid() && id.id < values.size());
     return values[id.id];
+}
+
+// Build a QoreListNode from a range of IR operands, ref'ing each node-typed value
+// so the resulting list owns a ref on every element.  Returns nullptr for the
+// empty range (same semantics as FunctionCallNode's args: absent list means no
+// args, not empty list).
+static QoreListNode* buildArgListFromIROperands(
+        const std::vector<QoreIRValue>& operands,
+        size_t first, size_t end,
+        const IRValueSlots& values) {
+    if (first >= end) {
+        return nullptr;
+    }
+    QoreListNode* arg_list = new QoreListNode(autoTypeInfo);
+    qore_list_private* priv = qore_list_private::get(*arg_list);
+    priv->reserve(end - first);
+    for (size_t i = first; i < end; ++i) {
+        QoreValue val = getIRValue(values, operands[i]);
+        if (val.hasNode()) {
+            val.refSelf();
+        }
+        priv->pushIntern(val);
+    }
+    return arg_list;
+}
+
+// Attempt the decomposed-background path for one of the five supported inner
+// expression shapes (self.method / foo(args) / Class::sm(args) / obj.method(args) /
+// callref(args)).  Returns {true, result} if the shape matched and the spawned
+// thread was kicked off; {false, QoreValue()} if the caller should fall through
+// to the AST eval path.  Operand layout matches QoreIRLowering::lowerBackground.
+static std::pair<bool, QoreValue> runDecomposedBackground(
+        const QoreBackgroundOperatorNode* bg_op,
+        const std::vector<QoreIRValue>& operands,
+        const IRValueSlots& values,
+        ExceptionSink* xsink) {
+    if (!bg_op || operands.empty()) {
+        return {false, QoreValue()};
+    }
+    const AbstractQoreNode* inner = bg_op->getExp().getInternalNode();
+    const size_t nargs_ops = operands.size();
+
+    // background self.method(args)
+    if (auto* sfcn = dynamic_cast<const SelfFunctionCallNode*>(inner)) {
+        if (!sfcn->getMethod()) {
+            return {false, QoreValue()};
+        }
+        const QoreParseListNode* pargs = sfcn->getParseArgs();
+        const QoreListNode* sargs = sfcn->getArgs();
+        size_t actual_nargs = pargs ? pargs->size() : (sargs ? sargs->size() : 0);
+        QoreListNode* arg_list =
+            buildArgListFromIROperands(operands, 0, actual_nargs, values);
+        SetSelfFunctionCallNode* call_node =
+            new SetSelfFunctionCallNode(*sfcn, arg_list);
+        QoreValue result = do_op_background(QoreValue(call_node), xsink);
+        call_node->deref(xsink);
+        QoreValue(call_node).discard(xsink);
+        return {true, result};
+    }
+    // background foo(args) — free function call
+    if (auto* fcn = dynamic_cast<const FunctionCallNode*>(inner)) {
+        const QoreParseListNode* pargs = fcn->getParseArgs();
+        const QoreListNode* fargs = fcn->getArgs();
+        size_t actual_nargs = pargs ? pargs->size() : (fargs ? fargs->size() : 0);
+        QoreListNode* arg_list =
+            buildArgListFromIROperands(operands, 0, actual_nargs, values);
+        FunctionCallNode* call_node = new FunctionCallNode(*fcn, arg_list);
+        QoreValue result = do_op_background(QoreValue(call_node), xsink);
+        QoreValue(call_node).discard(xsink);
+        return {true, result};
+    }
+    // background Class::staticMethod(args)
+    if (auto* smcn = dynamic_cast<const StaticMethodCallNode*>(inner)) {
+        const QoreParseListNode* pargs = smcn->getParseArgs();
+        const QoreListNode* sargs = smcn->getArgs();
+        size_t actual_nargs = pargs ? pargs->size() : (sargs ? sargs->size() : 0);
+        QoreListNode* arg_list =
+            buildArgListFromIROperands(operands, 0, actual_nargs, values);
+        StaticMethodCallNode* call_node = new StaticMethodCallNode(*smcn, arg_list);
+        QoreValue result = do_op_background(QoreValue(call_node), xsink);
+        QoreValue(call_node).discard(xsink);
+        return {true, result};
+    }
+    // background obj.method(args) — receiver pre-evaluated in operand 0
+    if (auto* devn = dynamic_cast<const QoreDotEvalOperatorNode*>(inner)) {
+        MethodCallNode* m = devn->getMethodCall();
+        if (!m) {
+            return {false, QoreValue()};
+        }
+        QoreValue recv = getIRValue(values, operands[0]);
+        if (recv.hasNode()) {
+            recv.refSelf();
+        }
+        QoreListNode* arg_list =
+            buildArgListFromIROperands(operands, 1, nargs_ops, values);
+        MethodCallNode* new_m = new MethodCallNode(*m, arg_list);
+        QoreDotEvalOperatorNode* call_node =
+            new QoreDotEvalOperatorNode(devn->loc, recv, new_m);
+        QoreValue result = do_op_background(QoreValue(call_node), xsink);
+        QoreValue(call_node).discard(xsink);
+        return {true, result};
+    }
+    // background callref(args) — call-ref pre-evaluated in operand 0
+    if (auto* crcn = dynamic_cast<const CallReferenceCallNode*>(inner)) {
+        QoreValue callee = getIRValue(values, operands[0]);
+        if (callee.hasNode()) {
+            callee.refSelf();
+        }
+        QoreListNode* arg_list =
+            buildArgListFromIROperands(operands, 1, nargs_ops, values);
+        CallReferenceCallNode* call_node =
+            new CallReferenceCallNode(crcn->loc, callee, arg_list);
+        QoreValue result = do_op_background(QoreValue(call_node), xsink);
+        QoreValue(call_node).discard(xsink);
+        return {true, result};
+    }
+    return {false, QoreValue()};
 }
 
 static void removeCleanupEntry(std::vector<uint32_t>& cleanup, uint32_t id) {
@@ -1708,36 +1826,12 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
 
         // BackgroundInt: decomposed path with pre-evaluated args
         case QoreIROpcode::BackgroundInt: {
-            if (!inv->operands.empty()) {
-                auto* bg_op = dynamic_cast<const QoreBackgroundOperatorNode*>(
-                    inv->expr.getInternalNode());
-                if (bg_op) {
-                    auto* sfcn = dynamic_cast<const SelfFunctionCallNode*>(
-                        bg_op->getExp().getInternalNode());
-                    if (sfcn && sfcn->getMethod()) {
-                        size_t nargs = inv->operands.size();
-                        bool zero_arg_sentinel = (nargs == 1
-                            && getIRValue(values, inv->operands[0]).isNothing());
-                        ReferenceHolder<QoreListNode> arg_list(xsink);
-                        if (!zero_arg_sentinel && nargs > 0) {
-                            arg_list = new QoreListNode(autoTypeInfo);
-                            for (size_t i = 0; i < nargs; i++) {
-                                QoreValue val = getIRValue(values, inv->operands[i]);
-                                if (val.hasNode()) {
-                                    val.refSelf();
-                                }
-                                arg_list->push(val, nullptr);
-                            }
-                        }
-                        // do_op_background copies the expression; original must be freed
-                        SetSelfFunctionCallNode* call_node =
-                            new SetSelfFunctionCallNode(*sfcn, arg_list.release());
-                        QoreValue bg_result = do_op_background(QoreValue(call_node), xsink);
-                        call_node->deref(xsink);
-                        QoreValue(call_node).discard(xsink);
-                        return bg_result;
-                    }
-                }
+            auto* bg_op = dynamic_cast<const QoreBackgroundOperatorNode*>(
+                inv->expr.getInternalNode());
+            auto [matched, result] = runDecomposedBackground(bg_op, inv->operands,
+                values, xsink);
+            if (matched) {
+                return result;
             }
             return evalAndRef(inv->expr, xsink);
         }
@@ -8920,48 +9014,19 @@ lvalue_path_unary_done:
         case QoreIROpcode::BackgroundInt: {
                 auto* expr_inst = static_cast<QoreIRExprInstruction*>(inst);
                 QoreValue res;
-                if (!expr_inst->operands.empty()) {
-                    // Decomposed path: args pre-evaluated, method identity from expr
-                    auto* bg_op = dynamic_cast<const QoreBackgroundOperatorNode*>(
-                        expr_inst->expr.getInternalNode());
-                    assert(bg_op);
-                    auto* sfcn = dynamic_cast<const SelfFunctionCallNode*>(
-                        bg_op->getExp().getInternalNode());
-                    assert(sfcn && sfcn->getMethod());
-
-                    // Build QoreListNode from pre-evaluated operands
-                    // First operand may be a ConstNothing sentinel for zero-arg calls
-                    size_t nargs = expr_inst->operands.size();
-                    bool zero_arg_sentinel = (nargs == 1
-                        && getIRValue(values, expr_inst->operands[0]).isNothing());
-                    ReferenceHolder<QoreListNode> arg_list(xsink);
-                    if (!zero_arg_sentinel && nargs > 0) {
-                        arg_list = new QoreListNode(autoTypeInfo);
-                        for (size_t i = 0; i < nargs; i++) {
-                            QoreValue val = getIRValue(values, expr_inst->operands[i]);
-                            if (val.hasNode()) {
-                                val.refSelf();
-                            }
-                            arg_list->push(val, nullptr);
-                        }
-                    }
-
-                    // Create a SetSelfFunctionCallNode with the resolved method and pre-evaluated args
-                    // do_op_background copies the expression; original must be freed
-                    SetSelfFunctionCallNode* bg_call =
-                        new SetSelfFunctionCallNode(*sfcn, arg_list.release());
-                    res = do_op_background(QoreValue(bg_call), xsink);
-                    bg_call->deref(xsink);
-                    QoreValue(bg_call).discard(xsink);
+                auto* bg_op = dynamic_cast<const QoreBackgroundOperatorNode*>(
+                    expr_inst->expr.getInternalNode());
+                auto [matched, bg_result] = runDecomposedBackground(bg_op,
+                    expr_inst->operands, values, xsink);
+                if (matched) {
+                    res = bg_result;
                 } else {
                     // Full AST fallback path — the inner expression wasn't a
-                    // decomposable self.method(args) pattern, so we hand the
-                    // whole QoreBackgroundOperatorNode to do_op_background via
-                    // the AST eval path.  Tracing via QORE_IR_TRACE_BG_FALLBACK=1
-                    // surfaces which shapes still rely on this.
+                    // decomposable call shape, so we hand the whole
+                    // QoreBackgroundOperatorNode to do_op_background via the AST
+                    // eval path.  Tracing via QORE_IR_TRACE_BG_FALLBACK=1 surfaces
+                    // which shapes still rely on this.
                     if (getenv("QORE_IR_TRACE_BG_FALLBACK")) {
-                        const auto* bg_op = dynamic_cast<const QoreBackgroundOperatorNode*>(
-                            expr_inst->expr.getInternalNode());
                         const AbstractQoreNode* inner = bg_op ? bg_op->getExp().getInternalNode()
                                                               : nullptr;
                         const QoreProgramLocation* loc = inst->loc;

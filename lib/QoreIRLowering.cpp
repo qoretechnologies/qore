@@ -7913,44 +7913,95 @@ QoreIRValue QoreIRLowering::lowerBackground(const QoreValue& expr, std::string& 
         return QoreIRValue();
     }
 
-    // Try decomposed path: pre-evaluate args for background self.method(args)
+    // Decomposed paths — pre-evaluate args (and receiver/callref where applicable)
+    // so the spawned thread's code runs with IR-evaluated operands instead of
+    // a raw ParseNode* handed to qore_rt_invoke_expr at AST fallback time.
+    //
+    // Operand layouts by inner-expression type:
+    //   SelfFunctionCallNode       → [arg...] or [ConstNothing] sentinel for zero args
+    //   FunctionCallNode           → [arg...] or [ConstNothing] sentinel for zero args
+    //   StaticMethodCallNode       → [arg...] or [ConstNothing] sentinel for zero args
+    //   QoreDotEvalOperatorNode    → [receiver, arg...]  (always ≥ 1 operand)
+    //   CallReferenceCallNode      → [callref, arg...]   (always ≥ 1 operand)
+    //
+    // An empty operand list still signals the AST fallback path.
     QoreValue inner_expr = op->getExp();
     if (inner_expr.hasNode()) {
-        auto* sfcn = dynamic_cast<const SelfFunctionCallNode*>(inner_expr.getInternalNode());
-        if (sfcn && sfcn->getMethod() && !sfcn->getMethod()->isStatic()) {
-            // Pre-evaluate each argument expression
-            std::vector<QoreIRValue> operands;
-            bool can_decompose = true;
-            const QoreParseListNode* parse_args = sfcn->getParseArgs();
-            const QoreListNode* args = sfcn->getArgs();
-            if (parse_args && parse_args->size() > 0) {
-                for (size_t i = 0; i < parse_args->size(); i++) {
-                    QoreIRValue arg_val = lowerExpression(parse_args->get(i), error);
-                    if (!arg_val.isValid()) {
-                        can_decompose = false;
-                        break;
+        const AbstractQoreNode* inner = inner_expr.getInternalNode();
+
+        // background self.method(args)
+        if (auto* sfcn = dynamic_cast<const SelfFunctionCallNode*>(inner)) {
+            if (sfcn->getMethod() && !sfcn->getMethod()->isStatic()) {
+                std::vector<QoreIRValue> operands;
+                if (lowerCallArgs(sfcn->getParseArgs(), sfcn->getArgs(), operands, error)) {
+                    if (operands.empty()) {
+                        operands.push_back(builder.createConstNothing(op->loc)->result);
                     }
-                    operands.push_back(arg_val);
+                    return lowerExprOpOrInvoke(QoreIROpcode::BackgroundInt, expr,
+                        operands, op->loc, error);
                 }
-            } else if (args && args->size() > 0) {
-                for (size_t i = 0; i < args->size(); i++) {
-                    QoreIRValue arg_val = lowerExpression(args->retrieveEntry(i), error);
-                    if (!arg_val.isValid()) {
-                        can_decompose = false;
-                        break;
+                error.clear();
+            }
+        }
+        // background foo(args) — free function call
+        else if (auto* fcn = dynamic_cast<const FunctionCallNode*>(inner)) {
+            if (fcn->getFunction()) {
+                std::vector<QoreIRValue> operands;
+                if (lowerCallArgs(fcn->getParseArgs(), fcn->getArgs(), operands, error)) {
+                    if (operands.empty()) {
+                        operands.push_back(builder.createConstNothing(op->loc)->result);
                     }
-                    operands.push_back(arg_val);
+                    return lowerExprOpOrInvoke(QoreIROpcode::BackgroundInt, expr,
+                        operands, op->loc, error);
+                }
+                error.clear();
+            }
+        }
+        // background Class::staticMethod(args)
+        else if (auto* smcn = dynamic_cast<const StaticMethodCallNode*>(inner)) {
+            if (smcn->getMethod()) {
+                std::vector<QoreIRValue> operands;
+                if (lowerCallArgs(smcn->getParseArgs(), smcn->getArgs(), operands, error)) {
+                    if (operands.empty()) {
+                        operands.push_back(builder.createConstNothing(op->loc)->result);
+                    }
+                    return lowerExprOpOrInvoke(QoreIROpcode::BackgroundInt, expr,
+                        operands, op->loc, error);
+                }
+                error.clear();
+            }
+        }
+        // background obj.method(args)
+        else if (auto* devn = dynamic_cast<const QoreDotEvalOperatorNode*>(inner)) {
+            MethodCallNode* m = devn->getMethodCall();
+            if (m && m->getName()) {
+                QoreIRValue receiver_val = lowerExpression(devn->getExpression(), error);
+                if (receiver_val.isValid()) {
+                    std::vector<QoreIRValue> operands;
+                    operands.push_back(receiver_val);
+                    if (lowerCallArgs(m->getParseArgs(), m->getArgs(), operands, error)) {
+                        return lowerExprOpOrInvoke(QoreIROpcode::BackgroundInt, expr,
+                            operands, op->loc, error);
+                    }
+                    error.clear();
+                } else {
+                    error.clear();
                 }
             }
-            if (can_decompose) {
-                // Non-empty operands (or empty for zero-arg methods) signal decomposed path;
-                // the LLVM/interpreter codegen extracts method identity from expr at codegen time
-                // Use a sentinel operand for zero-arg calls to distinguish from the AST fallback path
-                if (operands.empty()) {
-                    // Add a ConstNothing sentinel to signal decomposed zero-arg call
-                    operands.push_back(builder.createConstNothing(op->loc)->result);
+        }
+        // background callref(args) — closure / call-ref / method-ref invocation
+        else if (auto* crcn = dynamic_cast<const CallReferenceCallNode*>(inner)) {
+            QoreIRValue callee_val = lowerExpression(crcn->getExp(), error);
+            if (callee_val.isValid()) {
+                std::vector<QoreIRValue> operands;
+                operands.push_back(callee_val);
+                if (lowerCallArgs(crcn->getParseArgs(), crcn->getArgs(), operands, error)) {
+                    return lowerExprOpOrInvoke(QoreIROpcode::BackgroundInt, expr,
+                        operands, op->loc, error);
                 }
-                return lowerExprOpOrInvoke(QoreIROpcode::BackgroundInt, expr, operands, op->loc, error);
+                error.clear();
+            } else {
+                error.clear();
             }
         }
     }

@@ -8185,6 +8185,96 @@ extern "C" DLLEXPORT uint64_t qore_rt_background_self_call_aot(
     return toBits(result);
 }
 
+namespace {
+// Helper — build a QoreListNode owning a ref on each boxed QoreValue in args[].
+// Returns nullptr for zero args (FunctionCallNode / crlr_list_copy semantics).
+QoreListNode* bgBuildArgList(uint64_t* args, int nargs) {
+    if (nargs <= 0) {
+        return nullptr;
+    }
+    QoreListNode* arg_list = new QoreListNode(autoTypeInfo);
+    qore_list_private* priv = qore_list_private::get(*arg_list);
+    priv->reserve(nargs);
+    for (int i = 0; i < nargs; ++i) {
+        QoreValue val = fromBits(args[i]);
+        if (val.hasNode()) {
+            val.refSelf();
+        }
+        priv->pushIntern(val);
+    }
+    return arg_list;
+}
+} // anonymous
+
+//! Background free function call (JIT mode): takes FunctionCallNode* for identity
+//! and pre-evaluated args — avoids EXPR_TREE serialization and lets the spawned
+//! thread participate in JIT/IR tiering via the FunctionCallNode's evalImpl.
+extern "C" DLLEXPORT uint64_t qore_rt_background_function_call(
+        const FunctionCallNode* fcn, uint64_t* args, int nargs, ExceptionSink* xsink) {
+    assert(fcn);
+    QoreListNode* arg_list = bgBuildArgList(args, nargs);
+    // Clone with pre-evaluated args (tmp_args=true via AbstractFunctionCallNode copy ctor).
+    // do_op_background will make its own copy via crlr_fcall_copy; we release the
+    // original here so the local FunctionCallNode's destructor cleans up.
+    FunctionCallNode* call_node = new FunctionCallNode(*fcn, arg_list);
+    QoreValue result = do_op_background(QoreValue(call_node), xsink);
+    QoreValue(call_node).discard(xsink);
+    return toBits(result);
+}
+
+//! Background static method call (JIT mode)
+extern "C" DLLEXPORT uint64_t qore_rt_background_static_method_call(
+        const StaticMethodCallNode* smcn, uint64_t* args, int nargs, ExceptionSink* xsink) {
+    assert(smcn);
+    QoreListNode* arg_list = bgBuildArgList(args, nargs);
+    StaticMethodCallNode* call_node = new StaticMethodCallNode(*smcn, arg_list);
+    QoreValue result = do_op_background(QoreValue(call_node), xsink);
+    QoreValue(call_node).discard(xsink);
+    return toBits(result);
+}
+
+//! Background dot-eval method call (JIT mode): takes the QoreDotEvalOperatorNode
+//! as template (for method identity / name) + a pre-evaluated receiver bit-value
+//! + pre-evaluated args.  Rebuilds a new QoreDotEvalOperatorNode wrapping a fresh
+//! MethodCallNode and hands it to do_op_background.
+extern "C" DLLEXPORT uint64_t qore_rt_background_dot_eval_call(
+        const QoreDotEvalOperatorNode* devn, uint64_t recv_bits,
+        uint64_t* args, int nargs, ExceptionSink* xsink) {
+    assert(devn);
+    MethodCallNode* source_m = devn->getMethodCall();
+    assert(source_m);
+    QoreValue recv = fromBits(recv_bits);
+    if (recv.hasNode()) {
+        recv.refSelf();  // node takes ownership of this ref
+    }
+    QoreListNode* arg_list = bgBuildArgList(args, nargs);
+    MethodCallNode* new_m = new MethodCallNode(*source_m, arg_list);
+    QoreDotEvalOperatorNode* call_node =
+        new QoreDotEvalOperatorNode(devn->loc, recv, new_m);
+    QoreValue result = do_op_background(QoreValue(call_node), xsink);
+    QoreValue(call_node).discard(xsink);
+    return toBits(result);
+}
+
+//! Background call-ref / closure / method-ref invocation (JIT mode):
+//! takes the CallReferenceCallNode as template (source loc) + a pre-evaluated
+//! callable bit-value + pre-evaluated args.
+extern "C" DLLEXPORT uint64_t qore_rt_background_call_ref_call(
+        const CallReferenceCallNode* crcn, uint64_t callee_bits,
+        uint64_t* args, int nargs, ExceptionSink* xsink) {
+    assert(crcn);
+    QoreValue callee = fromBits(callee_bits);
+    if (callee.hasNode()) {
+        callee.refSelf();
+    }
+    QoreListNode* arg_list = bgBuildArgList(args, nargs);
+    CallReferenceCallNode* call_node =
+        new CallReferenceCallNode(crcn->loc, callee, arg_list);
+    QoreValue result = do_op_background(QoreValue(call_node), xsink);
+    QoreValue(call_node).discard(xsink);
+    return toBits(result);
+}
+
 // --- Phase 2B Step 5: specialized helpers throwing wrappers ---
 // (placed at end of file - all base helpers are defined above)
 
@@ -8320,6 +8410,44 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_background_self_
 extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_background_self_call_aot_throwing(
         const char* method_name, uint64_t* args, int nargs, ExceptionSink* xsink) {
     uint64_t result = qore_rt_background_self_call_aot(method_name, args, nargs, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_background_function_call_throwing(
+        const FunctionCallNode* fcn, uint64_t* args, int nargs, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_background_function_call(fcn, args, nargs, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_background_static_method_call_throwing(
+        const StaticMethodCallNode* smcn, uint64_t* args, int nargs, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_background_static_method_call(smcn, args, nargs, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_background_dot_eval_call_throwing(
+        const QoreDotEvalOperatorNode* devn, uint64_t recv_bits,
+        uint64_t* args, int nargs, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_background_dot_eval_call(devn, recv_bits, args, nargs, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_background_call_ref_call_throwing(
+        const CallReferenceCallNode* crcn, uint64_t callee_bits,
+        uint64_t* args, int nargs, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_background_call_ref_call(crcn, callee_bits, args, nargs, xsink);
     if (xsink && *xsink) {
         throw QoreJITException();
     }

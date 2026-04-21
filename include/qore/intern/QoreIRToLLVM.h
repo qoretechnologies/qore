@@ -699,6 +699,24 @@ private:
     bool tryEmitHashKeyAccess(const QoreIRInstruction* inst, llvm::Module& module,
             llvm::Function* llvm_func);
 
+    // Try the decomposed `background` lowering for one of five inner-call shapes
+    // (self.method / foo(args) / Class::sm(args) / obj.method(args) / callref(args)).
+    // On success writes the call result to *result and returns true; on non-match
+    // (empty operands or unsupported inner shape) returns false leaving *result
+    // untouched so the caller emits the AST fallback path.  In AOT mode, only the
+    // self.method shape has a dedicated helper (qore_rt_background_self_call_aot);
+    // other shapes fall through to AST eval since they'd need name-based lookup.
+    // @param expr_val        The QoreBackgroundOperatorNode wrapped as QoreValue
+    // @param operands        Pre-evaluated operands (layout described above)
+    // @param throwing_ok     Allow invoke+throwing-helper pair for EH mode (pass
+    //                        false when the caller emits its own exception check)
+    bool tryEmitDecomposedBackground(const QoreValue& expr_val,
+            const std::vector<QoreIRValue>& operands,
+            llvm::Module& module, llvm::Function* llvm_func,
+            const QoreIRInstruction* inst,
+            bool throwing_ok,
+            llvm::Value** result);
+
     // Phase 5b: Try to emit a specialized list index access instead of qore_rt_invoke_expr.
     // Returns true if specialized code was emitted, false to fall through to generic path.
     bool tryEmitListIndexAccess(const QoreIRInstruction* inst, llvm::Module& module,

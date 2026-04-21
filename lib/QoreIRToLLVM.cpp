@@ -55,6 +55,7 @@ static_assert(QORE_IR_MAX_OPCODE == 363,
 #include "qore/intern/SelfVarrefNode.h"
 #include "qore/intern/StaticClassVarRefNode.h"
 #include "qore/intern/FunctionCallNode.h"
+#include "qore/intern/CallReferenceCallNode.h"
 #include "qore/intern/ScopedObjectCallNode.h"
 #include "qore/intern/QoreBackgroundOperatorNode.h"
 #include "qore/intern/QoreHashObjectDereferenceOperatorNode.h"
@@ -2106,6 +2107,200 @@ llvm::Value* QoreIRToLLVM::emitMaybeInvoke(llvm::FunctionCallee normal_helper,
         return result;
     }
     return builder->CreateCall(normal_helper, args);
+}
+
+bool QoreIRToLLVM::tryEmitDecomposedBackground(const QoreValue& expr_val,
+        const std::vector<QoreIRValue>& operands,
+        llvm::Module& module, llvm::Function* llvm_func,
+        const QoreIRInstruction* inst,
+        bool throwing_ok,
+        llvm::Value** result_out) {
+    if (operands.empty()) {
+        return false;
+    }
+    const auto* bg_op = dynamic_cast<const QoreBackgroundOperatorNode*>(
+        expr_val.getInternalNode());
+    if (!bg_op) {
+        return false;
+    }
+    const AbstractQoreNode* inner = bg_op->getExp().getInternalNode();
+    if (!inner) {
+        return false;
+    }
+
+    std::string error_dummy;
+
+    // Helper: given an operand range, build an alloca'd i64 array of boxed values.
+    // Returns a null pointer when empty range (zero args).
+    auto build_args_array = [&](size_t first, size_t end) -> llvm::Value* {
+        int count = (int)(end - first);
+        if (count <= 0) {
+            return llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(ptr_type));
+        }
+        llvm::Value* arr = builder->CreateAlloca(i64_type,
+            llvm::ConstantInt::get(i32_type, count));
+        for (int i = 0; i < count; ++i) {
+            auto* val = getVal(operands[first + i].id, error_dummy);
+            if (!val) { return nullptr; }
+            llvm::Value* boxed = boxValue(val, operands[first + i].id);
+            builder->CreateStore(boxed, builder->CreateGEP(i64_type, arr,
+                llvm::ConstantInt::get(i32_type, i)));
+        }
+        return arr;
+    };
+
+    // Signature shared by the four new per-shape helpers:
+    //   uint64_t helper(const Node*, uint64_t* args, int nargs, ExceptionSink*)
+    auto call_with_node_helper = [&](const char* normal_name, const char* throwing_name,
+            const void* node_ptr, size_t args_first, size_t args_end,
+            llvm::Value** out) -> bool {
+        int nargs = (int)(args_end - args_first);
+        llvm::Value* args_array = build_args_array(args_first, args_end);
+        if (!args_array) {
+            return false;
+        }
+        llvm::Value* node_as_ptr = builder->CreateIntToPtr(
+            llvm::ConstantInt::get(i64_type, reinterpret_cast<uint64_t>(node_ptr)),
+            ptr_type);
+        auto ft = llvm::FunctionType::get(i64_type,
+            {ptr_type, ptr_type, i32_type, ptr_type}, false);
+        auto helper = module.getOrInsertFunction(normal_name, ft);
+        if (throwing_ok) {
+            auto helper_throwing = module.getOrInsertFunction(throwing_name, ft);
+            *out = emitMaybeInvoke(helper, helper_throwing,
+                {node_as_ptr, args_array, llvm::ConstantInt::get(i32_type, nargs),
+                 xsink_arg}, module, llvm_func, inst);
+        } else {
+            *out = builder->CreateCall(helper,
+                {node_as_ptr, args_array, llvm::ConstantInt::get(i32_type, nargs),
+                 xsink_arg});
+        }
+        return true;
+    };
+
+    // Signature for dot-eval / call-ref helpers (receiver / callref boxed as arg):
+    //   uint64_t helper(const Node*, uint64_t recv_or_callref, uint64_t* args,
+    //                   int nargs, ExceptionSink*)
+    auto call_with_node_and_recv = [&](const char* normal_name, const char* throwing_name,
+            const void* node_ptr, size_t recv_idx, size_t args_first, size_t args_end,
+            llvm::Value** out) -> bool {
+        auto* recv_val = getVal(operands[recv_idx].id, error_dummy);
+        if (!recv_val) {
+            return false;
+        }
+        llvm::Value* recv_boxed = boxValue(recv_val, operands[recv_idx].id);
+        int nargs = (int)(args_end - args_first);
+        llvm::Value* args_array = build_args_array(args_first, args_end);
+        if (!args_array) {
+            return false;
+        }
+        llvm::Value* node_as_ptr = builder->CreateIntToPtr(
+            llvm::ConstantInt::get(i64_type, reinterpret_cast<uint64_t>(node_ptr)),
+            ptr_type);
+        auto ft = llvm::FunctionType::get(i64_type,
+            {ptr_type, i64_type, ptr_type, i32_type, ptr_type}, false);
+        auto helper = module.getOrInsertFunction(normal_name, ft);
+        if (throwing_ok) {
+            auto helper_throwing = module.getOrInsertFunction(throwing_name, ft);
+            *out = emitMaybeInvoke(helper, helper_throwing,
+                {node_as_ptr, recv_boxed, args_array,
+                 llvm::ConstantInt::get(i32_type, nargs), xsink_arg},
+                module, llvm_func, inst);
+        } else {
+            *out = builder->CreateCall(helper,
+                {node_as_ptr, recv_boxed, args_array,
+                 llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+        }
+        return true;
+    };
+
+    // background self.method(args) — supported in JIT and AOT (existing path)
+    if (auto* sfcn = dynamic_cast<const SelfFunctionCallNode*>(inner)) {
+        if (!sfcn->getMethod()) {
+            return false;
+        }
+        const QoreParseListNode* pargs = sfcn->getParseArgs();
+        const QoreListNode* sargs = sfcn->getArgs();
+        size_t actual_nargs = pargs ? pargs->size() : (sargs ? sargs->size() : 0);
+        if (aot_mode) {
+            // AOT: use name-based helper (method resolved on spawned thread)
+            const char* method_name = sfcn->getName();
+            llvm::Value* name_ptr = builder->CreateGlobalStringPtr(method_name);
+            llvm::Value* args_array = build_args_array(0, actual_nargs);
+            if (!args_array) { return false; }
+            auto ft = llvm::FunctionType::get(i64_type,
+                {ptr_type, ptr_type, i32_type, ptr_type}, false);
+            auto helper = module.getOrInsertFunction("qore_rt_background_self_call_aot", ft);
+            if (throwing_ok) {
+                auto helper_throwing = module.getOrInsertFunction(
+                    "qore_rt_background_self_call_aot_throwing", ft);
+                *result_out = emitMaybeInvoke(helper, helper_throwing,
+                    {name_ptr, args_array,
+                     llvm::ConstantInt::get(i32_type, (int)actual_nargs), xsink_arg},
+                    module, llvm_func, inst);
+            } else {
+                *result_out = builder->CreateCall(helper,
+                    {name_ptr, args_array,
+                     llvm::ConstantInt::get(i32_type, (int)actual_nargs), xsink_arg});
+            }
+            return true;
+        }
+        return call_with_node_helper("qore_rt_background_self_call",
+            "qore_rt_background_self_call_throwing",
+            sfcn, 0, actual_nargs, result_out);
+    }
+
+    // All four new shapes embed an AST node pointer — only available in JIT mode.
+    // AOT mode falls back to AST eval so the spawned thread resolves the call
+    // from the serialized expression slot.
+    if (aot_mode) {
+        return false;
+    }
+
+    // background foo(args) — free function call
+    if (auto* fcn = dynamic_cast<const FunctionCallNode*>(inner)) {
+        if (!fcn->getFunction()) {
+            return false;
+        }
+        const QoreParseListNode* pargs = fcn->getParseArgs();
+        const QoreListNode* fargs = fcn->getArgs();
+        size_t actual_nargs = pargs ? pargs->size() : (fargs ? fargs->size() : 0);
+        return call_with_node_helper("qore_rt_background_function_call",
+            "qore_rt_background_function_call_throwing",
+            fcn, 0, actual_nargs, result_out);
+    }
+    // background Class::staticMethod(args)
+    if (auto* smcn = dynamic_cast<const StaticMethodCallNode*>(inner)) {
+        if (!smcn->getMethod()) {
+            return false;
+        }
+        const QoreParseListNode* pargs = smcn->getParseArgs();
+        const QoreListNode* sargs = smcn->getArgs();
+        size_t actual_nargs = pargs ? pargs->size() : (sargs ? sargs->size() : 0);
+        return call_with_node_helper("qore_rt_background_static_method_call",
+            "qore_rt_background_static_method_call_throwing",
+            smcn, 0, actual_nargs, result_out);
+    }
+    // background obj.method(args) — receiver in operands[0], args after
+    if (auto* devn = dynamic_cast<const QoreDotEvalOperatorNode*>(inner)) {
+        MethodCallNode* m = devn->getMethodCall();
+        if (!m) {
+            return false;
+        }
+        return call_with_node_and_recv("qore_rt_background_dot_eval_call",
+            "qore_rt_background_dot_eval_call_throwing",
+            devn, /*recv_idx*/0, /*args_first*/1, /*args_end*/operands.size(),
+            result_out);
+    }
+    // background callref(args) — call-ref in operands[0], args after
+    if (auto* crcn = dynamic_cast<const CallReferenceCallNode*>(inner)) {
+        return call_with_node_and_recv("qore_rt_background_call_ref_call",
+            "qore_rt_background_call_ref_call_throwing",
+            crcn, /*recv_idx*/0, /*args_first*/1, /*args_end*/operands.size(),
+            result_out);
+    }
+
+    return false;
 }
 
 void QoreIRToLLVM::finalizeFunctionUnwindLP(llvm::Module& module) {
@@ -6245,60 +6440,12 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 // instanceof doesn't modify locals — no reload needed
 
             } else if (inv->invoke_opcode == QoreIROpcode::BackgroundInt
-                    && !inv->operands.empty()) {
-                // BackgroundInt invoke: decomposed path with pre-evaluated args
-                auto* bg_op = dynamic_cast<const QoreBackgroundOperatorNode*>(
-                    inv->expr.getInternalNode());
-                assert(bg_op);
-                auto* sfcn = dynamic_cast<const SelfFunctionCallNode*>(
-                    bg_op->getExp().getInternalNode());
-                assert(sfcn && sfcn->getMethod());
-                const char* method_name = sfcn->getName();
-
-                // Determine actual arg count from SelfFunctionCallNode's parse args
-                const QoreParseListNode* parse_args = sfcn->getParseArgs();
-                const QoreListNode* sfcn_args = sfcn->getArgs();
-                int actual_nargs = 0;
-                if (parse_args && parse_args->size() > 0) {
-                    actual_nargs = (int)parse_args->size();
-                } else if (sfcn_args && sfcn_args->size() > 0) {
-                    actual_nargs = (int)sfcn_args->size();
-                }
-
-                // Build args array on stack
-                llvm::Value* args_array;
-                if (actual_nargs == 0) {
-                    args_array = llvm::ConstantPointerNull::get(
-                        llvm::cast<llvm::PointerType>(ptr_type));
-                } else {
-                    args_array = builder->CreateAlloca(i64_type,
-                        llvm::ConstantInt::get(i32_type, actual_nargs));
-                    for (int i = 0; i < actual_nargs; i++) {
-                        auto* val = getVal(inv->operands[i].id, error);
-                        if (!val) { return false; }
-                        llvm::Value* boxed = boxValue(val, inv->operands[i].id);
-                        builder->CreateStore(boxed, builder->CreateGEP(i64_type, args_array,
-                            llvm::ConstantInt::get(i32_type, i)));
-                    }
-                }
-
-                if (aot_mode) {
-                    llvm::Value* name_ptr = builder->CreateGlobalStringPtr(method_name);
-                    auto helper = module.getOrInsertFunction("qore_rt_background_self_call_aot",
-                        llvm::FunctionType::get(i64_type,
-                            {ptr_type, ptr_type, i32_type, ptr_type}, false));
-                    result = builder->CreateCall(helper, {name_ptr, args_array,
-                        llvm::ConstantInt::get(i32_type, actual_nargs), xsink_arg});
-                } else {
-                    llvm::Value* sfcn_ptr = builder->CreateIntToPtr(
-                        llvm::ConstantInt::get(i64_type, reinterpret_cast<uint64_t>(sfcn)),
-                        ptr_type);
-                    auto helper = module.getOrInsertFunction("qore_rt_background_self_call",
-                        llvm::FunctionType::get(i64_type,
-                            {ptr_type, ptr_type, i32_type, ptr_type}, false));
-                    result = builder->CreateCall(helper, {sfcn_ptr, args_array,
-                        llvm::ConstantInt::get(i32_type, actual_nargs), xsink_arg});
-                }
+                    && !inv->operands.empty()
+                    && tryEmitDecomposedBackground(inv->expr, inv->operands,
+                        module, llvm_func, inst, /*throwing_ok*/false, &result)) {
+                // Decomposed background call path — one of the five supported
+                // inner-call shapes.  Falls through to AST eval below when the
+                // shape is unsupported (AOT mode on non-self shapes, etc.).
                 // Background call may modify closure-captured vars but not locals
 
             } else if (inv->invoke_opcode == QoreIROpcode::CastList
@@ -11039,75 +11186,14 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         // === Background op ===
         case QoreIROpcode::BackgroundInt: {
             const auto* expr_inst = static_cast<const QoreIRExprInstruction*>(inst);
-            llvm::Value* result;
-            if (!expr_inst->operands.empty()) {
-                // Decomposed path: pre-evaluated args + method identity from expr
-                auto* bg_op = dynamic_cast<const QoreBackgroundOperatorNode*>(
-                    expr_inst->expr.getInternalNode());
-                assert(bg_op);
-                auto* sfcn = dynamic_cast<const SelfFunctionCallNode*>(
-                    bg_op->getExp().getInternalNode());
-                assert(sfcn && sfcn->getMethod());
-                const char* method_name = sfcn->getName();
-
-                // Determine actual arg count from SelfFunctionCallNode's parse args
-                const QoreParseListNode* parse_args = sfcn->getParseArgs();
-                const QoreListNode* sfcn_args = sfcn->getArgs();
-                int actual_nargs = 0;
-                if (parse_args && parse_args->size() > 0) {
-                    actual_nargs = (int)parse_args->size();
-                } else if (sfcn_args && sfcn_args->size() > 0) {
-                    actual_nargs = (int)sfcn_args->size();
-                }
-
-                // Build args array on stack
-                llvm::Value* args_array;
-                if (actual_nargs == 0) {
-                    args_array = llvm::ConstantPointerNull::get(
-                        llvm::cast<llvm::PointerType>(ptr_type));
-                } else {
-                    args_array = builder->CreateAlloca(i64_type,
-                        llvm::ConstantInt::get(i32_type, actual_nargs));
-                    for (int i = 0; i < actual_nargs; i++) {
-                        auto* val = getVal(expr_inst->operands[i].id, error);
-                        if (!val) { return false; }
-                        llvm::Value* boxed = boxValue(val, expr_inst->operands[i].id);
-                        builder->CreateStore(boxed, builder->CreateGEP(i64_type, args_array,
-                            llvm::ConstantInt::get(i32_type, i)));
-                    }
-                }
-
-                if (aot_mode) {
-                    // AOT: embed method name, resolve at runtime
-                    llvm::Value* name_ptr = builder->CreateGlobalStringPtr(method_name);
-                    auto bg_aot_ft = llvm::FunctionType::get(i64_type,
-                            {ptr_type, ptr_type, i32_type, ptr_type}, false);
-                    auto helper = module.getOrInsertFunction(
-                            "qore_rt_background_self_call_aot", bg_aot_ft);
-                    auto helper_throwing = module.getOrInsertFunction(
-                            "qore_rt_background_self_call_aot_throwing", bg_aot_ft);
-                    result = emitMaybeInvoke(helper, helper_throwing,
-                            {name_ptr, args_array,
-                             llvm::ConstantInt::get(i32_type, actual_nargs), xsink_arg},
-                            module, llvm_func, inst);
-                } else {
-                    // JIT: embed SelfFunctionCallNode pointer directly
-                    llvm::Value* sfcn_ptr = builder->CreateIntToPtr(
-                        llvm::ConstantInt::get(i64_type, reinterpret_cast<uint64_t>(sfcn)),
-                        ptr_type);
-                    auto bg_ft = llvm::FunctionType::get(i64_type,
-                            {ptr_type, ptr_type, i32_type, ptr_type}, false);
-                    auto helper = module.getOrInsertFunction(
-                            "qore_rt_background_self_call", bg_ft);
-                    auto helper_throwing = module.getOrInsertFunction(
-                            "qore_rt_background_self_call_throwing", bg_ft);
-                    result = emitMaybeInvoke(helper, helper_throwing,
-                            {sfcn_ptr, args_array,
-                             llvm::ConstantInt::get(i32_type, actual_nargs), xsink_arg},
-                            module, llvm_func, inst);
-                }
+            llvm::Value* result = nullptr;
+            if (!expr_inst->operands.empty()
+                    && tryEmitDecomposedBackground(expr_inst->expr, expr_inst->operands,
+                        module, llvm_func, inst, /*throwing_ok*/true, &result)) {
+                // Decomposed path emitted — result is set.
             } else {
-                // Full AST fallback path
+                // Full AST fallback path: either no decomposed operands, or AOT
+                // mode on a non-self shape that we don't (yet) support.
                 QoreValue expr_val = expr_inst->expr;
                 uint64_t expr_bits;
                 std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
