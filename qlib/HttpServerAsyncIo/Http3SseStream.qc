@@ -107,14 +107,24 @@ public class Http3SseStream inherits AbstractSseConnection {
         if (!stream_open) {
             throw "SSE-CLOSED", "SSE stream is closed";
         }
-        while (sock.submitQuicStreamData(session_id, stream_id, data, False) == 1) {
+        try {
+            while (sock.submitQuicStreamData(session_id, stream_id, data, False) == 1) {
+                if (wake_callback) {
+                    wake_callback();
+                }
+                sock.waitForQuicStreamDrain(session_id, stream_id, 5s);
+            }
             if (wake_callback) {
                 wake_callback();
             }
-            sock.waitForQuicStreamDrain(session_id, stream_id, 5s);
-        }
-        if (wake_callback) {
-            wake_callback();
+        } catch (hash<ExceptionInfo> ex) {
+            # Any failure here (QUIC-ERROR from a gone session/stream, drain timeout,
+            # GOAWAY, etc.) means the underlying QUIC stream is effectively dead.
+            # Flip stream_open so isOpen()/isDisconnected() report the true state
+            # and subsequent sends fail fast with SSE-CLOSED rather than surfacing
+            # raw transport errors to every caller.
+            stream_open = False;
+            rethrow;
         }
     }
 
