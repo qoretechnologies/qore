@@ -447,28 +447,34 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
     # whole-dir avoids.  Revisit per-file mode after the slice-4 fix and
     # add an opt-in option for dev-loop incremental builds.
     set(_qmod_dep ${_qmod_out}.d)
-    # Depend on the actual built FILES ($<TARGET_FILE:X>) rather than the
-    # bare target names — CMake's Makefile generator uses file-mtime for
-    # both forms, but naming the files explicitly documents intent and
-    # avoids surprise if a future cmake version treats target-level
-    # dependencies more coarsely.  The `DEPENDS qcc libqore` form also
-    # propagates custom-target re-evaluation to every .qmod rule even
-    # when the actual .so/.bin mtime didn't change; the file form is
-    # strictly mtime-driven so rebuilds happen only when libqore.so or
-    # qcc's binary actually changed (e.g. after a libqore relink).
+    # Dependency strategy: qmod output depends on the module's own
+    # source files (ARGN) and on ${QCC_FORMAT_STAMP} (see root
+    # CMakeLists.txt).  The stamp's mtime tracks only files that
+    # change qmod wire format or qcc compile semantics — NOT every
+    # libqore source edit.  Target-level `add_dependencies` below
+    # ensures qcc and libqore are BUILT before qmod rules run
+    # (needed for cold builds) without making qmod rules mtime-
+    # dependent on their binaries.  Previously `DEPENDS $<TARGET_FILE:qcc>`
+    # triggered all 238 qmod rebuilds on any libqore relink, even for
+    # runtime-only fixes (QoreAOTRuntime.cpp, Function.cpp evalIntern,
+    # slot-reg filtering, etc.) that don't affect qmod output.
     add_custom_command(
         OUTPUT ${_qmod_out}
         COMMAND ${CMAKE_COMMAND} -E make_directory ${_qmod_out_dir}
         COMMAND ${CMAKE_COMMAND} -E env ${QORE_QM_METADATA_ENV}
             $<TARGET_FILE:qcc> -m ${_source_root}
             --depfile=${_qmod_dep} -o ${_qmod_out}
-        DEPENDS ${ARGN} $<TARGET_FILE:qcc> $<TARGET_FILE:libqore>
+        DEPENDS ${ARGN} ${QCC_FORMAT_STAMP}
         DEPFILE ${_qmod_dep}
         COMMENT "AOT compile ${_name}.qmod"
         VERBATIM
     )
 
     add_custom_target(${_name}-qmod ALL DEPENDS ${_qmod_out})
+    # Ensure qcc executable + libqore.so are built before this qmod
+    # rule runs — target-level deps, not mtime deps, so a newer qcc
+    # binary doesn't force a qmod rebuild on its own.
+    add_dependencies(${_name}-qmod qcc qcc-format-version)
 
     install(FILES ${_qmod_out} DESTINATION ${QORE_USER_MODULES_DIR})
 ENDMACRO (QORE_USER_MODULE_AOT_RULES)

@@ -1819,6 +1819,40 @@ target_link_libraries(qcc libqore)
 set_target_properties(qcc PROPERTIES INSTALL_RPATH ${CMAKE_INSTALL_FULL_LIBDIR})
 set_target_properties(qcc PROPERTIES BUILD_RPATH ${CMAKE_BINARY_DIR})
 
+# qcc format-version stamp.  Purpose: decouple qmod rebuilds from
+# libqore.so / qcc binary mtime.  Without this, any libqore source
+# change relinks libqore → relinks qcc → all 238 qmods rebuild even
+# when the change has nothing to do with the AOT binary format
+# (e.g. a runtime-only fix in QoreAOTRuntime.cpp).
+#
+# The stamp's mtime tracks only files that actually affect qmod output:
+# the wire-format header, the writer, the compile pipeline, the IR
+# opcode header, and qcc itself.  Runtime files (QoreAOTRuntime.cpp,
+# Function.cpp's evalIntern tiering, etc.) are excluded — they affect
+# how qmods are executed, not how they're generated.
+#
+# If a file affecting qmod output is missed here, it would cause
+# silently stale qmods.  The feature-flag machinery
+# (QORE_AOT_SUPPORTED_FEATURES) catches wire-format drift at load
+# time, but behavioral drift (e.g. slot-map layout changes) wouldn't
+# be caught — err on the side of including rather than excluding.
+set(_qcc_format_sources
+    ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreAOTBinary.h
+    ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreIR.h
+    ${CMAKE_SOURCE_DIR}/lib/QoreAOT.cpp
+    ${CMAKE_SOURCE_DIR}/lib/QoreAOTBinary.cpp
+    ${CMAKE_SOURCE_DIR}/qcc-main.cpp
+)
+set(QCC_FORMAT_STAMP ${CMAKE_BINARY_DIR}/qcc-format.stamp)
+add_custom_command(
+    OUTPUT ${QCC_FORMAT_STAMP}
+    COMMAND ${CMAKE_COMMAND} -E touch ${QCC_FORMAT_STAMP}
+    DEPENDS ${_qcc_format_sources}
+    COMMENT "Updating qcc format-version stamp"
+    VERBATIM
+)
+add_custom_target(qcc-format-version DEPENDS ${QCC_FORMAT_STAMP})
+
 # Ensure the installed qore binary can resolve @rpath/libqore.20.dylib.
 set_target_properties(qore PROPERTIES INSTALL_RPATH ${CMAKE_INSTALL_FULL_LIBDIR})
 set_target_properties(qore PROPERTIES BUILD_RPATH ${CMAKE_BINARY_DIR})
