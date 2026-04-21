@@ -126,6 +126,74 @@ OnnxModel::constructor(string model_path, hash<OnnxSessionConfig> options) {
 #endif
 }
 
+//! Creates an OnnxModel from an in-memory byte buffer
+/** @param model_data the raw ONNX model bytes (as produced by writing an ONNX
+    file, or downloading one over the network)
+
+    Use this constructor when the caller holds the model in memory and does
+    not want to round-trip it through a tempfile. The buffer is copied into
+    ONNX Runtime, so it may be freed immediately after the call returns.
+
+    The best available GPU execution provider is automatically selected (CUDA
+    on Linux, CoreML on macOS), falling back to CPU.
+
+    @par Example:
+    @code{.py}
+binary bytes = ReadOnlyFile::readBinaryFile("/path/to/model.onnx");
+OnnxModel model(bytes);
+    @endcode
+
+    @throw ML-ONNX-ERROR if the model bytes cannot be parsed
+*/
+OnnxModel::constructor(binary model_data) {
+#ifdef HAVE_ONNXRUNTIME
+    ReferenceHolder<QoreOnnxModel> model_holder(
+        new QoreOnnxModel(model_data->getPtr(), model_data->size(), xsink), xsink);
+    if (*xsink) {
+        return;
+    }
+    self->setPrivate(CID_ONNXMODEL, model_holder.release());
+#else
+    xsink->raiseException("MISSING-FEATURE-ERROR", "the ml module was not compiled with ONNX "
+        "Runtime support; check MLCapabilities.has_onnx before calling this constructor");
+#endif
+}
+
+//! Creates an OnnxModel from an in-memory byte buffer with session configuration options
+/** @param model_data the raw ONNX model bytes
+    @param options session configuration including execution providers, threading, and optimization
+
+    If no \c providers are specified in the config, the best available GPU execution provider
+    is automatically selected (CUDA on Linux, CoreML on macOS), falling back to CPU.
+    An explicit empty \c providers list disables auto-detection and uses CPU only.
+
+    @par Example:
+    @code{.py}
+binary bytes = ReadOnlyFile::readBinaryFile("/path/to/model.onnx");
+hash<OnnxSessionConfig> config = <OnnxSessionConfig>{
+    "intra_op_threads": 4,
+    "graph_optimization_level": 99,
+};
+OnnxModel model(bytes, config);
+    @endcode
+
+    @throw ML-ONNX-ERROR if the model bytes cannot be parsed or config is invalid
+    @throw ML-ONNX-PROVIDER-ERROR if an execution provider cannot be initialized
+*/
+OnnxModel::constructor(binary model_data, hash<OnnxSessionConfig> options) {
+#ifdef HAVE_ONNXRUNTIME
+    ReferenceHolder<QoreOnnxModel> model_holder(
+        new QoreOnnxModel(model_data->getPtr(), model_data->size(), options, xsink), xsink);
+    if (*xsink) {
+        return;
+    }
+    self->setPrivate(CID_ONNXMODEL, model_holder.release());
+#else
+    xsink->raiseException("MISSING-FEATURE-ERROR", "the ml module was not compiled with ONNX "
+        "Runtime support; check MLCapabilities.has_onnx before calling this constructor");
+#endif
+}
+
 //! Creates a copy of the OnnxModel
 /** @throw COPY-ERROR OnnxModel objects cannot be copied
 */

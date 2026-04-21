@@ -63,6 +63,20 @@ public:
     //! Constructor — loads the ONNX model with session configuration
     DLLLOCAL QoreOnnxModel(const char* model_path, const QoreHashNode* config, ExceptionSink* xsink);
 
+    //! Constructor — loads the ONNX model from an in-memory byte buffer
+    /** @param model_data pointer to the raw ONNX model bytes
+        @param model_data_len length of the buffer in bytes
+        @param xsink exception sink
+
+        The buffer is copied into ONNX Runtime, so the caller may free it
+        immediately after construction.
+    */
+    DLLLOCAL QoreOnnxModel(const void* model_data, size_t model_data_len, ExceptionSink* xsink);
+
+    //! Constructor — loads the ONNX model from memory with session configuration
+    DLLLOCAL QoreOnnxModel(const void* model_data, size_t model_data_len,
+        const QoreHashNode* config, ExceptionSink* xsink);
+
     //! Returns the active execution provider name
     DLLLOCAL const std::string& getActiveProvider() const { return active_provider; }
 
@@ -101,6 +115,13 @@ private:
     std::vector<TensorMeta> output_meta;
 
     std::string active_provider;
+
+    //! Initialize the Ort::Env and populate session options from the config hash
+    /** Shared between the path-based and memory-based configured constructors.
+        @return true if env and options were populated; false if an exception was raised
+    */
+    DLLLOCAL bool initEnvAndOptions(Ort::SessionOptions& session_options,
+        const QoreHashNode* config, ExceptionSink* xsink);
 
     //! Configure session options from a config hash
     DLLLOCAL void configureSession(Ort::SessionOptions& opts, const QoreHashNode* config,
