@@ -966,8 +966,16 @@ int qore_program_private::internParseCommit(bool standard_parse) {
             str_vec_hwm = str_vec.size();
             pgmloc_hwm = pgmloc.size();
 
-            // Eagerly compile all functions if --exec-mode=ir, --exec-mode=jit, or --exec-mode=tiered was specified
-            if ((exec_mode == QEM_IR || exec_mode == QEM_JIT || exec_mode == QEM_TIERED) && standard_parse) {
+            // Eagerly compile all functions if --exec-mode=ir, --exec-mode=jit, or --exec-mode=tiered was specified.
+            // Gate on PO_MODERN: `ensureIrExecMode` in parseCommit runs
+            // right after this and will downgrade non-%modern programs to
+            // QEM_AST.  Without the gate, every attemptIRLowering call
+            // records a spurious `lowering: ...` fallback (e.g. `break`
+            // under PO_BROKEN_LOOP_STATEMENT is legal in AST but fails
+            // IR lowering) before the exec-mode is downgraded.
+            if ((exec_mode == QEM_IR || exec_mode == QEM_JIT || exec_mode == QEM_TIERED)
+                    && standard_parse
+                    && (pwo.parse_options & PO_MODERN) == PO_MODERN) {
                 qore_root_ns_private* root_ns_priv = qore_root_ns_private::get(*RootNS);
                 eagerlyCompileAllFunctions(root_ns_priv, exec_mode);
             }
