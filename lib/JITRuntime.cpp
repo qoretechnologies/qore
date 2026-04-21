@@ -998,10 +998,22 @@ extern "C" DLLEXPORT uint64_t qore_rt_cast_by_type_path(uint64_t inner_bits,
         return toBits(QoreValue());
     }
 
-    // Resolve the type path
+    // Resolve the type path.  IR emission emits the FULL nullable path
+    // (e.g. `*list<string>`) for or-nothing casts and sets or_nothing=1
+    // alongside, but QoreAOTTypeResolver's `resolveBuiltin` /
+    // `resolveComplexType` only know the non-nullable form — feeding
+    // them a leading `*` gives "cannot resolve type path".  Strip the
+    // prefix before resolution; the `or_nothing` flag already carries
+    // the semantic.  Matches the QoreTypeInfo convention where
+    // `list<string>` and `*list<string>` share the base type and differ
+    // only in the or-nothing flag.
+    const char* resolve_path = type_path;
+    if (or_nothing && resolve_path[0] == '*') {
+        ++resolve_path;
+    }
     std::string error;
     QoreAOTTypeResolver resolver(pgm);
-    const QoreTypeInfo* ti = resolver.resolve(type_path, error);
+    const QoreTypeInfo* ti = resolver.resolve(resolve_path, error);
 
     // Try class cast first
     const QoreClass* qc = ti ? QoreTypeInfo::getUniqueReturnClass(ti) : nullptr;
