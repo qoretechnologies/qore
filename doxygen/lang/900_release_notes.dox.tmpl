@@ -30,6 +30,19 @@
     <b>Note:</b> The @ref broken-soft-types "%broken-soft-types" option is AST-only and not supported in IR/JIT execution modes.
     @endparblock
 
+    @par summarize Statement Rejected Under %modern
+    @parblock
+    The @ref context "summarize" statement is now rejected at parse time when @ref modern "%modern" is in effect.
+    \c %modern now implies the new @ref no-summarize "%no-summarize" parse option. Code that uses \c summarize
+    inside a program parsed with \c %modern, via the \c -M command-line flag, the \c .qr file extension, or
+    @ref Qore::PO_MODERN will now fail parse with a \c PARSE-EXCEPTION.
+
+    <b>Workarounds:</b>
+    - Drop \c %modern and use @ref new-style "%new-style" (plus other directives) directly — \c summarize
+      remains available without \c %modern
+    - Rewrite the \c summarize block as a plain @ref context "context" loop with manual grouping
+    @endparblock
+
     @section qore_2_3_0 Qore 2.3.0
 
     @par Release Summary

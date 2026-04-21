@@ -122,6 +122,7 @@
 #define PO_NO_CONSTANT_DEFS                 0  //!< disallow constant definitions; use QoreParseOptions::NO_CONSTANT_DEFS in C++
 #define PO_NO_NAMESPACE_DEFS                0  //!< disallow namespace definitions; use QoreParseOptions::NO_NAMESPACE_DEFS in C++
 #define PO_NO_NEW                           0  //!< disallow the 'new' keyword; use QoreParseOptions::NO_NEW in C++
+#define PO_NO_SUMMARIZE                     0  //!< disallow the 'summarize' statement; use QoreParseOptions::NO_SUMMARIZE in C++
 
 #define PO_DEFAULT 0            //!< no parse options set by default
 
@@ -149,11 +150,15 @@
 //! new Qore style: no more '$' and with assumed variable scope
 #define PO_NEW_STYLE                  (PO_ALLOW_BARE_REFS|PO_ASSUME_LOCAL)
 
-//! modern Qore style: new style + require types + strict args + strong encapsulation
-/** @note all warnings are also enabled with %modern; use the %modern parse directive
+//! modern Qore style: new style + require types + strict args + strong encapsulation + no summarize
+/** @note all warnings are also enabled with %modern; use the %modern parse directive.
+    \c PO_NO_SUMMARIZE is an extended parse option (bit 69); its macro value is \c 0 here
+    for qpp/int64 compatibility, so the bit is also applied implicitly wherever \c PO_MODERN
+    is materialised (parse-option application, \c \%modern directive, CLI \c -M).
     @since %Qore 2.3
 */
-#define PO_MODERN                     (PO_NEW_STYLE|PO_REQUIRE_TYPES|PO_STRICT_ARGS|PO_STRONG_ENCAPSULATION)
+#define PO_MODERN                     (PO_NEW_STYLE|PO_REQUIRE_TYPES|PO_STRICT_ARGS|PO_STRONG_ENCAPSULATION \
+    |PO_NO_SUMMARIZE)
 
 //! mask of all options allowing for more freedom (instead of less)
 #define PO_POSITIVE_OPTIONS           (PO_NO_CHILD_PO_RESTRICTIONS|PO_ALLOW_INJECTION|PO_ALLOW_WEAK_REFERENCES \

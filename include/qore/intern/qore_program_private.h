@@ -612,6 +612,9 @@ public:
             TZ = QTZM.getLocalZoneInfo();
             newProgram();
         }
+        // Apply parse-option implications once pwo.parse_options is fully populated
+        // (setParent may OR in inherited restrictions from the parent Program).
+        applyParseOptionImplications();
 
         // initialize global vars
         // check if PO_NO_EXTERNAL_INFO is set - if so, provide empty values for ARGV, QORE_ARGV, and ENV
@@ -668,8 +671,17 @@ public:
         return pwo.parse_options & ~po & ~PO_FREE_STYLE_OPTIONS;
     }
 
+    // apply parse-option bit implications that cannot be encoded in the int64 PO_* macros
+    // (currently: PO_MODERN implies QoreParseOptions::NO_SUMMARIZE, which lives at bit 69)
+    DLLLOCAL void applyParseOptionImplications() {
+        if ((pwo.parse_options & PO_MODERN) == PO_MODERN) {
+            pwo.parse_options |= QoreParseOptions::NO_SUMMARIZE;
+        }
+    }
+
     DLLLOCAL void replaceParseOptionsIntern(const QoreParseOptions& po) {
         pwo.parse_options = po;
+        applyParseOptionImplications();
     }
 
     DLLLOCAL bool checkSetParseOptions(const QoreParseOptions& po) {
@@ -680,6 +692,7 @@ public:
 
     DLLLOCAL void setParseOptionsIntern(const QoreParseOptions& po) {
         pwo.parse_options |= po;
+        applyParseOptionImplications();
     }
 
     DLLLOCAL void addParseModule(const char* mod) {
@@ -1543,6 +1556,7 @@ public:
         size_t len = strlen(filename);
         if (len > 3 && !strcmp(filename + len - 3, ".qr")) {
             pwo.parse_options |= PO_MODERN;
+            applyParseOptionImplications();
             pgm->setWarningMask(QP_WARN_ALL);
         }
 
@@ -2496,6 +2510,7 @@ public:
     DLLLOCAL static QoreParseOptions forceReplaceParseOptions(QoreProgram& pgm, const QoreParseOptions& po) {
         QoreParseOptions rv = pgm.priv->pwo.parse_options;
         pgm.priv->pwo.parse_options = po;
+        pgm.priv->applyParseOptionImplications();
         return rv;
     }
 

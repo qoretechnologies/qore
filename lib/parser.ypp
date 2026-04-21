@@ -2716,6 +2716,12 @@ statement:
         $$ = new ContextStatement(@1.first_line, @3.last_line, 0, 0, $2, $3);
     }
     | TOK_SUMMARIZE optname '(' exp ')' TOK_BY '(' exp ')' context_mods statement_or_block {
+        if (parse_check_parse_option(QoreParseOptions::NO_SUMMARIZE)) {
+            const QoreProgramLocation* loc = qore_program_private::get(*getProgram())
+                ->getLocation(@1.first_line, @11.last_line);
+            parse_error(*loc, "the 'summarize' statement is not allowed when '%%no-summarize' is "
+                "set (implied by '%%modern'); rewrite as a 'context' loop with manual grouping");
+        }
         $$ = new SummarizeStatement(@1.first_line, @11.last_line, $2, $4, $10, $11, $8);
     }
     | TOK_CONTEXT optname '(' exp ')' context_mods statement_or_block {

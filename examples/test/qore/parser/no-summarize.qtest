@@ -1,0 +1,77 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%requires ../../../../qlib/QUnit.qm
+
+%exec-class NoSummarizeTest
+
+class NoSummarizeTest inherits QUnit::Test {
+    # A syntactically valid summarize statement over a small context hash, wrapped
+    # in a function so the top-level-statements restriction (inherited from this
+    # test harness's %exec-class) doesn't mask the directive-specific errors we
+    # care about.
+    private {
+        const SummarizeSrc = "
+            int sub compute() {
+                hash<auto> data = (\"k\": (\"a\",), \"v\": (1,));
+                int total = 0;
+                summarize(data) by (%k) {
+                    total += %v;
+                }
+                return total;
+            }
+        ";
+    }
+
+    constructor() : QUnit::Test("NoSummarizeTest", "1.0") {
+        addTestCase("summarize rejected under %no-summarize directive",
+            \testDirectiveRejects());
+        addTestCase("summarize rejected under %modern (implies no-summarize)",
+            \testModernImpliesNoSummarize());
+        addTestCase("summarize accepted without %modern / %no-summarize",
+            \testLegacyStillParses());
+        addTestCase("ParseOptions 'no-summarize' rejects",
+            \testParseOptionsStringRejects());
+        set_return_value(main());
+    }
+
+    # Explicit %no-summarize directive must cause a parse error for 'summarize'.
+    # 'independent' decouples this child Program from the harness's %modern
+    # parent so we're testing the directive in isolation.
+    testDirectiveRejects() {
+        Program p(PO_NEW_STYLE, True);
+        assertThrows("PARSE-EXCEPTION",
+            "not allowed when '%no-summarize'",
+            \p.parse(),
+            ("%require-types\n%no-summarize\n" + SummarizeSrc, "summarize-direct"));
+    }
+
+    # %modern implies %no-summarize via PO_MODERN's implication in setParseOptionsIntern.
+    testModernImpliesNoSummarize() {
+        Program p(PO_MODERN, True);
+        assertThrows("PARSE-EXCEPTION",
+            "not allowed when '%no-summarize'",
+            \p.parse(),
+            (SummarizeSrc, "summarize-modern"));
+    }
+
+    # Without %modern or %no-summarize, summarize should still parse (backward compat).
+    testLegacyStillParses() {
+        Program p(PO_NEW_STYLE, True);
+        p.parse(SummarizeSrc, "summarize-legacy");
+        assertTrue(p.existsFunction("compute"));
+    }
+
+    # Setting no-summarize via the ParseOptions class must also reject.
+    testParseOptionsStringRejects() {
+        ParseOptions opts(PO_NEW_STYLE | PO_REQUIRE_TYPES);
+        opts.set("no-summarize");
+        Program p(opts, True);
+        assertThrows("PARSE-EXCEPTION",
+            "not allowed when '%no-summarize'",
+            \p.parse(),
+            (SummarizeSrc, "summarize-parseoptions"));
+    }
+}

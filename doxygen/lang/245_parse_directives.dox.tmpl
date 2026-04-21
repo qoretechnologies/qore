@@ -7,7 +7,7 @@
     Parse directives that set parsing options can be used any time parse options have not been locked on a @ref Qore::Program "Program object". They are used most often when it's not possible or desirable to set the parse options in the qore command line.
 
     The recommended parse directive for %Qore programming is @ref modern "%modern", which combines all the recommended parse options into a single directive:
-    - @ref modern "%modern" - sets @ref new-style "%new-style", @ref strict-args "%strict-args", @ref require-types "%require-types", @ref strong-encapsulation "%strong-encapsulation", and enables all non-strict warnings
+    - @ref modern "%modern" - sets @ref new-style "%new-style", @ref strict-args "%strict-args", @ref require-types "%require-types", @ref strong-encapsulation "%strong-encapsulation", @ref no-summarize "%no-summarize", and enables all non-strict warnings
 
     Alternatively, files with the \c .qr extension automatically enable @ref modern "%modern" mode without any parse directive.
 
@@ -73,7 +73,7 @@
     |@ref lock-options "%lock-options"|Prohibits further changes to parse options (equivalent to the <tt>-</tt><tt>-lock-options</tt> command line option)
     |@ref lock-warnings "%lock-warnings"|Prohibits further changes to the warning mask (equivalent to the <tt>-</tt><tt>-lock-warnings</tt> command line option)
     |@ref loose-args "%loose-args"|reverts the effect of the @ref strict-args "%strict-args" parse options
-    |@ref modern "%modern"|Sets @ref new-style "%new-style", @ref require-types "%require-types", @ref strict-args "%strict-args", @ref strong-encapsulation "%strong-encapsulation", and enables all non-strict warnings. This is the recommended parse directive for modern %Qore programming. Files with the \c .qr extension automatically enable this mode.<br><br>Since %Qore 2.3
+    |@ref modern "%modern"|Sets @ref new-style "%new-style", @ref require-types "%require-types", @ref strict-args "%strict-args", @ref strong-encapsulation "%strong-encapsulation", @ref no-summarize "%no-summarize", and enables all non-strict warnings. This is the recommended parse directive for modern %Qore programming. Files with the \c .qr extension automatically enable this mode.<br><br>Since %Qore 2.3
     |@ref loose-types "%loose-types"|Deprecated: support removed in %Qore 2.3; this directive has no effect
     |@ref new-style "%new-style"|Sets both @ref allow-bare-refs "%allow-bare-refs" and @ref assume-local "%assume-local". These two options together make programming in %Qore superficially more like programming in C++ or Java programs; use this if you dislike programming with the \c "$" sign, for example; see also @ref old-style "%old-style" <br><br>Since %Qore 0.8.1
     |@ref old-style "%old-style"|Resets default %Qore parsing behavior by setting @ref require-dollar "%require-dollar" and @ref assume-global "%assume-global"; this option is the opposite of @ref new-style "%new-style" <br><br>Since %Qore 0.8.4
@@ -97,6 +97,7 @@
     |@ref no-process-control "%no-process-control"|Disallows access to functions that would affect the current process (see @ref no-process-control "%no-process-control" for a list of features not available with this parse option); equivalent to parse option @ref Qore::PO_NO_PROCESS_CONTROL and the <tt>-</tt><tt>-no-process-control</tt> command line option
     |@ref no-reflection "%no-reflection"|Disallows access to the reflection API provided by the <a href="../../modules/reflection/html/index.html#reflectionintro">reflection</a> module; equivalent to parse option @ref Qore::PO_NO_REFLECTION<br><br>Since %Qore 0.9
     |@ref no-subroutine-defs "%no-subroutine-defs"|Disallows subroutine (function) definitions; equivalent to parse option @ref Qore::PO_NO_SUBROUTINE_DEFS and the <tt>-</tt><tt>-no-subroutine-defs</tt> command line option
+    |@ref no-summarize "%no-summarize"|Disallows the \c summarize statement; implied by @ref modern "%modern". Set programmatically via the string \c "no-summarize" on @ref ParseOptions<br><br>Since %Qore 2.4
     |@ref no-terminal-io "%no-terminal-io"|Disallows access to terminal I/O (see @ref no-terminal-io "%no-terminal-io" for a list of features not available with this parse option); equivalent to parse option @ref Qore::PO_NO_TERMINAL_IO and the <tt>-pno-terminal-io</tt> command line option
     |@ref no-thread-classes "%no-thread-classes"|Disallows access to thread classes (see @ref no-thread-classes "%no-thread-classes" for a list of features not available with this parse option); equivalent to parse option @ref Qore::PO_NO_THREAD_CLASSES and the <tt>-</tt><tt>-no-thread-classes</tt> command line option
     |@ref no-thread-control "%no-thread-control"|Disallows access to thread control operations (see @ref no-thread-control "%no-thread-control" for a list of features not available with this parse option); equivalent to parse option @ref Qore::PO_NO_THREAD_CONTROL and the <tt>-</tt><tt>-no-thread-control</tt> command line option
@@ -1316,7 +1317,7 @@ sub validate_input(int value, int max_value) {
     @ref Qore::PO_MODERN
 
     @par Description:
-    Sets @ref new-style "%new-style" (@ref allow-bare-refs "%allow-bare-refs" and @ref assume-local "%assume-local"), @ref require-types "%require-types", @ref strict-args "%strict-args", @ref strong-encapsulation "%strong-encapsulation", and enables all non-strict warnings.
+    Sets @ref new-style "%new-style" (@ref allow-bare-refs "%allow-bare-refs" and @ref assume-local "%assume-local"), @ref require-types "%require-types", @ref strict-args "%strict-args", @ref strong-encapsulation "%strong-encapsulation", @ref no-summarize "%no-summarize", and enables all non-strict warnings.
 
     This is the recommended parse directive for modern %Qore programming. It combines all the best practices into a single directive.
 
@@ -1794,6 +1795,34 @@ sub validate_input(int value, int max_value) {
 
     @par Description:
     Disallows subroutine (function) definitions.
+
+    <hr>
+    @section no-summarize %no-summarize
+
+    @par Parse Directive:
+    <tt>%%no-summarize</tt>
+
+    @par Command Line:
+    <tt>-</tt><tt>-set-parse-option=no-summarize</tt>
+
+    @par Parse Option Constant:
+    <tt>"no-summarize"</tt> (via @ref ParseOptions)
+
+    @par Description:
+    Disallows the \c summarize statement at parse time. When this option is set, any
+    \c summarize statement triggers a parse error. The recommended rewrite is to
+    iterate a plain @ref context "context" loop and perform grouping manually.
+
+    This option is implied by @ref modern "%modern" and therefore applies to all
+    \c .qr files and any program started with the \c -M command-line flag or the
+    @ref Qore::PO_MODERN option constant.
+
+    @note This is an extended parse option (bit 69). The Qore constant \c PO_NO_SUMMARIZE
+    is defined as \c 0 for backward compatibility with the legacy 64-bit integer
+    parse-option space; use the string name \c "no-summarize" with the @ref ParseOptions
+    class when setting parse options programmatically.
+
+    @since %Qore 2.4
 
     <hr>
     @section no-terminal-io %no-terminal-io

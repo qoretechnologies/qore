@@ -189,6 +189,13 @@ public:
     */
     DLLEXPORT static const QoreParseOptions BROKEN_SOFT_TYPES;
 
+    //! extended option: disallow the \c summarize statement (bit 69)
+    /** Enforced at parse time: when set, any \c summarize statement triggers a parse error.
+        Included in \c PO_MODERN so modern code always rejects \c summarize.
+        @since %Qore 2.4
+    */
+    DLLEXPORT static const QoreParseOptions NO_SUMMARIZE;
+
 private:
     int64 lo;  //!< bits 0-63 (compatible with legacy int64 parse options)
     int64 hi;  //!< bits 64-127 (extended parse options)

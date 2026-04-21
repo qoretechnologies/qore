@@ -36,3 +36,4 @@ const QoreParseOptions QoreParseOptions::NO_CONSTANT_DEFS(0, 1LL << 1);    // bi
 const QoreParseOptions QoreParseOptions::NO_NAMESPACE_DEFS(0, 1LL << 2);   // bit 66
 const QoreParseOptions QoreParseOptions::NO_NEW(0, 1LL << 3);              // bit 67
 const QoreParseOptions QoreParseOptions::BROKEN_SOFT_TYPES(0, 1LL << 4);   // bit 68
+const QoreParseOptions QoreParseOptions::NO_SUMMARIZE(0, 1LL << 5);        // bit 69

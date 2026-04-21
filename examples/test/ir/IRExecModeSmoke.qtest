@@ -2855,6 +2855,11 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrContextSummarizeSmoke() {
+        # Note: the 'summarize' statement is rejected under %modern (PO_MODERN implies
+        # %no-summarize), and IR/JIT exec modes only run on %modern code — so this
+        # smoke test now exercises the 'context' path only. 'summarize' will be
+        # covered separately once IR lowering for context is complete and the
+        # legacy summarize path is retired.
         string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
@@ -2866,9 +2871,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
         script.file.write("hash q = (\"name\": (\"a\", \"b\", \"a\"), \"age\": (10, 20, 5));\n");
         script.file.write("int sum = 0;\n");
         script.file.write("context (q) { sum += %age; }\n");
-        script.file.write("int groups = 0;\n");
-        script.file.write("summarize (q) by (%name) { groups += 1; }\n");
-        script.file.write("printf(\"context:%d groups:%d\\n\", sum, groups);\n");
+        script.file.write("printf(\"context:%d\\n\", sum);\n");
         script.file.close();
 
         TmpFile out();
@@ -2887,7 +2890,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
         assertFalse(err_output =~ /IR exec fallback to AST:/, "Unexpected IR fallback warning");
 
         string stdout_output = ReadOnlyFile::readTextFile(out.path);
-        assertEq("context:35 groups:2\n", stdout_output, "Unexpected IR context/summarize output");
+        assertEq("context:35\n", stdout_output, "Unexpected IR context output");
     }
 
     testIrObjectHashListOpSmoke() {
