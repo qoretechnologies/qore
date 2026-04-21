@@ -5219,7 +5219,21 @@ public:
 
         fputs("    ", fp);
 
-        if (attr & QCA_ABSTRACT) fputs("abstract ", fp);
+        // Abstract-ness is dropped for stub-only methods: they exist
+        // solely to satisfy parse-time name lookup, and enforcing an
+        // abstract slot would force derived classes to match the
+        // stub's signature exactly.  The orphan-abstract pattern is
+        // precisely for cases where derived classes HAVE DIFFERENT
+        // signatures (different arity or param types) that only
+        // co-exist because the base has no concrete abstract slot —
+        // see parse()'s orphan-abstract handler and the Qorus case
+        // of LocalQorusService/RemoteQorusService's callMethodImpl
+        // (2-param vs 6-param).  Emitting as a concrete stub lets
+        // callers through the base type resolve the name, while
+        // derived overloads retain their freedom.
+        if ((attr & QCA_ABSTRACT) && !stub_only) {
+            fputs("abstract ", fp);
+        }
         if (attr & QCA_STATIC) fputs("static ", fp);
         if (attr & QCA_PRIVATE) fputs("private ", fp);
         if (attr & QCA_PRIVATE_INTERNAL) fputs("private:internal ", fp);
@@ -5253,9 +5267,11 @@ public:
         }
         fputc(')', fp);
 
-        if (attr & QCA_ABSTRACT) {
+        if ((attr & QCA_ABSTRACT) && !stub_only) {
             fputs(";\n", fp);
         } else {
+            // stub_only abstract methods emit as concrete stubs (see
+            // comment above re: derived-class signature freedom).
             fputc(' ', fp);
             emit_stub_default_body(fp, return_type);
             fputc('\n', fp);
