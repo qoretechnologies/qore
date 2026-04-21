@@ -1799,10 +1799,23 @@ void AsyncIoControllerPriv::cancelByProgram(QoreProgram* pgm, ExceptionSink* xsi
                 if (it != tp.cache.end()) {
                     ASYNC_IO_TRACE("cache.erase CANCEL_BY_PROGRAM_DIRECT key='%s' owner='%s'\n",
                         key.c_str(), it->second.owner.c_str());
-                    cancel_pinfos.push_back(it->second);
+                    PollInfo pinfo_copy = it->second;
+                    bool in_flight = it->second.continue_poll_in_flight;
                     it->second = PollInfo();
                     tp.cache.erase(it);
                     tp.cache_size.fetch_sub(1, std::memory_order_relaxed);
+                    if (in_flight) {
+                        // Worker is currently running continuePoll for this
+                        // op — defer doCancelIntern until ContinuePollResult
+                        // arrives.  waitForProgramIdle() alone is insufficient
+                        // because active_per_program[pgm] only increments when
+                        // a worker pops the item, not when it is enqueued, so
+                        // a dispatched-but-not-yet-popped continuePoll would
+                        // race with the caller's Phase-3 doCancelIntern.
+                        tp.pending_aborts.emplace(key, std::move(pinfo_copy));
+                    } else {
+                        cancel_pinfos.push_back(std::move(pinfo_copy));
+                    }
                 }
             }
         }
@@ -4021,15 +4034,26 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                                 key.c_str(), it->second.owner.c_str());
                             unregisterFromEventLoop(t, key, xsink);
                             PollInfo pinfo_copy = it->second;
+                            bool in_flight = it->second.continue_poll_in_flight;
                             it->second = PollInfo();
                             t.cache.erase(it);
                             t.cache_size.fetch_sub(1, std::memory_order_relaxed);
 
-                            // Append to the completion's shared vector
-                            // (guarded by its own pinfos_lock).
-                            if (cmd.completion) {
+                            if (in_flight) {
+                                // Worker is currently running continuePoll for
+                                // this op — defer doCancelIntern until
+                                // ContinuePollResult arrives.  waitForProgramIdle
+                                // on the caller side only reflects worker items
+                                // that have been popped off the dispatcher
+                                // queue; queued-but-not-yet-popped items would
+                                // race with the caller's Phase-3 doCancelIntern.
+                                t.pending_aborts.emplace(key, std::move(pinfo_copy));
+                            } else if (cmd.completion) {
+                                // Append to the completion's shared vector
+                                // (guarded by its own pinfos_lock).
                                 AutoLocker al2(cmd.completion->pinfos_lock);
-                                cmd.completion->cancel_pinfos.push_back(pinfo_copy);
+                                cmd.completion->cancel_pinfos.push_back(
+                                    std::move(pinfo_copy));
                             }
 
                             // Signal any pending cancel waiters for this key
