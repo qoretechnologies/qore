@@ -360,7 +360,7 @@ public class SystemeIoDataProviderBase inherits DataProvider::AbstractDataProvid
                 if (retryRequest(ex, \retries)) {
                     continue;
                 }
-                rethrow;
+                rethrow ex.err, getApiErrorDesc(ex), ex.arg;
             }
         }
     }
@@ -377,9 +377,58 @@ public class SystemeIoDataProviderBase inherits DataProvider::AbstractDataProvid
                 if (retryRequest(ex, \retries)) {
                     continue;
                 }
-                rethrow;
+                rethrow ex.err, getApiErrorDesc(ex), ex.arg;
             }
         }
+    }
+
+    #! Returns an enriched error description that includes the Systeme.io API error message if available
+    /** Systeme.io uses the RFC 7807 \c application/problem+json envelope:
+        \c {"type": "<uri>", "title": "<generic>", "status": <int>, "detail": "<specific>"}. Built
+        on Symfony's API Platform, validation failures additionally populate a \c violations list
+        with \c {"propertyPath", "message", "code"} entries for field-level errors.
+
+        \c detail is preferred over \c title because \c title is usually the generic placeholder
+        \"An error occurred\" while \c detail carries the specific reason.
+    */
+    private string getApiErrorDesc(hash<ExceptionInfo> ex) {
+        string desc = ex.desc;
+        auto body = ex.arg.body;
+        if (body.typeCode() != NT_HASH) {
+            return desc;
+        }
+        *string primary = DataProvider::DataProviderErrorUtil::firstStringAt(
+            body, ("detail", "hydra:description", "title"));
+        if (primary.val()) {
+            desc += ": " + primary;
+        }
+        if (body.violations.typeCode() == NT_LIST && body.violations) {
+            list<string> parts = ();
+            foreach auto v in (body.violations) {
+                if (v.typeCode() != NT_HASH) {
+                    continue;
+                }
+                *string path = DataProvider::DataProviderErrorUtil::firstStringAt(
+                    v, ("propertyPath", "property", "field"));
+                *string msg = DataProvider::DataProviderErrorUtil::firstStringAt(
+                    v, ("message", "title"));
+                *string code = DataProvider::DataProviderErrorUtil::firstStringAt(v, ("code",));
+                string part = path ?? "";
+                if (msg.val()) {
+                    part = part.val() ? part + ": " + msg : msg;
+                }
+                if (code.val()) {
+                    part = part.val() ? part + sprintf(" (code: %s)", code) : code;
+                }
+                if (part.val()) {
+                    push parts, part;
+                }
+            }
+            if (parts) {
+                desc += " [" + join("; ", parts) + "]";
+            }
+        }
+        return desc;
     }
 
     #! Checks if a request should be retried

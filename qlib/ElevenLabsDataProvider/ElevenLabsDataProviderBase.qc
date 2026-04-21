@@ -240,18 +240,8 @@ public class ElevenLabsDataProviderBase inherits DataProvider::AbstractDataProvi
 
         # Check for HTTP errors
         if (status >= 400) {
-            string msg;
-            if (body.typeCode() == NT_HASH) {
-                if (body.detail.typeCode() == NT_HASH) {
-                    msg = body.detail.message ?? sprintf("API error: %y", body.detail);
-                } else if (body.detail.typeCode() == NT_STRING) {
-                    msg = body.detail;
-                } else {
-                    msg = body.message ?? sprintf("API error %d", status);
-                }
-            } else {
-                msg = sprintf("API error %d: %y", status, body);
-            }
+            *string detail = formatApiDetail(body);
+            string msg = detail ?? sprintf("API error %d: %y", status, body);
             throw "ELEVENLABS-API-ERROR", msg, {"status_code": status, "body": body};
         }
 
@@ -388,9 +378,83 @@ public class ElevenLabsDataProviderBase inherits DataProvider::AbstractDataProvi
                 if (retry(ex, \retries)) {
                     continue;
                 }
-                rethrow;
+                rethrow ex.err, getApiErrorDesc(ex), ex.arg;
             }
         }
+    }
+
+    #! Returns an enriched error description that includes the ElevenLabs API error message if available
+    /** ElevenLabs uses FastAPI/Pydantic error conventions with a polymorphic \c detail field in the body:
+        - scalar string (e.g. \c "Not Found", \c "Method Not Allowed")
+        - nested hash (e.g. \c {"status": "invalid_api_key", "message": "Invalid API key"}) on auth errors
+        - list of per-field Pydantic entries (e.g. \c [{"type": "...", "loc": ["body","field"], "msg": "...", "input": ...}])
+          on 422 validation failures
+    */
+    private string getApiErrorDesc(hash<ExceptionInfo> ex) {
+        string desc = ex.desc;
+        *string detail = formatApiDetail(ex.arg.body);
+        if (detail.val()) {
+            desc += ": " + detail;
+        }
+        return desc;
+    }
+
+    #! Renders the polymorphic \c detail field of an ElevenLabs error body into a human string
+    /** @param body the parsed response body
+
+        @return the formatted detail string, or \c NOTHING if the body cannot be meaningfully formatted
+    */
+    private *string formatApiDetail(auto body) {
+        if (body.typeCode() != NT_HASH || !body.hasKey("detail")) {
+            return NOTHING;
+        }
+        auto detail = body.detail;
+        switch (detail.typeCode()) {
+            case NT_STRING:
+                return detail.val() ? detail : NOTHING;
+            case NT_HASH: {
+                if (!detail) {
+                    return NOTHING;
+                }
+                *string msg = DataProvider::DataProviderErrorUtil::firstStringAt(detail, ("message",));
+                *string status = DataProvider::DataProviderErrorUtil::firstStringAt(detail, ("status",));
+                if (msg.val() && status.val()) {
+                    return sprintf("%s (status: %s)", msg, status);
+                }
+                return msg ?? status;
+            }
+            case NT_LIST: {
+                if (!detail) {
+                    return NOTHING;
+                }
+                list<string> parts = ();
+                foreach auto e in (detail) {
+                    if (e.typeCode() != NT_HASH) {
+                        push parts, sprintf("%y", e);
+                        continue;
+                    }
+                    *string msg = DataProvider::DataProviderErrorUtil::firstStringAt(e, ("msg", "message"));
+                    *string type_str = DataProvider::DataProviderErrorUtil::firstStringAt(e, ("type",));
+                    string loc_str = "";
+                    if (e.loc.typeCode() == NT_LIST && e.loc) {
+                        list<string> segs = map $1.typeCode() == NT_STRING ? $1 : sprintf("%y", $1), e.loc;
+                        loc_str = join(".", segs);
+                    }
+                    string part = loc_str;
+                    if (msg.val()) {
+                        part = part.val() ? part + ": " + msg : msg;
+                    }
+                    if (type_str.val()) {
+                        part = part.val() ? part + sprintf(" (type: %s)", type_str) : type_str;
+                    }
+                    if (part.val()) {
+                        push parts, part;
+                    }
+                }
+                return parts ? "[" + join("; ", parts) + "]" : NOTHING;
+            }
+        }
+        return NOTHING;
     }
 
     #! Returns True if the error indicates that the operation should be retried

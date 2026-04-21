@@ -230,10 +230,75 @@ public class OneDriveDataProviderBase inherits DataProvider::AbstractDataProvide
                 if (retry(ex, \retries)) {
                     continue;
                 }
-                rethrow ex.err, sprintf("%s (request path: %y)", ex.desc,
-                    ex.arg.request_path ?? path), ex.arg;
+                rethrow ex.err, getApiErrorDesc(ex, path), ex.arg;
             }
         }
+    }
+
+    #! Returns an enriched error description that includes the Microsoft Graph API error message if available
+    /** OneDrive is served via Microsoft Graph, which uses the OData-style error envelope:
+        \c {"error": {"code": "...", "message": "...", "innerError": {"code": "...", ...},
+        "details": [{...}, ...]}}. The \c message is the developer-facing prose and \c code is a
+        machine-readable identifier (e.g. \c itemNotFound, \c InvalidAuthenticationToken).
+        \c innerError is optional and may carry a more specific nested code plus request metadata
+        (documented as lowercase \c innererror in the resource spec but emitted as \c innerError in
+        practice — both casings are probed). \c details[] is populated for batch/multi-operation
+        failures and contains error objects with the same shape.
+    */
+    private string getApiErrorDesc(hash<ExceptionInfo> ex, string path) {
+        string desc = ex.desc;
+        auto body = ex.arg.body;
+        if (body.typeCode() == NT_HASH && body.error.typeCode() == NT_HASH) {
+            auto err = body.error;
+            *string message = DataProvider::DataProviderErrorUtil::firstStringAt(err, ("message",));
+            *string code = DataProvider::DataProviderErrorUtil::firstStringAt(err, ("code",));
+            *string inner_code = DataProvider::DataProviderErrorUtil::firstStringAt(
+                err, ("innerError.code", "innererror.code"));
+
+            string primary;
+            if (message.val() && code.val()) {
+                primary = sprintf("%s (code: %s)", message, code);
+            } else if (message.val()) {
+                primary = message;
+            } else if (code.val()) {
+                primary = code;
+            }
+            if (inner_code.val() && inner_code != code) {
+                primary = primary.val()
+                    ? primary + sprintf(" [inner: %s]", inner_code)
+                    : sprintf("[inner: %s]", inner_code);
+            }
+            if (primary.val()) {
+                desc += ": " + primary;
+            }
+
+            # details[] is populated for batch operations (each entry same shape as top-level error)
+            if (err.details.typeCode() == NT_LIST && err.details) {
+                list<string> parts = ();
+                foreach auto d in (err.details) {
+                    if (d.typeCode() != NT_HASH) {
+                        continue;
+                    }
+                    *string dm = DataProvider::DataProviderErrorUtil::firstStringAt(d, ("message",));
+                    *string dc = DataProvider::DataProviderErrorUtil::firstStringAt(d, ("code",));
+                    string p;
+                    if (dm.val() && dc.val()) {
+                        p = sprintf("%s (code: %s)", dm, dc);
+                    } else if (dm.val()) {
+                        p = dm;
+                    } else if (dc.val()) {
+                        p = dc;
+                    }
+                    if (p.val()) {
+                        push parts, p;
+                    }
+                }
+                if (parts) {
+                    desc += " [" + join("; ", parts) + "]";
+                }
+            }
+        }
+        return sprintf("%s (request path: %y)", desc, ex.arg.request_path ?? path);
     }
 
     #! Returns True if the error indicates that the operation should be retried

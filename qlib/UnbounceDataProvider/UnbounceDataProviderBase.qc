@@ -195,9 +195,49 @@ public class UnbounceDataProviderBase inherits DataProvider::AbstractDataProvide
                 if (retryRequest(ex, \retries)) {
                     continue;
                 }
-                rethrow;
+                rethrow ex.err, getApiErrorDesc(ex), ex.arg;
             }
         }
+    }
+
+    #! Returns an enriched error description that includes the Unbounce API error message if available
+    /** Unbounce emits three different error shapes depending on where the failure originates:
+        - Auth 401: plain text body like \c "Unauthorized\nRequested URL: ..."
+        - OAuth token endpoint: \c {"error": "unsupported_grant_type", "error_description": "..."}
+        - Generic endpoint errors: \c {"message": "Not Found", "documentation": "<url>"}
+    */
+    private string getApiErrorDesc(hash<ExceptionInfo> ex) {
+        string desc = ex.desc;
+        auto body = ex.arg.body;
+        switch (body.typeCode()) {
+            case NT_STRING:
+                if (body.val()) {
+                    desc += ": " + body;
+                }
+                break;
+            case NT_HASH: {
+                *string error = DataProvider::DataProviderErrorUtil::firstStringAt(body, ("error",));
+                *string error_description = DataProvider::DataProviderErrorUtil::firstStringAt(
+                    body, ("error_description",));
+                *string message = DataProvider::DataProviderErrorUtil::firstStringAt(body, ("message",));
+
+                string primary;
+                if (error.val() && error_description.val()) {
+                    primary = sprintf("%s (error: %s)", error_description, error);
+                } else if (error_description.val()) {
+                    primary = error_description;
+                } else if (message.val()) {
+                    primary = message;
+                } else if (error.val()) {
+                    primary = error;
+                }
+                if (primary.val()) {
+                    desc += ": " + primary;
+                }
+                break;
+            }
+        }
+        return desc;
     }
 
     #! Checks if a request should be retried
