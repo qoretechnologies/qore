@@ -356,6 +356,10 @@ OKKqgBjNAlYDdPhOy8O8Agk=
     constructor() : Test("HttpServerAsyncHttp2Test", "1.0") {
         addTestCase("basic HTTP/2 async response", \testBasicHttp2Response());
         addTestCase("HTTP/2 empty body returns 204", \testHttp2EmptyBodyBecomes204());
+        addTestCase("HTTP/2 sendWithRecvCallback no body",
+            \testHttp2SendWithRecvCallbackNoBody());
+        addTestCase("HTTP/2 sendWithRecvCallback error response",
+            \testHttp2SendWithRecvCallbackErrorResponse());
         addTestCase("HTTP/2 SOAP content-type body", \testSoapContentTypeHttp2());
         addTestCase("HTTP/2 gzip decoded body", \testGzipContentTypeHttp2());
         addTestCase("HTTP/2 gzip passthru body", \testGzipPassthruHttp2());
@@ -488,6 +492,99 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         hash<auto> resp = hc.send(NOTHING, "GET", "/empty-body");
         assertEq(204, resp.status_code, "HTTP/2 empty-body response should return 204");
         assertNothing(resp.body);
+    }
+
+    # Regression test: H2 GET via sendWithRecvCallback must send HEADERS with
+    # END_STREAM when the request has no body.  Previously the H2/H3
+    # submitRequestStreaming path passed streaming=true unconditionally to the
+    # poll op, which suppressed END_STREAM on HEADERS — the server then waited
+    # 30s for body DATA that never arrived and failed with HTTP2-STREAM-TIMEOUT.
+    testHttp2SendWithRecvCallbackNoBody() {
+        HTTPClient hc({
+            "url": mSslUrl,
+            "ssl_verify_cert": False,
+            "http_version": "2.0",
+            "timeout": 10000,
+        });
+        hc.setHttp2Mode("required");
+
+        list<auto> http_msgs;
+        code rc = sub (auto http_data) {
+            http_msgs += http_data;
+        };
+        hash<auto> info;
+        hc.sendWithRecvCallback(rc, NOTHING, "GET", "/simple", NOTHING, NOTHING, NOTHING, \info);
+
+        # Header callback must carry hdr with status_code, and we must have
+        # received at least one terminal callback — server would not have
+        # responded if HEADERS were sent without END_STREAM (the bug fixed in
+        # Http2ClientConnection::submitRequestStreaming / Http3 equivalent).
+        assertGt(0, http_msgs.size(), "recv_callback should have been invoked");
+        *hash<auto> hdr_msg;
+        auto body_data;
+        foreach auto msg in (http_msgs) {
+            if (msg.typeCode() == NT_HASH) {
+                if (exists msg.hdr && msg.hdr.typeCode() == NT_HASH) {
+                    hdr_msg = msg.hdr;
+                } else if (exists msg."data") {
+                    body_data = msg."data";
+                }
+            }
+        }
+        assertEq(Qore::NT_HASH, hdr_msg.typeCode(),
+            "recv_callback should receive a header hash");
+        assertEq(200, hdr_msg.status_code,
+            "HTTP/2 GET via sendWithRecvCallback should return 200");
+        # Body must also reach the callback — when DATA arrives in the same
+        # poll-op dispatch batch as HEADERS (common for small H2 responses),
+        # the recv loop previously did `continue` after header processing and
+        # lost the body in the same hash.
+        assertEq("OK", body_data,
+            "body data must reach recv_callback even when DATA+HEADERS "
+            "arrive in the same dispatch");
+    }
+
+    # Regression test: H2 GET with sendWithRecvCallback on a 4xx/5xx response
+    # must NOT raise HTTP-CLIENT-RECEIVE-ERROR — the recv_callback consumer
+    # (DataStreamClient, SSE handler, etc.) needs to see the error body
+    # through its own decoder and throw a protocol-specific exception.  The
+    # legacy send_internal already skips the error raise when a recv_callback
+    # is in use; the conn_mgr path must match that behavior.
+    testHttp2SendWithRecvCallbackErrorResponse() {
+        HTTPClient hc({
+            "url": mSslUrl,
+            "ssl_verify_cert": False,
+            "http_version": "2.0",
+            "timeout": 10000,
+        });
+        hc.setHttp2Mode("required");
+
+        list<auto> http_msgs;
+        code rc = sub (auto http_data) {
+            http_msgs += http_data;
+        };
+        hash<auto> info;
+        hc.sendWithRecvCallback(rc, NOTHING, "GET", "/status/404",
+            NOTHING, NOTHING, NOTHING, \info);
+
+        # With recv_callback in use, the builtin must not raise; the 404 body
+        # is delivered through the callback for the consumer to decode.
+        *hash<auto> hdr_msg;
+        auto body_data;
+        foreach auto msg in (http_msgs) {
+            if (msg.typeCode() == NT_HASH) {
+                if (exists msg.hdr && msg.hdr.typeCode() == NT_HASH) {
+                    hdr_msg = msg.hdr;
+                } else if (exists msg."data") {
+                    body_data = msg."data";
+                }
+            }
+        }
+        assertEq(404, hdr_msg.status_code,
+            "recv_callback must receive 404 status_code for error response");
+        assertTrue(body_data.val(),
+            "recv_callback must receive the error response body so "
+            "DataStreamClient-like consumers can decode it");
     }
 
     testHttp2ResponseHeadersNoHopByHop() {

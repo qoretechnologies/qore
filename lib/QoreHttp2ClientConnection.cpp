@@ -463,9 +463,16 @@ int64_t Http2ClientConnection::submitRequestStreaming(const char* method, const 
     // Create ChannelAction — poll op takes ownership via submitRequest
     ChannelAction* action = new ChannelAction(ch);
 
-    // Submit with streaming=true
+    // streaming=false: Http2ClientPollOperationPriv::submitRequest interprets
+    // `streaming` as request-body streaming (caller pushes body via
+    // pushSendData), not response streaming.  submitRequestStreaming delivers
+    // a one-shot body and only streams the response; passing streaming=true
+    // would make the H2 session send HEADERS without END_STREAM and the
+    // server would wait indefinitely for DATA frames that never arrive.
+    // Response-streaming dispatch is handled via action->isStreaming() in the
+    // poll op (setHttp2StreamStreaming).
     int64_t stream_id = poll_op_priv->submitRequest(method, path, headers,
-        body, body_len, /* streaming */ true, action,
+        body, body_len, /* streaming */ false, action,
         /* max_streams */ max_concurrent_streams_, xsink);
     if (*xsink || stream_id < 0) {
         return -1;

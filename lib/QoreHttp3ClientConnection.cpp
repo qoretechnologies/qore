@@ -424,8 +424,13 @@ int64_t Http3ClientConnection::submitRequestStreaming(const char* method, const 
 
     ChannelAction* action = new ChannelAction(ch);
 
+    // streaming=false: `streaming` at this layer means request-body streaming
+    // (caller pushes body via sendStreamData).  submitRequestStreaming uses a
+    // one-shot body and only streams the response, so HEADERS must carry
+    // END_STREAM (via nghttp3 with drp=nullptr) when the body is empty —
+    // otherwise the server waits for body data that never arrives.
     int64_t stream_id = poll_op_priv->submitRequest(method, path, headers,
-        body, body_len, /* streaming */ true, action,
+        body, body_len, /* streaming */ false, action,
         max_concurrent_streams_, xsink);
     if (*xsink || stream_id < 0) {
         return -1;

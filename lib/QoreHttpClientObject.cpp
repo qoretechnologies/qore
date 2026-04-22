@@ -6603,7 +6603,14 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                         channel_done = true;
                         break;  // break out of channel loop; redirect handling below
                     }
-                    continue;
+                    // Fall through to check for body data in the same hash —
+                    // the H2/H3 poll op dispatches headers + body in a single
+                    // channel event when the response fits in one frame
+                    // (see the sibling streaming-send recv branch above that
+                    // already has this fall-through).  Without it, body bytes
+                    // are lost whenever DATA arrives in the same batch as
+                    // HEADERS, which is the common case for small responses
+                    // (e.g. DataStream records over H2).
                 }
 
                 // Check for body data
@@ -7141,8 +7148,15 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
         }
     }
 
-    // Check error status codes
-    if (!error_passthru && !*xsink && (code < 100 || code >= 300)) {
+    // Check error status codes — match the legacy send_internal behavior of
+    // NOT raising when a recv_callback or OutputStream was used.  The
+    // callback-driven consumer (e.g. DataStreamClient) needs to see the
+    // error body through its own decoder and throw a protocol-specific
+    // exception (DATASTREAM-CLIENT-RECEIVE-ERROR, SEND-ABORTED, etc.)
+    // instead of the generic HTTP-CLIENT-RECEIVE-ERROR.  See the sibling
+    // guard at the bottom of the legacy send_internal.
+    if (!error_passthru && !recv_callback && !os && !*xsink
+            && (code < 100 || code >= 300)) {
         const char* mess = get_string_header(xsink, **ans, "status_message");
         if (!mess) {
             mess = "<no message>";
@@ -7153,7 +7167,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
         return nullptr;
     }
 
-    return *xsink ? nullptr : ans.release();
+    return *xsink || recv_callback || os ? nullptr : ans.release();
 }
 
 QoreHashNode* qore_httpclient_priv::send_internal(ExceptionSink* xsink, const char* mname, const char* meth,
