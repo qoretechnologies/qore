@@ -2327,6 +2327,17 @@ const QoreTypeInfo* QoreParseTypeInfo::resolveRuntimeSubtype() const {
         while (!return_type_str.empty() && isspace(return_type_str.front())) {
             return_type_str.erase(0, 1);
         }
+        // If the subtype was flagged as or-nothing (a leading `*` on the
+        // callable's return type — e.g. `code<*Foo(string)>`), getSubTypes
+        // consumed the `*` into subtypes[0]->or_nothing instead of leaving
+        // it on the ostr string.  The `*` applies to the callable's return
+        // type, not to the whole callable, so re-prepend it here before
+        // resolving so the return type is resolved as or-nothing.
+        if (subtypes[0]->or_nothing && !return_type_str.empty()
+                && return_type_str != "nothing"
+                && return_type_str[0] != '*') {
+            return_type_str.insert(0, "*");
+        }
 
         // Resolve return type
         const QoreTypeInfo* returnType = nullptr;
