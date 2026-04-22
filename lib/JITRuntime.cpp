@@ -6122,6 +6122,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
                     if (str) {
                         str->trim();
                     }
+                    // Mirror QoreTrimOperatorNode::evalImpl: return the trimmed
+                    // value so callers like `return trim ct;` see the result.
+                    res = lvh.getReferencedValue();
                 }
                 break;
             case LVUnaryOp::Chomp:
@@ -6130,10 +6133,15 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
                     QoreStringNode* str = lvh.getValue().get<QoreStringNode>();
                     if (str) {
                         qore_size_t len = str->size();
+                        size_t removed = 0;
                         if (len > 0 && str->c_str()[len - 1] == '\n') {
-                            str->terminate(len > 1 && str->c_str()[len - 2] == '\r'
-                                ? len - 2 : len - 1);
+                            size_t new_len = len > 1 && str->c_str()[len - 2] == '\r'
+                                ? len - 2 : len - 1;
+                            removed = len - new_len;
+                            str->terminate(new_len);
                         }
+                        // Mirror QoreChompOperatorNode::evalImpl: return count.
+                        res = QoreValue(static_cast<int64>(removed));
                     }
                 }
                 break;

@@ -2342,8 +2342,8 @@ public namespace RestSchemaValidator {
                     throw "DESERIALIZATION-ERROR", sprintf("cannot deserialize response body without a content-type; "
                         "response body: %y; headers: %y", response_body, hdr);
                 }
-                string ct = mime_get_base_type(raw_ct);
-                *hash<auto> dh = DataDeserializationSupport{ct};
+                *string ct = mime_get_base_type(raw_ct);
+                *hash<auto> dh = ct ? DataDeserializationSupport{ct} : NOTHING;
                 if (!dh) {
                     throw "DESERIALIZATION-ERROR", sprintf("cannot deserialize response body; content-type is: %y; "
                         "types supported: %y; response body: %y", hdr."content-type",
