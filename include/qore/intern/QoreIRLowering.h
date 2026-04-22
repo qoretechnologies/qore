@@ -376,7 +376,7 @@ private:
         //! not reach back past the firing Scope entry and re-enter the same
         //! handler range (infinite-recursion guard; symmetric to the
         //! TryStatement/RefForeach anchors added in 8fb555ac1).
-        enum Type { Scope, Lvars, RefForeachRecord, RefForeach, Context, HandlerBarrier };
+        enum Type { Scope, Lvars, RefForeachRecord, RefForeach, Context, HandlerBarrier, CatchVar };
         Type type;
         uint32_t scope_id = 0;                    //!< scope ID for Scope entries
         size_t handler_start = 0;                 //!< index into block_handlers at scope entry (for inline lowering)
@@ -386,6 +386,7 @@ private:
         QoreIRValue old_implicit_element;          //!< saved $# for RefForeachRecord
         QoreValue var_expr;                        //!< loop variable expression for RefForeachRecord
         QoreIRValue context_state;                 //!< Context* handle for Context entries
+        LocalVar* catch_var = nullptr;             //!< single local for CatchVar entries (try-catch exception param)
     };
     //! Unified cleanup stack tracking scope exits, block-scoped locals, and ref foreach state
     /** Entries are pushed in nesting order. Reverse iteration gives correct cleanup ordering.

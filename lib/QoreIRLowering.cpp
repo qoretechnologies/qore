@@ -1890,20 +1890,45 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         // execute on_error/on_exit handlers for scopes entered within the try body
         builder.createLandingPad(try_scope_depth, try_scope_id, stmt->loc);
         QoreIRInstruction* catch_inst = builder.createCatchException(stmt->loc);
-        if (LocalVar* catch_var = try_stmt->getCatchVar()) {
+        LocalVar* catch_var = try_stmt->getCatchVar();
+        if (catch_var) {
             maybeInsertNotNothingGuard(catch_inst->result, nullptr, catch_inst->loc, catch_var->getTypeInfo());
             builder.createStoreLocal(catch_var, catch_inst->result, stmt->loc);
             if (parse_context) {
                 parse_context->markLocalAssignment(catch_var, true, catch_var->getTypeInfo());
             }
+            // Push a CatchVar cleanup entry so non-local exits (break, continue,
+            // return, throw) within the catch block uninstantiate the catch_var
+            // before unwinding.  The thread local-var stack is strictly LIFO —
+            // if we leave the catch_var on the stack, the enclosing block's
+            // UninstantiateLocal for its own lvars will pop the catch_var
+            // instead, leading to thread_find_lvar asserts when the catch
+            // fires again (identity mismatch between expected and actual top).
+            BlockCleanupEntry catch_var_entry;
+            catch_var_entry.type = BlockCleanupEntry::CatchVar;
+            catch_var_entry.catch_var = catch_var;
+            catch_var_entry.loc = stmt->loc;
+            cleanup_stack.push_back(catch_var_entry);
         }
         ++catch_cleanup_depth;
         if (try_stmt->getCatchBlock() && !lowerStatementBlock(try_stmt->getCatchBlock(), error)) {
             --catch_cleanup_depth;
+            if (catch_var) {
+                cleanup_stack.pop_back();
+            }
             return false;
         }
         --catch_cleanup_depth;
+        if (catch_var) {
+            cleanup_stack.pop_back();
+        }
         if (!blockHasTerminator(builder.getBlock())) {
+            // Fallthrough path: uninstantiate catch_var before CatchCleanup so
+            // the stack pop order matches the push order (LIFO invariant).
+            if (catch_var) {
+                auto* ui = builder.createUninstantiateLocal(catch_var, stmt->loc);
+                ui->is_block_exit = true;
+            }
             // Clean up catch scope before merging: restore previous td->catchException
             // and delete the caught exception.  This only runs on the catch path's
             // fallthrough to merge.  Rethrow handles its own cleanup.
@@ -2238,6 +2263,13 @@ bool QoreIRLowering::emitBlockCleanups(size_t target_depth, std::string& error, 
                         // break/continue/return always exit the scope permanently
                         ui->is_block_exit = true;
                     }
+                }
+                break;
+            case BlockCleanupEntry::CatchVar:
+                if (!(flags & CF_SKIP_LVARS)) {
+                    assert(entry.catch_var);
+                    auto* ui = builder.createUninstantiateLocal(entry.catch_var, entry.loc);
+                    ui->is_block_exit = true;
                 }
                 break;
             case BlockCleanupEntry::RefForeachRecord: {
