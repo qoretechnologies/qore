@@ -991,20 +991,35 @@ int QoreSocketObject::submitHttp2StreamingResponseWithStream(int32_t stream_id, 
     return *xsink ? -1 : 0;
 }
 
-// NOTE: readHttp2StreamDataBlock does NOT acquire priv->m because it blocks
-// during I/O (waiting for HTTP/2 stream data with timeout).  Holding the
-// object mutex during a blocking wait would prevent other threads from
-// performing any socket operation (write, flush, cleanup) on this socket.
-// The caller must ensure exclusive socket access (which is the case for
-// server handler threads that own the connection).  Thread safety for the
-// HTTP/2 session internals is provided by Http2Session's own recursive mutex.
-// No concurrent receiveData() calls can occur on the same session because the
-// server connection model is single-threaded per connection: the handler thread
-// that calls readHttp2StreamDataBlock() is the same thread that drives the
-// HTTP/2 session.  flushHttp2()/sendPendingDataBlocking() only sends outgoing
-// frames and does not call receiveData(), so there is no nghttp2 reentrancy risk.
+// readHttp2StreamDataBlock MUST acquire priv->m even though the inner read
+// blocks waiting for HTTP/2 stream data.  Reasoning:
+//
+// brecv() uses waitReleasingLock() for its poll wait, and waitReleasingLock
+// requires priv->m to be held by the caller on entry — it releases it during
+// the poll and re-acquires on return (see SocketSyncPoll::waitReleasingLock).
+// If the caller doesn't hold priv->m when brecv runs, the AutoUnlocker in
+// waitReleasingLock issues an unlock on an unheld mutex (undefined for
+// PTHREAD_MUTEX_NORMAL — typically silently marks the mutex unlocked) and
+// then re-acquires it on return.  Net effect: this thread leaves brecv
+// holding priv->m it never asked for, and the next socket call from the
+// same thread (e.g. submitHttp2StreamingResponseHeaders) deadlocks on a
+// non-recursive mutex it already owns.  The grpc-test server-stream hang
+// reproduces exactly this — see the deadlock investigation comment block
+// in the bug write-up.
+//
+// Holding priv->m during the blocking wait is safe because:
+//   1. waitReleasingLock releases it for the duration of the actual poll,
+//      so other threads can perform short non-blocking socket ops between
+//      our wait cycles;
+//   2. concurrent close() calls prepareForClose() (which marks the H2
+//      session closed AND ::shutdown(fd) the socket) BEFORE attempting to
+//      take priv->m, so the in-flight poll exits immediately and our own
+//      AutoLocker releases priv->m on scope exit, allowing the close to
+//      proceed.  This is the same close-vs-poll race that motivated
+//      prepareForClose() in the first place.
 BinaryNode* QoreSocketObject::readHttp2StreamDataBlock(int32_t stream_id, int timeout_ms,
         ExceptionSink* xsink) {
+    AutoLocker al(priv->m);
     return priv->socket->readHttp2StreamDataBlock(stream_id, timeout_ms, xsink);
 }
 
