@@ -415,16 +415,35 @@ static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* 
                 printd(0, "AOT v2: cannot resolve class '%s' for static var '%s'\n", ref1, ref2);
                 return 0;
             }
+            // Walk the class hierarchy to find the static member.  Source code like
+            // `DbDataProvider::table_lookup` where `table_lookup` is defined on
+            // `DbDataProviderBase` (a parent class) serializes ref1 as the class
+            // in whose scope the reference was made (the derived class), but
+            // `findLocalStaticMember` only looks at own-vars — not inherited.
+            // Walk parents to match AST-side name resolution.
+            const QoreClass* owner_qc = qc;
             const QoreExternalStaticMember* m = qc->findLocalStaticMember(ref2);
             if (!m) {
-                printd(0, "AOT v2: cannot find static var '%s::%s'\n", ref1, ref2);
+                QoreClassHierarchyIterator hi(*qc);
+                while (hi.next()) {
+                    const QoreClass& pqc = hi.get();
+                    m = pqc.findLocalStaticMember(ref2);
+                    if (m) {
+                        owner_qc = &pqc;
+                        break;
+                    }
+                }
+            }
+            if (!m) {
+                printd(0, "AOT v2: cannot find static var '%s::%s' (incl. inherited)\n",
+                    ref1, ref2);
                 return 0;
             }
             // QoreExternalStaticMember is the public API facade for QoreVarInfo
             QoreVarInfo* vi = const_cast<QoreVarInfo*>(
                 reinterpret_cast<const QoreVarInfo*>(m));
             StaticClassVarRefNode* node = new StaticClassVarRefNode(&loc_builtin, strdup(ref2),
-                *qc, *vi);
+                *owner_qc, *vi);
             return toBitsNB(QoreValue(node));
         }
 
