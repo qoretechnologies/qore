@@ -976,15 +976,17 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
                 if (*xsink) {
                     return 0;
                 }
-                // IR execution failed without exception — fall through to AST
-                printd(1, "IR execution failed without exception, falling back to AST\n");
-                if (qore_program_private::get(*pgm)->ir_fallback_warn) {
-                    printe("IR exec fallback to AST: execution failed\n");
-                }
+                // IR execution failed without raising an exception.  This path only
+                // runs under %modern (ensureIrExecMode guarantees it), so silent AST
+                // fallback is disabled to expose IR-interpreter bugs immediately.
                 if (getenv("QORE_IR_TRACE_SILENT_FAIL")) {
                     QoreIRInterpreter::dumpLastSilentFail("toplevel");
                 }
                 qore_program_private::get(*pgm)->recordIRFallback("execution: runtime failure");
+                xsink->raiseException("IR-EXECUTION-ERROR",
+                    "IR interpreter execution of top-level code failed without raising an "
+                    "exception; this is a bug in the IR interpreter (silent AST fallback disabled)");
+                return -1;
             }
         }
     }

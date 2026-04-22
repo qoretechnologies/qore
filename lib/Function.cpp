@@ -3288,33 +3288,28 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                 } else if (*xsink) {
                     // exception raised — propagate
                 } else {
-                    // IR execution failed without exception — clean up pre-instantiated
-                    // AST-visible locals FIRST (destroys any values from partial IR execution),
-                    // then fall back to AST which manages its own locals
+                    // IR execution failed without raising an exception.  Under %modern
+                    // (which is guaranteed on this path — ensureIrExecMode downgrades
+                    // non-%modern programs to QEM_AST so evalTiered is never reached),
+                    // this is a bug in the IR interpreter, not a recoverable condition.
+                    // Silent fallback to AST is disabled so the bug surfaces immediately.
                     for (int i = (int)cached_ir->ast_visible_body_locals.size() - 1; i >= 0; --i) {
                         if (!cached_ir->ast_visible_body_locals[i]->closureUse()) {
                             cached_ir->ast_visible_body_locals[i]->uninstantiate(xsink);
                         }
                     }
                     fell_back_to_ast = true;
-                    printd(2, "UserVariantBase::evalTiered() IR execution failed for '%s', "
-                        "falling back to AST\n", name);
                     if (getenv("QORE_IR_TRACE_SILENT_FAIL")) {
                         QoreIRInterpreter::dumpLastSilentFail(name ? name : "<fn>");
-                    }
-                    static bool debug_deopt = [] {
-                        const char* debug_env = getenv("QORE_IR_DEBUG");
-                        return debug_env && strstr(debug_env, "deopt");
-                    }();
-                    if (debug_deopt) {
-                        fprintf(stderr, "[DEOPT-IR->AST] Function '%s' deopting from IR to AST\n",
-                                name ? name : "<unknown>");
-                        fflush(stderr);
                     }
                     if (pgm) {
                         pgm->recordIRFallback("execution: runtime failure");
                     }
-                    val = statements->exec(xsink);
+                    xsink->raiseException("IR-EXECUTION-ERROR",
+                        "IR interpreter execution of '%s' failed without raising an exception; "
+                        "this is a bug in the IR interpreter (silent AST fallback disabled)",
+                        name ? name : "<fn>");
+                    val = QoreValue();
                 }
 
                 // Restore thread-local parse options
