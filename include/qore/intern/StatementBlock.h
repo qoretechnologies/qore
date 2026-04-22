@@ -274,6 +274,9 @@ protected:
     mutable QoreIRFunction* cached_toplevel_ir = nullptr;
     mutable std::once_flag toplevel_ir_once;
     mutable bool toplevel_ir_failed = false;
+    // Reason string recorded on IR-lowering failure; used to raise
+    // IR-COMPILATION-ERROR from subsequent execImpl calls under %modern.
+    mutable std::string toplevel_ir_fail_reason;
 
     // AOT pre-compiled top-level function pointer
     using JitFunctionPtr = uint64_t (*)(ExceptionSink*);

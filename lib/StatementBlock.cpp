@@ -858,12 +858,10 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
                     std::string error;
                     if (!lowering.lowerStatementBlock(this, error)) {
                         toplevel_ir_failed = true;
+                        toplevel_ir_fail_reason = std::string("lowering: ") + error;
                         delete func;
                         printd(1, "IR lowering failed: %s\n", error.c_str());
-                        if (qore_program_private::get(*pgm)->ir_fallback_warn) {
-                            printe("IR exec fallback to AST: %s\n", error.c_str());
-                        }
-                        qore_program_private::get(*pgm)->recordIRFallback(std::string("lowering: ") + error);
+                        qore_program_private::get(*pgm)->recordIRFallback(toplevel_ir_fail_reason);
                         return;
                     }
                     if (!irBlockHasTerminator(builder.getBlock())) {
@@ -871,12 +869,10 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
                     }
                     if (!QoreIRVerifier::verify(*func, error)) {
                         toplevel_ir_failed = true;
+                        toplevel_ir_fail_reason = std::string("verification: ") + error;
                         delete func;
                         printd(1, "IR verification failed: %s\n", error.c_str());
-                        if (qore_program_private::get(*pgm)->ir_fallback_warn) {
-                            printe("IR exec fallback to AST: verification failed: %s\n", error.c_str());
-                        }
-                        qore_program_private::get(*pgm)->recordIRFallback(std::string("verification: ") + error);
+                        qore_program_private::get(*pgm)->recordIRFallback(toplevel_ir_fail_reason);
                         return;
                     }
 
@@ -886,21 +882,14 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
 
                     // Phase A4: Compile all handler bodies to separate IR functions and attach to OnBlockExit instructions
                     // This must happen AFTER computeSlotIdsAndEmbed() so handlers can be compiled with correct parent context.
-                    // Failure is fatal: the runtime asserts handler_ir is
-                    // populated, so we fall back to AST execution for the
-                    // whole top-level block instead.
                     std::string handler_compile_error;
                     int handlers_compiled = lowering.compileAllHandlerIRs(handler_compile_error);
                     if (handlers_compiled < 0) {
                         toplevel_ir_failed = true;
+                        toplevel_ir_fail_reason = std::string("handler lowering: ") + handler_compile_error;
                         delete func;
                         printd(1, "Top-level handler compilation failed: %s\n", handler_compile_error.c_str());
-                        if (qore_program_private::get(*pgm)->ir_fallback_warn) {
-                            printe("IR exec fallback to AST: handler lowering failed: %s\n",
-                                handler_compile_error.c_str());
-                        }
-                        qore_program_private::get(*pgm)->recordIRFallback(
-                            std::string("handler lowering: ") + handler_compile_error);
+                        qore_program_private::get(*pgm)->recordIRFallback(toplevel_ir_fail_reason);
                         return;
                     }
                     // NOTE: do NOT call func->computeIROnlyLocals() for top-level code.
@@ -912,6 +901,17 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
                     cached_toplevel_ir = func;
                 });
                 ir_func = cached_toplevel_ir;
+            }
+
+            // If IR lowering failed, raise a hard error instead of silently
+            // falling back to AST.  This path runs only under %modern
+            // (ensureIrExecMode guarantees it), so any lowering gap is a
+            // bug in the IR implementation that must surface.
+            if (toplevel_ir_failed) {
+                xsink->raiseException("IR-COMPILATION-ERROR",
+                    "IR lowering of top-level code failed: %s (silent AST fallback "
+                    "disabled)", toplevel_ir_fail_reason.c_str());
+                return -1;
             }
 
             if (ir_func) {

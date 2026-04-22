@@ -735,8 +735,13 @@ protected:
     //! Tiered compilation dispatch path
     DLLLOCAL QoreValue evalTiered(const char* name, ReferenceHolder<QoreListNode>& argv, QoreObject* self,
             ExceptionSink* xsink, bool caller_has_frame_boundary = false) const;
-    //! Attempt to lower to IR; called via std::call_once
-    DLLLOCAL void attemptIRLowering(const char* name) const;
+    //! Attempt to lower to IR; called via std::call_once.
+    /** If @p raise_on_failure is true and lowering fails, a parseException
+        is raised describing the gap.  Used for parse-time eager compilation
+        under --exec-mode=ir/jit/tiered so IR gaps surface as parse errors
+        rather than silently falling back to AST.
+    */
+    DLLLOCAL void attemptIRLowering(const char* name, bool raise_on_failure = false) const;
 
     //! Attempt JIT compilation; called via std::call_once
     DLLLOCAL void attemptJITCompilation() const;
@@ -890,9 +895,9 @@ public:
 
     //! Force IR lowering (thread-safe via call_once).  Used by batch compilation
     //! to ensure callees have IR before the root function is JIT-compiled.
-    DLLLOCAL void forceIRLowering(const char* name) const {
-        std::call_once(ir_lower_once, [this, name]() {
-            attemptIRLowering(name);
+    DLLLOCAL void forceIRLowering(const char* name, bool raise_on_failure = false) const {
+        std::call_once(ir_lower_once, [this, name, raise_on_failure]() {
+            attemptIRLowering(name, raise_on_failure);
         });
     }
 

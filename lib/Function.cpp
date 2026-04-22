@@ -2530,7 +2530,7 @@ static bool irBlockHasTerminatorFunc(const QoreIRBasicBlock* block) {
     }
 }
 
-void UserVariantBase::attemptIRLowering(const char* name) const {
+void UserVariantBase::attemptIRLowering(const char* name, bool raise_on_failure) const {
     assert(pgm);
     assert(statements);
 
@@ -2584,6 +2584,11 @@ void UserVariantBase::attemptIRLowering(const char* name) const {
         if (pgm) {
             pgm->recordIRFallback((std::string("lowering: ") + error).c_str());
         }
+        if (raise_on_failure) {
+            parseException(*signature.getParseLocation(), "IR-COMPILATION-ERROR",
+                "IR lowering of '%s' failed: %s (silent AST fallback disabled)",
+                name ? name : "<fn>", error.c_str());
+        }
         return;
     }
     if (!irBlockHasTerminatorFunc(builder.getBlock())) {
@@ -2595,6 +2600,11 @@ void UserVariantBase::attemptIRLowering(const char* name) const {
         printd(2, "UserVariantBase::attemptIRLowering() '%s' verification failed: %s\n", name, error.c_str());
         if (pgm) {
             pgm->recordIRFallback((std::string("verification: ") + error).c_str());
+        }
+        if (raise_on_failure) {
+            parseException(*signature.getParseLocation(), "IR-COMPILATION-ERROR",
+                "IR verification of '%s' failed: %s (silent AST fallback disabled)",
+                name ? name : "<fn>", error.c_str());
         }
         return;
     }
@@ -2616,6 +2626,11 @@ void UserVariantBase::attemptIRLowering(const char* name) const {
             name, handler_compile_error.c_str());
         if (pgm) {
             pgm->recordIRFallback((std::string("handler lowering: ") + handler_compile_error).c_str());
+        }
+        if (raise_on_failure) {
+            parseException(*signature.getParseLocation(), "IR-COMPILATION-ERROR",
+                "IR handler lowering for '%s' failed: %s (silent AST fallback disabled)",
+                name ? name : "<fn>", handler_compile_error.c_str());
         }
         return;
     }
@@ -2958,9 +2973,12 @@ void UserVariantBase::eagerlyCompileForExecMode(const char* name, qore_exec_mode
         return;
     }
 
-    // Attempt IR lowering (bypasses threshold check via call_once)
+    // Attempt IR lowering (bypasses threshold check via call_once).
+    // raise_on_failure=true: the user explicitly requested IR/JIT/tiered
+    // execution, so any IR lowering gap must surface as a parse error
+    // rather than silently falling back to AST.
     std::call_once(ir_lower_once, [this, name]() {
-        attemptIRLowering(name);
+        attemptIRLowering(name, /*raise_on_failure=*/true);
     });
 
     // For JIT mode, set IR tier so function executes immediately, then enqueue
