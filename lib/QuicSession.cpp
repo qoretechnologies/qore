@@ -2525,6 +2525,10 @@ std::unique_ptr<QuicStreamInfo> QuicSession::takeCompletedStream() {
                 (long long)getSessionId(), (long long)it->first,
                 (int)it->second->is_connect);
             auto result = std::move(it->second);
+            if (result->dispatched) {
+                dispatched_stream_count_.fetch_sub(1,
+                    std::memory_order_release);
+            }
             streams_.erase(it);
             updateKeepAliveLocked();
             return result;
@@ -2561,6 +2565,10 @@ std::unique_ptr<QuicStreamInfo> QuicSession::takeHeadersReadyStreamCopy() {
             // in the original for takeStreamData()/readQuicStreamDataBlock() to return.
             copy->body.clear();
             info->dispatched = true;
+            // Pin the session in the socket's session map until the handler
+            // calls cleanupStream (or the stream is otherwise erased).  See
+            // hasDispatchedStreams() for the race this prevents.
+            dispatched_stream_count_.fetch_add(1, std::memory_order_release);
 
             printd(5, "QuicSession::takeHeadersReadyStreamCopy() stream_id=" QLLD "\n", id);
             return copy;
@@ -2632,6 +2640,10 @@ void QuicSession::cleanupStream(int64_t stream_id) {
             (int)isc, (int)cta);
         printd(5, "QuicSession::cleanupStream() stream_id=" QLLD " removing dispatched stream\n",
             stream_id);
+        if (it->second->dispatched) {
+            dispatched_stream_count_.fetch_sub(1,
+                std::memory_order_release);
+        }
         streams_.erase(it);
         updateKeepAliveLocked();
     }
@@ -2677,6 +2689,10 @@ int QuicSession::resetStream(int64_t stream_id) {
         ASYNC_IO_TRACE("QuicSession::resetStream ERASE session=%lld stream_id=%lld is_connect=%d\n",
             (long long)getSessionId(), (long long)stream_id,
             (int)it->second->is_connect);
+        if (it->second->dispatched) {
+            dispatched_stream_count_.fetch_sub(1,
+                std::memory_order_release);
+        }
         streams_.erase(it);
         updateKeepAliveLocked();
     }
@@ -2857,7 +2873,14 @@ int QuicSession::cancelStream(int64_t stream_id, uint64_t app_error_code, Except
         (long long)getSessionId(), (long long)stream_id,
         (unsigned long long)app_error_code);
     // Remove from tracking
-    streams_.erase(stream_id);
+    auto sit = streams_.find(stream_id);
+    if (sit != streams_.end()) {
+        if (sit->second->dispatched) {
+            dispatched_stream_count_.fetch_sub(1,
+                std::memory_order_release);
+        }
+        streams_.erase(sit);
+    }
     updateKeepAliveLocked();
 
     // Signal that packets need to be written (RESET_STREAM frame)
@@ -3705,6 +3728,9 @@ int QuicSession::h3EndHeadersCallback(nghttp3_conn* /* conn */, int64_t stream_i
         if (stream->is_connect && !stream->connect_protocol.empty()) {
             stream->headers_complete = true;
             stream->dispatched = true;
+            // Pin session in socket's map — same rationale as takeHeadersReadyStreamCopy
+            session->dispatched_stream_count_.fetch_add(1,
+                std::memory_order_release);
             session->completed_streams_.push(stream_id);
             session->has_completed_streams_.store(true, std::memory_order_release);
             printd(5, "QuicSession::h3EndHeadersCallback() stream_id=" QLLD

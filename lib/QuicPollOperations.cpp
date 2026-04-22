@@ -1798,10 +1798,25 @@ int SocketQuicServerPollOperation::recvAndProcessPacket(ExceptionSink* xsink, Qu
 // Called periodically from continuePoll() to avoid unbounded session growth.
 // Note: idle sessions are handled by ngtcp2's built-in idle timeout
 // (QUIC_MAX_IDLE_TIMEOUT), which marks them as closed after inactivity.
+//
+// We also require hasDispatchedStreams() == false before removing the
+// session: a handler thread that received a headers-only dispatched stream
+// looks the session up by session_id via qore_socket_private::getQuicSession
+// when it calls readQuicStreamDataBlock / cleanupQuicStream, so the session
+// must stay in the socket's session map until every dispatched stream has
+// been erased (cleanupStream / resetStream / cancelStream /
+// takeCompletedStream).  Without this guard, a GET-with-body over H3 where
+// the client tears the QUIC connection down immediately after the response
+// would race: isClosed() flips true before the handler thread reads the
+// body, cleanupClosedSessions erases the session from the socket map, then
+// the handler's readQuicStreamDataBlock throws QUIC-ERROR "no QUIC session
+// with id N on this socket".
 void SocketQuicServerPollOperation::cleanupClosedSessions() {
     auto it = sessions_.begin();
     while (it != sessions_.end()) {
-        if (it->second->isClosed() && !it->second->hasCompletedStreams()) {
+        if (it->second->isClosed()
+                && !it->second->hasCompletedStreams()
+                && !it->second->hasDispatchedStreams()) {
             sock->priv->socket->priv->removeQuicSession(it->first);
             it = sessions_.erase(it);
         } else {

@@ -253,6 +253,76 @@ class BidiEchoHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+#! Handler that reproduces the "QUIC session removed while handler is dispatched"
+#! race: it reports when it starts, waits for the test to signal a go-ahead,
+#! THEN reads the request body and returns the response.  Without the
+#! QuicSession dispatched-stream pinning, a QUIC connection close (e.g.
+#! client teardown immediately after it observed the server's dispatch logs)
+#! between start and readQuicStreamDataBlock causes cleanupClosedSessions to
+#! evict the session from the socket map — the handler's body read then
+#! raises QUIC-ERROR "no QUIC session with id N on this socket".
+class DispatchRaceHandler inherits AbstractHttpRequestHandler {
+    public {
+        Counter started;     # decremented once handler is in dispatch
+        Counter release;     # test signals go-ahead by decrementing
+        bool body_read_ok;
+        binary body;
+        *string body_read_err;
+        *string body_read_desc;
+    }
+
+    constructor() {
+        started = new Counter(1);
+        release = new Counter(1);
+    }
+
+    bool wantsBodyStreaming(hash<auto> cx, hash<auto> hdr) {
+        return True;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body_in) {
+        int session_id = cx."header-info".session_id;
+        int stream_id = cx."header-info".stream_id;
+        Socket sock = cx."header-info".sock;
+
+        # Signal the test that the handler is running and holding the
+        # dispatch slot; test now has a chance to disrupt the QUIC session
+        # (e.g. close the client connection) to race against body reading.
+        started.dec();
+
+        # Wait for the test's go-ahead.  While blocked, the test can close
+        # the client manager so the server's QuicSession transitions into
+        # the draining period — without the hasDispatchedStreams() gate on
+        # cleanupClosedSessions, the session would be removed from the
+        # socket map right here.
+        release.waitForZero(30s);
+
+        # Now do the body read: with the fix this should still succeed
+        # because the session was pinned by dispatched_stream_count_.
+        binary accumulated = binary();
+        try {
+            while (True) {
+                *binary chunk = sock.readQuicStreamDataBlock(session_id,
+                    stream_id, 10s);
+                if (!exists chunk) {
+                    break;
+                }
+                accumulated += chunk;
+            }
+            body = accumulated;
+            body_read_ok = True;
+        } catch (hash<ExceptionInfo> ex) {
+            body_read_ok = False;
+            body_read_err = ex.err;
+            body_read_desc = ex.desc;
+        }
+
+        return makeResponse(body_read_ok ? 200 : 500,
+            body_read_ok ? accumulated : binary(body_read_err ?? ""),
+            {"Content-Type": "application/octet-stream"});
+    }
+}
+
 #! Handler that blocks until signaled so concurrent client requests stay
 #! pending while we tear down the server to simulate a crash.
 class SlowHandler inherits AbstractHttpRequestHandler {
@@ -858,6 +928,8 @@ l50Xb2GWQesIt9k5jF5IOw==
         addTestCase("HTTP/3 client-streaming POST (headers-only)", \testH3ClientStreaming());
         addTestCase("HTTP/3 headers-end-stream GET (no body)", \testH3HeadersEndStream());
         addTestCase("HTTP/3 body_streaming flag detection", \testH3BodyStreamingFlag());
+        addTestCase("HTTP/3 dispatched-stream race on client close",
+            \testH3DispatchStreamRaceOnClientClose());
         addTestCase("HTTP/3 backward-compat body buffering", \testH3BackwardCompatBuffering());
         addTestCase("HTTP/3 timeout handling", \testH3Timeout());
         addTestCase("HTTP/3 oversized body (413)", \testH3OversizedBody());
@@ -936,12 +1008,19 @@ l50Xb2GWQesIt9k5jF5IOw==
         });
         server.waitForAsyncIo();
 
-        return {
+        hash<auto> rv = {
             "server": server,
             "port": h2info.port,
             "streaming_handler": streaming_handler,
             "bidi_handler": bidi_handler,
         };
+        if (opts.dispatch_race_handler) {
+            DispatchRaceHandler race_handler();
+            server.setHandler("dispatch-race", "/dispatch-race", NOTHING,
+                race_handler, NOTHING, False);
+            rv.race_handler = race_handler;
+        }
+        return rv;
     }
 
     #! Creates an HTTP/3 client connection manager
@@ -1101,6 +1180,74 @@ l50Xb2GWQesIt9k5jF5IOw==
             "body_streaming flag: POST with body → body_streaming=True");
         assertFalse(requests[0].headers_end_stream,
             "body_streaming flag: POST with body → headers_end_stream=False");
+    }
+
+    #! Regression: handler must be able to read the request body even if the
+    #! client tore down the QUIC connection before the handler got to
+    #! readQuicStreamDataBlock().
+    /** Reproduces the Qorus streams.qtest failure at rest-test/test?stream=echo
+        (GET with body): without pinning the session in the socket map while a
+        stream is dispatched to a handler, cleanupClosedSessions() evicts the
+        session as soon as the QUIC connection enters draining, and the
+        handler's readQuicStreamDataBlock throws QUIC-ERROR.  With the fix
+        (dispatched_stream_count_ gate on cleanupClosedSessions), the session
+        stays put until the handler calls cleanupQuicStream via the framework's
+        on_exit in HttpAsyncSocketIoController.
+    */
+    testH3DispatchStreamRaceOnClientClose() {
+        hash<auto> setup = createServer({
+            "headers_only": True,
+            "dispatch_race_handler": True,
+        });
+        HttpServer server = setup.server;
+        DispatchRaceHandler race_handler = setup.race_handler;
+        on_exit delete server;
+
+        HttpClientIo::HttpClientConnectionManager mgr = createH3Manager();
+
+        # Fire the H3 GET-with-body request in the background — the handler
+        # blocks before body read, so this call won't return until the
+        # handler completes (or throws).  We don't care about the client-side
+        # result; the race is proven if the handler reads the body cleanly.
+        string url = sprintf("https://127.0.0.1:%d", setup.port);
+        Counter req_done(1);
+        *hash<ExceptionInfo> req_ex;
+        background sub () {
+            on_exit req_done.dec();
+            try {
+                mgr.request(url, "GET", "/dispatch-race",
+                    {"Content-Type": "application/octet-stream"},
+                    binary("race-body"));
+            } catch (hash<ExceptionInfo> ex) {
+                req_ex = ex;
+            }
+        }();
+
+        # Wait until the server's handler has been dispatched — at this
+        # point the server's QuicSession has the stream marked dispatched=true.
+        race_handler.started.waitForZero(15s);
+
+        # Close the client side.  This queues a CONNECTION_CLOSE which the
+        # server processes; its QuicSession::isClosed() then flips true.  Any
+        # subsequent cleanupClosedSessions() tick would have evicted the
+        # session from the socket map — except the handler's dispatched
+        # stream pins it via dispatched_stream_count_.
+        delete mgr;
+
+        # Release the handler so it calls readQuicStreamDataBlock.  With the
+        # fix this finds the session and returns "race-body"; without the fix
+        # it throws QUIC-ERROR "no QUIC session with id N on this socket".
+        race_handler.release.dec();
+
+        # Wait for the background request to finish (success OR failure —
+        # client-side may have already errored out due to the mgr delete).
+        req_done.waitForZero(30s);
+
+        assertTrue(race_handler.body_read_ok,
+            sprintf("handler must read body after client close: err=%y desc=%y",
+                race_handler.body_read_err, race_handler.body_read_desc));
+        assertEq(binary("race-body"), race_handler.body,
+            "handler received the correct request body across QUIC close");
     }
 
     #! Backward-compat: handler without wantsBodyStreaming() gets fully buffered body

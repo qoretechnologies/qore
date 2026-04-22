@@ -443,6 +443,24 @@ public:
     */
     DLLLOCAL std::unique_ptr<QuicStreamInfo> takeHeadersReadyStreamCopy();
 
+    //! Returns true if any stream on this session has been dispatched to a handler
+    /** A stream is "dispatched" from the moment
+        @ref takeHeadersReadyStreamCopy() (or the CONNECT-tunnel path in
+        h3EndHeadersCallback) flips @c QuicStreamInfo::dispatched to true
+        until @ref cleanupStream() / @ref resetStream() / @ref cancelStream()
+        / @ref takeCompletedStream() erases it from @c streams_.  While this
+        count is non-zero, the server poll op's @c cleanupClosedSessions()
+        must keep the session in the socket's session map — otherwise a
+        handler thread about to call
+        @c Socket::readQuicStreamDataBlock(session_id, stream_id) would hit
+        @c QUIC-ERROR because @c getQuicSession(session_id) returns null.
+        Atomic so the server's I/O-thread poll loop can read it without
+        taking @c mtx_.
+    */
+    DLLLOCAL bool hasDispatchedStreams() const {
+        return dispatched_stream_count_.load(std::memory_order_acquire) > 0;
+    }
+
     //! Check if a dispatched stream has received all body data (END_STREAM)
     /** @param stream_id the HTTP/3 stream ID
         @return true if body_complete or stream not found (treat as complete)
@@ -1192,6 +1210,15 @@ private:
     std::atomic<bool> handshake_completed_{false};   //!< true when handshake completes
     std::atomic<bool> pending_write_{false};         //!< true when data queued for writing
     std::atomic<bool> has_completed_streams_{false};  //!< true when completed streams are queued (lock-free check)
+    //! Number of streams currently dispatched to handler threads.
+    /** Incremented when a stream's @c dispatched flag transitions to true
+        (takeHeadersReadyStreamCopy / the CONNECT-tunnel path in
+        h3EndHeadersCallback); decremented when a dispatched stream is
+        erased from @c streams_ via cleanupStream / resetStream / cancelStream
+        / takeCompletedStream.  See @ref hasDispatchedStreams() for why this
+        matters for server-side session lifecycle.
+    */
+    std::atomic<int> dispatched_stream_count_{0};
     bool headers_only_mode_{false};                  //!< when true, markStreamComplete() keeps undispatched headers-complete streams in map
     std::atomic<bool> attempting_0rtt_{false};          //!< true when attempting 0-RTT connection
     std::atomic<bool> early_data_rejected_{false};    //!< true when 0-RTT early data was rejected by server
