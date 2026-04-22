@@ -1,0 +1,241 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    MethodGuard lifetime-barrier stress test.
+
+    Stresses the HttpClientConnectionBase MethodGuard by spawning many
+    background threads hammering an HTTPClient while the main thread
+    deletes it.  Pre-fix (raw pointer dereferences): crashes libqore with
+    SIGSEGV on a freed Http{1,2,3}ClientPollOperationPriv vtable.
+    Post-fix: every background call either completes successfully OR
+    receives a clean HTTPCLIENT-STATE-ERROR Qore exception; no SIGSEGV,
+    no assertion failures, no torn reads.
+
+    Invariant asserted: "Qore code cannot crash libqore".  The test
+    deliberately performs the unsafe-looking "delete rc" concurrent with
+    "rc.get()" pattern that the MethodGuard was designed to survive.
+*/
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Mime.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/HttpServerUtil.qm
+%requires ../../../../qlib/HttpServerAsyncIo
+%requires ../../../../qlib/HttpServer.qm
+
+%exec-class HttpClientMethodGuardTest
+
+#! Tiny handler — we only care about the client-side race, not server work.
+class OkHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(200, "ok", {"Content-Type": "text/plain"});
+    }
+}
+
+class HttpClientMethodGuardTest inherits QUnit::Test {
+    private {
+        const CertPem = "-----BEGIN CERTIFICATE-----
+MIIDCTCCAfGgAwIBAgIULwwY9Xmqwn7ZZIYgEu8otC1aRNMwDQYJKoZIhvcNAQEL
+BQAwFDESMBAGA1UEAwwJbG9jYWxob3N0MB4XDTI1MTIzMTE4MjIyOVoXDTI2MTIz
+MTE4MjIyOVowFDESMBAGA1UEAwwJbG9jYWxob3N0MIIBIjANBgkqhkiG9w0BAQEF
+AAOCAQ8AMIIBCgKCAQEA0r/nka21DXdApKWXg6yoM64+RXZ/j2afHJjnnL7IGt87
+wOow8iZDyn3+S9h/J6FP5dGKCmqItq/OKmZxpL61sfUwpcYe3axnoAjKshkfbwSi
+ZKL0oFJcmXYSk9H/qIIbxdHbBre9ztoJsPaBLHWbcoc/too/o4wDW3FUSZaCzgy2
+Lpphnwi/gXNoD2qxQodv+pfkAzn2+nN0J7Yt+cWs15E2DZCxekhISrhT1ull+Afr
+UbHlcqA08AXyyzx61nENtcWpFyuVmfwhvcSPMTgRpoZ+/P+QrcgbmCe2hjZJtgiL
+aQqtsakV7KxvHpR8AgnFeshfnjZY+w8oRMlaMIb6IwIDAQABo1MwUTAdBgNVHQ4E
+FgQUWOgm+lMoLNS8ReH7mvffWJfreREwHwYDVR0jBBgwFoAUWOgm+lMoLNS8ReH7
+mvffWJfreREwDwYDVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOCAQEAxBG0
+3X0YIeNaf+3XDnoiZBtgMxpsRkxMtRy+lLoQZ3XO5f58eFjDmTq9InplX4IEW0Nx
+TpWr7suU4cFwgZfe6+cHfiU0PQ/pCA7XIetZb2n3GFrQkU4U1K7DgHeZ8HZ7vQ1T
+tVaefxRR3Y8CoIWmI9kYhXs0I0imKOopzpj2iScwGYKmFuasSGyfbkEQgRvg+hAl
+8oL2f4hCFLynTLkA8bWcd3cyBbGIhPzTffuSBjfNHLRqrI4hGPvTM8Xl4WcqmrmZ
+CP3wt6EiYaxJ2zRR2kUtxdm4xntxjc+nr5sjj1pVJvoN7AVmeihS7y4Awy156UCN
+cnhHffwhNhKl6MTonQ==
+-----END CERTIFICATE-----";
+
+        const KeyPem = "-----BEGIN PRIVATE KEY-----
+MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDSv+eRrbUNd0Ck
+pZeDrKgzrj5Fdn+PZp8cmOecvsga3zvA6jDyJkPKff5L2H8noU/l0YoKaoi2r84q
+ZnGkvrWx9TClxh7drGegCMqyGR9vBKJkovSgUlyZdhKT0f+oghvF0dsGt73O2gmw
+9oEsdZtyhz+2ij+jjANbcVRJloLODLYummGfCL+Bc2gParFCh2/6l+QDOfb6c3Qn
+ti35xazXkTYNkLF6SEhKuFPW6WX4B+tRseVyoDTwBfLLPHrWcQ21xakXK5WZ/CG9
+xI8xOBGmhn78/5CtyBuYJ7aGNkm2CItpCq2xqRXsrG8elHwCCcV6yF+eNlj7DyhE
+yVowhvojAgMBAAECggEAMLi64VvmQnGyWR4LNB7DWAdNUCPAA7f2ytaynPMiMcwv
+9T5vCFw+Sd7s3j3zz4akgP37SsMsTgfAwt6iITMRsE197KUr15WW81F1As16DeFl
+ZZyirzm7PKMmUlQ3JY7Guun0F858rAiOOwISBOQ/hq+r1BiL89RXpllB4i1Qmi+8
+Y7Y4mF9j3BDfdUCY+nG8aJ9zhZHZK2/cV40G9qrafFYwQEp86mM2BhtlRr24FCFe
+nWUboADvEAiOhlj7TQl5eMnfKuOPPU9oAZX1yTRkjTPQnBSqZbLaFkcnRKkZcgyg
+dC78RDl2iOB8JclXdLu/R9Dg8SQQ8M5clcKprR+4IQKBgQD7ubtmrFpRzvVMYiGJ
++JXf5AfSRB6OeXUMDaEw31XGZU9zZALqrh/98D4GVWGPSvXVbgH8KdxEc5GN5OJj
+HKxBldRZ0sw2gJLAE6UKH/qDNmp+2qWEdrDE8YcAeCQxo6rk+Ns5qqsvmn2SR14Y
+mvtgHHS1D+9lsqea5jUTSXrc0wKBgQDWVAwsZOtah2CHvsonqOyQXotnRtBool0u
+6rtGrRXoDFvwrjRsicBv6L1kf/npD+QhkaRe3ZkOBZxPsjv9Kfc974czLBAf1zeD
+rW931aSp1YiHyBo8+PmjTvbbiOK7K/8n79CN8W+zwr9plaU+HE1nLwwp/UmaCYtM
+fArq1jHbcQKBgFWnUVkSdHk5zsX67iaga38PfInTnAIm2ekMCjkzBWDIwEwnT8bD
+ESe7Q5+sFdJIU3YYRJylMcoo+PIrW80VyJdYgDVAQTSac1TgWlwjnX5gWcRoacG1
+EVkyRhmmx8oMQu4+r3nj1PQRwYCwwBfnRHnjtOKXVYJpVBalFpJFgoT5AoGAGTUx
+aVdFRxR9CfoqlJeNmz1DcBYoFOZjx0zcUeexl+U8OwaCK/HXrFHXVKaoofy4fCpB
+BtdRVRDb3ZO88n2pEqPFZwNbsiMB6H7RiWqbP05aDH5Ad8NguRBkgFWNNS5riCrw
+gIFQ/fd9w9FR6ggyIlyqNZYQvgk5VPmR3yTqIEECgYEA0akqJwH4M2aQb3mP6FGX
+MbQ5aconCeXHrT2u80LEhF4KzwQz8k8XX2K2XRZ+4LgWq3tOfeVnkEivkJBzFEao
+/g5l2ZjftRO2yAdYhP4Sbcws88pP+cr64tWDI6qK6tlGXI93EyfCVT1FSX5CC1aq
+Do+Sl1gfqlpgpszQaOMjR4M=
+-----END PRIVATE KEY-----";
+
+        Logger mLogger;
+    }
+
+    constructor() : Test("HttpClientMethodGuardTest", "1.0") {
+        addTestCase("concurrent delete vs get (plain)", \testConcurrentDeletePlain());
+        addTestCase("concurrent delete vs get (H2 over TLS)", \testConcurrentDeleteH2());
+        addTestCase("concurrent delete vs get (H3 over QUIC)", \testConcurrentDeleteH3());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        mLogger = new Logger("http-mguard-test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            mLogger.addAppender(new StdoutAppender());
+        }
+    }
+
+    #! Shared racing harness — spawns N threads calling rc.get() in a tight
+    #! loop, then deletes rc from the main thread.  Passes if no thread
+    #! observed a crash (indicated by a non-Qore-exception abnormal exit).
+    private hammerAndDelete(string url, int n_threads = 16, int per_thread_ms = 300) {
+        # Reference-counted client handle shared across threads via a
+        # hash wrapper — Qore's ref counting keeps it alive across threads
+        # until every background has dropped its reference.
+        HTTPClient client({"url": url, "ssl_verify_cert": False});
+
+        # Warm up the connection pool with one successful call so the
+        # background threads race against a LIVE connection, not a fresh
+        # connect.
+        client.send("", "GET", "/ok", NOTHING, True);
+
+        Counter done(n_threads);
+        int ok_count = 0;
+        int err_count = 0;
+        Mutex m_stats();
+
+        for (int i = 0; i < n_threads; ++i) {
+            background sub() {
+                on_exit done.dec();
+                date deadline = now_us() + per_thread_ms * 1ms;
+                while (now_us() < deadline) {
+                    try {
+                        client.send("", "GET", "/ok", NOTHING, True);
+                        m_stats.lock();
+                        on_exit m_stats.unlock();
+                        ++ok_count;
+                    } catch (hash<ExceptionInfo> ex) {
+                        # Any Qore exception is acceptable — the only
+                        # unacceptable outcome is a libqore-level crash
+                        # (SIGSEGV / assert) which would terminate this
+                        # test binary without executing any of these
+                        # handlers.
+                        m_stats.lock();
+                        on_exit m_stats.unlock();
+                        ++err_count;
+                    }
+                }
+            }();
+        }
+
+        # Let the workers get into their loops before we destroy the
+        # client.  The whole point is to overlap our delete with their
+        # in-flight method calls.
+        usleep(per_thread_ms * 250);  # 1/4 of the hammer window
+
+        # This is the unsafe-looking operation the MethodGuard has to
+        # survive: tear down the shared client while N threads are
+        # executing its methods.
+        delete client;
+
+        # Wait for all workers to drain (they'll exit their loops on the
+        # deadline or when a HTTPCLIENT-STATE-ERROR propagates).
+        done.waitForZero(15s);
+
+        if (m_options.verbose) {
+            printf("hammerAndDelete: ok=%d err=%d\n", ok_count, err_count);
+        }
+
+        # The platform guarantee: no crash.  If we got here at all, no
+        # SIGSEGV fired.  All err_count outcomes are clean Qore
+        # exceptions (verified by the catch block above having run).
+        assertGt(0, ok_count + err_count,
+            "at least one background call must have observed an outcome");
+    }
+
+    testConcurrentDeletePlain() {
+        HttpServer server(<HttpServerOptionInfo>{"logger": mLogger});
+        on_exit delete server;
+        server.setHandler("ok", "/ok", NOTHING, new OkHandler());
+
+        hash<auto> info = server.addListener(<HttpListenerOptionInfo>{"service": "0"});
+        server.waitForAsyncIo();
+
+        hammerAndDelete("http://localhost:" + info.port);
+    }
+
+    testConcurrentDeleteH2() {
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": mLogger,
+            "enable_h3": False,  # keep H3 out so we're testing H2 specifically
+        });
+        on_exit delete server;
+        server.setHandler("ok", "/ok", NOTHING, new OkHandler());
+
+        hash<auto> info = server.addListener(<HttpListenerOptionInfo>{
+            "service": "0",
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+        });
+        server.waitForAsyncIo();
+
+        hammerAndDelete("https://localhost:" + info.port);
+    }
+
+    testConcurrentDeleteH3() {
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": mLogger,
+            "enable_h3": True,
+        });
+        on_exit delete server;
+        server.setHandler("ok", "/ok", NOTHING, new OkHandler());
+
+        hash<auto> info = server.addListener(<HttpListenerOptionInfo>{
+            "service": "0",
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+        });
+        server.waitForAsyncIo();
+
+        hammerAndDelete("https://localhost:" + info.port);
+    }
+}

@@ -423,7 +423,8 @@ int Http1ClientConnection::finalizePollOpSubmission(
 }
 
 int Http1ClientConnection::getActiveStreamCount() const {
-    if (!poll_op_priv) {
+    MethodGuard g(const_cast<Http1ClientConnection*>(this));
+    if (!g.acquired() || !poll_op_priv) {
         return 0;
     }
     return poll_op_priv->getActiveStreamCount();
@@ -432,6 +433,12 @@ int Http1ClientConnection::getActiveStreamCount() const {
 QoreHashNode* Http1ClientConnection::submitRequest(const char* method, const char* path,
         const QoreHashNode* headers, const void* body, size_t body_len,
         ExceptionSink* xsink) {
+    MethodGuard g(this);
+    if (!g.acquired()) {
+        xsink->raiseException("HTTPCLIENT-STATE-ERROR",
+            "cannot submit request: connection has been closed");
+        return nullptr;
+    }
     if (!poll_op_priv || isClosed()) {
         xsink->raiseException("HTTPCLIENT-STATE-ERROR",
             "cannot submit request: connection is closed");
@@ -517,6 +524,12 @@ QoreHashNode* Http1ClientConnection::submitRequest(const char* method, const cha
 int64_t Http1ClientConnection::submitRequestStreaming(const char* method, const char* path,
         const QoreHashNode* headers, const void* body, size_t body_len,
         QoreChannel*& channel_out, ExceptionSink* xsink) {
+    MethodGuard g(this);
+    if (!g.acquired()) {
+        xsink->raiseException("HTTPCLIENT-STATE-ERROR",
+            "cannot submit streaming request: connection has been closed");
+        return -1;
+    }
     if (!poll_op_priv || isClosed()) {
         xsink->raiseException("HTTPCLIENT-STATE-ERROR",
             "cannot submit streaming request: connection is closed");
@@ -573,6 +586,12 @@ int64_t Http1ClientConnection::submitRequestStreaming(const char* method, const 
 QoreHashNode* Http1ClientConnection::submitRequestStreamingSend(const char* method,
         const char* path, const QoreHashNode* headers, bool streaming_recv,
         QoreChannel*& channel_out, ExceptionSink* xsink) {
+    MethodGuard g(this);
+    if (!g.acquired()) {
+        xsink->raiseException("HTTPCLIENT-STATE-ERROR",
+            "cannot submit streaming send request: connection has been closed");
+        return nullptr;
+    }
     if (!poll_op_priv || isClosed()) {
         xsink->raiseException("HTTPCLIENT-STATE-ERROR",
             "cannot submit streaming send request: connection is closed");
@@ -648,6 +667,12 @@ QoreHashNode* Http1ClientConnection::submitRequestStreamingSend(const char* meth
 }
 
 void Http1ClientConnection::pushSendData(const QoreStringNode* data, ExceptionSink* xsink) {
+    MethodGuard g(this);
+    if (!g.acquired()) {
+        xsink->raiseException("HTTPCLIENT-STATE-ERROR",
+            "cannot push data: connection has been closed");
+        return;
+    }
     if (!poll_op_priv) {
         xsink->raiseException("HTTPCLIENT-STATE-ERROR",
             "cannot push data: connection has no poll operation");
@@ -675,6 +700,16 @@ void Http1ClientConnection::pushSendData(const QoreStringNode* data, ExceptionSi
 }
 
 void Http1ClientConnection::pushSendData(const void* data, size_t len, ExceptionSink* xsink) {
+    // MethodGuard is re-entrant so the inner pushSendData(QoreStringNode*)
+    // call here is cheap (one map bump on this thread).  We still take
+    // one at this entry point so callers dispatched from the Qore void*
+    // binding hit a real invalidation check.
+    MethodGuard g(this);
+    if (!g.acquired()) {
+        xsink->raiseException("HTTPCLIENT-STATE-ERROR",
+            "cannot push data: connection has been closed");
+        return;
+    }
     if (!data || !len) {
         // End-of-body sentinel
         pushSendData(nullptr, xsink);
@@ -685,6 +720,12 @@ void Http1ClientConnection::pushSendData(const void* data, size_t len, Exception
 }
 
 void Http1ClientConnection::setTrailers(const QoreHashNode* trailers, ExceptionSink* xsink) {
+    MethodGuard g(this);
+    if (!g.acquired()) {
+        xsink->raiseException("HTTPCLIENT-STATE-ERROR",
+            "cannot set trailers: connection has been closed");
+        return;
+    }
     if (!poll_op_priv) {
         xsink->raiseException("HTTPCLIENT-STATE-ERROR",
             "cannot set trailers: connection has no poll operation");
@@ -696,6 +737,13 @@ void Http1ClientConnection::setTrailers(const QoreHashNode* trailers, ExceptionS
 int64_t Http1ClientConnection::submitRequestWithAction(const char* method, const char* path,
         const QoreHashNode* headers, const void* body, size_t body_len,
         AbstractAsyncAction* action, ExceptionSink* xsink) {
+    MethodGuard g(this);
+    if (!g.acquired()) {
+        action->deref(xsink);
+        xsink->raiseException("HTTPCLIENT-STATE-ERROR",
+            "cannot submit request: connection has been closed");
+        return -1;
+    }
     if (!poll_op_priv || isClosed()) {
         action->deref(xsink);
         xsink->raiseException("HTTPCLIENT-STATE-ERROR",
@@ -740,6 +788,15 @@ int64_t Http1ClientConnection::submitRequestWithAction(const char* method, const
 }
 
 void Http1ClientConnection::closeConnection(ExceptionSink* xsink) {
+    // Lifetime barrier (S1): invalidate so new method calls are refused,
+    // then wait for any in-flight calls to finish before tearing down
+    // protocol-specific state.  Makes `delete rc` concurrent with
+    // another thread's `rc.get()` safe — the other thread either
+    // completes its call first (we wait) or gets a clean Qore exception
+    // (we've already invalidated).  See HttpClientConnection.h.
+    markInvalidated();
+    drainInFlight();
+
     if (!poll_op_priv) {
         return;
     }
@@ -835,7 +892,8 @@ int Http1ClientConnection::takeSocket(QoreObject*& sock_obj_out,
 }
 
 QoreHashNode* Http1ClientConnection::getReferencedErrorInfo() {
-    if (!poll_op_priv) {
+    MethodGuard g(this);
+    if (!g.acquired() || !poll_op_priv) {
         return nullptr;
     }
     return poll_op_priv->getErrorInfo();

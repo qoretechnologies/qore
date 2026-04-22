@@ -620,7 +620,12 @@ void Http3ClientConnection::onInnerHandshakeFailed(Http3ClientPollOperationPriv*
 }
 
 int Http3ClientConnection::getActiveStreamCount() const {
-    if (!poll_op_priv) {
+    // MethodGuard: block concurrent closeConnection from tearing down
+    // poll_op_priv while we read it.  If the connection has already
+    // been invalidated, report 0 (same as the existing !poll_op_priv
+    // branch — this is a count accessor, not a state transition).
+    MethodGuard g(const_cast<Http3ClientConnection*>(this));
+    if (!g.acquired() || !poll_op_priv) {
         return 0;
     }
     return poll_op_priv->getActiveStreamCount();
@@ -629,6 +634,12 @@ int Http3ClientConnection::getActiveStreamCount() const {
 QoreHashNode* Http3ClientConnection::submitRequest(const char* method, const char* path,
         const QoreHashNode* headers, const void* body, size_t body_len,
         ExceptionSink* xsink) {
+    MethodGuard g(this);
+    if (!g.acquired()) {
+        xsink->raiseException("HTTPCLIENT-STATE-ERROR",
+            "cannot submit request: connection has been closed");
+        return nullptr;
+    }
     if (!poll_op_priv || isClosed()) {
         xsink->raiseException("HTTPCLIENT-STATE-ERROR",
             "cannot submit request: connection is closed");
@@ -701,6 +712,13 @@ QoreHashNode* Http3ClientConnection::submitRequest(const char* method, const cha
 int64_t Http3ClientConnection::submitRequestWithAction(const char* method, const char* path,
         const QoreHashNode* headers, const void* body, size_t body_len,
         AbstractAsyncAction* action, ExceptionSink* xsink) {
+    MethodGuard g(this);
+    if (!g.acquired()) {
+        action->deref(xsink);
+        xsink->raiseException("HTTPCLIENT-STATE-ERROR",
+            "cannot submit request: connection has been closed");
+        return -1;
+    }
     if (!poll_op_priv || isClosed()) {
         action->deref(xsink);
         xsink->raiseException("HTTPCLIENT-STATE-ERROR",
@@ -750,6 +768,12 @@ int64_t Http3ClientConnection::submitRequestWithAction(const char* method, const
 int64_t Http3ClientConnection::submitRequestStreaming(const char* method, const char* path,
         const QoreHashNode* headers, const void* body, size_t body_len,
         QoreChannel*& channel_out, ExceptionSink* xsink) {
+    MethodGuard g(this);
+    if (!g.acquired()) {
+        xsink->raiseException("HTTPCLIENT-STATE-ERROR",
+            "cannot submit streaming request: connection has been closed");
+        return -1;
+    }
     if (!poll_op_priv || isClosed()) {
         xsink->raiseException("HTTPCLIENT-STATE-ERROR",
             "cannot submit streaming request: connection is closed");
@@ -810,6 +834,12 @@ int64_t Http3ClientConnection::submitRequestStreaming(const char* method, const 
 QoreHashNode* Http3ClientConnection::submitRequestStreamingSend(const char* method,
         const char* path, const QoreHashNode* headers, bool streaming_recv,
         QoreChannel*& channel_out, ExceptionSink* xsink) {
+    MethodGuard g(this);
+    if (!g.acquired()) {
+        xsink->raiseException("HTTPCLIENT-STATE-ERROR",
+            "cannot submit streaming send request: connection has been closed");
+        return nullptr;
+    }
     if (!poll_op_priv || isClosed()) {
         xsink->raiseException("HTTPCLIENT-STATE-ERROR",
             "cannot submit streaming send request: connection is closed");
@@ -889,6 +919,12 @@ QoreHashNode* Http3ClientConnection::submitRequestStreamingSend(const char* meth
 }
 
 void Http3ClientConnection::pushSendData(const void* data, size_t len, ExceptionSink* xsink) {
+    MethodGuard g(this);
+    if (!g.acquired()) {
+        xsink->raiseException("HTTPCLIENT-STATE-ERROR",
+            "cannot push data: connection has been closed");
+        return;
+    }
     if (!poll_op_priv) {
         xsink->raiseException("HTTPCLIENT-STATE-ERROR",
             "cannot push data: connection has no poll operation");
@@ -946,6 +982,12 @@ void Http3ClientConnection::pushSendData(const void* data, size_t len, Exception
 }
 
 void Http3ClientConnection::setTrailers(const QoreHashNode* trailers, ExceptionSink* xsink) {
+    MethodGuard g(this);
+    if (!g.acquired()) {
+        xsink->raiseException("HTTPCLIENT-STATE-ERROR",
+            "cannot set trailers: connection has been closed");
+        return;
+    }
     if (!poll_op_priv) {
         xsink->raiseException("HTTPCLIENT-STATE-ERROR",
             "cannot set trailers: connection has no poll operation");
@@ -985,6 +1027,18 @@ void Http3ClientConnection::setTrailers(const QoreHashNode* trailers, ExceptionS
 }
 
 void Http3ClientConnection::closeConnection(ExceptionSink* xsink) {
+    // Lifetime barrier: atomically mark the connection invalidated (so
+    // any NEW method calls arriving after this point are refused via
+    // MethodGuard.acquired()==false and return a clean Qore exception)
+    // and wait for any CURRENTLY in-flight method calls to finish.  See
+    // HttpClientConnection.h for the full design rationale.
+    //
+    // After drainInFlight() returns, no call is dereferencing the
+    // protocol-specific members below and none can start, so the
+    // teardown that follows is race-free with Qore-visible API callers.
+    markInvalidated();
+    drainInFlight();
+
     // Happy-eyeballs: if we are still racing (no winner chosen yet),
     // tear down every in-flight attempt.  Move them out of attempts_
     // under the lock and clear outside it.
