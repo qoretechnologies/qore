@@ -3002,7 +3002,22 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                 return;
             }
 
-            sendReply(request_helper, listener, s, handler, rv, \cx, hdr, head, \async_response_out);
+            # Re-establish handler-specific thread-local data around sendReply so that
+            # any deferred handler dispatch performed from inside sendReply (SSE setup
+            # via setupAsyncSseConnection*(), WebSocket 101 registered()/startImpl(),
+            # etc.) runs in the handler's TLD context — identical to handler.handleRequest()
+            # earlier in this method.  Without this, handler methods invoked from
+            # sendReply run with TLD already restored (e.g. tld.svc == NOTHING for
+            # service-bound handlers), which breaks ServiceApi::startThread(),
+            # service-log routing, and any other service-context API called from the
+            # setup path.
+            if (handler) {
+                *hash<auto> tld_save = handler.saveThreadLocalData();
+                on_exit handler.restoreThreadLocalData(tld_save);
+                sendReply(request_helper, listener, s, handler, rv, \cx, hdr, head, \async_response_out);
+            } else {
+                sendReply(request_helper, listener, s, handler, rv, \cx, hdr, head, \async_response_out);
+            }
         } catch (hash<ExceptionInfo> ex) {
             string desc = !debug
                 ? sprintf("%s: %s: %s", get_ex_pos(ex), ex.err, ex.desc)
@@ -3076,6 +3091,24 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             "cx": cx,
             "listener": listener,
         };
+    }
+
+    # Logs a framework-level error via the handler's own logError() method if it has
+    # one.  For Qorus service-bound handlers, this routes the message into the
+    # owning service's log file (see OMQ::AbstractServiceHttpHandler::logError()),
+    # so operators see protocol-upgrade / SSE setup failures in the service log
+    # instead of only in the listener log.  Best-effort: any error (method missing,
+    # etc.) is swallowed so the outer error path continues.
+    private:internal logViaHandlerIfPossible(*object handler, int cid, string err) {
+        if (!handler) {
+            return;
+        }
+        try {
+            call_object_method(handler, "logError", "cid %d: %s", cid, err);
+        } catch (hash<ExceptionInfo> ignored) {
+            # handler has no logError() method, or logError() threw — already logged
+            # via listener.logError() at the call site, so this is a safe no-op
+        }
     }
 
     # sends a reply to a request
@@ -3322,12 +3355,20 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             bool sse_is_http2 = cx."header-info".http2 ?? False;
             bool sse_is_http3 = cx."header-info".http3 ?? False;
             if (rv.close) {
-                listener.logError("cid %d: SSE response returned from handler %y, but the connection "
-                    "close flag is set", cx.id, cx.handler_name);
+                string err = sprintf("SSE response (Content-Type: %s) returned from handler %y with "
+                    "connection close flag set — SSE requires a persistent connection",
+                    MimeTypeSse, cx.handler_name);
+                listener.logError("cid %d: %s", cx.id, err);
+                logViaHandlerIfPossible(handler, cx.id, err);
+                throw "SSE-HANDLER-ERROR", err;
             } else if (!(handler instanceof HttpServer::AbstractHttpSocketHandlerInterface)) {
-                listener.logError("cid %d: SSE response returned from handler %y, but the handler does "
-                    "not inherit AbstractHttpSocketHandlerInterface (class: %y)", cx.id, cx.handler_name,
-                    handler.className());
+                string err = sprintf("SSE response (Content-Type: %s) returned from handler %y, but the "
+                    "handler does not inherit AbstractHttpSocketHandlerInterface (class: %y) — SSE "
+                    "requires a handler that implements setupAsyncSseConnection{,Http2,Http3}()",
+                    MimeTypeSse, cx.handler_name, handler.className());
+                listener.logError("cid %d: %s", cx.id, err);
+                logViaHandlerIfPossible(handler, cx.id, err);
+                throw "SSE-HANDLER-ERROR", err;
             } else if (sse_is_http2 || sse_is_http3) {
                 # HTTP/2 / HTTP/3 SSE: multiplexed streams — submit response
                 # headers directly on the stream and hand the stream to a
@@ -3405,12 +3446,20 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         } else if (rv."code" == 101) {
             # WebSocket upgrade — use async I/O controller
             if (rv.close) {
-                listener.logError("cid %d: 101 Switching Protocols returned from handler %y, but the connection "
-                    "close flag is set", cx.id, cx.handler_name);
+                string err = sprintf("101 Switching Protocols returned from handler %y with connection "
+                    "close flag set — protocol upgrade requires a persistent connection",
+                    cx.handler_name);
+                listener.logError("cid %d: %s", cx.id, err);
+                logViaHandlerIfPossible(handler, cx.id, err);
+                throw "WEBSOCKET-HANDLER-ERROR", err;
             } else if (!(handler instanceof HttpServer::AbstractHttpSocketHandlerInterface)) {
-                listener.logError("cid %d: 101 Switching Protocols returned from handler %y, but the handler does "
-                    "not inherit AbstractHttpSocketHandlerInterface (class: %y)", cx.id, cx.handler_name,
-                    handler.className());
+                string err = sprintf("101 Switching Protocols returned from handler %y, but the handler "
+                    "does not inherit AbstractHttpSocketHandlerInterface (class: %y) — protocol upgrade "
+                    "requires a handler that implements AbstractHttpSocketHandlerInterface",
+                    cx.handler_name, handler.className());
+                listener.logError("cid %d: %s", cx.id, err);
+                logViaHandlerIfPossible(handler, cx.id, err);
+                throw "WEBSOCKET-HANDLER-ERROR", err;
             } else {
                 if (listener.registerDedicatedSocket(request_helper, cx.id, handler)) {
                     on_exit {
