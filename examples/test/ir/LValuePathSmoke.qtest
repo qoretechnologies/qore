@@ -27,6 +27,7 @@ class LValuePathSmokeTest inherits QUnit::Test {
         addTestCase("pre/post increment on member", \testMemberIncrement());
         addTestCase("compound on local hash key", \testLocalHashKeyCompound());
         addTestCase("trim and chomp", \testTrimChomp());
+        addTestCase("chomp on self.member", \testChompMember());
         set_return_value(main());
     }
 
@@ -210,5 +211,21 @@ trim s;
 printf(\"%s:%d\\n\", s, s.length());
 ";
         assertSameInAllModes(code, "hello:5\n", "trim");
+    }
+
+    testChompMember() {
+        # Bug: lowerChomp lacked the tryEmitLValuePathOp fast path, so every
+        # chomp (even on a simple local or member) trampolined through
+        # evalAndRef.  Fixed to match lowerTrim's LVPath emission.
+        string code = "
+class E {
+    public { string line = \"oops\\n\"; }
+    strip() { chomp self.line; }
+}
+E e();
+e.strip();
+printf(\"%s:%d\\n\", e.line, e.line.length());
+";
+        assertSameInAllModes(code, "oops:4\n", "chomp self.member");
     }
 }

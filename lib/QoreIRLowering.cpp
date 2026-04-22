@@ -7940,6 +7940,15 @@ QoreIRValue QoreIRLowering::lowerChomp(const QoreValue& expr, std::string& error
     if (!op) {
         return QoreIRValue();
     }
+    // Path-based chomp for complex lvalues (mirrors lowerTrim) — avoids the
+    // AST-eval fallback in the IR interpreter / JIT runtime on simple lvalues.
+    {
+        QoreIRValue path_result = tryEmitLValuePathOp(QoreIROpcode::LValuePathUnary,
+            op->getExp(), nullptr, op->loc, error, false, LVCompoundOp::AddAssign, LVUnaryOp::Chomp);
+        if (path_result.isValid()) {
+            return path_result;
+        }
+    }
     std::vector<QoreIRValue> operands;
     QoreIROpcode opcode = QoreIROpcode::ChompAny;
     QoreParseAnalysis analysis;
