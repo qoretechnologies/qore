@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file RestHandler.qm Qore handler definition for the HttpServer module for exporting REST services
 
-/* RestHandler.qm Copyright (C) 2013 - 2025 Qore Technologies, s.r.o.
+/* RestHandler.qm Copyright (C) 2013 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
