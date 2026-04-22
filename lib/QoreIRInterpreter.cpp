@@ -2409,6 +2409,19 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             }
         }
     };
+    // Same as invalidateClosureCache, but keyed on a LocalVar* directly.  Used by
+    // opcodes that carry an explicit LocalVar* (HashKeyStore/HashKeyStoreDynamic/
+    // ListIndexStore) — they may have been AOT-deserialized with container=nullptr
+    // and only container_lv populated, so the VarRefNode-based helper cannot run.
+    auto invalidateClosureCacheLv = [&](const LocalVar* lv) {
+        if (lv && lv->closureUse()) {
+            auto cit = closures.find(lv);
+            if (cit != closures.end()) {
+                cit->second.discard(xsink);
+                closures.erase(cit);
+            }
+        }
+    };
 
     // Helper: prepare slot cache before a lvalue operation.
     // Extracts the base VarRefNode, calls ensureLocalInstantiated, and pre-invalidates
@@ -3924,6 +3937,10 @@ load_local_done:
                         } else {
                             assignLocalVarValueTransfer(lv, QoreValue(new_h), xsink);
                         }
+                        // After COW, LoadClosure's `closures` cache still holds a ref
+                        // to the pre-COW hash (old contents).  Invalidate so the next
+                        // load re-reads through the CVV and sees the new hash.
+                        invalidateClosureCacheLv(lv);
                         if (xsink && *xsink) {
                             // new_h's ref was consumed by assign*Transfer (either stored
                             // in TLS or discarded on failure). Do not deref here.
@@ -3981,6 +3998,9 @@ load_local_done:
                     } else {
                         assignLocalVarValueTransfer(lv, QoreValue(new_h), xsink);
                     }
+                    // Auto-vivify replaces NOTHING with a new hash; any prior LoadClosure
+                    // of this var cached a stale NOTHING (or empty hash) — invalidate.
+                    invalidateClosureCacheLv(lv);
                     if (xsink && *xsink) {
                         cleanupValues(values, cleanup, xsink, true, cleanup_log);
                         cleanupLocalCaches();
@@ -4034,6 +4054,8 @@ load_local_done:
                         } else {
                             assignLocalVarValueTransfer(lv, QoreValue(new_h), xsink);
                         }
+                        // After COW, invalidate stale LoadClosure cache entry
+                        invalidateClosureCacheLv(lv);
                         if (xsink && *xsink) {
                             cleanupValues(values, cleanup, xsink, true, cleanup_log);
                             cleanupLocalCaches();
@@ -4080,6 +4102,8 @@ load_local_done:
                     } else {
                         assignLocalVarValueTransfer(lv, QoreValue(new_h), xsink);
                     }
+                    // Auto-vivify replaces NOTHING; invalidate stale LoadClosure cache
+                    invalidateClosureCacheLv(lv);
                     if (xsink && *xsink) {
                         cleanupValues(values, cleanup, xsink, true, cleanup_log);
                         cleanupLocalCaches();
@@ -4146,6 +4170,8 @@ load_local_done:
                         } else {
                             assignLocalVarValueTransfer(lv, QoreValue(new_l), xsink);
                         }
+                        // After COW, invalidate stale LoadClosure cache entry
+                        invalidateClosureCacheLv(lv);
                         if (xsink && *xsink) {
                             cleanupValues(values, cleanup, xsink, true, cleanup_log);
                             cleanupLocalCaches();
@@ -4222,6 +4248,8 @@ load_local_done:
                     } else {
                         assignLocalVarValueTransfer(lv, QoreValue(new_l), xsink);
                     }
+                    // Auto-vivify replaces NOTHING; invalidate stale LoadClosure cache
+                    invalidateClosureCacheLv(lv);
                     if (xsink && *xsink) {
                         cleanupValues(values, cleanup, xsink, true, cleanup_log);
                         cleanupLocalCaches();
