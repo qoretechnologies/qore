@@ -34,6 +34,7 @@
 #include <qore/Qore.h>
 
 #include "qore/intern/Http2Session.h"
+#include "qore/intern/QoreAsyncIoLogger.h"
 #include "qore/intern/QoreIoUring.h"
 #include "qore/intern/QuicCommon.h"
 #include "qore/intern/qore_socket_private.h"
@@ -325,6 +326,25 @@ int32_t Http2Session::submitRequestImpl(const char* method, const char* path,
 
     if (scheme_str.empty()) {
         scheme_str = scheme;
+    }
+
+    // Defensive path normalization: RFC 9113 §8.3.1 requires ":path" to
+    // contain a "path-absolute" production (leading "/") for normal methods.
+    // Only CONNECT omits :path, and "OPTIONS *" uses the asterisk-form.
+    // nghttp2 enforces the rule client-side and strict H2 servers reject
+    // requests whose :path does not start with "/", closing the stream
+    // before the handler runs.  Silently prepend the slash here and log a
+    // warning so the caller can find and fix the root cause instead of
+    // chasing a mysterious PROTOCOL_ERROR or stream-reset.
+    if (!path_str.empty() && path_str[0] != '/' && method_str != "CONNECT"
+            && !(method_str == "OPTIONS" && path_str == "*")) {
+        qore_async_io_log(QORE_LOG_LEVEL_WARN,
+            "Http2Session::submitRequestImpl: caller passed non-absolute "
+            ":path %s for method %s — auto-prepending leading '/' to avoid "
+            "H2 PROTOCOL_ERROR rejection; fix the caller to pass an "
+            "absolute path",
+            path_str.c_str(), method_str.c_str());
+        path_str.insert(path_str.begin(), '/');
     }
 
     // Add :method pseudo-header
