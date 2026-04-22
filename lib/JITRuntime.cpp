@@ -659,14 +659,35 @@ extern "C" DLLEXPORT void qore_rt_assign_local(LocalVar* var, uint64_t value, Ex
 extern "C" DLLEXPORT uint64_t qore_rt_coerce_value(const QoreTypeInfo* ti, uint64_t value,
         uint64_t* cleanup_ptr, ExceptionSink* xsink) {
     QoreValue val = fromBits(value);
+    // Take our own reference before acceptAssignment so its internal
+    // `discard(p)` (in the copy branch of acceptInputComplexList/Hash)
+    // consumes OUR +1, not the caller's.  Otherwise, when the caller
+    // passes a value loaded from an alloca-cached pre-instantiated local
+    // (no owned +1), the discard underflows the runtime-stack variable's
+    // refcount, causing a use-after-free at function exit.  The refSelf
+    // is balanced by the `*cleanup_ptr = result` below — the caller's
+    // cleanup alloca drops our +1 at function exit.
+    //
+    // Reproducer: MewsRestClient.qtest → RestClient.ping → pingImpl →
+    // RestClientIo::restDoRequestIntern → HttpClientConnectionManager::request →
+    // CookieJar::processResponseHeaders, specifically `cookie_strings =
+    // set_cookie` where `set_cookie` is `auto` bound to `headers."set-cookie"`
+    // (a list aliased into the shared response hash) and `cookie_strings` is
+    // `list<string>`.  The inner-scope StoreLocal coerce-copy path freed the
+    // shared list prematurely, tripping `AbstractQoreNode::deref` on dangling
+    // bits when the outer response hash later dereffed.
+    if (val.hasNode()) {
+        val.refSelf();
+    }
     QoreTypeInfo::acceptAssignment(ti, "<lvalue>", val, xsink);
     uint64_t result = toBits(val);
-    if (result != value && cleanup_ptr) {
-        // acceptAssignment created a copy with complexTypeInfo and already freed
-        // the old value internally (via discard in acceptInputComplexList/Hash).
-        // The cleanup alloca's old pointer is now dangling — update it to track
-        // the new coerced value.  Do NOT discard the old cleanup value; it was
-        // already freed by acceptAssignment.
+    if (cleanup_ptr) {
+        // Always track the output for cleanup at function exit.  In the
+        // copy case `val` now points to the freshly-allocated coerced
+        // container (refcount 1 from copy).  In the no-op case `val` is
+        // the original input with an extra +1 from the refSelf above.
+        // Either way there is exactly one +1 that the caller's cleanup
+        // alloca must drop.
         *cleanup_ptr = result;
     }
     return result;
