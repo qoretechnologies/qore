@@ -35,7 +35,9 @@ public class BaseLinkerCreatePackageRequestDataType inherits HashDataType {
                 "display_name": "Courier Fields",
                 "short_desc": "Courier-specific field values",
                 "type": new ListDataType("fields", new BaseLinkerCourierFieldDataType()),
-                "desc": "Courier-specific field values; see `list-courier-fields` for definitions.",
+                "required": True,
+                "desc": "Courier-specific field values; see `list-courier-fields` for definitions. "
+                    "Pass an empty list (`[]`) if the selected courier has no form fields.",
             },
             "packages": {
                 "display_name": "Packages",

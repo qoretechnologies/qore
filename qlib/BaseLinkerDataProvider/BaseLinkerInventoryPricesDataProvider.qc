@@ -15,11 +15,18 @@ public class BaseLinkerInventoryPricesDataProvider inherits BaseLinkerDataProvid
             "type": "BaseLinkerInventoryPricesDataProvider",
             "has_record": True,
             "supports_read": True,
+            "supports_children": True,
+            "children_can_support_apis": True,
             "search_options": SearchOptions,
             "constructor_options": ConstructorOptions,
         };
 
         const ConstructorOptions = BaseConstructorOptions;
+
+        const ChildMap = {
+            "update-inventory-prices":
+                Class::forName("BaseLinkerDataProvider::BaseLinkerUpdateInventoryProductsPricesDataProvider"),
+        };
 
         const SearchOptions = {
             "inventory_id": <DataProviderOptionInfo>{
@@ -60,6 +67,17 @@ public class BaseLinkerInventoryPricesDataProvider inherits BaseLinkerDataProvid
 
     private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
         return (new BaseLinkerInventoryPriceDataType()).getFields();
+    }
+
+    private *list<string> getChildProviderNamesImpl() {
+        return keys ChildMap;
+    }
+
+    private *AbstractDataProvider getChildProviderImpl(string name) {
+        *Class cls = ChildMap{name};
+        if (cls) {
+            return cls.newObject(rest);
+        }
     }
 
     private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,

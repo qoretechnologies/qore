@@ -25,13 +25,15 @@ public class BaseLinkerSetOrderPaymentRequestDataType inherits HashDataType {
             "payment_date": {
                 "display_name": "Payment Date",
                 "short_desc": "Payment timestamp (Unix seconds)",
-                "type": SoftIntOrNothingType,
-                "desc": "Payment timestamp as Unix seconds. Defaults to the current time.",
+                "type": SoftIntType,
+                "required": True,
+                "desc": "Payment timestamp as Unix seconds.",
             },
             "payment_comment": {
                 "display_name": "Payment Comment",
                 "short_desc": "Free-text payment note",
-                "type": SoftStringOrNothingType,
+                "type": SoftStringType,
+                "required": True,
             },
             "external_payment_id": {
                 "display_name": "External Payment ID",

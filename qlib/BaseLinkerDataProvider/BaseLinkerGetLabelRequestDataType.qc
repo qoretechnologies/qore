@@ -19,13 +19,13 @@ public class BaseLinkerGetLabelRequestDataType inherits HashDataType {
             },
             "package_id": {
                 "display_name": "Package ID",
-                "short_desc": "BaseLinker package ID (alternative to `package_number`)",
-                "type": SoftStringOrNothingType,
+                "short_desc": "BaseLinker package ID (alternative to package number)",
+                "type": SoftIntOrNothingType,
                 "desc": "Internal BaseLinker package ID. Supply either this or `package_number`.",
             },
             "package_number": {
                 "display_name": "Package Number",
-                "short_desc": "Carrier-assigned tracking number (alternative to `package_id`)",
+                "short_desc": "Carrier-assigned tracking number (alternative to package ID)",
                 "type": SoftStringOrNothingType,
                 "desc": "Carrier-assigned tracking/package number. Supply either this or "
                     "`package_id`.",

@@ -5,8 +5,8 @@
 public namespace BaseLinkerDataProvider {
 
 #! Request type for the BaseLinker `addOrderReturn` method
-/** Delivery / invoice address and pickup-point fields are flattened to
-    top-level keys, mirroring BaseLinker's flat payload shape.
+/** Only delivery address fields are supported — invoice addresses, payment
+    methods, and pickup-point fields are not accepted by `addOrderReturn`.
 */
 public class BaseLinkerAddOrderReturnRequestDataType inherits HashDataType {
     public {
@@ -23,20 +23,30 @@ public class BaseLinkerAddOrderReturnRequestDataType inherits HashDataType {
                 "short_desc": "Initial return status",
                 "type": SoftIntType,
                 "required": True,
-                "desc": "Return status identifier; see `list-order-return-statuses`.",
+                "desc": "Return status identifier; values are drawn from BaseLinker's "
+                    "`getOrderReturnStatusList` endpoint and surfaced via the "
+                    "`order_return_statuses` reference data.",
                 "ref_data": "order_return_statuses",
+            },
+            "custom_source_id": {
+                "display_name": "Custom Source ID",
+                "short_desc": "Custom personal source ID",
+                "type": SoftIntOrNothingType,
+                "ref_data": "order_sources",
+                "desc": "Identifier of a custom personal order source (see `list-order-sources`).",
+            },
+            "reference_number": {
+                "display_name": "Reference Number",
+                "short_desc": "External reference number for the return",
+                "type": SoftStringOrNothingType,
             },
             "date_add": {
                 "display_name": "Date Added",
                 "short_desc": "Return creation timestamp (Unix seconds)",
-                "type": SoftIntOrNothingType,
-                "desc": "Return creation timestamp as Unix seconds. Defaults to the current time.",
-            },
-            "order_source_id": {
-                "display_name": "Order Source ID",
-                "short_desc": "Source identifier",
-                "type": SoftIntOrNothingType,
-                "ref_data": "order_sources",
+                "type": SoftIntType,
+                "required": True,
+                "desc": "Return creation timestamp as Unix seconds.",
+                "example_value": 1745280000,
             },
             "currency": {
                 "display_name": "Currency",
@@ -44,26 +54,13 @@ public class BaseLinkerAddOrderReturnRequestDataType inherits HashDataType {
                 "type": SoftStringType,
                 "required": True,
                 "desc": "ISO 4217 currency code, e.g. `PLN`, `EUR`, `USD`.",
+                "example_value": "PLN",
             },
-            "payment_method": {
-                "display_name": "Payment Method",
-                "short_desc": "Refund method description",
-                "type": SoftStringOrNothingType,
-            },
-            "payment_method_cod": {
-                "display_name": "Cash On Delivery",
-                "short_desc": "Whether refund is COD",
-                "type": SoftBoolOrNothingType,
-            },
-            "paid": {
+            "refunded": {
                 "display_name": "Refunded",
                 "short_desc": "Whether the return has been refunded",
                 "type": SoftBoolOrNothingType,
-            },
-            "user_comments": {
-                "display_name": "Customer Comments",
-                "short_desc": "Free-text comments from the customer",
-                "type": SoftStringOrNothingType,
+                "desc": "`True` marks the return as refunded.",
             },
             "admin_comments": {
                 "display_name": "Admin Comments",
@@ -83,11 +80,6 @@ public class BaseLinkerAddOrderReturnRequestDataType inherits HashDataType {
             "user_login": {
                 "display_name": "User Login",
                 "short_desc": "Customer login (marketplace username)",
-                "type": SoftStringOrNothingType,
-            },
-            "delivery_method": {
-                "display_name": "Delivery Method",
-                "short_desc": "Return shipping method name",
                 "type": SoftStringOrNothingType,
             },
             "delivery_price": {
@@ -129,51 +121,7 @@ public class BaseLinkerAddOrderReturnRequestDataType inherits HashDataType {
                 "display_name": "Delivery Country Code",
                 "short_desc": "2-letter ISO country code",
                 "type": SoftStringOrNothingType,
-            },
-            "invoice_fullname": {
-                "display_name": "Invoice Full Name",
-                "short_desc": "Billing recipient full name",
-                "type": SoftStringOrNothingType,
-            },
-            "invoice_company": {
-                "display_name": "Invoice Company",
-                "short_desc": "Billing company name",
-                "type": SoftStringOrNothingType,
-            },
-            "invoice_nip": {
-                "display_name": "Invoice Tax ID",
-                "short_desc": "NIP / VAT / tax identifier",
-                "type": SoftStringOrNothingType,
-            },
-            "invoice_address": {
-                "display_name": "Invoice Address",
-                "short_desc": "Billing street address",
-                "type": SoftStringOrNothingType,
-            },
-            "invoice_postcode": {
-                "display_name": "Invoice Postcode",
-                "short_desc": "Billing postal code",
-                "type": SoftStringOrNothingType,
-            },
-            "invoice_city": {
-                "display_name": "Invoice City",
-                "short_desc": "Billing city",
-                "type": SoftStringOrNothingType,
-            },
-            "invoice_state": {
-                "display_name": "Invoice State/Province",
-                "short_desc": "Billing state or province",
-                "type": SoftStringOrNothingType,
-            },
-            "invoice_country_code": {
-                "display_name": "Invoice Country Code",
-                "short_desc": "Billing 2-letter ISO country code",
-                "type": SoftStringOrNothingType,
-            },
-            "want_invoice": {
-                "display_name": "Wants Invoice",
-                "short_desc": "Whether the customer requested an invoice",
-                "type": SoftBoolOrNothingType,
+                "desc": "ISO 3166-1 alpha-2 country code (e.g. `PL`, `DE`, `US`).",
             },
             "extra_field_1": {
                 "display_name": "Extra Field 1",
@@ -185,11 +133,32 @@ public class BaseLinkerAddOrderReturnRequestDataType inherits HashDataType {
                 "short_desc": "Free-form extra field",
                 "type": SoftStringOrNothingType,
             },
+            "custom_extra_fields": {
+                "display_name": "Custom Extra Fields",
+                "short_desc": "Map of custom extra field ID to value",
+                "type": AutoHashOrNothingType,
+                "desc": "Map of `{\"<extra_field_id>\": <value>}` for custom order-return extra "
+                    "fields configured in BaseLinker.",
+            },
+            "refund_account_number": {
+                "display_name": "Refund Account Number",
+                "short_desc": "Bank account for the refund",
+                "type": SoftStringOrNothingType,
+            },
+            "refund_iban": {
+                "display_name": "Refund IBAN",
+                "short_desc": "IBAN for the refund",
+                "type": SoftStringOrNothingType,
+            },
+            "refund_swift": {
+                "display_name": "Refund SWIFT",
+                "short_desc": "SWIFT/BIC code for the refund",
+                "type": SoftStringOrNothingType,
+            },
             "products": {
                 "display_name": "Products",
                 "short_desc": "Returned line items",
-                "type": new ListDataType("products", new BaseLinkerOrderProductDataType()),
-                "required": True,
+                "type": new ListDataType("products", new BaseLinkerOrderProductDataType(), True),
                 "desc": "Line items being returned.",
             },
         };

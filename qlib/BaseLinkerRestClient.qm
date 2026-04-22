@@ -108,10 +108,12 @@ public class BaseLinkerRestClientBase {
         const DefaultPingMethod = "POST";
 
         #! Default ping path
-        /** Empty — the base URL already points at the single \c /connector.php
-            endpoint, so the ping hits the endpoint root.
+        /** \c connector.php — RestClientIo normalizes an empty path to \c / and then
+            prepends the URL's connection path, which on BaseLinker would produce
+            \c /connector.php/ (trailing slash). BaseLinker's nginx rewrites that to
+            404, so the ping path must be set explicitly.
         */
-        const DefaultPingPath = "";
+        const DefaultPingPath = "connector.php";
 
         #! Default ping headers
         /** The authentication header (\c X-BLToken) is merged in automatically by

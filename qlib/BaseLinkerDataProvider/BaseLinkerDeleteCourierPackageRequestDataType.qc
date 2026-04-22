@@ -5,6 +5,8 @@
 public namespace BaseLinkerDataProvider {
 
 #! Request type for the BaseLinker `deleteCourierPackage` method
+/** Exactly one of `package_id` or `package_number` must be supplied.
+*/
 public class BaseLinkerDeleteCourierPackageRequestDataType inherits HashDataType {
     public {
         const Fields = {
@@ -17,9 +19,16 @@ public class BaseLinkerDeleteCourierPackageRequestDataType inherits HashDataType
             },
             "package_id": {
                 "display_name": "Package ID",
-                "short_desc": "Package to delete",
-                "type": SoftStringType,
-                "required": True,
+                "short_desc": "BaseLinker package ID (alternative to package number)",
+                "type": SoftIntOrNothingType,
+                "desc": "Internal BaseLinker package ID. Supply either this or `package_number`.",
+            },
+            "package_number": {
+                "display_name": "Package Number",
+                "short_desc": "Carrier-assigned tracking number (alternative to package ID)",
+                "type": SoftStringOrNothingType,
+                "desc": "Carrier-assigned tracking/package number. Supply either this or "
+                    "`package_id`.",
             },
             "force_delete": {
                 "display_name": "Force Delete",

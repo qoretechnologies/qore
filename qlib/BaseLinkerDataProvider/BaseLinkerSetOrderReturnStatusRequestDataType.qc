@@ -8,8 +8,8 @@ public namespace BaseLinkerDataProvider {
 public class BaseLinkerSetOrderReturnStatusRequestDataType inherits HashDataType {
     public {
         const Fields = {
-            "order_return_id": {
-                "display_name": "Order Return ID",
+            "return_id": {
+                "display_name": "Return ID",
                 "short_desc": "Return to transition",
                 "type": SoftIntType,
                 "required": True,
@@ -20,7 +20,9 @@ public class BaseLinkerSetOrderReturnStatusRequestDataType inherits HashDataType
                 "short_desc": "Target return status",
                 "type": SoftIntType,
                 "required": True,
-                "desc": "Target return status identifier; see `list-order-return-statuses`.",
+                "desc": "Target return status identifier; values are drawn from BaseLinker's "
+                    "`getOrderReturnStatusList` endpoint and surfaced via the "
+                    "`order_return_statuses` reference data.",
                 "ref_data": "order_return_statuses",
             },
         };

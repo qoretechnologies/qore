@@ -27,8 +27,9 @@ public namespace BaseLinkerDataProvider {
     #! Application name
     public const AppName = "BaseLinker";
 
-    #! Application display name
-    public const AppDisplayName = "BaseLinker";
+    #! Application display name (BaseLinker rebranded to Base.com in 2025; keep both
+    #! names so users find it under the familiar "BaseLinker" brand)
+    public const AppDisplayName = "BaseLinker (Base.com)";
 
     #! BaseLinker returns up to 100 orders per getOrders call
     public const OrdersPageSize = 100;

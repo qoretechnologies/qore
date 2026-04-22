@@ -20,11 +20,21 @@ public class BaseLinkerInventoryProductsDataProvider inherits BaseLinkerDataProv
             "has_record": True,
             "supports_read": True,
             "supports_native_search": True,
+            "supports_children": True,
+            "children_can_support_apis": True,
             "search_options": SearchOptions,
             "constructor_options": ConstructorOptions,
         };
 
         const ConstructorOptions = BaseConstructorOptions;
+
+        #! Action-provider children reachable via \c getChildProvider()
+        const ChildMap = {
+            "add-inventory-product":
+                Class::forName("BaseLinkerDataProvider::BaseLinkerAddInventoryProductDataProvider"),
+            "delete-inventory-product":
+                Class::forName("BaseLinkerDataProvider::BaseLinkerDeleteInventoryProductDataProvider"),
+        };
 
         const SearchOptions = {
             "inventory_id": <DataProviderOptionInfo>{
@@ -96,6 +106,39 @@ public class BaseLinkerInventoryProductsDataProvider inherits BaseLinkerDataProv
                 "type": AbstractDataProviderType::get(SoftIntOrNothingType),
                 "desc": "Return products with stock at or below this value.",
             },
+            "filter_sort": <DataProviderOptionInfo>{
+                "display_name": "Sort Order",
+                "short_desc": "Result ordering expression",
+                "type": AbstractDataProviderType::get(SoftStringOrNothingType),
+                "desc": "Result sort expression accepted by BaseLinker "
+                    "`getInventoryProductsList` (e.g. `id [ASC|DESC]`, `name [ASC|DESC]`, "
+                    "`quantity [ASC|DESC]`, `price [ASC|DESC]`).",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "id ASC",       "desc": "ID ascending"},
+                    <AllowedValueInfo>{"value": "id DESC",      "desc": "ID descending"},
+                    <AllowedValueInfo>{"value": "name ASC",     "desc": "Name A-Z"},
+                    <AllowedValueInfo>{"value": "name DESC",    "desc": "Name Z-A"},
+                    <AllowedValueInfo>{"value": "quantity ASC", "desc": "Stock ascending"},
+                    <AllowedValueInfo>{"value": "quantity DESC","desc": "Stock descending"},
+                    <AllowedValueInfo>{"value": "price ASC",    "desc": "Price ascending"},
+                    <AllowedValueInfo>{"value": "price DESC",   "desc": "Price descending"},
+                ),
+            },
+            "filter_locations": <DataProviderOptionInfo>{
+                "display_name": "Filter Locations",
+                "short_desc": "Filter by warehouse location",
+                "type": AbstractDataProviderType::get(SoftStringOrNothingType),
+                "desc": "Return only products assigned to the supplied warehouse location "
+                    "(see `locations` on @ref BaseLinkerAddInventoryProductRequestDataType for "
+                    "the location-code format).",
+            },
+            "include_variants": <DataProviderOptionInfo>{
+                "display_name": "Include Variants",
+                "short_desc": "Include product variants in the output",
+                "type": AbstractDataProviderType::get(SoftBoolOrNothingType),
+                "desc": "When `True`, include product variants alongside their parent "
+                    "products in the results.",
+            },
             "page": <DataProviderOptionInfo>{
                 "display_name": "Page",
                 "short_desc": "Starting page number",
@@ -126,6 +169,17 @@ public class BaseLinkerInventoryProductsDataProvider inherits BaseLinkerDataProv
 
     private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
         return (new BaseLinkerInventoryProductDataType()).getFields();
+    }
+
+    private *list<string> getChildProviderNamesImpl() {
+        return keys ChildMap;
+    }
+
+    private *AbstractDataProvider getChildProviderImpl(string name) {
+        *Class cls = ChildMap{name};
+        if (cls) {
+            return cls.newObject(rest);
+        }
     }
 
     private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
@@ -184,6 +238,15 @@ public class BaseLinkerInventoryProductsDataProvider inherits BaseLinkerDataProv
         }
         if (exists search_options.filter_stock_to) {
             base_params.filter_stock_to = int(search_options.filter_stock_to);
+        }
+        if (exists search_options.filter_sort) {
+            base_params.filter_sort = search_options.filter_sort;
+        }
+        if (exists search_options.filter_locations) {
+            base_params.filter_locations = search_options.filter_locations;
+        }
+        if (exists search_options.include_variants) {
+            base_params.include_variants = boolean(search_options.include_variants);
         }
 
         while (remaining > 0) {

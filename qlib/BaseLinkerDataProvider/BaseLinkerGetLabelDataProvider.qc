@@ -6,18 +6,33 @@
 public namespace BaseLinkerDataProvider {
 
 #! BaseLinker `getLabel` action data provider
-/** Returns the base64-encoded courier label for a given package. */
+/** Returns the courier label file for a given package. The raw BaseLinker
+    response (`label` = base64 string, `extension` = file format) is transformed
+    into a @ref DataProvider::FileDataType wrapper with `content`, `name`, and
+    `mime_type` populated.
+*/
 public class BaseLinkerGetLabelDataProvider inherits BaseLinkerDataProviderBase {
     public {
         const ProviderInfo = <DataProviderInfo>{
             "name": "get-label",
-            "desc": "Fetch the base64-encoded courier label for a package (`getLabel`).",
+            "desc": "Fetch the courier label file for a package (`getLabel`).",
             "type": "BaseLinkerGetLabelDataProvider",
             "supports_request": True,
             "constructor_options": ConstructorOptions,
         };
 
         const ConstructorOptions = BaseConstructorOptions;
+
+        #! Map of BaseLinker `extension` values to IANA MIME types
+        const ExtensionMimeMap = {
+            "pdf": "application/pdf",
+            "html": "text/html",
+            "gif": "image/gif",
+            "png": "image/png",
+            "epl": "application/vnd.eltron-epl",
+            "zpl": "application/vnd.zebra-zpl",
+            "dpl": "application/vnd.datamax-dpl",
+        };
     }
 
     constructor(*RestClientIo::RestClientIo rest) : BaseLinkerDataProviderBase(rest) {
@@ -40,7 +55,19 @@ public class BaseLinkerGetLabelDataProvider inherits BaseLinkerDataProviderBase 
     }
 
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        return callMethod("getLabel", req);
+        hash<auto> response = callMethod("getLabel", req);
+        *string ext = response.extension;
+        *string mime = ext.val() ? ExtensionMimeMap{ext.lwr()} : NOTHING;
+        hash<auto> rv = response + {
+            "label": response.label.val()
+                ? {
+                    "name": ext.val() ? sprintf("label.%s", ext.lwr()) : "label",
+                    "content": response.label,
+                    "mime_type": mime ?? "application/octet-stream",
+                }
+                : NOTHING,
+        };
+        return rv;
     }
 
     private hash<DataProviderInfo> getStaticInfoImpl() {

@@ -22,12 +22,34 @@ public class BaseLinkerOrdersDataProvider inherits BaseLinkerDataProviderBase {
             "has_record": True,
             "supports_read": True,
             "supports_native_search": True,
+            "supports_children": True,
+            "children_can_support_apis": True,
             "search_options": SearchOptions,
             "constructor_options": ConstructorOptions,
         };
 
         #! Constructor options
         const ConstructorOptions = BaseConstructorOptions;
+
+        #! Action-provider children reachable via \c getChildProvider()
+        const ChildMap = {
+            "add-order":
+                Class::forName("BaseLinkerDataProvider::BaseLinkerAddOrderDataProvider"),
+            "set-order-fields":
+                Class::forName("BaseLinkerDataProvider::BaseLinkerSetOrderFieldsDataProvider"),
+            "set-order-status":
+                Class::forName("BaseLinkerDataProvider::BaseLinkerSetOrderStatusDataProvider"),
+            "set-order-payment":
+                Class::forName("BaseLinkerDataProvider::BaseLinkerSetOrderPaymentDataProvider"),
+            "delete-order":
+                Class::forName("BaseLinkerDataProvider::BaseLinkerDeleteOrdersDataProvider"),
+            "add-order-product":
+                Class::forName("BaseLinkerDataProvider::BaseLinkerAddOrderProductDataProvider"),
+            "set-order-product-fields":
+                Class::forName("BaseLinkerDataProvider::BaseLinkerSetOrderProductFieldsDataProvider"),
+            "delete-order-product":
+                Class::forName("BaseLinkerDataProvider::BaseLinkerDeleteOrderProductDataProvider"),
+        };
 
         #! Search options exposed for `list-orders` and `get-order`
         const SearchOptions = {
@@ -102,6 +124,32 @@ public class BaseLinkerOrdersDataProvider inherits BaseLinkerDataProviderBase {
                 "type": AbstractDataProviderType::get(SoftIntOrNothingType),
                 "desc": "Return orders from a specific source instance ID.",
             },
+            "filter_shop_order_id": <DataProviderOptionInfo>{
+                "display_name": "Filter Shop Order ID",
+                "short_desc": "Filter by shop order identifier",
+                "type": AbstractDataProviderType::get(SoftIntOrNothingType),
+                "desc": "Return the order(s) whose shop-side identifier matches this value.",
+            },
+            "filter_external_order_id": <DataProviderOptionInfo>{
+                "display_name": "Filter External Order ID",
+                "short_desc": "Filter by marketplace/shop original order ID",
+                "type": AbstractDataProviderType::get(SoftStringOrNothingType),
+                "desc": "Return orders whose external (marketplace/shop) order identifier "
+                    "matches this value.",
+            },
+            "include_commission_data": <DataProviderOptionInfo>{
+                "display_name": "Include Commission Data",
+                "short_desc": "Include marketplace commission information",
+                "type": AbstractDataProviderType::get(SoftBoolOrNothingType),
+                "desc": "When `True`, commission data is included in the response.",
+            },
+            "include_connect_data": <DataProviderOptionInfo>{
+                "display_name": "Include Connect Data",
+                "short_desc": "Include Base Connect / contractor data",
+                "type": AbstractDataProviderType::get(SoftBoolOrNothingType),
+                "desc": "When `True`, Base Connect and contractor data is included in the "
+                    "response.",
+            },
             "limit": <DataProviderOptionInfo>{
                 "display_name": "Limit",
                 "short_desc": "Maximum results",
@@ -141,6 +189,19 @@ public class BaseLinkerOrdersDataProvider inherits BaseLinkerDataProviderBase {
         return (new BaseLinkerOrderDataType()).getFields();
     }
 
+    #! Returns the names of the action-provider children
+    private *list<string> getChildProviderNamesImpl() {
+        return keys ChildMap;
+    }
+
+    #! Returns an action-provider child by name
+    private *AbstractDataProvider getChildProviderImpl(string name) {
+        *Class cls = ChildMap{name};
+        if (cls) {
+            return cls.newObject(rest);
+        }
+    }
+
     #! Executes the search
     private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
@@ -177,6 +238,19 @@ public class BaseLinkerOrdersDataProvider inherits BaseLinkerDataProviderBase {
         }
         if (exists search_options.filter_order_source_id) {
             base_params.filter_order_source_id = int(search_options.filter_order_source_id);
+        }
+        if (exists search_options.filter_shop_order_id) {
+            base_params.filter_shop_order_id = int(search_options.filter_shop_order_id);
+        }
+        if (exists search_options.filter_external_order_id) {
+            base_params.filter_external_order_id = search_options.filter_external_order_id;
+        }
+        if (exists search_options.include_commission_data) {
+            base_params.include_commission_data =
+                boolean(search_options.include_commission_data);
+        }
+        if (exists search_options.include_connect_data) {
+            base_params.include_connect_data = boolean(search_options.include_connect_data);
         }
 
         # Single-order fast path: one call, no pagination

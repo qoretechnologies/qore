@@ -150,7 +150,7 @@ module BaseLinkerDataProvider {
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 BaseLinkerSetOrderFieldsRequestDataType::Fields),
             "get_output_type": AbstractDataProviderType sub () {
-                return AbstractDataProviderType::get(AutoHashType);
+                return new BaseLinkerSuccessIdResponseDataType();
             },
         });
 
@@ -169,7 +169,7 @@ module BaseLinkerDataProvider {
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 BaseLinkerSetOrderStatusRequestDataType::Fields),
             "get_output_type": AbstractDataProviderType sub () {
-                return AbstractDataProviderType::get(AutoHashType);
+                return new BaseLinkerSuccessIdResponseDataType();
             },
         });
 
@@ -187,7 +187,7 @@ module BaseLinkerDataProvider {
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 BaseLinkerSetOrderPaymentRequestDataType::Fields),
             "get_output_type": AbstractDataProviderType sub () {
-                return AbstractDataProviderType::get(AutoHashType);
+                return new BaseLinkerSuccessIdResponseDataType();
             },
         });
 
@@ -205,7 +205,7 @@ module BaseLinkerDataProvider {
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 BaseLinkerDeleteOrdersRequestDataType::Fields),
             "get_output_type": AbstractDataProviderType sub () {
-                return AbstractDataProviderType::get(AutoHashType);
+                return new BaseLinkerSuccessIdResponseDataType();
             },
         });
 
@@ -232,42 +232,53 @@ module BaseLinkerDataProvider {
             },
         });
 
-        # Set Order Product Fields
-        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": BaseLinkerDataProvider::AppName,
-            "path": "/set-order-product-fields",
-            "action": "set-order-product-fields",
-            "groups": "Orders / Line Items",
-            "display_name": "Set Order Product Fields",
-            "short_desc": "Update a product line on an order",
-            "desc": "Update fields on a specific product line of a BaseLinker order via "
-                "`setOrderProductFields`.",
-            "action_code": DPAT_API,
-            "action_val": "setOrderProductFields",
-            "options": DataProviderActionCatalog::getActionOptionFromFields(
-                BaseLinkerSetOrderProductFieldsRequestDataType::Fields),
-            "get_output_type": AbstractDataProviderType sub () {
-                return AbstractDataProviderType::get(AutoHashType);
-            },
-        });
+        # Set Order Product Fields — order_id drives order_product_id dropdown;
+        # mark with has_dependents/on_change (not propagated by getActionOptionFromFields).
+        {
+            hash<string, hash<ActionOptionInfo>> opts =
+                DataProviderActionCatalog::getActionOptionFromFields(
+                    BaseLinkerSetOrderProductFieldsRequestDataType::Fields);
+            opts.order_id += {"has_dependents": True, "on_change": ("refetch",)};
+            DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+                "app": BaseLinkerDataProvider::AppName,
+                "path": "/set-order-product-fields",
+                "action": "set-order-product-fields",
+                "groups": "Orders / Line Items",
+                "display_name": "Set Order Product Fields",
+                "short_desc": "Update a product line on an order",
+                "desc": "Update fields on a specific product line of a BaseLinker order via "
+                    "`setOrderProductFields`.",
+                "action_code": DPAT_API,
+                "action_val": "setOrderProductFields",
+                "options": opts,
+                "get_output_type": AbstractDataProviderType sub () {
+                    return new BaseLinkerSuccessIdResponseDataType();
+                },
+            });
+        }
 
-        # Delete Order Product
-        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": BaseLinkerDataProvider::AppName,
-            "path": "/delete-order-product",
-            "action": "delete-order-product",
-            "groups": "Orders / Line Items",
-            "display_name": "Delete Order Product",
-            "short_desc": "Remove a product line from an order",
-            "desc": "Remove a product line from a BaseLinker order via `deleteOrderProduct`.",
-            "action_code": DPAT_API,
-            "action_val": "deleteOrderProduct",
-            "options": DataProviderActionCatalog::getActionOptionFromFields(
-                BaseLinkerDeleteOrderProductRequestDataType::Fields),
-            "get_output_type": AbstractDataProviderType sub () {
-                return AbstractDataProviderType::get(AutoHashType);
-            },
-        });
+        # Delete Order Product — order_id drives order_product_id dropdown.
+        {
+            hash<string, hash<ActionOptionInfo>> opts =
+                DataProviderActionCatalog::getActionOptionFromFields(
+                    BaseLinkerDeleteOrderProductRequestDataType::Fields);
+            opts.order_id += {"has_dependents": True, "on_change": ("refetch",)};
+            DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+                "app": BaseLinkerDataProvider::AppName,
+                "path": "/delete-order-product",
+                "action": "delete-order-product",
+                "groups": "Orders / Line Items",
+                "display_name": "Delete Order Product",
+                "short_desc": "Remove a product line from an order",
+                "desc": "Remove a product line from a BaseLinker order via `deleteOrderProduct`.",
+                "action_code": DPAT_API,
+                "action_val": "deleteOrderProduct",
+                "options": opts,
+                "get_output_type": AbstractDataProviderType sub () {
+                    return new BaseLinkerSuccessIdResponseDataType();
+                },
+            });
+        }
 
         # ============================================================
         # ORDER RETURNS
@@ -300,11 +311,11 @@ module BaseLinkerDataProvider {
             "groups": "Order Returns",
             "display_name": "Get Order Return",
             "short_desc": "Get a single order return by ID",
-            "desc": "Retrieve a single BaseLinker order return by its `order_return_id`.",
+            "desc": "Retrieve a single BaseLinker order return by its `return_id`.",
             "action_code": DPAT_FIND_SINGLE,
             "options": {
-                "order_return_id": <ActionOptionInfo>{
-                    "display_name": "Order Return ID",
+                "return_id": <ActionOptionInfo>{
+                    "display_name": "Return ID",
                     "short_desc": "BaseLinker order return identifier",
                     "type": AbstractDataProviderTypeMap."int",
                     "required": True,
@@ -322,7 +333,7 @@ module BaseLinkerDataProvider {
             "display_name": "Add Order Return",
             "short_desc": "Create a new order return",
             "desc": "Create a new BaseLinker order return via `addOrderReturn`. Returns the new "
-                "`order_return_id` on success.",
+                "`return_id` on success.",
             "action_code": DPAT_API,
             "action_val": "addOrderReturn",
             "options": DataProviderActionCatalog::getActionOptionFromFields(
@@ -347,7 +358,7 @@ module BaseLinkerDataProvider {
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 BaseLinkerSetOrderReturnFieldsRequestDataType::Fields),
             "get_output_type": AbstractDataProviderType sub () {
-                return AbstractDataProviderType::get(AutoHashType);
+                return new BaseLinkerSuccessIdResponseDataType();
             },
         });
 
@@ -366,7 +377,7 @@ module BaseLinkerDataProvider {
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 BaseLinkerSetOrderReturnStatusRequestDataType::Fields),
             "get_output_type": AbstractDataProviderType sub () {
-                return AbstractDataProviderType::get(AutoHashType);
+                return new BaseLinkerSuccessIdResponseDataType();
             },
         });
 
@@ -385,7 +396,7 @@ module BaseLinkerDataProvider {
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 BaseLinkerSetOrderReturnRefundRequestDataType::Fields),
             "get_output_type": AbstractDataProviderType sub () {
-                return AbstractDataProviderType::get(AutoHashType);
+                return new BaseLinkerSuccessIdResponseDataType();
             },
         });
 
@@ -446,6 +457,8 @@ module BaseLinkerDataProvider {
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
                     "ref_data": "inventories",
+                    "has_dependents": True,
+                    "on_change": ("refetch",),
                 },
                 "product_id": <ActionOptionInfo>{
                     "display_name": "Product ID",
@@ -458,43 +471,55 @@ module BaseLinkerDataProvider {
             },
         });
 
-        # Add Inventory Product (single upsert)
-        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": BaseLinkerDataProvider::AppName,
-            "path": "/add-inventory-product",
-            "action": "add-inventory-product",
-            "groups": "Inventory",
-            "display_name": "Add / Update Inventory Product",
-            "short_desc": "Create or update a BaseLinker inventory product",
-            "desc": "Upsert a BaseLinker inventory product via `addInventoryProduct`. Omit "
-                "`product_id` to create a new product; supply it (together with "
-                "`inventory_id`) to update an existing product.",
-            "action_code": DPAT_API,
-            "action_val": "addInventoryProduct",
-            "options": DataProviderActionCatalog::getActionOptionFromFields(
-                BaseLinkerAddInventoryProductRequestDataType::Fields),
-            "get_output_type": AbstractDataProviderType sub () {
-                return new BaseLinkerSuccessIdResponseDataType();
-            },
-        });
+        # Add Inventory Product (single upsert) — inventory_id drives the
+        # product_id dropdown; mark it with has_dependents/on_change because
+        # getActionOptionFromFields() does not propagate those keys.
+        {
+            hash<string, hash<ActionOptionInfo>> opts =
+                DataProviderActionCatalog::getActionOptionFromFields(
+                    BaseLinkerAddInventoryProductRequestDataType::Fields);
+            opts.inventory_id += {"has_dependents": True, "on_change": ("refetch",)};
+            DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+                "app": BaseLinkerDataProvider::AppName,
+                "path": "/add-inventory-product",
+                "action": "add-inventory-product",
+                "groups": "Inventory",
+                "display_name": "Add / Update Inventory Product",
+                "short_desc": "Create or update a BaseLinker inventory product",
+                "desc": "Upsert a BaseLinker inventory product via `addInventoryProduct`. Omit "
+                    "`product_id` to create a new product; supply it (together with "
+                    "`inventory_id`) to update an existing product.",
+                "action_code": DPAT_API,
+                "action_val": "addInventoryProduct",
+                "options": opts,
+                "get_output_type": AbstractDataProviderType sub () {
+                    return new BaseLinkerSuccessIdResponseDataType();
+                },
+            });
+        }
 
         # Delete Inventory Product
-        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": BaseLinkerDataProvider::AppName,
-            "path": "/delete-inventory-product",
-            "action": "delete-inventory-product",
-            "groups": "Inventory",
-            "display_name": "Delete Inventory Product",
-            "short_desc": "Delete a BaseLinker inventory product",
-            "desc": "Delete a BaseLinker inventory product via `deleteInventoryProduct`.",
-            "action_code": DPAT_API,
-            "action_val": "deleteInventoryProduct",
-            "options": DataProviderActionCatalog::getActionOptionFromFields(
-                BaseLinkerDeleteInventoryProductRequestDataType::Fields),
-            "get_output_type": AbstractDataProviderType sub () {
-                return AbstractDataProviderType::get(AutoHashType);
-            },
-        });
+        {
+            hash<string, hash<ActionOptionInfo>> opts =
+                DataProviderActionCatalog::getActionOptionFromFields(
+                    BaseLinkerDeleteInventoryProductRequestDataType::Fields);
+            opts.inventory_id += {"has_dependents": True, "on_change": ("refetch",)};
+            DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+                "app": BaseLinkerDataProvider::AppName,
+                "path": "/delete-inventory-product",
+                "action": "delete-inventory-product",
+                "groups": "Inventory",
+                "display_name": "Delete Inventory Product",
+                "short_desc": "Delete a BaseLinker inventory product",
+                "desc": "Delete a BaseLinker inventory product via `deleteInventoryProduct`.",
+                "action_code": DPAT_API,
+                "action_val": "deleteInventoryProduct",
+                "options": opts,
+                "get_output_type": AbstractDataProviderType sub () {
+                    return new BaseLinkerSuccessIdResponseDataType();
+                },
+            });
+        }
 
         # List Inventory Stock
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
@@ -530,7 +555,7 @@ module BaseLinkerDataProvider {
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 BaseLinkerUpdateInventoryProductsStockRequestDataType::Fields),
             "get_output_type": AbstractDataProviderType sub () {
-                return AbstractDataProviderType::get(AutoHashType);
+                return new BaseLinkerSuccessIdResponseDataType();
             },
         });
 
@@ -569,7 +594,43 @@ module BaseLinkerDataProvider {
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 BaseLinkerUpdateInventoryProductsPricesRequestDataType::Fields),
             "get_output_type": AbstractDataProviderType sub () {
-                return AbstractDataProviderType::get(AutoHashType);
+                return new BaseLinkerSuccessIdResponseDataType();
+            },
+        });
+
+        # List Inventory Manufacturers
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BaseLinkerDataProvider::AppName,
+            "path": "/inventory-manufacturers",
+            "action": "list-inventory-manufacturers",
+            "groups": "Inventory",
+            "display_name": "List Inventory Manufacturers",
+            "short_desc": "List inventory manufacturers",
+            "desc": "List BaseLinker inventory manufacturers via "
+                "`getInventoryManufacturers`.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": BaseLinkerInventoryManufacturersDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("InventoryManufacturerList",
+                    new BaseLinkerInventoryManufacturerDataType(), True);
+            },
+        });
+
+        # List Inventory Categories
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BaseLinkerDataProvider::AppName,
+            "path": "/inventory-categories",
+            "action": "list-inventory-categories",
+            "groups": "Inventory",
+            "display_name": "List Inventory Categories",
+            "short_desc": "List inventory categories",
+            "desc": "List BaseLinker inventory categories via `getInventoryCategories`. "
+                "When `inventory_id` is supplied, results are scoped to that catalog.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": BaseLinkerInventoryCategoriesDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("InventoryCategoryList",
+                    new BaseLinkerInventoryCategoryDataType(), True);
             },
         });
 
@@ -595,24 +656,30 @@ module BaseLinkerDataProvider {
             },
         });
 
-        # Create Package
-        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": BaseLinkerDataProvider::AppName,
-            "path": "/create-package",
-            "action": "create-package",
-            "groups": "Shipping",
-            "display_name": "Create Courier Package",
-            "short_desc": "Create a courier package (shipment)",
-            "desc": "Create a courier package for a BaseLinker order via `createPackage`. "
-                "Returns the courier package identifier on success.",
-            "action_code": DPAT_API,
-            "action_val": "createPackage",
-            "options": DataProviderActionCatalog::getActionOptionFromFields(
-                BaseLinkerCreatePackageRequestDataType::Fields),
-            "get_output_type": AbstractDataProviderType sub () {
-                return new BaseLinkerSuccessIdResponseDataType();
-            },
-        });
+        # Create Package — courier_code drives account_id dropdown; mark with
+        # has_dependents/on_change (not propagated by getActionOptionFromFields).
+        {
+            hash<string, hash<ActionOptionInfo>> opts =
+                DataProviderActionCatalog::getActionOptionFromFields(
+                    BaseLinkerCreatePackageRequestDataType::Fields);
+            opts.courier_code += {"has_dependents": True, "on_change": ("refetch",)};
+            DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+                "app": BaseLinkerDataProvider::AppName,
+                "path": "/create-package",
+                "action": "create-package",
+                "groups": "Shipping",
+                "display_name": "Create Courier Package",
+                "short_desc": "Create a courier package (shipment)",
+                "desc": "Create a courier package for a BaseLinker order via `createPackage`. "
+                    "Returns the courier package identifier on success.",
+                "action_code": DPAT_API,
+                "action_val": "createPackage",
+                "options": opts,
+                "get_output_type": AbstractDataProviderType sub () {
+                    return new BaseLinkerSuccessIdResponseDataType();
+                },
+            });
+        }
 
         # Get Label
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
@@ -647,7 +714,7 @@ module BaseLinkerDataProvider {
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 BaseLinkerDeleteCourierPackageRequestDataType::Fields),
             "get_output_type": AbstractDataProviderType sub () {
-                return AbstractDataProviderType::get(AutoHashType);
+                return new BaseLinkerSuccessIdResponseDataType();
             },
         });
 
@@ -782,9 +849,9 @@ module BaseLinkerDataProvider {
             "action": EVENT_ORDER_CREATED,
             "groups": "Events",
             "display_name": "Order Created",
-            "short_desc": "Emitted when a new order is created",
-            "desc": "Polls BaseLinker's journal (`getJournalList`) for `log_type` 1 (order "
-                "created) and emits an event for each new log entry.",
+            "short_desc": "Trigger when a new order is created",
+            "desc": "Fires when a new order is created in BaseLinker. (Polled from "
+                "`getJournalList` `log_type` 1.)",
             "action_code": DPAT_EVENT,
             "action_val": EVENT_ORDER_CREATED,
         });
@@ -796,8 +863,9 @@ module BaseLinkerDataProvider {
             "action": EVENT_ORDER_DOWNLOADED,
             "groups": "Events",
             "display_name": "Order Downloaded",
-            "short_desc": "Emitted when an order is downloaded from a shop",
-            "desc": "Polls BaseLinker's journal for `log_type` 2 (order downloaded).",
+            "short_desc": "Trigger when an order is downloaded from a shop",
+            "desc": "Fires when an order is downloaded from a connected shop. (Polled "
+                "from `getJournalList` `log_type` 2.)",
             "action_code": DPAT_EVENT,
             "action_val": EVENT_ORDER_DOWNLOADED,
         });
@@ -809,8 +877,9 @@ module BaseLinkerDataProvider {
             "action": EVENT_ORDER_PAID,
             "groups": "Events",
             "display_name": "Order Paid",
-            "short_desc": "Emitted when an order is paid",
-            "desc": "Polls BaseLinker's journal for `log_type` 3 (order paid).",
+            "short_desc": "Trigger when an order is paid",
+            "desc": "Fires when an order is marked paid. (Polled from `getJournalList` "
+                "`log_type` 3.)",
             "action_code": DPAT_EVENT,
             "action_val": EVENT_ORDER_PAID,
         });
@@ -822,8 +891,9 @@ module BaseLinkerDataProvider {
             "action": EVENT_ORDER_REMOVED,
             "groups": "Events",
             "display_name": "Order Removed",
-            "short_desc": "Emitted when an order is removed",
-            "desc": "Polls BaseLinker's journal for `log_type` 4 (order removed).",
+            "short_desc": "Trigger when an order is removed",
+            "desc": "Fires when an order is removed. (Polled from `getJournalList` "
+                "`log_type` 4.)",
             "action_code": DPAT_EVENT,
             "action_val": EVENT_ORDER_REMOVED,
         });
@@ -835,8 +905,9 @@ module BaseLinkerDataProvider {
             "action": EVENT_ORDERS_MERGED,
             "groups": "Events",
             "display_name": "Orders Merged",
-            "short_desc": "Emitted when two or more orders are merged",
-            "desc": "Polls BaseLinker's journal for `log_type` 5 (orders merged).",
+            "short_desc": "Trigger when two or more orders are merged",
+            "desc": "Fires when two or more orders are merged. (Polled from "
+                "`getJournalList` `log_type` 5.)",
             "action_code": DPAT_EVENT,
             "action_val": EVENT_ORDERS_MERGED,
         });
@@ -848,8 +919,9 @@ module BaseLinkerDataProvider {
             "action": EVENT_ORDER_SPLIT,
             "groups": "Events",
             "display_name": "Order Split",
-            "short_desc": "Emitted when an order is split",
-            "desc": "Polls BaseLinker's journal for `log_type` 6 (order split).",
+            "short_desc": "Trigger when an order is split",
+            "desc": "Fires when an order is split. (Polled from `getJournalList` "
+                "`log_type` 6.)",
             "action_code": DPAT_EVENT,
             "action_val": EVENT_ORDER_SPLIT,
         });
@@ -861,8 +933,9 @@ module BaseLinkerDataProvider {
             "action": EVENT_INVOICE_ISSUED,
             "groups": "Events",
             "display_name": "Invoice Issued",
-            "short_desc": "Emitted when an invoice is issued",
-            "desc": "Polls BaseLinker's journal for `log_type` 7 (invoice issued).",
+            "short_desc": "Trigger when an invoice is issued",
+            "desc": "Fires when an invoice is issued. (Polled from `getJournalList` "
+                "`log_type` 7.)",
             "action_code": DPAT_EVENT,
             "action_val": EVENT_INVOICE_ISSUED,
         });
@@ -874,8 +947,9 @@ module BaseLinkerDataProvider {
             "action": EVENT_RECEIPT_ISSUED,
             "groups": "Events",
             "display_name": "Receipt Issued",
-            "short_desc": "Emitted when a receipt is issued",
-            "desc": "Polls BaseLinker's journal for `log_type` 8 (receipt issued).",
+            "short_desc": "Trigger when a receipt is issued",
+            "desc": "Fires when a receipt is issued. (Polled from `getJournalList` "
+                "`log_type` 8.)",
             "action_code": DPAT_EVENT,
             "action_val": EVENT_RECEIPT_ISSUED,
         });
@@ -887,8 +961,9 @@ module BaseLinkerDataProvider {
             "action": EVENT_PACKAGE_CREATED,
             "groups": "Events",
             "display_name": "Package Created",
-            "short_desc": "Emitted when a courier package is created",
-            "desc": "Polls BaseLinker's journal for `log_type` 9 (package created).",
+            "short_desc": "Trigger when a courier package is created",
+            "desc": "Fires when a courier package is created. (Polled from "
+                "`getJournalList` `log_type` 9.)",
             "action_code": DPAT_EVENT,
             "action_val": EVENT_PACKAGE_CREATED,
         });
@@ -900,8 +975,9 @@ module BaseLinkerDataProvider {
             "action": EVENT_PACKAGE_DELETED,
             "groups": "Events",
             "display_name": "Package Deleted",
-            "short_desc": "Emitted when a courier package is deleted",
-            "desc": "Polls BaseLinker's journal for `log_type` 10 (package deleted).",
+            "short_desc": "Trigger when a courier package is deleted",
+            "desc": "Fires when a courier package is deleted. (Polled from "
+                "`getJournalList` `log_type` 10.)",
             "action_code": DPAT_EVENT,
             "action_val": EVENT_PACKAGE_DELETED,
         });
@@ -913,8 +989,9 @@ module BaseLinkerDataProvider {
             "action": EVENT_DELIVERY_DATA_EDITED,
             "groups": "Events",
             "display_name": "Delivery Data Edited",
-            "short_desc": "Emitted when delivery data on an order is edited",
-            "desc": "Polls BaseLinker's journal for `log_type` 11 (delivery data edited).",
+            "short_desc": "Trigger when delivery data on an order is edited",
+            "desc": "Fires when delivery data on an order is edited. (Polled from "
+                "`getJournalList` `log_type` 11.)",
             "action_code": DPAT_EVENT,
             "action_val": EVENT_DELIVERY_DATA_EDITED,
         });
@@ -926,8 +1003,9 @@ module BaseLinkerDataProvider {
             "action": EVENT_ORDER_PRODUCT_ADDED,
             "groups": "Events",
             "display_name": "Order Product Added",
-            "short_desc": "Emitted when a product is added to an order",
-            "desc": "Polls BaseLinker's journal for `log_type` 12 (order product added).",
+            "short_desc": "Trigger when a product is added to an order",
+            "desc": "Fires when a product is added to an order. (Polled from "
+                "`getJournalList` `log_type` 12.)",
             "action_code": DPAT_EVENT,
             "action_val": EVENT_ORDER_PRODUCT_ADDED,
         });
@@ -939,8 +1017,9 @@ module BaseLinkerDataProvider {
             "action": EVENT_ORDER_PRODUCT_EDITED,
             "groups": "Events",
             "display_name": "Order Product Edited",
-            "short_desc": "Emitted when an order product is edited",
-            "desc": "Polls BaseLinker's journal for `log_type` 13 (order product edited).",
+            "short_desc": "Trigger when an order product is edited",
+            "desc": "Fires when a product line on an order is edited. (Polled from "
+                "`getJournalList` `log_type` 13.)",
             "action_code": DPAT_EVENT,
             "action_val": EVENT_ORDER_PRODUCT_EDITED,
         });
@@ -952,8 +1031,9 @@ module BaseLinkerDataProvider {
             "action": EVENT_ORDER_PRODUCT_REMOVED,
             "groups": "Events",
             "display_name": "Order Product Removed",
-            "short_desc": "Emitted when a product is removed from an order",
-            "desc": "Polls BaseLinker's journal for `log_type` 14 (order product removed).",
+            "short_desc": "Trigger when a product is removed from an order",
+            "desc": "Fires when a product line is removed from an order. (Polled from "
+                "`getJournalList` `log_type` 14.)",
             "action_code": DPAT_EVENT,
             "action_val": EVENT_ORDER_PRODUCT_REMOVED,
         });
@@ -965,8 +1045,9 @@ module BaseLinkerDataProvider {
             "action": EVENT_BLACKLIST_ADDED,
             "groups": "Events",
             "display_name": "Blacklist Entry Added",
-            "short_desc": "Emitted when a buyer is added to the blacklist",
-            "desc": "Polls BaseLinker's journal for `log_type` 15 (blacklist entry added).",
+            "short_desc": "Trigger when a buyer is added to the blacklist",
+            "desc": "Fires when a buyer is added to the blacklist. (Polled from "
+                "`getJournalList` `log_type` 15.)",
             "action_code": DPAT_EVENT,
             "action_val": EVENT_BLACKLIST_ADDED,
         });
@@ -978,8 +1059,9 @@ module BaseLinkerDataProvider {
             "action": EVENT_ORDER_DATA_EDITED,
             "groups": "Events",
             "display_name": "Order Data Edited",
-            "short_desc": "Emitted when general order data is edited",
-            "desc": "Polls BaseLinker's journal for `log_type` 16 (order data edited).",
+            "short_desc": "Trigger when general order data is edited",
+            "desc": "Fires when general order data is edited. (Polled from "
+                "`getJournalList` `log_type` 16.)",
             "action_code": DPAT_EVENT,
             "action_val": EVENT_ORDER_DATA_EDITED,
         });
@@ -991,8 +1073,9 @@ module BaseLinkerDataProvider {
             "action": EVENT_ORDER_COPIED,
             "groups": "Events",
             "display_name": "Order Copied",
-            "short_desc": "Emitted when an order is copied",
-            "desc": "Polls BaseLinker's journal for `log_type` 17 (order copied).",
+            "short_desc": "Trigger when an order is copied",
+            "desc": "Fires when an order is copied. (Polled from `getJournalList` "
+                "`log_type` 17.)",
             "action_code": DPAT_EVENT,
             "action_val": EVENT_ORDER_COPIED,
         });
@@ -1004,8 +1087,9 @@ module BaseLinkerDataProvider {
             "action": EVENT_ORDER_STATUS_CHANGED,
             "groups": "Events",
             "display_name": "Order Status Changed",
-            "short_desc": "Emitted when the status of an order changes",
-            "desc": "Polls BaseLinker's journal for `log_type` 18 (order status changed).",
+            "short_desc": "Trigger when the status of an order changes",
+            "desc": "Fires when an order's status changes. (Polled from `getJournalList` "
+                "`log_type` 18.)",
             "action_code": DPAT_EVENT,
             "action_val": EVENT_ORDER_STATUS_CHANGED,
         });
@@ -1017,8 +1101,9 @@ module BaseLinkerDataProvider {
             "action": EVENT_INVOICE_DELETED,
             "groups": "Events",
             "display_name": "Invoice Deleted",
-            "short_desc": "Emitted when an invoice is deleted",
-            "desc": "Polls BaseLinker's journal for `log_type` 19 (invoice deleted).",
+            "short_desc": "Trigger when an invoice is deleted",
+            "desc": "Fires when an invoice is deleted. (Polled from `getJournalList` "
+                "`log_type` 19.)",
             "action_code": DPAT_EVENT,
             "action_val": EVENT_INVOICE_DELETED,
         });
@@ -1030,8 +1115,9 @@ module BaseLinkerDataProvider {
             "action": EVENT_RECEIPT_DELETED,
             "groups": "Events",
             "display_name": "Receipt Deleted",
-            "short_desc": "Emitted when a receipt is deleted",
-            "desc": "Polls BaseLinker's journal for `log_type` 20 (receipt deleted).",
+            "short_desc": "Trigger when a receipt is deleted",
+            "desc": "Fires when a receipt is deleted. (Polled from `getJournalList` "
+                "`log_type` 20.)",
             "action_code": DPAT_EVENT,
             "action_val": EVENT_RECEIPT_DELETED,
         });
@@ -1043,8 +1129,9 @@ module BaseLinkerDataProvider {
             "action": EVENT_INVOICE_EDITED,
             "groups": "Events",
             "display_name": "Invoice Edited",
-            "short_desc": "Emitted when an invoice is edited",
-            "desc": "Polls BaseLinker's journal for `log_type` 21 (invoice edited).",
+            "short_desc": "Trigger when an invoice is edited",
+            "desc": "Fires when an invoice is edited. (Polled from `getJournalList` "
+                "`log_type` 21.)",
             "action_code": DPAT_EVENT,
             "action_val": EVENT_INVOICE_EDITED,
         });
@@ -1056,8 +1143,9 @@ module BaseLinkerDataProvider {
             "action": EVENT_PACKAGE_STATUS_CHANGED,
             "groups": "Events",
             "display_name": "Package Status Changed",
-            "short_desc": "Emitted when a courier package status changes",
-            "desc": "Polls BaseLinker's journal for `log_type` 22 (package status changed).",
+            "short_desc": "Trigger when a courier package status changes",
+            "desc": "Fires when a courier package's status changes. (Polled from "
+                "`getJournalList` `log_type` 22.)",
             "action_code": DPAT_EVENT,
             "action_val": EVENT_PACKAGE_STATUS_CHANGED,
         });

@@ -22,8 +22,8 @@ public class BaseLinkerSuccessIdResponseDataType inherits HashDataType {
                 "short_desc": "Newly assigned order ID",
                 "type": SoftIntOrNothingType,
             },
-            "order_return_id": {
-                "display_name": "Order Return ID",
+            "return_id": {
+                "display_name": "Return ID",
                 "short_desc": "Newly assigned return ID",
                 "type": SoftIntOrNothingType,
             },

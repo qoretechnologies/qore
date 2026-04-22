@@ -20,6 +20,8 @@ public class BaseLinkerSetOrderProductFieldsRequestDataType inherits HashDataTyp
                 "short_desc": "Line-item identifier to update",
                 "type": SoftIntType,
                 "required": True,
+                "ref_data": "order_products",
+                "depends_on": ("order_id",),
             },
         } + BaseLinkerDataProviderBase::makeFieldsOptional(
             BaseLinkerOrderProductDataType::Fields);

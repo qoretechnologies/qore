@@ -39,7 +39,9 @@ public class BaseLinkerDeleteInventoryProductDataProvider inherits BaseLinkerDat
     }
 
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        return callMethod("deleteInventoryProduct", req);
+        # inventory_id is only used to drive the cascading product_id dropdown;
+        # the BaseLinker API only accepts product_id
+        return callMethod("deleteInventoryProduct", {"product_id": req.product_id});
     }
 
     private hash<DataProviderInfo> getStaticInfoImpl() {

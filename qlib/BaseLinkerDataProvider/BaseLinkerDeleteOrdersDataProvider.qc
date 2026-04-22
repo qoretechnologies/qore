@@ -6,14 +6,14 @@
 public namespace BaseLinkerDataProvider {
 
 #! BaseLinker delete-order action data provider
-/** Exposes the BaseLinker `deleteOrders` method as a single-order delete
-    action; takes one `order_id` per call.
+/** Exposes the BaseLinker `deleteOrders` method; takes an array of `order_ids`
+    (up to 1000 per call).
 */
 public class BaseLinkerDeleteOrdersDataProvider inherits BaseLinkerDataProviderBase {
     public {
         const ProviderInfo = <DataProviderInfo>{
             "name": "delete-order",
-            "desc": "Delete a BaseLinker order (single-ID wrapper around `deleteOrders`).",
+            "desc": "Delete one or more BaseLinker orders via `deleteOrders`.",
             "type": "BaseLinkerDeleteOrdersDataProvider",
             "supports_request": True,
             "constructor_options": ConstructorOptions,
@@ -42,7 +42,7 @@ public class BaseLinkerDeleteOrdersDataProvider inherits BaseLinkerDataProviderB
     }
 
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        return callMethod("deleteOrders", {"order_id": int(req.order_id)});
+        return callMethod("deleteOrders", {"order_ids": req.order_ids});
     }
 
     private hash<DataProviderInfo> getStaticInfoImpl() {

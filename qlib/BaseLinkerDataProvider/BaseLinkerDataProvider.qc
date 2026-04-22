@@ -57,6 +57,10 @@ public class BaseLinkerDataProvider inherits BaseLinkerDataProviderBase {
                 Class::forName("BaseLinkerDataProvider::BaseLinkerInventoryStockDataProvider"),
             "inventory-prices":
                 Class::forName("BaseLinkerDataProvider::BaseLinkerInventoryPricesDataProvider"),
+            "inventory-manufacturers":
+                Class::forName("BaseLinkerDataProvider::BaseLinkerInventoryManufacturersDataProvider"),
+            "inventory-categories":
+                Class::forName("BaseLinkerDataProvider::BaseLinkerInventoryCategoriesDataProvider"),
             "order-packages":
                 Class::forName("BaseLinkerDataProvider::BaseLinkerCourierPackagesDataProvider"),
             "couriers": Class::forName("BaseLinkerDataProvider::BaseLinkerCouriersDataProvider"),

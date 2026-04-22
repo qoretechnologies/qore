@@ -32,6 +32,10 @@ public class BaseLinkerAddInventoryProductRequestDataType inherits HashDataType 
                 "display_name": "Parent Product ID",
                 "short_desc": "Parent product (for bundles / variants)",
                 "type": SoftStringOrNothingType,
+                "desc": "Identifier of the parent product when this product is a variant "
+                    "or bundle component.",
+                "ref_data": "inventory_products",
+                "depends_on": ("inventory_id",),
             },
             "is_bundle": {
                 "display_name": "Is Bundle",
@@ -42,11 +46,21 @@ public class BaseLinkerAddInventoryProductRequestDataType inherits HashDataType 
                 "display_name": "EAN",
                 "short_desc": "EAN / barcode",
                 "type": SoftStringOrNothingType,
+                "example_value": "5901234123457",
+            },
+            "ean_additional": {
+                "display_name": "Additional EANs",
+                "short_desc": "List of additional EANs with quantities",
+                "type": new ListDataType("ean_additional",
+                    new BaseLinkerEanAdditionalDataType(), True),
+                "desc": "List of additional EANs. Each entry is a hash "
+                    "`{\"ean\": \"<ean>\", \"quantity\": <n>}`.",
             },
             "sku": {
                 "display_name": "SKU",
                 "short_desc": "Stock-keeping unit",
                 "type": SoftStringOrNothingType,
+                "example_value": "WIDGET-001",
             },
             "tax_rate": {
                 "display_name": "Tax Rate",
@@ -86,11 +100,17 @@ public class BaseLinkerAddInventoryProductRequestDataType inherits HashDataType 
                 "display_name": "Manufacturer ID",
                 "short_desc": "Manufacturer identifier",
                 "type": SoftStringOrNothingType,
+                "desc": "Manufacturer identifier; see `list-inventory-manufacturers`.",
+                "ref_data": "inventory_manufacturers",
             },
             "category_id": {
                 "display_name": "Category ID",
                 "short_desc": "Category identifier",
                 "type": SoftStringOrNothingType,
+                "desc": "Category identifier; see `list-inventory-categories`. Scoped to the "
+                    "selected `inventory_id`.",
+                "ref_data": "inventory_categories",
+                "depends_on": ("inventory_id",),
             },
             "prices": {
                 "display_name": "Prices",
@@ -131,7 +151,12 @@ public class BaseLinkerAddInventoryProductRequestDataType inherits HashDataType 
                 "display_name": "Links",
                 "short_desc": "External-system product links",
                 "type": AbstractDataProviderType::get(AutoHashOrNothingType),
-                "desc": "Map of external-system identifiers linked to this product.",
+                "desc": "Map of external-system product links. Keys are of the form "
+                    "`<type>_<id>` (where `<type>` identifies the external system, e.g. "
+                    "`shop`, `amazon`, and `<id>` is the BaseLinker-side identifier of "
+                    "that system). Each value is a hash "
+                    "`{\"product_id\": \"<external-id>\", \"variant_id\": \"<external-variant-id>\"}` "
+                    "where `variant_id` is optional.",
             },
             "average_cost": {
                 "display_name": "Average Cost",
@@ -142,6 +167,20 @@ public class BaseLinkerAddInventoryProductRequestDataType inherits HashDataType 
                 "display_name": "ASIN",
                 "short_desc": "Amazon Standard Identification Number",
                 "type": SoftStringOrNothingType,
+            },
+            "tags": {
+                "display_name": "Tags",
+                "short_desc": "List of tag names",
+                "type": new ListDataType("tags", SoftStringType, True),
+                "desc": "List of tag names (strings) to associate with this product.",
+            },
+            "bundle_products": {
+                "display_name": "Bundle Products",
+                "short_desc": "Products included in this bundle",
+                "type": AbstractDataProviderType::get(AutoHashOrNothingType),
+                "desc": "Map of `{\"<product_id>\": <quantity>}` where each key is the "
+                    "identifier of a product included in this bundle and the value is the "
+                    "number of pieces.",
             },
         };
     }

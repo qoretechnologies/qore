@@ -20,6 +20,8 @@ public class BaseLinkerDeleteOrderProductRequestDataType inherits HashDataType {
                 "short_desc": "Line-item identifier to delete",
                 "type": SoftIntType,
                 "required": True,
+                "ref_data": "order_products",
+                "depends_on": ("order_id",),
             },
         };
     }

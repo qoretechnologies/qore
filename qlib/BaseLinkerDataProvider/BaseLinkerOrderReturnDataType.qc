@@ -8,7 +8,7 @@ public namespace BaseLinkerDataProvider {
 public class BaseLinkerOrderReturnDataType inherits HashDataType {
     public {
         const Fields = {
-            "order_return_id": {"display_name": "Order Return ID",
+            "return_id": {"display_name": "Return ID",
                 "short_desc": "Return identifier", "type": SoftIntType},
             "order_id": {"display_name": "Order ID",
                 "short_desc": "Original order identifier", "type": SoftIntOrNothingType},

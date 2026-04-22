@@ -17,7 +17,8 @@ public class BaseLinkerOrderProductDataType inherits HashDataType {
             "storage": {
                 "display_name": "Storage",
                 "short_desc": "Storage identifier for product origin",
-                "type": SoftStringOrNothingType,
+                "type": SoftStringType,
+                "required": True,
                 "desc": "The storage the product originates from. One of `db`, `shop`, `warehouse`.",
                 "allowed_values": (
                     <AllowedValueInfo>{"value": "db",
@@ -31,7 +32,8 @@ public class BaseLinkerOrderProductDataType inherits HashDataType {
             "storage_id": {
                 "display_name": "Storage ID",
                 "short_desc": "Storage-specific ID (inventory/shop/warehouse ID)",
-                "type": SoftStringOrNothingType,
+                "type": SoftStringType,
+                "required": True,
                 "desc": "Identifier of the storage (inventory ID for `db`, shop ID for `shop`, "
                     "warehouse ID for `warehouse`).",
             },
@@ -53,6 +55,7 @@ public class BaseLinkerOrderProductDataType inherits HashDataType {
                 "type": SoftStringType,
                 "required": True,
                 "desc": "Product name shown on the order line.",
+                "example_value": "Sample Widget",
             },
             "sku": {
                 "display_name": "SKU",
@@ -90,6 +93,7 @@ public class BaseLinkerOrderProductDataType inherits HashDataType {
                 "type": SoftFloatType,
                 "required": True,
                 "desc": "Unit price (gross, including tax).",
+                "example_value": 49.99,
             },
             "tax_rate": {
                 "display_name": "Tax Rate",
@@ -99,6 +103,7 @@ public class BaseLinkerOrderProductDataType inherits HashDataType {
                 "desc": "Tax rate as a percentage (e.g. `23` for 23%). "
                     "Special values: `-1` = tax exempt, `-0.02` = 0% reverse charge, "
                     "`-0.03` = 0% VAT-OSS.",
+                "example_value": 23,
             },
             "quantity": {
                 "display_name": "Quantity",
@@ -106,6 +111,7 @@ public class BaseLinkerOrderProductDataType inherits HashDataType {
                 "type": SoftIntType,
                 "required": True,
                 "desc": "Quantity of the product on the order line.",
+                "example_value": 1,
             },
             "weight": {
                 "display_name": "Weight",

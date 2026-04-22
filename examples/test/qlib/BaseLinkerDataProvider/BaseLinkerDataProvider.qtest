@@ -71,6 +71,8 @@ public class BaseLinkerDataProviderTest inherits QUnit::Test {
         addTestCase("factory tests", \factoryTests());
         addTestCase("metadata tests", \metadataTests());
         addTestCase("connection tests", \connectionTests());
+        addTestCase("example event data tests", \exampleEventDataTests());
+        addTestCase("type class tests", \typeClassTests());
 
         # Integration tests (require BaseLinker credentials or a connection)
         addTestCase("setup diagnostics", \setupDiagnosticsTest());
@@ -221,6 +223,91 @@ public class BaseLinkerDataProviderTest inherits QUnit::Test {
         assertEq(True, scheme.val(), "baselinkerrest scheme registered");
     }
 
+    #! Verifies every watch provider returns a journal-log-shaped example payload.
+    /** Exercises the fallback path in BaseLinkerWatchDataProviderBase::getExampleEventDataImpl()
+        (triggered when no live client is attached) to ensure flow-builder previews work
+        without credentials and conform to BaseLinkerJournalLogDataType.
+    */
+    exampleEventDataTests() {
+        hash<string, int> expected_fields = {
+            "log_id": NT_INT,
+            "log_type": NT_INT,
+            "date": NT_INT,
+        };
+
+        foreach string log_type_key in (keys BaseLinkerDataProvider::JournalLogTypeMap) {
+            int log_type = log_type_key.toInt();
+            string event_name = BaseLinkerDataProvider::JournalLogTypeMap{log_type};
+            *Class cls = BaseLinkerDataProvider::BaseLinkerEventsDataProvider::ChildMap{event_name};
+            assertEq(True, exists cls, sprintf("watch class registered for %y", event_name));
+
+            # Construct the watch provider with no client; the fallback path produces fake data.
+            object watch = cls.newObject();
+            auto example = watch.getExampleEventData(event_name);
+            assertEq(NT_HASH, example.typeCode(),
+                sprintf("%s: getExampleEventData returns a hash", event_name));
+
+            foreach string fname in (keys expected_fields) {
+                assertEq(expected_fields{fname}, example{fname}.typeCode(),
+                    sprintf("%s: example field %y has expected type", event_name, fname));
+            }
+            assertEq(log_type, example.log_type,
+                sprintf("%s: example log_type is %d", event_name, log_type));
+        }
+    }
+
+    #! Instantiates representative type classes and verifies the declared Fields catalog.
+    /** Each `HashDataType` subclass exposes a public `Fields` constant used by
+        `DataProviderActionCatalog::getActionOptionFromFields()`; this test confirms the
+        expected field names are present in each class's declared catalog and that each
+        class instantiates cleanly.
+    */
+    typeClassTests() {
+        # Journal log type (used by every watch provider)
+        assertEq(True, exists new BaseLinkerJournalLogDataType(),
+            "BaseLinkerJournalLogDataType instantiates");
+        foreach string fname in (("log_id", "log_type", "order_id", "object_id", "date")) {
+            assertEq(True, exists BaseLinkerJournalLogDataType::Fields{fname},
+                sprintf("BaseLinkerJournalLogDataType::Fields has %y", fname));
+        }
+
+        # Request types
+        assertEq(True, exists new BaseLinkerAddOrderRequestDataType(),
+            "BaseLinkerAddOrderRequestDataType instantiates");
+        foreach string fname in (("order_status_id", "date_add", "currency", "payment_method",
+                "products")) {
+            assertEq(True, exists BaseLinkerAddOrderRequestDataType::Fields{fname},
+                sprintf("BaseLinkerAddOrderRequestDataType::Fields has %y", fname));
+        }
+
+        assertEq(True, exists new BaseLinkerAddInventoryProductRequestDataType(),
+            "BaseLinkerAddInventoryProductRequestDataType instantiates");
+        foreach string fname in (("inventory_id", "ean_additional", "tags", "prices", "stock")) {
+            assertEq(True, exists BaseLinkerAddInventoryProductRequestDataType::Fields{fname},
+                sprintf("BaseLinkerAddInventoryProductRequestDataType::Fields has %y", fname));
+        }
+        # The EAN-additional typed sub-class should drive the ean_additional list element type.
+        assertEq(True, exists new BaseLinkerEanAdditionalDataType(),
+            "BaseLinkerEanAdditionalDataType instantiates");
+        foreach string fname in (("ean", "quantity")) {
+            assertEq(True, exists BaseLinkerEanAdditionalDataType::Fields{fname},
+                sprintf("BaseLinkerEanAdditionalDataType::Fields has %y", fname));
+        }
+
+        assertEq(True, exists BaseLinkerGetLabelRequestDataType::Fields.courier_code,
+            "getLabel request has courier_code");
+        assertEq(True, exists BaseLinkerGetLabelRequestDataType::Fields.package_id,
+            "getLabel request has package_id");
+
+        # Response types
+        assertEq(True, exists new BaseLinkerSuccessIdResponseDataType(),
+            "BaseLinkerSuccessIdResponseDataType instantiates");
+        assertEq(True, exists new BaseLinkerCourierLabelDataType(),
+            "BaseLinkerCourierLabelDataType instantiates");
+        assertEq(True, exists BaseLinkerCourierLabelDataType::Fields.label,
+            "BaseLinkerCourierLabelDataType::Fields has 'label'");
+    }
+
     # ========== INTEGRATION TESTS ==========
 
     #! Prints diagnostic info when a connection is configured; used by operators to debug setup.
@@ -269,13 +356,24 @@ public class BaseLinkerDataProviderTest inherits QUnit::Test {
         BaseLinkerDataProvider::BaseLinkerDataProvider provider = getProvider();
         AbstractDataProvider orders_dp = provider.getChildProvider("orders");
 
+        # BaseLinker rejects order_status_id=0 on some tenants; pick the first configured
+        # status up-front so the test works everywhere.
+        int initial_status_id = 0;
+        {
+            AbstractDataProvider statuses_dp = provider.getChildProvider("order-statuses");
+            AbstractDataProviderRecordIterator si = statuses_dp.searchRecords();
+            if (si.next()) {
+                initial_status_id = si.getValue().id;
+            }
+        }
+
         # Build a minimal test order; field names follow the BaseLinker addOrder API shape.
         # If the deployed fixture requires additional fields, the request will fail with a clear
         # BASELINKER-API-ERROR — we surface that as a skip rather than a hard failure so the test
         # remains resilient across tenants.
         string test_email = "qore-test-" + get_random_string(8) + "@example.com";
         hash<auto> order_payload = {
-            "order_status_id": 0,
+            "order_status_id": initial_status_id,
             "custom_source_id": 0,
             "date_add":         int(get_epoch_seconds(now_us())),
             "user_comments":    "Qore integration test " + get_random_string(8),
@@ -398,7 +496,7 @@ public class BaseLinkerDataProviderTest inherits QUnit::Test {
         # delete-order → verify gone
         try {
             AbstractDataProvider del_dp = orders_dp.getChildProvider("delete-order");
-            del_dp.doRequest({"order_id": testOrderId});
+            del_dp.doRequest({"order_ids": (testOrderId,)});
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err == "BASELINKER-API-ERROR") {
                 # Some BaseLinker plans don't allow order deletion — leave the cleanup for the operator
@@ -512,6 +610,7 @@ public class BaseLinkerDataProviderTest inherits QUnit::Test {
                 "phone":           "+48123456789",
                 "currency":        "PLN",
                 "payment_method":  "test",
+                "payment_method_cod": 0,
                 "paid":            0.0,
                 "delivery_method": "test",
                 "delivery_price":  0.0,
@@ -558,7 +657,7 @@ public class BaseLinkerDataProviderTest inherits QUnit::Test {
         # Cleanup the trigger order regardless of whether the observer fired
         try {
             AbstractDataProvider del_dp = orders_dp.getChildProvider("delete-order");
-            del_dp.doRequest({"order_id": trigger_order_id});
+            del_dp.doRequest({"order_ids": (trigger_order_id,)});
         } catch (hash<ExceptionInfo> _) {
             # best effort
         }
@@ -582,7 +681,7 @@ public class BaseLinkerDataProviderTest inherits QUnit::Test {
             BaseLinkerDataProvider::BaseLinkerDataProvider provider = getProvider();
             AbstractDataProvider orders_dp = provider.getChildProvider("orders");
             AbstractDataProvider del_dp = orders_dp.getChildProvider("delete-order");
-            del_dp.doRequest({"order_id": testOrderId});
+            del_dp.doRequest({"order_ids": (testOrderId,)});
             if (m_options.verbose) {
                 printf("Cleaned up leftover test order %d\n", testOrderId);
             }

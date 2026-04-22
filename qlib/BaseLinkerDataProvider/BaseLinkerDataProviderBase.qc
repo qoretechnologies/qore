@@ -46,7 +46,7 @@ public class BaseLinkerDataProviderBase inherits DataProvider::AbstractDataProvi
             },
             "baselinkerrestclient_options": <DataProviderOptionInfo>{
                 "display_name": "BaseLinker REST Client Options",
-                "short_desc": "Options for creating a BaseLinkerRestClientIo if no client is given",
+                "short_desc": "Fallback options used when no REST client is given",
                 "type": AbstractDataProviderType::get(AutoHashType),
                 "desc": "Options for creating a `BaseLinkerRestClientIo` object when one is not "
                     "supplied directly (must include `apikey`).",
@@ -135,10 +135,66 @@ public class BaseLinkerDataProviderBase inherits DataProvider::AbstractDataProvi
             "Content-Type": "application/x-www-form-urlencoded",
         };
 
+        # BaseLinker's single RPC endpoint is at /connector.php; pass it as the path
+        # rather than an empty string. RestClientIo normalizes an empty path to "/" and
+        # then prepends the URL's connection path, producing "/connector.php/" — which
+        # BaseLinker's nginx rewrites to a 404.
         return retryRequest(auto sub () {
-            hash<auto> response = rest.restDoRawRequest("POST", "", body, headers);
-            return checkResponse(method, response.body);
+            try {
+                hash<auto> response = rest.restDoRawRequest("POST", "connector.php",
+                    body, headers);
+                return checkResponse(method, response.body);
+            } catch (hash<ExceptionInfo> ex) {
+                # BASELINKER-API-ERROR is already enriched by checkResponse; everything
+                # else (REST-RESPONSE-ERROR, DESERIALIZATION-ERROR, socket errors) is
+                # low-level and lacks context. Enrich the desc with the method name and
+                # any parseable error body before re-throwing.
+                if (ex.err == "BASELINKER-API-ERROR") {
+                    rethrow;
+                }
+                rethrow ex.err, getApiErrorDesc(method, ex), ex.arg;
+            }
         });
+    }
+
+    #! Returns an enriched error description for non-BASELINKER-API-ERROR failures
+    /** BaseLinker normally reports application-level errors as HTTP 200 with a JSON body
+        carrying \c status: \c "ERROR" — those are enriched by @ref checkResponse(). Two
+        other failure modes are possible and reach this path:
+
+        - HTTP 4xx/5xx from the endpoint (rare; usually infrastructure or CDN): raised as
+          \c REST-RESPONSE-ERROR with \c arg.status_code and \c arg.body
+        - Non-JSON response body (e.g., nginx HTML 404, maintenance page): raised as
+          \c DESERIALIZATION-ERROR with the body embedded in \c desc
+
+        @param method the BaseLinker API method being called
+        @param ex the original exception
+
+        @return an enriched description string that names the method and surfaces any
+        API-provided error text that could be extracted
+    */
+    private string getApiErrorDesc(string method, hash<ExceptionInfo> ex) {
+        if (ex.err == "REST-RESPONSE-ERROR") {
+            string desc = sprintf("%s on method %s", ex.desc, method);
+            # BaseLinker may return its RPC error envelope even on a non-2xx response
+            *string api_msg = DataProvider::DataProviderErrorUtil::firstStringAt(
+                ex.arg.body, ("error_message",));
+            *string api_code = DataProvider::DataProviderErrorUtil::firstStringAt(
+                ex.arg.body, ("error_code",));
+            if (api_msg.val() || api_code.val()) {
+                desc += sprintf(": %s (%s)",
+                    api_msg ?? "(no message)", api_code ?? "no code");
+            }
+            return desc;
+        }
+        if (ex.err == "DESERIALIZATION-ERROR") {
+            # The unparseable body lives in ex.desc; don't forward the full "types
+            # supported" list — surface a compact message naming the method.
+            return sprintf("BaseLinker returned a non-JSON response for method %s "
+                "(likely an upstream infrastructure error or maintenance page)", method);
+        }
+        # Socket / timeout / other low-level errors: just add method context
+        return sprintf("%s on method %s", ex.desc, method);
     }
 
     #! Validates a BaseLinker response body and converts API errors to Qore exceptions
@@ -196,6 +252,12 @@ public class BaseLinkerDataProviderBase inherits DataProvider::AbstractDataProvi
                             do_retry = True;
                         }
                     }
+                } else if (ex.err == "REST-RESPONSE-ERROR") {
+                    # Retry on edge/infrastructure 429 and transient 5xx
+                    int status = ex.arg.status_code ?? 0;
+                    if (status == 429 || (status >= 500 && status < 600)) {
+                        do_retry = True;
+                    }
                 }
                 if (!do_retry) {
                     rethrow;
@@ -236,11 +298,14 @@ public class BaseLinkerDataProviderBase inherits DataProvider::AbstractDataProvi
         return {
             "orders": True,
             "order_returns": True,
+            "order_products": True,
             "order_statuses": True,
             "order_return_statuses": True,
             "order_sources": True,
             "inventories": True,
             "inventory_products": True,
+            "inventory_manufacturers": True,
+            "inventory_categories": True,
             "couriers": True,
             "courier_services": True,
             "courier_accounts": True,
@@ -254,12 +319,18 @@ public class BaseLinkerDataProviderBase inherits DataProvider::AbstractDataProvi
             switch (kind) {
                 case "orders": return getReferenceOrders();
                 case "order_returns": return getReferenceOrderReturns();
+                case "order_products":
+                    return getReferenceOrderProducts(depends_on_values.order_id);
                 case "order_statuses": return getReferenceOrderStatuses();
                 case "order_return_statuses": return getReferenceOrderReturnStatuses();
                 case "order_sources": return getReferenceOrderSources();
                 case "inventories": return getReferenceInventories();
                 case "inventory_products":
                     return getReferenceInventoryProducts(depends_on_values.inventory_id);
+                case "inventory_manufacturers":
+                    return getReferenceInventoryManufacturers();
+                case "inventory_categories":
+                    return getReferenceInventoryCategories(depends_on_values.inventory_id);
                 case "couriers": return getReferenceCouriers();
                 case "courier_services":
                     return getReferenceCourierServices(depends_on_values.courier_code);
@@ -292,8 +363,8 @@ public class BaseLinkerDataProviderBase inherits DataProvider::AbstractDataProvi
         hash<auto> response = callMethod("getOrderReturns", NOTHING);
         foreach hash<auto> ret in (response.returns ?? ()) {
             rv += <AllowedValueInfo>{
-                "value": int(ret.order_return_id),
-                "display_name": sprintf("Return %d (order %d)", ret.order_return_id,
+                "value": int(ret.return_id),
+                "display_name": sprintf("Return %d (order %d)", ret.return_id,
                     ret.order_id),
             };
         }
@@ -335,7 +406,7 @@ public class BaseLinkerDataProviderBase inherits DataProvider::AbstractDataProvi
             hash<auto> by_id = response.sources{source_type};
             foreach string id in (keys by_id) {
                 rv += <AllowedValueInfo>{
-                    "value": id,
+                    "value": int(id),
                     "display_name": sprintf("%s: %s", source_type, by_id{id}),
                 };
             }
@@ -389,8 +460,8 @@ public class BaseLinkerDataProviderBase inherits DataProvider::AbstractDataProvi
         hash<auto> response = callMethod("getCouriersList", NOTHING);
         foreach hash<auto> courier in (response.couriers ?? ()) {
             rv += <AllowedValueInfo>{
-                "value": courier.code,
-                "display_name": courier.name ?? courier.code,
+                "value": string(courier.code),
+                "display_name": courier.name ?? string(courier.code),
             };
         }
         return rv;
@@ -425,8 +496,63 @@ public class BaseLinkerDataProviderBase inherits DataProvider::AbstractDataProvi
         });
         foreach hash<auto> account in (response.accounts ?? ()) {
             rv += <AllowedValueInfo>{
-                "value": string(account.id),
+                "value": int(account.id),
                 "display_name": account.name ?? sprintf("Account %s", account.id),
+            };
+        }
+        return rv;
+    }
+
+    #! Returns line items for a given order (cascading ref_data)
+    private *list<hash<AllowedValueInfo>> getReferenceOrderProducts(*string order_id) {
+        if (!order_id.val()) {
+            return ();
+        }
+        list<hash<AllowedValueInfo>> rv = ();
+        hash<auto> response = callMethod("getOrders", {
+            "order_id": int(order_id),
+            "get_unconfirmed_orders": True,
+        });
+        foreach hash<auto> order in (response.orders ?? ()) {
+            foreach hash<auto> product in (order.products ?? ()) {
+                rv += <AllowedValueInfo>{
+                    "value": int(product.order_product_id),
+                    "display_name": sprintf("%s (line %d, qty %d)",
+                        product.name ?? "product",
+                        product.order_product_id,
+                        product.quantity ?? 0),
+                };
+            }
+        }
+        return rv;
+    }
+
+    #! Returns inventory manufacturers as reference data
+    private *list<hash<AllowedValueInfo>> getReferenceInventoryManufacturers() {
+        list<hash<AllowedValueInfo>> rv = ();
+        hash<auto> response = callMethod("getInventoryManufacturers", NOTHING);
+        foreach hash<auto> m in (response.manufacturers ?? ()) {
+            rv += <AllowedValueInfo>{
+                "value": string(m.manufacturer_id),
+                "display_name": m.name ?? m.manufacturer_name
+                    ?? sprintf("Manufacturer %s", m.manufacturer_id),
+            };
+        }
+        return rv;
+    }
+
+    #! Returns inventory categories as reference data, optionally scoped to a catalog
+    private *list<hash<AllowedValueInfo>> getReferenceInventoryCategories(*string inventory_id) {
+        list<hash<AllowedValueInfo>> rv = ();
+        *hash<auto> params;
+        if (inventory_id.val()) {
+            params = {"inventory_id": inventory_id};
+        }
+        hash<auto> response = callMethod("getInventoryCategories", params);
+        foreach hash<auto> cat in (response.categories ?? ()) {
+            rv += <AllowedValueInfo>{
+                "value": string(cat.category_id),
+                "display_name": cat.name ?? sprintf("Category %s", cat.category_id),
             };
         }
         return rv;

@@ -8,19 +8,34 @@ public namespace BaseLinkerDataProvider {
 public class BaseLinkerSetOrderReturnRefundRequestDataType inherits HashDataType {
     public {
         const Fields = {
-            "order_return_id": {
-                "display_name": "Order Return ID",
+            "return_id": {
+                "display_name": "Return ID",
                 "short_desc": "Return being refunded",
                 "type": SoftIntType,
                 "required": True,
                 "ref_data": "order_returns",
             },
-            "refund_done": {
+            "order_refund_done": {
                 "display_name": "Refund Amount",
                 "short_desc": "Total amount refunded (return currency)",
                 "type": SoftFloatType,
                 "required": True,
-                "desc": "Cumulative refunded amount in the return's currency.",
+                "desc": "Cumulative refunded amount in the return's currency. Replaces the "
+                    "current refund value (not added to it).",
+            },
+            "refund_date": {
+                "display_name": "Refund Date",
+                "short_desc": "Refund timestamp (Unix seconds)",
+                "type": SoftIntType,
+                "required": True,
+                "desc": "Date the refund was issued, as Unix seconds.",
+            },
+            "refund_comment": {
+                "display_name": "Refund Comment",
+                "short_desc": "Short comment for the refund",
+                "type": SoftStringType,
+                "required": True,
+                "desc": "Short free-text comment attached to the refund (max 50 characters).",
             },
             "external_refund_id": {
                 "display_name": "External Refund ID",

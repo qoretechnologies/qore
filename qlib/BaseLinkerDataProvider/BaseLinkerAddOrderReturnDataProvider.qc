@@ -11,7 +11,7 @@ public class BaseLinkerAddOrderReturnDataProvider inherits BaseLinkerDataProvide
         const ProviderInfo = <DataProviderInfo>{
             "name": "add-order-return",
             "desc": "Create a new order return in BaseLinker (`addOrderReturn`). The "
-                "response contains the newly assigned `order_return_id`.",
+                "response contains the newly assigned `return_id`.",
             "type": "BaseLinkerAddOrderReturnDataProvider",
             "supports_request": True,
             "constructor_options": ConstructorOptions,

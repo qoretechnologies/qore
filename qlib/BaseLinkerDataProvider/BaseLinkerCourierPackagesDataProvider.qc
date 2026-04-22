@@ -16,11 +16,22 @@ public class BaseLinkerCourierPackagesDataProvider inherits BaseLinkerDataProvid
             "type": "BaseLinkerCourierPackagesDataProvider",
             "has_record": True,
             "supports_read": True,
+            "supports_children": True,
+            "children_can_support_apis": True,
             "search_options": SearchOptions,
             "constructor_options": ConstructorOptions,
         };
 
         const ConstructorOptions = BaseConstructorOptions;
+
+        const ChildMap = {
+            "create-package":
+                Class::forName("BaseLinkerDataProvider::BaseLinkerCreatePackageDataProvider"),
+            "get-label":
+                Class::forName("BaseLinkerDataProvider::BaseLinkerGetLabelDataProvider"),
+            "delete-courier-package":
+                Class::forName("BaseLinkerDataProvider::BaseLinkerDeleteCourierPackageDataProvider"),
+        };
 
         const SearchOptions = {
             "order_id": <DataProviderOptionInfo>{
@@ -47,6 +58,17 @@ public class BaseLinkerCourierPackagesDataProvider inherits BaseLinkerDataProvid
 
     private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
         return (new BaseLinkerCourierPackageDataType()).getFields();
+    }
+
+    private *list<string> getChildProviderNamesImpl() {
+        return keys ChildMap;
+    }
+
+    private *AbstractDataProvider getChildProviderImpl(string name) {
+        *Class cls = ChildMap{name};
+        if (cls) {
+            return cls.newObject(rest);
+        }
     }
 
     private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,

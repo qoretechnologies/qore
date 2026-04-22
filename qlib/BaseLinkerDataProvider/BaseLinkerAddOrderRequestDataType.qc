@@ -12,19 +12,21 @@ public namespace BaseLinkerDataProvider {
 public class BaseLinkerAddOrderRequestDataType inherits HashDataType {
     public {
         const Fields = {
-            "order_source_id": {
-                "display_name": "Order Source ID",
-                "short_desc": "Source identifier (from `list-order-sources`)",
-                "type": SoftIntOrNothingType,
-                "desc": "Identifier of the order source configured in BaseLinker.",
-                "ref_data": "order_sources",
+            "order_status_id": {
+                "display_name": "Order Status ID",
+                "short_desc": "Initial order status identifier",
+                "type": SoftIntType,
+                "required": True,
+                "desc": "Initial order status; see `list-order-statuses`.",
+                "ref_data": "order_statuses",
             },
             "date_add": {
                 "display_name": "Date Added",
                 "short_desc": "Order creation timestamp (Unix seconds)",
-                "type": SoftIntOrNothingType,
-                "desc": "Order creation timestamp as Unix seconds. Defaults to the current time "
-                    "when omitted.",
+                "type": SoftIntType,
+                "required": True,
+                "desc": "Order creation timestamp as Unix seconds.",
+                "example_value": 1745280000,
             },
             "currency": {
                 "display_name": "Currency",
@@ -32,22 +34,27 @@ public class BaseLinkerAddOrderRequestDataType inherits HashDataType {
                 "type": SoftStringType,
                 "required": True,
                 "desc": "ISO 4217 currency code, e.g. `PLN`, `EUR`, `USD`.",
+                "example_value": "PLN",
             },
             "payment_method": {
                 "display_name": "Payment Method",
                 "short_desc": "Payment method description",
-                "type": SoftStringOrNothingType,
+                "type": SoftStringType,
+                "required": True,
+                "example_value": "Credit Card",
             },
             "payment_method_cod": {
                 "display_name": "Cash On Delivery",
                 "short_desc": "Whether this is a COD order",
-                "type": SoftBoolOrNothingType,
+                "type": SoftBoolType,
+                "required": True,
                 "desc": "`True` marks the order as cash-on-delivery.",
             },
             "paid": {
                 "display_name": "Paid",
                 "short_desc": "Whether the order is fully paid",
-                "type": SoftBoolOrNothingType,
+                "type": SoftBoolType,
+                "required": True,
                 "desc": "`True` marks the order as paid in full at creation time.",
             },
             "user_comments": {
@@ -64,11 +71,13 @@ public class BaseLinkerAddOrderRequestDataType inherits HashDataType {
                 "display_name": "Email",
                 "short_desc": "Customer email address",
                 "type": SoftStringOrNothingType,
+                "example_value": "customer@example.com",
             },
             "phone": {
                 "display_name": "Phone",
                 "short_desc": "Customer phone number",
                 "type": SoftStringOrNothingType,
+                "example_value": "+48 123 456 789",
             },
             "user_login": {
                 "display_name": "User Login",
@@ -120,6 +129,7 @@ public class BaseLinkerAddOrderRequestDataType inherits HashDataType {
                 "short_desc": "2-letter ISO country code",
                 "type": SoftStringOrNothingType,
                 "desc": "ISO 3166-1 alpha-2 country code (e.g. `PL`, `DE`, `US`).",
+                "example_value": "PL",
             },
             "invoice_fullname": {
                 "display_name": "Invoice Full Name",
@@ -192,18 +202,12 @@ public class BaseLinkerAddOrderRequestDataType inherits HashDataType {
                 "short_desc": "Whether the customer requested an invoice",
                 "type": SoftBoolOrNothingType,
             },
-            "status_id": {
-                "display_name": "Status ID",
-                "short_desc": "Initial status identifier",
-                "type": SoftIntOrNothingType,
-                "desc": "Initial order status; see `list-order-statuses`.",
-                "ref_data": "order_statuses",
-            },
             "custom_source_id": {
                 "display_name": "Custom Source ID",
                 "short_desc": "Custom personal source ID",
                 "type": SoftIntOrNothingType,
-                "desc": "Identifier of a custom personal order source (overrides `order_source_id`).",
+                "ref_data": "order_sources",
+                "desc": "Identifier of a custom personal order source (see `list-order-sources`).",
             },
             "extra_field_1": {
                 "display_name": "Extra Field 1",
@@ -214,6 +218,14 @@ public class BaseLinkerAddOrderRequestDataType inherits HashDataType {
                 "display_name": "Extra Field 2",
                 "short_desc": "Free-form extra field",
                 "type": SoftStringOrNothingType,
+            },
+            "custom_extra_fields": {
+                "display_name": "Custom Extra Fields",
+                "short_desc": "Map of custom extra field ID to value",
+                "type": AutoHashOrNothingType,
+                "desc": "Map of `{\"<extra_field_id>\": <value>}`. Text fields take strings; "
+                    "file fields take a `{\"title\": \"<filename>\", \"file\": \"<base64>\"}` "
+                    "hash where the base64-encoded file must not exceed 2 MB.",
             },
             "products": {
                 "display_name": "Products",
