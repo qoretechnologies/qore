@@ -32,6 +32,8 @@ class ClosureCaptureMutationTest inherits QUnit::Test {
         addTestCase("auto-vivify captured hash local via foreach", \testAutoVivifyForeach());
         addTestCase("TSAI sortOptions pattern", \testSortOptionsPattern());
         addTestCase("COW write to captured hash", \testCowWriteCaptured());
+        addTestCase("compound op on captured hash key", \testCompoundHashKeyCaptured());
+        addTestCase("compound op on captured list index", \testCompoundListIndexCaptured());
         set_return_value(main());
     }
 
@@ -172,5 +174,34 @@ printf(\"alias=%y captured=%y\\n\", alias, cap_hash);
         assertSameInAllModes(code,
             "alias={pre: 1} captured={pre: 1, post: 2}\n",
             "COW write to captured");
+    }
+
+    testCompoundHashKeyCaptured() {
+        # emitHashKeyCompoundOp fast path ends with HashKeyStore; verify that
+        # closures-cache invalidation covers compound operators on captured hashes.
+        string code = "
+hash<auto> h = {\"n\": 10};
+code cap = sub () {
+    any _dummy = h;
+};
+h{\"n\"} += 5;
+h{\"n\"} *= 2;
+printf(\"%y\\n\", h);
+";
+        assertSameInAllModes(code, "{n: 30}\n", "compound op on captured hash key");
+    }
+
+    testCompoundListIndexCaptured() {
+        # emitListKeyCompoundOp fast path ends with ListIndexStore.
+        string code = "
+list<auto> l = (10, 20, 30);
+code cap = sub () {
+    any _dummy = l;
+};
+l[1] += 5;
+l[0] *= 3;
+printf(\"%y\\n\", l);
+";
+        assertSameInAllModes(code, "[30, 25, 30]\n", "compound op on captured list index");
     }
 }
