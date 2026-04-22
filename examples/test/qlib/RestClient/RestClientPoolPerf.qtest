@@ -93,6 +93,23 @@ class RestClientPoolPerfTest inherits QUnit::Test {
     globalSetUp() {
         container_name = sprintf("qore-rest-pool-test-%d", getpid());
 
+        # Pre-flight: confirm podman is installed and the nginx:alpine
+        # image is already available locally.  Without this check, the
+        # later `podman run` call at line 168 would trigger an implicit
+        # image pull, which blocks for minutes on slow or offline
+        # networks before any timeout expires (`backquote` has no
+        # built-in cap).  Fast-failing here keeps `run_tests.sh` from
+        # stalling for ~5 minutes on hosts without a pre-pulled image.
+        if (system("command -v podman >/dev/null 2>&1")) {
+            testSkip("podman not installed");
+            return;
+        }
+        if (system("podman image exists docker.io/library/nginx:alpine")) {
+            testSkip("nginx:alpine image not available locally "
+                "(run `podman pull docker.io/library/nginx:alpine` to enable this test)");
+            return;
+        }
+
         # Generate self-signed cert
         string cert_path = tmp_dir.path + "/server.crt";
         string key_path = tmp_dir.path + "/server.key";
