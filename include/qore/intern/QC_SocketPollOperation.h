@@ -932,9 +932,14 @@ public:
     //! @param handshake_timeout_ns optional handshake deadline in nanoseconds
     //!     (0 = disabled); when >0, continuePoll() fails with QUIC-HANDSHAKE-TIMEOUT
     //!     if the handshake has not reached SETUP_HTTP3 by this elapsed time
+    //! @param not_before_ns_abs optional absolute ngtcp2 timestamp (ns) before
+    //!     which sendPendingPackets() must not emit any UDP datagrams; 0 =
+    //!     disabled.  Used by the HTTP/3 client's happy-eyeballs stagger to
+    //!     hold back secondary address-family attempts per RFC 8305 §8.
     DLLLOCAL SocketQuicClientPollOperation(ExceptionSink* xsink, QoreSocketObject* sock,
                                            const char* host, uint16_t port, int family,
-                                           int64_t handshake_timeout_ns = 0);
+                                           int64_t handshake_timeout_ns = 0,
+                                           int64_t not_before_ns_abs = 0);
 
     DLLLOCAL void deref(ExceptionSink* xsink) {
         if (ROdereference()) {
@@ -1053,6 +1058,17 @@ private:
     //! so a stalled handshake over UDP fails fast at the configured
     //! connect_timeout instead of silently waiting for the outer request_timeout.
     int64_t handshake_deadline_ns_ = 0;
+
+    //! Absolute ngtcp2 timestamp (ns) before which no UDP datagrams may be
+    //! emitted; 0 means disabled.  Enforced in sendPendingPackets(): while
+    //! now < not_before_ns_, the send path is a no-op and returns the deadline
+    //! as next_expiry so the I/O controller reschedules continuePoll() at
+    //! the correct wall time.  Used to implement the RFC 8305 Connection
+    //! Attempt Delay (typically 250ms) for H3 happy-eyeballs — the secondary
+    //! address-family attempt is submitted immediately but holds its Initial
+    //! packet until this deadline elapses, giving the preferred family a
+    //! head start on the handshake.
+    int64_t not_before_ns_ = 0;
 
     //! Coalesced timer + write + send pending QUIC packets via UDP
     /** @param next_expiry output: next timer expiry for poll timeout

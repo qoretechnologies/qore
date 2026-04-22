@@ -368,8 +368,10 @@ static int recvAndDispatchQuicPackets(int fd, QoreDatagramDispatcher& dispatcher
 SocketQuicClientPollOperation::SocketQuicClientPollOperation(
     ExceptionSink* xsink, QoreSocketObject* sock,
     const char* host, uint16_t port, int family,
-    int64_t handshake_timeout_ns)
-    : SocketPollSocketOperationBase(sock) {
+    int64_t handshake_timeout_ns,
+    int64_t not_before_ns_abs)
+    : SocketPollSocketOperationBase(sock),
+      not_before_ns_(not_before_ns_abs) {
     AutoLocker al(sock->priv->m);
 
     // Validate socket
@@ -560,6 +562,28 @@ QoreValue SocketQuicClientPollOperation::getOutput() const {
 
 int SocketQuicClientPollOperation::sendPendingPackets(
     ngtcp2_tstamp& next_expiry, ExceptionSink* xsink) {
+    // Happy-eyeballs Connection Attempt Delay (RFC 8305 §8).  When this
+    // operation is a secondary address-family attempt staggered behind the
+    // preferred family, suppress all datagram emission until the deadline
+    // elapses.  processTimerAndWrite() is skipped entirely so ngtcp2 does
+    // not even generate Initial packets — the session stays idle.  Return
+    // SOCK_POLLOUT with next_expiry = not_before_ns_ so the caller yields
+    // back to the controller with a timeout equal to the remaining stagger,
+    // rather than falling through to HANDSHAKE_RECV.
+    if (not_before_ns_) {
+        ngtcp2_tstamp now = QuicSession::timestamp();
+        if (now < not_before_ns_) {
+            next_expiry = not_before_ns_;
+            ASYNC_IO_TRACE("SocketQuicClientPollOperation::sendPendingPackets "
+                           "HE_STAGGER wait_ns=%lld\n",
+                           (long long)(not_before_ns_ - now));
+            return SOCK_POLLOUT;
+        }
+        // Deadline reached; disable the gate so subsequent calls proceed
+        // normally.  ngtcp2's own PTO timer now governs retransmission.
+        not_before_ns_ = 0;
+    }
+
     // Coalesced timer check + packet generation under a single lock
     auto result = quic_session->processTimerAndWrite(pkt_batch_, xsink);
     if (result.error) {
@@ -605,6 +629,16 @@ int SocketQuicClientPollOperation::sendPendingPackets(
 int SocketQuicClientPollOperation::flushPendingWrites(ExceptionSink* xsink) {
     if (!quic_session || !quic_session->hasPendingWrite()) {
         ASYNC_IO_TRACE("SocketQuicClientPollOperation::flushPendingWrites NO_PENDING\n");
+        return 0;
+    }
+    // Honor the happy-eyeballs stagger gate; see sendPendingPackets for
+    // rationale.  flushPendingWrites is normally invoked after the
+    // handshake has completed (request submission path), but a caller
+    // that wakes us during the stagger window must not cause packet
+    // emission before the preferred family has had its head start.
+    if (not_before_ns_ && QuicSession::timestamp() < not_before_ns_) {
+        ASYNC_IO_TRACE("SocketQuicClientPollOperation::flushPendingWrites "
+                       "HE_STAGGER_SKIP\n");
         return 0;
     }
     // Use a local batch — NOT the member pkt_batch_ — because this method

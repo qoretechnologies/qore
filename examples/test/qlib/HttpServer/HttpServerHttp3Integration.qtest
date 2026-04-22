@@ -303,6 +303,10 @@ l50Xb2GWQesIt9k5jF5IOw==
         addTestCase("ConnMgr Alt-Svc ignored with proxy", \testConnMgrAltSvcProxyGuard());
         addTestCase("ConnMgr Alt-Svc cross-origin ignored", \testConnMgrAltSvcCrossOrigin());
 
+        # Group 8: Happy-eyeballs + dual-stack Alt-Svc (RFC 8305)
+        addTestCase("Alt-Svc H3 upgrade via localhost fast path",
+            \testRestClientAltSvcViaLocalhostFastPath());
+
         set_return_value(main());
     }
 
@@ -1528,5 +1532,88 @@ l50Xb2GWQesIt9k5jF5IOw==
         # Verify we're still on H2 (no successful H3 upgrade)
         assertNeq("h3", resp2.protocol ?? "h2",
             "cross-origin: should NOT upgrade to H3 with mismatched Alt-Svc port");
+    }
+
+    #! Regression: Alt-Svc H3 upgrade via "localhost" must not stall.
+    /** On most Linux systems, getaddrinfo("localhost", AF_UNSPEC) returns
+        the IPv6 entry (::1) first.  Before the happy-eyeballs + dual-stack
+        fixes landed:
+          - HttpServer's auto-QUIC listener inherited the TCP listener's
+            bind address, so TCP-on-0.0.0.0 produced a UDP-on-0.0.0.0
+            listener reachable only via IPv4.
+          - The HTTPClient's H3 Alt-Svc upgrade resolved localhost to ::1
+            and sent QUIC Initial packets to [::1]:port — which the
+            IPv4-only server never received.
+          - ngtcp2's handshake PTO cascade retransmitted for ~30 seconds
+            before giving up and falling back to H2.
+        Two complementary fixes prevent the stall:
+          - Server: auto-QUIC listener binds "::" dual-stack when TCP is
+            on IPv4 wildcard (qlib/HttpServer.qm).
+          - Client: Http3ClientConnection runs RFC 8305 happy-eyeballs
+            across all resolved address families with a 250ms Connection
+            Attempt Delay, so the secondary family kicks in when the
+            first is a black hole.
+        This test asserts that three sequential HTTPClient requests via
+        localhost (which triggers the Alt-Svc upgrade on the second) all
+        complete well within any realistic 30s handshake window.
+    */
+    testRestClientAltSvcViaLocalhostFastPath() {
+        # Dedicated server so the default Alt-Svc cache from other tests
+        # doesn't interfere.
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": mLogger,
+            "enable_h3": True,
+        });
+        on_exit {
+            delete server;
+        }
+        server.setHandler("test", "/test", NOTHING, new SimpleHandler());
+
+        # Bind with no node so the TCP listener hits the same code path
+        # the user hit: 0.0.0.0 wildcard (Linux getaddrinfo(AI_PASSIVE)
+        # default).
+        hash<auto> info = server.addListener(<HttpListenerOptionInfo>{
+            "service": "0",
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+        });
+        server.waitForAsyncIo();
+
+        # Use "localhost" — the hostname whose resolution order exposes
+        # the family mismatch.  ssl_verify_cert=False because the test
+        # cert is CN=localhost but self-signed.
+        HTTPClient client({
+            "url": "https://localhost:" + info.port,
+            "ssl_verify_cert": False,
+        });
+        on_exit {
+            delete client;
+        }
+
+        hash<auto> resp1 = client.send("", "GET", "/test", NOTHING, True);
+        date t2 = now_us();
+        hash<auto> resp2 = client.send("", "GET", "/test", NOTHING, True);
+        date t3 = now_us();
+        hash<auto> resp3 = client.send("", "GET", "/test", NOTHING, True);
+        date t4 = now_us();
+
+        assertEq(200, int(resp1.status_code), "localhost first request");
+        assertEq(200, int(resp2.status_code), "localhost second request");
+        assertEq(200, int(resp3.status_code), "localhost third request");
+
+        int dt2_ms = (t3 - t2).durationMilliseconds();
+        int dt3_ms = (t4 - t3).durationMilliseconds();
+
+        # The bug produced a ~31000ms stall on the second request (QUIC
+        # handshake idle timeout).  5s is a comfortable ceiling that still
+        # traps any regression while leaving headroom for slow CI VMs.
+        assertTrue(dt2_ms < 5000,
+            sprintf("second request via localhost took %d ms "
+                "(Alt-Svc H3 upgrade must not stall >5000ms; regression "
+                "indicates happy-eyeballs or dual-stack listener broken)",
+                dt2_ms));
+        assertTrue(dt3_ms < 5000,
+            sprintf("third request via localhost took %d ms (expected <5000)",
+                dt3_ms));
     }
 }

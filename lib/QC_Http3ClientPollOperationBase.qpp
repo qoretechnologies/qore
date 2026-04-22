@@ -35,6 +35,7 @@
 #include "qore/intern/QC_Http3ClientPollOperationBase.h"
 #include "qore/intern/QC_SocketPollOperation.h"
 #include "qore/intern/QC_Channel.h"
+#include "qore/intern/QoreHttp3ClientConnection.h"
 
 /** @cond INTERNAL */
 
@@ -465,6 +466,24 @@ void Http3ClientPollOperationPriv::setError(const char* err, const char* desc, E
     // Socket cleanup is handled by the I/O controller's Phase3 close logic
     // via needsCloseOnComplete() returning true when h3_state == CLOSED.
     notifyPendingStreams(err, desc, xsink);
+    // Happy-eyeballs: if an owner is armed (handshake-phase racing), hand
+    // the outcome to it instead of calling setClosed directly.  The owner
+    // decides whether to keep the connection CONNECTING (other attempts
+    // still pending) or transition to CLOSED (no candidates left).  Once
+    // reported, drop both back-pointers so a subsequent read-side error on
+    // this (losing) attempt does not re-enter the HE path.
+    Http3ClientConnection* owner = nullptr;
+    {
+        AutoLocker al(stream_lock);
+        owner = h3_owner_;
+        h3_owner_ = nullptr;
+    }
+    if (owner) {
+        owner->onInnerHandshakeFailed(this, err, desc);
+        AutoLocker al(stream_lock);
+        connection_priv = nullptr;
+        return;
+    }
     {
         AutoLocker al(stream_lock);
         if (connection_priv) {
@@ -512,6 +531,20 @@ void Http3ClientPollOperationPriv::cleanupPendingState() {
 }
 
 void Http3ClientPollOperationPriv::fireReadyCallback(ExceptionSink* xsink) {
+    // Happy-eyeballs: if an owner is armed, route the success through its
+    // coordinator so losing attempts can be cancelled atomically before the
+    // base-class condition is signaled.  The owner is responsible for
+    // calling @c connection_priv->onConnectionReady() on the winning path.
+    Http3ClientConnection* owner = nullptr;
+    {
+        AutoLocker al(stream_lock);
+        owner = h3_owner_;
+        h3_owner_ = nullptr;
+    }
+    if (owner) {
+        owner->onInnerHandshakeReady(this);
+        return;
+    }
     AutoLocker al(stream_lock);
     if (connection_priv) {
         connection_priv->onConnectionReady();  // Pure C++, no evalMethod, I/O-thread safe

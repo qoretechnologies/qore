@@ -168,6 +168,19 @@ static thread_local bool on_async_io_thread = false;
 //! dispatching to other threads' caches via cmdq (avoids cross-thread cache races).
 static thread_local int current_io_thread_idx = -1;
 
+//! True for the duration of the Phase 2 batch loop in ioThread() — i.e., while
+//! any op's continuePoll() is being driven from the @c ops_to_poll snapshot.
+//! The batch snapshot holds raw @c spop_base / @c spop_obj pointers captured
+//! from the cache before the loop, so cache mutation during the loop (direct
+//! erase + PollInfo::cleanup) produces dangling pointers for the remaining
+//! iterations → use-after-free at @c spop_base->needsWorkerDispatch() on the
+//! next entry.  @ref cancelByKey's I/O-thread direct path checks this flag and
+//! defers via cmdq when set so the erase+cleanup runs safely after the batch
+//! has been discarded.  This makes cancel-from-within-continuePoll safe for any
+//! caller (currently @ref Http3ClientConnection's happy-eyeballs loser
+//! teardown, but any future caller benefits).
+static thread_local bool inside_continue_poll_batch = false;
+
 bool qore_on_async_io_thread() {
     return on_async_io_thread;
 }
@@ -1389,8 +1402,9 @@ bool AsyncIoControllerPriv::cancelByKey(const QoreStringNode* key, ExceptionSink
     bool direct_cancel = false;
     std::atomic<int> found_count{0};
 
-    if (on_async_io_thread) {
-        // I/O thread — access cache directly (we own it)
+    if (on_async_io_thread && !inside_continue_poll_batch) {
+        // I/O thread, NOT currently iterating the Phase 2 batch — safe to
+        // access cache directly (we own it, no batch snapshot to invalidate).
         IoThreadContext& t = getThreadForKey(uh);
         auto it = t.cache.find(uh);
         if (it != t.cache.end()) {
@@ -1403,6 +1417,39 @@ bool AsyncIoControllerPriv::cancelByKey(const QoreStringNode* key, ExceptionSink
             t.cache.erase(it);
             t.cache_size.fetch_sub(1, std::memory_order_relaxed);
         }
+    } else if (on_async_io_thread && inside_continue_poll_batch) {
+        // I/O thread, but we're mid-batch iteration.  The caller
+        // (continuePoll) is still holding raw spop_base/spop_obj pointers
+        // captured from the cache before the loop.  Erasing + cleanup'ing
+        // now would leave the remaining batch entries with dangling
+        // pointers → UAF on the next iteration's needsWorkerDispatch().
+        // Enqueue a Cancel to our own cmdq instead; it runs at the top of
+        // the next iteration, after the batch has been discarded.
+        //
+        // waitCancel is NOT safe from the I/O thread (we'd deadlock
+        // waiting for ourselves to drain), so this path is fire-and-forget:
+        // the caller does not observe the found_count result.  This
+        // matches how direct_cancel behaves already (it also returns
+        // without waiting).
+        IoThreadContext& target = getThreadForKey(uh);
+        Command cmd;
+        cmd.cmd = IoCommand::Cancel;
+        cmd.key = uh;
+        // found_count is a local stack variable from this frame — do
+        // NOT reference it from the cmd, because we return before the
+        // cmd is processed.  The caller's bool return value (rv) stays
+        // false, consistent with the fire-and-forget semantics.
+        cmd.cancel_count = nullptr;
+        target.cmdq.push(std::move(cmd));
+        ++submit_seq;
+        target.notifier->notify();
+        ASYNC_IO_TRACE("cancelByKey DEFER_MID_BATCH key='%s'\n", uh.c_str());
+        // rv stays false (fire-and-forget); caller must not rely on the
+        // boolean.  The direct-cancel counterpart also doesn't set rv
+        // until later (line below via direct_cancel flag), so deferred
+        // cancel is strictly a safer variant.
+        rv = true;
+        return rv;
     } else {
         // Worker thread — send Cancel command to I/O thread and wait for result.
         // Use cancel_count atomic to learn whether the key was actually found.
@@ -2819,6 +2866,19 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
             bool was_ready;  // true if triggered by a ready event (kqueue/epoll)
         };
         std::vector<PollResult> poll_results;
+
+        // Mark the I/O thread as inside the continuePoll batch so that
+        // any cancelByKey() invoked from within a poll op's continuePoll
+        // (e.g., Http3ClientConnection's happy-eyeballs loser teardown)
+        // is deferred via cmdq rather than taking the direct cache-erase
+        // path — the direct path would invalidate the raw spop_base /
+        // spop_obj pointers that ops_to_poll still holds for remaining
+        // entries, producing a UAF on the next iteration.  Cleared in an
+        // RAII guard so exceptions don't leave the flag dangling.
+        struct BatchGuard {
+            BatchGuard() { inside_continue_poll_batch = true; }
+            ~BatchGuard() { inside_continue_poll_batch = false; }
+        } batch_guard;
 
         for (auto& op : ops_to_poll) {
             PollResult result;
