@@ -2395,6 +2395,18 @@ ThreadLocalProgramData* ProgramThreadCountContextHelper::getContextFrame(int& fr
         if (ch->init_tlpd) {
             frame--;
         }
+        // The context we are ABOUT to pop past: its `old_pgm` is the
+        // Program whose frames become visible once we cross this
+        // boundary.  If that Program has `%no-debugging`, crossing it
+        // is forbidden even when the final landing Program allows
+        // debugging — otherwise a debugger-enabled inner Program
+        // could side-step a no-debugging outer Program by walking
+        // past an empty frame boundary and landing in a different
+        // Program behind it (e.g. a QUnit test-case callback Program
+        // that happens to allow debugging).  Check before swapping.
+        if (ch->old_pgm && !ch->old_pgm->checkAllowDebugging(xsink)) {
+            return nullptr;
+        }
         pgm = ch->old_pgm;
         tlpd = ch->old_tlpd;
         frameCount = ch->old_frameCount;
