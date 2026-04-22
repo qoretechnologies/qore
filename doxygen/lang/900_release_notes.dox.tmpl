@@ -1959,6 +1959,18 @@ cargo install tree-sitter-cli@0.26.5
         built on @ref Qore::Thread::AbstractConnectionPool "AbstractConnectionPool"
     - @ref restschemadataproviderintro "RestSchemaDataProvider" module
       - new module providing a unified data provider API for both Swagger 2.0 and OpenAPI 3.0 / 3.1 REST schemas
+    - @ref sendcloudrestclientintro "SendCloudRestClient" module
+      - new module providing a REST client for <a href="https://www.sendcloud.com/">SendCloud</a>'s shipping automation API
+      - supports HTTP Basic Authentication with public and secret API keys
+      - provides SendCloudRestConnection for connection management with \c sendcloudrest:// URL scheme
+    - @ref sendclouddataproviderintro "SendCloudDataProvider" module
+      - new module providing a data provider API for <a href="https://www.sendcloud.com/">SendCloud</a> shipping services
+      - parcel management (create, cancel, list, retrieve parcels and labels)
+      - return parcel management and service point lookup
+      - shipping method, sender address, and user information retrieval
+      - polling-based event triggers for new parcels and parcel status updates
+      - action catalog integration with 19 actions and 2 triggers
+      - connection support with \c sendcloudrest:// URL scheme
     - @ref sglangdataproviderintro "SGLangDataProvider" module
       - new module providing a data provider API for SGLang services
       - exposes chat completions, embeddings, constrained generation (JSON schema/regex/EBNF), server info, and KV cache flush as DPC actions

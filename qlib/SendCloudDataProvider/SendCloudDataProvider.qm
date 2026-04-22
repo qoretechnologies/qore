@@ -1,0 +1,574 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore SendCloudDataProvider module definition
+
+/*  SendCloudDataProvider.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 2.0
+# assume local scope for variables, do not use "$" signs
+%modern
+
+%requires(reexport) DataProvider
+%requires(reexport) SendCloudRestClient
+%try-module json
+%define NoJson
+%endtry
+
+module SendCloudDataProvider {
+    version = "1.0";
+    desc = "User module providing a data provider API for SendCloud shipping automation";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        # Register the data provider factory
+        DataProvider::registerFactory(new SendCloudDataProviderFactory());
+
+        # Register the application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": SendCloudDataProvider::AppName,
+            "display_name": "SendCloud",
+            "short_desc": "SendCloud shipping automation platform",
+            "desc": "SendCloud is a European shipping automation platform that helps eCommerce merchants "
+                "manage parcels, carriers, labels, returns, and tracking from a single integration. "
+                "This integration enables creating and managing parcels, requesting shipping labels, "
+                "processing returns, and receiving real-time notifications via polling-based triggers.\n\n"
+                "**Features:**\n"
+                "- Parcel management (create, update, cancel, track)\n"
+                "- Shipping label generation and PDF retrieval\n"
+                "- Return management (create, update, cancel)\n"
+                "- Service point lookup across carriers\n"
+                "- Brand and sender-address management\n"
+                "- Triggers for parcel status changes and return updates",
+            "scheme": "sendcloudrest",
+            "logo": SendCloudDataProvider::SendCloudLogo,
+            "logo_file_name": "sendcloud-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::Shipping,),
+        });
+
+        # ========== PARCEL ACTIONS ==========
+
+        # List Parcels
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SendCloudDataProvider::AppName,
+            "path": "/parcels",
+            "action": "list-parcels",
+            "groups": "Parcels",
+            "display_name": "List Parcels",
+            "short_desc": "List and search parcels",
+            "desc": "Retrieve a list of parcels from SendCloud with optional filtering by order number, "
+                "tracking number, and creation/update date ranges.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": SendCloudParcelsDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("ParcelList", new SendCloudParcelDataType(), True);
+            },
+            "options": {
+                "order_number": <ActionOptionInfo>{
+                    "display_name": "Order Number",
+                    "short_desc": "Filter by merchant order number",
+                    "desc": "Filter parcels by the merchant-provided order number",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                },
+                "tracking_number": <ActionOptionInfo>{
+                    "display_name": "Tracking Number",
+                    "short_desc": "Filter by carrier tracking number",
+                    "desc": "Filter parcels by the carrier tracking number",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum total records",
+                    "desc": "Maximum number of aggregated records to return across pages",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
+                },
+            },
+        });
+
+        # Get Parcel
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SendCloudDataProvider::AppName,
+            "path": "/get-parcel",
+            "action": "get-parcel",
+            "groups": "Parcels",
+            "display_name": "Get Parcel",
+            "short_desc": "Get a single parcel by ID",
+            "desc": "Retrieve detailed information about a specific SendCloud parcel by its numeric ID.",
+            "action_code": DPAT_API,
+            "data_provider_info": SendCloudGetParcelDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return SendCloudGetParcelDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(SendCloudGetParcelRequestDataType::Fields),
+        });
+
+        # Create Parcel
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SendCloudDataProvider::AppName,
+            "path": "/create-parcel",
+            "action": "create-parcel",
+            "groups": "Parcels",
+            "display_name": "Create Parcel",
+            "short_desc": "Create a new parcel",
+            "desc": "Create a new parcel in SendCloud, optionally requesting a shipping label and announcing "
+                "the parcel to the selected carrier.",
+            "action_code": DPAT_API,
+            "data_provider_info": SendCloudCreateParcelDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return SendCloudCreateParcelDataProvider::ResponseType;
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                SendCloudParcelCreateRequestDataType::Fields),
+        });
+
+        # Update Parcel
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SendCloudDataProvider::AppName,
+            "path": "/update-parcel",
+            "action": "update-parcel",
+            "groups": "Parcels",
+            "display_name": "Update Parcel",
+            "short_desc": "Update an existing parcel",
+            "desc": "Update an existing parcel in SendCloud; commonly used to announce a parcel and request "
+                "a shipping label after initial creation.",
+            "action_code": DPAT_API,
+            "data_provider_info": SendCloudUpdateParcelDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return SendCloudUpdateParcelDataProvider::ResponseType;
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                SendCloudParcelUpdateRequestDataType::Fields),
+        });
+
+        # Cancel Parcel
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SendCloudDataProvider::AppName,
+            "path": "/cancel-parcel",
+            "action": "cancel-parcel",
+            "groups": "Parcels",
+            "display_name": "Cancel Parcel",
+            "short_desc": "Cancel an announced parcel",
+            "desc": "Cancel an announced parcel in SendCloud. This removes the parcel from the outgoing queue "
+                "and voids the shipping label if one was created.",
+            "action_code": DPAT_API,
+            "data_provider_info": SendCloudCancelParcelDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return SendCloudCancelParcelDataProvider::ResponseType;
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                SendCloudCancelParcelRequestDataType::Fields),
+        });
+
+        # Get Parcel Label
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SendCloudDataProvider::AppName,
+            "path": "/get-parcel-label",
+            "action": "get-parcel-label",
+            "groups": "Parcels",
+            "display_name": "Get Parcel Label",
+            "short_desc": "Get shipping label URLs for a parcel",
+            "desc": "Retrieve the shipping label URL(s) for an announced parcel. The label is available as a "
+                "normal-printer PDF and a label-printer PDF.",
+            "action_code": DPAT_API,
+            "data_provider_info": SendCloudGetParcelLabelDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return SendCloudGetParcelLabelDataProvider::ResponseType;
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                SendCloudGetParcelLabelRequestDataType::Fields),
+        });
+
+        # Get Parcel Documents
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SendCloudDataProvider::AppName,
+            "path": "/get-parcel-documents",
+            "action": "get-parcel-documents",
+            "groups": "Parcels",
+            "display_name": "Get Parcel Document",
+            "short_desc": "Download a parcel document (label, CN22, CN23, commercial invoice)",
+            "desc": "Download a specific parcel document (such as the shipping label, CN22/CN23 customs "
+                "declaration, or commercial invoice) as binary PDF data.",
+            "action_code": DPAT_API,
+            "data_provider_info": SendCloudGetParcelDocumentsDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return SendCloudGetParcelDocumentsDataProvider::ResponseType;
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                SendCloudGetParcelDocumentsRequestDataType::Fields),
+        });
+
+        # ========== SHIPPING METHOD ACTIONS ==========
+
+        # List Shipping Methods
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SendCloudDataProvider::AppName,
+            "path": "/shipping-methods",
+            "action": "list-shipping-methods",
+            "groups": "Shipping Methods",
+            "display_name": "List Shipping Methods",
+            "short_desc": "List available shipping methods",
+            "desc": "Retrieve a list of shipping methods available on your SendCloud account, including "
+                "carrier details, service levels and destination countries.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": SendCloudShippingMethodsDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("ShippingMethodList", new SendCloudShippingMethodDataType(), True);
+            },
+        });
+
+        # ========== SENDER ADDRESS ACTIONS ==========
+
+        # List Sender Addresses
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SendCloudDataProvider::AppName,
+            "path": "/sender-addresses",
+            "action": "list-sender-addresses",
+            "groups": "Sender Addresses",
+            "display_name": "List Sender Addresses",
+            "short_desc": "List sender addresses",
+            "desc": "Retrieve a list of sender addresses configured on your SendCloud account; the default "
+                "sender address is used when no other is specified on a parcel.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": SendCloudSenderAddressesDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("SenderAddressList", new SendCloudSenderAddressDataType(), True);
+            },
+        });
+
+        # ========== USER ACTIONS ==========
+
+        # List Users
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SendCloudDataProvider::AppName,
+            "path": "/users",
+            "action": "list-users",
+            "groups": "User",
+            "display_name": "List Users",
+            "short_desc": "List the authenticated user",
+            "desc": "Retrieve the SendCloud user/account owning the current API credentials. The list contains "
+                "at most one entry because the API returns the authenticated user only.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": SendCloudUsersDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("UserList", new SendCloudUserDataType(), True);
+            },
+        });
+
+        # Get User
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SendCloudDataProvider::AppName,
+            "path": "/get-user",
+            "action": "get-user",
+            "groups": "User",
+            "display_name": "Get User",
+            "short_desc": "Get the authenticated user",
+            "desc": "Retrieve information about the currently authenticated SendCloud user (account owner).",
+            "action_code": DPAT_API,
+            "data_provider_info": SendCloudGetUserDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return SendCloudGetUserDataProvider::ResponseType; },
+        });
+
+        # ========== SERVICE POINT ACTIONS ==========
+
+        # List Service Points
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SendCloudDataProvider::AppName,
+            "path": "/service-points",
+            "action": "list-service-points",
+            "groups": "Service Points",
+            "display_name": "List Service Points",
+            "short_desc": "List service points for a country",
+            "desc": "Retrieve a list of carrier service points (pickup/drop-off locations) within a country; "
+                "supports filtering by city, postal code, carrier, and radius.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": SendCloudServicePointsDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("ServicePointList", new SendCloudServicePointDataType(), True);
+            },
+            "options": {
+                "country": <ActionOptionInfo>{
+                    "display_name": "Country",
+                    "short_desc": "ISO 3166-1 alpha-2 country code (required)",
+                    "desc": "Two-letter ISO country code to search service points within",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": "countries",
+                },
+            },
+        });
+
+        # Search Service Points
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SendCloudDataProvider::AppName,
+            "path": "/search-service-points",
+            "action": "search-service-points",
+            "groups": "Service Points",
+            "display_name": "Search Service Points",
+            "short_desc": "Search service points across carriers",
+            "desc": "Search for carrier service points (pickup/drop-off locations) near a location; supports "
+                "postal-code or lat/long search origins and radius/weight filters.",
+            "action_code": DPAT_API,
+            "data_provider_info": SendCloudSearchServicePointsDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return SendCloudSearchServicePointsDataProvider::ResponseType;
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                SendCloudSearchServicePointsRequestDataType::Fields),
+        });
+
+        # ========== RETURN ACTIONS ==========
+
+        # List Returns
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SendCloudDataProvider::AppName,
+            "path": "/returns",
+            "action": "list-returns",
+            "groups": "Returns",
+            "display_name": "List Returns",
+            "short_desc": "List and search returns",
+            "desc": "Retrieve a list of returns from SendCloud, optionally filtered by status, parcel, and "
+                "creation date range.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": SendCloudReturnsDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("ReturnList", new SendCloudReturnDataType(), True);
+            },
+            "options": {
+                "status": <ActionOptionInfo>{
+                    "display_name": "Status",
+                    "short_desc": "Filter by return status",
+                    "desc": "Filter returns by status",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "created", "display_name": "Created"},
+                        <AllowedValueInfo>{"value": "announced", "display_name": "Announced"},
+                        <AllowedValueInfo>{"value": "delivered", "display_name": "Delivered"},
+                        <AllowedValueInfo>{"value": "cancelled", "display_name": "Cancelled"},
+                        <AllowedValueInfo>{"value": "completed", "display_name": "Completed"},
+                    ),
+                },
+                "parcel_id": <ActionOptionInfo>{
+                    "display_name": "Parcel",
+                    "short_desc": "Filter by outgoing parcel",
+                    "desc": "Filter returns whose outgoing parcel matches the given ID",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "ref_data": "parcels",
+                },
+            },
+        });
+
+        # Get Return
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SendCloudDataProvider::AppName,
+            "path": "/get-return",
+            "action": "get-return",
+            "groups": "Returns",
+            "display_name": "Get Return",
+            "short_desc": "Get a single return by ID",
+            "desc": "Retrieve detailed information about a specific return by its numeric ID.",
+            "action_code": DPAT_API,
+            "data_provider_info": SendCloudGetReturnDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return SendCloudGetReturnDataProvider::ResponseType;
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                SendCloudGetReturnRequestDataType::Fields),
+        });
+
+        # Create Return
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SendCloudDataProvider::AppName,
+            "path": "/create-return",
+            "action": "create-return",
+            "groups": "Returns",
+            "display_name": "Create Return",
+            "short_desc": "Create a new return",
+            "desc": "Create a new return in SendCloud for an outgoing parcel, optionally including refund "
+                "details and the list of returned items.",
+            "action_code": DPAT_API,
+            "data_provider_info": SendCloudCreateReturnDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return SendCloudCreateReturnDataProvider::ResponseType;
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                SendCloudReturnCreateRequestDataType::Fields),
+        });
+
+        # Update Return
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SendCloudDataProvider::AppName,
+            "path": "/update-return",
+            "action": "update-return",
+            "groups": "Returns",
+            "display_name": "Update Return",
+            "short_desc": "Update an existing return",
+            "desc": "Update fields on an existing return (status, refund details, etc.).",
+            "action_code": DPAT_API,
+            "data_provider_info": SendCloudUpdateReturnDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return SendCloudUpdateReturnDataProvider::ResponseType;
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                SendCloudReturnUpdateRequestDataType::Fields),
+        });
+
+        # Cancel Return
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SendCloudDataProvider::AppName,
+            "path": "/cancel-return",
+            "action": "cancel-return",
+            "groups": "Returns",
+            "display_name": "Cancel Return",
+            "short_desc": "Cancel a return",
+            "desc": "Cancel a previously created return so that it will not be processed further.",
+            "action_code": DPAT_API,
+            "data_provider_info": SendCloudCancelReturnDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return SendCloudCancelReturnDataProvider::ResponseType;
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                SendCloudCancelReturnRequestDataType::Fields),
+        });
+
+        # ========== BRAND ACTIONS ==========
+
+        # List Brands
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SendCloudDataProvider::AppName,
+            "path": "/brands",
+            "action": "list-brands",
+            "groups": "Brands",
+            "display_name": "List Brands",
+            "short_desc": "List configured brands",
+            "desc": "Retrieve a list of brands configured on your SendCloud account. Brands are used to "
+                "customize tracking pages and shipping documentation.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": SendCloudBrandsDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("BrandList", new SendCloudBrandDataType(), True);
+            },
+        });
+
+        # ========== TRIGGER ACTIONS (EVENTS) ==========
+
+        # Parcel Status Changed Event Trigger
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SendCloudDataProvider::AppName,
+            "path": "/events/parcel-status-changed",
+            "action": EVENT_PARCEL_STATUS_CHANGED,
+            "groups": "Triggers",
+            "display_name": "Parcel Status Changed",
+            "short_desc": "Trigger when a parcel's status changes",
+            "desc": "Fires whenever the status of a SendCloud parcel changes. The poll interval is "
+                "configurable; a minimum interval is enforced to respect SendCloud API limits.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_PARCEL_STATUS_CHANGED,
+            "data_provider_info": SendCloudWatchParcelStatusChangedDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new SendCloudParcelDataType(); },
+        });
+
+        # Return Updated Event Trigger
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SendCloudDataProvider::AppName,
+            "path": "/events/return-updated",
+            "action": EVENT_RETURN_UPDATED,
+            "groups": "Triggers",
+            "display_name": "Return Updated",
+            "short_desc": "Trigger when a return is created or updated",
+            "desc": "Fires whenever a return record is created or updated in SendCloud. The poll interval "
+                "is configurable; a minimum interval is enforced to respect SendCloud API limits.",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_RETURN_UPDATED,
+            "data_provider_info": SendCloudWatchReturnUpdatedDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return new SendCloudReturnDataType(); },
+        });
+    };
+}
+
+/** @mainpage SendCloudDataProvider Module
+
+    @tableofcontents
+
+    @section sendclouddataproviderintro SendCloudDataProvider Introduction
+
+    The %SendCloudDataProvider module provides a data provider API for SendCloud shipping
+    automation services through the SendCloud REST API.
+
+    To use this module, use \c "%requires SendCloudDataProvider" in your code.
+
+    All the public symbols in the module are defined in the SendCloudDataProvider namespace.
+
+    The main classes are:
+    - @ref SendCloudDataProvider::SendCloudDataProvider "SendCloudDataProvider":
+      the root data provider for SendCloud with child providers for parcels, returns,
+      shipping methods, service points, and more
+
+    @par Authentication:
+    SendCloud uses HTTP Basic Authentication. You need an integration's public_key (username)
+    and secret_key (password) which can be obtained from the SendCloud Settings > Integrations
+    page after creating an API integration.
+
+    @par Example:
+    @code{.py}
+#!/usr/bin/env qore
+
+%requires SendCloudDataProvider
+
+SendCloudDataProvider sendcloud({
+    "public_key": ENV.SENDCLOUD_PUBLIC_KEY,
+    "secret_key": ENV.SENDCLOUD_SECRET_KEY,
+});
+
+# List parcels
+map printf("Parcel: %s (Status: %s)\n", $1.tracking_number, $1.status.message),
+    sendcloud.getChildProvider("parcels").searchRecords({});
+
+# Create a parcel (unstamped letter for testing)
+hash<auto> result = sendcloud.getChildProvider("create-parcel").doRequest({
+    "name": "John Doe",
+    "address": "Main St",
+    "house_number": "1",
+    "city": "Amsterdam",
+    "postal_code": "1000AA",
+    "country": "NL",
+    "telephone": "+31612345678",
+    "email": "john@example.com",
+    "order_number": "TEST-001",
+    "weight": "1.000",
+    "shipment": {"id": 8},
+});
+printf("Created parcel: %d\n", result.id);
+    @endcode
+
+    @section sendclouddataproviderrelnotes Release Notes
+
+    @subsection sendclouddataproviderv1_0 SendCloudDataProvider v1.0
+    - the initial version of the %SendCloudDataProvider module
+*/
+
+#! Contains all public definitions in the SendCloudDataProvider module
+public namespace SendCloudDataProvider {
+}

@@ -242,6 +242,9 @@ public class ConnectionSchemeCache {
 
             "shipstation": "ShipStationRestClient",
 
+            "sendcloudrest": "SendCloudRestClient",
+            "sendcloudrests": "SendCloudRestClient",
+
             "systemeio": "SystemeIoRestClient",
 
             "customerio": "CustomerIoRestClient",

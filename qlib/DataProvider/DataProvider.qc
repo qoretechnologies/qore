@@ -239,6 +239,7 @@ public class DataProvider {
             "sax": "SaxDataProvider",
             "servicenowrest": "ServiceNowRestDataProvider",
             "lemlist": "LemlistDataProvider",
+            "sendcloud": "SendCloudDataProvider",
             "shippo": "ShippoDataProvider",
             "shipstation": "ShipStationDataProvider",
             "systemeio": "SystemeIoDataProvider",
