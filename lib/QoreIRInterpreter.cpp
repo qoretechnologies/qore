@@ -2423,6 +2423,40 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         }
     };
 
+    // Helper: make a private copy of an LValuePath instruction's path with
+    // dynamic operands resolved for the current invocation.  MUST be used by
+    // every LValuePath{Assign,Compound,Unary,BinaryMut,Ternary} handler instead
+    // of mutating path_inst->path directly — the instruction is SHARED across
+    // concurrent invocations of the same IR function, and per-call fields like
+    // `step.name` (dynamic hash key), `step.slot_id` (dynamic list index), and
+    // `step.slice_values` (multi-key/index slice) race between threads when
+    // written in place.  Mirrors the JIT path in `patchLVPath` (JITRuntime.cpp)
+    // which also copies into a local `path_copy`.  Without this, a thread
+    // reading `step.name.c_str()` in navigatePath can see a stomped string
+    // from another thread still patching.
+    auto patchLVPathLocal = [&](const QoreIRLValuePathInstruction* path_inst)
+            -> std::vector<LVPathStep> {
+        std::vector<LVPathStep> path_copy = path_inst->path;
+        for (auto& step : path_copy) {
+            if (step.kind == LVPathStepKind::HashKey && step.operand_idx != UINT32_MAX) {
+                QoreValue key_val = getIRValue(values, QoreIRValue(step.operand_idx));
+                QoreStringValueHelper key_str(key_val);
+                step.name = key_str->c_str();
+            } else if (step.kind == LVPathStepKind::ListIndex && step.operand_idx != UINT32_MAX) {
+                QoreValue idx_val = getIRValue(values, QoreIRValue(step.operand_idx));
+                step.slot_id = static_cast<uint32_t>(idx_val.getAsBigInt());
+            } else if (step.kind == LVPathStepKind::HashKeySlice
+                    || step.kind == LVPathStepKind::ListIndexSlice) {
+                step.slice_values.clear();
+                step.slice_values.reserve(step.slice_operand_ids.size());
+                for (uint32_t sid : step.slice_operand_ids) {
+                    step.slice_values.push_back(getIRValue(values, QoreIRValue(sid)));
+                }
+            }
+        }
+        return path_copy;
+    };
+
     // Helper: prepare slot cache before a lvalue operation.
     // Extracts the base VarRefNode, calls ensureLocalInstantiated, and pre-invalidates
     // the slot cache entry and closure cache. Returns the base VarRefNode.
@@ -6785,18 +6819,9 @@ load_local_done:
                     return false;
                 }
 
-                // Resolve dynamic key/index operands into the path step names
-                // (the navigatePath method uses step.name for hash keys)
-                for (auto& step : path_inst->path) {
-                    if (step.kind == LVPathStepKind::HashKey && step.operand_idx != UINT32_MAX) {
-                        QoreValue key_val = getIRValue(values, QoreIRValue(step.operand_idx));
-                        QoreStringValueHelper key_str(key_val);
-                        step.name = key_str->c_str();
-                    } else if (step.kind == LVPathStepKind::ListIndex && step.operand_idx != UINT32_MAX) {
-                        QoreValue idx_val = getIRValue(values, QoreIRValue(step.operand_idx));
-                        step.slot_id = static_cast<uint32_t>(idx_val.getAsBigInt());
-                    }
-                }
+                // Per-invocation private path copy; see patchLVPathLocal for why
+                // mutating path_inst->path directly is a data race.
+                std::vector<LVPathStep> path_copy = patchLVPathLocal(path_inst);
 
                 QoreValue val = getIRValue(values, path_inst->operands[0]);
                 ValueHolder val_holder(val.refSelf(), xsink);
@@ -6806,7 +6831,7 @@ load_local_done:
                 // try to acquire the same lock for GC scanning).
                 {
                     LValueHelper lvh(xsink);
-                    if (lvh.navigatePath(path_inst->path.data(), path_inst->path.size(), false)) {
+                    if (lvh.navigatePath(path_copy.data(), path_copy.size(), false)) {
                         cleanupValues(values, cleanup, xsink, true, cleanup_log);
                         cleanupLocalCaches();
                         return false;
@@ -6863,17 +6888,9 @@ load_local_done:
                     cleanupLocalCaches();
                     return false;
                 }
-                // Resolve dynamic key/index operands
-                for (auto& step : path_inst->path) {
-                    if (step.kind == LVPathStepKind::HashKey && step.operand_idx != UINT32_MAX) {
-                        QoreValue key_val = getIRValue(values, QoreIRValue(step.operand_idx));
-                        QoreStringValueHelper key_str(key_val);
-                        step.name = key_str->c_str();
-                    } else if (step.kind == LVPathStepKind::ListIndex && step.operand_idx != UINT32_MAX) {
-                        QoreValue idx_val = getIRValue(values, QoreIRValue(step.operand_idx));
-                        step.slot_id = static_cast<uint32_t>(idx_val.getAsBigInt());
-                    }
-                }
+                // Per-invocation private path copy; see patchLVPathLocal for why
+                // mutating path_inst->path directly is a data race.
+                std::vector<LVPathStep> path_copy = patchLVPathLocal(path_inst);
                 QoreValue rhs = getIRValue(values, path_inst->operands[0]);
                 ValueHolder rhs_holder(rhs.refSelf(), xsink);
                 QoreValue res;
@@ -6882,7 +6899,7 @@ load_local_done:
                 // try to acquire the same lock for GC scanning).
                 {
                     LValueHelper lvh(xsink);
-                    if (lvh.navigatePath(path_inst->path.data(), path_inst->path.size(), false)) {
+                    if (lvh.navigatePath(path_copy.data(), path_copy.size(), false)) {
                         cleanupValues(values, cleanup, xsink, true, cleanup_log);
                         cleanupLocalCaches();
                         return false;
@@ -6975,24 +6992,14 @@ load_local_done:
                     cleanupLocalCaches();
                     return false;
                 }
-                // Resolve dynamic key/index operands
-                for (auto& step : path_inst->path) {
-                    if (step.kind == LVPathStepKind::HashKey && step.operand_idx != UINT32_MAX) {
-                        QoreValue key_val = getIRValue(values, QoreIRValue(step.operand_idx));
-                        QoreStringValueHelper key_str(key_val);
-                        step.name = key_str->c_str();
-                    } else if (step.kind == LVPathStepKind::ListIndex && step.operand_idx != UINT32_MAX) {
-                        QoreValue idx_val = getIRValue(values, QoreIRValue(step.operand_idx));
-                        step.slot_id = static_cast<uint32_t>(idx_val.getAsBigInt());
-                    } else if (step.kind == LVPathStepKind::HashKeySlice
-                            || step.kind == LVPathStepKind::ListIndexSlice) {
-                        step.slice_values.clear();
-                        step.slice_values.reserve(step.slice_operand_ids.size());
-                        for (uint32_t sid : step.slice_operand_ids) {
-                            step.slice_values.push_back(getIRValue(values, QoreIRValue(sid)));
-                        }
-                    }
-                }
+                // Per-invocation private path copy; see patchLVPathLocal for why
+                // mutating path_inst->path directly is a data race.  This is the
+                // site where the race was first observed — under concurrent HTTP/2
+                // async-I/O load, the `remove rv.hdr{"Connection", ...}` call in
+                // HttpServerUtil::http_set_reply_headers stomped slice_values
+                // between threads, corrupting the string pointers and SEGV'ing in
+                // QoreStringValueHelper::setup on the first (dangling) key_val.
+                std::vector<LVPathStep> path_copy = patchLVPathLocal(path_inst);
                 QoreValue res;
                 bool is_remove = (path_inst->unary_op == LVUnaryOp::Remove
                                 || path_inst->unary_op == LVUnaryOp::Delete);
@@ -7031,9 +7038,9 @@ load_local_done:
                     // the value without removing the hash key; we need container-level removal.
                     LValueHelper lvh(xsink);
                     // Navigate to parent (for_remove=true: don't vivify intermediates)
-                    if (!lvh.navigatePath(path_inst->path.data(), path_inst->path.size() - 1, true)) {
+                    if (!lvh.navigatePath(path_copy.data(), path_copy.size() - 1, true)) {
                         // Now remove/delete the final key/element from the container
-                        const LVPathStep& last_step = path_inst->path.back();
+                        const LVPathStep& last_step = path_copy.back();
                         QoreValue container = lvh.getValue();
                         qore_type_t ct = container.getType();
                         if ((last_step.kind == LVPathStepKind::HashKeyConst
@@ -7136,7 +7143,7 @@ load_local_done:
                     }
                     {
                     LValueHelper lvh(xsink);
-                    if (lvh.navigatePath(path_inst->path.data(), path_inst->path.size(), true)) {
+                    if (lvh.navigatePath(path_copy.data(), path_copy.size(), true)) {
                         if (*xsink) {
                             // Real error during navigation — propagate
                             cleanupValues(values, cleanup, xsink, true, cleanup_log);
@@ -7200,7 +7207,7 @@ load_local_done:
                         || path_inst->unary_op == LVUnaryOp::Trim
                         || path_inst->unary_op == LVUnaryOp::Chomp);
                     LValueHelper lvh(xsink);
-                    if (lvh.navigatePath(path_inst->path.data(), path_inst->path.size(), no_vivify)) {
+                    if (lvh.navigatePath(path_copy.data(), path_copy.size(), no_vivify)) {
                         if (no_vivify && !*xsink) {
                             // navigatePath failed without error — lvalue doesn't exist, no-op
                             break;
@@ -7415,17 +7422,9 @@ lvalue_path_unary_done:
                     cleanupLocalCaches();
                     return false;
                 }
-                // Resolve dynamic key/index operands
-                for (auto& step : path_inst->path) {
-                    if (step.kind == LVPathStepKind::HashKey && step.operand_idx != UINT32_MAX) {
-                        QoreValue key_val = getIRValue(values, QoreIRValue(step.operand_idx));
-                        QoreStringValueHelper key_str(key_val);
-                        step.name = key_str->c_str();
-                    } else if (step.kind == LVPathStepKind::ListIndex && step.operand_idx != UINT32_MAX) {
-                        QoreValue idx_val = getIRValue(values, QoreIRValue(step.operand_idx));
-                        step.slot_id = static_cast<uint32_t>(idx_val.getAsBigInt());
-                    }
-                }
+                // Per-invocation private path copy; see patchLVPathLocal for why
+                // mutating path_inst->path directly is a data race.
+                std::vector<LVPathStep> path_copy = patchLVPathLocal(path_inst);
                 // Get RHS value (operands[0] for push/unshift)
                 QoreValue rhs;
                 if (!path_inst->operands.empty()) {
@@ -7433,7 +7432,7 @@ lvalue_path_unary_done:
                 }
                 QoreValue res;
                 LValueHelper lvh(xsink);
-                if (lvh.navigatePath(path_inst->path.data(), path_inst->path.size(), false)) {
+                if (lvh.navigatePath(path_copy.data(), path_copy.size(), false)) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
                     cleanupLocalCaches();
                     return false;
@@ -7553,17 +7552,9 @@ lvalue_path_unary_done:
                     cleanupLocalCaches();
                     return false;
                 }
-                // Resolve dynamic key/index operands
-                for (auto& step : path_inst->path) {
-                    if (step.kind == LVPathStepKind::HashKey && step.operand_idx != UINT32_MAX) {
-                        QoreValue key_val = getIRValue(values, QoreIRValue(step.operand_idx));
-                        QoreStringValueHelper key_str(key_val);
-                        step.name = key_str->c_str();
-                    } else if (step.kind == LVPathStepKind::ListIndex && step.operand_idx != UINT32_MAX) {
-                        QoreValue idx_val = getIRValue(values, QoreIRValue(step.operand_idx));
-                        step.slot_id = static_cast<uint32_t>(idx_val.getAsBigInt());
-                    }
-                }
+                // Per-invocation private path copy; see patchLVPathLocal for why
+                // mutating path_inst->path directly is a data race.
+                std::vector<LVPathStep> path_copy = patchLVPathLocal(path_inst);
                 // Get the ternary operands: offset, length, replacement
                 QoreValue offset_val = (path_inst->operands.size() > 0)
                     ? getIRValue(values, path_inst->operands[0]) : QoreValue();
@@ -7575,7 +7566,7 @@ lvalue_path_unary_done:
                 bool no_vivify = (path_inst->ternary_op == LVTernaryOp::Extract
                     && replacement_val.isNothing());
                 LValueHelper lvh(xsink);
-                if (lvh.navigatePath(path_inst->path.data(), path_inst->path.size(), no_vivify)) {
+                if (lvh.navigatePath(path_copy.data(), path_copy.size(), no_vivify)) {
                     if (no_vivify && !*xsink) {
                         // Lvalue doesn't exist — no-op, return NOTHING
                         if (path_inst->result.isValid()) {
