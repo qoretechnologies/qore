@@ -1212,8 +1212,17 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
             //printd(5, "ModuleManager::loadModule(%s) trying binary module: %s\n", name, str.c_str());
             if (!stat(str.c_str(), &sb)) {
                 if (mpgm) {
-                    xsink.raiseException("LOAD-MODULE-ERROR", "cannot load a binary module with a Program container");
-                    return nullptr;
+                    // `mpgm` means the caller needs to inject the module INTO a
+                    // specific Program container (loadApplyToUserModule and
+                    // friends).  Binary / AOT-compiled modules have their
+                    // namespace baked in and cannot be injected this way.  Fall
+                    // through to the `.qm` source search below rather than
+                    // erroring — if the source form exists alongside the `.qmod`
+                    // (common for qlib modules installed with both forms), use
+                    // it.  If neither `.qm` nor a split module folder exists,
+                    // loadModule will surface a "feature not found" error later,
+                    // which is more informative than "binary + Program" here.
+                    break;
                 }
                 mi = loadBinaryModuleFromPath(xsink, str.c_str(), name, reexport, pholder.release(),
                     load_opt & QMLO_REINJECT ? mpgm : nullptr, load_opt, mod_desc_func);
