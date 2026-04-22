@@ -287,7 +287,7 @@ int Http3ClientConnection::buildAttempt(int family, int64_t not_before_ns_abs,
     priv_raw->armHappyEyeballsOwner(this);
 
     std::lock_guard<std::mutex> lk(attempts_mu_);
-    int idx = (int)attempts_.size();
+    int idx = static_cast<int>(attempts_.size());
     attempts_.push_back(std::move(a));
     return idx;
 }
@@ -321,7 +321,7 @@ int Http3ClientConnection::submitAttempt(Attempt& a, ExceptionSink* xsink) {
         owner_to_use = owner_buf;
     } else {
         snprintf(owner_buf, sizeof(owner_buf), "http3-cpp-conn-%p-%s",
-            (void*)&a,
+            static_cast<const void*>(&a),
             (a.family == AF_INET6) ? "v6" : "v4");
         owner_to_use = owner_buf;
     }
@@ -501,7 +501,7 @@ void Http3ClientConnection::onInnerHandshakeReady(Http3ClientPollOperationPriv* 
     int my_idx = -1;
     for (size_t i = 0; i < attempts_.size(); ++i) {
         if (attempts_[i] && attempts_[i]->poll_op_priv == inner) {
-            my_idx = (int)i;
+            my_idx = static_cast<int>(i);
             break;
         }
     }
@@ -536,8 +536,9 @@ void Http3ClientConnection::onInnerHandshakeReady(Http3ClientPollOperationPriv* 
     // ctl_priv_holder->cancel — a potentially blocking cross-thread
     // operation that must not be held under attempts_mu_).
     std::vector<std::unique_ptr<Attempt>> losers;
+    const size_t winner_idx_sz = static_cast<size_t>(my_idx);
     for (size_t i = 0; i < attempts_.size(); ++i) {
-        if ((int)i != my_idx && attempts_[i]) {
+        if (i != winner_idx_sz && attempts_[i]) {
             losers.push_back(std::move(attempts_[i]));
         }
     }
@@ -1129,13 +1130,15 @@ QoreHashNode* Http3ClientConnection::getReferencedErrorInfo() {
     }
     // Happy-eyeballs all-fail path: attempts_ has been torn down and
     // poll_op_priv nulled.  Surface the cached error from the most
-    // recent handshake failure.
+    // recent handshake failure.  Use ReferenceHolder so a bad_alloc
+    // thrown by the intermediate QoreStringNode allocations does not
+    // leak the hash.
     std::lock_guard<std::mutex> lk(attempts_mu_);
     if (last_err_.empty() && last_desc_.empty()) {
         return nullptr;
     }
     ExceptionSink xsink;
-    QoreHashNode* h = new QoreHashNode(autoTypeInfo);
+    ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), &xsink);
     h->setKeyValue("err",
         new QoreStringNode(last_err_.empty()
             ? "HTTP3-CONNECT-ERROR" : last_err_.c_str()),
@@ -1145,5 +1148,5 @@ QoreHashNode* Http3ClientConnection::getReferencedErrorInfo() {
             ? "QUIC handshake failed" : last_desc_.c_str()),
         &xsink);
     xsink.clear();
-    return h;
+    return h.release();
 }
