@@ -6322,7 +6322,9 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                                 return nullptr;
                             }
                         }
-                        continue;
+                        // Fall through to end_stream check — H2/H3 streaming
+                        // send can dispatch body and end_stream in a single
+                        // channel event when the response fits in one frame.
                     }
 
                     // Check for end_stream — always fire a terminal
@@ -6330,9 +6332,11 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                     // trailers) regardless of chunked vs fixed-length framing
                     // (the conn_mgr streaming-send path delivers body bytes
                     // through recv_callback for both cases, so the end-of-data
-                    // signal must be uniform).
+                    // signal must be uniform).  Fire only when end_stream is
+                    // actually true — H3 streaming events always carry the
+                    // key (false on body chunks, true on the final event).
                     QoreValue end_val = h->getKeyValue("end_stream");
-                    if (!end_val.isNullOrNothing()) {
+                    if (end_val.getAsBool()) {
                         if (recv_callback) {
                             ReferenceHolder<QoreListNode> args(
                                 new QoreListNode(autoTypeInfo), xsink);
@@ -6672,12 +6676,21 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                             }
                         }
                     }
-                    continue;
+                    // Fall through to end_stream check — H2/H3 deliver body
+                    // and end_stream in the same channel event for small
+                    // single-frame responses.  Without this, accumulated_body
+                    // is never decompressed and the terminal recv_callback
+                    // (hdr=NOTHING) never fires, leaving DataStreamClient
+                    // with an empty body.
                 }
 
-                // Check for end_stream
+                // Check for end_stream — fire only when actually true.  H3
+                // streaming events always carry end_stream (false on body
+                // chunks, true on the final event), so guarding on bare
+                // presence would prematurely flush partial body and fire
+                // the terminal callback on every chunk.
                 QoreValue end_val = h->getKeyValue("end_stream");
-                if (!end_val.isNullOrNothing()) {
+                if (end_val.getAsBool()) {
                     // For non-chunked + content-encoding case, decompress
                     // accumulated body and deliver as single data callback
                     // (matches legacy send_internal behavior at line ~9070)
