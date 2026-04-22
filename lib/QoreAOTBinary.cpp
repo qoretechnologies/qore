@@ -6889,12 +6889,13 @@ bool QoreAOTBinaryDeserializer::importInheritedMembers(std::string& error) {
 }
 
 bool QoreAOTBinaryDeserializer::commitDeserializedClasses(std::string& error) {
-    // Single-session wrapper — runs all 4 sub-phases in order.
+    // Single-session wrapper — runs all 5 sub-phases in order.
     // Multi-session callers bypass this and interleave sub-phases
     // across sessions via the MultiDeserializer.
     if (!commitClassesPrepare(error)) return false;
     if (!commitClassesDoCommit(error)) return false;
     if (!commitClassesImportAbstract(error)) return false;
+    if (!commitClassesResolveAbstract(error)) return false;
     if (!commitClassesValidate(error)) return false;
     return true;
 }
@@ -7061,6 +7062,61 @@ bool QoreAOTBinaryDeserializer::commitClassesImportAbstract(std::string& error) 
                 }
             }
         }
+    }
+    return true;
+}
+
+// Sub-phase 2c-3b: resolve imported abstract methods by searching
+// sibling parent classes for concrete overrides.
+//
+// `commitClassesImportAbstract` only checks the derived class's own
+// committed methods for concrete overrides — if a sibling parent in
+// a diamond provides the concrete, the abstract stays in `priv->ahm`
+// and later trips the `ahm.empty()` assertion in `execConstructor`.
+//
+// Example from qlib/HttpClientIo/Http1ClientPollOperationImpl.qc:
+//     public class Http1ClientPollOperation
+//             inherits Http1ClientPollOperationBase, HttpClientPollOperation {
+//         # cancelRequest is the only locally-concrete method here
+//         cancelRequest(int stream_id) { ... }
+//     }
+// `HttpClientPollOperation` (Qore) inherits the abstract `goalReached`
+// `getGoal` `getState` `continuePoll` slots from `AbstractPollOperation`.
+// `Http1ClientPollOperationBase` (C++/qpp, via `SocketPollOperationBase`)
+// provides concrete overrides for all four — but they live on the
+// SIBLING parent chain, so `commitClassesImportAbstract`'s local-hm
+// check misses them.
+//
+// Source-parse path runs `qore_class_private::parseResolveAbstract()`
+// (lib/QoreClass.cpp:4951) which calls `ahm.parseInit(*this, scl)`
+// (lib/QoreClass.cpp:335) — the latter walks `scl->matchNonAbstractVariant`
+// over ALL siblings and moves resolved abstracts from `vlist` to
+// `pending_save`.  Mirror that here for AOT-deserialized classes.
+bool QoreAOTBinaryDeserializer::commitClassesResolveAbstract(std::string& error) {
+    auto& order = topo_order;
+    std::vector<uint32_t> fallback_order;
+    if (order.empty() && !class_list.empty()) {
+        fallback_order.resize(class_list.size());
+        std::iota(fallback_order.begin(), fallback_order.end(), 0);
+        order = fallback_order;
+    }
+    for (uint32_t i : order) {
+        if (i >= class_list.size() || preexisting_classes.count(i)) {
+            continue;
+        }
+        QoreClass* qc = class_list[i];
+        if (!qc) {
+            continue;
+        }
+        qore_class_private* priv = qore_class_private::get(*qc);
+        if (!priv->scl || priv->ahm.empty()) {
+            continue;
+        }
+        priv->ahm.parseInit(*priv, priv->scl);
+        // parseResolveAbstract() is a no-op once this flag is true; set it
+        // so any later source-parse pass in the same Program doesn't
+        // redundantly walk the same classes.
+        priv->parse_resolve_abstract = true;
     }
     return true;
 }

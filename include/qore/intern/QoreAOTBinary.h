@@ -1429,13 +1429,22 @@ public:
 
     //! Sub-phases of commitClasses, exposed so the MultiDeserializer
     //! can interleave across sessions.
-    /** Order: prepare → doCommit → importAbstract → validate.
+    /** Order: prepare → doCommit → importAbstract → resolveAbstract → validate.
         - prepare: set initialized + has_new_user_changes,
           parseAddAncestors on each method.  No parseCommit.
         - doCommit: parseCommit on each class in topo order.
         - importAbstract: lift parent abstract methods into ahm
           where derived classes don't override them.  Runs after
           doCommit because it checks the committed vlist.
+        - resolveAbstract: for each imported abstract, search sibling
+          parent classes for a concrete override.  This mirrors the
+          source-parse path's `qore_class_private::parseResolveAbstract()`
+          which the AOT deserializer bypasses.  Without this, diamond
+          inheritance like
+              Derived : BaseCxx (provides concrete),
+                        BaseQore (inherits abstract)
+          is left with stale abstract entries that later trip the
+          allow_abstract=false assertion in `execConstructor`.
         - validate: confirm base-class reachability.
         Must run in this order per session.  In batch mode,
         MultiDeserializer runs prepare across all sessions, then
@@ -1443,6 +1452,7 @@ public:
     bool commitClassesPrepare(std::string& error);
     bool commitClassesDoCommit(std::string& error);
     bool commitClassesImportAbstract(std::string& error);
+    bool commitClassesResolveAbstract(std::string& error);
     bool commitClassesValidate(std::string& error);
 
     //! Phase-split 2d — resolve pending static-method defaults,
@@ -1572,7 +1582,7 @@ class QoreAOTBinaryMultiDeserializer {
         const char* name;
         uint64_t us_total = 0;
     };
-    PhaseTiming timings_[12] = {
+    PhaseTiming timings_[13] = {
         {"addBlob",                  0},
         {"resolveTypesAndMembers",   0},
         {"rebuildBaseClassSml",      0},
@@ -1582,6 +1592,7 @@ class QoreAOTBinaryMultiDeserializer {
         {"commitClassesPrepare",     0},
         {"commitClassesDoCommit",    0},
         {"commitClassesImportAbs",   0},
+        {"commitClassesResolveAbs",  0},
         {"commitClassesValidate",    0},
         {"finalize",                 0},
         {"TOTAL",                    0},
@@ -1608,13 +1619,13 @@ public:
     ~QoreAOTBinaryMultiDeserializer() {
         if (timingEnabled()) {
             uint64_t total = 0;
-            for (int i = 0; i < 11; ++i) {
+            for (int i = 0; i < 12; ++i) {
                 total += timings_[i].us_total;
             }
-            timings_[11].us_total = total;
+            timings_[12].us_total = total;
             fprintf(stderr, "[aot-timing] ===== phase totals (usec) "
                 "sessions=%zu =====\n", sessions.size());
-            for (int i = 0; i < 12; ++i) {
+            for (int i = 0; i < 13; ++i) {
                 fprintf(stderr, "[aot-timing]   %-26s %8lu us (%5.1f %%)\n",
                     timings_[i].name,
                     (unsigned long)timings_[i].us_total,
@@ -1755,6 +1766,11 @@ public:
         });
         AOT_PHASE_TIME(9, {
             for (auto& sess : sessions) {
+                if (!sess->commitClassesResolveAbstract(error)) return false;
+            }
+        });
+        AOT_PHASE_TIME(10, {
+            for (auto& sess : sessions) {
                 if (!sess->commitClassesValidate(error)) return false;
             }
         });
@@ -1766,7 +1782,7 @@ public:
         // was O(N * tree_size) — dominant in batch mode.  Split into
         // pre-index + post-index halves so a single rebuild covers the
         // whole batch.
-        AOT_PHASE_TIME(10, {
+        AOT_PHASE_TIME(11, {
             for (auto& sess : sessions) {
                 if (!sess->finalizePreIndex(error)) return false;
             }
