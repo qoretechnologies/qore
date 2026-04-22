@@ -735,6 +735,21 @@ int QoreSocketObject::getRecvTimeout() {
 }
 
 int QoreSocketObject::close() {
+    // Pre-close interrupt — MUST run before we attempt to take priv->m.
+    // Another thread may be holding priv->m (or Http2Session::m via an
+    // H2 sync poll / send) and blocked in a ::poll / SSL_read / SSL_write
+    // on our fd.  Without the interrupt, our AutoLocker would wait for
+    // the other thread to release priv->m, which it can't do until its
+    // blocking I/O returns — which requires us to shut down the fd.
+    // Classic close-vs-poll deadlock (grpc-shutdown-deadlock.md).
+    //
+    // prepareForClose() atomically:
+    //   1. Marks the H2 session closed so sync H2 loops exit promptly.
+    //   2. ::shutdown(fd) to unblock any pending poll / SSL I/O.
+    // Both actions are safe concurrently with in-flight I/O on the same
+    // socket; see the prepareForClose() doc comment for the race
+    // analysis.
+    priv->socket->priv->prepareForClose();
     AutoLocker al(priv->m);
     return priv->socket->close();
 }

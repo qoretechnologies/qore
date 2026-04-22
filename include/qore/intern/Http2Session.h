@@ -450,10 +450,33 @@ public:
     //! Check if stream's body is complete (END_STREAM received)
     /** @param stream_id the stream to check
         @return True if END_STREAM has been received (body_complete), or if the
-        stream is not found (a cleaned-up stream is effectively complete)
+        stream is not found (a cleaned-up stream is effectively complete),
+        or if the session has been marked closed (via @ref markClosed) —
+        the latter unblocks polling consumers during socket teardown.
         @since %Qore 2.3
     */
     DLLLOCAL bool isStreamComplete(int32_t stream_id) const;
+
+    //! Marks the session closed; wakes/unblocks concurrent sync consumers.
+    /** Idempotent, one-shot: flips @ref session_closed_ from false to true.
+        Subsequent calls are no-ops.  Called by @c qore_socket_private's
+        pre-close interruption path BEFORE any outer mutex is taken, so
+        that a thread currently inside @ref sendPendingDataBlocking or
+        @ref receiveData (holding @ref m) observes the flag on its next
+        check and returns promptly, releasing @ref m.  The thread calling
+        @c Socket::close() can then acquire @c priv->m and perform the
+        actual teardown without waiting on the stuck sync consumer.
+
+        @since %Qore 2.3
+    */
+    DLLLOCAL void markClosed() {
+        session_closed_.store(true, std::memory_order_release);
+    }
+
+    //! Returns true once @ref markClosed has been called.
+    DLLLOCAL bool isSessionClosed() const {
+        return session_closed_.load(std::memory_order_acquire);
+    }
 
     //! Check if stream has been closed (stream state is Closed)
     /** @param stream_id the stream to check
@@ -789,6 +812,18 @@ private:
 
     //! Atomic flag for lock-free hasActiveStreamInputStreams() checks in the I/O hot path
     std::atomic<bool> has_active_input_streams_{false};
+
+    //! Sticky atomic flag: true once the owning socket begins shutting down.
+    /** Set by @ref markClosed, observed by the blocking H2 loops
+        (@ref sendPendingDataBlocking, @ref receiveData) and by
+        @ref isStreamComplete's lookup so concurrent sync readers on a
+        socket whose @c QoreSocketObject::close() is in flight see
+        "complete" / "closed" and drop @ref m / @c priv->m promptly —
+        letting @c close() proceed instead of blocking indefinitely on
+        the poll-vs-close lock inversion described in
+        @c grpc-shutdown-deadlock.md.  Set-only; clears never.
+    */
+    std::atomic<bool> session_closed_{false};
 
     //! Condition variable for flow-control drain notifications
     /** Signaled by dataProviderReadCallback when it consumes data from a streaming

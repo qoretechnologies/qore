@@ -898,7 +898,23 @@ int Http2Session::sendPendingData(int timeout_ms, ExceptionSink* xsink) {
 }
 
 int Http2Session::sendPendingDataBlocking(int timeout_ms, ExceptionSink* xsink) {
+    // Close-vs-poll guard: if the owning socket has begun shutting down,
+    // bail out before taking @c m and before attempting any I/O.  A
+    // thread blocked here while holding @c m was the direct cause of
+    // the Socket::close() deadlock in grpc-shutdown-deadlock.md: close
+    // couldn't acquire @c priv->m because another sync-consumer thread
+    // was waiting for @c m in @c isStreamComplete.  Making the send
+    // path a fast failure when the session is closed lets @c close()
+    // reach its teardown step.
+    if (session_closed_.load(std::memory_order_acquire)) {
+        return -1;
+    }
     std::lock_guard<std::recursive_mutex> lg(m);
+    // Re-check under the lock: the flag may have flipped while we
+    // waited to acquire m.
+    if (session_closed_.load(std::memory_order_acquire)) {
+        return -1;
+    }
     size_t pending = send_buffer.size() - send_offset;
     printd(5, "sendPendingDataBlocking() want_write=%d pending=%zu timeout_ms=%d\n",
         nghttp2_session_want_write(session), pending, timeout_ms);
@@ -997,6 +1013,17 @@ int Http2Session::sendPendingDataBlocking(int timeout_ms, ExceptionSink* xsink) 
 }
 
 int Http2Session::receiveData(int timeout_ms, ExceptionSink* xsink) {
+    // Fast-path bail-out when the owning socket is closing (or has
+    // closed).  Without this check a caller racing Socket::close() can
+    // enter brecv and block for the full timeout_ms waiting on an fd
+    // that's about to be shut down, even though the pre-close fd
+    // shutdown in qore_socket_private::prepareForClose() would make the
+    // wait return errno=EPIPE almost immediately — we just skip the
+    // pointless round-trip.
+    if (session_closed_.load(std::memory_order_acquire)) {
+        return 1;  // connection closed — matches the EOF return value
+    }
+
     // Do NOT hold Http2Session::m during the blocking brecv call.
     //
     // Lock-order deadlock rationale (macOS Http2.qtest hang seen on
@@ -1295,6 +1322,16 @@ std::unique_ptr<Http2StreamInfo> Http2Session::takeHeadersReadyStreamCopy() {
 }
 
 bool Http2Session::isStreamComplete(int32_t stream_id) const {
+    // Fast, lock-free path: a closed session unblocks concurrent
+    // sync consumers waiting for END_STREAM.  Treat any outstanding
+    // stream as "complete" from the application's perspective so a
+    // polling reader (e.g. GrpcServer::readStreamBody) exits its loop
+    // and releases the outer socket mutex — letting Socket::close()
+    // proceed without a close-vs-poll deadlock.  See
+    // `grpc-shutdown-deadlock.md`.
+    if (session_closed_.load(std::memory_order_acquire)) {
+        return true;
+    }
     std::lock_guard<std::recursive_mutex> lg(m);
     auto it = streams.find(stream_id);
     if (it == streams.end()) {
