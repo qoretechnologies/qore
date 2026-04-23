@@ -982,6 +982,33 @@ public:
             // quic_sessions_lock). Released before closeIo() which also takes
             // priv->m.
             AutoLocker al(sock->priv->m);
+            // Send CONNECTION_CLOSE (RFC 9000 §10.2) so the peer sees an
+            // immediate error instead of falling back to its 30s idle
+            // timeout.  Without this, a graceful client disconnect leaves
+            // the server's handler blocked on readQuicStreamDataBlock()
+            // until its own max_idle_timeout fires — observed as
+            // testH3DispatchStreamRaceOnClientClose body_read never
+            // setting and testH3MultiStreamServerCrash cleanup exceeding
+            // the 15s bound.  Best-effort: a send failure is fine because
+            // the peer may already be gone; we still do the normal
+            // teardown below.  Matches the pattern used on the server
+            // side (SocketQuicServerPollOperation::abort) and the
+            // sync-HTTP-client path (QoreHttpClientObject::disconnectQuic).
+            if (quic_session) {
+                int fd = sock->priv->socket->getSocket();
+                if (fd >= 0) {
+                    uint8_t close_buf[1280];
+                    ssize_t close_len = quic_session->writeConnectionClose(
+                        close_buf, sizeof(close_buf));
+                    if (close_len > 0) {
+                        // Client UDP socket is connect()-ed, so send()
+                        // works without specifying the peer.  MSG_DONTWAIT
+                        // keeps this non-blocking.
+                        (void)::send(fd, close_buf,
+                            static_cast<size_t>(close_len), MSG_DONTWAIT);
+                    }
+                }
+            }
             // Wake handler threads blocked in waitForStreamData()/waitForStreamDrain()
             // BEFORE removing the session from the socket map
             if (quic_session) {
