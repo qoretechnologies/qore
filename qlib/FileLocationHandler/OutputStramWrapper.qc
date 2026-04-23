@@ -35,6 +35,9 @@ public class OutputStreamWrapper inherits Qore::OutputStream {
 
         #! The synchronization WaitGroup
         Qore::Thread::WaitGroup cnt;
+
+        #! Exception captured from the background I/O operation, if any
+        *hash<ExceptionInfo> io_error;
     }
 
     #! Creates the output stream wrapper object
@@ -43,14 +46,33 @@ public class OutputStreamWrapper inherits Qore::OutputStream {
         self.cnt = cnt;
     }
 
+    #! Records an exception raised by the background I/O operation.
+    /** Called from the background thread in place of silently swallowing
+        the exception.  Stored on the wrapper so waitForIo() can rethrow
+        it; otherwise the caller sees only a stale read-back from the
+        storage layer.
+
+        @param ex the exception hash
+    */
+    setIoError(hash<ExceptionInfo> ex) {
+        io_error = ex;
+    }
+
     #! Returns the output stream
     Qore::OutputStream getStream() {
         return stream;
     }
 
-    #! Wait for any background I/O to complete
+    #! Wait for any background I/O to complete; rethrow any captured error
+    /** If the background I/O operation raised an exception, waitForIo()
+        rethrows it here so the caller sees the real failure instead of
+        a stale read-back from the storage layer.
+    */
     waitForIo() {
         cnt.wait();
+        if (io_error) {
+            throw io_error.err, io_error.desc, io_error.arg;
+        }
     }
 
     #! Flushes any buffered (unwritten) bytes, closes the output stream and releases all resources.

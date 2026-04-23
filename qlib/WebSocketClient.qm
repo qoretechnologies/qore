@@ -562,6 +562,32 @@ public class WebSocketClient inherits Logger::LoggerWrapper, ConnectionProvider:
         code pong_callback;
         timeout timeout_ms = DefaultTimeout;
 
+        #! Async-mode heartbeat interval in milliseconds
+        /** When positive and the async poll operation has not received data for this many
+            milliseconds, a PING frame is sent automatically.  Override via the \c "heartbeat"
+            option to the constructor.  Default: 20 seconds (preserves prior behavior).
+
+            @since WebSocketClient 2.4.1
+        */
+        timeout async_heartbeat_ms = 20000;
+
+        #! Async-mode idle timeout in milliseconds (0 = disabled)
+        /** When positive and no data has been received for this many milliseconds, the async
+            poll operation closes the connection with code @ref WSCC_GoingAway and surfaces
+            \c {reason: "idle-timeout"} on @ref EVENT_WS_CLOSED.  Use together with
+            @ref async_heartbeat_ms to detect peers that silently stopped responding to PINGs.
+            Override via the \c "idle_timeout" option to the constructor.  Default: 0 (disabled).
+
+            @since WebSocketClient 2.4.1
+        */
+        timeout async_idle_timeout_ms = 0;
+
+        #! Captured client-initiated close cause (empty until the connection closes on idle-timeout or similar)
+        /** Populated in stopAsyncIo() before the poll op is released so
+            closingConnection() can surface it to observers.
+        */
+        string async_close_cause = "";
+
         #! Reconnect flag
         bool reconnect = False;
 
@@ -864,6 +890,36 @@ WebSocketClient ws(\event(), {
         return reconnect;
     }
 
+    #! Returns the async-mode heartbeat interval in milliseconds
+    /** @return the heartbeat interval; 0 disables the heartbeat
+
+        @since WebSocketClient 2.4.1
+    */
+    timeout getAsyncHeartbeat() {
+        return async_heartbeat_ms;
+    }
+
+    #! Returns the async-mode idle timeout in milliseconds
+    /** @return the idle timeout; 0 disables idle-timeout detection
+
+        @since WebSocketClient 2.4.1
+    */
+    timeout getAsyncIdleTimeout() {
+        return async_idle_timeout_ms;
+    }
+
+    #! Returns the client-initiated close cause captured on the last async shutdown
+    /** Populated by the async shutdown path when the client itself triggered the close
+        (e.g. on idle-timeout).  Empty string otherwise.
+
+        @return the close cause tag (e.g. \c "idle-timeout") or empty string
+
+        @since WebSocketClient 2.4.1
+    */
+    string getAsyncCloseCause() {
+        return async_close_cause;
+    }
+
     #! Returns True if the permessage-deflate extension is active
     /** @return True if permessage-deflate compression is active on this connection
 
@@ -1057,6 +1113,10 @@ ws.connect();
         async_io = True;
         async_owner = "wsc-" + get_random_string(12);
         async_close_sent = False;
+        # Reset close-cause state so each connection lifecycle sees only its
+        # own close reason; otherwise a later peer-initiated close on a
+        # reconnected session could surface a stale value to observers.
+        async_close_cause = "";
 
         # The HCIO connect (connectUnlocked + startAsyncIo) is driven by the
         # controller's I/O thread. The calling thread blocks at readData() on
@@ -1772,6 +1832,14 @@ ws.setEventQueue();
         } else {
             http_opts."timeout" = timeout_ms;
         }
+
+        # async-mode heartbeat + idle-timeout options (apply to the async poll op)
+        if (exists http_opts.heartbeat) {
+            async_heartbeat_ms = remove http_opts.heartbeat;
+        }
+        if (exists http_opts.idle_timeout) {
+            async_idle_timeout_ms = remove http_opts.idle_timeout;
+        }
         # Default to "auto" for automatic HTTP version negotiation (H2/H3 via
         # ALPN, with fallback to H1 on error)
         if (!http_opts.http_version) {
@@ -2012,6 +2080,10 @@ ws.setEventQueue();
 
         async_owner = "wsc-" + get_random_string(12);
         async_close_sent = False;
+        # Reset close-cause state so each connection lifecycle sees only its
+        # own close reason; otherwise a later peer-initiated close on a
+        # reconnected session could surface a stale value to observers.
+        async_close_cause = "";
 
         if (hcio_stream) {
             if (transport == "http1") {
@@ -2025,6 +2097,13 @@ ws.setEventQueue();
                 try { controller.cancel(ws_sock); } catch () {}
                 poll_op = new WebSocketClientPollOperation(ws_sock, transport, 0,
                     active_extensions, timeout_ms, logger, raw_callback, on_poll_complete);
+                # Enable keepalive heartbeat (default 20s) and optional idle-timeout.
+                # The heartbeat sends a PING when recv-idle; the idle-timeout closes
+                # the connection with WSCC_GoingAway when no real traffic is seen.
+                poll_op.setHeartbeat(async_heartbeat_ms);
+                if (async_idle_timeout_ms > 0) {
+                    poll_op.setIdleTimeout(async_idle_timeout_ms);
+                }
                 async_wake_socket = ws_sock;
                 # Submit to the global async I/O controller
                 controller.submit(<SocketPollOperationInfo>{
@@ -2067,6 +2146,16 @@ ws.setEventQueue();
         # closure if we don't clear it first
         if (poll_op) {
             poll_op.clearCallbacks();
+            # Capture the close cause before releasing poll_op so closingConnection()
+            # can surface it to observers on EVENT_WS_CLOSED.
+            if (poll_op instanceof Qore::WebSocketClientPollOperationBase) {
+                try {
+                    string cause = cast<Qore::WebSocketClientPollOperationBase>(poll_op).getCloseCause();
+                    if (cause.val()) {
+                        async_close_cause = cause;
+                    }
+                } catch () {}
+            }
         }
         if (async_owner) {
             try {
@@ -3493,7 +3582,15 @@ class MyObserver inherits Observer {
 
     #! Called when the connection is closed
     private closingConnection() {
-        notifyObservers(EVENT_WS_CLOSED, {});
+        # Surface a client-initiated close cause (e.g. "idle-timeout") to
+        # observers when the async poll op captured one before shutdown;
+        # otherwise the event hash is empty as before.
+        hash<auto> info = {};
+        string cause = getAsyncCloseCause();
+        if (cause.val()) {
+            info.reason = cause;
+        }
+        notifyObservers(EVENT_WS_CLOSED, info);
     }
 
     #! Serializes data for sending
@@ -5869,6 +5966,10 @@ public class WebSocketConnectAndRunPollOperation inherits Qore::AbstractPollOper
         Socket ws_sock = h1conn.getSocket();
         ws_op = new WebSocketClientPollOperation(ws_sock, "http1", 0,
             offered_extensions, timeout_ms, logger, raw_callback, on_poll_complete);
+        ws_op.setHeartbeat(wsc.getAsyncHeartbeat());
+        if (wsc.getAsyncIdleTimeout() > 0) {
+            ws_op.setIdleTimeout(wsc.getAsyncIdleTimeout());
+        }
 
         # Notify the WebSocketClient of the successful connect
         wsc.finishAsyncConnect(rh, ws_op, ws_sock);

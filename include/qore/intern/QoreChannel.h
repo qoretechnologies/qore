@@ -413,6 +413,59 @@ public:
         return cap;
     }
 
+    //! Waits for the channel to become non-empty or closed.
+    //! Non-destructive — does not consume any value.
+    /** @param timeout_ms wait budget; @c 0 = non-blocking check,
+        negative = wait forever, positive = wait up to the given number
+        of milliseconds
+        @param xsink exception sink (for deletion/interrupt detection)
+
+        @return @c true if the channel has at least one buffered value or
+            is closed; @c false if no readable state is available before
+            the timeout expires, in non-blocking mode, or on interrupt.
+            Callers typically follow up with @ref tryRecv or @ref recv
+            to fetch the value.
+    */
+    DLLLOCAL bool waitReadable(int64 timeout_ms, ExceptionSink* xsink) {
+        AutoLocker al(&lck);
+
+        // Non-blocking check: inspect channel state without touching
+        // the condition variable.  This is the correct async-friendly
+        // path for isDataAvailable(0) — no poll, no wait.
+        if (timeout_ms == 0) {
+            if (cap == 0) {
+                return unbuffered_has_value || closed || deleted;
+            }
+            return !buffer.empty() || closed || deleted;
+        }
+
+        // timeout_ms < 0  → wait indefinitely
+        // timeout_ms > 0  → wait up to timeout_ms milliseconds
+        int64 cond_timeout = (timeout_ms < 0) ? -1 : timeout_ms;
+        if (cap == 0) {
+            if (unbuffered_has_value || closed || deleted) {
+                return true;
+            }
+            ++recv_waiting;
+            int rc = recv_cond.waitWithInterrupt(&lck, cond_timeout, xsink);
+            --recv_waiting;
+            if (rc == QORE_COND_RESULT_INTERRUPTED) {
+                return false;
+            }
+            return unbuffered_has_value || closed || deleted;
+        }
+        if (!buffer.empty() || closed || deleted) {
+            return true;
+        }
+        ++recv_waiting;
+        int rc = recv_cond.waitWithInterrupt(&lck, cond_timeout, xsink);
+        --recv_waiting;
+        if (rc == QORE_COND_RESULT_INTERRUPTED) {
+            return false;
+        }
+        return !buffer.empty() || closed || deleted;
+    }
+
     DLLLOCAL bool empty() const {
         AutoLocker al(&lck);
         if (cap == 0) {
@@ -470,7 +523,20 @@ public:
     }
 
 protected:
-    DLLLOCAL virtual ~QoreChannel() {}
+    DLLLOCAL virtual ~QoreChannel() {
+        // Drain any remaining buffered values to prevent leaks.
+        // Values can be left in the buffer when the channel is closed
+        // before all values are consumed (e.g., error paths, timeouts).
+        ExceptionSink xsink;
+        for (auto& v : buffer) {
+            v.discard(&xsink);
+        }
+        buffer.clear();
+        if (cap == 0 && unbuffered_has_value) {
+            unbuffered_value.discard(&xsink);
+            unbuffered_has_value = false;
+        }
+    }
 
 private:
     mutable QoreThreadLock lck;

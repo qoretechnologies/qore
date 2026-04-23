@@ -34,6 +34,7 @@
 #include <qore/Qore.h>
 
 #include "qore/intern/Http2Session.h"
+#include "qore/intern/QoreAsyncIoLogger.h"
 #include "qore/intern/QoreIoUring.h"
 #include "qore/intern/QuicCommon.h"
 #include "qore/intern/qore_socket_private.h"
@@ -125,8 +126,25 @@ int Http2Session::init(ExceptionSink* xsink) {
             nghttp2_strerror(rv));
         return -1;
     }
-    // We buffer DATA frames; manage WINDOW_UPDATE manually.
-    nghttp2_option_set_no_auto_window_update(opts, 1);
+    // On the server, we buffer request DATA frames and want manual WINDOW_UPDATE
+    // control so the application can apply backpressure by delaying consumption
+    // (e.g. large-body streaming with an InputStream sink).
+    //
+    // On the client, body bytes are delivered synchronously via
+    // onDataChunkRecvCallback with no intervening buffer, so manual control
+    // buys nothing — and it actively breaks flow control when a locally-closed
+    // (RST'd) stream still has in-flight DATA arriving from the peer: nghttp2
+    // silently consumes the bytes against the connection window and fires no
+    // callback at all (not on_data_chunk_recv, not on_frame_recv, not even
+    // on_begin_frame — verified empirically).  With no callback, the app has
+    // no hook to submit a WINDOW_UPDATE, and with manual mode nghttp2 won't
+    // auto-emit one either.  The peer's connection-level remote window then
+    // pins at whatever it was when the stream was RST'd and every subsequent
+    // DATA frame on every other stream blocks forever.  See Http2.qtest's
+    // testHttp2RstStreamDuringInputStreamStreaming (and Qorus issue-1704.qtest
+    // which exposed this on conn_mgr via the H2 MultiplexPoll headers-first
+    // dispatch fix).
+    nghttp2_option_set_no_auto_window_update(opts, is_server ? 1 : 0);
     // RFC 8441: enable extended CONNECT support in nghttp2.
 
     if (is_server) {
@@ -325,6 +343,25 @@ int32_t Http2Session::submitRequestImpl(const char* method, const char* path,
 
     if (scheme_str.empty()) {
         scheme_str = scheme;
+    }
+
+    // Defensive path normalization: RFC 9113 §8.3.1 requires ":path" to
+    // contain a "path-absolute" production (leading "/") for normal methods.
+    // Only CONNECT omits :path, and "OPTIONS *" uses the asterisk-form.
+    // nghttp2 enforces the rule client-side and strict H2 servers reject
+    // requests whose :path does not start with "/", closing the stream
+    // before the handler runs.  Silently prepend the slash here and log a
+    // warning so the caller can find and fix the root cause instead of
+    // chasing a mysterious PROTOCOL_ERROR or stream-reset.
+    if (!path_str.empty() && path_str[0] != '/' && method_str != "CONNECT"
+            && !(method_str == "OPTIONS" && path_str == "*")) {
+        qore_async_io_log(QORE_LOG_LEVEL_WARN,
+            "Http2Session::submitRequestImpl: caller passed non-absolute "
+            ":path %s for method %s — auto-prepending leading '/' to avoid "
+            "H2 PROTOCOL_ERROR rejection; fix the caller to pass an "
+            "absolute path",
+            path_str.c_str(), method_str.c_str());
+        path_str.insert(path_str.begin(), '/');
     }
 
     // Add :method pseudo-header
@@ -878,7 +915,23 @@ int Http2Session::sendPendingData(int timeout_ms, ExceptionSink* xsink) {
 }
 
 int Http2Session::sendPendingDataBlocking(int timeout_ms, ExceptionSink* xsink) {
+    // Close-vs-poll guard: if the owning socket has begun shutting down,
+    // bail out before taking @c m and before attempting any I/O.  A
+    // thread blocked here while holding @c m was the direct cause of
+    // the Socket::close() deadlock in grpc-shutdown-deadlock.md: close
+    // couldn't acquire @c priv->m because another sync-consumer thread
+    // was waiting for @c m in @c isStreamComplete.  Making the send
+    // path a fast failure when the session is closed lets @c close()
+    // reach its teardown step.
+    if (session_closed_.load(std::memory_order_acquire)) {
+        return -1;
+    }
     std::lock_guard<std::recursive_mutex> lg(m);
+    // Re-check under the lock: the flag may have flipped while we
+    // waited to acquire m.
+    if (session_closed_.load(std::memory_order_acquire)) {
+        return -1;
+    }
     size_t pending = send_buffer.size() - send_offset;
     printd(5, "sendPendingDataBlocking() want_write=%d pending=%zu timeout_ms=%d\n",
         nghttp2_session_want_write(session), pending, timeout_ms);
@@ -977,17 +1030,32 @@ int Http2Session::sendPendingDataBlocking(int timeout_ms, ExceptionSink* xsink) 
 }
 
 int Http2Session::receiveData(int timeout_ms, ExceptionSink* xsink) {
-    if (http2DebugEnabled()) {
-        fprintf(stderr, "HTTP2 DEBUG: receiveData() session=%p isServer=%d tid=%d about to lock\n",
-            this, is_server, q_gettid());
-        fflush(stderr);
+    // Fast-path bail-out when the owning socket is closing (or has
+    // closed).  Without this check a caller racing Socket::close() can
+    // enter brecv and block for the full timeout_ms waiting on an fd
+    // that's about to be shut down, even though the pre-close fd
+    // shutdown in qore_socket_private::prepareForClose() would make the
+    // wait return errno=EPIPE almost immediately — we just skip the
+    // pointless round-trip.
+    if (session_closed_.load(std::memory_order_acquire)) {
+        return 1;  // connection closed — matches the EOF return value
     }
-    std::lock_guard<std::recursive_mutex> lg(m);
-    if (http2DebugEnabled()) {
-        fprintf(stderr, "HTTP2 DEBUG: receiveData() session=%p isServer=%d tid=%d locked\n",
-            this, is_server, q_gettid());
-        fflush(stderr);
-    }
+
+    // Do NOT hold Http2Session::m during the blocking brecv call.
+    //
+    // Lock-order deadlock rationale (macOS Http2.qtest hang seen on
+    // job 170360): two worker-path/IO-path contention points take the
+    // two mutexes in opposite orders:
+    //   - IO thread (this function):   Http2Session::m  →  socket->priv->m (via brecv)
+    //   - worker (submitHttp2Request): socket->priv->m  →  Http2Session::m
+    // With brecv holding session->m across its internal waitReleasingLock
+    // poll wait, a concurrent submitHttp2Request from a worker thread can
+    // hold the socket outer mutex while waiting for session->m, while
+    // the IO thread holds session->m and needs the socket outer mutex to
+    // resume its brecv — classic deadlock.
+    //
+    // brecv does not touch nghttp2_session state; only
+    // nghttp2_session_mem_recv below does, and we reacquire m for that.
     char* buf;
     printd(5, "receiveData() ENTRY fd=%d isServer=%d timeout_ms=%d\n", sock->sock, is_server, timeout_ms);
     // Use suppress_exception=true to avoid exception on timeout
@@ -1035,6 +1103,11 @@ int Http2Session::receiveData(int timeout_ms, ExceptionSink* xsink) {
         }
     }
 
+    // Now acquire m for the stateful nghttp2 call; brecv above did I/O
+    // without holding it to avoid the lock-order deadlock with worker-
+    // thread submitHttp2Request (see the comment at entry of this
+    // function).
+    std::lock_guard<std::recursive_mutex> lg(m);
     ssize_t rv = nghttp2_session_mem_recv(session, reinterpret_cast<uint8_t*>(buf), len);
     printd(5, "receiveData() nghttp2_session_mem_recv rv=%zd (input len=%zd)\n", rv, len);
     if (rv < 0) {
@@ -1265,7 +1338,42 @@ std::unique_ptr<Http2StreamInfo> Http2Session::takeHeadersReadyStreamCopy() {
     return nullptr;
 }
 
+std::unique_ptr<Http2StreamInfo> Http2Session::takeStreamingHeadersReadyCopy() {
+    std::lock_guard<std::recursive_mutex> lg(m);
+    for (auto& [id, info] : streams) {
+        // Non-CONNECT streaming streams that received response headers but haven't
+        // yet had a headers-only event dispatched.  CONNECT streams are handled
+        // via takeHeadersReadyStreamCopy (which flips @c dispatched).  Using a
+        // separate flag here (@c headers_streamed) lets markStreamComplete still
+        // fire the completion callback on END_STREAM — @c dispatched would
+        // suppress it (see markStreamComplete @ line 1191).
+        if (info->headers_complete && !info->headers_streamed
+                && info->streaming && !info->is_connect) {
+            auto copy = std::make_unique<Http2StreamInfo>(*info);
+            // Clear body on the copy: the original keeps any buffered DATA
+            // bytes so takeStreamData() returns them on the following
+            // intermediate-body push (a duplicate body delivery would double-
+            // count bytes for chunked-YAML decoders in ds_get_recv).
+            copy->body.clear();
+            info->headers_streamed = true;
+            printd(5, "takeStreamingHeadersReadyCopy(%d)\n", id);
+            return copy;
+        }
+    }
+    return nullptr;
+}
+
 bool Http2Session::isStreamComplete(int32_t stream_id) const {
+    // Fast, lock-free path: a closed session unblocks concurrent
+    // sync consumers waiting for END_STREAM.  Treat any outstanding
+    // stream as "complete" from the application's perspective so a
+    // polling reader (e.g. GrpcServer::readStreamBody) exits its loop
+    // and releases the outer socket mutex — letting Socket::close()
+    // proceed without a close-vs-poll deadlock.  See
+    // `grpc-shutdown-deadlock.md`.
+    if (session_closed_.load(std::memory_order_acquire)) {
+        return true;
+    }
     std::lock_guard<std::recursive_mutex> lg(m);
     auto it = streams.find(stream_id);
     if (it == streams.end()) {
@@ -1666,7 +1774,11 @@ int Http2Session::onDataChunkRecvCallback(nghttp2_session* session, uint8_t flag
             return 0;
         }
     }
-    if (len) {
+    // With auto-window-update enabled on the client (see init()), nghttp2 emits
+    // WINDOW_UPDATE automatically as the app consumes data via this callback —
+    // we must NOT call submitWindowUpdate on the client branch or we double-credit.
+    // Server is still in manual mode (for backpressure) and must call it.
+    if (len && h2->is_server) {
         int rv = h2->submitWindowUpdate(stream_id, len, nullptr);
         if (rv) {
             printd(5, "onDataChunkRecvCallback: submitWindowUpdate stream_id=%d failed\n", stream_id);
@@ -2308,13 +2420,15 @@ int Http2Session::submitConnectResponse(int32_t stream_id, int status_code,
     return 0;
 }
 
-void Http2Session::setStreamInputStream(int32_t stream_id, InputStream* is, ExceptionSink* xsink) {
+void Http2Session::setStreamInputStream(int32_t stream_id, InputStream* is, ExceptionSink* xsink,
+        int64_t content_length) {
     std::lock_guard<std::recursive_mutex> lg(m);
-    stream_input_streams_.emplace(stream_id, StreamInputStreamInfo(is));
+    auto [it, inserted] = stream_input_streams_.emplace(stream_id, StreamInputStreamInfo(is));
+    it->second.content_length = content_length;
     has_active_input_streams_.store(true, std::memory_order_release);
-    printd(5, "Http2Session::setStreamInputStream() stream_id=%d pollable=%d fd=%d\n",
-        stream_id, stream_input_streams_[stream_id].is_pollable,
-        stream_input_streams_[stream_id].stream_fd);
+    printd(5, "Http2Session::setStreamInputStream() stream_id=%d pollable=%d fd=%d cl=" QLLD "\n",
+        stream_id, it->second.is_pollable, it->second.stream_fd,
+        (long long)content_length);
 }
 
 int Http2Session::waitForStreamDrain(int32_t stream_id, int timeout_ms) {
@@ -2461,12 +2575,21 @@ void Http2Session::processStreamInputStreams(ExceptionSink* xsink) {
                 continue;
             }
             if (count == 0) {
-                // EOF
+                // EOF — if Content-Length was declared and we are short,
+                // send RST_STREAM instead of END_STREAM so the client
+                // detects the truncation instead of waiting for the
+                // promised byte count (FUTURE-TIMEOUT on the wire).
                 info.eof = true;
-                sendStreamData(stream_id, nullptr, 0, true, xsink);
+                if (info.content_length >= 0
+                        && info.bytes_sent < info.content_length) {
+                    submitRstStream(stream_id, NGHTTP2_INTERNAL_ERROR, xsink);
+                } else {
+                    sendStreamData(stream_id, nullptr, 0, true, xsink);
+                }
             } else {
                 chunk->setSize(count);
                 sendStreamData(stream_id, chunk->getPtr(), count, false, xsink);
+                info.bytes_sent += (int64_t)count;
             }
         } else {
             // Non-pollable (memory streams) — readHelper never blocks
@@ -2477,9 +2600,17 @@ void Http2Session::processStreamInputStreams(ExceptionSink* xsink) {
             }
             if (!chunk || !chunk->size()) {
                 info.eof = true;
-                sendStreamData(stream_id, nullptr, 0, true, xsink);
+                // Short-stream detection (see is_pollable branch above).
+                if (info.content_length >= 0
+                        && info.bytes_sent < info.content_length) {
+                    submitRstStream(stream_id, NGHTTP2_INTERNAL_ERROR, xsink);
+                } else {
+                    sendStreamData(stream_id, nullptr, 0, true, xsink);
+                }
             } else {
-                sendStreamData(stream_id, chunk->getPtr(), chunk->size(), false, xsink);
+                size_t cs = chunk->size();
+                sendStreamData(stream_id, chunk->getPtr(), cs, false, xsink);
+                info.bytes_sent += (int64_t)cs;
             }
         }
         if (*xsink) {

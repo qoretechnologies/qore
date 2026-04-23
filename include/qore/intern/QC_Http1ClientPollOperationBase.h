@@ -39,6 +39,7 @@
 #include "qore/intern/QC_AbstractHttpPollConnection.h"
 
 #include <atomic>
+#include <deque>
 #include <string>
 
 //! C++ base for Http1ClientPollOperation providing SocketPollOperationBase fast path
@@ -75,6 +76,7 @@ public:
     enum class ReqState {
         IDLE,
         SENDING,
+        SEND_STREAMING_BODY,  //!< waiting for / sending chunked TE body data from app thread
         RECV_HEADER,
         RECV_BODY_LENGTH,
         RECV_CHUNK_SIZE,
@@ -89,6 +91,44 @@ public:
             SocketPollOperationBase* connect_op, bool ssl_required, bool proxy_tunnel,
             bool is_proxy_plain, std::string target_host, int target_port,
             AbstractHttpPollConnectionPriv* connection_priv);
+
+    //! Creates the poll operation by adopting an already-connected (and
+    //! TLS-handshook, if SSL is in use) socket.
+    /** Used by @ref NegotiatingConnectionPollOp after per-connect ALPN
+        negotiation selected HTTP/1.1.  The priv starts in
+        @ref H1State::CONNECTING with no @c current_op; the connection
+        class must call @ref initAdoptedReady to transition to
+        @ref H1State::READING and fire the ready callback after
+        @ref setSelf.
+
+        @param self the QoreObject wrapping this private data (may be
+            nullptr; set later via @ref setSelf)
+        @param sock the already-connected socket (ref'd by caller,
+            ownership transferred)
+        @param ssl_required whether the adopted socket is using TLS —
+            informational only; no handshake is attempted
+        @param target_host target hostname (for Host header)
+        @param target_port target TCP port
+        @param connection_priv the owning C++ connection priv
+            (raw pointer — @ref setSelf takes the Qore ref separately)
+
+        @since %Qore 2.3
+    */
+    DLLLOCAL Http1ClientPollOperationPriv(QoreObject* self, QoreSocketObject* sock,
+            bool ssl_required, std::string target_host, int target_port,
+            AbstractHttpPollConnectionPriv* connection_priv);
+
+    //! Transitions an adopt-socket-constructed poll op from CONNECTING to
+    //! READING and fires the connection ready callback.
+    /** Must be called after @ref setSelf and before the poll op is
+        submitted to the I/O controller.  Only valid on instances created
+        via the adopt-socket constructor.
+
+        @param xsink exception sink
+
+        @since %Qore 2.3
+    */
+    DLLLOCAL void initAdoptedReady(ExceptionSink* xsink);
 
     DLLLOCAL virtual ~Http1ClientPollOperationPriv();
 
@@ -118,10 +158,27 @@ public:
     // --- Stream management (called from Qore app thread) ---
 
     //! Submits an HTTP/1.1 request with headers and optional body
+    /** @param streaming_send if true, the request uses chunked TE and the
+        body is pushed incrementally via pushSendData(); body/body_len are
+        ignored in this mode
+    */
     DLLLOCAL int64_t submitRequest(const char* method, const char* path,
         const QoreHashNode* user_headers, const void* body, size_t body_len,
         bool streaming, AbstractAsyncAction* action, int max_streams,
-        ExceptionSink* xsink);
+        bool streaming_send, ExceptionSink* xsink);
+
+    //! Queues body data for incremental chunked TE send (app thread)
+    /** @param data body chunk to send; nullptr signals end-of-body
+        @param xsink exception sink
+    */
+    DLLLOCAL void pushSendData(const QoreStringNode* data, ExceptionSink* xsink);
+
+    //! Sets HTTP trailers to be sent with the final chunk (app thread)
+    /** Must be called before pushing the end sentinel (nullptr) via pushSendData().
+        @param trailers hash of trailer key-value pairs (ref'd internally)
+        @param xsink exception sink
+    */
+    DLLLOCAL void setTrailers(const QoreHashNode* trailers, ExceptionSink* xsink);
 
     //! Cancel a stream
     DLLLOCAL bool cancelStream(int64_t stream_id, ExceptionSink* xsink);
@@ -246,6 +303,9 @@ private:
     //! Response headers (ref'd or nullptr, lowercase keys)
     QoreHashNode* response_headers = nullptr;
 
+    //! Response headers with original case (ref'd or nullptr)
+    QoreHashNode* response_headers_raw = nullptr;
+
     //! Accumulated response body (ref'd or nullptr)
     BinaryNode* response_body = nullptr;
 
@@ -260,6 +320,9 @@ private:
 
     //! Whether the current request is in streaming mode (copied from shared state)
     bool streaming_active_io = false;
+
+    //! Whether the current request uses streaming send (I/O thread copy)
+    bool streaming_send_io = false;
 
     //! True after a 101 Switching Protocols response has been received
     bool protocol_switched = false;
@@ -312,6 +375,15 @@ private:
     //! Whether the current request uses streaming mode
     bool streaming_active = false;
 
+    //! Whether the current request uses streaming send (chunked TE, app pushes body)
+    bool streaming_send = false;
+
+    //! Queue of body chunks for streaming send (nullptr = end sentinel)
+    std::deque<QoreStringNode*> send_body_queue;
+
+    //! Trailers to send with the final chunk (ref'd or nullptr)
+    QoreHashNode* send_trailers = nullptr;
+
     //! Error info (ref'd or nullptr)
     QoreHashNode* error_info = nullptr;
 
@@ -347,6 +419,7 @@ private:
     // Request sub-state handlers
     DLLLOCAL QoreHashNode* handleIdle(ExceptionSink* xsink);
     DLLLOCAL QoreHashNode* handleSending(ExceptionSink* xsink);
+    DLLLOCAL QoreHashNode* handleStreamingSendBody(ExceptionSink* xsink);
     DLLLOCAL QoreHashNode* handleRecvHeader(ExceptionSink* xsink);
     DLLLOCAL QoreHashNode* handleRecvBodyLength(ExceptionSink* xsink);
     DLLLOCAL QoreHashNode* handleRecvChunkSize(ExceptionSink* xsink);

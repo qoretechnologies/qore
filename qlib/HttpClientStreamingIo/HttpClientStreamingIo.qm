@@ -47,7 +47,10 @@ module HttpClientStreamingIo {
       @ref HttpClientStreamingIo::StreamDecompressor "StreamDecompressor", and
       @ref HttpClientStreamingIo::SseObservable "SseObservable" class for push-based SSE
       event delivery using I/O-thread parsing via C++ SseAction
-    - SSE event constants: @ref EVENT_SSE_DATA, @ref EVENT_SSE_CLOSED, @ref EVENT_SSE_CONNECTED
+    - SSE event constants: @ref EVENT_SSE_DATA, @ref EVENT_SSE_CLOSED, @ref EVENT_SSE_CONNECTED,
+      @ref EVENT_SSE_HEARTBEAT
+    - @ref HttpClientStreamingIo::SseObservable "SseObservable" gains \c idle_timeout and
+      \c emit_heartbeat options for dead-connection detection and heartbeat delivery
 */
 
 #! Main namespace for the HttpClientStreamingIo module
@@ -67,5 +70,14 @@ public const EVENT_SSE_CLOSED = "sse-closed-event";
 /** @since %HttpClientStreamingIo 1.0
 */
 public const EVENT_SSE_CONNECTED = "sse-connected-event";
+
+#! SSE heartbeat event constant (emitted for comment-only SSE messages like \c ":hb\\n\\n")
+/** Heartbeat events indicate that the server is alive but has no data to send.
+    Delivered to observers only when @ref SseObservable is configured with
+    \c emit_heartbeat = \c True (the default).
+
+    @since %HttpClientStreamingIo 1.0.1
+*/
+public const EVENT_SSE_HEARTBEAT = "sse-heartbeat-event";
 
 }

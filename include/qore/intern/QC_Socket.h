@@ -61,6 +61,7 @@ public:
     unsigned non_block_flags = 0;
     int non_block_accept_count = 0;
     bool valid = true;
+    SocketIoMode io_mode = SocketIoMode::Unclaimed;
 
     DLLLOCAL my_socket_priv(QoreSocket* s, QoreSSLCertificate* c = nullptr, QoreSSLPrivateKey* p = nullptr);
 
@@ -100,10 +101,67 @@ public:
         return 0;
     }
 
+    //! Throws an exception if the socket is in Async mode and a sync operation is attempted
+    /** @return 0 if sync I/O is allowed, -1 if not (exception raised on @a xsink)
+        @since %Qore 2.3
+    */
+    DLLLOCAL int checkSyncAllowed(ExceptionSink* xsink) {
+        // must be called with the lock held
+        assert(m.trylock());
+
+        if (io_mode == SocketIoMode::Async) {
+            xsink->raiseException("SOCKET-ASYNC-MODE-ERROR",
+                "cannot perform synchronous I/O on a socket managed by "
+                "the async I/O controller");
+            return -1;
+        }
+        return 0;
+    }
+
+    //! Throws an exception if the socket is in Sync mode and an async operation is attempted
+    /** @return 0 if async I/O is allowed, -1 if not (exception raised on @a xsink)
+        @since %Qore 2.3
+    */
+    DLLLOCAL int checkAsyncAllowed(ExceptionSink* xsink) {
+        // must be called with the lock held
+        assert(m.trylock());
+
+        if (io_mode == SocketIoMode::Sync) {
+            xsink->raiseException("SOCKET-SYNC-MODE-ERROR",
+                "cannot perform async I/O on a socket with active "
+                "synchronous operations");
+            return -1;
+        }
+        return 0;
+    }
+
+    //! Sets the I/O mode of the socket
+    /** @since %Qore 2.3
+    */
+    DLLLOCAL void setIoMode(SocketIoMode mode) {
+        // must be called with the lock held
+        assert(m.trylock());
+        io_mode = mode;
+    }
+
+    //! Returns the current I/O mode of the socket
+    /** @since %Qore 2.3
+    */
+    DLLLOCAL SocketIoMode getIoMode() const {
+        // must be called with the lock held
+        assert(m.trylock());
+        return io_mode;
+    }
+
     //! Throws an exception if any non-blocking operation is in progress or is not valid
     DLLLOCAL int checkNonBlock(ExceptionSink* xsink) {
         // must be called with the lock held
         assert(m.trylock());
+
+        // Prevent sync operations on a socket managed by the async I/O controller
+        if (checkSyncAllowed(xsink)) {
+            return -1;
+        }
 
         if (non_block_flags || non_block_accept_count > 0) {
             xsink->raiseException("SOCKET-NON-BLOCK-ERROR", "a non-blocking operation is currently in progress");
@@ -117,6 +175,11 @@ public:
     DLLLOCAL int checkNonBlock(ExceptionSink* xsink, unsigned direction) {
         // must be called with the lock held
         assert(m.trylock());
+
+        // Prevent sync operations on a socket managed by the async I/O controller
+        if (checkSyncAllowed(xsink)) {
+            return -1;
+        }
 
         if ((non_block_flags & direction) || non_block_accept_count > 0) {
             xsink->raiseException("SOCKET-NON-BLOCK-ERROR",
@@ -152,49 +215,76 @@ public:
         non_block_flags |= direction;
     }
 
-    //! Checks and sets all non-block flags
+    //! Checks and sets all non-block flags; also claims async I/O mode
     DLLLOCAL int setNonBlock(ExceptionSink* xsink) {
         // must be called with the lock held
         assert(m.trylock());
 
-        if (!checkNonBlock(xsink)) {
-            setNonBlock();
-            return 0;
+        if (checkAsyncAllowed(xsink)) {
+            return -1;
         }
-        return -1;
+        if (checkValid(xsink)) {
+            return -1;
+        }
+        if (non_block_flags || non_block_accept_count > 0) {
+            xsink->raiseException("SOCKET-NON-BLOCK-ERROR", "a non-blocking operation is currently in progress");
+            return -1;
+        }
+        setNonBlock();
+        io_mode = SocketIoMode::Async;
+        return 0;
     }
 
-    //! Checks and sets specific direction non-block flags
+    //! Checks and sets specific direction non-block flags; also claims async I/O mode
     DLLLOCAL int setNonBlock(ExceptionSink* xsink, unsigned direction) {
         // must be called with the lock held
         assert(m.trylock());
 
-        if (!checkNonBlock(xsink, direction)) {
-            setNonBlock(direction);
-            return 0;
+        if (checkAsyncAllowed(xsink)) {
+            return -1;
         }
-        return -1;
+        if (checkValid(xsink)) {
+            return -1;
+        }
+        if ((non_block_flags & direction) || non_block_accept_count > 0) {
+            xsink->raiseException("SOCKET-NON-BLOCK-ERROR",
+                "a non-blocking %s operation is currently in progress",
+                direction == NB_SEND ? "send" : direction == NB_RECV ? "receive" : "connect");
+            return -1;
+        }
+        setNonBlock(direction);
+        io_mode = SocketIoMode::Async;
+        return 0;
     }
 
-    //! Clears all non-block flags
+    //! Clears all non-block flags and resets I/O mode to Unclaimed
     DLLLOCAL void clearNonBlock() {
         // must be called with the lock held
         assert(m.trylock());
         non_block_flags = 0;
+        if (non_block_accept_count == 0) {
+            io_mode = SocketIoMode::Unclaimed;
+        }
     }
 
-    //! Clears specific direction non-block flags
+    //! Clears specific direction non-block flags; resets I/O mode when all flags clear
     DLLLOCAL void clearNonBlock(unsigned direction) {
         // must be called with the lock held
         assert(m.trylock());
         non_block_flags &= ~direction;
+        if (!non_block_flags && non_block_accept_count == 0) {
+            io_mode = SocketIoMode::Unclaimed;
+        }
     }
 
-    //! Increments accept refcount (concurrent accept ops allowed)
+    //! Increments accept refcount (concurrent accept ops allowed); claims async I/O mode
     DLLLOCAL int setNonBlockAccept(ExceptionSink* xsink) {
         // must be called with the lock held
         assert(m.trylock());
 
+        if (checkAsyncAllowed(xsink)) {
+            return -1;
+        }
         if (non_block_flags) {
             xsink->raiseException("SOCKET-NON-BLOCK-ERROR", "a non-blocking operation is currently in progress");
             return -1;
@@ -203,15 +293,19 @@ public:
             return -1;
         }
         ++non_block_accept_count;
+        io_mode = SocketIoMode::Async;
         return 0;
     }
 
-    //! Decrements accept refcount
+    //! Decrements accept refcount; resets I/O mode when no async ops remain
     DLLLOCAL void clearNonBlockAccept() {
         // must be called with the lock held
         assert(m.trylock());
         assert(non_block_accept_count > 0);
         --non_block_accept_count;
+        if (!non_block_flags && non_block_accept_count == 0) {
+            io_mode = SocketIoMode::Unclaimed;
+        }
     }
 
     //! Check if the socket has an active QUIC session
@@ -224,6 +318,13 @@ public:
 
     DLLLOCAL static void setAccept(QoreSocketObject& sock, QoreObject* o) {
         sock.priv->setAccept(o);
+    }
+
+    //! Returns the my_socket_priv pointer for a QoreSocketObject (for internal use)
+    /** @since %Qore 2.3
+    */
+    DLLLOCAL static my_socket_priv* getPriv(QoreSocketObject& sock) {
+        return sock.priv;
     }
 };
 

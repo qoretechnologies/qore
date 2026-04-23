@@ -1044,7 +1044,10 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
             TestOutputStream strstr();
             hc.send(strstr, NOTHING, "GET", "/something", NOTHING, 5s, False, NOTHING, rcb);
             assertEq(TestMessage, strstr.getData());
-            assertEq(1, l.size());
+            # conn_mgr streaming recv fires two callbacks for both chunked
+            # and fixed-length responses: initial headers + terminal
+            # (hdr=NOTHING) end-of-data signal
+            assertEq(2, l.size());
             list ml = strstr.getList();
             assertEq(TestMessage, ml[0]);
             assertEq(1, ml.size());
@@ -1057,6 +1060,10 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
             assertEq("text/plain", h.hdr."content-type");
             assertEq("text/plain", h.hdr._qore_orig_content_type);
             assertEq(hc, h.obj);
+            assertEq(False, h.send_aborted);
+
+            h = l[1];
+            assertEq(NOTHING, h.hdr);
             assertEq(False, h.send_aborted);
         }
 
@@ -1109,7 +1116,8 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
             TestOutputStream strstr();
             hc.send(strstr, TestMessage, "POST", "/something", {"Content-Type": MimeTypeText}, 5s, False, NOTHING, rcb);
             assertEq(TestMessage, strstr.getData());
-            assertEq(1, l.size());
+            # headers + terminal (hdr=NOTHING) end-of-data signal
+            assertEq(2, l.size());
             list ml = strstr.getList();
             assertEq(1, ml.size());
             assertEq((TestMessage,), ml);
@@ -1124,6 +1132,7 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
             assertEq("text/plain;charset=utf8", h.hdr._qore_orig_content_type);
             assertEq(hc, h.obj);
             assertEq(False, h.send_aborted);
+            assertEq(NOTHING, l[1].hdr);
 
             # send a streamed/chunked message and get back a single message in a stream
             TestInputStream is(TestList);
@@ -1138,7 +1147,8 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
                     "Connection": "close"
                 }, 5s, False, NOTHING, rcb, tcb);
             assertEq(TestMessage, strstr.getData());
-            assertEq(1, l.size());
+            # headers + terminal (hdr=NOTHING) end-of-data signal
+            assertEq(2, l.size());
             ml = strstr.getList();
             assertEq(1, ml.size());
             assertEq((TestMessage,), ml);
@@ -1154,6 +1164,7 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
             assertEq("text/plain;charset=utf8", h.hdr._qore_orig_content_type);
             assertEq(hc, h.obj);
             assertEq(False, h.send_aborted);
+            assertEq(NOTHING, l[1].hdr);
 
             hash<auto> info = hs.getListenerInfo("listener-0");
             assertEq(False, info.get_remote_certs);
@@ -1195,10 +1206,13 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
             hc.get("/");
             fail();
         } catch (hash<ExceptionInfo> ex) {
-            # Accept any socket/SSL error - the exact error varies by timing and platform
+            # Accept any socket/SSL/HTTP error - the exact error varies by timing and platform
             # Common errors: SOCKET-CLOSED, SOCKET-SSL-ERROR (reset by peer, EOF, unexpected eof),
-            # SOCKET-RECV-ERROR, HTTP-CLIENT-RECEIVE-ERROR
-            if (ex.err =~ /^SOCKET-/ || ex.err =~ /^HTTP-CLIENT-/) {
+            # SOCKET-RECV-ERROR, HTTP-CLIENT-RECEIVE-ERROR, HTTP1-CONNECTION-CLOSED
+            # (the last one arrives when the server closes cleanly between the client's
+            # request send and its recv, which is common on fast local loopbacks)
+            if (ex.err =~ /^SOCKET-/ || ex.err =~ /^HTTP-CLIENT-/
+                || ex.err =~ /^HTTP1?-/) {
                 assertTrue(True);
             } else {
                 fail(sprintf("unexpected exception: %s: %s", ex.err, ex.desc));
@@ -1338,8 +1352,12 @@ class TempFile {
         string path;
     }
 
+    # Use a per-instance unique filename so parallel test runs (or overlapping
+    # helper threads that touch the same /tmp path) don't race on a shared name
+    # and race each other's unlink() in the destructor.
     constructor(string name, data content) {
-        path = sprintf("%s%s%s", tmp_location(), DirSep, name);
+        path = sprintf("%s%s%s.%s", tmp_location(), DirSep,
+            get_random_string(12), name);
         File f();
         f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
         f.write(content);

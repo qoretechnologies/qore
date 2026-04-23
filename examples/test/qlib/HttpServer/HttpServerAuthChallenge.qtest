@@ -1,0 +1,230 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Mime.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/HttpServerUtil.qm
+%requires ../../../../qlib/AsyncSocketIo
+%requires ../../../../qlib/HttpServerAsyncIo
+%requires ../../../../qlib/HttpServer.qm
+
+%exec-class HttpServerAuthChallengeTest
+
+#! Handler that requires Basic auth — returns 401 on first request without Authorization
+class BasicAuthHandler inherits AbstractHttpRequestHandler {
+    private {
+        string expected_user;
+        string expected_pass;
+    }
+
+    constructor(string user, string pass) {
+        expected_user = user;
+        expected_pass = pass;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        *string auth = hdr.authorization;
+        if (!auth) {
+            return makeResponse(401, "Unauthorized", {
+                "WWW-Authenticate": "Basic realm=\"test\"",
+            });
+        }
+        # Verify Basic auth
+        if (auth =~ /^Basic /i) {
+            string decoded = binary_to_string(parse_base64_string(auth.substr(6)));
+            string expected = expected_user + ":" + expected_pass;
+            if (decoded == expected) {
+                return makeResponse(200, "Authenticated OK");
+            }
+        }
+        return makeResponse(401, "Bad credentials", {
+            "WWW-Authenticate": "Basic realm=\"test\"",
+        });
+    }
+}
+
+#! Handler that requires Digest auth — validates nonce-based response
+class DigestAuthHandler inherits AbstractHttpRequestHandler {
+    private {
+        string expected_user;
+        string expected_pass;
+        string realm = "digest-test";
+        string nonce;
+    }
+
+    constructor(string user, string pass) {
+        expected_user = user;
+        expected_pass = pass;
+        # Fixed nonce for test determinism
+        nonce = "dcd98b7102dd2f0e8b11d0f600bfb0c093";
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        *string auth = hdr.authorization;
+        if (!auth || !(auth =~ /^Digest /i)) {
+            return makeResponse(401, "Unauthorized", {
+                "WWW-Authenticate": sprintf("Digest realm=\"%s\", nonce=\"%s\", qop=\"auth\"",
+                    realm, nonce),
+            });
+        }
+
+        # Parse Digest response and validate
+        hash<auto> params = parseDigestResponse(auth.substr(7));
+        if (params.username != expected_user) {
+            return makeResponse(401, "Bad username");
+        }
+
+        # Compute expected response
+        string ha1 = MD5(expected_user + ":" + realm + ":" + expected_pass);
+        string ha2 = MD5(hdr.method + ":" + params.uri);
+        string expected;
+        if (params.qop == "auth") {
+            expected = MD5(ha1 + ":" + nonce + ":" + params.nc + ":" + params.cnonce
+                + ":auth:" + ha2);
+        } else {
+            expected = MD5(ha1 + ":" + nonce + ":" + ha2);
+        }
+
+        if (params.response == expected) {
+            return makeResponse(200, "Digest Auth OK");
+        }
+        return makeResponse(401, "Bad digest response");
+    }
+
+    #! Parse "username=..., realm=..., ..." into a hash
+    private hash<auto> parseDigestResponse(string params_str) {
+        hash<auto> result;
+        # Split on ", " but handle quoted values
+        list<string> parts = params_str.split(",");
+        foreach string part in (parts) {
+            trim part;
+            *list<*string> m = (part =~ x/^(\w+)=(?:"([^"]*)"|(.*))$/);
+            if (m[0]) {
+                result{m[0]} = m[1] ?? m[2];
+            }
+        }
+        return result;
+    }
+}
+
+#! Handler that always returns 401 — tests that retry is limited to once
+class AlwaysRejectHandler inherits AbstractHttpRequestHandler {
+    private {
+        int request_count = 0;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        ++request_count;
+        return makeResponse(401, "Always rejected", {
+            "WWW-Authenticate": "Basic realm=\"test\"",
+        });
+    }
+
+    int getRequestCount() {
+        return request_count;
+    }
+}
+
+public class HttpServerAuthChallengeTest inherits QUnit::Test {
+    constructor() : Test("HttpServerAuthChallengeTest", "1.0", \ARGV) {
+        addTestCase("Basic auth challenge retry", \testBasicAuthRetry());
+        addTestCase("Digest auth challenge retry", \testDigestAuthRetry());
+        addTestCase("auth retry limited to once", \testAuthRetryLimited());
+        addTestCase("no retry without credentials", \testNoRetryWithoutCreds());
+        set_return_value(main());
+    }
+
+    private hash<auto> createServer(AbstractHttpRequestHandler handler) {
+        HttpServer server();
+        server.setHandler("auth-test", "", MimeTypeText, handler);
+        server.setDefaultHandler("auth-test", handler);
+        hash<auto> info = server.addListener(<HttpListenerOptionInfo>{"service": "0"});
+        server.waitForAsyncIo();
+        return {"server": server, "port": info.port};
+    }
+
+    #! Test that HTTPClient retries with Basic auth on 401
+    testBasicAuthRetry() {
+        BasicAuthHandler handler("testuser", "testpass");
+        hash<auto> setup = createServer(handler);
+        HttpServer server = setup.server;
+        on_exit delete server;
+
+        # HTTPClient with credentials — should auto-retry after 401
+        HTTPClient client({
+            "url": sprintf("http://testuser:testpass@localhost:%d/test", setup.port),
+        });
+        on_exit client.disconnect();
+
+        hash<auto> resp = client.send("", "GET", "/test");
+        assertEq(200, resp.status_code, "Basic auth retry should succeed");
+        assertEq("Authenticated OK", resp.body, "response body after auth retry");
+    }
+
+    #! Test that HTTPClient retries with Digest auth on 401
+    testDigestAuthRetry() {
+        DigestAuthHandler handler("digestuser", "digestpass");
+        hash<auto> setup = createServer(handler);
+        HttpServer server = setup.server;
+        on_exit delete server;
+
+        # HTTPClient with credentials — first request gets 401 with Digest challenge,
+        # client computes digest response and retries
+        HTTPClient client({
+            "url": sprintf("http://digestuser:digestpass@localhost:%d/protected", setup.port),
+        });
+        on_exit client.disconnect();
+
+        hash<auto> resp = client.send("", "GET", "/protected");
+        assertEq(200, resp.status_code, "Digest auth retry should succeed");
+        assertEq("Digest Auth OK", resp.body, "response body after digest auth");
+    }
+
+    #! Test that auth retry is limited to one attempt
+    testAuthRetryLimited() {
+        AlwaysRejectHandler handler();
+        hash<auto> setup = createServer(handler);
+        HttpServer server = setup.server;
+        on_exit delete server;
+
+        HTTPClient client({
+            "url": sprintf("http://user:pass@localhost:%d/reject", setup.port),
+        });
+        on_exit client.disconnect();
+
+        # HTTPClient throws on 401 after the retry — catch it and check request count
+        try {
+            client.send("", "GET", "/reject");
+            assertTrue(False, "should have thrown");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("HTTP-CLIENT-RECEIVE-ERROR", ex.err,
+                "401 raises HTTP-CLIENT-RECEIVE-ERROR after retry");
+        }
+        # Server should have seen exactly 2 requests (original + 1 retry)
+        assertEq(2, handler.getRequestCount(), "exactly 2 requests sent (original + retry)");
+    }
+
+    #! Test that no retry happens without credentials
+    testNoRetryWithoutCreds() {
+        AlwaysRejectHandler handler();
+        hash<auto> setup = createServer(handler);
+        HttpServer server = setup.server;
+        on_exit delete server;
+
+        # No credentials in URL
+        HTTPClient client({
+            "url": sprintf("http://localhost:%d/reject", setup.port),
+            "error_passthru": True,
+        });
+        on_exit client.disconnect();
+
+        hash<auto> resp = client.send("", "GET", "/reject");
+        assertEq(401, resp.status_code, "401 returned without credentials");
+        # Only 1 request — no retry without credentials
+        assertEq(1, handler.getRequestCount(), "only 1 request without credentials");
+    }
+}

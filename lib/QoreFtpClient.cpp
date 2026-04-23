@@ -37,10 +37,16 @@
 #include <qore/QoreSocket.h>
 
 #include "qore/intern/QC_FtpClient.h"
+#include "qore/intern/QC_FtpControlPollOperation.h"
+#include "qore/intern/QC_FtpDataPollOperation.h"
 #include "qore/intern/QC_Queue.h"
+#include "qore/intern/QC_Socket.h"
 #include "qore/intern/qore_socket_private.h"
 #include "qore/intern/qore_string_private.h"
 
+#include <cerrno>
+#include <cstdlib>
+#include <cstring>
 #include <cerrno>
 #include <cstdlib>
 #include <cstring>
@@ -48,6 +54,8 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
+
+#include "qore/intern/AsyncIoControllerPriv.h"
 
 #define FTPDEBUG 5
 
@@ -142,18 +150,31 @@ struct qore_ftp_private {
         loggedin = false,
         secure = false,
         secure_data = false,
-        manual_mode = false;
+        manual_mode = false,
+        use_async = true;  //!< dispatch through async I/O controller
+
+    // Async I/O — control channel poll operation (lazy-init)
+    QoreObject* ctrl_op_obj = nullptr;
+    FtpControlPollOperationPriv* ctrl_op = nullptr;
+    std::string async_owner;  //!< per-instance owner for async controller cache
 
     DLLLOCAL qore_ftp_private(const QoreString* url, ExceptionSink* xsink) {
+        char buf[32];
+        snprintf(buf, sizeof(buf), "ftp-%p", (void*)this);
+        async_owner = buf;
         if (url) {
             setURLIntern(url, xsink);
         }
     }
 
     DLLLOCAL qore_ftp_private() {
+        char buf[32];
+        snprintf(buf, sizeof(buf), "ftp-%p", (void*)this);
+        async_owner = buf;
     }
 
     DLLLOCAL ~qore_ftp_private() {
+        assert(!ctrl_op_obj);
         if (host) {
             free(host);
         }
@@ -165,6 +186,30 @@ struct qore_ftp_private {
         }
         if (url_path) {
             free(url_path);
+        }
+    }
+
+    //! Clean up async control op (must be called with ExceptionSink before destructor)
+    DLLLOCAL void cleanupAsync(ExceptionSink* xsink) {
+        if (ctrl_op_obj) {
+            // Cancel our operations from the async controller cache before deref
+            ReferenceHolder<QoreObject> ctl_obj(qore_get_async_io_controller_obj(xsink), xsink);
+            if (!*xsink && *ctl_obj) {
+                ReferenceHolder<AsyncIoControllerPriv> ctl_priv(
+                    static_cast<AsyncIoControllerPriv*>(
+                        (*ctl_obj)->getReferencedPrivateData(CID_ASYNCIOCONTROLLER, xsink)),
+                    xsink);
+                if (!*xsink && *ctl_priv) {
+                    SimpleRefHolder<QoreStringNode> owner(new QoreStringNode(async_owner));
+                    ctl_priv->cancelByOwner(*owner, xsink);
+                }
+            }
+            if (*xsink) {
+                xsink->clear();
+            }
+            ctrl_op = nullptr;
+            ctrl_op_obj->deref(xsink);
+            ctrl_op_obj = nullptr;
         }
     }
 
@@ -209,6 +254,9 @@ struct qore_ftp_private {
 
     DLLLOCAL QoreHashNode* getControlPeerInfo(ExceptionSink* xsink, bool host_lookup) const {
         AutoLocker al(m);
+        if (ctrl_op && ctrl_op->getControlSocket()) {
+            return ctrl_op->getControlSocket()->getPeerInfo(xsink, host_lookup);
+        }
         return control.getPeerInfo(xsink, host_lookup);
     }
 
@@ -219,6 +267,9 @@ struct qore_ftp_private {
 
     DLLLOCAL QoreHashNode* getControlSocketInfo(ExceptionSink* xsink, bool host_lookup) const {
         AutoLocker al(m);
+        if (ctrl_op && ctrl_op->getControlSocket()) {
+            return ctrl_op->getControlSocket()->getSocketInfo(xsink, host_lookup);
+        }
         return control.getSocketInfo(xsink, host_lookup);
     }
 
@@ -292,10 +343,19 @@ struct qore_ftp_private {
     DLLLOCAL void disconnectIntern() {
         control.close();
         control_connected = false;
-        if (!manual_mode)
+        if (!manual_mode) {
             mode = FTP_MODE_UNKNOWN;
+        }
         data.close();
         loggedin = false;
+        // Clear async pointers — don't cancel from controller here;
+        // cleanupAsync() handles that during object destruction
+        ctrl_op = nullptr;
+        if (ctrl_op_obj) {
+            ExceptionSink xsink;
+            ctrl_op_obj->deref(&xsink);
+            ctrl_op_obj = nullptr;
+        }
     }
 
     DLLLOCAL int connect(ExceptionSink* xsink) {
@@ -306,6 +366,10 @@ struct qore_ftp_private {
 
     // unlocked
     DLLLOCAL QoreStringNode* getResponse(int &code, ExceptionSink* xsink) {
+        // Use async recv if available
+        if (use_async && ctrl_op) {
+            return recvResponseAsyncBlocking(code, xsink);
+        }
         QoreStringNodeHolder resp(nullptr);
         // if there is data in the buffer, then take it, otherwise read
         if (!buffer.strlen()) {
@@ -403,6 +467,10 @@ struct qore_ftp_private {
 
     // unlocked
     DLLLOCAL QoreStringNode* sendMsg(int &code, const char* cmd, const char* arg, ExceptionSink* xsink) {
+        if (use_async && ctrl_op) {
+            return sendMsgAsyncBlocking(code, cmd, arg, xsink);
+        }
+
         do_event_send_msg(cmd, arg);
 
         QoreString c(cmd);
@@ -485,7 +553,734 @@ struct qore_ftp_private {
         return 0;
     }
 
+    //! Async connect: creates FtpControlPollOperation, submits to controller, blocks
+    DLLLOCAL int connectAsyncBlocking(ExceptionSink* xsink) {
+        disconnectIntern();
+        if (!host) {
+            xsink->raiseException("FTP-CONNECT-ERROR", "no hostname set");
+            return -1;
+        }
+
+        // Create FtpControlPollOperation — this creates the socket and starts the connect
+        // We need to create the QoreObject + priv manually from C++
+        QoreSocketObject* sock_priv = new QoreSocketObject;
+        sock_priv->ref();  // extra ref for QoreObject setPrivate
+
+        QoreStringMaker target("%s:%d", host, port);
+        sock_priv->ref();  // ref for connect op
+        SocketConnectPollOperation* connect_op = new SocketConnectPollOperation(xsink,
+            false, target.c_str(), sock_priv);
+        if (*xsink) {
+            connect_op->deref(xsink);
+            sock_priv->deref(xsink);
+            sock_priv->deref(xsink);
+            return -1;
+        }
+
+        // Create QoreObject wrapper for the poll operation
+        ctrl_op_obj = new QoreObject(QC_FTPCONTROLPOLLOPERATION, getProgram());
+        // Set sock member (setMemberValue takes ownership)
+        QoreObject* sock_obj = new QoreObject(QC_SOCKET, getProgram(), sock_priv);
+        ctrl_op_obj->setMemberValue("sock", QC_FTPCONTROLPOLLOPERATION, sock_obj, xsink);
+        if (*xsink) {
+            sock_obj->deref(xsink);
+            connect_op->deref(xsink);
+            ctrl_op_obj->deref(xsink);
+            ctrl_op_obj = nullptr;
+            return -1;
+        }
+        ctrl_op_obj->setMemberValue("goal", QC_FTPCONTROLPOLLOPERATION,
+            new QoreStringNode("ftp-login"), xsink);
+        if (*xsink) {
+            connect_op->deref(xsink);
+            ctrl_op_obj->deref(xsink);
+            ctrl_op_obj = nullptr;
+            return -1;
+        }
+
+        // Create C++ priv and set it on the QoreObject
+        ctrl_op = new FtpControlPollOperationPriv(ctrl_op_obj, sock_priv, connect_op,
+            secure, secure_data,
+            user ? user : nullptr,
+            pass ? pass : nullptr);
+        ctrl_op_obj->setPrivate(CID_FTPCONTROLPOLLOPERATION, ctrl_op);
+        // Set self on the connect op so it can create poll info
+        connect_op->setSelf(ctrl_op_obj);
+
+        // Submit to async I/O controller
+        if (ctrl_op->submitToController(xsink, async_owner.c_str())) {
+            cleanupAsync(xsink);
+            return -1;
+        }
+
+        // Block until login completes
+        if (ctrl_op->waitForCompletion(timeout_ms, xsink)) {
+            cleanupAsync(xsink);
+            return -1;
+        }
+
+        // Check result
+        if (ctrl_op->isClosed()) {
+            xsink->raiseException("FTP-CONNECT-ERROR", "FTP connection closed during login");
+            cleanupAsync(xsink);
+            return -1;
+        }
+        if (!ctrl_op->isReady()) {
+            xsink->raiseException("FTP-CONNECT-ERROR", "FTP login did not complete");
+            cleanupAsync(xsink);
+            return -1;
+        }
+
+        loggedin = true;
+        control_connected = true;
+        return 0;
+    }
+
+    //! Async sendMsg: submits command via async poll op, blocks for response
+    DLLLOCAL QoreStringNode* sendMsgAsyncBlocking(int& code, const char* cmd, const char* arg,
+            ExceptionSink* xsink) {
+        if (!ctrl_op || !ctrl_op->isReady()) {
+            xsink->raiseException("FTP-SEND-ERROR", "not connected (async)");
+            return nullptr;
+        }
+
+        ctrl_op->submitCommand(cmd, arg, xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+
+        // Re-submit to controller for the command
+        if (ctrl_op->submitToController(xsink, async_owner.c_str())) {
+            return nullptr;
+        }
+
+        // Block until command response
+        if (ctrl_op->waitForCompletion(timeout_ms, xsink)) {
+            return nullptr;
+        }
+
+        code = ctrl_op->getLastResponseCode();
+        // Get the response text from getOutput()
+        ValueHolder output(ctrl_op->getOutput(), xsink);
+        if (output->getType() == NT_HASH) {
+            QoreHashNode* h = output->get<QoreHashNode>();
+            QoreValue msg = h->getKeyValue("message");
+            if (msg.getType() == NT_STRING) {
+                return msg.get<QoreStringNode>()->stringRefSelf();
+            }
+        }
+        return new QoreStringNode("");
+    }
+
+    //! Read a response from the control channel without sending a command (async)
+    DLLLOCAL QoreStringNode* recvResponseAsyncBlocking(int& code, ExceptionSink* xsink) {
+        if (!ctrl_op || !ctrl_op->isReady()) {
+            xsink->raiseException("FTP-RECEIVE-ERROR", "not connected (async)");
+            return nullptr;
+        }
+        ctrl_op->submitRecvResponse(xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+        if (ctrl_op->submitToController(xsink, async_owner.c_str())) {
+            return nullptr;
+        }
+        if (ctrl_op->waitForCompletion(timeout_ms, xsink)) {
+            return nullptr;
+        }
+        code = ctrl_op->getLastResponseCode();
+        ValueHolder output(ctrl_op->getOutput(), xsink);
+        if (output->getType() == NT_HASH) {
+            QoreHashNode* h = output->get<QoreHashNode>();
+            QoreValue msg = h->getKeyValue("message");
+            if (msg.getType() == NT_STRING) {
+                return msg.get<QoreStringNode>()->stringRefSelf();
+            }
+        }
+        return new QoreStringNode("");
+    }
+
+    //! Create a FtpDataPollOperation and submit it to the async controller
+    /** Returns the data op priv (for waitForCompletion) and the QoreObject (for cleanup).
+        Does NOT block — the caller must send the transfer command (RETR/STOR/LIST) on
+        the control channel and then call data_op->waitForCompletion().
+    */
+    DLLLOCAL FtpDataPollOperationPriv* createAndSubmitDataOp(
+            const char* data_host, int data_port, bool recv_mode,
+            BinaryNode* send_data, QoreObject*& data_op_obj_out,
+            ExceptionSink* xsink) {
+        // Create data socket
+        QoreSocketObject* dsock = new QoreSocketObject;
+        dsock->ref();  // for QoreObject setPrivate
+
+        QoreStringMaker dtarget("%s:%d", data_host, data_port);
+        dsock->ref();  // for connect op
+        SocketConnectPollOperation* dconnect = new SocketConnectPollOperation(xsink,
+            false, dtarget.c_str(), dsock);
+        if (*xsink) {
+            dconnect->deref(xsink);
+            dsock->deref(xsink);
+            dsock->deref(xsink);
+            return nullptr;
+        }
+
+        // Create QoreObject for the data poll op
+        QoreObject* dop_obj = new QoreObject(QC_FTPDATAPOLLOPERATION, getProgram());
+        QoreObject* dsock_obj = new QoreObject(QC_SOCKET, getProgram(), dsock);
+        dop_obj->setMemberValue("sock", QC_FTPDATAPOLLOPERATION, dsock_obj, xsink);
+        if (*xsink) {
+            dsock_obj->deref(xsink);
+            dconnect->deref(xsink);
+            dop_obj->deref(xsink);
+            return nullptr;
+        }
+        dop_obj->setMemberValue("goal", QC_FTPDATAPOLLOPERATION,
+            new QoreStringNode(recv_mode ? "ftp-data-recv" : "ftp-data-send"), xsink);
+        if (*xsink) {
+            dconnect->deref(xsink);
+            dop_obj->deref(xsink);
+            return nullptr;
+        }
+
+        FtpDataPollOperationPriv* dop;
+        if (recv_mode) {
+            dop = new FtpDataPollOperationPriv(dop_obj, dsock, dconnect, secure_data);
+        } else {
+            dop = new FtpDataPollOperationPriv(dop_obj, dsock, dconnect, secure_data, send_data);
+        }
+        dop_obj->setPrivate(CID_FTPDATAPOLLOPERATION, dop);
+        // Set self on the connect op so it can create poll info
+        dconnect->setSelf(dop_obj);
+
+        // Submit to controller (non-blocking — starts connect immediately)
+        if (dop->submitToController(xsink, async_owner.c_str())) {
+            dop_obj->deref(xsink);
+            return nullptr;
+        }
+
+        data_op_obj_out = dop_obj;
+        return dop;
+    }
+
+    //! Parse EPSV response "229 ... (|||port|)" → returns data port, or -1 on error
+    DLLLOCAL int parseEpsvResponse(const char* resp, ExceptionSink* xsink) {
+        const char* s = strstr(resp, "|||");
+        if (!s) {
+            xsink->raiseException("FTP-RESPONSE-ERROR", "cannot find port in EPSV response: %s", resp);
+            return -1;
+        }
+        s += 3;
+        const char* end = strchr(s, '|');
+        if (!end) {
+            xsink->raiseException("FTP-RESPONSE-ERROR", "cannot find port in EPSV response: %s", resp);
+            return -1;
+        }
+        return atoi(s);
+    }
+
+    //! Parse PASV response "227 ... (h1,h2,h3,h4,p1,p2)" → fills host/port
+    DLLLOCAL int parsePasvResponse(const char* resp, std::string& data_host_out,
+            int& data_port_out, ExceptionSink* xsink) {
+        const char* s = strstr(resp, "(");
+        if (!s) {
+            xsink->raiseException("FTP-RESPONSE-ERROR", "cannot parse PASV response: %s", resp);
+            return -1;
+        }
+        int num[5];
+        s++;
+        for (int i = 0; i < 5; i++) {
+            const char* comma = strchr(s, ',');
+            if (!comma) {
+                xsink->raiseException("FTP-RESPONSE-ERROR", "cannot parse PASV response: %s", resp);
+                return -1;
+            }
+            num[i] = atoi(s);
+            s = comma + 1;
+        }
+        data_port_out = (num[4] << 8) + atoi(s);
+        char buf[32];
+        snprintf(buf, sizeof(buf), "%d.%d.%d.%d", num[0], num[1], num[2], num[3]);
+        data_host_out = buf;
+        return 0;
+    }
+
+    //! Negotiate data channel: sends EPSV/PASV via async, returns host+port
+    DLLLOCAL int negotiateDataChannelAsync(std::string& data_host_out,
+            int& data_port_out, ExceptionSink* xsink) {
+        int code;
+        // Try EPSV first (unless mode is forced)
+        if (mode == FTP_MODE_UNKNOWN || mode == FTP_MODE_EPSV) {
+            QoreStringNodeHolder resp(sendMsgAsyncBlocking(code, "EPSV", nullptr, xsink));
+            if (*xsink) {
+                return -1;
+            }
+            if ((code / 100) == 2) {
+                int dp = parseEpsvResponse(resp->c_str(), xsink);
+                if (*xsink) {
+                    return -1;
+                }
+                data_host_out = host;
+                data_port_out = dp;
+                mode = FTP_MODE_EPSV;
+                return 0;
+            }
+            // EPSV failed — if it was forced, error out
+            if (mode == FTP_MODE_EPSV) {
+                xsink->raiseException("FTP-CONNECT-ERROR",
+                    "EPSV failed: %s", resp ? resp->c_str() : "no response");
+                return -1;
+            }
+        }
+        // Try PASV
+        if (mode == FTP_MODE_UNKNOWN || mode == FTP_MODE_PASV) {
+            QoreStringNodeHolder resp(sendMsgAsyncBlocking(code, "PASV", nullptr, xsink));
+            if (*xsink) {
+                return -1;
+            }
+            if ((code / 100) != 2) {
+                xsink->raiseException("FTP-CONNECT-ERROR",
+                    "PASV failed: %s", resp ? resp->c_str() : "no response");
+                return -1;
+            }
+            if (parsePasvResponse(resp->c_str(), data_host_out, data_port_out, xsink)) {
+                return -1;
+            }
+            mode = FTP_MODE_PASV;
+            return 0;
+        }
+        // PORT mode: handled separately via portTransferAsyncBlocking
+        xsink->raiseException("FTP-CONNECT-ERROR",
+            "PORT mode must use portTransferAsyncBlocking directly");
+        return -1;
+    }
+
+    //! PORT mode async data transfer: bind+listen+PORT+accept+transfer, all non-blocking
+    /** @param transfer_cmd "RETR", "STOR", or "LIST"/"NLST"
+        @param transfer_arg command argument (file path)
+        @param send_data data to send (for STOR), nullptr for recv
+        @param recv_output receives downloaded data (for RETR/LIST), nullptr for send
+        @return 0 on success, -1 on error
+    */
+    DLLLOCAL int portTransferAsyncBlocking(const char* transfer_cmd, const char* transfer_arg,
+            const void* send_data_ptr, size_t send_len,
+            BinaryNode** recv_output, ExceptionSink* xsink) {
+        // 1. Get local interface address from the async control socket
+        int ctrl_fd = (ctrl_op && ctrl_op->getControlSocket())
+            ? ctrl_op->getControlSocket()->getSocket()
+            : control.getSocket();
+        struct sockaddr_in add;
+        socklen_t socksize = sizeof(struct sockaddr_in);
+        if (getsockname(ctrl_fd, (struct sockaddr*)&add, &socksize) < 0) {
+            xsink->raiseErrnoException("FTP-CONNECT-ERROR", errno,
+                "cannot determine local interface address");
+            return -1;
+        }
+
+        // 2. Create a fresh QoreSocketObject for listening, bind + listen
+        QoreSocketObject* listen_sock = new QoreSocketObject;
+        listen_sock->ref();  // extra ref for QoreObject setPrivate (derefAll)
+        char ifname_buf[80];
+        if (!inet_ntop(AF_INET, &add.sin_addr, ifname_buf, sizeof(ifname_buf))) {
+            listen_sock->deref(xsink);
+            listen_sock->deref(xsink);
+            xsink->raiseErrnoException("FTP-CONNECT-ERROR", errno,
+                "cannot determine local interface address");
+            return -1;
+        }
+        // Bind on the control connection's local IPv4 interface, ephemeral port
+        if (listen_sock->bindINET(ifname_buf, "0", true, Q_AF_INET, Q_SOCK_STREAM, 0, xsink)) {
+            listen_sock->deref(xsink);
+            listen_sock->deref(xsink);
+            return -1;
+        }
+        int dataport = listen_sock->getPort();
+        char ifname[80];
+        strncpy(ifname, ifname_buf, sizeof(ifname) - 1);
+        ifname[sizeof(ifname) - 1] = '\0';
+        if (listen_sock->listen(5)) {
+            listen_sock->deref(xsink);
+            listen_sock->deref(xsink);
+            return -1;
+        }
+
+        // Wrap in QoreObject for async controller
+        QoreObject* listen_obj = new QoreObject(QC_SOCKET, getProgram(), listen_sock);
+        ReferenceHolder<QoreObject> listen_holder(listen_obj, xsink);
+
+        // 3. Create FtpPortAcceptPollOperation and submit to controller FIRST
+        //    (must be polling before RETR triggers the server's connect-back)
+        listen_sock->ref();  // ref for SocketAcceptPollOperation
+        SocketAcceptPollOperation* raw_accept = new SocketAcceptPollOperation(xsink, listen_sock);
+        if (*xsink) {
+            raw_accept->deref(xsink);
+            return -1;
+        }
+
+        // Create FtpPortAcceptPollOperation (composite: accept + optional SSL)
+        QoreObject* accept_op_obj = new QoreObject(QC_FTPPORTACCEPTPOLLOPERATION, getProgram());
+        listen_obj->ref();
+        accept_op_obj->setMemberValue("sock", QC_FTPPORTACCEPTPOLLOPERATION, listen_obj, xsink);
+        accept_op_obj->setMemberValue("goal", QC_FTPPORTACCEPTPOLLOPERATION,
+            new QoreStringNode("ftp-port-accept"), xsink);
+        if (*xsink) {
+            raw_accept->deref(xsink);
+            accept_op_obj->deref(xsink);
+            return -1;
+        }
+        FtpPortAcceptPollOperationPriv* accept_priv = new FtpPortAcceptPollOperationPriv(
+            accept_op_obj, raw_accept, listen_sock, secure_data);
+        accept_op_obj->setPrivate(CID_FTPPORTACCEPTPOLLOPERATION, accept_priv);
+        raw_accept->setSelf(accept_op_obj);
+        ReferenceHolder<QoreObject> accept_holder(accept_op_obj, xsink);
+
+        // Submit accept op to controller (non-blocking — starts polling listener fd)
+        if (accept_priv->submitToController(xsink, async_owner.c_str())) {
+            return -1;
+        }
+
+        // 4. Now send PORT command (server learns where to connect)
+        char ifcopy[80];
+        strncpy(ifcopy, ifname, sizeof(ifcopy) - 1);
+        ifcopy[sizeof(ifcopy) - 1] = '\0';
+        for (int i = 0; ifcopy[i]; i++) {
+            if (ifcopy[i] == '.') {
+                ifcopy[i] = ',';
+            }
+        }
+        QoreString pconn;
+        pconn.sprintf("%s,%d,%d", ifcopy, dataport >> 8, dataport & 255);
+        int code;
+        QoreStringNodeHolder mr(sendMsgAsyncBlocking(code, "PORT", pconn.c_str(), xsink));
+        if (*xsink || (code / 100) != 2) {
+            if (!*xsink) {
+                xsink->raiseException("FTP-CONNECT-ERROR",
+                    "PORT command failed: %s", mr ? mr->c_str() : "no response");
+            }
+            return -1;
+        }
+
+        // 5. Send transfer command — triggers server connect-back to our PORT
+        mr = sendMsgAsyncBlocking(code, transfer_cmd, transfer_arg, xsink);
+        if (*xsink || (code / 100) != 1) {
+            if (!*xsink) {
+                xsink->raiseException("FTP-DATA-ERROR",
+                    "%s failed: %s", transfer_cmd, mr ? mr->c_str() : "no response");
+            }
+            return -1;
+        }
+
+        // 6. Block until accept (+ optional SSL) completes
+        if (accept_priv->waitForCompletion(timeout_ms, xsink)) {
+            return -1;
+        }
+
+        // 7. Get accepted socket
+        ValueHolder accepted_val(accept_priv->getOutput(), xsink);
+        if (accepted_val->getType() != NT_OBJECT) {
+            xsink->raiseException("FTP-CONNECT-ERROR", "PORT accept did not return a socket");
+            return -1;
+        }
+        QoreObject* accepted_obj = accepted_val->get<QoreObject>();
+        QoreSocketObject* accepted_sock = static_cast<QoreSocketObject*>(
+            accepted_obj->getReferencedPrivateData(CID_SOCKET, xsink));
+        if (*xsink || !accepted_sock) {
+            if (!*xsink) {
+                xsink->raiseException("FTP-CONNECT-ERROR", "failed to get accepted socket");
+            }
+            return -1;
+        }
+
+        // 8. Create FtpDataPollOperation with adopt-socket constructor
+        accepted_sock->ref();  // for QoreObject setPrivate
+        QoreObject* data_op_obj = new QoreObject(QC_FTPDATAPOLLOPERATION, getProgram());
+        accepted_obj->ref();
+        data_op_obj->setMemberValue("sock", QC_FTPDATAPOLLOPERATION, accepted_obj, xsink);
+        data_op_obj->setMemberValue("goal", QC_FTPDATAPOLLOPERATION,
+            new QoreStringNode(recv_output ? "ftp-data-recv" : "ftp-data-send"), xsink);
+        if (*xsink) {
+            accepted_sock->deref(xsink);
+            data_op_obj->deref(xsink);
+            return -1;
+        }
+
+        FtpDataPollOperationPriv* data_op;
+        if (send_data_ptr && send_len > 0) {
+            BinaryNode* send_bin = new BinaryNode;
+            send_bin->append(send_data_ptr, send_len);
+            data_op = new FtpDataPollOperationPriv(data_op_obj, accepted_sock,
+                secure_data, send_bin);
+        } else {
+            data_op = new FtpDataPollOperationPriv(data_op_obj, accepted_sock,
+                secure_data, true);
+        }
+        data_op_obj->setPrivate(CID_FTPDATAPOLLOPERATION, data_op);
+        ReferenceHolder<QoreObject> data_op_holder(data_op_obj, xsink);
+
+        // Submit data transfer to controller and block
+        if (data_op->submitToController(xsink, async_owner.c_str())) {
+            return -1;
+        }
+        if (data_op->waitForCompletion(timeout_ms, xsink)) {
+            return -1;
+        }
+
+        // 9. Get received data
+        if (recv_output) {
+            ValueHolder result(data_op->getOutput(), xsink);
+            if (result->getType() == NT_BINARY) {
+                *recv_output = result.release().get<BinaryNode>();
+            } else {
+                *recv_output = new BinaryNode;
+            }
+        }
+
+        // 10. Read 226 completion response
+        mr = recvResponseAsyncBlocking(code, xsink);
+        if (*xsink) {
+            return -1;
+        }
+        if ((code / 100) != 2) {
+            xsink->raiseException("FTP-DATA-ERROR",
+                "transfer completion failed: %s", mr ? mr->c_str() : "no response");
+            return -1;
+        }
+        return 0;
+    }
+
+    //! Async GET: download a file via async I/O controller
+    DLLLOCAL BinaryNode* getAsyncBlocking(const char* remotepath, ExceptionSink* xsink) {
+        // 1. TYPE I (binary mode)
+        int code;
+        QoreStringNodeHolder resp(sendMsgAsyncBlocking(code, "TYPE", "I", xsink));
+        if (*xsink || (code / 100) != 2) {
+            if (!*xsink) {
+                xsink->raiseException("FTP-ERROR", "TYPE I failed: %s", resp ? resp->c_str() : "no response");
+            }
+            return nullptr;
+        }
+
+        // PORT mode: use dedicated PORT transfer flow
+        if (mode == FTP_MODE_PORT) {
+            BinaryNode* output = nullptr;
+            if (portTransferAsyncBlocking("RETR", remotepath, nullptr, 0, &output, xsink)) {
+                return nullptr;
+            }
+            return output ? output : new BinaryNode;
+        }
+
+        // 2. Negotiate data channel (EPSV/PASV)
+        std::string dhost;
+        int dport;
+        if (negotiateDataChannelAsync(dhost, dport, xsink)) {
+            return nullptr;
+        }
+
+        // 3. Create and submit data receive op (non-blocking — starts connecting)
+        QoreObject* data_op_obj = nullptr;
+        FtpDataPollOperationPriv* data_op = createAndSubmitDataOp(
+            dhost.c_str(), dport, true, nullptr, data_op_obj, xsink);
+        if (!data_op) {
+            return nullptr;
+        }
+        ReferenceHolder<QoreObject> data_op_holder(data_op_obj, xsink);
+
+        // 4. RETR command on control channel
+        resp = sendMsgAsyncBlocking(code, "RETR", remotepath, xsink);
+        if (*xsink || (code / 100) != 1) {
+            if (!*xsink) {
+                xsink->raiseException("FTP-GET-ERROR",
+                    "RETR failed: %s", resp ? resp->c_str() : "no response");
+            }
+            return nullptr;
+        }
+
+        // 5. Wait for data transfer to complete
+        if (data_op->waitForCompletion(timeout_ms, xsink)) {
+            return nullptr;
+        }
+
+        // 6. Get received data
+        ValueHolder result(data_op->getOutput(), xsink);
+
+        // 7. Read 226 completion response
+        resp = recvResponseAsyncBlocking(code, xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+        if ((code / 100) != 2) {
+            xsink->raiseException("FTP-GET-ERROR",
+                "transfer completion failed: %s", resp ? resp->c_str() : "no response");
+            return nullptr;
+        }
+
+        if (result->getType() == NT_BINARY) {
+            return result.release().get<BinaryNode>();
+        }
+        return new BinaryNode;
+    }
+
+    //! Async PUT: upload data via async I/O controller
+    DLLLOCAL int putAsyncBlocking(const void* data_ptr, size_t data_len,
+            const char* remotename, ExceptionSink* xsink) {
+        // 1. TYPE I
+        int code;
+        QoreStringNodeHolder resp(sendMsgAsyncBlocking(code, "TYPE", "I", xsink));
+        if (*xsink || (code / 100) != 2) {
+            if (!*xsink) {
+                xsink->raiseException("FTP-ERROR", "TYPE I failed: %s", resp ? resp->c_str() : "no response");
+            }
+            return -1;
+        }
+
+        // PORT mode
+        if (mode == FTP_MODE_PORT) {
+            return portTransferAsyncBlocking("STOR", remotename,
+                data_ptr, data_len, nullptr, xsink);
+        }
+
+        // 2. Negotiate data channel
+        std::string dhost;
+        int dport;
+        if (negotiateDataChannelAsync(dhost, dport, xsink)) {
+            return -1;
+        }
+
+        // 3. Create send data binary
+        BinaryNode* send_bin = new BinaryNode;
+        send_bin->append(data_ptr, data_len);
+
+        // 4. Create and submit data send op
+        QoreObject* data_op_obj = nullptr;
+        FtpDataPollOperationPriv* data_op = createAndSubmitDataOp(
+            dhost.c_str(), dport, false, send_bin, data_op_obj, xsink);
+        if (!data_op) {
+            send_bin->deref();
+            return -1;
+        }
+        ReferenceHolder<QoreObject> data_op_holder(data_op_obj, xsink);
+
+        // 5. STOR command
+        resp = sendMsgAsyncBlocking(code, "STOR", remotename, xsink);
+        if (*xsink || (code / 100) != 1) {
+            if (!*xsink) {
+                xsink->raiseException("FTP-PUT-ERROR",
+                    "STOR failed: %s", resp ? resp->c_str() : "no response");
+            }
+            return -1;
+        }
+
+        // 6. Wait for data transfer
+        if (data_op->waitForCompletion(timeout_ms, xsink)) {
+            return -1;
+        }
+
+        // 7. Read 226
+        resp = recvResponseAsyncBlocking(code, xsink);
+        if (*xsink) {
+            return -1;
+        }
+        if ((code / 100) != 2) {
+            xsink->raiseException("FTP-PUT-ERROR",
+                "transfer completion failed: %s", resp ? resp->c_str() : "no response");
+            return -1;
+        }
+        return 0;
+    }
+
+    //! Async LIST: directory listing via async I/O controller
+    DLLLOCAL QoreStringNode* listAsyncBlocking(const char* path, bool long_list,
+            ExceptionSink* xsink) {
+        // 1. TYPE A (ASCII)
+        int code;
+        QoreStringNodeHolder resp(sendMsgAsyncBlocking(code, "TYPE", "A", xsink));
+        if (*xsink || (code / 100) != 2) {
+            if (!*xsink) {
+                xsink->raiseException("FTP-ERROR", "TYPE A failed: %s", resp ? resp->c_str() : "no response");
+            }
+            return nullptr;
+        }
+
+        // PORT mode
+        if (mode == FTP_MODE_PORT) {
+            BinaryNode* output = nullptr;
+            const char* cmd = long_list ? "LIST" : "NLST";
+            if (portTransferAsyncBlocking(cmd, (path && *path) ? path : nullptr,
+                    nullptr, 0, &output, xsink)) {
+                return nullptr;
+            }
+            if (output) {
+                SimpleRefHolder<BinaryNode> holder(output);
+                return new QoreStringNode(static_cast<const char*>(output->getPtr()),
+                    output->size(), QCS_DEFAULT);
+            }
+            return new QoreStringNode("");
+        }
+
+        // 2. Negotiate data channel
+        std::string dhost;
+        int dport;
+        if (negotiateDataChannelAsync(dhost, dport, xsink)) {
+            return nullptr;
+        }
+
+        // 3. Create data receive op
+        QoreObject* data_op_obj = nullptr;
+        FtpDataPollOperationPriv* data_op = createAndSubmitDataOp(
+            dhost.c_str(), dport, true, nullptr, data_op_obj, xsink);
+        if (!data_op) {
+            return nullptr;
+        }
+        ReferenceHolder<QoreObject> data_op_holder(data_op_obj, xsink);
+
+        // 4. LIST/NLST command
+        resp = sendMsgAsyncBlocking(code, long_list ? "LIST" : "NLST",
+            (path && *path) ? path : nullptr, xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+        // 5xx = file not found
+        if ((code / 100) == 5) {
+            return nullptr;
+        }
+        if ((code / 100) != 1) {
+            xsink->raiseException("FTP-LIST-ERROR",
+                "LIST/NLST failed: %s", resp ? resp->c_str() : "no response");
+            return nullptr;
+        }
+
+        // 5. Wait for data transfer
+        if (data_op->waitForCompletion(timeout_ms, xsink)) {
+            return nullptr;
+        }
+
+        // 6. Get data
+        ValueHolder result(data_op->getOutput(), xsink);
+
+        // 7. Read 226
+        resp = recvResponseAsyncBlocking(code, xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+        if ((code / 100) != 2) {
+            xsink->raiseException("FTP-LIST-ERROR",
+                "transfer completion failed: %s", resp ? resp->c_str() : "no response");
+            return nullptr;
+        }
+
+        // Convert binary to string
+        if (result->getType() == NT_BINARY) {
+            const BinaryNode* bin = result->get<const BinaryNode>();
+            return new QoreStringNode(static_cast<const char*>(bin->getPtr()), bin->size(),
+                QCS_DEFAULT);
+        }
+        return new QoreStringNode("");
+    }
+
     DLLLOCAL int connectUnlocked(ExceptionSink* xsink) {
+        if (use_async) {
+            return connectAsyncBlocking(xsink);
+        }
+
         disconnectIntern();
 
         if (!host) {
@@ -718,7 +1513,11 @@ struct qore_ftp_private {
         struct sockaddr_in add;
         socklen_t socksize = sizeof(struct sockaddr_in);
 
-        if (getsockname(control.getSocket(), (struct sockaddr *)&add, &socksize) < 0) {
+        // Use the async control socket if available, otherwise the legacy socket
+        int ctrl_fd = (ctrl_op && ctrl_op->getControlSocket())
+            ? ctrl_op->getControlSocket()->getSocket()
+            : control.getSocket();
+        if (getsockname(ctrl_fd, (struct sockaddr *)&add, &socksize) < 0) {
             xsink->raiseErrnoException("FTP-CONNECT-ERROR", errno, "cannot determine local interface address for data port connection");
             return -1;
         }
@@ -920,6 +1719,12 @@ QoreStringNode* QoreFtpClient::list(const char* path, bool long_list, ExceptionS
     if (priv->checkConnectedUnlocked(xsink))
         return nullptr;
 
+    if (priv->use_async && priv->ctrl_op) {
+        QoreStringNode* rv = priv->listAsyncBlocking(path, long_list, xsink);
+        sl.unlock();
+        return rv;
+    }
+
     if (priv->setBinaryMode(false, xsink) || priv->connectData(xsink))
         return nullptr;
 
@@ -987,6 +1792,37 @@ int QoreFtpClient::put(const char* localpath, const char* remotename, ExceptionS
     SafeLocker sl(priv->m);
     if (priv->checkConnectedUnlocked(xsink))
         return -1;
+
+    if (priv->use_async && priv->ctrl_op) {
+        // Read file into memory and use async put
+        TmpLocalName ln(remotename, localpath);
+        int fd = open(localpath, O_RDONLY, 0);
+        if (fd < 0) {
+            xsink->raiseErrnoException("FTP-FILE-OPEN-ERROR", errno, "%s", localpath);
+            return -1;
+        }
+        struct stat file_info;
+        if (fstat(fd, &file_info) == -1) {
+            close(fd);
+            xsink->raiseErrnoException("FTP-FILE-PUT-ERROR", errno, "could not get file size");
+            return -1;
+        }
+        SimpleRefHolder<BinaryNode> data(new BinaryNode);
+        if (file_info.st_size > 0) {
+            data->preallocate(file_info.st_size);
+            ssize_t nread = read(fd, const_cast<void*>(data->getPtr()), file_info.st_size);
+            if (nread < 0) {
+                close(fd);
+                xsink->raiseErrnoException("FTP-FILE-PUT-ERROR", errno, "error reading file");
+                return -1;
+            }
+            data->setSize(nread);
+        }
+        close(fd);
+        int rv = priv->putAsyncBlocking((*data)->getPtr(), (*data)->size(), *ln, xsink);
+        sl.unlock();
+        return rv;
+    }
 
     int fd = open(localpath, O_RDONLY, 0);
     if (fd < 0) {
@@ -1069,6 +1905,33 @@ int QoreFtpClient::put(InputStream *is, const char* remotename, ExceptionSink* x
     if (priv->checkConnectedUnlocked(xsink))
         return -1;
 
+    if (priv->use_async && priv->ctrl_op) {
+        // Read InputStream into memory for async dispatch.
+        // Use is->read() directly (not readHelper and without the
+        // reassign/unassign thread dance): callers commonly wire a
+        // StreamPipe in a producer/consumer pattern where the pipe's
+        // InputStream was constructed in a different thread from the
+        // one executing this put().  readHelper() / reassignThread()
+        // both reject that; PipeInputStream::read itself is internally
+        // synchronized and thread-safe, matching the sync path at
+        // sendFromInputStream() below.
+        SimpleRefHolder<BinaryNode> buf(new BinaryNode);
+        char chunk[65536];
+        while (true) {
+            int64_t nread = is->read(chunk, sizeof(chunk), xsink);
+            if (*xsink) {
+                return -1;
+            }
+            if (nread <= 0) {
+                break;
+            }
+            buf->append(chunk, static_cast<size_t>(nread));
+        }
+        int rv = priv->putAsyncBlocking((*buf)->getPtr(), (*buf)->size(), remotename, xsink);
+        sl.unlock();
+        return rv;
+    }
+
     // set binary mode and establish data connection
     if (priv->setBinaryMode(true, xsink) || priv->connectData(xsink)) {
         return -1;
@@ -1136,6 +1999,12 @@ int QoreFtpClient::putData(const void *data, size_t len, const char* remotename,
    if (priv->checkConnectedUnlocked(xsink))
       return -1;
 
+   if (priv->use_async && priv->ctrl_op) {
+      int rv = priv->putAsyncBlocking(data, len, remotename, xsink);
+      sl.unlock();
+      return rv;
+   }
+
    // set binary mode and establish data connection
    if (priv->setBinaryMode(true, xsink) || priv->connectData(xsink)) {
       return -1;
@@ -1197,6 +2066,32 @@ int QoreFtpClient::get(const char* remotepath, const char* localname, ExceptionS
         return -1;
     }
 
+    if (priv->use_async && priv->ctrl_op) {
+        TmpLocalName ln(localname, remotepath);
+        SimpleRefHolder<BinaryNode> data(priv->getAsyncBlocking(remotepath, xsink));
+        sl.unlock();
+        if (*xsink) {
+            return -1;
+        }
+        // Write to file
+        int fd = open(*ln, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+        if (fd < 0) {
+            xsink->raiseErrnoException("FTP-FILE-OPEN-ERROR", errno, "%s", *ln);
+            return -1;
+        }
+        if (*data && (*data)->size() > 0) {
+            ssize_t nw = write(fd, (*data)->getPtr(), (*data)->size());
+            if (nw < 0) {
+                int en = errno;
+                close(fd);
+                xsink->raiseErrnoException("FTP-FILE-WRITE-ERROR", en, "error writing file");
+                return -1;
+            }
+        }
+        close(fd);
+        return 0;
+    }
+
     // get local file name
     TmpLocalName ln(localname, remotepath);
     printd(FTPDEBUG, "QoreFtpClient::get(%s) %s\n", remotepath, *ln);
@@ -1245,6 +2140,22 @@ int QoreFtpClient::get(const char* remotepath, OutputStream *os, ExceptionSink* 
    if (priv->checkConnectedUnlocked(xsink))
       return -1;
 
+   if (priv->use_async && priv->ctrl_op) {
+      // Download via async, write to OutputStream
+      SimpleRefHolder<BinaryNode> data(priv->getAsyncBlocking(remotepath, xsink));
+      sl.unlock();
+      if (*xsink) {
+         return -1;
+      }
+      if (*data && (*data)->size() > 0) {
+         os->write((*data)->getPtr(), (*data)->size(), xsink);
+         if (*xsink) {
+            return -1;
+         }
+      }
+      return 0;
+   }
+
    FtpResp resp;
    if (priv->pre_get(resp, remotepath, xsink)) {
       return -1;
@@ -1284,6 +2195,16 @@ QoreStringNode* QoreFtpClient::getAsString(ExceptionSink* xsink, const char* rem
     SafeLocker sl(priv->m);
     if (priv->checkConnectedUnlocked(xsink)) {
         return nullptr;
+    }
+
+    if (priv->use_async && priv->ctrl_op) {
+        SimpleRefHolder<BinaryNode> data(priv->getAsyncBlocking(remotepath, xsink));
+        sl.unlock();
+        if (*xsink || !*data) {
+            return nullptr;
+        }
+        return new QoreStringNode(static_cast<const char*>((*data)->getPtr()),
+            (*data)->size(), encoding);
     }
 
     printd(FTPDEBUG, "QoreFtpClient::getAsString(%s)\n", remotepath);
@@ -1328,6 +2249,12 @@ BinaryNode* QoreFtpClient::getAsBinary(const char* remotepath, ExceptionSink* xs
     SafeLocker sl(priv->m);
     if (priv->checkConnectedUnlocked(xsink)) {
         return nullptr;
+    }
+
+    if (priv->use_async && priv->ctrl_op) {
+        BinaryNode* rv = priv->getAsyncBlocking(remotepath, xsink);
+        sl.unlock();
+        return rv;
     }
 
     printd(FTPDEBUG, "QoreFtpClient::getAsBinary(%s)\n", remotepath);

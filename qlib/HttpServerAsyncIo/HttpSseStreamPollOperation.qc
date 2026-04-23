@@ -71,6 +71,15 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
         */
         int pending_offset = 0;
 
+        #! Heartbeat interval in milliseconds; 0 disables the heartbeat
+        int heartbeat_ms = 0;
+
+        #! Heartbeat payload sent when the interval expires with no outbound traffic
+        string heartbeat_msg = ":hb\n\n";
+
+        #! Epoch microseconds of the last successful send (or construction)
+        int last_send_us = clock_getmicros();
+
         #! Optional callback retained for API compatibility
         /** SSE queue wakeups are driven by @ref notifier.  This callback is no
             longer needed for normal operation, but the setter remains so older
@@ -84,6 +93,22 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
     */
     constructor(Socket sock) {
         self.sock = sock;
+    }
+
+    #! Configures the SSE heartbeat
+    /** The async I/O controller wakes the operation via \c poll_timeout_ms when the
+        interval elapses with no outbound traffic; the operation then sends \a msg
+        (typically a \c ":hb\\n\\n" comment) to keep proxies and load balancers from
+        dropping the idle connection.
+
+        @param interval_ms heartbeat interval in milliseconds; 0 disables the heartbeat
+        @param msg raw bytes to send (must already be SSE-framed, e.g. \c ":hb\\n\\n")
+
+        @since HttpServerAsyncIo 1.0.1
+    */
+    setHeartbeat(int interval_ms, string msg = ":hb\n\n") {
+        heartbeat_ms = interval_ms;
+        heartbeat_msg = msg;
     }
 
     #! Sets the wake callback used to notify the I/O controller after queuing data
@@ -145,6 +170,7 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
                     sock.send2(pending_data, DefaultSocketSendTimeout);
                     remove pending_data;
                     pending_offset = 0;
+                    last_send_us = clock_getmicros();
                 } catch (hash<ExceptionInfo> ex) {
                     state = STATE_DISCONNECTED;
                     return NOTHING;
@@ -164,7 +190,33 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
             pending_offset = 0;
         }
 
-        # No data to send - wait until queueEvent()/queueRaw*() signals us.
+        # No data to send — send a heartbeat inline if the interval has
+        # elapsed, otherwise arm poll_timeout_ms so the controller wakes us
+        # when the next heartbeat tick is due.  If no heartbeat is
+        # configured, wait for the notifier to signal us from queueEvent()
+        # / queueRaw*().
+        if (heartbeat_ms > 0) {
+            int elapsed_ms = (clock_getmicros() - last_send_us) / 1000;
+            if (elapsed_ms >= heartbeat_ms) {
+                try {
+                    sock.send2(heartbeat_msg, DefaultSocketSendTimeout);
+                    last_send_us = clock_getmicros();
+                } catch (hash<ExceptionInfo> ex) {
+                    state = STATE_DISCONNECTED;
+                    return NOTHING;
+                }
+                return <SocketPollInfo>{
+                    "events": SOCK_POLLIN,
+                    "socket": notifier,
+                    "poll_timeout_ms": heartbeat_ms,
+                };
+            }
+            return <SocketPollInfo>{
+                "events": SOCK_POLLIN,
+                "socket": notifier,
+                "poll_timeout_ms": heartbeat_ms - elapsed_ms,
+            };
+        }
         return <SocketPollInfo>{
             "events": SOCK_POLLIN,
             "socket": notifier,

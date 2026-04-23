@@ -81,7 +81,9 @@ enum Http3Mode {
  */
 class QoreHttpClientObject : public QoreSocketObject {
     friend struct qore_httpclient_priv;
-    friend class HttpClientConnectSendRecvPollOperation;
+    // HttpClientConnectSendRecvPollOperation was the legacy poll op
+    // for startPollSendRecv/startPollConnect; removed in Phase 5
+    // (all traffic now routes through HttpClientConnMgrPollOp).
 
 public:
     //! creates the QoreHttpClientObject object
@@ -647,6 +649,87 @@ public:
             OutputStream *os, InputStream* is, size_t max_chunk_size,
             const ResolvedCallReferenceNode* trailer_callback, ExceptionSink* xsink);
 
+    //! Reads a single HTTP chunk from the conn_mgr streaming channel or the raw socket
+    /** When a streaming channel is active (set by sendAndStream via conn_mgr),
+        reads the next body chunk from the channel.  Otherwise falls through to
+        the Socket-level readHTTPChunk.
+
+        @param timeout_ms timeout in milliseconds; -1 = use default
+        @param xsink exception sink
+        @return hash with "body" key, or empty hash for EOF
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT QoreHashNode* readHTTPChunkConnMgr(int timeout_ms, ExceptionSink* xsink);
+
+    //! Reads a Server-Sent Event from the conn_mgr streaming channel or the raw socket
+    /** @param content_encoding optional content-encoding for decompression
+        @param timeout_ms timeout in milliseconds; -1 = use default
+        @param xsink exception sink
+        @return SseMessageInfo hash or nullptr for EOF
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT QoreHashNode* readServerSentEventConnMgr(const QoreStringNode* content_encoding,
+        int timeout_ms, ExceptionSink* xsink);
+
+    //! Reads the full chunked body from the conn_mgr streaming channel or the raw socket
+    /** @param timeout_ms timeout in milliseconds; -1 = use default
+        @param xsink exception sink
+        @return hash with "body" key containing accumulated body
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT QoreHashNode* readHTTPChunkedBodyConnMgr(int timeout_ms, ExceptionSink* xsink);
+
+    //! Reads the full chunked body as binary from the conn_mgr streaming channel or the raw socket
+    /** @param timeout_ms timeout in milliseconds; -1 = use default
+        @param xsink exception sink
+        @return hash with "body" key containing accumulated binary body
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT QoreHashNode* readHTTPChunkedBodyBinaryConnMgr(int timeout_ms, ExceptionSink* xsink);
+
+    //! Returns true if a conn_mgr streaming channel is currently held by this client
+    /** When true, @ref readHTTPChunk / @ref readServerSentEvent / @ref readHTTPChunkedBody
+        read from the conn_mgr channel instead of the raw socket, and
+        @ref isDataAvailable waits on the channel instead of probing the
+        legacy socket.
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT bool hasStreamingChannel() const;
+
+    //! Reports whether the client is open, including when a conn_mgr streaming channel is held.
+    /** When the client is using conn_mgr (`use_conn_mgr=true`), the
+        legacy @c msock socket is never connected, so the inherited
+        @c Socket::isOpen reports @c false even while the client is
+        actively streaming.  This override reports @c true whenever a
+        conn_mgr streaming channel is held; otherwise it falls through
+        to the legacy socket check.
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT bool isOpen() const;
+
+    //! Reports whether data is available, across the conn_mgr streaming channel and the raw socket.
+    /** When the client holds a conn_mgr streaming channel (e.g. after a
+        @c sendAndStream for SSE), the channel is consulted with the full
+        @a timeout_ms budget via @c QoreChannel::waitReadable (non-
+        destructive — the data stays in the channel for the subsequent
+        @c readHTTPChunk / @c readServerSentEvent call).  The raw socket
+        is not probed in this case because it belongs to the conn_mgr
+        pool, not this client.  Otherwise falls through to the legacy
+        @c msock.
+
+        @param timeout_ms wait budget in milliseconds; @c 0 = non-blocking
+        @param xsink exception sink
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT bool isDataAvailable(int timeout_ms, ExceptionSink* xsink) const;
+
     //! sends an HTTP "GET" method and returns the value of the message body returned
     /** if you need to get all the headers received, then use QoreHttpClientObject::send() instead
         @param path the path string to send in the header
@@ -871,6 +954,11 @@ public:
     DLLEXPORT QoreHashNode* getConfig() const;
 
     DLLLOCAL static void static_init();
+
+    //! Returns the standard HTTP reason phrase for a status code.
+    /** @since %Qore 2.3
+    */
+    DLLLOCAL static const char* getHttpStatusMessage(int code);
 
     DLLLOCAL void cleanup(ExceptionSink* xsink);
 

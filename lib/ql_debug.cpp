@@ -630,6 +630,11 @@ static void ut_promise_action_execute_error(UnitTestCounters& c) {
     UT_ASSERT(c, !xsink, "cleanup succeeds");
 }
 
+// Forward declarations for the adopt-socket tests added in the
+// NEGOTIATE-phase work.
+static void ut_http1_adopt_socket_simple_request(UnitTestCounters& c);
+static void ut_http2_adopt_socket_construct(UnitTestCounters& c);
+
 // --- Http1ClientConnection (Phase P2) tests ---
 //
 // These tests exercise the minimum-viable C++ HttpClientConnectionBase /
@@ -1105,9 +1110,13 @@ static void ut_manager_pool_reuse(UnitTestCounters& c) {
     UT_ASSERT(c, !xsink, "manager construction succeeds");
     if (xsink) { xsink.clear(); return; }
 
-    // Server that handles two sequential requests on the same connection
-    // (HTTP/1.1 keep-alive — Connection: keep-alive header).  After the
-    // second response, the server closes.
+    // Server that handles two sequential requests on the SAME TCP
+    // connection.  Reuse is enforced by the test topology: the server
+    // listen queue is size 1 and the handler thread does exactly one
+    // accept() — if the client were to open a second TCP connection for
+    // the second request, the server would not service it and mgr->request()
+    // would hang.  Both requests succeeding is therefore proof that the
+    // manager reused the pooled connection.
     UtH1Server server;
     if (server.start() != 0) {
         UT_ASSERT(c, false, "test server bind/listen failed");
@@ -1119,21 +1128,19 @@ static void ut_manager_pool_reuse(UnitTestCounters& c) {
             char buf[4096];
             ssize_t n = ut_read_request_headers(cfd, buf, sizeof(buf));
             if (n <= 0) return;
-            // Use Content-Length-only reply with keep-alive on the first
-            // response so the client reuses the connection.
-            const char* resp = (i == 0)
-                ? "HTTP/1.1 200 OK\r\n"
-                  "Content-Type: text/plain\r\n"
-                  "Content-Length: 5\r\n"
-                  "Connection: keep-alive\r\n"
-                  "\r\n"
-                  "hello"
-                : "HTTP/1.1 200 OK\r\n"
-                  "Content-Type: text/plain\r\n"
-                  "Content-Length: 5\r\n"
-                  "Connection: close\r\n"
-                  "\r\n"
-                  "world";
+            // Both responses use keep-alive so the H1 poll op does not
+            // proactively close the connection after response 2 (that
+            // would evict it from the pool before we can observe it).
+            // The server-side socket still closes when the handler
+            // returns, but the client's I/O thread processes that TCP
+            // close asynchronously, which is a separate condition.
+            static const char* resp =
+                "HTTP/1.1 200 OK\r\n"
+                "Content-Type: text/plain\r\n"
+                "Content-Length: 5\r\n"
+                "Connection: keep-alive\r\n"
+                "\r\n"
+                "hello";
             send(cfd, resp, strlen(resp), 0);
         }
     });
@@ -1151,7 +1158,10 @@ static void ut_manager_pool_reuse(UnitTestCounters& c) {
     UT_ASSERT_EQ(c, 1, mgr->getConnectionCount("127.0.0.1", server_port),
         "key has 1 connection");
 
-    // Second request to the same target — should reuse the pooled connection.
+    // Second request to the same target — reuses the pooled connection.
+    // (If reuse is broken, the server's single-accept topology makes the
+    // request hang rather than produce wrong data, so a successful r2
+    // already proves reuse.)
     {
         ReferenceHolder<QoreHashNode> r2(
             mgr->request("GET", "http", "127.0.0.1", server_port, "/",
@@ -1160,9 +1170,14 @@ static void ut_manager_pool_reuse(UnitTestCounters& c) {
         UT_ASSERT(c, !xsink && r2, "second request succeeds (reuse)");
         if (xsink) xsink.clear();
     }
-    // Pool size still 1 — same connection reused, not a new one created.
-    UT_ASSERT_EQ(c, 1, mgr->getPoolSize(),
-        "pool still has 1 connection after second request (reuse)");
+
+    // We intentionally do NOT assert getPoolSize() after the second
+    // request: the server-side socket is closed by the handler thread
+    // when serveOnce's wrapper calls ::close(cfd) after the lambda
+    // returns, and the client's I/O thread may or may not have
+    // processed that TCP close by the time this function returns from
+    // mgr->request().  A pool-size assertion here is racy.  Reuse is
+    // already proven by the server's single-accept topology.
 }
 
 static void ut_manager_close_all(UnitTestCounters& c) {
@@ -1299,6 +1314,257 @@ static void ut_http2_connection_alpn_setup(UnitTestCounters& c) {
     // connect outcome is not deterministic on a refused port + SSL.
     UT_ASSERT(c, !conn->isReady(), "fresh https H2 connection not yet ready");
     conn->closeConnection(&xsink);
+    xsink.clear();
+}
+
+// --- Adopt-socket constructor tests (NEGOTIATE phase 2) ---
+//
+// These exercise the new Http1/Http2 ClientConnection constructors that
+// take an already-connected socket instead of doing the connect phase
+// themselves.  The H1 test is full end-to-end: a local POSIX server is
+// bound, a QoreSocketObject is connected to it synchronously, the
+// adopt-socket Http1ClientConnection constructor is invoked, and a GET
+// request is issued and awaited.  The H2 test verifies the construction
+// path against a dead socket — the H2 preface send will fail but we
+// assert that the constructor itself doesn't crash and the connection
+// ends up in a reasonable state.
+
+static void ut_http1_adopt_socket_simple_request(UnitTestCounters& c) {
+    ExceptionSink xsink;
+
+    UtH1Server server;
+    if (server.start() != 0) {
+        UT_ASSERT(c, false, "test server bind/listen failed");
+        return;
+    }
+    int server_port = server.port;
+
+    server.serveOnce([](int cfd) {
+        char buf[4096];
+        ssize_t n = ut_read_request_headers(cfd, buf, sizeof(buf));
+        if (n <= 0) {
+            return;
+        }
+        static const char* resp =
+            "HTTP/1.1 200 OK\r\n"
+            "Content-Type: text/plain\r\n"
+            "Content-Length: 5\r\n"
+            "Connection: close\r\n"
+            "\r\n"
+            "hello";
+        send(cfd, resp, strlen(resp), 0);
+    });
+
+    // Create a QoreSocketObject and connect it synchronously to the
+    // test server.  This gives us an already-connected socket to pass
+    // to the adopt-socket constructor.
+    ReferenceHolder<QoreSocketObject> sock(new QoreSocketObject, &xsink);
+    int rc = sock->connectINET("127.0.0.1", server_port, 5000, &xsink);
+    UT_ASSERT(c, rc == 0, "synchronous connectINET to test server succeeds");
+    UT_ASSERT(c, !xsink, "connectINET raises no exception");
+    if (rc != 0 || xsink) {
+        xsink.clear();
+        return;
+    }
+
+    // Hand the connected socket to Http1ClientConnection via the new
+    // adopt-socket ctor.  The ctor takes the QoreObject wrapper (not a
+    // fresh copy) so the handover preserves the single-owner
+    // close_internal invariant — see the comment in
+    // Http1ClientConnection::buildAndSubmitAdopted.
+    sock->ref();
+    QoreSocketObject* sock_raw = *sock;
+    ReferenceHolder<QoreObject> sock_obj_holder(
+        new QoreObject(QC_SOCKET, getProgram(), sock_raw), &xsink);
+    ReferenceHolder<Http1ClientConnection> conn(
+        new Http1ClientConnection(sock_obj_holder.release(), sock_raw,
+            "127.0.0.1", server_port,
+            /* ssl_required */ false, &xsink),
+        &xsink);
+    UT_ASSERT(c, !xsink, "adopt-socket Http1ClientConnection construction succeeds");
+    if (xsink) {
+        xsink.clear();
+        return;
+    }
+
+    // The adopt ctor transitions to READY synchronously — waitForReady
+    // should return true immediately.
+    bool ready = conn->waitForReadyOrError(1000, &xsink);
+    UT_ASSERT(c, !xsink, "adopt-path waitForReadyOrError raises no error");
+    UT_ASSERT(c, ready, "adopt-socket connection is READY after construction");
+    if (!ready || xsink) {
+        xsink.clear();
+        return;
+    }
+
+    // Submit a GET request and await the Future.
+    ReferenceHolder<QoreHashNode> submit_result(
+        conn->submitRequest("GET", "/", nullptr, nullptr, 0, &xsink), &xsink);
+    UT_ASSERT(c, !xsink, "adopt-socket submitRequest succeeds");
+    UT_ASSERT(c, (bool)submit_result, "submitRequest returns a hash");
+    if (!submit_result) {
+        xsink.clear();
+        return;
+    }
+    QoreValue future_v = submit_result->getKeyValue("future");
+    QoreObject* future_obj = future_v.getType() == NT_OBJECT
+        ? const_cast<QoreObject*>(future_v.get<const QoreObject>()) : nullptr;
+    UT_ASSERT(c, future_obj != nullptr, "future is non-null");
+    if (!future_obj) {
+        return;
+    }
+    future_obj->ref();
+    QoreValue result = q_future_get_blocking(future_obj, 5000, &xsink);
+    future_obj->deref(&xsink);
+    UT_ASSERT(c, !xsink, "q_future_get_blocking on adopt-path succeeds");
+    UT_ASSERT(c, result.getType() == NT_HASH, "response is a hash");
+    if (result.getType() == NT_HASH) {
+        const QoreHashNode* h = result.get<const QoreHashNode>();
+        int64 status = h->getKeyValue("status_code").getAsBigInt();
+        UT_ASSERT_EQ(c, (int64)200, status,
+            "adopt-socket response status is 200");
+    }
+    result.discard(&xsink);
+
+    conn->closeConnection(&xsink);
+    xsink.clear();
+}
+
+static void ut_http2_adopt_socket_construct(UnitTestCounters& c) {
+    ExceptionSink xsink;
+
+    // Construction-only coverage: we can't easily build a real
+    // SSL+ALPN-handshook socket inline in a C++ unit test.  Instead we
+    // exercise the code path on an already-connected (but non-SSL)
+    // socket — the H2 multiplex op will send the preface and eventually
+    // fail to confirm H2, but we verify the adopt-socket ctor itself
+    // doesn't crash and the resulting connection object is in a
+    // reasonable state.
+    //
+    // End-to-end SSL+ALPN coverage of the H2 adopt-socket path lives in
+    // the Phase 3 NegotiatingConnectionPollOp integration tests.
+
+    UtH1Server server;
+    if (server.start() != 0) {
+        UT_ASSERT(c, false, "test server bind/listen failed");
+        return;
+    }
+    int server_port = server.port;
+
+    // The test server accepts the connection but never responds.  The
+    // H2 multiplex op will time out or error on SETTINGS, which is fine
+    // for this construction-focused test.
+    server.serveOnce([](int cfd) {
+        // Read whatever the client sends (the H2 preface + SETTINGS)
+        // then close without responding.
+        char buf[4096];
+        recv(cfd, buf, sizeof(buf), 0);
+    });
+
+    ReferenceHolder<QoreSocketObject> sock(new QoreSocketObject, &xsink);
+    int rc = sock->connectINET("127.0.0.1", server_port, 5000, &xsink);
+    UT_ASSERT(c, rc == 0, "synchronous connectINET for H2 adopt test succeeds");
+    if (rc != 0 || xsink) {
+        xsink.clear();
+        return;
+    }
+
+    sock->ref();
+    QoreSocketObject* sock_raw = *sock;
+    ReferenceHolder<QoreObject> sock_obj_holder(
+        new QoreObject(QC_SOCKET, getProgram(), sock_raw), &xsink);
+    ReferenceHolder<Http2ClientConnection> conn(
+        new Http2ClientConnection(sock_obj_holder.release(), sock_raw,
+            "127.0.0.1", server_port,
+            /* max_streams */ 100, &xsink),
+        &xsink);
+    UT_ASSERT(c, !xsink,
+        "adopt-socket Http2ClientConnection construction succeeds");
+    if (xsink) {
+        xsink.clear();
+        return;
+    }
+
+    // The adopt ctor calls initAdoptedMultiplex which installs the H2
+    // multiplex op.  Because ssl_required is implicitly true on the
+    // adopt path, fireReadyCallback runs synchronously — verify.
+    UT_ASSERT(c, conn->isReady(),
+        "adopt-socket Http2 connection is READY after construction");
+
+    // Close the connection cleanly; no request is submitted because the
+    // peer is not a real H2 server.
+    conn->closeConnection(&xsink);
+    xsink.clear();
+}
+
+// --- NEGOTIATE manager dispatch tests (phase 3) ---
+//
+// These exercise the manager's NEGOTIATE case wire-up: reject on plain
+// HTTP (no ALPN without TLS), reject on proxy (future work), and surface
+// a connect error cleanly on a refused port.  Full end-to-end coverage
+// of the ALPN selection path lands in phase 5 when QoreHttpClientObject's
+// AUTO+SSL flow switches from the legacy bypass to NEGOTIATE.
+
+static void ut_manager_negotiate_requires_ssl(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    HttpClientConnectionManagerBase::Options opts;
+    opts.protocol = HttpClientProtocol::NEGOTIATE;
+    opts.connect_timeout_ms = 1000;
+    ReferenceHolder<HttpClientConnectionManagerBase> mgr(
+        new HttpClientConnectionManagerBase(opts, &xsink), &xsink);
+    UT_ASSERT(c, !xsink, "manager(NEGOTIATE) construction succeeds");
+    if (xsink) { xsink.clear(); return; }
+
+    // Plain HTTP (scheme "http") → NEGOTIATE rejects with
+    // HTTPCLIENT-NEGOTIATE-SSL-REQUIRED.
+    HttpClientConnectionBase* conn = mgr->acquireConnection(
+        "http", "127.0.0.1", 1, &xsink);
+    UT_ASSERT(c, !conn, "NEGOTIATE + plain HTTP returns nullptr");
+    UT_ASSERT(c, xsink.isException(),
+        "NEGOTIATE + plain HTTP raises an exception");
+    const QoreStringNode* err = xsink.getExceptionErr().get<const QoreStringNode>();
+    UT_ASSERT(c, err && strcmp(err->c_str(), "HTTPCLIENT-NEGOTIATE-SSL-REQUIRED") == 0,
+        "exception code is HTTPCLIENT-NEGOTIATE-SSL-REQUIRED");
+    xsink.clear();
+}
+
+static void ut_manager_negotiate_refused_port(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    HttpClientConnectionManagerBase::Options opts;
+    opts.protocol = HttpClientProtocol::NEGOTIATE;
+    opts.connect_timeout_ms = 2000;
+    opts.accept_all_certs = true;  // not used — handshake never starts
+    ReferenceHolder<HttpClientConnectionManagerBase> mgr(
+        new HttpClientConnectionManagerBase(opts, &xsink), &xsink);
+    UT_ASSERT(c, !xsink, "manager(NEGOTIATE) construction succeeds");
+    if (xsink) { xsink.clear(); return; }
+
+    // Bind+close an ephemeral port so the next connect is refused.
+    int sfd = socket(AF_INET, SOCK_STREAM, 0);
+    if (sfd < 0) { UT_ASSERT(c, false, "reserve socket"); return; }
+    sockaddr_in addr{};
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    addr.sin_port = 0;
+    ::bind(sfd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
+    socklen_t alen = sizeof(addr);
+    getsockname(sfd, reinterpret_cast<sockaddr*>(&addr), &alen);
+    int dead_port = ntohs(addr.sin_port);
+    ::close(sfd);
+
+    // https scheme triggers the NEGOTIATE path.  Connect fails at TCP
+    // (refused); the error propagates out of the negotiation helper.
+    HttpClientConnectionBase* conn = mgr->acquireConnection(
+        "https", "127.0.0.1", dead_port, &xsink);
+    UT_ASSERT(c, !conn, "NEGOTIATE + refused port returns nullptr");
+    UT_ASSERT(c, xsink.isException(),
+        "NEGOTIATE + refused port raises an exception");
+    // Exception code should NOT be HTTPCLIENT-NEGOTIATE-NOT-IMPLEMENTED
+    // (the Phase 1 placeholder) — if we see that, the wire-up is broken.
+    const QoreStringNode* err = xsink.getExceptionErr().get<const QoreStringNode>();
+    UT_ASSERT(c, err
+            && strcmp(err->c_str(), "HTTPCLIENT-NEGOTIATE-NOT-IMPLEMENTED") != 0,
+        "NEGOTIATE is wired (not the phase 1 placeholder)");
     xsink.clear();
 }
 
@@ -1440,6 +1706,84 @@ static void ut_manager_proxy_url_parse(UnitTestCounters& c) {
         UT_ASSERT(c, xsink.isException(), "invalid proxy scheme rejected");
         xsink.clear();
     }
+}
+
+//! Test that manager with proxy creates connections that connect to the proxy
+static void ut_manager_proxy_h1_connect(UnitTestCounters& c) {
+    ExceptionSink xsink;
+
+    // Reserve an ephemeral port to use as the "proxy" address.  It's closed
+    // immediately so the connect will fail — but the error message should
+    // reference this port, proving the H1 connection targets the proxy.
+    int sfd = socket(AF_INET, SOCK_STREAM, 0);
+    if (sfd < 0) { UT_ASSERT(c, false, "reserve proxy port"); return; }
+    sockaddr_in addr{};
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    addr.sin_port = 0;
+    bind(sfd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
+    socklen_t alen = sizeof(addr);
+    getsockname(sfd, reinterpret_cast<sockaddr*>(&addr), &alen);
+    int proxy_port = ntohs(addr.sin_port);
+    ::close(sfd);
+
+    // Create manager with proxy pointing to the dead port
+    char proxy_url[128];
+    snprintf(proxy_url, sizeof(proxy_url), "http://127.0.0.1:%d", proxy_port);
+
+    HttpClientConnectionManagerBase::Options opts;
+    opts.protocol = HttpClientProtocol::H1;
+    opts.proxy_url = proxy_url;
+    opts.connect_timeout_ms = 2000;
+    ReferenceHolder<HttpClientConnectionManagerBase> mgr(
+        new HttpClientConnectionManagerBase(opts, &xsink), &xsink);
+    UT_ASSERT(c, !xsink, "manager(proxy) construction succeeds");
+    if (xsink) { xsink.clear(); return; }
+
+    // HTTPS through proxy: should attempt the connect (not raise
+    // HTTPCLIENT-PROXY-ERROR anymore)
+    HttpClientConnectionBase* conn = mgr->acquireConnection(
+        "https", "target.example.com", 443, &xsink);
+    UT_ASSERT(c, !conn, "acquireConnection(https via proxy) returns nullptr (connect refused)");
+    UT_ASSERT(c, xsink.isException(),
+        "acquireConnection(https via proxy) raises exception");
+    const QoreStringNode* err = xsink.getExceptionErr().get<const QoreStringNode>();
+    UT_ASSERT(c, err && strcmp(err->c_str(), "HTTPCLIENT-PROXY-ERROR") != 0,
+        "exception is NOT HTTPCLIENT-PROXY-ERROR (proxy CONNECT is attempted)");
+    xsink.clear();
+
+    // Plain HTTP through proxy: also should attempt connect
+    conn = mgr->acquireConnection("http", "target.example.com", 80, &xsink);
+    UT_ASSERT(c, !conn, "acquireConnection(http via proxy) returns nullptr");
+    UT_ASSERT(c, xsink.isException(),
+        "acquireConnection(http via proxy) raises exception");
+    xsink.clear();
+
+    mgr->closeAll(&xsink);
+    xsink.clear();
+}
+
+//! Test that H3 through proxy is correctly rejected
+static void ut_manager_proxy_h3_rejected(UnitTestCounters& c) {
+    ExceptionSink xsink;
+
+    HttpClientConnectionManagerBase::Options opts;
+    opts.protocol = HttpClientProtocol::H3;
+    opts.proxy_url = "http://127.0.0.1:8080";
+    opts.connect_timeout_ms = 1000;
+    ReferenceHolder<HttpClientConnectionManagerBase> mgr(
+        new HttpClientConnectionManagerBase(opts, &xsink), &xsink);
+    UT_ASSERT(c, !xsink, "manager(H3+proxy) construction succeeds");
+    if (xsink) { xsink.clear(); return; }
+
+    HttpClientConnectionBase* conn = mgr->acquireConnection(
+        "https", "target.example.com", 443, &xsink);
+    UT_ASSERT(c, !conn, "H3+proxy acquireConnection returns nullptr");
+    UT_ASSERT(c, xsink.isException(), "H3+proxy raises exception");
+    const QoreStringNode* err = xsink.getExceptionErr().get<const QoreStringNode>();
+    UT_ASSERT(c, err && strcmp(err->c_str(), "HTTPCLIENT-PROXY-ERROR") == 0,
+        "H3+proxy raises HTTPCLIENT-PROXY-ERROR");
+    xsink.clear();
 }
 
 // --- P10 tests: HTTPClient via conn_mgr ---
@@ -1644,6 +1988,194 @@ static void ut_asyncio_stop_clear(UnitTestCounters& c) {
     UT_ASSERT(c, !xsink, "cleanup succeeds");
 }
 
+// ============================================================
+// SocketIoMode enforcement unit tests
+// ============================================================
+
+//! Test that a socket in Async mode rejects sync operations
+static void ut_socket_iomode_async_blocks_sync(UnitTestCounters& c) {
+    ExceptionSink xsink;
+
+    // Create a socket object
+    QoreSocketObject* sock = new QoreSocketObject;
+    QoreObject* sock_obj = new QoreObject(QC_SOCKET, getProgram(), sock);
+    my_socket_priv* sp = my_socket_priv::getPriv(*sock);
+
+    // Manually set I/O mode to Async (simulates what a poll op does)
+    {
+        AutoLocker al(sp->m);
+        sp->io_mode = SocketIoMode::Async;
+    }
+
+    // checkNonBlock (sync entry point) should raise SOCKET-ASYNC-MODE-ERROR
+    {
+        AutoLocker al(sp->m);
+        int rv = sp->checkNonBlock(&xsink);
+        UT_ASSERT(c, rv == -1, "checkNonBlock returns -1 when io_mode=Async");
+        UT_ASSERT(c, (bool)xsink, "checkNonBlock raises exception when io_mode=Async");
+        const QoreValue err_val = xsink.getExceptionErr();
+        const QoreStringNode* err = err_val.get<const QoreStringNode>();
+        UT_ASSERT(c, err && *err == "SOCKET-ASYNC-MODE-ERROR",
+            "exception is SOCKET-ASYNC-MODE-ERROR");
+        xsink.clear();
+    }
+
+    // Reset and verify directional checkNonBlock also checks
+    {
+        AutoLocker al(sp->m);
+        int rv = sp->checkNonBlock(&xsink, NB_SEND);
+        UT_ASSERT(c, rv == -1, "directional checkNonBlock returns -1 when io_mode=Async");
+        UT_ASSERT(c, (bool)xsink, "directional checkNonBlock raises exception");
+        xsink.clear();
+    }
+
+    // Reset io_mode before cleanup
+    {
+        AutoLocker al(sp->m);
+        sp->io_mode = SocketIoMode::Unclaimed;
+    }
+
+    sock_obj->deref(&xsink);
+    xsink.clear();
+}
+
+//! Test that a socket in Sync mode rejects async operations
+static void ut_socket_iomode_sync_blocks_async(UnitTestCounters& c) {
+    ExceptionSink xsink;
+
+    QoreSocketObject* sock = new QoreSocketObject;
+    QoreObject* sock_obj = new QoreObject(QC_SOCKET, getProgram(), sock);
+    my_socket_priv* sp = my_socket_priv::getPriv(*sock);
+
+    // Manually set I/O mode to Sync
+    {
+        AutoLocker al(sp->m);
+        sp->io_mode = SocketIoMode::Sync;
+    }
+
+    // setNonBlock (async entry point) should raise SOCKET-SYNC-MODE-ERROR
+    {
+        AutoLocker al(sp->m);
+        int rv = sp->setNonBlock(&xsink);
+        UT_ASSERT(c, rv == -1, "setNonBlock returns -1 when io_mode=Sync");
+        UT_ASSERT(c, (bool)xsink, "setNonBlock raises exception when io_mode=Sync");
+        const QoreValue err_val = xsink.getExceptionErr();
+        const QoreStringNode* err = err_val.get<const QoreStringNode>();
+        UT_ASSERT(c, err && *err == "SOCKET-SYNC-MODE-ERROR",
+            "exception is SOCKET-SYNC-MODE-ERROR");
+        xsink.clear();
+    }
+
+    // Also check directional setNonBlock
+    {
+        AutoLocker al(sp->m);
+        int rv = sp->setNonBlock(&xsink, NB_RECV);
+        UT_ASSERT(c, rv == -1, "directional setNonBlock returns -1 when io_mode=Sync");
+        UT_ASSERT(c, (bool)xsink, "directional setNonBlock raises exception");
+        xsink.clear();
+    }
+
+    // Also check setNonBlockAccept
+    {
+        AutoLocker al(sp->m);
+        int rv = sp->setNonBlockAccept(&xsink);
+        UT_ASSERT(c, rv == -1, "setNonBlockAccept returns -1 when io_mode=Sync");
+        UT_ASSERT(c, (bool)xsink, "setNonBlockAccept raises exception");
+        xsink.clear();
+    }
+
+    // Reset io_mode before cleanup
+    {
+        AutoLocker al(sp->m);
+        sp->io_mode = SocketIoMode::Unclaimed;
+    }
+
+    sock_obj->deref(&xsink);
+    xsink.clear();
+}
+
+//! Test that Unclaimed mode allows both sync and async
+static void ut_socket_iomode_unclaimed_allows_both(UnitTestCounters& c) {
+    ExceptionSink xsink;
+
+    QoreSocketObject* sock = new QoreSocketObject;
+    QoreObject* sock_obj = new QoreObject(QC_SOCKET, getProgram(), sock);
+    my_socket_priv* sp = my_socket_priv::getPriv(*sock);
+
+    // Verify default is Unclaimed
+    {
+        AutoLocker al(sp->m);
+        UT_ASSERT(c, sp->io_mode == SocketIoMode::Unclaimed,
+            "default io_mode is Unclaimed");
+
+        // checkSyncAllowed should pass
+        int rv = sp->checkSyncAllowed(&xsink);
+        UT_ASSERT(c, rv == 0, "checkSyncAllowed passes when Unclaimed");
+        UT_ASSERT(c, !xsink, "no exception from checkSyncAllowed");
+
+        // checkAsyncAllowed should pass
+        rv = sp->checkAsyncAllowed(&xsink);
+        UT_ASSERT(c, rv == 0, "checkAsyncAllowed passes when Unclaimed");
+        UT_ASSERT(c, !xsink, "no exception from checkAsyncAllowed");
+    }
+
+    sock_obj->deref(&xsink);
+    xsink.clear();
+}
+
+//! Test that setNonBlock claims Async mode and clearNonBlock resets to Unclaimed
+static void ut_socket_iomode_async_lifecycle(UnitTestCounters& c) {
+    ExceptionSink xsink;
+
+    QoreSocketObject* sock = new QoreSocketObject;
+    QoreObject* sock_obj = new QoreObject(QC_SOCKET, getProgram(), sock);
+    my_socket_priv* sp = my_socket_priv::getPriv(*sock);
+
+    // setNonBlock should claim Async mode
+    {
+        AutoLocker al(sp->m);
+
+        int rv = sp->setNonBlock(&xsink, NB_SEND);
+        UT_ASSERT(c, rv == 0, "setNonBlock(NB_SEND) succeeds on Unclaimed socket");
+        UT_ASSERT(c, !xsink, "no exception from setNonBlock");
+        UT_ASSERT(c, sp->io_mode == SocketIoMode::Async,
+            "io_mode is Async after setNonBlock");
+
+        // Sync operations should now be blocked
+        rv = sp->checkSyncAllowed(&xsink);
+        UT_ASSERT(c, rv == -1, "checkSyncAllowed fails when Async");
+        xsink.clear();
+
+        // clearNonBlock should reset to Unclaimed
+        sp->clearNonBlock(NB_SEND);
+        UT_ASSERT(c, sp->io_mode == SocketIoMode::Unclaimed,
+            "io_mode resets to Unclaimed after clearNonBlock");
+    }
+
+    // Test that clearing partial flags doesn't reset when other flags remain
+    {
+        AutoLocker al(sp->m);
+
+        // Set two directions
+        sp->setNonBlock(NB_SEND);
+        sp->setNonBlock(NB_RECV);
+        sp->io_mode = SocketIoMode::Async;
+
+        // Clear just one direction — should stay Async
+        sp->clearNonBlock(NB_SEND);
+        UT_ASSERT(c, sp->io_mode == SocketIoMode::Async,
+            "io_mode stays Async when non_block_flags still set");
+
+        // Clear the last direction — should reset to Unclaimed
+        sp->clearNonBlock(NB_RECV);
+        UT_ASSERT(c, sp->io_mode == SocketIoMode::Unclaimed,
+            "io_mode resets to Unclaimed when all flags cleared");
+    }
+
+    sock_obj->deref(&xsink);
+    xsink.clear();
+}
+
 #ifdef DEBUG
 //! Debug-only: arm a one-shot fd-swap simulation on the next lock-yielding wait of @a sock.
 /** Tests use this to exercise the fd_generation re-verification path in
@@ -1699,6 +2231,10 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_manager_proxy_url_parse(c);
     ut_http2_connection_construct(c);
     ut_http2_connection_alpn_setup(c);
+    ut_http1_adopt_socket_simple_request(c);
+    ut_http2_adopt_socket_construct(c);
+    ut_manager_negotiate_requires_ssl(c);
+    ut_manager_negotiate_refused_port(c);
     ut_manager_h2_dispatch(c);
     ut_http3_connection_construct(c);
     ut_manager_h3_dispatch(c);
@@ -1708,6 +2244,12 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_asyncio_logger(c);
     ut_asyncio_wait_for_processing_empty(c);
     ut_asyncio_stop_clear(c);
+    ut_socket_iomode_async_blocks_sync(c);
+    ut_socket_iomode_sync_blocks_async(c);
+    ut_socket_iomode_unclaimed_allows_both(c);
+    ut_socket_iomode_async_lifecycle(c);
+    ut_manager_proxy_h1_connect(c);
+    ut_manager_proxy_h3_rejected(c);
 
     QoreHashNode* result = new QoreHashNode(autoTypeInfo);
     result->setKeyValue("test_count", c.test_count, xsink);

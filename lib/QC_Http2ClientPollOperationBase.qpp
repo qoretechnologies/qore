@@ -64,11 +64,80 @@ Http2ClientPollOperationPriv::Http2ClientPollOperationPriv(QoreObject* self,
     // Qore-level connection_ref member (private, stored in the data hash)
 }
 
+Http2ClientPollOperationPriv::Http2ClientPollOperationPriv(QoreObject* self,
+        QoreSocketObject* sock, std::string target_host, int target_port,
+        AbstractHttpPollConnectionPriv* conn_priv)
+    : SocketPollOperationBase(self), current_op(nullptr), sock_obj(sock),
+      ssl_required(true), proxy_tunnel(false),
+      target_host(std::move(target_host)), target_port(target_port),
+      connection_priv(conn_priv) {
+    // Adopt-socket path: no connect op, socket already SSL-handshook and
+    // ALPN-confirmed h2.  h2_state stays at CONNECTING; the multiplex
+    // inner op is installed by initAdoptedMultiplex() once the owning
+    // connection class has called setSelf().
+}
+
+void Http2ClientPollOperationPriv::initAdoptedMultiplex(ExceptionSink* xsink) {
+    // startMultiplex() creates the SocketHttp2ClientMultiplexPollOperation,
+    // installs it as current_op, transitions h2_state to READING, and
+    // (because ssl_required is true on the adopt-socket path) confirms
+    // h2 and fires the ready callback.  Requires self to be set.
+    //
+    // HTTP/2 sends many small frames as separate writes; without TCP_NODELAY,
+    // Nagle + delayed-ACK interaction adds ~40ms per request on sequential
+    // workloads.  The adopted socket inherits from the NEGOTIATE H1
+    // connection, which did not set NODELAY, so set it here.
+    if (sock_obj) {
+        sock_obj->setNoDelay(1);
+    }
+    startMultiplex(xsink);
+}
+
 Http2ClientPollOperationPriv::~Http2ClientPollOperationPriv() {
     if (current_op || sock_obj || error_info) {
         ExceptionSink xsink;
         cleanup(&xsink);
     }
+}
+
+bool Http2ClientPollOperationPriv::scanMembers(RObject& obj, RSetHelper& rsh) {
+    // DGC custom scanner (Pattern B in design/dgc.md).
+    //
+    // stream_queues and pending_stream_registrations store ref'd QoreObject
+    // refs (queue_obj, notifier_obj) in C++ maps that the normal
+    // data/cdmap scan cannot see — without this scanner those refs would
+    // be DGC-invisible, blocking collection of any cycle that crosses the
+    // Queue/EventNotifier.
+    //
+    // Non-blocking: trylock both stream_lock and sq_lock.  If either is
+    // contended we return false and let the scanner try again in the next
+    // cycle — blocking here could deadlock with an app thread holding the
+    // lock and waiting on the same QoreObject's rsection lock (held by the
+    // scanner).  See qore_queue_private::scanMembers for the reference
+    // implementation of this pattern.
+    if (stream_lock.trylock() == 0) {
+        AutoLocker al(stream_lock, true);
+        for (auto& [sid, info] : stream_queues) {
+            if (info.queue_obj && obj.scanCheck(rsh, info.queue_obj)) {
+                return true;
+            }
+            if (info.notifier_obj && obj.scanCheck(rsh, info.notifier_obj)) {
+                return true;
+            }
+        }
+    }
+    if (sq_lock.trylock() == 0) {
+        AutoLocker al(sq_lock, true);
+        for (auto& [sid, info] : pending_stream_registrations) {
+            if (info.queue_obj && obj.scanCheck(rsh, info.queue_obj)) {
+                return true;
+            }
+            if (info.notifier_obj && obj.scanCheck(rsh, info.notifier_obj)) {
+                return true;
+            }
+        }
+    }
+    return false;
 }
 
 void Http2ClientPollOperationPriv::cleanup(ExceptionSink* xsink) {
@@ -195,6 +264,11 @@ QoreHashNode* Http2ClientPollOperationPriv::handleConnecting(ExceptionSink* xsin
     if (current_op->goalReached()) {
         ASYNC_IO_TRACE("H2 handleConnecting: TCP connected to %s:%d ssl=%d\n",
             target_host.c_str(), target_port, (int)ssl_required);
+        // HTTP/2 sends many small frames as separate writes; without
+        // TCP_NODELAY, Nagle + delayed-ACK interaction adds ~40ms per
+        // request on sequential workloads (see legacy setNoDelay at
+        // QoreHttpClientObject::connect_unlocked for context).
+        sock_obj->setNoDelay(1);
         if (proxy_tunnel) {
             startProxyConnect(xsink);
         } else if (ssl_required) {
@@ -621,11 +695,34 @@ QoreHashNode* Http2ClientPollOperationPriv::applyIdleTimeout(QoreHashNode* poll_
             (long long)idle_timeout_us, sock_obj ? sock_obj->getSocket() : -1);
     }
 
+    // Keepalive PING: when idle for ping_interval_us, submit an HTTP/2
+    // PING frame to probe liveness.  nghttp2 handles the PING ACK
+    // automatically; if the connection is dead, the next recv() fails
+    // and existing error handling evicts it from the pool.
+    if (ping_interval_us > 0 && !expired) {
+        if (last_ping_sent_us == 0 || (now_us - last_ping_sent_us) >= ping_interval_us) {
+            if (sock_obj) {
+                ExceptionSink ping_xsink;
+                sock_obj->submitHttp2Ping(&ping_xsink);
+                ping_xsink.clear();
+            }
+            last_ping_sent_us = now_us;
+        }
+    }
+
     // Annotate poll_info so the controller wakes us at the deadline even if
     // no socket events arrive.  Mirrors the nginx keepalive timer model.
     if (poll_info) {
         int64_t remaining_us = idle_deadline_us - now_us;
         int64_t timeout_ms = (remaining_us + 999) / 1000;
+        // If ping interval is shorter, use that as the wakeup deadline
+        if (ping_interval_us > 0 && last_ping_sent_us > 0) {
+            int64_t ping_remaining_us = ping_interval_us
+                - (now_us - last_ping_sent_us);
+            if (ping_remaining_us < remaining_us) {
+                timeout_ms = (ping_remaining_us + 999) / 1000;
+            }
+        }
         if (timeout_ms < 1) {
             timeout_ms = 1;
         }
@@ -920,6 +1017,20 @@ int64_t Http2ClientPollOperationPriv::submitRequest(const char* method, const ch
         }
     }
 
+    // Add Content-Length when a one-shot request body is present.  The
+    // `streaming` parameter indicates request-body streaming (chunked TE
+    // where the caller pushes body data incrementally via pushSendData),
+    // NOT response streaming (SSE/Channel delivery).  For one-shot bodies
+    // (streaming == false) the full size is known upfront.
+    if (body_len > 0 && !streaming) {
+        if (req_headers->getKeyValue("content-length").isNullOrNothing()
+                && req_headers->getKeyValue("Content-Length").isNullOrNothing()) {
+            QoreStringNode* cl = new QoreStringNode();
+            cl->sprintf("%zu", body_len);
+            req_headers->setKeyValue("content-length", cl, xsink);
+        }
+    }
+
     // Check for errors from header construction before acquiring lock
     if (*xsink) {
         action->deref(xsink);
@@ -1118,12 +1229,20 @@ Http2ClientPollOperationBase::constructor(Socket[QoreSocketObject] sock, string 
         new Http2ClientPollOperationPriv(self, sock_ptr, connect_ptr,
             ssl_required, proxy_tunnel,
             target_host->c_str(), (int)target_port, conn_priv));
+
+    // DGC custom scanner gate — priv holds ref'd queue_obj / notifier_obj
+    // in stream_queues/pending_stream_registrations that the normal
+    // data/cdmap scan cannot see.  incScanPrivateData() tells the scanner
+    // to dispatch to Http2ClientPollOperationPriv::scanMembers on every
+    // cycle check for this object.  See design/dgc.md Pattern B.
+    qore_object_private::get(*self)->incScanPrivateData();
 }
 
 //! Destroys the object
 /** Releases all internal references.
 */
 Http2ClientPollOperationBase::destructor() {
+    qore_object_private::get(*self)->decScanPrivateData();
     priv->cleanup(xsink);
     priv->deref(xsink);
 }
@@ -1180,6 +1299,26 @@ nothing Http2ClientPollOperationBase::abort() {
 */
 nothing Http2ClientPollOperationBase::setIdleTimeout(int idle_timeout_ms) {
     priv->setIdleTimeout((int64_t)idle_timeout_ms * 1000);
+}
+
+//! Sets the keepalive ping interval in milliseconds
+/** When set to a positive value, an HTTP/2 PING frame is sent periodically
+    when the connection is idle (no active streams).  This probes connection
+    liveness so dead connections are detected before the idle timeout fires.
+
+    nghttp2 handles the PING ACK automatically.  If the connection is dead,
+    the next recv() call will fail, and existing error handling evicts the
+    connection from the pool.
+
+    Typical value: @c idle_timeout_ms / 2 — probes at the midpoint of the
+    idle window.
+
+    @param ping_interval_ms interval in milliseconds (0 or negative = disabled)
+
+    @since %Qore 2.3
+*/
+nothing Http2ClientPollOperationBase::setPingInterval(int ping_interval_ms) {
+    priv->setPingInterval(ping_interval_ms > 0 ? (int64_t)ping_interval_ms * 1000 : -1);
 }
 
 //! Returns output from the inner operation

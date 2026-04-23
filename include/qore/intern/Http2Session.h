@@ -119,6 +119,10 @@ struct Http2StreamInfo {
     bool dispatched = false;       //!< True after headers-only dispatch (stream stays in map for DATA accumulation)
     bool headers_end_stream = false; //!< True if END_STREAM was on the initial HEADERS frame (no body expected)
     bool streaming = false;        //!< True for streaming requests (bidi/client-streaming) on client side
+    bool headers_streamed = false; //!< True after a headers-only event has been pushed for a non-CONNECT streaming
+                                   //!< response.  Separate from @c dispatched because we do NOT want to inhibit
+                                   //!< markStreamComplete's callback (which still needs to fire on END_STREAM to
+                                   //!< deliver the terminal event with trailers).
     uint32_t error_code = 0;
 
     //! Returns true if this is a WebSocket over HTTP/2 stream (RFC 8441)
@@ -450,10 +454,33 @@ public:
     //! Check if stream's body is complete (END_STREAM received)
     /** @param stream_id the stream to check
         @return True if END_STREAM has been received (body_complete), or if the
-        stream is not found (a cleaned-up stream is effectively complete)
+        stream is not found (a cleaned-up stream is effectively complete),
+        or if the session has been marked closed (via @ref markClosed) —
+        the latter unblocks polling consumers during socket teardown.
         @since %Qore 2.3
     */
     DLLLOCAL bool isStreamComplete(int32_t stream_id) const;
+
+    //! Marks the session closed; wakes/unblocks concurrent sync consumers.
+    /** Idempotent, one-shot: flips @ref session_closed_ from false to true.
+        Subsequent calls are no-ops.  Called by @c qore_socket_private's
+        pre-close interruption path BEFORE any outer mutex is taken, so
+        that a thread currently inside @ref sendPendingDataBlocking or
+        @ref receiveData (holding @ref m) observes the flag on its next
+        check and returns promptly, releasing @ref m.  The thread calling
+        @c Socket::close() can then acquire @c priv->m and perform the
+        actual teardown without waiting on the stuck sync consumer.
+
+        @since %Qore 2.3
+    */
+    DLLLOCAL void markClosed() {
+        session_closed_.store(true, std::memory_order_release);
+    }
+
+    //! Returns true once @ref markClosed has been called.
+    DLLLOCAL bool isSessionClosed() const {
+        return session_closed_.load(std::memory_order_acquire);
+    }
 
     //! Check if stream has been closed (stream state is Closed)
     /** @param stream_id the stream to check
@@ -504,6 +531,23 @@ public:
         @since %Qore 2.3
     */
     DLLLOCAL bool hasStreamingData(int32_t& stream_id);
+
+    //! Take a copy of a non-CONNECT streaming stream whose headers are ready but have not yet
+    //! been dispatched via a headers-only event.  Marks the original stream
+    //! @c headers_streamed=true atomically so the next call skips it.
+    /** The CONNECT path dispatches headers separately via takeHeadersReadyStreamCopy() (which
+        sets @c dispatched=true); non-CONNECT streaming streams need the same headers-first
+        ordering so callers that rely on the header callback (e.g. ds_get_recv, per-chunk
+        body decoders in send_internal_conn_mgr) see status_code + content-type before the
+        first body fragment.  Using a separate flag (@c headers_streamed) preserves the
+        semantics of @c dispatched — markStreamComplete() still fires the completion callback
+        on END_STREAM so the terminal event + trailers are delivered.
+
+        @return a copy of the stream info (headers, status_code, empty body, trailers) or
+        nullptr if no such stream exists
+        @since %Qore 2.3
+    */
+    DLLLOCAL std::unique_ptr<Http2StreamInfo> takeStreamingHeadersReadyCopy();
 
     //! Callback type for stream completion notification (HTTP/2 client multiplexing)
     /** Callback arguments:
@@ -574,6 +618,27 @@ public:
         only accounts for data inside nghttp2's internal buffers, not our send_buffer.
     */
     DLLLOCAL bool hasPendingData() const { return send_offset < send_buffer.size(); }
+
+    //! Returns true if any stream has outgoing DATA still to be sent
+    //! (queued in @c pending_body_data or waiting on a registered
+    //! @c pending_data_providers entry).
+    /** Used by @ref SocketHttp2FlushPollOperation to tell the difference
+        between "everything nghttp2 is willing to emit has been drained"
+        (@c !wantWrite() && !hasPendingData()) and "a streaming response has
+        more bytes queued but the connection window is empty so nghttp2
+        hasn't generated the DATA frame yet".
+
+        In the second case @c session_want_write returns 0 because there
+        is no frame in nghttp2's send queue — the caller must drive the
+        read side so peer WINDOW_UPDATE frames can re-open the window
+        and let the next @c session_mem_send pull from the data provider.
+
+        @since %Qore 2.3
+    */
+    DLLLOCAL bool hasUnsentStreamData() const {
+        std::lock_guard<std::recursive_mutex> lg(m);
+        return !pending_body_data.empty() || !pending_data_providers.empty();
+    }
 
     //! Returns true if any stream has buffered body data waiting to be drained
     /** Used by QoreSocketObject::hasPendingData() to trigger re-polling of H2
@@ -752,6 +817,15 @@ private:
         std::unique_ptr<char[]> pending_iouring_buf;
         //! Length of data in pending_iouring_buf
         size_t pending_iouring_len = 0;
+        //! Declared Content-Length from response headers (-1 if not declared)
+        //! and cumulative bytes sent.  Used to detect short-stream bugs (the
+        //! InputStream EOFs before the declared byte count) so the server
+        //! can send RST_STREAM instead of END_STREAM with partial data,
+        //! preventing the H2 client from waiting for the promised bytes and
+        //! eventually surfacing FUTURE-TIMEOUT.  Matches the H1 behavior
+        //! in SocketSendStreamAndReadHeaderPollOperation.
+        int64_t content_length = -1;
+        int64_t bytes_sent = 0;
 
         StreamInputStreamInfo() = default;
         StreamInputStreamInfo(InputStream* is)
@@ -780,6 +854,18 @@ private:
 
     //! Atomic flag for lock-free hasActiveStreamInputStreams() checks in the I/O hot path
     std::atomic<bool> has_active_input_streams_{false};
+
+    //! Sticky atomic flag: true once the owning socket begins shutting down.
+    /** Set by @ref markClosed, observed by the blocking H2 loops
+        (@ref sendPendingDataBlocking, @ref receiveData) and by
+        @ref isStreamComplete's lookup so concurrent sync readers on a
+        socket whose @c QoreSocketObject::close() is in flight see
+        "complete" / "closed" and drop @ref m / @c priv->m promptly —
+        letting @c close() proceed instead of blocking indefinitely on
+        the poll-vs-close lock inversion described in
+        @c grpc-shutdown-deadlock.md.  Set-only; clears never.
+    */
+    std::atomic<bool> session_closed_{false};
 
     //! Condition variable for flow-control drain notifications
     /** Signaled by dataProviderReadCallback when it consumes data from a streaming
@@ -812,7 +898,8 @@ public:
     //! Store an InputStream for a stream (I/O thread will read from it)
     /** @since %Qore 2.3
     */
-    DLLLOCAL void setStreamInputStream(int32_t stream_id, InputStream* is, ExceptionSink* xsink);
+    DLLLOCAL void setStreamInputStream(int32_t stream_id, InputStream* is, ExceptionSink* xsink,
+        int64_t content_length = -1);
 
     //! Returns true if there are active InputStreams being processed
     /** @since %Qore 2.3

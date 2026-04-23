@@ -162,7 +162,10 @@ int QoreCondition::waitWithInterrupt(pthread_mutex_t* m, int64 timeout_ms, Excep
             effective_timeout = remaining_timeout > poll_interval ? poll_interval : remaining_timeout;
         }
 
-        // Wait for the effective timeout
+        // Snapshot the signal generation before waiting so we can detect a
+        // broadcast that raced with ETIMEDOUT (pthread_cond_timedwait may
+        // return ETIMEDOUT even when a concurrent signal/broadcast fired).
+        uint64_t pre_gen = getSignalGen();
         int rc = wait2(m, effective_timeout);
 
         if (rc == 0) {
@@ -175,6 +178,18 @@ int QoreCondition::waitWithInterrupt(pthread_mutex_t* m, int64 timeout_ms, Excep
             // Non-timeout error (e.g., EINVAL) - this shouldn't happen normally
             // but if it does, treat it as an error and return timeout to avoid infinite loop
             return QORE_COND_RESULT_TIMEOUT;
+        }
+
+        // ETIMEDOUT returned, but check if a signal/broadcast fired during our
+        // wait.  POSIX permits pthread_cond_timedwait to return ETIMEDOUT even
+        // when signalled concurrently with the deadline, which manifests as a
+        // lost wakeup to the caller.  The signal generation counter is
+        // incremented under the same mutex by signal()/broadcast(), so a
+        // change here means the caller's predicate may have transitioned —
+        // return SUCCESS so the caller re-checks state immediately instead of
+        // waiting for the full timeout.
+        if (getSignalGen() != pre_gen) {
+            return QORE_COND_RESULT_SUCCESS;
         }
 
         // Timeout occurred - check for cancellation or program interrupt

@@ -47,6 +47,8 @@
 
 class ExceptionSink;
 class QoreHashNode;
+class QoreSSLCertificate;
+class QoreSSLPrivateKey;
 
 //! C++ HTTP client connection manager — Phase P3 of the porting plan.
 /** Implements the connection pool, per-key creation serialization, proxy
@@ -117,6 +119,21 @@ public:
         //! Optional proxy URL (e.g., "http://proxy.example.com:8080");
         //! empty string means no proxy.  Parsed in the constructor.
         std::string proxy_url;
+
+        //! SSL certificate verification mode (SSL_VERIFY_NONE or SSL_VERIFY_PEER).
+        //! Default is SSL_VERIFY_NONE to match the legacy HTTPClient behavior.
+        int ssl_verify_mode = 0;  // SSL_VERIFY_NONE
+
+        //! If true, accept all SSL certificates including self-signed.
+        bool accept_all_certs = false;
+
+        //! Client certificate for mutual TLS (ref'd; nullptr = no client cert).
+        //! The manager holds a reference while it's alive and passes it to new
+        //! connections.
+        QoreSSLCertificate* client_cert = nullptr;
+
+        //! Client private key for mutual TLS (ref'd; nullptr = no key).
+        QoreSSLPrivateKey* client_key = nullptr;
     };
 
     //! Creates a new manager with the given options.
@@ -156,6 +173,32 @@ public:
         const char* scheme, const char* host, int port,
         ExceptionSink* xsink);
 
+    //! Acquires a connection without blocking for it to become READY.
+    /** Like @ref acquireConnection but, on a pool miss, returns the newly
+        created connection while it is still in CONNECTING state.  The
+        caller must wait asynchronously for the connection to become
+        READY (typically via
+        @ref AbstractHttpPollConnectionPriv::registerReadyNotifier) before
+        submitting a request.
+
+        On a pool hit, behaves identically to @ref acquireConnection — the
+        returned connection is already READY.
+
+        @param scheme URL scheme ("http" or "https")
+        @param host target hostname
+        @param port target TCP port
+        @param xsink exception sink
+
+        @return a borrowed connection pointer (do NOT @c deref); the
+            connection may be in CONNECTING or READY state.  @c nullptr
+            on error (@a xsink set).
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT virtual HttpClientConnectionBase* acquireConnectionAsync(
+        const char* scheme, const char* host, int port,
+        ExceptionSink* xsink);
+
     //! Releases a stream slot back to the pool.
     /** Decrements the connection's pending stream count.  Does NOT close
         the connection — the connection stays in the pool for reuse.
@@ -186,6 +229,20 @@ public:
         back-pointer (via @c setManager(nullptr)), closes it, and derefs.
     */
     DLLEXPORT virtual void closeAll(ExceptionSink* xsink);
+
+    //! Returns the options used to create this manager.
+    DLLLOCAL const Options& getOptions() const {
+        return opts_;
+    }
+
+    //! Returns true if any pooled connection uses the given protocol.
+    /** Used by @c isHttp2Active() to detect whether a NEGOTIATE manager
+        has established at least one H2 connection.
+        @param proto the protocol to check for
+        @return true if at least one pooled connection reports @a proto
+        @since %Qore 2.3
+    */
+    DLLEXPORT bool hasProtocolInPool(HttpClientProtocol proto) const;
 
     //! Returns the total number of pooled connections across all keys.
     DLLEXPORT int getPoolSize() const;
@@ -222,6 +279,34 @@ public:
         const char* scheme, const char* host, int port, const char* path,
         const QoreHashNode* headers, const void* body, size_t body_len,
         int timeout_ms, ExceptionSink* xsink);
+
+    //! Submits a streaming request and returns a Channel for reading
+    /** Like @ref request but uses Channel-based incremental delivery
+        for the response.  The caller reads headers, body chunks, and
+        end_stream sentinels from the returned channel.
+
+        @param method HTTP method
+        @param scheme URL scheme
+        @param host target hostname
+        @param port target port
+        @param path request path
+        @param headers optional request headers
+        @param body optional complete request body
+        @param body_len body length in bytes
+        @param xsink exception sink
+
+        @return hash with "stream_id" and "channel" (QoreChannel*, ref'd);
+            nullptr on error.  Caller must deref channel when done.
+
+        @since %Qore 2.3
+    */
+    //! @param channel_out receives a ref'd QoreChannel* for reading
+    //!     streaming response data.  Caller must deref when done.
+    //! @return stream ID on success, -1 on error
+    DLLEXPORT int64_t requestStreaming(const char* method,
+        const char* scheme, const char* host, int port, const char* path,
+        const QoreHashNode* headers, const void* body, size_t body_len,
+        QoreChannel*& channel_out, ExceptionSink* xsink);
 
     // --- Hook from connection close (called by Http1ClientConnection::onClosedHook) ---
 
@@ -282,8 +367,21 @@ protected:
     std::condition_variable create_cond_;
     std::unordered_set<std::string> creating_;
 
+    //! Connections removed from the pool by onConnectionClosed but not yet
+    //! deref'd.  The deref is deferred because onConnectionClosed runs on
+    //! the I/O thread; a synchronous deref that triggers destruction would
+    //! call closeConnection → controller cancel from inside continuePoll,
+    //! causing a use-after-free / deadlock.  Drained by processDeferredDeref().
+    //! Protected by pool_lock_ (write).
+    std::vector<HttpClientConnectionBase*> deferred_deref_;
+
     //! Computes the pool key for the given target (with proxy info baked in).
     DLLLOCAL std::string poolKey(const char* host, int port) const;
+
+    //! Drains deferred connection derefs from onConnectionClosed.
+    /** Must be called from an app thread, not the I/O thread.
+    */
+    DLLLOCAL void processDeferredDeref(ExceptionSink* xsink);
 
     //! Creates a new connection (must be called outside @ref pool_lock_
     //! since the connection constructor blocks on the controller submit).
@@ -291,17 +389,31 @@ protected:
         @param host target host
         @param port target port
         @param ssl_required True for HTTPS
+        @param wait_for_ready if @c true (default), block until the new
+            connection transitions out of CONNECTING (the historical
+            behavior).  If @c false, return as soon as the connection is
+            constructed and submitted to the I/O controller — the caller
+            must wait asynchronously for the READY transition.
         @param xsink exception sink
 
         @return a new connection (caller owns one ref); @c nullptr on error
+
+        @since %Qore 2.3 @c wait_for_ready parameter
     */
     DLLLOCAL virtual HttpClientConnectionBase* createConnection(
         const std::string& key, const char* host, int port,
-        bool ssl_required, ExceptionSink* xsink);
+        bool ssl_required, ExceptionSink* xsink, bool wait_for_ready = true);
 
 private:
     HttpClientConnectionManagerBase(const HttpClientConnectionManagerBase&) = delete;
     HttpClientConnectionManagerBase& operator=(const HttpClientConnectionManagerBase&) = delete;
+
+    //! Internal: shared implementation for @ref acquireConnection and
+    //! @ref acquireConnectionAsync.  When @a wait_for_ready is @c false,
+    //! newly-created connections are returned in CONNECTING state.
+    DLLLOCAL HttpClientConnectionBase* acquireConnectionImpl(
+        const char* scheme, const char* host, int port,
+        bool wait_for_ready, ExceptionSink* xsink);
 
     //! Internal: scans the pool for a reusable connection (caller must
     //! hold a shared or unique lock).  Returns @c nullptr if no live

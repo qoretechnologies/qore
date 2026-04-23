@@ -31,10 +31,12 @@
 
 #include <qore/Qore.h>
 #include <qore/HttpClientConnectionManager.h>
+#include <qore/QoreHttpClientObject.h>
 #include <qore/QoreFuture.h>
 #include "qore/intern/QoreHttp1ClientConnection.h"
 #include "qore/intern/QoreHttp2ClientConnection.h"
 #include "qore/intern/QoreHttp3ClientConnection.h"
+#include "qore/intern/NegotiatingConnectionPollOp.h"
 #include "qore/intern/QC_FutureImpl.h"
 #include "qore/intern/QC_Future.h"
 
@@ -161,6 +163,48 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::findReusableLocked(
     if (it == pool_.end()) {
         return nullptr;
     }
+
+    // For NEGOTIATE managers the pool may hold a mix of H1 and H2
+    // connections under the same (host, port) key.  H2 is nearly always
+    // cheaper to reuse than H1 — a single H2 connection multiplexes up
+    // to max_concurrent_streams requests concurrently, whereas an H1
+    // connection serializes one request at a time.  A dual-pass search
+    // prefers H2 when available, falling back to H1 otherwise.
+    //
+    // For fixed-protocol managers (H1, H2, H3) every pool entry has the
+    // same protocol, so the first pass either matches every entry or
+    // none — the second pass is a no-op.  The extra traversal is O(n)
+    // per pool key with small constants and skipped entirely for
+    // non-NEGOTIATE managers.
+    if (opts_.protocol == HttpClientProtocol::NEGOTIATE) {
+        // Pass 1: prefer H2.
+        for (HttpClientConnectionBase* conn : it->second) {
+            if (conn->isClosed() || conn->isDraining()) {
+                continue;
+            }
+            if (conn->getProtocol() != HttpClientProtocol::H2) {
+                continue;
+            }
+            if (conn->tryReserveStream()) {
+                return conn;
+            }
+        }
+        // Pass 2: any live H1 (or other) connection.
+        for (HttpClientConnectionBase* conn : it->second) {
+            if (conn->isClosed() || conn->isDraining()) {
+                continue;
+            }
+            if (conn->getProtocol() == HttpClientProtocol::H2) {
+                continue;  // already tried above
+            }
+            if (conn->tryReserveStream()) {
+                return conn;
+            }
+        }
+        return nullptr;
+    }
+
+    // Fixed-protocol manager: single pass, insertion order.
     for (HttpClientConnectionBase* conn : it->second) {
         if (conn->isClosed() || conn->isDraining()) {
             continue;
@@ -199,19 +243,24 @@ void HttpClientConnectionManagerBase::evictDeadLocked(const std::string& key) {
 
 HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnection(
         const char* scheme, const char* host, int port, ExceptionSink* xsink) {
+    return acquireConnectionImpl(scheme, host, port, /*wait_for_ready=*/true, xsink);
+}
+
+HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnectionAsync(
+        const char* scheme, const char* host, int port, ExceptionSink* xsink) {
+    return acquireConnectionImpl(scheme, host, port, /*wait_for_ready=*/false, xsink);
+}
+
+HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnectionImpl(
+        const char* scheme, const char* host, int port,
+        bool wait_for_ready, ExceptionSink* xsink) {
     // All three protocols (H1, H2, H3) are supported as of Phase P5.
 
+    // Drain any deferred derefs from onConnectionClosed.  Safe here
+    // because we're on an app thread, not the I/O thread.
+    processDeferredDeref(xsink);
+
     bool ssl_required = (strcmp(scheme, "https") == 0);
-    if (proxy_info_ && ssl_required) {
-        // CONNECT-tunneled HTTPS through proxy is not yet implemented in
-        // the C++ Http1ClientConnection (Phase P2's two-phase connect
-        // ladder is missing).  Phase P3 raises so callers know to fall
-        // back to the Qore manager for now.
-        xsink->raiseException("HTTPCLIENT-PROXY-ERROR",
-            "HTTPS through HTTP proxy is not yet implemented in the C++ "
-            "manager; use the Qore HttpClientConnectionManager for now");
-        return nullptr;
-    }
 
     std::string key = poolKey(host, port);
 
@@ -295,7 +344,8 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnection(
         // does DNS resolution + controller submission, both of which
         // can block.
         ReferenceHolder<HttpClientConnectionBase> conn(
-            createConnection(key, host, port, ssl_required, xsink), xsink);
+            createConnection(key, host, port, ssl_required, xsink,
+                wait_for_ready), xsink);
         if (*xsink || !conn) {
             return nullptr;
         }
@@ -317,6 +367,7 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnection(
                     "connection manager is shutting down");
                 return nullptr;
             }
+            conn_raw->setPoolKey(key);
             pool_[key].push_back(conn_raw);
             reserved = conn_raw->tryReserveStream();
         }
@@ -341,7 +392,7 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnection(
 
 HttpClientConnectionBase* HttpClientConnectionManagerBase::createConnection(
         const std::string& /*key*/, const char* host, int port,
-        bool ssl_required, ExceptionSink* xsink) {
+        bool ssl_required, ExceptionSink* xsink, bool wait_for_ready) {
     // Phase P3: H1 only.  Phase P4 added H2 dispatch.  Phase P5 will
     // add H3 (Http3ClientConnection) here.
     // Pass `this` as the manager so the back-pointer is set BEFORE the
@@ -349,42 +400,220 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::createConnection(
     // window where the I/O thread fires onClosedHook before setManager.
     HttpClientConnectionBase* conn = nullptr;
     switch (opts_.protocol) {
-        case HttpClientProtocol::H1:
-            conn = new Http1ClientConnection(host, port, ssl_required, xsink, this);
+        case HttpClientProtocol::H1: {
+            Http1SslConfig ssl_cfg;
+            ssl_cfg.verify_mode = opts_.ssl_verify_mode;
+            ssl_cfg.accept_all = opts_.accept_all_certs;
+            ssl_cfg.cert = opts_.client_cert;
+            ssl_cfg.key = opts_.client_key;
+            if (proxy_info_) {
+                conn = new Http1ClientConnection(host, port, ssl_required,
+                    proxy_info_->host.c_str(), proxy_info_->port,
+                    xsink, this, ssl_cfg);
+            } else {
+                conn = new Http1ClientConnection(host, port, ssl_required,
+                    xsink, this, ssl_cfg);
+            }
             break;
+        }
         case HttpClientProtocol::H2:
+            if (proxy_info_ && ssl_required) {
+                // H2 through an HTTP proxy: use the NEGOTIATE path which
+                // creates an H1 CONNECT tunnel, does SSL+ALPN inside, and
+                // adopts the result into an H2 connection.  Fall through
+                // to the NEGOTIATE case.
+                goto negotiate_case;
+            }
             conn = new Http2ClientConnection(host, port, ssl_required,
                 opts_.max_streams_per_connection, xsink, this);
             break;
         case HttpClientProtocol::H3:
+            if (proxy_info_) {
+                xsink->raiseException("HTTPCLIENT-PROXY-ERROR",
+                    "HTTP/3 (QUIC) connections cannot use HTTP proxies");
+                return nullptr;
+            }
             conn = new Http3ClientConnection(host, port,
-                opts_.max_streams_per_connection, xsink, this);
+                opts_.max_streams_per_connection, xsink, this,
+                opts_.ssl_verify_mode, opts_.accept_all_certs,
+                opts_.client_cert, opts_.client_key);
             break;
+        case HttpClientProtocol::NEGOTIATE:
+        negotiate_case: {
+            // Per-connect ALPN negotiation.  Two paths:
+            //
+            // 1. Direct (no proxy): runs NegotiatingHttpClientConnection
+            //    which does TCP connect + TLS handshake with ALPN offer
+            //    {"h2","http/1.1"}, then adopts into H1 or H2.
+            //
+            // 2. Proxy: creates an H1 connection with proxy_tunnel=true
+            //    and ALPN configured.  The H1 poll op handles CONNECT +
+            //    SSL upgrade inside the tunnel.  After READY, reads ALPN;
+            //    if h2, extracts the socket and adopts into H2.
+            //
+            // NEGOTIATE requires SSL; plain-HTTP AUTO is always H1 at
+            // the HTTPClient level and never reaches this case.
+            if (!ssl_required) {
+                xsink->raiseException("HTTPCLIENT-NEGOTIATE-SSL-REQUIRED",
+                    "HttpClientProtocol::NEGOTIATE requires SSL (ALPN "
+                    "only runs over TLS)");
+                return nullptr;
+            }
+
+            Http1SslConfig ssl_cfg;
+            ssl_cfg.verify_mode = opts_.ssl_verify_mode;
+            ssl_cfg.accept_all = opts_.accept_all_certs;
+            ssl_cfg.cert = opts_.client_cert;
+            ssl_cfg.key = opts_.client_key;
+
+            if (proxy_info_) {
+                // Enable ALPN on the H1 socket so the SSL handshake
+                // inside the CONNECT tunnel advertises h2+http/1.1.
+                ssl_cfg.negotiate_alpn = true;
+
+                // Proxy path: H1 CONNECT tunnel + SSL + ALPN check.
+                // The H1 connection's socket is configured with ALPN
+                // {"h2","http/1.1"} via the SSL config — setAlpnProtocols
+                // is called in buildAndSubmit before the connect op starts.
+                //
+                // After the CONNECT tunnel + SSL upgrade completes (H1
+                // connection reaches READY), we read the negotiated ALPN
+                // from the socket:
+                // - "h2" → extract socket, adopt into Http2ClientConnection
+                // - "http/1.1" or empty → keep the H1 connection
+                ReferenceHolder<Http1ClientConnection> h1(
+                    new Http1ClientConnection(host, port, ssl_required,
+                        proxy_info_->host.c_str(), proxy_info_->port,
+                        xsink, this, ssl_cfg),
+                    xsink);
+                if (*xsink) {
+                    return nullptr;
+                }
+
+                bool ready = h1->waitForReadyOrError(
+                    opts_.connect_timeout_ms, xsink);
+                if (!ready || *xsink) {
+                    if (!*xsink) {
+                        xsink->raiseException("HTTPCLIENT-NEGOTIATE-TIMEOUT",
+                            "ALPN negotiation through proxy to %s:%d "
+                            "timed out after %d ms",
+                            host, port, opts_.connect_timeout_ms);
+                    }
+                    ExceptionSink dx;
+                    h1->setManager(nullptr);
+                    h1->closeConnection(&dx);
+                    dx.clear();
+                    return nullptr;
+                }
+
+                // Read the ALPN result from the tunneled+SSL socket.
+                QoreSocketObject* h1_sock = h1->getSocketPriv();
+                SimpleRefHolder<QoreStringNode> alpn(
+                    h1_sock ? h1_sock->getAlpnProtocol() : nullptr);
+                std::string alpn_id;
+                if (alpn && !alpn->empty()) {
+                    alpn_id = alpn->c_str();
+                }
+
+                if (alpn_id == "h2") {
+                    // Protocol escalation: extract socket, adopt into H2.
+                    QoreObject* adopted_obj = nullptr;
+                    QoreSocketObject* adopted_priv = nullptr;
+                    h1->setManager(nullptr);
+                    if (h1->takeSocket(adopted_obj, adopted_priv, xsink)) {
+                        return nullptr;
+                    }
+                    conn = new Http2ClientConnection(adopted_obj,
+                        adopted_priv, host, port,
+                        opts_.max_streams_per_connection, xsink, this);
+                    if (*xsink) {
+                        if (conn) {
+                            conn->deref(xsink);
+                        }
+                        return nullptr;
+                    }
+                } else {
+                    // H1 (or no ALPN) — keep the H1 connection.
+                    conn = h1.release();
+                }
+                break;
+            }
+
+            // Direct path (no proxy): use NegotiatingHttpClientConnection.
+            ReferenceHolder<NegotiatingHttpClientConnection> neg(
+                new NegotiatingHttpClientConnection(host, port, ssl_cfg, xsink),
+                xsink);
+            if (*xsink) {
+                return nullptr;
+            }
+
+            // Block on the negotiation handshake regardless of the
+            // caller's wait_for_ready setting — we cannot construct
+            // the concrete H1/H2 adopt-socket connection until ALPN
+            // has been decided.  The resulting concrete connection
+            // will be returned in READY state, which satisfies the
+            // acquireConnectionAsync contract's "caller waits on
+            // CONNECTING via registerReadyNotifier" because there
+            // will be nothing to wait for.  True async takeover
+            // (returning a transitional NegotiatingHttpClientConnection
+            // that reports CONNECTING and later morphs into the
+            // concrete) is a later enhancement — blocking here keeps
+            // the phase 5 bypass removal atomic.
+            bool ready = neg->waitForReadyOrError(opts_.connect_timeout_ms, xsink);
+            if (!ready || *xsink) {
+                if (!*xsink) {
+                    xsink->raiseException("HTTPCLIENT-NEGOTIATE-TIMEOUT",
+                        "ALPN negotiation with %s:%d timed out after %d ms",
+                        host, port, opts_.connect_timeout_ms);
+                }
+                ExceptionSink dx;
+                neg->closeConnection(&dx);
+                dx.clear();
+                return nullptr;
+            }
+
+            // Hand off the adopted socket to the concrete H1 or H2
+            // connection.  The adopt-socket ctor submits the socket
+            // back to the AsyncIoController under its own poll op.
+            conn = neg->takeOver(opts_.max_streams_per_connection, this, xsink);
+            if (*xsink) {
+                return nullptr;
+            }
+            // The neg helper is taken over; its destructor (on
+            // ReferenceHolder scope exit) will not double-close the
+            // socket.
+            break;
+        }
     }
     if (*xsink) {
-        ExceptionSink dx;
-        conn->deref(&dx);
-        dx.clear();
+        if (conn) {
+            ExceptionSink dx;
+            conn->deref(&dx);
+            dx.clear();
+        }
         return nullptr;
     }
 
-    // Wait for the connection to become ready (or fail) within the
-    // configured connect timeout.
-    bool ready = conn->waitForReadyOrError(opts_.connect_timeout_ms, xsink);
-    if (!ready || *xsink) {
-        // Either timeout (no exception) or error (xsink set).  Either
-        // way, evict and return failure.
-        if (!*xsink) {
-            xsink->raiseException("HTTPCLIENT-CONNECT-ERROR",
-                "connection to %s:%d timed out after %d ms",
-                host, port, opts_.connect_timeout_ms);
+    // If the caller wants a synchronous, already-READY connection (the
+    // historical behavior), wait here.  Otherwise return immediately —
+    // the connection is already submitted to the I/O controller and the
+    // caller will wait asynchronously (typically via
+    // AbstractHttpPollConnectionPriv::registerReadyNotifier).
+    if (wait_for_ready) {
+        bool ready = conn->waitForReadyOrError(opts_.connect_timeout_ms, xsink);
+        if (!ready || *xsink) {
+            if (!*xsink) {
+                xsink->raiseException("HTTPCLIENT-CONNECT-ERROR",
+                    "connection to %s:%d timed out after %d ms",
+                    host, port, opts_.connect_timeout_ms);
+            }
+            conn->setManager(nullptr);
+            ExceptionSink dx;
+            conn->closeConnection(&dx);
+            conn->deref(&dx);
+            dx.clear();
+            return nullptr;
         }
-        conn->setManager(nullptr);
-        ExceptionSink dx;
-        conn->closeConnection(&dx);
-        conn->deref(&dx);
-        dx.clear();
-        return nullptr;
     }
 
     return conn;
@@ -410,22 +639,28 @@ void HttpClientConnectionManagerBase::closeAndEvict(HttpClientConnectionBase* co
         return;
     }
 
-    // Find and remove from pool first to prevent re-acquisition.
+    // Find and remove from pool using the stashed pool key for O(1) lookup.
     {
         std::unique_lock<std::shared_mutex> wl(pool_lock_);
-        for (auto it = pool_.begin(); it != pool_.end(); ++it) {
-            auto& conns = it->second;
-            for (auto cit = conns.begin(); cit != conns.end(); ++cit) {
-                if (*cit == conn) {
-                    conns.erase(cit);
-                    if (conns.empty()) {
-                        pool_.erase(it);
-                    }
-                    goto found;
+        const std::string& key = conn->getPoolKey();
+        if (key.empty()) {
+            return;
+        }
+        auto it = pool_.find(key);
+        if (it == pool_.end()) {
+            return;
+        }
+        auto& conns = it->second;
+        for (auto cit = conns.begin(); cit != conns.end(); ++cit) {
+            if (*cit == conn) {
+                conns.erase(cit);
+                if (conns.empty()) {
+                    pool_.erase(it);
                 }
+                goto found;
             }
         }
-        // Not in pool — caller may have already evicted; treat as no-op.
+        // Not found in this key's vector — already evicted.
         return;
     }
 found:
@@ -447,7 +682,7 @@ void HttpClientConnectionManagerBase::closeAll(ExceptionSink* xsink) {
     std::vector<HttpClientConnectionBase*> drained;
     {
         std::unique_lock<std::shared_mutex> wl(pool_lock_);
-        if (shutdown_ && pool_.empty()) {
+        if (shutdown_ && pool_.empty() && deferred_deref_.empty()) {
             return;
         }
         shutdown_ = true;
@@ -457,6 +692,11 @@ void HttpClientConnectionManagerBase::closeAll(ExceptionSink* xsink) {
             }
         }
         pool_.clear();
+        // Also drain any deferred derefs
+        for (auto* conn : deferred_deref_) {
+            drained.push_back(conn);
+        }
+        deferred_deref_.clear();
     }
 
     // Wake any thread waiting in acquireConnection's create_cond_ wait.
@@ -478,6 +718,18 @@ void HttpClientConnectionManagerBase::closeAll(ExceptionSink* xsink) {
     }
 }
 
+bool HttpClientConnectionManagerBase::hasProtocolInPool(HttpClientProtocol proto) const {
+    std::shared_lock<std::shared_mutex> rl(pool_lock_);
+    for (const auto& kv : pool_) {
+        for (const auto* conn : kv.second) {
+            if (conn->getProtocol() == proto) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 int HttpClientConnectionManagerBase::getPoolSize() const {
     std::shared_lock<std::shared_mutex> rl(pool_lock_);
     int total = 0;
@@ -495,6 +747,21 @@ int HttpClientConnectionManagerBase::getConnectionCount(const char* host, int po
 }
 
 // ============================================================
+// processDeferredDeref — drain deferred connection derefs
+// ============================================================
+
+void HttpClientConnectionManagerBase::processDeferredDeref(ExceptionSink* xsink) {
+    std::vector<HttpClientConnectionBase*> to_deref;
+    {
+        std::unique_lock<std::shared_mutex> wl(pool_lock_);
+        to_deref.swap(deferred_deref_);
+    }
+    for (auto* conn : to_deref) {
+        conn->deref(xsink);
+    }
+}
+
+// ============================================================
 // onConnectionClosed (called from connection's onClosedHook)
 // ============================================================
 
@@ -502,38 +769,41 @@ void HttpClientConnectionManagerBase::onConnectionClosed(HttpClientConnectionBas
     if (!conn) {
         return;
     }
-    // Remove the connection from its pool entry.  We don't know the
-    // key (the connection doesn't carry one), so we scan all pool
-    // entries.  Pools are typically small (~10s of keys at most), so
-    // O(n) here is fine.  Future optimization: stash the key on the
-    // connection at insertion time.
+    // Remove the connection from its pool entry using the stashed key
+    // for O(1) map lookup (the connection within the vector is still
+    // a linear scan, but vectors are tiny — typically 1-3 entries per key).
     bool removed = false;
     {
         std::unique_lock<std::shared_mutex> wl(pool_lock_);
-        for (auto it = pool_.begin(); it != pool_.end(); ++it) {
-            auto& conns = it->second;
-            for (auto cit = conns.begin(); cit != conns.end(); ++cit) {
-                if (*cit == conn) {
-                    conns.erase(cit);
-                    if (conns.empty()) {
-                        pool_.erase(it);
+        const std::string& key = conn->getPoolKey();
+        if (!key.empty()) {
+            auto it = pool_.find(key);
+            if (it != pool_.end()) {
+                auto& conns = it->second;
+                for (auto cit = conns.begin(); cit != conns.end(); ++cit) {
+                    if (*cit == conn) {
+                        conns.erase(cit);
+                        if (conns.empty()) {
+                            pool_.erase(it);
+                        }
+                        removed = true;
+                        break;
                     }
-                    removed = true;
-                    goto done;
                 }
             }
         }
     }
-done:
-    // If we removed something, drop our pool ref on it.  The hook
-    // contract says onConnectionClosed must NOT deref — but the pool
-    // held a strong ref that we owned.  Releasing that pool ref is
-    // distinct from the lifetime ref the original caller might still
-    // hold.
+    // Drop the pool's ref on the connection.  This callback can run on
+    // the I/O thread (from continuePoll → setClosed → onClosedHook).
+    // If the deref triggers destruction, the connection destructor calls
+    // closeConnection → controller cancel on the poll op that is
+    // currently mid-continuePoll — a use-after-free / deadlock (cancel
+    // waits for the I/O thread, but we ARE the I/O thread).
+    //
+    // Stash the pointer and deref on a background thread so any
+    // destruction runs off the I/O thread.
     if (removed) {
-        ExceptionSink xs;
-        conn->deref(&xs);
-        xs.clear();
+        deferred_deref_.push_back(conn);
     }
     // Wake any thread waiting in create_cond_ for this key — we don't
     // know the key, so notify all.  Acceptable: spurious wakeups just
@@ -556,6 +826,13 @@ QoreHashNode* HttpClientConnectionManagerBase::request(const char* method,
     if (!conn || *xsink) {
         return nullptr;
     }
+    // Hold a strong ref for the duration of request().  The pool holds its
+    // own ref; the I/O thread may fire onConnectionClosed → deref at any
+    // time (even during our blocking Future wait), so without this extra
+    // ref the connection can be freed under us.
+    conn->ref();
+    // RAII deref — fires on every return path below.
+    ReferenceHolder<HttpClientConnectionBase> conn_holder(conn, xsink);
 
     ReferenceHolder<QoreHashNode> submit_result(
         conn->submitRequest(method, path, headers, body, body_len, xsink), xsink);
@@ -597,5 +874,67 @@ QoreHashNode* HttpClientConnectionManagerBase::request(const char* method,
             "Future returned non-hash result type %d", (int)result.getType());
         return nullptr;
     }
-    return result.get<QoreHashNode>();
+    // The future returns result.refSelf() — a new ref on the SAME hash
+    // instance.  If the hash has multiple refs (e.g., the promise still
+    // holds one), setKeyValue triggers the uniqueness assertion.  Copy
+    // the hash to ensure we have sole ownership before mutating.
+    QoreHashNode* rv = result.get<QoreHashNode>();
+    if (!rv->is_unique()) {
+        QoreHashNode* copy = rv->copy();
+        rv->deref(xsink);
+        rv = copy;
+    }
+    // Stamp the response with the actual protocol of the connection that
+    // served it.  The C++ multiplex ops (H1/H2/H3) don't set this — the
+    // Qore-level stream handles do, but the C++ conn_mgr path doesn't go
+    // through Qore.  Callers like send_internal_conn_mgr rely on these
+    // fields for isHttp2Active refresh and response-uri generation.
+    switch (conn->getProtocol()) {
+        case HttpClientProtocol::H2:
+            rv->setKeyValue("protocol", new QoreStringNode("h2"), xsink);
+            rv->setKeyValue("http_version", new QoreStringNode("2"), xsink);
+            break;
+        case HttpClientProtocol::H3:
+            rv->setKeyValue("protocol", new QoreStringNode("h3"), xsink);
+            rv->setKeyValue("http_version", new QoreStringNode("3"), xsink);
+            break;
+        default:
+            rv->setKeyValue("protocol", new QoreStringNode("h1"), xsink);
+            break;
+    }
+    // H2/H3 don't carry a reason phrase; derive it from the status code
+    // so the legacy shape has a status_message field.
+    if (!rv->getKeyValue("status_message").getType()) {
+        int code = (int)rv->getKeyValue("status_code").getAsBigInt();
+        if (code > 0) {
+            const char* msg = QoreHttpClientObject::getHttpStatusMessage(code);
+            rv->setKeyValue("status_message",
+                new QoreStringNode(msg), xsink);
+        }
+    }
+    return rv;
+}
+
+int64_t HttpClientConnectionManagerBase::requestStreaming(const char* method,
+        const char* scheme, const char* host, int port, const char* path,
+        const QoreHashNode* headers, const void* body, size_t body_len,
+        QoreChannel*& channel_out, ExceptionSink* xsink) {
+    HttpClientConnectionBase* conn = acquireConnection(scheme, host, port, xsink);
+    if (!conn || *xsink) {
+        return -1;
+    }
+
+    int64_t stream_id = conn->submitRequestStreaming(method, path, headers,
+        body, body_len, channel_out, xsink);
+    if (*xsink || stream_id < 0) {
+        releaseConnection(conn);
+        return -1;
+    }
+
+    // Release the stream reservation — submitRequestStreaming internally
+    // calls releaseStreamReservation on success (matching the non-streaming
+    // request() path).  The connection itself stays in the pool; the
+    // active stream count tracks in-flight work independently.
+    releaseConnection(conn);
+    return stream_id;
 }

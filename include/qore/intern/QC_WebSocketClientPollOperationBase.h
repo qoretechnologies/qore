@@ -230,6 +230,38 @@ public:
         return result;
     }
 
+    //! Sets the heartbeat interval in milliseconds (0 = disabled)
+    /** When set, a PING frame is sent automatically when no data has been
+        received for this many milliseconds.  The poll_timeout_ms field in
+        the continuePoll result ensures the controller wakes at the deadline.
+        @param ms heartbeat interval (0 = disabled)
+    */
+    DLLLOCAL void setHeartbeat(int64 ms) {
+        heartbeat_interval_ms = ms;
+        if (ms > 0 && last_recv_activity_ms == 0) {
+            last_recv_activity_ms = q_clock_getmillis();
+        }
+    }
+
+    //! Sets the idle timeout in milliseconds (0 = disabled)
+    /** When set and no data has been received for this many milliseconds,
+        the client closes the connection with code WSCC_GoingAway and
+        reason "idle-timeout".  Used in combination with setHeartbeat() to
+        detect dead peers that silently stopped responding to PINGs.
+        @param ms idle timeout (0 = disabled)
+    */
+    DLLLOCAL void setIdleTimeout(int64 ms) {
+        idle_timeout_ms = ms;
+        if (ms > 0 && last_recv_activity_ms == 0) {
+            last_recv_activity_ms = q_clock_getmillis();
+        }
+    }
+
+    //! Returns the cause tag if the client initiated the close (e.g. "idle-timeout")
+    DLLLOCAL const std::string& getCloseCause() const {
+        return close_cause;
+    }
+
     //! Releases all internal references
     DLLLOCAL void cleanup(ExceptionSink* xsink);
 
@@ -264,6 +296,32 @@ private:
         Read by the controller via getAndClearFramesPushed() to dispatch notifications.
     */
     int frames_pushed_in_cycle = 0;
+
+    //! Heartbeat ping interval (milliseconds, 0 = disabled)
+    /** When positive and the connection is idle (no data received for this
+        many milliseconds), a PING frame is sent automatically.  Mirrors the
+        server-side HttpWebSocketPollOperationBase heartbeat timer.
+    */
+    int64 heartbeat_interval_ms = 0;
+
+    //! Timestamp of last received data (milliseconds, monotonic clock)
+    int64 last_recv_activity_ms = 0;
+
+    //! Timestamp of last PING frame sent (milliseconds, monotonic clock)
+    /** Tracked separately from last_recv_activity_ms so outgoing PINGs do
+        not mask peer silence — idle-timeout detection relies on
+        last_recv_activity_ms reflecting real incoming traffic only.
+    */
+    int64 last_ping_sent_ms = 0;
+
+    //! Idle timeout in milliseconds (0 = disabled)
+    int64 idle_timeout_ms = 0;
+
+    //! True once we have queued the close-on-idle frame (prevents re-entry)
+    bool closed_on_idle = false;
+
+    //! Reason tag for client-initiated close (e.g. "idle-timeout"), surfaced to observers
+    std::string close_cause;
 
     //! Error information (ref'd or nullptr)
     QoreHashNode* error_info = nullptr;

@@ -29,7 +29,7 @@
 %requires Logger
 %requires(reexport) RestClient >= 2.4
 %requires(reexport) HttpClientIo
-%requires HttpClientStreamingIo
+%requires(reexport) HttpClientStreamingIo
 %requires(reexport) RestSchemaValidator >= 1.0
 %requires Swagger >= 2.0
 %requires OpenApi3 >= 1.0
@@ -1257,6 +1257,103 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
         #! Sends an HTTP \c DELETE request and returns a @ref RestClient::RestResponseInfo hash
         hash<RestClient::RestResponseInfo> restDel(string path, auto body, *hash<auto> hdr) {
             return restDoRequest("DELETE", path, body, hdr);
+        }
+
+        #! Opens an SSE stream and returns an event reader for iteration
+        /** Establishes an HTTP streaming connection to the given path with
+            \c Accept: \c text/event-stream and returns an
+            @ref HttpClientStreamingIo::SseStreamReader that the caller can
+            loop over with \c readEvent().
+
+            @par Example
+            @code{.py}
+RestClientIo rest({"url": "https://api.example.com"});
+SseStreamReader reader = rest.restSseReader("GET", "/events");
+while (*hash<SseMessageInfo> evt = reader.readEvent(30s)) {
+    printf("event=%s data=%s\n", evt.event, evt.data);
+}
+            @endcode
+
+            @param method HTTP method (typically \c "GET")
+            @param path request path
+            @param hdr additional HTTP headers (\c Accept is set automatically)
+            @param body optional request body (for \c POST-based SSE endpoints)
+
+            @return an @ref HttpClientStreamingIo::SseStreamReader ready for
+            @ref HttpClientStreamingIo::SseStreamReader::readEvent() "readEvent()" calls
+
+            @throw HTTPCLIENT-CONNECT-ERROR if the connection cannot be established
+
+            @since %RestClientIo 1.5
+
+            @see restSseStream()
+        */
+        HttpClientStreamingIo::SseStreamReader restSseReader(string method, string path,
+                *hash<auto> hdr, *data body) {
+            ensureToken();
+            hdr = hdr ?? {};
+            if (!hdr.accept && !hdr.Accept) {
+                hdr.accept = "text/event-stream";
+            }
+            # Merge auth/default headers, then normalize all keys to
+            # lowercase — HTTP/2 and HTTP/3 require lowercase header
+            # names on the wire (RFC 9113 §8.2).  This path bypasses
+            # prepareRequest() so normalization must happen here.
+            {
+                AutoReadLock al(config_lock);
+                hdr = {} + headers + hdr;
+            }
+            # Lowercase all header keys for H2/H3 wire compliance
+            hash<auto> lc_hdr;
+            HashIterator hi(hdr);
+            while (hi.next()) {
+                lc_hdr{hi.getKey().lwr()} = hi.getValue();
+            }
+            hdr = lc_hdr;
+            HttpClientIo::HttpClientStreamHandle stream =
+                mgr.acquireAndStartStreaming(url, method, path, hdr, False, body);
+            return new HttpClientStreamingIo::SseStreamReader(stream);
+        }
+
+        #! Opens an SSE stream and calls a callback for each event
+        /** Blocks until the stream closes, an error occurs, or the callback
+            returns @ref False to stop.  This is a convenience wrapper around
+            @ref restSseReader() for simple consume-and-process patterns.
+
+            @par Example
+            @code{.py}
+RestClientIo rest({"url": "https://api.example.com"});
+rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
+    printf("event=%s data=%s\n", evt.event, evt.data);
+    return True;  # return False to stop
+});
+            @endcode
+
+            @param method HTTP method (typically \c "GET")
+            @param path request path
+            @param callback called with each @ref Qore::SseMessageInfo event;
+            return @ref False to stop the stream, @ref True to continue
+            @param hdr additional HTTP headers
+            @param body optional request body
+            @param event_timeout per-event read timeout (default \c 30s);
+            @ref NOTHING is returned on timeout, which terminates the loop
+
+            @throw HTTPCLIENT-CONNECT-ERROR if the connection cannot be established
+            @throw SSE-STREAM-ERROR if the stream reported an error
+
+            @since %RestClientIo 1.5
+
+            @see restSseReader()
+        */
+        restSseStream(string method, string path, code<bool(hash<SseMessageInfo>)> callback,
+                *hash<auto> hdr, *data body, timeout event_timeout = 30s) {
+            HttpClientStreamingIo::SseStreamReader reader =
+                restSseReader(method, path, hdr, body);
+            while (*hash<SseMessageInfo> evt = reader.readEvent(event_timeout)) {
+                if (!callback(evt)) {
+                    break;
+                }
+            }
         }
 
         #! Sends a generic async REST request and returns a cancellable Future

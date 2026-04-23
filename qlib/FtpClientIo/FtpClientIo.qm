@@ -1,0 +1,70 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file FtpClientIo.qm Qore user module providing async FTP client I/O
+
+/*  FtpClientIo.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+module FtpClientIo {
+    version = "1.0";
+    desc = "Async FTP client I/O via poll operations";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        # Module initialization
+    };
+}
+
+/** @mainpage FtpClientIo Module
+
+    @tableofcontents
+
+    @section ftpclientiointro Introduction
+
+    The %FtpClientIo module provides async FTP client I/O via poll operations
+    suitable for use with the @ref Qore::Thread::AsyncIoController.
+
+    Features:
+    - Non-blocking FTP control channel (connect, login, command execution)
+    - Non-blocking data channel (PASV/EPSV connect, data transfer)
+    - FTPS support (AUTH TLS, encrypted data channel)
+    - Composite orchestrator for high-level operations (get, put, list)
+
+    @section ftpclientio_classes Classes
+
+    - @ref FtpClientIo::FtpClientPollOperation "FtpClientPollOperation" — composite
+      orchestrator for complete FTP operations (connect + login + data transfer)
+*/
+
+public namespace FtpClientIo {
+
+#! FTP data transfer mode
+public const FTP_MODE_EPSV = "epsv";
+public const FTP_MODE_PASV = "pasv";
+
+#! EPSV response regex: "229 Entering Extended Passive Mode (|||<port>|)"
+const EpsvRegex = "\\|\\|\\|(\\d+)\\|";
+#! PASV response regex: "227 Entering Passive Mode (h1,h2,h3,h4,p1,p2)"
+const PasvRegex = "\\((\\d+),(\\d+),(\\d+),(\\d+),(\\d+),(\\d+)\\)";
+
+} # namespace FtpClientIo

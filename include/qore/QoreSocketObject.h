@@ -54,6 +54,20 @@ constexpr unsigned NB_CONNECT = (1 << 2);  //!< Connect operation in progress
 constexpr unsigned NB_ALL     = NB_SEND | NB_RECV | NB_CONNECT;  //!< Blocks everything
 ///@}
 
+//! Socket I/O mode — prevents mixing synchronous and asynchronous operations
+/** When a socket is claimed by the async I/O controller (via a poll operation),
+    it is set to @ref SocketIoMode::Async and synchronous operations will raise
+    a @c SOCKET-ASYNC-MODE-ERROR exception.  When a sync caller is using the
+    socket, async operations will raise a @c SOCKET-SYNC-MODE-ERROR exception.
+
+    @since %Qore 2.3
+*/
+enum class SocketIoMode : uint8_t {
+    Unclaimed = 0,  //!< No owner — either sync or async can claim the socket
+    Sync,           //!< Socket is being used by a synchronous caller
+    Async,          //!< Socket is managed by the async I/O controller
+};
+
 class QoreSocketObject : public AbstractPollableIoObjectBase {
     friend class my_socket_priv;
     friend struct qore_httpclient_priv;
@@ -984,6 +998,15 @@ public:
         @since %Qore 2.3
     */
     DLLEXPORT bool isQuicDatagramSupported(int64_t session_id, ExceptionSink* xsink);
+
+    //! Submits an HTTP/2 PING frame and flushes pending data
+    /** Used by the async I/O keepalive timer to probe idle connections.
+        No-op if no HTTP/2 session is active.
+        @param xsink exception sink
+        @return 0 on success, -1 on error
+        @since %Qore 2.3
+    */
+    DLLEXPORT int submitHttp2Ping(ExceptionSink* xsink);
 
 private:
     DLLLOCAL QoreSocketObject(QoreSocket* s, QoreSSLCertificate* cert = nullptr, QoreSSLPrivateKey* pk = nullptr);

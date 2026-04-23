@@ -809,9 +809,14 @@ public class Message {
             }
         }
 
-        # issue #3275: fix encoding of a naked "." on a line which will break the SMTP protocol
+        # RFC 5321 §4.5.2 SMTP transparency: any line starting with "." must
+        # be dot-stuffed (prepend a second ".") on the wire; otherwise the
+        # server un-stuffs the first "." and corrupts body lines that
+        # legitimately begin with a dot (e.g. ".hello").  Previously this
+        # only escaped the bare "\r\n.\r\n" terminator sequence, which left
+        # content lines like ".foo" undetected by many SMTP servers.
         if (smtp_mode) {
-            str = replace(str, "\r\n.\r\n", "\r\n..\r\n");
+            str = regex_subst(str, "\r\n\\.", "\r\n..", RE_Global);
         }
 
         return str;

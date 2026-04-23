@@ -716,6 +716,25 @@ struct qore_socket_private {
     // issue #3053: client target for SNI
     std::string client_target;
     SSLSocketHelper* ssl = nullptr;
+    //! Serialises close_internal() SSL shutdown across concurrent callers.
+    /** Two paths can reach close_internal() on the same socket without
+        holding any shared lock: the I/O thread running an H2 client
+        abort → current_op->abort → socket->close, and an app-thread
+        disconnect / HTTPClient destructor calling socket->close directly.
+        Without serialisation they both read ssl != nullptr, both call
+        ssl->shutdown(), and the second touches a freed OpenSSL SSL*
+        (backtrace in CI job 170545: EVP_CIPHER_CTX_get0_cipher SIGSEGV
+        inside SSL_shutdown on a freed cipher ctx).  Taking this lock only
+        around the ssl shutdown/deref block is sufficient — the rest of
+        close_internal() is either idempotent or already guarded by its
+        own locks. */
+    QoreThreadLock ssl_close_m;
+
+    //! Sticky one-shot flag: first @ref prepareForClose caller wins and
+    //! performs the fd shutdown + H2 session-closed mark; subsequent
+    //! callers (cross-thread races on Socket::close) short-circuit.
+    //! Set only — never cleared.  See @ref prepareForClose.
+    std::atomic<bool> pre_close_interrupt_fired{false};
     //! ALPN protocols for TLS negotiation (HTTP/2 support)
     std::vector<std::string> alpn_protocols;
     Queue* event_queue = nullptr,   //!< event queue
@@ -1121,6 +1140,71 @@ struct qore_socket_private {
         return close_internal();
     }
 
+    //! Interrupts any in-flight sync I/O on this socket without taking the
+    //! outer mutex.
+    /** Must be called by the outer @c QoreSocketObject::close() BEFORE it
+        acquires @c priv->m.  Without this pre-step, a deadlock arises
+        when another thread is holding @c priv->m (or @c Http2Session::m
+        via an H2 sync poll / send) and is itself blocked in a @c ::poll
+        / @c SSL_read / @c SSL_write on this fd — that thread cannot
+        release its mutex until the I/O returns, which in turn requires
+        the fd to be closed or shut down.  The close path is the caller
+        responsible for that shutdown, but it's stuck waiting for the
+        same mutex.  See @c grpc-shutdown-deadlock.md for the full
+        scenario (Socket::close vs isHttp2StreamComplete / send).
+
+        Two actions, both safe to perform concurrently with any other
+        thread's in-flight I/O:
+
+          1. Mark the @ref Http2Session (if any) as closed via
+             @ref Http2Session::markClosed.  Loops in
+             @c sendPendingDataBlocking / @c receiveData /
+             @c isStreamComplete check @ref Http2Session::isSessionClosed
+             and return promptly on their next iteration — releasing
+             @c Http2Session::m.
+
+          2. Issue @c ::shutdown(fd, SHUT_RDWR) on the raw fd.  The
+             kernel returns any pending blocking @c recv / @c send with
+             EPIPE / ECONNRESET, making @c isSocketDataAvailable /
+             @c asyncIoWait return.  The fd is read without any lock —
+             the race with a concurrent @c close_and_reset is harmless
+             because @c close_and_reset runs inside the very close path
+             we're about to continue from (AutoLocker on priv->m in
+             @c QoreSocketObject::close), so no fd reuse can have
+             happened yet by the same thread.
+
+        Idempotent: @ref pre_close_interrupt_fired ensures at most one
+        thread actually issues the shutdown/mark-closed side effects even
+        if multiple concurrent @c close() calls arrive.
+
+        @since %Qore 2.3
+    */
+    DLLLOCAL void prepareForClose() {
+        bool expected = false;
+        if (!pre_close_interrupt_fired.compare_exchange_strong(
+                expected, true,
+                std::memory_order_acq_rel,
+                std::memory_order_acquire)) {
+            return;  // another concurrent close already did the interrupt
+        }
+        // Wake H2 sync consumers (sendPendingDataBlocking,
+        // receiveData's retry loops, isStreamComplete).
+        if (h2_session) {
+            h2_session->markClosed();
+        }
+        // Shut down the raw fd to unblock any ::poll / SSL_read /
+        // SSL_write currently in flight on this socket.  A concurrent
+        // close_and_reset() on the SAME thread that called us would be
+        // a re-entrant close and is guarded by the outer AutoLocker on
+        // priv->m; cross-thread, the fd here either (a) is still open
+        // and we unblock the poll, or (b) has already been closed by a
+        // racing close, in which case ::shutdown returns EBADF silently.
+        int fd = sock;
+        if (fd != QORE_INVALID_SOCKET) {
+            ::shutdown(fd, SHUTDOWN_ARG);
+        }
+    }
+
     DLLLOCAL int close_and_reset() {
         assert(sock != QORE_INVALID_SOCKET);
         int rc;
@@ -1203,11 +1287,37 @@ struct qore_socket_private {
         }
         h2_stream_complete_callback = nullptr;
         if (sock >= 0) {
-            // if an SSL connection has been established, shut it down first
-            if (ssl) {
-                ssl->shutdown();
-                ssl->deref();
-                ssl = nullptr;
+            // Cancel any in-flight I/O on this socket BEFORE touching the SSL
+            // state.  The SSL object is not thread-safe (see SSLSocketHelper.h
+            // line 70: "all operations must be already locked"), and a concurrent
+            // SSL_read/SSL_write on another thread colliding with the SSL_shutdown
+            // below corrupts the internal cipher context — SIGSEGV inside
+            // EVP_CIPHER_get_mode / EVP_CIPHER_CTX_get0_cipher has been observed
+            // under H2 teardown load (e.g. CI jobs 170545, 170659).
+            //
+            // A TCP-level shutdown(SHUT_RDWR) makes any pending/blocking SSL I/O
+            // on other threads return a fatal error (EPIPE/ECONNRESET/WANT_READ
+            // loops resolve to failure), so by the time SSL_shutdown runs below
+            // no other thread is still inside an SSL call on this context.  This
+            // is the "cancel I/O first, then shutdown" invariant.
+            //
+            // Ignore errors from the shutdown syscall: already-shutdown sockets
+            // return ENOTCONN, and we only need best-effort cancellation here.
+            ::shutdown(sock, SHUTDOWN_ARG);
+
+            // if an SSL connection has been established, shut it down first.
+            // Serialise the shutdown/deref pair so concurrent close callers
+            // cannot both see ssl != nullptr and both invoke shutdown on
+            // the same OpenSSL SSL* (one side derefs it to 0 → SSL_free,
+            // the other side crashes inside SSL_shutdown on freed state —
+            // see ssl_close_m comment).
+            {
+                AutoLocker al(ssl_close_m);
+                if (ssl) {
+                    ssl->shutdown();
+                    ssl->deref();
+                    ssl = nullptr;
+                }
             }
 
             if (!socketname.empty()) {
@@ -5046,8 +5156,6 @@ struct qore_socket_private {
     }
 
     DLLLOCAL QoreHashNode* readServerSentEvent(ExceptionSink* xsink, Transform* transform, int timeout_ms);
-
-    DLLLOCAL static QoreHashNode* parseServerSentEvent(ExceptionSink* xsink, const QoreString& buf);
 
     DLLLOCAL static void do_accept_encoding(char* t, QoreHashNode& info) {
         ReferenceHolder<QoreListNode> l(new QoreListNode(autoTypeInfo), 0);

@@ -184,13 +184,20 @@ class FileLocationHandlerFtp inherits AbstractFileLocationHandler {
 
         # run the I/O operation in the background
         background sub () {
+            # on_exit must run AFTER setIoError so waitForIo() sees the
+            # error before the waitgroup reaches zero; placing done()
+            # inside the try would decrement the counter during unwinding
+            # and let waitForIo() return before catch assigned the error.
+            on_exit io_counter.done();
             try {
-                on_exit io_counter.done();
-
                 Qore::InputStream is = pipe.getInputStream();
                 f.put(is, file);
-                is.close();
             } catch (hash<ExceptionInfo> ex) {
+                # Record the error so OutputStreamWrapper::waitForIo()
+                # can rethrow; previously this was silently dropped,
+                # leaving callers to misinterpret stale read-backs as
+                # the put result.
+                rv.setIoError(ex);
             }
         }();
 
