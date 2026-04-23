@@ -1,0 +1,358 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/Mime.qm
+%requires ../../../../qlib/MailMessage.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/ConnectionProvider
+%requires ../../../../qlib/Pop3Client.qm
+%requires ../../../../qlib/QUnit.qm
+
+%exec-class Pop3ClientFetchTest
+
+#! Mock POP3 server serving canned messages
+class MockPop3Server {
+    private {
+        Socket listener();
+        int port;
+        #! Canned messages keyed by ID
+        hash<string, string> messages;
+        #! Collected commands from client
+        list<string> received_commands = ();
+        #! IDs that were DELEted
+        list<string> deleted_ids = ();
+        #! Signals server thread completion
+        Counter done(1);
+        #! Error from server thread
+        *string server_error;
+    }
+
+    constructor(hash<string, string> messages) {
+        self.messages = messages;
+        listener.bind("localhost:0");
+        listener.listen(1);
+        port = listener.getSocketInfo().port;
+    }
+
+    int getPort() {
+        return port;
+    }
+
+    start() {
+        background acceptAndServe();
+    }
+
+    wait(timeout to = 30s) {
+        done.waitForZero(to);
+    }
+
+    list<string> getReceivedCommands() {
+        return received_commands;
+    }
+
+    list<string> getDeletedIds() {
+        return deleted_ids;
+    }
+
+    *string getServerError() {
+        return server_error;
+    }
+
+    private acceptAndServe() {
+        on_exit done.dec();
+        try {
+            Socket client = listener.accept(15s);
+            serveClient(client);
+        } catch (hash<ExceptionInfo> ex) {
+            server_error = sprintf("%s: %s", ex.err, ex.desc);
+        }
+    }
+
+    private string readLine(Socket client, timeout to = 10s) {
+        string str = "";
+        while (True) {
+            int c = client.recvu1(to);
+            str += chr(c);
+            if (c == 10) {
+                break;
+            }
+        }
+        return str;
+    }
+
+    private serveClient(Socket client) {
+        # Send greeting
+        client.send("+OK POP3 mock server ready\r\n");
+
+        int total_size = 0;
+        map (total_size += $1.size()), messages.values();
+
+        while (True) {
+            string line = readLine(client);
+            trim line;
+            received_commands += line;
+
+            if (line =~ /^USER /i) {
+                client.send("+OK\r\n");
+            } else if (line =~ /^PASS /i) {
+                client.send("+OK logged in\r\n");
+            } else if (line =~ /^STAT$/i) {
+                client.send(sprintf("+OK %d %d\r\n", messages.size(), total_size));
+            } else if (line =~ /^LIST$/i) {
+                client.send(sprintf("+OK %d messages\r\n", messages.size()));
+                foreach string id in (keys messages) {
+                    client.send(sprintf("%s %d\r\n", id, messages{id}.size()));
+                }
+                client.send(".\r\n");
+            } else if (line =~ /^RETR (\d+)$/i) {
+                *string id = (line =~ x/^RETR (\d+)$/i)[0];
+                if (id && messages.hasKey(id)) {
+                    client.send(sprintf("+OK %d octets\r\n", messages{id}.size()));
+                    # Send message body (dot-stuff lines starting with ".")
+                    foreach string mline in (messages{id}.split("\n")) {
+                        if (mline =~ /^\./) {
+                            client.send("." + mline + "\n");
+                        } else {
+                            client.send(mline + "\n");
+                        }
+                    }
+                    client.send(".\r\n");
+                } else {
+                    client.send(sprintf("-ERR no such message %s\r\n", id ?? "?"));
+                }
+            } else if (line =~ /^DELE (\d+)$/i) {
+                *string id = (line =~ x/^DELE (\d+)$/i)[0];
+                if (id) {
+                    deleted_ids += id;
+                }
+                client.send("+OK deleted\r\n");
+            } else if (line =~ /^QUIT$/i) {
+                client.send("+OK bye\r\n");
+                break;
+            } else if (line =~ /^NOOP$/i) {
+                client.send("+OK\r\n");
+            } else {
+                client.send(sprintf("-ERR unknown command: %s\r\n", line));
+            }
+        }
+    }
+}
+
+public class Pop3ClientFetchTest inherits QUnit::Test {
+    constructor() : Test("Pop3ClientFetchTest", "1.0", \ARGV) {
+        addTestCase("stat pipeline", \testStatPipeline());
+        addTestCase("fetch with single message", \testFetchSingleMessage());
+        addTestCase("fetch with multiple messages", \testFetchMultipleMessages());
+        addTestCase("fetch empty mailbox", \testFetchEmptyMailbox());
+        addTestCase("fetch with delete", \testFetchWithDelete());
+        addTestCase("fetch poll operation API", \testFetchPollOperationApi());
+        set_return_value(main());
+    }
+
+    #! Test Pop3StatPollOperation directly
+    testStatPipeline() {
+        hash<string, string> msgs = {
+            "1": "From: a@test.com\r\nSubject: msg1\r\n\r\nBody 1",
+            "2": "From: b@test.com\r\nSubject: msg2\r\n\r\nBody 2",
+        };
+        MockPop3Server server(msgs);
+        server.start();
+        on_exit server.wait();
+
+        Pop3Client pop3(sprintf("pop3://testuser:testpass@localhost:%d", server.getPort()));
+        Pop3StatPollOperation op(pop3);
+
+        assertEq("stat", op.getGoal(), "stat goal");
+        runPollOp(op);
+        assertTrue(op.goalReached(), "stat completed");
+
+        # Verify STAT and LIST were sent
+        list<string> cmds = server.getReceivedCommands();
+        bool has_stat = False;
+        bool has_list = False;
+        foreach string cmd in (cmds) {
+            if (cmd =~ /^STAT$/i) {
+                has_stat = True;
+            } else if (cmd =~ /^LIST$/i) {
+                has_list = True;
+            }
+        }
+        assertTrue(has_stat, "STAT sent");
+        assertTrue(has_list, "LIST sent");
+
+        assertNothing(server.getServerError(), "no server errors");
+    }
+
+    #! Test full fetch with a single message
+    testFetchSingleMessage() {
+        hash<string, string> msgs = {
+            "1": "From: sender@test.com\r\nSubject: Hello\r\n\r\nThis is the body",
+        };
+        MockPop3Server server(msgs);
+        server.start();
+        on_exit server.wait();
+
+        Pop3Client pop3(sprintf("pop3://testuser:testpass@localhost:%d", server.getPort()));
+        Pop3FetchPollOperation fetch(pop3);
+
+        runFetchOp(fetch);
+        assertTrue(fetch.goalReached(), "fetch completed");
+        assertEq(1, fetch.getMessageCount(), "one message fetched");
+
+        list<string> ids = fetch.getMessageIds();
+        assertEq(1, ids.size(), "one message ID");
+        assertEq("1", ids[0], "message ID is '1'");
+
+        # Verify protocol exchange
+        list<string> cmds = server.getReceivedCommands();
+        bool has_retr = False;
+        bool has_quit = False;
+        foreach string cmd in (cmds) {
+            if (cmd =~ /^RETR 1$/i) {
+                has_retr = True;
+            } else if (cmd =~ /^QUIT$/i) {
+                has_quit = True;
+            }
+        }
+        assertTrue(has_retr, "RETR 1 sent");
+        assertTrue(has_quit, "QUIT sent");
+
+        assertNothing(server.getServerError(), "no server errors");
+    }
+
+    #! Test fetch with multiple messages
+    testFetchMultipleMessages() {
+        hash<string, string> msgs = {
+            "1": "From: a@test.com\r\nSubject: First\r\n\r\nBody 1",
+            "2": "From: b@test.com\r\nSubject: Second\r\n\r\nBody 2",
+            "3": "From: c@test.com\r\nSubject: Third\r\n\r\nBody 3",
+        };
+        MockPop3Server server(msgs);
+        server.start();
+        on_exit server.wait();
+
+        Pop3Client pop3(sprintf("pop3://testuser:testpass@localhost:%d", server.getPort()));
+        Pop3FetchPollOperation fetch(pop3);
+
+        runFetchOp(fetch);
+        assertTrue(fetch.goalReached(), "fetch completed");
+        assertEq(3, fetch.getMessageCount(), "three messages fetched");
+
+        # Verify all RETR commands sent
+        list<string> cmds = server.getReceivedCommands();
+        int retr_count = 0;
+        foreach string cmd in (cmds) {
+            if (cmd =~ /^RETR \d+$/i) {
+                ++retr_count;
+            }
+        }
+        assertEq(3, retr_count, "3 RETR commands sent");
+
+        assertNothing(server.getServerError(), "no server errors");
+    }
+
+    #! Test fetch with empty mailbox
+    testFetchEmptyMailbox() {
+        hash<string, string> msgs = {};
+        MockPop3Server server(msgs);
+        server.start();
+        on_exit server.wait();
+
+        Pop3Client pop3(sprintf("pop3://testuser:testpass@localhost:%d", server.getPort()));
+        Pop3FetchPollOperation fetch(pop3);
+
+        # For empty mailbox: stat phase completes, createRetrOp returns NOTHING
+        runFetchOp(fetch);
+        assertTrue(fetch.goalReached(), "fetch completed for empty mailbox");
+        assertEq(0, fetch.getMessageCount(), "zero messages");
+
+        assertNothing(server.getServerError(), "no server errors");
+    }
+
+    #! Test fetch with delete_after_fetch
+    testFetchWithDelete() {
+        hash<string, string> msgs = {
+            "1": "From: a@test.com\r\nSubject: Del1\r\n\r\nBody 1",
+            "2": "From: b@test.com\r\nSubject: Del2\r\n\r\nBody 2",
+        };
+        MockPop3Server server(msgs);
+        server.start();
+        on_exit server.wait();
+
+        Pop3Client pop3(sprintf("pop3://testuser:testpass@localhost:%d", server.getPort()));
+        Pop3FetchPollOperation fetch(pop3, True);
+
+        runFetchOp(fetch);
+        assertTrue(fetch.goalReached(), "fetch-with-delete completed");
+        assertEq(2, fetch.getMessageCount(), "two messages");
+
+        # Verify DELE commands were sent
+        list<string> deleted = server.getDeletedIds();
+        assertEq(2, deleted.size(), "2 DELE commands sent");
+
+        assertNothing(server.getServerError(), "no server errors");
+    }
+
+    #! Test API shape
+    testFetchPollOperationApi() {
+        Pop3Client pop3("pop3://user:pass@localhost:9999");
+        Pop3FetchPollOperation fetch(pop3);
+        assertFalse(fetch.goalReached(), "not reached before execution");
+        assertEq("Pop3FetchPollOperation", fetch.className(), "class name correct");
+
+        # Abort should be callable
+        fetch.abort();
+        assertTrue(True, "abort() callable");
+    }
+
+    #! Drive a poll operation to completion via manual poll loop
+    private drivePollOp(Qore::AbstractPollOperation op, timeout to = 30s) {
+        date start = now_us();
+        while (!op.goalReached()) {
+            if ((now_us() - start) > to) {
+                throw "POLL-TIMEOUT", "poll operation timed out";
+            }
+            *hash<SocketPollInfo> pi = op.continuePoll();
+            if (!pi) {
+                continue;
+            }
+            list<hash<SocketPollInfo>> poll_list = (pi,);
+            Socket::poll(poll_list, 5s);
+        }
+    }
+
+    #! Submit a poll operation to AsyncIoController and block until done
+    private runPollOp(Qore::AbstractPollOperation op, timeout to = 30s) {
+        *hash<SocketPollInfo> pi = op.continuePoll();
+        if (!pi) {
+            return;
+        }
+        Queue q = AsyncIoController::submit(<SocketPollOperationInfo>{
+            "sock": pi.socket,
+            "spop": op,
+            "owner": "pop3-test",
+            "to": to,
+        });
+        hash<auto> result = q.get(to);
+        if (result.ex) {
+            throw result.ex.err, result.ex.desc;
+        }
+    }
+
+    #! Run the two-phase fetch orchestrator
+    private runFetchOp(Pop3FetchPollOperation fetch, timeout to = 30s) {
+        # Phase 1: stat + list
+        Pop3StatPollOperation stat_op = fetch.getStatOp();
+        drivePollOp(stat_op, to);
+
+        # Phase 2: create retr op (may be NOTHING for empty mailbox)
+        *Pop3RetrPollOperation retr_op = fetch.createRetrOp();
+        if (!retr_op) {
+            return;
+        }
+        drivePollOp(retr_op, to);
+    }
+}

@@ -1539,34 +1539,71 @@ public class AbstractStreamRequest {
             # process via recv() callbacks so the handler can detect errors mid-stream
             # (e.g. COLUMN-ERROR) without buffering the entire body in memory.
             # This is analogous to HTTP/1.x readHTTPChunkedBodyWithCallback() below.
+            #
+            # If recv() throws mid-stream, we must tell the client to stop sending —
+            # otherwise a client in a tight producer loop (e.g. DbRemoteSend using
+            # `while (True) append(...)`) will never observe the error and hang.  For
+            # HTTP/3 we call resetQuicStream() which sends RESET_STREAM + STOP_SENDING
+            # frames; libqore's client-side QuicSession surfaces those as a typed
+            # QUIC-STREAM-RESET exception on the next sendStreamData() call.  For HTTP/2
+            # we call cleanupHttp2Stream() and rely on the response path to emit
+            # RST_STREAM.
             int sid = cx."header-info".stream_id;
             if (cx."header-info".http3) {
                 int session_id = cx."header-info".session_id;
-                while (True) {
-                    *binary chunk = s.readQuicStreamDataBlock(session_id, sid, timeout_ms);
-                    if (!chunk) {
-                        break;
+                try {
+                    while (True) {
+                        *binary chunk;
+                        try {
+                            chunk = s.readQuicStreamDataBlock(session_id, sid, timeout_ms);
+                        } catch (hash<ExceptionInfo> ex) {
+                            if (ex.err == "QUIC-STREAM-TIMEOUT") {
+                                # Propagate the timeout so the handler can
+                                # return 408 or otherwise react to a stalled
+                                # client — silently breaking here would
+                                # truncate the request body.
+                                rethrow;
+                            }
+                            rethrow;
+                        }
+                        if (!chunk) {
+                            break;
+                        }
+                        recv({"data": chunk});
+                        if (hasRecvError()) {
+                            # Reset this stream — remaining DATA frames must be discarded
+                            s.resetQuicStream(session_id, sid);
+                            break;
+                        }
                     }
-                    recv({"data": chunk});
-                    if (hasRecvError()) {
-                        # Reset this stream — remaining DATA frames must be discarded
+                } catch (hash<ExceptionInfo> ex) {
+                    # recv() raised — reset the stream to stop the client from sending
+                    # more data, then rethrow so the REST framework can build the error
+                    # response.  resetQuicStream() is best-effort (stream may already
+                    # be gone if the client closed in a race).
+                    try {
                         s.resetQuicStream(session_id, sid);
-                        break;
-                    }
+                    } catch () {}
+                    rethrow;
                 }
                 # NOTE: cleanupQuicStream is called by the controller's on_exit handler
             } else {
-                bool recv_error = False;
-                while (True) {
-                    *binary chunk = s.readHttp2StreamDataBlock(sid, timeout_ms);
-                    if (!chunk) {
-                        break;
+                try {
+                    while (True) {
+                        *binary chunk = s.readHttp2StreamDataBlock(sid, timeout_ms);
+                        if (!chunk) {
+                            break;
+                        }
+                        recv({"data": chunk});
+                        if (hasRecvError()) {
+                            break;
+                        }
                     }
-                    recv({"data": chunk});
-                    if (hasRecvError()) {
-                        recv_error = True;
-                        break;
-                    }
+                } catch (hash<ExceptionInfo> ex) {
+                    try {
+                        s.cleanupHttp2Stream(sid);
+                    } catch () {}
+                    rethrow;
                 }
                 # Clean up the stream from the Http2Session streams map.
                 # cleanupHttp2Stream only removes from Qore's tracking map,

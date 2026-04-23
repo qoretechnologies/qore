@@ -92,6 +92,31 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         hash<string, list<HttpClientConnection>> pool;
 
         #! Lock for thread-safe access to pool
+        /** @anchor pool_lock_pin
+            Every public method that might be called concurrently with
+            the destructor (e.g. from a background thread retaining a
+            reference to the manager) must declare a local variable
+
+            @code
+            RWLock pool_lock_pin = pool_lock;
+            @endcode
+
+            at its entry.  The local holds a QoreObject reference on the
+            RWLock wrapper, so if another thread runs @c delete @c mgr
+            concurrently the wrapper's refcount stays >0 and its
+            QoreObject destructor is deferred.  Without this pin, member
+            cleanup in @c delete derefs the wrapper to 0 → its Qore
+            destructor calls @c AbstractSmartLock::destructor, which
+            fires @c LOCK-ERROR if any thread still holds the
+            underlying lock (lib/QC_RWLock.qpp).
+
+            The pin is a local-only ref: once the method returns, it
+            drops out of scope and the wrapper is destroyed cleanly —
+            by which time any @c AutoReadLock / @c AutoWriteLock in the
+            method body has already released the lock, so the deferred
+            @c destructor() call finds the lock free and exits without
+            error.
+        */
         RWLock pool_lock();
 
         #! AsyncSocketIoController for async operations
@@ -126,6 +151,16 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
 
         #! Protocol cache: "host:port" -> "h2" or "h3"
         hash<string, string> protocol_cache;
+
+        #! Alt-Svc alt port map: origin "host:port" -> alt_port
+        /** Populated by checkAltSvc() when the server advertises an h3
+            alternative on a port different from the origin TCP port.
+            createConnection() rewrites Http3ClientConnection's url_info.port
+            to alt_port so the QUIC handshake targets the advertised UDP
+            port, not the origin TCP port.  Absent entry means alt_port
+            equals origin port (the common case).
+        */
+        hash<string, int> alt_svc_port_map;
 
         #! Last H3 probe times: "host:port" -> timestamp
         hash<string, date> h3_probe_times;
@@ -295,6 +330,8 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         @throw HTTPCLIENT-CAPACITY-ERROR if no connection can be acquired
     */
     HttpClientStreamHandle acquireStream(string url) {
+        # Pin @c pool_lock across this method: see @ref pool_lock_pin.
+        RWLock pool_lock_pin = pool_lock;
         # Opportunistically evict idle connections on request entry so the pool
         # doesn't grow unboundedly under churn.  Throttled to at most once per
         # cleanup-interval window; see maybeCleanupIdle().
@@ -397,14 +434,30 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
     */
     HttpClientStreamHandle acquireAndStartStreaming(string url, string method, string path,
             *hash<auto> headers, bool body_streaming = False, *data body) {
+        # Pin @c pool_lock across this method: see @ref pool_lock_pin.
+        RWLock pool_lock_pin = pool_lock;
         int retries = 0;
         bool timeout_retried = False;
+        bool h3_close_retried = False;
         while (True) {
             HttpClientStreamHandle stream = acquireStream(url);
             try {
                 stream.startStreaming(method, path, headers, body_streaming, body);
                 return stream;
             } catch (hash<ExceptionInfo> ex) {
+                # HTTP3-CONNECTION-CLOSED and HTTP3-READ-ERROR retry only ONCE:
+                # the Gmail/Google idle-close pattern needs one retry on a fresh
+                # connection, but if the fresh connection ALSO fails the server
+                # is truly down — burning MaxRequestRetries × connect_timeout
+                # turns a single dead-server failure into a 45s+ hang.
+                if ((ex.err == "HTTP3-CONNECTION-CLOSED" || ex.err == "HTTP3-READ-ERROR")
+                        && !h3_close_retried) {
+                    h3_close_retried = True;
+                    log(LoggerLevel::DEBUG, "streaming %s, retrying once on fresh connection",
+                        ex.err);
+                    evictDeadConnections(url);
+                    continue;
+                }
                 if (isConnectionError(ex.err) && ++retries <= MaxRequestRetries) {
                     log(LoggerLevel::DEBUG, "streaming connection error %s, retrying (%d/%d)",
                         ex.err, retries, MaxRequestRetries);
@@ -449,6 +502,8 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
     */
     hash<auto> submitRequestAsync(string url, string method, string path,
             *hash<auto> headers, *data body) {
+        # Pin @c pool_lock across this method: see @ref pool_lock_pin.
+        RWLock pool_lock_pin = pool_lock;
         # Inject cookies from jar into request headers
         hash<UrlInfo> url_info;
         if (cookie_jar) {
@@ -466,6 +521,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         }
 
         int retries = 0;
+        bool h3_close_retried = False;
         while (True) {
             *HttpClientStreamHandle stream;
             try {
@@ -490,6 +546,14 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
                 # calls releaseReservationIfHeld() on all pre-submit failure paths
                 # (waitForReady timeout, cancel, submitAsyncImpl exception), and
                 # the destructor is a final safety net
+                if ((ex.err == "HTTP3-CONNECTION-CLOSED" || ex.err == "HTTP3-READ-ERROR")
+                        && !h3_close_retried) {
+                    h3_close_retried = True;
+                    log(LoggerLevel::DEBUG, "async %s, retrying once on fresh connection",
+                        ex.err);
+                    evictDeadConnections(url);
+                    continue;
+                }
                 if ((isCapacityError(ex.err) || isConnectionError(ex.err))
                         && ++retries <= MaxRequestRetries) {
                     if (isConnectionError(ex.err)) {
@@ -532,6 +596,8 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
     */
     HttpCancellableFuture requestAsync(string url, string method, string path,
             *hash<auto> headers, *data body) {
+        # Pin @c pool_lock across this method: see @ref pool_lock_pin.
+        RWLock pool_lock_pin = pool_lock;
         # Inject cookies from jar into request headers
         hash<UrlInfo> url_info;
         if (cookie_jar) {
@@ -549,6 +615,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         }
 
         int retries = 0;
+        bool h3_close_retried = False;
         while (True) {
             *HttpClientStreamHandle stream;
             try {
@@ -566,6 +633,14 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
                 }
                 return new HttpCancellableFuture(raw_future, stream);
             } catch (hash<ExceptionInfo> ex) {
+                if ((ex.err == "HTTP3-CONNECTION-CLOSED" || ex.err == "HTTP3-READ-ERROR")
+                        && !h3_close_retried) {
+                    h3_close_retried = True;
+                    log(LoggerLevel::DEBUG, "cancellable async %s, retrying once on fresh connection",
+                        ex.err);
+                    evictDeadConnections(url);
+                    continue;
+                }
                 if ((isCapacityError(ex.err) || isConnectionError(ex.err))
                         && ++retries <= MaxRequestRetries) {
                     if (isConnectionError(ex.err)) {
@@ -616,6 +691,8 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
     */
     hash<auto> request(string url, string method, string path, *hash<auto> headers,
             *data body, *timeout timeout_ms) {
+        # Pin @c pool_lock across this method: see @ref pool_lock_pin.
+        RWLock pool_lock_pin = pool_lock;
         int redirect_count = 0;
 
         while (True) {
@@ -695,6 +772,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
             *hash<auto> headers, *data body, *timeout timeout_ms) {
         int retries = 0;
         bool timeout_retried = False;
+        bool h3_close_retried = False;
         while (True) {
             *HttpClientStreamHandle stream;
             try {
@@ -756,6 +834,16 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
                     }
                     rethrow;
                 }
+                # HTTP3-CONNECTION-CLOSED / HTTP3-READ-ERROR retry ONCE only —
+                # see acquireAndStartStreaming for rationale.
+                if ((ex.err == "HTTP3-CONNECTION-CLOSED" || ex.err == "HTTP3-READ-ERROR")
+                        && !h3_close_retried) {
+                    h3_close_retried = True;
+                    log(LoggerLevel::DEBUG, "sync request %s, retrying once on fresh connection",
+                        ex.err);
+                    evictDeadConnections(url);
+                    continue;
+                }
                 if ((isCapacityError(ex.err) || isConnectionError(ex.err))
                         && ++retries <= MaxRequestRetries) {
                     if (isConnectionError(ex.err)) {
@@ -787,6 +875,8 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         - \c protocol (string): configured protocol selection ("auto", "h1", "h2", or "h3")
     */
     hash<auto> getStats() {
+        # Pin @c pool_lock across this method: see @ref pool_lock_pin.
+        RWLock pool_lock_pin = pool_lock;
         AutoReadLock al(pool_lock);
 
         int total_connections = 0;
@@ -868,6 +958,15 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
             }
         }
 
+        # Final callback barrier: conn.close() above synchronously cancels
+        # the in-flight poll ops, which queue terminal onComplete callbacks
+        # on the AsyncIoController.  Call flushCallbacksByOwner again so
+        # those callbacks finish before our destructor returns.  The
+        # underlying per-owner accounting counts callbacks at enqueue
+        # time (not pop time), so this call waits for every callback
+        # queued by the cancellations above, not just those already
+        # picked up by a worker.
+        controller.flushCallbacksByOwner(owner_id);
     }
 
     #! Removes idle connections older than the idle timeout
@@ -918,6 +1017,8 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
     /** @return the number of connections successfully migrated
     */
     int migrateAll() {
+        # Pin @c pool_lock across this method: see @ref pool_lock_pin.
+        RWLock pool_lock_pin = pool_lock;
         list<hash<auto>> to_migrate = ();
         {
             AutoReadLock al(pool_lock);
@@ -1279,9 +1380,20 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
             # Record probe time
             h3_probe_times{key} = now_us();
 
+            # Apply Alt-Svc port rewrite: when the server advertised h3 on a
+            # port different from the origin TCP port, connect QUIC to the
+            # advertised alt port instead of the origin port.
+            hash<auto> h3_url_info = url_info;
+            if (alt_svc_port_map.hasKey(key)) {
+                int alt_port = alt_svc_port_map{key};
+                h3_url_info.port = alt_port;
+                log(LoggerLevel::DEBUG,
+                    "Alt-Svc: using h3 alt-port %d for origin %s", alt_port, key);
+            }
             try {
-                log(LoggerLevel::DEBUG, "creating new HTTP/3 connection to %s", key);
-                Http3ClientConnection conn(url_info, opts.connect_timeout, logger,
+                log(LoggerLevel::DEBUG, "creating new HTTP/3 connection to %s:%d",
+                    h3_url_info.host, h3_url_info.port);
+                Http3ClientConnection conn(h3_url_info, opts.connect_timeout, logger,
                     opts.max_streams_per_connection, opts.ssl_verify_mode, opts.accept_all_certs,
                     opts.client_cert, opts.client_pk);
                 cacheProtocol(key, "h3");
@@ -1410,16 +1522,46 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
                 }
                 return h2conn;
             }
-            # Both already failed but neither is ready — fall through to poll
+            # Race: H2 setClosed() can fire between submit and registerReadyNotifier,
+            # so race_notifier gets queued only on H3.  If H2 failed with
+            # SOCKET-CONNECT-ERROR (TCP refused), the port is definitively closed
+            # — H3 over UDP won't recover.  Skip the poll (which would wait up to
+            # connect_timeout for H3's own timeout to expire) and fall straight
+            # through to error handling so asyncModeConnectionRefusedTest
+            # fast-fails in ~100ms instead of 10s.
+            if (!h2_pending && !h2conn.isReady()) {
+                *hash<auto> h2_err_early = h2conn.getPollOperation().getError();
+                if (h2_err_early.err == "SOCKET-CONNECT-ERROR") {
+                    log(LoggerLevel::DEBUG,
+                        "happy eyeballs: H2 failed fast with SOCKET-CONNECT-ERROR for %s,"
+                        " aborting H3", key);
+                    try { controller.cancel(h3conn.getSocket()); } catch () {}
+                    try { h3conn.close(); } catch () {}
+                    try { h2conn.close(); } catch () {}
+                    string desc_fast = sprintf("could not connect to %s: %s", key,
+                        h2_err_early.desc);
+                    throw "SOCKET-CONNECT-ERROR", desc_fast;
+                }
+            }
         }
 
-        timeout remaining = opts.connect_timeout - HappyEyeballsStaggerMs;
-        if (remaining <= 0ms) {
-            remaining = opts.connect_timeout;
+        # If BOTH H3 and H2 already failed (neither pending, neither ready),
+        # skip the poll entirely — race_notifier will never fire, and blocking
+        # up to connect_timeout here would be wasted time.
+        bool both_already_closed = !h3_pending && !h2_pending
+            && !h3conn.isReady() && !h2conn.isReady();
+        if (!both_already_closed) {
+            timeout remaining = opts.connect_timeout - HappyEyeballsStaggerMs;
+            if (remaining <= 0ms) {
+                remaining = opts.connect_timeout;
+            }
+            Socket::poll((<SocketPollInfo>{"events": SOCK_POLLIN, "socket": race_notifier},),
+                remaining);
+            race_notifier.acknowledge();
+        } else {
+            log(LoggerLevel::DEBUG,
+                "happy eyeballs: both H3 and H2 already closed for %s, skipping poll", key);
         }
-        Socket::poll((<SocketPollInfo>{"events": SOCK_POLLIN, "socket": race_notifier},),
-            remaining);
-        race_notifier.acknowledge();
 
         # Determine winner
         if (h3conn.isReady()) {
@@ -1458,6 +1600,19 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         if (detail) {
             desc += sprintf(": %s", detail);
         }
+
+        # Fail-fast path: if the H2 (TCP) attempt reported SOCKET-CONNECT-ERROR,
+        # the endpoint is definitively refused at the kernel level (ECONNREFUSED
+        # or similar).  H3 over UDP can't recover this because the remote host
+        # has rejected the port — retrying via the outer isConnectionError loop
+        # just wastes another connect_timeout per attempt (seen in
+        # asyncModeConnectionRefusedTest: 2×10s = 20s, 5s over the 15s budget).
+        # Propagate the underlying SOCKET-CONNECT-ERROR, which is NOT in
+        # isConnectionError(), so the retry loop fails fast.
+        if (h2_err.err == "SOCKET-CONNECT-ERROR") {
+            throw h2_err.err, desc;
+        }
+
         throw "HTTPCLIENT-CONNECT-ERROR", desc;
     }
 
@@ -1489,6 +1644,9 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
                 cast<Http1ClientPollOperation>(op).setIdleTimeout(opts.idle_timeout);
             } else if (op instanceof Http2ClientPollOperation) {
                 cast<Http2ClientPollOperation>(op).setIdleTimeout(opts.idle_timeout);
+                # Set keepalive ping at half the idle timeout so dead connections
+                # are detected before the idle timer fires and evicts them.
+                cast<Http2ClientPollOperation>(op).setPingInterval(opts.idle_timeout / 2);
             }
         }
 
@@ -1703,6 +1861,10 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         @param resp the response hash (checked for @c alt-svc header)
     */
     private checkAltSvc(string url, hash<auto> resp) {
+        # Skip during shutdown — see evictDeadConnections() for rationale.
+        if (shutdown) {
+            return;
+        }
         # Only applicable to HTTPS in auto mode without a proxy
         if (opts.protocol != "auto") {
             return;
@@ -1768,12 +1930,26 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
                     alt_host, alt_port, origin_host);
                 continue;
             }
-            # Use the origin host for the pool key — this is the same format
-            # used by acquireStream() → getConnection() for pool lookups
-            string key = sprintf("%s:%d", origin_host, alt_port);
-            log(LoggerLevel::DEBUG, "Alt-Svc: H3 advertised at %s, caching h3", key);
+            # Cache key MUST be the origin (host:origin_port), not the Alt-Svc
+            # alternative port.  getConnection() / getProtocol() look up by
+            # (url_info.host, url_info.port) = origin port; a cache keyed by
+            # alt_port would never match a subsequent request to the origin.
+            # When alt_port != origin_port we also record alt_port separately
+            # so createConnection() can rewrite the H3 target.
+            string key = sprintf("%s:%d", origin_host, url_info.port);
+            log(LoggerLevel::DEBUG,
+                "Alt-Svc: H3 advertised for origin %s via alt-port %d, caching h3",
+                key, alt_port);
             AutoWriteLock al(pool_lock);
             cacheProtocol(key, "h3");
+            if (alt_port != url_info.port) {
+                alt_svc_port_map{key} = alt_port;
+            } else {
+                # Alt-Svc port equals origin port — no rewrite needed;
+                # remove any stale entry in case it was set by a prior
+                # Alt-Svc response pointing elsewhere.
+                remove alt_svc_port_map{key};
+            }
             # Drain existing non-H3 connections so subsequent requests use H3.
             # setDraining() prevents new streams while in-flight streams complete.
             if (pool.hasKey(key)) {
@@ -1800,6 +1976,10 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         while H3 is cached (e.g., from Alt-Svc discovery).
     */
     private handleProtocolFallback(string url, string err) {
+        # Skip during shutdown — see evictDeadConnections() for rationale.
+        if (shutdown) {
+            return;
+        }
         hash<UrlInfo> url_info = parse_url(url);
         if (!url_info.port) {
             url_info.port = url_info.protocol == "https" ? 443 : 80;
@@ -1899,6 +2079,13 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
 
     #! Internal: evicts dead connections for the given URL
     private evictDeadConnections(string url) {
+        # Fast-fail during shutdown — the caller's public-method
+        # pool_lock_pin keeps pool_lock alive, but the pool itself has
+        # already been removed in closeAll(), so there is no useful
+        # work to do.
+        if (shutdown) {
+            return;
+        }
         hash<UrlInfo> url_info = parse_url(url);
         string key = sprintf("%s:%d", url_info.host, url_info.port);
 

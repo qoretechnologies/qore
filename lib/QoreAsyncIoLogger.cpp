@@ -32,6 +32,9 @@
 #include <qore/Qore.h>
 #include "qore/intern/QoreLoggerBridge.h"
 #include "qore/intern/QoreAsyncIoLogger.h"
+#include <unistd.h>
+#include <sys/syscall.h>
+#include <cstring>
 
 static QoreThreadLock async_io_logger_lock;
 static QoreLoggerBridge* async_io_logger = nullptr;
@@ -126,13 +129,29 @@ void qore_async_io_trace(const char* fmt, ...) {
     clock_gettime(CLOCK_REALTIME, &ts);
     struct tm tm;
     localtime_r(&ts.tv_sec, &tm);
-    fprintf(stderr, "[ASYNC-IO %04d-%02d-%02d %02d:%02d:%02d.%06ld] ",
+    long tid = (long)syscall(SYS_gettid);
+    char prefix[128];
+    int plen = snprintf(prefix, sizeof(prefix),
+        "[ASYNC-IO %04d-%02d-%02d %02d:%02d:%02d.%06ld tid=%ld] ",
         tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday,
-        tm.tm_hour, tm.tm_min, tm.tm_sec, ts.tv_nsec / 1000);
+        tm.tm_hour, tm.tm_min, tm.tm_sec, ts.tv_nsec / 1000, tid);
+    if (plen < 0) plen = 0;
+    if (plen >= (int)sizeof(prefix)) plen = sizeof(prefix) - 1;
+    char body[4096];
     va_list args;
     va_start(args, fmt);
-    vfprintf(stderr, fmt, args);
+    int blen = vsnprintf(body, sizeof(body), fmt, args);
     va_end(args);
+    if (blen < 0) blen = 0;
+    if (blen >= (int)sizeof(body)) blen = sizeof(body) - 1;
+    // Single atomic write — no interleaving between threads
+    char combined[4096 + 256];
+    int total = plen + blen;
+    if (total >= (int)sizeof(combined)) total = sizeof(combined) - 1;
+    memcpy(combined, prefix, plen);
+    memcpy(combined + plen, body, (size_t)(total - plen));
+    combined[total] = '\0';
+    fputs(combined, stderr);
 }
 
 #endif // DEBUG || DEBUG_ASYNC_IO

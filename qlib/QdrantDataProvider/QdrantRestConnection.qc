@@ -57,6 +57,15 @@ public class QdrantRestConnection inherits RestClient::RestConnection {
                     + <ConnectionOptionInfo>{
                     "default_value": "/",
                 },
+                "ping_headers": RestConnection::ConnectionScheme.options."ping_headers"
+                    + <ConnectionOptionInfo>{
+                    "default_value": {"Connection": "close"},
+                    "desc": "HTTP headers to send with ping requests; defaults to "
+                        "`{\"Connection\": \"close\"}` to force a fresh TCP connection on "
+                        "each ping, preventing stale keep-alive connection failures against "
+                        "qdrant's actix-web server (which closes idle keep-alive connections "
+                        "after a short timeout)",
+                },
             },
         };
     }
@@ -110,18 +119,6 @@ public class QdrantRestConnection inherits RestClient::RestConnection {
     */
     DataProvider::AbstractDataProvider getDataProvider(*hash<auto> constructor_options) {
         return new QdrantDataProvider({"restclient": getAsync()});
-    }
-
-    #! Returns a sync @ref RestClient::RestClient "RestClient" object
-    /** @param connect if @ref True "True", then the connection is returned already connected
-        @param rtopts this connection type does not accept any runtime options, so this parameter is ignored
-
-        @return a sync @ref RestClient::RestClient "RestClient" object
-
-        @note use \c getAsync() for a @ref RestClientIo::RestClientIo "RestClientIo" client with async I/O support
-    */
-    private RestClient getImpl(bool connect = True, *hash<auto> rtopts) {
-        return new RestClient(getConnectionOptions(), !connect);
     }
 
     #! Returns the ConnectionSchemeInfo hash for this object

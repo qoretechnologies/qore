@@ -3675,6 +3675,17 @@ public class Http2Test inherits QUnit::Test {
                         AutoLock al(result_mutex);
                         test_results.client_goal_reached = spop.goalReached();
                     }
+                    # For the conn_mgr path, goalReached() may return True even
+                    # on error (the Future resolves with a rejection).  Call
+                    # continuePoll() once more to surface the error exception.
+                    if (spop.goalReached()) {
+                        try {
+                            spop.continuePoll();
+                        } catch (hash<ExceptionInfo> ex2) {
+                            AutoLock al(result_mutex);
+                            test_results.client_error = ex2.err;
+                        }
+                    }
                 } catch (hash<ExceptionInfo> ex) {
                     AutoLock al(result_mutex);
                     test_results.client_error = ex.err;

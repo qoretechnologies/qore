@@ -1483,6 +1483,29 @@ int64_t QuicSession::submitRequest(const char* method, const char* path,
         });
     };
 
+    // Defensive path normalization: RFC 9114 §4.3.1 requires ":path" to start
+    // with "/" (the only exceptions are the asterisk-form "*" for OPTIONS and
+    // "CONNECT" where ":path" is omitted).  nghttp3 enforces this — a server
+    // receiving a malformed ":path" responds with H3_MALFORMED_HTTP_HEADER
+    // (-105) and closes the QUIC connection before the handler runs, leaving
+    // no clue in the service log.  Silently prepend the slash here and log a
+    // warning so the caller can find and fix the root cause instead of
+    // chasing a mysterious "QUIC connection closed by peer during read".
+    std::string path_norm;
+    if (path && *path && *path != '/' && strcmp(method, "CONNECT") != 0
+            && !(strcmp(method, "OPTIONS") == 0 && strcmp(path, "*") == 0)) {
+        qore_async_io_log(QORE_LOG_LEVEL_WARN,
+            "QuicSession::submitRequest: caller passed non-absolute :path %s for "
+            "method %s — auto-prepending leading '/' to avoid "
+            "H3_MALFORMED_HTTP_HEADER rejection; fix the caller to pass an "
+            "absolute path",
+            path, method);
+        path_norm.reserve(strlen(path) + 1);
+        path_norm.push_back('/');
+        path_norm.append(path);
+        path = path_norm.c_str();
+    }
+
     // Pseudo-headers
     add_nv(":method", 7, method, strlen(method));
     add_nv(":path", 5, path, strlen(path));
@@ -1595,6 +1618,22 @@ int64_t QuicSession::submitRequestStreaming(const char* method, const char* path
             namelen, valuelen, NGHTTP3_NV_FLAG_NONE
         });
     };
+
+    // Defensive path normalization — see submitRequest() for rationale
+    std::string path_norm;
+    if (path && *path && *path != '/' && strcmp(method, "CONNECT") != 0
+            && !(strcmp(method, "OPTIONS") == 0 && strcmp(path, "*") == 0)) {
+        qore_async_io_log(QORE_LOG_LEVEL_WARN,
+            "QuicSession::submitRequestStreaming: caller passed non-absolute "
+            ":path %s for method %s — auto-prepending leading '/' to avoid "
+            "H3_MALFORMED_HTTP_HEADER rejection; fix the caller to pass an "
+            "absolute path",
+            path, method);
+        path_norm.reserve(strlen(path) + 1);
+        path_norm.push_back('/');
+        path_norm.append(path);
+        path = path_norm.c_str();
+    }
 
     // Pseudo-headers
     add_nv(":method", 7, method, strlen(method));
@@ -1711,6 +1750,23 @@ int64_t QuicSession::submitConnectRequest(const char* path, const strcase_str_ma
             namelen, valuelen, NGHTTP3_NV_FLAG_NONE
         });
     };
+
+    // Defensive path normalization — RFC 9220 Section 3: extended CONNECT
+    // includes :path, which follows the same absolute-path rule as other
+    // request methods (RFC 9114 §4.3.1).  See submitRequest() for rationale.
+    std::string path_norm;
+    if (path && *path && *path != '/') {
+        qore_async_io_log(QORE_LOG_LEVEL_WARN,
+            "QuicSession::submitConnectRequest: caller passed non-absolute "
+            ":path %s for extended CONNECT :protocol %s — auto-prepending "
+            "leading '/' to avoid H3_MALFORMED_HTTP_HEADER rejection; fix "
+            "the caller to pass an absolute path",
+            path, protocol);
+        path_norm.reserve(strlen(path) + 1);
+        path_norm.push_back('/');
+        path_norm.append(path);
+        path = path_norm.c_str();
+    }
 
     // Pseudo-headers — RFC 9220 Section 3: extended CONNECT includes all 5
     add_nv(":method", 7, "CONNECT", 7);
@@ -2527,6 +2583,10 @@ std::unique_ptr<QuicStreamInfo> QuicSession::takeCompletedStream() {
                 (long long)getSessionId(), (long long)it->first,
                 (int)it->second->is_connect);
             auto result = std::move(it->second);
+            if (result->dispatched) {
+                dispatched_stream_count_.fetch_sub(1,
+                    std::memory_order_release);
+            }
             streams_.erase(it);
             updateKeepAliveLocked();
             return result;
@@ -2563,6 +2623,10 @@ std::unique_ptr<QuicStreamInfo> QuicSession::takeHeadersReadyStreamCopy() {
             // in the original for takeStreamData()/readQuicStreamDataBlock() to return.
             copy->body.clear();
             info->dispatched = true;
+            // Pin the session in the socket's session map until the handler
+            // calls cleanupStream (or the stream is otherwise erased).  See
+            // hasDispatchedStreams() for the race this prevents.
+            dispatched_stream_count_.fetch_add(1, std::memory_order_release);
 
             printd(5, "QuicSession::takeHeadersReadyStreamCopy() stream_id=" QLLD "\n", id);
             return copy;
@@ -2634,6 +2698,10 @@ void QuicSession::cleanupStream(int64_t stream_id) {
             (int)isc, (int)cta);
         printd(5, "QuicSession::cleanupStream() stream_id=" QLLD " removing dispatched stream\n",
             stream_id);
+        if (it->second->dispatched) {
+            dispatched_stream_count_.fetch_sub(1,
+                std::memory_order_release);
+        }
         streams_.erase(it);
         updateKeepAliveLocked();
     }
@@ -2679,6 +2747,10 @@ int QuicSession::resetStream(int64_t stream_id) {
         ASYNC_IO_TRACE("QuicSession::resetStream ERASE session=%lld stream_id=%lld is_connect=%d\n",
             (long long)getSessionId(), (long long)stream_id,
             (int)it->second->is_connect);
+        if (it->second->dispatched) {
+            dispatched_stream_count_.fetch_sub(1,
+                std::memory_order_release);
+        }
         streams_.erase(it);
         updateKeepAliveLocked();
     }
@@ -2859,7 +2931,14 @@ int QuicSession::cancelStream(int64_t stream_id, uint64_t app_error_code, Except
         (long long)getSessionId(), (long long)stream_id,
         (unsigned long long)app_error_code);
     // Remove from tracking
-    streams_.erase(stream_id);
+    auto sit = streams_.find(stream_id);
+    if (sit != streams_.end()) {
+        if (sit->second->dispatched) {
+            dispatched_stream_count_.fetch_sub(1,
+                std::memory_order_release);
+        }
+        streams_.erase(sit);
+    }
     updateKeepAliveLocked();
 
     // Signal that packets need to be written (RESET_STREAM frame)
@@ -2984,9 +3063,32 @@ int QuicSession::recvStreamDataCallback(ngtcp2_conn* conn, uint32_t flags,
             (long long)nconsumed);
 
         if (nconsumed < 0) {
-            printd(1, "QuicSession::recvStreamDataCallback() nghttp3_conn_read_stream2() "
-                "failed: %s (stream_id: " QLLD ")\n",
-                nghttp3_strerror(static_cast<int>(nconsumed)), stream_id);
+            // Always surface H3 parse failures at WARN level — these close the
+            // QUIC connection with no trace at the handler layer, so operators
+            // need to see them in the normal server log rather than only via
+            // the compile-time DEBUG_ASYNC_IO trace.  Include the first 64
+            // bytes as hex so the root cause (e.g. missing ':path' leading
+            // slash → -105 H3_MALFORMED_HTTP_HEADER) can be diagnosed from a
+            // production log capture without enabling trace.
+            char hex_buf[64 * 3 + 1];
+            size_t dump_len = datalen < 64 ? datalen : 64;
+            size_t pos = 0;
+            for (size_t i = 0; i < dump_len && pos + 3 < sizeof(hex_buf); ++i) {
+                int w = snprintf(hex_buf + pos, sizeof(hex_buf) - pos,
+                    "%02x ", data[i]);
+                if (w < 0) break;
+                pos += static_cast<size_t>(w);
+            }
+            hex_buf[pos] = '\0';
+            qore_async_io_log(QORE_LOG_LEVEL_WARN,
+                "QuicSession::recvStreamDataCallback nghttp3_conn_read_stream2 "
+                "rejected stream: session=%lld stream_id=%lld err=%s datalen=%zu "
+                "fin=%d first_%zu_bytes=[%s] — server will close the QUIC "
+                "connection; typical cause is a non-compliant request header "
+                "block from the peer (e.g. missing leading '/' in :path)",
+                (long long)session->getSessionId(), (long long)stream_id,
+                nghttp3_strerror(static_cast<int>(nconsumed)), datalen,
+                (int)fin, dump_len, hex_buf);
             return NGTCP2_ERR_CALLBACK_FAILURE;
         }
 
@@ -3707,6 +3809,9 @@ int QuicSession::h3EndHeadersCallback(nghttp3_conn* /* conn */, int64_t stream_i
         if (stream->is_connect && !stream->connect_protocol.empty()) {
             stream->headers_complete = true;
             stream->dispatched = true;
+            // Pin session in socket's map — same rationale as takeHeadersReadyStreamCopy
+            session->dispatched_stream_count_.fetch_add(1,
+                std::memory_order_release);
             session->completed_streams_.push(stream_id);
             session->has_completed_streams_.store(true, std::memory_order_release);
             printd(5, "QuicSession::h3EndHeadersCallback() stream_id=" QLLD

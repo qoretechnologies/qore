@@ -45,6 +45,8 @@
 #include <unordered_set>
 #include <vector>
 
+class Http3ClientConnection;
+
 //! C++ base for Http3ClientPollOperation providing SocketPollOperationBase fast path
 /** This class implements the HTTP/3 client poll state machine (connecting, reading,
     wait_read, closed) entirely in C++, enabling the AsyncIoController to use the
@@ -89,6 +91,32 @@ public:
     DLLLOCAL void disarmConnectionPriv() {
         AutoLocker al(stream_lock);
         connection_priv = nullptr;
+        h3_owner_ = nullptr;
+    }
+
+    //! Arms a handshake-phase observer for happy-eyeballs coordination.
+    /** When set, @c fireReadyCallback and @c setError route the CONNECTING
+        → outcome transition through the @ref Http3ClientConnection hooks
+        (@ref Http3ClientConnection::onInnerHandshakeReady /
+        @ref Http3ClientConnection::onInnerHandshakeFailed) instead of
+        directly calling the base-class @c onConnectionReady / @c setClosed.
+        The owner then decides whether to commit this attempt, cancel it
+        (it lost the race), or keep the connection CONNECTING (other
+        attempts are still pending).
+
+        Must be called while @c h3_state is @c CONNECTING and before the
+        operation is submitted to the controller.  Cleared automatically
+        after the first handshake outcome is reported (setError /
+        fireReadyCallback) so post-handshake errors (read-side closure)
+        go through the base-class setClosed path as before.
+
+        @param owner non-null raw back-pointer; lifetime must outlive
+            this poll op
+        @since %Qore 2.3
+    */
+    DLLLOCAL void armHappyEyeballsOwner(Http3ClientConnection* owner) {
+        AutoLocker al(stream_lock);
+        h3_owner_ = owner;
     }
 
     // --- SocketPollOperationBase overrides ---
@@ -161,6 +189,25 @@ public:
     //! Set error and close state (for connection death during submit)
     DLLLOCAL void setSubmitError(const char* err, const char* desc);
 
+    //! Submit a request to the QUIC layer with the full multi-phase protocol
+    /** Handles checkCapacity, beginSubmit, inner op submit, registerStream,
+        endSubmitOk/Fail. Called from Http3ClientConnection C++ methods.
+        @param method HTTP method
+        @param path request path
+        @param headers request headers (QoreHashNode*)
+        @param body request body (may be nullptr)
+        @param body_len body length
+        @param streaming if true, submit as streaming (no END_STREAM on headers)
+        @param action completion action (ownership transferred; deref'd on failure)
+        @param max_streams max concurrent streams
+        @param xsink exception sink
+        @return stream ID on success, -1 on failure
+    */
+    DLLLOCAL int64_t submitRequest(const char* method, const char* path,
+        const QoreHashNode* headers, const void* body, size_t body_len,
+        bool streaming, AbstractAsyncAction* action, int max_streams,
+        ExceptionSink* xsink);
+
     //! Synchronously flush pending QUIC writes to the network
     /** Delegates to the inner SocketQuicClientPollOperation::flushPendingWrites().
         Safe to call from any thread.
@@ -227,6 +274,11 @@ public:
     //! Returns the raw connection priv pointer (for I/O-thread calls)
     DLLLOCAL AbstractHttpPollConnectionPriv* getConnectionPriv() const {
         return connection_priv;
+    }
+
+    //! Returns the inner QUIC client poll operation (for stream data send)
+    DLLLOCAL SocketQuicClientPollOperation* getInnerOp() const {
+        return inner_op;
     }
 
     //! Get the socket object (returns a referenced QoreObject*)
@@ -331,6 +383,22 @@ private:
         This raw pointer is used for direct I/O-thread calls (onConnectionReady).
     */
     AbstractHttpPollConnectionPriv* connection_priv = nullptr;
+
+    //! Optional happy-eyeballs coordinator for the CONNECTING phase.
+    /** When non-null, the first handshake outcome (success or failure) is
+        reported to this owner instead of directly signalling the base-class
+        condition variable on @c connection_priv.  Armed by
+        @ref armHappyEyeballsOwner from @ref Http3ClientConnection when the
+        enclosing connection is racing multiple address families.  Cleared
+        on the first outcome report and on @c disarmConnectionPriv so that
+        subsequent post-handshake events (read errors, remote close) fall
+        back to the normal @c setClosed path.
+
+        Raw pointer — the @c Http3ClientConnection owns this poll op and
+        outlives it contractually; no ref is taken to avoid GC-invisible
+        cycles, mirroring @c connection_priv.
+    */
+    Http3ClientConnection* h3_owner_ = nullptr;
 
     static constexpr int MAX_DRAIN_ITERATIONS = 100;
     static constexpr int MAX_EMPTY_READS = 100;

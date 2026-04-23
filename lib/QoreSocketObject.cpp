@@ -735,6 +735,21 @@ int QoreSocketObject::getRecvTimeout() {
 }
 
 int QoreSocketObject::close() {
+    // Pre-close interrupt — MUST run before we attempt to take priv->m.
+    // Another thread may be holding priv->m (or Http2Session::m via an
+    // H2 sync poll / send) and blocked in a ::poll / SSL_read / SSL_write
+    // on our fd.  Without the interrupt, our AutoLocker would wait for
+    // the other thread to release priv->m, which it can't do until its
+    // blocking I/O returns — which requires us to shut down the fd.
+    // Classic close-vs-poll deadlock (grpc-shutdown-deadlock.md).
+    //
+    // prepareForClose() atomically:
+    //   1. Marks the H2 session closed so sync H2 loops exit promptly.
+    //   2. ::shutdown(fd) to unblock any pending poll / SSL I/O.
+    // Both actions are safe concurrently with in-flight I/O on the same
+    // socket; see the prepareForClose() doc comment for the race
+    // analysis.
+    priv->socket->priv->prepareForClose();
     AutoLocker al(priv->m);
     return priv->socket->close();
 }
@@ -899,6 +914,18 @@ int QoreSocketObject::flushHttp2PendingData(ExceptionSink* xsink) {
     return priv->socket->priv->h2_session->sendPendingData(0, xsink);
 }
 
+int QoreSocketObject::submitHttp2Ping(ExceptionSink* xsink) {
+    AutoLocker al(priv->m);
+    if (!priv->socket->priv->h2_session) {
+        return 0;
+    }
+    int rv = priv->socket->priv->h2_session->submitPing(nullptr, xsink);
+    if (rv < 0 || *xsink) {
+        return -1;
+    }
+    return priv->socket->priv->h2_session->sendPendingData(0, xsink);
+}
+
 int QoreSocketObject::submitHttp2StreamingResponseHeaders(int32_t stream_id, int status_code,
         const QoreHashNode* headers, ExceptionSink* xsink) {
     AutoLocker al(priv->m);
@@ -927,6 +954,32 @@ int QoreSocketObject::submitHttp2StreamingResponseWithStream(int32_t stream_id, 
         return rv;
     }
 
+    // Extract Content-Length from headers if declared, so the session can
+    // enforce it and send RST_STREAM on short-stream (InputStream EOFs
+    // before the promised bytes are delivered).  Without this the peer
+    // receives END_STREAM on a truncated body and waits forever for the
+    // missing bytes (FUTURE-TIMEOUT on the HTTP client).
+    int64_t content_length = -1;
+    if (headers) {
+        ConstHashIterator hi(headers);
+        while (hi.next()) {
+            if (!strcasecmp(hi.getKey(), "content-length")) {
+                QoreValue v = hi.get();
+                if (v.getType() == NT_STRING) {
+                    const char* s = v.get<const QoreStringNode>()->c_str();
+                    char* endptr = nullptr;
+                    long long cl = strtoll(s, &endptr, 10);
+                    if (endptr != s && cl >= 0) {
+                        content_length = cl;
+                    }
+                } else if (v.getType() == NT_INT) {
+                    content_length = v.getAsBigInt();
+                }
+                break;
+            }
+        }
+    }
+
     // Transfer ownership of InputStream to the session for I/O thread reading
     // The handler thread unassigns before calling; I/O thread will reassign on first read
     body->unassignThread(xsink);
@@ -934,24 +987,39 @@ int QoreSocketObject::submitHttp2StreamingResponseWithStream(int32_t stream_id, 
         return -1;
     }
 
-    session->setStreamInputStream(stream_id, body, xsink);
+    session->setStreamInputStream(stream_id, body, xsink, content_length);
     return *xsink ? -1 : 0;
 }
 
-// NOTE: readHttp2StreamDataBlock does NOT acquire priv->m because it blocks
-// during I/O (waiting for HTTP/2 stream data with timeout).  Holding the
-// object mutex during a blocking wait would prevent other threads from
-// performing any socket operation (write, flush, cleanup) on this socket.
-// The caller must ensure exclusive socket access (which is the case for
-// server handler threads that own the connection).  Thread safety for the
-// HTTP/2 session internals is provided by Http2Session's own recursive mutex.
-// No concurrent receiveData() calls can occur on the same session because the
-// server connection model is single-threaded per connection: the handler thread
-// that calls readHttp2StreamDataBlock() is the same thread that drives the
-// HTTP/2 session.  flushHttp2()/sendPendingDataBlocking() only sends outgoing
-// frames and does not call receiveData(), so there is no nghttp2 reentrancy risk.
+// readHttp2StreamDataBlock MUST acquire priv->m even though the inner read
+// blocks waiting for HTTP/2 stream data.  Reasoning:
+//
+// brecv() uses waitReleasingLock() for its poll wait, and waitReleasingLock
+// requires priv->m to be held by the caller on entry — it releases it during
+// the poll and re-acquires on return (see SocketSyncPoll::waitReleasingLock).
+// If the caller doesn't hold priv->m when brecv runs, the AutoUnlocker in
+// waitReleasingLock issues an unlock on an unheld mutex (undefined for
+// PTHREAD_MUTEX_NORMAL — typically silently marks the mutex unlocked) and
+// then re-acquires it on return.  Net effect: this thread leaves brecv
+// holding priv->m it never asked for, and the next socket call from the
+// same thread (e.g. submitHttp2StreamingResponseHeaders) deadlocks on a
+// non-recursive mutex it already owns.  The grpc-test server-stream hang
+// reproduces exactly this — see the deadlock investigation comment block
+// in the bug write-up.
+//
+// Holding priv->m during the blocking wait is safe because:
+//   1. waitReleasingLock releases it for the duration of the actual poll,
+//      so other threads can perform short non-blocking socket ops between
+//      our wait cycles;
+//   2. concurrent close() calls prepareForClose() (which marks the H2
+//      session closed AND ::shutdown(fd) the socket) BEFORE attempting to
+//      take priv->m, so the in-flight poll exits immediately and our own
+//      AutoLocker releases priv->m on scope exit, allowing the close to
+//      proceed.  This is the same close-vs-poll race that motivated
+//      prepareForClose() in the first place.
 BinaryNode* QoreSocketObject::readHttp2StreamDataBlock(int32_t stream_id, int timeout_ms,
         ExceptionSink* xsink) {
+    AutoLocker al(priv->m);
     return priv->socket->readHttp2StreamDataBlock(stream_id, timeout_ms, xsink);
 }
 

@@ -2004,6 +2004,25 @@ int SocketRecvPollState::continuePoll(ExceptionSink* xsink) {
                 // do another read
                 continue;
             }
+            // rc == 0 && real_io == 0 is SSL_ERROR_ZERO_RETURN / peer-initiated
+            // close-notify (see SSLSocketHelper::doNonBlockingIo handling).
+            // Reporting "0 = success" here would let the caller take the
+            // output buffer which is only `received` bytes of valid data
+            // followed by `size - received` bytes of uninitialized memory
+            // preallocated by preallocate(size) — the caller has no way to
+            // detect the short read.  Surface it as SOCKET-CLOSED so the H1
+            // client body-read gets a real error (matching the non-SSL path
+            // below).  Seen in HttpServerAsyncStreamingResponse.qtest
+            // testH1ShortStream where the server streams 100 bytes + close
+            // with a declared Content-Length of 10000 — the client was
+            // reporting a 10000-byte body containing 9900 bytes of
+            // uninitialized memory (INVALID-ENCODING on any string decode).
+            if (rc == 0 && received < size) {
+                xsink->raiseException("SOCKET-CLOSED",
+                    "peer closed the SSL connection after " QLLD " of " QLLD
+                    " bytes read", (int64)received, (int64)size);
+                return -1;
+            }
             return rc;
         } else {
             rc = ::recv(sock->sock,
@@ -2018,7 +2037,20 @@ int SocketRecvPollState::continuePoll(ExceptionSink* xsink) {
             if (*xsink) {
                 return -1;
             }
-            if (rc >= 0) {
+            if (rc == 0) {
+                // EOF — peer closed the connection before we got the requested size.
+                // Returning 0 here would be misinterpreted as "success, done"; returning
+                // SOCK_POLLIN would spin in a tight re-poll loop (poll wakes immediately
+                // on a closed fd → recv returns 0 → we'd return SOCK_POLLIN again).
+                // Report SOCKET-CLOSED so the caller can surface a real error — seen
+                // under load as HttpServerAsyncStreamingResponse.qtest Content-Length
+                // mismatch producing FUTURE-TIMEOUT instead of SOCKET/HTTP error.
+                xsink->raiseException("SOCKET-CLOSED",
+                    "peer closed the connection after " QLLD " of " QLLD " bytes read",
+                    (int64)received, (int64)size);
+                return -1;
+            }
+            if (rc > 0) {
                 received += rc;
                 if (received == size) {
                     bin->setSize(size);
@@ -3911,31 +3943,51 @@ int32_t QoreSocket::submitHttp2Request(const QoreHashNode* headers, const void* 
         return -1;
     }
 
-    // Convert Qore headers hash to std::map and extract :method, :path
-    strcase_str_map_t h2_headers;
+    // Build an ordered vector of (name, value) pairs so list-valued
+    // headers (e.g. multiple Cookie or X-Custom entries) are emitted
+    // as separate HPACK entries — required for RFC 7540 § 8.1.2.5 cookie
+    // handling and for any other header whose single-name/multiple-value
+    // semantics must be preserved.  Using a flat strcase_str_map_t would
+    // drop all but the last entry for a given name.
+    std::vector<std::pair<std::string, std::string>> h2_headers;
+    h2_headers.reserve(headers->size() + 4);
     std::string method;
     std::string path;
+
+    auto append = [&](const std::string& key, const char* sval) {
+        if (key == ":method") {
+            if (sval && *sval) {
+                method = sval;
+            }
+        } else if (key == ":path") {
+            if (sval && *sval) {
+                path = sval;
+            }
+        }
+        h2_headers.emplace_back(key, sval ? sval : "");
+    };
 
     ConstHashIterator hi(headers);
     while (hi.next()) {
         const char* key = hi.getKey();
         QoreValue val = hi.get();
-        if (val.getType() != NT_STRING) {
-            continue;
-        }
-        const char* sval = val.get<const QoreStringNode>()->c_str();
         std::string skey(key);
-
-        if (skey == ":method") {
-            if (sval && *sval) {
-                method = sval;
-            }
-        } else if (skey == ":path") {
-            if (sval && *sval) {
-                path = sval;
+        if (val.getType() == NT_STRING) {
+            append(skey, val.get<const QoreStringNode>()->c_str());
+        } else if (val.getType() == NT_LIST) {
+            // Emit one HPACK entry per list element.  HTTP/2 explicitly
+            // supports multiple header fields with the same name (and
+            // server-side code joins cookies with "; " and keeps other
+            // multi-value headers as lists — see httpMultiHeadersToQoreHash
+            // in Http2Session.h).
+            const QoreListNode* l = val.get<const QoreListNode>();
+            for (size_t i = 0; i < l->size(); ++i) {
+                QoreValue elem = l->retrieveEntry(i);
+                if (elem.getType() == NT_STRING) {
+                    append(skey, elem.get<const QoreStringNode>()->c_str());
+                }
             }
         }
-        h2_headers[skey] = sval ? sval : "";
     }
 
     if (method.empty()) {
@@ -8188,7 +8240,9 @@ SocketHttp2SendStreamingResponsePollOperation::SocketHttp2SendStreamingResponseP
     }
     set_non_block = true;
 
-    // Build headers map
+    // Build headers map; extract Content-Length for short-stream detection
+    // so EOF before the declared length can be reported to the peer via
+    // RST_STREAM (matching the H1 "server closes the connection" behavior).
     strcase_str_map_t hdr_map;
     if (headers) {
         ConstHashIterator hi(headers);
@@ -8196,7 +8250,15 @@ SocketHttp2SendStreamingResponsePollOperation::SocketHttp2SendStreamingResponseP
             const char* key = hi.getKey();
             QoreValue val = hi.get();
             if (val.getType() == NT_STRING) {
-                hdr_map[key] = val.get<const QoreStringNode>()->c_str();
+                const char* str_val = val.get<const QoreStringNode>()->c_str();
+                hdr_map[key] = str_val;
+                if (!strcasecmp(key, "content-length")) {
+                    char* endptr = nullptr;
+                    long long cl = strtoll(str_val, &endptr, 10);
+                    if (endptr != str_val && cl >= 0) {
+                        content_length = cl;
+                    }
+                }
             }
         }
     }
@@ -8258,6 +8320,30 @@ QoreHashNode* SocketHttp2SendStreamingResponsePollOperation::continuePoll(Except
         switch (ss_state) {
             case SS_READ_CHUNK: {
                 if (eof) {
+                    // If a Content-Length was declared and we've sent fewer
+                    // bytes than promised, the InputStream ran out early.
+                    // Send RST_STREAM with INTERNAL_ERROR so the client sees
+                    // a concrete H2 stream error instead of an END_STREAM
+                    // carrying truncated data (which would otherwise be
+                    // indistinguishable from a valid short response and
+                    // surface as FUTURE-TIMEOUT on the client when the H2
+                    // layer keeps waiting for the declared byte count).
+                    // Mirrors the H1 behavior at QoreSocket.cpp:7376-7382
+                    // (HTTP-STREAM-ERROR + Phase::Error + connection close).
+                    if (content_length >= 0 && bytes_sent < content_length) {
+                        ExceptionSink rst_xsink;
+                        session->submitRstStream(stream_id,
+                            NGHTTP2_INTERNAL_ERROR, &rst_xsink);
+                        if (!rst_xsink) {
+                            session->sendPendingDataBlocking(100, &rst_xsink);
+                        }
+                        rst_xsink.clear();
+                        xsink->raiseException("HTTP-STREAM-ERROR",
+                            "InputStream provided " QLLD " bytes but "
+                            "Content-Length is " QLLD,
+                            bytes_sent, content_length);
+                        return nullptr;
+                    }
                     // Send END_STREAM
                     int rv = session->sendStreamData(stream_id, nullptr, 0, true, xsink);
                     if (*xsink) return nullptr;
@@ -8344,14 +8430,16 @@ QoreHashNode* SocketHttp2SendStreamingResponsePollOperation::continuePoll(Except
             }
 
             case SS_SEND_CHUNK: {
+                size_t chunk_bytes = current_chunk->size();
                 // Send the chunk as HTTP/2 DATA frames (not end_stream)
                 int rv = session->sendStreamData(stream_id, current_chunk->getPtr(),
-                    current_chunk->size(), false, xsink);
+                    chunk_bytes, false, xsink);
                 if (*xsink) return nullptr;
                 if (rv != 0) {
                     xsink->raiseException("HTTP2-ERROR", "failed to send stream data");
                     return nullptr;
                 }
+                bytes_sent += (int64_t)chunk_bytes;
                 current_chunk = nullptr;
                 ss_state = SS_FLUSH;
                 continue;
@@ -8495,7 +8583,50 @@ QoreHashNode* SocketHttp2FlushPollOperation::continuePoll(ExceptionSink* xsink) 
                     continue;
                 }
 
-                // All pending data flushed
+                // @c session_want_write returns 0 AND our send_buffer is
+                // empty — but a streaming response's data provider may still
+                // have bytes queued that nghttp2 hasn't generated a DATA frame
+                // for because the connection-level flow-control window is
+                // exhausted.  In that case the only way forward is to drain
+                // the read side, so peer WINDOW_UPDATE frames re-open the
+                // window and let the next @c session_mem_send pull from the
+                // data provider.
+                //
+                // This is the real-world case exposed by
+                // Http2.qtest::testHttp2RstStreamDuringInputStreamStreaming:
+                // peer RSTs a streaming response mid-flight, consuming 65535
+                // bytes of connection window.  A fresh response on another
+                // stream can send HEADERS but stays flow-control-blocked on
+                // DATA until the peer credits the window back.  Without this
+                // read-drain the caller deadlocks on flush.
+                if (session->hasUnsentStreamData()) {
+                    int recv_rv = session->receiveData(0, xsink);
+                    if (*xsink) {
+                        return nullptr;
+                    }
+                    if (recv_rv == 1) {
+                        // Peer closed — we can't complete the flush, but
+                        // terminate cleanly instead of spinning.
+                        h2f_state = H2F_DONE;
+                        if (set_non_block) {
+                            set_non_block = false;
+                            sock->priv->clearNonBlock();
+                        }
+                        return nullptr;
+                    }
+                    if (recv_rv == -1) {
+                        // Would block: wait for either readable (peer's
+                        // WINDOW_UPDATE) or writable (our re-generated DATA
+                        // frame once the window reopens).
+                        return getSocketPollInfoHash(xsink,
+                            SOCK_POLLIN | SOCK_POLLOUT);
+                    }
+                    // Processed incoming data (WINDOW_UPDATE, trailers, etc.);
+                    // loop back to re-attempt sendPendingData.
+                    continue;
+                }
+
+                // All pending data flushed and no streams have queued data.
                 h2f_state = H2F_DONE;
                 if (set_non_block) {
                     set_non_block = false;
@@ -8635,6 +8766,29 @@ void SocketHttp2ClientMultiplexPollOperation::onStreamComplete(int32_t stream_id
     // Build response hash from stream info
     ReferenceHolder<QoreHashNode> response(new QoreHashNode(autoTypeInfo), xsink);
 
+    // If the stream was reset by the peer (RST_STREAM with non-zero error
+    // code), surface it as an err/desc pair so the conn_mgr response path
+    // (send_internal_conn_mgr) raises a proper exception instead of letting
+    // the partial body bubble up as a successful short response (observed as
+    // FUTURE-TIMEOUT with a Content-Length mismatch, because the H1 body
+    // reader would otherwise spin waiting for the declared byte count).
+    if (stream->reset && stream->error_code != 0) {
+        char errbuf[64];
+        snprintf(errbuf, sizeof(errbuf), "HTTP/2 stream %d reset by peer "
+            "(error_code=%u)", stream_id, stream->error_code);
+        response->setKeyValue("err", new QoreStringNode("HTTP2-STREAM-RESET"),
+            xsink);
+        response->setKeyValue("desc", new QoreStringNode(errbuf), xsink);
+        response->setKeyValue("stream_id", stream_id, xsink);
+        // Also mark the stream as ended so the waiter stops polling.
+        response->setKeyValue("end_stream", true, xsink);
+        {
+            AutoLocker al(response_lock);
+            completed_responses.push_back(response.release());
+        }
+        return;
+    }
+
     response->setKeyValue("stream_id", stream_id, xsink);
     response->setKeyValue("status_code", stream->status_code, xsink);
 
@@ -8684,7 +8838,24 @@ void SocketHttp2ClientMultiplexPollOperation::onStreamComplete(int32_t stream_id
                 || media_type == "text/x-yaml" || media_type == "application/yaml";
         }
 
-        if (is_text) {
+        // Skip text conversion if content-encoding indicates compression
+        // (gzip, deflate, br, zstd, etc.) — the compressed bytes must stay
+        // as binary until the upstream decompression layer in
+        // send_internal_conn_mgr / process_binary_body runs.  Without this
+        // check, compressed bytes are interpreted as UTF-8 and corrupted.
+        bool has_content_encoding = false;
+        {
+            auto ce_it = stream->headers.find("content-encoding");
+            if (ce_it != stream->headers.end() && !ce_it->second.empty()) {
+                const std::string& ce = ce_it->second.back();
+                // "identity" means no encoding — treat as uncompressed
+                if (!ce.empty() && strcasecmp(ce.c_str(), "identity") != 0) {
+                    has_content_encoding = true;
+                }
+            }
+        }
+
+        if (is_text && !has_content_encoding) {
             const QoreEncoding* enc = QCS_UTF8;
             if (!force_utf8) {
                 // Extract charset from full content-type header (case-insensitive search)
@@ -8890,6 +9061,38 @@ QoreHashNode* SocketHttp2ClientMultiplexPollOperation::continuePoll(ExceptionSin
                             completed_responses.push_back(resp.release());
                         }
                         continue;
+                    }
+                }
+
+                // Non-CONNECT streaming streams need a headers-only event dispatched
+                // BEFORE the first intermediate body fragment, so downstream consumers
+                // (ds_get_recv, send_internal_conn_mgr's per-chunk recv_callback, SSE
+                // parsers) see status_code + Content-Type before any body bytes.  The
+                // CONNECT handshake path above handles CONNECT streams via
+                // takeHeadersReadyStreamCopy (which flips `dispatched`); non-CONNECT
+                // streaming streams use a separate flag (`headers_streamed`) so
+                // markStreamComplete still fires on END_STREAM to deliver the
+                // terminal event with trailers.
+                //
+                // Without this split, small responses where the server ships HEADERS
+                // in one frame and DATA+END_STREAM in a later frame leak the first
+                // DATA chunk into recv_callback before the header callback has
+                // recorded content-type — ds_get_recv then throws
+                // DESERIALIZATION-ERROR with ct=null (see Qorus issue-1704.qtest).
+                while (std::unique_ptr<Http2StreamInfo> hdr_stream =
+                        h2_session->takeStreamingHeadersReadyCopy()) {
+                    ReferenceHolder<QoreHashNode> resp(new QoreHashNode(autoTypeInfo), xsink);
+                    resp->setKeyValue("stream_id", (int64)hdr_stream->stream_id, xsink);
+                    resp->setKeyValue("status_code", (int64)hdr_stream->status_code, xsink);
+                    if (!hdr_stream->headers.empty()) {
+                        resp->setKeyValue("headers",
+                            httpMultiHeadersToQoreHash(hdr_stream->headers), xsink);
+                    }
+                    // Intentionally NOT setting end_stream — the stream is still open,
+                    // body chunks and end marker will follow via subsequent events.
+                    {
+                        AutoLocker rl(response_lock);
+                        completed_responses.push_back(resp.release());
                     }
                 }
 

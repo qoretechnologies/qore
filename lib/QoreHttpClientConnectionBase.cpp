@@ -32,6 +32,10 @@
 #include <qore/Qore.h>
 #include <qore/HttpClientConnection.h>
 #include <qore/HttpClientConnectionManager.h>
+#include <qore/AsyncCompletionAction.h>
+
+#include <cassert>
+#include <unordered_map>
 
 bool HttpClientConnectionBase::tryReserveStream() {
     AutoLocker al(reserve_lock);
@@ -90,6 +94,54 @@ QoreHashNode* HttpClientConnectionBase::submitRequest(const char* method, const 
     return nullptr;
 }
 
+int64_t HttpClientConnectionBase::submitRequestStreaming(const char* method, const char* path,
+        const QoreHashNode* headers, const void* body, size_t body_len,
+        QoreChannel*& channel_out, ExceptionSink* xsink) {
+    xsink->raiseException("HTTPCLIENT-NOT-IMPLEMENTED",
+        "submitRequestStreaming not implemented on this connection class");
+    return -1;
+}
+
+int64_t HttpClientConnectionBase::submitRequestWithAction(const char* method, const char* path,
+        const QoreHashNode* headers, const void* body, size_t body_len,
+        AbstractAsyncAction* action, ExceptionSink* xsink) {
+    // Default: not supported.  H1/H2 subclasses override.  We own the
+    // action on entry and must release it on failure so the caller does
+    // not leak (matches the H1/H2 overrides which also deref on error).
+    if (action) {
+        action->deref(xsink);
+    }
+    xsink->raiseException("HTTPCLIENT-NOT-IMPLEMENTED",
+        "submitRequestWithAction not implemented on this connection class");
+    return -1;
+}
+
+QoreHashNode* HttpClientConnectionBase::submitRequestStreamingSend(const char* method, const char* path,
+        const QoreHashNode* headers, bool streaming_recv,
+        QoreChannel*& channel_out, ExceptionSink* xsink) {
+    xsink->raiseException("HTTPCLIENT-NOT-IMPLEMENTED",
+        "submitRequestStreamingSend not implemented on this connection class");
+    return nullptr;
+}
+
+void HttpClientConnectionBase::pushSendData(const void* data, size_t len, ExceptionSink* xsink) {
+    xsink->raiseException("HTTPCLIENT-NOT-IMPLEMENTED",
+        "pushSendData not implemented on this connection class");
+}
+
+void HttpClientConnectionBase::setTrailers(const QoreHashNode* trailers, ExceptionSink* xsink) {
+    xsink->raiseException("HTTPCLIENT-NOT-IMPLEMENTED",
+        "setTrailers not implemented on this connection class");
+}
+
+void HttpClientConnectionBase::setPoolKey(const std::string& key) {
+    pool_key_ = key;
+}
+
+const std::string& HttpClientConnectionBase::getPoolKey() const {
+    return pool_key_;
+}
+
 void HttpClientConnectionBase::closeConnection(ExceptionSink* xsink) {
     // Default: just transition the state machine to CLOSED.
     // C++ subclasses override to also abort the poll op and cancel the
@@ -102,6 +154,16 @@ bool HttpClientConnectionBase::waitForReadyOrError(int64_t timeout_ms, Exception
     bool ready = AbstractHttpPollConnectionPriv::waitForReady(timeout_ms);
 
     if (ready) {
+        return true;
+    }
+
+    // The wait may have returned because the connection moved CONNECTING →
+    // READY → CLOSED faster than this thread could observe the READY tick
+    // (e.g. peer drops the accepted socket immediately).  In that case the
+    // connect itself succeeded — report success here.  Callers that need a
+    // usable connection (send/recv) re-check isClosed() after this returns
+    // and surface the closure error themselves.
+    if (wasReady()) {
         return true;
     }
 
@@ -128,4 +190,130 @@ bool HttpClientConnectionBase::waitForReadyOrError(int64_t timeout_ms, Exception
 
     // Timeout: no exception, caller decides what to do.
     return false;
+}
+
+// -----------------------------------------------------------------------
+// MethodGuard — see HttpClientConnection.h for the design rationale.
+//
+// The guard's job is to make "Qore code cannot crash libqore" hold for
+// concurrent `delete rc` + `rc.get()` on different threads.  Entry CAS-
+// increments the in-flight count unless the invalidated bit is set;
+// exit decrements and, on the last release after invalidation, wakes
+// the thread blocked in drainInFlight().
+//
+// Re-entrancy: method implementations may call into each other on the
+// same thread (e.g., Http1ClientConnection::pushSendData(void*) forwards
+// to pushSendData(QoreStringNode*), each of which guards).  A thread-
+// local depth map tracks how deeply this thread has guarded a given
+// connection; only the OUTERMOST guard touches the shared atomic.
+// Inner guards succeed unconditionally because the outer one is still
+// holding the count — the connection cannot have drained to zero while
+// this thread is still inside a guarded method.  This costs one map
+// lookup on entry/exit, amortized against the far-more-expensive atomic
+// CAS that first-entry pays.
+// -----------------------------------------------------------------------
+
+namespace {
+    // Per-thread re-entrancy map: HttpClientConnectionBase* → depth.
+    // Only one entry per connection guarded on this thread; absent when
+    // not currently guarded.  Cleared fully on thread exit.
+    thread_local std::unordered_map<HttpClientConnectionBase*, int>
+        s_method_guard_depth;
+}
+
+HttpClientConnectionBase::MethodGuard::MethodGuard(
+        HttpClientConnectionBase* c)
+    : conn_(c), acquired_(false) {
+    auto& depth = s_method_guard_depth[conn_];
+    if (depth > 0) {
+        // Nested call on the same thread — the outer guard is still
+        // holding a count, so we're under the protection of the outer
+        // barrier.  Skip the atomic CAS entirely; just bump the depth.
+        ++depth;
+        acquired_ = true;
+        return;
+    }
+    // First guard on this thread: do the full acq-rel CAS loop.
+    uint32_t expected = conn_->lifetime_state_.load(std::memory_order_acquire);
+    for (;;) {
+        if (expected & INVALIDATED_BIT) {
+            // Connection is being (or has been) closed — refuse entry.
+            // Caller checks acquired() and raises a Qore exception.
+            // Clean up the (still-zero) depth entry we just inserted.
+            s_method_guard_depth.erase(conn_);
+            return;
+        }
+        // Defensive: the low 31 bits cap at IN_FLIGHT_MASK.  In practice
+        // it's impossible to have >2^31 concurrent calls on a single
+        // connection, but loop guard anyway to keep the counter domain
+        // well-defined under adversarial scenarios.
+        if ((expected & IN_FLIGHT_MASK) == IN_FLIGHT_MASK) {
+            s_method_guard_depth.erase(conn_);
+            return;
+        }
+        uint32_t desired = expected + 1;
+        if (conn_->lifetime_state_.compare_exchange_weak(
+                expected, desired,
+                std::memory_order_acq_rel,
+                std::memory_order_acquire)) {
+            acquired_ = true;
+            depth = 1;
+            return;
+        }
+        // CAS failure refreshes `expected` with the observed value; loop.
+    }
+}
+
+HttpClientConnectionBase::MethodGuard::~MethodGuard() {
+    if (!acquired_) {
+        return;
+    }
+    auto it = s_method_guard_depth.find(conn_);
+    assert(it != s_method_guard_depth.end() && it->second > 0);
+    if (--it->second > 0) {
+        // Nested release: outer guard still holds the atomic count.
+        return;
+    }
+    s_method_guard_depth.erase(it);
+
+    // Outermost release: decrement the shared atomic.
+    uint32_t prev = conn_->lifetime_state_.fetch_sub(
+        1, std::memory_order_acq_rel);
+    // If we just dropped the LAST in-flight call after invalidation, the
+    // closer thread is blocked in drainInFlight() waiting for exactly
+    // this moment — wake it.  Take close_mu_ to pair with the wait's
+    // unique_lock so the notify happens-before the waiter observes the
+    // zero.  Without the lock the waiter could miss the edge if it
+    // reloads lifetime_state_ between the fetch_sub here and the CV
+    // wait call.
+    if ((prev & INVALIDATED_BIT) && (prev & IN_FLIGHT_MASK) == 1) {
+        std::lock_guard<std::mutex> lk(conn_->close_mu_);
+        conn_->close_cv_.notify_all();
+    }
+}
+
+uint32_t HttpClientConnectionBase::markInvalidated() {
+    // Idempotent: fetch_or returns the previous value, so repeat calls
+    // see the bit already set.  acq-rel so the bit becomes visible to
+    // concurrent MethodGuard constructors before this returns.
+    return lifetime_state_.fetch_or(INVALIDATED_BIT, std::memory_order_acq_rel);
+}
+
+void HttpClientConnectionBase::drainInFlight() {
+    // Fast path: no call was in flight at invalidation time.  No need to
+    // take the mutex / wait on the CV.
+    uint32_t cur = lifetime_state_.load(std::memory_order_acquire);
+    if ((cur & IN_FLIGHT_MASK) == 0) {
+        return;
+    }
+    // Slow path: wait for the in-flight count to reach zero.  The last
+    // MethodGuard to release observes the zero transition and notifies
+    // close_cv_ under close_mu_; we take the mutex here and reload the
+    // state under it so the notify happens-before our observation of
+    // zero.
+    std::unique_lock<std::mutex> lk(close_mu_);
+    close_cv_.wait(lk, [this] {
+        return (lifetime_state_.load(std::memory_order_acquire)
+            & IN_FLIGHT_MASK) == 0;
+    });
 }

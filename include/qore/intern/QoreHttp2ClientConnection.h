@@ -34,6 +34,7 @@
 #define _QORE_INTERN_QOREHTTP2CLIENTCONNECTION_H
 
 #include <qore/HttpClientConnection.h>
+#include <qore/ReferenceHolder.h>
 
 #include <string>
 
@@ -92,6 +93,48 @@ public:
         bool ssl_required, int max_concurrent_streams, ExceptionSink* xsink,
         HttpClientConnectionManagerBase* mgr = nullptr);
 
+    //! Creates a new HTTP/2 client connection by adopting an
+    //! already-connected, TLS-handshook socket whose ALPN has selected
+    //! @c "h2".
+    /** Used by @ref NegotiatingConnectionPollOp after per-connect ALPN
+        negotiation selected HTTP/2.  The constructor skips the connect
+        and TLS handshake phases entirely: it takes over
+        @a adopted_sock_obj (the existing Qore Socket wrapper), creates
+        an adopt-socket @ref Http2ClientPollOperationPriv, installs the
+        HTTP/2 multiplex inner op (which sends the H2 client preface),
+        and submits to the global AsyncIoController.
+
+        The connection transitions to READY before the constructor
+        returns.
+
+        @note The caller MUST transfer ownership of the existing
+        @c QoreObject socket wrapper — do NOT create a new wrapper around
+        the priv.  Creating a second wrapper and then dropping the original
+        runs @c QoreSocketObject::deref → @c priv->socket->cleanup() →
+        @c close_internal() on the adopted fd, killing the SSL session
+        and the underlying socket before the new connection can use it.
+
+        @param adopted_sock_obj the existing socket @c QoreObject wrapper
+            (caller transfers ownership of one strong ref; the constructor
+            takes it and the resulting connection's @c sock_obj member owns
+            it).  Must not be nullptr.  Must wrap an SSL-handshook socket
+            whose ALPN has been confirmed as @c "h2".
+        @param adopted_sock_priv the priv pointer inside @a adopted_sock_obj
+            (raw — kept alive by the wrapper).  Must match the wrapper's
+            priv.
+        @param target_host target hostname (for @c :authority pseudo-header)
+        @param target_port target TCP port
+        @param max_concurrent_streams advisory cap on concurrent streams
+        @param xsink exception sink — set on construction failure
+        @param mgr optional owning manager
+
+        @since %Qore 2.3
+    */
+    DLLLOCAL Http2ClientConnection(QoreObject* adopted_sock_obj,
+        QoreSocketObject* adopted_sock_priv,
+        std::string target_host, int target_port, int max_concurrent_streams,
+        ExceptionSink* xsink, HttpClientConnectionManagerBase* mgr = nullptr);
+
     DLLLOCAL virtual ~Http2ClientConnection();
 
     //! Sets the controller-submission owner string before submission.
@@ -123,12 +166,67 @@ public:
         const QoreHashNode* headers, const void* body, size_t body_len,
         ExceptionSink* xsink) override;
 
+    //! Submits a request with a caller-provided completion action.
+    /** Like @ref submitRequest but uses the caller's @c AbstractAsyncAction
+        directly — the conn_mgr poll operation uses this with a
+        @c PromiseNotifierAction so the response wakes an EventNotifier
+        and resolves a Future.
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT int64_t submitRequestWithAction(const char* method, const char* path,
+        const QoreHashNode* headers, const void* body, size_t body_len,
+        AbstractAsyncAction* action, ExceptionSink* xsink) override;
+
+    //! Submits a streaming request: response delivered incrementally via Channel.
+    /** Creates an unbounded Channel, submits with streaming=true, and returns
+        the Channel to the caller for incremental response reading.
+        @since %Qore 2.3
+    */
+    DLLEXPORT int64_t submitRequestStreaming(const char* method, const char* path,
+        const QoreHashNode* headers, const void* body, size_t body_len,
+        QoreChannel*& channel_out, ExceptionSink* xsink) override;
+
+    //! Submits a request with streaming send (H2 DATA frames pushed incrementally)
+    /** @since %Qore 2.3
+    */
+    DLLEXPORT QoreHashNode* submitRequestStreamingSend(const char* method, const char* path,
+        const QoreHashNode* headers, bool streaming_recv,
+        QoreChannel*& channel_out, ExceptionSink* xsink) override;
+
+    //! Push body data for a streaming send request (H2 DATA frame)
+    /** @since %Qore 2.3
+    */
+    DLLEXPORT void pushSendData(const void* data, size_t len, ExceptionSink* xsink) override;
+
+    //! Set HTTP trailers for a streaming send request (H2 TRAILERS frame)
+    /** @since %Qore 2.3
+    */
+    DLLEXPORT void setTrailers(const QoreHashNode* trailers, ExceptionSink* xsink) override;
+
     DLLEXPORT void closeConnection(ExceptionSink* xsink) override;
 
 protected:
     DLLLOCAL QoreHashNode* getReferencedErrorInfo() override;
 
 private:
+    //! @name QoreObject refs — standalone C++ lifecycle, NOT DGC-visible
+    /** @c sock_obj and @c poll_op_obj hold strong refs on the socket /
+        poll-op QoreObjects.  They are raw, not stored in any qclass's
+        @c internal_members slot — because @c Http2ClientConnection is
+        itself a pure C++ class (not wrapped in a QoreObject) and so is
+        not a participant in DGC cycle collection.
+
+        Lifetime is managed by the @ref Http2ClientConnection destructor,
+        which derefs both when the connection is released.  See
+        @c design/dgc.md — Pattern A (internal_members) does not apply
+        here because there is no enclosing QoreObject whose data/cdmap
+        the scanner could walk.  If a future refactor wraps this class
+        in a @c qclass, both refs should move into @c internal_members
+        at that point.
+
+        @{
+    */
     //! The socket QoreObject (ref'd).
     QoreObject* sock_obj = nullptr;
 
@@ -140,6 +238,7 @@ private:
 
     //! The poll op priv (raw pointer — ownership via @ref poll_op_obj).
     Http2ClientPollOperationPriv* poll_op_priv = nullptr;
+    //! @}
 
     //! True once the poll op has been submitted to the controller.
     bool submitted_to_controller = false;
@@ -150,8 +249,58 @@ private:
     //! Owner string for controller submit info hash; default per-instance.
     std::string owner_str;
 
+    //! Stream ID for the active streaming send request (-1 = none)
+    int64_t streaming_send_stream_id = -1;
+
     //! Builds the C++ pieces and submits to the controller.
     DLLLOCAL int buildAndSubmit(ExceptionSink* xsink);
+
+    //! Builds the C++ pieces around an already-connected, SSL+ALPN
+    //! confirmed socket and submits to the controller.  Called from the
+    //! adopt-socket constructor.
+    /** @param adopted_sock_obj the existing socket QoreObject wrapper
+            (caller transfers one strong ref; on success it ends up in
+            @ref sock_obj)
+        @param adopted_sock_priv the priv pointer inside @a adopted_sock_obj
+            (raw — kept alive by the wrapper)
+        @param xsink exception sink
+        @return 0 on success, -1 on failure
+    */
+    DLLLOCAL int buildAndSubmitAdopted(QoreObject* adopted_sock_obj,
+        QoreSocketObject* adopted_sock_priv, ExceptionSink* xsink);
+
+    //! Submission tail shared between @ref buildAndSubmit and
+    //! @ref buildAndSubmitAdopted.
+    /** Sets @c "sock" and @c "goal" on the poll op QoreObject, fetches
+        the AsyncIoController singleton, builds the SocketPollOperationInfo
+        hash, submits, and on success commits the holders into the member
+        pointers and sets @ref submitted_to_controller to true.
+
+        Extracted to eliminate the drift risk between the two constructor
+        paths (see design/conn-mgr-alpn-negotiation.md §9).
+
+        @param sock_obj_holder holder for the socket QoreObject — on
+            success ownership transfers to @ref sock_obj
+        @param poll_obj_holder holder for the poll op QoreObject — on
+            success ownership transfers to @ref poll_op_obj
+        @param priv_raw raw pointer to the Http2 poll op priv inside
+            @a poll_obj_holder
+        @param sock_priv_raw raw pointer to the socket priv inside
+            @a sock_obj_holder
+        @param owner_prefix prefix for the auto-generated controller
+            submission owner string (the full owner is
+            @c "<owner_prefix><pointer>")
+        @param xsink exception sink
+
+        @return 0 on success, -1 on failure (holders unwind on scope exit)
+    */
+    DLLLOCAL int finalizePollOpSubmission(
+        ReferenceHolder<QoreObject>& sock_obj_holder,
+        ReferenceHolder<QoreObject>& poll_obj_holder,
+        Http2ClientPollOperationPriv* priv_raw,
+        QoreSocketObject* sock_priv_raw,
+        const char* owner_prefix,
+        ExceptionSink* xsink);
 };
 
 #endif // _QORE_INTERN_QOREHTTP2CLIENTCONNECTION_H

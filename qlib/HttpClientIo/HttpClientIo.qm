@@ -253,15 +253,85 @@ public namespace HttpClientIo {
         Error = 6,
     }
 
-    #! Unified response info for HTTP client requests
+    #! Canonical response shape for HTTP client async / conn_mgr requests.
+    /** This hashdecl is the **single authoritative shape** for responses
+        returned by the C++ HTTP connection manager and consumed by
+        pure-async callers (@ref HttpClientConnectionManager,
+        @ref HttpClientIo, @ref RestClientIo, their DataProviders).
+        Any new async code must read fields off this shape directly —
+        no ad-hoc response hashes, no legacy-style flattening.
+
+        @par Provenance
+        Fields @c status_code, @c status_message, @c http_version,
+        @c headers, @c headers_raw, and @c body come directly from the
+        C++ connection manager (produced in
+        @c Http1/Http2/Http3ClientPollOperationPriv and returned via
+        @c HttpClientConnectionManagerBase::request /
+        @c submitRequestWithAction).  Fields @c content_type,
+        @c stream_id, @c protocol, and @c timing are populated by the
+        Qore-level @ref HttpClientStreamHandle / @ref HttpClientConnection
+        layers on top.
+
+        @par Legacy adapters
+        Two legacy callers still expect different response shapes:
+
+        - **Sync HTTPClient** (`hc.send()`, `hc.get()`, …) expects a
+          flattened hash where the response headers are top-level keys
+          alongside @c status_code and @c body, matching the pre-conn_mgr
+          @c readHTTPHeader format.  Adapted from this shape by
+          @c transformConnMgrResponse in @c lib/QoreHttpClientObject.cpp.
+
+        - **Legacy HTTPClient poll API** (`hc.startPollSendRecv(...)` +
+          @c spop.getOutput() ) expects @c {code, info: {response-headers,
+          response-headers-raw, response-body}, response-body}, matching
+          the pre-conn_mgr @ref HttpClientConnectSendRecvPollOperation
+          output format (where @c response-body is intentionally present
+          at BOTH locations for backward compatibility with existing
+          consumers).  Adapted from this shape by
+          @c HttpClientConnMgrPollOp::getOutput in the same file.
+
+        Those adapters are LEGACY COMPATIBILITY LAYERS — new code must
+        NOT add fields, shapes, or duplication to them.  Any new async
+        API reads this @ref HttpClientResponseInfo hashdecl directly.
+
+        @since HttpClientIo 1.0
+    */
     public hashdecl HttpClientResponseInfo {
-        #! HTTP status code
+        #! HTTP response status code (e.g. 200, 404, 500).
         int status_code;
 
-        #! Response headers
+        #! HTTP response status message (e.g. "OK", "Not Found").
+        /** Populated for HTTP/1.x responses; @ref nothing for HTTP/2
+            and HTTP/3 (neither protocol carries a reason phrase on the
+            wire).
+        */
+        *string status_message;
+
+        #! HTTP version string (e.g. "1.1", "2", "3").
+        /** Present for all protocols; callers that only need to know
+            the protocol family should prefer @ref protocol below.
+        */
+        *string http_version;
+
+        #! Response headers with lowercase keys.
+        /** Multi-value headers are handled per RFC 7230 §3.2.2:
+            - @c cookie is joined with @c "; " into a single string.
+            - Other multi-value headers (@c set-cookie, custom
+              @c x-multi, etc.) are stored as a @ref list_type.
+            - Single-value headers are stored as plain strings.
+        */
         hash<auto> headers;
 
-        #! Response body (binary or string depending on content-type)
+        #! Response headers with original-case keys (HTTP/1.x only).
+        /** HTTP/2 and HTTP/3 mandate lowercase on the wire, so
+            @c headers_raw is typically @ref nothing for those
+            protocols; consumers that need case-preserving access
+            (for example to pass headers through unchanged) should
+            prefer this field when set and fall back to @c headers.
+        */
+        *hash<auto> headers_raw;
+
+        #! Response body (binary or string depending on content-type).
         auto body;
 
         #! Bare MIME type from the response \c Content-Type header, with parameters stripped

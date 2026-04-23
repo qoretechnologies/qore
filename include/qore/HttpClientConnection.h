@@ -36,21 +36,28 @@
 #include <qore/AbstractHttpPollConnection.h>
 #include <qore/QoreThreadLock.h>
 
+#include <atomic>
+#include <condition_variable>
+#include <mutex>
 #include <string>
 
 // Forward declarations
 class QoreHashNode;
 class QoreObject;
 class ExceptionSink;
+class QoreChannel;
 class HttpClientConnectionManagerBase;
+class AbstractAsyncAction;
 
 //! HTTP client protocol version
 /** @since %Qore 2.3
 */
 enum class HttpClientProtocol {
-    H1,  //!< HTTP/1.1
-    H2,  //!< HTTP/2
-    H3   //!< HTTP/3 (QUIC)
+    H1,         //!< HTTP/1.1 over TCP or TCP+TLS
+    H2,         //!< HTTP/2 over TCP (h2c direct) or TCP+TLS (ALPN "h2")
+    H3,         //!< HTTP/3 over QUIC
+    NEGOTIATE   //!< TCP+TLS with ALPN offer {"h2", "http/1.1"};
+                //!< manager decides H1 vs H2 per connection
 };
 
 //! Abstract base for C++ HTTP client connections
@@ -194,6 +201,92 @@ public:
         const QoreHashNode* headers, const void* body, size_t body_len,
         ExceptionSink* xsink);
 
+    //! Submits a streaming request with Channel-based response delivery
+    /** Like @ref submitRequest but uses a @ref QoreChannel for incremental
+        response delivery (headers, body chunks, end_stream sentinel).
+
+        @param method HTTP method (GET, POST, etc.)
+        @param path request path
+        @param headers optional request headers
+        @param body optional complete request body
+        @param body_len body length in bytes
+        @param channel_out receives a ref'd QoreChannel* on success
+        @param xsink exception sink
+        @return stream ID on success; -1 on error
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT virtual int64_t submitRequestStreaming(const char* method, const char* path,
+        const QoreHashNode* headers, const void* body, size_t body_len,
+        QoreChannel*& channel_out, ExceptionSink* xsink);
+
+    //! Submits a request with a caller-provided async completion action.
+    /** Like @ref submitRequest but uses the caller's
+        @ref AbstractAsyncAction instead of creating a PromiseAction
+        internally.  Used by the conn_mgr poll operation to install a
+        @c PromiseNotifierAction that signals an @c EventNotifier when
+        the response is ready.
+
+        Default implementation raises @c HTTPCLIENT-NOT-IMPLEMENTED;
+        H1/H2 subclasses override to dispatch through their
+        protocol-specific poll operation.  H3 is not yet supported.
+
+        @param method HTTP method
+        @param path request path
+        @param headers optional request headers
+        @param body optional request body (may be nullptr)
+        @param body_len body length
+        @param action the action to use — ownership transferred on
+            success, dereffed on failure
+        @param xsink exception sink
+
+        @return stream id on success, -1 on failure
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT virtual int64_t submitRequestWithAction(const char* method, const char* path,
+        const QoreHashNode* headers, const void* body, size_t body_len,
+        AbstractAsyncAction* action, ExceptionSink* xsink);
+
+    //! Submits a request with streaming send (body pushed incrementally via pushSendData)
+    /** The initial request headers are sent without a body. The caller then pushes
+        body chunks via @ref pushSendData and signals end-of-body with pushSendData(nullptr, 0).
+        If @a streaming_recv is true, the response is delivered via @a channel_out;
+        otherwise a Future hash is returned in the result.
+
+        @param method HTTP method
+        @param path request path
+        @param headers optional request headers
+        @param streaming_recv if true, response delivered incrementally via Channel
+        @param channel_out receives a ref'd QoreChannel* when streaming_recv is true
+        @param xsink exception sink
+        @return result hash on success, nullptr on error
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT virtual QoreHashNode* submitRequestStreamingSend(const char* method, const char* path,
+        const QoreHashNode* headers, bool streaming_recv,
+        QoreChannel*& channel_out, ExceptionSink* xsink);
+
+    //! Push body data for a streaming send request
+    /** @param data body chunk pointer (nullptr signals end-of-body)
+        @param len data length (0 when data is nullptr)
+        @param xsink exception sink
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT virtual void pushSendData(const void* data, size_t len, ExceptionSink* xsink);
+
+    //! Set HTTP trailers for a streaming send request
+    /** Must be called before the final pushSendData(nullptr, 0).
+
+        @param trailers hash of trailer key-value pairs
+        @param xsink exception sink
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT virtual void setTrailers(const QoreHashNode* trailers, ExceptionSink* xsink);
+
     //! Close the connection and release controller resources
     /** After this call, @ref isClosed returns true and no further requests
         can be submitted.  Any in-flight request is rejected with
@@ -237,22 +330,149 @@ public:
     */
     DLLEXPORT HttpClientConnectionBase() = default;
 
+    //! Sets the pool key for O(1) eviction by the connection manager
+    /** Called by the manager when inserting the connection into the pool.
+        @param key the pool key string
+        @since %Qore 2.3
+    */
+    DLLEXPORT void setPoolKey(const std::string& key);
+
+    //! Returns the pool key (empty if not in a pool)
+    /** @since %Qore 2.3
+    */
+    DLLEXPORT const std::string& getPoolKey() const;
+
+    //! Returns the referenced protocol-specific error hash (if any)
+    /** The returned hash has @c err (string) and @c desc (string) keys;
+        caller owns the returned ref (or nullptr if no error info is
+        available).  Called internally by @ref waitForReadyOrError, and
+        externally by async poll wrappers when the connection transitions
+        to CLOSED.
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT virtual QoreHashNode* getReferencedErrorInfo() {
+        return nullptr;
+    }
+
+    //! Lifetime barrier: concurrent-safe guard against use-after-free.
+    /** Qore's connection APIs are reachable from any thread; a well-formed
+        Qore program can `delete rc` from one thread while another is still
+        executing `rc.get()`.  Libqore's contract is "Qore code cannot crash
+        libqore", so the C++ connection MUST keep itself alive for the
+        duration of any in-flight public method call regardless of when
+        the destructor is invoked.
+
+        @par Design
+
+        A single atomic @c uint32_t packs two pieces of state:
+          - Bit 31 (@ref INVALIDATED_BIT): set exactly once, by
+            @ref markInvalidated, when the connection is being destroyed
+            or @ref closeConnection is called.  Sticky — once set, never
+            clears.
+          - Bits 0..30 (@ref IN_FLIGHT_MASK): count of @ref MethodGuard
+            instances currently in the @em acquired state.
+
+        @par Methods
+
+        Every public method that dereferences protocol-specific state
+        begins with @code{.cpp}
+            MethodGuard g(this);
+            if (!g.acquired()) {
+                xsink->raiseException("HTTPCLIENT-STATE-ERROR",
+                    "connection has been closed");
+                return ...;
+            }
+        @endcode The guard's constructor CAS-increments the in-flight
+        count unless the invalidated bit is already set, in which case it
+        reports @c acquired()==false and the method returns a clean Qore
+        exception.  The guard's destructor decrements the count and, if
+        it observes the decrement dropping the count to zero while the
+        invalidated bit is set, wakes a closer waiting in
+        @ref drainInFlight.
+
+        @par Close path
+
+        @ref closeConnection (and the destructor, which calls
+        @ref closeConnection) must invoke @ref markInvalidated then
+        @ref drainInFlight before dereferencing protocol-specific members.
+        After @ref drainInFlight returns, no in-flight call exists and no
+        new one can start — the subsequent teardown is race-free.
+
+        @par Concurrency properties
+          - Uncontended cost per method call: one acq-rel CAS + one
+            acq-rel fetch_sub on a single atomic.  On x86_64 both are
+            hardware-LOCK ops, ~10-15 ns total.
+          - Parallel method calls from multiple threads do not serialize
+            against each other — the guard is a reader-writer pattern
+            with close as the single writer.
+          - Destructor waits for the specific in-flight calls that were
+            already running; it never preempts a live method body.
+
+        @since %Qore 2.3
+    */
+    static constexpr uint32_t INVALIDATED_BIT = 0x80000000u;
+    static constexpr uint32_t IN_FLIGHT_MASK  = 0x7FFFFFFFu;
+
+    //! RAII entry barrier for public methods.  See @c lifetime_state_.
+    /** Acquire on method entry.  Check @ref acquired() before dereferencing
+        any protocol-specific member; if @c false, the connection is in the
+        process of being closed / destroyed and the method must return an
+        error without touching further state.  Release is automatic at
+        scope exit.
+
+        Designed to be trivially cheap on the uncontended path.  Supports
+        recursive acquisition on the same thread (via the count — not a
+        mutex): nested calls each add one to the count and each release
+        subtracts one.
+
+        @since %Qore 2.3
+    */
+    class DLLEXPORT MethodGuard {
+    public:
+        DLLEXPORT explicit MethodGuard(HttpClientConnectionBase* c);
+        DLLEXPORT ~MethodGuard();
+
+        //! Non-copyable, non-movable — guards are stack-local.
+        MethodGuard(const MethodGuard&) = delete;
+        MethodGuard& operator=(const MethodGuard&) = delete;
+
+        //! @return @c true if the guard incremented the in-flight count;
+        //!     @c false if the connection was already invalidated.
+        bool acquired() const { return acquired_; }
+
+    private:
+        HttpClientConnectionBase* conn_;
+        bool acquired_;
+    };
+
+    //! Atomically sets the invalidated bit and returns the prior state.
+    /** Idempotent — subsequent calls are no-ops w.r.t. the bit but still
+        return the current state.  Called from @ref closeConnection (and
+        the destructor) before @ref drainInFlight.
+
+        @return the prior @c lifetime_state_ value; the caller can mask
+            with @ref IN_FLIGHT_MASK to observe how many calls were
+            in flight at the moment of invalidation.
+        @since %Qore 2.3
+    */
+    DLLEXPORT uint32_t markInvalidated();
+
+    //! Blocks until every in-flight @ref MethodGuard has released.
+    /** Must be called AFTER @ref markInvalidated (otherwise new guards
+        would keep acquiring while the caller waits).  Returns promptly
+        when no call was in flight at invalidation time.
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT void drainInFlight();
+
 protected:
     DLLLOCAL HttpClientConnectionBase(std::string target_host, int target_port,
             bool ssl_required)
         : target_host(std::move(target_host)),
           target_port(target_port),
           ssl_required(ssl_required) {
-    }
-
-    //! Returns the referenced protocol-specific error hash (if any)
-    /** Called by @ref waitForReadyOrError when the state transitioned to
-        CLOSED during the wait.  The returned hash has @c err (string) and
-        @c desc (string) keys; caller owns the returned ref (or nullptr if
-        no error info is available).
-    */
-    DLLLOCAL virtual QoreHashNode* getReferencedErrorInfo() {
-        return nullptr;
     }
 
     std::string target_host;
@@ -288,6 +508,25 @@ protected:
         7.3 of @c design/http-client-manager-cpp-port.md.
     */
     HttpClientConnectionManagerBase* manager_ = nullptr;
+
+    //! Pool key for O(1) eviction.  Set by setPoolKey(), read by the
+    //! manager's onConnectionClosed / closeAndEvict.
+    std::string pool_key_;
+
+    //! Lifetime barrier state — see @ref MethodGuard.
+    /** Packed: top bit @ref INVALIDATED_BIT + low 31 bits in-flight count.
+        Declared @c mutable so @c const methods can also guard (we don't
+        add one today, but future @c isFoo() reads could participate).
+    */
+    mutable std::atomic<uint32_t> lifetime_state_{0};
+
+    //! Mutex + condvar coordinating @ref drainInFlight with the final
+    //! @ref MethodGuard release.  @c close_cv_ is notified from
+    //! @ref MethodGuard's destructor when it observes the count dropping
+    //! to zero while @ref INVALIDATED_BIT is set, waking a closer blocked
+    //! in @ref drainInFlight.
+    mutable std::mutex close_mu_;
+    mutable std::condition_variable close_cv_;
 };
 
 #endif // _QORE_HTTPCLIENTCONNECTION_H

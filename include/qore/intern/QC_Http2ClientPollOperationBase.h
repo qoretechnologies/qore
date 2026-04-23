@@ -37,6 +37,7 @@
 #include "qore/intern/QC_SocketPollOperation.h"
 #include "qore/intern/AsyncCompletionAction.h"
 #include "qore/intern/QC_AbstractHttpPollConnection.h"
+#include "qore/intern/RSet.h"
 
 #include <atomic>
 #include <string>
@@ -88,6 +89,45 @@ public:
             SocketPollOperationBase* connect_op, bool ssl_required, bool proxy_tunnel,
             std::string target_host, int target_port,
             AbstractHttpPollConnectionPriv* connection_priv);
+
+    //! Creates the poll operation by adopting an already-connected and
+    //! TLS-handshook socket (ALPN has already confirmed "h2").
+    /** Used by @ref NegotiatingConnectionPollOp after per-connect ALPN
+        negotiation selected HTTP/2.  The priv starts in
+        @ref H2State::CONNECTING with no @c current_op; the connection
+        class must call @ref initAdoptedMultiplex after @ref setSelf to
+        install the multiplex inner op, transition to
+        @ref H2State::READING, and fire the ready callback.
+
+        Always implies @c ssl_required=true and no proxy tunnel — per
+        the design doc §5.1, @ref HttpClientProtocol::NEGOTIATE only
+        applies to TLS connections.
+
+        @param self the QoreObject wrapping this private data (may be
+            nullptr; set later via @ref setSelf)
+        @param sock the already-connected (and SSL-handshook) socket
+            (ref'd by caller, ownership transferred)
+        @param target_host target hostname (for @c :authority pseudo-header)
+        @param target_port target TCP port
+        @param connection_priv the owning C++ connection priv
+
+        @since %Qore 2.3
+    */
+    DLLLOCAL Http2ClientPollOperationPriv(QoreObject* self, QoreSocketObject* sock,
+            std::string target_host, int target_port,
+            AbstractHttpPollConnectionPriv* connection_priv);
+
+    //! Installs the HTTP/2 multiplex inner op on an adopt-socket-constructed
+    //! poll op and transitions to READING + ready.
+    /** Must be called after @ref setSelf and before the poll op is
+        submitted to the I/O controller.  Only valid on instances created
+        via the adopt-socket constructor.
+
+        @param xsink exception sink
+
+        @since %Qore 2.3
+    */
+    DLLLOCAL void initAdoptedMultiplex(ExceptionSink* xsink);
 
     DLLLOCAL virtual ~Http2ClientPollOperationPriv();
 
@@ -216,6 +256,18 @@ public:
         idle_timeout_us = timeout_us;
     }
 
+    //! Sets the keepalive ping interval (microseconds, -1 = disabled)
+    /** When positive, an HTTP/2 PING frame is submitted when the connection
+        has been idle (no active streams) for this long.  nghttp2 handles the
+        PING ACK automatically; if the connection is dead, the next recv()
+        fails and existing error handling evicts it.
+        @param interval_us ping interval in microseconds (-1 = disabled)
+        @since %Qore 2.3
+    */
+    DLLLOCAL void setPingInterval(int64_t interval_us) {
+        ping_interval_us = interval_us;
+    }
+
     //! Returns the raw connection priv pointer (for I/O-thread calls)
     DLLLOCAL AbstractHttpPollConnectionPriv* getConnectionPriv() const {
         return connection_priv;
@@ -280,6 +332,26 @@ public:
 
     //! Cleanup all referenced objects (must be called before destructor)
     DLLLOCAL void cleanup(ExceptionSink* xsink);
+
+    //! Custom cycle scanner for stream_queues / pending_stream_registrations
+    //! QoreObject refs that live in C++ containers invisible to the normal
+    //! data/cdmap scan.
+    /** Walks @ref stream_queues and @ref pending_stream_registrations
+        and reports each ref'd @c queue_obj / @c notifier_obj via
+        @c RObject::scanCheck().  Uses @c trylock on both @c stream_lock
+        and @c sq_lock and returns false on contention — mirrors the
+        non-blocking pattern of @ref qore_queue_private::scanMembers (a
+        deadlock or a blocking wait here would freeze cycle detection).
+
+        @param obj the @c RObject wrapping this private data (i.e. the
+            Qore @c Http2ClientPollOperation object)
+        @param rsh the scanner helper
+        @return @c true if a lock error forces the scan transaction to
+            be aborted (per the scanCheck contract)
+
+        @since %Qore 2.3
+    */
+    DLLLOCAL bool scanMembers(RObject& obj, RSetHelper& rsh);
 
 protected:
     DLLLOCAL const char* getStateImpl() const override;
@@ -376,6 +448,16 @@ private:
     */
     int64_t idle_deadline_us = 0;
 
+    //! Keepalive ping interval (microseconds); -1 = disabled
+    /** When positive and active_stream_count == 0, a PING frame is
+        submitted every ping_interval_us to probe connection liveness.
+        nghttp2 handles PING ACK automatically.  I/O thread only.
+    */
+    int64_t ping_interval_us = -1;
+
+    //! Timestamp of last PING sent (epoch us); 0 = none sent
+    int64_t last_ping_sent_us = 0;
+
     static constexpr int MAX_DRAIN_ITERATIONS = 100;
     static constexpr int MAX_EMPTY_READS = 100;
     static constexpr int H2C_PROBE_MAX_EMPTY_READS = 5;
@@ -425,5 +507,9 @@ private:
 };
 
 DLLLOCAL QoreClass* initHttp2ClientPollOperationBaseClass(QoreNamespace& qorens);
+
+//! Class ID — defined by the generated QPP code (qore_classid_t storage in
+//! the generated .cpp file, initialised from the registered class).
+DLLLOCAL extern qore_classid_t CID_HTTP2CLIENTPOLLOPERATIONBASE;
 
 #endif // _QORE_CLASS_HTTP2CLIENTPOLLOPERATIONBASE_H

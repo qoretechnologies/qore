@@ -225,6 +225,7 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
 
         # Create the poll operation for the async I/O controller
         HttpServerAsyncIo::HttpSseStreamPollOperation poll_op(sock);
+        poll_op.setHeartbeat(heartbeat * 1000, heartbeat_msg);
 
         # Create and register the connection
         ServerSentEventConnection conn = getConnectionImpl(sock, cx, hdr, cid);

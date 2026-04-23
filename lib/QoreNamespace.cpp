@@ -169,6 +169,9 @@ DLLLOCAL QoreClass* initStderrOutputStreamClass(QoreNamespace& ns);
 DLLLOCAL void preinitAbstractPollOperationClass();
 DLLLOCAL QoreClass* initAbstractPollOperationClass(QoreNamespace& ns);
 DLLLOCAL QoreClass* initDelegatingPollOperationClass(QoreNamespace& ns);
+DLLLOCAL QoreClass* initFtpControlPollOperationClass(QoreNamespace& ns);
+DLLLOCAL QoreClass* initFtpPortAcceptPollOperationClass(QoreNamespace& ns);
+DLLLOCAL QoreClass* initFtpDataPollOperationClass(QoreNamespace& ns);
 DLLLOCAL QoreClass* initAbstractHttpPollConnectionClass(QoreNamespace& ns);
 DLLLOCAL QoreClass* initHttpIdlePollOperationBaseClass(QoreNamespace& ns);
 DLLLOCAL QoreClass* initHttpKeepAlivePollOperationBaseClass(QoreNamespace& ns);
@@ -1332,6 +1335,10 @@ StaticSystemNamespace::StaticSystemNamespace() : RootQoreNamespace(new qore_root
     qns.addSystemClass(initAbstractPollOperationClass(qns));
     // DelegatingPollOperation must be after SocketPollResultInfo and SocketPollOperationBase
     qns.addSystemClass(initDelegatingPollOperationClass(qns));
+    // FTP poll operations must be after SocketPollOperationBase
+    qns.addSystemClass(initFtpControlPollOperationClass(qns));
+    qns.addSystemClass(initFtpPortAcceptPollOperationClass(qns));
+    qns.addSystemClass(initFtpDataPollOperationClass(qns));
     // AbstractHttpPollConnection must be before Http{1,2,3}ClientPollOperationBase
     qns.addSystemClass(initAbstractHttpPollConnectionClass(qns));
     // HttpClientConnectionBase must be after AbstractHttpPollConnection (vparent)

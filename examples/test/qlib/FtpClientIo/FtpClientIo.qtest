@@ -1,0 +1,117 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%enable-all-warnings
+
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/FsUtil.qm
+%requires ../../../../qlib/FtpClientIo/FtpClientIo.qm
+
+%include ../../qore/classes/FtpServer.qc
+
+%exec-class FtpClientIoTest
+
+class FtpClientIoTest inherits QUnit::Test {
+    private {
+        int port;
+        FtpServer ftpServer;
+    }
+
+    constructor() : QUnit::Test("FtpClientIo", "1.0") {
+        addTestCase("FtpControlPollOperation basic", \testControlPollOperationBasic());
+        addTestCase("FtpControlPollOperation login", \testControlPollOperationLogin());
+        addTestCase("FtpControlPollOperation command", \testControlPollOperationCommand());
+        addTestCase("FtpDataPollOperation basic", \testDataPollOperationBasic());
+
+        ftpServer = new FtpServer(0, m_options.verbose);
+        port = ftpServer.getPort();
+
+        set_return_value(main());
+
+        ftpServer.shutdown();
+    }
+
+    #! Drive a poll operation to completion using continuePoll + Socket::poll
+    private drivePollOp(AbstractPollOperation op, timeout tmout = 10s) {
+        date deadline = now_us() + tmout;
+        while (!op.goalReached()) {
+            *hash<SocketPollInfo> pi = op.continuePoll();
+            if (pi) {
+                list<hash<SocketPollInfo>> poll_list = (pi,);
+                timeout remaining = deadline - now_us();
+                if (remaining <= 0) {
+                    throw "TIMEOUT", "poll operation timed out";
+                }
+                Socket::poll(poll_list, remaining);
+            }
+        }
+    }
+
+    testControlPollOperationBasic() {
+        # Test basic construction and state
+        FtpControlPollOperation op("localhost", port);
+        assertEq("FtpControlPollOperation", op.className());
+        assertEq("connecting", op.getState());
+        assertEq("ftp-login", op.getGoal());
+        assertFalse(op.goalReached());
+        assertFalse(op.isReady());
+        assertFalse(op.isClosed());
+        assertEq(0, op.getLastResponseCode());
+    }
+
+    testControlPollOperationLogin() {
+        # Test login via poll driver
+        FtpControlPollOperation op("localhost", port);
+
+        # Drive to login completion
+        drivePollOp(op);
+
+        assertTrue(op.isReady(), "operation should be in ready state after login");
+        assertTrue(op.goalReached(), "goal should be reached after login");
+        int code = op.getLastResponseCode();
+        assertTrue(code >= 200 && code < 300, sprintf("expected 2xx login code, got %d", code));
+
+        hash<auto> output = op.getOutput();
+        assertEq(True, output.login_complete);
+    }
+
+    testControlPollOperationCommand() {
+        # Test command execution after login
+        FtpControlPollOperation op("localhost", port);
+
+        # Login first
+        drivePollOp(op);
+        assertTrue(op.isReady(), "should be ready after login");
+
+        # Submit PWD command
+        op.submitCommand("PWD");
+        assertEq("ftp-command", op.getGoal());
+
+        # Drive command to completion
+        drivePollOp(op);
+
+        assertTrue(op.goalReached(), "goal should be reached after command");
+        assertTrue(op.isReady(), "should be ready after command");
+        hash<auto> output = op.getOutput();
+        assertEq(257, output.code, "PWD should return 257");
+        if (m_options.verbose > 1) {
+            printf("PWD response: %d %s\n", output.code, output.message);
+        }
+
+        # Submit TYPE I command
+        op.submitCommand("TYPE", "I");
+        drivePollOp(op);
+        assertEq(200, op.getLastResponseCode(), "TYPE I should return 200");
+    }
+
+    testDataPollOperationBasic() {
+        # Test basic construction
+        FtpDataPollOperation data_op("localhost", port);
+        assertEq("FtpDataPollOperation", data_op.className());
+        assertEq("data-connecting", data_op.getState());
+        assertEq("ftp-data-recv", data_op.getGoal());
+        assertFalse(data_op.goalReached());
+    }
+}

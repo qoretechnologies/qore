@@ -252,7 +252,16 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         mServer.setDefaultHandler("ws-handler", wsHandler);
         linfo = mServer.addListener(<HttpListenerOptionInfo>{"service": 0});
 
-        # Try to add HTTPS/HTTP/2 listener
+        # Try to add HTTPS/HTTP/2 listener.
+        #
+        # enable_h3 = False: the H2 tests below use http_version=auto on both
+        # sides.  With enable_h3 on (default) the paired auto-QUIC listener
+        # advertises Alt-Svc h3, and the client's happy-eyeballs race picks
+        # H3 over H2 on localhost — isHttp2() then returns False and every
+        # H2-specific assertion block is testSkip'd.  Disable H3 on this
+        # listener so ALPN definitively selects h2 and the H2-focused tests
+        # actually run.  A dedicated HTTP/3 WebSocket test suite exercises
+        # the H3 path separately.
         try {
             SSLCertificate cert(CertPem);
             SSLPrivateKey key(KeyPem);
@@ -261,6 +270,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
                 "cert": cert,
                 "key": key,
                 "http_version": "auto",
+                "enable_h3": False,
             });
         } catch (hash<ExceptionInfo> ex) {
             # SSL might not be available

@@ -191,6 +191,8 @@ ModuleName/
         filesystem
     |user|<a href="../../modules/FtpClientDataProvider/html/index.html#ftpclientdataproviderintro">FtpClientDataProvider</a>|Provides a \
         <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for the FTP protocol
+    |user|<a href="../../FtpClientIo/html/index.html#ftpclientiointro">FtpClientIo</a>|Provides async FTP client I/O \
+        via poll operations for use with the async I/O controller
     |user|<a href="../../modules/FtpPoller/html/index.html#ftppollerintro">FtpPoller</a>|Provides an API for polling files from a \
         remote directory with the FTP protocol
     |user|<a href="../../modules/FtpPollerUtil/html/index.html#ftppollerutilintro">FtpPollerUtil</a>|Provides definitions for the \
@@ -659,13 +661,29 @@ ModuleName/
             provides a <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API \
             for 2D graphics rendering
     |binary|<a href="https://github.com/qoretechnologies/module-sybase">freetds</a>|Provides a FreeTDS-based DBI driver for communicating with Sybase and MS SQL Server databases
-    |binary|<a href="https://github.com/qoretechnologies/module-fsevent">fsevent</a>|Provides an event-driven filesystem event API
+    |binary|<a href="https://github.com/qoretechnologies/module-fsevent">fsevent</a>|Provides an event-driven filesystem event API, also provides the following user modules:\n\
+        - <a href="https://github.com/qoretechnologies/module-fsevent">FsEventPoller</a>: \
+            provides an \c fsevent-based filesystem polling solution\n\
+        - <a href="https://github.com/qoretechnologies/module-fsevent">FsEventPollerUtil</a>: \
+            provides common definitions for the \
+            <a href="https://github.com/qoretechnologies/module-fsevent">FsEventPoller</a> module
     |binary|<a href="https://github.com/qoretechnologies/module-geos">geos</a>|Provides geospatial processing APIs using \
         <a href="https://libgeos.org/">GEOS</a> with spatial predicates, topology operations, \
         geometry validation, and WKT/WKB serialization, also provides the following user module:\n\
         - <a href="https://github.com/qoretechnologies/module-geos">GEOSDataProvider</a>: \
             provides a <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API \
             for reading and writing WKT and WKB geometries
+    |binary|<a href="https://github.com/qoretechnologies/module-git">git</a>|Provides libgit2-based Git repository \
+        manipulation with support for in-memory ODB and ref databases, also provides the following user modules:\n\
+        - <a href="https://github.com/qoretechnologies/module-git">GitConfigManager</a>: \
+            provides a high-level git-based configuration management API with observer pattern support\n\
+        - <a href="https://github.com/qoretechnologies/module-git">GitConnections</a>: \
+            provides connection management for Git repositories\n\
+        - <a href="https://github.com/qoretechnologies/module-git">GitDataProvider</a>: \
+            provides a <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API \
+            for Git repositories\n\
+        - <a href="https://github.com/qoretechnologies/module-git">GitForgeHelper</a>: \
+            provides helpers for managing GitHub and GitLab pull/merge requests
     |binary|<a href="https://github.com/qoretechnologies/module-grpc">grpc</a>|Provides gRPC client/server and protocol buffer \
         support with dynamic protobuf schema loading, all four gRPC call patterns, TLS/SSL, \
         and server reflection, also provides the following user modules:\n\
@@ -684,18 +702,99 @@ ModuleName/
             provides a <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API \
             for image processing operations
     |binary|<a href="https://github.com/qoretechnologies/module-jni">jni</a>|Provides access to Java APIs in %Qore as \
-        well as the following user modules\n\
-        - <a href="https://qoretechnologies.com/manual/qorus/current/jni/ExcelDataProvider/html/index.html">ExcelDataProvider</a>: \
-            a data provider API for working with Excel spreadsheet data\n\
-        - <a href="https://qoretechnologies.com/manual/qorus/current/jni/KafkaDataProvider/html/index.html">KafkaDataProvider</a>: \
-            a data provider API for Kafka messaging\n\
-        - <a href="https://qoretechnologies.com/manual/qorus/current/jni/MqttDataProvider/html/index.html">MqttDataProvider</a>: \
-            a data provider API for MQTT messaging\n
-    |binary|<a href="https://github.com/qoretechnologies/module-json">json</a>|Provides JSON and JSON-RPC client functionality, also provides the following user modules:\n- <a href="http://www.qore.org/manual/modules/json/current/JsonRpcHandler/html/index.html">JsonRpcHandler</a>: provides infrastructure for implementing JSON-RPC server-side services using the <a href="../../modules/HttpServer/html/index.html#httpserverintro">HttpServer</a> module
-
+        well as the following user modules:\n\
+        - <a href="https://github.com/qoretechnologies/module-jni">AccessDataProvider</a>: \
+            provides a data provider API for reading Microsoft Access databases\n\
+        - <a href="https://github.com/qoretechnologies/module-jni">AvroDataProvider</a>: \
+            provides a data provider API for reading and writing Apache Avro data files\n\
+        - <a href="https://github.com/qoretechnologies/module-jni">BusyLightDataProvider</a>: \
+            provides a data provider API for BusyLight devices through MQTT\n\
+        - <a href="https://github.com/qoretechnologies/module-jni">CamelDataProvider</a>: \
+            provides a data provider API for enterprise integration patterns via Apache Camel\n\
+        - <a href="https://github.com/qoretechnologies/module-jni">EmailDataProvider</a>: \
+            provides a data provider API for reading and writing email messages in EML, MSG, and MBOX formats\n\
+        - <a href="https://github.com/qoretechnologies/module-jni">ExcelDataProvider</a>: \
+            provides a data provider API for reading and writing Excel spreadsheets\n\
+        - <a href="https://github.com/qoretechnologies/module-jni">FlywayDataProvider</a>: \
+            provides a data provider API for Flyway database schema migration\n\
+        - <a href="https://github.com/qoretechnologies/module-jni">IcsDataProvider</a>: \
+            provides a data provider API for reading and writing iCalendar (ICS) files\n\
+        - <a href="https://github.com/qoretechnologies/module-jni">JakartaJmsDataProvider</a>: \
+            provides a data provider API for Jakarta JMS messaging brokers\n\
+        - <a href="https://github.com/qoretechnologies/module-jni">JasperReportsDataProvider</a>: \
+            provides a data provider API for generating reports from JasperReports templates\n\
+        - <a href="https://github.com/qoretechnologies/module-jni">JdbcDataProvider</a>: \
+            provides a data provider API for JDBC database access\n\
+        - <a href="https://github.com/qoretechnologies/module-jni">KafkaDataProvider</a>: \
+            provides a data provider API for Kafka messaging\n\
+        - <a href="https://github.com/qoretechnologies/module-jni">MqttDataProvider</a>: \
+            provides a data provider API for MQTT messaging\n\
+        - <a href="https://github.com/qoretechnologies/module-jni">OdpDataProvider</a>: \
+            provides a data provider API for reading and writing ODP presentations\n\
+        - <a href="https://github.com/qoretechnologies/module-jni">OdsDataProvider</a>: \
+            provides a data provider API for reading and writing ODS spreadsheets\n\
+        - <a href="https://github.com/qoretechnologies/module-jni">OdtDataProvider</a>: \
+            provides a data provider API for reading and writing ODT documents\n\
+        - <a href="https://github.com/qoretechnologies/module-jni">OpcUaDataProvider</a>: \
+            provides a data provider API for OPC UA servers\n\
+        - <a href="https://github.com/qoretechnologies/module-jni">PowerPointDataProvider</a>: \
+            provides a data provider API for reading and writing PowerPoint presentations\n\
+        - <a href="https://github.com/qoretechnologies/module-jni">TikaDataProvider</a>: \
+            provides a data provider API for universal content detection and extraction via Apache Tika\n\
+        - <a href="https://github.com/qoretechnologies/module-jni">VcfDataProvider</a>: \
+            provides a data provider API for reading and writing vCard (.vcf) contact files\n\
+        - <a href="https://github.com/qoretechnologies/module-jni">VisioDataProvider</a>: \
+            provides a data provider API for reading Visio documents\n\
+        - <a href="https://github.com/qoretechnologies/module-jni">WordDataProvider</a>: \
+            provides a data provider API for reading and writing Word documents
+    |binary|<a href="https://github.com/qoretechnologies/module-json">json</a>|Provides JSON and JSON-RPC client functionality, also provides the following user modules:\n\
+        - <a href="https://github.com/qoretechnologies/module-json">A2aClient</a>: \
+            provides a client API for connecting to A2A (Agent-to-Agent) agents\n\
+        - <a href="https://github.com/qoretechnologies/module-json">A2aClientDataProvider</a>: \
+            provides a <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API \
+            for A2A agents\n\
+        - <a href="https://github.com/qoretechnologies/module-json">A2aServerHandler</a>: \
+            provides an A2A server handler for use with the \
+            <a href="../../modules/HttpServer/html/index.html#httpserverintro">HttpServer</a> module\n\
+        - <a href="https://github.com/qoretechnologies/module-json">JsonFileDataProvider</a>: \
+            provides JSON file read/write support and \
+            <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> integration\n\
+        - <a href="https://github.com/qoretechnologies/module-json">JsonLd</a>: \
+            provides JSON-LD 1.1 processing (W3C JSON-LD 1.1 algorithms)\n\
+        - <a href="https://github.com/qoretechnologies/module-json">JsonRpcClientIo</a>: \
+            provides a pure-%Qore JSON-RPC client with async I/O via the \
+            <a href="../../modules/HttpClientIo/html/index.html#httpclientiointro">HttpClientIo</a> module\n\
+        - <a href="https://github.com/qoretechnologies/module-json">JsonRpcConnection</a>: \
+            provides JSON-RPC client connections\n\
+        - <a href="https://github.com/qoretechnologies/module-json">JsonRpcHandler</a>: \
+            provides infrastructure for implementing JSON-RPC server-side services using the \
+            <a href="../../modules/HttpServer/html/index.html#httpserverintro">HttpServer</a> module\n\
+        - <a href="https://github.com/qoretechnologies/module-json">McpClient</a>: \
+            provides a Model Context Protocol (MCP) client API for connecting to MCP servers\n\
+        - <a href="https://github.com/qoretechnologies/module-json">McpClientDataProvider</a>: \
+            provides a <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API \
+            for MCP servers\n\
+        - <a href="https://github.com/qoretechnologies/module-json">McpServerHandler</a>: \
+            provides an MCP server handler for use with the \
+            <a href="../../modules/HttpServer/html/index.html#httpserverintro">HttpServer</a> module\n\
+        - <a href="https://github.com/qoretechnologies/module-json">NdjsonDataProvider</a>: \
+            provides NDJSON (Newline Delimited JSON) support and \
+            <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> integration\n\
+        - <a href="https://github.com/qoretechnologies/module-json">OneRecordClient</a>: \
+            provides an IATA ONE Record client for air cargo data sharing via REST/JSON-LD\n\
+        - <a href="https://github.com/qoretechnologies/module-json">OneRecordServerHandler</a>: \
+            provides an IATA ONE Record server handler for use with the \
+            <a href="../../modules/HttpServer/html/index.html#httpserverintro">HttpServer</a> module
+    |binary|<a href="https://github.com/qoretechnologies/module-krb5">krb5</a>|Provides Kerberos 5 and GSSAPI \
+        support including client/acceptor contexts, credential caches, keytabs, and principal management, also \
+        provides the following user module:\n\
+        - <a href="https://github.com/qoretechnologies/module-krb5">Krb5Util</a>: \
+            provides utility APIs for Kerberos 5 and GSSAPI operations
     |binary|<a href="https://github.com/qoretechnologies/module-magic">magic</a>|Provides file type detection using \
         magic numbers via <a href="https://www.darwinsys.com/file/">libmagic</a>, providing MIME type and encoding \
         identification for files and in-memory data buffers
+    |binary|<a href="https://github.com/qoretechnologies/module-markdown">markdown</a>|Provides Markdown-to-HTML rendering \
+        in %Qore using the sundown library
     |binary|<a href="https://github.com/qoretechnologies/module-msgpack">msgpack</a>|Provides APIs for efficient data serialization in %Qore using the <a href="https://msgpack.org/index.html">MessagePack</a> format
     |binary|<a href="https://github.com/qoretechnologies/module-mysql">mysql</a>|Provides a MySQL / MariaDB / Percona DBI driver
     |binary|<a href="https://github.com/qoretechnologies/module-nats">nats</a>|Provides \
@@ -721,10 +820,18 @@ ModuleName/
     |binary|<a href="https://github.com/qoretechnologies/module-oracle">oracle</a>|Provides an Oracle DBI driver, providing many advanced features such as support for named types and collections, advanced queuing, etc, also provides the following user modules:\n- <a href="http://docs.qore.org/modules/oracle/current/OracleExtensions/html/index.html">OracleExtensions</a>: provides infrastructure for SQL tracing
     |binary|<a href="https://github.com/qoretechnologies/module-openldap">openldap</a>|Provides an OpenLDAP API to %Qore, also \
         provides the following user modules:\n\
-        - <a href="http://docs.qore.org/modules/openldap/current/LdapConnectionPool/html/index.html">LdapConnectionPool</a>: \
+        - <a href="https://github.com/qoretechnologies/module-openldap">LdapActiveDirectory</a>: \
+            provides Active Directory compatibility helpers for the openldap module\n\
+        - <a href="https://github.com/qoretechnologies/module-openldap">LdapAsync</a>: \
+            provides asynchronous LDAP operations using a Future/Promise pattern\n\
+        - <a href="https://github.com/qoretechnologies/module-openldap">LdapCli</a>: \
+            provides shared utilities for the \c qldap* CLI tools\n\
+        - <a href="https://github.com/qoretechnologies/module-openldap">LdapConnectionPool</a>: \
             provides connection pooling for LDAP connections\n\
-        - <a href="http://docs.qore.org/modules/openldap/current/LdapHelper/html/index.html">LdapHelper</a>: \
-            provides helper APIs for working with LDAP servers
+        - <a href="https://github.com/qoretechnologies/module-openldap">LdapHelper</a>: \
+            provides helper APIs for working with LDAP servers (entry management and search iteration)\n\
+        - <a href="https://github.com/qoretechnologies/module-openldap">LdifHelper</a>: \
+            provides LDIF (RFC 2849) import/export support for LDAP entries
     |binary|<a href="https://github.com/qoretechnologies/module-pdf">pdf</a>|Provides PDF manipulation APIs to %Qore \
         using <a href="https://podofo.io">PoDoFo</a>, also provides the following user module:\n\
         - <a href="http://docs.qore.org/modules/pdf/current/PdfDataProvider/html/index.html">PdfDataProvider</a>: \
@@ -736,7 +843,31 @@ ModuleName/
         %Qore and <a href="https://www.python.org/">Python</a>, enabling %Qore code to call Python modules and \
         Python code to call %Qore APIs, including cross-language inheritance
     |binary|<a href="https://github.com/qoretechnologies/module-sqlite3">sqlite3</a>|Provides an SQLite3 DBI driver
-    |binary|<a href="https://github.com/qoretechnologies/module-ssh2">ssh2</a>|Provides SSH2 and SFTP functionality, also provides the following user module:\n- <a href="http://docs.qore.org/modules/ssh2/current/SftpPoller/html/index.html">SftpPoller</a>: provides event-driven support for polling an SFTP server for new data
+    |binary|<a href="https://github.com/qoretechnologies/module-ssh">ssh</a>|Provides an embedded SSH/SFTP client and \
+        server implementation for %Qore including SSH sessions, command channels, SFTP, and a pluggable SSH server \
+        framework, also provides the following user modules:\n\
+        - <a href="https://github.com/qoretechnologies/module-ssh">QorusSshIntegration</a>: \
+            reserved module name used by Qorus-specific SSH adapters\n\
+        - <a href="https://github.com/qoretechnologies/module-ssh">SftpServerDataProvider</a>: \
+            provides virtual SFTP filesystem and atomic exchange helpers for the \c ssh module\n\
+        - <a href="https://github.com/qoretechnologies/module-ssh">SshServerAuthProvider</a>: \
+            provides typed auth-provider abstractions and built-in config-driven SSH auth implementations\n\
+        - <a href="https://github.com/qoretechnologies/module-ssh">SshServerCommandProvider</a>: \
+            provides generic virtual command-service helpers for SSH server command virtualization\n\
+        - <a href="https://github.com/qoretechnologies/module-ssh">SshServerConnections</a>: \
+            provides generic ConnectionProvider helpers for managed local SSH and SFTP server instances
+    |binary|<a href="https://github.com/qoretechnologies/module-ssh2">ssh2</a>|Provides SSH2 and SFTP functionality, also \
+        provides the following user modules:\n\
+        - <a href="https://github.com/qoretechnologies/module-ssh2">SftpClientDataProvider</a>: \
+            provides a <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API \
+            for SFTP servers\n\
+        - <a href="https://github.com/qoretechnologies/module-ssh2">SftpPoller</a>: \
+            provides event-driven support for polling an SFTP server for new data\n\
+        - <a href="https://github.com/qoretechnologies/module-ssh2">SftpPollerUtil</a>: \
+            provides common definitions for the \
+            <a href="https://github.com/qoretechnologies/module-ssh2">SftpPoller</a> module\n\
+        - <a href="https://github.com/qoretechnologies/module-ssh2">Ssh2Connections</a>: \
+            provides SSH2 connection management for the \c ConnectionProvider framework
     |binary|<a href="https://github.com/qoretechnologies/module-sybase">sybase</a>|Provides a Sybase DBI driver
     |binary|<a href="https://github.com/qoretechnologies/module-sysconf">sysconf</a>|Provides sysconf, pathconf, and confstr APIs
     |binary|<a href="https://github.com/qoretechnologies/module-tar">tar</a>|Provides tar archive functionality to %Qore \
@@ -751,7 +882,13 @@ ModuleName/
         JSON, YAML, JavaScript, Kotlin, TypeScript, and %Qore
     |binary|<a href="https://github.com/qoretechnologies/module-uuid">uuid</a>|Provices an API for generating UUIDs
     |binary|<a href="https://qoretechnologies.com/manual/qorus/current/v8/v8/html">v8</a>|Provides the ability to \
-        embed, compile, and execute JavaScript code
+        embed, compile, and execute JavaScript code, also provides the following user modules:\n\
+        - <a href="https://github.com/qoretechnologies/module-v8">TypeScriptActionInterface</a>: \
+            provides an API for %Qore \
+            <a href="../../modules/DataProvider/html/index.html#dataproviderintro">DataProvider</a> app actions \
+            implemented in TypeScript\n\
+        - <a href="https://github.com/qoretechnologies/module-v8">TypeScriptProxy</a>: \
+            provides definitions for a TypeScript proxy API
     |binary|<a href="https://github.com/qoretechnologies/module-vss">vss</a>|Provides support for \
         <a href="https://covesa.github.io/vehicle_signal_specification/">COVESA Vehicle Signal Specification</a> (VSS) \
         with native .vspec parsing, data validation, and unit conversion, also provides the following user modules:\n\
@@ -762,39 +899,73 @@ ModuleName/
             for VSS catalog navigation and metadata
     |binary|<a href="https://github.com/qoretechnologies/module-xml">xml</a>|Provides XML (SAX and DOM parsers), XPath, \
         XML-RPC, SOAP client and server, etc functionality, also provides the following user modules:\n\
-        - <a href="https://qoretechnologies.com/manual/qorus/current/xml/SalesforceSoapClient/html/index.html">SalesforceSoapClient</a>: \
+        - <a href="https://github.com/qoretechnologies/module-xml">SalesforceSoapClient</a>: \
             provides an easy to use API for making requests to Salesforce.com SOAP servers\n\
-        - <a href="https://qoretechnologies.com/manual/qorus/current/xml/SaxDataProvider/html/index.html">SaxDataProvider</a>: \
-            provides a data provider API for streaming XML data\n\
-        - <a href="https://qoretechnologies.com/manual/qorus/current/xml/SoapClient/html/index.html">SoapClient</a>: provides an \
-            easy to use API for making requests to SOAP servers\n\
-        - <a href="https://qoretechnologies.com/manual/qorus/current/xml/SoapHandler/html/index.html">SoapHandler</a>: provides \
-            infrastructure for implementing SOAP server-side services using the \
+        - <a href="https://github.com/qoretechnologies/module-xml">SaxDataProvider</a>: \
+            provides a <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API \
+            for streaming XML data\n\
+        - <a href="https://github.com/qoretechnologies/module-xml">SoapClient</a>: \
+            provides an easy to use API for making requests to SOAP servers\n\
+        - <a href="https://github.com/qoretechnologies/module-xml">SoapDataProvider</a>: \
+            provides a <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API \
+            for SOAP messaging\n\
+        - <a href="https://github.com/qoretechnologies/module-xml">SoapHandler</a>: \
+            provides infrastructure for implementing SOAP server-side services using the \
             <a href="../../modules/HttpServer/html/index.html#httpserverintro">HttpServer</a> module\n\
-        - <a href="https://qoretechnologies.com/manual/qorus/current/xml/WSDL/html/index.html">WSDL</a>: provides underlying web \
-            service/WSDL support for the \
-            <a href="https://qoretechnologies.com/manual/qorus/current/xml/SoapClient/html/index.html">SoapClient</a> and \
-            <a href="https://qoretechnologies.com/manual/qorus/current/xml/SoapHandler/html/index.html">SoapHandler</a> modules\n\
-        - <a href="https://qoretechnologies.com/manual/qorus/current/xml/WebDavHandler/html/index.html">WebDavHandler</a>: \
+        - <a href="https://github.com/qoretechnologies/module-xml">WSDL</a>: \
+            provides underlying web service/WSDL support for the \
+            <a href="https://github.com/qoretechnologies/module-xml">SoapClient</a> and \
+            <a href="https://github.com/qoretechnologies/module-xml">SoapHandler</a> modules\n\
+        - <a href="https://github.com/qoretechnologies/module-xml">WebContentUtil</a>: \
+            provides web crawling, HTML text extraction, text chunking, and URL normalization utilities\n\
+        - <a href="https://github.com/qoretechnologies/module-xml">WebDavClient</a>: \
+            provides a WebDAV client API\n\
+        - <a href="https://github.com/qoretechnologies/module-xml">WebDavClientDataProvider</a>: \
+            provides a <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API \
+            for WebDAV servers\n\
+        - <a href="https://github.com/qoretechnologies/module-xml">WebDavHandler</a>: \
             provides an API for serving WebDAV content using the \
             <a href="../../modules/HttpServer/html/index.html#httpserverintro">HttpServer</a> module\n\
-        - <a href="https://qoretechnologies.com/manual/qorus/current/xml/XmlRpcHandler/html/index.html">XmlRpcHandler</a>: \
+        - <a href="https://github.com/qoretechnologies/module-xml">XmlRpcClientIo</a>: \
+            provides a pure-%Qore XML-RPC client with async I/O via the \
+            <a href="../../modules/HttpClientIo/html/index.html#httpclientiointro">HttpClientIo</a> module\n\
+        - <a href="https://github.com/qoretechnologies/module-xml">XmlRpcConnection</a>: \
+            provides XML-RPC client connections\n\
+        - <a href="https://github.com/qoretechnologies/module-xml">XmlRpcHandler</a>: \
             provides infrastructure for implementing XML-RPC server-side services using the \
             <a href="../../modules/HttpServer/html/index.html#httpserverintro">HttpServer</a> module
     |binary|<a href="https://github.com/qoretechnologies/module-xmlsec">xmlsec</a>|Provides \c xmldsig and \c xmlenc functionality
     |binary|<a href="https://github.com/qoretechnologies/module-yaml">yaml</a>|Provides YAML functionality, also \
         provides the following user modules:\n\
-        - <a href="http://docs.qore.org/modules/yaml/current/DataStreamClient/html/index.html">DataStreamClient</a>: \
+        - <a href="https://github.com/qoretechnologies/module-yaml">Connect</a>: \
+            provides a Connect RPC protocol implementation with DataStream 2.0 and YAML payload encoding\n\
+        - <a href="https://github.com/qoretechnologies/module-yaml">ConnectDataProvider</a>: \
+            provides a <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API \
+            for the Connect RPC protocol\n\
+        - <a href="https://github.com/qoretechnologies/module-yaml">DataStreamClient</a>: \
             provides a DataStream client API extending the RestClient\n\
-        - <a href="http://docs.qore.org/modules/yaml/current/DataStreamRequestHandler/html/index.html">DataStreamRequestHandler</a>: \
+        - <a href="https://github.com/qoretechnologies/module-yaml">DataStreamClientIo</a>: \
+            provides client support for the DataStream protocol over multiplexed HTTP/2 and HTTP/3 \
+            via the <a href="../../modules/HttpClientIo/html/index.html#httpclientiointro">HttpClientIo</a> module\n\
+        - <a href="https://github.com/qoretechnologies/module-yaml">DataStreamRequestHandler</a>: \
             provides a DataStream server-side handler API extending the RestHandler\n\
-        - <a href="http://docs.qore.org/modules/yaml/current/DataStreamUtil/html/index.html">DataStreamUtil</a>: \
+        - <a href="https://github.com/qoretechnologies/module-yaml">DataStreamUtil</a>: \
             provides underlying DataStream client and server protocol support\n\
-        - <a href="http://docs.qore.org/modules/yaml/current/YamlRpcClient/html/index.html">YamlRpcClient</a>: \
+        - <a href="https://github.com/qoretechnologies/module-yaml">YamlDocumentDataProvider</a>: \
+            provides YAML document stream \
+            <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data providers</a>\n\
+        - <a href="https://github.com/qoretechnologies/module-yaml">YamlRpcClient</a>: \
             provides an API for easily making YAML-RPC calls over the network\n\
-        - <a href="http://docs.qore.org/modules/yaml/current/YamlRpcHandler/html/index.html">YamlRpcHandler</a>: \
+        - <a href="https://github.com/qoretechnologies/module-yaml">YamlRpcClientIo</a>: \
+            provides a pure-%Qore YAML-RPC client with async I/O via the \
+            <a href="../../modules/HttpClientIo/html/index.html#httpclientiointro">HttpClientIo</a> module\n\
+        - <a href="https://github.com/qoretechnologies/module-yaml">YamlRpcHandler</a>: \
             provides infrastructure for implementing YAML-RPC server-side services using the \
-            <a href="../../modules/HttpServer/html/index.html#httpserverintro">HttpServer</a> module
+            <a href="../../modules/HttpServer/html/index.html#httpserverintro">HttpServer</a> module\n\
+        - <a href="https://github.com/qoretechnologies/module-yaml">YamlSchema</a>: \
+            provides JSON Schema validation of YAML data\n\
+        - <a href="https://github.com/qoretechnologies/module-yaml">YamlTagHandler</a>: \
+            provides custom YAML tag handlers
     |binary|<a href="https://github.com/qoretechnologies/module-zip">zip</a>|Provides zip archive functionality to %Qore \
         using zlib, also provides the following user module:\n\
         - <a href="http://docs.qore.org/modules/zip/current/ZipDataProvider/html/index.html">ZipDataProvider</a>: \

@@ -36,6 +36,11 @@ public class Main inherits QUnit::Test {
     }
 
     constructor() : Test("ServerSentEventsHandlerTest", "1.0") {
+        @debug {
+            set_signal_handler(SIGUSR1, sub (int sig) {
+                printf("=== SIGUSR1 Thread Stacks ===\n%Y\n", get_all_thread_call_stacks());
+            });
+        }
         addTestCase("SSE response status", \sseResponseStatusTest());
         addTestCase("main test", \mainTest());
         addTestCase("SSE deterministic shutdown", \sseDeterministicShutdownTest());

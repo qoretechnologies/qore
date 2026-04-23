@@ -33,10 +33,12 @@
 #include <qore/QoreSocketObject.h>
 #include <qore/QoreFuture.h>
 #include <qore/AsyncCompletionAction.h>
+#include "qore/intern/QoreChannel.h"
 #include "qore/intern/QoreHttp2ClientConnection.h"
 #include "qore/intern/QC_Http2ClientPollOperationBase.h"
 #include "qore/intern/QC_SocketPollOperation.h"
 #include "qore/intern/QC_Socket.h"
+#include "qore/intern/QoreObjectIntern.h"
 #include "qore/intern/QC_FutureImpl.h"
 #include "qore/intern/AsyncIoControllerPriv.h"
 
@@ -59,6 +61,21 @@ Http2ClientConnection::Http2ClientConnection(const char* target_host, int target
     if (buildAndSubmit(xsink)) {
         // Constructor failure: holders unwound, member pointers stay
         // nullptr, destructor will be a no-op.
+        return;
+    }
+}
+
+Http2ClientConnection::Http2ClientConnection(QoreObject* adopted_sock_obj,
+        QoreSocketObject* adopted_sock_priv,
+        std::string target_host, int target_port, int max_concurrent_streams,
+        ExceptionSink* xsink, HttpClientConnectionManagerBase* mgr)
+    : HttpClientConnectionBase(std::move(target_host), target_port,
+          /* ssl_required */ true),
+      max_concurrent_streams_(max_concurrent_streams) {
+    if (mgr) {
+        setManager(mgr);
+    }
+    if (buildAndSubmitAdopted(adopted_sock_obj, adopted_sock_priv, xsink)) {
         return;
     }
 }
@@ -145,12 +162,100 @@ int Http2ClientConnection::buildAndSubmit(ExceptionSink* xsink) {
     ReferenceHolder<QoreObject> poll_obj_holder(
         new QoreObject(QC_HTTP2CLIENTPOLLOPERATIONBASE, pgm, priv_holder.release()), xsink);
 
+    // Enable the DGC custom scanner gate for this object — the QPP
+    // destructor at QC_Http2ClientPollOperationBase.qpp:1245 always calls
+    // decScanPrivateData(), so the scan_private_data counter must be
+    // incremented here to balance it.  The QPP constructor does the
+    // matching increment on the Qore-level `new Http2ClientPollOperation`
+    // path, but that path is NOT taken when we create the QoreObject
+    // directly from C++ as above — bypassing the QPP ctor leaves the
+    // counter at 0 and the destructor's assertion trips under Debug builds.
+    // See commit 53585cdba1 (H2 DGC scanner) for the scanner contract.
+    qore_object_private::get(**poll_obj_holder)->incScanPrivateData();
+
     // 6. Set up self references.
     priv_raw->setSelf(*poll_obj_holder);
     connect_ptr->setSelf(*poll_obj_holder);
 
-    // 7. Set poll op QoreObject members: "sock" and "goal" — same as
-    //    the QPP binding would.
+    // 7. Finalize: set poll op members, submit to AsyncIoController, and
+    //    on success commit the holders to member pointers.  Shared with
+    //    buildAndSubmitAdopted — see design/conn-mgr-alpn-negotiation.md §9.
+    return finalizePollOpSubmission(sock_obj_holder, poll_obj_holder,
+        priv_raw, sock_priv_raw, "http2-cpp-conn-", xsink);
+}
+
+int Http2ClientConnection::buildAndSubmitAdopted(QoreObject* adopted_sock_obj,
+        QoreSocketObject* adopted_sock_priv, ExceptionSink* xsink) {
+    if (!adopted_sock_obj || !adopted_sock_priv) {
+        xsink->raiseException("HTTPCLIENT-ADOPT-ERROR",
+            "cannot adopt a null socket");
+        return -1;
+    }
+    QoreProgram* pgm = getProgram();
+    (void)pgm;
+
+    // Adopt the caller's ref on the existing socket QoreObject wrapper.
+    // Do NOT create a new wrapper — see the extended comment in
+    // Http1ClientConnection::buildAndSubmitAdopted for why: the close_internal
+    // fires on refcount 0 of the wrapper, so a second wrapper over the same
+    // priv would race the original to zero and kill the adopted fd before
+    // the H2 multiplex op's first continuePoll runs.
+    ReferenceHolder<QoreObject> sock_obj_holder(adopted_sock_obj, xsink);
+    QoreSocketObject* sock_priv_raw = adopted_sock_priv;
+
+    // Create the adopt-socket H2 poll op priv.  ssl_required is
+    // implicitly true for the adopt path (see design doc §5.1).
+    sock_priv_raw->ref();
+    ReferenceHolder<Http2ClientPollOperationPriv> priv_holder(
+        new Http2ClientPollOperationPriv(
+            /* self */ nullptr,
+            /* sock */ sock_priv_raw,
+            /* target_host */ target_host,
+            /* target_port */ target_port,
+            /* conn_priv */ this),
+        xsink);
+    Http2ClientPollOperationPriv* priv_raw = *priv_holder;
+
+    ReferenceHolder<QoreObject> poll_obj_holder(
+        new QoreObject(QC_HTTP2CLIENTPOLLOPERATIONBASE, pgm, priv_holder.release()), xsink);
+
+    // Enable the DGC custom scanner gate — see the matching comment in
+    // buildAndSubmit() above; the QPP destructor's decScanPrivateData()
+    // requires a matching increment when the QoreObject is created
+    // directly from C++ instead of via the QPP constructor.
+    qore_object_private::get(**poll_obj_holder)->incScanPrivateData();
+
+    priv_raw->setSelf(*poll_obj_holder);
+
+    // Install the H2 multiplex inner op, send the client preface, and
+    // transition to READING + ready BEFORE the helper submits to the
+    // controller.  Order matters: the I/O thread's first continuePoll()
+    // must see h2_state = READING with a live current_op, or
+    // handleConnecting would run and error on current_op == nullptr.
+    // initAdoptedMultiplex only needs self set — it does not depend on
+    // poll_obj members being populated, so running it before the helper
+    // (which sets "sock"/"goal") is safe.
+    priv_raw->initAdoptedMultiplex(xsink);
+    if (*xsink) {
+        return -1;
+    }
+
+    // Finalize: set poll op members, submit to AsyncIoController, and
+    // on success commit the holders to member pointers.  Shared with
+    // buildAndSubmit — see design/conn-mgr-alpn-negotiation.md §9.
+    return finalizePollOpSubmission(sock_obj_holder, poll_obj_holder,
+        priv_raw, sock_priv_raw, "http2-cpp-conn-adopted-", xsink);
+}
+
+int Http2ClientConnection::finalizePollOpSubmission(
+        ReferenceHolder<QoreObject>& sock_obj_holder,
+        ReferenceHolder<QoreObject>& poll_obj_holder,
+        Http2ClientPollOperationPriv* priv_raw,
+        QoreSocketObject* sock_priv_raw,
+        const char* owner_prefix,
+        ExceptionSink* xsink) {
+    // Set poll op QoreObject members: "sock" and "goal" — same as the
+    // QPP binding would.
     poll_obj_holder->setValue("sock", sock_obj_holder->refSelf(), xsink);
     if (*xsink) {
         return -1;
@@ -160,7 +265,7 @@ int Http2ClientConnection::buildAndSubmit(ExceptionSink* xsink) {
         return -1;
     }
 
-    // 8. Submit to the global AsyncIoController.
+    // Get the global AsyncIoController.
     ReferenceHolder<QoreObject> ctl_obj_holder(
         qore_get_async_io_controller_obj(xsink), xsink);
     if (*xsink || !ctl_obj_holder) {
@@ -178,12 +283,16 @@ int Http2ClientConnection::buildAndSubmit(ExceptionSink* xsink) {
         return -1;
     }
 
+    // Owner string: caller-supplied (via setOwner) or auto-generated from
+    // the supplied prefix + this pointer so cancelByOwner can be used
+    // for cleanup.
     char owner_buf[64];
     const char* owner_to_use;
     if (!owner_str.empty()) {
         owner_to_use = owner_str.c_str();
     } else {
-        snprintf(owner_buf, sizeof(owner_buf), "http2-cpp-conn-%p", (void*)this);
+        snprintf(owner_buf, sizeof(owner_buf), "%s%p",
+            owner_prefix, (void*)this);
         owner_to_use = owner_buf;
     }
 
@@ -191,7 +300,9 @@ int Http2ClientConnection::buildAndSubmit(ExceptionSink* xsink) {
     info->setKeyValue("sock", sock_obj_holder->refSelf(), xsink);
     info->setKeyValue("spop", poll_obj_holder->refSelf(), xsink);
     info->setKeyValue("owner", new QoreStringNode(owner_to_use), xsink);
-    info->setKeyValue("to", DateTimeNode::makeRelative(0, 0, 0, 0, 0, 0, 0), xsink);
+    // Disable controller-level timeout; the H2 poll op manages its own
+    // idle timeout.
+    info->setKeyValue("to", -1, xsink);
     if (*xsink) {
         return -1;
     }
@@ -212,7 +323,8 @@ int Http2ClientConnection::buildAndSubmit(ExceptionSink* xsink) {
 }
 
 int Http2ClientConnection::getActiveStreamCount() const {
-    if (!poll_op_priv) {
+    MethodGuard g(const_cast<Http2ClientConnection*>(this));
+    if (!g.acquired() || !poll_op_priv) {
         return 0;
     }
     return poll_op_priv->getActiveStreamCount();
@@ -221,6 +333,12 @@ int Http2ClientConnection::getActiveStreamCount() const {
 QoreHashNode* Http2ClientConnection::submitRequest(const char* method, const char* path,
         const QoreHashNode* headers, const void* body, size_t body_len,
         ExceptionSink* xsink) {
+    MethodGuard g(this);
+    if (!g.acquired()) {
+        xsink->raiseException("HTTPCLIENT-STATE-ERROR",
+            "cannot submit request: connection has been closed");
+        return nullptr;
+    }
     if (!poll_op_priv || isClosed()) {
         xsink->raiseException("HTTPCLIENT-STATE-ERROR",
             "cannot submit request: connection is closed");
@@ -283,7 +401,299 @@ QoreHashNode* Http2ClientConnection::submitRequest(const char* method, const cha
     return result.release();
 }
 
+int64_t Http2ClientConnection::submitRequestWithAction(const char* method, const char* path,
+        const QoreHashNode* headers, const void* body, size_t body_len,
+        AbstractAsyncAction* action, ExceptionSink* xsink) {
+    MethodGuard g(this);
+    if (!g.acquired()) {
+        action->deref(xsink);
+        xsink->raiseException("HTTPCLIENT-STATE-ERROR",
+            "cannot submit request: connection has been closed");
+        return -1;
+    }
+    if (!poll_op_priv || isClosed()) {
+        action->deref(xsink);
+        xsink->raiseException("HTTPCLIENT-STATE-ERROR",
+            "cannot submit request: connection is closed");
+        return -1;
+    }
+    if (!isReady()) {
+        action->deref(xsink);
+        xsink->raiseException("HTTPCLIENT-STATE-ERROR",
+            "cannot submit request: connection is not ready");
+        return -1;
+    }
+
+    int64_t stream_id = poll_op_priv->submitRequest(method, path, headers,
+        body, body_len, /* streaming */ false, action,
+        /* max_streams */ max_concurrent_streams_, xsink);
+    if (*xsink || stream_id < 0) {
+        // poll_op_priv->submitRequest deref'd the action on failure.
+        return -1;
+    }
+
+    // Successful submit — release the reserved stream slot (matches H1).
+    releaseStreamReservation();
+
+    // Wake the I/O controller so it processes the queued request.
+    if (sock_obj) {
+        ExceptionSink wake_xsink;
+        ReferenceHolder<QoreObject> ctl_obj_holder(
+            qore_get_async_io_controller_obj(&wake_xsink), &wake_xsink);
+        if (ctl_obj_holder) {
+            ReferenceHolder<AsyncIoControllerPriv> ctl_priv_holder(
+                static_cast<AsyncIoControllerPriv*>(
+                    ctl_obj_holder->getReferencedPrivateData(
+                        CID_ASYNCIOCONTROLLER, &wake_xsink)),
+                &wake_xsink);
+            if (ctl_priv_holder) {
+                ctl_priv_holder->wakeSocketByObject(sock_obj, &wake_xsink);
+            }
+        }
+        wake_xsink.clear();
+    }
+
+    return stream_id;
+}
+
+int64_t Http2ClientConnection::submitRequestStreaming(const char* method, const char* path,
+        const QoreHashNode* headers, const void* body, size_t body_len,
+        QoreChannel*& channel_out, ExceptionSink* xsink) {
+    MethodGuard g(this);
+    if (!g.acquired()) {
+        xsink->raiseException("HTTPCLIENT-STATE-ERROR",
+            "cannot submit streaming request: connection has been closed");
+        return -1;
+    }
+    if (!poll_op_priv || isClosed()) {
+        xsink->raiseException("HTTPCLIENT-STATE-ERROR",
+            "cannot submit streaming request: connection is closed");
+        return -1;
+    }
+    if (!isReady()) {
+        xsink->raiseException("HTTPCLIENT-STATE-ERROR",
+            "cannot submit streaming request: connection is not ready");
+        return -1;
+    }
+
+    // Create an unbounded Channel for incremental response delivery
+    ReferenceHolder<QoreChannel> ch_holder(new QoreChannel(-1), xsink);
+    QoreChannel* ch = *ch_holder;
+
+    // Create ChannelAction — poll op takes ownership via submitRequest
+    ChannelAction* action = new ChannelAction(ch);
+
+    // streaming=false: Http2ClientPollOperationPriv::submitRequest interprets
+    // `streaming` as request-body streaming (caller pushes body via
+    // pushSendData), not response streaming.  submitRequestStreaming delivers
+    // a one-shot body and only streams the response; passing streaming=true
+    // would make the H2 session send HEADERS without END_STREAM and the
+    // server would wait indefinitely for DATA frames that never arrive.
+    // Response-streaming dispatch is handled via action->isStreaming() in the
+    // poll op (setHttp2StreamStreaming).
+    int64_t stream_id = poll_op_priv->submitRequest(method, path, headers,
+        body, body_len, /* streaming */ false, action,
+        /* max_streams */ max_concurrent_streams_, xsink);
+    if (*xsink || stream_id < 0) {
+        return -1;
+    }
+
+    releaseStreamReservation();
+
+    // Wake the I/O controller
+    if (sock_obj) {
+        ExceptionSink wake_xsink;
+        ReferenceHolder<QoreObject> ctl_obj_holder(
+            qore_get_async_io_controller_obj(&wake_xsink), &wake_xsink);
+        if (ctl_obj_holder) {
+            ReferenceHolder<AsyncIoControllerPriv> ctl_priv_holder(
+                static_cast<AsyncIoControllerPriv*>(
+                    ctl_obj_holder->getReferencedPrivateData(
+                        CID_ASYNCIOCONTROLLER, &wake_xsink)),
+                &wake_xsink);
+            if (ctl_priv_holder) {
+                ctl_priv_holder->wakeSocketByObject(sock_obj, &wake_xsink);
+            }
+        }
+        wake_xsink.clear();
+    }
+
+    // Output the channel to the caller (ref'd; caller must deref)
+    ch->ref();
+    channel_out = ch;
+    return stream_id;
+}
+
+QoreHashNode* Http2ClientConnection::submitRequestStreamingSend(const char* method,
+        const char* path, const QoreHashNode* headers, bool streaming_recv,
+        QoreChannel*& channel_out, ExceptionSink* xsink) {
+    MethodGuard g(this);
+    if (!g.acquired()) {
+        xsink->raiseException("HTTPCLIENT-STATE-ERROR",
+            "cannot submit streaming send request: connection has been closed");
+        return nullptr;
+    }
+    if (!poll_op_priv || isClosed()) {
+        xsink->raiseException("HTTPCLIENT-STATE-ERROR",
+            "cannot submit streaming send request: connection is closed");
+        return nullptr;
+    }
+    if (!isReady()) {
+        xsink->raiseException("HTTPCLIENT-STATE-ERROR",
+            "cannot submit streaming send request: connection is not ready");
+        return nullptr;
+    }
+
+    AbstractAsyncAction* action = nullptr;
+    ReferenceHolder<QoreObject> future_obj(xsink);
+    ReferenceHolder<QoreChannel> ch_holder(xsink);
+
+    if (streaming_recv) {
+        // Streaming receive via Channel
+        ch_holder = new QoreChannel(-1);
+        action = new ChannelAction(*ch_holder);
+    } else {
+        // Non-streaming receive via Promise/Future
+        ReferenceHolder<QorePromise> promise_holder(new QorePromise(), xsink);
+        QorePromise* promise_raw = *promise_holder;
+        ReferenceHolder<QoreFuture> future_holder(promise_holder->getFuture(xsink), xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+        QoreProgram* pgm = getProgram();
+        future_obj = new QoreObject(QC_FUTUREIMPL, pgm, future_holder.release());
+        action = new PromiseAction(promise_raw, nullptr);
+        promise_holder.release()->deref(xsink);
+    }
+
+    // Submit with streaming=true (no END_STREAM on headers — bidirectional streaming)
+    int64_t stream_id = poll_op_priv->submitRequest(method, path, headers,
+        nullptr, 0, /* streaming */ true, action,
+        /* max_streams */ max_concurrent_streams_, xsink);
+    if (*xsink || stream_id < 0) {
+        return nullptr;
+    }
+
+    // Store stream_id for subsequent pushSendData/setTrailers calls
+    streaming_send_stream_id = stream_id;
+
+    releaseStreamReservation();
+
+    // Wake the I/O controller
+    if (sock_obj) {
+        ExceptionSink wake_xsink;
+        ReferenceHolder<QoreObject> ctl_obj_holder(
+            qore_get_async_io_controller_obj(&wake_xsink), &wake_xsink);
+        if (ctl_obj_holder) {
+            ReferenceHolder<AsyncIoControllerPriv> ctl_priv_holder(
+                static_cast<AsyncIoControllerPriv*>(
+                    ctl_obj_holder->getReferencedPrivateData(
+                        CID_ASYNCIOCONTROLLER, &wake_xsink)),
+                &wake_xsink);
+            if (ctl_priv_holder) {
+                ctl_priv_holder->wakeSocketByObject(sock_obj, &wake_xsink);
+            }
+        }
+        wake_xsink.clear();
+    }
+
+    // Build result
+    ReferenceHolder<QoreHashNode> result(new QoreHashNode(autoTypeInfo), xsink);
+    result->setKeyValue("stream_id", QoreValue((int64)stream_id), xsink);
+    if (streaming_recv) {
+        QoreChannel* ch = *ch_holder;
+        ch->ref();
+        channel_out = ch;
+    } else {
+        result->setKeyValue("future", future_obj.release(), xsink);
+    }
+    return result.release();
+}
+
+void Http2ClientConnection::pushSendData(const void* data, size_t len, ExceptionSink* xsink) {
+    MethodGuard g(this);
+    if (!g.acquired()) {
+        xsink->raiseException("HTTPCLIENT-STATE-ERROR",
+            "cannot push data: connection has been closed");
+        return;
+    }
+    if (!poll_op_priv) {
+        xsink->raiseException("HTTPCLIENT-STATE-ERROR",
+            "cannot push data: connection has no poll operation");
+        return;
+    }
+    if (streaming_send_stream_id < 0) {
+        xsink->raiseException("HTTPCLIENT-STATE-ERROR",
+            "cannot push data: no streaming send in progress");
+        return;
+    }
+
+    bool end_stream = (!data || !len);
+    if (end_stream) {
+        // End-of-body: send empty DATA with END_STREAM
+        poll_op_priv->sendStreamData(streaming_send_stream_id, nullptr, true, xsink);
+        streaming_send_stream_id = -1;
+    } else {
+        // Create BinaryNode from raw data for the H2 sendStreamData API
+        // BinaryNode takes ownership of the buffer, so we must copy
+        void* buf = malloc(len);
+        if (!buf) {
+            xsink->raiseException("HTTPCLIENT-MEMORY-ERROR",
+                "failed to allocate %zu bytes for stream data", len);
+            return;
+        }
+        memcpy(buf, data, len);
+        SimpleRefHolder<BinaryNode> bin(new BinaryNode(buf, len));
+        poll_op_priv->sendStreamData(streaming_send_stream_id, *bin, false, xsink);
+    }
+
+    // Wake the I/O controller so it processes the queued data
+    if (sock_obj) {
+        ExceptionSink wake_xsink;
+        ReferenceHolder<QoreObject> ctl_obj_holder(
+            qore_get_async_io_controller_obj(&wake_xsink), &wake_xsink);
+        if (ctl_obj_holder) {
+            ReferenceHolder<AsyncIoControllerPriv> ctl_priv_holder(
+                static_cast<AsyncIoControllerPriv*>(
+                    ctl_obj_holder->getReferencedPrivateData(
+                        CID_ASYNCIOCONTROLLER, &wake_xsink)),
+                &wake_xsink);
+            if (ctl_priv_holder) {
+                ctl_priv_holder->wakeSocketByObject(sock_obj, &wake_xsink);
+            }
+        }
+        wake_xsink.clear();
+    }
+}
+
+void Http2ClientConnection::setTrailers(const QoreHashNode* trailers, ExceptionSink* xsink) {
+    MethodGuard g(this);
+    if (!g.acquired()) {
+        xsink->raiseException("HTTPCLIENT-STATE-ERROR",
+            "cannot set trailers: connection has been closed");
+        return;
+    }
+    if (!poll_op_priv || !sock_priv) {
+        xsink->raiseException("HTTPCLIENT-STATE-ERROR",
+            "cannot set trailers: connection has no poll operation");
+        return;
+    }
+    if (streaming_send_stream_id < 0) {
+        xsink->raiseException("HTTPCLIENT-STATE-ERROR",
+            "cannot set trailers: no streaming send in progress");
+        return;
+    }
+
+    sock_priv->sendHttp2Trailers(streaming_send_stream_id, trailers, xsink);
+}
+
 void Http2ClientConnection::closeConnection(ExceptionSink* xsink) {
+    // Lifetime barrier (S1): invalidate so new method calls are refused,
+    // then wait for any in-flight calls to finish before tearing down
+    // protocol-specific state.  See HttpClientConnection.h.
+    markInvalidated();
+    drainInFlight();
+
     if (!poll_op_priv) {
         return;
     }
@@ -331,7 +741,8 @@ void Http2ClientConnection::closeConnection(ExceptionSink* xsink) {
 }
 
 QoreHashNode* Http2ClientConnection::getReferencedErrorInfo() {
-    if (!poll_op_priv) {
+    MethodGuard g(this);
+    if (!g.acquired() || !poll_op_priv) {
         return nullptr;
     }
     return poll_op_priv->getErrorInfo();

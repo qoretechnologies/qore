@@ -819,7 +819,10 @@ static QoreValue parse_hash_map(const QoreProgramLocation* loc, QoreParseHashNod
     }
 
     if (len != 1) {
-        parse_error(*loc, "invalid initial argument to hash map operator, expected a single key value pair; got %d hash elements instead", len);
+        parse_error(*loc, "invalid initial argument to hash map operator: expected a single key-value "
+            "pair but got %d hash elements instead; the 'map {key: val}, list' form returns a single "
+            "hash (one entry per iteration); to return a list of hashes, drop the {} and use "
+            "parentheses, e.g.: map (\"code\": $1.code, \"name\": $1.name), input_list", len);
         return QoreValue();
     }
 

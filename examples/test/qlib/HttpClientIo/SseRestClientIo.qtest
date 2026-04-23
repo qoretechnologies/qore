@@ -1,0 +1,160 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  SseRestClientIo.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires ../../../../qlib/HttpServer.qm
+%requires ../../../../qlib/HttpServerAsyncIo
+%requires ../../../../qlib/ServerSentEventHandler
+%requires ../../../../qlib/RestClientIo.qm
+%requires ../../../../qlib/HttpClientStreamingIo
+%requires ../../../../qlib/Mime.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/QUnit.qm
+
+%exec-class SseRestClientIoTest
+
+class TestSseHandler inherits ServerSentEventHandler {
+    constructor() : ServerSentEventHandler() {
+    }
+
+    connectionRegisteredImpl(ServerSentEventConnection conn) {
+        conn.send(<SseMessageInfo>{
+            "event": "hello",
+            "data": "world",
+        });
+    }
+}
+
+class SseRestClientIoTest inherits Test {
+    private {
+        HttpServer server;
+        int port;
+        TestSseHandler handler();
+    }
+
+    constructor() : Test("SseRestClientIoTest", "1.0") {
+        addTestCase("restSseReader receives events", \testRestSseReader());
+        addTestCase("restSseReader multiple events", \testRestSseReaderMultiple());
+        addTestCase("restSseStream callback", \testRestSseStream());
+        addTestCase("restSseStream callback stop", \testRestSseStreamStop());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        Logger logger("test", LoggerLevel::getLevelInfo());
+        server = new HttpServer(<HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+            "enable_h3": False,
+        });
+        server.setDefaultHandler("sse", handler);
+        port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+    }
+
+    globalTearDown() {
+        if (server) {
+            server.stop();
+            delete server;
+        }
+    }
+
+    testRestSseReader() {
+        RestClientIo rest({"url": sprintf("http://localhost:%d", port)});
+
+        SseStreamReader reader = rest.restSseReader("GET", "/sse");
+
+        *hash<SseMessageInfo> evt = reader.readEvent(5s);
+        assertTrue(exists evt, "SSE event received via restSseReader");
+        assertEq("hello", evt.event);
+        assertEq("\"world\"", evt.data);
+
+        # Timeout — no more events
+        *hash<SseMessageInfo> evt2 = reader.readEvent(500ms);
+        assertEq(NOTHING, evt2, "timeout returns NOTHING");
+    }
+
+    testRestSseReaderMultiple() {
+        RestClientIo rest({"url": sprintf("http://localhost:%d", port)});
+
+        SseStreamReader reader = rest.restSseReader("GET", "/sse");
+
+        # Read initial hello event
+        *hash<SseMessageInfo> evt1 = reader.readEvent(5s);
+        assertTrue(exists evt1, "first event received");
+        assertEq("hello", evt1.event);
+
+        # Push a second event from server
+        handler.sendAll(<SseMessageInfo>{
+            "event": "update",
+            "data": "payload-123",
+        });
+
+        *hash<SseMessageInfo> evt2 = reader.readEvent(5s);
+        assertTrue(exists evt2, "second event received");
+        assertEq("update", evt2.event);
+        assertEq("\"payload-123\"", evt2.data);
+    }
+
+    testRestSseStream() {
+        RestClientIo rest({"url": sprintf("http://localhost:%d", port)});
+
+        list<hash<SseMessageInfo>> events();
+
+        # Use the reader pattern to ensure we're connected before sending
+        # the second event from the server
+        SseStreamReader reader = rest.restSseReader("GET", "/sse");
+        # Read the initial hello event to confirm connection is registered
+        *hash<SseMessageInfo> hello = reader.readEvent(5s);
+        @assert(hello);
+        events += hello;
+
+        # Now push a second event — the connection is definitely registered
+        handler.sendAll(<SseMessageInfo>{
+            "event": "bg-event",
+            "data": "bg-data",
+        });
+
+        *hash<SseMessageInfo> evt2 = reader.readEvent(5s);
+        if (evt2) {
+            events += evt2;
+        }
+
+        assertEq(2, events.size(), "callback received 2 events");
+        assertEq("hello", events[0].event);
+        assertEq("bg-event", events[1].event);
+    }
+
+    testRestSseStreamStop() {
+        RestClientIo rest({"url": sprintf("http://localhost:%d", port)});
+
+        int count = 0;
+        rest.restSseStream("GET", "/sse", bool sub(hash<SseMessageInfo> evt) {
+            count++;
+            return False;  # stop immediately
+        }, NOTHING, NOTHING, 5s);
+
+        assertEq(1, count, "callback stopped after first event");
+    }
+}

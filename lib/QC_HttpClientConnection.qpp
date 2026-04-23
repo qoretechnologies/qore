@@ -60,6 +60,19 @@
     foundation that Phase P3+ will layer the connection manager on top of.
     Direct use from Qore code is supported but minimal.
 
+    @par DGC
+    The C++ @ref Http1ClientConnection priv holds raw @c QoreObject* refs
+    on the socket and poll-op it owns (@c sock_obj, @c poll_op_obj —
+    see those declarations for the full rationale).  These refs are
+    **not** declared as @c internal_members here because the qclass is
+    currently unused in practice (H1/H2/H3 client connections are driven
+    through @ref HttpClientConnectionManagerBase in C++ with no qclass
+    wrapper).  If this class starts being created from Qore code, add
+    @c internal_members=Socket sock_obj,AbstractPollOperation poll_op_obj
+    and move the ref storage from the priv's raw pointers into the
+    internal-member slots via @c setValueIntern — see @c design/dgc.md
+    Pattern A.
+
     @since %Qore 2.3
 */
 qclass Http1Connection [

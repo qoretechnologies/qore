@@ -208,7 +208,7 @@ qlib/QoreModelRegistry/
 ## Tokenizer Module
 
 Separate binary module (`modules/tokenizer/`) providing HuggingFace-compatible text
-tokenization. See `design/ml-enhancement-plan.md` Phase 7 for details.
+tokenization.
 
 ### Key Features
 

@@ -248,13 +248,17 @@ class FileLocationHandlerHttp inherits AbstractFileLocationHandler {
 
         # run the I/O operation in the background
         background sub () {
+            # on_exit outside try: done() must fire AFTER catch records
+            # the error so waitForIo() observes the error before the
+            # waitgroup drops to zero.
+            on_exit io_counter.done();
             try {
-                on_exit io_counter.done();
-
                 Qore::InputStream is = pipe.getInputStream();
                 hc.sendChunked(new BinaryOutputStream(), is, opts.method ? opts.method.upr() : "POST", NOTHING, path);
-                is.close();
             } catch (hash<ExceptionInfo> ex) {
+                # Record the error so OutputStreamWrapper::waitForIo()
+                # can rethrow it to the caller — see FTP handler comment.
+                rv.setIoError(ex);
             }
         }();
 
