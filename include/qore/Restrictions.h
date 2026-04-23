@@ -123,6 +123,7 @@
 #define PO_NO_NAMESPACE_DEFS                0  //!< disallow namespace definitions; use QoreParseOptions::NO_NAMESPACE_DEFS in C++
 #define PO_NO_NEW                           0  //!< disallow the 'new' keyword; use QoreParseOptions::NO_NEW in C++
 #define PO_NO_SUMMARIZE                     0  //!< disallow the 'summarize' statement; use QoreParseOptions::NO_SUMMARIZE in C++
+#define PO_NO_MODULE_PATH_DIRECTIVES        0  //!< disallow %prepend-module-path / %append-module-path; use QoreParseOptions::NO_MODULE_PATH_DIRECTIVES in C++
 
 #define PO_DEFAULT 0            //!< no parse options set by default
 

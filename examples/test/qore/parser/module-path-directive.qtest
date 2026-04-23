@@ -60,6 +60,14 @@ class ModulePathDirectiveTest inherits QUnit::Test {
             \testAppendLegacyForm());
         addTestCase("QORE_VERSION macro expansion",
             \testQoreVersionMacro());
+        addTestCase("PO_NO_MODULE_PATH_DIRECTIVES: %prepend-module-path rejected",
+            \testNoDirectivesRejectsPrepend());
+        addTestCase("PO_NO_MODULE_PATH_DIRECTIVES: new-style %append-module-path rejected",
+            \testNoDirectivesRejectsAppendNew());
+        addTestCase("PO_NO_MODULE_PATH_DIRECTIVES: legacy %append-module-path rejected",
+            \testNoDirectivesRejectsAppendLegacy());
+        addTestCase("%no-module-path-directives: directive form of the option",
+            \testNoDirectivesDirective());
         set_return_value(main());
     }
 
@@ -211,6 +219,53 @@ class ModulePathDirectiveTest inherits QUnit::Test {
         Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS, True);
         string src = "%new-style\n"
             "%prepend-module-path \"/nonexistent/qore-${QORE_VERSION}\"\n"
+            "string sub hello_driver() { return \"ok\"; }\n";
+        p.parse(src, "<buffer>");
+        assertEq("ok", p.callFunction("hello_driver"));
+    }
+
+    private Program makeSandboxedProgram() {
+        # The C++ PO_NO_MODULE_PATH_DIRECTIVES bit lives at bit 70 (outside the
+        # int64 range); for this test we set it via the %no-module-path-directives
+        # directive at the top of the source.  Child Program must not inherit
+        # restrictions from the parent (%modern here) for the source-level
+        # directive to be the decisive bit.
+        return new Program(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS, True);
+    }
+
+    testNoDirectivesRejectsPrepend() {
+        Program p = makeSandboxedProgram();
+        string src = "%new-style\n"
+            "%no-module-path-directives\n"
+            "%prepend-module-path \"/some/path\"\n";
+        assertThrows("PARSE-EXCEPTION", "no-module-path-directives",
+            \p.parse(), (src, "<buffer>"));
+    }
+
+    testNoDirectivesRejectsAppendNew() {
+        Program p = makeSandboxedProgram();
+        string src = "%new-style\n"
+            "%no-module-path-directives\n"
+            "%append-module-path \"/some/path\"\n";
+        assertThrows("PARSE-EXCEPTION", "no-module-path-directives",
+            \p.parse(), (src, "<buffer>"));
+    }
+
+    testNoDirectivesRejectsAppendLegacy() {
+        Program p = makeSandboxedProgram();
+        string src = "%new-style\n"
+            "%no-module-path-directives\n"
+            "%append-module-path /some/path\n";
+        assertThrows("PARSE-EXCEPTION", "no-module-path-directives",
+            \p.parse(), (src, "<buffer>"));
+    }
+
+    testNoDirectivesDirective() {
+        # Same thing with the option's name spelled as a directive — the scanner
+        # rule must be wired up.
+        Program p = makeSandboxedProgram();
+        string src = "%new-style\n"
+            "%no-module-path-directives\n"
             "string sub hello_driver() { return \"ok\"; }\n";
         p.parse(src, "<buffer>");
         assertEq("ok", p.callFunction("hello_driver"));

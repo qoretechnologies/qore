@@ -840,6 +840,7 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
 ^%lock-options{WS}*$                    { yylval->parseopt = new ASTParseOption(APOK_LOCK_OPTIONS); return PARSE_OPTION_FULL; }
 ^%lock-warnings{WS}*$                   { yylval->parseopt = new ASTParseOption(APOK_LOCK_WARNINGS); return PARSE_OPTION_FULL; }
 ^%no-locale-control{WS}*$               { yylval->parseopt = new ASTParseOption(APOK_NO_LOCALE_CONTROL); return PARSE_OPTION_FULL; }
+^%no-module-path-directives{WS}*$       { yylval->parseopt = new ASTParseOption(APOK_NO_MODULE_PATH_DIRECTIVES); return PARSE_OPTION_FULL; }
 ^%no-process-control{WS}*$              { yylval->parseopt = new ASTParseOption(APOK_NO_PROCESS_CONTROL); return PARSE_OPTION_FULL; }
 ^%no-constant-defs{WS}*$                { yylval->parseopt = new ASTParseOption(APOK_NO_CONSTANT_DEFS); return PARSE_OPTION_FULL; }
 ^%no-new{WS}*$                          { yylval->parseopt = new ASTParseOption(APOK_NO_NEW); return PARSE_OPTION_FULL; }

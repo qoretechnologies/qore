@@ -1135,21 +1135,30 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
 ^%append-module-path{WS}*$              { parse_error(*get_loc(yylloc), "missing argument to %%append-module-path"); }
 ^%append-module-path{WS}+               BEGIN(append_module_state);
 <append_module_state>[^\n\r]+           {
-                                           // New-style ("path") — single quoted path with ${NAME} macro
-                                           // expansion, applied to the per-Program appended list.
-                                           // Legacy form (no surrounding quotes, colon-separated, $NAME
-                                           // substitution) continues to write the process-global
-                                           // QMM.moduleDirList — preserving backward compatibility for
-                                           // pre-2.3 scripts.  Detection: peek at the first non-WS char.
-                                           const char* p = yytext;
-                                           while (*p == ' ' || *p == '\t') ++p;
-                                           if (*p == '"') {
-                                              qore_program_private::get(*getProgram())
-                                                  ->applyModulePathDirective(false, yytext, *get_loc(yylloc));
+                                           if (getProgram()->getParseOptions()
+                                                 & QoreParseOptions::NO_MODULE_PATH_DIRECTIVES) {
+                                              parse_error(*get_loc(yylloc),
+                                                 "%%append-module-path is not allowed when "
+                                                 "'%%no-module-path-directives' "
+                                                 "(PO_NO_MODULE_PATH_DIRECTIVES) is set");
+                                              BEGIN(INITIAL);
                                            } else {
-                                              append_module_path(yytext);
+                                              // New-style ("path") — single quoted path with ${NAME} macro
+                                              // expansion, applied to the per-Program appended list.
+                                              // Legacy form (no surrounding quotes, colon-separated, $NAME
+                                              // substitution) continues to write the process-global
+                                              // QMM.moduleDirList — preserving backward compatibility for
+                                              // pre-2.3 scripts.  Detection: peek at the first non-WS char.
+                                              const char* p = yytext;
+                                              while (*p == ' ' || *p == '\t') ++p;
+                                              if (*p == '"') {
+                                                 qore_program_private::get(*getProgram())
+                                                     ->applyModulePathDirective(false, yytext, *get_loc(yylloc));
+                                              } else {
+                                                 append_module_path(yytext);
+                                              }
+                                              BEGIN(INITIAL);
                                            }
-                                           BEGIN(INITIAL);
                                         }
 <append_module_state><<EOF>>            {
                                            QORE_FLEX_DO_EOF
@@ -1157,16 +1166,25 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
 ^%prepend-module-path{WS}*$             { parse_error(*get_loc(yylloc), "missing argument to %%prepend-module-path"); }
 ^%prepend-module-path{WS}+              BEGIN(prepend_module_state);
 <prepend_module_state>[^\n\r]+          {
-                                           // %prepend-module-path is always new-style: single quoted
-                                           // path with ${NAME} macro expansion, applied to the
-                                           // per-Program prepended list.
-                                           qore_program_private::get(*getProgram())
-                                               ->applyModulePathDirective(true, yytext, *get_loc(yylloc));
+                                           if (getProgram()->getParseOptions()
+                                                 & QoreParseOptions::NO_MODULE_PATH_DIRECTIVES) {
+                                              parse_error(*get_loc(yylloc),
+                                                 "%%prepend-module-path is not allowed when "
+                                                 "'%%no-module-path-directives' "
+                                                 "(PO_NO_MODULE_PATH_DIRECTIVES) is set");
+                                           } else {
+                                              // %prepend-module-path is always new-style: single quoted
+                                              // path with ${NAME} macro expansion, applied to the
+                                              // per-Program prepended list.
+                                              qore_program_private::get(*getProgram())
+                                                  ->applyModulePathDirective(true, yytext, *get_loc(yylloc));
+                                           }
                                            BEGIN(INITIAL);
                                         }
 <prepend_module_state><<EOF>>           {
                                            QORE_FLEX_DO_EOF
                                         }
+^%no-module-path-directives{WS}*$       parse_set_parse_options(yylloc, QoreParseOptions::NO_MODULE_PATH_DIRECTIVES);
 ^%set-time-zone{WS}*$                   { parse_error(*get_loc(yylloc), "missing argument to %%set-time-zone"); }
 ^%set-time-zone{WS}+                    BEGIN(set_zone);
 <set_zone>[^\n\r]+                      {

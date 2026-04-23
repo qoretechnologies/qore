@@ -196,6 +196,15 @@ public:
     */
     DLLEXPORT static const QoreParseOptions NO_SUMMARIZE;
 
+    //! extended option: disallow %prepend-module-path / %append-module-path directives (bit 70)
+    /** Enforced at parse time: when set, either directive raises a parse error.  Intended for
+        embedders that want to prevent programs from extending their own module search path
+        (see design/parse-directive-prepend-module-path.md "Sandboxing").  Not included in
+        \c PO_MODERN — modern scripts that legitimately vendor modules should be able to do so.
+        @since %Qore 2.3
+    */
+    DLLEXPORT static const QoreParseOptions NO_MODULE_PATH_DIRECTIVES;
+
 private:
     int64 lo;  //!< bits 0-63 (compatible with legacy int64 parse options)
     int64 hi;  //!< bits 64-127 (extended parse options)
