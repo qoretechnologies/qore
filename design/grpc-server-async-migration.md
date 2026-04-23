@@ -1,6 +1,6 @@
 # GrpcServer over HttpServerAsyncIo — migration design
 
-**Status:** proposed
+**Status:** Phases 1–5 complete; Phases 6–7 pending (see Migration-plan below).
 **Author:** investigation arose from the gRPC server-streaming hang traced on
 2026-04-22.
 **Related docs:**
@@ -206,24 +206,40 @@ migrates.
 
 ## Migration plan (suggested phases)
 
-1. **Audit `HttpServerAsyncIo` streaming API**: identify what's missing
-   for the gRPC use case (server-streaming, client-streaming, bidi). Add
-   the gap APIs as new exports without changing existing behavior.
-2. **Add a parallel `GrpcServerAsync` class** in `module-grpc/qlib/GrpcUtil/`
-   alongside the existing `GrpcServer`. Implement on top of
-   `HttpServerAsyncIo`. Keep the public `GrpcServer` API.
-3. **Port `module-grpc` tests** against `GrpcServerAsync`, verify all 86
-   pass + no flakes under repeated runs.
-4. **Switch `GrpcServer` to alias `GrpcServerAsync`** (single-line swap).
-   Run `module-grpc` + `arrow-flight` + Qorus `grpc.qtest` test suites.
-5. **Same migration for ArrowFlight server** (uses the same base).
-6. **Deprecate the sync H2 server socket APIs** with `@deprecated`
-   markers + a one-version overlap. Blocked on resolving the
-   `Connect/GrpcProtocolAdapter` consumer (see Risks): either port
-   `ConnectHandler` to `HttpServerAsyncIo` first, or document an
-   explicit sync-path exemption before deprecation can land.
-7. **Remove the deprecated APIs** in the next major Qore version. Strip
-   the corresponding code paths in `qore_socket_private` and
+1. **Audit `HttpServerAsyncIo` streaming API** — DONE. Async
+   write-side primitives added: `Socket::submitHttp2StreamingResponseHeadersAsync`,
+   `sendHttp2StreamDataAsync`, `sendHttp2TrailersAsync` (C++ in qore repo,
+   Phase 1.3 commit `b4f1f42ba`).  `AsyncHttp2ServerStream` Qore handle
+   ships in `qlib/AsyncSocketIo/`.  Two supporting additions landed in
+   parallel: async happy-eyeballs (`NotifierPollOperation` +
+   `waitForNotifier`, Phase A) and `register_body_queue` opt-in for
+   HttpServerAsyncIo's H2 body_streaming dispatch (qore commit `cadfde49d`,
+   used by Phase 2c/2d for inbound DATA delivery via a Qore Queue).
+2. **Add a parallel `GrpcServerAsync` class** — DONE in four landings
+   (module-grpc repo):
+   - 2a: scaffold + unary (`0ce464e`)
+   - 2b: server-streaming (`e7fda98`)
+   - 2c: client-streaming + bidi + async body drain (`724f85b`)
+   - 2d: true interactive bidi via live+async read mode (`a763352`)
+3. **Port `module-grpc` tests** against `GrpcServerAsync` — DONE
+   (module-grpc `9bdd4a6`).  86/86 pass, no flakes across three repeat
+   runs; TLS listener fix included.
+4. **Switch `GrpcServer` to alias `GrpcServerAsync`** — DONE (module-grpc
+   `97f538e`, –2721/+56 LOC).  `GrpcServer` is a thin subclass with a
+   delegating constructor; the 932-line sync connection-loop body is
+   removed.  `grpc.qtest` 86/86, `arrow-flight.qtest` 21/21,
+   `grpc-reflection.qtest` 19/19, valgrind 0 definitely lost.
+5. **Same migration for ArrowFlight server** — DONE "for free" via
+   Phase 4's alias.  `ArrowFlightServer` composes a `GrpcServer` which
+   now IS `GrpcServerAsync`; no ArrowFlight-specific code changes
+   required.  Verified: arrow-flight 21/21, arrow-flight-interop 10/10,
+   ArrowFlightDataProvider 20/20, arrow-ipc 52/52, GrpcDataProvider 43/43.
+6. **Deprecate the sync H2 server socket APIs** — NOT STARTED.  Blocked
+   on resolving the `Connect/GrpcProtocolAdapter` consumer (see Risks):
+   either port `ConnectHandler` to `HttpServerAsyncIo` first, or document
+   an explicit sync-path exemption before deprecation can land.
+7. **Remove the deprecated APIs** — NOT STARTED (next major Qore version).
+   Strip the corresponding code paths in `qore_socket_private` and
    `Http2Session` — significant simplification of the lock model.
 
 ## Risks
