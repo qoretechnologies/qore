@@ -35,6 +35,7 @@ public class SendCloudSearchServicePointsRequestDataType inherits HashDataType {
                 "short_desc": "ISO 3166-1 alpha-2 country code (required)",
                 "desc": "Two-letter ISO country code to search service points within",
                 "required": True,
+                "ref_data": "countries",
             },
             "postal_code": {
                 "type": SoftStringOrNothingType,

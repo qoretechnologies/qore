@@ -78,10 +78,10 @@ public class SendCloudParcelDataType inherits HashDataType {
                 "desc": "Recipient postal code",
             },
             "country": {
-                "type": AutoHashOrNothingType,
+                "type": new SendCloudCountryObjectDataType(AutoHashOrNothingType),
                 "display_name": "Country",
                 "short_desc": "Country details",
-                "desc": "Country object with iso_2, iso_3, and name as returned by SendCloud",
+                "desc": "Country object with `iso_2`, `iso_3`, and `name` as returned by SendCloud",
             },
             "country_state": {
                 "type": SoftStringOrNothingType,
@@ -132,10 +132,10 @@ public class SendCloudParcelDataType inherits HashDataType {
                 "desc": "The tracking URL for the parcel",
             },
             "carrier": {
-                "type": AutoHashOrNothingType,
+                "type": new SendCloudCarrierObjectDataType(AutoHashOrNothingType),
                 "display_name": "Carrier",
                 "short_desc": "Carrier info",
-                "desc": "Carrier object (e.g., {code: 'postnl'})",
+                "desc": "Carrier object with at least a `code` field (e.g., `{\"code\": \"postnl\"}`)",
             },
             "weight": {
                 "type": SoftStringOrNothingType,
@@ -165,13 +165,13 @@ public class SendCloudParcelDataType inherits HashDataType {
                 "type": SoftStringOrNothingType,
                 "display_name": "Length Unit",
                 "short_desc": "Dimension unit",
-                "desc": "Unit used for length/width/height (e.g., cm, in)",
+                "desc": "Unit used for `length`/`width`/`height` (e.g., `cm`, `in`)",
             },
             "weight_unit": {
                 "type": SoftStringOrNothingType,
                 "display_name": "Weight Unit",
                 "short_desc": "Weight unit",
-                "desc": "Unit used for weight (e.g., kg, g, lb, oz)",
+                "desc": "Unit used for `weight` (e.g., `kg`, `g`, `lb`, `oz`)",
             },
             "total_insured_value": {
                 "type": SoftFloatOrNothingType,
@@ -216,10 +216,10 @@ public class SendCloudParcelDataType inherits HashDataType {
                 "desc": "Arbitrary merchant-supplied data attached to the parcel",
             },
             "label": {
-                "type": AutoHashOrNothingType,
+                "type": new SendCloudLabelUrlsDataType(AutoHashOrNothingType),
                 "display_name": "Label",
                 "short_desc": "Label URLs hash",
-                "desc": "Object with normal_printer and label_printer arrays containing PDF URLs",
+                "desc": "Object with `normal_printer` (list of A4 PDF URLs) and `label_printer` (single A6 PDF URL)",
             },
             "documents": {
                 "type": new ListDataType("ParcelDocumentList", new SendCloudParcelDocumentDataType(), True),
@@ -273,22 +273,22 @@ public class SendCloudParcelDataType inherits HashDataType {
                 "type": SoftBoolOrNothingType,
                 "display_name": "Is Return",
                 "short_desc": "Whether this parcel is a return",
-                "desc": "True if this parcel is a return shipment",
+                "desc": "`True` if this parcel is a return shipment",
             },
             "date_created": {
-                "type": SoftStringOrNothingType,
+                "type": SoftDateOrNothingType,
                 "display_name": "Created At",
                 "short_desc": "Creation timestamp",
                 "desc": "Timestamp when the parcel was created",
             },
             "date_updated": {
-                "type": SoftStringOrNothingType,
+                "type": SoftDateOrNothingType,
                 "display_name": "Updated At",
                 "short_desc": "Last update timestamp",
                 "desc": "Timestamp when the parcel was last updated",
             },
             "date_announced": {
-                "type": SoftStringOrNothingType,
+                "type": SoftDateOrNothingType,
                 "display_name": "Announced At",
                 "short_desc": "Announcement timestamp",
                 "desc": "Timestamp when the parcel was announced to the carrier",

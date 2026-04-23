@@ -77,6 +77,8 @@ public class SendCloudDataProviderTest inherits QUnit::Test {
         addTestCase("data type instantiation", \testDataTypeInstantiation());
         addTestCase("app registered", \testAppRegistered());
         addTestCase("actions registered", \testActionsRegistered());
+        addTestCase("event example data", \testEventExampleData());
+        addTestCase("create-parcel shipment object", \testCreateParcelShipmentObject());
 
         # Integration tests (require -c <connection>)
         addTestCase("integration: ping", \testPing());
@@ -192,6 +194,54 @@ public class SendCloudDataProviderTest inherits QUnit::Test {
         assertTrue(exists app.groups, "SendCloud app should have groups");
     }
 
+    #! Verify the event providers expose example data of the right shape
+    testEventExampleData() {
+        checkJson();
+        # Construct event watch providers without a REST client — the public
+        # getExampleEventData() falls back to getFakeExampleData() when fetchRecords() can't run.
+        list<list<auto>> cases = (
+            ("SendCloudDataProvider::SendCloudWatchParcelStatusChangedDataProvider",
+                "parcel-status-changed", ("id", "tracking_number", "status")),
+            ("SendCloudDataProvider::SendCloudWatchReturnUpdatedDataProvider",
+                "return-updated", ("id", "status", "products")),
+        );
+
+        foreach list<auto> entry in (cases) {
+            string cls_name = entry[0];
+            string event_name = entry[1];
+            list<string> required_keys = entry[2];
+
+            Class cls = Class::forName(cls_name);
+            DataProvider::AbstractDataProvider provider =
+                cast<DataProvider::AbstractDataProvider>(cls.newObject(NOTHING));
+            hash<auto> example = provider.getExampleEventData(event_name);
+            foreach string key in (required_keys) {
+                assertTrue(example.hasKey(key),
+                    sprintf("%s example event data should include %y key", cls_name, key));
+            }
+        }
+    }
+
+    #! Verify create-parcel request type accepts a nested shipment object
+    testCreateParcelShipmentObject() {
+        checkJson();
+        AbstractDataProviderType req_type = new SendCloudParcelCreateRequestDataType();
+        *AbstractDataField shipment_field = req_type.getFields().shipment;
+        assertTrue(exists shipment_field, "shipment field should exist");
+        AbstractDataProviderType shipment_type = shipment_field.getType();
+        # The type should accept a hash with id and name (not be a flat int)
+        hash<auto> accepted = cast<hash<auto>>(shipment_type.acceptsValue({
+            "id": 8,
+            "name": "Unstamped letter",
+        }));
+        assertEq(8, accepted.id, "shipment.id should be preserved");
+        assertEq("Unstamped letter", accepted.name, "shipment.name should be preserved");
+
+        # The shipment field should accept NOTHING (it's optional)
+        assertEq(NOTHING, shipment_type.acceptsValue(NOTHING),
+            "optional shipment field should accept NOTHING");
+    }
+
     #! Verify every advertised action is resolvable via the factory's action catalog
     testActionsRegistered() {
         checkJson();
@@ -230,8 +280,8 @@ public class SendCloudDataProviderTest inherits QUnit::Test {
         DataProvider::AbstractDataProvider r = requireConnection();
         try {
             hash<auto> result = r.doAppAction("get-user", {});
-            assertTrue(exists result.user, "get-user response should contain a 'user' object");
-            assertTrue(result.user.username.val(), "username should be non-empty");
+            # get-user unwraps the {user: ...} envelope — result is the user record directly
+            assertTrue(result.username.val(), "username should be non-empty");
         } catch (hash<ExceptionInfo> ex) {
             if (isScopeOr404(ex)) {
                 testSkip(sprintf("get-user unavailable (status %d): %s", ex.arg.status_code, ex.desc));
@@ -279,22 +329,20 @@ public class SendCloudDataProviderTest inherits QUnit::Test {
         DataProvider::AbstractDataProvider r = requireConnection();
 
         hash<auto> parcel_request = {
-            "parcel": {
-                "name": "Qore Test Recipient",
-                "company_name": "Qore Technologies",
-                "address": "Test Street 1",
-                "house_number": "1",
-                "city": "Amsterdam",
-                "postal_code": "1012AB",
-                "country": "NL",
-                "telephone": "0000000000",
-                "request_label": False,
-                "email": "test@example.com",
-                "weight": "1.000",
-                "order_number": sprintf("qore-test-%d", now_us().format("YYYYMMDDHHmmSSxx")),
-                "shipment": {
-                    "id": TestShippingMethodId,
-                },
+            "name": "Qore Test Recipient",
+            "company_name": "Qore Technologies",
+            "address": "Test Street 1",
+            "house_number": "1",
+            "city": "Amsterdam",
+            "postal_code": "1012AB",
+            "country": "NL",
+            "telephone": "0000000000",
+            "request_label": False,
+            "email": "test@example.com",
+            "weight": "1.000",
+            "order_number": sprintf("qore-test-%d", now_us().format("YYYYMMDDHHmmSSxx")),
+            "shipment": {
+                "id": TestShippingMethodId,
             },
         };
 
@@ -308,14 +356,15 @@ public class SendCloudDataProviderTest inherits QUnit::Test {
             rethrow;
         }
 
-        assertTrue(exists created.parcel, "create response should include 'parcel'");
-        assertTrue(exists created.parcel.id, "created parcel should have an id");
-        testParcelId = created.parcel.id;
+        # doPostWrapped unwraps the response under the same "parcel" key, so created is the
+        # parcel record itself
+        assertTrue(exists created.id, "created parcel should have an id");
+        testParcelId = created.id;
 
         on_exit {
             if (testParcelId) {
                 try {
-                    r.doAppAction("cancel-parcel", {"parcel_id": testParcelId});
+                    r.doAppAction("cancel-parcel", {"id": testParcelId});
                 } catch (hash<ExceptionInfo> ex) {
                     if (m_options.verbose) {
                         printf("cleanup: failed to cancel parcel %d: %s\n", testParcelId, ex.desc);
@@ -327,11 +376,11 @@ public class SendCloudDataProviderTest inherits QUnit::Test {
         # Verify data persistence — the server must return the parcel when queried.
         # This is the critical check: 200 OK on create is not proof of persistence.
         try {
-            hash<auto> fetched = r.doAppAction("get-parcel", {"parcel_id": testParcelId});
-            assertTrue(exists fetched.parcel, "get-parcel should return parcel data");
-            assertEq(testParcelId, fetched.parcel.id,
+            hash<auto> fetched = r.doAppAction("get-parcel", {"id": testParcelId});
+            # get-parcel's doRequestImpl returns the parcel record directly (already unwrapped)
+            assertEq(testParcelId, fetched.id,
                 "fetched parcel id should match created id (data persistence check)");
-            assertEq(parcel_request.parcel.postal_code, fetched.parcel.postal_code,
+            assertEq(parcel_request.postal_code, fetched.postal_code,
                 "postal_code should match what was submitted");
         } catch (hash<ExceptionInfo> ex) {
             if (isScopeOr404(ex)) {

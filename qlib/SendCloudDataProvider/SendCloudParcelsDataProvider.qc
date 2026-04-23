@@ -76,29 +76,29 @@ public class SendCloudParcelsDataProvider inherits SendCloudDataProviderBase {
                 "type": AbstractDataProviderType::get(SoftStringOrNothingType),
                 "desc": "Filter parcels by the carrier tracking number",
             },
-            "created_at_from": <DataProviderOptionInfo>{
-                "display_name": "Created From",
-                "short_desc": "Earliest creation date",
-                "type": AbstractDataProviderType::get(SoftDateOrNothingType),
-                "desc": "Only return parcels created on or after this timestamp",
+            "external_reference": <DataProviderOptionInfo>{
+                "display_name": "External Reference",
+                "short_desc": "Filter by external reference",
+                "type": AbstractDataProviderType::get(SoftStringOrNothingType),
+                "desc": "Filter parcels by the merchant-supplied `external_reference` field",
             },
-            "created_at_to": <DataProviderOptionInfo>{
-                "display_name": "Created To",
-                "short_desc": "Latest creation date",
-                "type": AbstractDataProviderType::get(SoftDateOrNothingType),
-                "desc": "Only return parcels created on or before this timestamp",
+            "parcel_status": <DataProviderOptionInfo>{
+                "display_name": "Parcel Status",
+                "short_desc": "Filter by parcel status ID",
+                "type": AbstractDataProviderType::get(SoftIntOrNothingType),
+                "desc": "Numeric SendCloud parcel-status ID to filter on (see SendCloud's status IDs)",
             },
-            "updated_at_from": <DataProviderOptionInfo>{
-                "display_name": "Updated From",
+            "announced_after": <DataProviderOptionInfo>{
+                "display_name": "Announced After",
+                "short_desc": "Earliest announcement date",
+                "type": AbstractDataProviderType::get(SoftDateOrNothingType),
+                "desc": "Only return parcels announced to the carrier on or after this timestamp",
+            },
+            "updated_after": <DataProviderOptionInfo>{
+                "display_name": "Updated After",
                 "short_desc": "Earliest update date",
                 "type": AbstractDataProviderType::get(SoftDateOrNothingType),
                 "desc": "Only return parcels updated on or after this timestamp",
-            },
-            "updated_at_to": <DataProviderOptionInfo>{
-                "display_name": "Updated To",
-                "short_desc": "Latest update date",
-                "type": AbstractDataProviderType::get(SoftDateOrNothingType),
-                "desc": "Only return parcels updated on or before this timestamp",
             },
             "limit": <DataProviderOptionInfo>{
                 "display_name": "Limit",
@@ -145,21 +145,19 @@ public class SendCloudParcelsDataProvider inherits SendCloudDataProviderBase {
         if (search_options.tracking_number) {
             params.tracking_number = search_options.tracking_number;
         }
-        if (search_options.created_at_from) {
-            params.created_at_from = SendCloudDataProviderBase::formatDateTime(
-                search_options.created_at_from);
+        if (exists search_options.external_reference) {
+            params.external_reference = search_options.external_reference;
         }
-        if (search_options.created_at_to) {
-            params.created_at_to = SendCloudDataProviderBase::formatDateTime(
-                search_options.created_at_to);
+        if (exists search_options.parcel_status) {
+            params.parcel_status = search_options.parcel_status;
         }
-        if (search_options.updated_at_from) {
-            params.updated_at_from = SendCloudDataProviderBase::formatDateTime(
-                search_options.updated_at_from);
+        if (search_options.announced_after) {
+            params.announced_after = SendCloudDataProviderBase::formatDateTime(
+                search_options.announced_after);
         }
-        if (search_options.updated_at_to) {
-            params.updated_at_to = SendCloudDataProviderBase::formatDateTime(
-                search_options.updated_at_to);
+        if (search_options.updated_after) {
+            params.updated_after = SendCloudDataProviderBase::formatDateTime(
+                search_options.updated_after);
         }
         if (search_options.page_size) {
             params.page_size = search_options.page_size;

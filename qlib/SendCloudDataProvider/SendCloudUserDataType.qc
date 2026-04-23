@@ -84,13 +84,13 @@ public class SendCloudUserDataType inherits HashDataType {
                 "desc": "Postal code of the account address",
             },
             "country": {
-                "type": AutoHashOrNothingType,
+                "type": new SendCloudCountryObjectDataType(AutoHashOrNothingType),
                 "display_name": "Country",
                 "short_desc": "Country info",
-                "desc": "Country object (iso_2, iso_3, name)",
+                "desc": "Country object with `iso_2`, `iso_3`, and `name` fields",
             },
             "registered": {
-                "type": SoftStringOrNothingType,
+                "type": SoftDateOrNothingType,
                 "display_name": "Registered At",
                 "short_desc": "Account registration timestamp",
                 "desc": "Timestamp when the account was registered",
@@ -126,21 +126,25 @@ public class SendCloudLabelUrlsDataType inherits HashDataType {
     public {
         const Fields = {
             "normal_printer": {
-                "type": SoftAutoListOrNothingType,
+                "type": new ListDataType("SendCloudLabelNormalPrinterUrls", SoftStringType, True),
                 "display_name": "Normal Printer",
                 "short_desc": "A4 label URLs",
-                "desc": "List of URLs for A4-size PDFs (one per collo in a multi-collo shipment)",
+                "desc": "List of URLs for A4-size PDFs (one per `start_from` index in a multi-collo shipment)",
             },
             "label_printer": {
-                "type": SoftAutoListOrNothingType,
+                "type": SoftStringOrNothingType,
                 "display_name": "Label Printer",
-                "short_desc": "A6 thermal label URLs",
-                "desc": "List of URLs for A6 thermal-printer PDFs (one per collo in a multi-collo shipment)",
+                "short_desc": "A6 thermal label URL",
+                "desc": "URL for the A6 thermal-printer PDF that contains all labels in the shipment",
             },
         };
     }
 
     constructor() : HashDataType("SendCloudLabelUrlsDataType") {
+        addQoreFields(Fields);
+    }
+
+    constructor(Type base_type) : HashDataType(base_type, "SendCloudLabelUrlsDataType") {
         addQoreFields(Fields);
     }
 }
@@ -153,42 +157,18 @@ public class SendCloudGetParcelLabelResponseDataType inherits HashDataType {
                 "type": new SendCloudLabelUrlsDataType(),
                 "display_name": "Label",
                 "short_desc": "Label URLs",
-                "desc": "Hash with normal_printer and label_printer arrays of PDF URLs",
+                "desc": "Hash with `normal_printer` (list of A4 PDF URLs) and `label_printer` (single A6 PDF URL)",
+            },
+            "customs_declaration": {
+                "type": AutoHashOrNothingType,
+                "display_name": "Customs Declaration",
+                "short_desc": "Customs declaration document URLs",
+                "desc": "Customs declaration document URLs (only present for international shipments)",
             },
         };
     }
 
     constructor() : HashDataType("SendCloudGetParcelLabelResponseDataType") {
-        addQoreFields(Fields);
-    }
-}
-
-#! Response type for the get-parcel-documents action
-public class SendCloudParcelDocumentDownloadDataType inherits HashDataType {
-    public {
-        const Fields = {
-            "filename": {
-                "type": SoftStringType,
-                "display_name": "File Name",
-                "short_desc": "Suggested filename",
-                "desc": "Suggested filename for the downloaded document",
-            },
-            "content_type": {
-                "type": SoftStringType,
-                "display_name": "Content Type",
-                "short_desc": "MIME content type",
-                "desc": "MIME content type of the downloaded document (e.g., application/pdf)",
-            },
-            "data": {
-                "type": SoftStringType,
-                "display_name": "Data (Base64)",
-                "short_desc": "Base64-encoded document bytes",
-                "desc": "The document contents encoded as a base64 string",
-            },
-        };
-    }
-
-    constructor() : HashDataType("SendCloudParcelDocumentDownloadDataType") {
         addQoreFields(Fields);
     }
 }

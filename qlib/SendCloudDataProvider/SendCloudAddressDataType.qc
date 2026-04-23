@@ -113,6 +113,10 @@ public class SendCloudAddressDataType inherits HashDataType {
     constructor() : HashDataType("SendCloudAddressDataType") {
         addQoreFields(Fields);
     }
+
+    constructor(Type base_type) : HashDataType(base_type, "SendCloudAddressDataType") {
+        addQoreFields(Fields);
+    }
 }
 
 } # namespace SendCloudDataProvider

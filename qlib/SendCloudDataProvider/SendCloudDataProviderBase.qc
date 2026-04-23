@@ -51,8 +51,9 @@ public class SendCloudDataProviderBase inherits DataProvider::AbstractDataProvid
     }
 
     private {
-        #! The REST client object for API calls (async-capable)
-        RestClientIo::RestClientIo rest;
+        #! The REST client object for API calls (async-capable). May be NOTHING for
+        #! introspection-only constructions (e.g., fetching example event data).
+        *RestClientIo::RestClientIo rest;
     }
 
     #! Creates the object with no arguments for child classes

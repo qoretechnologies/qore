@@ -138,25 +138,25 @@ public class SendCloudParcelCreateRequestDataType inherits HashDataType {
                 "type": SoftStringOrNothingType,
                 "display_name": "Length",
                 "short_desc": "Parcel length",
-                "desc": "Length of the parcel (string-encoded decimal, unit via length_unit)",
+                "desc": "Length of the parcel (string-encoded decimal, unit via `length_unit`, e.g., `\"30.0\"`)",
             },
             "width": {
                 "type": SoftStringOrNothingType,
                 "display_name": "Width",
                 "short_desc": "Parcel width",
-                "desc": "Width of the parcel (string-encoded decimal, unit via length_unit)",
+                "desc": "Width of the parcel (string-encoded decimal, unit via `length_unit`, e.g., `\"20.0\"`)",
             },
             "height": {
                 "type": SoftStringOrNothingType,
                 "display_name": "Height",
                 "short_desc": "Parcel height",
-                "desc": "Height of the parcel (string-encoded decimal, unit via length_unit)",
+                "desc": "Height of the parcel (string-encoded decimal, unit via `length_unit`, e.g., `\"10.0\"`)",
             },
             "length_unit": {
                 "type": SoftStringOrNothingType,
                 "display_name": "Length Unit",
                 "short_desc": "Length/width/height unit",
-                "desc": "Unit used for length, width, and height",
+                "desc": "Unit used for `length`, `width`, and `height`",
                 "allowed_values": (
                     <AllowedValueInfo>{"value": "cm", "display_name": "Centimeters", "desc": "Centimeters"},
                     <AllowedValueInfo>{"value": "m", "display_name": "Meters", "desc": "Meters"},
@@ -168,7 +168,7 @@ public class SendCloudParcelCreateRequestDataType inherits HashDataType {
                 "type": SoftStringOrNothingType,
                 "display_name": "Weight Unit",
                 "short_desc": "Weight unit",
-                "desc": "Unit used for the weight field",
+                "desc": "Unit used for the `weight` field",
                 "allowed_values": (
                     <AllowedValueInfo>{"value": "kg", "display_name": "Kilograms", "desc": "Kilograms"},
                     <AllowedValueInfo>{"value": "g", "display_name": "Grams", "desc": "Grams"},
@@ -180,7 +180,7 @@ public class SendCloudParcelCreateRequestDataType inherits HashDataType {
                 "type": SoftStringOrNothingType,
                 "display_name": "Total Order Value",
                 "short_desc": "Order value (string-encoded decimal)",
-                "desc": "Total order value as a string-encoded decimal; pair with total_order_value_currency",
+                "desc": "Total order value as a string-encoded decimal; pair with `total_order_value_currency`",
             },
             "total_order_value_currency": {
                 "type": SoftStringOrNothingType,
@@ -188,12 +188,13 @@ public class SendCloudParcelCreateRequestDataType inherits HashDataType {
                 "short_desc": "ISO 4217 currency code",
                 "desc": "Currency of the order value (e.g., EUR, USD)",
             },
-            "shipping_method": {
-                "type": SoftIntOrNothingType,
+            "shipment": {
+                "type": new SendCloudShipmentRefDataType(AutoHashOrNothingType),
                 "display_name": "Shipping Method",
-                "short_desc": "Shipping method ID",
-                "desc": "ID of the shipping method to use (omit to create an unlabeled parcel)",
-                "ref_data": "shipping_methods",
+                "short_desc": "Shipping method to use (id + name)",
+                "desc": "The shipping method to use for the parcel as a hash with `id` (required) and "
+                    "optional `name`. Omit to create an unlabeled parcel. When `request_label` is `True`, "
+                    "this field is mandatory",
                 "preselected": True,
             },
             "sender_address": {
@@ -203,37 +204,31 @@ public class SendCloudParcelCreateRequestDataType inherits HashDataType {
                 "desc": "ID of the sender address. Omit to use the default sender address",
                 "ref_data": "sender_addresses",
             },
-            "brand_id": {
+            "brand": {
                 "type": SoftIntOrNothingType,
                 "display_name": "Brand",
                 "short_desc": "Brand ID",
-                "desc": "ID of the brand associated with this parcel",
+                "desc": "ID of the brand associated with this parcel (must be linked to the chosen sender address)",
                 "ref_data": "brands",
             },
             "request_label": {
                 "type": SoftBoolOrNothingType,
                 "display_name": "Request Label",
                 "short_desc": "Immediately announce & request a label",
-                "desc": "If True, the parcel is announced to the carrier and a label is generated immediately",
+                "desc": "If `True`, the parcel is announced to the carrier and a label is generated immediately",
                 "preselected": True,
             },
             "apply_shipping_rules": {
                 "type": SoftBoolOrNothingType,
                 "display_name": "Apply Shipping Rules",
                 "short_desc": "Apply SendCloud shipping rules",
-                "desc": "If True, SendCloud applies configured shipping rules to choose a shipping method",
-            },
-            "request_service_point": {
-                "type": SoftIntOrNothingType,
-                "display_name": "Service Point ID",
-                "short_desc": "Destination service point",
-                "desc": "ID of the destination service point (for service-point shipments)",
+                "desc": "If `True`, SendCloud applies configured shipping rules to choose a shipping method",
             },
             "to_service_point": {
                 "type": SoftIntOrNothingType,
                 "display_name": "Destination Service Point",
                 "short_desc": "Service point ID the parcel is sent to",
-                "desc": "ID of the service point the parcel will be delivered to",
+                "desc": "ID of the service point the parcel will be delivered to (for service-point shipments)",
             },
             "to_post_number": {
                 "type": SoftStringOrNothingType,
@@ -245,7 +240,7 @@ public class SendCloudParcelCreateRequestDataType inherits HashDataType {
                 "type": SoftBoolOrNothingType,
                 "display_name": "Is Return",
                 "short_desc": "Whether this parcel is a return",
-                "desc": "If True, mark this parcel as a return shipment",
+                "desc": "If `True`, mark this parcel as a return shipment",
             },
             "customs_invoice_nr": {
                 "type": SoftStringOrNothingType,
@@ -381,15 +376,15 @@ public class SendCloudParcelUpdateRequestDataType inherits HashDataType {
                 "type": SoftBoolType,
                 "display_name": "Request Label",
                 "short_desc": "Announce the parcel and generate a label",
-                "desc": "If True, announces the parcel to the carrier and generates a shipping label",
+                "desc": "If `True`, announces the parcel to the carrier and generates a shipping label",
                 "required": True,
             },
             "shipment": {
-                "type": SoftIntOrNothingType,
+                "type": new SendCloudShipmentRefDataType(AutoHashOrNothingType),
                 "display_name": "Shipping Method",
-                "short_desc": "Shipping method ID to assign",
-                "desc": "ID of the shipping method to assign to the parcel before announcing",
-                "ref_data": "shipping_methods",
+                "short_desc": "Shipping method to assign (id + name)",
+                "desc": "Shipping method to assign to the parcel before announcing — a hash with `id` "
+                    "(required) and optional `name`. Required when `request_label` is `True`",
             },
         };
     }

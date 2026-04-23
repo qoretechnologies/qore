@@ -108,13 +108,13 @@ public class SendCloudReturnDataType inherits HashDataType {
                 ),
             },
             "created_at": {
-                "type": SoftStringOrNothingType,
+                "type": SoftDateOrNothingType,
                 "display_name": "Created At",
                 "short_desc": "Creation timestamp",
                 "desc": "Timestamp when the return was created",
             },
             "updated_at": {
-                "type": SoftStringOrNothingType,
+                "type": SoftDateOrNothingType,
                 "display_name": "Updated At",
                 "short_desc": "Last update timestamp",
                 "desc": "Timestamp when the return was last updated",
@@ -144,10 +144,10 @@ public class SendCloudReturnDataType inherits HashDataType {
                 "desc": "List of returned product lines",
             },
             "refund": {
-                "type": AutoHashOrNothingType,
+                "type": new SendCloudReturnRefundResponseDataType(AutoHashOrNothingType),
                 "display_name": "Refund",
                 "short_desc": "Refund details",
-                "desc": "Refund hash with fields like refund_type and total_refund",
+                "desc": "Refund object with `total_refund`, `refunded_at`, `message`, and nested `refund_type` sub-object",
             },
         };
     }
@@ -165,7 +165,7 @@ public class SendCloudReturnRefundRequestDataType inherits HashDataType {
                 "type": SoftStringOrNothingType,
                 "display_name": "Refund Type",
                 "short_desc": "Type of refund",
-                "desc": "Type of refund offered (money, store_credit, exchange)",
+                "desc": "Type of refund offered (`money`, `store_credit`, `exchange`)",
                 "allowed_values": (
                     <AllowedValueInfo>{"value": "money", "display_name": "Money",
                         "desc": "Monetary refund"},
@@ -187,6 +187,10 @@ public class SendCloudReturnRefundRequestDataType inherits HashDataType {
     constructor() : HashDataType("SendCloudReturnRefundRequestDataType") {
         addQoreFields(Fields);
     }
+
+    constructor(Type base_type) : HashDataType(base_type, "SendCloudReturnRefundRequestDataType") {
+        addQoreFields(Fields);
+    }
 }
 
 #! Request type for creating a SendCloud return (POST /returns wrapped in {return: ...})
@@ -200,9 +204,10 @@ public class SendCloudReturnCreateRequestDataType inherits HashDataType {
                 "desc": "ID of the original outgoing parcel being returned",
                 "required": True,
                 "ref_data": "parcels",
+                "example_value": 12345,
             },
             "refund": {
-                "type": new SendCloudReturnRefundRequestDataType(),
+                "type": new SendCloudReturnRefundRequestDataType(AutoHashOrNothingType),
                 "display_name": "Refund",
                 "short_desc": "Refund details",
                 "desc": "Optional refund hash describing the refund type and amount",
@@ -213,6 +218,13 @@ public class SendCloudReturnCreateRequestDataType inherits HashDataType {
                 "short_desc": "Products being returned",
                 "desc": "List of product lines being returned (at least one entry required)",
                 "required": True,
+                "example_value": (
+                    {
+                        "description": "T-Shirt",
+                        "quantity": 1,
+                        "value": "19.95",
+                    },
+                ),
             },
             "reason": {
                 "type": SoftStringOrNothingType,
@@ -241,7 +253,7 @@ public class SendCloudReturnCreateRequestDataType inherits HashDataType {
                 "desc": "Customer-provided message describing the return",
             },
             "address": {
-                "type": new SendCloudAddressDataType(),
+                "type": new SendCloudAddressDataType(AutoHashOrNothingType),
                 "display_name": "Pickup Address",
                 "short_desc": "Pickup address for the return",
                 "desc": "Pickup address for the return (if different from the original shipping address)",

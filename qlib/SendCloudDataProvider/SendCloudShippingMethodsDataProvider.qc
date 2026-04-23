@@ -74,13 +74,13 @@ public class SendCloudShippingMethodsDataProvider inherits SendCloudDataProvider
                 "display_name": "Is Return",
                 "short_desc": "Filter return methods",
                 "type": AbstractDataProviderType::get(SoftBoolOrNothingType),
-                "desc": "If True, only return-capable shipping methods are returned",
+                "desc": "If `True`, only return-capable shipping methods are returned",
             },
             "price_breakdown": <DataProviderOptionInfo>{
                 "display_name": "Price Breakdown",
                 "short_desc": "Include detailed price breakdown",
                 "type": AbstractDataProviderType::get(SoftBoolOrNothingType),
-                "desc": "If True, include a detailed pricing breakdown on each method",
+                "desc": "If `True`, include a detailed pricing breakdown on each method",
             },
         };
     }

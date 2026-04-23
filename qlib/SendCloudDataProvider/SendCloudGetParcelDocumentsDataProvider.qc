@@ -50,8 +50,16 @@ public class SendCloudGetParcelDocumentsRequestDataType inherits HashDataType {
                         "desc": "CN22 customs declaration form"},
                     <AllowedValueInfo>{"value": "cn23", "display_name": "CN23",
                         "desc": "CN23 customs declaration form"},
+                    <AllowedValueInfo>{"value": "cn23-default", "display_name": "CN23 (Default)",
+                        "desc": "CN23 customs declaration form (default layout)"},
+                    <AllowedValueInfo>{"value": "cp71", "display_name": "CP71",
+                        "desc": "CP71 international parcel form"},
                     <AllowedValueInfo>{"value": "commercial-invoice", "display_name": "Commercial Invoice",
                         "desc": "Commercial invoice PDF"},
+                    <AllowedValueInfo>{"value": "air-waybill", "display_name": "Air Waybill",
+                        "desc": "Air waybill document"},
+                    <AllowedValueInfo>{"value": "qr", "display_name": "QR Code",
+                        "desc": "QR code label (for paperless return drop-offs)"},
                 ),
             },
             "format": {
@@ -65,6 +73,8 @@ public class SendCloudGetParcelDocumentsRequestDataType inherits HashDataType {
                     <AllowedValueInfo>{"value": "pdf", "display_name": "PDF", "desc": "PDF format"},
                     <AllowedValueInfo>{"value": "zpl", "display_name": "ZPL",
                         "desc": "ZPL (Zebra printer) format"},
+                    <AllowedValueInfo>{"value": "png", "display_name": "PNG",
+                        "desc": "PNG image (only available for certain document types like QR codes)"},
                 ),
             },
         };
@@ -75,12 +85,30 @@ public class SendCloudGetParcelDocumentsRequestDataType inherits HashDataType {
     }
 }
 
+#! Response type for get-parcel-documents (wraps the standard FileDataType)
+public class SendCloudParcelDocumentResponseDataType inherits HashDataType {
+    public {
+        const Fields = {
+            "file": {
+                "type": FileDataType,
+                "display_name": "File",
+                "short_desc": "Downloaded document",
+                "desc": "Downloaded document as a file (`name`, `content` base64-encoded, `mime_type`)",
+            },
+        };
+    }
+
+    constructor() : HashDataType("SendCloudParcelDocumentResponseDataType") {
+        addQoreFields(Fields);
+    }
+}
+
 #! Get-parcel-documents action provider (GET /parcels/{id}/documents/{type}?format={format})
 public class SendCloudGetParcelDocumentsDataProvider inherits SendCloudDataProviderBase {
     public {
         const ProviderInfo = <DataProviderInfo>{
             "name": "get-parcel-documents",
-            "desc": "Download a parcel document (label, CN22, CN23, or commercial invoice) as base64-encoded bytes",
+            "desc": "Download a parcel document (label, CN22, CN23, commercial invoice, etc.) as a file",
             "type": "SendCloudGetParcelDocumentsDataProvider",
             "supports_request": True,
             "constructor_options": ConstructorOptions,
@@ -89,7 +117,7 @@ public class SendCloudGetParcelDocumentsDataProvider inherits SendCloudDataProvi
         const ConstructorOptions = BaseConstructorOptions;
 
         static *AbstractDataProviderType RequestType = new SendCloudGetParcelDocumentsRequestDataType();
-        static *AbstractDataProviderType ResponseType = new SendCloudParcelDocumentDownloadDataType();
+        static *AbstractDataProviderType ResponseType = new SendCloudParcelDocumentResponseDataType();
     }
 
     constructor(*RestClientIo::RestClientIo rest) : SendCloudDataProviderBase(rest) {
@@ -100,7 +128,7 @@ public class SendCloudGetParcelDocumentsDataProvider inherits SendCloudDataProvi
     }
 
     *string getDesc() {
-        return "Download a parcel document as base64-encoded bytes";
+        return "Download a parcel document as a file";
     }
 
     private *AbstractDataProviderType getRequestTypeImpl() {
@@ -117,9 +145,24 @@ public class SendCloudGetParcelDocumentsDataProvider inherits SendCloudDataProvi
         string fmt = req.format ?? "pdf";
         string path = sprintf("parcels/%d/documents/%s", id, type);
         hash<auto> got = doGetBytes(path, {"format": fmt}, "application/pdf");
-        string ext = fmt == "zpl" ? "zpl" : "pdf";
+        string ext;
+        string default_mime;
+        switch (fmt) {
+            case "zpl":
+                ext = "zpl";
+                default_mime = "application/zpl";
+                break;
+            case "png":
+                ext = "png";
+                default_mime = "image/png";
+                break;
+            default:
+                ext = "pdf";
+                default_mime = "application/pdf";
+                break;
+        }
         string filename = sprintf("parcel-%d-%s.%s", id, type, ext);
-        string content_type = got.content_type ?? (fmt == "zpl" ? "application/zpl" : "application/pdf");
+        string content_type = got.content_type ?? default_mime;
         string encoded;
         auto body = got.body;
         if (body.typeCode() == NT_BINARY) {
@@ -130,9 +173,11 @@ public class SendCloudGetParcelDocumentsDataProvider inherits SendCloudDataProvi
             encoded = "";
         }
         return {
-            "filename": filename,
-            "content_type": content_type,
-            "data": encoded,
+            "file": {
+                "name": filename,
+                "content": encoded,
+                "mime_type": content_type,
+            },
         };
     }
 

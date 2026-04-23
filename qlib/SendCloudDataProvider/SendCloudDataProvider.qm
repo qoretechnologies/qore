@@ -98,6 +98,30 @@ module SendCloudDataProvider {
                     "type": AbstractDataProviderTypeMap."*string",
                     "preselected": True,
                 },
+                "external_reference": <ActionOptionInfo>{
+                    "display_name": "External Reference",
+                    "short_desc": "Filter by external reference",
+                    "desc": "Filter parcels by the merchant-supplied `external_reference` field",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "parcel_status": <ActionOptionInfo>{
+                    "display_name": "Parcel Status",
+                    "short_desc": "Filter by parcel status ID",
+                    "desc": "Numeric SendCloud parcel-status ID to filter on",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+                "announced_after": <ActionOptionInfo>{
+                    "display_name": "Announced After",
+                    "short_desc": "Earliest announcement date",
+                    "desc": "Only return parcels announced to the carrier on or after this timestamp",
+                    "type": AbstractDataProviderTypeMap."*date",
+                },
+                "updated_after": <ActionOptionInfo>{
+                    "display_name": "Updated After",
+                    "short_desc": "Earliest update date",
+                    "desc": "Only return parcels updated on or after this timestamp",
+                    "type": AbstractDataProviderTypeMap."*date",
+                },
                 "limit": <ActionOptionInfo>{
                     "display_name": "Limit",
                     "short_desc": "Maximum total records",
@@ -206,7 +230,7 @@ module SendCloudDataProvider {
             "action": "get-parcel-documents",
             "groups": "Parcels",
             "display_name": "Get Parcel Document",
-            "short_desc": "Download a parcel document (label, CN22, CN23, commercial invoice)",
+            "short_desc": "Download a parcel document (label, customs, invoice)",
             "desc": "Download a specific parcel document (such as the shipping label, CN22/CN23 customs "
                 "declaration, or commercial invoice) as binary PDF data.",
             "action_code": DPAT_API,
@@ -234,6 +258,50 @@ module SendCloudDataProvider {
             "data_provider_info": SendCloudShippingMethodsDataProvider::ProviderInfo,
             "get_output_type": AbstractDataProviderType sub () {
                 return new ListDataType("ShippingMethodList", new SendCloudShippingMethodDataType(), True);
+            },
+            "options": {
+                "to_country": <ActionOptionInfo>{
+                    "display_name": "To Country",
+                    "short_desc": "Destination country filter",
+                    "desc": "ISO 3166-1 alpha-2 destination country code; only methods shipping to this country are returned",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                    "ref_data": "countries",
+                },
+                "sender_address": <ActionOptionInfo>{
+                    "display_name": "Sender Address",
+                    "short_desc": "Filter methods by sender address",
+                    "desc": "Only return shipping methods available for the given sender address ID",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
+                    "ref_data": "sender_addresses",
+                },
+                "service_point_input": <ActionOptionInfo>{
+                    "display_name": "Service Point Input",
+                    "short_desc": "Service-point input filter",
+                    "desc": "Filter methods by whether a service point is required, optional, or not used",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "none", "display_name": "None",
+                            "desc": "Methods that don't accept a service point"},
+                        <AllowedValueInfo>{"value": "required", "display_name": "Required",
+                            "desc": "Methods that require a service point"},
+                        <AllowedValueInfo>{"value": "optional", "display_name": "Optional",
+                            "desc": "Methods where a service point is optional"},
+                    ),
+                },
+                "is_return": <ActionOptionInfo>{
+                    "display_name": "Is Return",
+                    "short_desc": "Filter return methods",
+                    "desc": "If `True`, only return-capable shipping methods are returned",
+                    "type": AbstractDataProviderTypeMap."*bool",
+                },
+                "price_breakdown": <ActionOptionInfo>{
+                    "display_name": "Price Breakdown",
+                    "short_desc": "Include detailed price breakdown",
+                    "desc": "If `True`, include a detailed pricing breakdown on each method",
+                    "type": AbstractDataProviderTypeMap."*bool",
+                },
             },
         });
 
@@ -263,7 +331,7 @@ module SendCloudDataProvider {
             "app": SendCloudDataProvider::AppName,
             "path": "/users",
             "action": "list-users",
-            "groups": "User",
+            "groups": "Users",
             "display_name": "List Users",
             "short_desc": "List the authenticated user",
             "desc": "Retrieve the SendCloud user/account owning the current API credentials. The list contains "
@@ -280,7 +348,7 @@ module SendCloudDataProvider {
             "app": SendCloudDataProvider::AppName,
             "path": "/get-user",
             "action": "get-user",
-            "groups": "User",
+            "groups": "Users",
             "display_name": "Get User",
             "short_desc": "Get the authenticated user",
             "desc": "Retrieve information about the currently authenticated SendCloud user (account owner).",
@@ -313,8 +381,39 @@ module SendCloudDataProvider {
                     "desc": "Two-letter ISO country code to search service points within",
                     "type": AbstractDataProviderTypeMap."string",
                     "required": True,
-                    "preselected": True,
                     "ref_data": "countries",
+                },
+                "postal_code": <ActionOptionInfo>{
+                    "display_name": "Postal Code",
+                    "short_desc": "Postal code to search near",
+                    "desc": "Postal code used as a search origin",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                },
+                "city": <ActionOptionInfo>{
+                    "display_name": "City",
+                    "short_desc": "City name filter",
+                    "desc": "Filter service points by city name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "carrier": <ActionOptionInfo>{
+                    "display_name": "Carrier",
+                    "short_desc": "Carrier code filter",
+                    "desc": "Filter service points by carrier code (e.g., `postnl`, `dhl`, `ups`)",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                },
+                "radius": <ActionOptionInfo>{
+                    "display_name": "Radius (m)",
+                    "short_desc": "Search radius in meters",
+                    "desc": "Radius in meters around the search origin (max 50000)",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+                "near_postal_code": <ActionOptionInfo>{
+                    "display_name": "Near Postal Code",
+                    "short_desc": "Postal code near-search origin",
+                    "desc": "Postal code to search service points near (with distance returned)",
+                    "type": AbstractDataProviderTypeMap."*string",
                 },
             },
         });
@@ -375,7 +474,26 @@ module SendCloudDataProvider {
                     "short_desc": "Filter by outgoing parcel",
                     "desc": "Filter returns whose outgoing parcel matches the given ID",
                     "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
                     "ref_data": "parcels",
+                },
+                "created_at_from": <ActionOptionInfo>{
+                    "display_name": "Created From",
+                    "short_desc": "Earliest creation date",
+                    "desc": "Only return records created on or after this timestamp",
+                    "type": AbstractDataProviderTypeMap."*date",
+                },
+                "created_at_to": <ActionOptionInfo>{
+                    "display_name": "Created To",
+                    "short_desc": "Latest creation date",
+                    "desc": "Only return records created on or before this timestamp",
+                    "type": AbstractDataProviderTypeMap."*date",
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum total records",
+                    "desc": "Maximum number of aggregated records to return across pages",
+                    "type": AbstractDataProviderTypeMap."*int",
                 },
             },
         });

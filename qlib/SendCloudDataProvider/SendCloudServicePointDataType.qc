@@ -69,7 +69,7 @@ public class SendCloudServicePointDataType inherits HashDataType {
                 "type": SoftBoolOrNothingType,
                 "display_name": "Active",
                 "short_desc": "Whether the service point is currently active",
-                "desc": "True if the service point is currently accepting drop-offs or pickups",
+                "desc": "`True` if the service point is currently accepting drop-offs or pickups",
             },
             "shop_type": {
                 "type": SoftStringOrNothingType,
