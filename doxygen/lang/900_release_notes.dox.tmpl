@@ -396,6 +396,40 @@ qore --compile-module MyModule.qm --strip-source
     - Debug information (line numbers, variable names) is preserved for diagnostics
     @endparblock
 
+    @par New %prepend-module-path / %append-module-path Directives
+    @parblock
+    Two new parse directives let programs extend their own @ref qore_modules "module"
+    search path declaratively — replacing the previous C++ \c MM.addModuleDir() hack
+    and the \c QORE_MODULE_DIR env-var launcher indirection.  Critically, the
+    declared paths are now persisted into @ref aot_builds "AOT-compiled binaries"
+    and re-applied by the AOT loader before dependency modules load, making
+    AOT-compiled scripts self-contained with respect to their module search surface.
+
+    - @ref prepend-module-path "%prepend-module-path" — new directive (single
+      quoted path; per-@ref Qore::Program "Program" list; consulted before
+      \c QORE_MODULE_DIR and the built-in defaults).
+    - @ref append-module-path "%append-module-path" — existing directive gains a
+      new quoted form that writes to a per-\c Program appended list; the legacy
+      unquoted colon-separated form continues to target the process-global path
+      for backward compatibility.
+
+    Both new-form directives support \c ${NAME} expansion against a table of
+    predefined macros (\c SCRIPT_DIR, \c SCRIPT_NAME, \c SCRIPT_PATH, \c PROGRAM_DIR,
+    \c QORE_VERSION, \c QORE_PREFIX, \c QORE_MODULE_VERSION) with fallback to the
+    process environment.  Unknown names / unset env vars raise a parse error —
+    no silent empty-string substitution.  \c \\$ escapes a literal \c $.
+
+    The new @ref no-module-path-directives "%no-module-path-directives" option
+    (@ref Qore::QoreParseOptions::NO_MODULE_PATH_DIRECTIVES) rejects both
+    directives when a sandboxing embedder wants to prevent a program from
+    extending its own search path.
+
+    AOT wire format change: a new feature bit \c QORE_AOT_FEAT_MODULE_PATH_LISTS
+    (bit 14) and two new sections \c MODULE_PATH_PREPEND / \c MODULE_PATH_APPEND
+    carry the expanded lists into the .qo / .qmod blob. Older readers see empty
+    lists — back-compat preserved.
+    @endparblock
+
     @par Native IR Lowering for context Statement
     @parblock
     The @ref context "context" statement is now lowered to a native IR loop

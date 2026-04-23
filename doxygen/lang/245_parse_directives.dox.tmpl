@@ -21,7 +21,9 @@
     |@ref allow-returns "%allow-returns"|Allows the use of the deprecated \c returns keyword<br><br>Since %Qore 0.9.4
     |@ref allow-weak-references "%allow-weak-references"|Allows the use of the @ref weak_assignment_operator "weak assignment operator (:=)"<br><br>Since %Qore 0.8.13
     |@ref append-include-path "%append-include-path"|Appends the given directories to qore's include path; also performs environment variable substitution
-    |@ref append-module-path "%append-module-path"|Appends the given directories to qore's module path; also performs environment variable substitution <br><br>Since %Qore 0.8.6
+    |@ref append-module-path "%append-module-path"|Appends a directory to the module search path.  Two forms are supported: the legacy unquoted colon-separated form (writes to the process-global path, pre-2.3 behavior, \c $VAR env-var substitution) and the new quoted single-path form (writes to the per-Program appended list, with \c ${NAME} macro + env-var expansion).<br><br>Since %Qore 0.8.6; new quoted form since %Qore 2.3
+    |@ref prepend-module-path "%prepend-module-path"|Prepends a directory to the current @ref Qore::Program "Program" object's module search path.  Takes a single quoted path with \c ${NAME} macro + env-var expansion (macros: \c SCRIPT_DIR, \c SCRIPT_NAME, \c SCRIPT_PATH, \c PROGRAM_DIR, \c QORE_VERSION, \c QORE_PREFIX, \c QORE_MODULE_VERSION).  Prepended paths are consulted before \c QORE_MODULE_DIR and the built-in defaults.<br><br>Since %Qore 2.3
+    |@ref no-module-path-directives "%no-module-path-directives"|Disallows use of the @ref prepend-module-path "%prepend-module-path" and @ref append-module-path "%append-module-path" parse directives.  Intended for embedders that want to prevent programs from extending their own module search path.  Equivalent to @ref Qore::QoreParseOptions::NO_MODULE_PATH_DIRECTIVES.<br><br>Since %Qore 2.3
     |@ref assume-global "%assume-global"|Resets the default %Qore behavior of assuming global variable scope when variables are first referenced if no @ref my "my" or @ref our "our" is present; use after @ref assume-local "%assume-local" to reset the default parsing behavior.<br><br>This parse option is also set with @ref old-style "%old-style" <br><br>Since %Qore 0.8.4
     |@ref assume-local "%assume-local"|Assume local variable scope when variables are first referenced if no @ref my "my" or @ref our "our" is present. When used with @ref allow-bare-refs "%allow-bare-refs", local variables without @ref my "my" must be declared with a data type restriction (can be @ref any_type "any").<br><br>This parse option is set by default with @ref new-style "%new-style"; see also @ref assume-global "%assume-global" <br><br>Since %Qore 0.8.1
     |@ref broken-cast "%broken-cast"|Use old pre-0.9.4 broken @ref cast "cast<>" operator handling where @ref nothing would be accepted without an error
@@ -255,7 +257,8 @@
     @section append-module-path %append-module-path
 
     @par Parse Directive:
-    <tt>%%append-module-path</tt> <em>dir1[:dir2...]</em>
+    <tt>%%append-module-path</tt> <em>dir1[:dir2...]</em>  (legacy form)<br>
+    <tt>%%append-module-path "</tt><em>path</em><tt>"</tt>  (new-style form)
 
     @par Command Line:
     n/a
@@ -264,12 +267,109 @@
     n/a
 
     @par Description:
-    Appends the given directories to qore's module path; also performs environment variable substitution.  Only directories that exist and
-    are readable are added to the module path.
+    Appends a directory to the module search path.  Two forms are supported; the scanner
+    dispatches on the first non-whitespace character of the argument:
 
-    @since %Qore 0.8.6
+    - **Legacy form** (unquoted, colon-separated): appends the given directories to
+      qore's <em>process-global</em> module path; performs \c $VAR-style environment
+      variable substitution. Only directories that exist and are readable are added
+      to the path. Shared across every @ref Qore::Program "Program" in the process.
+      \n\n
+    - **New-style form** (quoted, single path): appends the given path to the
+      <em>current Program's</em> @ref prepend-module-path "per-Program appended module
+      path list". Supports \c ${NAME} expansion against a table of predefined macros
+      (\c SCRIPT_DIR, \c SCRIPT_NAME, \c SCRIPT_PATH, \c PROGRAM_DIR, \c QORE_VERSION,
+      \c QORE_PREFIX, \c QORE_MODULE_VERSION) and, as a fallback, the process
+      environment. Unknown macros / unset env vars raise a parse error — there is no
+      silent empty-string substitution. \c \\$ escapes a literal \c $. Macros win over
+      env vars on conflict.
 
-    @see @ref append-include-path "%append-include-path"
+    In the effective search-path precedence (highest → lowest):
+    -# Per-Program @ref prepend-module-path "%prepend-module-path" paths
+    -# Process \c QORE_MODULE_DIR entries and legacy <tt>%%append-module-path</tt> additions
+    -# Compiled-in default module paths
+    -# Per-Program new-style <tt>%%append-module-path</tt> paths
+
+    @par Examples:
+    @code{.py}
+# legacy form — process-global, colon-separated
+%append-module-path /opt/qore/qlib:/var/opt/qore/qlib
+
+# new form — per-Program, quoted, single path, macro expansion
+%append-module-path "${HOME}/.qore-modules-fallback"
+    @endcode
+
+    @since %Qore 0.8.6 (legacy form); new quoted form since %Qore 2.3
+
+    @see @ref prepend-module-path "%prepend-module-path", @ref no-module-path-directives "%no-module-path-directives", @ref append-include-path "%append-include-path"
+
+    <hr>
+    @section prepend-module-path %prepend-module-path
+
+    @par Parse Directive:
+    <tt>%%prepend-module-path "</tt><em>path</em><tt>"</tt>
+
+    @par Command Line:
+    n/a
+
+    @par Parse Option Constant:
+    n/a
+
+    @par Description:
+    Prepends a directory to the current @ref Qore::Program "Program" object's module
+    search path. Takes a single <em>quoted</em> path with \c ${NAME} macro + env-var
+    expansion. Multiple prepends stack in most-recently-added order (the last
+    <tt>%%prepend-module-path</tt> parsed sits at the head of the search list).
+
+    Prepended paths are consulted <em>before</em> \c QORE_MODULE_DIR and before
+    the built-in default module directories — use this when a program must find a
+    specific vendored / side-deployed copy of a module regardless of the process
+    environment.
+
+    Expansion happens at <em>parse time</em> on the parsing host; the expanded path
+    is persisted into @ref aot_builds "AOT-compiled artifacts" and re-applied by the
+    AOT runtime loader before any module-dependency loads fire. This makes the
+    directive the recommended way to declare module search paths in AOT-compiled
+    binaries — no host-side \c MM.addModuleDir() call or \c QORE_MODULE_DIR launcher
+    hack required.
+
+    @par Predefined macros:
+    | Macro | Value at parse time |
+    |-------|---------------------|
+    | <tt>${SCRIPT_DIR}</tt> | absolute directory of the file containing the directive |
+    | <tt>${SCRIPT_NAME}</tt> | basename of the file containing the directive |
+    | <tt>${SCRIPT_PATH}</tt> | absolute path of the file containing the directive |
+    | <tt>${PROGRAM_DIR}</tt> | absolute directory of the top-level program file |
+    | <tt>${QORE_VERSION}</tt> | \%Qore library version string (e.g. \c "2.3.0") |
+    | <tt>${QORE_PREFIX}</tt> | \%Qore install prefix (e.g. \c "/usr") |
+    | <tt>${QORE_MODULE_VERSION}</tt> | module API version (e.g. \c "2.0") |
+
+    Anything not in this table falls through to the process environment. \c \\$ escapes
+    a literal \c $. Unknown macros / unset env vars raise a parse error.
+
+    \c ${SCRIPT_*} macros require the directive to appear in an on-disk file; code parsed
+    from an in-memory buffer (e.g. <tt>Program::parse(string)</tt>) raises a parse error
+    unless @ref Qore::Program::setScriptPath() "setScriptPath()" was called first.
+
+    Subprograms inherit their parent's prepend/append lists (see
+    @ref Qore::Program "Program" inheritance semantics).
+
+    @par Examples:
+    @code{.py}
+# Qorus-style: locate vendored modules relative to an OMQ_DIR env var
+%prepend-module-path "${OMQ_DIR}/lib/modules"
+%prepend-module-path "${OMQ_DIR}/qlib"
+%prepend-module-path "${OMQ_DIR}/user/modules"
+%requires QorusInterfaceCore
+
+# script-local vendored modules
+%prepend-module-path "${SCRIPT_DIR}/qlib"
+%requires MyVendoredHelper
+    @endcode
+
+    @since %Qore 2.3
+
+    @see @ref append-module-path "%append-module-path", @ref no-module-path-directives "%no-module-path-directives", @ref requires "%requires"
 
     <hr>
     @section assume-global %assume-global
@@ -1677,6 +1777,30 @@ sub validate_input(int value, int max_value) {
     Disallows loading @ref qore_modules "modules" with the @ref requires "%requires", @ref try-module "%try-module", or @ref try-reexport-module "%try-reexport-module" directives or at runtime with load_module()
 
     @since %Qore 0.8.4
+
+    <hr>
+    @section no-module-path-directives %no-module-path-directives
+
+    @par Parse Directive:
+    <tt>%%no-module-path-directives</tt>
+
+    @par Command Line:
+    n/a
+
+    @par Parse Option Constant:
+    @ref Qore::QoreParseOptions::NO_MODULE_PATH_DIRECTIVES (string name: \c "no-module-path-directives")
+
+    @par Description:
+    Disallows use of the @ref prepend-module-path "%prepend-module-path" and
+    @ref append-module-path "%append-module-path" parse directives in this
+    @ref Qore::Program "Program". Intended for embedders that want to prevent
+    programs from extending their own module search path.
+    Not included in @ref modern "%modern" — modern scripts that legitimately
+    want to vendor modules should be able to do so.
+
+    @since %Qore 2.3
+
+    @see @ref prepend-module-path "%prepend-module-path", @ref append-module-path "%append-module-path"
 
     <hr>
     @section no-namespace-defs %no-namespace-defs
