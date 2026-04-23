@@ -358,56 +358,6 @@ bool QoreAOTBinaryWriter::writeValue(const QoreValue& v) {
             }
         }
     }
-    // RuntimeConstantRefNode — typed constant reference preserved in the AST
-    // (e.g. a hashdecl member default `string name = HttpServer::HttpServerString;`).
-    // Emit VT_CONST_REF with the constant's FQN so the reader can rebuild
-    // either a concrete value (default) or a fresh RuntimeConstantRefNode
-    // (when wrap_const_ref_in_rcr is set by the caller — see the hashdecl
-    // member reader).  Without this branch, RuntimeConstantRefNode falls
-    // into the default-case VT_NOTHING, silently corrupting member defaults
-    // to the type's zero-value at load time.
-    if (v.hasNode()) {
-        if (const AbstractQoreNode* node = v.getInternalNode()) {
-            if (auto* rcr = dynamic_cast<const RuntimeConstantRefNode*>(node)) {
-                ConstantEntry* ce = rcr->getConstantEntry();
-                if (ce) {
-                    std::string fqn;
-                    if (const_reverse_map) {
-                        if (ce->val.hasNode()) {
-                            auto it = const_reverse_map->find(ce->val.getInternalNode());
-                            if (it != const_reverse_map->end()) {
-                                fqn = it->second;
-                            }
-                        }
-                        if (fqn.empty()) {
-                            QoreValue sv = ce->getReferencedValue();
-                            if (sv.hasNode()) {
-                                auto it2 = const_reverse_map->find(sv.getInternalNode());
-                                if (it2 != const_reverse_map->end()) {
-                                    fqn = it2->second;
-                                }
-                            }
-                            sv.discard(nullptr);
-                        }
-                    }
-                    // If CRM didn't have the node, fall back to the constant
-                    // entry's stored name.  ConstantEntry::getNameStr() returns
-                    // the fully-qualified name when it was registered via
-                    // runtimeCreateConstant; for named module constants this
-                    // suffices for the reader's findNamespaceConstant lookup.
-                    if (fqn.empty()) {
-                        fqn = ce->getNameStr();
-                    }
-                    if (!fqn.empty()) {
-                        writeU8(static_cast<uint8_t>(QoreAOTValueTag::VT_CONST_REF));
-                        writeU32(static_cast<uint32_t>(fqn.size()));
-                        writeStringRef(fqn.c_str(), fqn.size());
-                        return true;
-                    }
-                }
-            }
-        }
-    }
     // Must check isEnum() before getType() because getType() on TAG_ENUM
     // returns the base type (e.g., NT_INT), which would serialize the wrong thing
     if (v.isEnum()) {
