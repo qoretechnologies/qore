@@ -1090,9 +1090,30 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
                 creating{key} = True;
             }
             on_exit {
-                AutoLock al(create_mutex);
-                remove creating{key};
-                create_cond.broadcast();
+                # Workaround: AOT-deserialized on_exit handler IR silently
+                # aborts execution after constructing certain built-in
+                # classes whose constructors go through Qore-side eval
+                # (e.g. AutoLock, Mutex, Counter, Logger, HashIterator).
+                # Symptom: declaring `AutoLock al(create_mutex)` here in
+                # AOT mode skipped the rest of the on_exit body, leaving
+                # `creating{key}` set forever; subsequent retries hit the
+                # `create_cond.wait` path and waited the full
+                # `connect_timeout` (~10 s) on each retry, multiplying
+                # connection-refused latency by `MaxRequestRetries`.
+                # Workaround uses explicit lock/unlock guarded by
+                # try/finally, which sidesteps the IR-deser pattern that
+                # triggers the abort.
+                # TODO: remove the workaround once the AOT OBE-handler
+                # deserialization bug is fixed in libqore.
+                create_mutex.lock();
+                try {
+                    remove creating{key};
+                    create_cond.broadcast();
+                } catch (hash<ExceptionInfo> ex) {
+                    create_mutex.unlock();
+                    rethrow;
+                }
+                create_mutex.unlock();
             }
 
             # We are the designated creator for this key.
