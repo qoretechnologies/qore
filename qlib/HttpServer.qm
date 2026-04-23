@@ -2477,7 +2477,18 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                     remove smap{effective_sock};
                     remove nmap{info.name};
                     try { l.stop(); } catch () {}
-                    c.done();
+                    # l.stop() drives listenerStopped() which already calls
+                    # c.done(); only decrement here if l.stop() didn't get
+                    # there (i.e. threw before reaching it).  Mirrors the
+                    # WAITGROUP-ERROR defense in listenerStopped() at the
+                    # top of this class.
+                    try {
+                        c.done();
+                    } catch (hash<ExceptionInfo> ex) {
+                        if (ex.err != "WAITGROUP-ERROR") {
+                            rethrow;
+                        }
+                    }
                     continue;
                 }
                 if (!random_port) {
@@ -2492,7 +2503,14 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                     remove smap{effective_sock};
                     remove nmap{info.name};
                     try { l.stop(); } catch () {}
-                    c.done();
+                    # See the random_port retry branch above for rationale.
+                    try {
+                        c.done();
+                    } catch (hash<ExceptionInfo> ex) {
+                        if (ex.err != "WAITGROUP-ERROR") {
+                            rethrow;
+                        }
+                    }
                     throw "HTTPSERVER-H3-BIND-ERROR",
                         sprintf("failed to bind paired HTTP/3 UDP listener on "
                             "requested port %s: %s: %s",
