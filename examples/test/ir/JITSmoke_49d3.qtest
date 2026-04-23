@@ -5,7 +5,8 @@
 %no-child-restrictions
 
 %requires QUnit
-%requires ../../../qlib/FsUtil.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires FsUtil
 
 %exec-class JITSmokeTest
 

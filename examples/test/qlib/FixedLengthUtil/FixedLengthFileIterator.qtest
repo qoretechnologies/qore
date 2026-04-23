@@ -3,10 +3,11 @@
 
 %modern
 
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/DataProvider
-%requires ../../../../qlib/FixedLengthUtil
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires DataProvider
+%requires FixedLengthUtil
 
 %exec-class Test
 

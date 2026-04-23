@@ -5,7 +5,8 @@
 %no-child-restrictions
 %allow-weak-references
 
-%requires ../../../../qlib/QUnit.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
 
 %disable-warning invalid-operation
 %disable-warning unreferenced-variable

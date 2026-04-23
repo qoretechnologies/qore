@@ -3,14 +3,15 @@
 
 %modern
 
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/Logger.qm
-%requires ../../../../qlib/DataProvider
-%requires ../../../../qlib/SqlUtil
-%requires ../../../../qlib/PgsqlSqlUtilBase.qm
-%requires ../../../../qlib/PgsqlSqlUtil.qm
-%requires ../../../../qlib/SchemaReverse.qm
-%requires ../../../../qlib/Schema
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires Logger
+%requires DataProvider
+%requires SqlUtil
+%requires PgsqlSqlUtilBase
+%requires PgsqlSqlUtil
+%requires SchemaReverse
+%requires Schema
 
 %try-module yaml
 %define NoYaml

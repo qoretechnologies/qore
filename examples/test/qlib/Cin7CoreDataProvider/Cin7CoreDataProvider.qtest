@@ -24,20 +24,21 @@
 
 %modern
 
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/Logger.qm
-%requires ../../../../qlib/DataProvider
-%requires ../../../../qlib/ConnectionProvider
-%requires ../../../../qlib/RestClient.qm
-%requires ../../../../qlib/Mime.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+%requires DataProvider
+%requires ConnectionProvider
+%requires RestClient
+%requires Mime
 
 %try-module json
 %define NoJson
 %endtry
 
-%requires ../../../../qlib/Cin7CoreRestClient.qm
-%requires ../../../../qlib/Cin7CoreDataProvider
+%requires Cin7CoreRestClient
+%requires Cin7CoreDataProvider
 
 %exec-class Cin7CoreDataProviderTest
 

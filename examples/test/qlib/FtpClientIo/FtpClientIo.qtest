@@ -4,9 +4,10 @@
 %modern
 %enable-all-warnings
 
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/FsUtil.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Util
+%requires FsUtil
 %requires ../../../../qlib/FtpClientIo/FtpClientIo.qm
 
 %include ../../qore/classes/FtpServer.qc

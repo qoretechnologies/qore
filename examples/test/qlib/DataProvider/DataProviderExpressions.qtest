@@ -3,7 +3,8 @@
 
 %modern
 
-%requires ../../../../qlib/DataProvider
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires DataProvider
 
 %requires QUnit
 

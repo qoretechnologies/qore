@@ -31,8 +31,9 @@
 %modern
 %disable-warning return-value-ignored
 
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/QUnit.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
 
 # Helper: Format nanoseconds as human-readable string
 string sub format_ns(float ns) {

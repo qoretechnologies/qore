@@ -24,8 +24,9 @@
 
 %modern
 
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/QoreApiMetadata
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires QoreApiMetadata
 
 %exec-class QoreApiMetadataTest
 

@@ -6,7 +6,8 @@
 */
 
 %modern
-%requires ../../../../qlib/QoreMLUtils
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QoreMLUtils
 %requires ml
 %requires QUnit
 

@@ -27,7 +27,8 @@
 %no-child-restrictions
 
 %append-module-path ../../qlib
-%requires ../../qlib/Util.qm
+%prepend-module-path "${SCRIPT_DIR}/../../qlib"
+%requires Util
 
 %exec-class Test
 

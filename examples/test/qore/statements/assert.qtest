@@ -5,8 +5,9 @@
 %no-child-restrictions
 %enable-debug
 
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/Util.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Util
 
 %exec-class AssertDebugTest
 

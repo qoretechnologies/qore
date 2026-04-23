@@ -3,8 +3,9 @@
 
 %modern
 
-%requires ../../../../qlib/FsUtil.qm
-%requires ../../../../qlib/QUnit.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires FsUtil
+%requires QUnit
 
 %try-module yaml
 %define NoYaml

@@ -11,14 +11,15 @@
 %define NoYaml
 %endtry
 
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/Mime.qm
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/HttpServerUtil.qm
-%requires ../../../../qlib/RestSchemaValidator.qm
-%requires ../../../../qlib/OpenApi3.qm
-%requires ../../../../qlib/ConnectionProvider
-%requires ../../../../qlib/RestClient.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires Mime
+%requires QUnit
+%requires HttpServerUtil
+%requires RestSchemaValidator
+%requires OpenApi3
+%requires ConnectionProvider
+%requires RestClient
 
 %exec-class OpenApi3Test
 

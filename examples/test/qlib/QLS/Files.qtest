@@ -24,8 +24,9 @@
 
 %modern
 
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/QLS
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires QLS
 
 %exec-class FilesTest
 

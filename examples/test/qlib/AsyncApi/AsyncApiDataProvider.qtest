@@ -11,17 +11,18 @@
 %define NoYaml
 %endtry
 
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/FsUtil.qm
-%requires ../../../../qlib/Logger.qm
-%requires ../../../../qlib/HttpServerUtil.qm
-%requires ../../../../qlib/RestSchemaValidator.qm
-%requires ../../../../qlib/WebSocketUtil.qm
-%requires ../../../../qlib/WebSocketClient.qm
-%requires ../../../../qlib/DataProvider
-%requires ../../../../qlib/AsyncApi.qm
-%requires ../../../../qlib/AsyncApiDataProvider
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires FsUtil
+%requires Logger
+%requires HttpServerUtil
+%requires RestSchemaValidator
+%requires WebSocketUtil
+%requires WebSocketClient
+%requires DataProvider
+%requires AsyncApi
+%requires AsyncApiDataProvider
 
 %exec-class AsyncApiDataProviderTest
 

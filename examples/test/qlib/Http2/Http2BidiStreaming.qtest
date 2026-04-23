@@ -34,12 +34,13 @@
 
 %modern
 
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/Mime.qm
-%requires ../../../../qlib/Logger.qm
-%requires ../../../../qlib/HttpServerUtil.qm
-%requires ../../../../qlib/HttpServer.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Mime
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
 
 %exec-class Http2BidiStreamingTest
 

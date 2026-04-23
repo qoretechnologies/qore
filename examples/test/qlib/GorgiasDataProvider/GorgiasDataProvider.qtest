@@ -24,20 +24,21 @@
 
 %modern
 
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/Logger.qm
-%requires ../../../../qlib/DataProvider
-%requires ../../../../qlib/ConnectionProvider
-%requires ../../../../qlib/RestClient.qm
-%requires ../../../../qlib/RestClientIo.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+%requires DataProvider
+%requires ConnectionProvider
+%requires RestClient
+%requires RestClientIo
 
 %try-module json
 %define NoJson
 %endtry
 
-%requires ../../../../qlib/GorgiasRestClient.qm
-%requires ../../../../qlib/GorgiasDataProvider
+%requires GorgiasRestClient
+%requires GorgiasDataProvider
 
 %exec-class GorgiasDataProviderTest
 

@@ -5,17 +5,18 @@
 
 %modern
 
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/DataProvider
-%requires ../../../../qlib/ConnectionProvider
-%requires ../../../../qlib/Logger.qm
-%requires ../../../../qlib/Mime.qm
-%requires ../../../../qlib/HttpServerUtil.qm
-%requires ../../../../qlib/HttpServerAsyncIo
-%requires ../../../../qlib/HttpServer.qm
-%requires ../../../../qlib/ServerSentEventClient
-%requires ../../../../qlib/ServerSentEventHandler
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires DataProvider
+%requires ConnectionProvider
+%requires Logger
+%requires Mime
+%requires HttpServerUtil
+%requires HttpServerAsyncIo
+%requires HttpServer
+%requires ServerSentEventClient
+%requires ServerSentEventHandler
 
 %exec-class SseAsyncConnectTest
 

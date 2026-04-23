@@ -3,18 +3,19 @@
 
 %modern
 
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/MapperUtil.qm
-%requires ../../../../qlib/Logger.qm
-%requires ../../../../qlib/DataProvider
-%requires ../../../../qlib/ConnectionProvider
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/Mime.qm
-%requires ../../../../qlib/HttpServerUtil.qm
-%requires ../../../../qlib/HttpServerAsyncIo
-%requires ../../../../qlib/HttpServer.qm
-%requires ../../../../qlib/ServerSentEventClient
-%requires ../../../../qlib/ServerSentEventHandler
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires MapperUtil
+%requires Logger
+%requires DataProvider
+%requires ConnectionProvider
+%requires QUnit
+%requires Mime
+%requires HttpServerUtil
+%requires HttpServerAsyncIo
+%requires HttpServer
+%requires ServerSentEventClient
+%requires ServerSentEventHandler
 
 %try-module json >= 1.5
 %define NoJson

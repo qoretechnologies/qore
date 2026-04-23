@@ -3,12 +3,13 @@
 
 %modern
 
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/DataProvider
-%requires ../../../../qlib/CsvUtil
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+%requires CsvUtil
 
 # Need for tmp_location()
-%requires ../../../../qlib/Util.qm
+%requires Util
 %exec-class CsvSampleTest
 
 public class CsvSampleTest inherits QUnit::Test {

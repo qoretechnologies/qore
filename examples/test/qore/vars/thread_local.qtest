@@ -5,7 +5,8 @@
 %enable-all-warnings
 %no-child-restrictions
 
-%requires ../../../../qlib/QUnit.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
 
 %exec-class ThreadLocalVarTest
 

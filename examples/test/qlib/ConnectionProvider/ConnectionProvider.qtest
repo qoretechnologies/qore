@@ -4,13 +4,14 @@
 %modern
 %allow-injection
 
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/Logger.qm
-%requires ../../../../qlib/DataProvider
-%requires ../../../../qlib/FsUtil.qm
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/AsyncSocketIo
-%requires ../../../../qlib/ConnectionProvider
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires Logger
+%requires DataProvider
+%requires FsUtil
+%requires QUnit
+%requires AsyncSocketIo
+%requires ConnectionProvider
 
 %include ../../qore/classes/FtpServer.qc
 

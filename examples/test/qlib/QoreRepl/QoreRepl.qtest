@@ -24,10 +24,11 @@
 
 %modern
 
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/QoreCodeFormat
-%requires ../../../../qlib/QoreRepl
-%requires ../../../../qlib/HttpServerUtil.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires QoreCodeFormat
+%requires QoreRepl
+%requires HttpServerUtil
 
 %exec-class QoreReplTest
 

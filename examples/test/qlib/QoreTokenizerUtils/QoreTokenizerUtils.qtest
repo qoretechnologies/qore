@@ -6,7 +6,8 @@
 */
 
 %modern
-%requires ../../../../qlib/QoreTokenizerUtils
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QoreTokenizerUtils
 %requires tokenizer
 %requires ml
 %requires Util

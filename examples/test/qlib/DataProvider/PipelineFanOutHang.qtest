@@ -4,8 +4,9 @@
 # Copyright 2026 Qore Technologies, s.r.o.
 
 %modern
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/DataProvider
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
 
 %exec-class PipelineFanOutHangTest
 

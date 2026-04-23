@@ -4,8 +4,9 @@
 %modern
 %allow-injection
 
-%requires ../../../../../qlib/Qorize.qm
-%requires ../../../../../qlib/QUnit.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires Qorize
+%requires QUnit
 
 %requires ./Issue3504.qm
 

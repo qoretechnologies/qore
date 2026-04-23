@@ -3,13 +3,14 @@
 
 %modern
 
-%requires ../../../../qlib/Logger.qm
-%requires ../../../../qlib/Mime.qm
-%requires ../../../../qlib/MailMessage.qm
-%requires ../../../../qlib/DataProvider
-%requires ../../../../qlib/ConnectionProvider
-%requires ../../../../qlib/SmtpClient.qm
-%requires ../../../../qlib/QUnit.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Logger
+%requires Mime
+%requires MailMessage
+%requires DataProvider
+%requires ConnectionProvider
+%requires SmtpClient
+%requires QUnit
 
 %exec-class SmtpClientTest
 

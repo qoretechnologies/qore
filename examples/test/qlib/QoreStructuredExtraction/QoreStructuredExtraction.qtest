@@ -6,12 +6,13 @@
 */
 
 %modern
-%requires ../../../../qlib/QoreStructuredExtraction
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QoreStructuredExtraction
 %requires json
 %requires Util
 %requires QUnit
 
-%try-module ../../../../qlib/DataProviderML
+%try-module DataProviderML
 %define NoDataProviderML
 %endtry
 

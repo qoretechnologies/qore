@@ -1,16 +1,17 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/Mime.qm
-%requires ../../../../qlib/MapperUtil.qm
-%requires ../../../../qlib/Logger.qm
-%requires ../../../../qlib/DataProvider
-%requires ../../../../qlib/ConnectionProvider
-%requires ../../../../qlib/RestClient.qm
-%requires ../../../../qlib/CdsRestClient.qm
-%requires ../../../../qlib/CdsRestDataProvider
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Mime
+%requires MapperUtil
+%requires Logger
+%requires DataProvider
+%requires ConnectionProvider
+%requires RestClient
+%requires CdsRestClient
+%requires CdsRestDataProvider
 
 %try-module json
 %define NoJson

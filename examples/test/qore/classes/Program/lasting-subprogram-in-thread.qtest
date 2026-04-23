@@ -5,7 +5,8 @@
 
 # this used to cause qore to crash...
 
-%requires ../../../../../qlib/QUnit.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
 
 # Allow child Program objects to have more liberal permissions than the parent.
 %no-child-restrictions

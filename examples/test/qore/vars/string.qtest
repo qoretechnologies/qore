@@ -7,7 +7,8 @@
 # tests are made where the return value is ignored
 %disable-warning return-value-ignored
 
-%requires ../../../../qlib/QUnit.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
 
 %exec-class StringTest
 

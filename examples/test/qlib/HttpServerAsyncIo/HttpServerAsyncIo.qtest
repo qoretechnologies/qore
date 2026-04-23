@@ -3,9 +3,10 @@
 
 %modern
 
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/AsyncSocketIo
-%requires ../../../../qlib/HttpServerAsyncIo
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires AsyncSocketIo
+%requires HttpServerAsyncIo
 
 %exec-class HttpServerAsyncIoTest
 

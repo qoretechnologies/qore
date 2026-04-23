@@ -24,13 +24,14 @@
 %modern
 %enable-all-warnings
 
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/Mime.qm
-%requires ../../../../qlib/DataProvider
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Mime
+%requires DataProvider
 %requires ml
-%requires ../../../../qlib/QoreModelRegistry
-%requires ../../../../qlib/DataProviderML
+%requires QoreModelRegistry
+%requires DataProviderML
 
 %exec-class DataProviderMLProcessorsTest
 

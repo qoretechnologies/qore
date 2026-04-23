@@ -1,15 +1,16 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 
-%requires ../../../../qlib/Logger.qm
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/Mime.qm
-%requires ../../../../qlib/ConnectionProvider
-%requires ../../../../qlib/HttpServerUtil.qm
-%requires ../../../../qlib/RestClient.qm
-%requires ../../../../qlib/AwsRestClient.qm
-%requires ../../../../qlib/HttpServerAsyncIo
-%requires ../../../../qlib/HttpServer.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Logger
+%requires QUnit
+%requires Mime
+%requires ConnectionProvider
+%requires HttpServerUtil
+%requires RestClient
+%requires AwsRestClient
+%requires HttpServerAsyncIo
+%requires HttpServer
 
 %requires qore >= 0.9.3
 

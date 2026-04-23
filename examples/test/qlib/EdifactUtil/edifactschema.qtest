@@ -3,10 +3,11 @@
 
 %modern
 
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/FsUtil.qm
-%requires ../../../../qlib/EdifactUtil
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires FsUtil
+%requires EdifactUtil
 
 %exec-class EdifactSchemaTest
 

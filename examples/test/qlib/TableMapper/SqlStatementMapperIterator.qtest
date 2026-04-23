@@ -1,15 +1,16 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/QUnit.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
 
 %modern
 
-%requires ../../../../qlib/DataProvider
-%requires ../../../../qlib/SqlUtil
-%requires ../../../../qlib/Mapper.qm
-%requires ../../../../qlib/TableMapper.qm
+%requires DataProvider
+%requires SqlUtil
+%requires Mapper
+%requires TableMapper
 
 %exec-class Main
 

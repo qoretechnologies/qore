@@ -25,9 +25,10 @@
 %modern
 %exec-class AstProcessorTests
 
-%requires ../../../../qlib/Qdx.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Qdx
 %requires astparser
-%requires ../../../../qlib/QUnit.qm
+%requires QUnit
 
 public class AstProcessorTests inherits QUnit::Test {
     constructor() : Test("AstProcessorTests", "1.0") {

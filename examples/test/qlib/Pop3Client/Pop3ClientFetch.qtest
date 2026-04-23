@@ -3,13 +3,14 @@
 
 %modern
 
-%requires ../../../../qlib/Logger.qm
-%requires ../../../../qlib/Mime.qm
-%requires ../../../../qlib/MailMessage.qm
-%requires ../../../../qlib/DataProvider
-%requires ../../../../qlib/ConnectionProvider
-%requires ../../../../qlib/Pop3Client.qm
-%requires ../../../../qlib/QUnit.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Logger
+%requires Mime
+%requires MailMessage
+%requires DataProvider
+%requires ConnectionProvider
+%requires Pop3Client
+%requires QUnit
 
 %exec-class Pop3ClientFetchTest
 

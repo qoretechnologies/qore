@@ -25,8 +25,9 @@
 %modern
 %exec-class QoreTokenizerTests
 
-%requires ../../../../qlib/Qdx.qm
-%requires ../../../../qlib/QUnit.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Qdx
+%requires QUnit
 
 public class QoreTokenizerTests inherits QUnit::Test {
     constructor() : Test("QoreTokenizerTests", "1.0") {

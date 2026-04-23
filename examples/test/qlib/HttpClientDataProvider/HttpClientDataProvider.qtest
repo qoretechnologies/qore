@@ -4,14 +4,15 @@
 %modern
 %allow-injection
 
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/Logger.qm
-%requires ../../../../qlib/DataProvider
-%requires ../../../../qlib/HttpClientDataProvider
-%requires ../../../../qlib/HttpServerUtil.qm
-%requires ../../../../qlib/HttpServerAsyncIo
-%requires ../../../../qlib/HttpServer.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+%requires DataProvider
+%requires HttpClientDataProvider
+%requires HttpServerUtil
+%requires HttpServerAsyncIo
+%requires HttpServer
 
 %exec-class HttpClientDataProviderTest
 

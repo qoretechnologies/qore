@@ -6,7 +6,8 @@
 */
 
 %modern
-%requires ../../../../qlib/QoreVisionExtraction
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QoreVisionExtraction
 %requires Util
 %requires QUnit
 

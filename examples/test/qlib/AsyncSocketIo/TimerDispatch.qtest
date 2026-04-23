@@ -3,9 +3,10 @@
 
 %modern
 
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/Logger.qm
-%requires ../../../../qlib/AsyncSocketIo
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Logger
+%requires AsyncSocketIo
 
 %exec-class TimerDispatchTest
 

@@ -4,7 +4,8 @@
 %modern
 %allow-debugger
 
-%requires ../../../../qlib/QUnit.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
 
 const ST_ATTACH = 1;
 const ST_BLOCK = 2;

@@ -6,7 +6,8 @@
 %no-child-restrictions
 %allow-weak-references
 
-%requires ../../../../qlib/QUnit.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
 
 our int calls_constructor = 0;
 our int calls_destructor  = 0;

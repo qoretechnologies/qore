@@ -1,6 +1,7 @@
 #!/usr/bin/env qore
 
-%requires ../../../../qlib/QUnit.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
 
 %modern
 %enable-all-warnings

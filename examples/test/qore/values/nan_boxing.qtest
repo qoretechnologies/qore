@@ -4,7 +4,8 @@
 %modern
 %disable-warning unreferenced-variable
 
-%requires ../../../../qlib/QUnit.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
 
 %exec-class NanBoxingTest
 

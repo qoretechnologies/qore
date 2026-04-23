@@ -4,10 +4,11 @@
 %modern
 %allow-weak-references
 
-%requires ../../../../../qlib/Util.qm
-%requires ../../../../../qlib/QUnit.qm
-%requires ../../../../../qlib/Mime.qm
-%requires ../../../../../qlib/SqlUtil
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Mime
+%requires SqlUtil
 
 %exec-class SerializableTest
 

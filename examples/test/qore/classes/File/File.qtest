@@ -7,9 +7,10 @@
 %define NoXml
 %endtry
 
-%requires ../../../../../qlib/Util.qm
-%requires ../../../../../qlib/FsUtil.qm
-%requires ../../../../../qlib/QUnit.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires Util
+%requires FsUtil
+%requires QUnit
 
 %exec-class FileTest
 

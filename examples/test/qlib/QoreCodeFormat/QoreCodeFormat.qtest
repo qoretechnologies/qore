@@ -3,8 +3,9 @@
 
 %modern
 
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/QoreCodeFormat
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires QoreCodeFormat
 
 %exec-class QoreCodeFormatTest
 

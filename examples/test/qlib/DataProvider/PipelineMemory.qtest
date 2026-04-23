@@ -24,11 +24,12 @@
 %modern
 %enable-all-warnings
 
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/Mime.qm
-%requires ../../../../qlib/DataProvider
-%requires ../../../../qlib/GeneratorDataProvider
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Mime
+%requires DataProvider
+%requires GeneratorDataProvider
 
 %try-module process
 %define NoProcess

@@ -5,17 +5,18 @@
 
 %exec-class TableMapperTest
 
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/SqlUtil
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires SqlUtil
 # load all possible SqlUtil driver-specific modules to ensure that our version is used when testing
-%requires ../../../../qlib/OracleSqlUtil.qm
-%requires ../../../../qlib/PgsqlSqlUtil.qm
-%requires ../../../../qlib/MysqlSqlUtil.qm
-%requires ../../../../qlib/FreetdsSqlUtil.qm
-%requires ../../../../qlib/Schema
-%requires ../../../../qlib/Mapper.qm
-%requires ../../../../qlib/TableMapper.qm
+%requires OracleSqlUtil
+%requires PgsqlSqlUtil
+%requires MysqlSqlUtil
+%requires FreetdsSqlUtil
+%requires Schema
+%requires Mapper
+%requires TableMapper
 
 public class TableMapperTestSchema inherits AbstractSchema {
     public {
