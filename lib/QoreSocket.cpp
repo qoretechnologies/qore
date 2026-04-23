@@ -8582,7 +8582,50 @@ QoreHashNode* SocketHttp2FlushPollOperation::continuePoll(ExceptionSink* xsink) 
                     continue;
                 }
 
-                // All pending data flushed
+                // @c session_want_write returns 0 AND our send_buffer is
+                // empty — but a streaming response's data provider may still
+                // have bytes queued that nghttp2 hasn't generated a DATA frame
+                // for because the connection-level flow-control window is
+                // exhausted.  In that case the only way forward is to drain
+                // the read side, so peer WINDOW_UPDATE frames re-open the
+                // window and let the next @c session_mem_send pull from the
+                // data provider.
+                //
+                // This is the real-world case exposed by
+                // Http2.qtest::testHttp2RstStreamDuringInputStreamStreaming:
+                // peer RSTs a streaming response mid-flight, consuming 65535
+                // bytes of connection window.  A fresh response on another
+                // stream can send HEADERS but stays flow-control-blocked on
+                // DATA until the peer credits the window back.  Without this
+                // read-drain the caller deadlocks on flush.
+                if (session->hasUnsentStreamData()) {
+                    int recv_rv = session->receiveData(0, xsink);
+                    if (*xsink) {
+                        return nullptr;
+                    }
+                    if (recv_rv == 1) {
+                        // Peer closed — we can't complete the flush, but
+                        // terminate cleanly instead of spinning.
+                        h2f_state = H2F_DONE;
+                        if (set_non_block) {
+                            set_non_block = false;
+                            sock->priv->clearNonBlock();
+                        }
+                        return nullptr;
+                    }
+                    if (recv_rv == -1) {
+                        // Would block: wait for either readable (peer's
+                        // WINDOW_UPDATE) or writable (our re-generated DATA
+                        // frame once the window reopens).
+                        return getSocketPollInfoHash(xsink,
+                            SOCK_POLLIN | SOCK_POLLOUT);
+                    }
+                    // Processed incoming data (WINDOW_UPDATE, trailers, etc.);
+                    // loop back to re-attempt sendPendingData.
+                    continue;
+                }
+
+                // All pending data flushed and no streams have queued data.
                 h2f_state = H2F_DONE;
                 if (set_non_block) {
                     set_non_block = false;
@@ -9017,6 +9060,38 @@ QoreHashNode* SocketHttp2ClientMultiplexPollOperation::continuePoll(ExceptionSin
                             completed_responses.push_back(resp.release());
                         }
                         continue;
+                    }
+                }
+
+                // Non-CONNECT streaming streams need a headers-only event dispatched
+                // BEFORE the first intermediate body fragment, so downstream consumers
+                // (ds_get_recv, send_internal_conn_mgr's per-chunk recv_callback, SSE
+                // parsers) see status_code + Content-Type before any body bytes.  The
+                // CONNECT handshake path above handles CONNECT streams via
+                // takeHeadersReadyStreamCopy (which flips `dispatched`); non-CONNECT
+                // streaming streams use a separate flag (`headers_streamed`) so
+                // markStreamComplete still fires on END_STREAM to deliver the
+                // terminal event with trailers.
+                //
+                // Without this split, small responses where the server ships HEADERS
+                // in one frame and DATA+END_STREAM in a later frame leak the first
+                // DATA chunk into recv_callback before the header callback has
+                // recorded content-type — ds_get_recv then throws
+                // DESERIALIZATION-ERROR with ct=null (see Qorus issue-1704.qtest).
+                while (std::unique_ptr<Http2StreamInfo> hdr_stream =
+                        h2_session->takeStreamingHeadersReadyCopy()) {
+                    ReferenceHolder<QoreHashNode> resp(new QoreHashNode(autoTypeInfo), xsink);
+                    resp->setKeyValue("stream_id", (int64)hdr_stream->stream_id, xsink);
+                    resp->setKeyValue("status_code", (int64)hdr_stream->status_code, xsink);
+                    if (!hdr_stream->headers.empty()) {
+                        resp->setKeyValue("headers",
+                            httpMultiHeadersToQoreHash(hdr_stream->headers), xsink);
+                    }
+                    // Intentionally NOT setting end_stream — the stream is still open,
+                    // body chunks and end marker will follow via subsequent events.
+                    {
+                        AutoLocker rl(response_lock);
+                        completed_responses.push_back(resp.release());
                     }
                 }
 

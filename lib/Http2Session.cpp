@@ -126,8 +126,25 @@ int Http2Session::init(ExceptionSink* xsink) {
             nghttp2_strerror(rv));
         return -1;
     }
-    // We buffer DATA frames; manage WINDOW_UPDATE manually.
-    nghttp2_option_set_no_auto_window_update(opts, 1);
+    // On the server, we buffer request DATA frames and want manual WINDOW_UPDATE
+    // control so the application can apply backpressure by delaying consumption
+    // (e.g. large-body streaming with an InputStream sink).
+    //
+    // On the client, body bytes are delivered synchronously via
+    // onDataChunkRecvCallback with no intervening buffer, so manual control
+    // buys nothing — and it actively breaks flow control when a locally-closed
+    // (RST'd) stream still has in-flight DATA arriving from the peer: nghttp2
+    // silently consumes the bytes against the connection window and fires no
+    // callback at all (not on_data_chunk_recv, not on_frame_recv, not even
+    // on_begin_frame — verified empirically).  With no callback, the app has
+    // no hook to submit a WINDOW_UPDATE, and with manual mode nghttp2 won't
+    // auto-emit one either.  The peer's connection-level remote window then
+    // pins at whatever it was when the stream was RST'd and every subsequent
+    // DATA frame on every other stream blocks forever.  See Http2.qtest's
+    // testHttp2RstStreamDuringInputStreamStreaming (and Qorus issue-1704.qtest
+    // which exposed this on conn_mgr via the H2 MultiplexPoll headers-first
+    // dispatch fix).
+    nghttp2_option_set_no_auto_window_update(opts, is_server ? 1 : 0);
     // RFC 8441: enable extended CONNECT support in nghttp2.
 
     if (is_server) {
@@ -1321,6 +1338,31 @@ std::unique_ptr<Http2StreamInfo> Http2Session::takeHeadersReadyStreamCopy() {
     return nullptr;
 }
 
+std::unique_ptr<Http2StreamInfo> Http2Session::takeStreamingHeadersReadyCopy() {
+    std::lock_guard<std::recursive_mutex> lg(m);
+    for (auto& [id, info] : streams) {
+        // Non-CONNECT streaming streams that received response headers but haven't
+        // yet had a headers-only event dispatched.  CONNECT streams are handled
+        // via takeHeadersReadyStreamCopy (which flips @c dispatched).  Using a
+        // separate flag here (@c headers_streamed) lets markStreamComplete still
+        // fire the completion callback on END_STREAM — @c dispatched would
+        // suppress it (see markStreamComplete @ line 1191).
+        if (info->headers_complete && !info->headers_streamed
+                && info->streaming && !info->is_connect) {
+            auto copy = std::make_unique<Http2StreamInfo>(*info);
+            // Clear body on the copy: the original keeps any buffered DATA
+            // bytes so takeStreamData() returns them on the following
+            // intermediate-body push (a duplicate body delivery would double-
+            // count bytes for chunked-YAML decoders in ds_get_recv).
+            copy->body.clear();
+            info->headers_streamed = true;
+            printd(5, "takeStreamingHeadersReadyCopy(%d)\n", id);
+            return copy;
+        }
+    }
+    return nullptr;
+}
+
 bool Http2Session::isStreamComplete(int32_t stream_id) const {
     // Fast, lock-free path: a closed session unblocks concurrent
     // sync consumers waiting for END_STREAM.  Treat any outstanding
@@ -1732,7 +1774,11 @@ int Http2Session::onDataChunkRecvCallback(nghttp2_session* session, uint8_t flag
             return 0;
         }
     }
-    if (len) {
+    // With auto-window-update enabled on the client (see init()), nghttp2 emits
+    // WINDOW_UPDATE automatically as the app consumes data via this callback —
+    // we must NOT call submitWindowUpdate on the client branch or we double-credit.
+    // Server is still in manual mode (for backpressure) and must call it.
+    if (len && h2->is_server) {
         int rv = h2->submitWindowUpdate(stream_id, len, nullptr);
         if (rv) {
             printd(5, "onDataChunkRecvCallback: submitWindowUpdate stream_id=%d failed\n", stream_id);

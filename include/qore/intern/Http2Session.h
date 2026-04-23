@@ -119,6 +119,10 @@ struct Http2StreamInfo {
     bool dispatched = false;       //!< True after headers-only dispatch (stream stays in map for DATA accumulation)
     bool headers_end_stream = false; //!< True if END_STREAM was on the initial HEADERS frame (no body expected)
     bool streaming = false;        //!< True for streaming requests (bidi/client-streaming) on client side
+    bool headers_streamed = false; //!< True after a headers-only event has been pushed for a non-CONNECT streaming
+                                   //!< response.  Separate from @c dispatched because we do NOT want to inhibit
+                                   //!< markStreamComplete's callback (which still needs to fire on END_STREAM to
+                                   //!< deliver the terminal event with trailers).
     uint32_t error_code = 0;
 
     //! Returns true if this is a WebSocket over HTTP/2 stream (RFC 8441)
@@ -528,6 +532,23 @@ public:
     */
     DLLLOCAL bool hasStreamingData(int32_t& stream_id);
 
+    //! Take a copy of a non-CONNECT streaming stream whose headers are ready but have not yet
+    //! been dispatched via a headers-only event.  Marks the original stream
+    //! @c headers_streamed=true atomically so the next call skips it.
+    /** The CONNECT path dispatches headers separately via takeHeadersReadyStreamCopy() (which
+        sets @c dispatched=true); non-CONNECT streaming streams need the same headers-first
+        ordering so callers that rely on the header callback (e.g. ds_get_recv, per-chunk
+        body decoders in send_internal_conn_mgr) see status_code + content-type before the
+        first body fragment.  Using a separate flag (@c headers_streamed) preserves the
+        semantics of @c dispatched — markStreamComplete() still fires the completion callback
+        on END_STREAM so the terminal event + trailers are delivered.
+
+        @return a copy of the stream info (headers, status_code, empty body, trailers) or
+        nullptr if no such stream exists
+        @since %Qore 2.3
+    */
+    DLLLOCAL std::unique_ptr<Http2StreamInfo> takeStreamingHeadersReadyCopy();
+
     //! Callback type for stream completion notification (HTTP/2 client multiplexing)
     /** Callback arguments:
         - \c stream_id: the completed stream ID
@@ -597,6 +618,27 @@ public:
         only accounts for data inside nghttp2's internal buffers, not our send_buffer.
     */
     DLLLOCAL bool hasPendingData() const { return send_offset < send_buffer.size(); }
+
+    //! Returns true if any stream has outgoing DATA still to be sent
+    //! (queued in @c pending_body_data or waiting on a registered
+    //! @c pending_data_providers entry).
+    /** Used by @ref SocketHttp2FlushPollOperation to tell the difference
+        between "everything nghttp2 is willing to emit has been drained"
+        (@c !wantWrite() && !hasPendingData()) and "a streaming response has
+        more bytes queued but the connection window is empty so nghttp2
+        hasn't generated the DATA frame yet".
+
+        In the second case @c session_want_write returns 0 because there
+        is no frame in nghttp2's send queue — the caller must drive the
+        read side so peer WINDOW_UPDATE frames can re-open the window
+        and let the next @c session_mem_send pull from the data provider.
+
+        @since %Qore 2.3
+    */
+    DLLLOCAL bool hasUnsentStreamData() const {
+        std::lock_guard<std::recursive_mutex> lg(m);
+        return !pending_body_data.empty() || !pending_data_providers.empty();
+    }
 
     //! Returns true if any stream has buffered body data waiting to be drained
     /** Used by QoreSocketObject::hasPendingData() to trigger re-polling of H2
