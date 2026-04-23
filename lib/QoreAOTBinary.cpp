@@ -5644,6 +5644,106 @@ bool QoreAOTBinaryDeserializer::resolveClassConstants(std::string& error) {
     return true;
 }
 
+//! Recursively retype a deserialized hash/list value to match the declared
+//! member type.  writeValue's NT_HASH / NT_LIST cases strip the source
+//! container's element type (see the acceptInputComplexHash flow in
+//! QoreTypeInfo.cpp:1498+), so values round-trip as hash<auto>/list<auto>.
+//! For a typed member like `hash<string, hash<MapperRuntimeKeyInfo>>
+//! mapper_keys = Mapper::MapperKeyInfo;` that bites twice: the inner hashes
+//! come back as hash<auto> (incompatible with hash<MapperRuntimeKeyInfo>)
+//! and the innermost hashdecl-shaped hashes lack their hashdecl pointer.
+//!
+//! Walks the target type top-down:
+//!   complex hash → stamp complexTypeInfo and recurse into each value
+//!   complex list → stamp complexTypeInfo and recurse into each entry
+//!   hashdecl     → reconstruct via typed_hash_decl_private::newHash so the
+//!                  hash picks up the declared shape + nested member types
+//!
+//! Returns true on full coercion; false + xsink populated on failure (caller
+//! leaves the original value in place so the downstream
+//! `acceptInputMember` still produces its own diagnostic).
+static bool aotRetypeForMember(QoreValue& v, const QoreTypeInfo* target_ti,
+        ExceptionSink* xsink) {
+    if (!v.hasNode() || !target_ti || target_ti == autoTypeInfo) {
+        return true;
+    }
+    // Typed hashdecl target: coerce plain hash → hashdecl instance
+    if (const TypedHashDecl* hd = QoreTypeInfo::getTypedHash(target_ti)) {
+        if (v.getType() != NT_HASH) {
+            return true;  // let acceptInputMember raise
+        }
+        const QoreHashNode* src = v.get<const QoreHashNode>();
+        if (src->getHashDecl() == hd) {
+            return true;  // already typed
+        }
+        QoreHashNode* coerced = typed_hash_decl_private::get(*hd)->newHash(
+            src, /*runtime_check=*/true, xsink);
+        if (!coerced || (xsink && xsink->isException())) {
+            if (coerced) {
+                coerced->deref(xsink);
+            }
+            return false;
+        }
+        v.discard(nullptr);
+        v = coerced;
+        return true;
+    }
+    // Complex hash target: hash<string, inner_vt>
+    const QoreTypeInfo* inner_h_vt = QoreTypeInfo::getComplexHashValueType(target_ti);
+    if (inner_h_vt && inner_h_vt != autoTypeInfo) {
+        if (v.getType() != NT_HASH) {
+            return true;
+        }
+        QoreHashNode* h = v.get<QoreHashNode>();
+        if (!h->is_unique()) {
+            QoreHashNode* copy = h->copy();
+            v.discard(nullptr);
+            v = copy;
+            h = copy;
+        }
+        HashIterator hi(h);
+        while (hi.next()) {
+            hash_assignment_priv ha(*qore_hash_private::get(*h), *qhi_priv::get(hi)->i);
+            QoreValue cur(ha.swap(QoreValue()));
+            if (!aotRetypeForMember(cur, inner_h_vt, xsink)) {
+                ha.swap(cur);
+                return false;
+            }
+            ha.swap(cur);
+        }
+        qore_hash_private::get(*h)->complexTypeInfo
+            = qore_get_complex_hash_type(inner_h_vt);
+        return true;
+    }
+    // Complex list target: list<inner_vt>
+    const QoreTypeInfo* inner_l_vt = QoreTypeInfo::getComplexListValueType(target_ti);
+    if (inner_l_vt && inner_l_vt != autoTypeInfo) {
+        if (v.getType() != NT_LIST) {
+            return true;
+        }
+        QoreListNode* l = v.get<QoreListNode>();
+        if (!l->is_unique()) {
+            QoreListNode* copy = l->copy();
+            v.discard(nullptr);
+            v = copy;
+            l = copy;
+        }
+        size_t n = l->size();
+        for (size_t i = 0; i < n; ++i) {
+            QoreValue cur = qore_list_private::get(*l)->swap(i, QoreValue());
+            if (!aotRetypeForMember(cur, inner_l_vt, xsink)) {
+                qore_list_private::get(*l)->swap(i, cur);
+                return false;
+            }
+            qore_list_private::get(*l)->swap(i, cur);
+        }
+        qore_list_private::get(*l)->complexTypeInfo
+            = qore_get_complex_list_type(inner_l_vt);
+        return true;
+    }
+    return true;
+}
+
 bool QoreAOTBinaryDeserializer::resolveHashdeclMembers(std::string& error) {
     // Second pass: add hashdecl members now that all types exist
     for (auto& entry : pending_hashdecl_members) {
@@ -5779,15 +5879,30 @@ bool QoreAOTBinaryDeserializer::resolveHashdeclMembers(std::string& error) {
                     && (phm.default_val.getType() == NT_HASH
                         || phm.default_val.getType() == NT_LIST)) {
                 ExceptionSink xs;
+                // Pre-retype nested containers recursively so inner values
+                // carry the declared hashdecl/complex-hash typing before
+                // `acceptInputMember` runs its narrowing check.
+                aotRetypeForMember(phm.default_val, mti, &xs);
+                if (xs.isException()) {
+                    xs.clear();  // fall through to acceptInputMember for the
+                                 // canonical diagnostic path
+                }
                 QoreTypeInfo::acceptInputMember(mti, phm.name.c_str(),
                     phm.default_val, &xs);
                 if (xs.isException()) {
                     // Narrowing failed — keep the original value; the hashdecl
                     // instance will hit the same error later with the same
                     // diagnostic.  Don't swallow silently.
+                    QoreValue e = xs.getExceptionErr();
+                    QoreValue d = xs.getExceptionDesc();
+                    const char* es = e.getType() == NT_STRING
+                        ? e.get<const QoreStringNode>()->c_str() : "(?err)";
+                    const char* ds = d.getType() == NT_STRING
+                        ? d.get<const QoreStringNode>()->c_str() : "(?desc)";
                     printd(0, "AOT deser: hashdecl '%s' member '%s' default "
-                        "narrowing to '%s' failed\n",
-                        hd->getName(), phm.name.c_str(), phm.type_path.c_str());
+                        "narrowing to '%s' failed: %s: %s\n",
+                        hd->getName(), phm.name.c_str(), phm.type_path.c_str(),
+                        es, ds);
                     xs.clear();
                 }
             }
