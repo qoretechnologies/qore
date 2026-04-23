@@ -440,6 +440,20 @@ class QoreAOTBinaryReader {
     std::vector<uint8_t> decompressed_body;
 
 public:
+    //! Controls the VT_CONST_REF reader return path.  When true (set by the
+    //! hashdecl-member reader), VT_CONST_REF resolves to a fresh
+    //! `RuntimeConstantRefNode` wrapping the ConstantEntry rather than
+    //! eagerly evaluating the constant's current value.  This preserves the
+    //! lazy-eval semantics that source-parse provides — crucial for hashdecl
+    //! member defaults like `hash<string, hash<MapperRuntimeKeyInfo>>
+    //! mapper_keys = Mapper::MapperKeyInfo;` where the referenced constant
+    //! has a looser declared type (hash<auto>) than the member.  Without the
+    //! wrap, parse-time folding of `<DataProviderInfo>{...}` in a downstream
+    //! module hits the stricter member type via the already-resolved loose
+    //! value and fails narrowing.  Mutable so readValue can be called on a
+    //! const-referenced reader (common from handler paths).
+    mutable bool wrap_const_ref_in_rcr = false;
+
     //! Open and validate a binary blob
     /** @param data pointer to the binary data
         @param size size of the binary data

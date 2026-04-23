@@ -358,6 +358,56 @@ bool QoreAOTBinaryWriter::writeValue(const QoreValue& v) {
             }
         }
     }
+    // RuntimeConstantRefNode — typed constant reference preserved in the AST
+    // (e.g. a hashdecl member default `string name = HttpServer::HttpServerString;`).
+    // Emit VT_CONST_REF with the constant's FQN so the reader can rebuild
+    // either a concrete value (default) or a fresh RuntimeConstantRefNode
+    // (when wrap_const_ref_in_rcr is set by the caller — see the hashdecl
+    // member reader).  Without this branch, RuntimeConstantRefNode falls
+    // into the default-case VT_NOTHING, silently corrupting member defaults
+    // to the type's zero-value at load time.
+    if (v.hasNode()) {
+        if (const AbstractQoreNode* node = v.getInternalNode()) {
+            if (auto* rcr = dynamic_cast<const RuntimeConstantRefNode*>(node)) {
+                ConstantEntry* ce = rcr->getConstantEntry();
+                if (ce) {
+                    std::string fqn;
+                    if (const_reverse_map) {
+                        if (ce->val.hasNode()) {
+                            auto it = const_reverse_map->find(ce->val.getInternalNode());
+                            if (it != const_reverse_map->end()) {
+                                fqn = it->second;
+                            }
+                        }
+                        if (fqn.empty()) {
+                            QoreValue sv = ce->getReferencedValue();
+                            if (sv.hasNode()) {
+                                auto it2 = const_reverse_map->find(sv.getInternalNode());
+                                if (it2 != const_reverse_map->end()) {
+                                    fqn = it2->second;
+                                }
+                            }
+                            sv.discard(nullptr);
+                        }
+                    }
+                    // If CRM didn't have the node, fall back to the constant
+                    // entry's stored name.  ConstantEntry::getNameStr() returns
+                    // the fully-qualified name when it was registered via
+                    // runtimeCreateConstant; for named module constants this
+                    // suffices for the reader's findNamespaceConstant lookup.
+                    if (fqn.empty()) {
+                        fqn = ce->getNameStr();
+                    }
+                    if (!fqn.empty()) {
+                        writeU8(static_cast<uint8_t>(QoreAOTValueTag::VT_CONST_REF));
+                        writeU32(static_cast<uint32_t>(fqn.size()));
+                        writeStringRef(fqn.c_str(), fqn.size());
+                        return true;
+                    }
+                }
+            }
+        }
+    }
     // Must check isEnum() before getType() because getType() on TAG_ENUM
     // returns the base type (e.g., NT_INT), which would serialize the wrong thing
     if (v.isEnum()) {
@@ -1265,11 +1315,25 @@ QoreValue QoreAOTBinaryReader::readValue(const uint8_t*& ptr, const uint8_t* end
         case QoreAOTValueTag::VT_CONST_REF: {
             // Written as: FQN string (length + string pool offset).
             // At load time, resolve the referenced constant from the current
-            // program's namespace tree and return its referenced value. Used
-            // for objects and other unserializable values that live inside
-            // parse-time-folded hash/list literals — the parser inlines the
-            // constant's value into the literal, and the writer detects the
-            // shared node pointer via the program reverse map.
+            // program's namespace tree.  Two return modes:
+            //
+            //   1. `wrap_const_ref_in_rcr == true`: return a fresh
+            //      RuntimeConstantRefNode wrapping the ConstantEntry.  Used
+            //      when the caller needs the *lazy-eval* semantics of the
+            //      original AST — crucially, for hashdecl member defaults
+            //      like `hash<string, hash<MapperRuntimeKeyInfo>> mapper_keys =
+            //      Mapper::MapperKeyInfo;` where `Mapper::MapperKeyInfo`'s
+            //      type is `hash<auto>` and naïvely folding its value into
+            //      the typed member at parse-time fails the narrowing.
+            //      Wrapping in RCR defers the evaluation to runtime, matching
+            //      what source-parse does for the same declaration.
+            //
+            //   2. otherwise: return the referenced value directly.  Used
+            //      for objects and other unserializable values that live
+            //      inside parse-time-folded hash/list literals — the parser
+            //      inlines the constant's value into the literal, and the
+            //      writer detects the shared node pointer via the program
+            //      reverse map.
             if (ptr + 8 > end) {
                 error = "unexpected end of data reading const_ref name";
                 return QoreValue();
@@ -1288,8 +1352,9 @@ QoreValue QoreAOTBinaryReader::readValue(const uint8_t*& ptr, const uint8_t* end
             }
             qore_program_private* pp = qore_program_private::get(*pgm);
             const qore_ns_private* cns = nullptr;
-            const ConstantEntry* ce = qore_root_ns_private::runtimeFindNamespaceConstant(
-                *pp->RootNS, fqn, cns);
+            ConstantEntry* ce = const_cast<ConstantEntry*>(
+                qore_root_ns_private::runtimeFindNamespaceConstant(
+                    *pp->RootNS, fqn, cns));
             if (!ce) {
                 // Try class constant lookup: path format "ClassName::ConstName"
                 std::string path(fqn);
@@ -1301,14 +1366,23 @@ QoreValue QoreAOTBinaryReader::readValue(const uint8_t*& ptr, const uint8_t* end
                     const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
                         *pp->RootNS, class_path.c_str(), found_ns);
                     if (qc) {
-                        ce = qore_class_private::get(*qc)->constlist.findEntry(
-                            const_name.c_str());
+                        ce = const_cast<ConstantEntry*>(
+                            qore_class_private::get(*qc)->constlist.findEntry(
+                                const_name.c_str()));
                     }
                 }
             }
             if (!ce) {
                 printd(0, "AOT readValue: cannot resolve const_ref '%s'\n", fqn);
                 return QoreValue();
+            }
+            if (wrap_const_ref_in_rcr && ce->hasValue()) {
+                // Preserve lazy-eval semantics for hashdecl member defaults.
+                // The RuntimeConstantRefNode ctor asserts saved_val is set;
+                // hasValue() verifies that.  Falls back to the eager-value
+                // return path below when the constant isn't fully populated
+                // (e.g. an AOT-shell that's still pending init-function run).
+                return QoreValue(new RuntimeConstantRefNode(&loc_builtin, ce));
             }
             return ce->getReferencedValue();
         }
@@ -2379,6 +2453,31 @@ static void writeHashDeclsSection(QoreAOTBinaryWriter& writer, const AOTSerializ
                 writer.writeStringRef(mi.first);
                 writer.writeStringRef(getTypePath(mi.second->getTypeInfo()));
                 if (mi.second->exp) {
+                    // Complex-expression diagnostic: writeValue's default-case
+                    // silently encodes unrecognised AST nodes as VT_NOTHING,
+                    // which loads as the type's zero-value (0 for int, empty
+                    // for string, ...).  RuntimeConstantRefNode is handled via
+                    // VT_CONST_REF in writeValue itself (see the NT_RTCONSTREF
+                    // branch below).  Anything else that writeValue can't
+                    // round-trip deserves a diagnostic.
+                    const QoreValue v = mi.second->exp;
+                    qore_type_t t = v.getType();
+                    bool serialisable = v.isNothing() || v.isNull()
+                        || t == NT_BOOLEAN || t == NT_INT || t == NT_FLOAT
+                        || t == NT_STRING || t == NT_DATE || t == NT_NUMBER
+                        || t == NT_BINARY || t == NT_LIST || t == NT_HASH
+                        || t == NT_OBJECT || t == NT_SCOPE_REF || v.isEnum()
+                        || t == NT_RTCONSTREF;
+                    if (!serialisable) {
+                        fprintf(stderr,
+                            "warning: AOT serialisation of hashdecl '%s' member '%s' "
+                            "default expression may lose information (type %d = %s); "
+                            "loaded value will default to the type's zero-value "
+                            "(0 for int, empty for string, etc.).  Consider using a "
+                            "simple literal default and moving the computation into "
+                            "an init() method.\n",
+                            hd->getName(), mi.first, t, get_type_name(v.getInternalNode()));
+                    }
                     writer.writeU8(1);
                     writer.writeValue(mi.second->exp);
                 } else {
@@ -5697,6 +5796,36 @@ bool QoreAOTBinaryDeserializer::resolveHashdeclMembers(std::string& error) {
                 error.clear();
                 mti = autoTypeInfo;
             }
+            // Narrow the deserialized default into the member's declared type.
+            // writeValue's NT_HASH / NT_LIST paths serialize by key/value or
+            // element without preserving the source container's declared
+            // element type — a typed hash like
+            // `hash<string, hash<MapperRuntimeKeyInfo>> mapper_keys =
+            // Mapper::MapperKeyInfo;` comes back as a plain hash<auto>.
+            // Source-parse retains the declared typing via the AST's
+            // `exp.getFullTypeInfo()`; AOT-load doesn't have that, so parse-time
+            // folding of downstream `<DataProviderInfo>{...}` constants trips
+            // the hash<auto>→typed-hash narrowing check in
+            // `acceptInputComplexHash`.  Pre-narrow the default here via
+            // `acceptInputMember` so the stored exp already carries the
+            // member's declared type info.  This matches the effective shape
+            // of source-parse without requiring a wire-format extension.
+            if (mti && phm.default_val.hasNode()
+                    && (phm.default_val.getType() == NT_HASH
+                        || phm.default_val.getType() == NT_LIST)) {
+                ExceptionSink xs;
+                QoreTypeInfo::acceptInputMember(mti, phm.name.c_str(),
+                    phm.default_val, &xs);
+                if (xs.isException()) {
+                    // Narrowing failed — keep the original value; the hashdecl
+                    // instance will hit the same error later with the same
+                    // diagnostic.  Don't swallow silently.
+                    printd(0, "AOT deser: hashdecl '%s' member '%s' default "
+                        "narrowing to '%s' failed\n",
+                        hd->getName(), phm.name.c_str(), phm.type_path.c_str());
+                    xs.clear();
+                }
+            }
             hdp->addMember(phm.name.c_str(), mti, phm.default_val);
 
             printd(5, "AOT deser: added member '%s' to hashdecl '%s'\n",
@@ -5819,6 +5948,21 @@ bool QoreAOTBinaryDeserializer::deserializeHashDecls(std::string& error) {
 
         uint32_t num_members = QoreAOTBinaryReader::readU32(ptr);
         members.reserve(num_members);
+        // Enable RCR wrapping for VT_CONST_REF defaults so member initializers
+        // like `hash<string, hash<MapperRuntimeKeyInfo>> mapper_keys =
+        // Mapper::MapperKeyInfo;` preserve lazy-eval semantics and match
+        // source-parse behaviour during parse-time folding of downstream
+        // `<DataProviderInfo>{...}` constants.  See the VT_CONST_REF reader
+        // branch in readValue for the mechanism.
+        struct RcrWrapGuard {
+            QoreAOTBinaryReader& r;
+            bool prev;
+            RcrWrapGuard(QoreAOTBinaryReader& r_, bool newv) : r(r_), prev(r_.wrap_const_ref_in_rcr) {
+                r_.wrap_const_ref_in_rcr = newv;
+            }
+            ~RcrWrapGuard() { r.wrap_const_ref_in_rcr = prev; }
+        } rcr_guard(reader, true);
+
         for (uint32_t j = 0; j < num_members; ++j) {
             MemberInfo mi;
             mi.name = reader.readStringRef(ptr);
