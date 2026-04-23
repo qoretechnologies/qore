@@ -7817,6 +7817,16 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
             ExceptionSink wsink;
             QoreProgram* fallback_pgm = new QoreProgram(parse_options & ~PO_NO_TOP_LEVEL_STATEMENTS);
             fallback_pgm->setScriptPath(label);
+            // Push a per-module context helper before parsing the fallback
+            // source — the scanner's `module <name> { }` rule calls
+            // parse_set_module_def_context_name, which would otherwise land
+            // on the OUTER caller's helper (e.g. when OracleSqlUtil loads
+            // OracleSqlUtilBase.qmod, OracleSqlUtilBase's fallback parse
+            // would setNameInit on OracleSqlUtil's helper, tripping the
+            // vmap["name"] duplicate assertion).  Source-parse flow creates
+            // this helper in loadUserModuleFromPath; init_v3 needs to do
+            // the same around its parse-based fallbacks.
+            QoreUserModuleDefContextHelper fb_mod_ctx(mod_name, label, fallback_pgm, xsink);
             fallback_pgm->parse(deserializer.getFallbackSource(), label, &xsink, &wsink,
                 QP_WARN_DEFAULT);
             if (wsink.isException()) {
@@ -7876,6 +7886,12 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
         ExceptionSink wsink;
         QoreProgram* fallback_pgm = new QoreProgram(parse_options & ~PO_NO_TOP_LEVEL_STATEMENTS);
         fallback_pgm->setScriptPath(label);
+        // Push a per-module context helper before the fallback parse; see the
+        // matching guard around the function-registration fallback above for
+        // why.  Without this, `module <name> { }` in the fallback source
+        // reuses the outer caller's helper and trips the setNameInit
+        // duplicate-name assertion.
+        QoreUserModuleDefContextHelper fb_mod_ctx(mod_name, label, fallback_pgm, xsink);
         fallback_pgm->parse(deserializer.getFallbackSource(), label, &xsink, &wsink,
             QP_WARN_DEFAULT);
         AOT_TRACE("fallback source parsed");
