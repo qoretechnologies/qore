@@ -244,6 +244,19 @@ QuicSession::~QuicSession() {
     }
     // Drop frame-state registrations (destructor derefs each state's queue)
     connect_stream_frame_states_.clear();
+
+    // Release any remaining datagram Queue references registered via
+    // registerDatagramQueue().  markClosed() pushed a NOTHING sentinel already
+    // (if called before destruction); here we just drop the refs.
+    if (!datagram_qqueues_.empty()) {
+        ExceptionSink xsink;
+        for (auto& [id, q] : datagram_qqueues_) {
+            if (q) {
+                q->deref(&xsink);
+            }
+        }
+        datagram_qqueues_.clear();
+    }
 }
 
 // ===== Factory Methods =====
@@ -2852,6 +2865,25 @@ void QuicSession::markClosed() {
         std::lock_guard<std::mutex> lg(drain_mtx_);
     }
     drain_cv_.notify_all();
+
+    // Wake handler threads blocked in Queue::get() on registered datagram queues
+    // by pushing a NOTHING sentinel to each.  Consistent with the ChannelAction
+    // / SseAction close semantics: sentinel = end-of-stream.
+    {
+        std::lock_guard<std::mutex> lg(datagram_mutex_);
+        for (auto& [sid, q] : datagram_qqueues_) {
+            if (q) {
+                q->pushAndTakeRef(QoreValue());  // NOTHING sentinel
+            }
+        }
+    }
+
+    // Also wake legacy readDatagram() callers blocked on datagram_cv_.
+    datagram_gen_.fetch_add(1, std::memory_order_release);
+    {
+        std::lock_guard<std::mutex> lg(datagram_cv_mtx_);
+    }
+    datagram_cv_.notify_all();
 }
 
 ssize_t QuicSession::writeConnectionClose(uint8_t* buf, size_t buflen) {
@@ -4541,15 +4573,35 @@ int QuicSession::recvDatagramCallback(ngtcp2_conn* conn, uint32_t flags,
     const uint8_t* payload = data + varint_len;
     size_t payload_len = datalen - varint_len;
 
-    // Route to per-stream datagram queue
+    // Route to per-stream datagram queue.  If a handler has registered an async
+    // Qore Queue for this stream via registerDatagramQueue(), push the datagram
+    // there directly (handler wakes via Queue::get()); otherwise fall back to the
+    // internal deque + CV path for legacy Socket::readQuicDatagram() callers.
     try {
+        bool pushed_to_qqueue = false;
         {
             std::lock_guard<std::mutex> lg(session->datagram_mutex_);
-            auto& queue = session->datagram_queues_[stream_id];
-            queue.emplace_back(payload, payload + payload_len);
+            auto qit = session->datagram_qqueues_.find(stream_id);
+            if (qit != session->datagram_qqueues_.end() && qit->second) {
+                SimpleRefHolder<BinaryNode> bin(new BinaryNode());
+                if (payload_len > 0) {
+                    bin->append(payload, payload_len);
+                }
+                // pushAndTakeRef transfers ownership to the Queue
+                qit->second->pushAndTakeRef(bin.release());
+                pushed_to_qqueue = true;
+            } else {
+                auto& queue = session->datagram_queues_[stream_id];
+                queue.emplace_back(payload, payload + payload_len);
+            }
         }
 
-        // Signal waiting readers
+        if (pushed_to_qqueue) {
+            // Queue has its own CV; no generation counter work needed.
+            return 0;
+        }
+
+        // Legacy path: signal CV waiters in QuicSession::readDatagram().
         session->datagram_gen_.fetch_add(1, std::memory_order_release);
         {
             std::lock_guard<std::mutex> lg(session->datagram_cv_mtx_);
@@ -4562,6 +4614,57 @@ int QuicSession::recvDatagramCallback(ngtcp2_conn* conn, uint32_t flags,
     }
 
     return 0;
+}
+
+void QuicSession::registerDatagramQueue(int64_t stream_id, Queue* queue,
+                                         ExceptionSink* xsink) {
+    if (!queue) {
+        unregisterDatagramQueue(stream_id, xsink);
+        return;
+    }
+
+    // Drain any already-buffered datagrams from the internal deque into the
+    // Queue so no frame is lost in the switch; order is preserved because the
+    // deque is drained front-to-back while holding datagram_mutex_, and
+    // recvDatagramCallback cannot observe the Queue until after we store the
+    // pointer (same lock).
+    std::lock_guard<std::mutex> lg(datagram_mutex_);
+
+    // If a Queue is already registered, replace (deref the old one).
+    auto existing = datagram_qqueues_.find(stream_id);
+    if (existing != datagram_qqueues_.end() && existing->second) {
+        existing->second->deref(xsink);
+    }
+
+    // Contract: caller transfers the Queue reference (matches
+    // registerQuicConnectStreamQueue precedent in QC_Socket.qpp).  We own the
+    // ref now and deref on unregister / session teardown.
+    datagram_qqueues_[stream_id] = queue;
+
+    // Backfill: push any already-buffered datagrams so the first Queue::get()
+    // sees datagrams that arrived before registration.
+    auto dit = datagram_queues_.find(stream_id);
+    if (dit != datagram_queues_.end()) {
+        for (auto& buf : dit->second) {
+            SimpleRefHolder<BinaryNode> bin(new BinaryNode());
+            if (!buf.empty()) {
+                bin->append(buf.data(), buf.size());
+            }
+            queue->pushAndTakeRef(bin.release());
+        }
+        datagram_queues_.erase(dit);
+    }
+}
+
+void QuicSession::unregisterDatagramQueue(int64_t stream_id, ExceptionSink* xsink) {
+    std::lock_guard<std::mutex> lg(datagram_mutex_);
+    auto it = datagram_qqueues_.find(stream_id);
+    if (it != datagram_qqueues_.end()) {
+        if (it->second) {
+            it->second->deref(xsink);
+        }
+        datagram_qqueues_.erase(it);
+    }
 }
 
 int QuicSession::submitDatagram(int64_t stream_id, const uint8_t* data, size_t len,

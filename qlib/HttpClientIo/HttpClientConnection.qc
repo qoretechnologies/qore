@@ -221,11 +221,6 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
         return last_activity;
     }
 
-    #! Returns True if the connection is in controller mode
-    bool isControllerMode() {
-        return exists controller_ref;
-    }
-
     #! Sets the controller reference for wake notifications
     setControllerRef(object controller) {
         controller_ref = controller;

@@ -518,6 +518,35 @@ public:
     DLLEXPORT int submitHttp2StreamingResponseWithStream(int32_t stream_id, int status_code,
             const QoreHashNode* headers, InputStream* body, ExceptionSink* xsink);
 
+    //! Submit HTTP/2 streaming response headers without holding the socket wrapper lock
+    /** Async-path variant of @ref submitHttp2StreamingResponseHeaders() for handlers
+        running under an async I/O controller: acquires the wrapper lock only briefly
+        to copy the Http2Session shared pointer, then performs header submission under
+        only the session's internal recursive mutex.  This avoids the handler-thread
+        vs. I/O-thread contention on @c priv->m that the sync variant incurs.
+        @since %Qore 2.3
+    */
+    DLLEXPORT int submitHttp2StreamingResponseHeadersAsync(int32_t stream_id, int status_code,
+            const QoreHashNode* headers, ExceptionSink* xsink);
+
+    //! Send HTTP/2 DATA frame payload without holding the socket wrapper lock
+    /** Async-path variant of @ref sendHttp2StreamData(); follows the
+        @ref waitForHttp2StreamDrain() precedent of briefly acquiring
+        @c priv->m only to copy the Http2Session shared pointer.
+        @since %Qore 2.3
+    */
+    DLLEXPORT int sendHttp2StreamDataAsync(int32_t stream_id, const BinaryNode* data,
+            bool end_stream, ExceptionSink* xsink);
+
+    //! Send HTTP/2 trailers without holding the socket wrapper lock
+    /** Async-path variant of @ref sendHttp2Trailers(); follows the
+        @ref waitForHttp2StreamDrain() precedent of briefly acquiring
+        @c priv->m only to copy the Http2Session shared pointer.
+        @since %Qore 2.3
+    */
+    DLLEXPORT int sendHttp2TrailersAsync(int32_t stream_id, const QoreHashNode* trailers,
+            ExceptionSink* xsink);
+
     //! Blocking read of HTTP/2 stream data for incremental server-side streaming
     /** @since %Qore 2.3
     */
@@ -980,6 +1009,33 @@ public:
     */
     DLLEXPORT QoreValue readQuicDatagram(int64_t session_id, int64_t stream_id,
         int timeout_ms, ExceptionSink* xsink);
+
+    //! Register a @ref Queue to receive incoming QUIC datagrams for a stream (RFC 9221/9297)
+    /** Async-path replacement for @ref readQuicDatagram().  Once registered, incoming
+        datagrams for @a stream_id are pushed to @a queue (as @ref BinaryNode) by the I/O
+        thread; handlers block on @c Queue::get(timeout) for delivery.  A @c NOTHING
+        sentinel is pushed when the QUIC session is closed.
+
+        @param session_id the QUIC session ID
+        @param stream_id the HTTP/3 stream ID (anchor stream)
+        @param queue the @ref Queue to populate; pass @c nullptr to unregister
+        @param xsink exception sink
+        @since %Qore 2.3
+    */
+    DLLEXPORT void registerQuicDatagramQueue(int64_t session_id, int64_t stream_id,
+        Queue* queue, ExceptionSink* xsink);
+
+    //! Unregister the @ref Queue previously registered via @ref registerQuicDatagramQueue
+    /** Subsequent datagrams for @a stream_id fall back to the internal deque path used
+        by legacy @ref readQuicDatagram() callers.
+
+        @param session_id the QUIC session ID
+        @param stream_id the HTTP/3 stream ID
+        @param xsink exception sink
+        @since %Qore 2.3
+    */
+    DLLEXPORT void unregisterQuicDatagramQueue(int64_t session_id, int64_t stream_id,
+        ExceptionSink* xsink);
 
     //! Get the maximum datagram payload size for a QUIC session (RFC 9221)
     /** @param session_id the QUIC session ID

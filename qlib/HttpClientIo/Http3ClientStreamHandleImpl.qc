@@ -83,6 +83,29 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
 
         #! True when the request write side remains open after startStreaming()
         bool request_body_streaming = False;
+
+        #! Per-stream @ref Queue "Queue" for async QUIC datagram delivery (RFC 9221/9297)
+        /** Lazily created on the first @ref readDatagram() call and registered with
+            the QUIC session via @ref Qore::Socket::registerQuicDatagramQueue().  The
+            I/O thread pushes incoming datagrams (as @ref binary) to this Queue; this
+            class consumes via @c Queue::get(timeout).  A @c NOTHING sentinel pushed by
+            the session on close signals end-of-stream.
+        */
+        *Queue datagram_queue;
+    }
+
+    #! Destructor — unregisters the datagram queue if one was registered
+    destructor() {
+        if (exists datagram_queue && exists stream_id) {
+            *int sid = h3conn.getSessionId();
+            if (sid) {
+                try {
+                    h3conn.getSocket().unregisterQuicDatagramQueue(sid, stream_id);
+                } catch () {
+                    # Best-effort cleanup during teardown; session may already be gone
+                }
+            }
+        }
     }
 
     #! Creates a new stream handle
@@ -516,6 +539,18 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
     }
 
     #! Read the next incoming QUIC datagram on this stream's channel (RFC 9221/9297)
+    /** Blocks up to @a timeout_ms for a datagram on a per-stream @ref Queue "Queue"
+        populated by the I/O thread.  No handler-thread socket I/O, no C++-level
+        condition-variable wait across the Qore/C++ boundary — matches the
+        @ref Channel "Channel"-based pattern used for HTTP/3 stream body data.
+
+        The Queue is created and registered on the first call; it stays registered
+        for the lifetime of this stream handle and is unregistered by the destructor.
+
+        @param timeout_ms maximum wait time (default 30 seconds)
+        @return the datagram payload as binary data, or @ref nothing on timeout or
+        when the QUIC session has closed (the session pushes a @c NOTHING sentinel).
+    */
     *binary readDatagram(timeout timeout_ms = 30s) {
         if (!exists stream_id) {
             throw "HTTPCLIENT-STATE-ERROR", "stream not yet established";
@@ -524,7 +559,24 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
         if (!sid) {
             throw "HTTPCLIENT-STATE-ERROR", "QUIC session not yet established";
         }
-        return h3conn.getSocket().readQuicDatagram(sid, stream_id, timeout_ms);
+        # Lazy-register the per-stream delivery Queue.  max=-1 is required: the
+        # I/O thread's recvDatagramCallback runs in a ngtcp2 C callback and cannot
+        # block on a bounded Queue.
+        if (!exists datagram_queue) {
+            datagram_queue = new Queue(-1);
+            h3conn.getSocket().registerQuicDatagramQueue(sid, stream_id, datagram_queue);
+        }
+        try {
+            auto v = datagram_queue.get(timeout_ms);
+            # NOTHING sentinel from session-close; everything else is the datagram
+            # payload (BinaryNode).
+            return v instanceof binary ? v : NOTHING;
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "QUEUE-TIMEOUT") {
+                return NOTHING;
+            }
+            rethrow;
+        }
     }
 
     #! Check if the remote peer supports QUIC datagrams on this connection

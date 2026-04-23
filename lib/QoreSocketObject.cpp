@@ -932,6 +932,85 @@ int QoreSocketObject::submitHttp2StreamingResponseHeaders(int32_t stream_id, int
     return priv->socket->submitHttp2StreamingResponseHeaders(stream_id, status_code, headers, xsink);
 }
 
+// Async-path H2 server write methods.  These follow the waitForHttp2StreamDrain
+// precedent (see below): acquire priv->m only briefly to copy the
+// Http2Session shared pointer, then perform header/data/trailer submission
+// under only the session's internal recursive mutex.  This eliminates the
+// handler-thread vs. I/O-thread contention on priv->m that motivated the
+// GrpcServer async-migration (see design/grpc-server-async-migration.md).
+int QoreSocketObject::submitHttp2StreamingResponseHeadersAsync(int32_t stream_id, int status_code,
+        const QoreHashNode* headers, ExceptionSink* xsink) {
+    Http2SessionPtr h2;
+    {
+        AutoLocker al(priv->m);
+        h2 = priv->socket->priv->h2_session;
+    }
+    if (!h2) {
+        xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session active");
+        return -1;
+    }
+    strcase_str_map_t header_map;
+    if (headers) {
+        ConstHashIterator hi(headers);
+        while (hi.next()) {
+            QoreValue val = hi.get();
+            if (val.getType() == NT_STRING) {
+                header_map[hi.getKey()] = val.get<const QoreStringNode>()->c_str();
+            }
+        }
+    }
+    return h2->submitResponseStreaming(stream_id, status_code, header_map, xsink);
+}
+
+int QoreSocketObject::sendHttp2StreamDataAsync(int32_t stream_id, const BinaryNode* data,
+        bool end_stream, ExceptionSink* xsink) {
+    Http2SessionPtr h2;
+    {
+        AutoLocker al(priv->m);
+        h2 = priv->socket->priv->h2_session;
+    }
+    if (!h2) {
+        xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session active");
+        return -1;
+    }
+    const void* ptr = data ? data->getPtr() : nullptr;
+    size_t len = data ? data->size() : 0;
+    int rv = h2->sendStreamData(stream_id, ptr, len, end_stream, xsink);
+    if (rv < 0) {
+        return -1;
+    }
+    if (rv > 0) {
+        xsink->raiseException("HTTP2-FLOW-CONTROL",
+            "stream %d buffer full: data dropped", stream_id);
+        return -1;
+    }
+    return 0;
+}
+
+int QoreSocketObject::sendHttp2TrailersAsync(int32_t stream_id, const QoreHashNode* trailers,
+        ExceptionSink* xsink) {
+    Http2SessionPtr h2;
+    {
+        AutoLocker al(priv->m);
+        h2 = priv->socket->priv->h2_session;
+    }
+    if (!h2) {
+        xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session active");
+        return -1;
+    }
+    strcase_str_map_t trailer_map;
+    if (trailers) {
+        ConstHashIterator hi(trailers);
+        while (hi.next()) {
+            QoreValue val = hi.get();
+            if (val.getType() == NT_STRING) {
+                trailer_map[hi.getKey()] = val.get<const QoreStringNode>()->c_str();
+            }
+        }
+    }
+    return h2->submitTrailers(stream_id, trailer_map, xsink);
+}
+
 int QoreSocketObject::submitHttp2StreamingResponseWithStream(int32_t stream_id, int status_code,
         const QoreHashNode* headers, InputStream* body, ExceptionSink* xsink) {
     // C++ vtable is the sole authority on I/O thread eligibility.
@@ -1929,6 +2008,39 @@ QoreValue QoreSocketObject::readQuicDatagram(int64_t session_id, int64_t stream_
         return QoreValue();
     }
     return session->readDatagram(stream_id, timeout_ms, xsink);
+}
+
+void QoreSocketObject::registerQuicDatagramQueue(int64_t session_id, int64_t stream_id,
+        Queue* queue, ExceptionSink* xsink) {
+    // Same brief-lock pattern as readQuicDatagram: copy the session shared_ptr
+    // under priv->m, then do the register work under only QuicSession::datagram_mutex_.
+    std::shared_ptr<QuicSession> session;
+    {
+        AutoLocker al(priv->m);
+        qore_socket_private* sp = qore_socket_private::get(*priv->socket);
+        session = sp->getQuicSession(session_id);
+    }
+    if (!session) {
+        xsink->raiseException("QUIC-ERROR", "no QUIC session with id %lld on this socket",
+            (long long)session_id);
+        return;
+    }
+    session->registerDatagramQueue(stream_id, queue, xsink);
+}
+
+void QoreSocketObject::unregisterQuicDatagramQueue(int64_t session_id, int64_t stream_id,
+        ExceptionSink* xsink) {
+    std::shared_ptr<QuicSession> session;
+    {
+        AutoLocker al(priv->m);
+        qore_socket_private* sp = qore_socket_private::get(*priv->socket);
+        session = sp->getQuicSession(session_id);
+    }
+    if (!session) {
+        // Session gone — nothing to unregister.  Silent for idempotent teardown.
+        return;
+    }
+    session->unregisterDatagramQueue(stream_id, xsink);
 }
 
 int64_t QoreSocketObject::getQuicMaxDatagramSize(int64_t session_id, int64_t stream_id,

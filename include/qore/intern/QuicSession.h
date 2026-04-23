@@ -813,6 +813,44 @@ public:
     */
     DLLLOCAL QoreValue readDatagram(int64_t stream_id, int timeout_ms, ExceptionSink* xsink);
 
+    //! Register a @ref Queue to receive incoming QUIC datagrams for a stream (RFC 9221/9297)
+    /** When a Queue is registered for a stream, @ref recvDatagramCallback pushes the payload
+        to the Queue (as a @ref BinaryNode) instead of appending to the internal deque.
+        Handlers can then block on @c Queue::get(timeout) for async-friendly wait semantics
+        — no @c Socket::poll() syscall, no C++-level CV wait across the Qore/C++ boundary.
+
+        On session close (@ref markClosed) a @c NOTHING sentinel is pushed to every registered
+        Queue so blocked readers wake.  The Queue is referenced by this session; callers must
+        call @ref unregisterDatagramQueue() when the stream is no longer reading datagrams to
+        release the reference.
+
+        If a Queue is already registered for @a stream_id this call replaces it (the old
+        Queue is dereferenced).  Passing @c nullptr for @a queue is equivalent to
+        @ref unregisterDatagramQueue().
+
+        @param stream_id the HTTP/3 stream ID (anchor stream)
+        @param queue the @ref Queue to populate; may be @c nullptr to unregister
+        @param xsink exception sink for push errors during backfill drain
+
+        @note Any datagrams already buffered in the internal deque at registration time
+        are drained into the Queue in arrival order, so no frame is lost in the switch.
+
+        @since %Qore 2.3
+    */
+    DLLLOCAL void registerDatagramQueue(int64_t stream_id, Queue* queue, ExceptionSink* xsink);
+
+    //! Unregister the @ref Queue previously registered for a stream's datagrams
+    /** Subsequent datagrams for @a stream_id fall back to the internal deque path (so
+        legacy @ref readDatagram() callers continue to work).  The registered Queue is
+        dereferenced.
+
+        @param stream_id the HTTP/3 stream ID
+        @param xsink exception sink for Queue deref
+
+        @since %Qore 2.3
+    */
+    DLLLOCAL void unregisterDatagramQueue(int64_t stream_id, ExceptionSink* xsink);
+
     //! Get the maximum datagram payload size for this connection (RFC 9221)
     /** Returns the maximum payload that can be sent in a single QUIC DATAGRAM frame,
         accounting for quarter-stream-ID encoding overhead.
@@ -1329,7 +1367,19 @@ private:
         Protected by datagram_mutex_.
     */
     std::unordered_map<int64_t, std::deque<std::vector<uint8_t>>> datagram_queues_;
-    std::mutex datagram_mutex_;  //!< protects datagram_queues_
+
+    //! Per-stream handler-registered Qore Queue for async datagram delivery (RFC 9221/9297)
+    /** When an entry exists for a stream_id, @ref recvDatagramCallback pushes the datagram
+        payload (as a @ref BinaryNode) to this Queue instead of the internal deque.  Enables
+        handler-side @c Queue::get(timeout) waits with no handler-thread syscall.  The Queue
+        reference is owned by this session (ref'd on register, deref'd on unregister / session
+        teardown / destructor).  Populated and consumed under @ref datagram_mutex_.
+
+        @since %Qore 2.3
+    */
+    std::unordered_map<int64_t, Queue*> datagram_qqueues_;
+
+    std::mutex datagram_mutex_;  //!< protects datagram_queues_ and datagram_qqueues_
 
     //! Condition variable for datagram arrival notifications
     /** Uses the same generation-counter pattern as drain_cv_ to avoid

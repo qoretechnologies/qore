@@ -196,6 +196,43 @@ public class AsyncSocketIoController inherits LoggerWrapper {
         return Qore::AsyncIoController::submit(info, replace);
     }
 
+    #! Waits for an @ref Qore::EventNotifier "EventNotifier" to be signaled via the I/O thread
+    /** Async replacement for the pattern @c Socket::poll((<SocketPollInfo>{events:
+        SOCK_POLLIN, socket: notifier},), timeout), which blocked the caller thread on a
+        raw @ref Qore::Socket::poll() "Socket::poll()" syscall.  This method submits a
+        @ref NotifierPollOperation to the I/O controller and blocks on the returned
+        @ref Qore::Thread::Queue "Queue" — the I/O thread does the fd wait, and the
+        caller is woken via CV when the notifier becomes readable or the timeout
+        elapses.
+
+        On success the caller should invoke @ref Qore::EventNotifier::acknowledge()
+        "acknowledge()" to drain the notifier's fd, matching the @c Socket::poll
+        pattern the caller is replacing.
+
+        @param notifier the notifier to wait on
+        @param to the maximum time to wait; a negative value means wait indefinitely
+
+        @return @ref True if the notifier was signaled within the timeout, @ref False
+        if the wait timed out
+
+        @since AsyncSocketIo 1.3
+    */
+    bool waitForNotifier(EventNotifier notifier, timeout to = 30s) {
+        NotifierPollOperation op(notifier);
+        Queue q = submit(<SocketPollOperationInfo>{
+            "sock": notifier,
+            "spop": op,
+            "owner": sprintf("notifier-wait-%d-%d", gettid(), clock_getmicros()),
+            "to": to,
+        });
+        # Pull the completion result (the controller pushes it on goal-reached,
+        # timeout, cancellation, or error).  Use Queue::get() with no timeout
+        # here — the controller is the authority on timing; an additional
+        # Queue-level timeout would only race with it.
+        q.get();
+        return op.goalReached();
+    }
+
     #! Cancels the operation with the given Socket's unique hash as the key
     /** @param sock the socket whose operation should be canceled
         @return @ref True "True" if an operation was found and canceled

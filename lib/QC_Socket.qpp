@@ -5446,6 +5446,76 @@ nothing Socket::submitHttp2StreamingResponseHeaders(int stream_id, int status_co
     return QoreValue();
 }
 
+//! Submits HTTP/2 streaming response headers without holding the socket wrapper lock
+/** Async-path variant of @ref submitHttp2StreamingResponseHeaders() for handlers
+    driven by an async I/O controller.  The wrapper lock is acquired only briefly to
+    copy the HTTP/2 session shared pointer; the actual header submission runs under
+    only the session's internal recursive mutex.  This avoids handler-thread vs.
+    I/O-thread contention on the socket wrapper lock and eliminates the close-vs-poll
+    lock inversion that the sync variant can trigger.
+
+    Must be paired with @ref sendHttp2StreamDataAsync() and/or @ref sendHttp2TrailersAsync();
+    flushing to the wire is driven by the I/O thread's existing HTTP/2 flush poll
+    operation.  No explicit flush call is needed from the handler.
+
+    @param stream_id the HTTP/2 stream ID
+    @param status_code HTTP status code (e.g., 200)
+    @param headers response headers
+
+    @throw HTTP2-ERROR if no HTTP/2 session is active or submission fails
+
+    @since %Qore 2.3
+*/
+nothing Socket::submitHttp2StreamingResponseHeadersAsync(int stream_id, int status_code,
+        *hash<auto> headers) {
+    s->submitHttp2StreamingResponseHeadersAsync((int32_t)stream_id, status_code, headers, xsink);
+    return QoreValue();
+}
+
+//! Sends HTTP/2 DATA frame payload without holding the socket wrapper lock
+/** Async-path variant of @ref sendHttp2StreamData().  Acquires the socket wrapper
+    lock only briefly to copy the HTTP/2 session shared pointer; the actual DATA
+    enqueue runs under only the session's internal recursive mutex.
+
+    @param stream_id the HTTP/2 stream ID
+    @param data the binary data to send
+    @param end_stream set to @ref True "True" to end the stream after sending
+
+    @throw HTTP2-ERROR if no HTTP/2 session is active
+    @throw HTTP2-FLOW-CONTROL raised when the stream's send buffer is full; the
+    caller should drain via @ref waitForHttp2StreamDrain() and retry
+
+    @since %Qore 2.3
+*/
+nothing Socket::sendHttp2StreamDataAsync(int stream_id, *binary data, softbool end_stream = False) {
+    s->sendHttp2StreamDataAsync((int32_t)stream_id, data, (bool)end_stream, xsink);
+    return QoreValue();
+}
+
+//! Sends HTTP/2 trailer headers on a stream without holding the socket wrapper lock
+/** Async-path variant of @ref sendHttp2Trailers().  Acquires the socket wrapper
+    lock only briefly to copy the HTTP/2 session shared pointer; the actual trailer
+    submission runs under only the session's internal recursive mutex.
+
+    Submits a trailing HEADERS frame with END_STREAM on the specified stream.
+    The stream's data provider is configured to use NGHTTP2_DATA_FLAG_NO_END_STREAM
+    on the last DATA frame so that the trailer HEADERS frame carries END_STREAM.
+
+    This is required for protocols like gRPC that communicate status via HTTP/2
+    trailers (e.g., \c grpc-status, \c grpc-message).
+
+    @param stream_id the HTTP/2 stream ID
+    @param trailers trailer header name/value pairs
+
+    @throw HTTP2-ERROR if no HTTP/2 session is active or trailer submission fails
+
+    @since %Qore 2.3
+*/
+nothing Socket::sendHttp2TrailersAsync(int stream_id, hash<string, string> trailers) {
+    s->sendHttp2TrailersAsync((int32_t)stream_id, trailers, xsink);
+    return QoreValue();
+}
+
 //! Submit HTTP/2 streaming response with InputStream body (non-blocking)
 /** Handler thread calls this and returns immediately. The I/O thread reads from the
     InputStream and sends DATA frames incrementally.
@@ -6933,6 +7003,75 @@ nothing Socket::submitQuicDatagram(int session_id, int stream_id, binary data) [
         return QoreValue();
     }
     return s->readQuicDatagram(session_id, stream_id, (int)timeout, xsink);
+}
+
+//! Registers a @ref Queue to receive incoming QUIC datagrams for a stream (RFC 9221/9297)
+/** Async-path replacement for @ref readQuicDatagram() — once registered, incoming
+    datagrams for @a stream_id are pushed to @a queue (as a @ref binary) by the
+    I/O thread; handlers block on @c Queue::get(timeout) for delivery.  A
+    @ref NOTHING sentinel is pushed when the QUIC session is closed.
+
+    Any datagrams already buffered internally at registration time are drained
+    into the Queue in arrival order so no frame is lost in the switch.
+
+    Call @ref unregisterQuicDatagramQueue() when the handler is done reading.
+
+    @param session_id the QUIC session ID
+    @param stream_id the HTTP/3 stream ID (anchor stream)
+    @param queue the Queue to populate
+
+    @throw QUIC-ERROR if no QUIC session with the given ID is active
+
+    @since %Qore 2.3
+
+    @see @ref unregisterQuicDatagramQueue()
+    @see @ref readQuicDatagram()
+*/
+nothing Socket::registerQuicDatagramQueue(int session_id, int stream_id, Queue[Queue] queue) [dom=NETWORK] {
+    if (session_id <= 0) {
+        xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0", (long long)session_id);
+        return QoreValue();
+    }
+    if (stream_id < 0) {
+        xsink->raiseException("QUIC-ERROR", "invalid stream_id %lld: must be >= 0", (long long)stream_id);
+        return QoreValue();
+    }
+    // Queue must be unlimited (max = -1) — the recvDatagramCallback runs in the
+    // ngtcp2 C callback and cannot block if the Queue fills up.  Matches the
+    // contract of registerQuicConnectStreamQueue() for the same reason.
+    if (queue->getMax() != -1) {
+        xsink->raiseException("QUIC-ERROR", "Queue must be unlimited (max = -1) for "
+            "datagram delivery; got max = %lld", (long long)queue->getMax());
+        return QoreValue();
+    }
+    // Transfer the ref to QuicSession — it derefs on unregister / teardown.
+    s->registerQuicDatagramQueue(session_id, stream_id, queue.release(), xsink);
+    return QoreValue();
+}
+
+//! Unregisters the @ref Queue previously registered via @ref registerQuicDatagramQueue()
+/** Subsequent datagrams for @a stream_id fall back to the internal buffered path
+    used by legacy @ref readQuicDatagram() callers.  Idempotent — calling this
+    without a prior register (or on a session that no longer exists) is a no-op.
+
+    @param session_id the QUIC session ID
+    @param stream_id the HTTP/3 stream ID
+
+    @since %Qore 2.3
+
+    @see @ref registerQuicDatagramQueue()
+*/
+nothing Socket::unregisterQuicDatagramQueue(int session_id, int stream_id) [dom=NETWORK] {
+    if (session_id <= 0) {
+        xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0", (long long)session_id);
+        return QoreValue();
+    }
+    if (stream_id < 0) {
+        xsink->raiseException("QUIC-ERROR", "invalid stream_id %lld: must be >= 0", (long long)stream_id);
+        return QoreValue();
+    }
+    s->unregisterQuicDatagramQueue(session_id, stream_id, xsink);
+    return QoreValue();
 }
 
 //! Get the maximum datagram payload size for a QUIC session (RFC 9221)

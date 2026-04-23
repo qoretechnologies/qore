@@ -37,6 +37,15 @@ path entirely and onto **HttpServerAsyncIo** — the async server framework
 already used by every other Qorus HTTP entry point (REST, MCP, A2A, SSE,
 WebSocket, HTTP/3).
 
+**Target end state:** `module-grpc` calls zero sync H2 socket APIs. No
+handler thread blocks on socket I/O. No handler thread acquires
+`my_socket_priv::m` for HTTP/2 operations. Inbound DATA is drained by
+the I/O thread into per-stream queues registered via
+`Http2PollOperationBase::registerStreamQueue`; outbound HEADERS, DATA,
+and trailers are enqueued by handlers via new async methods that take
+only `Http2Session::m` and wake the I/O thread to flush. The existing
+`SocketHttp2FlushPollOperation` on the I/O thread remains unchanged.
+
 ## Goals
 
 1. Eliminate `GrpcServer`'s direct use of `Socket::*Http2*` sync APIs.
@@ -125,23 +134,75 @@ streaming-response API, which already knows how to push DATA frames
 through the H2 session without sync `priv->m` acquisition.
 Trailers and `cleanupHttp2Stream` are likewise async.
 
-## What needs to be added in HttpServerAsyncIo
+## What needs to be added — concrete Phase-1 surface
 
-A quick scan suggests the I/O-thread machinery is already in place; what's
-missing is the **handler-facing API** for "give me a duplex
-framed-message channel for this H2 stream". Sketch:
+The I/O-thread machinery is already in place (`Http2PollOperation`
+inbound dispatch, per-stream inbound `Queue` via
+`registerStreamQueue`, `SocketHttp2FlushPollOperation` outbound flush).
+What's missing is a write side that does not traverse
+`my_socket_priv::m`. The sync methods (`sendHttp2StreamData`,
+`submitHttp2StreamingResponseHeaders`, `sendHttp2Trailers`) each take
+`my_socket_priv::m` in `QoreSocketObject` and then
+`Http2Session::m` one frame deeper; the latter is where the actual
+staging buffers (`pending_body_data`, `pending_data_providers`) live,
+so the former is redundant for enqueue.
 
-- `HttpServerAsyncIo::registerStreamingHandler(path, handler)` where the
-  handler receives a `StreamingRequestContext` containing
-  - request headers + metadata,
-  - a `Channel` for inbound DATA frames (already exposed for SSE/WS),
-  - methods to send response headers, push DATA frames, and submit
-    trailers (mostly already exposed for SSE).
+### C++ additions on `Http2Session`
 
-The gRPC-specific bits (length-prefixed frame header, gRPC trailers,
-`grpc-status` / `grpc-message`) live entirely in `GrpcServer` /
-`GrpcServerStream` on top of that primitive — they're already there in
-the current code, just sitting on the wrong substrate.
+Three new methods, mirroring the sync ones but taking **only**
+`Http2Session::m`, reusing the existing staging buffers, and waking
+the I/O thread (`AsyncIoControllerPriv::wakeSocket`) before return:
+
+- `submitStreamingResponseHeadersAsync(stream_id, status, headers, xsink)`
+- `sendStreamDataAsync(stream_id, data, len, end_stream, xsink)`
+- `submitTrailersAsync(stream_id, trailers, xsink)`
+
+Existing sync methods remain; the new ones sit alongside them.
+
+### Qore additions in `qlib/AsyncSocketIo/`
+
+New class `AsyncHttp2ServerStream` — the *only* stream-side API that
+`GrpcServerAsync` will use. Deliberately no overlap with
+`Http2StreamContext` (which wraps sync methods) so the "nothing sync"
+bar is visually enforceable.
+
+```qore
+public class AsyncHttp2ServerStream {
+    constructor(Socket sock, int stream_id, Queue inbound);
+    *binary read(timeout t = 5s);   # Queue::get, NOTHING = END_STREAM
+    bool readsDone();
+    sendHeaders(int status, hash<string, string> headers);
+    sendData(binary data, bool end_stream = False);
+    sendTrailers(hash<string, string> trailers);
+    reset(int error_code = 8 /* CANCEL */);
+}
+```
+
+Handlers are already dispatched by `HttpAsyncSocketIoController`
+with `HttpConnectionInfo` carrying `sock` + `header_info.stream_id`;
+`GrpcServerAsync` constructs one `AsyncHttp2ServerStream` per RPC
+from those inputs plus the Queue returned by
+`Http2PollOperation::registerStreamQueue`. No new
+`registerStreamingHandler` API is needed on `HttpServerAsyncIo`.
+
+### Prior art for the trailer API shape
+
+HTTP/2 response trailers are **not** a new pattern in the Qore codebase
+— they are already used on the sync side by
+`module-yaml/qlib/Connect/GrpcProtocolAdapter.qc:174-196`, which does the
+exact `submitHttp2StreamingResponseHeaders` → `sendHttp2StreamData` →
+`sendHttp2Trailers` → `startPollHttp2Flush` + `Socket::poll` dance that
+`GrpcServer` does today, and also knows how to produce **gRPC-Web
+trailers** (base64-encoded trailer frame appended to the response body;
+see `GrpcProtocolAdapter.qc:261-269`). What we are adding here is
+specifically the **async** equivalent — gRPC on the async path is
+the first consumer, not the first use of trailers overall.
+
+Keep the new async primitive shape-minimal — "send trailers for this
+stream" — and leave encoding variants (gRPC-Web base64, DataStream's
+HTTP/1.1 chunked `DataStream-Error`) to adapter layers on top, so
+`GrpcProtocolAdapter` can reuse the primitive cleanly when/if it
+migrates.
 
 ## Migration plan (suggested phases)
 
@@ -157,7 +218,10 @@ the current code, just sitting on the wrong substrate.
    Run `module-grpc` + `arrow-flight` + Qorus `grpc.qtest` test suites.
 5. **Same migration for ArrowFlight server** (uses the same base).
 6. **Deprecate the sync H2 server socket APIs** with `@deprecated`
-   markers + a one-version overlap.
+   markers + a one-version overlap. Blocked on resolving the
+   `Connect/GrpcProtocolAdapter` consumer (see Risks): either port
+   `ConnectHandler` to `HttpServerAsyncIo` first, or document an
+   explicit sync-path exemption before deprecation can land.
 7. **Remove the deprecated APIs** in the next major Qore version. Strip
    the corresponding code paths in `qore_socket_private` and
    `Http2Session` — significant simplification of the lock model.
@@ -167,9 +231,12 @@ the current code, just sitting on the wrong substrate.
 - `HttpServerAsyncIo`'s streaming-response path is currently exercised by
   SSE and WebSocket. gRPC will be the first consumer that needs both
   client-streaming **inbound** *and* server-streaming **outbound** on the
-  same logical RPC (bidi), and that needs trailer-based status reporting.
-  Some additional API surface is likely required — see the audit step
-  above.
+  same logical RPC (bidi), and that needs **async** trailer-based status
+  reporting. (Trailers themselves are not novel — the sync side already
+  has `Connect/GrpcProtocolAdapter` for HTTP/2 trailers and
+  `DataStreamRequestHandler` for HTTP/1.1 chunked trailers — but async
+  trailer submission on `HttpServerAsyncIo` is new.) Some additional API
+  surface is likely required — see the audit step above.
 - `RemoteServiceGrpcHandler` (Qorus relay) marshalls per-stream state
   through static `stream_hash{stream_id} = stream` tables. The thread
   identity changes when handlers run on the async worker pool instead of
@@ -178,6 +245,16 @@ the current code, just sitting on the wrong substrate.
   thread being the GrpcServer connection thread.
 - ArrowFlight has its own framing on top of gRPC that may have
   thread-affinity assumptions — needs explicit verification before flip.
+- **Second sync consumer of the H2 server APIs.**
+  `module-yaml/qlib/Connect/GrpcProtocolAdapter::handleGrpcRequest`
+  (called from `ConnectHandler`, which inherits the sync
+  `HttpServer::AbstractHttpRequestHandler`) calls the same sync
+  `submitHttp2StreamingResponseHeaders` / `sendHttp2StreamData` /
+  `sendHttp2Trailers` / `startPollHttp2Flush` methods `GrpcServer` does.
+  Before Phase 6/7 can deprecate and remove those APIs, the Connect
+  side has to be handled — either migrate `ConnectHandler` onto
+  `HttpServerAsyncIo` as well, or carve out an explicit sync-path
+  exemption. This decision is currently open.
 
 ## Acceptance criteria
 
@@ -188,13 +265,22 @@ the current code, just sitting on the wrong substrate.
   modes).
 - `arrow-flight.qtest` passes.
 - No remaining call sites of `Socket::*Http2*` sync APIs in
-  `module-grpc/qlib/`. `git grep -n 'startPollReadHttp2Request\|readHttp2StreamDataBlock\|submitHttp2StreamingResponseHeaders\|sendHttp2StreamData\|sendHttp2Trailers\|cleanupHttp2Stream\|isHttp2StreamComplete' qlib/` returns empty.
+  `module-grpc/qlib/`. `git grep -nE 'startPollReadHttp2Request|readHttp2StreamDataBlock|submitHttp2StreamingResponseHeaders|sendHttp2StreamData|sendHttp2Trailers|cleanupHttp2Stream|isHttp2StreamComplete|startPollHttp2Flush|flushHttp2|setHttp2ActiveStream|getHttp2ActiveStream' qlib/` returns empty.
+- `module-grpc` handler threads do not *hold* `my_socket_priv::m` while
+  performing HTTP/2 work. The new async write path follows the
+  `waitForHttp2StreamDrain` precedent (`QoreSocketObject.cpp:1056-1068`):
+  a brief `priv->m` acquisition to copy the `Http2SessionPtr`, then all
+  nghttp2 / session-state work runs under only the `Http2Session::m`
+  recursive mutex. This eliminates the close-vs-poll lock inversion and
+  the handler-vs-I/O-thread contention on `priv->m` that drove the
+  sync-API bugs.
 - A run of `valgrind` on the streaming tests shows no new leaks from
   the migration (baseline against current sync version).
 
 ## Out of scope for this doc
 
-- The exact `HttpServerAsyncIo` streaming API additions (cover in a
-  follow-up design doc once Phase 1 audit completes).
 - Deprecation timeline for the sync `Socket::*Http2*` server APIs (cover
   with the version-policy doc).
+- Converting SSE/WebSocket's existing write path off the sync Socket
+  methods. That path is independent of this migration; flip it when
+  convenient.

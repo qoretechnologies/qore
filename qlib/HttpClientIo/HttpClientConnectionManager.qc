@@ -1451,9 +1451,14 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
             }
             # H3 failed immediately — fall through to start H2
         } else {
-            # Poll the notifier fd for the stagger period
-            Socket::poll((<SocketPollInfo>{"events": SOCK_POLLIN, "socket": h3_notifier},),
-                HappyEyeballsStaggerMs);
+            # Drive the stagger wait via the I/O controller — no handler-thread
+            # Socket::poll() syscall.  The NotifierPollOperation submits a
+            # SOCK_POLLIN watch on the notifier's fd; the I/O thread wakes us via
+            # the returned Queue on signal or timeout.  waitForNotifier returns
+            # False on timeout; in either case we still acknowledge() to drain
+            # the fd (matches the former Socket::poll pattern) and then check
+            # isReady() for the authoritative state.
+            controller.waitForNotifier(h3_notifier, HappyEyeballsStaggerMs);
             h3_notifier.acknowledge();
             if (h3conn.isReady()) {
                 log(LoggerLevel::DEBUG, "happy eyeballs: H3 won within stagger for %s", key);
@@ -1534,8 +1539,9 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
             if (remaining <= 0ms) {
                 remaining = opts.connect_timeout;
             }
-            Socket::poll((<SocketPollInfo>{"events": SOCK_POLLIN, "socket": race_notifier},),
-                remaining);
+            # Async wait via the I/O controller (replaces a handler-thread
+            # Socket::poll syscall).  See the h3_notifier path above.
+            controller.waitForNotifier(race_notifier, remaining);
             race_notifier.acknowledge();
         } else {
             log(LoggerLevel::DEBUG,

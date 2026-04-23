@@ -242,7 +242,7 @@ Wraps a Socket + Http2ClientPollOperation pair.
 - **Sync mode**: `drivePoll(timeout)` performs a single poll iteration. `driveToReady(timeout)`
   loops until the HTTP/2 handshake completes. Uses `EventNotifier poll_notifier()` to wake the
   blocked poll when new requests are submitted.
-- **Controller mode**: `isControllerMode()` returns true when a controller reference is set.
+- **Controller mode**: when `setControllerRef()` has installed a controller reference,
   `submitRequest()` calls `controller_ref.wake()` after submitting to nghttp2, waking the I/O
   thread to pick up the new stream.
 - **States**: `Connecting` → `Ready` → `Draining` (GOAWAY received) → `Closed`.
