@@ -2354,100 +2354,171 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             throw "HTTPSERVER-ADDLISTENER-ERROR", sprintf("cannot add listener on %y; there is already an existing listener with this bind address", sock);
         }
 
-        int id = seqListeners.next();
-        if (!info.name) {
-            info.name = "listener";
-        }
-        info.name += sprintf("-%d", id);
+        # A "random port" request (service == "0") lets us transparently retry
+        # if the kernel-assigned TCP port turns out to be taken on UDP by
+        # something else in the process — most commonly a still-lingering
+        # ephemeral UDP socket from a previous H3 client in the same test
+        # process.  For an explicit port the caller committed to that port
+        # and we fail loudly instead of silently degrading to TCP-only (the
+        # old behaviour would leave clients hitting QUIC-HANDSHAKE-TIMEOUT
+        # with no indication why).
+        bool random_port = (info.service == "0");
+        bool needs_h3 = enable_h3 && info.cert && info.key && (info.enable_h3 ?? True);
+        int max_attempts = (random_port && needs_h3) ? 10 : 1;
 
-        if (nmap{info.name}) {
-            throw "HTTPSERVER-ADDLISTENER-ERROR", sprintf("there is already an active listener with name %y", info.name);
-        }
+        string base_name = info.name ?? "listener";
 
-        c.add();
-        #printf("HttpServer::addListenerIntern() %y c=%y\n", sock, c.getCount());
-        on_error c.done();
+        for (int attempt = 1; attempt <= max_attempts; ++attempt) {
+            int id = seqListeners.next();
+            info.name = base_name + sprintf("-%d", id);
 
-        HttpListener l = getListener(self, id, info);
-
-        # Register listener in maps BEFORE adding to async I/O controller
-        # This prevents a race where an accept could arrive before registration is complete
-        listeners{id} = l;
-        smap{sock} = id;
-        nmap{info.name} = id;
-
-        # rename listener if a wildcard service was provided
-        if (info.service == "0") {
-            int port = l.getInfo().port;
-            string nsock = sprintf("%s:%s", info.node ?? "*", port);
-            smap{nsock} = remove smap{sock};
-        }
-
-        # Auto-create the paired QUIC listener and populate the per-listener
-        # Alt-Svc entry BEFORE the TCP listener starts accepting connections.
-        # If we did this after asyncIo.addListener(), there would be a race
-        # window where a client could connect, send a request, and receive a
-        # response that omits the Alt-Svc header (because listener_alt_svc
-        # hasn't been populated yet).  This was observed intermittently in
-        # HttpServerHttp3Integration.qtest::testHttpClientHttp3Disabled: a
-        # fast client completed the handshake + request before the QUIC
-        # setup + updateAltSvcHeader() sequence finished on the server
-        # thread.
-        if (enable_h3 && info.cert && info.key && (info.enable_h3 ?? True)) {
-            try {
-                # Use the actual listener socket info to get the resolved address
-                # and family, since the original info may have AF_UNSPEC / no node
-                hash<auto> linfo = l.getInfo();
-                # When TCP bound to the IPv4 wildcard (0.0.0.0), bind the paired
-                # QUIC listener to "::" dual-stack instead.  The Alt-Svc header
-                # advertises "h3=\":<port>\"" which clients resolve against the
-                # original hostname; a host like "localhost" commonly resolves
-                # to ::1 first, so an IPv4-only QUIC listener is unreachable
-                # from the family the client picked and the handshake stalls
-                # ~30s until ngtcp2's idle timeout.  Linux IPv6 sockets accept
-                # IPv4 clients via v4-mapped addresses when bindv6only=0
-                # (the default), so "::" covers both families on one socket.
-                string q_node;
-                int q_family;
-                if (linfo.address == "0.0.0.0") {
-                    q_node = "::";
-                    q_family = AF_INET6;
-                } else {
-                    q_node = linfo.address ?? info.node;
-                    q_family = linfo.family;
-                }
-                hash<HttpListenerOptionInfo> quic_opts = <HttpListenerOptionInfo>{
-                    "cert": info.cert,
-                    "key": info.key,
-                    "node": q_node,
-                    "family": q_family,
-                    "alt_svc_max_age": info.alt_svc_max_age,
-                };
-                if (info.additional_info) {
-                    quic_opts.additional_info = info.additional_info;
-                }
-                hash<auto> quic_info = addQuicListener(quic_opts, linfo.port);
-                quic_port_map{id} = quic_info.port;
-                quic_alt_svc_max_age{id} = quic_info.alt_svc_max_age;
-                quic_listener_map{id} = quic_info.id;
-                updateAltSvcHeader();
-                log("Auto-created QUIC/HTTP/3 listener on UDP port %d for TCP listener %d",
-                    quic_info.port, id);
-            } catch (hash<ExceptionInfo> ex) {
-                # QUIC auto-creation is best-effort; log and continue with TCP-only
-                log("WARNING: Failed to auto-create QUIC listener for TCP listener %d: %s: %s",
-                    id, ex.err, ex.desc);
+            if (nmap{info.name}) {
+                throw "HTTPSERVER-ADDLISTENER-ERROR",
+                    sprintf("there is already an active listener with name %y", info.name);
             }
+
+            c.add();
+            #printf("HttpServer::addListenerIntern() %y c=%y\n", sock, c.getCount());
+
+            HttpListener l;
+            try {
+                l = getListener(self, id, info);
+            } catch (hash<ExceptionInfo> ex) {
+                c.done();
+                rethrow;
+            }
+
+            # Register listener in maps BEFORE adding to async I/O controller
+            # This prevents a race where an accept could arrive before registration is complete
+            listeners{id} = l;
+            smap{sock} = id;
+            nmap{info.name} = id;
+
+            # rename listener if a wildcard service was provided
+            string effective_sock = sock;
+            if (info.service == "0") {
+                int port = l.getInfo().port;
+                effective_sock = sprintf("%s:%s", info.node ?? "*", port);
+                smap{effective_sock} = remove smap{sock};
+            }
+
+            # Auto-create the paired QUIC listener and populate the per-listener
+            # Alt-Svc entry BEFORE the TCP listener starts accepting connections.
+            # If we did this after asyncIo.addListener(), there would be a race
+            # window where a client could connect, send a request, and receive a
+            # response that omits the Alt-Svc header (because listener_alt_svc
+            # hasn't been populated yet).  This was observed intermittently in
+            # HttpServerHttp3Integration.qtest::testHttpClientHttp3Disabled: a
+            # fast client completed the handshake + request before the QUIC
+            # setup + updateAltSvcHeader() sequence finished on the server
+            # thread.
+            bool h3_ok = True;
+            *string h3_err;
+            *string h3_desc;
+            if (needs_h3) {
+                try {
+                    # Use the actual listener socket info to get the resolved address
+                    # and family, since the original info may have AF_UNSPEC / no node
+                    hash<auto> linfo = l.getInfo();
+                    # When TCP bound to the IPv4 wildcard (0.0.0.0), bind the paired
+                    # QUIC listener to "::" dual-stack instead.  The Alt-Svc header
+                    # advertises "h3=\":<port>\"" which clients resolve against the
+                    # original hostname; a host like "localhost" commonly resolves
+                    # to ::1 first, so an IPv4-only QUIC listener is unreachable
+                    # from the family the client picked and the handshake stalls
+                    # ~30s until ngtcp2's idle timeout.  Linux IPv6 sockets accept
+                    # IPv4 clients via v4-mapped addresses when bindv6only=0
+                    # (the default), so "::" covers both families on one socket.
+                    string q_node;
+                    int q_family;
+                    if (linfo.address == "0.0.0.0") {
+                        q_node = "::";
+                        q_family = AF_INET6;
+                    } else {
+                        q_node = linfo.address ?? info.node;
+                        q_family = linfo.family;
+                    }
+                    hash<HttpListenerOptionInfo> quic_opts = <HttpListenerOptionInfo>{
+                        "cert": info.cert,
+                        "key": info.key,
+                        "node": q_node,
+                        "family": q_family,
+                        "alt_svc_max_age": info.alt_svc_max_age,
+                    };
+                    if (info.additional_info) {
+                        quic_opts.additional_info = info.additional_info;
+                    }
+                    hash<auto> quic_info = addQuicListener(quic_opts, linfo.port);
+                    quic_port_map{id} = quic_info.port;
+                    quic_alt_svc_max_age{id} = quic_info.alt_svc_max_age;
+                    quic_listener_map{id} = quic_info.id;
+                    updateAltSvcHeader();
+                    log("Auto-created QUIC/HTTP/3 listener on UDP port %d for TCP listener %d",
+                        quic_info.port, id);
+                } catch (hash<ExceptionInfo> ex) {
+                    h3_ok = False;
+                    h3_err = ex.err;
+                    h3_desc = ex.desc;
+                }
+            }
+
+            if (!h3_ok) {
+                if (random_port && attempt < max_attempts) {
+                    # Retry with a fresh random port.  Tear down everything
+                    # bound so far so the next iteration starts clean.  This
+                    # is strictly better than silently degrading to TCP-only
+                    # on a random-port listener, because the caller asked for
+                    # enable_h3 and has no way to observe that it didn't take.
+                    log("WARNING: attempt %d/%d: paired QUIC listener bind "
+                        "failed on port %d (%s: %s); retrying with a fresh "
+                        "random port", attempt, max_attempts,
+                        l.getInfo().port, h3_err, h3_desc);
+                    remove listeners{id};
+                    remove smap{effective_sock};
+                    remove nmap{info.name};
+                    try { l.stop(); } catch () {}
+                    c.done();
+                    continue;
+                }
+                if (!random_port) {
+                    # Explicit port — caller committed to this port; we can't
+                    # pick a different one behind their back.  Roll back the
+                    # TCP listener and surface a hard error so misconfiguration
+                    # (port in use, no IPv6 support, etc.) is visible.
+                    log("ERROR: failed to bind paired QUIC listener on "
+                        "explicit port %s: %s: %s",
+                        info.service, h3_err, h3_desc);
+                    remove listeners{id};
+                    remove smap{effective_sock};
+                    remove nmap{info.name};
+                    try { l.stop(); } catch () {}
+                    c.done();
+                    throw "HTTPSERVER-H3-BIND-ERROR",
+                        sprintf("failed to bind paired HTTP/3 UDP listener on "
+                            "requested port %s: %s: %s",
+                            info.service, h3_err, h3_desc);
+                }
+                # random_port && attempt == max_attempts: retries exhausted.
+                # Keep the TCP listener running (we already told the caller we
+                # have a bind) but log a clear warning that H3 is disabled.
+                log("WARNING: exhausted %d QUIC-bind attempts for random-port "
+                    "listener %d; continuing with TCP-only (no H3) on port %d: "
+                    "last error: %s: %s",
+                    max_attempts, id, l.getInfo().port, h3_err, h3_desc);
+            }
+
+            # Add the TCP listener to the async I/O controller — start accepting.
+            # Done AFTER QUIC + Alt-Svc setup so the first TCP response already
+            # carries the Alt-Svc header (see comment above).
+            asyncIo.addListener(l, asyncTarget, l.isSsl(), l.getSslCertificateObject(),
+                l.getSslPrivateKeyObject(), l.getHttpVersion(), l.getSslVerifyFlags(),
+                l.getSslAcceptAllCerts(), l.getGetRemoteCerts(), l.getMaxRequestBodySize(), l);
+
+            return l;
         }
 
-        # Add the TCP listener to the async I/O controller — start accepting.
-        # Done AFTER QUIC + Alt-Svc setup so the first TCP response already
-        # carries the Alt-Svc header (see comment above).
-        asyncIo.addListener(l, asyncTarget, l.isSsl(), l.getSslCertificateObject(),
-            l.getSslPrivateKeyObject(), l.getHttpVersion(), l.getSslVerifyFlags(),
-            l.getSslAcceptAllCerts(), l.getGetRemoteCerts(), l.getMaxRequestBodySize(), l);
-
-        return l;
+        throw "HTTPSERVER-ADDLISTENER-ERROR",
+            sprintf("internal error: retry loop exhausted without a decision");
     }
 
     private list<hash<auto>> addINETListenersIntern(hash<HttpListenerOptionInfo> info,
