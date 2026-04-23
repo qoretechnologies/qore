@@ -463,7 +463,6 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
         COMMAND ${CMAKE_COMMAND} -E make_directory ${_qmod_out_dir}
         COMMAND ${CMAKE_COMMAND} -E env ${QORE_QM_METADATA_ENV}
             $<TARGET_FILE:qcc> -m ${_source_root}
-            --include-source
             --depfile=${_qmod_dep} -o ${_qmod_out}
         # Drop a symlink at qlib/<name>.qmod pointing at the freshly
         # built qmod.  The in-tree test suite uses
