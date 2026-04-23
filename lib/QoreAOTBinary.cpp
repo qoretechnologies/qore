@@ -2987,6 +2987,28 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
         return true;
     }
 
+    // Early CRM lookup for container values that came from parse-time folding
+    // of a named constant.  AOT init functions commit runtime-initialised
+    // constants by calling ConstantEntry::setRuntimeValue(), which overwrites
+    // ce->val with the concrete evaluated value (hash/list/object) — the
+    // RuntimeConstantRefNode wrapper is gone.  Downstream parses of other
+    // qmods therefore see the raw pointer instead of a constant reference,
+    // and classifyAndWriteExpr would expand the hash/list in place (leaking
+    // anonymous inner values that later fail as GENERIC_EVAL).  Short-circuit
+    // by emitting RUNTIME_CONST_REF when the pointer matches a known
+    // top-level constant so load-time reader resolves via the live constant.
+    if (const_reverse_map) {
+        qore_type_t qt = node->getType();
+        if (qt == NT_HASH || qt == NT_LIST || qt == NT_OBJECT) {
+            auto it = const_reverse_map->find(node);
+            if (it != const_reverse_map->end()) {
+                writer.writeU8(static_cast<uint8_t>(AOTExprKind::RUNTIME_CONST_REF));
+                writer.writeStringRef(it->second.c_str());
+                return true;
+            }
+        }
+    }
+
     // FunctionCallNode: regular function call
     if (auto* call = dynamic_cast<const FunctionCallNode*>(node)) {
         writer.writeU8(static_cast<uint8_t>(AOTExprKind::FUNC_CALL));
