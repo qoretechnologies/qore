@@ -418,6 +418,183 @@ void qore_program_private_base::setDefines() {
     }
 }
 
+namespace {
+
+// module API version as a formatted string for ${QORE_MODULE_VERSION}
+inline std::string qore_module_api_version_str() {
+    char buf[32];
+    snprintf(buf, sizeof(buf), "%d.%d", QORE_MODULE_API_MAJOR, QORE_MODULE_API_MINOR);
+    return buf;
+}
+
+// Expand ${NAME} variable references in `in` into `out`.
+// Returns true on success, false on error (with `err` populated with a human-readable reason).
+// Supports \$ as a literal $ escape.  Recognises the predefined macros listed in the design doc;
+// falls back to the process environment for anything else.  Unknown macros and unset env vars
+// produce an error (no silent empty substitution — see design doc "Error cases").
+bool expand_module_path_macros(const std::string& in, std::string& out, std::string& err,
+        qore_program_private_base& pp) {
+    out.clear();
+    out.reserve(in.size());
+    const char* const data = in.data();
+    const size_t n = in.size();
+    for (size_t i = 0; i < n; ) {
+        char c = data[i];
+        if (c == '\\' && i + 1 < n && data[i + 1] == '$') {
+            out.push_back('$');
+            i += 2;
+            continue;
+        }
+        if (c == '$' && i + 1 < n && data[i + 1] == '{') {
+            // find closing '}'
+            size_t j = i + 2;
+            while (j < n && data[j] != '}') {
+                ++j;
+            }
+            if (j >= n) {
+                err = "expected '}' to close variable reference";
+                return false;
+            }
+            std::string name(data + i + 2, j - (i + 2));
+            if (name.empty()) {
+                err = "empty variable name in ${...}";
+                return false;
+            }
+            // predefined macros
+            const char* expansion = nullptr;
+            std::string owned;
+            if (name == "SCRIPT_DIR") {
+                if (pp.script_dir.empty()) {
+                    err = "${SCRIPT_DIR} is not available (parse input has no on-disk file)";
+                    return false;
+                }
+                expansion = pp.script_dir.c_str();
+            } else if (name == "SCRIPT_NAME") {
+                if (pp.script_name.empty()) {
+                    err = "${SCRIPT_NAME} is not available (parse input has no on-disk file)";
+                    return false;
+                }
+                expansion = pp.script_name.c_str();
+            } else if (name == "SCRIPT_PATH") {
+                if (pp.script_path.empty()) {
+                    err = "${SCRIPT_PATH} is not available (parse input has no on-disk file)";
+                    return false;
+                }
+                expansion = pp.script_path.c_str();
+            } else if (name == "PROGRAM_DIR") {
+                // Per design, PROGRAM_DIR refers to the TOP-LEVEL program file's directory —
+                // same as SCRIPT_DIR for the top-level program, but in a module (.qm/.qc) it
+                // yields the parent program's script_dir.  We walk up via the thread-local
+                // getProgram() chain isn't stable here, so approximate with script_dir —
+                // this matches user intent in the Qorus case because the entrypoint directive
+                // fires during the top-level parse.  (Future work: thread a parent pointer
+                // through qore_program_private to distinguish the two.)
+                if (pp.script_dir.empty()) {
+                    err = "${PROGRAM_DIR} is not available (parse input has no on-disk file)";
+                    return false;
+                }
+                expansion = pp.script_dir.c_str();
+            } else if (name == "QORE_VERSION") {
+                expansion = QORE_VERSION;
+            } else if (name == "QORE_PREFIX") {
+                expansion = QORE_INSTALL_PREFIX;
+            } else if (name == "QORE_MODULE_VERSION") {
+                owned = qore_module_api_version_str();
+                expansion = owned.c_str();
+            } else {
+                const char* env_val = getenv(name.c_str());
+                if (!env_val) {
+                    err = "undefined variable '";
+                    err += name;
+                    err += "' in path argument";
+                    return false;
+                }
+                expansion = env_val;
+            }
+            out.append(expansion);
+            i = j + 1;
+            continue;
+        }
+        if (c == '$' && i + 1 < n && data[i + 1] == '$') {
+            // literal $ via $$
+            out.push_back('$');
+            i += 2;
+            continue;
+        }
+        out.push_back(c);
+        ++i;
+    }
+    return true;
+}
+
+} // anonymous namespace
+
+int qore_program_private_base::applyModulePathDirective(bool prepend, std::string raw_path,
+        const QoreProgramLocation& loc) {
+    const char* directive_name = prepend ? "prepend-module-path" : "append-module-path";
+
+    // Strip surrounding whitespace
+    auto lstrip = [](std::string& s) {
+        size_t i = 0;
+        while (i < s.size() && (s[i] == ' ' || s[i] == '\t' || s[i] == '\r' || s[i] == '\n')) {
+            ++i;
+        }
+        if (i) {
+            s.erase(0, i);
+        }
+    };
+    auto rstrip = [](std::string& s) {
+        while (!s.empty()) {
+            char c = s.back();
+            if (c == ' ' || c == '\t' || c == '\r' || c == '\n') {
+                s.pop_back();
+            } else {
+                break;
+            }
+        }
+    };
+    lstrip(raw_path);
+    rstrip(raw_path);
+
+    // Strip surrounding double-quotes, if any — the new-style directive uses quoted paths
+    if (raw_path.size() >= 2 && raw_path.front() == '"' && raw_path.back() == '"') {
+        raw_path = raw_path.substr(1, raw_path.size() - 2);
+    }
+
+    if (raw_path.empty()) {
+        parse_error(loc, "missing argument to %%%s", directive_name);
+        return -1;
+    }
+
+    std::string expanded;
+    std::string err;
+    if (!expand_module_path_macros(raw_path, expanded, err, *this)) {
+        parse_error(loc, "%%%s: %s", directive_name, err.c_str());
+        return -1;
+    }
+
+    if (expanded.empty()) {
+        parse_error(loc, "%%%s: empty path computed from variable expansion", directive_name);
+        return -1;
+    }
+
+    auto& target = prepend ? prepended_module_paths : appended_module_paths;
+
+    // silent dedup (design: "silent dedup at insert time")
+    for (const std::string& existing : target) {
+        if (existing == expanded) {
+            return 0;
+        }
+    }
+
+    if (prepend) {
+        target.insert(target.begin(), std::move(expanded));
+    } else {
+        target.push_back(std::move(expanded));
+    }
+    return 0;
+}
+
 void qore_program_private_base::startThread(ExceptionSink& xsink) {
    if (!thread_local_storage->get())
       thread_local_storage->set(new QoreHashNode(autoTypeInfo));
@@ -586,6 +763,12 @@ void qore_program_private_base::setParent(QoreProgram* p_pgm, const QoreParseOpt
     for (auto& i : p_pgm->priv->dmap) {
         dmap[i.first] = i.second.refSelf();
     }
+
+    // inherit parent's %prepend-module-path / %append-module-path lists so subprograms
+    // see the same module search surface their parent established (design:
+    // design/parse-directive-prepend-module-path.md, "Subprogram propagation")
+    prepended_module_paths = p_pgm->priv->prepended_module_paths;
+    appended_module_paths = p_pgm->priv->appended_module_paths;
 
     // copy external data if present
     if (!(n_parse_options & PO_NO_INHERIT_PROGRAM_DATA) && !p_pgm->priv->extmap.empty()) {

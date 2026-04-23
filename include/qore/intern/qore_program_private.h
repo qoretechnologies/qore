@@ -460,6 +460,17 @@ public:
     // modules loadded with parse commands
     strset_t parse_modules;
 
+    //! per-Program module search-path lists populated by %prepend-module-path and %append-module-path
+    /** Stored in insertion order (most-recently-prepended path sits at index 0 for prepended_module_paths).
+        Consulted by QoreModuleManager::loadModuleIntern's path search: prepended paths first,
+        then the process-global moduleDirList, then appended paths last.
+        Serialised into AOT binaries (QORE_AOT_FEAT_MODULE_PATH_LISTS) so AOT-compiled modules
+        can resolve their dependencies without requiring QORE_MODULE_DIR at runtime.
+    */
+    std::vector<std::string> prepended_module_paths;
+    //! per-Program appended module search paths (see prepended_module_paths)
+    std::vector<std::string> appended_module_paths;
+
     // parse lock, making parsing actions atomic and thread-safe, also for runtime thread attachment
     mutable QoreThreadLock plock;
 
@@ -727,6 +738,19 @@ public:
     DLLLOCAL void addParseModule(const char* mod) {
         parse_modules.insert(mod);
     }
+
+    //! Applies a %prepend-module-path / %append-module-path directive argument to this Program.
+    /** Expands ${NAME} variable references (predefined macros + process environment) in `raw_path`,
+        de-duplicates against the current list, and prepends/appends the expanded absolute path.
+
+        @param prepend true for %prepend-module-path (new path added at index 0); false for %append-module-path
+        @param raw_path the raw quoted-or-unquoted argument as captured by the scanner; leading and
+               trailing whitespace and surrounding double-quotes are stripped
+        @param loc parse location for error reporting
+
+        @return 0 on success, -1 on parse error (parseException raised via parse_error)
+    */
+    DLLLOCAL int applyModulePathDirective(bool prepend, std::string raw_path, const QoreProgramLocation& loc);
 
 protected:
     typedef vector_map_t<const char*, AbstractQoreProgramExternalData*> extmap_t;

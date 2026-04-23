@@ -1183,8 +1183,28 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
     QoreString str;
     struct stat sb;
 
-    strdeque_t::const_iterator w = moduleDirList.begin();
-    while (w != moduleDirList.end()) {
+    // Build the effective search path: per-Program prepended paths FIRST (most-recently-added at
+    // index 0 per design doc), then the process-global moduleDirList, then per-Program appended
+    // paths LAST.  We collect raw pointers to avoid copying strings.  See
+    // design/parse-directive-prepend-module-path.md "Search-path layering".
+    std::vector<const std::string*> search_paths;
+    const qore_program_private* priv_pgm = pgm ? qore_program_private::get(*pgm) : nullptr;
+    if (priv_pgm) {
+        for (const std::string& p : priv_pgm->prepended_module_paths) {
+            search_paths.push_back(&p);
+        }
+    }
+    for (const std::string& p : moduleDirList) {
+        search_paths.push_back(&p);
+    }
+    if (priv_pgm) {
+        for (const std::string& p : priv_pgm->appended_module_paths) {
+            search_paths.push_back(&p);
+        }
+    }
+
+    for (const std::string* path_ptr : search_paths) {
+        const std::string& dir = *path_ptr;
         // Per module directory, the preference order is:
         //   1. `<name>-api-<x>.<y>.qmod` (binary, matching an active API version)
         //   2. `<name>.qmod`             (binary, no API suffix — AOT-compiled user
@@ -1200,7 +1220,7 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
         for (unsigned ai = 0; ai <= qore_mod_api_list_len; ++ai) {
             // build path to binary module
             str.clear();
-            str.sprintf("%s" QORE_DIR_SEP_STR "%s", (*w).c_str(), name);
+            str.sprintf("%s" QORE_DIR_SEP_STR "%s", dir.c_str(), name);
 
             // make new extension string
             if (ai < qore_mod_api_list_len) {
@@ -1232,7 +1252,7 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
 
         // No `.qmod` form exists in this directory — try the `.qm` source.
         str.clear();
-        str.sprintf("%s" QORE_DIR_SEP_STR "%s.qm", (*w).c_str(), name);
+        str.sprintf("%s" QORE_DIR_SEP_STR "%s.qm", dir.c_str(), name);
         if (!stat(str.c_str(), &sb)) {
             // see if this is a relative path; if so normalize it; we cannot send a relative path to
             // loadUserModuleFromPath(), since it will try to normalize the path using the current program's
@@ -1246,7 +1266,7 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
         }
 
         // check whether it is a module folder
-        QoreString modulePath(*w);
+        QoreString modulePath(dir);
         modulePath += QORE_DIR_SEP_STR;
         modulePath += name;
 
@@ -1256,13 +1276,24 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
                 load_opt & QMLO_REINJECT ? mpgm : nullptr, load_opt, warning_mask);
             return qore_check_load_module_intern(mi, op, version, pgm, xsink) ? nullptr : mi;
         }
-
-        ++w;
     }
 
     QoreStringNode* desc = new QoreStringNodeMaker("feature '%s' is not builtin and no module with this name could "
         "be found in the module path: ", name);
+    if (priv_pgm && !priv_pgm->prepended_module_paths.empty()) {
+        bool first = true;
+        for (const std::string& p : priv_pgm->prepended_module_paths) {
+            desc->sprintf("%s%s", first ? "" : ":", p.c_str());
+            first = false;
+        }
+        desc->concat(':');
+    }
     moduleDirList.appendPath(*desc);
+    if (priv_pgm && !priv_pgm->appended_module_paths.empty()) {
+        for (const std::string& p : priv_pgm->appended_module_paths) {
+            desc->sprintf(":%s", p.c_str());
+        }
+    }
     xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(name), desc);
     return nullptr;
 }

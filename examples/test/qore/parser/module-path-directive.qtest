@@ -1,0 +1,218 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%requires ../../../../qlib/QUnit.qm
+
+%exec-class ModulePathDirectiveTest
+
+# Regression coverage for the %prepend-module-path / %append-module-path parse
+# directives introduced in Qore 2.3.  See
+# design/parse-directive-prepend-module-path.md for the specification.
+class ModulePathDirectiveTest inherits QUnit::Test {
+    private {
+        # module source used to verify the search-path plumbing end-to-end:
+        # a trivial .qm that publishes one public function.
+        const ModuleSrc =
+            "# -*- mode: qore; indent-tabs-mode: nil -*-\n"
+            "%new-style\n"
+            "%requires qore >= 2.0\n"
+            "\n"
+            "module HelloTest {\n"
+            "    version = \"1.0\";\n"
+            "    desc = \"mod-path directive test module\";\n"
+            "    author = \"test\";\n"
+            "    url = \"https://example.com\";\n"
+            "    license = \"MIT\";\n"
+            "}\n"
+            "\n"
+            "public namespace HelloTest {\n"
+            "    public string sub hello() {\n"
+            "        return \"hello from HelloTest\";\n"
+            "    }\n"
+            "}\n";
+
+        string tmpdir;
+        string moddir;
+    }
+
+    constructor() : QUnit::Test("ModulePathDirectiveTest", "1.0") {
+        addTestCase("prepend-module-path: literal path resolves %requires",
+            \testPrependLiteral());
+        addTestCase("prepend-module-path: SCRIPT_DIR macro expansion",
+            \testPrependScriptDirMacro());
+        addTestCase("prepend-module-path: environment variable expansion",
+            \testPrependEnvVar());
+        addTestCase("prepend-module-path: macro precedence over env var",
+            \testMacroBeatsEnvVar());
+        addTestCase("prepend-module-path: backslash-dollar escape",
+            \testEscapedDollar());
+        addTestCase("prepend-module-path: unknown variable raises parse error",
+            \testUnknownVarError());
+        addTestCase("prepend-module-path: unterminated ${ raises parse error",
+            \testUnterminatedBrace());
+        addTestCase("prepend-module-path: SCRIPT_DIR error for buffer-parsed code",
+            \testBufferParseScriptDirError());
+        addTestCase("append-module-path: quoted form routes to per-Program list",
+            \testAppendNewForm());
+        addTestCase("append-module-path: legacy unquoted form still works",
+            \testAppendLegacyForm());
+        addTestCase("QORE_VERSION macro expansion",
+            \testQoreVersionMacro());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        tmpdir = sprintf("/tmp/qore_modpath_test_%d_%d", getpid(), rand());
+        mkdir(tmpdir, 0755);
+        moddir = tmpdir + DirSep + "mods";
+        mkdir(moddir, 0755);
+        # write the test module into moddir as HelloTest.qm
+        File f();
+        f.open2(moddir + DirSep + "HelloTest.qm", O_CREAT | O_TRUNC | O_WRONLY);
+        f.write(ModuleSrc);
+        f.close();
+    }
+
+    globalTearDown() {
+        # best-effort cleanup; leave files if the test crashed mid-run
+        try {
+            foreach string name in (glob(moddir + DirSep + "*")) {
+                unlink(name);
+            }
+            rmdir(moddir);
+            foreach string name in (glob(tmpdir + DirSep + "*")) {
+                unlink(name);
+            }
+            rmdir(tmpdir);
+        } catch (hash<ExceptionInfo> ex) {
+            # swallow
+        }
+    }
+
+    # A small helper that parses + runs the given source in a fresh Program with
+    # parent inheritance disabled so parent `%modern` / module-path state doesn't
+    # leak in.  When @scriptFileName is set, uses setScriptPath() so
+    # ${SCRIPT_DIR} macros resolve to @tmpdir.
+    private auto runScript(string src, *string scriptFileName) {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS, True);
+        string label;
+        if (scriptFileName.val()) {
+            string path = tmpdir + DirSep + scriptFileName;
+            p.setScriptPath(path);
+            label = path;
+        } else {
+            label = "<buffer>";
+        }
+        p.parse(src, label);
+        return p.callFunction("hello_driver");
+    }
+
+    testPrependLiteral() {
+        string src = "%new-style\n"
+            "%prepend-module-path \"" + moddir + "\"\n"
+            "%requires HelloTest\n"
+            "string sub hello_driver() { return HelloTest::hello(); }\n";
+        assertEq("hello from HelloTest", runScript(src));
+    }
+
+    testPrependScriptDirMacro() {
+        string src = "%new-style\n"
+            "%prepend-module-path \"${SCRIPT_DIR}" + DirSep + "mods\"\n"
+            "%requires HelloTest\n"
+            "string sub hello_driver() { return HelloTest::hello(); }\n";
+        assertEq("hello from HelloTest", runScript(src, "script.qr"));
+    }
+
+    testPrependEnvVar() {
+        setenv("QORE_MODPATH_TEST_DIR", moddir);
+        on_exit unsetenv("QORE_MODPATH_TEST_DIR");
+        string src = "%new-style\n"
+            "%prepend-module-path \"${QORE_MODPATH_TEST_DIR}\"\n"
+            "%requires HelloTest\n"
+            "string sub hello_driver() { return HelloTest::hello(); }\n";
+        assertEq("hello from HelloTest", runScript(src));
+    }
+
+    testMacroBeatsEnvVar() {
+        # Set SCRIPT_DIR env var to a bogus path — the builtin macro must win
+        # and point to the real script location (tmpdir).
+        setenv("SCRIPT_DIR", "/nonexistent/bogus");
+        on_exit unsetenv("SCRIPT_DIR");
+        string src = "%new-style\n"
+            "%prepend-module-path \"${SCRIPT_DIR}" + DirSep + "mods\"\n"
+            "%requires HelloTest\n"
+            "string sub hello_driver() { return HelloTest::hello(); }\n";
+        assertEq("hello from HelloTest", runScript(src, "script.qr"));
+    }
+
+    testEscapedDollar() {
+        # \$ must be passed through as a literal $ and not trigger variable
+        # expansion; the resulting path won't exist so %requires will fail, but
+        # the parse itself must succeed.
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS, True);
+        string src = "%new-style\n"
+            "%prepend-module-path \"/tmp/path-with-\\$-in-it\"\n"
+            "string sub hello_driver() { return \"ok\"; }\n";
+        p.parse(src, "<buffer>");
+        assertEq("ok", p.callFunction("hello_driver"));
+    }
+
+    testUnknownVarError() {
+        unsetenv("QORE_MODPATH_UNKNOWN_9921");
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS, True);
+        string src = "%new-style\n"
+            "%prepend-module-path \"${QORE_MODPATH_UNKNOWN_9921}\"\n";
+        assertThrows("PARSE-EXCEPTION", "undefined variable",
+            \p.parse(), (src, "<buffer>"));
+    }
+
+    testUnterminatedBrace() {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS, True);
+        string src = "%new-style\n"
+            "%prepend-module-path \"${UNCLOSED\"\n";
+        assertThrows("PARSE-EXCEPTION", "close variable reference",
+            \p.parse(), (src, "<buffer>"));
+    }
+
+    testBufferParseScriptDirError() {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS, True);
+        # Program::parse() with no on-disk file — ${SCRIPT_DIR} has no value.
+        string src = "%new-style\n"
+            "%prepend-module-path \"${SCRIPT_DIR}" + DirSep + "mods\"\n";
+        assertThrows("PARSE-EXCEPTION", "SCRIPT_DIR.*not available",
+            \p.parse(), (src, "<buffer>"));
+    }
+
+    testAppendNewForm() {
+        string src = "%new-style\n"
+            "%append-module-path \"" + moddir + "\"\n"
+            "%requires HelloTest\n"
+            "string sub hello_driver() { return HelloTest::hello(); }\n";
+        assertEq("hello from HelloTest", runScript(src));
+    }
+
+    testAppendLegacyForm() {
+        # Legacy unquoted, colon-separated, $VAR-style argument still targets
+        # the process-global list.  Kept for backward compatibility with pre-2.3
+        # scripts (including Qorus entrypoint scripts).
+        string src = "%new-style\n"
+            "%append-module-path " + moddir + "\n"
+            "%requires HelloTest\n"
+            "string sub hello_driver() { return HelloTest::hello(); }\n";
+        assertEq("hello from HelloTest", runScript(src));
+    }
+
+    testQoreVersionMacro() {
+        # ${QORE_VERSION} should expand to a non-empty version string;
+        # we verify by embedding the expansion in a path that won't exist
+        # (so the parse of the directive must succeed with any non-empty value).
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS, True);
+        string src = "%new-style\n"
+            "%prepend-module-path \"/nonexistent/qore-${QORE_VERSION}\"\n"
+            "string sub hello_driver() { return \"ok\"; }\n";
+        p.parse(src, "<buffer>");
+        assertEq("ok", p.callFunction("hello_driver"));
+    }
+}
