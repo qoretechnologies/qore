@@ -170,8 +170,12 @@ fontconfig/
 # %prepend-module-path "${SCRIPT_DIR}/../../../../qlib" pick up the .qmod
 # (.qmod wins over .qm per loadModuleIntern's within-dir preference order).
 # Populated by the QORE_BUILD_AOT_MODULES cmake post-build step or by manually
-# symlinking build/qlib-qmod/*.qmod into qlib/.
+# symlinking build/qlib-qmod/*.qmod into qlib/.  Single-file modules land at
+# qlib/<name>.qmod; split-dir modules land at qlib/<name>/<name>.qmod so
+# get_script_dir() during AOT init resolves to the source subdir where
+# resource siblings (logo SVGs, asyncapi YAMLs) live.
 /qlib/*.qmod
+/qlib/*/*.qmod
 /autolock_test
 /examples/test/ir/JITSmoke
 /examples/test/ir/AOTSmoke

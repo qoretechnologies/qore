@@ -7004,6 +7004,17 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v2(
     // Set JIT execution mode
     local_pgm->setExecMode(QEM_JIT);
 
+    // Set script path from the label so `get_script_dir()` returns the
+    // module's .qmod directory when init functions execute.  Mirrors v1's
+    // setScriptPath(label) at the equivalent construction site; without
+    // this, resource-file constants like
+    //     const FooLogo = File::readTextFile(get_script_dir() + "/foo.svg");
+    // fail to evaluate and cascade into AOT-PENDING-CONSTANT errors
+    // whenever any downstream code references the pending constant.
+    if (label) {
+        local_pgm->setScriptPath(label);
+    }
+
     // Re-apply the module's compiled-in %prepend-module-path / %append-module-path
     // lists to the local Program BEFORE loading dependencies — otherwise AOT
     // modules that rely on vendored dep paths would miss them at runtime.
@@ -7661,6 +7672,20 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
 
     // Set JIT execution mode
     local_pgm->setExecMode(QEM_JIT);
+
+    // Set script path from the label so `get_script_dir()` returns the
+    // module's .qmod directory when init functions execute under a
+    // ProgramThreadCountContextHelper(shadow=local_pgm) in ns_init.
+    // Constants like
+    //     const FooLogo = File::readTextFile(get_script_dir() + "/foo-logo.svg");
+    // fire during init and need the path populated; without this, script_dir
+    // is empty, concat emits "/foo-logo.svg" (leading slash), and every
+    // downstream registerApp(...) call raises AOT-PENDING-CONSTANT when the
+    // constant never populates.  Mirrors v1's setScriptPath(label) at the
+    // equivalent construction site.
+    if (label) {
+        local_pgm->setScriptPath(label);
+    }
 
     // Re-apply the module's compiled-in %prepend-module-path / %append-module-path
     // lists to the local Program BEFORE loading dependencies — otherwise AOT

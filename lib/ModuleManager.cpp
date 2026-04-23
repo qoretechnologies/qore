@@ -1250,6 +1250,36 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
             }
         }
 
+        // No flat `.qmod` form — try the subdir `.qmod` form.  Split-dir
+        // AOT-compiled modules land at `<dir>/<name>/<name>.qmod` so that
+        // `get_script_dir()` during AOT init resolves to a directory
+        // containing sibling resources (logo SVGs, asyncapi YAMLs, etc.).
+        // This path wins over the `.qm` source inside the same folder —
+        // binary forms MUST be preferred over source, matching the flat
+        // `.qmod` > `.qm` rule above.
+        for (unsigned ai = 0; ai <= qore_mod_api_list_len; ++ai) {
+            str.clear();
+            str.sprintf("%s" QORE_DIR_SEP_STR "%s" QORE_DIR_SEP_STR "%s",
+                dir.c_str(), name, name);
+            if (ai < qore_mod_api_list_len) {
+                str.sprintf("-api-%d.%d.qmod", qore_mod_api_list[ai].major, qore_mod_api_list[ai].minor);
+            } else {
+                str.concat(".qmod");
+            }
+            if (!stat(str.c_str(), &sb)) {
+                if (mpgm) {
+                    // As above: `mpgm` means the caller wants to inject
+                    // into a specific Program container, which binary
+                    // modules can't satisfy.  Fall through to source
+                    // search.
+                    break;
+                }
+                mi = loadBinaryModuleFromPath(xsink, str.c_str(), name, reexport, pholder.release(),
+                    load_opt & QMLO_REINJECT ? mpgm : nullptr, load_opt, mod_desc_func);
+                return qore_check_load_module_intern(mi, op, version, pgm, xsink) ? nullptr : mi;
+            }
+        }
+
         // No `.qmod` form exists in this directory — try the `.qm` source.
         str.clear();
         str.sprintf("%s" QORE_DIR_SEP_STR "%s.qm", dir.c_str(), name);

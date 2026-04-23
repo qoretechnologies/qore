@@ -428,7 +428,24 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
         message(FATAL_ERROR "QORE_BUILD_AOT_MODULES=ON requires a qcc target")
     endif()
 
-    set(_qmod_out_dir ${CMAKE_BINARY_DIR}/qlib-qmod)
+    # Split-dir modules emit `build/qlib-qmod/<name>/<name>.qmod` and copy
+    # sibling resources (logo SVGs, asyncapi YAMLs, etc.) into the same
+    # directory so that `get_script_dir()` during AOT init resolves to a
+    # directory containing those resources.  Constants like
+    # `const FooLogo = File::readTextFile(get_script_dir() + "/foo-logo.svg")`
+    # fire during `qore_aot_module_ns_init` under a
+    # ProgramThreadCountContextHelper that points at the module's own
+    # Program — whose script_dir is the .qmod's directory.  A flat qmod
+    # without sibling resources would hit FILE-OPEN2-ERROR and raise
+    # AOT-PENDING-CONSTANT on every downstream `registerApp(...)` call.
+    # Single-file modules (no subdir) have no resources, so they keep the
+    # flat layout.
+    set(_qmod_flat_dir ${CMAKE_BINARY_DIR}/qlib-qmod)
+    if (${_is_dir})
+        set(_qmod_out_dir ${_qmod_flat_dir}/${_name})
+    else()
+        set(_qmod_out_dir ${_qmod_flat_dir})
+    endif()
     set(_qmod_out ${_qmod_out_dir}/${_name}.qmod)
 
     # Both split-dir and single-file use the direct `qcc -m` path.
@@ -447,6 +464,19 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
     # whole-dir avoids.  Revisit per-file mode after the slice-4 fix and
     # add an opt-in option for dev-loop incremental builds.
     set(_qmod_dep ${_qmod_out}.d)
+
+    # For split-dir modules, collect sibling resource files at cmake-time
+    # so they can be declared as BYPRODUCTS of the copy step and tracked
+    # by make for rebuild triggers when the source changes.
+    set(_qmod_resource_copies "")
+    set(_qmod_resource_srcs "")
+    if (${_is_dir})
+        file(GLOB _qmod_resource_srcs
+            "${_source_root}/*.svg"
+            "${_source_root}/*.yaml"
+            "${_source_root}/*.json")
+    endif()
+
     # Dependency strategy: qmod output depends on the module's own
     # source files (ARGN) and on ${QCC_FORMAT_STAMP} (see root
     # CMakeLists.txt).  The stamp's mtime tracks only files that
@@ -458,12 +488,44 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
     # triggered all 238 qmod rebuilds on any libqore relink, even for
     # runtime-only fixes (QoreAOTRuntime.cpp, Function.cpp evalIntern,
     # slot-reg filtering, etc.) that don't affect qmod output.
-    add_custom_command(
-        OUTPUT ${_qmod_out}
-        COMMAND ${CMAKE_COMMAND} -E make_directory ${_qmod_out_dir}
-        COMMAND ${CMAKE_COMMAND} -E env ${QORE_QM_METADATA_ENV}
-            $<TARGET_FILE:qcc> -m ${_source_root}
-            --depfile=${_qmod_dep} -o ${_qmod_out}
+    if (${_is_dir})
+        # Symlink at qlib/<name>/<name>.qmod (inside the source subdir,
+        # alongside the resources).  Tests using
+        # %prepend-module-path "${SCRIPT_DIR}/../../../../qlib" drive
+        # module lookup into the <name>/ folder where the loader prefers
+        # the `.qmod` form per the within-folder preference rule added
+        # to ModuleManager::loadModuleIntern.  The link target is
+        # .gitignored (/qlib/*/*.qmod).
+        add_custom_command(
+            OUTPUT ${_qmod_out}
+            COMMAND ${CMAKE_COMMAND} -E make_directory ${_qmod_out_dir}
+            COMMAND ${CMAKE_COMMAND} -E env ${QORE_QM_METADATA_ENV}
+                $<TARGET_FILE:qcc> -m ${_source_root}
+                --depfile=${_qmod_dep} -o ${_qmod_out}
+            COMMAND ${CMAKE_COMMAND} -E create_symlink
+                ${_qmod_out} ${CMAKE_SOURCE_DIR}/qlib/${_name}/${_name}.qmod
+            DEPENDS ${ARGN} ${QCC_FORMAT_STAMP}
+            DEPFILE ${_qmod_dep}
+            COMMENT "AOT compile ${_name}.qmod"
+            VERBATIM
+        )
+        # Per-resource copy commands so rebuilds fire when a resource
+        # changes in the source tree.  Outputs go into the same dir as
+        # the qmod so `get_script_dir()` finds them at init time.
+        foreach(_res ${_qmod_resource_srcs})
+            get_filename_component(_res_name ${_res} NAME)
+            set(_res_out ${_qmod_out_dir}/${_res_name})
+            add_custom_command(
+                OUTPUT ${_res_out}
+                COMMAND ${CMAKE_COMMAND} -E make_directory ${_qmod_out_dir}
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different ${_res} ${_res_out}
+                DEPENDS ${_res}
+                COMMENT "Copy ${_name} resource ${_res_name}"
+                VERBATIM
+            )
+            list(APPEND _qmod_resource_copies ${_res_out})
+        endforeach()
+    else()
         # Drop a symlink at qlib/<name>.qmod pointing at the freshly
         # built qmod.  The in-tree test suite uses
         # %prepend-module-path "${SCRIPT_DIR}/../../../../qlib" to anchor
@@ -471,21 +533,36 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
         # there alongside the .qm lets loadModuleIntern's within-dir
         # preference order pick the AOT artifact.  The link target is
         # .gitignored (/qlib/*.qmod).
-        COMMAND ${CMAKE_COMMAND} -E create_symlink
-            ${_qmod_out} ${CMAKE_SOURCE_DIR}/qlib/${_name}.qmod
-        DEPENDS ${ARGN} ${QCC_FORMAT_STAMP}
-        DEPFILE ${_qmod_dep}
-        COMMENT "AOT compile ${_name}.qmod"
-        VERBATIM
-    )
+        add_custom_command(
+            OUTPUT ${_qmod_out}
+            COMMAND ${CMAKE_COMMAND} -E make_directory ${_qmod_out_dir}
+            COMMAND ${CMAKE_COMMAND} -E env ${QORE_QM_METADATA_ENV}
+                $<TARGET_FILE:qcc> -m ${_source_root}
+                --depfile=${_qmod_dep} -o ${_qmod_out}
+            COMMAND ${CMAKE_COMMAND} -E create_symlink
+                ${_qmod_out} ${CMAKE_SOURCE_DIR}/qlib/${_name}.qmod
+            DEPENDS ${ARGN} ${QCC_FORMAT_STAMP}
+            DEPFILE ${_qmod_dep}
+            COMMENT "AOT compile ${_name}.qmod"
+            VERBATIM
+        )
+    endif()
 
-    add_custom_target(${_name}-qmod ALL DEPENDS ${_qmod_out})
+    add_custom_target(${_name}-qmod ALL DEPENDS ${_qmod_out} ${_qmod_resource_copies})
     # Ensure qcc executable + libqore.so are built before this qmod
     # rule runs — target-level deps, not mtime deps, so a newer qcc
     # binary doesn't force a qmod rebuild on its own.
     add_dependencies(${_name}-qmod qcc qcc-format-version)
 
-    install(FILES ${_qmod_out} DESTINATION ${QORE_USER_MODULES_DIR})
+    # For split-dir modules install into ${QORE_USER_MODULES_DIR}/<name>/
+    # so the layout matches the in-tree build: qmod sits alongside the
+    # .qm source and resource siblings.  The .qm+resources were already
+    # staged there by QORE_USER_MODULE's install(FILES) call.
+    if (${_is_dir})
+        install(FILES ${_qmod_out} DESTINATION ${QORE_USER_MODULES_DIR}/${_name})
+    else()
+        install(FILES ${_qmod_out} DESTINATION ${QORE_USER_MODULES_DIR})
+    endif()
 ENDMACRO (QORE_USER_MODULE_AOT_RULES)
 
 # Install qore native/user module (.qm file) into the proper location.
