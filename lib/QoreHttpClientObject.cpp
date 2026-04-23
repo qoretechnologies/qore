@@ -43,6 +43,7 @@
 #include "qore/intern/QoreChannel.h"
 #include "qore/intern/QoreEventNotifier.h"
 #include "qore/intern/QC_EventNotifier.h"
+#include "qore/intern/QC_Future.h"
 #include "qore/intern/QC_FutureImpl.h"
 #include "qore/intern/AsyncCompletionAction.h"
 #include "qore/intern/QoreHttp1ClientConnection.h"

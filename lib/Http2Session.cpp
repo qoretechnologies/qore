@@ -32,6 +32,7 @@
 */
 
 #include <qore/Qore.h>
+#include <qore/QoreAbstractLoggerInterface.h>
 
 #include "qore/intern/Http2Session.h"
 #include "qore/intern/QoreAsyncIoLogger.h"
