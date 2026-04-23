@@ -2613,9 +2613,28 @@ public:
     }
 
     //! Add a constant to a user class during AOT deserialization (does NOT set sys flag)
-    DLLLOCAL void addUserConstant(const char* cname, QoreValue value, ClassAccess access = Public, const QoreTypeInfo* cTypeInfo = nullptr) {
+    /** Constructs the `ConstantEntry` directly with `builtin=false` so it is
+        correctly marked as user-originated — `ConstantList::add()` unconditionally
+        sets `builtin=true`, which matches the system-constant add path used for
+        builtin namespaces but not user classes.  Leaving `builtin=true` here
+        makes `ConstantEntry::isUser()` return false, which causes the AOT
+        fallback-source transplant in QoreAOTRuntime to skip the NOTHING-valued
+        constant (the transplant guard explicitly filters on `isUser()` to avoid
+        touching system constants).  Without this, class constants whose init
+        function was flagged `has_unsupported_exprs` at AOT compile time never
+        get populated by the fallback parse and raise `AOT-PENDING-CONSTANT` on
+        first runtime access (e.g. `DbTableDataProvider::ProviderInfo`).
+    */
+    DLLLOCAL void addUserConstant(const char* cname, QoreValue value, ClassAccess access = Public,
+            const QoreTypeInfo* cTypeInfo = nullptr) {
         assert(!constlist.inList(cname));
-        constlist.add(cname, value, cTypeInfo, access);
+        const QoreTypeInfo* ti = (cTypeInfo
+                || (value.hasNode() && value.getInternalNode()->needs_eval()))
+            ? cTypeInfo
+            : value.getTypeInfo();
+        ConstantEntry* ce = new ConstantEntry(&loc_builtin, cname, value, ti,
+            /*n_pub=*/true, /*n_init=*/true, /*n_builtin=*/false, access);
+        constlist.addEntry(cname, ce);
     }
 
     DLLLOCAL void addBuiltinStaticVar(const char* vname, QoreValue value, ClassAccess access = Public, const QoreTypeInfo* vTypeInfo = nullptr);
