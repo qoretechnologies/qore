@@ -322,9 +322,13 @@ QoreHashNode* Http3ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
             }
 
             if (need_buffer) {
-                // Buffer response for pending submit
-                output->ref();
+                // Buffer response for pending submit.  Mutate the hash while
+                // it's still uniquely owned by output_val (refcount==1) — the
+                // setKeyValue assertion enforces this — then bump the
+                // refcount so pending_responses gets its own owning reference
+                // before output_val discards at end of loop iteration.
                 output->setKeyValue("protocol", new QoreStringNode("h3"), xsink);
+                output->ref();
                 AutoLocker al(stream_lock);
                 pending_responses[sid].push_back(output);
             }
