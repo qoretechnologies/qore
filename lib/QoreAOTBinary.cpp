@@ -6708,28 +6708,39 @@ bool QoreAOTBinaryDeserializer::deserializeMethods(std::string& error) {
             bool is_copy = method_name && strcmp(method_name, "copy") == 0;
 
             uint64_t t_alloc0 = time_on ? now_us() : 0;
+            // Capture both the MethodVariantBase* and the UserVariantBase*
+            // arms via implicit upcasts from the just-constructed concrete
+            // type — UserConstructorVariant et al. inherit from BOTH
+            // (multiple inheritance), so a later `dynamic_cast<UserVariantBase*>`
+            // would incur the RTTI cross-cast walk on every variant
+            // (~73ns/var × 652k variants = ~48ms in qwf).  The compiler
+            // adjusts the ptr offset for the non-leftmost base at the
+            // assignment site for free.
             MethodVariantBase* mvb;
+            UserVariantBase* umv;
             if (is_constructor) {
-                mvb = new UserConstructorVariant(
+                auto* v = new UserConstructorVariant(
                     static_cast<ClassAccess>(access),
                     nullptr, 0, 0, QoreValue(), nullptr, QCF_NO_FLAGS);
+                mvb = v; umv = v;
             } else if (is_destructor) {
-                mvb = new UserDestructorVariant(nullptr, 0, 0);
+                auto* v = new UserDestructorVariant(nullptr, 0, 0);
+                mvb = v; umv = v;
             } else if (is_copy) {
-                mvb = new UserCopyVariant(
+                auto* v = new UserCopyVariant(
                     static_cast<ClassAccess>(access),
                     nullptr, 0, 0, QoreValue(), nullptr, false);
+                mvb = v; umv = v;
             } else {
-                mvb = new UserMethodVariant(
+                auto* v = new UserMethodVariant(
                     static_cast<ClassAccess>(access), is_final,
                     nullptr, 0, 0, QoreValue(), nullptr, false,
                     QCF_NO_FLAGS, is_abstract);
+                mvb = v; umv = v;
             }
 
             bool sig_has_ellipsis = false;
             bool needs_extra_args_flag = false;
-            UserVariantBase* umv = dynamic_cast<UserVariantBase*>(mvb);
-            assert(umv);
             uint64_t t_sig0 = time_on ? now_us() : 0;
             if (time_on) {
                 local_alloc_us += t_sig0 - t_alloc0;
