@@ -464,6 +464,15 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
         COMMAND ${CMAKE_COMMAND} -E env ${QORE_QM_METADATA_ENV}
             $<TARGET_FILE:qcc> -m ${_source_root}
             --depfile=${_qmod_dep} -o ${_qmod_out}
+        # Drop a symlink at qlib/<name>.qmod pointing at the freshly
+        # built qmod.  The in-tree test suite uses
+        # %prepend-module-path "${SCRIPT_DIR}/../../../../qlib" to anchor
+        # module lookup at the source qlib/ directory; placing the qmod
+        # there alongside the .qm lets loadModuleIntern's within-dir
+        # preference order pick the AOT artifact.  The link target is
+        # .gitignored (/qlib/*.qmod).
+        COMMAND ${CMAKE_COMMAND} -E create_symlink
+            ${_qmod_out} ${CMAKE_SOURCE_DIR}/qlib/${_name}.qmod
         DEPENDS ${ARGN} ${QCC_FORMAT_STAMP}
         DEPFILE ${_qmod_dep}
         COMMENT "AOT compile ${_name}.qmod"
