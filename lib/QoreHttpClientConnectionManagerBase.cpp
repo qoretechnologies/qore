@@ -369,6 +369,13 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnectionImpl
             }
             conn_raw->setPoolKey(key);
             pool_[key].push_back(conn_raw);
+            // Record the observed protocol in the sticky bitmask — see
+            // hasEverObservedProtocol() docs for the race this guards
+            // against (H2 eviction between response arrival and the
+            // test's isHttp2Active() check).
+            observed_protocols_.fetch_or(
+                1u << static_cast<unsigned>(conn_raw->getProtocol()),
+                std::memory_order_release);
             reserved = conn_raw->tryReserveStream();
         }
 
@@ -728,6 +735,12 @@ bool HttpClientConnectionManagerBase::hasProtocolInPool(HttpClientProtocol proto
         }
     }
     return false;
+}
+
+bool HttpClientConnectionManagerBase::hasEverObservedProtocol(
+        HttpClientProtocol proto) const {
+    const unsigned bit = 1u << static_cast<unsigned>(proto);
+    return (observed_protocols_.load(std::memory_order_acquire) & bit) != 0;
 }
 
 int HttpClientConnectionManagerBase::getPoolSize() const {

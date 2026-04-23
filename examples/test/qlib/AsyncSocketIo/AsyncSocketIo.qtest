@@ -69,6 +69,7 @@ public class AsyncSocketIoTest inherits QUnit::Test {
         addTestCase("concurrent submit", \concurrentSubmitTest());
         addTestCase("submit racing stop", \submitRacingStopTest());
         addTestCase("cancel by key", \cancelByKeyTest());
+        addTestCase("concurrent cancel by key UAF", \concurrentCancelByKeyUafTest());
         addTestCase("callback mode concurrent", \callbackConcurrentTest());
         addTestCase("shared socket custom keys", \sharedSocketCustomKeysTest());
         addTestCase("callback exception safety", \callbackExceptionSafetyTest());
@@ -694,6 +695,73 @@ public class AsyncSocketIoTest inherits QUnit::Test {
 
         spop.abort();
         SimpleStringHandler::interruptSleep(False);
+    }
+
+    #! Stresses concurrent cancelByKey on the same key interleaved with submits.
+    /** Targets the UAF class where two cancelByKey() calls for the same
+        key share one CancelCond in cancel_cond_map: the first cmd's
+        signalCancelLocked() broadcasts the shared cond and wakes both
+        waiters, letting the second waiter's stack frame go out of scope
+        before the I/O thread reaches the second Cancel cmd.  If a
+        SubmitOp for the same key is interleaved between the two Cancel
+        cmds in the cmdq, the second Cancel's fetch_add() writes to a
+        dead stack slot.  With CancelCountRef the counter is heap-
+        backed and refcounted, so the write is safe regardless of
+        cmd/caller ordering. */
+    concurrentCancelByKeyUafTest() {
+        AsyncSocketIoController io_controller(logger);
+        on_exit delete io_controller;
+
+        int num_iters = 200;
+        Counter done(2);
+        string shared_key = "concurrent-cancel-uaf-key";
+        list<hash<auto>> errors = ();
+        Mutex em();
+
+        # Thread A: repeatedly submit + cancelByKey on shared_key
+        background sub () {
+            try {
+                for (int i = 0; i < num_iters; ++i) {
+                    RestClient rest({"url": "http://127.0.0.1:" + port});
+                    AbstractPollOperation spop = rest.startPollSendRecv(
+                        "GET", "/api_text", NOTHING, {"Wait-Forever": 1});
+                    io_controller.submit(<SocketPollOperationInfo>{
+                        "sock": rest,
+                        "spop": spop,
+                        "key": shared_key,
+                        "owner": "uaf-test",
+                    });
+                    io_controller.cancelByKey(shared_key);
+                    spop.abort();
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                AutoLock al(em);
+                push errors, ex;
+            }
+            done.dec();
+        }();
+
+        # Thread B: repeatedly cancelByKey on shared_key (may find or not find)
+        background sub () {
+            try {
+                for (int i = 0; i < num_iters * 4; ++i) {
+                    io_controller.cancelByKey(shared_key);
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                AutoLock al(em);
+                push errors, ex;
+            }
+            done.dec();
+        }();
+
+        done.waitForZero(60s);
+        SimpleStringHandler::interruptSleep(False);
+
+        {
+            AutoLock al(em);
+            assertEq(0, errors.size(),
+                sprintf("no exceptions expected; got: %y", errors));
+        }
     }
 
     #! Tests callback mode with multiple concurrent completions

@@ -353,6 +353,15 @@ void AsyncIoControllerPriv::cleanupAbandonedCommand(Command& cmd, ExceptionSink*
             // Signal cancel waiter if present so waitCancel() returns.
             // Uses the refcounted CancelCond helper — caller holds m.
             signalCancelLocked(cmd.key);
+            // Release the cmd's ref on the count holder.  No fetch_add
+            // here because this is the abandoned path — the caller's
+            // rv will be "not found" (count stays 0), which is
+            // semantically correct (the op was already cancelled or
+            // never existed).
+            if (cmd.cancel_count) {
+                cmd.cancel_count->deref();
+                cmd.cancel_count = nullptr;
+            }
             break;
         }
         case IoCommand::CancelByProgram:
@@ -1422,7 +1431,12 @@ bool AsyncIoControllerPriv::cancelByKey(const QoreStringNode* key, ExceptionSink
     bool stopped = false;
     PollInfo direct_pinfo;
     bool direct_cancel = false;
-    std::atomic<int> found_count{0};
+    //! Refcounted heap holder — see CancelCountRef docs for the UAF
+    //! that motivated moving this off the stack.  Allocated lazily
+    //! in the worker-thread branch below; caller's initial refcount
+    //! is 1 (from QoreReferenceCounter's ctor), cmd takes one more
+    //! via ROreference().
+    CancelCountRef* count_ref = nullptr;
 
     if (on_async_io_thread && !inside_continue_poll_batch) {
         // I/O thread, NOT currently iterating the Phase 2 batch — safe to
@@ -1474,7 +1488,7 @@ bool AsyncIoControllerPriv::cancelByKey(const QoreStringNode* key, ExceptionSink
         return rv;
     } else {
         // Worker thread — send Cancel command to I/O thread and wait for result.
-        // Use cancel_count atomic to learn whether the key was actually found.
+        // Use count_ref atomic to learn whether the key was actually found.
         AutoLocker al(m);
         IoThreadContext& target = getThreadForKey(uh);
         if (anyThreadRunning() && !io_exiting) {
@@ -1488,10 +1502,16 @@ bool AsyncIoControllerPriv::cancelByKey(const QoreStringNode* key, ExceptionSink
                 cancel_cond_map.emplace(uh, cc.get());
                 cc.release();
             }
+            // Allocate the heap holder; initial refcount 1 belongs to the
+            // caller (this function).  Bump for the cmd's ref before the
+            // push so the cmd's ref is published atomically alongside the
+            // cmd on the queue.
+            count_ref = new CancelCountRef;
+            count_ref->ROreference();
             Command cmd;
             cmd.cmd = IoCommand::Cancel;
             cmd.key = uh;
-            cmd.cancel_count = &found_count;
+            cmd.cancel_count = count_ref;
             target.cmdq.push(std::move(cmd));
             // Bump submit_seq so the I/O thread's pre-poll catch-up covers
             // this Cancel; submit() does the same.  Without this, a queued
@@ -1512,7 +1532,13 @@ bool AsyncIoControllerPriv::cancelByKey(const QoreStringNode* key, ExceptionSink
         direct_pinfo.cleanup(xsink);
     } else if (do_signal) {
         waitCancel(uh);
-        rv = found_count.load(std::memory_order_relaxed) > 0;
+        rv = count_ref->count.load(std::memory_order_relaxed) > 0;
+    }
+
+    if (count_ref) {
+        // Release caller's ref.  The cmd holds the other ref until it's
+        // processed or abandoned; whichever side derefs last deletes.
+        count_ref->deref();
     }
 
     // Autostop is handled by the I/O thread's main loop (cache is I/O-thread-only).
@@ -3812,6 +3838,12 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                     // memory ordering can delay visibility of the cmdq push,
                     // allowing the auto-stop check to see an empty queue.
                     signalCancelLocked(pending_cmd.key);
+                    // Release the cmd's ref on the count holder (abandoned
+                    // path — no fetch_add, count stays 0).
+                    if (pending_cmd.cancel_count) {
+                        pending_cmd.cancel_count->deref();
+                        pending_cmd.cancel_count = nullptr;
+                    }
                 } else if ((pending_cmd.cmd == IoCommand::CancelByProgram
                             || pending_cmd.cmd == IoCommand::CancelOwner
                             || pending_cmd.cmd == IoCommand::GetInfo)
@@ -3985,16 +4017,15 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                     }
 
                     // Publish cancel count BEFORE signalling, so the waiter
-                    // reading found_count after waitCancel() returns sees a
-                    // value consistent with the signal.  Reversing this
-                    // order left a window where the waiter could wake,
-                    // return from cancel(), and have its stack frame
-                    // reused before this fetch_add ran — on arm64 the
-                    // subsequent fetch_add would increment a stale 4-byte
-                    // word on the reused stack (matching the observed
-                    // SIGBUS signature: +1 on a stack-saved return addr).
+                    // reading count after waitCancel() returns sees a
+                    // value consistent with the signal.  (Before the
+                    // CancelCountRef refactor this also avoided a UAF
+                    // where the waiter's stack had been freed before
+                    // fetch_add ran — now the counter is heap-backed
+                    // and refcounted, so the order only matters for
+                    // consumer visibility, not lifetime.)
                     if (found && cmd.cancel_count) {
-                        cmd.cancel_count->fetch_add(1,
+                        cmd.cancel_count->count.fetch_add(1,
                             std::memory_order_relaxed);
                     }
 
@@ -4002,6 +4033,16 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                     {
                         AutoLocker al(m);
                         signalCancelLocked(cmd.key);
+                    }
+                    // Release the cmd's ref on the count holder.  Done
+                    // AFTER fetch_add + signalCancelLocked so the
+                    // waiter's read is observably ordered before the
+                    // holder can be destroyed.  The caller's deref in
+                    // cancelByKey() races with this one; refcounting
+                    // coordinates the final delete.
+                    if (cmd.cancel_count) {
+                        cmd.cancel_count->deref();
+                        cmd.cancel_count = nullptr;
                     }
 
                     if (found) {

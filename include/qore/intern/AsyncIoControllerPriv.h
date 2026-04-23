@@ -489,6 +489,41 @@ private:
     //! Forward declaration — full definition below (requires PollInfo)
     struct AsyncOpCompletion;
 
+    //! Refcounted holder for the Cancel command's match count.
+    /** Replaces the former raw pointer to a stack-local
+        std::atomic<int> found_count in cancelByKey().  The stack-local
+        form had a narrow UAF window: two concurrent cancelByKey() calls
+        for the same key share one CancelCond via cancel_cond_map (the
+        second caller reuses the first's entry).  When the I/O thread
+        processes the first Cancel command, signalCancelLocked()
+        broadcasts the shared cond, waking both waiters.  The second
+        waiter's waitCancel() returns — its stack frame (and its
+        found_count) can then be freed.  If a SubmitOp for the same
+        key is interleaved between the two Cancel commands in the I/O
+        thread's cmdq (e.g. cmdq=[cmd_X, SubmitOp, cmd_Z]), cmd_Z's
+        processing finds the re-added cache entry, sets found=true,
+        and does fetch_add() on the dead stack pointer.  Heap-
+        allocating the counter isolates it from caller-stack
+        lifetime; refcounting coordinates cmd-side and caller-side
+        releases. */
+    struct CancelCountRef : public QoreReferenceCounter {
+        //! Number of matches; incremented by the I/O thread under `found`.
+        std::atomic<int> count{0};
+
+        //! Atomic deref; deletes on last ref.
+        DLLLOCAL void deref() {
+            if (ROdereference()) {
+                delete this;
+            }
+        }
+
+        //! Public alias for ROreference()
+        using QoreReferenceCounter::ROreference;
+
+    protected:
+        DLLLOCAL ~CancelCountRef() = default;
+    };
+
     //! Command queue entry
     struct Command {
         IoCommand cmd = IoCommand::WakeSocket;
@@ -503,12 +538,15 @@ private:
             pending_threads / cancel_count / info_result / cancel_pinfos)
             — see AsyncOpCompletion docs. */
         AsyncOpCompletion* completion = nullptr;
-        //! For Cancel: counter receiving the match result (0 or 1).
-        /** Raw pointer is safe here because the fetch_add in the I/O
-            thread is published before signalCancelLocked, and the
-            caller only reads the value after waitCancel() returns —
-            establishing a happens-before relationship. */
-        std::atomic<int>* cancel_count = nullptr;
+        //! For Cancel: refcounted holder receiving the match result (0 or 1).
+        /** Heap-allocated and refcounted so it outlives any caller
+            stack frame that may go out of scope before this command is
+            processed — see CancelCountRef docs for the UAF this
+            avoids.  When non-null, this Command owns one ref; that
+            ref is released by the I/O thread after processing
+            (normal path) or by cleanupAbandonedCommand / I/O-thread-
+            exit drain (abandoned path). */
+        CancelCountRef* cancel_count = nullptr;
         QoreProgram* pgm = nullptr;       //!< For CancelByProgram: the program being destroyed
         int64_t timer_deadline_us = 0;  //!< For AddTimer: absolute deadline in microseconds
         int64_t timer_id = 0;           //!< For AddTimer/CancelTimer: timer ID
