@@ -458,6 +458,18 @@ void QoreCallDispatcher::enqueue(AsyncWorkItem&& item) {
 
     AutoLocker al(m);
 
+    // Increment per-owner tracking at enqueue time (before the early-return
+    // path below, so discarded items are not counted).  Counting at enqueue —
+    // rather than at pop time in the worker — makes waitForOwnerIdle() a
+    // true barrier: it must wait not only for items currently being processed
+    // but also for items still sitting on async_queue.  Without this, a
+    // callback enqueued before markOwnerShuttingDown() but popped after
+    // clearOwnerShuttingDown() runs past the barrier — defeating the whole
+    // point of flushCallbacksByOwner().
+    if (!stopping && !item.owner.empty()) {
+        ++active_per_owner[item.owner];
+    }
+
     if (stopping) {
         // Cannot dispatch — clean up refs synchronously
         ExceptionSink xsink;
@@ -536,6 +548,17 @@ void QoreCallDispatcher::stop(ExceptionSink* xsink) {
             // the strong refcount but not the dc counter, stranding the
             // program past shutdown.
             item.pgm->depDeref();
+        }
+        // Match the enqueue-time increment of active_per_owner so any
+        // concurrent waitForOwnerIdle() doesn't hang on drained queue items.
+        if (!item.owner.empty()) {
+            auto it = active_per_owner.find(item.owner);
+            if (it != active_per_owner.end()) {
+                if (--it->second <= 0) {
+                    active_per_owner.erase(it);
+                    owner_idle_cond.broadcast();
+                }
+            }
         }
     }
     async_queue.clear();
@@ -640,10 +663,9 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
             if (async_item.pgm) {
                 ++active_per_program[async_item.pgm];
             }
-            // Track per-owner active count for targeted flush (flushCallbacksByOwner)
-            if (!async_item.owner.empty()) {
-                ++active_per_owner[async_item.owner];
-            }
+            // NOTE: per-owner count was already incremented at enqueue() time
+            // (see there for rationale).  It is decremented below after the
+            // work item is fully processed or discarded.
         }
 
         ExceptionSink work_xsink;
