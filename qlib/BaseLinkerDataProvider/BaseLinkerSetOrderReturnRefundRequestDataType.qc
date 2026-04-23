@@ -22,6 +22,7 @@ public class BaseLinkerSetOrderReturnRefundRequestDataType inherits HashDataType
                 "required": True,
                 "desc": "Cumulative refunded amount in the return's currency. Replaces the "
                     "current refund value (not added to it).",
+                "example_value": 49.99,
             },
             "refund_date": {
                 "display_name": "Refund Date",
@@ -29,6 +30,7 @@ public class BaseLinkerSetOrderReturnRefundRequestDataType inherits HashDataType
                 "type": SoftIntType,
                 "required": True,
                 "desc": "Date the refund was issued, as Unix seconds.",
+                "example_value": 1745280000,
             },
             "refund_comment": {
                 "display_name": "Refund Comment",
@@ -36,11 +38,13 @@ public class BaseLinkerSetOrderReturnRefundRequestDataType inherits HashDataType
                 "type": SoftStringType,
                 "required": True,
                 "desc": "Short free-text comment attached to the refund (max 50 characters).",
+                "example_value": "Refunded via Stripe",
             },
             "external_refund_id": {
                 "display_name": "External Refund ID",
                 "short_desc": "Identifier assigned by the refund provider",
                 "type": SoftStringOrNothingType,
+                "example_value": "re_3NqZxYJk2aBcD1e0F2gH3iJ4",
             },
         };
     }

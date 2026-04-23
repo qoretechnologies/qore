@@ -229,6 +229,7 @@ public class BaseLinkerRestConnection inherits RestClient::RestConnection {
                 "4. Generate a new token and copy its value\n\n"
                 "**Note:** The token is sent on every request as the `X-BLToken` header.",
             "cls": Class::forName("BaseLinkerRestConnection"),
+            "auto_url": True,
             "schemes": {
                 "baselinkerrest": True,
             },
@@ -251,13 +252,6 @@ public class BaseLinkerRestConnection inherits RestClient::RestConnection {
                         "4. Generate a new token and copy its value",
                     "sensitive": True,
                     "preselected": True,
-                },
-                "url": RestConnection::ConnectionScheme.options."url"
-                + <ConnectionOptionInfo>{
-                    "default_value": BaseLinkerRestClientBase::DefaultApiUrl,
-                    "desc": "The URL of the BaseLinker RPC endpoint. The default "
-                        "(`https://api.baselinker.com/connector.php`) is correct for all "
-                        "production usage; override only for local mock testing.",
                 },
                 "data": RestConnection::ConnectionScheme.options."data"
                 + <ConnectionOptionInfo>{

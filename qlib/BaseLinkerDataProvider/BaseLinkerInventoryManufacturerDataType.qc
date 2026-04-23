@@ -20,7 +20,7 @@ public class BaseLinkerInventoryManufacturerDataType inherits HashDataType {
             },
             "manufacturer_name": {
                 "display_name": "Manufacturer Name",
-                "short_desc": "Manufacturer name (duplicate of `name`)",
+                "short_desc": "Manufacturer name (duplicate of the name field)",
                 "type": SoftStringOrNothingType,
             },
             "manufacturer_photo": {

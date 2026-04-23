@@ -59,7 +59,8 @@ public class BaseLinkerAddOrderReturnRequestDataType inherits HashDataType {
             "refunded": {
                 "display_name": "Refunded",
                 "short_desc": "Whether the return has been refunded",
-                "type": SoftBoolOrNothingType,
+                "type": SoftBoolType,
+                "required": True,
                 "desc": "`True` marks the return as refunded.",
             },
             "admin_comments": {

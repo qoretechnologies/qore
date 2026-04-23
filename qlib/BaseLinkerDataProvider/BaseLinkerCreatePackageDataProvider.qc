@@ -9,7 +9,7 @@ public namespace BaseLinkerDataProvider {
 public class BaseLinkerCreatePackageDataProvider inherits BaseLinkerDataProviderBase {
     public {
         const ProviderInfo = <DataProviderInfo>{
-            "name": "create-package",
+            "name": "add-package",
             "desc": "Create a courier shipment/package for an order (`createPackage`). The "
                 "response contains the newly assigned `package_id` and courier "
                 "`package_number`.",
@@ -29,7 +29,7 @@ public class BaseLinkerCreatePackageDataProvider inherits BaseLinkerDataProvider
     constructor(*hash<auto> options) : BaseLinkerDataProviderBase(options) {
     }
 
-    string getName() { return "create-package"; }
+    string getName() { return "add-package"; }
     *string getDesc() { return ProviderInfo.desc; }
 
     private *AbstractDataProviderType getRequestTypeImpl() {

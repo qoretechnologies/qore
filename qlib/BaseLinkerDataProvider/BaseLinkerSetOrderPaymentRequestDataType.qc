@@ -21,6 +21,7 @@ public class BaseLinkerSetOrderPaymentRequestDataType inherits HashDataType {
                 "type": SoftFloatType,
                 "required": True,
                 "desc": "Cumulative amount paid so far in the order's currency.",
+                "example_value": 99.99,
             },
             "payment_date": {
                 "display_name": "Payment Date",
@@ -28,17 +29,20 @@ public class BaseLinkerSetOrderPaymentRequestDataType inherits HashDataType {
                 "type": SoftIntType,
                 "required": True,
                 "desc": "Payment timestamp as Unix seconds.",
+                "example_value": 1745280000,
             },
             "payment_comment": {
                 "display_name": "Payment Comment",
                 "short_desc": "Free-text payment note",
                 "type": SoftStringType,
                 "required": True,
+                "example_value": "Paid via Stripe",
             },
             "external_payment_id": {
                 "display_name": "External Payment ID",
                 "short_desc": "Identifier assigned by the payment gateway",
                 "type": SoftStringOrNothingType,
+                "example_value": "ch_3NqZxYJk2aBcD1e0F2gH3iJ4",
             },
         };
     }

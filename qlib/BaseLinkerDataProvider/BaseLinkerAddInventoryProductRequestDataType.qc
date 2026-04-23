@@ -94,7 +94,15 @@ public class BaseLinkerAddInventoryProductRequestDataType inherits HashDataType 
                 "display_name": "Rating",
                 "short_desc": "Internal 0-5 rating",
                 "type": SoftIntOrNothingType,
-                "desc": "Internal product rating in the range `0`-`5`.",
+                "desc": "Internal product rating in the range `0`-`5`, where `0` means no rating.",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": 0, "display_name": "No Rating"},
+                    <AllowedValueInfo>{"value": 1, "display_name": "1 Star"},
+                    <AllowedValueInfo>{"value": 2, "display_name": "2 Stars"},
+                    <AllowedValueInfo>{"value": 3, "display_name": "3 Stars"},
+                    <AllowedValueInfo>{"value": 4, "display_name": "4 Stars"},
+                    <AllowedValueInfo>{"value": 5, "display_name": "5 Stars"},
+                ),
             },
             "manufacturer_id": {
                 "display_name": "Manufacturer ID",

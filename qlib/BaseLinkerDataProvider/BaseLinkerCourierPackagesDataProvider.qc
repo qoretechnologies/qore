@@ -25,7 +25,7 @@ public class BaseLinkerCourierPackagesDataProvider inherits BaseLinkerDataProvid
         const ConstructorOptions = BaseConstructorOptions;
 
         const ChildMap = {
-            "create-package":
+            "add-package":
                 Class::forName("BaseLinkerDataProvider::BaseLinkerCreatePackageDataProvider"),
             "get-label":
                 Class::forName("BaseLinkerDataProvider::BaseLinkerGetLabelDataProvider"),

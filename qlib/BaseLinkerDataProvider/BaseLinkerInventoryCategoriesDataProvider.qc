@@ -31,6 +31,7 @@ public class BaseLinkerInventoryCategoriesDataProvider inherits BaseLinkerDataPr
                 "desc": "When provided, only categories from the given catalog are "
                     "returned. When omitted, categories across all catalogs are returned.",
                 "ref_data": "inventories",
+                "preselected": True,
             },
         };
     }

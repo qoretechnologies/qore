@@ -656,7 +656,7 @@ module BaseLinkerDataProvider {
             },
         });
 
-        # Create Package — courier_code drives account_id dropdown; mark with
+        # Add Package — courier_code drives account_id dropdown; mark with
         # has_dependents/on_change (not propagated by getActionOptionFromFields).
         {
             hash<string, hash<ActionOptionInfo>> opts =
@@ -665,10 +665,10 @@ module BaseLinkerDataProvider {
             opts.courier_code += {"has_dependents": True, "on_change": ("refetch",)};
             DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
                 "app": BaseLinkerDataProvider::AppName,
-                "path": "/create-package",
-                "action": "create-package",
+                "path": "/add-package",
+                "action": "add-package",
                 "groups": "Shipping",
-                "display_name": "Create Courier Package",
+                "display_name": "Add Courier Package",
                 "short_desc": "Create a courier package (shipment)",
                 "desc": "Create a courier package for a BaseLinker order via `createPackage`. "
                     "Returns the courier package identifier on success.",
@@ -750,14 +750,10 @@ module BaseLinkerDataProvider {
             "desc": "List available services (product/tier options) for a given courier via "
                 "`getCourierServices`.",
             "action_code": DPAT_FIND,
-            "options": {
-                "courier_code": <ActionOptionInfo>{
-                    "display_name": "Courier Code",
-                    "short_desc": "BaseLinker courier code",
-                    "type": AbstractDataProviderTypeMap."string",
-                    "required": True,
-                    "ref_data": "couriers",
-                },
+            "data_provider_info": BaseLinkerCourierServicesDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("CourierServiceList",
+                    new BaseLinkerCourierServiceDataType(), True);
             },
         });
 
@@ -772,14 +768,10 @@ module BaseLinkerDataProvider {
             "desc": "List the courier-account credentials configured for a given courier via "
                 "`getCourierAccounts`.",
             "action_code": DPAT_FIND,
-            "options": {
-                "courier_code": <ActionOptionInfo>{
-                    "display_name": "Courier Code",
-                    "short_desc": "BaseLinker courier code",
-                    "type": AbstractDataProviderTypeMap."string",
-                    "required": True,
-                    "ref_data": "couriers",
-                },
+            "data_provider_info": BaseLinkerCourierAccountsDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("CourierAccountList",
+                    new BaseLinkerCourierAccountDataType(), True);
             },
         });
 
@@ -795,14 +787,10 @@ module BaseLinkerDataProvider {
                 "courier via `getCourierFields`. Useful when programmatically constructing "
                 "`createPackage` payloads.",
             "action_code": DPAT_FIND,
-            "options": {
-                "courier_code": <ActionOptionInfo>{
-                    "display_name": "Courier Code",
-                    "short_desc": "BaseLinker courier code",
-                    "type": AbstractDataProviderTypeMap."string",
-                    "required": True,
-                    "ref_data": "couriers",
-                },
+            "data_provider_info": BaseLinkerCourierFieldsDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("CourierFieldDefinitionList",
+                    new BaseLinkerCourierFieldDefinitionDataType(), True);
             },
         });
 
@@ -821,7 +809,11 @@ module BaseLinkerDataProvider {
             "desc": "List the order statuses configured in BaseLinker via "
                 "`getOrderStatusList`.",
             "action_code": DPAT_FIND,
-            "options": {},
+            "data_provider_info": BaseLinkerOrderStatusesDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("OrderStatusList",
+                    new BaseLinkerOrderStatusDataType(), True);
+            },
         });
 
         # List Order Sources
@@ -835,7 +827,11 @@ module BaseLinkerDataProvider {
             "desc": "List the order sources (marketplaces/shops) configured in BaseLinker via "
                 "`getOrderSources`.",
             "action_code": DPAT_FIND,
-            "options": {},
+            "data_provider_info": BaseLinkerOrderSourcesDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("OrderSourceList",
+                    new BaseLinkerOrderSourceDataType(), True);
+            },
         });
 
         # ============================================================
