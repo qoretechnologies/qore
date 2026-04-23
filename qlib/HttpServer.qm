@@ -447,7 +447,12 @@ public string sub get_exception_string(hash<auto> ex) {
 #! Hash for HttpServer options
 public hashdecl HttpServerOptionInfo {
     #! HTTP server name
-    string name = HttpServer::HttpServerString;
+    /** Empty string = use HttpServer::HttpServerString default; actual substitution
+        happens in HttpServer::init().  Direct use of a constant ref here would
+        break AOT serialisation (the writer has no encoding for
+        RuntimeConstantRefNode in hashdecl member defaults).
+    */
+    string name = "";
 
     #! Debug flag
     bool debug = False;
@@ -456,24 +461,33 @@ public hashdecl HttpServerOptionInfo {
     bool protect_last_listener = False;
 
     #! Headers to add in responses
-    hash<auto> hdr = {
-        "X-Powered-By": "Qore/" + Qore::VersionString,
-    };
+    /** Empty hash = use the built-in X-Powered-By header default; actual
+        substitution happens in HttpServer::init().  See `name` member for
+        the AOT-serialisation constraint.
+    */
+    hash<auto> hdr = {};
 
     #! Idle disconnect time; the default is 75 seconds
-    date ttl = HttpServer::DefaultTtl;
+    /** 0s = use HttpServer::DefaultTtl default; actual substitution happens
+        in HttpServer::init().  See `name` member for the AOT-serialisation
+        constraint.
+    */
+    date ttl = 0s;
 
     #! HTTP server logger
     *LoggerInterface logger;
 
     #! Idle thread count for the connection thread pool
-    int idle_threads =
-%ifndef NO_SYSCONF
-        sysconf(SC_NPROCESSORS_ONLN) * 2
-%else
-        HttpServer::DefaultIdleThreads
-%endif
-        ;
+    /** 0 means auto-detect: 2 × CPU count (or HttpServer::DefaultIdleThreads on
+        systems without sysconf(SC_NPROCESSORS_ONLN)).  The auto-detect computation
+        lives in HttpServer::init() rather than in the member initializer because
+        an initializer expression like \c "sysconf(SC_NPROCESSORS_ONLN) * 2" serialises
+        as \c VT_NOTHING in the AOT binary format (the writer has no specialised
+        encoding for a multiplication of a function-call result) — which yields
+        \c idle_threads=0 after an AOT-compiled load.  Using 0 as a sentinel keeps
+        the source-parse and AOT-parse paths identical.
+    */
+    int idle_threads = 0;
 
     #! Maximum number of handler threads for the async I/O thread pool (0 = unlimited)
     /** Controls the maximum number of concurrent threads that can be used for request processing.
@@ -2212,17 +2226,34 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
 
     #! Common constructor code
     private init(hash<HttpServerOptionInfo> opts) {
-        if (opts.idle_threads < 1) {
-            throw "HTTP-SERVER-INIT-ERROR", sprintf("idle_threads (%d) must be greater than zero", opts.idle_threads);
+        int idle_threads = opts.idle_threads;
+        if (idle_threads <= 0) {
+            # auto-detect: 2 × CPU count (or the fixed fallback when sysconf is
+            # unavailable).  See HttpServerOptionInfo::idle_threads for why this
+            # lives here rather than in the hashdecl member initializer.
+%ifndef NO_SYSCONF
+            idle_threads = sysconf(SC_NPROCESSORS_ONLN) * 2;
+%else
+            idle_threads = HttpServer::DefaultIdleThreads;
+%endif
         }
-        threadPool = new ThreadPool(-1, opts.idle_threads);
-        http_server_string = opts.name;
+        if (idle_threads < 1) {
+            throw "HTTP-SERVER-INIT-ERROR", sprintf("idle_threads (%d) must be greater than zero", idle_threads);
+        }
+        threadPool = new ThreadPool(-1, idle_threads);
+        # Apply sentinel-based defaults for members whose "real" default is a
+        # RuntimeConstantRefNode or expression too complex for the AOT writer
+        # to round-trip faithfully; see the hashdecl declaration for context.
+        http_server_string = opts.name.val() ? opts.name : HttpServer::HttpServerString;
         debug = opts.debug;
-        hdr = opts.hdr;
+        hdr = opts.hdr.val()
+            ? opts.hdr
+            : {"X-Powered-By": "Qore/" + Qore::VersionString};
         protect_last_listener = opts.protect_last_listener ?? False;
         logger = opts.logger ?? new Logger(http_server_string, LoggerLevel::getLevelInfo());
-        if (opts.ttl) {
-            setTtl(opts.ttl);
+        date effective_ttl = opts.ttl ? opts.ttl : HttpServer::DefaultTtl;
+        if (effective_ttl) {
+            setTtl(effective_ttl);
         }
         max_request_body_size = opts.max_request_body_size ?? 0;
         enable_h3 = opts.enable_h3 ?? True;
