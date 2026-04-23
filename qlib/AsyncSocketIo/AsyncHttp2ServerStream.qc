@@ -82,14 +82,29 @@ public class AsyncHttp2ServerStream {
 
         #! Set to True after @ref sendTrailers() (or @ref sendData() with end_stream=True) has run
         bool writes_done = False;
+
+        #! Optional callback invoked after each write to wake the I/O thread
+        /** The @c *Async Socket methods enqueue data on the HTTP/2 session but
+            do not wake the I/O controller.  For the controller to flush
+            pending frames promptly, handlers must call a wake closure
+            (typically @c sub () { controller.wakeSocket(sock); }).
+            HttpServerAsyncIo provides exactly this closure via
+            @c HttpConnectionInfo.header_info.io_wake; pass it here.  If
+            unset, writes still succeed but are only flushed on the
+            controller's next scheduled tick.
+        */
+        *code<nothing()> wake_callback;
     }
 
     #! Construct an async server-side HTTP/2 stream handle
     /** @param sock the open HTTP/2 Socket carrying the stream
         @param stream_id the HTTP/2 stream ID from the async dispatch
         @param inbound the Queue populated by the I/O controller with DATA payloads
+        @param wake_callback optional I/O-controller wake closure; see the
+        @ref wake_callback member for the contract
     */
-    constructor(Socket sock, int stream_id, Queue inbound) {
+    constructor(Socket sock, int stream_id, Queue inbound,
+            *code<nothing()> wake_callback) {
         @assert(sock, "socket cannot be null");
         @assert(sock.isOpen(), "socket must be open");
         @assert(stream_id > 0, "stream_id must be positive");
@@ -97,6 +112,7 @@ public class AsyncHttp2ServerStream {
         self.sock = sock;
         self.stream_id = stream_id;
         self.inbound = inbound;
+        self.wake_callback = wake_callback;
     }
 
     #! Returns the HTTP/2 stream ID
@@ -165,6 +181,9 @@ public class AsyncHttp2ServerStream {
         @assert(!headers_sent, "sendHeaders() already called on this stream");
         sock.submitHttp2StreamingResponseHeadersAsync(stream_id, status, headers);
         headers_sent = True;
+        if (wake_callback) {
+            wake_callback();
+        }
     }
 
     #! Sends a DATA frame payload on the stream
@@ -182,6 +201,9 @@ public class AsyncHttp2ServerStream {
         if (end_stream) {
             writes_done = True;
         }
+        if (wake_callback) {
+            wake_callback();
+        }
     }
 
     #! Sends HTTP/2 trailers on the stream
@@ -195,6 +217,9 @@ public class AsyncHttp2ServerStream {
         @assert(!writes_done, "stream write side already closed");
         sock.sendHttp2TrailersAsync(stream_id, trailers);
         writes_done = True;
+        if (wake_callback) {
+            wake_callback();
+        }
     }
 }
 

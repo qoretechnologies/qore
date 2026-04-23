@@ -71,7 +71,11 @@ module AsyncSocketIo {
       @c *Async socket methods so handler threads do not hold the socket wrapper
       lock while performing HTTP/2 I/O.  Purpose-built for gRPC and other
       protocols that drive \c headers → \c DATA* → \c trailers responses from
-      an async I/O controller.
+      an async I/O controller.  Constructor accepts an optional
+      @c wake_callback closure (typically @c HttpConnectionInfo.header_info.io_wake)
+      that is invoked after each @c sendHeaders / @c sendData / @c sendTrailers
+      to wake the I/O thread for prompt frame flushing — without it, writes are
+      only flushed on the controller's next scheduled tick.
     - @ref AsyncSocketIo::NotifierPollOperation "NotifierPollOperation" +
       @ref AsyncSocketIo::AsyncSocketIoController::waitForNotifier()
       "AsyncSocketIoController::waitForNotifier()": async replacement for the
