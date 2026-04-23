@@ -496,6 +496,23 @@ static uint64_t computeFeatureFlags(const std::vector<AOTCompiledFunc>& funcs) {
     return flags;
 }
 
+//! Emit MODULE_PATH_PREPEND / MODULE_PATH_APPEND sections (if non-empty) for `pgm`
+//! and OR the feature flag bit into `feature_flags`.  Used by every AOT-binary
+//! emitter (script + module paths) so %prepend-module-path / %append-module-path
+//! lists survive into the `.qo` / `.qmod` artifact and get re-applied at load.
+static void appendModulePathListSections(QoreAOTBinaryWriter& writer,
+        QoreProgram* pgm, uint64_t& feature_flags) {
+    if (!pgm) {
+        return;
+    }
+    qore_program_private* pp = qore_program_private::get(*pgm);
+    if (!pp) {
+        return;
+    }
+    serializeModulePathLists(writer, pp->prepended_module_paths,
+        pp->appended_module_paths, feature_flags);
+}
+
 //! Compute xxHash64 of source file bytes
 static uint64_t computeSourceHash(const char* label) {
     if (!label) {
@@ -3137,6 +3154,7 @@ bool QoreAOT::compile(QoreProgram* pgm,
         hdr.parse_options_hi = parse_options.getHi();
         hdr.source_hash = computeSourceHash(label);
         hdr.feature_flags = computeFeatureFlags(compiled_funcs);
+        appendModulePathListSections(writer, pgm, hdr.feature_flags);
 
         // Serialize dependencies from the parsed program's feature lists.
         // This captures ALL module dependencies including those from %include'd files,
@@ -4788,6 +4806,7 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
         hdr.parse_options_hi = final_po.getHi();
         hdr.source_hash = computeSourceHash(label);
         hdr.feature_flags = computeFeatureFlags(compiled_funcs);
+        appendModulePathListSections(writer, *qpgm, hdr.feature_flags);
 
         // Serialize ALL dependencies (including reexport) so they can be loaded
         // at runtime before deserializing the namespace tree
@@ -5227,6 +5246,7 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
             hdr.parse_options_hi = final_po.getHi();
             hdr.source_hash = computeSourceHash(qm_path.c_str());
             hdr.feature_flags = computeFeatureFlags(compiled_funcs);
+            appendModulePathListSections(writer, *qpgm, hdr.feature_flags);
 
             // Serialize ALL dependencies (including reexport) so they can be loaded
             // at runtime before deserializing the namespace tree
@@ -5588,6 +5608,7 @@ static bool emitScriptQoFromParsedProgram(QoreProgram* qpgm,
         hdr.qore_version_patch = QORE_VERSION_PATCH;
         hdr.source_hash = computeSourceHash(target_canon.c_str());
         hdr.feature_flags = computeFeatureFlags(compiled_funcs);
+        appendModulePathListSections(writer, qpgm, hdr.feature_flags);
 
         if (!serializeNamespaceTree(writer, root_ns, nullptr, nullptr,
                 target_canon.c_str())) {
@@ -6217,6 +6238,7 @@ bool QoreAOT::compileScriptFile(const char* target_file,
         hdr.qore_version_patch = QORE_VERSION_PATCH;
         hdr.source_hash = computeSourceHash(target_canon.c_str());
         hdr.feature_flags = computeFeatureFlags(compiled_funcs);
+        appendModulePathListSections(writer, *qpgm, hdr.feature_flags);
 
         if (!serializeNamespaceTree(writer, root_ns, nullptr, nullptr,
                 target_canon.c_str())) {
@@ -6681,6 +6703,7 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
             hdr.parse_options_hi = final_po.getHi();
             hdr.source_hash = computeSourceHash(qm_path.c_str());
             hdr.feature_flags = computeFeatureFlags(compiled_funcs);
+            appendModulePathListSections(writer, *qpgm, hdr.feature_flags);
 
             std::vector<std::string> reexport_mods;
             std::vector<std::string> all_deps = extractAllDependencies(
@@ -7085,6 +7108,7 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
             hdr.parse_options_hi = final_po.getHi();
             hdr.source_hash = computeSourceHash(qm_path.c_str());
             hdr.feature_flags = computeFeatureFlags(compiled_funcs);
+            appendModulePathListSections(writer, *qpgm, hdr.feature_flags);
 
             std::vector<std::string> reexport_mods;
             std::vector<std::string> all_deps = extractAllDependencies(
@@ -7536,6 +7560,7 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
             hdr.parse_options_hi = final_po.getHi();
             hdr.source_hash = computeSourceHash(qm_path.c_str());
             hdr.feature_flags = computeFeatureFlags(compiled_funcs);
+            appendModulePathListSections(writer, *qpgm, hdr.feature_flags);
 
             std::vector<std::string> reexport_mods;
             std::vector<std::string> all_deps = extractAllDependencies(

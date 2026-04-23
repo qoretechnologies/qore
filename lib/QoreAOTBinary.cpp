@@ -7422,6 +7422,113 @@ bool readReexportModules(const uint8_t* data, uint32_t size, std::vector<std::st
     return true;
 }
 
+void serializeModulePathLists(QoreAOTBinaryWriter& writer,
+        const std::vector<std::string>& prepended,
+        const std::vector<std::string>& appended,
+        uint64_t& feature_flags) {
+    if (prepended.empty() && appended.empty()) {
+        return;
+    }
+    feature_flags |= QORE_AOT_FEAT_MODULE_PATH_LISTS;
+
+    if (!prepended.empty()) {
+        uint32_t sec_idx = writer.beginSection(QoreAOTSectionType::MODULE_PATH_PREPEND);
+        writer.writeU32(static_cast<uint32_t>(prepended.size()));
+        for (const std::string& p : prepended) {
+            writer.writeStringRef(p.c_str());
+        }
+        writer.endSection(sec_idx);
+    }
+    if (!appended.empty()) {
+        uint32_t sec_idx = writer.beginSection(QoreAOTSectionType::MODULE_PATH_APPEND);
+        writer.writeU32(static_cast<uint32_t>(appended.size()));
+        for (const std::string& p : appended) {
+            writer.writeStringRef(p.c_str());
+        }
+        writer.endSection(sec_idx);
+    }
+}
+
+bool readModulePathLists(const uint8_t* data, uint32_t size,
+        std::vector<std::string>& prepended,
+        std::vector<std::string>& appended,
+        std::string& error) {
+    prepended.clear();
+    appended.clear();
+    QoreAOTBinaryReader reader;
+    if (!reader.open(data, size, error)) {
+        return false;
+    }
+    return readModulePathLists(reader, prepended, appended, error);
+}
+
+void applyModulePathListsToProgram(QoreProgram* pgm,
+        const std::vector<std::string>& prepended,
+        const std::vector<std::string>& appended) {
+    if (!pgm || (prepended.empty() && appended.empty())) {
+        return;
+    }
+    qore_program_private* pp = qore_program_private::get(*pgm);
+    if (!pp) {
+        return;
+    }
+    // Silent dedup (same policy as applyModulePathDirective).  Prepended paths
+    // are applied in input order so the front-most stays front-most.
+    auto has = [](const std::vector<std::string>& v, const std::string& s) {
+        for (const std::string& x : v) {
+            if (x == s) {
+                return true;
+            }
+        }
+        return false;
+    };
+    for (const std::string& p : prepended) {
+        if (!has(pp->prepended_module_paths, p)) {
+            pp->prepended_module_paths.push_back(p);
+        }
+    }
+    for (const std::string& p : appended) {
+        if (!has(pp->appended_module_paths, p)) {
+            pp->appended_module_paths.push_back(p);
+        }
+    }
+}
+
+bool readModulePathLists(const QoreAOTBinaryReader& reader,
+        std::vector<std::string>& prepended,
+        std::vector<std::string>& appended,
+        std::string& error) {
+    prepended.clear();
+    appended.clear();
+
+    auto readList = [&](QoreAOTSectionType type, std::vector<std::string>& out) -> bool {
+        const QoreAOTSectionHeader* sec = reader.findSection(type);
+        if (!sec) {
+            return true;  // absent — fine, back-compat with pre-feature-flag blobs
+        }
+        const uint8_t* ptr = reader.getSectionData(*sec);
+        if (!ptr) {
+            error = "invalid module-path section data";
+            return false;
+        }
+        uint32_t count = QoreAOTBinaryReader::readU32(ptr);
+        out.reserve(count);
+        for (uint32_t i = 0; i < count; ++i) {
+            const char* s = reader.readStringRef(ptr);
+            out.emplace_back(s ? s : "");
+        }
+        return true;
+    };
+
+    if (!readList(QoreAOTSectionType::MODULE_PATH_PREPEND, prepended)) {
+        return false;
+    }
+    if (!readList(QoreAOTSectionType::MODULE_PATH_APPEND, appended)) {
+        return false;
+    }
+    return true;
+}
+
 void serializeProgramMetadata(QoreAOTBinaryWriter& writer, const char* exec_class_name) {
     // Only create the section if there's metadata to write
     if (!exec_class_name || !*exec_class_name) {

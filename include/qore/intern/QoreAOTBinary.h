@@ -93,8 +93,9 @@ constexpr uint64_t QORE_AOT_FEAT_CONST_PENDING   = 1ULL << 10; //!< per-constant
 constexpr uint64_t QORE_AOT_FEAT_SIG_LINES       = 1ULL << 11; //!< per-variant signature start/end line pair follows the flags u16 in writeVariantSignature
 constexpr uint64_t QORE_AOT_FEAT_CONTEXT_IR      = 1ULL << 12; //!< native IR lowering of `context` statement (Context carries name+exp+where+sort; ContextMaxPos/SetPos/Destroy opcodes present)
 constexpr uint64_t QORE_AOT_FEAT_LVPATH_SLICE    = 1ULL << 13; //!< LVPathStepKind::HashKeySlice / ListIndexSlice with slice_operand_ids vector (multi-key hash / multi-index list remove/delete)
+constexpr uint64_t QORE_AOT_FEAT_MODULE_PATH_LISTS = 1ULL << 14; //!< per-Program %prepend-module-path / %append-module-path lists (MODULE_PATH_PREPEND / MODULE_PATH_APPEND sections)
 //! Mask of all currently supported features
-constexpr uint64_t QORE_AOT_SUPPORTED_FEATURES   = 0x3FFFULL;
+constexpr uint64_t QORE_AOT_SUPPORTED_FEATURES   = 0x7FFFULL;
 
 //! Section type IDs
 enum class QoreAOTSectionType : uint16_t {
@@ -116,6 +117,8 @@ enum class QoreAOTSectionType : uint16_t {
     PROGRAM_METADATA = 16,  //!< Program-level metadata (exec-class name, etc.)
     INIT_FUNCS       = 17,  //!< Init functions for constants/static vars with lowered init expressions
     TYPE_TABLE       = 18,  //!< Per-blob interned type-path table (bulk-resolved at shell phase)
+    MODULE_PATH_PREPEND = 19,  //!< Per-Program %prepend-module-path expanded path list (count u32 + count × StringRef)
+    MODULE_PATH_APPEND  = 20,  //!< Per-Program %append-module-path expanded path list (count u32 + count × StringRef)
 };
 
 //! Value type tags for serialized constant values
@@ -671,6 +674,46 @@ void serializeReexportModules(QoreAOTBinaryWriter& writer, const std::vector<std
     @return true on success, false on failure
 */
 bool readReexportModules(const uint8_t* data, uint32_t size, std::vector<std::string>& reexport_modules, std::string& error);
+
+//! Serialize the per-Program %prepend-module-path / %append-module-path lists
+//! into MODULE_PATH_PREPEND / MODULE_PATH_APPEND sections (if non-empty).
+//! Also ORs `QORE_AOT_FEAT_MODULE_PATH_LISTS` into `feature_flags` when any list has entries.
+/** Wire format per section: `u32 count` followed by `count × StringRef`.
+    Readers without the feature bit set see empty lists (back-compat).
+    @param writer the binary writer to emit sections into
+    @param prepended the expanded %prepend-module-path list (front = most-recently-added)
+    @param appended the expanded %append-module-path list (insertion order)
+    @param feature_flags in/out bitset; gets `QORE_AOT_FEAT_MODULE_PATH_LISTS` OR'd in when needed
+*/
+void serializeModulePathLists(QoreAOTBinaryWriter& writer,
+        const std::vector<std::string>& prepended,
+        const std::vector<std::string>& appended,
+        uint64_t& feature_flags);
+
+//! Read the MODULE_PATH_PREPEND / MODULE_PATH_APPEND sections (if present).
+/** Populates `prepended` and `appended` from the blob.  Returns true on success
+    (including the case where the sections are absent — this is back-compat for
+    old blobs predating QORE_AOT_FEAT_MODULE_PATH_LISTS).  On failure sets `error`
+    and returns false.
+*/
+bool readModulePathLists(const QoreAOTBinaryReader& reader,
+        std::vector<std::string>& prepended,
+        std::vector<std::string>& appended,
+        std::string& error);
+
+//! data+size convenience overload of readModulePathLists
+bool readModulePathLists(const uint8_t* data, uint32_t size,
+        std::vector<std::string>& prepended,
+        std::vector<std::string>& appended,
+        std::string& error);
+
+//! Merge the given prepended/appended path lists onto a target Program's per-Program
+//! search-path lists with silent dedup.  Used by the AOT runtime to apply a blob's
+//! %prepend-module-path / %append-module-path state to the freshly created Program
+//! BEFORE dependency modules load.
+void applyModulePathListsToProgram(QoreProgram* pgm,
+        const std::vector<std::string>& prepended,
+        const std::vector<std::string>& appended);
 
 //! Serialize program-level metadata into the PROGRAM_METADATA binary section
 /** Writes exec-class name and other program-level settings.
@@ -1665,6 +1708,18 @@ public:
                 failure (error populated) */
     bool addBlob(const uint8_t* data, uint32_t size, std::string& error) {
         uint64_t t0 = timingEnabled() ? nowMicros() : 0;
+        // Apply this blob's %prepend-module-path / %append-module-path lists to
+        // the target Program BEFORE shell deserialization runs — so any module
+        // dependency loads triggered during shell creation see the expected
+        // search surface.  Merge is dedup-on-append, matching the semantics of
+        // applyModulePathDirective.
+        {
+            std::vector<std::string> prepended, appended;
+            std::string mp_err;
+            if (readModulePathLists(data, size, prepended, appended, mp_err)) {
+                applyModulePathListsToProgram(pgm, prepended, appended);
+            }
+        }
         auto deser = std::make_unique<QoreAOTBinaryDeserializer>();
         if (!deser->openAndDeserializeShells(pgm, data, size, error)) {
             return false;

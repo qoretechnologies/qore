@@ -5537,6 +5537,16 @@ extern "C" DLLEXPORT int qore_aot_run_v2(
             (long long)parse_options, (long long)PO_MODERN,
             (int)((parse_options & PO_MODERN) == PO_MODERN));
 
+        // Apply %prepend-module-path / %append-module-path lists before loading deps
+        {
+            std::vector<std::string> prepended, appended;
+            std::string mp_error;
+            if (readModulePathLists(metadata, static_cast<uint32_t>(metadata_len),
+                    prepended, appended, mp_error)) {
+                applyModulePathListsToProgram(*qpgm, prepended, appended);
+            }
+        }
+
         // Load module dependencies before deserialization so that module classes,
         // functions, etc. are available when resolving base classes and types
         {
@@ -6174,6 +6184,26 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
                 }
             } else {
                 printd(0, "AOT v3: failed to read program metadata: %s\n", meta_error.c_str());
+            }
+        }
+
+        // Re-apply %prepend-module-path / %append-module-path lists to the
+        // freshly-created Program BEFORE loading dependency modules, so that
+        // the blob's declared search paths take effect during runTimeLoadModule
+        // below.  See design/parse-directive-prepend-module-path.md
+        // "AOT integration".
+        {
+            std::vector<std::string> prepended, appended;
+            std::string mp_error;
+            if (readModulePathLists(metadata, static_cast<uint32_t>(metadata_len),
+                    prepended, appended, mp_error)) {
+                applyModulePathListsToProgram(*qpgm, prepended, appended);
+                if (!prepended.empty() || !appended.empty()) {
+                    printd(2, "AOT v3: applied %d prepended + %d appended module paths\n",
+                        (int)prepended.size(), (int)appended.size());
+                }
+            } else {
+                printd(0, "AOT v3: failed to read module-path lists: %s\n", mp_error.c_str());
             }
         }
 
@@ -6974,6 +7004,18 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v2(
     // Set JIT execution mode
     local_pgm->setExecMode(QEM_JIT);
 
+    // Re-apply the module's compiled-in %prepend-module-path / %append-module-path
+    // lists to the local Program BEFORE loading dependencies — otherwise AOT
+    // modules that rely on vendored dep paths would miss them at runtime.
+    {
+        std::vector<std::string> prepended, appended;
+        std::string mp_error;
+        if (readModulePathLists(metadata, static_cast<uint32_t>(metadata_len),
+                prepended, appended, mp_error)) {
+            applyModulePathListsToProgram(local_pgm, prepended, appended);
+        }
+    }
+
     // Load dependencies from serialized metadata BEFORE deserializing namespace tree.
     // Dependencies must be loaded first because deserialization may need to resolve
     // base classes, types, and other references from dependency modules.
@@ -7619,6 +7661,18 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
 
     // Set JIT execution mode
     local_pgm->setExecMode(QEM_JIT);
+
+    // Re-apply the module's compiled-in %prepend-module-path / %append-module-path
+    // lists to the local Program BEFORE loading dependencies — otherwise AOT
+    // modules that rely on vendored dep paths would miss them at runtime.
+    {
+        std::vector<std::string> prepended, appended;
+        std::string mp_error;
+        if (readModulePathLists(metadata, static_cast<uint32_t>(metadata_len),
+                prepended, appended, mp_error)) {
+            applyModulePathListsToProgram(local_pgm, prepended, appended);
+        }
+    }
 
     // Load dependencies from serialized metadata BEFORE deserializing namespace tree.
     // Dependencies must be loaded first because deserialization may need to resolve
