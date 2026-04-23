@@ -448,6 +448,20 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
     endif()
     set(_qmod_out ${_qmod_out_dir}/${_name}.qmod)
 
+    # One-shot cleanup of stale flat artifacts from the pre-subdir layout
+    # (cmake commit that moved split-dir qmods into subdirs).  Without this,
+    # ModuleManager::loadModuleIntern finds `<dir>/<name>.qmod` first
+    # (flat takes precedence in the search order) and loads the stale
+    # pre-fix qmod instead of the current subdir one.  Runs at configure
+    # time; `file(REMOVE)` is a no-op on nonexistent paths, so it's
+    # idempotent across clean configures.
+    if (${_is_dir})
+        file(REMOVE
+            "${_qmod_flat_dir}/${_name}.qmod"
+            "${_qmod_flat_dir}/${_name}.qmod.d"
+            "${CMAKE_SOURCE_DIR}/qlib/${_name}.qmod")
+    endif()
+
     # Both split-dir and single-file use the direct `qcc -m` path.
     # Split-dir takes the module directory; single-file takes the .qm.
     #
