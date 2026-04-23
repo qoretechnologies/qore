@@ -4243,13 +4243,23 @@ bool QoreHttpClientObject::isHttp2Active() const {
     if (http_priv->http2_active) {
         return true;
     }
-    // For NEGOTIATE clients, http2_active may not have been refreshed yet
-    // (the poll API's goalReached() can return true before continuePoll
-    // runs the refresh).  Check the conn_mgr's pool for H2 connections.
+    // For NEGOTIATE clients, @c http2_active may not have been refreshed
+    // yet — the poll API's @c goalReached() can return true the moment
+    // the Future resolves, so a caller that checks goalReached() before
+    // making the last @c continuePoll() call never runs the refresh at
+    // QoreHttpClientObject.cpp:8120-8143.  We need a reliable signal
+    // that doesn't depend on live pool state: @c hasProtocolInPool(H2)
+    // becomes false as soon as the H2 connection is evicted (e.g., the
+    // server closes the connection after sending the response, as the
+    // Http2.qtest poll test does), which races with the
+    // @c isHttp2Active() check.  @c hasEverObservedProtocol() is sticky
+    // — it answers "did this manager ever pool an H2 connection?",
+    // which is what callers actually mean by "is HTTP/2 active?"
     if (http_priv->conn_mgr) {
         const auto& opts = http_priv->conn_mgr->getOptions();
         if (opts.protocol == HttpClientProtocol::NEGOTIATE) {
-            return http_priv->conn_mgr->hasProtocolInPool(HttpClientProtocol::H2);
+            return http_priv->conn_mgr->hasEverObservedProtocol(
+                HttpClientProtocol::H2);
         }
     }
     return false;

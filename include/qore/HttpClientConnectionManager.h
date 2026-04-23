@@ -36,6 +36,7 @@
 #include <qore/AbstractPrivateData.h>
 #include <qore/HttpClientConnection.h>
 
+#include <atomic>
 #include <condition_variable>
 #include <memory>
 #include <mutex>
@@ -244,6 +245,24 @@ public:
     */
     DLLEXPORT bool hasProtocolInPool(HttpClientProtocol proto) const;
 
+    //! Returns true if a connection of @a proto was ever added to the pool.
+    /** Sticky across pool eviction.  `hasProtocolInPool()` reports only
+        live pool contents, so a short-lived H2 response where the server
+        closes the connection after sending the body (e.g. the
+        @c Http2.qtest poll test's server does @c client.close() right
+        after @c h2op.startSendResponse) would briefly see H2 in the pool
+        and then — after the close arrives on the I/O thread and
+        @c onConnectionClosed evicts the connection — not see it.  This
+        method returns true for the entire lifetime of the manager if an
+        H2 (or H3) connection was ever pooled, matching what
+        @c isHttp2Active() / @c isHttp3Active() semantically want: "did
+        this HTTPClient ever speak HTTP/2 over this manager?"
+        @param proto the protocol to check for
+        @return true if @a proto has been observed at least once
+        @since %Qore 2.3
+    */
+    DLLEXPORT bool hasEverObservedProtocol(HttpClientProtocol proto) const;
+
     //! Returns the total number of pooled connections across all keys.
     DLLEXPORT int getPoolSize() const;
 
@@ -374,6 +393,14 @@ protected:
     //! causing a use-after-free / deadlock.  Drained by processDeferredDeref().
     //! Protected by pool_lock_ (write).
     std::vector<HttpClientConnectionBase*> deferred_deref_;
+
+    //! Sticky bitmask of protocols ever added to the pool.
+    /** Bit N corresponds to the underlying_type value N of
+        @c HttpClientProtocol.  Set when a connection is added to the
+        pool; never cleared.  Used by @ref hasEverObservedProtocol().
+        Atomic so the isHttp2Active() / isHttp3Active() read paths can
+        check it without taking @c pool_lock_. */
+    std::atomic<unsigned> observed_protocols_{0};
 
     //! Computes the pool key for the given target (with proxy info baked in).
     DLLLOCAL std::string poolKey(const char* host, int port) const;
