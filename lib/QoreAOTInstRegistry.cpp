@@ -1292,10 +1292,18 @@ static bool writeNewObject(AOTInstWriteCtx& ctx) {
     // The class/variant are the only metadata needed — args are IR operands
     // (handled by the generic instruction write path).
     auto* ni = static_cast<const QoreIRNewObjectInstruction*>(ctx.inst);
-    const char* class_path = ni->qc ? ni->qc->getNamespacePath().c_str() : "";
-    // Strip leading :: from qc->getPath() so it matches runtime lookups
-    if (class_path[0] == ':' && class_path[1] == ':') {
-        class_path += 2;
+    // QoreClass::getNamespacePath() returns std::string by value; bind the
+    // temporary to a named local so the c_str() pointer stays valid until
+    // writeStringRef() reads it.
+    std::string class_path_storage;
+    const char* class_path = "";
+    if (ni->qc) {
+        class_path_storage = ni->qc->getNamespacePath();
+        class_path = class_path_storage.c_str();
+        // Strip leading :: from getNamespacePath() so it matches runtime lookups
+        if (class_path[0] == ':' && class_path[1] == ':') {
+            class_path += 2;
+        }
     }
     ctx.writer.writeStringRef(class_path);
     // Variant signature for disambiguation (empty string if no variant)

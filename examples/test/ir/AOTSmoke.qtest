@@ -106,6 +106,7 @@ class AOTSmokeTest inherits QUnit::Test {
         addTestCase("AOT strip source static varref module", \testStripSourceStaticVarrefModule());
         # Strip source: on_exit/on_success handler IR
         addTestCase("AOT strip source on_exit handlers", \testStripSourceOnExitHandlers());
+        addTestCase("AOT strip source on_exit builtin class", \testStripSourceOnExitBuiltinClass());
         addTestCase("AOT strip source constructor args", \testStripSourceConstructorArgs());
         addTestCase("AOT strip source default args", \testStripSourceDefaultArgs());
         addTestCase("AOT strip source cast parse hash", \testStripSourceCastParseHash());
@@ -2923,6 +2924,45 @@ exit(0);
         string interp_out = runInterpreted(code);
         assertEq(interp_out, result.run_out,
             "on_exit strip-source output matches interpreter");
+    }
+
+    testStripSourceOnExitBuiltinClass() {
+        # Regression: writeNewObject() in lib/QoreAOTInstRegistry.cpp held
+        # ni->qc->getNamespacePath().c_str() in a const char* across the
+        # writeStringRef() call.  getNamespacePath() returns std::string
+        # by value, so the temporary destroyed at end-of-statement and
+        # the pointer dangled.  Subsequent writeStringRef interned
+        # whatever bytes happened to be in the freed memory, the reader
+        # got garbage, runtimeFindClass() returned nullptr, and the
+        # NewObject opcode in the OBE handler IR raised AOT-ERROR which
+        # the on_block_exit dispatcher swallowed silently — leaving the
+        # rest of the on_exit body unexecuted.  Symptom: on_exit handlers
+        # that constructed AutoLock / Mutex / Counter / etc. silently
+        # aborted, breaking serialized lock release in
+        # HttpClientConnectionManager (30s SSL-refused regression in
+        # HttpServer.qtest:asyncModeConnectionRefusedTest).
+        # Body NewObjects went through the LLVM-lowered slot table path
+        # (qore_rt_new_object_nb_aot) which is unaffected; only
+        # interpreter-driven handler IRs hit readNewObject.
+        string code = "%modern
+sub run() {
+    Mutex m();
+    on_exit {
+        printf(\"before\\n\");
+        AutoLock al(m);
+        printf(\"after\\n\");
+    }
+    throw \"X\", \"x\";
+}
+try { run(); } catch (hash<ExceptionInfo> ex) { printf(\"caught: %s\\n\", ex.err); }
+exit(0);
+";
+        hash<auto> result = compileStripSourceAndRun(code);
+        assertTrue(result.all_precompiled,
+            "on_exit-builtin-class strip-source: all pre-compiled: " + result.compile_out);
+        # The body must run to completion: both 'before' and 'after' must print
+        assertEq("before\nafter\ncaught: X\n", result.run_out,
+            "on_exit body completes after constructing built-in class");
     }
 
     testStripSourceConstructorArgs() {
