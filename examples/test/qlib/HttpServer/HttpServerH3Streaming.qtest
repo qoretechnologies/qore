@@ -263,17 +263,13 @@ class BidiEchoHandler inherits AbstractHttpRequestHandler {
 #! raises QUIC-ERROR "no QUIC session with id N on this socket".
 class DispatchRaceHandler inherits AbstractHttpRequestHandler {
     public {
-        Counter started;     # decremented once handler is in dispatch
-        Counter release;     # test signals go-ahead by decrementing
+        Counter started(1); # decremented once handler is in dispatch
+        Counter release(1); # test signals go-ahead by decrementing
+        Counter done(1);    # decremented after body_read_ok is set
         bool body_read_ok;
         binary body;
         *string body_read_err;
         *string body_read_desc;
-    }
-
-    constructor() {
-        started = new Counter(1);
-        release = new Counter(1);
     }
 
     bool wantsBodyStreaming(hash<auto> cx, hash<auto> hdr) {
@@ -281,6 +277,12 @@ class DispatchRaceHandler inherits AbstractHttpRequestHandler {
     }
 
     hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body_in) {
+        # Register the completion signal FIRST so the test's
+        # @c done.waitForZero() unblocks on any exit path, including an
+        # exception thrown before the body-read try/catch below (e.g.
+        # @c makeResponse() failure after the client has disconnected).
+        on_exit done.dec();
+
         int session_id = cx."header-info".session_id;
         int stream_id = cx."header-info".stream_id;
         Socket sock = cx."header-info".sock;
@@ -1242,6 +1244,15 @@ l50Xb2GWQesIt9k5jF5IOw==
         # Wait for the background request to finish (success OR failure —
         # client-side may have already errored out due to the mgr delete).
         req_done.waitForZero(30s);
+
+        # Independently wait for the handler's body-read attempt to
+        # complete.  The client-side @c req_done fires as soon as
+        # Future.get() is rejected by @c delete @c mgr, which happens
+        # in milliseconds; the server handler can still be mid-read
+        # via @c readQuicStreamDataBlock (up to its 10s timeout).
+        # Without this barrier, the assertion would race the handler
+        # and see @c body_read_ok unset.
+        race_handler.done.waitForZero(15s);
 
         assertTrue(race_handler.body_read_ok,
             sprintf("handler must read body after client close: err=%y desc=%y",
