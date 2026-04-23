@@ -227,23 +227,13 @@ class FormattingTest inherits QUnit::Test {
     }
 
     testDocFmtMissingParams() {
-        QLS::QLSServer errorServer();
-
-        hash<auto> initReq = makeRequest("initialize", {
-            "processId": getpid(),
-            "capabilities": {},
-            "rootUri": NOTHING,
-        });
-        errorServer.handleRequest(make_json(initReq));
-
-        hash<auto> initializedReq = makeRequest("initialized");
-        delete initializedReq.id;
-        errorServer.handleRequest(make_json(initializedReq));
-
-        # Send request with missing params
+        # Reuse the shared server: a malformed request returns an error response
+        # without mutating server state, so isolation is unnecessary.  Spinning
+        # up a fresh QLSServer would re-parse all ~3180 standard module files
+        # (~30s per fresh init) just to send one bad request.
         hash<auto> req = makeRequest("textDocument/formatting");
         delete req.params;
-        softlist<auto> responses = errorServer.handleRequest(make_json(req));
+        softlist<auto> responses = server.handleRequest(make_json(req));
         assertTrue(exists responses, "should return error response for missing params");
         assertTrue(responses.size() > 0, "should have at least one response");
         hash<auto> resp = parse_json(responses[0]);
@@ -507,23 +497,11 @@ class FormattingTest inherits QUnit::Test {
     }
 
     testOtfMissingParams() {
-        QLS::QLSServer errorServer();
-
-        hash<auto> initReq = makeRequest("initialize", {
-            "processId": getpid(),
-            "capabilities": {},
-            "rootUri": NOTHING,
-        });
-        errorServer.handleRequest(make_json(initReq));
-
-        hash<auto> initializedReq = makeRequest("initialized");
-        delete initializedReq.id;
-        errorServer.handleRequest(make_json(initializedReq));
-
-        # Send request with missing params
+        # See testDocFmtMissingParams comment — shared server is fine for
+        # malformed requests and avoids a ~30s fresh-init reparse.
         hash<auto> req = makeRequest("textDocument/onTypeFormatting");
         delete req.params;
-        softlist<auto> responses = errorServer.handleRequest(make_json(req));
+        softlist<auto> responses = server.handleRequest(make_json(req));
         assertTrue(exists responses, "should return error response for missing params");
         assertTrue(responses.size() > 0, "should have at least one response");
         hash<auto> resp = parse_json(responses[0]);
@@ -657,22 +635,11 @@ class FormattingTest inherits QUnit::Test {
     }
 
     testFoldingMissingParams() {
-        QLS::QLSServer errorServer();
-
-        hash<auto> initReq = makeRequest("initialize", {
-            "processId": getpid(),
-            "capabilities": {},
-            "rootUri": NOTHING,
-        });
-        errorServer.handleRequest(make_json(initReq));
-
-        hash<auto> initializedReq = makeRequest("initialized");
-        delete initializedReq.id;
-        errorServer.handleRequest(make_json(initializedReq));
-
+        # See testDocFmtMissingParams comment — shared server is fine for
+        # malformed requests and avoids a ~30s fresh-init reparse.
         hash<auto> req = makeRequest("textDocument/foldingRange");
         delete req.params;
-        softlist<auto> responses = errorServer.handleRequest(make_json(req));
+        softlist<auto> responses = server.handleRequest(make_json(req));
         assertTrue(exists responses, "should return error response for missing params");
         assertTrue(responses.size() > 0, "should have at least one response");
         hash<auto> resp = parse_json(responses[0]);
