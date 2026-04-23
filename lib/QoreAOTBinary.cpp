@@ -3667,6 +3667,21 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
         }
     }
 
+    // QoreObject (or any other pointer-backed value) via program constant
+    // reverse map — parse-time folding can leave a concrete QoreObject in
+    // expression position (e.g. `Class::forName("...")` folds to a
+    // Reflection::Class instance that lands inside a containing hash
+    // literal).  If the CRM knows the node pointer, emit RUNTIME_CONST_REF
+    // so the loader resolves it to the same named constant at load time.
+    if (const_reverse_map) {
+        auto it = const_reverse_map->find(node);
+        if (it != const_reverse_map->end()) {
+            writer.writeU8(static_cast<uint8_t>(AOTExprKind::RUNTIME_CONST_REF));
+            writer.writeStringRef(it->second.c_str());
+            return true;
+        }
+    }
+
     // Unsupported — write GENERIC_EVAL placeholder
     printd(3, "AOT: handler IR unsupported expr type '%s' for serialization\n",
         node->getTypeName());
