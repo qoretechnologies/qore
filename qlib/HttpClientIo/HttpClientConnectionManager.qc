@@ -92,6 +92,31 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         hash<string, list<HttpClientConnection>> pool;
 
         #! Lock for thread-safe access to pool
+        /** @anchor pool_lock_pin
+            Every public method that might be called concurrently with
+            the destructor (e.g. from a background thread retaining a
+            reference to the manager) must declare a local variable
+
+            @code
+            RWLock pool_lock_pin = pool_lock;
+            @endcode
+
+            at its entry.  The local holds a QoreObject reference on the
+            RWLock wrapper, so if another thread runs @c delete @c mgr
+            concurrently the wrapper's refcount stays >0 and its
+            QoreObject destructor is deferred.  Without this pin, member
+            cleanup in @c delete derefs the wrapper to 0 → its Qore
+            destructor calls @c AbstractSmartLock::destructor, which
+            fires @c LOCK-ERROR if any thread still holds the
+            underlying lock (lib/QC_RWLock.qpp).
+
+            The pin is a local-only ref: once the method returns, it
+            drops out of scope and the wrapper is destroyed cleanly —
+            by which time any @c AutoReadLock / @c AutoWriteLock in the
+            method body has already released the lock, so the deferred
+            @c destructor() call finds the lock free and exits without
+            error.
+        */
         RWLock pool_lock();
 
         #! AsyncSocketIoController for async operations
@@ -305,6 +330,8 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         @throw HTTPCLIENT-CAPACITY-ERROR if no connection can be acquired
     */
     HttpClientStreamHandle acquireStream(string url) {
+        # Pin @c pool_lock across this method: see @ref pool_lock_pin.
+        RWLock pool_lock_pin = pool_lock;
         # Opportunistically evict idle connections on request entry so the pool
         # doesn't grow unboundedly under churn.  Throttled to at most once per
         # cleanup-interval window; see maybeCleanupIdle().
@@ -407,6 +434,8 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
     */
     HttpClientStreamHandle acquireAndStartStreaming(string url, string method, string path,
             *hash<auto> headers, bool body_streaming = False, *data body) {
+        # Pin @c pool_lock across this method: see @ref pool_lock_pin.
+        RWLock pool_lock_pin = pool_lock;
         int retries = 0;
         bool timeout_retried = False;
         bool h3_close_retried = False;
@@ -473,6 +502,8 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
     */
     hash<auto> submitRequestAsync(string url, string method, string path,
             *hash<auto> headers, *data body) {
+        # Pin @c pool_lock across this method: see @ref pool_lock_pin.
+        RWLock pool_lock_pin = pool_lock;
         # Inject cookies from jar into request headers
         hash<UrlInfo> url_info;
         if (cookie_jar) {
@@ -565,6 +596,8 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
     */
     HttpCancellableFuture requestAsync(string url, string method, string path,
             *hash<auto> headers, *data body) {
+        # Pin @c pool_lock across this method: see @ref pool_lock_pin.
+        RWLock pool_lock_pin = pool_lock;
         # Inject cookies from jar into request headers
         hash<UrlInfo> url_info;
         if (cookie_jar) {
@@ -658,6 +691,8 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
     */
     hash<auto> request(string url, string method, string path, *hash<auto> headers,
             *data body, *timeout timeout_ms) {
+        # Pin @c pool_lock across this method: see @ref pool_lock_pin.
+        RWLock pool_lock_pin = pool_lock;
         int redirect_count = 0;
 
         while (True) {
@@ -840,6 +875,8 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         - \c protocol (string): configured protocol selection ("auto", "h1", "h2", or "h3")
     */
     hash<auto> getStats() {
+        # Pin @c pool_lock across this method: see @ref pool_lock_pin.
+        RWLock pool_lock_pin = pool_lock;
         AutoReadLock al(pool_lock);
 
         int total_connections = 0;
@@ -921,6 +958,15 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
             }
         }
 
+        # Final callback barrier: conn.close() above synchronously cancels
+        # the in-flight poll ops, which queue terminal onComplete callbacks
+        # on the AsyncIoController.  Call flushCallbacksByOwner again so
+        # those callbacks finish before our destructor returns.  The
+        # underlying per-owner accounting counts callbacks at enqueue
+        # time (not pop time), so this call waits for every callback
+        # queued by the cancellations above, not just those already
+        # picked up by a worker.
+        controller.flushCallbacksByOwner(owner_id);
     }
 
     #! Removes idle connections older than the idle timeout
@@ -971,6 +1017,8 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
     /** @return the number of connections successfully migrated
     */
     int migrateAll() {
+        # Pin @c pool_lock across this method: see @ref pool_lock_pin.
+        RWLock pool_lock_pin = pool_lock;
         list<hash<auto>> to_migrate = ();
         {
             AutoReadLock al(pool_lock);
@@ -1792,6 +1840,10 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         @param resp the response hash (checked for @c alt-svc header)
     */
     private checkAltSvc(string url, hash<auto> resp) {
+        # Skip during shutdown — see evictDeadConnections() for rationale.
+        if (shutdown) {
+            return;
+        }
         # Only applicable to HTTPS in auto mode without a proxy
         if (opts.protocol != "auto") {
             return;
@@ -1903,6 +1955,10 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         while H3 is cached (e.g., from Alt-Svc discovery).
     */
     private handleProtocolFallback(string url, string err) {
+        # Skip during shutdown — see evictDeadConnections() for rationale.
+        if (shutdown) {
+            return;
+        }
         hash<UrlInfo> url_info = parse_url(url);
         if (!url_info.port) {
             url_info.port = url_info.protocol == "https" ? 443 : 80;
@@ -2002,6 +2058,13 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
 
     #! Internal: evicts dead connections for the given URL
     private evictDeadConnections(string url) {
+        # Fast-fail during shutdown — the caller's public-method
+        # pool_lock_pin keeps pool_lock alive, but the pool itself has
+        # already been removed in closeAll(), so there is no useful
+        # work to do.
+        if (shutdown) {
+            return;
+        }
         hash<UrlInfo> url_info = parse_url(url);
         string key = sprintf("%s:%d", url_info.host, url_info.port);
 
