@@ -144,26 +144,7 @@ public:
     }
 
     //! Sets the runtime value (val + saved_val) for AOT init functions
-    DLLLOCAL void setRuntimeValue(QoreValue result, ExceptionSink* xsink) {
-        // AOT init functions can lose container element metadata while
-        // computing values. Re-apply the declared constant type before storing
-        // so runtime overload dispatch sees the same value type as source mode.
-        // This is best-effort; some legacy constants contain values that cannot
-        // be folded back into the declared nested container type.
-        if (typeInfo && !result.isNothing()) {
-            ExceptionSink type_xsink;
-            QoreTypeInfo::acceptAssignment(typeInfo, "<constant>", result, &type_xsink);
-            if (type_xsink) {
-                type_xsink.clear();
-            }
-        }
-        val.discard(xsink);
-        val = result;
-        saved_val.discard(xsink);
-        saved_val = result.refSelf();
-        init = true;
-        aot_shell_pending = false;
-    }
+    DLLLOCAL void setRuntimeValue(QoreValue result, ExceptionSink* xsink);
 
     DLLLOCAL int parseInit(ClassNs ptr);
 

@@ -122,6 +122,29 @@ void ConstantEntry::del(ExceptionSink* xsink) {
     }
 }
 
+void ConstantEntry::setRuntimeValue(QoreValue result, ExceptionSink* xsink) {
+    // AOT init functions can lose container metadata while computing values.
+    // Re-apply the declared constant type before storing so runtime overload
+    // dispatch sees the same value type as source mode.
+    if (typeInfo && !result.isNothing()) {
+        ExceptionSink type_xsink;
+        QoreTypeInfo::retypeValue(result, typeInfo, &type_xsink);
+        if (type_xsink) {
+            type_xsink.clear();
+        }
+        QoreTypeInfo::acceptAssignment(typeInfo, "<constant>", result, &type_xsink);
+        if (type_xsink) {
+            type_xsink.clear();
+        }
+    }
+    val.discard(xsink);
+    val = result;
+    saved_val.discard(xsink);
+    saved_val = result.refSelf();
+    init = true;
+    aot_shell_pending = false;
+}
+
 int ConstantEntry::parseInit(ClassNs ptr) {
     //printd(5, "ConstantEntry::parseInit() this: %p '%s' pub: %d init: %d in_init: %d node: %p '%s' "
     //  "class context: %p '%s' ns: %p ('%s') pub: %d\n", this, name.c_str(), pub, init, in_init, node,

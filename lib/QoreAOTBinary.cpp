@@ -5687,6 +5687,31 @@ bool QoreAOTBinaryDeserializer::resolveClassConstants(std::string& error) {
                 }
             }
 
+            if (!pcc.pending_init && ti && pcc.value.hasNode()
+                    && (pcc.value.getType() == NT_HASH
+                        || pcc.value.getType() == NT_LIST)) {
+                ExceptionSink xs;
+                QoreTypeInfo::retypeValue(pcc.value, ti, &xs);
+                if (xs.isException()) {
+                    xs.clear();
+                }
+                QoreTypeInfo::acceptInputMember(ti, pcc.name.c_str(),
+                    pcc.value, &xs);
+                if (xs.isException()) {
+                    QoreValue e = xs.getExceptionErr();
+                    QoreValue d = xs.getExceptionDesc();
+                    const char* es = e.getType() == NT_STRING
+                        ? e.get<const QoreStringNode>()->c_str() : "(?err)";
+                    const char* ds = d.getType() == NT_STRING
+                        ? d.get<const QoreStringNode>()->c_str() : "(?desc)";
+                    printd(0, "AOT deser: class '%s' constant '%s' narrowing "
+                        "to '%s' failed: %s: %s\n",
+                        qc->getName(), pcc.name.c_str(),
+                        pcc.type_path.c_str(), es, ds);
+                    xs.clear();
+                }
+            }
+
             // Use addUserConstant to avoid setting sys=true on user classes
             priv->addUserConstant(pcc.name.c_str(), pcc.value,
                 static_cast<ClassAccess>(pcc.access), ti);
@@ -5712,106 +5737,6 @@ bool QoreAOTBinaryDeserializer::resolveClassConstants(std::string& error) {
 
     // Clear pending data
     pending_class_constants.clear();
-    return true;
-}
-
-//! Recursively retype a deserialized hash/list value to match the declared
-//! member type.  writeValue's NT_HASH / NT_LIST cases strip the source
-//! container's element type (see the acceptInputComplexHash flow in
-//! QoreTypeInfo.cpp:1498+), so values round-trip as hash<auto>/list<auto>.
-//! For a typed member like `hash<string, hash<MapperRuntimeKeyInfo>>
-//! mapper_keys = Mapper::MapperKeyInfo;` that bites twice: the inner hashes
-//! come back as hash<auto> (incompatible with hash<MapperRuntimeKeyInfo>)
-//! and the innermost hashdecl-shaped hashes lack their hashdecl pointer.
-//!
-//! Walks the target type top-down:
-//!   complex hash → stamp complexTypeInfo and recurse into each value
-//!   complex list → stamp complexTypeInfo and recurse into each entry
-//!   hashdecl     → reconstruct via typed_hash_decl_private::newHash so the
-//!                  hash picks up the declared shape + nested member types
-//!
-//! Returns true on full coercion; false + xsink populated on failure (caller
-//! leaves the original value in place so the downstream
-//! `acceptInputMember` still produces its own diagnostic).
-static bool aotRetypeForMember(QoreValue& v, const QoreTypeInfo* target_ti,
-        ExceptionSink* xsink) {
-    if (!v.hasNode() || !target_ti || target_ti == autoTypeInfo) {
-        return true;
-    }
-    // Typed hashdecl target: coerce plain hash → hashdecl instance
-    if (const TypedHashDecl* hd = QoreTypeInfo::getTypedHash(target_ti)) {
-        if (v.getType() != NT_HASH) {
-            return true;  // let acceptInputMember raise
-        }
-        const QoreHashNode* src = v.get<const QoreHashNode>();
-        if (src->getHashDecl() == hd) {
-            return true;  // already typed
-        }
-        QoreHashNode* coerced = typed_hash_decl_private::get(*hd)->newHash(
-            src, /*runtime_check=*/true, xsink);
-        if (!coerced || (xsink && xsink->isException())) {
-            if (coerced) {
-                coerced->deref(xsink);
-            }
-            return false;
-        }
-        v.discard(nullptr);
-        v = coerced;
-        return true;
-    }
-    // Complex hash target: hash<string, inner_vt>
-    const QoreTypeInfo* inner_h_vt = QoreTypeInfo::getComplexHashValueType(target_ti);
-    if (inner_h_vt && inner_h_vt != autoTypeInfo) {
-        if (v.getType() != NT_HASH) {
-            return true;
-        }
-        QoreHashNode* h = v.get<QoreHashNode>();
-        if (!h->is_unique()) {
-            QoreHashNode* copy = h->copy();
-            v.discard(nullptr);
-            v = copy;
-            h = copy;
-        }
-        HashIterator hi(h);
-        while (hi.next()) {
-            hash_assignment_priv ha(*qore_hash_private::get(*h), *qhi_priv::get(hi)->i);
-            QoreValue cur(ha.swap(QoreValue()));
-            if (!aotRetypeForMember(cur, inner_h_vt, xsink)) {
-                ha.swap(cur);
-                return false;
-            }
-            ha.swap(cur);
-        }
-        qore_hash_private::get(*h)->complexTypeInfo
-            = qore_get_complex_hash_type(inner_h_vt);
-        return true;
-    }
-    // Complex list target: list<inner_vt>
-    const QoreTypeInfo* inner_l_vt = QoreTypeInfo::getComplexListValueType(target_ti);
-    if (inner_l_vt && inner_l_vt != autoTypeInfo) {
-        if (v.getType() != NT_LIST) {
-            return true;
-        }
-        QoreListNode* l = v.get<QoreListNode>();
-        if (!l->is_unique()) {
-            QoreListNode* copy = l->copy();
-            v.discard(nullptr);
-            v = copy;
-            l = copy;
-        }
-        size_t n = l->size();
-        for (size_t i = 0; i < n; ++i) {
-            QoreValue cur = qore_list_private::get(*l)->swap(i, QoreValue());
-            if (!aotRetypeForMember(cur, inner_l_vt, xsink)) {
-                qore_list_private::get(*l)->swap(i, cur);
-                return false;
-            }
-            qore_list_private::get(*l)->swap(i, cur);
-        }
-        qore_list_private::get(*l)->complexTypeInfo
-            = qore_get_complex_list_type(inner_l_vt);
-        return true;
-    }
     return true;
 }
 
@@ -5970,7 +5895,7 @@ bool QoreAOTBinaryDeserializer::resolveHashdeclMembers(std::string& error) {
                 // Pre-retype nested containers recursively so inner values
                 // carry the declared hashdecl/complex-hash typing before
                 // `acceptInputMember` runs its narrowing check.
-                aotRetypeForMember(phm.default_val, mti, &xs);
+                QoreTypeInfo::retypeValue(phm.default_val, mti, &xs);
                 if (xs.isException()) {
                     xs.clear();  // fall through to acceptInputMember for the
                                  // canonical diagnostic path
@@ -6422,6 +6347,27 @@ bool QoreAOTBinaryDeserializer::deserializeConstants(std::string& error) {
             return false;
         }
         const QoreTypeInfo* final_ti = ti ? ti : val.getTypeInfo();
+        if (!pending && final_ti && val.hasNode()
+                && (val.getType() == NT_HASH || val.getType() == NT_LIST)) {
+            ExceptionSink xs;
+            QoreTypeInfo::retypeValue(val, final_ti, &xs);
+            if (xs.isException()) {
+                xs.clear();
+            }
+            QoreTypeInfo::acceptInputMember(final_ti, name, val, &xs);
+            if (xs.isException()) {
+                QoreValue e = xs.getExceptionErr();
+                QoreValue d = xs.getExceptionDesc();
+                const char* es = e.getType() == NT_STRING
+                    ? e.get<const QoreStringNode>()->c_str() : "(?err)";
+                const char* ds = d.getType() == NT_STRING
+                    ? d.get<const QoreStringNode>()->c_str() : "(?desc)";
+                printd(0, "AOT deser: namespace constant '%s' narrowing "
+                    "to '%s' failed: %s: %s\n",
+                    name, type_path ? type_path : "(null)", es, ds);
+                xs.clear();
+            }
+        }
         // Create as user constant (not builtin) with proper pub flag.
         // Using add() would mark the constant as builtin, which causes
         // scanMergeCommittedNamespace to skip it (isUserPublic() returns false).

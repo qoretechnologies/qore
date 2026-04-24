@@ -4068,6 +4068,9 @@ QoreIRValue QoreIRLowering::lowerConstant(const QoreValue& expr, std::string& er
     if (expr.getType() == NT_HASH && expr.isValue()) {
         const QoreHashNode* hash = expr.get<const QoreHashNode>();
         if (hash) {
+            if (hash->getHashDecl()) {
+                return builder.createLoadConstant(nullptr, expr, nullptr)->result;
+            }
             std::vector<QoreIRValue> values;
             ConstHashIterator it(hash);
             while (it.next()) {

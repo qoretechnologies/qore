@@ -61,6 +61,7 @@ class AOTSmokeTest inherits QUnit::Test {
         # Module compilation tests
         addTestCase("AOT module compile", \testAOTModuleCompile());
         addTestCase("AOT module no-narrow member types", \testAOTModuleNoNarrowMemberTypes());
+        addTestCase("AOT module hashdecl class constants", \testAOTModuleHashdeclClassConstants());
         addTestCase("AOT module default object args", \testAOTModuleDefaultObjectArgs());
         addTestCase("AOT module compile custom output", \testAOTModuleCompileCustomOutput());
         addTestCase("AOT module compile opt levels", \testAOTModuleCompileOptLevels());
@@ -1485,6 +1486,80 @@ printf(\"%s\", AOTNoNarrowMember::run());
         assertEq(interp_out, aot_out, "compiled module preserves hash<auto!>/list<auto!> member types: " + aot_out);
         assertTrue(aot_out.regex("alpha"), "hash member accepted mixed value types: " + aot_out);
         assertTrue(aot_out.regex("0.3"), "list member accepted mixed value types: " + aot_out);
+    }
+
+    testAOTModuleHashdeclClassConstants() {
+        string tmp_dir = sprintf("/tmp/aot_hashdecl_class_const_%d", getpid());
+        mkdir(tmp_dir);
+        on_exit {
+            backquote(sprintf("rm -rf %s", tmp_dir));
+        }
+
+        string mod_code = "%modern
+module AOTHashdeclConst {
+    version = \"1.0\";
+    desc = \"AOT hashdecl class constant regression\";
+    author = \"Test\";
+    url = \"http://test.example.com\";
+    license = \"MIT\";
+}
+
+public namespace AOTHashdeclConst {
+    public hashdecl FieldInfo {
+        string name;
+        string type;
+    }
+
+    public hashdecl SchemaInfo {
+        string name;
+        list<hash<FieldInfo>> fields;
+    }
+
+    public class Templates {
+        public const EntitySchema = <SchemaInfo>{
+            \"name\": \"entity\",
+            \"fields\": (
+                <FieldInfo>{\"name\": \"id\", \"type\": \"string\"},
+            ),
+        };
+    }
+}
+";
+        string qm_path = tmp_dir + "/AOTHashdeclConst.qm";
+        {
+            File f();
+            f.open2(qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write(mod_code);
+            f.close();
+        }
+
+        string qmod_path = tmp_dir + "/AOTHashdeclConst.qmod";
+        hash<auto> result = compileModuleFile(qm_path, qmod_path);
+        assertTrue(result.compiled, "hashdecl constant module compiled: " + result.compile_out);
+
+        string test_code = "%modern
+%requires AOTHashdeclConst
+
+string sub read_schema() {
+    hash<AOTHashdeclConst::SchemaInfo> schema = AOTHashdeclConst::Templates::EntitySchema;
+    return sprintf(\"%s:%s:%s\\n\", schema.name, schema.fields[0].name, schema.fields[0].type);
+}
+
+printf(\"%s\", read_schema());
+";
+        hash<auto> paths = writeTempScript(test_code);
+        on_exit {
+            unlink(paths.src);
+        }
+
+        string aot_out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, tmp_dir, qore_bin, paths.src));
+        unlink(qmod_path);
+        string interp_out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, tmp_dir, qore_bin, paths.src));
+
+        assertEq(interp_out, aot_out, "compiled module preserves hashdecl class constants: " + aot_out);
+        assertEq("entity:id:string\n", aot_out, "hashdecl class constant keeps declared type");
     }
 
     testAOTModuleCompileCustomOutput() {

@@ -460,6 +460,10 @@ public:
         }
     }
 
+    //! Re-applies declared hash/list/hashdecl container metadata to a value.
+    DLLLOCAL static bool retypeValue(QoreValue& v, const QoreTypeInfo* target_ti,
+            ExceptionSink* xsink);
+
     // static version of method, checking for null pointer
     DLLLOCAL static bool hasDefaultValue(const QoreTypeInfo* ti) {
         return ti ? ti->hasDefaultValueImpl() : false;

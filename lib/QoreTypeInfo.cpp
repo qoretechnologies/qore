@@ -3305,6 +3305,89 @@ const QoreTypeInfo* QoreTypeInfo::getComplexListValueType(const QoreTypeInfo* ti
     return ti->return_vec[0].spec.getComplexList();
 }
 
+bool QoreTypeInfo::retypeValue(QoreValue& v, const QoreTypeInfo* target_ti,
+        ExceptionSink* xsink) {
+    if (!v.hasNode() || !target_ti || target_ti == autoTypeInfo) {
+        return true;
+    }
+
+    if (const TypedHashDecl* hd = QoreTypeInfo::getTypedHash(target_ti)) {
+        if (v.getType() != NT_HASH) {
+            return true;
+        }
+        const QoreHashNode* src = v.get<const QoreHashNode>();
+        if (src->getHashDecl() == hd) {
+            return true;
+        }
+        QoreHashNode* coerced = typed_hash_decl_private::get(*hd)->newHash(
+            src, /*runtime_check=*/true, xsink);
+        if (!coerced || (xsink && xsink->isException())) {
+            if (coerced) {
+                coerced->deref(xsink);
+            }
+            return false;
+        }
+        v.discard(nullptr);
+        v = coerced;
+        return true;
+    }
+
+    const QoreTypeInfo* inner_h_vt = QoreTypeInfo::getComplexHashValueType(target_ti);
+    if (inner_h_vt && inner_h_vt != autoTypeInfo) {
+        if (v.getType() != NT_HASH) {
+            return true;
+        }
+        QoreHashNode* h = v.get<QoreHashNode>();
+        if (!h->is_unique()) {
+            QoreHashNode* copy = h->copy();
+            v.discard(nullptr);
+            v = copy;
+            h = copy;
+        }
+        HashIterator hi(h);
+        while (hi.next()) {
+            hash_assignment_priv ha(*qore_hash_private::get(*h), *qhi_priv::get(hi)->i);
+            QoreValue cur(ha.swap(QoreValue()));
+            if (!QoreTypeInfo::retypeValue(cur, inner_h_vt, xsink)) {
+                ha.swap(cur);
+                return false;
+            }
+            ha.swap(cur);
+        }
+        qore_hash_private::get(*h)->complexTypeInfo
+            = qore_get_complex_hash_type(inner_h_vt);
+        return true;
+    }
+
+    const QoreTypeInfo* inner_l_vt = QoreTypeInfo::getComplexListValueType(target_ti);
+    if (inner_l_vt && inner_l_vt != autoTypeInfo) {
+        if (v.getType() != NT_LIST) {
+            return true;
+        }
+        QoreListNode* l = v.get<QoreListNode>();
+        if (!l->is_unique()) {
+            QoreListNode* copy = l->copy();
+            v.discard(nullptr);
+            v = copy;
+            l = copy;
+        }
+        qore_list_private* lp = qore_list_private::get(*l);
+        size_t n = l->size();
+        for (size_t i = 0; i < n; ++i) {
+            QoreValue cur = lp->swap(i, QoreValue());
+            if (!QoreTypeInfo::retypeValue(cur, inner_l_vt, xsink)) {
+                lp->swap(i, cur);
+                return false;
+            }
+            lp->swap(i, cur);
+        }
+        lp->complexTypeInfo = qore_get_complex_list_type(inner_l_vt);
+        return true;
+    }
+
+    return true;
+}
+
 qore_type_result_e QoreTypeInfo::parseAccepts(const QoreTypeInfo* first, const QoreTypeInfo* second,
         bool& may_not_match, bool& may_need_filter, qore_type_result_e& max_result,
         bool known_initial_assignment) {
