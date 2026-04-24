@@ -842,6 +842,16 @@ FtpPortAcceptPollOperationPriv::~FtpPortAcceptPollOperationPriv() {
 void FtpPortAcceptPollOperationPriv::deref(ExceptionSink* xsink) {
     if (ROdereference()) {
         if (current_op) {
+            // Abort the inner op first so it releases any buffered state —
+            // in particular SocketAcceptPollOperation's accepted_socket,
+            // which would otherwise leak if this FtpPortAcceptPollOperation
+            // is torn down before handleAcceptComplete extracted the
+            // accepted socket (e.g. FTP timeout / connection error mid-accept
+            // that never consumed the result).  Abort is a no-op for ops
+            // already past goalReached() that released their state in
+            // handleAcceptComplete's releaseCurrentOp, and for the
+            // SocketAcceptPollOperation family it does not close sockets.
+            current_op->abort(xsink);
             current_op->deref(xsink);
             current_op = nullptr;
         }
