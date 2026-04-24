@@ -1363,25 +1363,6 @@ std::unique_ptr<Http2StreamInfo> Http2Session::takeStreamingHeadersReadyCopy() {
     return nullptr;
 }
 
-bool Http2Session::isStreamComplete(int32_t stream_id) const {
-    // Fast, lock-free path: a closed session unblocks concurrent
-    // sync consumers waiting for END_STREAM.  Treat any outstanding
-    // stream as "complete" from the application's perspective so a
-    // polling reader (e.g. GrpcServer::readStreamBody) exits its loop
-    // and releases the outer socket mutex — letting Socket::close()
-    // proceed without a close-vs-poll deadlock.  See
-    // `grpc-shutdown-deadlock.md`.
-    if (session_closed_.load(std::memory_order_acquire)) {
-        return true;
-    }
-    std::lock_guard<std::recursive_mutex> lg(m);
-    auto it = streams.find(stream_id);
-    if (it == streams.end()) {
-        return true;  // Stream not found, treat as complete
-    }
-    return it->second->body_complete;
-}
-
 bool Http2Session::isStreamClosed(int32_t stream_id) const {
     std::lock_guard<std::recursive_mutex> lg(m);
     auto it = streams.find(stream_id);

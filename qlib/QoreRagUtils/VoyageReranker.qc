@@ -31,8 +31,6 @@ public namespace QoreRagUtils {
     - \c api_key (required): Voyage API key; passed via the \c apikey option
     - \c url (optional): override the default Voyage URL
     - \c model (optional): model name, default \c "rerank-2"
-
-    @since QoreRagUtils 1.0
 */
 public class VoyageReranker inherits AbstractReranker {
     public {

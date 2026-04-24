@@ -37,8 +37,6 @@ public namespace AsyncSocketIo {
 
     Receive-side: uses @ref Qore::Socket::readQuicConnectStreamData() to
     read tunnel data buffered by the QUIC session.
-
-    @since AsyncSocketIo 1.0
 */
 public class Http3StreamContext inherits AbstractStreamContext {
     #! Maximum number of drain retries before throwing a backpressure timeout

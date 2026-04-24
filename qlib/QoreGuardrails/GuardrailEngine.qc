@@ -48,8 +48,6 @@ hash<GuardrailResult> input_result = engine.evaluateInput("user message...");
 # output_format runs, prompt_injection is skipped (input-only rule)
 hash<GuardrailResult> output_result = engine.evaluateOutput("ai response...");
     @endcode
-
-    @since QoreGuardrails 1.0
 */
 public class GuardrailEngine {
     private {

@@ -94,8 +94,6 @@ public hashdecl AgentEvent {
     Override the \c execute() method to implement your strategy. Use
     \c callChat() for multi-turn LLM calls with tool support, or
     \c callLlm() for simple single-shot completions.
-
-    @since QoreAgentStrategies 1.0
 */
 public class AbstractAgentStrategy {
     private {

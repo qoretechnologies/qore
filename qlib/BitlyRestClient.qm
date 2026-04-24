@@ -400,8 +400,6 @@ public class BitlyRestConnection inherits RestClient::RestConnection {
     }
 
     #! Returns an async-I/O-capable connection object
-    /** @since BitlyRestClient 1.0
-    */
     private object getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
         return new BitlyRestClientIo(getConnectionOptions(rtopts));
     }

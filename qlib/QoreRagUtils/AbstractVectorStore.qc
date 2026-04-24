@@ -28,8 +28,6 @@ public namespace QoreRagUtils {
     upserts and similarity searches.
 
     Implementations must be thread-safe.
-
-    @since QoreRagUtils 1.0
 */
 public class AbstractVectorStore {
     #! Upserts a batch of vector records

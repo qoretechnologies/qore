@@ -35,8 +35,6 @@ LruEmbeddingCache cache(1024);
 RagPipeline pipe(embedder, vector_store, reranker, chunker, 10, 50,
     <RagPipelineOptions>{"embedding_cache": cache});
     @endcode
-
-    @since QoreRagUtils 1.0
 */
 public class LruEmbeddingCache inherits AbstractEmbeddingCache {
     private {

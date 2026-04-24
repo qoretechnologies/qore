@@ -4040,28 +4040,6 @@ int QoreSocket::sendHttp2StreamData(int32_t stream_id, const BinaryNode* data,
     return 0;
 }
 
-int QoreSocket::submitHttp2StreamingResponseHeaders(int32_t stream_id, int status_code,
-        const QoreHashNode* headers, ExceptionSink* xsink) {
-    if (!priv->h2_session) {
-        xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session active");
-        return -1;
-    }
-
-    // Convert QoreHashNode to map
-    strcase_str_map_t header_map;
-    if (headers) {
-        ConstHashIterator hi(headers);
-        while (hi.next()) {
-            QoreValue val = hi.get();
-            if (val.getType() == NT_STRING) {
-                header_map[hi.getKey()] = val.get<const QoreStringNode>()->c_str();
-            }
-        }
-    }
-
-    return priv->h2_session->submitResponseStreaming(stream_id, status_code, header_map, xsink);
-}
-
 int QoreSocket::sendHttp2Trailers(int32_t stream_id, const QoreHashNode* trailers,
         ExceptionSink* xsink) {
     if (!priv->h2_session) {
@@ -4093,117 +4071,6 @@ BinaryNode* QoreSocket::readHttp2StreamData(int32_t stream_id, size_t max_bytes,
     return priv->h2_session->takeStreamData(stream_id, max_bytes, xsink);
 }
 
-void QoreSocket::setHttp2ActiveStream(int32_t stream_id, ExceptionSink* xsink) {
-    if (!priv->h2_session) {
-        xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session active");
-        return;
-    }
-    priv->setH2ActiveStreamId(stream_id);
-}
-
-int32_t QoreSocket::getHttp2ActiveStream() const {
-    return priv->getH2ActiveStreamId();
-}
-
-// RAII guard for saving/restoring the HTTP/2 active stream ID
-namespace {
-struct Http2ActiveStreamGuard {
-    qore_socket_private& priv;
-    int32_t old_id;
-    Http2ActiveStreamGuard(qore_socket_private& p, int32_t new_id)
-        : priv(p), old_id(p.getH2ActiveStreamId()) {
-        p.setH2ActiveStreamId(new_id);
-    }
-    ~Http2ActiveStreamGuard() { priv.setH2ActiveStreamId(old_id); }
-    Http2ActiveStreamGuard(const Http2ActiveStreamGuard&) = delete;
-    Http2ActiveStreamGuard& operator=(const Http2ActiveStreamGuard&) = delete;
-};
-} // anonymous namespace
-
-// Thread safety: this method must only be called from a single thread per socket.
-// The server connection model enforces this — each connection has one handler thread
-// that drives the HTTP/2 session exclusively.  Concurrent calls on the same socket
-// would cause nghttp2 reentrancy issues (receiveData is not reentrant).
-BinaryNode* QoreSocket::readHttp2StreamDataBlock(int32_t stream_id, int timeout_ms,
-        ExceptionSink* xsink) {
-    if (!priv->h2_session) {
-        xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session active");
-        return nullptr;
-    }
-
-    // RAII guard saves/restores active stream ID on all exit paths
-    Http2ActiveStreamGuard id_guard(*priv, stream_id);
-
-    // Use a deadline to avoid timeout reset when control frames arrive
-    int64 deadline_ms = timeout_ms >= 0
-        ? q_clock_getmillis() + timeout_ms
-        : -1;
-
-    while (true) {
-        // 1. Check stream buffer for available data
-        BinaryNode* data = priv->h2_session->takeStreamData(stream_id, 0, xsink);
-        if (data) {
-            return data;
-        }
-        if (*xsink) {
-            return nullptr;
-        }
-
-        // 2. Check body_complete (END_STREAM received)
-        if (priv->h2_session->isStreamComplete(stream_id)) {
-            return nullptr;
-        }
-
-        // 3. Calculate remaining timeout from deadline
-        int remaining_ms;
-        if (deadline_ms >= 0) {
-            remaining_ms = (int)(deadline_ms - q_clock_getmillis());
-            if (remaining_ms < 0) {
-                remaining_ms = 0;
-            }
-        } else {
-            remaining_ms = -1;
-        }
-
-        // 4. Wait for raw socket data with timeout
-        bool has_data = priv->h2_session->hasSocketBufferedData();
-        if (!has_data) {
-            has_data = priv->isSocketDataAvailable(remaining_ms, "readHttp2StreamDataBlock", xsink);
-            if (*xsink) {
-                return nullptr;
-            }
-            if (!has_data) {
-                // Timeout — raise exception so callers can distinguish
-                // from normal stream completion (END_STREAM)
-                xsink->raiseException("HTTP2-STREAM-TIMEOUT",
-                    "timeout reading HTTP/2 stream %d data", stream_id);
-                return nullptr;
-            }
-        }
-
-        // 5. Process HTTP/2 frames
-        priv->h2_receiving_frames = true;
-        int rv = priv->h2_session->receiveData(0, xsink);
-        priv->h2_receiving_frames = false;
-        if (*xsink || rv == 1) {
-            return nullptr;
-        }
-
-        // 6. Flush pending protocol frames (WINDOW_UPDATE, SETTINGS_ACK)
-        priv->h2_session->sendPendingDataBlocking(100, xsink);
-        if (*xsink) {
-            return nullptr;
-        }
-    }
-}
-
-bool QoreSocket::isHttp2StreamComplete(int32_t stream_id) const {
-    if (!priv->h2_session) {
-        return true;
-    }
-    return priv->h2_session->isStreamComplete(stream_id);
-}
-
 bool QoreSocket::isHttp2StreamClosed(int32_t stream_id) const {
     if (!priv->h2_session) {
         return true;
@@ -4216,36 +4083,6 @@ bool QoreSocket::isHttp2StreamRemoteClosed(int32_t stream_id) const {
         return true;
     }
     return priv->h2_session->isStreamRemoteClosed(stream_id);
-}
-
-int QoreSocket::flushHttp2(int timeout_ms, ExceptionSink* xsink) {
-    if (!priv->h2_session) {
-        return 0;
-    }
-    return priv->h2_session->sendPendingDataBlocking(timeout_ms, xsink);
-}
-
-void QoreSocket::cleanupHttp2Stream(int32_t stream_id) {
-    if (priv->h2_session) {
-        priv->h2_session->cleanupStream(stream_id);
-    }
-}
-
-int QoreSocket::resetHttp2Stream(int32_t stream_id, ExceptionSink* xsink) {
-    if (!priv->h2_session) {
-        return 0;
-    }
-    int rv = priv->h2_session->submitRstStream(stream_id, NGHTTP2_CANCEL, xsink);
-    if (rv != 0) {
-        // RST_STREAM submission failed (stream already closed, invalid state, etc.)
-        // Still clean up local state — the handler is done and keeping stale stream
-        // entries would leak resources.  The remote side will handle the stream via
-        // its own timeout or connection close.
-        printd(2, "resetHttp2Stream() submitRstStream failed for stream %d (rv=%d), "
-            "cleaning up local state anyway\n", stream_id, rv);
-    }
-    priv->h2_session->cleanupStream(stream_id);
-    return rv;
 }
 
 int QoreSocket::waitForHttp2StreamDrain(int32_t stream_id, int timeout_ms) {

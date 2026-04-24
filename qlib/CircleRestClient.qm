@@ -358,8 +358,6 @@ public class CircleRestConnection inherits RestClient::RestConnection {
     }
 
     #! Returns an async-I/O-capable connection object
-    /** @since CircleRestClient 1.0
-    */
     private object getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
         return new CircleRestClientIo(getConnectionOptions(rtopts));
     }

@@ -136,8 +136,6 @@ public hashdecl GuardrailRuleConfig {
     Rules that depend on external services (LLM, ONNX) can be configured to
     fail-closed — blocking content when the service is unavailable instead of
     silently passing.
-
-    @since QoreGuardrails 1.0
 */
 public class AbstractGuardrailRule {
     private {

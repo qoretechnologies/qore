@@ -32,8 +32,6 @@ public namespace QoreGuardrails {
     blocked.
 
     Requires a QoreLlmUtils backend.
-
-    @since QoreGuardrails 1.0
 */
 public class TopicRestrictionRule inherits AbstractGuardrailRule {
     private {

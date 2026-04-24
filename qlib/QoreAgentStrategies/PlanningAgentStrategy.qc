@@ -35,8 +35,6 @@ public namespace QoreAgentStrategies {
     This is useful for complex queries that require multiple distinct steps —
     for example, "compare Q1 revenue with last year and find the top-selling
     product" requires searching two datasets and cross-referencing results.
-
-    @since QoreAgentStrategies 1.0
 */
 public class PlanningAgentStrategy inherits AbstractAgentStrategy {
     private {

@@ -154,7 +154,6 @@ public hashdecl ChatStreamEvent {
 
     Thread-safe: the underlying REST client is lazily initialized behind a mutex.
 
-    @since QoreLlmUtils 1.0
 
     @par Example: Create an HTTP backend and get a completion
     @code{.py}
@@ -296,8 +295,6 @@ public class LlmBackend {
         @return a @ref ChatResponse hash with stop_reason, content, and optional tool_calls
 
         @throw LLM-ERROR if the chat request fails
-
-        @since QoreLlmUtils 1.0
     */
     hash<ChatResponse> chat(list<hash<ChatMessage>> messages,
             *list<hash<ToolDefinition>> tools) {
@@ -345,8 +342,6 @@ llm.chatStream(
     },
 );
         @endcode
-
-        @since QoreLlmUtils 1.0
     */
     chatStream(list<hash<ChatMessage>> messages, code callback,
             *list<hash<ToolDefinition>> tools) {

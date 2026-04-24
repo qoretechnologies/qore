@@ -27,8 +27,6 @@ public namespace QoreHistory {
 #! Shared history management class for Qore tools
 /** Provides timestamped history entries with navigation, search, persistence,
     deduplication, and history expansion support.
-
-    @since QoreHistory 1.0
 */
 public class History {
     private {

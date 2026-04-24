@@ -2014,61 +2014,6 @@ public:
     DLLEXPORT int sendHttp2Trailers(int32_t stream_id, const QoreHashNode* trailers,
             ExceptionSink* xsink);
 
-    //! Submits HTTP/2 streaming response headers without body or END_STREAM
-    /** Calls Http2Session::submitResponseStreaming() to send response HEADERS
-        without END_STREAM. A deferred data provider is created so that body data
-        can be sent later via sendHttp2StreamData() and trailers via sendHttp2Trailers().
-
-        @param stream_id the HTTP/2 stream ID
-        @param status_code HTTP status code (e.g., 200)
-        @param headers response headers
-        @param xsink exception sink for error reporting
-        @return 0 on success, -1 on error
-
-        @since %Qore 2.3
-    */
-    DLLEXPORT int submitHttp2StreamingResponseHeaders(int32_t stream_id, int status_code,
-            const QoreHashNode* headers, ExceptionSink* xsink);
-
-    //! Sets the active HTTP/2 stream ID for transparent send/recv operations
-    /** @param stream_id the stream ID to use for subsequent send/recv operations
-        @param xsink exception sink for error reporting
-
-        @since Qore 2.3
-    */
-    DLLEXPORT void setHttp2ActiveStream(int32_t stream_id, ExceptionSink* xsink);
-
-    //! Gets the active HTTP/2 stream ID
-    /** @return the active stream ID, or -1 if no stream is active
-
-        @since Qore 2.3
-    */
-    DLLEXPORT int32_t getHttp2ActiveStream() const;
-
-    //! Blocking read of HTTP/2 stream data for incremental server-side streaming
-    /** Blocks until data is available on the specified stream, the stream completes
-        (END_STREAM), or the timeout expires.
-
-        @param stream_id the HTTP/2 stream ID
-        @param timeout_ms read timeout in milliseconds
-        @param xsink exception sink for error reporting
-
-        @return binary data from the stream, or nullptr on timeout or stream end.
-        Use isHttp2StreamComplete() to distinguish timeout from end-of-stream.
-
-        @since %Qore 2.3
-    */
-    DLLEXPORT BinaryNode* readHttp2StreamDataBlock(int32_t stream_id, int timeout_ms,
-            ExceptionSink* xsink);
-
-    //! Check if an HTTP/2 stream has received END_STREAM
-    /** @param stream_id the HTTP/2 stream ID
-        @return true if END_STREAM has been received (body_complete) or stream not found
-
-        @since %Qore 2.3
-    */
-    DLLEXPORT bool isHttp2StreamComplete(int32_t stream_id) const;
-
     //! Check if an HTTP/2 stream has been closed
     /** @param stream_id the HTTP/2 stream ID
         @return true if the stream state is Closed (via END_STREAM + response, RST_STREAM,
@@ -2085,37 +2030,6 @@ public:
         @since %Qore 2.3
     */
     DLLEXPORT bool isHttp2StreamRemoteClosed(int32_t stream_id) const;
-
-    //! Flush all pending HTTP/2 outgoing data (blocking)
-    /** Calls sendPendingDataBlocking() to send all queued frames to the socket.
-
-        @param timeout_ms send timeout in milliseconds; -1 for infinite
-        @param xsink exception sink for error reporting
-        @return 0 on success, -1 on error
-
-        @since %Qore 2.3
-    */
-    DLLEXPORT int flushHttp2(int timeout_ms, ExceptionSink* xsink);
-
-    //! Remove an HTTP/2 stream from the session (cleanup after handler finishes)
-    /** @param stream_id the HTTP/2 stream ID to remove
-
-        @since %Qore 2.3
-    */
-    DLLEXPORT void cleanupHttp2Stream(int32_t stream_id);
-
-    //! Send RST_STREAM to abort an HTTP/2 stream and clean up the stream state
-    /** Sends a CANCEL (0x8) RST_STREAM frame to the peer and removes the stream from the session.
-        Use this when a body streaming error is detected and remaining DATA frames must be discarded.
-
-        @param stream_id the HTTP/2 stream ID to reset
-        @param xsink if an error occurs, the Qore-language exception information will be added here
-
-        @return 0 for OK, -1 for error
-
-        @since %Qore 2.3
-    */
-    DLLEXPORT int resetHttp2Stream(int32_t stream_id, ExceptionSink* xsink);
 
     //! Wait for an HTTP/2 stream's send buffer to drain below the backpressure threshold
     /** Blocks until the stream's pending body data drops below 1MB, the stream is closed,

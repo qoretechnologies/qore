@@ -143,31 +143,44 @@ class BidiEchoHandler inherits AbstractHttpRequestHandler {
             return makeResponse(200, body ?? "no body");
         }
         int stream_id = cx."header-info".stream_id;
+        *code<nothing()> io_wake = cx."header-info".io_wake;
+        *code<nothing(Queue)> register_body_queue = cx."header-info".register_body_queue;
 
-        # Send response headers (no END_STREAM yet)
+        # Send response headers (no END_STREAM yet) via the async write path.
+        # The I/O thread flushes via io_wake() — no handler-thread H2 lock hold.
         s.submitHttp2StreamingResponseHeaders(stream_id, 200,
             {"content-type": "application/octet-stream"});
-        # In body_streaming mode, the handler has exclusive socket access
-        # (h2op is not on the I/O thread). Use flushHttp2() to send queued data.
-        s.flushHttp2();
+        if (io_wake) {
+            io_wake();
+        }
 
-        # Read body data and echo it back (bidirectional).
-        # Use readHttp2StreamDataBlock() return value as loop control (not isHttp2StreamComplete),
-        # because DATA+END_STREAM may arrive in the same batch as HEADERS, making
-        # isHttp2StreamComplete() True before data is consumed. readHttp2StreamDataBlock()
-        # returns data first, then NOTHING when stream is complete.
+        # Drain inbound DATA via the I/O thread's Queue (NOTHING sentinel
+        # signals END_STREAM) and echo each chunk back as a DATA frame.
+        Queue body_queue(-1);
+        register_body_queue(body_queue);
         while (True) {
-            *binary chunk = s.readHttp2StreamDataBlock(stream_id, 5s);
-            if (!chunk) {
+            auto chunk;
+            try {
+                chunk = body_queue.get(5s);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "QUEUE-TIMEOUT") {
+                    break;
+                }
+                rethrow;
+            }
+            if (!(chunk instanceof binary)) {
                 break;
             }
             s.sendHttp2StreamData(stream_id, chunk);
-            s.flushHttp2();
+            if (io_wake) {
+                io_wake();
+            }
         }
         # Send END_STREAM on response
         s.sendHttp2StreamData(stream_id, NOTHING, True);
-        s.flushHttp2();
-        s.cleanupHttp2Stream(stream_id);
+        if (io_wake) {
+            io_wake();
+        }
 
         # Mark response as sent — framework will call setDedicatedExternal()
         cx."response-sent" = True;

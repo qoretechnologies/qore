@@ -47,6 +47,7 @@ class RejectHandler inherits HttpServer::AbstractHttpRequestHandler {
         int stream_id = cx."header-info".stream_id;
         bool http3 = cx."header-info".http3 ?? False;
         *int session_id = cx."header-info".session_id;
+        *code<nothing()> io_wake = cx."header-info".io_wake;
         # Reset the stream directly so the peer sees a RESET/STOP_SENDING
         # rather than a clean FIN + 400 response.
         if (sock) {
@@ -57,6 +58,9 @@ class RejectHandler inherits HttpServer::AbstractHttpRequestHandler {
             } else {
                 try {
                     sock.resetHttp2Stream(stream_id);
+                    if (io_wake) {
+                        io_wake();
+                    }
                 } catch () {}
             }
         }
@@ -83,17 +87,37 @@ class DrainHandler inherits HttpServer::AbstractHttpRequestHandler {
         int stream_id = cx."header-info".stream_id;
         binary accumulated = binary();
         if (body_streaming && !headers_end_stream && sock) {
-            while (True) {
-                *binary chunk;
-                if (cx."header-info".http3) {
-                    chunk = sock.readQuicStreamDataBlock(session_id, stream_id, 5s);
-                } else {
-                    chunk = sock.readHttp2StreamDataBlock(stream_id, 5s);
+            if (cx."header-info".http3) {
+                while (True) {
+                    *binary chunk = sock.readQuicStreamDataBlock(session_id, stream_id, 5s);
+                    if (!exists chunk) {
+                        break;
+                    }
+                    accumulated += chunk;
                 }
-                if (!exists chunk) {
-                    break;
+            } else {
+                # Drive HTTP/2 inbound DATA via register_body_queue (the I/O
+                # thread pushes binary chunks to the Queue and a NOTHING
+                # sentinel on END_STREAM).
+                code<nothing(Queue)> register_body_queue
+                    = cx."header-info".register_body_queue;
+                Queue body_queue(-1);
+                register_body_queue(body_queue);
+                while (True) {
+                    auto chunk;
+                    try {
+                        chunk = body_queue.get(5s);
+                    } catch (hash<ExceptionInfo> ex) {
+                        if (ex.err == "QUEUE-TIMEOUT") {
+                            break;
+                        }
+                        rethrow;
+                    }
+                    if (!(chunk instanceof binary)) {
+                        break;
+                    }
+                    accumulated += chunk;
                 }
-                accumulated += chunk;
             }
         } else if (body.typeCode() == NT_BINARY) {
             accumulated = body;

@@ -179,6 +179,25 @@ log("started listener on %s", lh.desc);
     @section http_relnotes HttpServer Module Release Notes
 
     @subsection http1_6 HttpServer 1.6
+    - HTTP/2 server-side request and response handling fully migrated to
+      the async-safe @c Socket HTTP/2 primitives under the
+      @ref HttpServerAsyncIo "HttpServerAsyncIo" controller.  The handler
+      thread no longer holds the socket wrapper lock during HTTP/2 frame
+      submission, eliminating the close-vs-poll lock inversion and the
+      handler-vs-I/O-thread contention that drove the long tail of
+      sync/async impedance bugs.
+      - body-streaming handlers drain inbound DATA via the new
+        \c cx."header-info".register_body_queue closure (the I/O thread
+        pushes binary chunks to a Qore Queue and a NOTHING sentinel at
+        END_STREAM)
+      - response paths (regular, send_callback, InputStream, SSE setup)
+        all use \c sendHttp2StreamData() /
+        \c submitHttp2StreamingResponseHeaders() /
+        \c sendHttp2Trailers() followed by \c io_wake()
+      - the \c Socket::setHttp2ActiveStream() bridge that redirected
+        \c Socket::send() / \c Socket::recv() to HTTP/2 DATA frames was
+        removed from \c handleRequest(); every H2 response site already
+        branches on protocol explicitly
     - added HTTP/3 (QUIC) support with automatic listener creation for TLS listeners
     - added per-listener \c Alt-Svc header support for advertising HTTP/3 availability; each TCP
       listener only advertises its own QUIC counterpart to prevent browsers from confusing origins
@@ -545,7 +564,7 @@ public hashdecl HttpServerOptionInfo {
         @ref AbstractHttpRequestHandler::wantsBodyStreaming() "wantsBodyStreaming()" and
         return @ref True "True" can read body data incrementally via
         @ref Qore::Socket::readQuicStreamDataBlock() (HTTP/3) or
-        @ref Qore::Socket::readHttp2StreamDataBlock() (HTTP/2).
+        HttpConnectionInfo::header_info::register_body_queue (HTTP/2).
 
         Handlers that do @b not override \c wantsBodyStreaming() are unaffected — the
         framework automatically buffers the full body before calling \c handleRequest(),
@@ -2623,10 +2642,6 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         remove cx."response-sent";
         bool is_http2 = cx."header-info".http2 ?? False;
         bool is_multiplexed = is_http2 || (cx."header-info".http3 ?? False);
-        if (is_http2) {
-            s.setHttp2ActiveStream(cx."header-info".stream_id);
-            on_exit s.setHttp2ActiveStream(-1);
-        }
         # Check for HTTP/2 connection preface (RFC 7540 Section 3.5)
         # The preface is "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n"
         # HTTP parser separates this into method="PRI", path="*", protocol="HTTP/2.0" or "2.0"
@@ -2850,28 +2865,45 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                     }
                     # NOTE: cleanupQuicStream is called by the controller's on_exit handler
                 } else {
-                    # HTTP/2: use H2 stream data methods
-                    # Use readHttp2StreamDataBlock() return value as loop control:
-                    # it returns data if available (even if stream is already complete),
-                    # and NOTHING when no more data is available. This handles the case
-                    # where DATA+END_STREAM arrived in the same batch as HEADERS.
+                    # HTTP/2: drive inbound DATA frames through register_body_queue.
+                    # The I/O thread drains frames into the Queue (NOTHING sentinel
+                    # = END_STREAM) so the handler thread never touches the H2
+                    # session lock.
+                    *code<nothing(Queue)> register_body_queue
+                        = cx."header-info".register_body_queue;
+                    if (!register_body_queue) {
+                        throw "HTTP2-BODY-STREAMING-ERROR",
+                            sprintf("body_streaming dispatch missing register_body_queue "
+                                "closure for stream %d", sid);
+                    }
+                    Queue body_queue(-1);
+                    register_body_queue(body_queue);
+
+                    bool h2_complete = False;
+                    bool hit_max_body = False;
                     while (True) {
-                        *binary chunk = s.readHttp2StreamDataBlock(sid, 30s);
-                        if (!chunk) {
+                        auto chunk;
+                        try {
+                            chunk = body_queue.get(30s);
+                        } catch (hash<ExceptionInfo> ex) {
+                            if (ex.err == "QUEUE-TIMEOUT") {
+                                break;
+                            }
+                            rethrow;
+                        }
+                        if (!(chunk instanceof binary)) {
+                            # NOTHING sentinel → END_STREAM observed by I/O thread
+                            h2_complete = True;
                             break;
                         }
                         body_data += chunk;
                         # Incremental size check: reject early instead of buffering the full body
                         if (max_body > 0 && body_data.size() > max_body) {
+                            hit_max_body = True;
                             break;
                         }
                     }
-                    # readHttp2StreamDataBlock() returns NOTHING on both timeout and stream
-                    # completion — check isHttp2StreamComplete() to distinguish.
-                    # Only treat as timeout if we didn't exit due to max_body.
-                    bool h2_complete = s.isHttp2StreamComplete(sid);
-                    s.cleanupHttp2Stream(sid);
-                    if (!h2_complete && !(max_body > 0 && body_data.size() > max_body)) {
+                    if (!h2_complete && !hit_max_body) {
                         listener.logError("HTTP/2 request body read timeout from %s",
                             cx."peer-info".address_desc);
                         cx.close = True;
@@ -3504,6 +3536,9 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                     } else {
                         s.submitHttp2StreamingResponseHeaders(stream_id,
                             rv."code" ?? 200, resp_hdr);
+                        if (wake_cb) {
+                            wake_cb();
+                        }
                         call_object_method(handler, "setupAsyncSseConnectionHttp2",
                             s, cx, hdr, cid, stream_id, wake_cb);
                     }

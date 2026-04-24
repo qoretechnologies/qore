@@ -30,8 +30,6 @@ public namespace QoreRagUtils {
 
     This chunker respects no natural boundaries — use
     @ref StructuredChunker when paragraph integrity matters.
-
-    @since QoreRagUtils 1.0
 */
 public class FixedChunker inherits AbstractChunker {
     public {

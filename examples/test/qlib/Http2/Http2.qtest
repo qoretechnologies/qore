@@ -189,14 +189,14 @@ public class Http2Test inherits QUnit::Test {
         addTestCase("HTTP/2 poll large body test", \testHttp2PollLargeBody());
         addTestCase("HTTP/2 poll multi-value headers test", \testHttp2PollMultiValueHeaders());
         addTestCase("HTTP/2 poll negative tests", \testHttp2PollNegative());
-        addTestCase("HTTP/2 headers-only poll and streaming read test",
-            \testHttp2HeadersOnlyPoll());
-        addTestCase("HTTP/2 headers-only then normal request test",
-            \testHttp2HeadersOnlyThenNormal());
-        addTestCase("HTTP/2 client multiplex streaming data test",
-            \testHttp2ClientMultiplexStreaming());
-        addTestCase("HTTP/2 RST_STREAM during InputStream streaming test",
-            \testHttp2RstStreamDuringInputStreamStreaming());
+        # The four tests below exercised the now-removed sync H2 server
+        # Socket API (Socket::readHttp2StreamDataBlock,
+        # submitHttp2StreamingResponseHeaders, sendHttp2StreamData,
+        # flushHttp2, cleanupHttp2Stream, resetHttp2Stream).  Equivalent
+        # coverage runs at a higher level via HttpServerAsyncHttp2*.qtest
+        # (server) and HttpClientIo.qtest (client multiplex / RST_STREAM).
+        # Test bodies are retained as historical reference but are not
+        # registered and will be deleted in the next major Qore release.
         addTestCase("HTTP/2 ALPN via HttpAcceptPollOperation auto-SSL test",
             \testAlpnViaAcceptPollAutoSsl());
         addTestCase("HTTP/2 concurrent connections test",
