@@ -181,6 +181,11 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
     \c resetHttp2StreamAsync() — round out the async set so every
     server-side HTTP/2 operation has a non-blocking sibling.
 
+    The corresponding libqore C++ implementations on \c QoreSocket,
+    \c QoreSocketObject, and \c Http2Session were stripped in the same
+    release cycle — no externally visible API change beyond the Qore
+    \c Socket methods above.
+
     <b>Migration:</b>
     - Replace each call with the \c *Async sibling
       (\c sendHttp2StreamDataAsync(), \c sendHttp2TrailersAsync(),

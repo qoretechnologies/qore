@@ -1,6 +1,6 @@
 # GrpcServer over HttpServerAsyncIo — migration design
 
-**Status:** Phases 1–6 complete; Phase 7 (C++ removal) pending (see Migration-plan below).
+**Status:** All phases (1–7) complete.
 **Author:** investigation arose from the gRPC server-streaming hang traced on
 2026-04-22.
 **Related docs:**
@@ -268,11 +268,18 @@ migrates.
      `GrpcServer` to `GrpcServerAsync`).
    - 6.6 (qore `e9c87c8`): chore — untrack a `ws-bench` build artifact
      accidentally swept into 6.4.
-7. **Remove the C++ sync H2 server code paths** — NOT STARTED (next major
-   Qore version).  Strip the corresponding code paths in
-   `QoreSocket` / `QoreSocketObject` / `qore_socket_private` /
-   `Http2Session`.  The Qore-level API surface is already gone, so this
-   is a code-cleanup pass with no externally visible API change.
+7. **Remove the C++ sync H2 server code paths** — DONE (qore `62c63ed9b`).
+   Stripped every `QoreSocket` / `QoreSocketObject` / `Http2Session`
+   method whose only callers were the Qore-level bindings removed in
+   Phase 6.4 (`setHttp2ActiveStream`, `getHttp2ActiveStream`,
+   `readHttp2StreamDataBlock`, `isHttp2StreamComplete`, `flushHttp2`,
+   `cleanupHttp2Stream`, `resetHttp2Stream`, and the dependent
+   `Http2ActiveStreamGuard` helper).  libqore net: −363 / +37 lines.
+   Retained: the methods still used by the client-side H2 poll ops, the
+   server-side H2 poll op, `submitHttp2StreamingResponseWithStream`, and
+   `QoreHttpClientObject` — deleting those is out of scope since
+   Phase 6 was a server-side migration.  No externally visible Qore API
+   change.
 
 ## Risks
 
@@ -328,8 +335,14 @@ migrates.
 
 ## Out of scope for this doc
 
-- Phase 7 stripping of the C++ `QoreSocket` / `qore_socket_private` /
-  `Http2Session` sync server-side code paths now that no Qore-level
-  consumer exists.  Schedule with the next major Qore release.
 - Client-side HTTP/2 (`HTTPClient::sendHttp2StreamData` and friends)
   remains on the sync API; that path is independent of this migration.
+  The `QoreSocket` / `QoreSocketObject` sync H2 methods retained in
+  Phase 7 (`sendHttp2StreamData`, `readHttp2StreamData`,
+  `isHttp2StreamClosed`, `isHttp2StreamRemoteClosed`, `sendHttp2Trailers`,
+  `submitHttp2StreamingResponseHeaders`) all serve those client-side
+  paths or the internal `submitHttp2StreamingResponseWithStream`
+  helper; none are reachable from Qore-level handler code.
+- Renaming the `*Async` suffix off the surviving methods (cosmetic —
+  the sync siblings they contrast with are gone).  If desirable, fold
+  into a future API-break cycle.
