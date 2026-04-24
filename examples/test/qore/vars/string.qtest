@@ -19,6 +19,7 @@ class StringTest inherits QUnit::Test {
         addTestCase("splitString iterator", \testSplitStringIter());
         addTestCase("splitLines iterator", \testSplitLinesIter());
         addTestCase("splitLinesRegex iterator", \testSplitLinesRegexIter());
+        addTestCase("splitChars iterator", \testSplitCharsIter());
         addTestCase("non scalar test", \nonScalarTest());
         addTestCase("width test", \testWidth());
         addTestCase("Basic functions test", \testBasics());
@@ -228,6 +229,46 @@ class StringTest inherits QUnit::Test {
         list<auto> first_fatal = select "info\nwarn\nFATAL: boom\nmore\nFATAL: again".splitLinesRegex("\n"),
             $1 =~ /FATAL/;
         assertEq(2, first_fatal.size());
+    }
+
+    testSplitCharsIter() {
+        # ASCII: one byte per codepoint
+        assertEq(("a", "b", "c"), (map $1, "abc".splitChars()));
+
+        # Empty string yields no pieces
+        list<auto> empty = map $1, "".splitChars();
+        assertEq(0, empty.size());
+
+        # UTF-8 multi-byte codepoints: 6 chars, 18 bytes
+        string ja = "ステップの例";
+        assertEq(6, ja.length());
+        assertEq(18, ja.size());
+        list<auto> chars = map $1, ja.splitChars();
+        assertEq(6, chars.size());
+        # each piece is exactly one codepoint wide (3 bytes in UTF-8 for these)
+        assertEq(3, chars[0].size());
+        assertEq("ス", chars[0]);
+        assertEq("例", chars[5]);
+        # concat of all pieces reconstructs the source
+        assertEq(ja, foldl $1 + $2, chars);
+
+        # Mixed ASCII + multi-byte
+        list<auto> mixed = map $1, "aスb".splitChars();
+        assertEq(("a", "ス", "b"), mixed);
+
+        # 4-byte UTF-8 (emoji codepoint U+1F600 encoded as F0 9F 98 80)
+        string emoji = "a😀b";
+        list<auto> eparts = map $1, emoji.splitChars();
+        assertEq(3, eparts.size());
+        assertEq("a", eparts[0]);
+        assertEq(4, eparts[1].size());
+        assertEq("😀", eparts[1]);
+        assertEq("b", eparts[2]);
+
+        # functional composition (exercises native fast path)
+        int digits = foldl $1 + $2, (map ($1 =~ /[0-9]/ ? 1 : 0), "a1b2c3".splitChars());
+        assertEq(3, digits);
+
     }
 
     nonScalarTest() {

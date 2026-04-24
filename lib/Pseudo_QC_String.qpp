@@ -498,6 +498,31 @@ AbstractIterator <string>::splitString(string sep) [flags=CONSTANT] {
         new StringSplitIterator(str, *temp));
 }
 
+//! Returns a lazy iterator yielding each character of the string, one per element.
+/** Each element is a zero-copy @ref Qore::StringSplitIterator "StringSplitIterator"
+    view covering one codepoint of the source string.  Works with any encoding
+    Qore supports (the iterator walks codepoints using
+    @ref QoreString::getUnicodePointFromBytePos()).
+
+    Streaming counterpart of iterating over @ref <string>::toList or of
+    iterating over `str.chars()`-style composition; the intermediate list is
+    never materialised.
+
+    @return a @ref Qore::StringSplitIterator "StringSplitIterator" in
+            SPLIT_CHARS mode
+
+    @par Example:
+    @code{.py}
+int digits = foldl $1 + ($2 =~ /[0-9]/ ? 1 : 0), 0, str.splitChars();
+    @endcode
+
+    @since %Qore 2.3
+ */
+AbstractIterator <string>::splitChars() [flags=CONSTANT] {
+    return new QoreObject(QC_STRINGSPLITITERATOR, 0,
+        new StringSplitIterator(str, nullptr, StringSplitIterator::SPLIT_CHARS));
+}
+
 //! Returns a lazy iterator yielding each line of the string, one per element.
 /** Splits on "\n"; a trailing "\r" byte on each piece is trimmed so files
     with "\r\n" line endings iterate identically to "\n"-delimited files.

@@ -58,7 +58,7 @@ StringSplitIterator::~StringSplitIterator() {
     }
 }
 
-bool StringSplitIterator::next() {
+bool StringSplitIterator::next(ExceptionSink* xsink) {
     if (exhausted) {
         m_valid = false;
         return false;
@@ -68,8 +68,38 @@ bool StringSplitIterator::next() {
         m_valid = false;
         return false;
     }
+    const size_t src_len = src->size();
+
+    // SPLIT_CHARS: yield one character (codepoint) at a time.  getUnicodePointFromBytePos
+    // handles any encoding Qore supports and reports the character's byte width via out-param.
+    if (mode & SPLIT_CHARS) {
+        if (cursor >= src_len) {
+            exhausted = true;
+            m_valid = false;
+            return false;
+        }
+        unsigned clen = 0;
+        src->getUnicodePointFromBytePos(cursor, clen, xsink);
+        if (xsink && *xsink) {
+            exhausted = true;
+            m_valid = false;
+            return false;
+        }
+        // Defensive floor: an encoding bug that returns clen=0 would loop forever.
+        if (clen == 0) {
+            clen = 1;
+        }
+        piece_off = cursor;
+        piece_len = clen;
+        cursor += clen;
+        if (cursor >= src_len) {
+            exhausted = true;
+        }
+        m_valid = true;
+        return true;
+    }
+
     const char* src_buf = src->c_str();
-    size_t src_len = src->size();
 
     // Empty separator: yield the whole string once, then done.
     if (sep.empty()) {
@@ -186,7 +216,7 @@ StringSplitIterator::copy() {
 bool StringSplitIterator::next() {
     if (i->check(xsink))
         return false;
-    return i->next();
+    return i->next(xsink);
 }
 
 //! Returns the current piece as a zero-copy view onto the source string.

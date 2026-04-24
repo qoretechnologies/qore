@@ -52,6 +52,12 @@ public:
         //! When set, each yielded piece has a trailing '\r' byte trimmed so
         //! a "\r\n"-delimited text file iterates identically to a "\n" one.
         STRIP_TRAILING_CR    = 1,
+        //! When set, the separator is ignored and each yielded piece is a
+        //! single character (codepoint) from the source.  Uses the
+        //! source string's encoding to advance one character at a time; for
+        //! UTF-8 sources this is a single-byte lead-byte scan, for other
+        //! encodings it relies on QoreString::getUnicodePointFromBytePos().
+        SPLIT_CHARS          = 2,
     };
 
     //! Takes a reference on the source string; the caller retains the ref it passed in.
@@ -63,7 +69,10 @@ public:
     DLLLOCAL virtual ~StringSplitIterator();
 
     //! Advances to the next piece; returns true if a piece is available, false at end.
-    DLLLOCAL bool next();
+    /** The xsink is only used by @ref SPLIT_CHARS mode when advancing through
+        a non-UTF-8 source raises an encoding error; byte-wise modes ignore it.
+     */
+    DLLLOCAL bool next(ExceptionSink* xsink);
 
     //! Returns the current piece as a zero-copy view onto the source string.
     DLLLOCAL QoreValue getValue(ExceptionSink* xsink);
@@ -89,7 +98,7 @@ public:
         if (check(xsink)) {
             return false;
         }
-        return next();
+        return next(xsink);
     }
 
     DLLLOCAL QoreValue nativeGetValue(ExceptionSink* xsink) override {
