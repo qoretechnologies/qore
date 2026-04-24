@@ -39,10 +39,11 @@ QoreBreakpointList_t::QoreBreakpointList_t() {
 }
 
 QoreBreakpointList_t::~QoreBreakpointList_t() {
-    for (auto& i : *this) {
-        i->deref();
+    while (!empty()) {
+        QoreBreakpoint* b = front();
+        pop_front();
+        b->deref();
     }
-    clear();
 }
 
 AbstractStatement::AbstractStatement(qore_program_private_base* p) : loc(p->getLocation(-1, -1)) {
@@ -68,9 +69,10 @@ AbstractStatement::~AbstractStatement() {
         std::list<QoreBreakpoint*>::iterator it = breakpoints->begin();
         while (it != breakpoints->end()) {
             QoreBreakpoint* bkpt = *it;
-            it++;  // will be removed by unassignBreakpoint()
+            ++it;
             bkpt->statementList.remove(this);
         }
+        breakpoints->clear();
         delete breakpoints;
     }
 }
