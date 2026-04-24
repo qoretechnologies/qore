@@ -134,8 +134,8 @@ module HttpServerUtil {
       END_STREAM); the removed sync \c readHttp2StreamDataBlock() loop is
       no longer used.
     - @ref HttpServer::StreamResponseProducer "StreamResponseProducer"
-      now uses \c sendHttp2StreamDataAsync() and
-      \c resetHttp2StreamAsync() for HTTP/2 outbound DATA + RST_STREAM,
+      now uses \c sendHttp2StreamData() and
+      \c resetHttp2Stream() for HTTP/2 outbound DATA + RST_STREAM,
       followed by \c io_wake() to nudge the I/O thread.
     - the streaming-handler example in
       @ref HttpServer::AbstractHttpRequestHandler::wantsBodyStreaming()
@@ -1996,7 +1996,7 @@ public class CallbackInputStream inherits InputStream {
     calls never execute on the async I/O thread (architectural invariant).
 
     The producer reads chunks from the InputStream and calls
-    @ref Qore::Socket::sendHttp2StreamDataAsync() "sendHttp2StreamData()" (HTTP/2)
+    @ref Qore::Socket::sendHttp2StreamData() "sendHttp2StreamData()" (HTTP/2)
     or @ref Qore::Socket::submitQuicStreamData() "submitQuicStreamData()" (HTTP/3)
     to push frames into the session's internal send buffer.  The I/O thread
     drains that buffer to the socket as part of its normal poll loop.
@@ -2009,7 +2009,7 @@ public class CallbackInputStream inherits InputStream {
     the same chunk (no data loss).
 
     Error handling: any exception from @c read() or a stream-level send error
-    triggers a per-stream reset via @ref Qore::Socket::resetHttp2StreamAsync()
+    triggers a per-stream reset via @ref Qore::Socket::resetHttp2Stream()
     "resetHttp2StreamAsync()" or @ref Qore::Socket::cancelQuicStream()
     "cancelQuicStream()" — the peer sees a clean RST, never a silent hang.
 
@@ -2135,7 +2135,7 @@ public class StreamResponseProducer {
                                 "stream %d", rv, stream_id);
                     }
                 } else {
-                    sock.sendHttp2StreamDataAsync(stream_id, data, end_stream);
+                    sock.sendHttp2StreamData(stream_id, data, end_stream);
                 }
             } catch (hash<ExceptionInfo> ex) {
                 if (ex.err == "HTTP2-FLOW-CONTROL") {
@@ -2168,7 +2168,7 @@ public class StreamResponseProducer {
         if (session_id) {
             sock.cancelQuicStream(session_id, stream_id);
         } else {
-            sock.resetHttp2StreamAsync(stream_id);
+            sock.resetHttp2Stream(stream_id);
             if (io_wake) {
                 io_wake();
             }

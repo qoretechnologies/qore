@@ -3220,7 +3220,7 @@ public class HttpAsyncSocketIoController {
             int retries = 0;
             while (True) {
                 try {
-                    cinfo.sock.sendHttp2StreamDataAsync(stream_id, data, end_stream);
+                    cinfo.sock.sendHttp2StreamData(stream_id, data, end_stream);
                     break;
                 } catch (hash<ExceptionInfo> ex) {
                     if (ex.err == "HTTP2-FLOW-CONTROL") {
@@ -3372,7 +3372,7 @@ public class HttpAsyncSocketIoController {
                         return;
                     }
                     # C++ gate rejected: spawn a producer worker.
-                    cinfo.sock.submitHttp2StreamingResponseHeadersAsync(stream_id,
+                    cinfo.sock.submitHttp2StreamingResponseHeaders(stream_id,
                         result.code, resp_hdr);
                     result.input_stream.unassignThread();
                     code<nothing()> wake_fn = sub () {
@@ -3410,7 +3410,7 @@ public class HttpAsyncSocketIoController {
                     stream_id, uh, ex.err, ex.desc);
                 # Send RST_STREAM so the client gets an error instead of waiting forever
                 try {
-                    cinfo.sock.resetHttp2StreamAsync(stream_id);
+                    cinfo.sock.resetHttp2Stream(stream_id);
                     controller.wakeSocket(cinfo.sock);
                 } catch () {}
             }

@@ -57,7 +57,7 @@ class RejectHandler inherits HttpServer::AbstractHttpRequestHandler {
                 } catch () {}
             } else {
                 try {
-                    sock.resetHttp2StreamAsync(stream_id);
+                    sock.resetHttp2Stream(stream_id);
                     if (io_wake) {
                         io_wake();
                     }

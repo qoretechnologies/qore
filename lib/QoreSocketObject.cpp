@@ -916,12 +916,6 @@ int QoreSocketObject::submitHttp2Ping(ExceptionSink* xsink) {
     return priv->socket->priv->h2_session->sendPendingData(0, xsink);
 }
 
-int QoreSocketObject::submitHttp2StreamingResponseHeaders(int32_t stream_id, int status_code,
-        const QoreHashNode* headers, ExceptionSink* xsink) {
-    AutoLocker al(priv->m);
-    return priv->socket->submitHttp2StreamingResponseHeaders(stream_id, status_code, headers, xsink);
-}
-
 // Async-path H2 server write methods.  These follow the waitForHttp2StreamDrain
 // precedent (see below): acquire priv->m only briefly to copy the
 // Http2Session shared pointer, then perform header/data/trailer submission

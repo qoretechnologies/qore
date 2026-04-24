@@ -143,7 +143,7 @@ public class Http2StreamContext inherits AbstractStreamContext {
         any exception thrown by Socket::sendHttp2StreamDataAsync()
     */
     sendData(binary data, bool end_stream = False) {
-        sock.sendHttp2StreamDataAsync(stream_id, data, end_stream);
+        sock.sendHttp2StreamData(stream_id, data, end_stream);
         if (wake_callback) {
             wake_callback();
         }
@@ -190,7 +190,7 @@ public class Http2StreamContext inherits AbstractStreamContext {
         if no HTTP/2 session is active or trailer submission fails
     */
     sendTrailers(hash<string, string> trailers) {
-        sock.sendHttp2TrailersAsync(stream_id, trailers);
+        sock.sendHttp2Trailers(stream_id, trailers);
         if (wake_callback) {
             wake_callback();
         }

@@ -5174,15 +5174,14 @@ int Socket::waitForHttp2StreamDrain(int stream_id, timeout timeout_ms = 5s) {
     return s->waitForHttp2StreamDrain((int32_t)stream_id, (int)timeout_ms);
 }
 
-//! Submits HTTP/2 streaming response headers without holding the socket wrapper lock
-/** Async-path variant of @ref submitHttp2StreamingResponseHeaders() for handlers
-    driven by an async I/O controller.  The wrapper lock is acquired only briefly to
-    copy the HTTP/2 session shared pointer; the actual header submission runs under
-    only the session's internal recursive mutex.  This avoids handler-thread vs.
-    I/O-thread contention on the socket wrapper lock and eliminates the close-vs-poll
-    lock inversion that the sync variant can trigger.
+//! Submits HTTP/2 streaming response headers without body or END_STREAM
+/** Used by server-side HTTP/2 handlers driven by an async I/O controller.
+    The socket wrapper lock is acquired only briefly to copy the HTTP/2 session
+    shared pointer; the actual header submission runs under only the session's
+    internal recursive mutex.  This avoids handler-thread vs. I/O-thread
+    contention on the socket wrapper lock.
 
-    Must be paired with @ref sendHttp2StreamDataAsync() and/or @ref sendHttp2TrailersAsync();
+    Must be paired with @ref sendHttp2StreamData() and/or @ref sendHttp2Trailers();
     flushing to the wire is driven by the I/O thread's existing HTTP/2 flush poll
     operation.  No explicit flush call is needed from the handler.
 
@@ -5194,16 +5193,16 @@ int Socket::waitForHttp2StreamDrain(int stream_id, timeout timeout_ms = 5s) {
 
     @since %Qore 2.3
 */
-nothing Socket::submitHttp2StreamingResponseHeadersAsync(int stream_id, int status_code,
+nothing Socket::submitHttp2StreamingResponseHeaders(int stream_id, int status_code,
         *hash<auto> headers) {
     s->submitHttp2StreamingResponseHeadersAsync((int32_t)stream_id, status_code, headers, xsink);
     return QoreValue();
 }
 
-//! Sends HTTP/2 DATA frame payload without holding the socket wrapper lock
-/** Async-path variant of @ref sendHttp2StreamData().  Acquires the socket wrapper
-    lock only briefly to copy the HTTP/2 session shared pointer; the actual DATA
-    enqueue runs under only the session's internal recursive mutex.
+//! Sends HTTP/2 DATA frame payload on a server-side stream
+/** Acquires the socket wrapper lock only briefly to copy the HTTP/2 session
+    shared pointer; the actual DATA enqueue runs under only the session's
+    internal recursive mutex.
 
     @param stream_id the HTTP/2 stream ID
     @param data the binary data to send
@@ -5215,15 +5214,15 @@ nothing Socket::submitHttp2StreamingResponseHeadersAsync(int stream_id, int stat
 
     @since %Qore 2.3
 */
-nothing Socket::sendHttp2StreamDataAsync(int stream_id, *binary data, softbool end_stream = False) {
+nothing Socket::sendHttp2StreamData(int stream_id, *binary data, softbool end_stream = False) {
     s->sendHttp2StreamDataAsync((int32_t)stream_id, data, (bool)end_stream, xsink);
     return QoreValue();
 }
 
-//! Sends HTTP/2 trailer headers on a stream without holding the socket wrapper lock
-/** Async-path variant of @ref sendHttp2Trailers().  Acquires the socket wrapper
-    lock only briefly to copy the HTTP/2 session shared pointer; the actual trailer
-    submission runs under only the session's internal recursive mutex.
+//! Sends HTTP/2 trailer headers on a server-side stream
+/** Acquires the socket wrapper lock only briefly to copy the HTTP/2 session
+    shared pointer; the actual trailer submission runs under only the session's
+    internal recursive mutex.
 
     Submits a trailing HEADERS frame with END_STREAM on the specified stream.
     The stream's data provider is configured to use NGHTTP2_DATA_FLAG_NO_END_STREAM
@@ -5239,30 +5238,29 @@ nothing Socket::sendHttp2StreamDataAsync(int stream_id, *binary data, softbool e
 
     @since %Qore 2.3
 */
-nothing Socket::sendHttp2TrailersAsync(int stream_id, hash<string, string> trailers) {
+nothing Socket::sendHttp2Trailers(int stream_id, hash<string, string> trailers) {
     s->sendHttp2TrailersAsync((int32_t)stream_id, trailers, xsink);
     return QoreValue();
 }
 
-//! Removes an HTTP/2 stream from the session without holding the socket wrapper lock
-/** Async-path variant of @ref cleanupHttp2Stream().  Acquires the socket wrapper
-    lock only briefly to copy the HTTP/2 session shared pointer; the stream
-    bookkeeping removal runs under only the session's internal recursive mutex.
+//! Removes an HTTP/2 stream from the session
+/** Acquires the socket wrapper lock only briefly to copy the HTTP/2 session
+    shared pointer; the stream bookkeeping removal runs under only the session's
+    internal recursive mutex.
 
     @param stream_id the HTTP/2 stream ID to remove
 
     @since %Qore 2.3
 */
-nothing Socket::cleanupHttp2StreamAsync(int stream_id) {
+nothing Socket::cleanupHttp2Stream(int stream_id) {
     s->cleanupHttp2StreamAsync((int32_t)stream_id);
     return QoreValue();
 }
 
-//! Send RST_STREAM to abort an HTTP/2 stream without holding the socket wrapper lock
-/** Async-path variant of @ref resetHttp2Stream().  Acquires the socket wrapper
-    lock only briefly to copy the HTTP/2 session shared pointer; the RST_STREAM
-    submission and stream cleanup run under only the session's internal recursive
-    mutex.
+//! Send RST_STREAM to abort an HTTP/2 stream and clean up the stream state
+/** Acquires the socket wrapper lock only briefly to copy the HTTP/2 session
+    shared pointer; the RST_STREAM submission and stream cleanup run under
+    only the session's internal recursive mutex.
 
     @param stream_id the HTTP/2 stream ID to reset
 
@@ -5270,7 +5268,7 @@ nothing Socket::cleanupHttp2StreamAsync(int stream_id) {
 
     @since %Qore 2.3
 */
-nothing Socket::resetHttp2StreamAsync(int stream_id) {
+nothing Socket::resetHttp2Stream(int stream_id) {
     s->resetHttp2StreamAsync((int32_t)stream_id, xsink);
     return QoreValue();
 }

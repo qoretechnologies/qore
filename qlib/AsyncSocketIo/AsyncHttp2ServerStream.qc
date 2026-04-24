@@ -179,7 +179,7 @@ public class AsyncHttp2ServerStream {
     */
     sendHeaders(int status, hash<string, string> headers) {
         @assert(!headers_sent, "sendHeaders() already called on this stream");
-        sock.submitHttp2StreamingResponseHeadersAsync(stream_id, status, headers);
+        sock.submitHttp2StreamingResponseHeaders(stream_id, status, headers);
         headers_sent = True;
         if (wake_callback) {
             wake_callback();
@@ -197,7 +197,7 @@ public class AsyncHttp2ServerStream {
     sendData(binary data, bool end_stream = False) {
         @assert(headers_sent, "sendHeaders() must be called before sendData()");
         @assert(!writes_done, "stream write side already closed");
-        sock.sendHttp2StreamDataAsync(stream_id, data, end_stream);
+        sock.sendHttp2StreamData(stream_id, data, end_stream);
         if (end_stream) {
             writes_done = True;
         }
@@ -215,7 +215,7 @@ public class AsyncHttp2ServerStream {
     sendTrailers(hash<string, string> trailers) {
         @assert(headers_sent, "sendHeaders() must be called before sendTrailers()");
         @assert(!writes_done, "stream write side already closed");
-        sock.sendHttp2TrailersAsync(stream_id, trailers);
+        sock.sendHttp2Trailers(stream_id, trailers);
         writes_done = True;
         if (wake_callback) {
             wake_callback();

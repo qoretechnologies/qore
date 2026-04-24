@@ -492,12 +492,6 @@ public:
     */
     DLLEXPORT int flushHttp2PendingData(ExceptionSink* xsink);
 
-    //! Submits HTTP/2 streaming response headers without body or END_STREAM
-    /** Used internally by submitHttp2StreamingResponseWithStream().
-    */
-    DLLEXPORT int submitHttp2StreamingResponseHeaders(int32_t stream_id, int status_code,
-            const QoreHashNode* headers, ExceptionSink* xsink);
-
     //! Submit HTTP/2 streaming response with InputStream body (non-blocking)
     /** Handler thread calls this and returns immediately. The I/O thread reads from
         the InputStream and sends DATA frames incrementally.

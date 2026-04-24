@@ -148,7 +148,7 @@ class BidiEchoHandler inherits AbstractHttpRequestHandler {
 
         # Send response headers (no END_STREAM yet) via the async write path.
         # The I/O thread flushes via io_wake() — no handler-thread H2 lock hold.
-        s.submitHttp2StreamingResponseHeadersAsync(stream_id, 200,
+        s.submitHttp2StreamingResponseHeaders(stream_id, 200,
             {"content-type": "application/octet-stream"});
         if (io_wake) {
             io_wake();
@@ -171,13 +171,13 @@ class BidiEchoHandler inherits AbstractHttpRequestHandler {
             if (!(chunk instanceof binary)) {
                 break;
             }
-            s.sendHttp2StreamDataAsync(stream_id, chunk);
+            s.sendHttp2StreamData(stream_id, chunk);
             if (io_wake) {
                 io_wake();
             }
         }
         # Send END_STREAM on response
-        s.sendHttp2StreamDataAsync(stream_id, NOTHING, True);
+        s.sendHttp2StreamData(stream_id, NOTHING, True);
         if (io_wake) {
             io_wake();
         }
