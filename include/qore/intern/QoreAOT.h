@@ -448,6 +448,14 @@ DLLLOCAL bool qore_is_aot_user_module(const char* name);
 */
 DLLLOCAL QoreProgram* qore_aot_get_module_pgm(const char* name);
 
+//! Clears namespace/global/static data for all registered AOT user modules.
+/** AOT user modules are loaded as binary modules, so they are skipped by
+    QoreModuleManager::delUser().  This helper lets shutdown clear their global
+    objects before any user-module programs are destroyed, mirroring source
+    user-module teardown.
+ */
+DLLLOCAL void qore_aot_clear_all_module_namespace_data(ExceptionSink& xsink);
+
 //! AOT compiler class — compiles a parsed QoreProgram to a standalone executable
 class QoreAOT {
 public:

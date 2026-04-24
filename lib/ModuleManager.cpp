@@ -2264,6 +2264,7 @@ void QoreModuleManager::delUser() {
             pgm->waitForTermination();
             qore_program_private::get(*pgm)->clearNamespaceData(&xsink);
         }
+        qore_aot_clear_all_module_namespace_data(xsink);
     }
 
     // Phase 2 - delete user modules in dependency order
@@ -2312,6 +2313,11 @@ void QoreModuleManager::delUser() {
 
 void QoreModuleManager::cleanup() {
     QORE_TRACE("ModuleManager::cleanup()");
+
+    {
+        ExceptionSink xsink;
+        qore_aot_clear_all_module_namespace_data(xsink);
+    }
 
     module_map_t::iterator i;
     while ((i = map.begin()) != map.end()) {

@@ -7057,6 +7057,17 @@ DLLLOCAL QoreProgram* qore_aot_get_module_pgm(const char* name) {
     return it->second.pgm;
 }
 
+DLLLOCAL void qore_aot_clear_all_module_namespace_data(ExceptionSink& xsink) {
+    for (auto& entry : aot_module_map) {
+        QoreProgram* pgm = entry.second.pgm;
+        if (!pgm) {
+            continue;
+        }
+        pgm->waitForTermination();
+        qore_program_private::get(*pgm)->clearNamespaceData(&xsink);
+    }
+}
+
 extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v2(
     const uint8_t* metadata, int metadata_len,
     const char* label,
