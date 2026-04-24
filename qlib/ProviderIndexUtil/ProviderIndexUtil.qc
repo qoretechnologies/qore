@@ -565,6 +565,12 @@ public class ProviderIndexUtil {
 %ifdef NoYaml
         throw "PROVIDER-INDEX-ERROR", sprintf("YAML support is not available; cannot read %s provider index", type);
 %else
+        # Skip silently when the index env var is not configured — this is
+        # the default in tests and non-Qorus deployments, not an error.
+        # Check the env directly to avoid tryGetIndexDir()'s WARN log.
+        if (!ENV{ProviderIndexEnvVar}.val()) {
+            return;
+        }
         try {
             string path = getIndexPath(type);
             return parse_yaml(File::readTextFile(path));
