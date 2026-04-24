@@ -4900,8 +4900,19 @@ static void transplantClassClosureValues(
             // Transplant: set the main constant's value from the fallback constant.
             // The fallback program lives until after the main program finishes running,
             // so the referenced values (closures, etc.) remain valid.
+            //
+            // Use setRuntimeValue() to properly populate both val AND saved_val
+            // and clear aot_shell_pending — otherwise any RuntimeConstantRefNode
+            // still pointing at this entry (from a sibling constant's expression
+            // tree compiled into an AOT-deserialized init function) would read
+            // saved_val (still NOTHING) and raise AOT-PENDING-CONSTANT even
+            // though the visible val holds the correct transplanted value.
             ConstantEntry* writable_ce = const_cast<ConstantEntry*>(main_ce);
-            writable_ce->val = fb_ce->getReferencedValue();
+            ExceptionSink txs;
+            writable_ce->setRuntimeValue(fb_ce->getReferencedValue(), &txs);
+            if (txs.isException()) {
+                txs.clear();
+            }
             writable_ce->init = true;
             printd(5, "AOT: transplanted constant '%s::%s' from fallback\n",
                 main_qc->getName(), main_ce->getName());
