@@ -57,8 +57,6 @@ public namespace AsyncSocketIo {
     @par Thread safety
     A single handler thread owns this object.  Read and write methods are not
     safe to call concurrently from multiple threads on the same instance.
-
-    @since AsyncSocketIo 1.3
 */
 public class AsyncHttp2ServerStream {
     private {

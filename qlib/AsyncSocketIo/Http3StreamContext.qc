@@ -56,20 +56,14 @@ public class Http3StreamContext inherits AbstractStreamContext {
             When @ref uses_frame_state is True, the same Queue carries typed
             frame hashes (one per complete WebSocket message) instead of raw
             binary chunks, and @ref readFrame() must be used to drain it.
-
-            @since AsyncSocketIo 1.2
         */
         *Queue data_queue;
         #! Set to True when a NOTHING sentinel is received from the Queue (stream closed)
-        /** @since AsyncSocketIo 1.2
-        */
         bool closed = False;
         #! True when data_queue contains pre-decoded WebSocket frame hashes
         /** Set when the underlying transport is feeding a C++ WebSocketStreamFrameState
             rather than a raw-data queue.  Consumers MUST use @ref readFrame()
             in this mode — @ref readData() throws.
-
-            @since AsyncSocketIo 1.3
         */
         bool uses_frame_state = False;
     }
@@ -98,7 +92,6 @@ public class Http3StreamContext inherits AbstractStreamContext {
     }
 
     #! Returns True when the transport feeds pre-decoded WebSocket frame hashes
-    /** @since AsyncSocketIo 1.3 */
     bool usesFrameState() {
         return uses_frame_state;
     }
@@ -110,8 +103,6 @@ public class Http3StreamContext inherits AbstractStreamContext {
 
         Returns @ref nothing when the queue is drained.  If a NOTHING sentinel
         is pulled, the context is marked closed and @ref isOpen() returns False.
-
-        @since AsyncSocketIo 1.3
     */
     *hash<auto> readFrame() {
         if (!uses_frame_state) {
@@ -187,8 +178,6 @@ public class Http3StreamContext inherits AbstractStreamContext {
         @param max_bytes ignored for HTTP/3 — all buffered data is returned
 
         @return binary data if available, or @ref nothing if no data is buffered
-
-        @since AsyncSocketIo 1.2 Queue-based reading
     */
     *binary readData(int max_bytes = 0) {
         if (data_queue) {

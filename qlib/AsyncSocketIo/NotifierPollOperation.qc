@@ -49,8 +49,6 @@ public namespace AsyncSocketIo {
         # ... check whatever state the signaler updated ...
     }
     @endcode
-
-    @since AsyncSocketIo 1.3
 */
 public class NotifierPollOperation inherits Qore::AbstractPollOperation {
     private {

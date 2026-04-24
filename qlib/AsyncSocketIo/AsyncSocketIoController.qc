@@ -211,8 +211,6 @@ public class AsyncSocketIoController inherits LoggerWrapper {
 
         @return @ref True if the notifier was signaled within the timeout, @ref False
         if the wait timed out
-
-        @since AsyncSocketIo 1.3
     */
     bool waitForNotifier(EventNotifier notifier, timeout to = 30s) {
         NotifierPollOperation op(notifier);
