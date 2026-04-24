@@ -488,7 +488,7 @@ string dump = b.toHexArray(NOTHING, NOTHING, 16, "\n");
 
     @return the formatted hex string
 
-    @since %Qore 2.4.0
+    @since %Qore 2.3
  */
 string <binary>::toHexArray(*string byte_prefix, *string byte_suffix, int bytes_per_line = 0,
         *string line_separator) [flags=CONSTANT] {

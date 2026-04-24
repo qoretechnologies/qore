@@ -484,7 +484,7 @@ list<string> <string>::split(string sep, bool with_separator = False) [flags=RET
 int errors = foldl $1 + ($2 =~ /ERROR/ ? 1 : 0), 0, log.splitString("\n");
     @endcode
 
-    @since %Qore 2.4.0
+    @since %Qore 2.3
  */
 AbstractIterator <string>::splitString(string sep) [flags=CONSTANT] {
     // Convert separator encoding if needed; use c_str()/size() on the source

@@ -243,7 +243,7 @@ public:
         @param byte_len number of bytes in the view
         @return a new QoreStringNode in view state, owned by the caller
 
-        @since %Qore 2.4.0
+        @since %Qore 2.3
     */
     DLLEXPORT static QoreStringNode* makeView(QoreStringNode* parent, size_t byte_offset, size_t byte_len);
 
