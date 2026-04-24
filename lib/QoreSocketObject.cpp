@@ -1011,6 +1011,35 @@ int QoreSocketObject::sendHttp2TrailersAsync(int32_t stream_id, const QoreHashNo
     return h2->submitTrailers(stream_id, trailer_map, xsink);
 }
 
+void QoreSocketObject::cleanupHttp2StreamAsync(int32_t stream_id) {
+    Http2SessionPtr h2;
+    {
+        AutoLocker al(priv->m);
+        h2 = priv->socket->priv->h2_session;
+    }
+    if (h2) {
+        h2->cleanupStream(stream_id);
+    }
+}
+
+int QoreSocketObject::resetHttp2StreamAsync(int32_t stream_id, ExceptionSink* xsink) {
+    Http2SessionPtr h2;
+    {
+        AutoLocker al(priv->m);
+        h2 = priv->socket->priv->h2_session;
+    }
+    if (!h2) {
+        return 0;
+    }
+    int rv = h2->submitRstStream(stream_id, NGHTTP2_CANCEL, xsink);
+    if (rv != 0) {
+        printd(2, "resetHttp2StreamAsync() submitRstStream failed for stream %d (rv=%d), "
+            "cleaning up local state anyway\n", stream_id, rv);
+    }
+    h2->cleanupStream(stream_id);
+    return rv;
+}
+
 int QoreSocketObject::submitHttp2StreamingResponseWithStream(int32_t stream_id, int status_code,
         const QoreHashNode* headers, InputStream* body, ExceptionSink* xsink) {
     // C++ vtable is the sole authority on I/O thread eligibility.

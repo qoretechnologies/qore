@@ -1545,9 +1545,7 @@ public class AbstractStreamRequest {
             # `while (True) append(...)`) will never observe the error and hang.  For
             # HTTP/3 we call resetQuicStream() which sends RESET_STREAM + STOP_SENDING
             # frames; libqore's client-side QuicSession surfaces those as a typed
-            # QUIC-STREAM-RESET exception on the next sendStreamData() call.  For HTTP/2
-            # we call cleanupHttp2Stream() and rely on the response path to emit
-            # RST_STREAM.
+            # QUIC-STREAM-RESET exception on the next sendStreamData() call.
             int sid = cx."header-info".stream_id;
             if (cx."header-info".http3) {
                 int session_id = cx."header-info".session_id;
@@ -1588,28 +1586,39 @@ public class AbstractStreamRequest {
                 }
                 # NOTE: cleanupQuicStream is called by the controller's on_exit handler
             } else {
-                try {
-                    while (True) {
-                        *binary chunk = s.readHttp2StreamDataBlock(sid, timeout_ms);
-                        if (!chunk) {
-                            break;
-                        }
-                        recv({"data": chunk});
-                        if (hasRecvError()) {
-                            break;
-                        }
-                    }
-                } catch (hash<ExceptionInfo> ex) {
-                    try {
-                        s.cleanupHttp2Stream(sid);
-                    } catch () {}
-                    rethrow;
+                # HTTP/2: drive inbound DATA frames through register_body_queue.
+                # The I/O thread drains frames into the Queue (NOTHING sentinel
+                # = END_STREAM); the handler thread never touches the H2 session.
+                *code<nothing(Queue)> register_body_queue
+                    = cx."header-info".register_body_queue;
+                if (!register_body_queue) {
+                    throw "HTTP2-BODY-STREAMING-ERROR",
+                        sprintf("body_streaming dispatch missing register_body_queue "
+                            "closure for stream %d", sid);
                 }
-                # Clean up the stream from the Http2Session streams map.
-                # cleanupHttp2Stream only removes from Qore's tracking map,
-                # not nghttp2's internal state, so the response can still be
-                # sent on this stream.
-                s.cleanupHttp2Stream(sid);
+                Queue body_queue(-1);
+                register_body_queue(body_queue);
+                while (True) {
+                    auto chunk;
+                    try {
+                        chunk = body_queue.get(timeout_ms);
+                    } catch (hash<ExceptionInfo> ex) {
+                        if (ex.err == "QUEUE-TIMEOUT") {
+                            # No chunk within timeout — treat as end-of-stream
+                            # the same way the prior sync path did on NOTHING.
+                            break;
+                        }
+                        rethrow;
+                    }
+                    if (!(chunk instanceof binary)) {
+                        # NOTHING sentinel → END_STREAM
+                        break;
+                    }
+                    recv({"data": chunk});
+                    if (hasRecvError()) {
+                        break;
+                    }
+                }
             }
             # signal end of data
             recvImpl({"hdr": NOTHING});
@@ -2110,7 +2119,7 @@ public class StreamResponseProducer {
                                 "stream %d", rv, stream_id);
                     }
                 } else {
-                    sock.sendHttp2StreamData(stream_id, data, end_stream);
+                    sock.sendHttp2StreamDataAsync(stream_id, data, end_stream);
                 }
             } catch (hash<ExceptionInfo> ex) {
                 if (ex.err == "HTTP2-FLOW-CONTROL") {
@@ -2143,7 +2152,10 @@ public class StreamResponseProducer {
         if (session_id) {
             sock.cancelQuicStream(session_id, stream_id);
         } else {
-            sock.resetHttp2Stream(stream_id);
+            sock.resetHttp2StreamAsync(stream_id);
+            if (io_wake) {
+                io_wake();
+            }
         }
     }
 }

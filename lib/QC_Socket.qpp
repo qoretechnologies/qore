@@ -5516,6 +5516,37 @@ nothing Socket::sendHttp2TrailersAsync(int stream_id, hash<string, string> trail
     return QoreValue();
 }
 
+//! Removes an HTTP/2 stream from the session without holding the socket wrapper lock
+/** Async-path variant of @ref cleanupHttp2Stream().  Acquires the socket wrapper
+    lock only briefly to copy the HTTP/2 session shared pointer; the stream
+    bookkeeping removal runs under only the session's internal recursive mutex.
+
+    @param stream_id the HTTP/2 stream ID to remove
+
+    @since %Qore 2.3
+*/
+nothing Socket::cleanupHttp2StreamAsync(int stream_id) {
+    s->cleanupHttp2StreamAsync((int32_t)stream_id);
+    return QoreValue();
+}
+
+//! Send RST_STREAM to abort an HTTP/2 stream without holding the socket wrapper lock
+/** Async-path variant of @ref resetHttp2Stream().  Acquires the socket wrapper
+    lock only briefly to copy the HTTP/2 session shared pointer; the RST_STREAM
+    submission and stream cleanup run under only the session's internal recursive
+    mutex.
+
+    @param stream_id the HTTP/2 stream ID to reset
+
+    @throw HTTP2-ERROR if the RST_STREAM submission fails
+
+    @since %Qore 2.3
+*/
+nothing Socket::resetHttp2StreamAsync(int stream_id) {
+    s->resetHttp2StreamAsync((int32_t)stream_id, xsink);
+    return QoreValue();
+}
+
 //! Submit HTTP/2 streaming response with InputStream body (non-blocking)
 /** Handler thread calls this and returns immediately. The I/O thread reads from the
     InputStream and sends DATA frames incrementally.

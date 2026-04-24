@@ -547,6 +547,23 @@ public:
     DLLEXPORT int sendHttp2TrailersAsync(int32_t stream_id, const QoreHashNode* trailers,
             ExceptionSink* xsink);
 
+    //! Remove an HTTP/2 stream from the session without holding the socket wrapper lock
+    /** Async-path variant of @ref cleanupHttp2Stream(); briefly acquires
+        @c priv->m to copy the Http2Session shared pointer, then performs
+        stream cleanup under only the session's internal mutex.
+        @since %Qore 2.3
+    */
+    DLLEXPORT void cleanupHttp2StreamAsync(int32_t stream_id);
+
+    //! Send RST_STREAM and clean up the stream state without holding the socket wrapper lock
+    /** Async-path variant of @ref resetHttp2Stream(); briefly acquires
+        @c priv->m to copy the Http2Session shared pointer, then submits
+        RST_STREAM and cleans up stream state under only the session's
+        internal mutex.
+        @since %Qore 2.3
+    */
+    DLLEXPORT int resetHttp2StreamAsync(int32_t stream_id, ExceptionSink* xsink);
+
     //! Blocking read of HTTP/2 stream data for incremental server-side streaming
     /** @since %Qore 2.3
     */

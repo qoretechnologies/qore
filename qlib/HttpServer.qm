@@ -2623,10 +2623,6 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         remove cx."response-sent";
         bool is_http2 = cx."header-info".http2 ?? False;
         bool is_multiplexed = is_http2 || (cx."header-info".http3 ?? False);
-        if (is_http2) {
-            s.setHttp2ActiveStream(cx."header-info".stream_id);
-            on_exit s.setHttp2ActiveStream(-1);
-        }
         # Check for HTTP/2 connection preface (RFC 7540 Section 3.5)
         # The preface is "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n"
         # HTTP parser separates this into method="PRI", path="*", protocol="HTTP/2.0" or "2.0"
@@ -2850,28 +2846,45 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                     }
                     # NOTE: cleanupQuicStream is called by the controller's on_exit handler
                 } else {
-                    # HTTP/2: use H2 stream data methods
-                    # Use readHttp2StreamDataBlock() return value as loop control:
-                    # it returns data if available (even if stream is already complete),
-                    # and NOTHING when no more data is available. This handles the case
-                    # where DATA+END_STREAM arrived in the same batch as HEADERS.
+                    # HTTP/2: drive inbound DATA frames through register_body_queue.
+                    # The I/O thread drains frames into the Queue (NOTHING sentinel
+                    # = END_STREAM) so the handler thread never touches the H2
+                    # session lock.
+                    *code<nothing(Queue)> register_body_queue
+                        = cx."header-info".register_body_queue;
+                    if (!register_body_queue) {
+                        throw "HTTP2-BODY-STREAMING-ERROR",
+                            sprintf("body_streaming dispatch missing register_body_queue "
+                                "closure for stream %d", sid);
+                    }
+                    Queue body_queue(-1);
+                    register_body_queue(body_queue);
+
+                    bool h2_complete = False;
+                    bool hit_max_body = False;
                     while (True) {
-                        *binary chunk = s.readHttp2StreamDataBlock(sid, 30s);
-                        if (!chunk) {
+                        auto chunk;
+                        try {
+                            chunk = body_queue.get(30s);
+                        } catch (hash<ExceptionInfo> ex) {
+                            if (ex.err == "QUEUE-TIMEOUT") {
+                                break;
+                            }
+                            rethrow;
+                        }
+                        if (!(chunk instanceof binary)) {
+                            # NOTHING sentinel → END_STREAM observed by I/O thread
+                            h2_complete = True;
                             break;
                         }
                         body_data += chunk;
                         # Incremental size check: reject early instead of buffering the full body
                         if (max_body > 0 && body_data.size() > max_body) {
+                            hit_max_body = True;
                             break;
                         }
                     }
-                    # readHttp2StreamDataBlock() returns NOTHING on both timeout and stream
-                    # completion — check isHttp2StreamComplete() to distinguish.
-                    # Only treat as timeout if we didn't exit due to max_body.
-                    bool h2_complete = s.isHttp2StreamComplete(sid);
-                    s.cleanupHttp2Stream(sid);
-                    if (!h2_complete && !(max_body > 0 && body_data.size() > max_body)) {
+                    if (!h2_complete && !hit_max_body) {
                         listener.logError("HTTP/2 request body read timeout from %s",
                             cx."peer-info".address_desc);
                         cx.close = True;
@@ -3502,8 +3515,11 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                         call_object_method(handler, "setupAsyncSseConnectionHttp3",
                             s, cx, hdr, cid, session_id, stream_id, wake_cb);
                     } else {
-                        s.submitHttp2StreamingResponseHeaders(stream_id,
+                        s.submitHttp2StreamingResponseHeadersAsync(stream_id,
                             rv."code" ?? 200, resp_hdr);
+                        if (wake_cb) {
+                            wake_cb();
+                        }
                         call_object_method(handler, "setupAsyncSseConnectionHttp2",
                             s, cx, hdr, cid, stream_id, wake_cb);
                     }
@@ -5424,7 +5440,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                     stream_id, response.code, hdr, response.input_stream);
                 if (rv) {
                     # C++ gate rejected — spawn a producer.
-                    s.submitHttp2StreamingResponseHeaders(stream_id, response.code, hdr);
+                    s.submitHttp2StreamingResponseHeadersAsync(stream_id, response.code, hdr);
                     response.input_stream.unassignThread();
                     StreamResponseProducer producer(s, stream_id, NOTHING,
                         response.input_stream, io_wake);
@@ -5501,7 +5517,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             }
         } else {
             # HTTP/2
-            s.submitHttp2StreamingResponseHeaders(stream_id, response.code, hdr);
+            s.submitHttp2StreamingResponseHeadersAsync(stream_id, response.code, hdr);
             io_wake();
 
             while (True) {
@@ -5525,7 +5541,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         while (True) {
             bool backpressure = False;
             try {
-                s.sendHttp2StreamData(stream_id, data, end_stream);
+                s.sendHttp2StreamDataAsync(stream_id, data, end_stream);
             } catch (hash<ExceptionInfo> ex) {
                 if (ex.err == "HTTP2-FLOW-CONTROL") {
                     backpressure = True;
@@ -5795,7 +5811,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 # has already been queued via sendMultiplexedResponse() which
                 # uses nghttp2's internal state, not our streams map.
                 if (conn_info.header_info.body_streaming) {
-                    s.cleanupHttp2Stream(conn_info.header_info.stream_id);
+                    s.cleanupHttp2StreamAsync(conn_info.header_info.stream_id);
                     conn_info.header_info.io_wake();
                 }
 
