@@ -1094,10 +1094,12 @@ void AsyncIoControllerPriv::flushCallbacksByOwner(const std::string& owner) {
 
 QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, bool replace,
         ExceptionSink* xsink) {
-    // The caller transferred ownership of `info` via `info.release()`.  Hold
-    // it here so it is deref'd on any return path — otherwise the submission
-    // hash (spop ref, owner string, sock ref, etc.) leaks for every FTP
-    // connect/command and every SocketPollOperation submission.
+    // Callers transfer ownership of `info`; hold it here so it is deref'd on
+    // any return path.  Otherwise the submission hash (spop ref, owner
+    // string, sock ref, etc.) leaks for every FTP connect/command and every
+    // SocketPollOperation submission.  The Qore-language entry point
+    // (QC_AsyncIoController.qpp AsyncIoController::submit) calls info->ref()
+    // before invoking this method to satisfy the transfer contract.
     ReferenceHolder<QoreHashNode> info_holder(info, xsink);
     // Extract fields from info hash
     QoreValue v = info->getKeyValue("sock");
