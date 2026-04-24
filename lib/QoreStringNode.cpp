@@ -51,60 +51,59 @@ QoreStringNodeMaker::QoreStringNodeMaker(const char* fmt, ...) {
 }
 
 QoreStringNode::QoreStringNode() : SimpleValueQoreNode(NT_STRING) {
-    //sset.add(this);
+    qore_string_private::get(*this)->owning_node = this;
 }
 
 QoreStringNode::~QoreStringNode() {
-    //sset.del(this);
 }
 
 QoreStringNode::QoreStringNode(const char* str, const QoreEncoding* enc) : SimpleValueQoreNode(NT_STRING),
         QoreString(str, enc) {
-    //sset.add(this);
+    qore_string_private::get(*this)->owning_node = this;
 }
 
 // copies str
 QoreStringNode::QoreStringNode(const QoreString &str) : SimpleValueQoreNode(NT_STRING), QoreString(str) {
-    //sset.add(this);
+    qore_string_private::get(*this)->owning_node = this;
 }
 
 // copies str
 QoreStringNode::QoreStringNode(const QoreStringNode &str) : SimpleValueQoreNode(NT_STRING), QoreString(str) {
-    //sset.add(this);
+    qore_string_private::get(*this)->owning_node = this;
 }
 
 // copies str
 QoreStringNode::QoreStringNode(const std::string &str, const QoreEncoding* enc) : SimpleValueQoreNode(NT_STRING),
         QoreString(str, enc) {
-    //sset.add(this);
+    qore_string_private::get(*this)->owning_node = this;
 }
 
 QoreStringNode::QoreStringNode(char c) : SimpleValueQoreNode(NT_STRING), QoreString(c) {
-    //sset.add(this);
+    qore_string_private::get(*this)->owning_node = this;
 }
 
 QoreStringNode::QoreStringNode(const BinaryNode* b) : SimpleValueQoreNode(NT_STRING), QoreString(b) {
-    //sset.add(this);
+    qore_string_private::get(*this)->owning_node = this;
 }
 
 QoreStringNode::QoreStringNode(const BinaryNode* b, size_t maxlinelen) : SimpleValueQoreNode(NT_STRING),
         QoreString(b, maxlinelen) {
-    //sset.add(this);
+    qore_string_private::get(*this)->owning_node = this;
 }
 
 QoreStringNode::QoreStringNode(struct qore_string_private *p) : SimpleValueQoreNode(NT_STRING), QoreString() {
     qore_string_private::adopt(*this, p);
-    //sset.add(this);
+    qore_string_private::get(*this)->owning_node = this;
 }
 
 QoreStringNode::QoreStringNode(char* nbuf, size_t nlen, size_t nallocated, const QoreEncoding* enc)
         : SimpleValueQoreNode(NT_STRING), QoreString(nbuf, nlen, nallocated, enc) {
-    //sset.add(this);
+    qore_string_private::get(*this)->owning_node = this;
 }
 
 QoreStringNode::QoreStringNode(const char* str, size_t len, const QoreEncoding* new_qore_encoding)
         : SimpleValueQoreNode(NT_STRING), QoreString(str, len, new_qore_encoding) {
-    //sset.add(this);
+    qore_string_private::get(*this)->owning_node = this;
 }
 
 // virtual function
@@ -183,6 +182,7 @@ QoreStringNode* QoreStringNode::convertEncoding(const QoreEncoding* nccs, Except
 // DLLLOCAL constructor
 QoreStringNode::QoreStringNode(const char* str, const QoreEncoding* from, const QoreEncoding* to,
         ExceptionSink* xsink) : SimpleValueQoreNode(NT_STRING), QoreString(to) {
+    qore_string_private::get(*this)->owning_node = this;
     qore_string_private::convert_encoding_intern(str, ::strlen(str), from, *this, to, xsink);
 }
 
@@ -232,7 +232,6 @@ QoreStringNode* QoreStringNode::copy() const {
 QoreStringNode* QoreStringNode::substr(qore_offset_t offset, ExceptionSink* xsink) const {
     size_t byte_offset, byte_len;
     if (priv->compute_substr_range(offset, byte_offset, byte_len, xsink)) {
-        // out of range (or encoding error) — match pre-view behaviour: return nullptr
         return nullptr;
     }
     return makeView(const_cast<QoreStringNode*>(this), byte_offset, byte_len);

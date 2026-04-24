@@ -70,6 +70,12 @@ public:
     QoreStringNode* view_parent = nullptr;
     size_t view_offset = 0;
 
+    // Back-pointer to the embedding QoreStringNode, if any.  Populated by
+    // QoreStringNode ctors; nullptr for plain QoreString instances (stack or
+    // inside other refcounted types).  Used by QORE_ASSERT_MUTABLE to check
+    // the CoW convention (ref>1 strings must not be mutated in place).
+    const AbstractQoreNode* owning_node = nullptr;
+
     DLLLOCAL qore_string_private() {
     }
 
@@ -835,6 +841,9 @@ public:
     }
 
     DLLLOCAL int allocate(unsigned requested_size) {
+        if (view_parent) {
+            materialize();
+        }
         if ((unsigned)allocated >= requested_size)
             return 0;
         requested_size = (requested_size / 0x10 + 1) * 0x10; // fill complete cache line
