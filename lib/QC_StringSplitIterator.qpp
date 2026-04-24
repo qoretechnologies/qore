@@ -34,16 +34,17 @@
 
 #include <cstring>
 
-StringSplitIterator::StringSplitIterator(const QoreStringNode* s, const QoreString* separator)
+StringSplitIterator::StringSplitIterator(const QoreStringNode* s, const QoreString* separator, int m)
         : src(const_cast<QoreStringNode*>(s)),
-          sep(separator ? separator->c_str() : "", separator ? separator->size() : 0) {
+          sep(separator ? separator->c_str() : "", separator ? separator->size() : 0),
+          mode(m) {
     if (src) {
         src->ref();
     }
 }
 
 StringSplitIterator::StringSplitIterator(const StringSplitIterator& old)
-        : src(old.src), sep(old.sep) {
+        : src(old.src), sep(old.sep), mode(old.mode) {
     // Fresh iterator over the same source + delimiter, positioned at the start.
     // cursor / piece_off / piece_len / m_valid / exhausted default-initialise.
     if (src) {
@@ -110,7 +111,16 @@ QoreValue StringSplitIterator::getValue(ExceptionSink* xsink) {
         xsink->raiseException("INVALID-ITERATOR", "the iterator is not pointing at a valid element");
         return QoreValue();
     }
-    return QoreValue(QoreStringNode::makeView(src, piece_off, piece_len));
+    size_t eff_len = piece_len;
+    // STRIP_TRAILING_CR: trim a "\r" byte at the end of the piece so
+    // "\r\n"-delimited input is handled transparently alongside "\n".
+    if ((mode & STRIP_TRAILING_CR) && eff_len > 0) {
+        const char* sb = qore_string_private::get(src)->effective_buf();
+        if (sb[piece_off + eff_len - 1] == '\r') {
+            --eff_len;
+        }
+    }
+    return QoreValue(QoreStringNode::makeView(src, piece_off, eff_len));
 }
 
 void StringSplitIterator::reset() {

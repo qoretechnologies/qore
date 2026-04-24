@@ -36,6 +36,7 @@
 #define _QORE_QOREITERATORBASE_H
 
 #include <qore/AbstractPrivateData.h>
+#include <qore/QoreValue.h>
 
 DLLEXPORT extern QoreClass* QC_ABSTRACTITERATOR;
 DLLEXPORT extern QoreClass* QC_ABSTRACTBIDIRECTIONALITERATOR;
@@ -73,6 +74,47 @@ protected:
 public:
     //! creates the object and marks it as owned by the current thread
     DLLEXPORT QoreIteratorBase();
+
+    //! Returns true if this iterator provides C++-native iteration fast-paths
+    //! (nativeNext() and nativeGetValue()) that can bypass the Qore method
+    //! dispatch used by AbstractIteratorHelper.
+    /**
+        Default returns false; Qore-language iterators and C++ iterators that
+        have not opted in are driven through the normal method-call path.
+
+        C++-native iterators override both this and the two methods below to
+        cut the per-element dispatch cost by ~5-10x when iterated through
+        map/select/foldl/foreach.
+
+        @since %Qore 2.3
+     */
+    DLLEXPORT virtual bool supportsNativeIteration() const {
+        return false;
+    }
+
+    //! C++-native fast-path advance; only called when supportsNativeIteration() returns true
+    /**
+        Must behave identically to the iterator's Qore-visible next() method:
+        returns true if a value is available via nativeGetValue(), false at end
+        of iteration.
+
+        @since %Qore 2.3
+     */
+    DLLEXPORT virtual bool nativeNext(ExceptionSink* xsink) {
+        return false;
+    }
+
+    //! C++-native fast-path value accessor; only called when supportsNativeIteration() returns true
+    /**
+        Must behave identically to the iterator's Qore-visible getValue()
+        method: returns the current element.  May raise INVALID-ITERATOR via
+        xsink if the iterator is not positioned on a valid element.
+
+        @since %Qore 2.3
+     */
+    DLLEXPORT virtual QoreValue nativeGetValue(ExceptionSink* xsink) {
+        return QoreValue();
+    }
 };
 
 #endif

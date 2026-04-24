@@ -16,6 +16,9 @@ class StringTest inherits QUnit::Test {
         addTestCase("pseudo-method test", \testPseudoMethods());
         addTestCase("Base64 URL test", \testBase64Url());
         addTestCase("split regex", \splitRegexTest());
+        addTestCase("splitString iterator", \testSplitStringIter());
+        addTestCase("splitLines iterator", \testSplitLinesIter());
+        addTestCase("splitLinesRegex iterator", \testSplitLinesRegexIter());
         addTestCase("non scalar test", \nonScalarTest());
         addTestCase("width test", \testWidth());
         addTestCase("Basic functions test", \testBasics());
@@ -103,6 +106,90 @@ class StringTest inherits QUnit::Test {
         assertEq(True, a.complexType());
         assertEq("list<string>", a.fullType());
         assertEq(("FIELD", "1.FIELD", "2\\.WITH\\.DOTS.FIELD", "3"), a);
+    }
+
+    testSplitStringIter() {
+        # basic semantics match eager split
+        string s = "a,b,,c";
+        list<string> expected = s.split(",");
+        list<auto> got = map $1, s.splitString(",");
+        assertEq(expected, got);
+
+        # empty source string yields one empty piece (matches eager split())
+        assertEq(("",), (map $1, "".splitString(",")));
+
+        # delimiter not found yields the whole string
+        assertEq(("xyz",), (map $1, "xyz".splitString(",")));
+
+        # trailing delimiter yields a trailing empty piece
+        assertEq(("a", "b", ""), (map $1, "a,b,".splitString(",")));
+
+        # multi-byte delimiter
+        assertEq(("x", "y", "z"), (map $1, "x::y::z".splitString("::")));
+
+        # iterator protocol: valid() before next(), next() advances, reset()
+        StringSplitIterator i("one two three", " ");
+        assertFalse(i.valid());
+        assertTrue(i.next());
+        assertEq("one", i.getValue());
+        assertTrue(i.valid());
+        assertTrue(i.next());
+        assertEq("two", i.getValue());
+        assertTrue(i.next());
+        assertEq("three", i.getValue());
+        assertFalse(i.next());
+        assertFalse(i.valid());
+        i.reset();
+        assertTrue(i.next());
+        assertEq("one", i.getValue());
+
+        # getValue() on invalid iterator throws
+        StringSplitIterator j("x", ",");
+        assertThrows("INVALID-ITERATOR", \j.getValue());
+
+        # functional-operator composition (exercises the native fast path)
+        assertEq(6, foldl $1 + $2, (map $1.size(), "aa,bb,cc".splitString(",")));
+        assertEq(("bb",), select "aa,bb,cc".splitString(","), $1 == "bb");
+    }
+
+    testSplitLinesIter() {
+        # "\n" delimited
+        assertEq(("a", "b", "c"), (map $1, "a\nb\nc".splitLines()));
+
+        # "\r\n" stripped transparently
+        assertEq(("a", "b", "c"), (map $1, "a\r\nb\r\nc".splitLines()));
+
+        # mixed line endings
+        assertEq(("a", "b", "c", ""), (map $1, "a\r\nb\nc\r\n".splitLines()));
+
+        # empty string yields a single empty piece
+        assertEq(("",), (map $1, "".splitLines()));
+
+        # lone \r is NOT a line terminator (documented behaviour — splits on \n only)
+        assertEq(("a\rb",), (map $1, "a\rb".splitLines()));
+
+        # isolated trailing \r is trimmed (even with no preceding \n)
+        assertEq(("a",), (map $1, "a\r".splitLines()));
+
+        # functional composition
+        int lines = foldl $1 + $2, (map 1, "one\ntwo\nthree".splitLines());
+        assertEq(3, lines);
+    }
+
+    testSplitLinesRegexIter() {
+        # any of LF / CR / CRLF
+        assertEq(("a", "b", "c"), (map $1, "a\r\nb\nc".splitLinesRegex("\r?\n|\r")));
+
+        # case-insensitive separator
+        assertEq(("1", "2", "3"), (map $1, "1FOO2foo3".splitLinesRegex("foo", RE_Caseless)));
+
+        # with_separator=True keeps the matched separator on each piece
+        list<auto> got = map $1, "a,b;c".splitLinesRegex("[,;]", 0, True);
+        assertEq(("a,", "b;", "c"), got);
+
+        # invalid regex raises at the pseudo-method call, not lazily
+        assertThrows("REGEX-COMPILATION-ERROR",
+            sub () { "abc".splitLinesRegex("("); });
     }
 
     nonScalarTest() {

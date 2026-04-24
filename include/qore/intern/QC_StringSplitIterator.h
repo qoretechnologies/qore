@@ -46,8 +46,16 @@ DLLEXPORT extern qore_classid_t CID_STRINGSPLITITERATOR;
 */
 class StringSplitIterator : public QoreIteratorBase {
 public:
+    //! Mode flags passed to the ctor.
+    enum Mode {
+        MODE_DEFAULT         = 0,
+        //! When set, each yielded piece has a trailing '\r' byte trimmed so
+        //! a "\r\n"-delimited text file iterates identically to a "\n" one.
+        STRIP_TRAILING_CR    = 1,
+    };
+
     //! Takes a reference on the source string; the caller retains the ref it passed in.
-    DLLLOCAL StringSplitIterator(const QoreStringNode* src, const QoreString* sep);
+    DLLLOCAL StringSplitIterator(const QoreStringNode* src, const QoreString* sep, int mode = MODE_DEFAULT);
 
     //! Copy constructor — returns a fresh iterator over the same source + delimiter, reset to the start.
     DLLLOCAL StringSplitIterator(const StringSplitIterator& old);
@@ -69,6 +77,27 @@ public:
     DLLLOCAL virtual const char* getName() const override { return "StringSplitIterator"; }
 
     DLLLOCAL virtual const QoreTypeInfo* getElementType() const override;
+
+    // Native fast-path overrides: when driven by map/select/foldl/foreach
+    // through AbstractIteratorHelper, these let the helper skip the Qore
+    // method-dispatch machinery entirely and call into this C++ code
+    // directly.  Thread-check in check() is replicated inline here so the
+    // behaviour matches the Qore-visible next()/getValue().
+    DLLLOCAL bool supportsNativeIteration() const override { return true; }
+
+    DLLLOCAL bool nativeNext(ExceptionSink* xsink) override {
+        if (check(xsink)) {
+            return false;
+        }
+        return next();
+    }
+
+    DLLLOCAL QoreValue nativeGetValue(ExceptionSink* xsink) override {
+        if (check(xsink)) {
+            return QoreValue();
+        }
+        return getValue(xsink);
+    }
 
 private:
     // Source string (ref'd on construction, deref'd in dtor).  Declared as the
@@ -97,6 +126,9 @@ private:
 
     // true once the final piece has been produced; next() will return false.
     bool exhausted = false;
+
+    // Combination of Mode flag bits.
+    int mode = MODE_DEFAULT;
 };
 
 #endif

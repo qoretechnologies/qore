@@ -497,6 +497,67 @@ AbstractIterator <string>::splitString(string sep) [flags=CONSTANT] {
         new StringSplitIterator(str, *temp));
 }
 
+//! Returns a lazy iterator yielding each line of the string, one per element.
+/** Splits on "\n"; a trailing "\r" byte on each piece is trimmed so files
+    with "\r\n" line endings iterate identically to "\n"-delimited files.
+    Streaming counterpart of splitting on "\n" and then mapping \c chomp;
+    the intermediate list is never built when consumed by @ref map,
+    @ref select, or @ref foldl.
+
+    @return an @ref Qore::StringSplitIterator "StringSplitIterator"
+
+    @par Example:
+    @code{.py}
+int errors = foldl $1 + ($2 =~ /ERROR/ ? 1 : 0), 0, log.splitLines();
+    @endcode
+
+    @since %Qore 2.3
+ */
+AbstractIterator <string>::splitLines() [flags=CONSTANT] {
+    QoreString nl("\n");
+    return new QoreObject(QC_STRINGSPLITITERATOR, 0,
+        new StringSplitIterator(str, &nl, StringSplitIterator::STRIP_TRAILING_CR));
+}
+
+//! Returns an iterator yielding the pieces produced by splitting on a regex.
+/** Streaming counterpart of @ref <string>::splitRegex; returns an
+    @ref Qore::ListIterator "ListIterator" so the result composes directly
+    with @ref map, @ref select, @ref foldl, and @c foreach.
+
+    The underlying split is performed eagerly (pieces are materialised
+    into a list in one PCRE2 pass) — this is cheaper than per-element
+    PCRE2 iteration anyway because the regex engine's setup is
+    amortised.  The iterator interface exists primarily for ergonomic
+    composition with functional operators.
+
+    @param regex_sep the separator regular expression
+    @param options regex options (e.g. \c RE_Caseless)
+    @param with_separator include the separator match in each element
+
+    @return a @ref Qore::ListIterator "ListIterator" over the split pieces
+
+    @par Example:
+    @code{.py}
+# splits on any of LF, CR, CRLF line endings
+int empty = foldl $1 + ($2.empty() ? 1 : 0), 0,
+    text.splitLinesRegex("\r?\n|\r");
+    @endcode
+
+    @since %Qore 2.3
+ */
+AbstractIterator <string>::splitLinesRegex(string regex_sep, int options = 0,
+        bool with_separator = False) [flags=RET_VALUE_ONLY] {
+    QoreRegex qr(*regex_sep, options, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    ReferenceHolder<QoreListNode> pieces(qr.extractWithPattern(*str, with_separator, xsink, -1), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return new QoreObject(QC_LISTITERATOR, 0, new QoreListIterator(pieces.release()));
+}
+
 //! Splits a string into a list of components based on a separator string and a quote character
 /** The quote character can appear as the first part of a field, in which case it is assumed to designate the entire
     field. If instances of the quote character are found in the field preceded by a backquote character (\c "\"), then
