@@ -1099,6 +1099,9 @@ cargo install tree-sitter-cli@0.26.5
       - new module providing a composable abstraction layer for retrieval-augmented generation (RAG)
       - defines abstract embedder, vector store, reranker, and chunker building blocks plus a \c RagPipeline orchestrator
       - ships built-in concrete backends: \c LocalOnnxEmbedder, \c OpenAiEmbedder, \c VoyageEmbedder, \c SGLangEmbedder, \c LocalOnnxReranker, \c VoyageReranker, \c HttpGatewayReranker, \c StructuredChunker, \c FixedChunker
+    - @ref qorecryptointro "QoreCrypto" module
+      - new module providing provider-neutral envelope encryption helpers for sensitive long-lived records
+      - supports AES-256-GCM content encryption with per-record data-encryption keys, key-provider-managed wrapping, and authenticated structured AAD
     - @ref huggingfacerestclientintro "HuggingFaceRestClient" module
       - new module providing a REST client for the <a href="https://huggingface.co/">Hugging Face</a> Hub API
       - supports Bearer token authentication

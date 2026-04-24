@@ -1,0 +1,167 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  QoreCrypto.qtest Copyright 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+%modern
+%requires ../../../../qlib/QoreCrypto
+%requires ../../../../qlib/FsUtil.qm
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+
+%exec-class QoreCryptoTest
+
+public class QoreCryptoTest inherits QUnit::Test {
+    private {
+        const TestKey = <000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f>;
+        const OtherKey = <202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f>;
+    }
+
+    constructor() : Test("QoreCryptoTest", "1.0") {
+        addTestCase("round trip string", \roundTripStringTest());
+        addTestCase("round trip binary", \roundTripBinaryTest());
+        addTestCase("canonical AAD is hash-order stable", \canonicalAadHashOrderTest());
+        addTestCase("wrong AAD fails before decrypt", \wrongAadTest());
+        addTestCase("tampered ciphertext fails closed", \tamperedCiphertextTest());
+        addTestCase("provider mismatch fails closed", \providerMismatchTest());
+        addTestCase("key mismatch fails closed", \keyMismatchTest());
+        addTestCase("invalid key length rejected", \invalidKeyLengthTest());
+        addTestCase("file key provider", \fileKeyProviderTest());
+        addTestCase("envelope options are persisted", \envelopeOptionsTest());
+        set_return_value(main());
+    }
+
+    private EnvelopeCipher makeCipher() {
+        StaticKeyProvider provider(TestKey, "test-provider", "k1");
+        return new EnvelopeCipher(provider);
+    }
+
+    private hash<auto> makeAad() {
+        return {
+            "table": "qonsole_chat_messages",
+            "record_id": "msg-1",
+            "scope": {
+                "system_uuid": "system-uuid",
+                "user": "alice",
+                "group_namespace": 17,
+            },
+            "schema_version": 1,
+        };
+    }
+
+    roundTripStringTest() {
+        EnvelopeCipher cipher = makeCipher();
+        hash<auto> aad = makeAad();
+        hash<CiphertextEnvelope> env = cipher.encrypt("secret text", aad);
+
+        assertEq(ENVELOPE_VERSION, env.version);
+        assertEq(ENVELOPE_ALGORITHM, env.algorithm);
+        assertEq("test-provider", env.key_provider);
+        assertEq("k1", env.key_id);
+        assertEq("secret text", cipher.decryptToString(env, aad));
+        assertNeq("secret text", env.ciphertext);
+    }
+
+    roundTripBinaryTest() {
+        EnvelopeCipher cipher = makeCipher();
+        binary plaintext = <00112233445566778899aabbccddeeff>;
+        hash<CiphertextEnvelope> env = cipher.encrypt(plaintext, {"record": "bin"});
+
+        assertEq(plaintext, cipher.decrypt(env, {"record": "bin"}));
+    }
+
+    canonicalAadHashOrderTest() {
+        string a = EnvelopeCipher::canonicalizeAad({"b": 2, "a": {"z": 1, "y": (3, 4)}});
+        string b = EnvelopeCipher::canonicalizeAad({"a": {"y": (3, 4), "z": 1}, "b": 2});
+        assertEq(a, b);
+    }
+
+    wrongAadTest() {
+        EnvelopeCipher cipher = makeCipher();
+        hash<CiphertextEnvelope> env = cipher.encrypt("secret text", makeAad());
+
+        assertThrows("QORE-CRYPTO-AAD-ERROR", "AAD does not match",
+            sub () {
+                cipher.decryptToString(env, makeAad() + {"record_id": "msg-2"});
+            }
+        );
+    }
+
+    tamperedCiphertextTest() {
+        EnvelopeCipher cipher = makeCipher();
+        hash<auto> aad = makeAad();
+        hash<CiphertextEnvelope> env = cipher.encrypt("secret text", aad);
+        env.ciphertext = make_base64_string(parse_base64_string(env.ciphertext) + <00>);
+
+        assertThrows("QORE-CRYPTO-DECRYPT-ERROR", "could not decrypt",
+            sub () {
+                cipher.decryptToString(env, aad);
+            }
+        );
+    }
+
+    providerMismatchTest() {
+        EnvelopeCipher cipher = makeCipher();
+        hash<auto> aad = makeAad();
+        hash<CiphertextEnvelope> env = cipher.encrypt("secret text", aad);
+        EnvelopeCipher other = new EnvelopeCipher(new StaticKeyProvider(TestKey, "other-provider", "k1"));
+
+        assertThrows("QORE-CRYPTO-KEY-ERROR", "does not match provider",
+            sub () {
+                other.decryptToString(env, aad);
+            }
+        );
+    }
+
+    keyMismatchTest() {
+        EnvelopeCipher cipher = makeCipher();
+        hash<auto> aad = makeAad();
+        hash<CiphertextEnvelope> env = cipher.encrypt("secret text", aad);
+        EnvelopeCipher other = new EnvelopeCipher(new StaticKeyProvider(OtherKey, "test-provider", "k2"));
+
+        assertThrows("QORE-CRYPTO-KEY-ERROR", "is not available",
+            sub () {
+                other.decryptToString(env, aad);
+            }
+        );
+    }
+
+    invalidKeyLengthTest() {
+        assertThrows("QORE-CRYPTO-KEY-ERROR", "exactly 32 bytes",
+            sub () {
+                new StaticKeyProvider("short");
+            }
+        );
+    }
+
+    fileKeyProviderTest() {
+        string path = tmp_location() + DirSep + "qorecrypto-key-" + get_random_string(8);
+        on_exit unlink(path);
+        {
+            File f();
+            f.open2(path, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+            f.write(TestKey);
+        }
+
+        EnvelopeCipher cipher = new EnvelopeCipher(new FileKeyProvider(path, "file-provider", "file-key"));
+        hash<CiphertextEnvelope> env = cipher.encrypt("file secret", {"record": "file"});
+        assertEq("file secret", cipher.decryptToString(env, {"record": "file"}));
+        assertEq("file-provider", env.key_provider);
+        assertEq("file-key", env.key_id);
+    }
+
+    envelopeOptionsTest() {
+        EnvelopeCipher cipher = makeCipher();
+        hash<CiphertextEnvelope> env = cipher.encrypt("secret", {"record": "opts"},
+            <EnvelopeEncryptOptions>{
+                "aad_descriptor": "qonsole_chat_messages:v1",
+                "metadata": {"schema": 1, "purpose": "test"},
+            });
+
+        assertEq("qonsole_chat_messages:v1", env.aad_descriptor);
+        assertEq(1, env.metadata.schema);
+        assertEq("test", env.metadata.purpose);
+    }
+}

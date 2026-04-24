@@ -1984,6 +1984,7 @@ qore_user_module("qlib/QoreModelRegistry" "DataProvider;modules/ml/ml;Mime;Util"
 qore_user_module("qlib/QoreOnnxExport" "modules/protobuf/protobuf;modules/ml/ml;Util")
 qore_user_module("qlib/QoreMLUtils" "modules/ml/ml")
 qore_user_module("qlib/QoreTokenizerUtils" "modules/tokenizer/tokenizer")
+qore_user_module("qlib/QoreCrypto" "")
 qore_user_module("qlib/QoreLlmUtils" "")
 qore_user_module("qlib/QoreStructuredExtraction" "QoreLlmUtils")
 qore_user_module("qlib/QoreGuardrails" "QoreLlmUtils")
