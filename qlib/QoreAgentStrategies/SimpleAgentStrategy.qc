@@ -62,8 +62,6 @@ hash<AgentResult> result = agent.execute(<AgentContext>{
 });
 printf("Response: %s\nTools called: %d\n", result.response, result.tool_calls.size());
     @endcode
-
-    @since QoreAgentStrategies 1.0
 */
 public class SimpleAgentStrategy inherits AbstractAgentStrategy {
     private {

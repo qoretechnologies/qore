@@ -1151,17 +1151,17 @@ struct qore_socket_private {
         the fd to be closed or shut down.  The close path is the caller
         responsible for that shutdown, but it's stuck waiting for the
         same mutex.  See @c grpc-shutdown-deadlock.md for the full
-        scenario (Socket::close vs isHttp2StreamComplete / send).
+        scenario (Socket::close vs an H2 session lock held by an in-flight
+        poll / send).
 
         Two actions, both safe to perform concurrently with any other
         thread's in-flight I/O:
 
           1. Mark the @ref Http2Session (if any) as closed via
              @ref Http2Session::markClosed.  Loops in
-             @c sendPendingDataBlocking / @c receiveData /
-             @c isStreamComplete check @ref Http2Session::isSessionClosed
-             and return promptly on their next iteration — releasing
-             @c Http2Session::m.
+             @c sendPendingDataBlocking / @c receiveData check
+             @ref Http2Session::isSessionClosed and return promptly on
+             their next iteration — releasing @c Http2Session::m.
 
           2. Issue @c ::shutdown(fd, SHUT_RDWR) on the raw fd.  The
              kernel returns any pending blocking @c recv / @c send with
@@ -2233,17 +2233,17 @@ struct qore_socket_private {
         printd(5, "isDataAvailable() h2_session=%p isServer=%d h2_active=%d h2_recv=%d h2_cond=%d\n",
             h2_session.get(), h2_session ? h2_session->isServer() : -1, h2_active_stream_id, h2_receiving_frames, h2_cond);
         if (h2_cond) {
-            // Server-side HTTP/2 is fully async in the current architecture:
-            // handlers must read body data via @ref readHttp2StreamDataBlock()
-            // or use the pre-read `cx.header-info.body` field populated by
-            // HttpServerAsyncIo.  Calling sync isDataAvailable() on an
+            // Server-side HTTP/2 is fully async: handlers drain inbound
+            // DATA via `cx.header-info.register_body_queue` (a Qore Queue
+            // populated by the I/O thread) and use HttpServerAsyncIo for
+            // all response I/O.  Calling sync isDataAvailable() on an
             // H2-active server socket is a misuse — raise a clear error
             // instead of running a sync recv/process loop under the outer
             // mutex.
             xsink->raiseException("SOCKET-H2-SYNC-ERROR",
                 "Socket::isDataAvailable() is not supported on an HTTP/2-active "
-                "server socket; use readHttp2StreamDataBlock() or the async "
-                "poll API instead");
+                "server socket; use HttpServerAsyncIo + register_body_queue "
+                "for inbound DATA");
             return false;
         }
         return isSocketDataAvailable(timeout_ms, mname, xsink);
@@ -3295,11 +3295,10 @@ struct qore_socket_private {
             return (ssize_t)bs;
         }
 
-        // Server-side HTTP/2 is fully async in the current architecture —
-        // handlers must read body data via @ref readHttp2StreamDataBlock()
-        // or use the pre-read `cx.header-info.body` field populated by
-        // HttpServerAsyncIo.  Calling sync recv() on an H2-active server
-        // socket is a misuse; raise a clear error.
+        // Server-side HTTP/2 is fully async — handlers drain inbound DATA
+        // via `cx.header-info.register_body_queue` and use HttpServerAsyncIo
+        // for all I/O.  Calling sync recv() on an H2-active server socket
+        // is a misuse; raise a clear error.
         //
         // The `!h2_receiving_frames` gate lets the recursive brecv from
         // h2_session->receiveData() bypass this check — that internal
@@ -3310,8 +3309,8 @@ struct qore_socket_private {
             if (!suppress_exception) {
                 xsink->raiseException("SOCKET-H2-SYNC-ERROR",
                     "Socket::%s() is not supported on an HTTP/2-active server "
-                    "socket; use readHttp2StreamDataBlock() or the async poll "
-                    "API instead", meth);
+                    "socket; use HttpServerAsyncIo + register_body_queue for "
+                    "inbound DATA", meth);
             }
             return QSE_SSL_ERR;
         }

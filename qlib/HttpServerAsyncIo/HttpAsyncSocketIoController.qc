@@ -3025,6 +3025,20 @@ public class HttpAsyncSocketIoController {
                     resumeMultiplexedReading(h2op, uh,
                         HttpConnectionState::Http2);
                 } : NOTHING,
+                # Async-body opt-in: handlers that want inbound DATA frames
+                # delivered via a Qore Queue (instead of the handler-thread
+                # sync Socket::readHttp2StreamDataBlock() path) call this
+                # closure with an unlimited (max=-1) Queue.  The I/O thread
+                # drains previously-buffered frames into the Queue at
+                # registration time and pushes subsequent frames as they
+                # arrive; a NOTHING sentinel marks END_STREAM.  Used by
+                # GrpcServerAsync for client-streaming / bidi and to drain
+                # the unary request body without the sync helper.
+                "register_body_queue": body_streaming ? sub (Queue q) {
+                    h2op.registerStreamQueue(stream_id, q);
+                    resumeMultiplexedReading(h2op, uh,
+                        HttpConnectionState::Http2);
+                } : NOTHING,
             },
             "listener": cinfo.listener,
             "cx": cinfo.cx,

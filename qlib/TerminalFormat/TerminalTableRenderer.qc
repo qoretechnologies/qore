@@ -47,8 +47,6 @@ public namespace TerminalFormat {
     my-service   loaded     42
     other-svc    unloaded   43
     @endverbatim
-
-    @since TerminalFormat 1.0
 */
 public class TerminalTableRenderer {
     private {

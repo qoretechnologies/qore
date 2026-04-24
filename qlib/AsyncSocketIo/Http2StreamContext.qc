@@ -32,8 +32,6 @@ public namespace AsyncSocketIo {
 
     An external I/O thread reads HTTP/2 frames and populates a Queue for the stream. The
     context reads from the Queue via @ref readData() and sends via the socket directly.
-
-    @since AsyncSocketIo 1.0
 */
 public class Http2StreamContext inherits AbstractStreamContext {
     private {
@@ -43,24 +41,25 @@ public class Http2StreamContext inherits AbstractStreamContext {
         /** @ref readData() reads from this Queue (non-blocking). The I/O controller's
             @ref HttpServerAsyncIo::Http2PollOperation "Http2PollOperation" drains data
             from the per-stream buffer to this Queue after each poll cycle.
-
-            @since AsyncSocketIo 1.1
         */
         Queue data_queue;
 
         #! Set to True when a NOTHING sentinel is received from the Queue (stream closed)
-        /** @since AsyncSocketIo 1.1
-        */
         bool closed = False;
 
         #! True when data_queue contains pre-decoded WebSocket frame hashes
         /** Set when the underlying transport is feeding a C++
             WebSocketStreamFrameState rather than a raw-data queue.  Consumers
             MUST use @ref readFrame() in this mode — @ref readData() throws.
-
-            @since AsyncSocketIo 1.3
         */
         bool uses_frame_state = False;
+
+        #! Optional callback to wake the I/O controller after queuing data
+        /** When set, @ref sendData() and @ref sendTrailers() invoke this
+            closure after enqueuing HTTP/2 frames so the I/O thread flushes
+            them on its next tick rather than on the next timeout.
+        */
+        *code<nothing()> wake_callback;
     }
 
     #! Creates an HTTP/2 stream context with Queue-based async I/O
@@ -70,11 +69,10 @@ public class Http2StreamContext inherits AbstractStreamContext {
         @ref readData() reads from this Queue non-blockingly
         @param uses_frame_state when True, @p data_queue carries typed WS frame
             hashes (one per complete message) and @ref readFrame() must be used
-
-        @since AsyncSocketIo 1.1
+        @param wake_callback optional closure to wake the I/O controller after writes
     */
     constructor(Socket sock, int stream_id, Queue data_queue,
-            bool uses_frame_state = False) {
+            bool uses_frame_state = False, *code<nothing()> wake_callback) {
         @assert(sock, "socket cannot be null");
         @assert(sock.isOpen(), "socket must be open");
         @assert(stream_id > 0, "stream_id must be positive");
@@ -82,10 +80,10 @@ public class Http2StreamContext inherits AbstractStreamContext {
         self.stream_id = stream_id;
         self.data_queue = data_queue;
         self.uses_frame_state = uses_frame_state;
+        self.wake_callback = wake_callback;
     }
 
     #! Returns True when the transport feeds pre-decoded WebSocket frame hashes
-    /** @since AsyncSocketIo 1.3 */
     bool usesFrameState() {
         return uses_frame_state;
     }
@@ -97,8 +95,6 @@ public class Http2StreamContext inherits AbstractStreamContext {
 
         Returns @ref nothing when the queue is drained.  If a NOTHING sentinel
         is pulled, the context is marked closed and @ref isOpen() returns False.
-
-        @since AsyncSocketIo 1.3
     */
     *hash<auto> readFrame() {
         if (!uses_frame_state) {
@@ -133,7 +129,9 @@ public class Http2StreamContext inherits AbstractStreamContext {
     }
 
     #! Send DATA frames on the associated HTTP/2 stream.
-    /** Sends binary DATA frames for this HTTP/2 stream using the underlying socket.
+    /** Enqueues binary DATA frames for this HTTP/2 stream; the I/O controller
+        flushes them on its next tick (or immediately when @c wake_callback is
+        set).
 
         @param data
         the binary payload to send on the stream
@@ -146,6 +144,9 @@ public class Http2StreamContext inherits AbstractStreamContext {
     */
     sendData(binary data, bool end_stream = False) {
         sock.sendHttp2StreamData(stream_id, data, end_stream);
+        if (wake_callback) {
+            wake_callback();
+        }
     }
 
     #! Read data from this HTTP/2 stream.
@@ -190,6 +191,9 @@ public class Http2StreamContext inherits AbstractStreamContext {
     */
     sendTrailers(hash<string, string> trailers) {
         sock.sendHttp2Trailers(stream_id, trailers);
+        if (wake_callback) {
+            wake_callback();
+        }
     }
 }
 

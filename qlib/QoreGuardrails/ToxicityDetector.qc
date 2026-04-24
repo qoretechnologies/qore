@@ -51,8 +51,6 @@ if (!result.passed) {
     printf("Toxic content detected: %y\n", result.violations);
 }
     @endcode
-
-    @since QoreGuardrails 1.0
 */
 public class ToxicityDetector inherits AbstractGuardrailRule {
     private {

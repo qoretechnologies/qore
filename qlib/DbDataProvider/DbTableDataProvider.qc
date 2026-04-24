@@ -121,7 +121,6 @@ public class DbTableDataProvider inherits DbDataProviderBase {
                 - \c "key": (required) the column name to return
                 - \c "type": (optional) the data type for the output placeholder buffer (ex:
                   @ref Qore::Type::Number "Type::Number")
-
         */
         const CreateOptions = {
             "returning": <DataProviderOptionInfo>{

@@ -225,8 +225,6 @@ public hashdecl RagConfig {
 #! Optional hooks passed to @ref RagPipeline::constructor()
 /** Every field is optional and strictly additive — omitting the options hash
     preserves the behavior of earlier module versions.
-
-    @since QoreRagUtils 1.0
 */
 public hashdecl RagPipelineOptions {
     #! Optional query transformer (e.g. HyDE-style hypothetical-answer generation)
@@ -334,8 +332,6 @@ public hashdecl RetrievalHit {
     When a @ref fallback_stores "fallback vector store chain" is configured,
     the same filter is forwarded to every store in the chain until one
     returns results.
-
-    @since QoreRagUtils 1.0
 */
 public class RagPipeline {
     public {
@@ -387,8 +383,6 @@ public class RagPipeline {
         @param doc_id the caller-supplied document identifier
         @param chunk_index zero-based index of the chunk within the document
         @return a lowercase UUID string suitable for every AbstractVectorStore backend
-
-        @since QoreRagUtils 1.0
     */
     static string deriveChunkId(string doc_id, int chunk_index) {
         binary sha = SHA1_bin(ChunkIdNamespace + "|" + doc_id + ":"

@@ -42,8 +42,6 @@ public namespace QoreRagUtils {
     The underlying ONNX model is instantiated on first use; construction is
     cheap and validation of the model file is deferred until the first
     @ref encode() / @ref encodeBatch() call.
-
-    @since QoreRagUtils 1.0
 */
 public class LocalOnnxEmbedder inherits AbstractEmbedder {
     private {

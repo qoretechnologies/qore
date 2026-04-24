@@ -44,7 +44,6 @@ public namespace HttpServerAsyncIo {
     @note Stream queue drain logic runs in pure C++ on the I/O thread — no Qore interpreter
     calls.  The C++ base class (Http2PollOperationBase) handles drainStreamQueues() and
     clearStreamQueues() automatically.
-
 */
 public class Http2PollOperation inherits Http2PollOperationBase, HttpConnectionPollOperationBase {
     public {
@@ -118,8 +117,6 @@ public class Http2PollOperation inherits Http2PollOperationBase, HttpConnectionP
     /** Called when the H2 connection dies (TCP reset, GOAWAY, error). Each
         listener's notifyIo() will detect the closed stream context and clean up,
         unblocking handler threads waiting on stream_done.waitForZero().
-
-        @since HttpServerAsyncIo 1.2
     */
     notifyStreamListenersClosed() {
         AutoLock al(stream_listener_mutex);
@@ -174,7 +171,6 @@ int js_stream = h2op.pushResource("/app.js", {"content-type": "application/javas
 # Send the main HTML response
 h2op.startSendResponse(200, {"content-type": "text/html"}, html_body);
         @endcode
-
     */
     int pushResource(string path, *hash<auto> headers) {
         string state = getH2State();
@@ -208,7 +204,6 @@ if (css_stream > 0) {
     # Drive push_op alongside main response...
 }
         @endcode
-
     */
     AbstractPollOperation startSendPushedResponse(int promised_stream_id, int status_code,
             *hash<auto> headers, *data body) {
@@ -233,7 +228,6 @@ if (push) {
     }
 }
         @endcode
-
     */
     *code getPushResourceCallback() {
         string state = getH2State();
@@ -272,7 +266,6 @@ if (push) {
         @note This must be called after the request is ready (goalReached() returns True).
         The InputStream body is read incrementally and sent as HTTP/2 DATA frames without
         buffering the entire body in memory.
-
     */
     startSendResponse(int status_code, *hash<auto> headers, InputStream body, *int chunk_size) {
         auto request = getOutput();
@@ -323,8 +316,6 @@ if (push) {
         drained to the Queue
 
         @note Must be called on the I/O controller thread before the handler starts reading.
-
-        @since HttpServerAsyncIo 1.1
     */
     registerStreamQueue(int stream_id, Queue queue, *code<nothing()> notify) {
         # Delegate to the C++ base class — the notify closure is not used;
@@ -350,8 +341,6 @@ if (push) {
 
         @note Must be called on the I/O controller thread before the
         handler starts reading.
-
-        @since HttpServerAsyncIo 1.3
     */
     registerStreamFrameState(int stream_id, Queue queue) {
         Http2PollOperationBase::registerStreamFrameState(stream_id, queue);

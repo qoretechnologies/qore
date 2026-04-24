@@ -117,8 +117,6 @@ binary img = ReadOnlyFile::readBinaryFile("receipt.jpg");
 hash<VisionExtractionResult> result = client.extractStructured(img, "image/jpeg", schema);
 printf("Store: %s, Total: %y\n", result.structured.store_name, result.structured.total);
     @endcode
-
-    @since QoreVisionExtraction 1.0
 */
 public class VisionLlmClient {
     private {

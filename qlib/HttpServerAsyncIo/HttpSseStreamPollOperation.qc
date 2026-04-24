@@ -33,7 +33,6 @@ public namespace HttpServerAsyncIo {
 
     SSE connections are persistent and unidirectional (server to client).
     The client receives events in the text/event-stream format.
-
 */
 public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase {
     public {

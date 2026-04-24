@@ -28,8 +28,6 @@ public namespace QoreRagUtils {
     strategy (structured, semantic, fixed-size).
 
     Implementations must be thread-safe.
-
-    @since QoreRagUtils 1.0
 */
 public class AbstractChunker {
     #! Splits content into chunks

@@ -117,6 +117,12 @@ printf("HTTP/3 WebSocket server listening on port 8443\n");
     @section websockethandler_relnotes WebSocketHandler Release History
 
     @subsection websockethandler_v2_8 Version 2.8
+    - HTTP/2 WebSocket connections now thread an \c io_wake closure into
+      the @ref AsyncSocketIo::Http2StreamContext "Http2StreamContext"
+      they hand to the @ref WebSocketHandler::WebSocketConnection
+      "WebSocketConnection".  Outbound DATA / trailers go through the
+      async-safe \c Socket HTTP/2 methods and the wake closure nudges the
+      I/O thread to flush, matching the existing HTTP/3 path.
     - added @ref WebSocketHandler::WebSocketConnection::setEchoMode()
       "WebSocketConnection::setEchoMode()" for automatic echo of received frames
 
@@ -1794,8 +1800,13 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                     "a stream data Queue from the I/O controller";
             }
             bool h2_uses_frame_state = cx."header-info".stream_uses_frame_state ?? False;
+            code<nothing()> h2_wake = sub () {
+                if (async_ctrl) {
+                    async_ctrl.wakeSocket(sock);
+                }
+            };
             wsc.setStreamContext(new AsyncSocketIo::Http2StreamContext(
-                sock, h2_stream_id, h2_data_queue, h2_uses_frame_state));
+                sock, h2_stream_id, h2_data_queue, h2_uses_frame_state, h2_wake));
             # Stream listener registration is deferred until after setup is complete
             # (the processor is created later, after extensions and registered())
         } else if (is_http3) {

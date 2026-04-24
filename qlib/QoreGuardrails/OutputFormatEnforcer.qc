@@ -42,8 +42,6 @@ if (!result.passed) {
     printf("Output violated rules: %y\n", result.violations);
 }
     @endcode
-
-    @since QoreGuardrails 1.0
 */
 public class OutputFormatEnforcer inherits AbstractGuardrailRule {
     private {

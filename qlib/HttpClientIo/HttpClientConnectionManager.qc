@@ -139,8 +139,6 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
             from user-facing entry points (e.g. @ref acquireStream()) on the calling thread —
             this avoids both the async-I/O-thread restriction and the ref-cycle that would
             arise from a background thread capturing @c self.
-
-            @since HttpClientIo 1.0
         */
         date last_cleanup_time = now_us();
 
@@ -177,8 +175,6 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         /** Created when enable_cookies is True (default).  Shared across all
             pooled connections — cookies set by one request are sent with
             subsequent matching requests regardless of which connection is used.
-
-            @since HttpClientIo 1.0
         */
         *CookieJar cookie_jar;
     }
@@ -258,8 +254,6 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         happen to both pass the time check may both call @ref cleanupIdleConnections(),
         which is harmless because it takes @c pool_lock and the second caller finds
         everything already cleaned up.
-
-        @since HttpClientIo 1.0
     */
     private:internal maybeCleanupIdle() {
         if (shutdown) {
@@ -307,8 +301,6 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
 
     #! Returns the cookie jar (NOTHING if cookies are disabled)
     /** @return the CookieJar instance, or NOTHING if \c enable_cookies is False
-
-        @since HttpClientIo 1.0
     */
     *CookieJar getCookieJar() {
         return cookie_jar;
@@ -1451,9 +1443,14 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
             }
             # H3 failed immediately — fall through to start H2
         } else {
-            # Poll the notifier fd for the stagger period
-            Socket::poll((<SocketPollInfo>{"events": SOCK_POLLIN, "socket": h3_notifier},),
-                HappyEyeballsStaggerMs);
+            # Drive the stagger wait via the I/O controller — no handler-thread
+            # Socket::poll() syscall.  The NotifierPollOperation submits a
+            # SOCK_POLLIN watch on the notifier's fd; the I/O thread wakes us via
+            # the returned Queue on signal or timeout.  waitForNotifier returns
+            # False on timeout; in either case we still acknowledge() to drain
+            # the fd (matches the former Socket::poll pattern) and then check
+            # isReady() for the authoritative state.
+            controller.waitForNotifier(h3_notifier, HappyEyeballsStaggerMs);
             h3_notifier.acknowledge();
             if (h3conn.isReady()) {
                 log(LoggerLevel::DEBUG, "happy eyeballs: H3 won within stagger for %s", key);
@@ -1534,8 +1531,9 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
             if (remaining <= 0ms) {
                 remaining = opts.connect_timeout;
             }
-            Socket::poll((<SocketPollInfo>{"events": SOCK_POLLIN, "socket": race_notifier},),
-                remaining);
+            # Async wait via the I/O controller (replaces a handler-thread
+            # Socket::poll syscall).  See the h3_notifier path above.
+            controller.waitForNotifier(race_notifier, remaining);
             race_notifier.acknowledge();
         } else {
             log(LoggerLevel::DEBUG,
@@ -2183,8 +2181,6 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
 /** Overrides \c get() to process cookies from the response headers before
     returning.  No extra threads — cookie extraction happens synchronously
     on the caller's thread when they call \c get().
-
-    @since HttpClientIo 1.0
 */
 class CookieExtractingFuture inherits Future {
     private {

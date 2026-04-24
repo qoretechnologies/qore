@@ -204,6 +204,57 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
     - Rewrite the \c summarize block as a plain @ref context "context" loop with manual grouping
     @endparblock
 
+    @par HTTP/2 Server Socket API Is Now Async-Safe
+    @parblock
+    The server-side HTTP/2 \c Socket API has been reworked end-to-end so
+    that handler threads never hold the socket wrapper lock during frame
+    submission.  Every surviving server-side method now acquires
+    @c priv->m only briefly to copy the @ref Qore::Http2Session shared
+    pointer and then does its actual work under the session's own
+    recursive mutex.  This eliminates the close-vs-poll lock inversion
+    and the handler-vs-I/O-thread contention that the previous sync
+    design suffered from.
+
+    The following server-side \c Socket methods were removed outright
+    (their functionality is covered by the @ref HttpServerAsyncIo
+    "HttpServerAsyncIo" stack — \c register_body_queue for inbound DATA,
+    plus the renamed response methods below):
+    \c readHttp2StreamData(), \c readHttp2StreamDataBlock(),
+    \c isHttp2StreamComplete(), \c flushHttp2(),
+    \c queueHttp2StreamData(), \c setHttp2ActiveStream(), and
+    \c getHttp2ActiveStream().
+
+    The following server-side \c Socket methods kept their names but
+    switched to the async-safe implementation described above:
+\if QORE_LANG_FINAL
+    @ref Qore::Socket::submitHttp2StreamingResponseHeaders() "submitHttp2StreamingResponseHeaders()",
+    @ref Qore::Socket::sendHttp2StreamData() "sendHttp2StreamData()",
+    @ref Qore::Socket::sendHttp2Trailers() "sendHttp2Trailers()",
+    @ref Qore::Socket::cleanupHttp2Stream() "cleanupHttp2Stream()", and
+    @ref Qore::Socket::resetHttp2Stream() "resetHttp2Stream()".
+\else
+    \c submitHttp2StreamingResponseHeaders(), \c sendHttp2StreamData(),
+    \c sendHttp2Trailers(), \c cleanupHttp2Stream(), and
+    \c resetHttp2Stream().
+\endif
+    Because the underlying frames are enqueued on the session and not
+    pushed to the wire synchronously, callers should follow each call
+    with \c io_wake() (provided by @ref HttpServerAsyncIo via
+    \c cx."header-info".io_wake) to flush promptly; under the
+    @ref HttpServerAsyncIo controller the flush is driven by the I/O
+    thread's existing HTTP/2 flush poll operation.
+
+    For inbound DATA on body-streaming dispatches, handlers opt in by
+    registering a @ref Queue "Queue" via
+    \c cx."header-info".register_body_queue; the I/O thread pushes one
+    binary chunk per DATA frame and a @ref nothing sentinel at
+    END_STREAM — no handler-thread socket reads.
+
+    \c HTTPClient HTTP/2 client-side methods (\c sendHttp2StreamData(),
+    \c isHttp2StreamClosed() etc.) are unaffected — this change only
+    reshapes the server-side \c Socket bindings.
+    @endparblock
+
     @subsection qore_2_3_0_new_features New Features in Qore
     @par New Required Libraries: nghttp2, ngtcp2, nghttp3, Brotli, Zstd, LZ4, Eigen3, and libprotobuf
     @parblock

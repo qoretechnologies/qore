@@ -399,6 +399,14 @@ Content-Length: 16
     @section resthandler_relnotes RestHandler Release Notes
 
     @subsection rh_1_6_7 RestHandler v1.6.7
+    - removed the \c Socket::setHttp2ActiveStream(stream_id) /
+      \c setHttp2ActiveStream(-1) pair previously wrapped around
+      @ref RestHandler::AbstractRestClass::handleRequest()
+      "AbstractRestClass::handleRequest()".  REST responses on HTTP/2
+      already use the async-safe H2 @c Socket primitives via the
+      @ref HttpServerAsyncIo "HttpServerAsyncIo" controller; no REST
+      handler relied on the \c Socket::send() / \c Socket::recv()
+      redirection that the active-stream bridge enabled.
     - dropped the per-response "raw body" log entry from DEBUG to TRACE; at DEBUG level it flooded
       the HTTP log with multi-MB response bodies (e.g. vector scrolls) and caused logger contention
       under load.  Operators who need the raw serialized body for protocol-level debugging can
@@ -885,20 +893,6 @@ public namespace RestHandler {
                 args = cx.body - "action";
             }
             cx.socketobject = s;
-            # Only set HTTP/2 active stream if the socket has an HTTP/2 session
-            # (may not be the case for forwarded requests to remote services)
-            bool h2_stream_set;
-            if (cx."header-info".http2) {
-                try {
-                    cx.socketobject.setHttp2ActiveStream(cx."header-info".stream_id);
-                    h2_stream_set = True;
-                } catch (hash<ExceptionInfo> ex) {
-                    # Ignore - socket doesn't have HTTP/2 session (forwarded request)
-                }
-            }
-            on_exit if (h2_stream_set) {
-                cx.socketobject.setHttp2ActiveStream(-1);
-            }
             if (cl) {
                 string cname = shift cl;
                 cx += {

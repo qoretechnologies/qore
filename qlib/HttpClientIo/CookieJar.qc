@@ -28,8 +28,6 @@ public namespace HttpClientIo {
 #! RFC 6265 cookie jar — stores, matches, and injects cookies
 /** Thread-safe cookie storage for use with HttpClientConnectionManager.
     Delegates parsing and matching to the shared HttpUtil module.
-
-    @since HttpClientIo 1.0
 */
 public class CookieJar {
     private {

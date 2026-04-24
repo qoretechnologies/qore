@@ -879,16 +879,6 @@ void QoreSocketObject::setHttp2ConnectProtocolEnabled(bool enable) {
     priv->socket->setHttp2ConnectProtocolEnabled(enable);
 }
 
-void QoreSocketObject::setHttp2ActiveStream(int32_t stream_id, ExceptionSink* xsink) {
-    AutoLocker al(priv->m);
-    priv->socket->setHttp2ActiveStream(stream_id, xsink);
-}
-
-int32_t QoreSocketObject::getHttp2ActiveStream() const {
-    AutoLocker al(priv->m);
-    return priv->socket->getHttp2ActiveStream();
-}
-
 int QoreSocketObject::sendHttp2StreamData(int32_t stream_id, const BinaryNode* data,
         bool end_stream, ExceptionSink* xsink) {
     AutoLocker al(priv->m);
@@ -926,10 +916,112 @@ int QoreSocketObject::submitHttp2Ping(ExceptionSink* xsink) {
     return priv->socket->priv->h2_session->sendPendingData(0, xsink);
 }
 
-int QoreSocketObject::submitHttp2StreamingResponseHeaders(int32_t stream_id, int status_code,
+// Async-path H2 server write methods.  These follow the waitForHttp2StreamDrain
+// precedent (see below): acquire priv->m only briefly to copy the
+// Http2Session shared pointer, then perform header/data/trailer submission
+// under only the session's internal recursive mutex.  This eliminates the
+// handler-thread vs. I/O-thread contention on priv->m that motivated the
+// GrpcServer async-migration (see design/grpc-server-async-migration.md).
+int QoreSocketObject::submitHttp2StreamingResponseHeadersAsync(int32_t stream_id, int status_code,
         const QoreHashNode* headers, ExceptionSink* xsink) {
-    AutoLocker al(priv->m);
-    return priv->socket->submitHttp2StreamingResponseHeaders(stream_id, status_code, headers, xsink);
+    Http2SessionPtr h2;
+    {
+        AutoLocker al(priv->m);
+        h2 = priv->socket->priv->h2_session;
+    }
+    if (!h2) {
+        xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session active");
+        return -1;
+    }
+    strcase_str_map_t header_map;
+    if (headers) {
+        ConstHashIterator hi(headers);
+        while (hi.next()) {
+            QoreValue val = hi.get();
+            if (val.getType() == NT_STRING) {
+                header_map[hi.getKey()] = val.get<const QoreStringNode>()->c_str();
+            }
+        }
+    }
+    return h2->submitResponseStreaming(stream_id, status_code, header_map, xsink);
+}
+
+int QoreSocketObject::sendHttp2StreamDataAsync(int32_t stream_id, const BinaryNode* data,
+        bool end_stream, ExceptionSink* xsink) {
+    Http2SessionPtr h2;
+    {
+        AutoLocker al(priv->m);
+        h2 = priv->socket->priv->h2_session;
+    }
+    if (!h2) {
+        xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session active");
+        return -1;
+    }
+    const void* ptr = data ? data->getPtr() : nullptr;
+    size_t len = data ? data->size() : 0;
+    int rv = h2->sendStreamData(stream_id, ptr, len, end_stream, xsink);
+    if (rv < 0) {
+        return -1;
+    }
+    if (rv > 0) {
+        xsink->raiseException("HTTP2-FLOW-CONTROL",
+            "stream %d buffer full: data dropped", stream_id);
+        return -1;
+    }
+    return 0;
+}
+
+int QoreSocketObject::sendHttp2TrailersAsync(int32_t stream_id, const QoreHashNode* trailers,
+        ExceptionSink* xsink) {
+    Http2SessionPtr h2;
+    {
+        AutoLocker al(priv->m);
+        h2 = priv->socket->priv->h2_session;
+    }
+    if (!h2) {
+        xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session active");
+        return -1;
+    }
+    strcase_str_map_t trailer_map;
+    if (trailers) {
+        ConstHashIterator hi(trailers);
+        while (hi.next()) {
+            QoreValue val = hi.get();
+            if (val.getType() == NT_STRING) {
+                trailer_map[hi.getKey()] = val.get<const QoreStringNode>()->c_str();
+            }
+        }
+    }
+    return h2->submitTrailers(stream_id, trailer_map, xsink);
+}
+
+void QoreSocketObject::cleanupHttp2StreamAsync(int32_t stream_id) {
+    Http2SessionPtr h2;
+    {
+        AutoLocker al(priv->m);
+        h2 = priv->socket->priv->h2_session;
+    }
+    if (h2) {
+        h2->cleanupStream(stream_id);
+    }
+}
+
+int QoreSocketObject::resetHttp2StreamAsync(int32_t stream_id, ExceptionSink* xsink) {
+    Http2SessionPtr h2;
+    {
+        AutoLocker al(priv->m);
+        h2 = priv->socket->priv->h2_session;
+    }
+    if (!h2) {
+        return 0;
+    }
+    int rv = h2->submitRstStream(stream_id, NGHTTP2_CANCEL, xsink);
+    if (rv != 0) {
+        printd(2, "resetHttp2StreamAsync() submitRstStream failed for stream %d (rv=%d), "
+            "cleaning up local state anyway\n", stream_id, rv);
+    }
+    h2->cleanupStream(stream_id);
+    return rv;
 }
 
 int QoreSocketObject::submitHttp2StreamingResponseWithStream(int32_t stream_id, int status_code,
@@ -941,15 +1033,34 @@ int QoreSocketObject::submitHttp2StreamingResponseWithStream(int32_t stream_id, 
         return 1;
     }
 
-    AutoLocker al(priv->m);
-    Http2Session* session = priv->socket->priv->h2_session.get();
-    if (!session) {
+    // Follow the same brief-lock pattern as the other async-safe HTTP/2
+    // server write methods: acquire priv->m only long enough to copy the
+    // Http2Session shared pointer, then do all session work under only
+    // Http2Session's own recursive mutex.  The handler thread never
+    // competes with the I/O thread for priv->m during frame submission
+    // or InputStream registration.
+    Http2SessionPtr h2;
+    {
+        AutoLocker al(priv->m);
+        h2 = priv->socket->priv->h2_session;
+    }
+    if (!h2) {
         xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session available");
         return -1;
     }
 
     // Submit response headers without END_STREAM
-    int rv = priv->socket->submitHttp2StreamingResponseHeaders(stream_id, status_code, headers, xsink);
+    strcase_str_map_t header_map;
+    if (headers) {
+        ConstHashIterator hi(headers);
+        while (hi.next()) {
+            QoreValue val = hi.get();
+            if (val.getType() == NT_STRING) {
+                header_map[hi.getKey()] = val.get<const QoreStringNode>()->c_str();
+            }
+        }
+    }
+    int rv = h2->submitResponseStreaming(stream_id, status_code, header_map, xsink);
     if (rv) {
         return rv;
     }
@@ -987,45 +1098,8 @@ int QoreSocketObject::submitHttp2StreamingResponseWithStream(int32_t stream_id, 
         return -1;
     }
 
-    session->setStreamInputStream(stream_id, body, xsink, content_length);
+    h2->setStreamInputStream(stream_id, body, xsink, content_length);
     return *xsink ? -1 : 0;
-}
-
-// readHttp2StreamDataBlock MUST acquire priv->m even though the inner read
-// blocks waiting for HTTP/2 stream data.  Reasoning:
-//
-// brecv() uses waitReleasingLock() for its poll wait, and waitReleasingLock
-// requires priv->m to be held by the caller on entry — it releases it during
-// the poll and re-acquires on return (see SocketSyncPoll::waitReleasingLock).
-// If the caller doesn't hold priv->m when brecv runs, the AutoUnlocker in
-// waitReleasingLock issues an unlock on an unheld mutex (undefined for
-// PTHREAD_MUTEX_NORMAL — typically silently marks the mutex unlocked) and
-// then re-acquires it on return.  Net effect: this thread leaves brecv
-// holding priv->m it never asked for, and the next socket call from the
-// same thread (e.g. submitHttp2StreamingResponseHeaders) deadlocks on a
-// non-recursive mutex it already owns.  The grpc-test server-stream hang
-// reproduces exactly this — see the deadlock investigation comment block
-// in the bug write-up.
-//
-// Holding priv->m during the blocking wait is safe because:
-//   1. waitReleasingLock releases it for the duration of the actual poll,
-//      so other threads can perform short non-blocking socket ops between
-//      our wait cycles;
-//   2. concurrent close() calls prepareForClose() (which marks the H2
-//      session closed AND ::shutdown(fd) the socket) BEFORE attempting to
-//      take priv->m, so the in-flight poll exits immediately and our own
-//      AutoLocker releases priv->m on scope exit, allowing the close to
-//      proceed.  This is the same close-vs-poll race that motivated
-//      prepareForClose() in the first place.
-BinaryNode* QoreSocketObject::readHttp2StreamDataBlock(int32_t stream_id, int timeout_ms,
-        ExceptionSink* xsink) {
-    AutoLocker al(priv->m);
-    return priv->socket->readHttp2StreamDataBlock(stream_id, timeout_ms, xsink);
-}
-
-bool QoreSocketObject::isHttp2StreamComplete(int32_t stream_id) const {
-    AutoLocker al(priv->m);
-    return priv->socket->isHttp2StreamComplete(stream_id);
 }
 
 bool QoreSocketObject::isHttp2StreamClosed(int32_t stream_id) const {
@@ -1036,21 +1110,6 @@ bool QoreSocketObject::isHttp2StreamClosed(int32_t stream_id) const {
 bool QoreSocketObject::isHttp2StreamRemoteClosed(int32_t stream_id) const {
     AutoLocker al(priv->m);
     return priv->socket->isHttp2StreamRemoteClosed(stream_id);
-}
-
-int QoreSocketObject::flushHttp2(int timeout_ms, ExceptionSink* xsink) {
-    AutoLocker al(priv->m);
-    return priv->socket->flushHttp2(timeout_ms, xsink);
-}
-
-void QoreSocketObject::cleanupHttp2Stream(int32_t stream_id) {
-    AutoLocker al(priv->m);
-    priv->socket->cleanupHttp2Stream(stream_id);
-}
-
-int QoreSocketObject::resetHttp2Stream(int32_t stream_id, ExceptionSink* xsink) {
-    AutoLocker al(priv->m);
-    return priv->socket->resetHttp2Stream(stream_id, xsink);
 }
 
 int QoreSocketObject::waitForHttp2StreamDrain(int32_t stream_id, int timeout_ms) {
@@ -1929,6 +1988,39 @@ QoreValue QoreSocketObject::readQuicDatagram(int64_t session_id, int64_t stream_
         return QoreValue();
     }
     return session->readDatagram(stream_id, timeout_ms, xsink);
+}
+
+void QoreSocketObject::registerQuicDatagramQueue(int64_t session_id, int64_t stream_id,
+        Queue* queue, ExceptionSink* xsink) {
+    // Same brief-lock pattern as readQuicDatagram: copy the session shared_ptr
+    // under priv->m, then do the register work under only QuicSession::datagram_mutex_.
+    std::shared_ptr<QuicSession> session;
+    {
+        AutoLocker al(priv->m);
+        qore_socket_private* sp = qore_socket_private::get(*priv->socket);
+        session = sp->getQuicSession(session_id);
+    }
+    if (!session) {
+        xsink->raiseException("QUIC-ERROR", "no QUIC session with id %lld on this socket",
+            (long long)session_id);
+        return;
+    }
+    session->registerDatagramQueue(stream_id, queue, xsink);
+}
+
+void QoreSocketObject::unregisterQuicDatagramQueue(int64_t session_id, int64_t stream_id,
+        ExceptionSink* xsink) {
+    std::shared_ptr<QuicSession> session;
+    {
+        AutoLocker al(priv->m);
+        qore_socket_private* sp = qore_socket_private::get(*priv->socket);
+        session = sp->getQuicSession(session_id);
+    }
+    if (!session) {
+        // Session gone — nothing to unregister.  Silent for idempotent teardown.
+        return;
+    }
+    session->unregisterDatagramQueue(stream_id, xsink);
 }
 
 int64_t QoreSocketObject::getQuicMaxDatagramSize(int64_t session_id, int64_t stream_id,

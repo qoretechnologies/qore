@@ -33,8 +33,6 @@ public namespace QoreRagUtils {
 
     Implementations must be thread-safe; the pipeline may call
     @ref get() and @ref put() from multiple threads concurrently.
-
-    @since QoreRagUtils 1.0
 */
 public class AbstractEmbeddingCache {
     #! Looks up a cached embedding for the given key

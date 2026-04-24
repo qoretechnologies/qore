@@ -75,8 +75,6 @@ hash<ExtractionResult> result = pipeline.extractData("Apple Inc. was founded by 
 binary img = ReadOnlyFile::readBinaryFile("receipt.jpg");
 hash<ExtractionResult> result = pipeline.extractFromImage(img, "image/jpeg");
     @endcode
-
-    @since QoreStructuredExtraction 1.0
 */
 public class ExtractionPipeline {
     private {

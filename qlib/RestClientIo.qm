@@ -201,8 +201,6 @@ public namespace RestClientIo {
 RestFuture f = rest.restGetAsync("/api/users");
 hash<RestResponseInfo> resp = f.get(30s);
         @endcode
-
-        @since RestClientIo 1.0
     */
     public class RestFuture {
         private {
@@ -345,8 +343,6 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
         @par Thread Safety
         This class is thread-safe. All mutable state is protected and the underlying
         @ref HttpClientIo::HttpClientConnectionManager "HttpClientConnectionManager" is thread-safe.
-
-        @since RestClientIo 1.0
     */
     public class RestClientIo inherits RestClient::AbstractRestClient {
         private {
@@ -2349,8 +2345,6 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
 
         #! Sets the callback for option updates (token changes)
         /** @param update_options the callback to set, or NOTHING to clear
-
-            @since %RestClientIo 1.0
         */
         setUpdateOptionsCode(*code update_options) {
             self.update_options = update_options;
@@ -2362,8 +2356,6 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
 
             @param signer the signer callback; receives a hash with \c method, \c path, \c body, and \c hdr keys
             @param signer_header the header name for the signature
-
-            @since %RestClientIo 1.0
         */
         setAltTokenSigner(code signer, string signer_header) {
             alt_token_signer = signer;
@@ -2371,8 +2363,6 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
         }
 
         #! Clears the alt token signer callback and header
-        /** @since %RestClientIo 1.0
-        */
         clearAltTokenSigner() {
             remove alt_token_signer;
             remove alt_token_signer_header;
@@ -3173,8 +3163,6 @@ RestClientIoPool pool({"url": "https://api.example.com", "data": "json"},
     NOTHING, shared_mgr);
 hash<RestResponseInfo> resp = pool.restGet("/api/data");
         @endcode
-
-        @since RestClientIo 1.0
     */
     public class RestClientIoPool inherits RestClientIo, Qore::Thread::AbstractConnectionPool {
         private {

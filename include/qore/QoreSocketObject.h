@@ -475,40 +475,22 @@ public:
     */
     DLLEXPORT void setHttp2ConnectProtocolEnabled(bool enable);
 
-    //! Sets the active HTTP/2 stream ID for transparent send/recv operations
-    /** @since %Qore 2.3
-    */
-    DLLEXPORT void setHttp2ActiveStream(int32_t stream_id, ExceptionSink* xsink);
-
-    //! Gets the active HTTP/2 stream ID
-    /** @return the active stream ID, or -1 if no stream is active
-        @since %Qore 2.3
-    */
-    DLLEXPORT int32_t getHttp2ActiveStream() const;
     DLLEXPORT int sendHttp2StreamData(int32_t stream_id, const BinaryNode* data,
             bool end_stream, ExceptionSink* xsink);
     DLLEXPORT BinaryNode* readHttp2StreamData(int32_t stream_id, size_t max_bytes, ExceptionSink* xsink);
 
     //! Sends HTTP/2 trailer headers on a stream
-    /** @since %Qore 2.3
+    /** Used internally by HTTPClient's HTTP/2 client-side code path.
     */
     DLLEXPORT int sendHttp2Trailers(int32_t stream_id, const QoreHashNode* trailers,
             ExceptionSink* xsink);
 
     //! Flushes pending HTTP/2 write data (non-blocking)
-    /** Drains data queued by sendHttp2StreamData() from the nghttp2 session
+    /** Drains data queued by sendHttp2StreamDataAsync() from the nghttp2 session
         and sends it on the socket. Returns 0 if all data was sent, 1 if
         data remains (would block), -1 on error.
-
-        @since %Qore 2.3
     */
     DLLEXPORT int flushHttp2PendingData(ExceptionSink* xsink);
-
-    //! Submits HTTP/2 streaming response headers without body or END_STREAM
-    /** @since %Qore 2.3
-    */
-    DLLEXPORT int submitHttp2StreamingResponseHeaders(int32_t stream_id, int status_code,
-            const QoreHashNode* headers, ExceptionSink* xsink);
 
     //! Submit HTTP/2 streaming response with InputStream body (non-blocking)
     /** Handler thread calls this and returns immediately. The I/O thread reads from
@@ -518,42 +500,50 @@ public:
     DLLEXPORT int submitHttp2StreamingResponseWithStream(int32_t stream_id, int status_code,
             const QoreHashNode* headers, InputStream* body, ExceptionSink* xsink);
 
-    //! Blocking read of HTTP/2 stream data for incremental server-side streaming
-    /** @since %Qore 2.3
+    //! Submit HTTP/2 streaming response headers without holding the socket wrapper lock
+    /** Acquires the wrapper lock only briefly to copy the Http2Session shared
+        pointer, then performs header submission under only the session's
+        internal recursive mutex.
     */
-    DLLEXPORT BinaryNode* readHttp2StreamDataBlock(int32_t stream_id, int timeout_ms,
+    DLLEXPORT int submitHttp2StreamingResponseHeadersAsync(int32_t stream_id, int status_code,
+            const QoreHashNode* headers, ExceptionSink* xsink);
+
+    //! Send HTTP/2 DATA frame payload without holding the socket wrapper lock
+    /** Briefly acquires @c priv->m only to copy the Http2Session shared
+        pointer; enqueue runs under only the session's internal mutex.
+    */
+    DLLEXPORT int sendHttp2StreamDataAsync(int32_t stream_id, const BinaryNode* data,
+            bool end_stream, ExceptionSink* xsink);
+
+    //! Send HTTP/2 trailers without holding the socket wrapper lock
+    /** Briefly acquires @c priv->m only to copy the Http2Session shared
+        pointer; submission runs under only the session's internal mutex.
+    */
+    DLLEXPORT int sendHttp2TrailersAsync(int32_t stream_id, const QoreHashNode* trailers,
             ExceptionSink* xsink);
 
-    //! Check if an HTTP/2 stream has received END_STREAM
-    /** @since %Qore 2.3
+    //! Remove an HTTP/2 stream from the session without holding the socket wrapper lock
+    /** Briefly acquires @c priv->m to copy the Http2Session shared pointer,
+        then performs stream cleanup under only the session's internal mutex.
     */
-    DLLEXPORT bool isHttp2StreamComplete(int32_t stream_id) const;
+    DLLEXPORT void cleanupHttp2StreamAsync(int32_t stream_id);
+
+    //! Send RST_STREAM and clean up the stream state without holding the socket wrapper lock
+    /** Briefly acquires @c priv->m to copy the Http2Session shared pointer,
+        then submits RST_STREAM and cleans up stream state under only the
+        session's internal mutex.
+    */
+    DLLEXPORT int resetHttp2StreamAsync(int32_t stream_id, ExceptionSink* xsink);
 
     //! Check if an HTTP/2 stream has been closed
-    /** @since %Qore 2.3
+    /** Used internally by HTTPClient's HTTP/2 client-side code path.
     */
     DLLEXPORT bool isHttp2StreamClosed(int32_t stream_id) const;
 
     //! Check if the remote peer has closed their side of an HTTP/2 stream
-    /** @since %Qore 2.3
+    /** Used internally by HTTPClient's HTTP/2 client-side code path.
     */
     DLLEXPORT bool isHttp2StreamRemoteClosed(int32_t stream_id) const;
-
-    //! Flush all pending HTTP/2 outgoing data (blocking)
-    /** @param timeout_ms send timeout in milliseconds; -1 for infinite
-        @since %Qore 2.3
-    */
-    DLLEXPORT int flushHttp2(int timeout_ms, ExceptionSink* xsink);
-
-    //! Remove an HTTP/2 stream from the session
-    /** @since %Qore 2.3
-    */
-    DLLEXPORT void cleanupHttp2Stream(int32_t stream_id);
-
-    //! Send RST_STREAM to abort an HTTP/2 stream and clean up the stream state
-    /** @since %Qore 2.3
-    */
-    DLLEXPORT int resetHttp2Stream(int32_t stream_id, ExceptionSink* xsink);
 
     //! Wait for an HTTP/2 stream's send buffer to drain below the backpressure threshold
     /** @param stream_id the HTTP/2 stream ID
@@ -980,6 +970,33 @@ public:
     */
     DLLEXPORT QoreValue readQuicDatagram(int64_t session_id, int64_t stream_id,
         int timeout_ms, ExceptionSink* xsink);
+
+    //! Register a @ref Queue to receive incoming QUIC datagrams for a stream (RFC 9221/9297)
+    /** Async-path replacement for @ref readQuicDatagram().  Once registered, incoming
+        datagrams for @a stream_id are pushed to @a queue (as @ref BinaryNode) by the I/O
+        thread; handlers block on @c Queue::get(timeout) for delivery.  A @c NOTHING
+        sentinel is pushed when the QUIC session is closed.
+
+        @param session_id the QUIC session ID
+        @param stream_id the HTTP/3 stream ID (anchor stream)
+        @param queue the @ref Queue to populate; pass @c nullptr to unregister
+        @param xsink exception sink
+        @since %Qore 2.3
+    */
+    DLLEXPORT void registerQuicDatagramQueue(int64_t session_id, int64_t stream_id,
+        Queue* queue, ExceptionSink* xsink);
+
+    //! Unregister the @ref Queue previously registered via @ref registerQuicDatagramQueue
+    /** Subsequent datagrams for @a stream_id fall back to the internal deque path used
+        by legacy @ref readQuicDatagram() callers.
+
+        @param session_id the QUIC session ID
+        @param stream_id the HTTP/3 stream ID
+        @param xsink exception sink
+        @since %Qore 2.3
+    */
+    DLLEXPORT void unregisterQuicDatagramQueue(int64_t session_id, int64_t stream_id,
+        ExceptionSink* xsink);
 
     //! Get the maximum datagram payload size for a QUIC session (RFC 9221)
     /** @param session_id the QUIC session ID

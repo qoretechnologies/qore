@@ -87,6 +87,13 @@ module HttpServerAsyncIo {
       @ref HttpServerAsyncIo::HttpPollType "HttpPollType",
       @ref HttpServerAsyncIo::HttpVersionMode "HttpVersionMode"
     - Protocol-agnostic SSE and WebSocket abstractions
+    - body-streaming HTTP/2 dispatches drain inbound DATA via
+      @c cx."header-info".register_body_queue (the I/O thread pushes one
+      binary chunk per DATA frame and a NOTHING sentinel at END_STREAM).
+      Outbound DATA / HEADERS / trailers go through the async-safe
+      @c Socket HTTP/2 methods followed by @c io_wake().  All built-in
+      response paths (regular, send_callback, InputStream, SSE setup,
+      RST_STREAM-on-error) use this convention.
 */
 
 #! Main namespace for HttpServerAsyncIo module
@@ -158,15 +165,13 @@ public namespace HttpServerAsyncIo {
         /** When set, the controller calls @ref Qore::Socket::sendHTTPResponseWithCallback()
             "sendHTTPResponseWithCallback()" with this callback instead of sending the body directly.
 
-            @since HttpServerAsyncIo 1.0
 
             @see send_timeout
         */
         *code send_callback;
 
         #! timeout for send_callback responses
-        /** @since HttpServerAsyncIo 1.0
-
+        /**
             @see send_callback
         */
         *timeout send_timeout;
@@ -177,14 +182,15 @@ public namespace HttpServerAsyncIo {
         - \c http2: \c True for HTTP/2 requests
         - \c stream_id: The HTTP/2 stream ID (needed for sending response)
         - \c body_streaming: \c True when the client sent HEADERS without END_STREAM (request body
-          not yet complete); the handler should use \c Socket::readHttp2StreamDataBlock() to read
-          body data incrementally and \c Socket::flushHttp2() to send outgoing data (the handler
-          has exclusive socket access in this mode)
+          not yet complete); the handler registers a @ref Queue "Queue" via
+          \c register_body_queue to receive inbound DATA chunks (NOTHING sentinel = END_STREAM)
+          and writes outgoing DATA via \c Socket::sendHttp2StreamData() followed by
+          \c io_wake()
         - \c headers_end_stream: \c True if END_STREAM was on the HEADERS frame (e.g., GET with
           no body); when \c True, \c body_streaming is \c False and there is no body to read
-        - \c io_wake: a code closure to call after queuing outgoing data to wake the I/O thread;
-          @note in \c body_streaming mode, \c io_wake has no effect because the I/O thread does not
-          manage the socket — use \c Socket::flushHttp2() instead
+        - \c io_wake: a code closure to call after queuing outgoing data to wake the I/O thread
+        - \c register_body_queue: only present in \c body_streaming mode — a closure that takes an
+          unlimited @ref Queue "Queue" and connects it to the I/O thread's stream reader
 
         For HTTP/3 connections, \c header_info contains:
         - \c http3: \c True for HTTP/3 requests
@@ -202,7 +208,6 @@ public namespace HttpServerAsyncIo {
         - \c path: The request path
         - \c :authority: The :authority pseudo-header value
         - \c :scheme: The :scheme pseudo-header value
-
     */
     public hashdecl HttpConnectionInfo {
         #! The socket for this connection

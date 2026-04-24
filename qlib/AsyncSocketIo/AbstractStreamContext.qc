@@ -35,8 +35,6 @@ public namespace AsyncSocketIo {
     Subclasses:
     - @ref Http2StreamContext — HTTP/2 stream I/O via nghttp2
     - @ref Http3StreamContext — HTTP/3 stream I/O via ngtcp2/nghttp3
-
-    @since AsyncSocketIo 1.0
 */
 public class AbstractStreamContext {
     #! Returns the protocol identifier
@@ -74,8 +72,6 @@ public class AbstractStreamContext {
     /** Subclasses that support WebSocket frame-level delivery (HTTP/3 with
         C++ `WebSocketStreamFrameState` in the loop) override this.  Default
         is False, meaning @ref readData() returns raw bytes.
-
-        @since AsyncSocketIo 1.3
     */
     bool usesFrameState() {
         return False;
@@ -84,8 +80,6 @@ public class AbstractStreamContext {
     #! Drains one pre-decoded WebSocket frame hash (only valid when usesFrameState())
     /** Default implementation throws — concrete classes that return True from
         @ref usesFrameState() must override.
-
-        @since AsyncSocketIo 1.3
     */
     *hash<auto> readFrame() {
         throw "STREAM-CONTEXT-ERROR",

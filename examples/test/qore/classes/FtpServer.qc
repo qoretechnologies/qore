@@ -72,7 +72,18 @@ class FtpServer {
         string str = sprintf("%d %s\r\n", code, vsprintf(msg, argv));
         if (verbose > 2)
             printf("FTP > %s", str);
-        ns.send(str);
+        try {
+            ns.send(str);
+        } catch (hash<ExceptionInfo> ex) {
+            # Client disconnected before we could reply — swallow the same
+            # errors ftpGetCommand() treats as clean shutdown.  Prevents
+            # an unhandled background-thread exception when the test races
+            # the client-side close against a pending server reply.
+            if (ex.err == "SOCKET-NOT-OPEN" || ex.err == "SOCKET-CLOSED") {
+                return;
+            }
+            rethrow;
+        }
     }
 
     private string ftpGetCommand(Socket ns) {

@@ -49,8 +49,6 @@ if (!result.passed) {
     printf("Hallucination detected: %y\n", result.violations);
 }
     @endcode
-
-    @since QoreGuardrails 1.0
 */
 public class HallucinationDetector inherits AbstractGuardrailRule {
     private {
