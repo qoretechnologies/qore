@@ -148,7 +148,7 @@ bool QoreStringNode::getAsBoolImpl() const {
     if (runtime_check_parse_option(PO_STRICT_BOOLEAN_EVAL)) {
         return q_strtod(c_str());
     }
-    if (priv->len == 1 && priv->buf[0] == '0') {
+    if (priv->len == 1 && priv->effective_buf()[0] == '0') {
         return false;
     }
     return !empty();
@@ -173,7 +173,7 @@ QoreStringNode* QoreStringNode::convertEncoding(const QoreEncoding* nccs, Except
 
     QoreStringNode* targ = new QoreStringNode(nccs);
 
-    if (qore_string_private::convert_encoding_intern(priv->buf, priv->len, priv->encoding, *targ, nccs, xsink)) {
+    if (qore_string_private::convert_encoding_intern(priv->effective_buf(), priv->len, priv->encoding, *targ, nccs, xsink)) {
         targ->deref();
         return 0;
     }
@@ -264,7 +264,7 @@ QoreStringNode* QoreStringNode::regexSubst(QoreString& match, QoreString& subst,
 }
 
 QoreStringNode* QoreStringNode::parseBase64ToString(const QoreEncoding* qe, ExceptionSink* xsink) const {
-    SimpleRefHolder<BinaryNode> b(::parseBase64(priv->buf, priv->len, xsink));
+    SimpleRefHolder<BinaryNode> b(::parseBase64(priv->effective_buf(), priv->len, xsink));
     return binary_to_string<QoreStringNode>(b.release(), qe);
 }
 
@@ -273,7 +273,7 @@ QoreStringNode* QoreStringNode::parseBase64ToString(ExceptionSink* xsink) const 
 }
 
 QoreStringNode* QoreStringNode::parseBase64UrlToString(const QoreEncoding* qe, ExceptionSink* xsink) const {
-    SimpleRefHolder<BinaryNode> b(::parseBase64Url(priv->buf, priv->len, xsink));
+    SimpleRefHolder<BinaryNode> b(::parseBase64Url(priv->effective_buf(), priv->len, xsink));
     return binary_to_string<QoreStringNode>(b.release(), qe);
 }
 

@@ -571,7 +571,7 @@ int qore_string_private::concatDecodeUriIntern(ExceptionSink* xsink, const qore_
 
     bool in_query = false;
 
-    const char* url = str.buf;
+    const char* url = str.effective_buf();
     while (*url) {
         int x1 = getHex(url);
         if (x1 >= 0) {
@@ -811,8 +811,9 @@ int qore_string_private::convert_encoding_intern(const char* src, size_t src_len
 }
 
 unsigned int qore_string_private::getUnicodePointFromBytePos(size_t offset, unsigned& clen, ExceptionSink* xsink) const {
-    // gets the unicode code point
-    return getEncoding()->getUnicode(buf + offset, buf + len, clen, xsink);
+    // gets the unicode code point (source may be a view)
+    const char* b = effective_buf();
+    return getEncoding()->getUnicode(b + offset, b + len, clen, xsink);
 }
 
 // FIXME: does not work with non-ASCII-compatible encodings such as UTF-16*
@@ -855,9 +856,10 @@ int qore_string_private::concatEncode(ExceptionSink* xsink, const QoreString& st
     //printd(5, "qore_string_private::concatEncode() p: %p '%s' len: %d\n", p, p->buf, p->len);
 
     allocate(len + p->len + p->len / 10 + 10); // avoid reallocations inside the loop, value guesstimated
+    const char* p_buf = p->effective_buf();
     for (size_t i = 0; i < p->len; ++i) {
-        // see if we are dealing with a non-ascii character
-        const unsigned char c = p->buf[i];
+        // see if we are dealing with a non-ascii character (source may be a view)
+        const unsigned char c = p_buf[i];
         if ((c & 0x80)) {
             unsigned len = 0;
             unsigned cp = p->getUnicodePointFromBytePos(i, len, xsink);
@@ -893,7 +895,7 @@ int qore_string_private::concatEncode(ExceptionSink* xsink, const QoreString& st
             continue;
         }
 
-        concat(p->buf[i]);
+        concat(p_buf[i]);
     }
     return 0;
 }
@@ -928,9 +930,10 @@ int qore_string_private::concatDecode(ExceptionSink* xsink, const QoreString& st
 
    // try to avoid reallocations inside the loop
    allocate(len + p->len + 1);
+   const char* p_buf = p->effective_buf();
    for (size_t i = 0; i < p->len; ++i) {
-      // see if we are dealing with a non-ascii character
-      const char* s = p->buf + i;
+      // see if we are dealing with a non-ascii character (source may be a view)
+      const char* s = p_buf + i;
       if (*s != '&') {
          concat(*s);
          continue;
@@ -951,7 +954,7 @@ int qore_string_private::concatDecode(ExceptionSink* xsink, const QoreString& st
                   code = strtoul(s, 0, 10);
 
                if (!concatUnicode(code)) {
-                  i = e - p->buf;
+                  i = e - p_buf;
                   continue;
                }
                // error occurred, so back out
@@ -979,7 +982,7 @@ int qore_string_private::concatDecode(ExceptionSink* xsink, const QoreString& st
                else
                   ok = true;
                if (ok && !concatUnicode(it->second)) {
-                  i = e - p->buf;
+                  i = e - p_buf;
                   continue;
                }
             }
@@ -994,7 +997,7 @@ int qore_string_private::concatDecode(ExceptionSink* xsink, const QoreString& st
          continue;
       }
       // concatenate character as a single unit
-      size_t cl = enc->getByteLen(s, p->buf + p->len, 1, xsink);
+      size_t cl = enc->getByteLen(s, p_buf + p->len, 1, xsink);
       if (*xsink)
          return -1;
       concat_intern(s, cl);
@@ -1045,6 +1048,12 @@ int qore_string_private::concatUnicode(unsigned code) {
 }
 
 int qore_string_private::trimLeading(ExceptionSink* xsink, const intvec_t& cvec) {
+    if (!len) {
+        return 0;
+    }
+    if (view_parent) {
+        materialize();
+    }
     size_t i = 0;
 
     // trim default whitespace
@@ -1081,6 +1090,12 @@ int qore_string_private::trimLeading(ExceptionSink* xsink, const qore_string_pri
 }
 
 int qore_string_private::trimTrailing(ExceptionSink* xsink, const intvec_t& cvec) {
+    if (!len) {
+        return 0;
+    }
+    if (view_parent) {
+        materialize();
+    }
     // get length of string in characters
     size_t i = getEncoding()->getLength(buf, buf + len, xsink);
     if (*xsink)
@@ -2632,8 +2647,8 @@ void QoreString::concat(const QoreString* str, size_t size) {
     if (str && str->priv->len) {
         // if priv->buffer needs to be resized
         priv->check_char(str->priv->len + size);
-        // concatenate new string
-        memcpy(priv->buf + priv->len, str->priv->buf, size);
+        // concatenate new string (source may be a view)
+        memcpy(priv->buf + priv->len, str->priv->effective_buf(), size);
         priv->len += size;
         priv->buf[priv->len] = '\0';
     }
@@ -2729,7 +2744,7 @@ int QoreString::compareSoft(const QoreString* str, ExceptionSink* xsink) const {
     if (xsink && *xsink)
         return 1;
 
-    int rc = memcmp(priv->buf, t->priv->buf, QORE_MIN(priv->len, t->size()));
+    int rc = memcmp(priv->effective_buf(), t->priv->effective_buf(), QORE_MIN(priv->len, t->size()));
     if (rc < 0)
         return -1;
     return !rc ? 0 : 1;
