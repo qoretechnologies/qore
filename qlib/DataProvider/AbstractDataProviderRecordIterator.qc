@@ -1009,8 +1009,9 @@ public class AbstractDataProviderRecordIterator inherits AbstractIterator {
     */
     private static bool matchGenericValue(auto expects, auto val, *hash<auto> template_context) {
         # Resolve template references in the value
-        if (val instanceof hash<DataProviderTemplateReference>) {
-            val = AbstractDataProvider::evalGenericExpressionValue({}, val, template_context);
+        if (AbstractDataProviderRecordIterator::isTemplateReferenceValue(val)) {
+            val = AbstractDataProvider::evalGenericExpressionValue({}, cast<hash<DataProviderTemplateReference>>(val),
+                template_context);
         }
         if (val.typeCode() == NT_HASH) {
             # in case of a hash, do a recursive partial match with only the given keys

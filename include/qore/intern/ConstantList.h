@@ -148,11 +148,13 @@ public:
         // AOT init functions can lose container element metadata while
         // computing values. Re-apply the declared constant type before storing
         // so runtime overload dispatch sees the same value type as source mode.
+        // This is best-effort; some legacy constants contain values that cannot
+        // be folded back into the declared nested container type.
         if (typeInfo && !result.isNothing()) {
-            QoreTypeInfo::acceptAssignment(typeInfo, "<constant>", result, xsink);
-            if (xsink && *xsink) {
-                result.discard(xsink);
-                return;
+            ExceptionSink type_xsink;
+            QoreTypeInfo::acceptAssignment(typeInfo, "<constant>", result, &type_xsink);
+            if (type_xsink) {
+                type_xsink.clear();
             }
         }
         val.discard(xsink);
