@@ -1020,6 +1020,12 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             // Move merge block to end (after invoke.cont blocks from body lowering)
             builder.getFunction()->moveBlockToEnd(merge_block);
             builder.setBlock(merge_block);
+
+            if (const LVList* loop_lvars = foreach_stmt->getLVList()) {
+                for (int i = static_cast<int>(loop_lvars->size()) - 1; i >= 0; --i) {
+                    builder.createUninstantiateLocal(loop_lvars->lv[i], stmt->loc);
+                }
+            }
             return true;
         }
 
@@ -1143,6 +1149,16 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         builder.getFunction()->moveBlockToEnd(exit_block);
         // Exit block
         builder.setBlock(exit_block);
+
+        // Foreach loop variables live for the duration of the foreach
+        // statement. Clean them up at the loop exit so nested block locals
+        // declared before an inner foreach do not pop the inner loop variable
+        // out of LIFO order.
+        if (const LVList* loop_lvars = foreach_stmt->getLVList()) {
+            for (int i = static_cast<int>(loop_lvars->size()) - 1; i >= 0; --i) {
+                builder.createUninstantiateLocal(loop_lvars->lv[i], stmt->loc);
+            }
+        }
         return true;
     }
     if (auto* on_block_exit_stmt = dynamic_cast<const OnBlockExitStatement*>(stmt)) {

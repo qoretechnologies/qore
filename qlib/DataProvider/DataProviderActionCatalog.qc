@@ -1702,10 +1702,15 @@ public class DataProviderActionCatalog {
         foreach hash<auto> i in ((remove resolve_output_types).pairIterator()) {
             foreach hash<auto> j in (i.value.pairIterator()) {
                 string key = sprintf("%s/%s", i.key, j.key);
+                *hash<DataProviderActionInfo> top_action = top_actionmap{key};
+                *hash<DataProviderActionInfo> app_action = app_actionmap{i.key}{j.key};
+                if (!top_action || !app_action) {
+                    continue;
+                }
                 try {
-                    code get_output_type = remove top_actionmap{key}.get_output_type;
-                    remove app_actionmap{i.key}{j.key}.get_output_type;
-                    top_actionmap{key}.output_type = app_actionmap{i.key}{j.key}.output_type = get_output_type();
+                    code get_output_type = remove top_action.get_output_type;
+                    remove app_action.get_output_type;
+                    top_action.output_type = app_action.output_type = get_output_type();
                 } catch (hash<ExceptionInfo> ex) {
                     # ignore exceptions
                 }
@@ -1723,8 +1728,9 @@ public class DataProviderActionCatalog {
     #! Deregisters an app and all its actions if an exception occurs during the other module's initialization
     private:internal static *bool deregisterAppIntern(string name) {
         *hash<DataProviderAppInfo> app = remove appcache{name};
-        remove app_actionmap{name};
+        *hash<string, hash<DataProviderActionInfo>> actions = remove app_actionmap{name};
         remove initactionmap{name};
+        remove resolve_output_types{name};
         if (!app) {
             return;
         }
@@ -1732,8 +1738,9 @@ public class DataProviderActionCatalog {
         if (app.scheme) {
             remove smap{app.scheme};
         }
-        map remove top_actionmap{name + "/" + $1.action}, app_actionmap{name}.values();
-        remove app_actionmap{name};
+        if (actions) {
+            map remove top_actionmap{name + "/" + $1.action}, actions.values();
+        }
 
         return True;
     }

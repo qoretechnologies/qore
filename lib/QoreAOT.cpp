@@ -9135,6 +9135,21 @@ static std::string getSlotTypePath(const QoreTypeInfo* ti) {
     if (!ti) {
         return {};
     }
+    if (ti == autoNoNarrowTypeInfo) {
+        return "auto!";
+    }
+    if (ti == autoNoNarrowHashTypeInfo) {
+        return "hash<auto!>";
+    }
+    if (ti == autoNoNarrowHashOrNothingTypeInfo) {
+        return "*hash<auto!>";
+    }
+    if (ti == autoNoNarrowListTypeInfo) {
+        return "list<auto!>";
+    }
+    if (ti == autoNoNarrowListOrNothingTypeInfo) {
+        return "*list<auto!>";
+    }
     return QoreTypeInfo::getPath(ti);
 }
 
@@ -10890,7 +10905,7 @@ void extractAOTSlotIdentities(const QoreIRFunction& func, const AOTSlotMap& slot
         const LocalVar* lv = reinterpret_cast<const LocalVar*>(ptr);
         AOTLocalSlotId& lid = out.locals[slot];
         lid.name = lv->getName();
-        lid.type_path = getSlotTypePath(lv->getTypeInfo());
+        lid.type_path = getSlotTypePath(lv->getTypeInfoForLValue());
         lid.local_var_ptr = ptr;
 
         lid.flags = 0;
@@ -10933,7 +10948,7 @@ void extractAOTSlotIdentities(const QoreIRFunction& func, const AOTSlotMap& slot
     for (LocalVar* lv : func.all_body_locals) {
         AOTBodyLocalId blid;
         blid.name = lv->getName();
-        blid.type_path = getSlotTypePath(lv->getTypeInfo());
+        blid.type_path = getSlotTypePath(lv->getTypeInfoForLValue());
         blid.is_closure = lv->closureUse();
         out.body_locals.push_back(std::move(blid));
     }

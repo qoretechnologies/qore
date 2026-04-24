@@ -656,6 +656,51 @@ extern "C" DLLEXPORT void qore_rt_assign_local(LocalVar* var, uint64_t value, Ex
     helper.assign(stored);
 }
 
+static void qore_rt_apply_no_narrow_container_type(const QoreTypeInfo* ti, QoreValue& val,
+        ExceptionSink* xsink) {
+    // Keep StoreLocal coercion aligned with LValueHelper::assign(): hash<auto!>
+    // and list<auto!> accept narrowed containers but must store them as auto
+    // containers so later heterogeneous key/element writes remain valid.
+    if (ti == autoNoNarrowHashTypeInfo || ti == autoNoNarrowHashOrNothingTypeInfo) {
+        if (val.getType() != NT_HASH) {
+            return;
+        }
+        QoreHashNode* h = val.get<QoreHashNode>();
+        qore_hash_private* hp = qore_hash_private::get(*h);
+        if (hp->getHashDecl()) {
+            return;
+        }
+        if (hp->complexTypeInfo == autoHashTypeInfo) {
+            return;
+        }
+        if (!h->is_unique()) {
+            QoreHashNode* copy = h->copy();
+            qore_hash_private::get(*copy)->complexTypeInfo = autoHashTypeInfo;
+            AbstractQoreNode* old = val.assign(copy);
+            discard(old, xsink);
+        } else {
+            hp->complexTypeInfo = autoHashTypeInfo;
+        }
+    } else if (ti == autoNoNarrowListTypeInfo || ti == autoNoNarrowListOrNothingTypeInfo) {
+        if (val.getType() != NT_LIST) {
+            return;
+        }
+        QoreListNode* l = val.get<QoreListNode>();
+        qore_list_private* lp = qore_list_private::get(*l);
+        if (lp->complexTypeInfo == autoListTypeInfo) {
+            return;
+        }
+        if (!l->is_unique()) {
+            QoreListNode* copy = l->copy();
+            qore_list_private::get(*copy)->complexTypeInfo = autoListTypeInfo;
+            AbstractQoreNode* old = val.assign(copy);
+            discard(old, xsink);
+        } else {
+            lp->complexTypeInfo = autoListTypeInfo;
+        }
+    }
+}
+
 extern "C" DLLEXPORT uint64_t qore_rt_coerce_value(const QoreTypeInfo* ti, uint64_t value,
         uint64_t* cleanup_ptr, ExceptionSink* xsink) {
     QoreValue val = fromBits(value);
@@ -680,6 +725,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_coerce_value(const QoreTypeInfo* ti, uint6
         val.refSelf();
     }
     QoreTypeInfo::acceptAssignment(ti, "<lvalue>", val, xsink);
+    if (!xsink || !*xsink) {
+        qore_rt_apply_no_narrow_container_type(ti, val, xsink);
+    }
     uint64_t result = toBits(val);
     if (cleanup_ptr) {
         // Always track the output for cleanup at function exit.  In the
@@ -5267,7 +5315,7 @@ extern "C" DLLEXPORT void qore_rt_assign_local_no_coerce_aot(QoreAOTContext* ctx
 extern "C" DLLEXPORT uint64_t qore_rt_coerce_value_aot(QoreAOTContext* ctx, int32_t local_idx,
         uint64_t value, uint64_t* cleanup_ptr, ExceptionSink* xsink) {
     assert(ctx && local_idx >= 0 && local_idx < ctx->num_locals);
-    const QoreTypeInfo* ti = ctx->locals[local_idx]->getTypeInfo();
+    const QoreTypeInfo* ti = ctx->locals[local_idx]->getTypeInfoForLValue();
     return qore_rt_coerce_value(ti, value, cleanup_ptr, xsink);
 }
 

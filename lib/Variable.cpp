@@ -1357,7 +1357,10 @@ int LValueHelper::assign(QoreValue n, const char* desc, bool check_types, bool w
             QoreHashNode* h = n.get<QoreHashNode>();
             qore_hash_private* hp = qore_hash_private::get(*h);
             if (!hp->getHashDecl()) {
-                if (!h->is_unique()) {
+                if (hp->complexTypeInfo == autoHashTypeInfo) {
+                    // Already no-narrow; no copy is needed just to preserve
+                    // the same container type.
+                } else if (!h->is_unique()) {
                     QoreHashNode* copy = h->copy();
                     qore_hash_private::get(*copy)->complexTypeInfo = autoHashTypeInfo;
                     n = copy;
@@ -1371,13 +1374,17 @@ int LValueHelper::assign(QoreValue n, const char* desc, bool check_types, bool w
         // list<auto!> / *list<auto!> - always strip to autoListTypeInfo
         if (n.getType() == NT_LIST) {
             QoreListNode* l = n.get<QoreListNode>();
-            if (!l->is_unique()) {
+            qore_list_private* lp = qore_list_private::get(*l);
+            if (lp->complexTypeInfo == autoListTypeInfo) {
+                // Already no-narrow; no copy is needed just to preserve the
+                // same container type.
+            } else if (!l->is_unique()) {
                 QoreListNode* copy = l->copy();
                 qore_list_private::get(*copy)->complexTypeInfo = autoListTypeInfo;
                 n = copy;
                 saveTemp(l);
             } else {
-                qore_list_private::get(*l)->complexTypeInfo = autoListTypeInfo;
+                lp->complexTypeInfo = autoListTypeInfo;
             }
         }
     }

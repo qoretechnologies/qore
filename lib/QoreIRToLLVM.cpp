@@ -4325,7 +4325,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 }
 
                 // Check if typed: apply coercion or type stripping
-                const QoreTypeInfo* outer_ti = linst->local->getTypeInfo();
+                const QoreTypeInfo* outer_ti = linst->local->getTypeInfoForLValue();
                 bool is_complex_typed_outer = QoreTypeInfo::isComplex(outer_ti)
                         && !QoreTypeInfo::isReference(outer_ti);
                 bool needs_type_strip_outer = !QoreTypeInfo::isComplex(outer_ti)
@@ -4363,7 +4363,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         auto coerce_fn_throwing = module.getOrInsertFunction(
                                 "qore_rt_coerce_value_throwing", cv_ft);
                         llvm::Value* ti_ptr = llvm::ConstantInt::get(i64_type,
-                                reinterpret_cast<uint64_t>(linst->local->getTypeInfo()));
+                                reinterpret_cast<uint64_t>(outer_ti));
                         llvm::Value* ti_as_ptr = builder->CreateIntToPtr(ti_ptr, ptr_type);
                         coerced = emitMaybeInvoke(coerce_fn, coerce_fn_throwing,
                                 {ti_as_ptr, boxed, cleanup, xsink_arg},
@@ -4373,10 +4373,44 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     boxed = coerced;
                     invoke_result_allocas.push_back(cleanup);
                 } else if (needs_type_strip_outer) {
-                    // Strip narrowed complex type in place for plain hash/list vars
-                    auto strip_fn = module.getOrInsertFunction("qore_rt_strip_complex_type",
-                            llvm::FunctionType::get(void_type, {i64_type}, false));
-                    builder->CreateCall(strip_fn, {boxed});
+                    llvm::Function* func = builder->GetInsertBlock()->getParent();
+                    llvm::BasicBlock* entry = &func->getEntryBlock();
+                    llvm::IRBuilder<> alloca_builder(entry, entry->begin());
+                    auto* cleanup = alloca_builder.CreateAlloca(i64_type, nullptr,
+                            "strip_cleanup_outer");
+                    alloca_builder.CreateStore(
+                            llvm::ConstantInt::get(i64_type, VAL_NOTHING), cleanup);
+
+                    llvm::Value* stripped;
+                    if (aot_mode) {
+                        int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(key);
+                        auto cv_aot_ft = llvm::FunctionType::get(i64_type,
+                                {ptr_type, i32_type, i64_type, ptr_type, ptr_type}, false);
+                        auto strip_fn = module.getOrInsertFunction(
+                                "qore_rt_coerce_value_aot", cv_aot_ft);
+                        auto strip_fn_throwing = module.getOrInsertFunction(
+                                "qore_rt_coerce_value_aot_throwing", cv_aot_ft);
+                        stripped = emitMaybeInvoke(strip_fn, strip_fn_throwing,
+                                {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot),
+                                 boxed, cleanup, xsink_arg},
+                                module, llvm_func, inst);
+                    } else {
+                        auto cv_ft = llvm::FunctionType::get(i64_type,
+                                {ptr_type, i64_type, ptr_type, ptr_type}, false);
+                        auto strip_fn = module.getOrInsertFunction(
+                                "qore_rt_coerce_value", cv_ft);
+                        auto strip_fn_throwing = module.getOrInsertFunction(
+                                "qore_rt_coerce_value_throwing", cv_ft);
+                        llvm::Value* ti_ptr = llvm::ConstantInt::get(i64_type,
+                                reinterpret_cast<uint64_t>(outer_ti));
+                        llvm::Value* ti_as_ptr = builder->CreateIntToPtr(ti_ptr, ptr_type);
+                        stripped = emitMaybeInvoke(strip_fn, strip_fn_throwing,
+                                {ti_as_ptr, boxed, cleanup, xsink_arg},
+                                module, llvm_func, inst);
+                    }
+                    emitExceptionCheck(module, llvm_func, inst);
+                    boxed = stripped;
+                    invoke_result_allocas.push_back(cleanup);
                 }
 
                 if (aot_mode) {
@@ -4545,7 +4579,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             }
             // Type handling before storing to the local alloca.
             bool is_ir_only = ir_only_locals_set && ir_only_locals_set->count(key);
-            const QoreTypeInfo* local_ti = linst->local ? linst->local->getTypeInfo() : nullptr;
+            const QoreTypeInfo* local_ti = linst->local ? linst->local->getTypeInfoForLValue() : nullptr;
 
             // Case 1: Complex hash/list types (not hashdecl) need type coercion
             // via acceptAssignment() to set complexTypeInfo for runtime variant
@@ -4570,7 +4604,12 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 && (QoreTypeInfo::isHashType(local_ti)
                     || QoreTypeInfo::isListType(local_ti));
 
-            if (is_complex_typed && !is_ir_only) {
+            // IR-only locals still need their cached alloca value to match
+            // the declared container type.  Only runtime-stack sync is
+            // skipped for IR-only locals; otherwise a literal like
+            // {"initialized": False} stored into hash<auto!> keeps its
+            // inferred hash<bool> type and later key writes reject floats.
+            if (is_complex_typed) {
                 // Complex type coercion: stores complexTypeInfo on the value for
                 // runtime variant matching.  Must happen BEFORE storing to alloca.
                 // Coerce once here; use no-coerce assign variant below to avoid
@@ -4596,7 +4635,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     auto coerce_fn = module.getOrInsertFunction("qore_rt_coerce_value",
                             llvm::FunctionType::get(i64_type, {ptr_type, i64_type, ptr_type, ptr_type}, false));
                     llvm::Value* ti_ptr = llvm::ConstantInt::get(i64_type,
-                            reinterpret_cast<uint64_t>(linst->local->getTypeInfo()));
+                            reinterpret_cast<uint64_t>(local_ti));
                     llvm::Value* ti_as_ptr = builder->CreateIntToPtr(ti_ptr, ptr_type);
                     coerced = builder->CreateCall(coerce_fn,
                             {ti_as_ptr, boxed, cleanup, xsink_arg});
@@ -4604,14 +4643,40 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 emitExceptionCheck(module, llvm_func, inst);
                 boxed = coerced;
                 invoke_result_allocas.push_back(cleanup);
-            } else if (needs_type_strip && !is_ir_only) {
-                // Plain hash/list type stripping: clear complexTypeInfo in place.
-                // This is safe because the value is unique (just created by
-                // MakeHash/MakeHashConstKeys/map). No copy needed, no ownership
-                // transfer, no cleanup alloca complications.
-                auto strip_fn = module.getOrInsertFunction("qore_rt_strip_complex_type",
-                        llvm::FunctionType::get(void_type, {i64_type}, false));
-                builder->CreateCall(strip_fn, {boxed});
+            } else if (needs_type_strip) {
+                // Plain hash/list type stripping must mirror lvalue assignment:
+                // typed nested containers are deep-copied without type metadata
+                // so later writes through the untyped local do not enforce the
+                // source hashdecl or complex value type.
+                llvm::Function* func = builder->GetInsertBlock()->getParent();
+                llvm::BasicBlock* entry = &func->getEntryBlock();
+                llvm::IRBuilder<> alloca_builder(entry, entry->begin());
+                auto* cleanup = alloca_builder.CreateAlloca(i64_type, nullptr,
+                        "strip_cleanup");
+                alloca_builder.CreateStore(
+                        llvm::ConstantInt::get(i64_type, VAL_NOTHING), cleanup);
+
+                llvm::Value* stripped;
+                if (aot_mode) {
+                    int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(key);
+                    auto strip_fn = module.getOrInsertFunction("qore_rt_coerce_value_aot",
+                            llvm::FunctionType::get(i64_type,
+                                    {ptr_type, i32_type, i64_type, ptr_type, ptr_type}, false));
+                    stripped = builder->CreateCall(strip_fn,
+                            {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot),
+                             boxed, cleanup, xsink_arg});
+                } else {
+                    auto strip_fn = module.getOrInsertFunction("qore_rt_coerce_value",
+                            llvm::FunctionType::get(i64_type, {ptr_type, i64_type, ptr_type, ptr_type}, false));
+                    llvm::Value* ti_ptr = llvm::ConstantInt::get(i64_type,
+                            reinterpret_cast<uint64_t>(local_ti));
+                    llvm::Value* ti_as_ptr = builder->CreateIntToPtr(ti_ptr, ptr_type);
+                    stripped = builder->CreateCall(strip_fn,
+                            {ti_as_ptr, boxed, cleanup, xsink_arg});
+                }
+                emitExceptionCheck(module, llvm_func, inst);
+                boxed = stripped;
+                invoke_result_allocas.push_back(cleanup);
             }
 
             builder->CreateStore(boxed, it->second);
@@ -4665,12 +4730,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
 
                 // For complex-typed or type-stripped locals (and hashdecl), use no-coerce variant.
                 // Complex types: coercion was already applied above via qore_rt_coerce_value.
-                // Type-stripped: complexTypeInfo was cleared via qore_rt_strip_complex_type.
+                // Type-stripped: qore_rt_coerce_value already produced the
+                // plain hash/list value.
                 // Hashdecl types: runtime type checking via acceptAssignment rejects hashes
                 // that have complexTypeInfo set instead of hashdecl (a valid state that the
                 // IR interpreter's fast path accepts). Using no-coerce aligns with IR behavior.
                 bool use_no_coerce = is_complex_typed || needs_type_strip
-                    || QoreTypeInfo::getTypedHash(linst->local->getTypeInfo());
+                    || QoreTypeInfo::getTypedHash(local_ti);
                 const char* aot_helper_name = use_no_coerce ? "qore_rt_assign_local_no_coerce_aot"
                         : "qore_rt_assign_local_aot";
                 const char* aot_helper_throwing_name = use_no_coerce

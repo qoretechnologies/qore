@@ -176,6 +176,28 @@ extern void collectAllStatementLocals(const StatementBlock* block, std::vector<L
 // Defined in QoreAOT.cpp - generates unique variant key with parameter types
 extern std::string getVariantKey(const char* name, const AbstractQoreFunctionVariant* variant);
 
+static std::string getAOTTypePathForLValue(const QoreTypeInfo* ti) {
+    if (!ti) {
+        return {};
+    }
+    if (ti == autoNoNarrowTypeInfo) {
+        return "auto!";
+    }
+    if (ti == autoNoNarrowHashTypeInfo) {
+        return "hash<auto!>";
+    }
+    if (ti == autoNoNarrowHashOrNothingTypeInfo) {
+        return "*hash<auto!>";
+    }
+    if (ti == autoNoNarrowListTypeInfo) {
+        return "list<auto!>";
+    }
+    if (ti == autoNoNarrowListOrNothingTypeInfo) {
+        return "*list<auto!>";
+    }
+    return QoreTypeInfo::getPath(ti);
+}
+
 // ---- Slot Map Context Builder (V2 — no IR re-lowering) ----
 
 // toBitsNB is defined in QoreJITIncludes.h (shared with other JIT files)
@@ -2475,8 +2497,9 @@ static QoreAOTContext* buildContextFromSlotMap(
                     if (bltype && *bltype) {
                         std::string norm_bltype = strip_ns_sep(bltype);
                         for (auto qi = it->second.begin(); qi != it->second.end(); ++qi) {
-                            const char* cand_path = QoreTypeInfo::getPath((*qi)->getTypeInfo());
-                            std::string norm_cand = strip_ns_sep(cand_path);
+                            std::string cand_path = getAOTTypePathForLValue(
+                                (*qi)->getTypeInfoForLValue());
+                            std::string norm_cand = strip_ns_sep(cand_path.c_str());
                             if (norm_cand == norm_bltype) {
                                 cit = qi;
                                 break;
@@ -2697,8 +2720,8 @@ static QoreAOTContext* buildContextFromSlotMap(
                 // Also register under a (name|type_path) composite key so
                 // handler slot deser can pick the right var among same-named
                 // shadowing vars (parent has Bar al, handler has Foo al).
-                const char* tpath = QoreTypeInfo::getPath(lv->getTypeInfo());
-                if (tpath && *tpath) {
+                std::string tpath = getAOTTypePathForLValue(lv->getTypeInfoForLValue());
+                if (!tpath.empty()) {
                     std::string ck(lv->getName());
                     ck += '\x1f';
                     ck += tpath;
@@ -2714,8 +2737,8 @@ static QoreAOTContext* buildContextFromSlotMap(
                 // (name|type) key above lets the shadowing handler local win
                 // when the deserializer asks for it specifically.
                 handler_local_map[lv->getName()] = lv;
-                const char* tpath = QoreTypeInfo::getPath(lv->getTypeInfo());
-                if (tpath && *tpath) {
+                std::string tpath = getAOTTypePathForLValue(lv->getTypeInfoForLValue());
+                if (!tpath.empty()) {
                     std::string ck(lv->getName());
                     ck += '\x1f';
                     ck += tpath;
@@ -5494,7 +5517,8 @@ static void executeInitFunctions(QoreProgram* pgm,
     const std::vector<AOTInitFuncExecInfo>& exec_infos,
     const std::vector<AOTInitFuncDescriptor>& descriptors,
     const char* mod_name,
-    QoreProgram* shadow_pgm = nullptr);
+    QoreProgram* shadow_pgm,
+    const char* mod_path);
 
 extern "C" DLLEXPORT int qore_aot_run_v2(
     int argc, char** argv,
@@ -5645,7 +5669,7 @@ extern "C" DLLEXPORT int qore_aot_run_v2(
                     ProgramThreadCountContextHelper tch(&xsink, *qpgm, false);
                     if (!xsink.isException()) {
                         executeInitFunctions(*qpgm, init_func_contexts,
-                            init_descriptors, label, nullptr);
+                            init_descriptors, label, nullptr, nullptr);
                     }
                 }
             }
@@ -5866,7 +5890,8 @@ static void executeInitFunctions(QoreProgram* pgm,
     const std::vector<AOTInitFuncExecInfo>& exec_infos,
     const std::vector<AOTInitFuncDescriptor>& descriptors,
     const char* mod_name,
-    QoreProgram* shadow_pgm);
+    QoreProgram* shadow_pgm,
+    const char* mod_path);
 
 struct AotModuleState {
     QoreProgram* pgm = nullptr;
@@ -5878,6 +5903,8 @@ struct AotModuleState {
     std::vector<uint8_t> metadata;
     //! Init function descriptors (target type, ns path, item name) read during module_init
     std::vector<AOTInitFuncDescriptor> init_descriptors;
+    //! Module path/label used for get_module_context_path() during deferred module init
+    std::string path;
 };
 
 //! Map from module name to per-module state
@@ -5895,6 +5922,7 @@ static std::unordered_map<std::string, AotModuleState> aot_module_map;
 //! Current module being initialized (valid only during qore_aot_module_init / _init_v2)
 static QoreProgram* aot_module_pgm = nullptr;
 static std::string aot_module_name;
+static std::string aot_module_path;
 static const QoreAOTFunc* aot_module_funcs = nullptr;
 static int aot_module_num_funcs = 0;
 
@@ -6357,7 +6385,7 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
                     ProgramThreadCountContextHelper tch(&xsink, *qpgm, false);
                     if (!xsink.isException()) {
                         executeInitFunctions(*qpgm, init_func_contexts,
-                            init_descriptors, label, nullptr);
+                            init_descriptors, label, nullptr, nullptr);
                     }
                 }
             }
@@ -6742,9 +6770,18 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init(
     // that call ns_init during their own init before being stored in the map).
     aot_module_pgm = local_pgm;
     aot_module_name = mod_name;
+    aot_module_path = label ? label : "";
     aot_module_funcs = functions;
     aot_module_num_funcs = num_functions;
-    aot_module_map[mod_name] = {local_pgm, functions, num_functions, std::move(reexport_deps)};
+    {
+        AotModuleState state;
+        state.pgm = local_pgm;
+        state.funcs = functions;
+        state.num_funcs = num_functions;
+        state.reexport_deps = std::move(reexport_deps);
+        state.path = label ? label : "";
+        aot_module_map[mod_name] = std::move(state);
+    }
 
     return nullptr;  // success
 }
@@ -6756,6 +6793,7 @@ extern "C" DLLEXPORT void qore_aot_module_ns_init(QoreNamespace* root_ns, QoreNa
     // QoreModuleContextHelper with the module's name. We use get_module_context() to
     // find which module's namespace to merge.
     const char* mod_name = nullptr;
+    const char* mod_path = nullptr;
     QoreProgram* mod_pgm = nullptr;
     const std::vector<std::string>* reexport_deps = nullptr;
 
@@ -6766,6 +6804,9 @@ extern "C" DLLEXPORT void qore_aot_module_ns_init(QoreNamespace* root_ns, QoreNa
         if (it != aot_module_map.end()) {
             mod_pgm = it->second.pgm;
             reexport_deps = &it->second.reexport_deps;
+            if (!it->second.path.empty()) {
+                mod_path = it->second.path.c_str();
+            }
         }
     }
 
@@ -6774,6 +6815,9 @@ extern "C" DLLEXPORT void qore_aot_module_ns_init(QoreNamespace* root_ns, QoreNa
         mod_pgm = aot_module_pgm;
         if (!mod_name) {
             mod_name = aot_module_name.c_str();
+        }
+        if (!aot_module_path.empty()) {
+            mod_path = aot_module_path.c_str();
         }
     }
 
@@ -6932,7 +6976,8 @@ extern "C" DLLEXPORT void qore_aot_module_ns_init(QoreNamespace* root_ns, QoreNa
                     // RuntimeConstantRefNode.
                     executeInitFunctions(tpgm, init_func_contexts,
                         it->second.init_descriptors, mod_name,
-                        init_ctx_pgm != tpgm ? init_ctx_pgm : nullptr);
+                        init_ctx_pgm != tpgm ? init_ctx_pgm : nullptr,
+                        mod_path);
                 }
             }
             // Clear stored metadata
@@ -6964,6 +7009,7 @@ extern "C" DLLEXPORT void qore_aot_module_delete() {
         if (aot_module_name == mod_name) {
             aot_module_pgm = nullptr;
             aot_module_name.clear();
+            aot_module_path.clear();
             aot_module_funcs = nullptr;
             aot_module_num_funcs = 0;
         }
@@ -6977,6 +7023,7 @@ extern "C" DLLEXPORT void qore_aot_module_delete() {
         aot_module_map.clear();
         aot_module_pgm = nullptr;
         aot_module_name.clear();
+        aot_module_path.clear();
         aot_module_funcs = nullptr;
         aot_module_num_funcs = 0;
     }
@@ -7155,9 +7202,18 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v2(
     // Also update the global for the fallback path in ns_init.
     aot_module_pgm = local_pgm;
     aot_module_name = mod_name;
+    aot_module_path = label ? label : "";
     aot_module_funcs = functions;
     aot_module_num_funcs = num_functions;
-    aot_module_map[mod_name] = {local_pgm, functions, num_functions, std::move(reexport_deps)};
+    {
+        AotModuleState state;
+        state.pgm = local_pgm;
+        state.funcs = functions;
+        state.num_funcs = num_functions;
+        state.reexport_deps = std::move(reexport_deps);
+        state.path = label ? label : "";
+        aot_module_map[mod_name] = std::move(state);
+    }
 
     return nullptr;  // success
 }
@@ -7264,7 +7320,8 @@ static void executeInitFunctions(
         const std::vector<AOTInitFuncExecInfo>& exec_infos,
         const std::vector<AOTInitFuncDescriptor>& descriptors,
         const char* mod_name,
-        QoreProgram* shadow_pgm) {
+        QoreProgram* shadow_pgm,
+        const char* mod_path) {
     if (exec_infos.empty() || descriptors.empty()) {
         return;
     }
@@ -7274,6 +7331,21 @@ static void executeInitFunctions(
     for (auto& info : exec_infos) {
         exec_map[info.name] = &info;
     }
+
+    struct ModuleInitNamePathContextHelper {
+        const char* old_name;
+        const char* old_path;
+
+        ModuleInitNamePathContextHelper(const char* name, const char* path)
+                : old_name(set_module_context_name(name)),
+                  old_path(set_module_context_path(path)) {
+        }
+
+        ~ModuleInitNamePathContextHelper() {
+            set_module_context_path(old_path);
+            set_module_context_name(old_name);
+        }
+    };
 
     qore_program_private* pp = qore_program_private::get(*pgm);
     qore_ns_private* root_ns = qore_ns_private::get(*pp->RootNS);
@@ -7374,41 +7446,42 @@ static void executeInitFunctions(
                 }
             }
             if (is_module_init) {
-            // The compiled closure body expects its body locals to be
-            // pre-instantiated on the thread's lvstack (mimicking evalTiered's
-            // contract with regular functions). Manually instantiate each
-            // body local before the call and uninstantiate after.
-            int instantiated = 0;
-            for (LocalVar* lv : info->ctx->all_body_locals) {
-                if (lv) {
-                    lv->instantiate(QoreParseOptions());
-                    ++instantiated;
+                ModuleInitNamePathContextHelper module_ctx(mod_name, mod_path);
+                // The compiled closure body expects its body locals to be
+                // pre-instantiated on the thread's lvstack (mimicking evalTiered's
+                // contract with regular functions). Manually instantiate each
+                // body local before the call and uninstantiate after.
+                int instantiated = 0;
+                for (LocalVar* lv : info->ctx->all_body_locals) {
+                    if (lv) {
+                        lv->instantiate(QoreParseOptions());
+                        ++instantiated;
+                    }
+                }
+                // C++ EH prototype: AOT init functions go through the same EH path
+                // as regular AOT functions when QORE_AOT_EH=1, so they may throw
+                // QoreJITException out of the function body. Catch here at the
+                // C++<->AOT boundary; xsink is already populated at the raise site.
+                // raw_result stays 0 (NOTHING bits) which is what the check-based
+                // path would have written too.
+                try {
+                    raw_result = info->fn_ptr(info->ctx, &xsink);
+                } catch (const QoreJITException&) {
+                    raw_result = 0;
+                }
+                for (int k = instantiated - 1; k >= 0; --k) {
+                    LocalVar* lv = info->ctx->all_body_locals[k];
+                    if (lv) {
+                        lv->uninstantiate(&xsink);
+                    }
+                }
+            } else {
+                try {
+                    raw_result = info->fn_ptr(info->ctx, &xsink);
+                } catch (const QoreJITException&) {
+                    raw_result = 0;
                 }
             }
-            // C++ EH prototype: AOT init functions go through the same EH path
-            // as regular AOT functions when QORE_AOT_EH=1, so they may throw
-            // QoreJITException out of the function body. Catch here at the
-            // C++↔AOT boundary — xsink is already populated at the raise site.
-            // raw_result stays 0 (NOTHING bits) which is what the check-based
-            // path would have written too.
-            try {
-                raw_result = info->fn_ptr(info->ctx, &xsink);
-            } catch (const QoreJITException&) {
-                raw_result = 0;
-            }
-            for (int k = instantiated - 1; k >= 0; --k) {
-                LocalVar* lv = info->ctx->all_body_locals[k];
-                if (lv) {
-                    lv->uninstantiate(&xsink);
-                }
-            }
-        } else {
-            try {
-                raw_result = info->fn_ptr(info->ctx, &xsink);
-            } catch (const QoreJITException&) {
-                raw_result = 0;
-            }
-        }
         }  // end shadow-context scope (init_ctx_helper destroyed here)
         printd(5, "AOT init: '%s' returned raw=%llu\n", desc.name.c_str(), (unsigned long long)raw_result);
 
@@ -7969,6 +8042,7 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
     // Also update the global for the fallback path in ns_init.
     aot_module_pgm = local_pgm;
     aot_module_name = mod_name;
+    aot_module_path = label ? label : "";
     aot_module_funcs = functions;
     aot_module_num_funcs = num_functions;
     {
@@ -7978,6 +8052,7 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
         state.num_funcs = num_functions;
         state.reexport_deps = std::move(reexport_deps);
         state.init_descriptors = std::move(init_descriptors);
+        state.path = label ? label : "";
         // Store metadata copy for ns_init to build init function contexts
         if (!state.init_descriptors.empty()) {
             state.metadata.assign(metadata, metadata + metadata_len);
@@ -8229,7 +8304,8 @@ extern "C" DLLEXPORT int qore_aot_script_register(QoreProgram* tpgm,
                         executeInitFunctions(tpgm, init_func_contexts,
                             init_descriptors,
                             label ? label : "<script>",
-                            /*shadow_pgm=*/nullptr);
+                            /*shadow_pgm=*/nullptr,
+                            /*mod_path=*/nullptr);
                     }
                 }
             } else {
@@ -8382,7 +8458,8 @@ extern "C" DLLEXPORT int qore_aot_script_end_batch(QoreProgram* tpgm) {
                             uint64_t t1 = time_on ? now_us() : 0;
                             executeInitFunctions(tpgm, init_func_contexts,
                                 init_descriptors, d.label.c_str(),
-                                /*shadow_pgm=*/nullptr);
+                                /*shadow_pgm=*/nullptr,
+                                /*mod_path=*/nullptr);
                             if (time_on) {
                                 us_init += now_us() - t1;
                             }

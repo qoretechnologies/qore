@@ -5845,30 +5845,47 @@ bool QoreAOTBinaryDeserializer::resolveHashdeclMembers(std::string& error) {
                     }
                     phm.pending_complex_default_args.clear();
                 }
-                const QoreTypeInfo* inner_ti = type_resolver->resolve(
-                    phm.pending_complex_default_path.c_str(), error);
-                if (!error.empty() || !inner_ti) {
-                    printd(0, "AOT deser: complex default inner type '%s' "
-                        "unresolved for hashdecl '%s' member '%s': %s\n",
-                        phm.pending_complex_default_path.c_str(),
-                        hd->getName(), phm.name.c_str(),
-                        error.c_str());
-                    error.clear();
-                    if (parse_args) {
-                        parse_args->deref(nullptr);
+                if (phm.pending_complex_default_kind == 2) {
+                    const QoreNamespace* pns = nullptr;
+                    const TypedHashDecl* default_hd = getProgram()->findHashDecl(
+                        phm.pending_complex_default_path.c_str(), pns);
+                    if (default_hd) {
+                        phm.default_val = QoreValue(new NewHashDeclNode(
+                            &loc_builtin, default_hd, parse_args, false));
+                    } else {
+                        printd(0, "AOT deser: hashdecl '%s' not found for "
+                            "hashdecl '%s' member '%s' default\n",
+                            phm.pending_complex_default_path.c_str(),
+                            hd->getName(), phm.name.c_str());
+                        if (parse_args) {
+                            parse_args->deref(nullptr);
+                        }
                     }
                 } else {
-                    // For now we just zero-initialise; the parser treats
-                    // `X()` as the zero-value of X in this context, which
-                    // matches pre-AOT semantics for empty constructor args
-                    // on a complex/typed container.  (A fuller fix would
-                    // synthesise a ComplexTypeNode mirroring how the parser
-                    // emits these.)  Keep the literal zero-value and let
-                    // parse_args fall away.
-                    if (parse_args) {
-                        parse_args->deref(nullptr);
+                    const QoreTypeInfo* cti = qore_get_type_from_string_intern(
+                        phm.pending_complex_default_path.c_str());
+                    if (cti) {
+                        if (phm.pending_complex_default_kind == 0) {
+                            QoreValue list_args;
+                            if (parse_args) {
+                                list_args = QoreValue(parse_args);
+                            }
+                            phm.default_val = QoreValue(new NewComplexListNode(
+                                &loc_builtin, cti, list_args));
+                        } else {
+                            phm.default_val = QoreValue(new NewComplexHashNode(
+                                &loc_builtin, cti, parse_args));
+                        }
+                    } else {
+                        printd(0, "AOT deser: type '%s' not found for "
+                            "hashdecl '%s' member '%s' default (complex kind=%d)\n",
+                            phm.pending_complex_default_path.c_str(),
+                            hd->getName(), phm.name.c_str(),
+                            (int)phm.pending_complex_default_kind);
+                        if (parse_args) {
+                            parse_args->deref(nullptr);
+                        }
                     }
-                    phm.default_val = QoreValue();
                 }
                 phm.pending_complex_default_kind = -1;
                 phm.pending_complex_default_path.clear();
