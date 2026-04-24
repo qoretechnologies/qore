@@ -56,6 +56,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
         addTestCase("IR throw/rethrow smoke", \testIrThrowRethrowSmoke());
         addTestCase("IR rethrow outside catch smoke", \testIrRethrowOutsideCatchSmoke());
         addTestCase("IR rethrow with args smoke", \testIrRethrowWithArgsSmoke());
+        addTestCase("IR on_error direct-call handled exception", \testIrOnErrorDirectCallHandledException());
         addTestCase("IR guard mismatch smoke", \testIrGuardMismatchSmoke());
         addTestCase("IR guard exception flow smoke", \testIrGuardExceptionFlowSmoke());
         addTestCase("IR logical guard exception smoke", \testIrLogicalGuardExceptionSmoke());
@@ -2133,6 +2134,55 @@ class IRExecModeSmokeTest inherits QUnit::Test {
         string stdout_output = ReadOnlyFile::readTextFile(out.path);
         assertEq("TEST-ERR:original desc (modified)\n", stdout_output,
             "Unexpected IR rethrow with args output");
+    }
+
+    testIrOnErrorDirectCallHandledException() {
+        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        if (!qore_bin || qore_bin == NOTHING) {
+            testSkip("no qore binary path available");
+            return;
+        }
+
+        TmpFile script();
+        script.file.write("%modern\n");
+        script.file.write("sub fail() { throw \"ERR\", \"desc\"; }\n");
+        script.file.write("sub wrapper() {\n");
+        script.file.write("    on_error printf(\"handler1 %s\\n\", $1.err);\n");
+        script.file.write("    on_error rethrow $1.err, $1.desc;\n");
+        script.file.write("    fail();\n");
+        script.file.write("    printf(\"bad-after-fail\\n\");\n");
+        script.file.write("}\n");
+        script.file.write("try {\n");
+        script.file.write("    wrapper();\n");
+        script.file.write("    printf(\"after-wrapper\\n\");\n");
+        script.file.write("} catch (hash<ExceptionInfo> e) {\n");
+        script.file.write("    printf(\"caught:%s:%s\\n\", e.err, e.desc);\n");
+        script.file.write("}\n");
+        script.file.close();
+
+        TmpFile out();
+        TmpFile err();
+
+        string cmd = sprintf("env QORE_IR_TRACE_SILENT_FAIL=1 %s --exec-mode=ir --ir-fallback-warn %s > %s 2> %s",
+            qore_bin, script.path, out.path, err.path);
+        int rc = runCommand(cmd, script.path);
+        string err_output = ReadOnlyFile::readTextFile(err.path);
+        if (rc != 0 && err_output =~ /exec-mode/ && err_output =~ /valid long option/) {
+            testSkip("exec-mode option not supported by test qore binary");
+            return;
+        }
+
+        assertEq(0, rc, "IR on_error handled direct-call exception should exit cleanly");
+        assertFalse(err_output =~ /IR exec fallback to AST:/, "Unexpected IR fallback warning");
+        assertFalse(err_output =~ /ir-silent-fail/, "Unexpected IR silent-failure diagnostic");
+        assertFalse(err_output =~ /IR-EXECUTION-ERROR/, "Unexpected IR execution error");
+
+        string stdout_output = ReadOnlyFile::readTextFile(out.path);
+        assertEq("handler1 ERR\nafter-wrapper\n", stdout_output,
+            "Unexpected IR on_error direct-call output");
+        assertFalse(stdout_output =~ /bad-after-fail/, "Unexpected continuation after failing call");
+        assertFalse(stdout_output =~ /caught:/, "Handled on_error exception should not reach outer catch");
+        assertFalse(stdout_output =~ /IR-EXECUTION-ERROR/, "Unexpected IR execution error in stdout");
     }
 
     testIrGuardMismatchSmoke() {

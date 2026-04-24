@@ -44,6 +44,7 @@
 #include "qore/intern/QoreNamespaceIntern.h"
 #include "qore/intern/QoreClassIntern.h"
 #include "qore/intern/QoreDotEvalOperatorNode.h"
+#include "qore/intern/QoreSquareBracketsOperatorNode.h"
 #include "qore/intern/qore_list_private.h"
 
 // ============================================================================
@@ -1306,6 +1307,33 @@ static bool write_expr_parse_ref(AOTExprWriteCtx& ctx) {
     return false;
 }
 
+static void mark_parse_ref_root_thread_safe(QoreValue n) {
+    while (n.hasNode()) {
+        qore_type_t ntype = n.getType();
+        if (ntype == NT_VARREF) {
+            VarRefNode* vr = n.get<VarRefNode>();
+            if (vr->getType() == VT_LOCAL && vr->ref.id) {
+                vr->setThreadSafe();
+            }
+            return;
+        }
+        if (ntype == NT_SELF_VARREF || ntype == NT_CLASS_VARREF || ntype != NT_OPERATOR) {
+            return;
+        }
+        auto* sq = dynamic_cast<QoreSquareBracketsOperatorNode*>(n.getInternalNode());
+        if (sq) {
+            n = sq->getLeft();
+            continue;
+        }
+        auto* hd = dynamic_cast<QoreHashObjectDereferenceOperatorNode*>(n.getInternalNode());
+        if (hd) {
+            n = hd->getLeft();
+            continue;
+        }
+        return;
+    }
+}
+
 static QoreValue read_expr_parse_ref(AOTExprReadCtx& ctx) {
     std::string inner_err;
     QoreValue inner = readOneExpr(ctx.reader, ctx.ptr, ctx.end, inner_err, ctx.pgm, ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
@@ -1313,6 +1341,10 @@ static QoreValue read_expr_parse_ref(AOTExprReadCtx& ctx) {
         ctx.error = inner_err;
         return QoreValue();
     }
+    // Keep this reader aligned with the source parser and the other AOT
+    // expression readers: \local{key} must resolve through the closure-var
+    // reference chain when passed as reference<auto> recursively.
+    mark_parse_ref_root_thread_safe(inner);
     return QoreValue(new ParseReferenceNode(&loc_builtin, inner));
 }
 

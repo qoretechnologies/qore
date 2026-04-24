@@ -2553,6 +2553,22 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     int last_debug_line = -1;  // track line changes for dbgStep
     bool debug_break_loop = false;  // set by dbgStep RC_BREAK to exit current loop
 
+    auto returnAfterUnhandledException = [&](bool values_cleaned = false) -> bool {
+        if (debug_active) {
+            tlpd->dbgFunctionExit(statements, return_value, xsink);
+        }
+        fireScopeExits();
+        if (!values_cleaned) {
+            cleanupValues(values, cleanup, xsink, true, cleanup_log);
+        }
+        cleanupLocalCaches();
+        if (!xsink || !*xsink) {
+            return_value = QoreValue();
+            return true;
+        }
+        return false;
+    };
+
     // Call dbgFunctionEnter if debug is active, then fire block-entry event.
     // AST mode fires dbgStep(block, nullptr) at block entry (StatementBlock.cpp:239)
     // to signal the debugger that a new block scope is being entered.
@@ -3397,15 +3413,7 @@ next_instruction:
                         }
                     }
                     if (!inv->exception_target) {
-                        // No exception target (no try/catch): propagate exception to caller.
-                        // Fire debug exit, on_block_exit handlers, and full cleanup.
-                        if (debug_active) {
-                            tlpd->dbgFunctionExit(statements, return_value, xsink);
-                        }
-                        executeOnBlockExitHandlers(on_block_exit_handlers, xsink, &locals_slot_cache);
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                        cleanupLocalCaches();
-                        return false;
+                        return returnAfterUnhandledException();
                     }
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
                     prev_block = block;
@@ -8054,9 +8062,7 @@ lvalue_path_unary_done:
 
                     if (nargs > SMALL_BUF) { delete[] nanboxed_args; }
                     if (xsink && *xsink) {
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                        cleanupLocalCaches();
-                        return false;
+                        return returnAfterUnhandledException();
                     }
                     // If call has reference args, callee may have modified caller's locals
                     if (direct_inst->has_ref_args) {
@@ -8090,9 +8096,7 @@ lvalue_path_unary_done:
                         nanboxed_args, nargs, xsink));
                     if (nargs > SMALL_BUF) { delete[] nanboxed_args; }
                     if (xsink && *xsink) {
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                        cleanupLocalCaches();
-                        return false;
+                        return returnAfterUnhandledException();
                     }
                     if (static_inst->has_ref_args) {
                         cleanupLocalCaches();
@@ -8183,9 +8187,7 @@ lvalue_path_unary_done:
                         if (arg_list) {
                             arg_list->deref(xsink);
                         }
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                        cleanupLocalCaches();
-                        return false;
+                        return returnAfterUnhandledException();
                     }
                     if (effective_opcode == QoreIROpcode::Call) {
                         if (auto* call = dynamic_cast<const FunctionCallNode*>(call_expr.getInternalNode())) {
@@ -8262,9 +8264,7 @@ lvalue_path_unary_done:
                     }
                 }
                 if (xsink && *xsink) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupLocalCaches();
-                    return false;
+                    return returnAfterUnhandledException();
                 }
                 // Function call runs in its own frame and cannot modify caller's locals
                 invalidateExternalCaches();
@@ -8293,9 +8293,7 @@ lvalue_path_unary_done:
                         nanboxed_args, nargs, xsink));
                     if (nargs > SMALL_BUF) { delete[] nanboxed_args; }
                     if (xsink && *xsink) {
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                        cleanupLocalCaches();
-                        return false;
+                        return returnAfterUnhandledException();
                     }
                     if (direct_inst->has_ref_args) {
                         cleanupLocalCaches();
@@ -8345,9 +8343,7 @@ lvalue_path_unary_done:
                 QoreValue res = qore_method_private::eval(*method, xsink, rc, self, *arg_list);
 
                 if (xsink && *xsink) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupLocalCaches();
-                    return false;
+                    return returnAfterUnhandledException();
                 }
                 // Skip invalidation for built-in methods without reference arguments
                 if (!method->isBuiltin() || direct_inst->has_ref_args) {
@@ -8393,6 +8389,9 @@ lvalue_path_unary_done:
                     if (xsink && *xsink) {
                         // On exception, branch to exception target
                         cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        if (!invoke_inst->exception_target) {
+                            return returnAfterUnhandledException(true);
+                        }
                         prev_block = block;
                         block = invoke_inst->exception_target;
                         ip = 0;
@@ -8449,6 +8448,9 @@ lvalue_path_unary_done:
                 if (xsink && *xsink) {
                     // On exception, branch to exception target
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    if (!invoke_inst->exception_target) {
+                        return returnAfterUnhandledException(true);
+                    }
                     prev_block = block;
                     block = invoke_inst->exception_target;
                     ip = 0;
@@ -8792,6 +8794,9 @@ lvalue_path_unary_done:
                 if (xsink && *xsink) {
                     // On exception, branch to exception target
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    if (!de_invoke_inst->exception_target) {
+                        return returnAfterUnhandledException(true);
+                    }
                     prev_block = block;
                     block = de_invoke_inst->exception_target;
                     ip = 0;
@@ -9243,12 +9248,7 @@ lvalue_path_unary_done:
                 // No exception target: fire all scope exits after raising the exception.
                 // The exception is now on xsink, so on_error handlers can access it
                 // via CatchExceptionHelper for rethrow support.
-                if (debug_active) {
-                    tlpd->dbgFunctionExit(statements, return_value, xsink);
-                }
-                fireScopeExits();
-                cleanupLocalCaches();
-                return false;
+                return returnAfterUnhandledException(true);
             }
             case QoreIROpcode::Rethrow: {
                 auto* rethrow_inst = static_cast<QoreIRThrowInstruction*>(inst);
@@ -9310,13 +9310,7 @@ lvalue_path_unary_done:
                 // No exception target: fire all scope exits after rethrowing.
                 // The rethrown exception is now on xsink, so on_error handlers
                 // can access it via CatchExceptionHelper.
-                if (debug_active) {
-                    tlpd->dbgFunctionExit(statements, return_value, xsink);
-                }
-                fireScopeExits();
-                cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                cleanupLocalCaches();
-                return false;
+                return returnAfterUnhandledException();
             }
             case QoreIROpcode::Return: {
                 auto* ret = static_cast<QoreIRReturnInstruction*>(inst);
