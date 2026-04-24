@@ -60,6 +60,7 @@ class AOTSmokeTest inherits QUnit::Test {
         addTestCase("AOT static link not built", \testAOTStaticLinkNotBuilt());
         # Module compilation tests
         addTestCase("AOT module compile", \testAOTModuleCompile());
+        addTestCase("AOT module no-narrow member types", \testAOTModuleNoNarrowMemberTypes());
         addTestCase("AOT module default object args", \testAOTModuleDefaultObjectArgs());
         addTestCase("AOT module compile custom output", \testAOTModuleCompileCustomOutput());
         addTestCase("AOT module compile opt levels", \testAOTModuleCompileOptLevels());
@@ -1410,6 +1411,80 @@ printf(\"%d\\n\", AOTTestMod::factorial(10));
 
         assertEq(interp_out, aot_out, "compiled module output matches interpreted module");
         assertEq("Hello, World!\n30\n3628800\n", aot_out, "module functions produce correct results");
+    }
+
+    testAOTModuleNoNarrowMemberTypes() {
+        string tmp_dir = sprintf("/tmp/aot_no_narrow_member_%d", getpid());
+        mkdir(tmp_dir);
+        on_exit {
+            backquote(sprintf("rm -rf %s", tmp_dir));
+        }
+
+        string mod_code = "%modern
+module AOTNoNarrowMember {
+    version = \"1.0\";
+    desc = \"AOT no-narrow member regression\";
+    author = \"Test\";
+    url = \"http://test.example.com\";
+    license = \"MIT\";
+}
+
+public namespace AOTNoNarrowMember {
+    public class C {
+        private {
+            hash<auto!> h;
+            list<auto!> l;
+        }
+
+        constructor() {
+            int p = 4;
+            h = {\"period\": p};
+            h.alpha = 0.3;
+            l = (p,);
+            l[1] = 0.3;
+        }
+
+        string getResult() {
+            return sprintf(\"%y|%y\\n\", h, l);
+        }
+    }
+
+    public string sub run() {
+        C c();
+        return c.getResult();
+    }
+}
+";
+        string qm_path = tmp_dir + "/AOTNoNarrowMember.qm";
+        {
+            File f();
+            f.open2(qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write(mod_code);
+            f.close();
+        }
+
+        string qmod_path = tmp_dir + "/AOTNoNarrowMember.qmod";
+        hash<auto> result = compileModuleFile(qm_path, qmod_path);
+        assertTrue(result.compiled, "no-narrow member module compiled: " + result.compile_out);
+
+        string test_code = "%modern
+%requires AOTNoNarrowMember
+printf(\"%s\", AOTNoNarrowMember::run());
+";
+        hash<auto> paths = writeTempScript(test_code);
+        on_exit {
+            unlink(paths.src);
+        }
+
+        string aot_out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, tmp_dir, qore_bin, paths.src));
+        unlink(qmod_path);
+        string interp_out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, tmp_dir, qore_bin, paths.src));
+
+        assertEq(interp_out, aot_out, "compiled module preserves hash<auto!>/list<auto!> member types: " + aot_out);
+        assertTrue(aot_out.regex("alpha"), "hash member accepted mixed value types: " + aot_out);
+        assertTrue(aot_out.regex("0.3"), "list member accepted mixed value types: " + aot_out);
     }
 
     testAOTModuleCompileCustomOutput() {

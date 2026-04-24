@@ -1370,6 +1370,7 @@ static const BuiltinTypeEntry builtin_types[] = {
     {"nothing",         &nothingTypeInfo},
     {"null",            &nullTypeInfo},
     {"auto",            &autoTypeInfo},
+    {"auto!",           &autoNoNarrowTypeInfo},
     {"any",             &anyTypeInfo},
     {"data",            &dataTypeInfo},
     {"code",            &codeTypeInfo},
@@ -1407,6 +1408,10 @@ static const BuiltinTypeEntry builtin_types[] = {
     {"auto hash",       &autoHashTypeInfo},
     {"*auto list",      &autoListOrNothingTypeInfo},
     {"*auto hash",      &autoHashOrNothingTypeInfo},
+    {"hash<auto!>",     &autoNoNarrowHashTypeInfo},
+    {"*hash<auto!>",    &autoNoNarrowHashOrNothingTypeInfo},
+    {"list<auto!>",     &autoNoNarrowListTypeInfo},
+    {"*list<auto!>",    &autoNoNarrowListOrNothingTypeInfo},
     {"softauto list",   &softAutoListTypeInfo},
     {"*softauto list",  &softAutoListOrNothingTypeInfo},
     {nullptr, nullptr}
@@ -1593,7 +1598,39 @@ const QoreTypeInfo* QoreAOTTypeResolver::resolve(const char* path, std::string& 
 namespace {
 
 //! Get type path string from QoreTypeInfo, handling null
-static const char* getTypePath(const QoreTypeInfo* ti) {
+static const char* getTypePath(const QoreTypeInfo* ti, bool no_narrow = false) {
+    if (no_narrow) {
+        if (ti == autoTypeInfo) {
+            return "auto!";
+        }
+        if (ti == autoHashTypeInfo) {
+            return "hash<auto!>";
+        }
+        if (ti == autoHashOrNothingTypeInfo) {
+            return "*hash<auto!>";
+        }
+        if (ti == autoListTypeInfo) {
+            return "list<auto!>";
+        }
+        if (ti == autoListOrNothingTypeInfo) {
+            return "*list<auto!>";
+        }
+    }
+    if (ti == autoNoNarrowTypeInfo) {
+        return "auto!";
+    }
+    if (ti == autoNoNarrowHashTypeInfo) {
+        return "hash<auto!>";
+    }
+    if (ti == autoNoNarrowHashOrNothingTypeInfo) {
+        return "*hash<auto!>";
+    }
+    if (ti == autoNoNarrowListTypeInfo) {
+        return "list<auto!>";
+    }
+    if (ti == autoNoNarrowListOrNothingTypeInfo) {
+        return "*list<auto!>";
+    }
     return ti ? QoreTypeInfo::getPath(ti) : "";
 }
 
@@ -2556,7 +2593,7 @@ static void writeGlobalsSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
     for (auto& gi : state.globals) {
         Var* var = gi.var;
         writer.writeStringRef(var->getName());
-        writer.writeStringRef(getTypePath(var->getTypeInfo()));
+        writer.writeStringRef(getTypePath(var->getTypeInfo(), var->isNoNarrowing()));
         writer.writeU32(gi.ns_idx);
         writer.writeU8(var->isThreadLocal() ? 1 : 0);
         writer.writeU8(var->isPublic() ? 1 : 0);
@@ -4255,7 +4292,7 @@ static QoreIRInstGroup classifyInstruction(const QoreIRInstruction* inst) {
 //! Get type path string for a LocalVar, handling nullptr typeInfo
 const char* getLocalTypePath(const LocalVar* lv) {
     const QoreTypeInfo* ti = lv->getTypeInfo();
-    return ti ? QoreTypeInfo::getPath(ti) : "";
+    return getTypePath(ti, lv->isNoNarrowing());
 }
 
 //! Serialize a single IR instruction
