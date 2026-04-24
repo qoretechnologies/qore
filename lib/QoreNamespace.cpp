@@ -3493,6 +3493,23 @@ void qore_ns_private::scanMergeCommittedNamespace(const qore_ns_private& mns, Qo
 
         FunctionEntry* fe = func_list.findNode(i->first);
         if (fe && !fe->getFunction()->injected()) {
+            // Same-origin identity check (mirrors the class / constant / hashdecl checks):
+            // if both sides resolve to the same QoreFunction pointer, they originate from
+            // the same module reached via two different import paths (e.g. the caller
+            // already has module M loaded, then loads module X which `%requires(reexport) M`
+            // — M's functions appear in X's mod_pgm by reference as well as in the caller,
+            // and a self-load re-traverses both). Treat as benign.
+            if (i->second->getFunction() == fe->getFunction()) {
+                continue;
+            }
+            // Fallback: match by module-of-origin name when the pointers differ but both
+            // functions originate from the same module (parallel to ConstantEntry's
+            // same-module benign-duplicate handling above).
+            const char* src_mod = i->second->getFunction()->getModuleName();
+            const char* dst_mod = fe->getFunction()->getModuleName();
+            if (src_mod && dst_mod && !strcmp(src_mod, dst_mod)) {
+                continue;
+            }
             qmc.error("duplicate function %s::%s()", name.c_str(), i->first);
         }
         //printd(5, "qore_ns_private::scanMergeCommittedNamespace() this: %p '%s::' looking for function '%s' (%d)\n",
