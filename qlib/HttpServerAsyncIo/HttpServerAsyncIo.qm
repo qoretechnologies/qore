@@ -87,6 +87,13 @@ module HttpServerAsyncIo {
       @ref HttpServerAsyncIo::HttpPollType "HttpPollType",
       @ref HttpServerAsyncIo::HttpVersionMode "HttpVersionMode"
     - Protocol-agnostic SSE and WebSocket abstractions
+    - body-streaming HTTP/2 dispatches drain inbound DATA via
+      @c cx."header-info".register_body_queue (the I/O thread pushes one
+      binary chunk per DATA frame and a NOTHING sentinel at END_STREAM).
+      Outbound DATA / HEADERS / trailers go through the @c *Async
+      @c Socket methods followed by @c io_wake().  All built-in response
+      paths (regular, send_callback, InputStream, SSE setup,
+      RST_STREAM-on-error) use this convention.
 */
 
 #! Main namespace for HttpServerAsyncIo module

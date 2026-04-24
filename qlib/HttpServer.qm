@@ -179,6 +179,26 @@ log("started listener on %s", lh.desc);
     @section http_relnotes HttpServer Module Release Notes
 
     @subsection http1_6 HttpServer 1.6
+    - HTTP/2 server-side request and response handling fully migrated to
+      the @ref HttpServerAsyncIo "HttpServerAsyncIo" \c *Async \c Socket
+      methods.  The handler thread no longer holds the socket wrapper
+      lock during HTTP/2 frame submission, eliminating the close-vs-poll
+      lock inversion and the handler-vs-I/O-thread contention that drove
+      the long tail of sync/async impedance bugs.
+      - body-streaming handlers drain inbound DATA via the new
+        \c cx."header-info".register_body_queue closure (the I/O thread
+        pushes binary chunks to a Qore Queue and a NOTHING sentinel at
+        END_STREAM); \c readHttp2StreamDataBlock() / \c isHttp2StreamComplete()
+        / \c cleanupHttp2Stream() are no longer used
+      - response paths (regular, send_callback, InputStream, SSE setup)
+        all use \c sendHttp2StreamDataAsync() /
+        \c submitHttp2StreamingResponseHeadersAsync() /
+        \c sendHttp2TrailersAsync() followed by \c io_wake() instead of
+        the removed sync siblings
+      - the \c Socket::setHttp2ActiveStream() bridge that redirected
+        \c Socket::send() / \c Socket::recv() to HTTP/2 DATA frames was
+        removed from \c handleRequest(); every H2 response site already
+        branches on protocol explicitly
     - added HTTP/3 (QUIC) support with automatic listener creation for TLS listeners
     - added per-listener \c Alt-Svc header support for advertising HTTP/3 availability; each TCP
       listener only advertises its own QUIC counterpart to prevent browsers from confusing origins

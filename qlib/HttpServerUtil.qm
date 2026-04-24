@@ -126,6 +126,22 @@ module HttpServerUtil {
     @section httpserverutil_relnotes HttpServerUtil Module Release Notes
 
     @subsection httputil1_5 HttpServerUtil 1.5
+    - HTTP/2 server-side body-streaming reads in
+      @ref HttpServer::AbstractStreamRequest "AbstractStreamRequest"
+      now drive inbound DATA via the
+      \c cx."header-info".register_body_queue closure (the I/O thread
+      pushes binary chunks to a Queue and a NOTHING sentinel at
+      END_STREAM); the removed sync \c readHttp2StreamDataBlock() loop is
+      no longer used.
+    - @ref HttpServer::StreamResponseProducer "StreamResponseProducer"
+      now uses \c sendHttp2StreamDataAsync() and
+      \c resetHttp2StreamAsync() for HTTP/2 outbound DATA + RST_STREAM,
+      followed by \c io_wake() to nudge the I/O thread.
+    - the streaming-handler example in
+      @ref HttpServer::AbstractHttpRequestHandler::wantsBodyStreaming()
+      "AbstractHttpRequestHandler::wantsBodyStreaming()" was rewritten
+      to demonstrate the HTTP/2 \c register_body_queue path alongside
+      the HTTP/3 sync QUIC stream path.
     - made the \c owner argument of @ref HttpServer::CallbackInputStream::constructor() "CallbackInputStream::constructor()"
       optional to support plain closure callbacks that do not need an owner pin to prevent garbage collection;
       this fixes a \c RUNTIME-OVERLOAD-ERROR when HTTP/2 handlers returned a \c send_callback response in a

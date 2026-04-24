@@ -32,7 +32,7 @@
 %requires(reexport) HttpServerUtil
 
 module AsyncSocketIo {
-    version = "1.3";
+    version = "1.0";
     desc    = "API for async socket I/O";
     author  = "David Nichols <david@qore.org>";
     url     = "http://qore.org";
@@ -65,15 +65,34 @@ module AsyncSocketIo {
 
     @section asyncsocketiorelnotes Release Notes
 
-    @subsection asyncsocketio_1_3 AsyncSocketIo 1.3
-    - @ref AsyncSocketIo::AsyncHttp2ServerStream "AsyncHttp2ServerStream": new
+    @subsection asyncsocketio_1_0 AsyncSocketIo 1.0
+    - the initial version of the AsyncSocketIo module
+    - thin wrapper around the native C++ @ref Qore::AsyncIoController class for high-performance
+      async socket I/O using epoll (Linux) / kqueue (macOS/BSD)
+    - @ref AsyncSocketIo::AsyncSocketIoController "AsyncSocketIoController" with submit(),
+      cancel(), cancelByKey(), cancelByOwner() operations
+    - custom key support in \c SocketPollOperationInfo
+    - @ref AsyncSocketIo::Http2StreamContext "Http2StreamContext" stream-scoped send/receive
+      helper for HTTP/2 sockets;
+      @ref AsyncSocketIo::Http2StreamContext::sendData() "sendData()" and
+      @ref AsyncSocketIo::Http2StreamContext::sendTrailers() "sendTrailers()" use the
+      \c *Async \c Socket methods (handler threads do not hold the socket wrapper
+      lock during HTTP/2 frame submission).  Constructor accepts an optional
+      trailing \c wake_callback closure that is invoked after each write to
+      nudge the I/O thread to flush promptly, matching the
+      @ref AsyncSocketIo::Http3StreamContext "Http3StreamContext" pattern.
+    - @ref AsyncSocketIo::Http3StreamContext "Http3StreamContext" stream-scoped send/receive helper
+      for HTTP/3 QUIC streams with backpressure handling and I/O controller wake integration
+    - @ref AsyncSocketIo::AbstractStreamContext "AbstractStreamContext" abstract base class providing a
+      protocol-agnostic stream I/O interface for WebSocket over HTTP/2 (RFC 8441) and HTTP/3 (RFC 9220)
+    - @ref AsyncSocketIo::AsyncHttp2ServerStream "AsyncHttp2ServerStream":
       async-only HTTP/2 server stream handle that routes writes through the
-      @c *Async socket methods so handler threads do not hold the socket wrapper
+      \c *Async socket methods so handler threads do not hold the socket wrapper
       lock while performing HTTP/2 I/O.  Purpose-built for gRPC and other
       protocols that drive \c headers → \c DATA* → \c trailers responses from
       an async I/O controller.  Constructor accepts an optional
-      @c wake_callback closure (typically @c HttpConnectionInfo.header_info.io_wake)
-      that is invoked after each @c sendHeaders / @c sendData / @c sendTrailers
+      \c wake_callback closure (typically @c HttpConnectionInfo.header_info.io_wake)
+      that is invoked after each \c sendHeaders / \c sendData / \c sendTrailers
       to wake the I/O thread for prompt frame flushing — without it, writes are
       only flushed on the controller's next scheduled tick.
     - @ref AsyncSocketIo::NotifierPollOperation "NotifierPollOperation" +
@@ -85,17 +104,12 @@ module AsyncSocketIo {
       Used by @ref HttpClientIo "HttpClientIo" happy-eyeballs connection
       racing to eliminate the last remaining handler-thread sync I/O in that
       module.
-
-    @subsection asyncsocketio_1_2 AsyncSocketIo 1.2
-    - thread scaling: I/O thread and callback worker thread counts are now capped at
-      \c hardware_concurrency() instead of a hardcoded constant, adapting automatically to the
-      host CPU count
+    - thread scaling: I/O thread and callback worker thread counts are capped at
+      \c hardware_concurrency() (the number of logical CPUs), adapting automatically to the
+      host CPU count; the \c QORE_IO_THREADS environment variable overrides this default.
     - autostop race fix: eliminated a race condition where the I/O thread could exit during the
       autostop grace period while new operations were being submitted
-    - documented the \c QORE_IO_THREADS environment variable for overriding the I/O thread count
-
-    @subsection asyncsocketio_1_1 AsyncSocketIo 1.1
-    - \c onComplete/abort refactor: poll operations now implement
+    - \c onComplete/abort refactor: poll operations implement
       @ref Qore::AbstractPollOperation::onComplete() "onComplete()" and
       @ref Qore::AbstractPollOperation::abort() "abort()" methods instead of using the
       \c SocketPollOperationInfo.callback field; callbacks are dispatched to the thread pool
@@ -103,20 +117,6 @@ module AsyncSocketIo {
     - @ref Qore::DelegatingPollOperation "DelegatingPollOperation": new C++ wrapper for poll
       operations that cannot be subclassed directly (SSL handshake, ping, synchronous wait),
       delegating \c onComplete()/\c abort() to user-provided closures
-
-    @subsection asyncsocketio_1_0 AsyncSocketIo 1.0
-    - the initial version of the AsyncSocketIo module
-    - thin wrapper around the native C++ @ref Qore::AsyncIoController class for high-performance
-      async socket I/O using epoll (Linux) / kqueue (macOS/BSD)
-    - @ref AsyncSocketIo::AsyncSocketIoController "AsyncSocketIoController" with submit(),
-      cancel(), cancelByKey(), cancelByOwner() operations
-    - custom key support in \c SocketPollOperationInfo
-    - @ref AsyncSocketIo::Http2StreamContext "Http2StreamContext" stream-scoped send/receive helper
-      for HTTP/2 sockets with direct I/O mode for handler-thread-driven frame reading
-    - @ref AsyncSocketIo::Http3StreamContext "Http3StreamContext" stream-scoped send/receive helper
-      for HTTP/3 QUIC streams with backpressure handling and I/O controller wake integration
-    - @ref AsyncSocketIo::AbstractStreamContext "AbstractStreamContext" abstract base class providing a
-      protocol-agnostic stream I/O interface for WebSocket over HTTP/2 (RFC 8441) and HTTP/3 (RFC 9220)
     - @ref AsyncSocketIo::AsyncSocketIoController::submitTask() "submitTask()" convenience
       method for submitting work to the thread pool
     - @ref AsyncSocketIo::AsyncSocketIoController::addTimer() "addTimer()" and

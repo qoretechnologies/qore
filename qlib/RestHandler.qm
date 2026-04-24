@@ -399,6 +399,14 @@ Content-Length: 16
     @section resthandler_relnotes RestHandler Release Notes
 
     @subsection rh_1_6_7 RestHandler v1.6.7
+    - removed the \c Socket::setHttp2ActiveStream(stream_id) /
+      \c setHttp2ActiveStream(-1) pair previously wrapped around
+      @ref RestHandler::AbstractRestClass::handleRequest()
+      "AbstractRestClass::handleRequest()".  REST responses on HTTP/2
+      already use explicit \c *Async H2 primitives via the
+      @ref HttpServerAsyncIo "HttpServerAsyncIo" controller; no REST
+      handler relied on the \c Socket::send() / \c Socket::recv()
+      redirection that the active-stream bridge enabled.
     - dropped the per-response "raw body" log entry from DEBUG to TRACE; at DEBUG level it flooded
       the HTTP log with multi-MB response bodies (e.g. vector scrolls) and caused logger contention
       under load.  Operators who need the raw serialized body for protocol-level debugging can

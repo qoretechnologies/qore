@@ -44,12 +44,12 @@ public class Http2StreamContext inherits AbstractStreamContext {
             @ref HttpServerAsyncIo::Http2PollOperation "Http2PollOperation" drains data
             from the per-stream buffer to this Queue after each poll cycle.
 
-            @since AsyncSocketIo 1.1
+            @since AsyncSocketIo 1.0
         */
         Queue data_queue;
 
         #! Set to True when a NOTHING sentinel is received from the Queue (stream closed)
-        /** @since AsyncSocketIo 1.1
+        /** @since AsyncSocketIo 1.0
         */
         bool closed = False;
 
@@ -58,7 +58,7 @@ public class Http2StreamContext inherits AbstractStreamContext {
             WebSocketStreamFrameState rather than a raw-data queue.  Consumers
             MUST use @ref readFrame() in this mode — @ref readData() throws.
 
-            @since AsyncSocketIo 1.3
+            @since AsyncSocketIo 1.0
         */
         bool uses_frame_state = False;
 
@@ -67,7 +67,7 @@ public class Http2StreamContext inherits AbstractStreamContext {
             closure after enqueuing HTTP/2 frames so the I/O thread flushes
             them on its next tick rather than on the next timeout.
 
-            @since AsyncSocketIo 1.4
+            @since AsyncSocketIo 1.0
         */
         *code<nothing()> wake_callback;
     }
@@ -81,7 +81,7 @@ public class Http2StreamContext inherits AbstractStreamContext {
             hashes (one per complete message) and @ref readFrame() must be used
         @param wake_callback optional closure to wake the I/O controller after writes
 
-        @since AsyncSocketIo 1.1
+        @since AsyncSocketIo 1.0
     */
     constructor(Socket sock, int stream_id, Queue data_queue,
             bool uses_frame_state = False, *code<nothing()> wake_callback) {
@@ -96,7 +96,7 @@ public class Http2StreamContext inherits AbstractStreamContext {
     }
 
     #! Returns True when the transport feeds pre-decoded WebSocket frame hashes
-    /** @since AsyncSocketIo 1.3 */
+    /** @since AsyncSocketIo 1.0 */
     bool usesFrameState() {
         return uses_frame_state;
     }
@@ -109,7 +109,7 @@ public class Http2StreamContext inherits AbstractStreamContext {
         Returns @ref nothing when the queue is drained.  If a NOTHING sentinel
         is pulled, the context is marked closed and @ref isOpen() returns False.
 
-        @since AsyncSocketIo 1.3
+        @since AsyncSocketIo 1.0
     */
     *hash<auto> readFrame() {
         if (!uses_frame_state) {
