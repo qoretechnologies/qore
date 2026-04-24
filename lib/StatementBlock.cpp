@@ -443,6 +443,7 @@ LocalVar* pop_local_var(bool set_unassigned) {
 LocalVar* find_local_var(const char* name, bool& in_closure) {
     VNode* vnode = getVStack();
     ClosureParseEnvironment* cenv = thread_get_closure_parse_env();
+    std::vector<ClosureParseEnvironment*> capture_envs;
     in_closure = false;
 
     if (vnode && !vnode->lvar)
@@ -452,16 +453,21 @@ LocalVar* find_local_var(const char* name, bool& in_closure) {
 
     while (vnode) {
         assert(vnode->lvar);
-        if (cenv && !in_closure && cenv->getHighWaterMark() == vnode)
-            in_closure = true;
+        for (ClosureParseEnvironment* ce = cenv; ce; ce = ce->getPrev()) {
+            if (ce->getHighWaterMark() == vnode) {
+                capture_envs.push_back(ce);
+            }
+        }
 
         //printd(5, "find_local_var('%s' %p) v: '%s' %p in_closure: %d match: %d\n", name, name, vnode->getName(),
         //    vnode->getName(), in_closure, !strcmp(vnode->getName(), name));
 
         if (!strcmp(vnode->getName(), name)) {
             //printd(5, "find_local_var() %s in_closure: %d\n", name, in_closure);
-            if (in_closure)
-                cenv->add(vnode->lvar);
+            in_closure = !capture_envs.empty();
+            for (ClosureParseEnvironment* ce : capture_envs) {
+                ce->add(vnode->lvar);
+            }
             vnode->setRef();
             return vnode->lvar;
         }

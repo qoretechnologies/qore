@@ -67,6 +67,10 @@ public:
         return high_water_mark;
     }
 
+    DLLLOCAL ClosureParseEnvironment* getPrev() {
+        return prev;
+    }
+
     DLLLOCAL void add(LocalVar* var) {
         // add var to the set
         vlist->add(var);

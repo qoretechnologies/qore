@@ -22,10 +22,22 @@ list<auto> sub closures(string x) {
     return (inc, dec);
 }
 
+code sub nestedClosureFactory() {
+    string prefix = "nested";
+    int a = 2;
+
+    return string sub () {
+        return string sub () {
+            return sprintf("%s-%n", prefix, ++a);
+        }();
+    };
+}
+
 public class ClosuresTest inherits QUnit::Test {
     constructor() : Test("Closures test", "1.0") {
         addTestCase("First test", \testPart1(), NOTHING);
         addTestCase("Second test", \testPart2(), NOTHING);
+        addTestCase("Nested transitive capture", \testNestedTransitiveCapture(), NOTHING);
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
@@ -53,5 +65,12 @@ public class ClosuresTest inherits QUnit::Test {
         c(\str);
 
         assertEq("hi", str, "closure with reference arg");
+    }
+
+    testNestedTransitiveCapture() {
+        code c = nestedClosureFactory();
+
+        assertEq("nested-3", c(), "first nested closure call");
+        assertEq("nested-4", c(), "second nested closure call");
     }
 }
