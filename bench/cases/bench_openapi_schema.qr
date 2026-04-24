@@ -1,0 +1,56 @@
+#!/usr/bin/env qr
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%exec-class BenchOpenApiSchema
+
+%requires ../lib/BenchRunner.qm
+
+%strict-args
+%require-types
+%enable-all-warnings
+
+# Benchmark: regex-heavy scanner over a concatenated OpenAPI/Swagger YAML.
+# Models the hot path in OpenApi3SchemaTokenizer / AsyncApiSchemaTokenizer
+# (annotation-aware line-by-line scan with regex_subst/regex_extract).
+
+class BenchOpenApiSchema {
+    constructor() {
+        Bench::BenchRunner r("openapi_schema");
+        r.iterations = 20;
+        r.warmup = 3;
+        string data;
+        r.setup = sub () {
+            string base_yaml = ReadOnlyFile::readTextFile(get_script_dir()
+                + "/../../examples/test/qlib/Swagger/PetStore.swagger.yaml");
+            # repeat 20x to get a ~140 KB corpus
+            list<string> copies = ();
+            for (int i = 0; i < 20; i++) {
+                copies += base_yaml;
+            }
+            data = copies.join("\n---\n");
+            r.bytes_processed = data.size();
+        };
+        r.measure = sub () {
+            int refs = 0;
+            int descs = 0;
+            int schemas = 0;
+            foreach string line in (data.split("\n")) {
+                string norm = line;
+                norm =~ s/\r$//;
+                if (norm =~ /\$ref:/) {
+                    refs++;
+                    *list<*string> m = regex_extract(norm, "\\$ref:\\s+['\"]([^'\"]+)['\"]");
+                    if (m && m[0]) {
+                        schemas++;
+                    }
+                } else if (norm =~ /description:/) {
+                    descs++;
+                }
+            }
+            if (refs < 0 || descs < 0 || schemas < 0) {
+                throw "UNREACHABLE";
+            }
+        };
+        exit(r.run());
+    }
+}

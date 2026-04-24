@@ -1,0 +1,30 @@
+#!/usr/bin/env qr
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%exec-class BenchViewSmoke
+
+%requires ../lib/BenchRunner.qm
+
+%strict-args
+%require-types
+%enable-all-warnings
+
+class BenchViewSmoke {
+    constructor() {
+        Bench::BenchRunner r("view_smoke");
+        r.iterations = 50;
+        r.warmup = 5;
+        string big;
+        r.setup = sub () {
+            big = strmul("x", 1024 * 1024);
+        };
+        r.measure = sub () {
+            string s = big.substr(500000, 100);
+            int n = s.size();
+            if (n != 100) {
+                throw "SIZE-ERROR", sprintf("got %d", n);
+            }
+        };
+        exit(r.run());
+    }
+}

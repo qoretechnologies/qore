@@ -1,0 +1,46 @@
+#!/usr/bin/env qr
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%exec-class BenchStringNonview
+
+%requires ../lib/BenchRunner.qm
+
+%strict-args
+%require-types
+%enable-all-warnings
+
+# Regression guard for Phase 2: plain-string operations (concat, compare,
+# encoding, hash) that do NOT take the view path. Must stay within +-2%
+# of baseline once QoreStringNodeView lands.
+
+class BenchStringNonview {
+    constructor() {
+        Bench::BenchRunner r("string_nonview");
+        r.iterations = 50;
+        r.warmup = 5;
+        list<string> words;
+        r.setup = sub () {
+            words = ();
+            for (int i = 0; i < 1000; i++) {
+                words += sprintf("word_%d_%d", i, i * 31);
+            }
+            int total = 0;
+            foreach string w in (words) {
+                total += w.size();
+            }
+            r.bytes_processed = total;
+        };
+        r.measure = sub () {
+            string acc = "";
+            hash<string, int> h = {};
+            foreach string w in (words) {
+                acc += w + ",";
+                h{w} = w.size();
+            }
+            if (acc.empty() || !h) {
+                throw "UNREACHABLE";
+            }
+        };
+        exit(r.run());
+    }
+}

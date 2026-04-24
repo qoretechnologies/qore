@@ -1,0 +1,65 @@
+#!/usr/bin/env qr
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%exec-class BenchQdxTokenize
+
+%requires ../lib/BenchRunner.qm
+
+%strict-args
+%require-types
+%enable-all-warnings
+
+# Benchmark: character-by-character tokenizer walking qlib/Qdx.qm itself.
+# Models the per-character peek/advance pattern used by Qdx::QoreTokenizer,
+# OpenApi3SchemaTokenizer, AsyncApiSchemaTokenizer.
+# Each src[i] allocates a 1-char QoreStringNode today; Phase 3 Scanner +
+# Phase 4 char should collapse this.
+
+class BenchQdxTokenize {
+    constructor() {
+        Bench::BenchRunner r("qdx_tokenize");
+        r.iterations = 5;
+        r.warmup = 2;
+        string src;
+        r.setup = sub () {
+            src = ReadOnlyFile::readTextFile(get_script_dir() + "/../../qlib/Qdx.qm");
+            r.bytes_processed = src.size();
+        };
+        r.measure = sub () {
+            int comments = 0;
+            int strings = 0;
+            int ws = 0;
+            int n = src.size();
+            int i = 0;
+            while (i < n) {
+                *string c = src[i];
+                if (c == "#") {
+                    comments++;
+                    while (i < n && src[i] != "\n") {
+                        i++;
+                    }
+                } else if (c == "\"" || c == "'") {
+                    strings++;
+                    *string quote = c;
+                    i++;
+                    while (i < n && src[i] != quote) {
+                        if (src[i] == "\\") {
+                            i++;
+                        }
+                        i++;
+                    }
+                    i++;
+                } else if (c == " " || c == "\t" || c == "\n") {
+                    ws++;
+                    i++;
+                } else {
+                    i++;
+                }
+            }
+            if (comments < 0 || strings < 0 || ws < 0) {
+                throw "UNREACHABLE";
+            }
+        };
+        exit(r.run());
+    }
+}

@@ -1,0 +1,104 @@
+#!/usr/bin/env qr
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Aggregate per-case bench JSON files into a suite JSON.
+# Usage: _aggregate.qr <dir-of-per-case-json> [--save=suite.json] [--baseline=other_suite.json]
+
+%exec-class Aggregate
+
+%requires json
+
+%strict-args
+%require-types
+%enable-all-warnings
+
+class Aggregate {
+    constructor() {
+        string dir = shift ARGV ?? ".";
+        *string save_path;
+        *string baseline_path;
+        foreach string arg in (ARGV) {
+            if (arg =~ /^--save=/) {
+                save_path = arg.substr(7);
+            } else if (arg =~ /^--baseline=/) {
+                baseline_path = arg.substr(11);
+            }
+        }
+
+        hash<auto> suite = {
+            "timestamp": format_date("YYYY-MM-DDTHH:mm:SS", now_us()),
+            "commit": trim(backquote("git rev-parse --short HEAD 2>/dev/null")) ?? "unknown",
+            "qore_version": Qore::VersionString,
+            "benchmarks": {},
+        };
+
+        Dir d();
+        d.chdir(dir);
+        list<string> files = d.listFiles("\\.json$");
+        foreach string f in (files) {
+            hash<auto> r = parse_json(ReadOnlyFile::readTextFile(dir + "/" + f));
+            suite.benchmarks{r.name} = r;
+        }
+
+        printReport(suite);
+
+        if (save_path) {
+            File fh();
+            fh.open2(save_path, O_WRONLY | O_CREAT | O_TRUNC);
+            fh.write(make_json(suite, JGF_ADD_FORMATTING));
+            fh.write("\n");
+            printf("\nsaved: %s\n", save_path);
+        }
+
+        if (baseline_path) {
+            int rc = compareToBaseline(baseline_path, suite);
+            exit(rc);
+        }
+    }
+
+    private printReport(hash<auto> suite) {
+        printf("\n%-28s  %12s  %10s  %10s  %12s  %12s\n",
+               "benchmark", "median_ms", "min_ms", "stdev_ms", "throughput", "RSS_delta_kb");
+        printf("%s\n", strmul("-", 96));
+        list<string> names = sort(keys suite.benchmarks);
+        foreach string n in (names) {
+            hash<auto> r = suite.benchmarks{n};
+            string thru = r.throughput_mb_s
+                ? sprintf("%7.2f MB/s", r.throughput_mb_s.toFloat())
+                : "-";
+            printf("%-28s  %12.3f  %10.3f  %10.3f  %12s  %12d\n",
+                   n, r.median_ms.toFloat(), r.min_ms.toFloat(), r.stdev_ms.toFloat(),
+                   thru, r.rss_delta_kb ?? 0);
+        }
+    }
+
+    private int compareToBaseline(string baseline_path, hash<auto> curr) {
+        hash<auto> base = parse_json(ReadOnlyFile::readTextFile(baseline_path));
+        printf("\nbaseline: %s (commit %s, %s)\n", baseline_path, base.commit ?? "?", base.timestamp ?? "?");
+        printf("current:  commit %s, %s\n", curr.commit, curr.timestamp);
+        printf("\n%-28s  %12s  %12s  %10s\n", "benchmark", "baseline_ms", "current_ms", "speedup");
+        printf("%s\n", strmul("-", 72));
+        int regressions = 0;
+        list<string> names = sort(keys curr.benchmarks);
+        foreach string n in (names) {
+            hash<auto> c = curr.benchmarks{n};
+            *hash<auto> b = base.benchmarks{n};
+            if (!b) {
+                printf("%-28s  %12s  %12.3f  %10s\n", n, "NEW", c.median_ms.toFloat(), "-");
+                continue;
+            }
+            float bms = b.median_ms.toFloat();
+            float cms = c.median_ms.toFloat();
+            float ratio = bms / cms;
+            string flag = "";
+            if (ratio < 0.95) {
+                flag = "  REGRESSION";
+                regressions++;
+            } else if (ratio > 1.5) {
+                flag = "  <-- speedup";
+            }
+            printf("%-28s  %12.3f  %12.3f  %9.2fx%s\n", n, bms, cms, ratio, flag);
+        }
+        printf("\n");
+        return regressions > 0 ? 1 : 0;
+    }
+}
