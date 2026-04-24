@@ -1177,7 +1177,7 @@ sub test() {
         } catch (hash<ExceptionInfo> nex) {
             ex = nex;
         }
-        assertEq(561, ex.callstack[0].line);
+        assertEq(562, ex.callstack[0].line);
 
         Child2 c2();
         Child1 c1(c2);
