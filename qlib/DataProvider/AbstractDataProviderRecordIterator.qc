@@ -941,7 +941,7 @@ public class AbstractDataProviderRecordIterator inherits AbstractIterator {
             *hash<auto> template_context) {
         foreach hash<auto> elem in (where_cond.pairIterator()) {
             # Template references and other typed hashdecls are matched directly as values
-            if (!(elem.value instanceof hash<DataProviderTemplateReference>)
+            if (!AbstractDataProviderRecordIterator::isTemplateReferenceValue(elem.value)
                 && elem.value.op && (*hash<auto> op = (DefaultGenericSearchOpMap{elem.value.op}
                     ?? DefaultGenericSearchOpMap{OperatorAliasMap{elem.value.op}}))) {
                 if (!AbstractDataProviderRecordIterator::evalOperator(elem.key, elem.value, op, record,
@@ -984,13 +984,23 @@ public class AbstractDataProviderRecordIterator inherits AbstractIterator {
         @since DataProvider 3.3
     */
     private static auto resolveTemplateValue(auto val, *hash<auto> template_context) {
-        if (val instanceof hash<DataProviderTemplateReference>) {
-            return AbstractDataProvider::evalGenericExpressionValue({}, val, template_context);
+        if (AbstractDataProviderRecordIterator::isTemplateReferenceValue(val)) {
+            return AbstractDataProvider::evalGenericExpressionValue({}, cast<hash<DataProviderTemplateReference>>(val),
+                template_context);
         }
         if (val.typeCode() == NT_LIST) {
             return map AbstractDataProviderRecordIterator::resolveTemplateValue($1, template_context), val;
         }
         return val;
+    }
+
+    #! Returns True if the value is a typed or normalized template reference hash.
+    private static bool isTemplateReferenceValue(auto val) {
+        return val instanceof hash<DataProviderTemplateReference>
+            || (val.typeCode() == NT_HASH
+                && val.hasKey("tmpl_context") && val.tmpl_context.typeCode() == NT_STRING
+                && val.hasKey("tmpl_value") && val.tmpl_value.typeCode() == NT_STRING
+                && val.hasKey("raw") && val.raw.typeCode() == NT_STRING);
     }
 
     #! Match a single value

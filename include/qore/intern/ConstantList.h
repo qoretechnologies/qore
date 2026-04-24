@@ -145,6 +145,16 @@ public:
 
     //! Sets the runtime value (val + saved_val) for AOT init functions
     DLLLOCAL void setRuntimeValue(QoreValue result, ExceptionSink* xsink) {
+        // AOT init functions can lose container element metadata while
+        // computing values. Re-apply the declared constant type before storing
+        // so runtime overload dispatch sees the same value type as source mode.
+        if (typeInfo && !result.isNothing()) {
+            QoreTypeInfo::acceptAssignment(typeInfo, "<constant>", result, xsink);
+            if (xsink && *xsink) {
+                result.discard(xsink);
+                return;
+            }
+        }
         val.discard(xsink);
         val = result;
         saved_val.discard(xsink);
