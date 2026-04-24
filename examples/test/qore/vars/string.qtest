@@ -190,6 +190,44 @@ class StringTest inherits QUnit::Test {
         # invalid regex raises at the pseudo-method call, not lazily
         assertThrows("REGEX-COMPILATION-ERROR",
             sub () { "abc".splitLinesRegex("("); });
+
+        # direct StringRegexSplitIterator: iterator protocol
+        StringRegexSplitIterator it("x|y|z", "\\|");
+        assertFalse(it.valid());
+        assertTrue(it.next());
+        assertEq("x", it.getValue());
+        assertTrue(it.next());
+        assertEq("y", it.getValue());
+        assertTrue(it.next());
+        assertEq("z", it.getValue());
+        assertFalse(it.next());
+        assertFalse(it.valid());
+
+        # reset()
+        it.reset();
+        assertFalse(it.valid());
+        assertTrue(it.next());
+        assertEq("x", it.getValue());
+
+        # getValue() on invalid iterator throws
+        StringRegexSplitIterator je("x", ",");
+        assertThrows("INVALID-ITERATOR", \je.getValue());
+
+        # trailing separator yields a trailing empty piece
+        assertEq(("a", "b", ""), (map $1, "a,b,".splitLinesRegex(",")));
+
+        # no match yields whole string
+        assertEq(("abc",), (map $1, "abc".splitLinesRegex("x")));
+
+        # invalid regex passed directly to the iterator ctor
+        assertThrows("REGEX-COMPILATION-ERROR",
+            sub () { StringRegexSplitIterator i("x", "("); });
+
+        # early termination: select stops iterating at the first match
+        # (verifies the lazy iterator's short-circuit behaviour)
+        list<auto> first_fatal = select "info\nwarn\nFATAL: boom\nmore\nFATAL: again".splitLinesRegex("\n"),
+            $1 =~ /FATAL/;
+        assertEq(2, first_fatal.size());
     }
 
     nonScalarTest() {

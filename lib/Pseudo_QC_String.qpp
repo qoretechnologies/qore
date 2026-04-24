@@ -33,6 +33,7 @@
 #include "qore/intern/ql_crypto.h"
 #include "qore/intern/QoreLibIntern.h"
 #include "qore/intern/QC_StringSplitIterator.h"
+#include "qore/intern/QC_StringRegexSplitIterator.h"
 
 #include <cctype>
 
@@ -519,43 +520,46 @@ AbstractIterator <string>::splitLines() [flags=CONSTANT] {
         new StringSplitIterator(str, &nl, StringSplitIterator::STRIP_TRAILING_CR));
 }
 
-//! Returns an iterator yielding the pieces produced by splitting on a regex.
-/** Streaming counterpart of @ref <string>::splitRegex; returns an
-    @ref Qore::ListIterator "ListIterator" so the result composes directly
-    with @ref map, @ref select, @ref foldl, and @c foreach.
+//! Returns a lazy iterator yielding the pieces produced by splitting on a regex.
+/** Streaming counterpart of @ref <string>::splitRegex; returns a
+    @ref Qore::StringRegexSplitIterator "StringRegexSplitIterator"
+    that runs one @c pcre2_match per element and yields zero-copy
+    views onto the (UTF-8) subject string.  Composes directly with
+    @ref map, @ref select, @ref foldl, and @c foreach — the
+    intermediate list is never built, and early termination
+    (select / first) stops the scan at the first hit.
 
-    The underlying split is performed eagerly (pieces are materialised
-    into a list in one PCRE2 pass) — this is cheaper than per-element
-    PCRE2 iteration anyway because the regex engine's setup is
-    amortised.  The iterator interface exists primarily for ergonomic
-    composition with functional operators.
+    Eager splitting is still available via
+    @ref <string>::splitRegex when every piece is needed and
+    throughput matters more than memory.
 
     @param regex_sep the separator regular expression
     @param options regex options (e.g. \c RE_Caseless)
     @param with_separator include the separator match in each element
 
-    @return a @ref Qore::ListIterator "ListIterator" over the split pieces
+    @return a @ref Qore::StringRegexSplitIterator "StringRegexSplitIterator"
 
     @par Example:
     @code{.py}
-# splits on any of LF, CR, CRLF line endings
-int empty = foldl $1 + ($2.empty() ? 1 : 0), 0,
-    text.splitLinesRegex("\r?\n|\r");
+# first line containing FATAL — stops at first hit
+*string fatal = first(select text.splitLinesRegex("\r?\n|\r"),
+                      $1 =~ /FATAL/);
     @endcode
 
     @since %Qore 2.3
  */
 AbstractIterator <string>::splitLinesRegex(string regex_sep, int options = 0,
         bool with_separator = False) [flags=RET_VALUE_ONLY] {
-    QoreRegex qr(*regex_sep, options, xsink);
+    SimpleRefHolder<QoreRegex> re(new QoreRegex(*regex_sep, options, xsink));
     if (*xsink) {
         return QoreValue();
     }
-    ReferenceHolder<QoreListNode> pieces(qr.extractWithPattern(*str, with_separator, xsink, -1), xsink);
+    ReferenceHolder<StringRegexSplitIterator> it(
+        new StringRegexSplitIterator(str, *re, with_separator, xsink), xsink);
     if (*xsink) {
         return QoreValue();
     }
-    return new QoreObject(QC_LISTITERATOR, 0, new QoreListIterator(pieces.release()));
+    return new QoreObject(QC_STRINGREGEXSPLITITERATOR, 0, it.release());
 }
 
 //! Splits a string into a list of components based on a separator string and a quote character
