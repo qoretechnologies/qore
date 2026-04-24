@@ -513,6 +513,12 @@ extern "C" DLLEXPORT uint64_t qore_rt_make_string(const char* str) {
     return toBits(v);
 }
 
+extern "C" DLLEXPORT uint64_t qore_rt_make_string_len(const char* str, uint64_t len) {
+    QoreStringNode* s = new QoreStringNode(str, static_cast<size_t>(len));
+    QoreValue v(s);
+    return toBits(v);
+}
+
 // Thread-local stack for catch exception context
 // Tracks the raw QoreException* and the saved previous td->catchException
 // Push on CatchException, pop on CatchCleanup/Rethrow

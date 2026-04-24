@@ -251,6 +251,7 @@ bool QoreJIT::registerRuntimeSymbols(std::string& error) {
     // Invoke helpers
     addSymbol("qore_rt_invoke_expr", reinterpret_cast<void*>(&qore_rt_invoke_expr));
     addSymbol("qore_rt_make_string", reinterpret_cast<void*>(&qore_rt_make_string));
+    addSymbol("qore_rt_make_string_len", reinterpret_cast<void*>(&qore_rt_make_string_len));
     addSymbol("qore_rt_catch_exception", reinterpret_cast<void*>(&qore_rt_catch_exception));
     addSymbol("qore_rt_catch_end", reinterpret_cast<void*>(&qore_rt_catch_end));
     addSymbol("qore_rt_rethrow", reinterpret_cast<void*>(&qore_rt_rethrow));

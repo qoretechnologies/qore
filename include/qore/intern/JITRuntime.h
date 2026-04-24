@@ -124,6 +124,9 @@ uint64_t qore_rt_invoke_expr(uint64_t expr_bits, ExceptionSink* xsink);
 //! Create a QoreStringNode from a C string and return as NaN-boxed QoreValue.
 uint64_t qore_rt_make_string(const char* str);
 
+//! Create a QoreStringNode from string bytes and return as NaN-boxed QoreValue.
+uint64_t qore_rt_make_string_len(const char* str, uint64_t len);
+
 //! Get exception info hash from ExceptionSink; returns NaN-boxed QoreValue (hash or NOTHING).
 //! Also clears the exception from the sink and sets td->catchException for rethrow support.
 uint64_t qore_rt_catch_exception(ExceptionSink* xsink);
