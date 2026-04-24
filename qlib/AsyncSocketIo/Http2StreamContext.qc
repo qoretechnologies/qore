@@ -61,6 +61,15 @@ public class Http2StreamContext inherits AbstractStreamContext {
             @since AsyncSocketIo 1.3
         */
         bool uses_frame_state = False;
+
+        #! Optional callback to wake the I/O controller after queuing data
+        /** When set, @ref sendData() and @ref sendTrailers() invoke this
+            closure after enqueuing HTTP/2 frames so the I/O thread flushes
+            them on its next tick rather than on the next timeout.
+
+            @since AsyncSocketIo 1.4
+        */
+        *code<nothing()> wake_callback;
     }
 
     #! Creates an HTTP/2 stream context with Queue-based async I/O
@@ -70,11 +79,12 @@ public class Http2StreamContext inherits AbstractStreamContext {
         @ref readData() reads from this Queue non-blockingly
         @param uses_frame_state when True, @p data_queue carries typed WS frame
             hashes (one per complete message) and @ref readFrame() must be used
+        @param wake_callback optional closure to wake the I/O controller after writes
 
         @since AsyncSocketIo 1.1
     */
     constructor(Socket sock, int stream_id, Queue data_queue,
-            bool uses_frame_state = False) {
+            bool uses_frame_state = False, *code<nothing()> wake_callback) {
         @assert(sock, "socket cannot be null");
         @assert(sock.isOpen(), "socket must be open");
         @assert(stream_id > 0, "stream_id must be positive");
@@ -82,6 +92,7 @@ public class Http2StreamContext inherits AbstractStreamContext {
         self.stream_id = stream_id;
         self.data_queue = data_queue;
         self.uses_frame_state = uses_frame_state;
+        self.wake_callback = wake_callback;
     }
 
     #! Returns True when the transport feeds pre-decoded WebSocket frame hashes
@@ -133,7 +144,9 @@ public class Http2StreamContext inherits AbstractStreamContext {
     }
 
     #! Send DATA frames on the associated HTTP/2 stream.
-    /** Sends binary DATA frames for this HTTP/2 stream using the underlying socket.
+    /** Enqueues binary DATA frames for this HTTP/2 stream; the I/O controller
+        flushes them on its next tick (or immediately when @c wake_callback is
+        set).
 
         @param data
         the binary payload to send on the stream
@@ -142,10 +155,13 @@ public class Http2StreamContext inherits AbstractStreamContext {
         if True, the END_STREAM flag is set on the DATA frame, signaling no more data will be sent on this stream
 
         @throw
-        any exception thrown by Socket::sendHttp2StreamData()
+        any exception thrown by Socket::sendHttp2StreamDataAsync()
     */
     sendData(binary data, bool end_stream = False) {
-        sock.sendHttp2StreamData(stream_id, data, end_stream);
+        sock.sendHttp2StreamDataAsync(stream_id, data, end_stream);
+        if (wake_callback) {
+            wake_callback();
+        }
     }
 
     #! Read data from this HTTP/2 stream.
@@ -189,7 +205,10 @@ public class Http2StreamContext inherits AbstractStreamContext {
         if no HTTP/2 session is active or trailer submission fails
     */
     sendTrailers(hash<string, string> trailers) {
-        sock.sendHttp2Trailers(stream_id, trailers);
+        sock.sendHttp2TrailersAsync(stream_id, trailers);
+        if (wake_callback) {
+            wake_callback();
+        }
     }
 }
 

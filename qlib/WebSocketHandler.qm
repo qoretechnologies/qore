@@ -1794,8 +1794,13 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                     "a stream data Queue from the I/O controller";
             }
             bool h2_uses_frame_state = cx."header-info".stream_uses_frame_state ?? False;
+            code<nothing()> h2_wake = sub () {
+                if (async_ctrl) {
+                    async_ctrl.wakeSocket(sock);
+                }
+            };
             wsc.setStreamContext(new AsyncSocketIo::Http2StreamContext(
-                sock, h2_stream_id, h2_data_queue, h2_uses_frame_state));
+                sock, h2_stream_id, h2_data_queue, h2_uses_frame_state, h2_wake));
             # Stream listener registration is deferred until after setup is complete
             # (the processor is created later, after extensions and registered())
         } else if (is_http3) {
