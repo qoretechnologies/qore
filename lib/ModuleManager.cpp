@@ -143,7 +143,25 @@ QoreHashNode* QoreAbstractModule::getHashIntern(bool with_filename) const {
 void QoreAbstractModule::reexport(ExceptionSink& xsink, QoreProgram* pgm) const {
     // import also any modules that should be reexported from the loaded module
     for (name_vec_t::const_iterator i = rmod.begin(), e = rmod.end(); i != e; ++i) {
-        //printd(5, "QoreAbstractModule::reexport() '%s' pgm: %p '%s'\n", getName(), pgm, i->c_str());
+        // Skip self-reexport: if the dep being reexported IS the module that owns
+        // the target Program, loading it again would re-merge the module's own
+        // user-public namespace into itself and raise "duplicate function" errors.
+        //
+        // This happens when a module M defines a runtime function that calls
+        // `load_module(X)` (e.g. DataProvider::tryLoad → load_module("AmqpDataProvider"))
+        // and X has `%requires(reexport) M`. getProgram() inside M's function
+        // returns M.mod_pgm, so X's reexport tries to load M into M.mod_pgm.
+        //
+        // Supports both source user modules (QoreUserModule::getProgram()) and
+        // AOT user modules (tracked in aot_module_map).
+        QoreAbstractModule* dep_mi = QMM.findModuleUnlocked(i->c_str());
+        if (dep_mi && dep_mi->isUser()
+            && static_cast<QoreUserModule*>(dep_mi)->getProgram() == pgm) {
+            continue;
+        }
+        if (qore_aot_get_module_pgm(i->c_str()) == pgm) {
+            continue;
+        }
 
         if (!qore_program_private::get(*pgm)->hasFeature(i->c_str())) {
             QMM.loadModuleIntern(xsink, xsink, i->c_str(), pgm);

@@ -6999,6 +6999,17 @@ DLLLOCAL bool qore_is_aot_user_module(const char* name) {
     return aot_module_map.find(name) != aot_module_map.end();
 }
 
+DLLLOCAL QoreProgram* qore_aot_get_module_pgm(const char* name) {
+    if (!name) {
+        return nullptr;
+    }
+    auto it = aot_module_map.find(name);
+    if (it == aot_module_map.end()) {
+        return nullptr;
+    }
+    return it->second.pgm;
+}
+
 extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v2(
     const uint8_t* metadata, int metadata_len,
     const char* label,

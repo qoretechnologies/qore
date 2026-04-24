@@ -441,6 +441,13 @@ extern "C" void qore_aot_register_into_program(QoreProgram* tpgm,
 //! without re-merging the module's user-public symbols).
 DLLLOCAL bool qore_is_aot_user_module(const char* name);
 
+//! Returns the QoreProgram owning \a name if registered as an AOT user module, nullptr otherwise.
+/** Used by reexport() to detect self-reexport (where the dep being reexported is the
+    module that owns the target pgm) for AOT user modules, mirroring the QoreUserModule
+    getProgram() check for source user modules.
+*/
+DLLLOCAL QoreProgram* qore_aot_get_module_pgm(const char* name);
+
 //! AOT compiler class — compiles a parsed QoreProgram to a standalone executable
 class QoreAOT {
 public:
