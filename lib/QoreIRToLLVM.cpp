@@ -1625,20 +1625,14 @@ void QoreIRToLLVM::trackResultForCleanup(llvm::Value* result, uint32_t result_id
     alloca_builder.CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING),
             cleanup_alloca);
 
-    if (!deferred_exception_checking) {
-        // In normal mode: pre-store decref (handles re-assignment in loops).
-        // Decref previous value before overwriting (handles loop bodies where
-        // the same alloca is stored to each iteration; first iteration old_val
-        // = NOTHING which is a no-op for decref)
-        auto decref_fn = current_module->getOrInsertFunction("qore_rt_decref",
-                llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
-        llvm::Value* old_val = builder->CreateLoad(i64_type, cleanup_alloca);
-        builder->CreateStore(result, cleanup_alloca);
-        builder->CreateCall(decref_fn, {old_val, xsink_arg});
-    } else {
-        // In deferred mode: init functions have no loops; old is always NOTHING
-        builder->CreateStore(result, cleanup_alloca);
-    }
+    // Decref previous value before overwriting.  This is required even when
+    // exception checks are deferred: ordinary AOT functions can contain loops,
+    // so the same cleanup alloca may be reused many times before function exit.
+    auto decref_fn = current_module->getOrInsertFunction("qore_rt_decref",
+            llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+    llvm::Value* old_val = builder->CreateLoad(i64_type, cleanup_alloca);
+    builder->CreateStore(result, cleanup_alloca);
+    builder->CreateCall(decref_fn, {old_val, xsink_arg});
 
     invoke_result_allocas.push_back(cleanup_alloca);
     invoke_alloca_map[result_id] = cleanup_alloca;
@@ -4078,7 +4072,6 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             bool is_native_int = native_int_locals.count(key) > 0;
             bool is_native_float = native_float_locals.count(key) > 0;
 
-
             // Closure-bound locals must always be read from the runtime stack
             // because closures can modify the value between IR instructions.
             // The alloca cache becomes stale after any call that may invoke a closure.
@@ -4300,6 +4293,15 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto key = reinterpret_cast<const void*>(linst->local);
             bool is_native_int = native_int_locals.count(key) > 0;
             bool is_native_float = native_float_locals.count(key) > 0;
+            // Coerce/strip helpers write an owned value through cleanup_ptr,
+            // so loop re-execution must release the previous slot value first.
+            auto clear_cleanup_before_reuse = [&](llvm::Value* cleanup) {
+                auto decref_fn = module.getOrInsertFunction("qore_rt_decref",
+                        llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+                llvm::Value* old_val = builder->CreateLoad(i64_type, cleanup);
+                builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), cleanup);
+                builder->CreateCall(decref_fn, {old_val, xsink_arg});
+            };
 
             // Outer-scope variables: assign directly to the thread-local stack via
             // qore_rt_assign_local() without creating an alloca or lazy instantiation.
@@ -4341,6 +4343,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             "coerce_cleanup_outer");
                     alloca_builder.CreateStore(
                             llvm::ConstantInt::get(i64_type, VAL_NOTHING), cleanup);
+                    clear_cleanup_before_reuse(cleanup);
 
                     llvm::Value* coerced;
                     if (aot_mode) {
@@ -4380,6 +4383,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             "strip_cleanup_outer");
                     alloca_builder.CreateStore(
                             llvm::ConstantInt::get(i64_type, VAL_NOTHING), cleanup);
+                    clear_cleanup_before_reuse(cleanup);
 
                     llvm::Value* stripped;
                     if (aot_mode) {
@@ -4621,6 +4625,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         "coerce_cleanup");
                 alloca_builder.CreateStore(
                         llvm::ConstantInt::get(i64_type, VAL_NOTHING), cleanup);
+                clear_cleanup_before_reuse(cleanup);
 
                 llvm::Value* coerced;
                 if (aot_mode) {
@@ -4643,6 +4648,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 emitExceptionCheck(module, llvm_func, inst);
                 boxed = coerced;
                 invoke_result_allocas.push_back(cleanup);
+                if (block_scoped_locals.count(key)) {
+                    local_cleanup_allocas[key].push_back(cleanup);
+                }
             } else if (needs_type_strip) {
                 // Plain hash/list type stripping must mirror lvalue assignment:
                 // typed nested containers are deep-copied without type metadata
@@ -4655,6 +4663,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         "strip_cleanup");
                 alloca_builder.CreateStore(
                         llvm::ConstantInt::get(i64_type, VAL_NOTHING), cleanup);
+                clear_cleanup_before_reuse(cleanup);
 
                 llvm::Value* stripped;
                 if (aot_mode) {
@@ -4677,6 +4686,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 emitExceptionCheck(module, llvm_func, inst);
                 boxed = stripped;
                 invoke_result_allocas.push_back(cleanup);
+                if (block_scoped_locals.count(key)) {
+                    local_cleanup_allocas[key].push_back(cleanup);
+                }
             }
 
             builder->CreateStore(boxed, it->second);
