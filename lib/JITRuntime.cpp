@@ -4227,8 +4227,16 @@ static void execJITWithDeopt(const UserVariantBase* uvb, const std::string& call
                 // (emitLocalInstantiation/emitLocalUninstantiation).  On normal
                 // return the CVV is already popped.  On exception paths the LLVM
                 // epilogue may be skipped, so safely pop any remaining CVV here.
-                // thread_try_find_closure_var returns null if already popped.
-                if (thread_try_find_closure_var(body_locals[i]->getName())) {
+                // Use the frame-aware lookup — a plain thread_try_find_closure_var()
+                // walks the entire cvstack (skipping frame boundaries) and can
+                // match a same-named CVV pushed by an outer frame. If we then call
+                // uninstantiate() under that false positive, it pops the top of
+                // the current frame — which may be a frame boundary — and trips
+                // the `curr->var[curr->pos].cvv` assertion in
+                // ThreadClosureVariableStack.h:152. The in-current-frame variant
+                // stops at the boundary, so it only reports presence when the CVV
+                // is actually on THIS call's frame.
+                if (thread_try_find_closure_var_in_current_frame(body_locals[i]->getName())) {
                     body_locals[i]->uninstantiate(xsink);
                 }
                 continue;
