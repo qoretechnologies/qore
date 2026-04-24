@@ -2761,9 +2761,10 @@ QoreString* QoreString::substr(qore_offset_t offset, qore_offset_t length, Excep
 }
 
 size_t QoreString::length() const {
-    if (priv->getEncoding()->isMultiByte() && priv->buf) {
+    if (priv->getEncoding()->isMultiByte() && priv->len) {
         bool invalid;
-        return priv->getEncoding()->getLength(priv->buf, priv->buf + priv->len, invalid);
+        const char* b = priv->effective_buf();
+        return priv->getEncoding()->getLength(b, b + priv->len, invalid);
     }
     return priv->len;
 }
@@ -2830,6 +2831,18 @@ const QoreEncoding* QoreString::getEncoding() const {
     return priv->getEncoding();
 }
 
+const char* qore_string_private::effective_buf() const {
+    return view_parent
+        ? qore_string_private::get(view_parent)->buf + view_offset
+        : buf;
+}
+
+void qore_string_private::dec_view_parent() {
+    view_parent->deref();
+    view_parent = nullptr;
+    view_offset = 0;
+}
+
 QoreString* QoreString::copy() const {
     return new QoreString(*this);
 }
@@ -2865,11 +2878,11 @@ size_t QoreString::capacity() const {
 }
 
 const char* QoreString::getBuffer() const {
-    return priv->buf;
+    return priv->effective_buf();
 }
 
 const char* QoreString::c_str() const {
-    return priv->buf;
+    return priv->effective_buf();
 }
 
 // FIXME: does not work with non-ASCII-compatible encodings such as UTF-16*

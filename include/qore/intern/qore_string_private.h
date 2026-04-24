@@ -38,6 +38,7 @@
 
 class QoreRegexBase;
 class QoreRegexSubst;
+class QoreStringNode;
 
 #define MAX_INT_STRING_LEN     48
 #define MAX_BIGINT_STRING_LEN  48
@@ -60,6 +61,15 @@ public:
     char* buf = nullptr;
     const QoreEncoding* encoding = nullptr;
 
+    // View support: when `view_parent` is non-null, this string is a read-only
+    // view onto `view_parent`'s buffer starting at byte `view_offset`. The `len`
+    // field is still authoritative for the view's byte length; `buf` and
+    // `allocated` are unused in the view state (set to nullptr/0). On any
+    // mutation the view is materialised (bytes copied out, parent deref'd,
+    // view_parent/view_offset cleared) before writing.
+    QoreStringNode* view_parent = nullptr;
+    size_t view_offset = 0;
+
     DLLLOCAL qore_string_private() {
     }
 
@@ -69,7 +79,7 @@ public:
         buf = (char*)malloc(sizeof(char) * allocated);
         len = p.len;
         if (len)
-            memcpy(buf, p.buf, len);
+            memcpy(buf, p.effective_buf(), len);
         buf[len] = '\0';
         encoding = p.getEncoding();
     }
@@ -78,7 +88,18 @@ public:
         if (buf) {
             free(buf);
         }
+        if (view_parent) {
+            dec_view_parent();
+        }
     }
+
+    // Returns the effective read-only buffer pointer: parent's buffer + offset
+    // when a view, or own buffer otherwise. O(1), branch-predictable.
+    DLLLOCAL const char* effective_buf() const;
+
+    // Drops the strong reference held on view_parent. Out-of-line because
+    // QoreStringNode::deref() is a complete-type call.
+    DLLLOCAL void dec_view_parent();
 
     DLLLOCAL void check_char(size_t i) {
         if (i >= allocated) {
