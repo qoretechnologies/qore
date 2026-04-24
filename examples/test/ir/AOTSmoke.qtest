@@ -62,6 +62,8 @@ class AOTSmokeTest inherits QUnit::Test {
         addTestCase("AOT module compile", \testAOTModuleCompile());
         addTestCase("AOT module no-narrow member types", \testAOTModuleNoNarrowMemberTypes());
         addTestCase("AOT module hashdecl class constants", \testAOTModuleHashdeclClassConstants());
+        addTestCase("AOT module closure-captured loop condition",
+            \testAOTModuleClosureCapturedLoopCondition());
         addTestCase("AOT module default object args", \testAOTModuleDefaultObjectArgs());
         addTestCase("AOT module compile custom output", \testAOTModuleCompileCustomOutput());
         addTestCase("AOT module compile opt levels", \testAOTModuleCompileOptLevels());
@@ -1560,6 +1562,78 @@ printf(\"%s\", read_schema());
 
         assertEq(interp_out, aot_out, "compiled module preserves hashdecl class constants: " + aot_out);
         assertEq("entity:id:string\n", aot_out, "hashdecl class constant keeps declared type");
+    }
+
+    testAOTModuleClosureCapturedLoopCondition() {
+        string tmp_dir = sprintf("/tmp/aot_closure_loop_%d", getpid());
+        mkdir(tmp_dir);
+        on_exit {
+            backquote(sprintf("rm -rf %s", tmp_dir));
+        }
+
+        string mod_code = "%modern
+module AOTClosureLoop {
+    version = \"1.0\";
+    desc = \"AOT closure loop condition regression\";
+    author = \"Test\";
+    license = \"MIT\";
+}
+
+public namespace AOTClosureLoop {
+    public class Runner {
+        list<int> capturedLoop(list<int> xs) {
+            list<int> results = ();
+            int total = xs.size();
+            int offset = 0;
+            while (offset < total) {
+                code<nothing()> worker = sub () {
+                    if (total < 0) {
+                        printf(\"unreachable\\n\");
+                    }
+                };
+                push results, offset;
+                offset = total;
+            }
+            return results;
+        }
+    }
+
+    public list<int> sub run() {
+        Runner r();
+        return r.capturedLoop((1, 2, 3));
+    }
+}
+";
+        string qm_path = tmp_dir + "/AOTClosureLoop.qm";
+        {
+            File f();
+            f.open2(qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write(mod_code);
+            f.close();
+        }
+
+        string qmod_path = tmp_dir + "/AOTClosureLoop.qmod";
+        hash<auto> result = compileModuleFile(qm_path, qmod_path);
+        assertTrue(result.compiled, "closure loop module compiled: " + result.compile_out);
+
+        string test_code = "%modern
+%requires AOTClosureLoop
+printf(\"%y\\n\", AOTClosureLoop::run());
+";
+        hash<auto> paths = writeTempScript(test_code);
+        on_exit {
+            unlink(paths.src);
+        }
+
+        string aot_out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, tmp_dir, qore_bin, paths.src));
+        unlink(qmod_path);
+        string interp_out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, tmp_dir, qore_bin, paths.src));
+
+        assertEq(interp_out, aot_out,
+            "compiled module preserves closure-captured loop condition: " + aot_out);
+        assertEq("[0]\n", aot_out, "closure-captured loop condition executes loop body");
     }
 
     testAOTModuleCompileCustomOutput() {

@@ -224,6 +224,12 @@ QoreIRLowering::QoreIRLowering(QoreIRBuilder& n_builder, QoreParseContext* n_par
         : builder(n_builder), parse_context(n_parse_context) {
 }
 
+// Check if a variable is a local (not global) and not captured by a closure.
+// Used for fused integer operations that can only be applied to lvstack locals.
+static bool isLocalNonClosureVar(const VarRefNode* var) {
+    return var && var->getType() == VT_LOCAL && var->ref.id && !var->ref.id->closureUse();
+}
+
 void QoreIRLowering::setParseContext(QoreParseContext* n_parse_context) {
     parse_context = n_parse_context;
 }
@@ -256,10 +262,7 @@ bool QoreIRLowering::tryEmitFusedBranchIfLtLocalInt(const QoreValue& cond,
     if (!left_var || !right_var) {
         return false;
     }
-    if (left_var->getType() != VT_LOCAL || !left_var->ref.id) {
-        return false;
-    }
-    if (right_var->getType() != VT_LOCAL || !right_var->ref.id) {
+    if (!isLocalNonClosureVar(left_var) || !isLocalNonClosureVar(right_var)) {
         return false;
     }
     builder.createBranchIfLtLocalInt(left_var->ref.id, right_var->ref.id,
@@ -3504,12 +3507,6 @@ QoreIROpcode QoreIRLowering::selectFoldOpcode(const QoreParseAnalysis& analysis,
 static bool isRangeLValue(const QoreValue& value) {
     const AbstractQoreNode* node = value.getInternalNode();
     return node && dynamic_cast<const QoreSquareBracketsRangeOperatorNode*>(node);
-}
-
-// Check if a variable is a local (not global) and not captured by a closure.
-// Used for fused integer operations (++, --, +=) that can only be applied to lvstack locals.
-static bool isLocalNonClosureVar(const VarRefNode* var) {
-    return var && var->getType() == VT_LOCAL && var->ref.id && !var->ref.id->closureUse();
 }
 
 static bool getLValueBaseValue(const QoreValue& value, QoreValue& base) {
