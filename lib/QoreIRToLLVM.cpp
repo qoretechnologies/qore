@@ -1176,6 +1176,8 @@ void QoreIRToLLVM::emitInvokeCleanup(llvm::Module& module) {
     for (llvm::Value* alloca_ptr : invoke_result_allocas) {
         llvm::Value* val = builder->CreateLoad(i64_type, alloca_ptr);
         builder->CreateCall(helper, {val, xsink_arg});
+        builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING),
+            alloca_ptr);
     }
 }
 
@@ -1188,6 +1190,35 @@ void QoreIRToLLVM::emitIteratorCleanup(llvm::Module& module) {
     for (llvm::Value* alloca_ptr : iterator_cleanup_allocas) {
         llvm::Value* iter_ptr = builder->CreateLoad(ptr_type, alloca_ptr);
         builder->CreateCall(helper, {iter_ptr});
+        builder->CreateStore(llvm::ConstantPointerNull::get(
+            llvm::cast<llvm::PointerType>(ptr_type)), alloca_ptr);
+    }
+}
+
+void QoreIRToLLVM::emitLateExitCleanup(llvm::Function* llvm_func,
+        llvm::Module& module) {
+    if (invoke_result_allocas.empty() && iterator_cleanup_allocas.empty()) {
+        return;
+    }
+
+    std::vector<llvm::Instruction*> exits;
+    for (llvm::BasicBlock& bb : *llvm_func) {
+        llvm::Instruction* term = bb.getTerminator();
+        if (term && (llvm::isa<llvm::ReturnInst>(term)
+                || llvm::isa<llvm::ResumeInst>(term))) {
+            exits.push_back(term);
+        }
+    }
+
+    llvm::BasicBlock* saved_insert = builder->GetInsertBlock();
+    auto saved_ip = builder->GetInsertPoint();
+    for (llvm::Instruction* term : exits) {
+        builder->SetInsertPoint(term);
+        emitIteratorCleanup(module);
+        emitInvokeCleanup(module);
+    }
+    if (saved_insert) {
+        builder->SetInsertPoint(saved_insert, saved_ip);
     }
 }
 
@@ -3370,6 +3401,8 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         builder->CreateCall(deopt_fn, {counter_ptr});
         builder->CreateRet(llvm::ConstantInt::get(i64_type, VAL_NOTHING));
     }
+
+    emitLateExitCleanup(llvm_func, module);
 
     // Phase 5c: Finalize debug info before verification
     if (shared_di_builder) {
@@ -9579,6 +9612,15 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 llvm::AllocaInst* iter_alloca = ab.CreateAlloca(ptr_type, nullptr, "iter_cleanup");
                 ab.CreateStore(llvm::ConstantPointerNull::get(
                         llvm::PointerType::get(ctx, 0)), iter_alloca);
+                // A loop can exit before IteratorNext exhausts and deletes the
+                // iterator. If this IteratorCreate is reached again, release the
+                // previous active iterator before overwriting the cleanup slot.
+                auto cleanup_helper = module.getOrInsertFunction("qore_rt_iterator_cleanup",
+                        llvm::FunctionType::get(void_type, {ptr_type}, false));
+                llvm::Value* old_iter_ptr = builder->CreateLoad(ptr_type, iter_alloca);
+                builder->CreateStore(llvm::ConstantPointerNull::get(
+                        llvm::PointerType::get(ctx, 0)), iter_alloca);
+                builder->CreateCall(cleanup_helper, {old_iter_ptr});
                 builder->CreateStore(result, iter_alloca);
                 iterator_cleanup_allocas.push_back(iter_alloca);
                 invoke_alloca_map[inst->result.id] = iter_alloca;
@@ -11961,6 +12003,16 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 llvm::AllocaInst* iter_alloca = ab.CreateAlloca(ptr_type, nullptr, "iter_cleanup");
                 ab.CreateStore(llvm::ConstantPointerNull::get(
                         llvm::PointerType::get(ctx, 0)), iter_alloca);
+                // A foreach can exit early (for example via break) before
+                // IteratorNext exhausts and deletes the iterator. If this
+                // IteratorCreate is reached again, release the previous active
+                // iterator before overwriting the cleanup slot.
+                auto cleanup_helper = module.getOrInsertFunction("qore_rt_iterator_cleanup",
+                        llvm::FunctionType::get(void_type, {ptr_type}, false));
+                llvm::Value* old_iter_ptr = builder->CreateLoad(ptr_type, iter_alloca);
+                builder->CreateStore(llvm::ConstantPointerNull::get(
+                        llvm::PointerType::get(ctx, 0)), iter_alloca);
+                builder->CreateCall(cleanup_helper, {old_iter_ptr});
                 // Store the iterator pointer in the cleanup alloca
                 builder->CreateStore(result, iter_alloca);
                 iterator_cleanup_allocas.push_back(iter_alloca);

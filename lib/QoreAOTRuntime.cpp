@@ -464,7 +464,7 @@ static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* 
             // QoreExternalStaticMember is the public API facade for QoreVarInfo
             QoreVarInfo* vi = const_cast<QoreVarInfo*>(
                 reinterpret_cast<const QoreVarInfo*>(m));
-            StaticClassVarRefNode* node = new StaticClassVarRefNode(&loc_builtin, strdup(ref2),
+            StaticClassVarRefNode* node = new StaticClassVarRefNode(&loc_builtin, ref2,
                 *owner_qc, *vi);
             return toBitsNB(QoreValue(node));
         }

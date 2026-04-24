@@ -877,7 +877,7 @@ static QoreValue read_expr_static_varref(AOTExprReadCtx& ctx) {
     }
     QoreVarInfo* vi = const_cast<QoreVarInfo*>(
         reinterpret_cast<const QoreVarInfo*>(m));
-    StaticClassVarRefNode* node = new StaticClassVarRefNode(&loc_builtin, strdup(var_name),
+    StaticClassVarRefNode* node = new StaticClassVarRefNode(&loc_builtin, var_name,
         *qc, *vi);
     return QoreValue(node);
 }

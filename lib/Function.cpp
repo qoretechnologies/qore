@@ -63,7 +63,10 @@
 #include <chrono>
 #include <cmath>
 #include <cstring>
+#include <memory>
 #include <pthread.h>
+#include <string>
+#include <unordered_map>
 
 static void duplicateSignatureException(const char* cname, const char* name, const UserSignature* sig) {
     parseException(*sig->getParseLocation(), "DUPLICATE-SIGNATURE", "%s%s%s(%s) has already been declared",
@@ -2197,38 +2200,27 @@ const QoreProgramLocation* get_current_builtin_src_loc() {
 }
 
 // Intern pool for QoreBuiltinSrcLocHelper source locations.  The helper
-// is stack-allocated (RAII scope) but the QoreProgramLocation pointer
-// it pushes is stashed on a variant that outlives the helper — so the
-// location object itself must have immortal lifetime.  Interning on
-// (file, line) bounds memory use by the number of distinct registration
-// sites in the library (a few thousand at most), regardless of how many
-// times the module is loaded/unloaded within a single process.
+// is stack-allocated (RAII scope), but the QoreProgramLocation pointer
+// it pushes is stashed on a variant that outlives the helper.  The pool
+// therefore owns each location until static destruction.
 namespace {
 struct BuiltinLocKey {
-    const char* file;
+    std::string file;
     int line;
     bool operator==(const BuiltinLocKey& o) const {
-        return line == o.line && file && o.file && strcmp(file, o.file) == 0;
+        return line == o.line && file == o.file;
     }
 };
 struct BuiltinLocKeyHash {
     size_t operator()(const BuiltinLocKey& k) const noexcept {
-        // file pointer stability isn't guaranteed across caller invocations
-        // (qpp emits string literals but modules may pass stack buffers) —
-        // hash by content for correctness.
-        size_t h = static_cast<size_t>(k.line) * 0x9E3779B97F4A7C15ULL;
-        if (k.file) {
-            for (const char* p = k.file; *p; ++p) {
-                h = (h * 131) + static_cast<unsigned char>(*p);
-            }
-        }
-        return h;
+        return std::hash<std::string>{}(k.file)
+            ^ (static_cast<size_t>(k.line) * 0x9E3779B97F4A7C15ULL);
     }
 };
 } // anonymous namespace
 
 static std::mutex g_builtin_loc_mutex;
-static std::unordered_map<BuiltinLocKey, const QoreProgramLocation*, BuiltinLocKeyHash>
+static std::unordered_map<BuiltinLocKey, std::unique_ptr<QoreProgramLocation>, BuiltinLocKeyHash>
     g_builtin_loc_pool;
 
 static const QoreProgramLocation* intern_builtin_src_loc(const char* file, int line) {
@@ -2236,20 +2228,11 @@ static const QoreProgramLocation* intern_builtin_src_loc(const char* file, int l
         return nullptr;
     }
     std::lock_guard<std::mutex> lk(g_builtin_loc_mutex);
-    BuiltinLocKey key{file, line};
-    auto it = g_builtin_loc_pool.find(key);
-    if (it != g_builtin_loc_pool.end()) {
-        return it->second;
+    auto [it, inserted] = g_builtin_loc_pool.try_emplace(BuiltinLocKey{file, line}, nullptr);
+    if (inserted) {
+        it->second.reset(new QoreProgramLocation(it->first.file.c_str(), line, line));
     }
-    // Duplicate the file string — caller's buffer may be transient.
-    // Intentionally leaked (immortal pool lifetime, bounded by the
-    // number of unique registration sites).
-    char* file_copy = strdup(file);
-    auto* loc = new QoreProgramLocation(file_copy, line, line);
-    // Re-key with the stable file pointer so subsequent equality
-    // checks have a comparable stored key.
-    g_builtin_loc_pool.emplace(BuiltinLocKey{file_copy, line}, loc);
-    return loc;
+    return it->second.get();
 }
 
 QoreBuiltinSrcLocHelper::QoreBuiltinSrcLocHelper(const char* file, int line)

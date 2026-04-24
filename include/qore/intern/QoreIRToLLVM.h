@@ -641,6 +641,11 @@ private:
     // temps along normal exit paths.
     void emitPendingSsaCleanup(llvm::Module& module);
 
+    // Emit idempotent temp cleanup before every function exit after all
+    // blocks have been lowered.  This covers returns that were emitted before
+    // later blocks created additional cleanup allocas.
+    void emitLateExitCleanup(llvm::Function* llvm_func, llvm::Module& module);
+
     // Phase 2B — spill all currently-pending SSA-direct cleanup entries
     // to per-temp cleanup allocas and clear pending_ssa_cleanup.  Used
     // at the point of a control-flow branch to a shared cleanup target
