@@ -93,9 +93,18 @@ public:
         }
     }
 
-    // Returns the effective read-only buffer pointer: parent's buffer + offset
-    // when a view, or own buffer otherwise. O(1), branch-predictable.
-    DLLLOCAL const char* effective_buf() const;
+    // Returns the effective read-only buffer pointer: own buffer when not a
+    // view, or parent's buffer + offset when a view. The hot non-view path
+    // is inlined here; the view path is out-of-line below (uses the complete
+    // type of QoreStringNode to reach its priv).
+    DLLLOCAL const char* effective_buf() const {
+        return view_parent ? effective_buf_view_path() : buf;
+    }
+
+    // Out-of-line slow path for views. Guaranteed to return a null-terminated
+    // buffer: end-slice views return parent->buf + offset (terminator is the
+    // parent's own); mid-slice views materialise lazily and return buf.
+    DLLLOCAL const char* effective_buf_view_path() const;
 
     // Drops the strong reference held on view_parent. Out-of-line because
     // QoreStringNode::deref() is a complete-type call.
@@ -110,6 +119,17 @@ public:
     // replace content (set/take/clear). After return: buf=nullptr,
     // allocated=0, len=0, view_parent=nullptr. No-op on a non-view.
     DLLLOCAL void abandon_view();
+
+    // Compute the byte range [byte_offset, byte_offset + byte_len) corresponding
+    // to a substr(offset) or substr(offset, length) request, handling negative
+    // offsets/lengths and both single-byte and multi-byte encodings.
+    // Returns 0 on success, -1 if offset is out of range (and no substring
+    // should be produced). For multi-byte encodings, xsink may be set on an
+    // invalid encoding error; the caller must check.
+    DLLLOCAL int compute_substr_range(qore_offset_t offset, size_t& byte_offset, size_t& byte_len,
+            ExceptionSink* xsink) const;
+    DLLLOCAL int compute_substr_range(qore_offset_t offset, qore_offset_t length, size_t& byte_offset,
+            size_t& byte_len, ExceptionSink* xsink) const;
 
     DLLLOCAL void check_char(size_t i) {
         if (view_parent) {
@@ -154,10 +174,11 @@ public:
                 pos = 0;
         } else if (pos > 0 && pos > (qore_offset_t)len)
             return -1;
+        const char* b = effective_buf();
         const char* p;
-        if (!(p = strchr(buf + pos, c)))
+        if (!(p = strchr(b + pos, c)))
             return -1;
-        return (qore_offset_t)(p - buf);
+        return (qore_offset_t)(p - b);
     }
 
     // NOTE: this is purely byte oriented - no character semantics here
@@ -171,10 +192,11 @@ public:
             pos = len - 1;
         }
 
-        const char* p = buf + pos;
-        while (p >= buf) {
+        const char* b = effective_buf();
+        const char* p = b + pos;
+        while (p >= b) {
             if (*p == c) {
-                return (qore_offset_t)(p - buf);
+                return (qore_offset_t)(p - b);
             }
             --p;
         }
@@ -191,11 +213,12 @@ public:
         } else if (pos > 0 && pos > (qore_offset_t)len) {
             return -1;
         }
+        const char* b = effective_buf();
         const char* p;
-        if (!(p = strstr(buf + pos, str))) {
+        if (!(p = strstr(b + pos, str))) {
             return -1;
         }
-        return (qore_offset_t)(p - buf);
+        return (qore_offset_t)(p - b);
     }
 
     // NOTE: this is purely byte oriented - no character semantics here
@@ -209,11 +232,12 @@ public:
             pos = len - 1;
         }
 
-        const char* p = buf + pos;
-        while (p >= buf) {
+        const char* b = effective_buf();
+        const char* p = b + pos;
+        while (p >= b) {
             for (const char* t = str; *t; ++t) {
                 if (*p == *t) {
-                    return (qore_offset_t)(p - buf);
+                    return (qore_offset_t)(p - b);
                 }
             }
             --p;
@@ -237,6 +261,7 @@ public:
         if (!needle)
             return -1;
 
+        const char* b = effective_buf();
         // do simple index
         if (!getEncoding()->isMultiByte()) {
             if (pos < 0) {
@@ -248,7 +273,7 @@ public:
                 return -1;
             }
 
-            return index_simple(buf, len, needle->c_str(), needle->size(), pos);
+            return index_simple(b, len, needle->c_str(), needle->size(), pos);
         }
 
         // do multibyte index()
@@ -259,9 +284,9 @@ public:
         else if (pos >= (qore_offset_t)len)
             return -1;
 
-        qore_offset_t ind = index_simple(buf + pos, len - pos, needle->c_str(), needle->size());
+        qore_offset_t ind = index_simple(b + pos, len - pos, needle->c_str(), needle->size());
         if (ind != -1) {
-            ind = getEncoding()->getCharPos(buf, buf + pos + ind, xsink);
+            ind = getEncoding()->getCharPos(b, b + pos + ind, xsink);
             if (*xsink)
                 return -1;
         }
@@ -296,7 +321,7 @@ public:
         if (!nsize) {
             nsize = strlen(needle);
         }
-        return index_simple(buf, len, needle, nsize, pos);
+        return index_simple(effective_buf(), len, needle, nsize, pos);
     }
 
     // finds the last occurrence of needle in haystack at or before position pos
@@ -327,16 +352,17 @@ public:
         assert(getEncoding()->isMultiByte());
         if (!pos)
             return 0;
+        const char* b = effective_buf();
         // get positive character offset if negative
         if (pos < 0) {
             // get the length of the string in characters
-            size_t clen = getEncoding()->getLength(buf + start, buf + len, xsink);
+            size_t clen = getEncoding()->getLength(b + start, b + len, xsink);
             if (*xsink)
                 return -1;
             pos = clen + pos;
         }
         // now get the byte position from this character offset
-        pos = getEncoding()->getByteLen(buf + start, buf + len, pos, xsink);
+        pos = getEncoding()->getByteLen(b + start, b + len, pos, xsink);
         return *xsink ? -1 : 0;
     }
 
@@ -346,6 +372,7 @@ public:
         if (!needle)
             return -1;
 
+        const char* b = effective_buf();
         if (!getEncoding()->isMultiByte()) {
             if (pos < 0) {
                 pos = len + pos;
@@ -353,7 +380,7 @@ public:
                 return -1;
             }
 
-            return rindex_simple(buf, len, needle->c_str(), needle->size(), pos);
+            return rindex_simple(b, len, needle->c_str(), needle->size(), pos);
         }
 
         // do multi-byte rindex
@@ -363,11 +390,11 @@ public:
             return -1;
 
         // get byte rindex position
-        qore_offset_t ind = rindex_simple(buf, len, needle->c_str(), needle->size(), pos);
+        qore_offset_t ind = rindex_simple(b, len, needle->c_str(), needle->size(), pos);
 
         // calculate character position from byte position
         if (ind && ind != -1) {
-            ind = getEncoding()->getCharPos(buf, buf + ind, xsink);
+            ind = getEncoding()->getCharPos(b, b + ind, xsink);
             if (*xsink)
                 return 0;
         }
@@ -403,31 +430,36 @@ public:
             return -1;
         }
 
-        return rindex_simple(buf, len, needle, needle_len, pos);
+        return rindex_simple(effective_buf(), len, needle, needle_len, pos);
     }
 
     DLLLOCAL bool startsWith(const char* str, size_t ssize) const {
-        return !strncmp(str, buf, ssize);
+        if (ssize > len) {
+            return false;
+        }
+        return !strncmp(str, effective_buf(), ssize);
     }
 
     DLLLOCAL bool endsWith(const char* str, size_t ssize) const {
         if (ssize > len) {
             return false;
         }
-        return !strncmp(str, buf + len - ssize, ssize);
+        return !strncmp(str, effective_buf() + len - ssize, ssize);
     }
 
     DLLLOCAL bool isDataPrintableAscii() const {
+        const char* b = effective_buf();
         for (size_t i = 0; i < len; ++i) {
-            if (buf[i] < 32 || buf[i] > 126)
+            if (b[i] < 32 || b[i] > 126)
                 return false;
         }
         return true;
     }
 
     DLLLOCAL bool isDataAscii() const {
+        const char* b = effective_buf();
         for (size_t i = 0; i < len; ++i) {
-            if ((unsigned char)(buf[i]) > 127)
+            if ((unsigned char)(b[i]) > 127)
                 return false;
         }
         return true;
@@ -451,7 +483,7 @@ public:
         else if (pos >= (qore_offset_t)str.len)
             return;
 
-        concat_intern(str.buf + pos, str.len - pos);
+        concat_intern(str.effective_buf() + pos, str.len - pos);
     }
 
     DLLLOCAL int concat(const qore_string_private& str, qore_offset_t pos, ExceptionSink* xsink) {
@@ -472,7 +504,7 @@ public:
                 return 0;
         }
 
-        concat_intern(str.buf + pos, str.len - pos);
+        concat_intern(str.effective_buf() + pos, str.len - pos);
         return 0;
     }
 
@@ -491,7 +523,7 @@ public:
         } else if (plen > (qore_offset_t)str.len)
             plen = str.len;
 
-        concat_intern(str.buf + pos, plen);
+        concat_intern(str.effective_buf() + pos, plen);
     }
 
     DLLLOCAL int concat(const qore_string_private& str, qore_offset_t pos, qore_offset_t plen, ExceptionSink* xsink) {
@@ -521,7 +553,7 @@ public:
         if (plen > (qore_offset_t)str.len)
             plen = str.len;
 
-        concat_intern(str.buf + pos, plen);
+        concat_intern(str.effective_buf() + pos, plen);
         return 0;
     }
 
@@ -529,7 +561,8 @@ public:
         assert(xsink);
         size_t rc;
         if (i) {
-            rc = getEncoding()->getByteLen(buf, buf + len, i, xsink);
+            const char* b = effective_buf();
+            rc = getEncoding()->getByteLen(b, b + len, i, xsink);
             if (*xsink)
                 return -1;
         } else
@@ -707,10 +740,11 @@ public:
         assert(!targ.len);
 
         targ.check_char(len);
+        const char* src = effective_buf();
         if (getEncoding()->isMultiByte()) {
-            char* p = buf;
+            const char* p = src;
             char* targ_end = targ.buf + len;
-            char* end = buf + len;
+            const char* end = src + len;
             while (p < end) {
                 bool invalid;
                 int bl = getEncoding()->getByteLen(p, end, 1, invalid);
@@ -726,7 +760,7 @@ public:
             }
         } else {
             for (size_t i = 0; i < len; ++i) {
-                targ.buf[i] = buf[len - i - 1];
+                targ.buf[i] = src[len - i - 1];
             }
         }
 

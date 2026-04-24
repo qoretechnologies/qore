@@ -1690,7 +1690,7 @@ QoreString::~QoreString() {
 }
 
 QoreListNode* QoreString::split(const char* sep, bool with_separator) {
-    return split_intern(sep, ::strlen(sep), priv->buf, priv->len, priv->encoding, with_separator);
+    return split_intern(sep, ::strlen(sep), priv->effective_buf(), priv->len, priv->encoding, with_separator);
 }
 
 QoreListNode* QoreString::split(ExceptionSink* xsink, const char* sep, const char* quote,
@@ -1778,7 +1778,7 @@ bool QoreString::equal(const char* str) const {
     if (!priv->len)
         return false;
 
-    return !strcmp(priv->buf, str);
+    return !strcmp(priv->effective_buf(), str);
 }
 
 bool QoreString::equalPartial(const char* str) const {
@@ -1791,7 +1791,7 @@ bool QoreString::equalPartial(const char* str) const {
     if (!priv->len)
         return false;
 
-    return !strncmp(priv->buf, str, ::strlen(str));
+    return !strncmp(priv->effective_buf(), str, ::strlen(str));
 }
 
 bool QoreString::equalSoft(const QoreString& str, ExceptionSink* xsink) const {
@@ -2299,7 +2299,13 @@ int QoreString::regexSubstInPlace(QoreString& match, QoreString& subst, int opts
 
 // removes a single trailing newline
 size_t QoreString::chomp() {
-    if (priv->len && priv->buf[priv->len - 1] == '\n') {
+    if (!priv->len) {
+        return 0;
+    }
+    if (priv->view_parent) {
+        priv->materialize();
+    }
+    if (priv->buf[priv->len - 1] == '\n') {
         terminate(priv->len - 1);
         if (priv->len && priv->buf[priv->len - 1] == '\r') {
             terminate(priv->len - 1);
@@ -2319,7 +2325,7 @@ QoreString* QoreString::convertEncoding(const QoreEncoding* nccs, ExceptionSink*
     std::unique_ptr<QoreString> targ(new QoreString(nccs));
 
     if (priv->len) {
-        if (qore_string_private::convert_encoding_intern(priv->buf, priv->len, priv->getEncoding(), *targ, nccs, xsink))
+        if (qore_string_private::convert_encoding_intern(priv->effective_buf(), priv->len, priv->getEncoding(), *targ, nccs, xsink))
             return 0;
 
         // remove BOM bytes (invisible non-breaking space) at the beginning of a string when converting to UTF-8
@@ -2830,11 +2836,11 @@ void QoreString::concatHex(const QoreString* str) {
 
 // endian-agnostic base64 string -> binary object function
 BinaryNode *QoreString::parseBase64(ExceptionSink* xsink) const {
-    return ::parseBase64(priv->buf, priv->len, xsink);
+    return ::parseBase64(priv->effective_buf(), priv->len, xsink);
 }
 
 QoreString* QoreString::parseBase64ToString(const QoreEncoding* qe, ExceptionSink* xsink) const {
-    SimpleRefHolder<BinaryNode> b(::parseBase64(priv->buf, priv->len, xsink));
+    SimpleRefHolder<BinaryNode> b(::parseBase64(priv->effective_buf(), priv->len, xsink));
     return binary_to_string<QoreString>(b.release(), qe);
 }
 
@@ -2844,11 +2850,11 @@ QoreString* QoreString::parseBase64ToString(ExceptionSink* xsink) const {
 
 // endian-agnostic base64 URL-encoded string -> binary object function
 BinaryNode *QoreString::parseBase64Url(ExceptionSink* xsink) const {
-    return ::parseBase64Url(priv->buf, priv->len, xsink);
+    return ::parseBase64Url(priv->effective_buf(), priv->len, xsink);
 }
 
 QoreString* QoreString::parseBase64UrlToString(const QoreEncoding* qe, ExceptionSink* xsink) const {
-    SimpleRefHolder<BinaryNode> b(::parseBase64Url(priv->buf, priv->len, xsink));
+    SimpleRefHolder<BinaryNode> b(::parseBase64Url(priv->effective_buf(), priv->len, xsink));
     return binary_to_string<QoreString>(b.release(), qe);
 }
 
@@ -2857,7 +2863,7 @@ QoreString* QoreString::parseBase64UrlToString(ExceptionSink* xsink) const {
 }
 
 BinaryNode *QoreString::parseHex(ExceptionSink* xsink) const {
-    return ::parseHex(priv->buf, priv->len, xsink);
+    return ::parseHex(priv->effective_buf(), priv->len, xsink);
 }
 
 void QoreString::allocate(unsigned requested_size) {
@@ -2868,10 +2874,25 @@ const QoreEncoding* QoreString::getEncoding() const {
     return priv->getEncoding();
 }
 
-const char* qore_string_private::effective_buf() const {
-    return view_parent
-        ? qore_string_private::get(view_parent)->buf + view_offset
-        : buf;
+const char* qore_string_private::effective_buf_view_path() const {
+    assert(view_parent);
+    // A view onto a parent buffer is only guaranteed null-terminated at
+    // view_offset + len if the view reaches the parent's own null terminator
+    // (i.e., view_offset + len == parent->len). For mid-slice views the
+    // parent byte at view_offset + len is a valid byte, not '\0'.
+    //
+    // QoreString consumers historically treat getBuffer()/c_str() as a C
+    // string and may call strlen/strcmp/printf("%s", ...) on it. To preserve
+    // that contract we materialise mid-slice views lazily on first access.
+    // Substr-from-end views (the common case — splitString's last field,
+    // `tail = str.substr(n)`, tokeniser `readUntil` views, etc.) do NOT
+    // trigger this and remain zero-copy.
+    qore_string_private* parent_priv = qore_string_private::get(view_parent);
+    if (view_offset + len == parent_priv->len) {
+        return parent_priv->buf + view_offset;
+    }
+    const_cast<qore_string_private*>(this)->materialize();
+    return buf;
 }
 
 void qore_string_private::dec_view_parent() {
@@ -2902,6 +2923,88 @@ void qore_string_private::abandon_view() {
     assert(allocated == 0);
     len = 0;
     dec_view_parent();
+}
+
+int qore_string_private::compute_substr_range(qore_offset_t offset, size_t& byte_offset, size_t& byte_len,
+        ExceptionSink* xsink) const {
+    const char* b = effective_buf();
+    if (!getEncoding()->isMultiByte()) {
+        size_t n_offset = (offset < 0) ? ((size_t)std::max<qore_offset_t>((qore_offset_t)len + offset, 0))
+                                       : (size_t)offset;
+        if (n_offset >= len)
+            return -1;
+        byte_offset = n_offset;
+        byte_len = len - n_offset;
+        return 0;
+    }
+    // multibyte: resolve offset via character count
+    if (offset < 0) {
+        int clength = getEncoding()->getLength(b, b + len, xsink);
+        if (xsink && *xsink)
+            return -1;
+        offset = clength + offset;
+        if ((offset < 0) || (offset >= clength))
+            return -1;
+    }
+    size_t start = getEncoding()->getByteLen(b, b + len, offset, xsink);
+    if (xsink && *xsink)
+        return -1;
+    if (start >= len)
+        return -1;
+    byte_offset = start;
+    byte_len = len - start;
+    return 0;
+}
+
+int qore_string_private::compute_substr_range(qore_offset_t offset, qore_offset_t length, size_t& byte_offset,
+        size_t& byte_len, ExceptionSink* xsink) const {
+    const char* b = effective_buf();
+    if (!getEncoding()->isMultiByte()) {
+        size_t n_offset = (offset < 0) ? ((size_t)std::max<qore_offset_t>((qore_offset_t)len + offset, 0))
+                                       : (size_t)offset;
+        if (n_offset >= len)
+            return -1;
+        size_t n_length;
+        if (length < 0) {
+            qore_offset_t l2 = (qore_offset_t)len - (qore_offset_t)n_offset + length;
+            n_length = l2 < 0 ? 0 : (size_t)l2;
+        } else if ((size_t)length > (len - n_offset)) {
+            n_length = len - n_offset;
+        } else {
+            n_length = (size_t)length;
+        }
+        byte_offset = n_offset;
+        byte_len = n_length;
+        return 0;
+    }
+    // multibyte
+    if (offset < 0) {
+        int clength = getEncoding()->getLength(b, b + len, xsink);
+        if (xsink && *xsink)
+            return -1;
+        offset = clength + offset;
+        if ((offset < 0) || (offset >= clength))
+            return -1;
+    }
+    size_t start = getEncoding()->getByteLen(b, b + len, offset, xsink);
+    if (xsink && *xsink)
+        return -1;
+    if (start >= len)
+        return -1;
+    if (length < 0) {
+        qore_offset_t chars_after = getEncoding()->getLength(b + start, b + len, xsink) + length;
+        if (xsink && *xsink)
+            return -1;
+        if (chars_after < 0)
+            chars_after = 0;
+        length = chars_after;
+    }
+    size_t end_bytes = getEncoding()->getByteLen(b + start, b + len, length, xsink);
+    if (xsink && *xsink)
+        return -1;
+    byte_offset = start;
+    byte_len = end_bytes;
+    return 0;
 }
 
 QoreString* QoreString::copy() const {
@@ -2998,10 +3101,11 @@ void QoreString::concatUTF8FromUnicode(unsigned code) {
 }
 
 unsigned int QoreString::getUnicodePointFromUTF8(qore_offset_t offset) const {
-    // get length in chars
+    // get length in chars (source may be a view)
     bool invalid;
-    char* endp = priv->buf + priv->len;
-    size_t clen = priv->getEncoding()->getLength(priv->buf, endp, invalid);
+    const char* b = priv->effective_buf();
+    const char* endp = b + priv->len;
+    size_t clen = priv->getEncoding()->getLength(b, endp, invalid);
     if (invalid)
         return -1;
 
@@ -3015,29 +3119,30 @@ unsigned int QoreString::getUnicodePointFromUTF8(qore_offset_t offset) const {
 
     // calculate byte offset
     if (offset) {
-        offset = priv->getEncoding()->getByteLen(priv->buf, endp, offset, invalid);
+        offset = priv->getEncoding()->getByteLen(b, endp, offset, invalid);
         if (invalid)
             return -1;
     }
 
-    size_t bl = priv->getEncoding()->getByteLen(priv->buf + offset, endp, 1, invalid);
+    size_t bl = priv->getEncoding()->getByteLen(b + offset, endp, 1, invalid);
     if (invalid)
         return -1;
 
-    return get_unicode_from_utf8(priv->buf + offset, bl);
+    return get_unicode_from_utf8(b + offset, bl);
 }
 
 unsigned int QoreString::getUnicodePoint(qore_offset_t offset, ExceptionSink* xsink) const {
+    const char* b = priv->effective_buf();
     if (offset < 0) {
         // get string length in characters
-        qore_offset_t clen = (qore_offset_t)priv->getEncoding()->getLength(priv->buf, priv->buf + priv->len, xsink);
+        qore_offset_t clen = (qore_offset_t)priv->getEncoding()->getLength(b, b + priv->len, xsink);
         if (*xsink)
             return -1;
         offset = clen + offset;
         if (offset < 0)
             offset = 0;
     }
-    size_t bl = priv->getEncoding()->getByteLen(priv->buf, priv->buf + priv->len, offset, xsink);
+    size_t bl = priv->getEncoding()->getByteLen(b, b + priv->len, offset, xsink);
     if (*xsink)
         return -1;
 
@@ -3059,6 +3164,9 @@ QoreString* QoreString::reverse() const {
 void QoreString::trim_trailing(char c) {
     if (!priv->len)
         return;
+    if (priv->view_parent) {
+        priv->materialize();
+    }
 
     char* p = priv->buf + priv->len - 1;
     while (p >= priv->buf && (*p) == c)
@@ -3069,14 +3177,23 @@ void QoreString::trim_trailing(char c) {
 
 // remove single trailing char
 void QoreString::trim_single_trailing(char c) {
-    if (priv->len && priv->buf[priv->len - 1] == c)
-        terminate(priv->len - 1);
+    if (priv->len) {
+        if (priv->view_parent) {
+            priv->materialize();
+        }
+        if (priv->buf[priv->len - 1] == c) {
+            terminate(priv->len - 1);
+        }
+    }
 }
 
 // remove leading char
 void QoreString::trim_leading(char c) {
     if (!priv->len)
         return;
+    if (priv->view_parent) {
+        priv->materialize();
+    }
 
     size_t i = 0;
     while (i < priv->len && priv->buf[i] == c)
@@ -3090,9 +3207,14 @@ void QoreString::trim_leading(char c) {
 
 // remove single leading char
 void QoreString::trim_single_leading(char c) {
-    if (priv->len && priv->buf[0] == c) {
-        memmove(priv->buf, priv->buf + 1, priv->len);
-        priv->len -= 1;
+    if (priv->len) {
+        if (priv->view_parent) {
+            priv->materialize();
+        }
+        if (priv->buf[0] == c) {
+            memmove(priv->buf, priv->buf + 1, priv->len);
+            priv->len -= 1;
+        }
     }
 }
 
@@ -3119,6 +3241,9 @@ int QoreString::trimTrailing(ExceptionSink* xsink, const QoreString* chars) {
 void QoreString::trim_trailing(const char* chars) {
     if (!priv->len)
         return;
+    if (priv->view_parent) {
+        priv->materialize();
+    }
 
     char* p = priv->buf + priv->len - 1;
     if (!chars) // use an alternate path here so we can check for embedded nulls as well
@@ -3135,6 +3260,9 @@ void QoreString::trim_trailing(const char* chars) {
 void QoreString::trim_leading(const char* chars) {
     if (!priv->len)
         return;
+    if (priv->view_parent) {
+        priv->materialize();
+    }
 
     size_t i = 0;
     if (!chars)
@@ -3175,18 +3303,21 @@ QoreString& QoreString::operator=(const std::string& other) {
 bool QoreString::operator==(const QoreString& other) const {
    if (other.priv->getEncoding() != priv->getEncoding() || other.priv->len != priv->len)
       return false;
-   return !memcmp(other.priv->buf, priv->buf, priv->len);
+   return !memcmp(other.priv->effective_buf(), priv->effective_buf(), priv->len);
 }
 
 bool QoreString::operator==(const std::string& other) const {
    if (other.size() != priv->len)
       return false;
-   return !memcmp(other.c_str(), priv->buf, priv->len);
+   return !memcmp(other.c_str(), priv->effective_buf(), priv->len);
 }
 
 bool QoreString::operator==(const char* other) const {
    // NOTE: does not work with UTF-16 or other non-ASCII-compatible multi-byte encodings
-   return !strcmp(other, priv->buf);
+   if (!priv->len) {
+      return !other || !other[0];
+   }
+   return !strcmp(other, priv->effective_buf());
 }
 
 QoreString& QoreString::operator+=(const char* str) {
@@ -3318,7 +3449,7 @@ bool QoreString::isDataAscii() const {
 }
 
 int64 QoreString::toBigInt() const {
-   return strtoll(priv->buf, 0, 10);
+   return priv->len ? strtoll(priv->effective_buf(), 0, 10) : 0;
 }
 
 qore_offset_t QoreString::getByteOffset(size_t i, ExceptionSink* xsink) const {

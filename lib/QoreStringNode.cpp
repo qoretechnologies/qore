@@ -193,6 +193,34 @@ QoreStringNode* QoreStringNode::createAndConvertEncoding(const char* str, const 
     return *xsink ? nullptr : rv.release();
 }
 
+// static function
+QoreStringNode* QoreStringNode::makeView(QoreStringNode* parent, size_t byte_offset, size_t byte_len) {
+    assert(parent);
+    qore_string_private* pp = qore_string_private::get(parent);
+    assert(byte_offset <= pp->len);
+    assert(byte_offset + byte_len <= pp->len);
+
+    // Collapse view-of-view: never chain. If parent is itself a view, hop once.
+    QoreStringNode* actual_parent = parent;
+    size_t actual_offset = byte_offset;
+    if (pp->view_parent) {
+        actual_parent = pp->view_parent;
+        actual_offset += pp->view_offset;
+    }
+
+    // Build the view in a fresh qore_string_private with no owned buffer, then
+    // adopt it into a QoreStringNode via the adopt ctor. The default QoreString
+    // ctor does not allocate a buffer, so there is nothing to free.
+    qore_string_private* vp = new qore_string_private;
+    vp->len = byte_len;
+    vp->encoding = actual_parent->getEncoding();
+    vp->view_parent = actual_parent;
+    vp->view_offset = actual_offset;
+
+    actual_parent->ref();
+    return new QoreStringNode(vp);
+}
+
 AbstractQoreNode* QoreStringNode::realCopy() const {
     return copy();
 }
@@ -202,29 +230,20 @@ QoreStringNode* QoreStringNode::copy() const {
 }
 
 QoreStringNode* QoreStringNode::substr(qore_offset_t offset, ExceptionSink* xsink) const {
-    SimpleRefHolder<QoreStringNode> str(new QoreStringNode(priv->encoding));
-
-    int rc;
-    if (!getEncoding()->isMultiByte()) {
-        rc = priv->substr_simple(*str, offset);
-    } else {
-        rc = priv->substr_complex(*str, offset, xsink);
+    size_t byte_offset, byte_len;
+    if (priv->compute_substr_range(offset, byte_offset, byte_len, xsink)) {
+        // out of range (or encoding error) — match pre-view behaviour: return nullptr
+        return nullptr;
     }
-
-    return rc ? nullptr : str.release();
+    return makeView(const_cast<QoreStringNode*>(this), byte_offset, byte_len);
 }
 
 QoreStringNode* QoreStringNode::substr(qore_offset_t offset, qore_offset_t length, ExceptionSink* xsink) const {
-    SimpleRefHolder<QoreStringNode> str(new QoreStringNode(priv->encoding));
-
-    int rc;
-    if (!getEncoding()->isMultiByte()) {
-        rc = priv->substr_simple(*str, offset, length);
-    } else {
-        rc = priv->substr_complex(*str, offset, length, xsink);
+    size_t byte_offset, byte_len;
+    if (priv->compute_substr_range(offset, length, byte_offset, byte_len, xsink)) {
+        return nullptr;
     }
-
-    return rc ? nullptr : str.release();
+    return makeView(const_cast<QoreStringNode*>(this), byte_offset, byte_len);
 }
 
 QoreStringNode* QoreStringNode::reverse() const {
