@@ -7656,6 +7656,9 @@ static bool try_dispatch_method_fast(QoreObject* o, const QoreMethod* method,
         result = toBits(QoreValue());
         return true;
     }
+    // This fast dot-eval path bypasses CodeEvaluationHelper/UserVariantExecHelper,
+    // so it must establish the callee frame itself, like qore_rt_call_method_fast().
+    ThreadFrameBoundaryHelper tfbh(true);
 
     // Push self object onto the method call stack (for runtime_get_stack_object())
     ObjectSubstitutionHelper osh(o, qore_class_private::get(*method->getClass()));

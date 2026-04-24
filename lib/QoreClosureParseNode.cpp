@@ -48,15 +48,16 @@ QoreClosureParseNode::~QoreClosureParseNode() {
 }
 
 QoreClosureNode* QoreClosureParseNode::evalClosure() const {
-    // Capture variables just like evalBackground() does to ensure proper closure capture
-    return new QoreClosureNode(this, thread_get_all_closure_vars(), runtime_get_class());
+    // Capture only the variables referenced by this closure.  Capturing the whole cvstack retains
+    // unrelated AOT-preinstantiated closure locals and can create uncollectable cycles.
+    return new QoreClosureNode(this, thread_get_closure_vars_for_vlist(getVList()), runtime_get_class());
 }
 
 QoreObjectClosureNode* QoreClosureParseNode::evalObjectClosure() const {
     QoreObject* o;
     const qore_class_private* c_ctx;
     runtime_get_object_and_class(o, c_ctx);
-    return new QoreObjectClosureNode(o, c_ctx, this, thread_get_all_closure_vars());
+    return new QoreObjectClosureNode(o, c_ctx, this, thread_get_closure_vars_for_vlist(getVList()));
 }
 
 QoreValue QoreClosureParseNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
