@@ -494,8 +494,13 @@ protected:
     std::string callName;
     const QoreStackLocation* stack_loc = nullptr;
     const QoreProgramLocation* old_runtime_loc = nullptr;
+    const AbstractStatement* old_runtime_stmt = nullptr;
+    const QoreProgramLocation* old_runtime_ctx_loc = nullptr;
+    QoreParseOptions old_runtime_po;
+    QoreParseOptions old_rc_po;
     q_rt_flags_t old_rtflags = 0;
     bool restore_stack = false;
+    bool restore_runtime_ctx = false;
     bool restore_rtflags = false;
 
     DLLLOCAL void init(const QoreFunction* func, const AbstractQoreFunctionVariant*& variant, bool is_copy,

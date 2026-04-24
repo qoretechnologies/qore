@@ -252,6 +252,10 @@ CodeEvaluationHelper::~CodeEvaluationHelper() {
             update_runtime_stack_location(stack_loc);
         }
     }
+    if (restore_runtime_ctx) {
+        rc.setParseOptions(old_rc_po);
+        update_runtime_statement_location(old_runtime_stmt, old_runtime_ctx_loc, old_runtime_po);
+    }
     if (restore_rtflags) {
         rc.setRuntimeFlags(old_rtflags);
     }
@@ -280,10 +284,21 @@ void CodeEvaluationHelper::init(const QoreFunction* func, const AbstractQoreFunc
 #endif
 
     // set the program context if necessary
+    QoreProgram* old_pgm = pgm_ctx ? getProgram() : nullptr;
     if (pgm_ctx) {
         set(xsink, pgm_ctx, true);
         if (*xsink) {
             return;
+        }
+        if (pgm_ctx != old_pgm) {
+            old_rc_po = rc.getParseOptions();
+            rc.setParseOptions(pgm_ctx->getParseOptions());
+            swap_runtime_statement_location(xsink, rc.getStatement(), rc.getLocation(), pgm_ctx->getParseOptions(),
+                old_runtime_stmt, old_runtime_ctx_loc, old_runtime_po);
+            restore_runtime_ctx = true;
+            if (*xsink) {
+                return;
+            }
         }
     }
 
