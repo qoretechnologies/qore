@@ -22,7 +22,7 @@ list<auto> sub closures(string x) {
     return (inc, dec);
 }
 
-code sub nestedClosureFactory() {
+code<string()> sub nestedClosureFactory() {
     string prefix = "nested";
     int a = 2;
 
@@ -68,7 +68,7 @@ public class ClosuresTest inherits QUnit::Test {
     }
 
     testNestedTransitiveCapture() {
-        code c = nestedClosureFactory();
+        code<string()> c = nestedClosureFactory();
 
         assertEq("nested-3", c(), "first nested closure call");
         assertEq("nested-4", c(), "second nested closure call");
