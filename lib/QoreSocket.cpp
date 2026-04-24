@@ -4040,28 +4040,6 @@ int QoreSocket::sendHttp2StreamData(int32_t stream_id, const BinaryNode* data,
     return 0;
 }
 
-int QoreSocket::submitHttp2StreamingResponseHeaders(int32_t stream_id, int status_code,
-        const QoreHashNode* headers, ExceptionSink* xsink) {
-    if (!priv->h2_session) {
-        xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session active");
-        return -1;
-    }
-
-    // Convert QoreHashNode to map
-    strcase_str_map_t header_map;
-    if (headers) {
-        ConstHashIterator hi(headers);
-        while (hi.next()) {
-            QoreValue val = hi.get();
-            if (val.getType() == NT_STRING) {
-                header_map[hi.getKey()] = val.get<const QoreStringNode>()->c_str();
-            }
-        }
-    }
-
-    return priv->h2_session->submitResponseStreaming(stream_id, status_code, header_map, xsink);
-}
-
 int QoreSocket::sendHttp2Trailers(int32_t stream_id, const QoreHashNode* trailers,
         ExceptionSink* xsink) {
     if (!priv->h2_session) {

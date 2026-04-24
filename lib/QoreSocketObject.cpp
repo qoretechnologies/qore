@@ -1033,15 +1033,34 @@ int QoreSocketObject::submitHttp2StreamingResponseWithStream(int32_t stream_id, 
         return 1;
     }
 
-    AutoLocker al(priv->m);
-    Http2Session* session = priv->socket->priv->h2_session.get();
-    if (!session) {
+    // Follow the same brief-lock pattern as the other async-safe HTTP/2
+    // server write methods: acquire priv->m only long enough to copy the
+    // Http2Session shared pointer, then do all session work under only
+    // Http2Session's own recursive mutex.  The handler thread never
+    // competes with the I/O thread for priv->m during frame submission
+    // or InputStream registration.
+    Http2SessionPtr h2;
+    {
+        AutoLocker al(priv->m);
+        h2 = priv->socket->priv->h2_session;
+    }
+    if (!h2) {
         xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session available");
         return -1;
     }
 
     // Submit response headers without END_STREAM
-    int rv = priv->socket->submitHttp2StreamingResponseHeaders(stream_id, status_code, headers, xsink);
+    strcase_str_map_t header_map;
+    if (headers) {
+        ConstHashIterator hi(headers);
+        while (hi.next()) {
+            QoreValue val = hi.get();
+            if (val.getType() == NT_STRING) {
+                header_map[hi.getKey()] = val.get<const QoreStringNode>()->c_str();
+            }
+        }
+    }
+    int rv = h2->submitResponseStreaming(stream_id, status_code, header_map, xsink);
     if (rv) {
         return rv;
     }
@@ -1079,7 +1098,7 @@ int QoreSocketObject::submitHttp2StreamingResponseWithStream(int32_t stream_id, 
         return -1;
     }
 
-    session->setStreamInputStream(stream_id, body, xsink, content_length);
+    h2->setStreamInputStream(stream_id, body, xsink, content_length);
     return *xsink ? -1 : 0;
 }
 

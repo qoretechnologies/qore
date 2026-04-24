@@ -2014,22 +2014,6 @@ public:
     DLLEXPORT int sendHttp2Trailers(int32_t stream_id, const QoreHashNode* trailers,
             ExceptionSink* xsink);
 
-    //! Submits HTTP/2 streaming response headers without body or END_STREAM
-    /** Calls Http2Session::submitResponseStreaming() to send response HEADERS
-        without END_STREAM. A deferred data provider is created so that body data
-        can be sent later via sendHttp2StreamData() and trailers via sendHttp2Trailers().
-
-        @param stream_id the HTTP/2 stream ID
-        @param status_code HTTP status code (e.g., 200)
-        @param headers response headers
-        @param xsink exception sink for error reporting
-        @return 0 on success, -1 on error
-
-        @since %Qore 2.3
-    */
-    DLLEXPORT int submitHttp2StreamingResponseHeaders(int32_t stream_id, int status_code,
-            const QoreHashNode* headers, ExceptionSink* xsink);
-
     //! Check if an HTTP/2 stream has been closed
     /** @param stream_id the HTTP/2 stream ID
         @return true if the stream state is Closed (via END_STREAM + response, RST_STREAM,
