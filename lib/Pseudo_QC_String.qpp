@@ -32,6 +32,7 @@
 #include <qore/Qore.h>
 #include "qore/intern/ql_crypto.h"
 #include "qore/intern/QoreLibIntern.h"
+#include "qore/intern/QC_StringSplitIterator.h"
 
 #include <cctype>
 
@@ -465,6 +466,35 @@ list<string> <string>::split(string sep, bool with_separator = False) [flags=RET
 
     return split_intern(temp->c_str(), temp->strlen(), str->c_str(), str->strlen(), str->getEncoding(),
         with_separator);
+}
+
+//! Returns a lazy @ref Qore::StringSplitIterator iterator yielding zero-copy views of each piece.
+/** Streaming counterpart of @ref split(); the intermediate @ref list "list" is
+    never built when the iterator is consumed by @ref map, @ref select, or
+    @ref foldl.  Each yielded element is a view onto the original string's
+    buffer, materialised lazily only if the caller mutates it.
+
+    @param sep the byte-wise delimiter; an empty delimiter yields the whole
+           string once
+
+    @return an @ref Qore::StringSplitIterator "StringSplitIterator"
+
+    @par Example:
+    @code{.py}
+int errors = foldl $1 + ($2 =~ /ERROR/ ? 1 : 0), 0, log.splitString("\n");
+    @endcode
+
+    @since %Qore 2.4.0
+ */
+AbstractIterator <string>::splitString(string sep) [flags=CONSTANT] {
+    // Convert separator encoding if needed; use c_str()/size() on the source
+    // (the iterator holds its own ref and walks bytes — encoding matters only
+    // for the separator search).
+    TempEncodingHelper temp(sep, str->getEncoding(), xsink);
+    if (*xsink)
+        return QoreValue();
+    return new QoreObject(QC_STRINGSPLITITERATOR, 0,
+        new StringSplitIterator(str, *temp));
 }
 
 //! Splits a string into a list of components based on a separator string and a quote character
