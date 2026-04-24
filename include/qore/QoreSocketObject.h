@@ -496,7 +496,7 @@ public:
             ExceptionSink* xsink);
 
     //! Flushes pending HTTP/2 write data (non-blocking)
-    /** Drains data queued by sendHttp2StreamData() from the nghttp2 session
+    /** Drains data queued by sendHttp2StreamDataAsync() from the nghttp2 session
         and sends it on the socket. Returns 0 if all data was sent, 1 if
         data remains (would block), -1 on error.
 
@@ -519,36 +519,36 @@ public:
             const QoreHashNode* headers, InputStream* body, ExceptionSink* xsink);
 
     //! Submit HTTP/2 streaming response headers without holding the socket wrapper lock
-    /** Async-path variant of @ref submitHttp2StreamingResponseHeaders() for handlers
-        running under an async I/O controller: acquires the wrapper lock only briefly
-        to copy the Http2Session shared pointer, then performs header submission under
-        only the session's internal recursive mutex.  This avoids the handler-thread
-        vs. I/O-thread contention on @c priv->m that the sync variant incurs.
+    /** Async-path variant of @ref submitHttp2StreamingResponseHeaders() for
+        handlers running under an async I/O controller: acquires the wrapper
+        lock only briefly to copy the Http2Session shared pointer, then
+        performs header submission under only the session's internal recursive
+        mutex.
         @since %Qore 2.3
     */
     DLLEXPORT int submitHttp2StreamingResponseHeadersAsync(int32_t stream_id, int status_code,
             const QoreHashNode* headers, ExceptionSink* xsink);
 
     //! Send HTTP/2 DATA frame payload without holding the socket wrapper lock
-    /** Async-path variant of @ref sendHttp2StreamData(); follows the
-        @ref waitForHttp2StreamDrain() precedent of briefly acquiring
-        @c priv->m only to copy the Http2Session shared pointer.
+    /** Async-path variant of @ref sendHttp2StreamData().  Briefly acquires
+        @c priv->m only to copy the Http2Session shared pointer; enqueue runs
+        under only the session's internal mutex.
         @since %Qore 2.3
     */
     DLLEXPORT int sendHttp2StreamDataAsync(int32_t stream_id, const BinaryNode* data,
             bool end_stream, ExceptionSink* xsink);
 
     //! Send HTTP/2 trailers without holding the socket wrapper lock
-    /** Async-path variant of @ref sendHttp2Trailers(); follows the
-        @ref waitForHttp2StreamDrain() precedent of briefly acquiring
-        @c priv->m only to copy the Http2Session shared pointer.
+    /** Async-path variant of @ref sendHttp2Trailers().  Briefly acquires
+        @c priv->m only to copy the Http2Session shared pointer; submission
+        runs under only the session's internal mutex.
         @since %Qore 2.3
     */
     DLLEXPORT int sendHttp2TrailersAsync(int32_t stream_id, const QoreHashNode* trailers,
             ExceptionSink* xsink);
 
     //! Remove an HTTP/2 stream from the session without holding the socket wrapper lock
-    /** Async-path variant of @ref cleanupHttp2Stream(); briefly acquires
+    /** Async-path variant of @ref cleanupHttp2Stream().  Briefly acquires
         @c priv->m to copy the Http2Session shared pointer, then performs
         stream cleanup under only the session's internal mutex.
         @since %Qore 2.3
@@ -556,7 +556,7 @@ public:
     DLLEXPORT void cleanupHttp2StreamAsync(int32_t stream_id);
 
     //! Send RST_STREAM and clean up the stream state without holding the socket wrapper lock
-    /** Async-path variant of @ref resetHttp2Stream(); briefly acquires
+    /** Async-path variant of @ref resetHttp2Stream().  Briefly acquires
         @c priv->m to copy the Http2Session shared pointer, then submits
         RST_STREAM and cleans up stream state under only the session's
         internal mutex.

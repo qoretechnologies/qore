@@ -545,7 +545,7 @@ public hashdecl HttpServerOptionInfo {
         @ref AbstractHttpRequestHandler::wantsBodyStreaming() "wantsBodyStreaming()" and
         return @ref True "True" can read body data incrementally via
         @ref Qore::Socket::readQuicStreamDataBlock() (HTTP/3) or
-        @ref Qore::Socket::readHttp2StreamDataBlock() (HTTP/2).
+        HttpConnectionInfo::header_info::register_body_queue (HTTP/2).
 
         Handlers that do @b not override \c wantsBodyStreaming() are unaffected — the
         framework automatically buffers the full body before calling \c handleRequest(),

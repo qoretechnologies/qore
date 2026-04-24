@@ -141,7 +141,7 @@ public class Http2SseStream inherits AbstractSseConnection {
         binary bin = binary(data);
         while (True) {
             try {
-                sock.sendHttp2StreamData(stream_id, bin, False);
+                sock.sendHttp2StreamDataAsync(stream_id, bin, False);
                 break;
             } catch (hash<ExceptionInfo> ex) {
                 if (ex.err == "HTTP2-FLOW-CONTROL") {
@@ -184,7 +184,7 @@ public class Http2SseStream inherits AbstractSseConnection {
         }
         stream_open = False;
         try {
-            sock.sendHttp2StreamData(stream_id, NOTHING, True);
+            sock.sendHttp2StreamDataAsync(stream_id, NOTHING, True);
             if (wake_callback) {
                 wake_callback();
             }
@@ -196,7 +196,7 @@ public class Http2SseStream inherits AbstractSseConnection {
     abort() {
         stream_open = False;
         try {
-            sock.resetHttp2Stream(stream_id);
+            sock.resetHttp2StreamAsync(stream_id);
             if (wake_callback) {
                 wake_callback();
             }
@@ -229,7 +229,7 @@ public class Http2SseStream inherits AbstractSseConnection {
         hash<auto> headers = extra_headers ?? {};
         headers."content-type" = "text/event-stream";
         headers."cache-control" = "no-cache";
-        sock.submitHttp2StreamingResponseHeaders(stream_id, 200, headers);
+        sock.submitHttp2StreamingResponseHeadersAsync(stream_id, 200, headers);
         headers_sent = True;
         if (wake_callback) {
             wake_callback();

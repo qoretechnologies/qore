@@ -189,14 +189,14 @@ public class Http2Test inherits QUnit::Test {
         addTestCase("HTTP/2 poll large body test", \testHttp2PollLargeBody());
         addTestCase("HTTP/2 poll multi-value headers test", \testHttp2PollMultiValueHeaders());
         addTestCase("HTTP/2 poll negative tests", \testHttp2PollNegative());
-        addTestCase("HTTP/2 headers-only poll and streaming read test",
-            \testHttp2HeadersOnlyPoll());
-        addTestCase("HTTP/2 headers-only then normal request test",
-            \testHttp2HeadersOnlyThenNormal());
-        addTestCase("HTTP/2 client multiplex streaming data test",
-            \testHttp2ClientMultiplexStreaming());
-        addTestCase("HTTP/2 RST_STREAM during InputStream streaming test",
-            \testHttp2RstStreamDuringInputStreamStreaming());
+        # The four tests below exercised the now-removed sync H2 server
+        # Socket API (Socket::readHttp2StreamDataBlock,
+        # submitHttp2StreamingResponseHeaders, sendHttp2StreamData,
+        # flushHttp2, cleanupHttp2Stream, resetHttp2Stream).  Equivalent
+        # coverage runs at a higher level via HttpServerAsyncHttp2*.qtest
+        # (server) and HttpClientIo.qtest (client multiplex / RST_STREAM).
+        # Test bodies are retained as historical reference but are not
+        # registered and will be deleted in the next major Qore release.
         addTestCase("HTTP/2 ALPN via HttpAcceptPollOperation auto-SSL test",
             \testAlpnViaAcceptPollAutoSsl());
         addTestCase("HTTP/2 concurrent connections test",
@@ -4275,7 +4275,7 @@ public class Http2Test inherits QUnit::Test {
                 }
 
                 # Send streaming response headers (no END_STREAM)
-                client.submitHttp2StreamingResponseHeaders(stream_id, 200, {
+                client.submitHttp2StreamingResponseHeadersAsync(stream_id, 200, {
                     "content-type": "application/octet-stream",
                     "x-streaming": "true",
                 });
@@ -4283,17 +4283,17 @@ public class Http2Test inherits QUnit::Test {
 
                 # Send data chunks with flush between each to encourage
                 # separate delivery to the client
-                client.sendHttp2StreamData(stream_id, chunk1, False);
+                client.sendHttp2StreamDataAsync(stream_id, chunk1, False);
                 client.flushHttp2(5s);
 
-                client.sendHttp2StreamData(stream_id, chunk2, False);
+                client.sendHttp2StreamDataAsync(stream_id, chunk2, False);
                 client.flushHttp2(5s);
 
-                client.sendHttp2StreamData(stream_id, chunk3, False);
+                client.sendHttp2StreamDataAsync(stream_id, chunk3, False);
                 client.flushHttp2(5s);
 
                 # Send trailers with END_STREAM
-                client.sendHttp2Trailers(stream_id, {
+                client.sendHttp2TrailersAsync(stream_id, {
                     "x-trailer": "complete",
                 });
 
@@ -4368,7 +4368,7 @@ public class Http2Test inherits QUnit::Test {
 
                 # Close the client stream (send END_STREAM) since this is a simple
                 # request with no body, not a client-streaming RPC
-                sock.sendHttp2StreamData(stream_id, NOTHING, True);
+                sock.sendHttp2StreamDataAsync(stream_id, NOTHING, True);
 
                 {
                     AutoLock al(result_mutex);
@@ -4589,9 +4589,9 @@ public class Http2Test inherits QUnit::Test {
                                 test_results.server_req2_path = req2.path;
                             }
                             # Respond to second request with a small body
-                            client.submitHttp2StreamingResponseHeaders(
+                            client.submitHttp2StreamingResponseHeadersAsync(
                                 req2.stream_id, 200, {"content-type": "text/plain"});
-                            client.sendHttp2StreamData(req2.stream_id, binary("OK"), True);
+                            client.sendHttp2StreamDataAsync(req2.stream_id, binary("OK"), True);
                             got_req2 = True;
                             break;
                         }
@@ -4650,7 +4650,7 @@ public class Http2Test inherits QUnit::Test {
                     ":authority": "localhost",
                 }, NOTHING, True);
                 # End the request stream immediately (no request body)
-                sock.sendHttp2StreamData(stream_id_1, NOTHING, True);
+                sock.sendHttp2StreamDataAsync(stream_id_1, NOTHING, True);
 
                 # Drive the poll loop until we receive at least the response headers
                 # for stream 1 (proves the server started sending)

@@ -242,7 +242,7 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
         given stream.
 
         The caller is responsible for having already submitted the response
-        headers via @ref Qore::Socket::submitHttp2StreamingResponseHeaders()
+        headers via @ref Qore::Socket::submitHttp2StreamingResponseHeadersAsync()
         before invoking this method (so that the SSE stream is open and
         headers don't get submitted twice).
 

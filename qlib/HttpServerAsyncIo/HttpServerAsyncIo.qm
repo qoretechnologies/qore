@@ -177,14 +177,15 @@ public namespace HttpServerAsyncIo {
         - \c http2: \c True for HTTP/2 requests
         - \c stream_id: The HTTP/2 stream ID (needed for sending response)
         - \c body_streaming: \c True when the client sent HEADERS without END_STREAM (request body
-          not yet complete); the handler should use \c Socket::readHttp2StreamDataBlock() to read
-          body data incrementally and \c Socket::flushHttp2() to send outgoing data (the handler
-          has exclusive socket access in this mode)
+          not yet complete); the handler registers a @ref Queue "Queue" via
+          \c register_body_queue to receive inbound DATA chunks (NOTHING sentinel = END_STREAM)
+          and writes outgoing DATA via \c Socket::sendHttp2StreamDataAsync() followed by
+          \c io_wake()
         - \c headers_end_stream: \c True if END_STREAM was on the HEADERS frame (e.g., GET with
           no body); when \c True, \c body_streaming is \c False and there is no body to read
-        - \c io_wake: a code closure to call after queuing outgoing data to wake the I/O thread;
-          @note in \c body_streaming mode, \c io_wake has no effect because the I/O thread does not
-          manage the socket — use \c Socket::flushHttp2() instead
+        - \c io_wake: a code closure to call after queuing outgoing data to wake the I/O thread
+        - \c register_body_queue: only present in \c body_streaming mode — a closure that takes an
+          unlimited @ref Queue "Queue" and connects it to the I/O thread's stream reader
 
         For HTTP/3 connections, \c header_info contains:
         - \c http3: \c True for HTTP/3 requests

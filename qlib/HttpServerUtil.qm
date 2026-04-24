@@ -1980,7 +1980,7 @@ public class CallbackInputStream inherits InputStream {
     calls never execute on the async I/O thread (architectural invariant).
 
     The producer reads chunks from the InputStream and calls
-    @ref Qore::Socket::sendHttp2StreamData() "sendHttp2StreamData()" (HTTP/2)
+    @ref Qore::Socket::sendHttp2StreamDataAsync() "sendHttp2StreamData()" (HTTP/2)
     or @ref Qore::Socket::submitQuicStreamData() "submitQuicStreamData()" (HTTP/3)
     to push frames into the session's internal send buffer.  The I/O thread
     drains that buffer to the socket as part of its normal poll loop.
@@ -1993,7 +1993,7 @@ public class CallbackInputStream inherits InputStream {
     the same chunk (no data loss).
 
     Error handling: any exception from @c read() or a stream-level send error
-    triggers a per-stream reset via @ref Qore::Socket::resetHttp2Stream()
+    triggers a per-stream reset via @ref Qore::Socket::resetHttp2StreamAsync()
     "resetHttp2Stream()" or @ref Qore::Socket::cancelQuicStream()
     "cancelQuicStream()" — the peer sees a clean RST, never a silent hang.
 
@@ -2229,7 +2229,7 @@ public class AbstractHttpRequestHandler {
         - <b>HTTP/3</b>: use @ref Qore::Socket::readQuicStreamDataBlock() with \c session_id and \c stream_id
           from \c cx."header-info".  The I/O thread drives the shared UDP socket; the handler waits on a
           per-stream condition variable for data.
-        - <b>HTTP/2</b>: use @ref Qore::Socket::readHttp2StreamDataBlock() with \c stream_id from
+        - <b>HTTP/2</b>: use HttpConnectionInfo::header_info::register_body_queue with \c stream_id from
           \c cx."header-info".  The handler thread drives the TCP socket directly.
 
         Check \c cx."header-info".http3 to determine which protocol is in use.
@@ -2245,7 +2245,7 @@ public class AbstractHttpRequestHandler {
         - \c http3 (\c bool): \c True for HTTP/3 requests
         - \c http2 (\c bool): \c True for HTTP/2 requests
 
-        @par Complete HTTP/3 Streaming Handler Example
+        @par Complete Streaming Handler Example
         @code{.py}
         class StreamingUploadHandler inherits AbstractHttpRequestHandler {
             bool wantsBodyStreaming(hash<auto> cx, hash<auto> hdr) {
@@ -2263,24 +2263,44 @@ public class AbstractHttpRequestHandler {
                     return makeResponse(200, body ?? "no body");
                 }
 
-                int session_id = cx."header-info".session_id;
-                int stream_id = cx."header-info".stream_id;
-                Socket sock = cx."header-info".sock;
-
-                # Read body data incrementally
                 binary accumulated = binary();
-                while (True) {
-                    *binary chunk;
-                    if (cx."header-info".http3) {
-                        chunk = sock.readQuicStreamDataBlock(session_id, stream_id, 30s);
-                    } else {
-                        chunk = sock.readHttp2StreamDataBlock(stream_id, 30s);
+                if (cx."header-info".http3) {
+                    # HTTP/3: read sync from the QUIC stream; the I/O thread
+                    # drives the shared UDP socket.
+                    int session_id = cx."header-info".session_id;
+                    int stream_id = cx."header-info".stream_id;
+                    Socket sock = cx."header-info".sock;
+                    while (True) {
+                        *binary chunk = sock.readQuicStreamDataBlock(session_id,
+                            stream_id, 30s);
+                        if (!exists chunk) {
+                            break;  # END_STREAM — no more data
+                        }
+                        accumulated += chunk;
                     }
-                    if (!exists chunk) {
-                        break;  # END_STREAM — no more data
+                } else {
+                    # HTTP/2: register a Queue via the header_info closure; the
+                    # I/O thread pushes binary DATA chunks and a NOTHING sentinel
+                    # at END_STREAM.
+                    code<nothing(Queue)> register_body_queue
+                        = cx."header-info".register_body_queue;
+                    Queue body_queue(-1);
+                    register_body_queue(body_queue);
+                    while (True) {
+                        auto chunk;
+                        try {
+                            chunk = body_queue.get(30s);
+                        } catch (hash<ExceptionInfo> ex) {
+                            if (ex.err == "QUEUE-TIMEOUT") {
+                                break;
+                            }
+                            rethrow;
+                        }
+                        if (!(chunk instanceof binary)) {
+                            break;  # NOTHING sentinel = END_STREAM
+                        }
+                        accumulated += chunk;
                     }
-                    accumulated += chunk;
-                    # Optional: process chunks as they arrive for streaming use cases
                 }
 
                 return makeResponse(200, sprintf("received %d bytes", accumulated.size()));
@@ -2291,7 +2311,7 @@ public class AbstractHttpRequestHandler {
         @par Backward Compatibility
         If this method returns @ref False "False" (the default), the framework automatically buffers
         the full request body using @ref Qore::Socket::readQuicStreamDataBlock() (HTTP/3) or
-        @ref Qore::Socket::readHttp2StreamDataBlock() (HTTP/2) before calling
+        HttpConnectionInfo::header_info::register_body_queue (HTTP/2) before calling
         @ref handleRequest() with the complete body in the \c body parameter.  This maintains
         full backward compatibility — existing handlers work without modification when
         \c quic_headers_only is enabled on the server.
@@ -2317,7 +2337,7 @@ public class AbstractHttpRequestHandler {
         the body first
 
         @see @ref Qore::Socket::readQuicStreamDataBlock()
-        @see @ref Qore::Socket::readHttp2StreamDataBlock()
+        @see HttpConnectionInfo::header_info::register_body_queue
 
         @since HttpServerUtil 2.1
     */

@@ -162,14 +162,14 @@ class Http2TrailersTest inherits QUnit::Test {
                 int stream_id = request.stream_id;
 
                 # Submit streaming response headers (no END_STREAM)
-                client.submitHttp2StreamingResponseHeaders(stream_id, 200,
+                client.submitHttp2StreamingResponseHeadersAsync(stream_id, 200,
                     {"content-type": "application/grpc+proto"});
 
                 # Send body data
-                client.sendHttp2StreamData(stream_id, binary("hello-grpc"));
+                client.sendHttp2StreamDataAsync(stream_id, binary("hello-grpc"));
 
                 # Send trailers (grpc-status, grpc-message)
-                client.sendHttp2Trailers(stream_id, {
+                client.sendHttp2TrailersAsync(stream_id, {
                     "grpc-status": "0",
                     "grpc-message": "OK",
                     "custom-trailer": "test-value",
@@ -251,15 +251,15 @@ class Http2TrailersTest inherits QUnit::Test {
                 int stream_id = request.stream_id;
 
                 # Submit streaming response headers
-                client.submitHttp2StreamingResponseHeaders(stream_id, 200,
+                client.submitHttp2StreamingResponseHeadersAsync(stream_id, 200,
                     {"content-type": "application/octet-stream"});
 
                 # Send multiple body chunks
-                client.sendHttp2StreamData(stream_id, binary("chunk1"));
-                client.sendHttp2StreamData(stream_id, binary("chunk2"));
+                client.sendHttp2StreamDataAsync(stream_id, binary("chunk1"));
+                client.sendHttp2StreamDataAsync(stream_id, binary("chunk2"));
 
                 # Send trailers
-                client.sendHttp2Trailers(stream_id, {
+                client.sendHttp2TrailersAsync(stream_id, {
                     "checksum": "abc123",
                 });
 
@@ -406,11 +406,11 @@ class Http2TrailersTest inherits QUnit::Test {
                 int stream_id = request.stream_id;
 
                 # Submit streaming response headers
-                client.submitHttp2StreamingResponseHeaders(stream_id, 200,
+                client.submitHttp2StreamingResponseHeadersAsync(stream_id, 200,
                     {"content-type": "application/grpc+proto"});
 
                 # Send trailers-only (no body data — gRPC error-only response)
-                client.sendHttp2Trailers(stream_id, {
+                client.sendHttp2TrailersAsync(stream_id, {
                     "grpc-status": "2",
                     "grpc-message": "UNKNOWN: something went wrong",
                     "x-debug-info": "server=node1",
@@ -486,13 +486,13 @@ class Http2TrailersTest inherits QUnit::Test {
                 int stream_id = request.stream_id;
 
                 # Submit streaming response headers
-                client.submitHttp2StreamingResponseHeaders(stream_id, 200,
+                client.submitHttp2StreamingResponseHeadersAsync(stream_id, 200,
                     {"content-type": "text/plain"});
 
-                client.sendHttp2StreamData(stream_id, binary("data"));
+                client.sendHttp2StreamDataAsync(stream_id, binary("data"));
 
                 # Send trailers with mixed-case names — HTTP/2 lowercases them
-                client.sendHttp2Trailers(stream_id, {
+                client.sendHttp2TrailersAsync(stream_id, {
                     "Grpc-Status": "0",
                     "X-Custom-Trailer": "mixed-case-value",
                     "UPPERCASE": "upper-value",
@@ -566,14 +566,14 @@ class Http2TrailersTest inherits QUnit::Test {
                 int stream_id = request.stream_id;
 
                 # Submit streaming response headers
-                client.submitHttp2StreamingResponseHeaders(stream_id, 200,
+                client.submitHttp2StreamingResponseHeadersAsync(stream_id, 200,
                     {"content-type": "application/grpc+proto"});
 
                 # Send body data
-                client.sendHttp2StreamData(stream_id, binary("streaming-body"));
+                client.sendHttp2StreamDataAsync(stream_id, binary("streaming-body"));
 
                 # Send trailers
-                client.sendHttp2Trailers(stream_id, {
+                client.sendHttp2TrailersAsync(stream_id, {
                     "grpc-status": "0",
                     "grpc-message": "OK",
                 });
@@ -658,7 +658,7 @@ class Http2TrailersTest inherits QUnit::Test {
                 int stream_id = request.stream_id;
 
                 # Submit streaming response headers
-                client.submitHttp2StreamingResponseHeaders(stream_id, 200,
+                client.submitHttp2StreamingResponseHeadersAsync(stream_id, 200,
                     {"content-type": "application/grpc+proto"});
 
                 # Create Http2StreamContext and use it for sending
@@ -731,7 +731,7 @@ class Http2TrailersTest inherits QUnit::Test {
     testSendTrailersNoHttp2Session() {
         Socket sock();
         assertThrows("HTTP2-ERROR", sub() {
-            sock.sendHttp2Trailers(1, {"grpc-status": "0"});
+            sock.sendHttp2TrailersAsync(1, {"grpc-status": "0"});
         }, NOTHING, "sendHttp2Trailers without HTTP/2 session throws");
     }
 
@@ -835,14 +835,14 @@ class Http2TrailersTest inherits QUnit::Test {
                 int stream_id = request.stream_id;
 
                 # Submit streaming response headers
-                client.submitHttp2StreamingResponseHeaders(stream_id, 200,
+                client.submitHttp2StreamingResponseHeadersAsync(stream_id, 200,
                     {"content-type": "application/grpc+proto"});
 
                 # Send body data
-                client.sendHttp2StreamData(stream_id, binary("streaming-body-data"));
+                client.sendHttp2StreamDataAsync(stream_id, binary("streaming-body-data"));
 
                 # Send trailers with custom headers
-                client.sendHttp2Trailers(stream_id, {
+                client.sendHttp2TrailersAsync(stream_id, {
                     "grpc-status": "0",
                     "grpc-message": "OK",
                     "x-custom-trailer": "test-value",
