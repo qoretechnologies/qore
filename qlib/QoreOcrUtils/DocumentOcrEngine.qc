@@ -75,8 +75,6 @@ result = engine.processDocument(
     ReadOnlyFile::readBinaryFile("scan.tiff"));
 printf("Text: %s\n", result.text);
     @endcode
-
-    @since QoreOcrUtils 1.0
 */
 public class DocumentOcrEngine {
     private {

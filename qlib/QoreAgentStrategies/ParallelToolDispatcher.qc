@@ -56,8 +56,6 @@ foreach hash<auto> r in (results) {
     printf("Tool %s: %y\n", r.name, r.result ?? r.error);
 }
     @endcode
-
-    @since QoreAgentStrategies 1.0
 */
 public class ParallelToolDispatcher {
     public {

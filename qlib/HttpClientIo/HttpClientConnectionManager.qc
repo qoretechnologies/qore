@@ -139,8 +139,6 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
             from user-facing entry points (e.g. @ref acquireStream()) on the calling thread —
             this avoids both the async-I/O-thread restriction and the ref-cycle that would
             arise from a background thread capturing @c self.
-
-            @since HttpClientIo 1.0
         */
         date last_cleanup_time = now_us();
 
@@ -177,8 +175,6 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         /** Created when enable_cookies is True (default).  Shared across all
             pooled connections — cookies set by one request are sent with
             subsequent matching requests regardless of which connection is used.
-
-            @since HttpClientIo 1.0
         */
         *CookieJar cookie_jar;
     }
@@ -258,8 +254,6 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         happen to both pass the time check may both call @ref cleanupIdleConnections(),
         which is harmless because it takes @c pool_lock and the second caller finds
         everything already cleaned up.
-
-        @since HttpClientIo 1.0
     */
     private:internal maybeCleanupIdle() {
         if (shutdown) {
@@ -307,8 +301,6 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
 
     #! Returns the cookie jar (NOTHING if cookies are disabled)
     /** @return the CookieJar instance, or NOTHING if \c enable_cookies is False
-
-        @since HttpClientIo 1.0
     */
     *CookieJar getCookieJar() {
         return cookie_jar;
@@ -2189,8 +2181,6 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
 /** Overrides \c get() to process cookies from the response headers before
     returning.  No extra threads — cookie extraction happens synchronously
     on the caller's thread when they call \c get().
-
-    @since HttpClientIo 1.0
 */
 class CookieExtractingFuture inherits Future {
     private {

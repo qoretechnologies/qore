@@ -60,8 +60,6 @@ SseObservable obs(mgr, "https://api.example.com", "POST", "/stream",
 obs.registerObserver(my_observer);
 obs.observersReady();
     @endcode
-
-    @since %HttpClientStreamingIo 1.0
 */
 
 namespace Priv {

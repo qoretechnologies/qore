@@ -35,8 +35,6 @@ public namespace AsyncSocketIo {
     Subclasses:
     - @ref Http2StreamContext — HTTP/2 stream I/O via nghttp2
     - @ref Http3StreamContext — HTTP/3 stream I/O via ngtcp2/nghttp3
-
-    @since AsyncSocketIo 1.0
 */
 public class AbstractStreamContext {
     #! Returns the protocol identifier

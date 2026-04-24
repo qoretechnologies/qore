@@ -31,8 +31,6 @@ public namespace QoreRagUtils {
     Paragraphs that individually exceed \c target_tokens are emitted as
     their own chunk (no forced splitting in this strategy; use
     @ref FixedChunker for hard limits).
-
-    @since QoreRagUtils 1.0
 */
 public class StructuredChunker inherits AbstractChunker {
     private {

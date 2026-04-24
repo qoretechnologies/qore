@@ -66,8 +66,6 @@ hash<OcrResult> result = engine.extractText(image_data);
 OcrEngine engine(<OcrConfig>{"mode": "http", "url": "http://ocr-service:8080"});
 hash<OcrResult> result = engine.extractText(image_data);
     @endcode
-
-    @since QoreOcrUtils 1.0
 */
 public class OcrEngine {
     private {

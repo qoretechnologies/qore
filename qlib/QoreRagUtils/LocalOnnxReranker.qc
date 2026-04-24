@@ -34,8 +34,6 @@ public namespace QoreRagUtils {
     - \c options.tokenizer_config (required): tokenizer JSON hash
     - \c options.max_length (optional): maximum query+passage tokens; default 512
     - \c options.activation (optional): \c "sigmoid" (default), \c "softmax", or \c "none"
-
-    @since QoreRagUtils 1.0
 */
 public class LocalOnnxReranker inherits AbstractReranker {
     private {

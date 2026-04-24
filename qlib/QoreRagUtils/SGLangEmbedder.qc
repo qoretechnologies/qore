@@ -37,8 +37,6 @@ public namespace QoreRagUtils {
       authentication enabled
     - \c dimension (optional): cached dimension; when unset the dimension is
       auto-detected on first call
-
-    @since QoreRagUtils 1.0
 */
 public class SGLangEmbedder inherits AbstractEmbedder {
     public {

@@ -71,8 +71,6 @@ hash<PdfOcrResult> result = engine.processPdf(pdf_data);
 printf("Extracted %d pages (%d required OCR):\n%s\n",
     result.total_pages, result.ocr_page_count, result.text);
     @endcode
-
-    @since QoreOcrUtils 1.0
 */
 public class PdfOcrEngine {
     private {

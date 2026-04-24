@@ -30,8 +30,6 @@ public namespace QoreRagUtils {
 
     Implementations must be thread-safe — multiple threads may call
     @ref encode() and @ref encodeBatch() concurrently.
-
-    @since QoreRagUtils 1.0
 */
 public class AbstractEmbedder {
     #! Encodes a single piece of text into a vector

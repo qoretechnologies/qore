@@ -165,15 +165,13 @@ public namespace HttpServerAsyncIo {
         /** When set, the controller calls @ref Qore::Socket::sendHTTPResponseWithCallback()
             "sendHTTPResponseWithCallback()" with this callback instead of sending the body directly.
 
-            @since HttpServerAsyncIo 1.0
 
             @see send_timeout
         */
         *code send_callback;
 
         #! timeout for send_callback responses
-        /** @since HttpServerAsyncIo 1.0
-
+        /**
             @see send_callback
         */
         *timeout send_timeout;
@@ -210,7 +208,6 @@ public namespace HttpServerAsyncIo {
         - \c path: The request path
         - \c :authority: The :authority pseudo-header value
         - \c :scheme: The :scheme pseudo-header value
-
     */
     public hashdecl HttpConnectionInfo {
         #! The socket for this connection

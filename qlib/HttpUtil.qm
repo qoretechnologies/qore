@@ -107,8 +107,6 @@ public hashdecl CookieInfo {
     @param default_path the request path (used to compute default path per RFC 6265 Section 5.1.4)
 
     @return the parsed cookie info, or NOTHING if the header is invalid
-
-    @since HttpUtil 1.0
 */
 public *hash<CookieInfo> sub parse_cookie(string cookie_str, string default_domain,
         string default_path) {
@@ -201,8 +199,6 @@ public *hash<CookieInfo> sub parse_cookie(string cookie_str, string default_doma
     @return the Set-Cookie header value string
 
     @throw COOKIE-ERROR if the cookie name is empty
-
-    @since HttpUtil 1.0
 */
 public string sub format_set_cookie(hash<CookieInfo> cookie) {
     if (!cookie.name) {
@@ -239,8 +235,6 @@ public string sub format_set_cookie(hash<CookieInfo> cookie) {
     @param cookie the cookie to set
     @param set_cache_control if True (default), sets Cache-Control to prevent caching
     of responses that set cookies
-
-    @since HttpUtil 1.0
 */
 public sub set_cookie_header(reference<hash<auto>> hdr, hash<CookieInfo> cookie,
         bool set_cache_control = True) {

@@ -44,8 +44,6 @@ public namespace QoreRagUtils {
     "usage": {...}
 }
     @endcode
-
-    @since QoreRagUtils 1.0
 */
 public class HttpGatewayReranker inherits AbstractReranker {
     private {

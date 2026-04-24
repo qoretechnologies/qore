@@ -150,8 +150,6 @@ public class HttpAsyncTarget {
 
         @param info connection and request information
         @return result hash if handled inline, or @ref nothing to dispatch to thread pool
-
-        @since HttpServerAsyncIo 1.0
     */
     *hash<HttpRequestResultInfo> tryInlineRequest(hash<HttpConnectionInfo> info) {
         return NOTHING;

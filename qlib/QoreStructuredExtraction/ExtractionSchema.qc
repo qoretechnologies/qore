@@ -78,8 +78,6 @@ public hashdecl ExtractionResult {
     - \b Invoice: Extract invoice numbers, dates, vendors, line items, and totals
     - \b Contact: Extract names, emails, phone numbers, companies, and addresses
     - \b Sentiment: Analyze whether text is positive, negative, neutral, or mixed
-
-    @since QoreStructuredExtraction 1.0
 */
 public class ExtractionSchema {
     #! NER (Named Entity Recognition) schema template

@@ -57,18 +57,12 @@ module HttpClientStreamingIo {
 public namespace HttpClientStreamingIo {
 
 #! SSE data event constant
-/** @since %HttpClientStreamingIo 1.0
-*/
 public const EVENT_SSE_DATA = "sse-data-event";
 
 #! SSE connection closed event constant
-/** @since %HttpClientStreamingIo 1.0
-*/
 public const EVENT_SSE_CLOSED = "sse-closed-event";
 
 #! SSE connected event constant
-/** @since %HttpClientStreamingIo 1.0
-*/
 public const EVENT_SSE_CONNECTED = "sse-connected-event";
 
 #! SSE heartbeat event constant (emitted for comment-only SSE messages like \c ":hb\\n\\n")

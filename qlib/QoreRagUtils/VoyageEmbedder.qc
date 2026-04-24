@@ -34,8 +34,6 @@ public namespace QoreRagUtils {
     - \c model (optional): model name, default \c "voyage-3"
     - \c dimension (optional): forwarded as the \c output_dimension request
       parameter; when unset the dimension is auto-detected on first call
-
-    @since QoreRagUtils 1.0
 */
 public class VoyageEmbedder inherits AbstractEmbedder {
     public {

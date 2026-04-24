@@ -29,8 +29,6 @@ public namespace AsyncSocketIo {
 #! I/O thread commands used internally by the async socket I/O controller
 /** These commands are sent to the I/O thread via an internal command queue to control
     its behavior. They are not intended for direct use by application code.
-
-    @since AsyncSocketIo 1.0
 */
 public enum IoCommand : string {
     #! Add a new operation to the I/O thread's poll set
@@ -62,7 +60,6 @@ public enum IoCommand : string {
     \c HttpClientIo::HttpClientConnectionManager) use the global controller by
     default.
 
-    @since AsyncSocketIo 1.0
 
     @see Qore::AsyncIoController
     @see getGlobalAsyncIoController()

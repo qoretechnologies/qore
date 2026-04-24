@@ -66,8 +66,6 @@ PiiDetector pii("high", {
 hash<GuardrailResult> r = pii.evaluate("Contact EMP-123456 for details");
 # r.passed == False, violation has pii_type: "employee_id"
     @endcode
-
-    @since QoreGuardrails 1.0
 */
 public class PiiDetector inherits AbstractGuardrailRule {
     public {

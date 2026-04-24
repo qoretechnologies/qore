@@ -29,8 +29,6 @@ public namespace QoreRagUtils {
     candidate documents against a query.
 
     Implementations must be thread-safe.
-
-    @since QoreRagUtils 1.0
 */
 public class AbstractReranker {
     #! Re-ranks a list of documents against a query and returns the top-K

@@ -46,8 +46,6 @@ list<string> page_texts = ("", "Hello world", "", "Some text here");
 list<int> scanned = detector.findScannedPages(page_texts);
 # scanned = (0, 2) — pages 0 and 2 are likely scanned
     @endcode
-
-    @since QoreOcrUtils 1.0
 */
 public class ScannedPdfDetector {
     private {

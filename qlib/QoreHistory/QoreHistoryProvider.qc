@@ -50,8 +50,6 @@ while (True) {
 
 hist.save(history_path);
     @endcode
-
-    @since QoreHistory 1.0
 */
 public namespace QoreHistory {
 public class QoreHistoryProvider inherits Linenoise::AbstractHistoryProvider {

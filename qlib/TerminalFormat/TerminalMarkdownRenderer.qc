@@ -43,8 +43,6 @@ public namespace TerminalFormat {
     TerminalMarkdownRenderer md();
     printf("%s\n", md.render("# Title\n\nSome **bold** text with `code`."));
     @endcode
-
-    @since TerminalFormat 1.0
 */
 public class TerminalMarkdownRenderer {
     private {
