@@ -2323,8 +2323,10 @@ ws.setEventQueue();
                 }
                 *object op = poll_op;
                 if (!op) {
-                    AutoLock al(delivery_mutex);
-                    delivery_active = False;
+                    {
+                        AutoLock al(delivery_mutex);
+                        delivery_active = False;
+                    }
                     return;
                 }
                 *hash<auto> msg = op.getReceivedMessage();
@@ -2364,14 +2366,18 @@ ws.setEventQueue();
             if (!self) {
                 return;
             }
+            bool done = False;
             {
                 AutoLock al(delivery_mutex);
                 if (delivery_pending == last_seen) {
                     # No new callbacks since we started; safe to stop
                     delivery_active = False;
-                    return;
+                    done = True;
                 }
                 # New callbacks arrived; loop and drain again
+            }
+            if (done) {
+                return;
             }
         }
     }

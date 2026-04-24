@@ -1176,6 +1176,7 @@ Mapper mapv(DataMap);
         output_log = opts.output_log;
         submapper_get = opts.submapper_get;
         template_subst = opts.template_subst;
+        *hash<auto> option_runtime_keys = opts.runtime_keys;
 
         if (opts.submappers) {
             if (opts.submappers.typeCode() != NT_HASH) {
@@ -1223,7 +1224,10 @@ Mapper mapv(DataMap);
         if (opts.output_provider) {
             setOutputProvider(opts);
 
-            opts.runtime_keys += output_provider.getMapperRuntimeKeys();
+            *hash<string, hash<MapperRuntimeKeyInfo>> provider_runtime_keys = output_provider.getMapperRuntimeKeys();
+            if (provider_runtime_keys) {
+                option_runtime_keys = (option_runtime_keys ?? {}) + provider_runtime_keys;
+            }
         } else if (opts.output) {
             checkInputOutputOption(opts, "output", mapv);
         }
@@ -1274,13 +1278,13 @@ Mapper mapv(DataMap);
         }
 
         # validate and set runtime types
-        if (opts.runtime_keys) {
-            if (opts.runtime_keys.typeCode() != NT_HASH) {
+        if (option_runtime_keys) {
+            if (option_runtime_keys.typeCode() != NT_HASH) {
                 error("option 'runtime_keys' passed to %s::constructor() assigned to type %y (value %y); "
                     "expecting \"hash<string, hash<MapperRuntimeKeyInfo>>\"", self.className(),
-                    opts.runtime.type(), opts.runtime);
+                    option_runtime_keys.type(), option_runtime_keys);
             }
-            foreach hash<auto> i in (opts.runtime_keys.pairIterator()) {
+            foreach hash<auto> i in (option_runtime_keys.pairIterator()) {
                 if (i.value.fullType() != "hash<MapperRuntimeKeyInfo>") {
                     # try to cast for older code
                     bool ok;

@@ -60,6 +60,7 @@ class AOTSmokeTest inherits QUnit::Test {
         addTestCase("AOT static link not built", \testAOTStaticLinkNotBuilt());
         # Module compilation tests
         addTestCase("AOT module compile", \testAOTModuleCompile());
+        addTestCase("AOT module default object args", \testAOTModuleDefaultObjectArgs());
         addTestCase("AOT module compile custom output", \testAOTModuleCompileCustomOutput());
         addTestCase("AOT module compile opt levels", \testAOTModuleCompileOptLevels());
         addTestCase("AOT module compile error", \testAOTModuleCompileError());
@@ -1497,6 +1498,95 @@ printf(\"not a module\\n\");
         hash<auto> result = compileModuleFile(qm_path);
         assertTrue(result.compile_out.regex("(failed|error|no module declaration)"),
             "non-module file produces error: " + result.compile_out);
+    }
+
+    testAOTModuleDefaultObjectArgs() {
+        string tmp_dir = sprintf("/tmp/aot_default_object_arg_%d", getpid());
+        mkdir(tmp_dir);
+        on_exit {
+            backquote(sprintf("rm -rf %s", tmp_dir));
+        }
+
+        string mod_code = "%modern
+%enable-all-warnings
+
+module AOTDefaultObjectArg {
+    version = \"1.0\";
+    desc = \"AOT default object arg test\";
+    author = \"Test\";
+    license = \"MIT\";
+}
+
+public namespace AOTDefaultObjectArg {
+    public class DefaultThing {
+        private {
+            int value;
+        }
+
+        constructor() {
+            value = 37;
+        }
+
+        int getValue() {
+            return value;
+        }
+    }
+
+    public int sub readValue(DefaultThing thing = new DefaultThing()) {
+        return thing.getValue();
+    }
+
+    public class Holder {
+        private {
+            int value;
+        }
+
+        constructor(DefaultThing thing = new DefaultThing()) {
+            value = thing.getValue() + 5;
+        }
+
+        int getValue() {
+            return value;
+        }
+    }
+}
+";
+
+        string qm_path = tmp_dir + "/AOTDefaultObjectArg.qm";
+        {
+            File f();
+            f.open2(qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write(mod_code);
+            f.close();
+        }
+
+        string qmod_path = tmp_dir + "/AOTDefaultObjectArg.qmod";
+        hash<auto> result = compileModuleFile(qm_path, qmod_path);
+        assertTrue(result.compiled, "default-object module compiled: " + result.compile_out);
+
+        string test_code = "%modern
+%enable-all-warnings
+
+%requires AOTDefaultObjectArg
+
+printf(\"%d\\n\", AOTDefaultObjectArg::readValue());
+AOTDefaultObjectArg::Holder h();
+printf(\"%d\\n\", h.getValue());
+";
+        hash<auto> paths = writeTempScript(test_code);
+        on_exit {
+            unlink(paths.src);
+        }
+
+        string aot_out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, tmp_dir, qore_bin, paths.src));
+
+        unlink(qmod_path);
+        string interp_out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, tmp_dir, qore_bin, paths.src));
+
+        assertEq(interp_out, aot_out, "compiled module default object args match interpreted module");
+        assertEq("37\n42\n", aot_out, "default object args are evaluated at call time");
     }
 
     #! Helper to create a split module directory structure

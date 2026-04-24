@@ -384,6 +384,7 @@ public class RestHandlerTest inherits QUnit::Test {
     }
 
     constructor() : Test("RestHandlerTest", "1.0") {
+        addTestCase("constructor defaults", \constructorDefaultsTest());
         addTestCase("pre-encoded-URLs test", \preEncodedUrlsTest());
         addTestCase("test bad request", \badRequestTest());
         addTestCase("Test direct interface", \directTest());
@@ -427,6 +428,22 @@ public class RestHandlerTest inherits QUnit::Test {
         port = mServer.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
 
         mClient = new RestClient({"url": "http://localhost:" + port});
+    }
+
+    constructorDefaultsTest() {
+        RestHandler h();
+        assertTrue(h.getRestSchemaValidator() instanceof NullRestSchemaValidator,
+            "default constructor creates a null schema validator");
+
+        Logger logger("rest-handler-constructor-test", LoggerLevel::getLevelInfo());
+        RestHandler logged(logger);
+        assertTrue(logged.getRestSchemaValidator() instanceof NullRestSchemaValidator,
+            "logger constructor creates a null schema validator");
+
+        NullRestSchemaValidator validator();
+        RestHandler explicit(NOTHING, validator);
+        assertTrue(explicit.getRestSchemaValidator() instanceof NullRestSchemaValidator,
+            "explicit validator constructor accepts a schema validator");
     }
 
     globalTearDown() {

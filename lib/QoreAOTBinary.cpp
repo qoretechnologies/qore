@@ -2023,6 +2023,18 @@ static void writeVariantSignature(QoreAOTBinaryWriter& writer, const AbstractQor
             // would make the parameter appear required. Use VT_OPAQUE_DEFAULT instead
             // to preserve the "has default" semantics.
             qore_type_t dt = dv.getType();
+            if (dt == NT_SCOPE_REF) {
+                const AbstractQoreNode* node = dv.getInternalNode();
+                if (auto* socn = dynamic_cast<const ScopedObjectCallNode*>(node)) {
+                    const QoreListNode* args = socn->getArgs();
+                    if (socn->oc && (!args || args->empty())) {
+                        writer.writeU8(1);
+                        writer.writeValue(dv);
+                        continue;
+                    }
+                }
+            }
+
             if (dv.isNothing() || dv.isNull() || dt == NT_BOOLEAN || dt == NT_INT
                     || dt == NT_FLOAT || dt == NT_STRING || dt == NT_DATE
                     || dt == NT_NUMBER || dt == NT_BINARY || dt == NT_LIST
