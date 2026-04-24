@@ -101,7 +101,20 @@ public:
     // QoreStringNode::deref() is a complete-type call.
     DLLLOCAL void dec_view_parent();
 
+    // Copy-on-write: if a view, copy the viewed bytes into a fresh owned
+    // buffer and release the parent. No-op on a non-view. Must be called
+    // before any in-place mutation of buf/len/allocated.
+    DLLLOCAL void materialize();
+
+    // Drop the view without copying bytes. Used by mutations that fully
+    // replace content (set/take/clear). After return: buf=nullptr,
+    // allocated=0, len=0, view_parent=nullptr. No-op on a non-view.
+    DLLLOCAL void abandon_view();
+
     DLLLOCAL void check_char(size_t i) {
+        if (view_parent) {
+            materialize();
+        }
         if (i >= allocated) {
             size_t d = i >> 2;
             allocated = i + (d < STR_CLASS_BLOCK ? STR_CLASS_BLOCK : d);
@@ -529,12 +542,19 @@ public:
             clear();
             return len;
         }
+        if (view_parent) {
+            materialize();
+        }
         memmove(buf, buf + num, len - num);
         len -= num;
         return num;
     }
 
     DLLLOCAL void clear() {
+        if (view_parent) {
+            abandon_view();
+            return;
+        }
         if (allocated) {
             len = 0;
             buf[0] = '\0';
@@ -542,6 +562,9 @@ public:
     }
 
     DLLLOCAL void concat(char c) {
+        if (view_parent) {
+            materialize();
+        }
         if (allocated) {
             buf[len] = c;
             check_char(++len);
@@ -563,8 +586,8 @@ public:
         if (str && str->len) {
             // if priv->buffer needs to be resized
             check_char(str->len + len + STR_CLASS_EXTRA);
-            // concatenate new string
-            memcpy(buf + len, str->buf, str->len);
+            // concatenate new string (source may be a view)
+            memcpy(buf + len, str->effective_buf(), str->len);
             len += str->len;
             buf[len] = '\0';
         }
