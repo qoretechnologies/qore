@@ -140,7 +140,7 @@ public class Http2StreamContext inherits AbstractStreamContext {
         if True, the END_STREAM flag is set on the DATA frame, signaling no more data will be sent on this stream
 
         @throw
-        any exception thrown by Socket::sendHttp2StreamDataAsync()
+        any exception thrown by Socket::sendHttp2StreamData()
     */
     sendData(binary data, bool end_stream = False) {
         sock.sendHttp2StreamData(stream_id, data, end_stream);

@@ -5319,9 +5319,9 @@ int Socket::submitHttp2StreamingResponseWithStream(int stream_id, int status_cod
 
     @par Example:
     @code{.py}
-    sock.submitHttp2StreamingResponseHeadersAsync(stream_id, 200, headers);
-    sock.sendHttp2StreamDataAsync(stream_id, body_data, False);
-    sock.sendHttp2TrailersAsync(stream_id, {"grpc-status": "0"});
+    sock.submitHttp2StreamingResponseHeaders(stream_id, 200, headers);
+    sock.sendHttp2StreamData(stream_id, body_data, False);
+    sock.sendHttp2Trailers(stream_id, {"grpc-status": "0"});
 
     AbstractPollOperation flush_op = sock.startPollHttp2Flush();
     while (True) {

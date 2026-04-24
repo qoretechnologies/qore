@@ -1620,9 +1620,14 @@ public class AbstractStreamRequest {
                         chunk = body_queue.get(timeout_ms);
                     } catch (hash<ExceptionInfo> ex) {
                         if (ex.err == "QUEUE-TIMEOUT") {
-                            # No chunk within timeout — treat as end-of-stream
-                            # the same way the prior sync path did on NOTHING.
-                            break;
+                            # Propagate the timeout so the caller can build the
+                            # 408 response — silently treating it as END_STREAM
+                            # would truncate the request body on a stalled
+                            # client.  Mirrors the HTTP/3 QUIC-STREAM-TIMEOUT
+                            # rethrow above and the sync path's pre-Phase-6
+                            # HTTP2-STREAM-TIMEOUT propagation.
+                            throw "HTTP2-STREAM-TIMEOUT",
+                                sprintf("timeout reading HTTP/2 stream %d data", sid);
                         }
                         rethrow;
                     }
