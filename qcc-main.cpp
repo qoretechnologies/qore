@@ -31,9 +31,11 @@
 */
 
 #include <qore/Qore.h>
+#include <qore/ParseOptionMap.h>
 #include "qore/intern/QoreAOT.h"
 
 #include <algorithm>
+#include <cctype>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -258,6 +260,57 @@ static bool include_source = false;
 static bool verbose = false;
 static bool show_help = false;
 static bool show_version = false;
+
+static bool apply_parse_option_flags(QoreParseOptions& po, std::string& error) {
+    for (const std::string& raw : parse_option_flags) {
+        static const struct {
+            const char* name;
+            QoreParseOptions value;
+        } macro_options[] = {
+            {"PO_MODERN",                     PO_MODERN},
+            {"PO_NEW_STYLE",                  PO_NEW_STYLE},
+            {"PO_REQUIRE_OUR",                PO_REQUIRE_OUR},
+            {"PO_REQUIRE_PROTOTYPES",         PO_REQUIRE_PROTOTYPES},
+            {"PO_NO_CHILD_PO_RESTRICTIONS",   PO_NO_CHILD_PO_RESTRICTIONS},
+            {"PO_ALLOW_INJECTION",            PO_ALLOW_INJECTION},
+            {"PO_ALLOW_DEBUGGER",             PO_ALLOW_DEBUGGER},
+            {"PO_ALLOW_WEAK_REFERENCES",      PO_ALLOW_WEAK_REFERENCES},
+            {"PO_REQUIRE_TYPES",              PO_REQUIRE_TYPES},
+            {"PO_STRICT_ARGS",                PO_STRICT_ARGS},
+            {"PO_STRONG_ENCAPSULATION",       PO_STRONG_ENCAPSULATION},
+            {"PO_ALLOW_BARE_REFS",            PO_ALLOW_BARE_REFS},
+            {"PO_ASSUME_LOCAL",               PO_ASSUME_LOCAL},
+            {"PO_BROKEN_NARROWED_TYPES",      PO_BROKEN_NARROWED_TYPES},
+            {"PO_BROKEN_LIST_PARSING",        PO_BROKEN_LIST_PARSING},
+            {"PO_NO_MODULES",                 PO_NO_MODULES},
+        };
+        bool found = false;
+        for (const auto& macro_option : macro_options) {
+            if (raw == macro_option.name) {
+                po |= macro_option.value;
+                found = true;
+                break;
+            }
+        }
+        if (found) {
+            continue;
+        }
+        std::string name = raw;
+        if (name.rfind("PO_", 0) == 0) {
+            name.erase(0, 3);
+            std::transform(name.begin(), name.end(), name.begin(), [](unsigned char c) {
+                return c == '_' ? '-' : static_cast<char>(std::tolower(c));
+            });
+        }
+        QoreParseOptions opt = ParseOptionMap::find_code(name.c_str());
+        if (opt == QoreParseOptions(-1)) {
+            error = "unknown --parse-option name: '" + raw + "'";
+            return false;
+        }
+        po |= opt;
+    }
+    return true;
+}
 static bool show_targets = false;
 // Phase 1 compile-time opt:
 static bool strip_debug_info = false;
@@ -1188,6 +1241,12 @@ int main(int argc, char** argv) {
 
     int rc = 0;
     std::string error;
+    QoreParseOptions compile_po = PO_DEFAULT;
+    if (!apply_parse_option_flags(compile_po, error)) {
+        fprintf(stderr, "error: %s\n", error.c_str());
+        qore_cleanup();
+        return 1;
+    }
 
     if (script_mode) {
         // Phase 4 slice 10c: compile a single script-style source with
@@ -1196,7 +1255,7 @@ int main(int argc, char** argv) {
                 source_file,
                 script_lib_dirs,
                 output,
-                PO_DEFAULT,
+                compile_po,
                 error,
                 opt_level,
                 target_triple,
@@ -1225,7 +1284,7 @@ int main(int argc, char** argv) {
                 context_dir,
                 source_file,
                 output,
-                PO_DEFAULT,
+                compile_po,
                 error,
                 opt_level,
                 target_triple,
@@ -1247,7 +1306,7 @@ int main(int argc, char** argv) {
         if (!QoreAOT::compileSeparatedModule(
                 source_file,
                 output,
-                PO_DEFAULT,
+                compile_po,
                 error,
                 opt_level,
                 target_triple,
@@ -1273,7 +1332,7 @@ int main(int argc, char** argv) {
                 source_text.c_str(), (int)source_text.size(),
                 source_file,
                 output,
-                PO_DEFAULT,
+                compile_po,
                 error,
                 opt_level,
                 target_triple,
@@ -1292,7 +1351,8 @@ int main(int argc, char** argv) {
         }
     } else {
         // Create program and parse
-        QoreProgram* qpgm = new QoreProgram(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+        QoreProgram* qpgm = new QoreProgram(compile_po | QoreParseOptions(PO_NEW_STYLE | PO_STRICT_ARGS
+            | PO_REQUIRE_TYPES));
         ExceptionSink xsink;
 
         qpgm->parseFile(source_file, &xsink);
@@ -1302,7 +1362,7 @@ int main(int argc, char** argv) {
             rc = 1;
         } else {
             // Compile to executable
-            QoreParseOptions po = qpgm->getParseOptions();
+            QoreParseOptions po = qpgm->getParseOptions() | compile_po;
             if (!QoreAOT::compile(
                     qpgm,
                     source_text.c_str(), (int)source_text.size(),

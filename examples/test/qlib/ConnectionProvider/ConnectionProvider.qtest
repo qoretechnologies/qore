@@ -12,6 +12,7 @@
 %requires QUnit
 %requires AsyncSocketIo
 %requires ConnectionProvider
+%requires ProviderIndexUtil
 
 %include ../../qore/classes/FtpServer.qc
 
@@ -40,6 +41,7 @@ public class ConnectionProviderTest inherits QUnit::Test {
         addTestCase("custom parseUrl", \customParseUrlTest());
         addTestCase("custom option validation", \customValidateOptions());
         addTestCase("polling monitor", \pollingMonitorTest());
+        addTestCase("indexed scheme fallback", \indexedSchemeFallbackTest());
 
         # Return for compatibility with a test harness that checks the return value
         set_return_value(main());
@@ -59,6 +61,27 @@ public class ConnectionProviderTest inherits QUnit::Test {
 
     cacheTest() {
         assertGt(0, ConnectionSchemeCache::size());
+    }
+
+    indexedSchemeFallbackTest() {
+        string dir = tmp_location() + "/scheme_index_test_" + get_random_string(8);
+        mkdir(dir);
+        on_exit {
+            unlink(dir + "/qore-data-index.yaml");
+            rmdir(dir);
+        }
+
+        ProviderIndexUtil::setEnvironmentVariable(dir);
+        ProviderIndexUtil::writeDataProviderIndex(<DataProviderIndexInfo>{
+            "schememap": {
+                "rest": {
+                    "DataProvider": True,
+                },
+            },
+        }, 0s, {});
+
+        hash<ConnectionSchemeInfo> info = ConnectionSchemeCache::getScheme("rest");
+        assertEq(True, exists info.schemes.rest, "built-in scheme module loaded after stale indexed module");
     }
 
     ftpConnectionTest() {

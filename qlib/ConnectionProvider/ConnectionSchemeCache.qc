@@ -543,8 +543,17 @@ public class ConnectionSchemeCache {
             lck.unlock();
         }
         bool loaded = ProviderIndexUtil::checkSchemeModule(scheme);
-        if (!loaded && mod) {
-            loaded = ConnectionSchemeCache::tryLoadModule(mod, throw_exception);
+        if (needs_lock) {
+            lck.lock();
+        }
+        if ((rv = cache{scheme})) {
+            return rv;
+        }
+        if (needs_lock) {
+            lck.unlock();
+        }
+        if (mod) {
+            loaded = ConnectionSchemeCache::tryLoadModule(mod, throw_exception) || loaded;
         }
         if (needs_lock) {
             lck.lock();
