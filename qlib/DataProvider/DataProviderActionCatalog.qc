@@ -749,12 +749,13 @@ public class DataProviderActionCatalog {
             }
         }
 
-        if (action.output_type && action.get_output_type) {
+        bool has_get_output_type = action.hasKey("get_output_type");
+        if (action.output_type && has_get_output_type) {
             throw "ACTION-ERROR", sprintf("action has both \"output_type\" and \"get_output_type\"; path: %y",
                 action.path);
         }
 
-        if (action.get_dynamic_options && !action.has_dynamic_options) {
+        if (action.hasKey("get_dynamic_options") && !action.has_dynamic_options) {
             action.has_dynamic_options = True;
         }
 
@@ -846,7 +847,7 @@ public class DataProviderActionCatalog {
             }
             smap{app.scheme} += action;
         }
-        if (action.get_output_type) {
+        if (has_get_output_type) {
             resolve_output_types{action.app}{action.action} = True;
         }
     }
@@ -1708,9 +1709,25 @@ public class DataProviderActionCatalog {
                     continue;
                 }
                 try {
-                    code get_output_type = remove top_action.get_output_type;
+                    AbstractDataProviderType output_type = top_action.get_output_type();
+                    top_action.output_type = output_type;
+                    app_action.output_type = output_type;
+                    remove top_action.get_output_type;
                     remove app_action.get_output_type;
-                    top_action.output_type = app_action.output_type = get_output_type();
+                    top_actionmap{key} = top_action;
+                    app_actionmap{i.key}{j.key} = app_action;
+                    if (*string scheme = appcache{i.key}.scheme) {
+                        *list<hash<DataProviderActionInfo>> actions = smap{scheme};
+                        if (actions) {
+                            for (int idx = 0; idx < actions.size(); ++idx) {
+                                if (actions[idx].app == i.key && actions[idx].action == j.key) {
+                                    actions[idx] = app_action;
+                                    smap{scheme} = actions;
+                                    break;
+                                }
+                            }
+                        }
+                    }
                 } catch (hash<ExceptionInfo> ex) {
                     # ignore exceptions
                 }
