@@ -3468,7 +3468,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             # - HTTP/1.x: HttpSseStreamPollOperation queues events for the I/O
             #   controller's Sse state to drain via chunked encoding
             # - HTTP/2: Http2SseStream pushes DATA frames directly via
-            #   sendHttp2StreamData(); the nghttp2 session's sendPendingData()
+            #   sendHttp2StreamDataAsync(); the nghttp2 session's sendPendingData()
             #   (driven by h2op on the I/O thread) flushes them to the socket
             # - HTTP/3: Http3SseStream pushes DATA on the QUIC stream via
             #   submitQuicStreamData()

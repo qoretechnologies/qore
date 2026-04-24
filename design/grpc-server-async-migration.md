@@ -1,6 +1,6 @@
 # GrpcServer over HttpServerAsyncIo — migration design
 
-**Status:** Phases 1–5 complete; Phases 6–7 pending (see Migration-plan below).
+**Status:** Phases 1–6 complete; Phase 7 (C++ removal) pending (see Migration-plan below).
 **Author:** investigation arose from the gRPC server-streaming hang traced on
 2026-04-22.
 **Related docs:**
@@ -57,13 +57,17 @@ only `Http2Session::m` and wake the I/O thread to flush. The existing
    `GrpcClientStream` API so existing handlers and callers (Qorus
    `RemoteServiceGrpcHandler`, `ArrowFlight`, `module-grpc` test suite)
    keep working unchanged.
-4. Once migrated, deprecate the sync server-side H2 socket APIs
-   (`Socket::startPollReadHttp2Request`, `readHttp2StreamDataBlock`,
-   `isHttp2StreamComplete`, `submitHttp2StreamingResponseHeaders`,
-   `sendHttp2StreamData`, `sendHttp2Trailers`, `cleanupHttp2Stream`,
-   `flushHttp2`, `cleanupHttp2Stream`, `startPollHttp2Flush`,
-   `setHttp2ActiveStream`, `getHttp2ActiveStream`) and remove them in
-   the next major version.
+4. Once migrated, delete the sync server-side H2 socket APIs
+   (`readHttp2StreamDataBlock`, `isHttp2StreamComplete` /
+   `isHttp2StreamClosed` / `isHttp2StreamRemoteClosed`,
+   `submitHttp2StreamingResponseHeaders`, `sendHttp2StreamData` /
+   `queueHttp2StreamData`, `sendHttp2Trailers`, `cleanupHttp2Stream`,
+   `flushHttp2`, `setHttp2ActiveStream`, `getHttp2ActiveStream`,
+   `resetHttp2Stream`, `readHttp2StreamData`).  Since H2 is unreleased
+   dev code, no deprecation cycle is necessary.  `startPollReadHttp2Request`
+   and `startPollHttp2Flush` are retained as they are async poll-op
+   starters used by the framework (`Http2PollOperation`) and by tests,
+   not by handler code.
 
 ## Non-goals
 
@@ -234,13 +238,41 @@ migrates.
    now IS `GrpcServerAsync`; no ArrowFlight-specific code changes
    required.  Verified: arrow-flight 21/21, arrow-flight-interop 10/10,
    ArrowFlightDataProvider 20/20, arrow-ipc 52/52, GrpcDataProvider 43/43.
-6. **Deprecate the sync H2 server socket APIs** — NOT STARTED.  Blocked
-   on resolving the `Connect/GrpcProtocolAdapter` consumer (see Risks):
-   either port `ConnectHandler` to `HttpServerAsyncIo` first, or document
-   an explicit sync-path exemption before deprecation can land.
-7. **Remove the deprecated APIs** — NOT STARTED (next major Qore version).
-   Strip the corresponding code paths in `qore_socket_private` and
-   `Http2Session` — significant simplification of the lock model.
+6. **Delete the sync H2 server socket APIs** — DONE in seven landings
+   spanning all three repos.  Since H2 is unreleased dev code, the sync
+   API was deleted outright rather than deprecated.
+   - 6.1 (module-yaml `5f5c95b`): delete `ConnectServerStream` live mode —
+     no caller used it; the only construction sites in `ConnectHandler`
+     drain the body via `register_body_queue` before invoking the handler.
+   - 6.2 (qore `9f2e623`): port `Http2StreamContext.qc` to `*Async`
+     writes + `wake_callback`; thread the wake closure through
+     `WebSocketHandler.qm`'s H2 stream context.
+   - 6.3 (qore `fd06acd`): port `HttpServer.qm` and `HttpServerUtil.qm`
+     to async H2.  Body-streaming reads now drain via
+     `cx."header-info".register_body_queue` (Queue-based);
+     `setHttp2ActiveStream` removed; response-side
+     `submitHttp2StreamingResponseHeadersAsync` /
+     `sendHttp2StreamDataAsync` everywhere.  `RestHandler.qm` matched.
+     New C++ primitives `cleanupHttp2StreamAsync` /
+     `resetHttp2StreamAsync` added on `QoreSocketObject` to round out
+     the async set.
+   - 6.4 (qore `98e364a`): delete the Qore-level `Socket::*` sync H2
+     methods.  Internal C++ implementations on `QoreSocket` and
+     `QoreSocketObject` retained for client-side poll ops and for
+     `submitHttp2StreamingResponseWithStream`'s internal use; Phase 7
+     will strip those.  Tests using the sync API ported to `*Async` or
+     retired.  Doc references rewritten.
+   - 6.5 (module-grpc `9d7b939`): drop the `m_live` /
+     Socket-based-constructor sync-fallback branches in
+     `GrpcServerStream.qc` (dead code since the Phase 4 alias of
+     `GrpcServer` to `GrpcServerAsync`).
+   - 6.6 (qore `e9c87c8`): chore — untrack a `ws-bench` build artifact
+     accidentally swept into 6.4.
+7. **Remove the C++ sync H2 server code paths** — NOT STARTED (next major
+   Qore version).  Strip the corresponding code paths in
+   `QoreSocket` / `QoreSocketObject` / `qore_socket_private` /
+   `Http2Session`.  The Qore-level API surface is already gone, so this
+   is a code-cleanup pass with no externally visible API change.
 
 ## Risks
 
@@ -267,10 +299,11 @@ migrates.
   `HttpServer::AbstractHttpRequestHandler`) calls the same sync
   `submitHttp2StreamingResponseHeaders` / `sendHttp2StreamData` /
   `sendHttp2Trailers` / `startPollHttp2Flush` methods `GrpcServer` does.
-  Before Phase 6/7 can deprecate and remove those APIs, the Connect
-  side has to be handled — either migrate `ConnectHandler` onto
-  `HttpServerAsyncIo` as well, or carve out an explicit sync-path
-  exemption. This decision is currently open.
+  RESOLVED in module-yaml `f9f7220` (port `ConnectHandler` +
+  `GrpcProtocolAdapter` to async H2 writes via `*Async` Socket methods +
+  `cx."header-info".io_wake`) and module-yaml `5f5c95b` (delete
+  `ConnectServerStream` live mode entirely).  The Connect side now uses
+  the same async H2 path as `GrpcServerAsync`.
 
 ## Acceptance criteria
 
@@ -295,8 +328,8 @@ migrates.
 
 ## Out of scope for this doc
 
-- Deprecation timeline for the sync `Socket::*Http2*` server APIs (cover
-  with the version-policy doc).
-- Converting SSE/WebSocket's existing write path off the sync Socket
-  methods. That path is independent of this migration; flip it when
-  convenient.
+- Phase 7 stripping of the C++ `QoreSocket` / `qore_socket_private` /
+  `Http2Session` sync server-side code paths now that no Qore-level
+  consumer exists.  Schedule with the next major Qore release.
+- Client-side HTTP/2 (`HTTPClient::sendHttp2StreamData` and friends)
+  remains on the sync API; that path is independent of this migration.
