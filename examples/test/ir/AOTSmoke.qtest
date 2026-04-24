@@ -64,6 +64,8 @@ class AOTSmokeTest inherits QUnit::Test {
         addTestCase("AOT module hashdecl class constants", \testAOTModuleHashdeclClassConstants());
         addTestCase("AOT module BCA hashdecl class constants",
             \testAOTModuleBcaHashdeclClassConstants());
+        addTestCase("AOT module computed member defaults",
+            \testAOTModuleComputedMemberDefaults());
         addTestCase("AOT module closure-captured loop condition",
             \testAOTModuleClosureCapturedLoopCondition());
         addTestCase("AOT module default object args", \testAOTModuleDefaultObjectArgs());
@@ -1647,6 +1649,65 @@ printf(\"%s\", AOTBcaHashdeclConst::run());
         assertEq(interp_out, aot_out,
             "compiled module preserves BCA hashdecl class constant: " + aot_out);
         assertEq("typed:11\n", aot_out, "BCA hashdecl class constant is deferred until init");
+    }
+
+    testAOTModuleComputedMemberDefaults() {
+        string tmp_dir = sprintf("/tmp/aot_member_default_%d", getpid());
+        mkdir(tmp_dir);
+        on_exit {
+            backquote(sprintf("rm -rf %s", tmp_dir));
+        }
+
+        string mod_code = "%modern
+module AOTComputedMemberDefault {
+    version = \"1.0\";
+    desc = \"AOT computed member default regression\";
+    author = \"Test\";
+    license = \"MIT\";
+}
+
+public namespace AOTComputedMemberDefault {
+    public class Holder {
+        private {
+            string value = replace(sprintf(\"member-%d\", getpid()), \"-\", \"\");
+        }
+
+        string getValue() {
+            return value;
+        }
+    }
+
+    public string sub run() {
+        Holder h();
+        return h.getValue();
+    }
+}
+";
+        string qm_path = tmp_dir + "/AOTComputedMemberDefault.qm";
+        {
+            File f();
+            f.open2(qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write(mod_code);
+            f.close();
+        }
+
+        string qmod_path = tmp_dir + "/AOTComputedMemberDefault.qmod";
+        hash<auto> result = compileModuleFile(qm_path, qmod_path);
+        assertTrue(result.compiled, "computed member default module compiled: " + result.compile_out);
+
+        string test_code = "%modern
+%requires AOTComputedMemberDefault
+printf(\"%s\\n\", AOTComputedMemberDefault::run());
+";
+        hash<auto> paths = writeTempScript(test_code);
+        on_exit {
+            unlink(paths.src);
+        }
+
+        string aot_out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, tmp_dir, qore_bin, paths.src));
+        assertTrue(aot_out.regex("^member[0-9]+\\n$"),
+            "compiled module evaluates computed member default: " + aot_out);
     }
 
     testAOTModuleClosureCapturedLoopCondition() {

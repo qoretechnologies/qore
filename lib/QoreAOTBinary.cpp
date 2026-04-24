@@ -1337,6 +1337,23 @@ QoreValue QoreAOTBinaryReader::readValue(const uint8_t*& ptr, const uint8_t* end
             return ce->getReferencedValue();
         }
 
+        case QoreAOTValueTag::VT_EXPR_TREE: {
+            if (ptr + 4 > end) {
+                error = "unexpected end of data reading expr_tree size";
+                return QoreValue();
+            }
+            uint32_t blob_size = QoreAOTBinaryReader::readU32(ptr);
+            if (ptr + blob_size > end) {
+                error = "expr_tree blob exceeds section bounds";
+                return QoreValue();
+            }
+            const uint8_t* blob = ptr;
+            ptr += blob_size;
+            QoreValue rv = deserializeExprTreeFromBlob(
+                blob, blob_size, getProgram(), nullptr, 0);
+            return rv;
+        }
+
         default:
             error = "unknown value tag: " + std::to_string(static_cast<int>(tag))
                 + " at offset " + std::to_string(ptr - 1 - end);
@@ -2253,6 +2270,46 @@ static void writeNamespacesSection(QoreAOTBinaryWriter& writer, const AOTSeriali
     writer.endSection(sec_idx);
 }
 
+static bool aotValueTagPreservesMemberDefault(const QoreValue& v) {
+    if (!v.hasNode()) {
+        return true;
+    }
+
+    switch (v.getType()) {
+        case NT_BOOLEAN:
+        case NT_INT:
+        case NT_FLOAT:
+        case NT_STRING:
+        case NT_DATE:
+        case NT_NUMBER:
+        case NT_BINARY:
+        case NT_LIST:
+        case NT_HASH:
+        case NT_OBJECT:
+        case NT_SCOPE_REF:
+            return true;
+        default:
+            return v.isEnum();
+    }
+}
+
+static bool writeMemberDefaultValue(QoreAOTBinaryWriter& writer, const QoreValue& v) {
+    if (!aotValueTagPreservesMemberDefault(v)) {
+        AOTSlotMap slots;
+        std::vector<uint8_t> blob;
+        if (serializeExprTreeToBlob(v, slots, blob, false, writer.const_reverse_map)
+                && !blob.empty()) {
+            writer.writeU8(static_cast<uint8_t>(QoreAOTValueTag::VT_EXPR_TREE));
+            writer.writeU32(static_cast<uint32_t>(blob.size()));
+            writer.writeBytes(blob.data(), static_cast<uint32_t>(blob.size()));
+            return true;
+        }
+    }
+
+    writer.writeValue(v);
+    return false;
+}
+
 //! Write CLASSES section
 static void writeClassesSection(QoreAOTBinaryWriter& writer, const AOTSerializeState& state) {
     uint32_t sec_idx = writer.beginSection(QoreAOTSectionType::CLASSES);
@@ -2324,8 +2381,7 @@ static void writeClassesSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
             // default initialization value
             if (mi.second->exp) {
                 writer.writeU8(1);
-                // writeValue handles unsupported types by writing NOTHING
-                writer.writeValue(mi.second->exp);
+                writeMemberDefaultValue(writer, mi.second->exp);
             } else {
                 writer.writeU8(0);
             }
@@ -2348,7 +2404,7 @@ static void writeClassesSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
             // is generated separately if the expression `needs_eval()`).
             if (vi.second->exp) {
                 writer.writeU8(1);
-                writer.writeValue(vi.second->exp);
+                writeMemberDefaultValue(writer, vi.second->exp);
             } else {
                 writer.writeU8(0);
             }
@@ -2452,22 +2508,11 @@ static void writeHashDeclsSection(QoreAOTBinaryWriter& writer, const AOTSerializ
                 writer.writeStringRef(mi.first);
                 writer.writeStringRef(getTypePath(mi.second->getTypeInfo()));
                 if (mi.second->exp) {
-                    // Complex-expression diagnostic: writeValue's default-case
-                    // silently encodes unrecognised AST nodes as VT_NOTHING,
-                    // which loads as the type's zero-value (0 for int, empty
-                    // for string, ...).  RuntimeConstantRefNode is handled via
-                    // VT_CONST_REF in writeValue itself (see the NT_RTCONSTREF
-                    // branch below).  Anything else that writeValue can't
-                    // round-trip deserves a diagnostic.
                     const QoreValue v = mi.second->exp;
                     qore_type_t t = v.getType();
-                    bool serialisable = v.isNothing() || v.isNull()
-                        || t == NT_BOOLEAN || t == NT_INT || t == NT_FLOAT
-                        || t == NT_STRING || t == NT_DATE || t == NT_NUMBER
-                        || t == NT_BINARY || t == NT_LIST || t == NT_HASH
-                        || t == NT_OBJECT || t == NT_SCOPE_REF || v.isEnum()
-                        || t == NT_RTCONSTREF;
-                    if (!serialisable) {
+                    writer.writeU8(1);
+                    bool wrote_expr_tree = writeMemberDefaultValue(writer, mi.second->exp);
+                    if (!wrote_expr_tree && !aotValueTagPreservesMemberDefault(v)) {
                         fprintf(stderr,
                             "warning: AOT serialisation of hashdecl '%s' member '%s' "
                             "default expression may lose information (type %d = %s); "
@@ -2477,8 +2522,6 @@ static void writeHashDeclsSection(QoreAOTBinaryWriter& writer, const AOTSerializ
                             "an init() method.\n",
                             hd->getName(), mi.first, t, get_type_name(v.getInternalNode()));
                     }
-                    writer.writeU8(1);
-                    writer.writeValue(mi.second->exp);
                 } else {
                     writer.writeU8(0);
                 }

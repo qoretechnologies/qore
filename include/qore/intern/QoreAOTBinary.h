@@ -157,6 +157,9 @@ enum class QoreAOTValueTag : uint8_t {
     //! num_args + recursive args. Used for class member initializers declared
     //! with the constructor-call form, e.g. `list<auto> elems()`.
     VT_NEW_COMPLEX_DEFAULT = 17,
+    //! Serialized expression tree for computed member defaults.
+    //! Used when a member initializer is an AST expression such as a function call.
+    VT_EXPR_TREE = 18,
 };
 
 //! Section header in the binary format
