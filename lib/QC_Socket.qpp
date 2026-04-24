@@ -4813,9 +4813,9 @@ static list<hash<SocketPollInfo>> Socket::poll(list<hash<SocketPollInfo>> items,
 
     @param opts optional hash with options:
     - \c headers_only (bool): if @ref True "True", the poll completes when HEADERS are received
-      (before END_STREAM); the stream stays in the session for incremental reading via
-      @ref readHttp2StreamDataBlock().  After all stream data has been consumed, call
-      @ref cleanupHttp2Stream() to free the stream state.
+      (before END_STREAM); the stream stays in the session for incremental reading via the
+      @ref HttpServerAsyncIo "HttpServerAsyncIo" @c register_body_queue closure (the I/O
+      thread pushes inbound DATA chunks to a Qore @ref Queue "Queue").
 
     @see isHttp2()
 

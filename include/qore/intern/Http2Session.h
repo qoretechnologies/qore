@@ -442,7 +442,7 @@ public:
         prevent TOCTOU races.
 
         The body is cleared on the copy (not the original) so that DATA frames that arrived
-        with HEADERS remain in the original for readHttp2StreamDataBlock() to return.
+        with HEADERS remain in the original for the per-stream read queue to drain.
         getOutput() skips the body field for H2S_HEADERS_READY mode to prevent duplication.
 
         @return a copy of the stream info (with empty body), or nullptr if no headers-ready
@@ -452,15 +452,6 @@ public:
     DLLLOCAL std::unique_ptr<Http2StreamInfo> takeHeadersReadyStreamCopy();
 
     //! Check if stream's body is complete (END_STREAM received)
-    /** @param stream_id the stream to check
-        @return True if END_STREAM has been received (body_complete), or if the
-        stream is not found (a cleaned-up stream is effectively complete),
-        or if the session has been marked closed (via @ref markClosed) —
-        the latter unblocks polling consumers during socket teardown.
-        @since %Qore 2.3
-    */
-    DLLLOCAL bool isStreamComplete(int32_t stream_id) const;
-
     //! Marks the session closed; wakes/unblocks concurrent sync consumers.
     /** Idempotent, one-shot: flips @ref session_closed_ from false to true.
         Subsequent calls are no-ops.  Called by @c qore_socket_private's

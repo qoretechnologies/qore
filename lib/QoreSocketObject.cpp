@@ -879,16 +879,6 @@ void QoreSocketObject::setHttp2ConnectProtocolEnabled(bool enable) {
     priv->socket->setHttp2ConnectProtocolEnabled(enable);
 }
 
-void QoreSocketObject::setHttp2ActiveStream(int32_t stream_id, ExceptionSink* xsink) {
-    AutoLocker al(priv->m);
-    priv->socket->setHttp2ActiveStream(stream_id, xsink);
-}
-
-int32_t QoreSocketObject::getHttp2ActiveStream() const {
-    AutoLocker al(priv->m);
-    return priv->socket->getHttp2ActiveStream();
-}
-
 int QoreSocketObject::sendHttp2StreamData(int32_t stream_id, const BinaryNode* data,
         bool end_stream, ExceptionSink* xsink) {
     AutoLocker al(priv->m);
@@ -1099,17 +1089,6 @@ int QoreSocketObject::submitHttp2StreamingResponseWithStream(int32_t stream_id, 
     return *xsink ? -1 : 0;
 }
 
-BinaryNode* QoreSocketObject::readHttp2StreamDataBlock(int32_t stream_id, int timeout_ms,
-        ExceptionSink* xsink) {
-    AutoLocker al(priv->m);
-    return priv->socket->readHttp2StreamDataBlock(stream_id, timeout_ms, xsink);
-}
-
-bool QoreSocketObject::isHttp2StreamComplete(int32_t stream_id) const {
-    AutoLocker al(priv->m);
-    return priv->socket->isHttp2StreamComplete(stream_id);
-}
-
 bool QoreSocketObject::isHttp2StreamClosed(int32_t stream_id) const {
     AutoLocker al(priv->m);
     return priv->socket->isHttp2StreamClosed(stream_id);
@@ -1118,21 +1097,6 @@ bool QoreSocketObject::isHttp2StreamClosed(int32_t stream_id) const {
 bool QoreSocketObject::isHttp2StreamRemoteClosed(int32_t stream_id) const {
     AutoLocker al(priv->m);
     return priv->socket->isHttp2StreamRemoteClosed(stream_id);
-}
-
-int QoreSocketObject::flushHttp2(int timeout_ms, ExceptionSink* xsink) {
-    AutoLocker al(priv->m);
-    return priv->socket->flushHttp2(timeout_ms, xsink);
-}
-
-void QoreSocketObject::cleanupHttp2Stream(int32_t stream_id) {
-    AutoLocker al(priv->m);
-    priv->socket->cleanupHttp2Stream(stream_id);
-}
-
-int QoreSocketObject::resetHttp2Stream(int32_t stream_id, ExceptionSink* xsink) {
-    AutoLocker al(priv->m);
-    return priv->socket->resetHttp2Stream(stream_id, xsink);
 }
 
 int QoreSocketObject::waitForHttp2StreamDrain(int32_t stream_id, int timeout_ms) {
