@@ -76,10 +76,10 @@ module AsyncSocketIo {
       helper for HTTP/2 sockets;
       @ref AsyncSocketIo::Http2StreamContext::sendData() "sendData()" and
       @ref AsyncSocketIo::Http2StreamContext::sendTrailers() "sendTrailers()" use the
-      \c *Async \c Socket methods (handler threads do not hold the socket wrapper
-      lock during HTTP/2 frame submission).  Constructor accepts an optional
-      trailing \c wake_callback closure that is invoked after each write to
-      nudge the I/O thread to flush promptly, matching the
+      async-safe \c Socket HTTP/2 methods (handler threads do not hold the
+      socket wrapper lock during HTTP/2 frame submission).  Constructor accepts
+      an optional trailing \c wake_callback closure that is invoked after each
+      write to nudge the I/O thread to flush promptly, matching the
       @ref AsyncSocketIo::Http3StreamContext "Http3StreamContext" pattern.
     - @ref AsyncSocketIo::Http3StreamContext "Http3StreamContext" stream-scoped send/receive helper
       for HTTP/3 QUIC streams with backpressure handling and I/O controller wake integration
@@ -87,8 +87,9 @@ module AsyncSocketIo {
       protocol-agnostic stream I/O interface for WebSocket over HTTP/2 (RFC 8441) and HTTP/3 (RFC 9220)
     - @ref AsyncSocketIo::AsyncHttp2ServerStream "AsyncHttp2ServerStream":
       async-only HTTP/2 server stream handle that routes writes through the
-      \c *Async socket methods so handler threads do not hold the socket wrapper
-      lock while performing HTTP/2 I/O.  Purpose-built for gRPC and other
+      async-safe \c Socket HTTP/2 methods so handler threads do not hold the
+      socket wrapper lock while performing HTTP/2 I/O.  Purpose-built for gRPC
+      and other
       protocols that drive \c headers → \c DATA* → \c trailers responses from
       an async I/O controller.  Constructor accepts an optional
       \c wake_callback closure (typically @c HttpConnectionInfo.header_info.io_wake)

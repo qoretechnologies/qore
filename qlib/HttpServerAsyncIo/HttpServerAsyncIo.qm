@@ -90,9 +90,9 @@ module HttpServerAsyncIo {
     - body-streaming HTTP/2 dispatches drain inbound DATA via
       @c cx."header-info".register_body_queue (the I/O thread pushes one
       binary chunk per DATA frame and a NOTHING sentinel at END_STREAM).
-      Outbound DATA / HEADERS / trailers go through the @c *Async
-      @c Socket methods followed by @c io_wake().  All built-in response
-      paths (regular, send_callback, InputStream, SSE setup,
+      Outbound DATA / HEADERS / trailers go through the async-safe
+      @c Socket HTTP/2 methods followed by @c io_wake().  All built-in
+      response paths (regular, send_callback, InputStream, SSE setup,
       RST_STREAM-on-error) use this convention.
 */
 
@@ -184,7 +184,7 @@ public namespace HttpServerAsyncIo {
         - \c body_streaming: \c True when the client sent HEADERS without END_STREAM (request body
           not yet complete); the handler registers a @ref Queue "Queue" via
           \c register_body_queue to receive inbound DATA chunks (NOTHING sentinel = END_STREAM)
-          and writes outgoing DATA via \c Socket::sendHttp2StreamDataAsync() followed by
+          and writes outgoing DATA via \c Socket::sendHttp2StreamData() followed by
           \c io_wake()
         - \c headers_end_stream: \c True if END_STREAM was on the HEADERS frame (e.g., GET with
           no body); when \c True, \c body_streaming is \c False and there is no body to read

@@ -5140,7 +5140,7 @@ AbstractPollOperation Socket::startPollSendHttp2ConnectResponse(int stream_id, i
     @code{.py}
     while (True) {
         try {
-            sock.sendHttp2StreamDataAsync(stream_id, chunk);
+            sock.sendHttp2StreamData(stream_id, chunk);
             break;
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err == "HTTP2-FLOW-CONTROL") {

@@ -2010,7 +2010,7 @@ public class CallbackInputStream inherits InputStream {
 
     Error handling: any exception from @c read() or a stream-level send error
     triggers a per-stream reset via @ref Qore::Socket::resetHttp2Stream()
-    "resetHttp2StreamAsync()" or @ref Qore::Socket::cancelQuicStream()
+    "resetHttp2Stream()" or @ref Qore::Socket::cancelQuicStream()
     "cancelQuicStream()" — the peer sees a clean RST, never a silent hang.
 
     Lifecycle: the producer holds the InputStream's thread affinity for the

@@ -403,7 +403,7 @@ Content-Length: 16
       \c setHttp2ActiveStream(-1) pair previously wrapped around
       @ref RestHandler::AbstractRestClass::handleRequest()
       "AbstractRestClass::handleRequest()".  REST responses on HTTP/2
-      already use explicit \c *Async H2 primitives via the
+      already use the async-safe H2 @c Socket primitives via the
       @ref HttpServerAsyncIo "HttpServerAsyncIo" controller; no REST
       handler relied on the \c Socket::send() / \c Socket::recv()
       redirection that the active-stream bridge enabled.

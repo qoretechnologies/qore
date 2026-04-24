@@ -141,67 +141,55 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
       create an unlimited queue (not recommended for production)
     @endparblock
 
-    @par Sync HTTP/2 Server Socket API Removed
+    @par HTTP/2 Server Socket API Is Now Async-Safe
     @parblock
-    The synchronous HTTP/2 server-side \c Socket API has been deleted; all
-    HTTP/2 server work now flows through @ref HttpServerAsyncIo and the
-    \c *Async sibling methods that copy the HTTP/2 session shared pointer
-    under the socket lock briefly and then operate under only the
-    session's internal mutex.  Eliminates the close-vs-poll lock
-    inversion and the handler-vs-I/O-thread contention on the socket
-    wrapper lock that drove the long tail of sync/async impedance bugs
-    (see \c design/grpc-server-async-migration.md).
+    The server-side HTTP/2 \c Socket API has been reworked end-to-end so
+    that handler threads never hold the socket wrapper lock during frame
+    submission.  Every surviving server-side method now acquires
+    @c priv->m only briefly to copy the @ref Qore::Http2Session shared
+    pointer and then does its actual work under the session's own
+    recursive mutex.  This eliminates the close-vs-poll lock inversion
+    and the handler-vs-I/O-thread contention that the previous sync
+    design suffered from.
 
-    Removed \c Socket methods:
+    The following server-side \c Socket methods were removed outright
+    (their functionality is covered by the @ref HttpServerAsyncIo
+    "HttpServerAsyncIo" stack — \c register_body_queue for inbound DATA,
+    plus the renamed response methods below):
+    \c readHttp2StreamData(), \c readHttp2StreamDataBlock(),
+    \c isHttp2StreamComplete(), \c flushHttp2(),
+    \c queueHttp2StreamData(), \c setHttp2ActiveStream(), and
+    \c getHttp2ActiveStream().
+
+    The following server-side \c Socket methods kept their names but
+    switched to the async-safe implementation described above:
 \if QORE_LANG_FINAL
-    @ref Qore::Socket::sendHttp2StreamData() "sendHttp2StreamData()",
-    @ref Qore::Socket::queueHttp2StreamData() "queueHttp2StreamData()",
-    @ref Qore::Socket::sendHttp2Trailers() "sendHttp2Trailers()",
     @ref Qore::Socket::submitHttp2StreamingResponseHeaders() "submitHttp2StreamingResponseHeaders()",
-    @ref Qore::Socket::readHttp2StreamData() "readHttp2StreamData()",
-    @ref Qore::Socket::readHttp2StreamDataBlock() "readHttp2StreamDataBlock()",
-    @ref Qore::Socket::isHttp2StreamComplete() "isHttp2StreamComplete()",
-    @ref Qore::Socket::isHttp2StreamClosed() "isHttp2StreamClosed()",
-    @ref Qore::Socket::isHttp2StreamRemoteClosed() "isHttp2StreamRemoteClosed()",
-    @ref Qore::Socket::flushHttp2() "flushHttp2()",
-    @ref Qore::Socket::cleanupHttp2Stream() "cleanupHttp2Stream()",
-    @ref Qore::Socket::resetHttp2Stream() "resetHttp2Stream()",
-    @ref Qore::Socket::setHttp2ActiveStream() "setHttp2ActiveStream()", and
-    @ref Qore::Socket::getHttp2ActiveStream() "getHttp2ActiveStream()".
+    @ref Qore::Socket::sendHttp2StreamData() "sendHttp2StreamData()",
+    @ref Qore::Socket::sendHttp2Trailers() "sendHttp2Trailers()",
+    @ref Qore::Socket::cleanupHttp2Stream() "cleanupHttp2Stream()", and
+    @ref Qore::Socket::resetHttp2Stream() "resetHttp2Stream()".
 \else
-    \c sendHttp2StreamData(), \c queueHttp2StreamData(), \c sendHttp2Trailers(),
-    \c submitHttp2StreamingResponseHeaders(), \c readHttp2StreamData(),
-    \c readHttp2StreamDataBlock(), \c isHttp2StreamComplete(),
-    \c isHttp2StreamClosed(), \c isHttp2StreamRemoteClosed(),
-    \c flushHttp2(), \c cleanupHttp2Stream(), \c resetHttp2Stream(),
-    \c setHttp2ActiveStream(), and \c getHttp2ActiveStream().
+    \c submitHttp2StreamingResponseHeaders(), \c sendHttp2StreamData(),
+    \c sendHttp2Trailers(), \c cleanupHttp2Stream(), and
+    \c resetHttp2Stream().
 \endif
+    Because the underlying frames are enqueued on the session and not
+    pushed to the wire synchronously, callers should follow each call
+    with \c io_wake() (provided by @ref HttpServerAsyncIo via
+    \c cx."header-info".io_wake) to flush promptly; under the
+    @ref HttpServerAsyncIo controller the flush is driven by the I/O
+    thread's existing HTTP/2 flush poll operation.
 
-    Two new \c *Async primitives — \c cleanupHttp2StreamAsync() and
-    \c resetHttp2StreamAsync() — round out the async set so every
-    server-side HTTP/2 operation has a non-blocking sibling.
-
-    The corresponding libqore C++ implementations on \c QoreSocket,
-    \c QoreSocketObject, and \c Http2Session were stripped in the same
-    release cycle — no externally visible API change beyond the Qore
-    \c Socket methods above.
-
-    <b>Migration:</b>
-    - Replace each call with the \c *Async sibling
-      (\c sendHttp2StreamDataAsync(), \c sendHttp2TrailersAsync(),
-      \c submitHttp2StreamingResponseHeadersAsync(),
-      \c cleanupHttp2StreamAsync(), \c resetHttp2StreamAsync()) and follow
-      it with \c io_wake() (provided by
-      @ref HttpServerAsyncIo "HttpServerAsyncIo" via
-      \c cx."header-info".io_wake) to flush the frame promptly.
-    - For inbound DATA on body-streaming dispatches, register a Queue
-      via \c cx."header-info".register_body_queue; the I/O thread pushes
-      one binary chunk per DATA frame and a NOTHING sentinel at
-      END_STREAM.
+    For inbound DATA on body-streaming dispatches, handlers opt in by
+    registering a @ref Queue "Queue" via
+    \c cx."header-info".register_body_queue; the I/O thread pushes one
+    binary chunk per DATA frame and a @ref nothing sentinel at
+    END_STREAM — no handler-thread socket reads.
 
     \c HTTPClient HTTP/2 client-side methods (\c sendHttp2StreamData(),
     \c isHttp2StreamClosed() etc.) are unaffected — this change only
-    removes the server-side \c Socket bindings.
+    reshapes the server-side \c Socket bindings.
     @endparblock
 
     @subsection qore_2_3_0_new_features New Features in Qore

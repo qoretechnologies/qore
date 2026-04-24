@@ -180,21 +180,20 @@ log("started listener on %s", lh.desc);
 
     @subsection http1_6 HttpServer 1.6
     - HTTP/2 server-side request and response handling fully migrated to
-      the @ref HttpServerAsyncIo "HttpServerAsyncIo" \c *Async \c Socket
-      methods.  The handler thread no longer holds the socket wrapper
-      lock during HTTP/2 frame submission, eliminating the close-vs-poll
-      lock inversion and the handler-vs-I/O-thread contention that drove
-      the long tail of sync/async impedance bugs.
+      the async-safe @c Socket HTTP/2 primitives under the
+      @ref HttpServerAsyncIo "HttpServerAsyncIo" controller.  The handler
+      thread no longer holds the socket wrapper lock during HTTP/2 frame
+      submission, eliminating the close-vs-poll lock inversion and the
+      handler-vs-I/O-thread contention that drove the long tail of
+      sync/async impedance bugs.
       - body-streaming handlers drain inbound DATA via the new
         \c cx."header-info".register_body_queue closure (the I/O thread
         pushes binary chunks to a Qore Queue and a NOTHING sentinel at
-        END_STREAM); \c readHttp2StreamDataBlock() / \c isHttp2StreamComplete()
-        / \c cleanupHttp2Stream() are no longer used
+        END_STREAM)
       - response paths (regular, send_callback, InputStream, SSE setup)
         all use \c sendHttp2StreamData() /
         \c submitHttp2StreamingResponseHeaders() /
-        \c sendHttp2Trailers() followed by \c io_wake() instead of
-        the removed sync siblings
+        \c sendHttp2Trailers() followed by \c io_wake()
       - the \c Socket::setHttp2ActiveStream() bridge that redirected
         \c Socket::send() / \c Socket::recv() to HTTP/2 DATA frames was
         removed from \c handleRequest(); every H2 response site already
@@ -3488,7 +3487,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             # - HTTP/1.x: HttpSseStreamPollOperation queues events for the I/O
             #   controller's Sse state to drain via chunked encoding
             # - HTTP/2: Http2SseStream pushes DATA frames directly via
-            #   sendHttp2StreamDataAsync(); the nghttp2 session's sendPendingData()
+            #   sendHttp2StreamData(); the nghttp2 session's sendPendingData()
             #   (driven by h2op on the I/O thread) flushes them to the socket
             # - HTTP/3: Http3SseStream pushes DATA on the QUIC stream via
             #   submitQuicStreamData()
