@@ -300,7 +300,11 @@ static QoreValue read_node_EN_CONST_REF(AOTExprNodeReadCtx& ctx) {
             }
         }
         if (ce) {
-            return ce->getReferencedValue();
+            if (ce->hasValue()) {
+                return ce->getReferencedValue();
+            }
+            return QoreValue(new RuntimeConstantRefNode(&loc_builtin,
+                const_cast<ConstantEntry*>(ce), /*aot_deferred=*/true));
         }
         printd(0, "AOT EXPR_TREE: cannot resolve constant '%s'\n", name.c_str());
     }

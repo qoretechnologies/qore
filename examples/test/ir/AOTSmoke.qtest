@@ -62,6 +62,8 @@ class AOTSmokeTest inherits QUnit::Test {
         addTestCase("AOT module compile", \testAOTModuleCompile());
         addTestCase("AOT module no-narrow member types", \testAOTModuleNoNarrowMemberTypes());
         addTestCase("AOT module hashdecl class constants", \testAOTModuleHashdeclClassConstants());
+        addTestCase("AOT module BCA hashdecl class constants",
+            \testAOTModuleBcaHashdeclClassConstants());
         addTestCase("AOT module closure-captured loop condition",
             \testAOTModuleClosureCapturedLoopCondition());
         addTestCase("AOT module default object args", \testAOTModuleDefaultObjectArgs());
@@ -1562,6 +1564,89 @@ printf(\"%s\", read_schema());
 
         assertEq(interp_out, aot_out, "compiled module preserves hashdecl class constants: " + aot_out);
         assertEq("entity:id:string\n", aot_out, "hashdecl class constant keeps declared type");
+    }
+
+    testAOTModuleBcaHashdeclClassConstants() {
+        string tmp_dir = sprintf("/tmp/aot_bca_hashdecl_const_%d", getpid());
+        mkdir(tmp_dir);
+        on_exit {
+            backquote(sprintf("rm -rf %s", tmp_dir));
+        }
+
+        string mod_code = "%modern
+module AOTBcaHashdeclConst {
+    version = \"1.0\";
+    desc = \"AOT BCA hashdecl class constant regression\";
+    author = \"Test\";
+    license = \"MIT\";
+}
+
+public namespace AOTBcaHashdeclConst {
+    public hashdecl Config {
+        string name;
+    }
+
+    public class Base {
+        private {
+            hash<Config> config;
+            int id;
+        }
+
+        constructor(int n_id, hash<Config> n_config) {
+            id = n_id;
+            config = n_config;
+        }
+
+        string getResult() {
+            return sprintf(\"%s:%d\\n\", config.name, id);
+        }
+    }
+
+    public class Child inherits Base {
+        public {
+            const DefaultConfig = <Config>{\"name\": \"typed\"};
+        }
+
+        constructor(int id) : Base(id, DefaultConfig) {
+        }
+    }
+
+    public string sub run() {
+        Child c(11);
+        return c.getResult();
+    }
+}
+";
+        string qm_path = tmp_dir + "/AOTBcaHashdeclConst.qm";
+        {
+            File f();
+            f.open2(qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write(mod_code);
+            f.close();
+        }
+
+        string qmod_path = tmp_dir + "/AOTBcaHashdeclConst.qmod";
+        hash<auto> result = compileModuleFile(qm_path, qmod_path);
+        assertTrue(result.compiled, "BCA hashdecl constant module compiled: " + result.compile_out);
+
+        string test_code = "%modern
+%requires AOTBcaHashdeclConst
+printf(\"%s\", AOTBcaHashdeclConst::run());
+";
+        hash<auto> paths = writeTempScript(test_code);
+        on_exit {
+            unlink(paths.src);
+        }
+
+        string aot_out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, tmp_dir, qore_bin, paths.src));
+        unlink(qmod_path);
+        string interp_out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, tmp_dir, qore_bin, paths.src));
+
+        assertEq(interp_out, aot_out,
+            "compiled module preserves BCA hashdecl class constant: " + aot_out);
+        assertEq("typed:11\n", aot_out, "BCA hashdecl class constant is deferred until init");
     }
 
     testAOTModuleClosureCapturedLoopCondition() {
