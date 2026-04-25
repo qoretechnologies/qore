@@ -872,6 +872,36 @@ void UserSignature::setupFromAOTMetadata(
     assert(str.empty());
 }
 
+void UserSignature::replaceResolvedTypes(const QoreTypeInfo* retType,
+        std::vector<const QoreTypeInfo*>&& paramTypes) {
+    if (retType) {
+        returnTypeInfo = retType;
+    }
+
+    if (paramTypes.size() != typeList.size()) {
+        return;
+    }
+
+    typeList = std::move(paramTypes);
+    for (size_t i = 0; i < typeList.size() && i < lv.size(); ++i) {
+        if (lv[i]) {
+            lv[i]->setTypeInfo(typeList[i]);
+        }
+    }
+
+    str.clear();
+    num_param_types = 0;
+    min_param_types = 0;
+    for (size_t i = 0; i < typeList.size(); ++i) {
+        if (QoreTypeInfo::hasType(typeList[i])) {
+            ++num_param_types;
+            if (i >= defaultArgList.size() || !defaultArgList[i]) {
+                ++min_param_types;
+            }
+        }
+    }
+}
+
 void UserSignature::parseInitPushLocalVars(const QoreTypeInfo* classTypeInfo) {
     lv.reserve(parseTypeList.size());
 

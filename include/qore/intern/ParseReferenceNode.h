@@ -84,6 +84,13 @@ public:
         return typeInfo;
     }
 
+    DLLLOCAL void setTypeInfo(const QoreTypeInfo* ti) {
+        typeInfo = ti;
+        if (parse_analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)) {
+            parse_analysis.known_type = ti;
+        }
+    }
+
     // returns an intermediate reference for use with the background operator
     DLLLOCAL IntermediateParseReferenceNode* evalToIntermediate(ExceptionSink* xsink) const;
     DLLLOCAL IntermediateParseReferenceNode* evalToIntermediate(RuntimeConfig& rc, ExceptionSink* xsink) const;

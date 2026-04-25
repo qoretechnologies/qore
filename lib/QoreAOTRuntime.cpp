@@ -54,8 +54,21 @@
 #include "qore/intern/QoreAOTInstRegistry.h"
 #include "qore/intern/QoreAOTExprRegistry.h"
 #include "qore/intern/QoreAOTExprNodeRegistry.h"
+#include "qore/intern/AssertStatement.h"
 #include "qore/intern/CaseNodeRegex.h"
+#include "qore/intern/ContextStatement.h"
+#include "qore/intern/DebugStatement.h"
+#include "qore/intern/ExpressionStatement.h"
+#include "qore/intern/ForEachStatement.h"
+#include "qore/intern/ForStatement.h"
+#include "qore/intern/IfStatement.h"
+#include "qore/intern/OnBlockExitStatement.h"
+#include "qore/intern/RethrowStatement.h"
+#include "qore/intern/ReturnStatement.h"
 #include "qore/intern/SwitchStatement.h"
+#include "qore/intern/ThrowStatement.h"
+#include "qore/intern/TryStatement.h"
+#include "qore/intern/WhileStatement.h"
 
 #include "qore/intern/ModuleInfo.h"
 #include "qore/intern/VarRefNode.h"
@@ -155,6 +168,7 @@
 #include "qore/intern/QoreRegex.h"
 #include "qore/intern/QoreRegexSubst.h"
 #include "qore/intern/QoreTransliteration.h"
+#include "qore/intern/QoreClosureNode.h"
 #include "qore/intern/QoreClosureParseNode.h"
 #include "qore/intern/qore_list_private.h"
 #include <qore/QoreNumberNode.h>
@@ -4887,6 +4901,482 @@ static void transplantConstructorBCALists(
     }
 }
 
+//! Resolve a fallback-program type pointer to the target AOT program's canonical type pointer.
+using hashdecl_retarget_map_t = std::unordered_map<const TypedHashDecl*, const TypedHashDecl*>;
+
+static const QoreTypeInfo* retargetFallbackTypeInfo(QoreAOTTypeResolver& type_resolver, const QoreTypeInfo* ti,
+        const hashdecl_retarget_map_t& hashdecl_map) {
+    if (!QoreTypeInfo::hasType(ti)) {
+        return ti;
+    }
+
+    if (const TypedHashDecl* hd = QoreTypeInfo::getUniqueReturnHashDecl(ti)) {
+        auto hdi = hashdecl_map.find(hd);
+        if (hdi != hashdecl_map.end() && hdi->second) {
+            bool or_nothing = QoreTypeInfo::parseReturns(ti, NT_NOTHING) != QTI_NOT_EQUAL;
+            return hdi->second->getTypeInfo(or_nothing);
+        }
+    }
+
+    if (QoreTypeInfo::isReference(ti)) {
+        const QoreTypeInfo* target_ti = QoreTypeInfo::getReferenceTarget(ti);
+        const QoreTypeInfo* new_target_ti = retargetFallbackTypeInfo(type_resolver, target_ti, hashdecl_map);
+        if (new_target_ti != target_ti && QoreTypeInfo::hasType(new_target_ti)) {
+            bool or_nothing = QoreTypeInfo::parseReturns(ti, NT_NOTHING) != QTI_NOT_EQUAL;
+            return or_nothing
+                ? qore_get_complex_reference_or_nothing_type(new_target_ti)
+                : qore_get_complex_reference_type(new_target_ti);
+        }
+    }
+
+    const char* path = QoreTypeInfo::getPath(ti);
+    if (!path || !*path || !strcmp(path, "no type info")) {
+        return ti;
+    }
+
+    std::string error;
+    const QoreTypeInfo* resolved = type_resolver.resolve(path, error);
+    return resolved && error.empty() ? resolved : ti;
+}
+
+static void retargetFallbackLocalVarType(LocalVar* lv, QoreAOTTypeResolver& type_resolver,
+        const hashdecl_retarget_map_t& hashdecl_map) {
+    if (!lv) {
+        return;
+    }
+
+    const QoreTypeInfo* ti = lv->getTypeInfo();
+    const QoreTypeInfo* new_ti = retargetFallbackTypeInfo(type_resolver, ti, hashdecl_map);
+    if (new_ti != ti) {
+        lv->setTypeInfo(new_ti);
+    }
+}
+
+static void retargetFallbackValueTypes(
+    QoreValue v,
+    QoreAOTTypeResolver& type_resolver,
+    const hashdecl_retarget_map_t& hashdecl_map,
+    std::unordered_set<const AbstractQoreNode*>& seen);
+
+static void retargetFallbackClosureFunctionTypes(
+    QoreFunction* func,
+    QoreAOTTypeResolver& type_resolver,
+    const hashdecl_retarget_map_t& hashdecl_map,
+    std::unordered_set<const AbstractQoreNode*>* seen_exprs = nullptr);
+
+static void retargetFallbackCallArgs(
+        const FunctionCallBase& call,
+        QoreAOTTypeResolver& type_resolver,
+        const hashdecl_retarget_map_t& hashdecl_map,
+        std::unordered_set<const AbstractQoreNode*>& seen) {
+    if (const QoreParseListNode* parse_args = call.getParseArgs()) {
+        for (const QoreValue& arg : parse_args->getValues()) {
+            retargetFallbackValueTypes(arg, type_resolver, hashdecl_map, seen);
+        }
+    }
+
+    if (const QoreListNode* args = call.getArgs()) {
+        size_t len = args->size();
+        for (size_t i = 0; i < len; ++i) {
+            retargetFallbackValueTypes(args->retrieveEntry(i), type_resolver, hashdecl_map, seen);
+        }
+    }
+}
+
+template <typename T>
+static bool retargetFallbackSingleExpressionOperator(
+        const AbstractQoreNode* node,
+        QoreAOTTypeResolver& type_resolver,
+        const hashdecl_retarget_map_t& hashdecl_map,
+        std::unordered_set<const AbstractQoreNode*>& seen) {
+    const T* op = dynamic_cast<const T*>(node);
+    if (!op) {
+        return false;
+    }
+
+    retargetFallbackValueTypes(op->getExp(), type_resolver, hashdecl_map, seen);
+    return true;
+}
+
+template <typename T>
+static bool retargetFallbackBinaryOperator(
+        const AbstractQoreNode* node,
+        QoreAOTTypeResolver& type_resolver,
+        const hashdecl_retarget_map_t& hashdecl_map,
+        std::unordered_set<const AbstractQoreNode*>& seen) {
+    const T* op = dynamic_cast<const T*>(node);
+    if (!op) {
+        return false;
+    }
+
+    retargetFallbackValueTypes(op->getLeft(), type_resolver, hashdecl_map, seen);
+    retargetFallbackValueTypes(op->getRight(), type_resolver, hashdecl_map, seen);
+    return true;
+}
+
+template <typename T, unsigned N>
+static bool retargetFallbackNOperator(
+        const AbstractQoreNode* node,
+        QoreAOTTypeResolver& type_resolver,
+        const hashdecl_retarget_map_t& hashdecl_map,
+        std::unordered_set<const AbstractQoreNode*>& seen) {
+    const T* op = dynamic_cast<const T*>(node);
+    if (!op) {
+        return false;
+    }
+
+    for (unsigned i = 0; i < N; ++i) {
+        retargetFallbackValueTypes(op->get(i), type_resolver, hashdecl_map, seen);
+    }
+    return true;
+}
+
+static void retargetFallbackStatementBlockTypes(
+        const StatementBlock* block,
+        QoreAOTTypeResolver& type_resolver,
+        const hashdecl_retarget_map_t& hashdecl_map,
+        std::unordered_set<const AbstractQoreNode*>& seen);
+
+static void retargetFallbackStatementTypes(
+        const AbstractStatement* stmt,
+        QoreAOTTypeResolver& type_resolver,
+        const hashdecl_retarget_map_t& hashdecl_map,
+        std::unordered_set<const AbstractQoreNode*>& seen) {
+    if (!stmt) {
+        return;
+    }
+
+    if (auto* block = dynamic_cast<const StatementBlock*>(stmt)) {
+        retargetFallbackStatementBlockTypes(block, type_resolver, hashdecl_map, seen);
+    } else if (auto* expr_stmt = dynamic_cast<const ExpressionStatement*>(stmt)) {
+        retargetFallbackValueTypes(expr_stmt->getExpression(), type_resolver, hashdecl_map, seen);
+    } else if (auto* return_stmt = dynamic_cast<const ReturnStatement*>(stmt)) {
+        retargetFallbackValueTypes(return_stmt->getExpression(), type_resolver, hashdecl_map, seen);
+    } else if (auto* throw_stmt = dynamic_cast<const ThrowStatement*>(stmt)) {
+        retargetFallbackValueTypes(throw_stmt->getArgs(), type_resolver, hashdecl_map, seen);
+    } else if (auto* rethrow_stmt = dynamic_cast<const RethrowStatement*>(stmt)) {
+        retargetFallbackValueTypes(rethrow_stmt->getArgs(), type_resolver, hashdecl_map, seen);
+    } else if (auto* if_stmt = dynamic_cast<const IfStatement*>(stmt)) {
+        retargetFallbackValueTypes(if_stmt->getCond(), type_resolver, hashdecl_map, seen);
+        retargetFallbackStatementBlockTypes(if_stmt->getIfCode(), type_resolver, hashdecl_map, seen);
+        retargetFallbackStatementBlockTypes(if_stmt->getElseCode(), type_resolver, hashdecl_map, seen);
+    } else if (auto* for_stmt = dynamic_cast<const ForStatement*>(stmt)) {
+        retargetFallbackValueTypes(for_stmt->getAssignment(), type_resolver, hashdecl_map, seen);
+        retargetFallbackValueTypes(for_stmt->getCond(), type_resolver, hashdecl_map, seen);
+        retargetFallbackValueTypes(for_stmt->getIterator(), type_resolver, hashdecl_map, seen);
+        retargetFallbackStatementBlockTypes(for_stmt->getCode(), type_resolver, hashdecl_map, seen);
+    } else if (auto* while_stmt = dynamic_cast<const WhileStatement*>(stmt)) {
+        retargetFallbackValueTypes(while_stmt->getCond(), type_resolver, hashdecl_map, seen);
+        retargetFallbackStatementBlockTypes(while_stmt->getCode(), type_resolver, hashdecl_map, seen);
+    } else if (auto* try_stmt = dynamic_cast<const TryStatement*>(stmt)) {
+        retargetFallbackLocalVarType(try_stmt->getCatchVar(), type_resolver, hashdecl_map);
+        retargetFallbackStatementBlockTypes(try_stmt->getTryBlock(), type_resolver, hashdecl_map, seen);
+        retargetFallbackStatementBlockTypes(try_stmt->getCatchBlock(), type_resolver, hashdecl_map, seen);
+    } else if (auto* sw_stmt = dynamic_cast<const SwitchStatement*>(stmt)) {
+        retargetFallbackValueTypes(sw_stmt->getSwitchExp(), type_resolver, hashdecl_map, seen);
+        const CaseNode* cn = sw_stmt->getCases();
+        while (cn) {
+            retargetFallbackValueTypes(cn->val, type_resolver, hashdecl_map, seen);
+            retargetFallbackStatementBlockTypes(cn->code, type_resolver, hashdecl_map, seen);
+            cn = cn->next;
+        }
+    } else if (auto* foreach_stmt = dynamic_cast<const ForEachStatement*>(stmt)) {
+        retargetFallbackValueTypes(foreach_stmt->getVar(), type_resolver, hashdecl_map, seen);
+        retargetFallbackValueTypes(foreach_stmt->getList(), type_resolver, hashdecl_map, seen);
+        retargetFallbackStatementBlockTypes(foreach_stmt->getCode(), type_resolver, hashdecl_map, seen);
+    } else if (auto* debug_stmt = dynamic_cast<const DebugStatement*>(stmt)) {
+        retargetFallbackValueTypes(debug_stmt->getExpression(), type_resolver, hashdecl_map, seen);
+        retargetFallbackStatementBlockTypes(debug_stmt->getBlock(), type_resolver, hashdecl_map, seen);
+    } else if (auto* assert_stmt = dynamic_cast<const AssertStatement*>(stmt)) {
+        retargetFallbackValueTypes(assert_stmt->getCondition(), type_resolver, hashdecl_map, seen);
+        retargetFallbackValueTypes(assert_stmt->getMessage(), type_resolver, hashdecl_map, seen);
+    } else if (auto* obe_stmt = dynamic_cast<const OnBlockExitStatement*>(stmt)) {
+        retargetFallbackStatementBlockTypes(obe_stmt->getCode(), type_resolver, hashdecl_map, seen);
+    } else if (auto* ctx_stmt = dynamic_cast<const ContextStatement*>(stmt)) {
+        retargetFallbackValueTypes(ctx_stmt->exp, type_resolver, hashdecl_map, seen);
+        retargetFallbackValueTypes(ctx_stmt->where_exp, type_resolver, hashdecl_map, seen);
+        retargetFallbackValueTypes(ctx_stmt->sort_ascending, type_resolver, hashdecl_map, seen);
+        retargetFallbackValueTypes(ctx_stmt->sort_descending, type_resolver, hashdecl_map, seen);
+        retargetFallbackStatementBlockTypes(ctx_stmt->code, type_resolver, hashdecl_map, seen);
+    }
+}
+
+static void retargetFallbackStatementBlockTypes(
+        const StatementBlock* block,
+        QoreAOTTypeResolver& type_resolver,
+        const hashdecl_retarget_map_t& hashdecl_map,
+        std::unordered_set<const AbstractQoreNode*>& seen) {
+    if (!block) {
+        return;
+    }
+
+    for (auto it = block->getStatements().begin(); it != block->getStatements().end(); ++it) {
+        retargetFallbackStatementTypes(*it, type_resolver, hashdecl_map, seen);
+    }
+}
+
+static void retargetFallbackClosureFunctionTypes(QoreFunction* func, QoreAOTTypeResolver& type_resolver,
+        const hashdecl_retarget_map_t& hashdecl_map,
+        std::unordered_set<const AbstractQoreNode*>* seen_exprs) {
+    if (!func) {
+        return;
+    }
+
+    UserClosureFunction* ucf = dynamic_cast<UserClosureFunction*>(func);
+
+    if (ucf) {
+        const QoreTypeInfo* class_ti = ucf->getClassType();
+        const QoreTypeInfo* new_class_ti = retargetFallbackTypeInfo(type_resolver, class_ti, hashdecl_map);
+        if (new_class_ti != class_ti) {
+            ucf->setClassType(new_class_ti);
+        }
+    }
+
+    std::unordered_set<const AbstractQoreNode*> local_seen;
+    std::unordered_set<const AbstractQoreNode*>& seen = seen_exprs ? *seen_exprs : local_seen;
+
+    QoreFunctionIterator vi(*func);
+    while (vi.next()) {
+        const UserVariantBase* const_uvb = vi.getVariant()->getUserVariantBase();
+        UserVariantBase* uvb = const_cast<UserVariantBase*>(const_uvb);
+        if (!uvb) {
+            continue;
+        }
+
+        UserSignature* sig = uvb->getUserSignature();
+        if (!sig) {
+            continue;
+        }
+
+        const type_vec_t& types = sig->getTypeList();
+        std::vector<const QoreTypeInfo*> param_types;
+        param_types.reserve(types.size());
+        bool changed = false;
+        for (const QoreTypeInfo* ti : types) {
+            const QoreTypeInfo* new_ti = retargetFallbackTypeInfo(type_resolver, ti, hashdecl_map);
+            changed |= new_ti != ti;
+            param_types.push_back(new_ti);
+        }
+
+        const QoreTypeInfo* ret_ti = sig->getReturnTypeInfo();
+        const QoreTypeInfo* new_ret_ti = retargetFallbackTypeInfo(type_resolver, ret_ti, hashdecl_map);
+        if (changed || new_ret_ti != ret_ti) {
+            sig->replaceResolvedTypes(new_ret_ti, std::move(param_types));
+        }
+
+        for (LocalVar* lv : sig->lv) {
+            retargetFallbackLocalVarType(lv, type_resolver, hashdecl_map);
+        }
+        retargetFallbackLocalVarType(sig->argvid, type_resolver, hashdecl_map);
+        retargetFallbackLocalVarType(sig->selfid, type_resolver, hashdecl_map);
+
+        if (uvb && uvb->getStatementBlock()) {
+            std::vector<LocalVar*> body_locals;
+            collectAllStatementLocals(uvb->getStatementBlock(), body_locals);
+            for (LocalVar* lv : body_locals) {
+                retargetFallbackLocalVarType(lv, type_resolver, hashdecl_map);
+            }
+        }
+        if (uvb && uvb->getStatementBlock()) {
+            retargetFallbackStatementBlockTypes(uvb->getStatementBlock(), type_resolver, hashdecl_map, seen);
+        }
+
+        if (uvb && uvb->hasCachedAOT()) {
+            const std::vector<LocalVar*>& body_locals = uvb->getBodyLocals();
+            for (LocalVar* lv : body_locals) {
+                retargetFallbackLocalVarType(lv, type_resolver, hashdecl_map);
+            }
+        }
+    }
+
+    if (ucf) {
+        LVarSet* vlist = ucf->getVList();
+        if (vlist) {
+            for (LocalVar* lv : *vlist) {
+                retargetFallbackLocalVarType(lv, type_resolver, hashdecl_map);
+            }
+        }
+    }
+}
+
+static void retargetFallbackValueTypes(
+        QoreValue v,
+        QoreAOTTypeResolver& type_resolver,
+        const hashdecl_retarget_map_t& hashdecl_map,
+        std::unordered_set<const AbstractQoreNode*>& seen) {
+    const AbstractQoreNode* node = v.getInternalNode();
+    if (!node || !seen.insert(node).second) {
+        return;
+    }
+
+    switch (v.getType()) {
+        case NT_PARSEREFERENCE: {
+            const ParseReferenceNode* prn = v.get<const ParseReferenceNode>();
+            const QoreTypeInfo* ti = prn->getTypeInfo();
+            const QoreTypeInfo* new_ti = retargetFallbackTypeInfo(type_resolver, ti, hashdecl_map);
+            if (new_ti != ti) {
+                const_cast<ParseReferenceNode*>(prn)->setTypeInfo(new_ti);
+            }
+            retargetFallbackValueTypes(prn->getLVExp(), type_resolver, hashdecl_map, seen);
+            break;
+        }
+
+        case NT_PARSE_LIST: {
+            const QoreParseListNode* l = v.get<const QoreParseListNode>();
+            for (const QoreValue& entry : l->getValues()) {
+                retargetFallbackValueTypes(entry, type_resolver, hashdecl_map, seen);
+            }
+            break;
+        }
+
+        case NT_PARSE_HASH: {
+            const QoreParseHashNode* h = v.get<const QoreParseHashNode>();
+            for (const QoreValue& key : h->getKeys()) {
+                retargetFallbackValueTypes(key, type_resolver, hashdecl_map, seen);
+            }
+            for (const QoreValue& value : h->getValues()) {
+                retargetFallbackValueTypes(value, type_resolver, hashdecl_map, seen);
+            }
+            break;
+        }
+
+        case NT_HASH: {
+            const QoreHashNode* h = v.get<const QoreHashNode>();
+            ConstHashIterator hi(h);
+            while (hi.next()) {
+                retargetFallbackValueTypes(hi.get(), type_resolver, hashdecl_map, seen);
+            }
+            break;
+        }
+
+        case NT_LIST: {
+            const QoreListNode* l = v.get<const QoreListNode>();
+            size_t len = l->size();
+            for (size_t i = 0; i < len; ++i) {
+                retargetFallbackValueTypes(l->retrieveEntry(i), type_resolver, hashdecl_map, seen);
+            }
+            break;
+        }
+
+        case NT_RUNTIME_CLOSURE: {
+            const QoreClosureBase* cb = dynamic_cast<const QoreClosureBase*>(node);
+            if (cb) {
+                retargetFallbackClosureFunctionTypes(cb->getFunction(), type_resolver, hashdecl_map, &seen);
+            }
+            break;
+        }
+
+        case NT_CLOSURE: {
+            const QoreClosureParseNode* cn = dynamic_cast<const QoreClosureParseNode*>(node);
+            if (cn) {
+                retargetFallbackClosureFunctionTypes(cn->getFunction(), type_resolver, hashdecl_map, &seen);
+            }
+            break;
+        }
+
+        case NT_FUNCTION_CALL:
+        case NT_PROGRAM_FUNC_CALL:
+        case NT_SELF_CALL:
+        case NT_METHOD_CALL:
+        case NT_STATIC_METHOD_CALL:
+        case NT_SCOPE_REF: {
+            const AbstractFunctionCallNode* call = dynamic_cast<const AbstractFunctionCallNode*>(node);
+            if (call) {
+                retargetFallbackCallArgs(*call, type_resolver, hashdecl_map, seen);
+            }
+            break;
+        }
+
+        case NT_NEW_OBJECT: {
+            const NewObjectCallNode* call = dynamic_cast<const NewObjectCallNode*>(node);
+            if (call) {
+                retargetFallbackCallArgs(*call, type_resolver, hashdecl_map, seen);
+            }
+            break;
+        }
+
+        case NT_FUNCREFCALL: {
+            const CallReferenceCallNode* call = dynamic_cast<const CallReferenceCallNode*>(node);
+            if (call) {
+                retargetFallbackValueTypes(call->getExp(), type_resolver, hashdecl_map, seen);
+                if (const QoreParseListNode* args = call->getParseArgs()) {
+                    for (const QoreValue& arg : args->getValues()) {
+                        retargetFallbackValueTypes(arg, type_resolver, hashdecl_map, seen);
+                    }
+                }
+                if (const QoreListNode* args = call->getArgs()) {
+                    size_t len = args->size();
+                    for (size_t i = 0; i < len; ++i) {
+                        retargetFallbackValueTypes(args->retrieveEntry(i), type_resolver, hashdecl_map, seen);
+                    }
+                }
+            }
+            break;
+        }
+
+        case NT_OPERATOR: {
+            if (auto* dot = dynamic_cast<const QoreDotEvalOperatorNode*>(node)) {
+                retargetFallbackValueTypes(dot->getExpression(), type_resolver, hashdecl_map, seen);
+                if (MethodCallNode* m = dot->getMethodCall()) {
+                    retargetFallbackCallArgs(*m, type_resolver, hashdecl_map, seen);
+                }
+                break;
+            }
+            if (retargetFallbackBinaryOperator<QoreBinaryOperatorNode<>>(node, type_resolver, hashdecl_map, seen)
+                    || retargetFallbackBinaryOperator<QoreBinaryOperatorNode<LValueOperatorNode>>(
+                        node, type_resolver, hashdecl_map, seen)
+                    || retargetFallbackSingleExpressionOperator<QoreSingleExpressionOperatorNode<>>(
+                        node, type_resolver, hashdecl_map, seen)
+                    || retargetFallbackSingleExpressionOperator<QoreSingleExpressionOperatorNode<LValueOperatorNode>>(
+                        node, type_resolver, hashdecl_map, seen)
+                    || retargetFallbackSingleExpressionOperator<QoreSingleValueExpressionOperatorNode<>>(
+                        node, type_resolver, hashdecl_map, seen)
+                    || retargetFallbackSingleExpressionOperator<QoreSingleValueExpressionOperatorNode<LValueOperatorNode>>(
+                        node, type_resolver, hashdecl_map, seen)
+                    || retargetFallbackNOperator<QoreNOperatorNodeBase<3>, 3>(
+                        node, type_resolver, hashdecl_map, seen)
+                    || retargetFallbackNOperator<QoreNOperatorNodeBase<4>, 4>(
+                        node, type_resolver, hashdecl_map, seen)) {
+                break;
+            }
+            break;
+        }
+
+        default:
+            break;
+    }
+}
+
+static void retargetFallbackValueTypes(QoreValue v, QoreAOTTypeResolver& type_resolver,
+        const hashdecl_retarget_map_t& hashdecl_map) {
+    std::unordered_set<const AbstractQoreNode*> seen;
+    retargetFallbackValueTypes(v, type_resolver, hashdecl_map, seen);
+}
+
+static void collectFallbackHashDeclMappings(
+        qore_ns_private* fallback_ns,
+        qore_ns_private* main_ns,
+        hashdecl_retarget_map_t& hashdecl_map) {
+    ConstHashDeclListIterator hdi(fallback_ns->hashDeclList);
+    while (hdi.next()) {
+        const TypedHashDecl* main_hd = main_ns->hashDeclList.find(hdi.getName());
+        if (main_hd) {
+            hashdecl_map[hdi.get()] = main_hd;
+        }
+    }
+
+    for (auto ni = main_ns->nsl.nsmap.begin(), ne = main_ns->nsl.nsmap.end(); ni != ne; ++ni) {
+        QoreNamespace* main_child = ni->second;
+        auto fb_ni = fallback_ns->nsl.nsmap.find(ni->first);
+        if (fb_ni != fallback_ns->nsl.nsmap.end() && fb_ni->second) {
+            collectFallbackHashDeclMappings(
+                qore_ns_private::get(*fb_ni->second),
+                qore_ns_private::get(*main_child),
+                hashdecl_map);
+        }
+    }
+}
+
 //! Transplant unserialized closure values from fallback-parsed classes to main classes.
 /** During AOT serialization, closure/code values are written as VT_NOTHING because
     they can't be serialized. This affects both class constants (ConstantEntry::val)
@@ -4897,7 +5387,17 @@ static void transplantConstructorBCALists(
 static void transplantClassClosureValues(
         qore_ns_private* fallback_ns,
         qore_ns_private* main_ns,
-        QoreProgram* main_pgm) {
+        QoreProgram* main_pgm,
+        QoreAOTTypeResolver* shared_type_resolver = nullptr,
+        hashdecl_retarget_map_t* shared_hashdecl_map = nullptr) {
+    QoreAOTTypeResolver local_type_resolver(main_pgm);
+    QoreAOTTypeResolver& type_resolver = shared_type_resolver ? *shared_type_resolver : local_type_resolver;
+    hashdecl_retarget_map_t local_hashdecl_map;
+    if (!shared_hashdecl_map) {
+        collectFallbackHashDeclMappings(fallback_ns, main_ns, local_hashdecl_map);
+    }
+    hashdecl_retarget_map_t& hashdecl_map = shared_hashdecl_map ? *shared_hashdecl_map : local_hashdecl_map;
+
     // Process classes in this namespace
     ClassListIterator cli(main_ns->classList);
     while (cli.next()) {
@@ -4940,7 +5440,9 @@ static void transplantClassClosureValues(
             // though the visible val holds the correct transplanted value.
             ConstantEntry* writable_ce = const_cast<ConstantEntry*>(main_ce);
             ExceptionSink txs;
-            writable_ce->setRuntimeValue(fb_ce->getReferencedValue(), &txs);
+            QoreValue fb_val = fb_ce->getReferencedValue();
+            retargetFallbackValueTypes(fb_val, type_resolver, hashdecl_map);
+            writable_ce->setRuntimeValue(fb_val, &txs);
             if (txs.isException()) {
                 txs.clear();
             }
@@ -4971,6 +5473,7 @@ static void transplantClassClosureValues(
             // The expression is a parse tree node owned by the fallback program,
             // which outlives the main program, so the pointer remains valid.
             // We use refSelf() to get a referenced copy of the expression value.
+            retargetFallbackValueTypes(fb_mi->exp, type_resolver, hashdecl_map);
             mi.second->exp = fb_mi->exp.refSelf();
             printd(5, "AOT: transplanted member default '%s::%s' from fallback\n",
                 main_qc->getName(), mi.first);
@@ -5002,7 +5505,9 @@ static void transplantClassClosureValues(
             }
 
             // Assign the evaluated value to the main static var
-            discard(vi.second->assignInit(fb_val.refSelf()), nullptr);
+            QoreValue fb_ref = fb_val.refSelf();
+            retargetFallbackValueTypes(fb_ref, type_resolver, hashdecl_map);
+            discard(vi.second->assignInit(fb_ref), nullptr);
             vi.second->eval_init = true;
             printd(5, "AOT: transplanted static var value '%s::%s' from fallback\n",
                 main_qc->getName(), vi.first);
@@ -5029,7 +5534,9 @@ static void transplantClassClosureValues(
         // val and saved_val populated and aot_shell_pending cleared.
         ConstantEntry* writable_ce = const_cast<ConstantEntry*>(main_ce);
         ExceptionSink txs;
-        writable_ce->setRuntimeValue(fb_ce->getReferencedValue(), &txs);
+        QoreValue fb_val = fb_ce->getReferencedValue();
+        retargetFallbackValueTypes(fb_val, type_resolver, hashdecl_map);
+        writable_ce->setRuntimeValue(fb_val, &txs);
         if (txs.isException()) {
             txs.clear();
         }
@@ -5048,7 +5555,7 @@ static void transplantClassClosureValues(
         if (fb_ni != fallback_ns->nsl.nsmap.end() && fb_ni->second) {
             transplantClassClosureValues(
                 qore_ns_private::get(*fb_ni->second),
-                qore_ns_private::get(*main_child), main_pgm);
+                qore_ns_private::get(*main_child), main_pgm, &type_resolver, &hashdecl_map);
         }
     }
 }

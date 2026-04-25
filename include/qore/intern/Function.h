@@ -279,6 +279,9 @@ public:
         int parseLocFirstLine = 0,
         int parseLocLastLine = 0);
 
+    DLLLOCAL void replaceResolvedTypes(const QoreTypeInfo* retType,
+        std::vector<const QoreTypeInfo*>&& paramTypes);
+
     DLLLOCAL virtual ~UserSignature() {
         for (ptype_vec_t::iterator i = parseTypeList.begin(), e = parseTypeList.end(); i != e; ++i)
             delete* i;

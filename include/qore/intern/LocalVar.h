@@ -653,6 +653,15 @@ public:
         return typeInfo;
     }
 
+    DLLLOCAL void setTypeInfo(const QoreTypeInfo* ti) {
+        const QoreTypeInfo* base_ti;
+        no_narrowing = isNoNarrowMarkerType(ti, base_ti);
+        is_auto_type = isAutoTypeInfo(base_ti);
+        typeInfo = base_ti;
+        refTypeInfo = QoreTypeInfo::getReferenceTarget(base_ti);
+        narrowedTypeInfo = nullptr;
+    }
+
     //! Returns the type info for this variable at parse time
     /** Always returns the declared type (or narrowed type for auto variables).
         For unassigned variables, returns the declared type — callers that need

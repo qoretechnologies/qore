@@ -1713,7 +1713,49 @@ static std::string normalize_aot_type_path(const char* path) {
     return out;
 }
 
+static bool extract_aot_single_type_arg(const char* path, const char* type_name, bool& or_nothing,
+        std::string& arg) {
+    or_nothing = false;
+    const char* p = path;
+    if (*p == '*') {
+        or_nothing = true;
+        ++p;
+    }
+
+    size_t type_len = strlen(type_name);
+    if (strncmp(p, type_name, type_len) || p[type_len] != '<') {
+        return false;
+    }
+
+    const char* start = p + type_len + 1;
+    int depth = 1;
+    for (const char* q = start; *q; ++q) {
+        if (*q == '<') {
+            ++depth;
+        } else if (*q == '>' && --depth == 0) {
+            if (q[1]) {
+                return false;
+            }
+            arg.assign(start, q - start);
+            return !arg.empty();
+        }
+    }
+    return false;
+}
+
 const QoreTypeInfo* QoreAOTTypeResolver::resolveComplexType(const char* path) {
+    bool or_nothing = false;
+    std::string inner_type;
+    if (extract_aot_single_type_arg(path, "reference", or_nothing, inner_type)) {
+        std::string error;
+        const QoreTypeInfo* value_type = resolve(inner_type.c_str(), error);
+        if (QoreTypeInfo::hasType(value_type)) {
+            return or_nothing
+                ? qore_get_complex_reference_or_nothing_type(value_type)
+                : qore_get_complex_reference_type(value_type);
+        }
+    }
+
     // Handle object<ClassName> patterns directly by looking up the class
     // in the namespace tree. This works even before rebuildAllIndexes() is called.
     if (strncmp(path, "object<", 7) == 0) {
@@ -7433,7 +7475,14 @@ bool QoreAOTBinaryDeserializer::commitClassesPrepare(std::string& error) {
             continue;
         }
         qore_class_private* priv = qore_class_private::get(*qc);
-        // Signatures already resolved by readAndSetupVariantSignature — just set initialized
+        // Mirror initializeIntern(): class signature hashing must use resolved
+        // method signatures, not the empty pre-resolve signature text.
+        for (auto& mi : priv->hm) {
+            qore_method_private::get(*mi.second)->getFunction()->resolvePendingSignatures();
+        }
+        for (auto& mi : priv->shm) {
+            qore_method_private::get(*mi.second)->getFunction()->resolvePendingSignatures();
+        }
         priv->initialized = true;
         // Force has_new_user_changes so parseCommit() runs its full path:
         //   - addLocalMembersForInit() populates member_init_list (so
