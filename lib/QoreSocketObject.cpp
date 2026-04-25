@@ -228,18 +228,36 @@ int QoreSocketObject::connectUNIX(const char* p, int sock_type, int protocol, Ex
 // to bind to either a UNIX socket or an INET interface:port
 int QoreSocketObject::bind(const char* name, bool reuseaddr) {
     AutoLocker al(priv->m);
+    ExceptionSink xsink;
+    my_socket_priv::SyncIoGuard sg(*priv, &xsink);
+    if (!sg) {
+        xsink.clear();
+        return -1;
+    }
     return priv->socket->bind(name, reuseaddr);
 }
 
 // to bind to an INET tcp port on all interfaces
 int QoreSocketObject::bind(int port, bool reuseaddr) {
     AutoLocker al(priv->m);
+    ExceptionSink xsink;
+    my_socket_priv::SyncIoGuard sg(*priv, &xsink);
+    if (!sg) {
+        xsink.clear();
+        return -1;
+    }
     return priv->socket->bind(port, reuseaddr);
 }
 
 // to bind an open socket to an INET tcp port on a specific interface
 int QoreSocketObject::bind(const char* iface, int port, bool reuseaddr) {
     AutoLocker al(priv->m);
+    ExceptionSink xsink;
+    my_socket_priv::SyncIoGuard sg(*priv, &xsink);
+    if (!sg) {
+        xsink.clear();
+        return -1;
+    }
     return priv->socket->bind(iface, port, reuseaddr);
 }
 
@@ -270,6 +288,12 @@ int QoreSocketObject::getPort() {
 
 int QoreSocketObject::listen(int backlog) {
     AutoLocker al(priv->m);
+    ExceptionSink xsink;
+    my_socket_priv::SyncIoGuard sg(*priv, &xsink);
+    if (!sg) {
+        xsink.clear();
+        return -1;
+    }
     return priv->socket->listen(backlog);
 }
 
@@ -861,6 +885,9 @@ bool QoreSocketObject::isSecure() {
 
 int QoreSocketObject::checkIdleData(ExceptionSink* xsink) {
     AutoLocker al(priv->m);
+    if (priv->checkAsyncAllowed(xsink)) {
+        return -1;
+    }
     qore_socket_private* p = qore_socket_private::get(*priv->socket);
     if (!p->isOpen()) {
         return -1;

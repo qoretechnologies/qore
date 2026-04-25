@@ -2213,6 +2213,26 @@ static void ut_socket_iomode_no_xsink_sync_wrappers(UnitTestCounters& c) {
         UT_ASSERT(c, sp->io_mode == SocketIoMode::Async,
             "no-xsink recv does not clear Async ownership");
         sp->clearNonBlock(NB_RECV);
+    }
+
+    {
+        AutoLocker al(sp->m);
+        rv = sp->setNonBlock(&xsink);
+        UT_ASSERT(c, rv == 0, "setNonBlock succeeds before no-xsink bind/listen test");
+        UT_ASSERT(c, !xsink, "no exception from setNonBlock before no-xsink bind/listen test");
+    }
+
+    rv = sock->bind(0);
+    UT_ASSERT(c, rv == -1, "no-xsink bind returns -1 while async I/O owns socket");
+
+    rv = sock->listen(1);
+    UT_ASSERT(c, rv == -1, "no-xsink listen returns -1 while async I/O owns socket");
+
+    {
+        AutoLocker al(sp->m);
+        UT_ASSERT(c, sp->io_mode == SocketIoMode::Async,
+            "no-xsink bind/listen do not clear Async ownership");
+        sp->clearNonBlock();
         UT_ASSERT(c, sp->io_mode == SocketIoMode::Unclaimed,
             "io_mode resets after no-xsink wrapper test cleanup");
     }
@@ -2247,7 +2267,22 @@ static void ut_socket_iomode_sync_lifecycle(UnitTestCounters& c) {
         UT_ASSERT(c, err && *err == "SOCKET-SYNC-MODE-ERROR",
             "exception is SOCKET-SYNC-MODE-ERROR while sync I/O is active");
         xsink.clear();
+    }
 
+    {
+        ExceptionSink async_xsink;
+        int rv = sock->checkIdleData(&async_xsink);
+        UT_ASSERT(c, rv == -1, "async idle-data check fails while sync I/O is active");
+        UT_ASSERT(c, (bool)async_xsink, "async idle-data check raises while sync I/O is active");
+        const QoreValue err_val = async_xsink.getExceptionErr();
+        const QoreStringNode* err = err_val.get<const QoreStringNode>();
+        UT_ASSERT(c, err && *err == "SOCKET-SYNC-MODE-ERROR",
+            "async idle-data exception is SOCKET-SYNC-MODE-ERROR while sync I/O is active");
+        async_xsink.clear();
+    }
+
+    {
+        AutoLocker al(sp->m);
         sp->clearSyncIo();
         UT_ASSERT(c, sp->sync_io_count == 0,
             "sync_io_count is cleared after clearSyncIo");
