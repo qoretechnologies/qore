@@ -70,22 +70,8 @@ public:
         return myElementTypeInfo;
     }
 
-    // Native fast-path overrides — see QC_StringSplitIterator.h for rationale.
-    DLLLOCAL bool supportsNativeIteration() const override { return true; }
-
-    DLLLOCAL bool nativeNext(ExceptionSink* xsink) override {
-        if (check(xsink)) {
-            return false;
-        }
-        return ConstListIterator::next();
-    }
-
-    DLLLOCAL QoreValue nativeGetValue(ExceptionSink* xsink) override {
-        if (check(xsink)) {
-            return QoreValue();
-        }
-        return getReferencedValue(xsink);
-    }
+    // Native fast-path: ConstListIterator::next() + getReferencedValue.
+    QORE_NATIVE_FAST_PATH_REFVAL()
 
 protected:
     const QoreTypeInfo* myElementTypeInfo;

@@ -121,23 +121,10 @@ public:
         return val.isNothing() ? bigIntTypeInfo : val.getTypeInfo();
     }
 
-    // Native fast-path overrides — see QC_StringSplitIterator.h for rationale.
-    // Thread-check from QoreAbstractIteratorBase::check() is replicated inline.
-    DLLLOCAL bool supportsNativeIteration() const override { return true; }
-
-    DLLLOCAL bool nativeNext(ExceptionSink* xsink) override {
-        if (check(xsink)) {
-            return false;
-        }
-        return next();
-    }
-
-    DLLLOCAL QoreValue nativeGetValue(ExceptionSink* xsink) override {
-        if (check(xsink)) {
-            return QoreValue();
-        }
-        return getValue(xsink);
-    }
+    // Native fast-path: bypasses Qore method dispatch when driven through
+    // map/select/foldl/foreach.  See QORE_NATIVE_FAST_PATH_DEFAULT in
+    // QoreIteratorBase.h for the macro expansion.
+    QORE_NATIVE_FAST_PATH_DEFAULT()
 
 private:
     DLLLOCAL int64 calculateCurrent() {

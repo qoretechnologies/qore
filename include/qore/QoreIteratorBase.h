@@ -117,4 +117,71 @@ public:
     }
 };
 
+//! Emits the standard native fast-path overrides for an iterator class.
+/** Use in the public section of a class that inherits @ref QoreIteratorBase
+    when:
+      - the class has a @c bool @c next() method (no xsink),
+      - the class has a @c QoreValue @c getValue(ExceptionSink*) method,
+      - thread ownership should be enforced via @ref QoreAbstractIteratorBase::check().
+
+    For classes whose @c next() takes an @c ExceptionSink* (e.g.
+    @ref StringSplitIterator after the SPLIT_CHARS extension or
+    @ref StringRegexSplitIterator), use
+    @ref QORE_NATIVE_FAST_PATH_NEXT_XSINK instead.
+
+    For classes that yield via @c getReferencedValue (the @c ConstListIterator
+    family), use @ref QORE_NATIVE_FAST_PATH_REFVAL.
+
+    @since %Qore 2.3
+ */
+#define QORE_NATIVE_FAST_PATH_DEFAULT()                                         \
+    DLLLOCAL bool supportsNativeIteration() const override { return true; }     \
+    DLLLOCAL bool nativeNext(ExceptionSink* xsink) override {                   \
+        if (check(xsink)) {                                                     \
+            return false;                                                       \
+        }                                                                       \
+        return next();                                                          \
+    }                                                                           \
+    DLLLOCAL QoreValue nativeGetValue(ExceptionSink* xsink) override {          \
+        if (check(xsink)) {                                                     \
+            return QoreValue();                                                 \
+        }                                                                       \
+        return getValue(xsink);                                                 \
+    }
+
+//! Fast-path variant where @c next() takes an @c ExceptionSink*.
+/** @since %Qore 2.3 */
+#define QORE_NATIVE_FAST_PATH_NEXT_XSINK()                                      \
+    DLLLOCAL bool supportsNativeIteration() const override { return true; }     \
+    DLLLOCAL bool nativeNext(ExceptionSink* xsink) override {                   \
+        if (check(xsink)) {                                                     \
+            return false;                                                       \
+        }                                                                       \
+        return next(xsink);                                                     \
+    }                                                                           \
+    DLLLOCAL QoreValue nativeGetValue(ExceptionSink* xsink) override {          \
+        if (check(xsink)) {                                                     \
+            return QoreValue();                                                 \
+        }                                                                       \
+        return getValue(xsink);                                                 \
+    }
+
+//! Fast-path variant for ConstListIterator-style classes that expose
+//! @c getReferencedValue() (the wrapped iterator's terminal accessor).
+/** @since %Qore 2.3 */
+#define QORE_NATIVE_FAST_PATH_REFVAL()                                          \
+    DLLLOCAL bool supportsNativeIteration() const override { return true; }     \
+    DLLLOCAL bool nativeNext(ExceptionSink* xsink) override {                   \
+        if (check(xsink)) {                                                     \
+            return false;                                                       \
+        }                                                                       \
+        return next();                                                          \
+    }                                                                           \
+    DLLLOCAL QoreValue nativeGetValue(ExceptionSink* xsink) override {          \
+        if (check(xsink)) {                                                     \
+            return QoreValue();                                                 \
+        }                                                                       \
+        return getReferencedValue(xsink);                                       \
+    }
+
 #endif

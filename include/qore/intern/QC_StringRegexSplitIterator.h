@@ -86,23 +86,8 @@ public:
 
     DLLLOCAL virtual const QoreTypeInfo* getElementType() const override;
 
-    // Native fast-path overrides — see QC_StringSplitIterator.h for the
-    // rationale.  Thread-check in check() is replicated inline.
-    DLLLOCAL bool supportsNativeIteration() const override { return true; }
-
-    DLLLOCAL bool nativeNext(ExceptionSink* xsink) override {
-        if (check(xsink)) {
-            return false;
-        }
-        return next(xsink);
-    }
-
-    DLLLOCAL QoreValue nativeGetValue(ExceptionSink* xsink) override {
-        if (check(xsink)) {
-            return QoreValue();
-        }
-        return getValue(xsink);
-    }
+    // Native fast-path: next() takes xsink for PCRE2 error reporting.
+    QORE_NATIVE_FAST_PATH_NEXT_XSINK()
 
 private:
     // UTF-8 subject string; ref'd on construction, deref'd in dtor.
