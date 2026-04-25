@@ -39,6 +39,7 @@
 #include "qore/intern/NegotiatingConnectionPollOp.h"
 #include "qore/intern/QC_FutureImpl.h"
 #include "qore/intern/QC_Future.h"
+#include "qore/intern/QoreAsyncIoLogger.h"
 
 #include <chrono>
 #include <cstdio>
@@ -501,6 +502,10 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::createConnection(
                     opts_.connect_timeout_ms, xsink);
                 if (!ready || *xsink) {
                     if (!*xsink) {
+                        qore_async_io_log(QORE_LOG_LEVEL_WARN,
+                            "negotiate-timeout-proxy target='%s:%d' "
+                            "timeout_ms=%d",
+                            host, port, opts_.connect_timeout_ms);
                         xsink->raiseException("HTTPCLIENT-NEGOTIATE-TIMEOUT",
                             "ALPN negotiation through proxy to %s:%d "
                             "timed out after %d ms",
@@ -569,9 +574,26 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::createConnection(
             bool ready = neg->waitForReadyOrError(opts_.connect_timeout_ms, xsink);
             if (!ready || *xsink) {
                 if (!*xsink) {
+                    // Diagnostic: surface the inner negotiate poll op's
+                    // current state and elapsed-since-submit so the
+                    // qorus-core log shows which step the state machine
+                    // was stuck in when the timeout fired.  See
+                    // /tmp/httpclient-negotiate-timeout-investigation.md
+                    // for the audit that motivated this instrumentation.
+                    int us;
+                    int64_t now_us = q_epoch_us(us) * 1000000LL + us;
+                    int64_t submit_us = neg->getNegSubmitTimeUs();
+                    int64_t elapsed_us = submit_us > 0 ? (now_us - submit_us) : -1;
+                    const char* neg_state = neg->getNegStateName();
+                    qore_async_io_log(QORE_LOG_LEVEL_WARN,
+                        "negotiate-timeout target='%s:%d' state='%s' "
+                        "elapsed_us=%lld timeout_ms=%d",
+                        host, port, neg_state, (long long)elapsed_us,
+                        opts_.connect_timeout_ms);
                     xsink->raiseException("HTTPCLIENT-NEGOTIATE-TIMEOUT",
-                        "ALPN negotiation with %s:%d timed out after %d ms",
-                        host, port, opts_.connect_timeout_ms);
+                        "ALPN negotiation with %s:%d timed out after %d ms "
+                        "(neg state: %s)",
+                        host, port, opts_.connect_timeout_ms, neg_state);
                 }
                 ExceptionSink dx;
                 neg->closeConnection(&dx);

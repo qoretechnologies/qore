@@ -38,6 +38,7 @@
 #include "qore/intern/QC_SocketPollOperationBase.h"
 #include "qore/intern/QC_Socket.h"
 #include "qore/intern/AsyncIoControllerPriv.h"
+#include "qore/intern/QoreAsyncIoLogger.h"
 
 #include <cstdio>
 
@@ -53,6 +54,13 @@ NegotiatingConnectionPollOpPriv::NegotiatingConnectionPollOpPriv(QoreObject* sel
       target_host(std::move(target_host)), target_port(target_port),
       owner_conn(owner_conn) {
     // sock and connect_op refs are transferred from the caller.
+    int us;
+    submit_time_us = q_epoch_us(us) * 1000000LL + us;
+    ASYNC_IO_TRACE("negotiate-create target='%s:%d' priv=%p\n",
+        this->target_host.c_str(), this->target_port, (void*)this);
+    qore_async_io_log(QORE_LOG_LEVEL_DEBUG,
+        "negotiate-create target='%s:%d' priv=%p",
+        this->target_host.c_str(), this->target_port, (void*)this);
 }
 
 NegotiatingConnectionPollOpPriv::~NegotiatingConnectionPollOpPriv() {
@@ -119,6 +127,12 @@ QoreHashNode* NegotiatingConnectionPollOpPriv::continuePoll(ExceptionSink* xsink
 }
 
 QoreHashNode* NegotiatingConnectionPollOpPriv::handleConnecting(ExceptionSink* xsink) {
+    int us;
+    int64_t now_us = q_epoch_us(us) * 1000000LL + us;
+    int64_t elapsed_us = now_us - submit_time_us;
+    ASYNC_IO_TRACE("handleConnecting begin target='%s:%d' priv=%p elapsed_us=%lld\n",
+        target_host.c_str(), target_port, (void*)this, (long long)elapsed_us);
+
     if (!current_op) {
         setError("HTTPCLIENT-NEGOTIATE-ERROR",
             "connect operation not initialized", xsink);
@@ -143,6 +157,8 @@ QoreHashNode* NegotiatingConnectionPollOpPriv::handleConnecting(ExceptionSink* x
     if (poll_info) {
         // Still progressing — pass the poll info back to the controller
         // so it re-arms epoll for the right events.
+        ASYNC_IO_TRACE("handleConnecting still-connecting target='%s:%d' priv=%p elapsed_us=%lld\n",
+            target_host.c_str(), target_port, (void*)this, (long long)elapsed_us);
         return poll_info;
     }
 
@@ -152,12 +168,21 @@ QoreHashNode* NegotiatingConnectionPollOpPriv::handleConnecting(ExceptionSink* x
         return nullptr;
     }
 
+    ASYNC_IO_TRACE("handleConnecting tcp+tls done target='%s:%d' priv=%p elapsed_us=%lld\n",
+        target_host.c_str(), target_port, (void*)this, (long long)elapsed_us);
+    qore_async_io_log(QORE_LOG_LEVEL_DEBUG,
+        "negotiate-handshake-done target='%s:%d' priv=%p elapsed_us=%lld",
+        target_host.c_str(), target_port, (void*)this, (long long)elapsed_us);
+
     // TCP + SSL handshake done.  Read the negotiated ALPN protocol.
     SimpleRefHolder<QoreStringNode> alpn(sock_obj->getAlpnProtocol());
     std::string alpn_id;
     if (alpn && !alpn->empty()) {
         alpn_id = alpn->c_str();
     }
+
+    ASYNC_IO_TRACE("handleConnecting alpn='%s' target='%s:%d' priv=%p elapsed_us=%lld\n",
+        alpn_id.c_str(), target_host.c_str(), target_port, (void*)this, (long long)elapsed_us);
 
     // Validate the ALPN id against our offer list (defense against
     // non-conforming servers — per RFC 7301 the server MUST reject with
@@ -178,6 +203,13 @@ QoreHashNode* NegotiatingConnectionPollOpPriv::handleConnecting(ExceptionSink* x
     // thread is ordered by the AbstractHttpPollConnectionPriv condition
     // variable internal to onConnectionReady().
     if (owner_conn) {
+        ASYNC_IO_TRACE("onAlpnDecided fire alpn='%s' target='%s:%d' priv=%p elapsed_us=%lld\n",
+            alpn_id.c_str(), target_host.c_str(), target_port, (void*)this,
+            (long long)elapsed_us);
+        qore_async_io_log(QORE_LOG_LEVEL_DEBUG,
+            "negotiate-alpn-decided alpn='%s' target='%s:%d' priv=%p elapsed_us=%lld",
+            alpn_id.c_str(), target_host.c_str(), target_port, (void*)this,
+            (long long)elapsed_us);
         owner_conn->onAlpnDecided(std::move(alpn_id));
     }
 
@@ -200,6 +232,15 @@ void NegotiatingConnectionPollOpPriv::setError(const char* err, const char* desc
     if (error_info) {
         return;  // preserve the first error
     }
+
+    int us;
+    int64_t elapsed_us = (q_epoch_us(us) * 1000000LL + us) - submit_time_us;
+    ASYNC_IO_TRACE("negotiate-setError err='%s' desc='%s' target='%s:%d' priv=%p elapsed_us=%lld\n",
+        err, desc, target_host.c_str(), target_port, (void*)this, (long long)elapsed_us);
+    qore_async_io_log(QORE_LOG_LEVEL_DEBUG,
+        "negotiate-setError err='%s' desc='%s' target='%s:%d' priv=%p elapsed_us=%lld",
+        err, desc, target_host.c_str(), target_port, (void*)this, (long long)elapsed_us);
+
     error_info = new QoreHashNode(autoTypeInfo);
     error_info->setKeyValue("err", new QoreStringNode(err), xsink);
     error_info->setKeyValue("desc", new QoreStringNode(desc), xsink);
@@ -224,6 +265,14 @@ void NegotiatingConnectionPollOpPriv::setError(const char* err, const char* desc
 }
 
 void NegotiatingConnectionPollOpPriv::abort(ExceptionSink* xsink) {
+    int us;
+    int64_t elapsed_us = (q_epoch_us(us) * 1000000LL + us) - submit_time_us;
+    ASYNC_IO_TRACE("negotiate-abort target='%s:%d' priv=%p elapsed_us=%lld\n",
+        target_host.c_str(), target_port, (void*)this, (long long)elapsed_us);
+    qore_async_io_log(QORE_LOG_LEVEL_DEBUG,
+        "negotiate-abort target='%s:%d' priv=%p elapsed_us=%lld",
+        target_host.c_str(), target_port, (void*)this, (long long)elapsed_us);
+
     neg_state.store(NegState::CLOSED, std::memory_order_release);
     releaseCurrentOp(xsink);
     if (owner_conn) {
@@ -400,6 +449,18 @@ int NegotiatingHttpClientConnection::buildAndSubmit(const Http1SslConfig& ssl_co
     }
 
     // Commit ownership to members.
+    //
+    // Ordering note: the commits happen AFTER submit() so that on submit
+    // failure (xsink set) the holders' ReferenceHolder dtors release the
+    // refs cleanly and we never leave members pointing at a half-submitted
+    // op.  An I/O thread that picks up the SubmitOp can race ahead and
+    // call onAlpnDecided -> onConnectionReady before we reach these lines,
+    // but that path only touches the priv's owner_conn (a raw pointer set
+    // in the priv ctor before submit) and the base class condition
+    // variable — it does NOT read sock_priv / submitted_to_controller.
+    // closeConnection (which DOES read those) is only invoked after
+    // buildAndSubmit returns (from the manager's error path or this
+    // object's destructor), by which time the commits below have run.
     sock_priv = sock_priv_raw;
     sock_obj = sock_obj_holder.release();
     neg_priv = priv_raw;
