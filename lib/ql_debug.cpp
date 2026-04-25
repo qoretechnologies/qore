@@ -2044,7 +2044,7 @@ static void ut_socket_iomode_sync_blocks_async(UnitTestCounters& c) {
     ExceptionSink xsink;
 
     QoreSocketObject* sock = new QoreSocketObject;
-    QoreObject* sock_obj = new QoreObject(QC_SOCKET, getProgram(), sock);
+    ReferenceHolder<QoreObject> sock_obj(new QoreObject(QC_SOCKET, getProgram(), sock), &xsink);
     my_socket_priv* sp = my_socket_priv::getPriv(*sock);
 
     // Manually set I/O mode to Sync
@@ -2090,7 +2090,6 @@ static void ut_socket_iomode_sync_blocks_async(UnitTestCounters& c) {
         sp->io_mode = SocketIoMode::Unclaimed;
     }
 
-    sock_obj->deref(&xsink);
     xsink.clear();
 }
 
@@ -2099,7 +2098,7 @@ static void ut_socket_iomode_unclaimed_allows_both(UnitTestCounters& c) {
     ExceptionSink xsink;
 
     QoreSocketObject* sock = new QoreSocketObject;
-    QoreObject* sock_obj = new QoreObject(QC_SOCKET, getProgram(), sock);
+    ReferenceHolder<QoreObject> sock_obj(new QoreObject(QC_SOCKET, getProgram(), sock), &xsink);
     my_socket_priv* sp = my_socket_priv::getPriv(*sock);
 
     // Verify default is Unclaimed
@@ -2119,7 +2118,6 @@ static void ut_socket_iomode_unclaimed_allows_both(UnitTestCounters& c) {
         UT_ASSERT(c, !xsink, "no exception from checkAsyncAllowed");
     }
 
-    sock_obj->deref(&xsink);
     xsink.clear();
 }
 
@@ -2128,7 +2126,7 @@ static void ut_socket_iomode_async_lifecycle(UnitTestCounters& c) {
     ExceptionSink xsink;
 
     QoreSocketObject* sock = new QoreSocketObject;
-    QoreObject* sock_obj = new QoreObject(QC_SOCKET, getProgram(), sock);
+    ReferenceHolder<QoreObject> sock_obj(new QoreObject(QC_SOCKET, getProgram(), sock), &xsink);
     my_socket_priv* sp = my_socket_priv::getPriv(*sock);
 
     // setNonBlock should claim Async mode
@@ -2172,7 +2170,129 @@ static void ut_socket_iomode_async_lifecycle(UnitTestCounters& c) {
             "io_mode resets to Unclaimed when all flags cleared");
     }
 
-    sock_obj->deref(&xsink);
+    xsink.clear();
+}
+
+//! Test that no-ExceptionSink sync wrappers still honor async ownership
+static void ut_socket_iomode_no_xsink_sync_wrappers(UnitTestCounters& c) {
+    ExceptionSink xsink;
+
+    QoreSocketObject* sock = new QoreSocketObject;
+    ReferenceHolder<QoreObject> sock_obj(new QoreObject(QC_SOCKET, getProgram(), sock), &xsink);
+    my_socket_priv* sp = my_socket_priv::getPriv(*sock);
+
+    {
+        AutoLocker al(sp->m);
+        int rv = sp->setNonBlock(&xsink, NB_SEND);
+        UT_ASSERT(c, rv == 0, "setNonBlock(NB_SEND) succeeds before no-xsink send test");
+        UT_ASSERT(c, !xsink, "no exception from setNonBlock(NB_SEND)");
+    }
+
+    int rv = sock->send("x", 1);
+    UT_ASSERT(c, rv == -1, "no-xsink send returns -1 while async send owns socket");
+
+    {
+        AutoLocker al(sp->m);
+        UT_ASSERT(c, sp->io_mode == SocketIoMode::Async,
+            "no-xsink send does not clear Async ownership");
+        sp->clearNonBlock(NB_SEND);
+    }
+
+    {
+        AutoLocker al(sp->m);
+        rv = sp->setNonBlock(&xsink, NB_RECV);
+        UT_ASSERT(c, rv == 0, "setNonBlock(NB_RECV) succeeds before no-xsink recv test");
+        UT_ASSERT(c, !xsink, "no exception from setNonBlock(NB_RECV)");
+    }
+
+    rv = sock->recv(0, 1, 0);
+    UT_ASSERT(c, rv == -1, "no-xsink recv(fd) returns -1 while async recv owns socket");
+
+    {
+        AutoLocker al(sp->m);
+        UT_ASSERT(c, sp->io_mode == SocketIoMode::Async,
+            "no-xsink recv does not clear Async ownership");
+        sp->clearNonBlock(NB_RECV);
+        UT_ASSERT(c, sp->io_mode == SocketIoMode::Unclaimed,
+            "io_mode resets after no-xsink wrapper test cleanup");
+    }
+
+    xsink.clear();
+}
+
+//! Test that direct synchronous I/O claims Sync mode while active
+static void ut_socket_iomode_sync_lifecycle(UnitTestCounters& c) {
+    ExceptionSink xsink;
+
+    QoreSocketObject* sock = new QoreSocketObject;
+    ReferenceHolder<QoreObject> sock_obj(new QoreObject(QC_SOCKET, getProgram(), sock), &xsink);
+    my_socket_priv* sp = my_socket_priv::getPriv(*sock);
+
+    {
+        AutoLocker al(sp->m);
+
+        int rv = sp->startSyncIo(&xsink, NB_RECV);
+        UT_ASSERT(c, rv == 0, "startSyncIo(NB_RECV) succeeds on Unclaimed socket");
+        UT_ASSERT(c, !xsink, "no exception from startSyncIo");
+        UT_ASSERT(c, sp->io_mode == SocketIoMode::Sync,
+            "io_mode is Sync after startSyncIo");
+        UT_ASSERT(c, sp->sync_io_count == 1,
+            "sync_io_count is incremented after startSyncIo");
+
+        rv = sp->setNonBlock(&xsink, NB_SEND);
+        UT_ASSERT(c, rv == -1, "setNonBlock fails while sync I/O is active");
+        UT_ASSERT(c, (bool)xsink, "setNonBlock raises while sync I/O is active");
+        const QoreValue err_val = xsink.getExceptionErr();
+        const QoreStringNode* err = err_val.get<const QoreStringNode>();
+        UT_ASSERT(c, err && *err == "SOCKET-SYNC-MODE-ERROR",
+            "exception is SOCKET-SYNC-MODE-ERROR while sync I/O is active");
+        xsink.clear();
+
+        sp->clearSyncIo();
+        UT_ASSERT(c, sp->sync_io_count == 0,
+            "sync_io_count is cleared after clearSyncIo");
+        UT_ASSERT(c, sp->io_mode == SocketIoMode::Unclaimed,
+            "io_mode resets to Unclaimed after clearSyncIo");
+    }
+
+    xsink.clear();
+}
+
+//! Test that nested direct synchronous I/O keeps Sync mode until the last guard clears
+static void ut_socket_iomode_nested_sync_lifecycle(UnitTestCounters& c) {
+    ExceptionSink xsink;
+
+    QoreSocketObject* sock = new QoreSocketObject;
+    ReferenceHolder<QoreObject> sock_obj(new QoreObject(QC_SOCKET, getProgram(), sock), &xsink);
+    my_socket_priv* sp = my_socket_priv::getPriv(*sock);
+
+    {
+        AutoLocker al(sp->m);
+
+        int rv = sp->startSyncIo(&xsink, NB_RECV);
+        UT_ASSERT(c, rv == 0, "first startSyncIo succeeds");
+        rv = sp->startSyncIo(&xsink, NB_SEND);
+        UT_ASSERT(c, rv == 0, "nested startSyncIo succeeds");
+        UT_ASSERT(c, sp->sync_io_count == 2,
+            "sync_io_count tracks nested sync operations");
+
+        sp->clearSyncIo();
+        UT_ASSERT(c, sp->sync_io_count == 1,
+            "sync_io_count decrements after first clearSyncIo");
+        UT_ASSERT(c, sp->io_mode == SocketIoMode::Sync,
+            "io_mode remains Sync while nested sync operation is active");
+
+        rv = sp->setNonBlock(&xsink);
+        UT_ASSERT(c, rv == -1, "setNonBlock fails while nested sync I/O remains active");
+        xsink.clear();
+
+        sp->clearSyncIo();
+        UT_ASSERT(c, sp->sync_io_count == 0,
+            "sync_io_count is zero after final clearSyncIo");
+        UT_ASSERT(c, sp->io_mode == SocketIoMode::Unclaimed,
+            "io_mode resets after final nested clearSyncIo");
+    }
+
     xsink.clear();
 }
 
@@ -2248,6 +2368,9 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_socket_iomode_sync_blocks_async(c);
     ut_socket_iomode_unclaimed_allows_both(c);
     ut_socket_iomode_async_lifecycle(c);
+    ut_socket_iomode_no_xsink_sync_wrappers(c);
+    ut_socket_iomode_sync_lifecycle(c);
+    ut_socket_iomode_nested_sync_lifecycle(c);
     ut_manager_proxy_h1_connect(c);
     ut_manager_proxy_h3_rejected(c);
 

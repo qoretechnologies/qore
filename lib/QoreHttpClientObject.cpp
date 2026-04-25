@@ -1720,6 +1720,11 @@ struct qore_httpclient_priv {
 
     // returns -1 if an exception was thrown, 0 for OK
     DLLLOCAL int connect_unlocked(ExceptionSink* xsink, const con_info& connection) {
+        my_socket_priv::SyncIoGuard sg(*msock, xsink);
+        if (!sg) {
+            return -1;
+        }
+
         assert(!msock->socket->isOpen());
         bool connect_ssl = proxy_connection.has_url()
             ? proxy_connection.ssl
@@ -4799,6 +4804,10 @@ bool QoreHttpClientObject::isHttp2DataAvailable(int32_t stream_id, int timeout_m
 
     if (!http_priv->http2_active || !http_priv->getH2Session()) {
         // Fall back to socket-level check if not in HTTP/2 mode
+        my_socket_priv::SyncIoGuard sg(*http_priv->msock, xsink, NB_RECV);
+        if (!sg) {
+            return false;
+        }
         return http_priv->msock->socket->isDataAvailable(xsink, timeout_ms);
     }
 
@@ -7321,7 +7330,8 @@ QoreHashNode* qore_httpclient_priv::send_internal(ExceptionSink* xsink, const ch
 
     SafeLocker sl(msock->m);
 
-    if (msock->checkNonBlock(xsink)) {
+    my_socket_priv::SyncIoGuard sg(*msock, xsink);
+    if (!sg) {
         return nullptr;
     }
 
@@ -9102,6 +9112,11 @@ bool QoreHttpClientObject::isDataAvailable(int timeout_ms, ExceptionSink* xsink)
         return http_priv->streaming_recv_channel->waitReadable(timeout_ms, xsink);
     }
     // No streaming channel — legacy msock path
+    SafeLocker sl(http_priv->msock->m);
+    my_socket_priv::SyncIoGuard sg(*http_priv->msock, xsink, NB_RECV);
+    if (!sg) {
+        return false;
+    }
     return http_priv->msock->socket->isDataAvailable(xsink, timeout_ms);
 }
 
