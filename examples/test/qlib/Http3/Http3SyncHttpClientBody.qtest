@@ -1,0 +1,264 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    HTTP/3 sync HTTPClient body delivery tests.
+
+    Regression coverage for the bug where the legacy sync HTTPClient
+    sendWithRecvCallback path delivered an HTTP/3 non-chunked response in
+    multiple per-DATA-frame callback invocations once the body spanned more
+    than one QUIC datagram (~1200 bytes).  Consumers that follow the H1/H2
+    contract (one recv_callback invocation per non-chunked body) — e.g.
+    DataStreamClient's ds_get_recv — overwrote earlier chunks with each
+    subsequent invocation and ended up with only the last datagram's bytes.
+
+    The fix accumulates the body in qore_httpclient_priv::send_internal_conn_mgr
+    when the response is not chunked and not text/event-stream, then delivers
+    it as one recv_callback({"data": ..., "chunked": false}) invocation at
+    end_stream — matching H1/H2 semantics and the new HttpClientIo stack.
+*/
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Mime.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/HttpServerUtil.qm
+%requires ../../../../qlib/AsyncSocketIo
+%requires ../../../../qlib/HttpServerAsyncIo
+%requires ../../../../qlib/HttpServer.qm
+
+%exec-class Http3SyncHttpClientBodyTest
+
+class SizedHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        # Path layout: /body/<status>/<size>
+        int code = 200;
+        int size = 1000;
+        *list<*string> m = (hdr.path =~ x/body\/(\d+)\/(\d+)/);
+        if (m) {
+            code = m[0].toInt();
+            size = m[1].toInt();
+        }
+        # Use random alphanumeric content so gzip cannot compress to under
+        # one QUIC datagram and mask the bug.
+        string body_str = get_random_string(size);
+        # application/octet-stream so the consumer's per-event callback
+        # path (DataStreamClient-style) sees a non-chunked, non-event-stream
+        # body and exposes the accumulation contract.
+        return makeResponse(code, body_str,
+            {"Content-Type": "application/octet-stream"});
+    }
+}
+
+class Http3SyncHttpClientBodyTest inherits QUnit::Test {
+    private {
+        HttpServer mServer;
+        string mUrl;
+        Logger mLogger;
+
+        # 9 sizes spanning 1- to many-datagram bodies.  1500/2000/4000/...
+        # are reliably multi-datagram (path MTU ~ 1200 bytes).
+        const Sizes = (100, 500, 1000, 1500, 1664, 2000, 4000, 8000, 16000);
+        # status 200 used for the success path; error_passthru for everything
+        # else so we can inspect the raw response uniformly.
+        const StatusCodes = (200, 400, 404, 409, 500);
+
+        const CertPem = "-----BEGIN CERTIFICATE-----
+MIIDCTCCAfGgAwIBAgIUahuuRGDlubXWYmiPhjVeT66vtNYwDQYJKoZIhvcNAQEL
+BQAwFDESMBAGA1UEAwwJbG9jYWxob3N0MB4XDTI2MDIyMjE5MjIwMVoXDTM2MDIy
+MDE5MjIwMVowFDESMBAGA1UEAwwJbG9jYWxob3N0MIIBIjANBgkqhkiG9w0BAQEF
+AAOCAQ8AMIIBCgKCAQEAjZNfLFUyyo02MjZjouaR11FybkZNwDWBG/bhkpTVyj/x
+QKlwKf20LbGSCmMIYHaFnODMg6u6E6sfRJVk+ofwVHBN/Ug+mvoL1zlNJanMdXLH
+7oUsUILY6bVUDPm1ACZmFJsAc9jfHfkluJ6vfYG+DOJbyB0nsMfO9/fvrwndQPUQ
+k9eMq2VfDohni4ijk5BWD/P9UmrciZUNOaNISay469Le5ZrtfGt9An1+Ye3TckJC
+tTF4q7+V+GC88w5QtLd1AMQGf/1ax5cwqQv9SSFvhnwj9o3V3Wkz1dq4XA/9rSA1
+ecPHh/tJeGuvbD11Hyr9LTYjQ+DIel0DV0ZDHdc5vwIDAQABo1MwUTAdBgNVHQ4E
+FgQUYBBsVylVinbbAzTbUt0jRM6mJvwwHwYDVR0jBBgwFoAUYBBsVylVinbbAzTb
+Ut0jRM6mJvwwDwYDVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOCAQEAfIAE
+EPvLO+gOnm366xJabLr2Sw3hfmvCq/zSTlPcrB9jdBlOLpMmKcdGiOOCNmzg9+BX
+YNX+I6+MNOGp0j3afWlVwEjiMD66ydSMPEQw0FTzvpIjFN3fHo/MJzFbingRLrk8
+LCo94GmjMBYG+50M8MCKE6EzqfmoYT9fiMJcyJwwdptOWf0URNYKKrG1wRlX4+o8
+uNjQ3VwynI95fAw9WcR/ZtP0pkmCor/hKaYgVRsSGjD78Fu0Uuhm/pCAOuObpEHj
+5eoTlaWC3pZzGA67piqlEDOWiRi9Mo2CzG0t5fmQ83KB51ImauKdYB21whxjkZ+5
+BjwMC4hqSD+bzO2B+A==
+-----END CERTIFICATE-----";
+
+        const KeyPem = "-----BEGIN PRIVATE KEY-----
+MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCNk18sVTLKjTYy
+NmOi5pHXUXJuRk3ANYEb9uGSlNXKP/FAqXAp/bQtsZIKYwhgdoWc4MyDq7oTqx9E
+lWT6h/BUcE39SD6a+gvXOU0lqcx1csfuhSxQgtjptVQM+bUAJmYUmwBz2N8d+SW4
+nq99gb4M4lvIHSewx8739++vCd1A9RCT14yrZV8OiGeLiKOTkFYP8/1SatyJlQ05
+o0hJrLjr0t7lmu18a30CfX5h7dNyQkK1MXirv5X4YLzzDlC0t3UAxAZ//VrHlzCp
+C/1JIW+GfCP2jdXdaTPV2rhcD/2tIDV5w8eH+0l4a69sPXUfKv0tNiND4Mh6XQNX
+RkMd1zm/AgMBAAECggEAATo1WYTgPK75DiS4PBR5UDS7DryvoN/LNOsGLUdQC9b+
+aEaacSrAvKKs9vJr2KuTtfahn0SbsjRKFZtL9aYRuHxZbhLfGWiF4MGflcOBQRq+
+eVFl6clwnaS+S/cq5rZD1/WODUhkisslqhI/cubvNwe2rvyduE510LgxYkLuIZ7a
++SCQz1XyPyhb8eVrWIZiprufjqXvDy01MC74l3ZYqaq1hr1oKi0ZDHI95Os7gtwQ
+4HQ3qdJsmYfbaf1223REp8gybnshsxkyjhKRU3nG7ZvgrRRMFkJvfHZ8VcS3cvsK
+ccKBJg7376+VDtc+RHUcBMyVZ881y4Rq2t6ssYVJVQKBgQDFq+N7ZGKOtQChSIXn
+ju/gP5WzSKJFaZhdkSggHi1K+PkuCZ1SXzKD3CPibreSUx9hzoZAAmTjzOfwhVZ7
+5HDqhrKfkWNeThAdXlglhNX5LVKhhmBsNGawANO8Pmq+pueWhK/76XgiGcOknyt6
+NH1ZE/QZpFeZB2binEhf6leYGwKBgQC3WgF2eaj2c4pugq13oZ9BHms5nsbYQgj8
+1H2C1wsgJNiz4tq6xFdvjiaw+r1OrCFrl9nz7npFc7uohtrRxXr7sq5nwMPO3QAP
+VxzyZ/TFP/FI70Avz6x+xX7HIlptpQ1mWacsdrvtoIG1c8veEJTyA4JgjoMhdDer
+JuPze+ZHLQKBgAzuLIhCzcul/W+Pberyx7A0mJdMtgiyWpwsRaKsNqxD0xD24gqk
+XYqQmOxT78Arnc7pEpEXVwArxDRQlJKwI87DluWnPgfKNXWmWT/DC7gsBc65Go+Z
+ceorc65JqvPjuRx4e4aQBCK+6rRXESICUvzDuGEBBhXljQ5fyMA1dRtnAoGAQSFH
+w74Ttvf0BK2G0SgoWglkLWOpXsiWSLlynDenTBPKppu+9vkn1gi41cU72eZrOL0I
+Pw5HgMRLtOGyeTGdLiuaqGBhLepzSv+22KT03dyI6U+TjWhH7gBZuIMLfEdVKzZN
+nA3RU+fgK4SmtotNXWrBtWrqScfuvm1iK+unMUECgYBrwc1rU/GI9tH4MWvBX99n
+pmFneeIUuXJajOsh7jUyTxcrHl+4kkgHDExuFMNPHfrIG8xCj43fjzxD/spz3xRS
++Ki3i3lYOFNhTUCREt5Xx23hkksK6j7SYlfY0IV2UruWt/UubpsfEqxC1Uk07NTo
+l50Xb2GWQesIt9k5jF5IOw==
+-----END PRIVATE KEY-----";
+    }
+
+    constructor() : Test("Http3SyncHttpClientBodyTest", "1.0") {
+        addTestCase("send: multi-datagram non-chunked body", \testSend());
+        addTestCase("sendWithRecvCallback: single dispatch per body", \testSendWithRecvCallback());
+
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        mLogger = new Logger("h3-body-test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            mLogger.addAppender(new StdoutAppender());
+        }
+
+        mServer = new HttpServer(<HttpServerOptionInfo>{
+            "logger": mLogger,
+            "debug": False,
+        });
+        mServer.setHandler("body", "/body", NOTHING, new SizedHandler());
+        mServer.waitForAsyncIo();
+
+        hash<auto> info = mServer.addQuicListener(<HttpListenerOptionInfo>{
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+        });
+        mServer.waitForAsyncIo();
+        mUrl = sprintf("https://127.0.0.1:%d", info.port);
+
+        if (m_options.verbose > 1) {
+            printf("HTTP/3 test server at %s\n", mUrl);
+        }
+    }
+
+    globalTearDown() {
+        if (mServer) {
+            try {
+                mServer.stop();
+            } catch (hash<ExceptionInfo> ex) {
+                # ignore
+            }
+        }
+    }
+
+    HTTPClient newClient() {
+        HTTPClient hc({
+            "url": mUrl,
+            "http_version": "3.0",
+            "ssl_verify_cert": False,
+            "accept_all_certs": True,
+            "error_passthru": True,
+        });
+        # Long-lived persistent connection: warm up to mirror the production
+        # pattern (Qorus's QorusSystemRestHelper) where the QUIC connection
+        # is reused across many requests before the large body arrives.
+        for (int i = 0; i < 5; ++i) {
+            hc.send(NOTHING, "GET", "/body/200/50");
+        }
+        return hc;
+    }
+
+    # Plain HTTPClient.send must round-trip every (status, size) combination
+    # — both the success path and the error path that goes through
+    # send_internal_conn_mgr's non-streaming branch.
+    testSend() {
+        HTTPClient hc = newClient();
+        hash<auto> hdrs = {"Accept-Encoding": "identity"};
+        foreach int code in (StatusCodes) {
+            foreach int size in (Sizes) {
+                hash<auto> resp = hc.send(NOTHING, "GET",
+                    sprintf("/body/%d/%d", code, size), hdrs);
+                assertEq(code, resp.status_code,
+                    sprintf("code %d size %d: status_code", code, size));
+                int rx = resp.body.size();
+                assertEq(size, rx,
+                    sprintf("code %d size %d: body size (got %d)",
+                        code, size, rx));
+            }
+        }
+    }
+
+    # The streaming-recv path used by sendWithRecvCallback must deliver each
+    # non-chunked body as exactly ONE data callback regardless of how many
+    # QUIC datagrams it spans on the wire — the same contract H1 and H2
+    # provide and the same contract DataStreamClient's ds_get_recv assumes
+    # for non-chunked transfers.  Pre-fix this test fails: a 16000-byte body
+    # arrived as ~12 invocations and the consumer (and ex.arg.body) saw
+    # only the last datagram's bytes.
+    testSendWithRecvCallback() {
+        HTTPClient hc = newClient();
+        # Mirror the Accept-Encoding RestClient sends by default.  The bug
+        # only shows up when the server actually delivers an uncompressed
+        # body (i.e. the response carries no Content-Encoding); the matrix
+        # below uses incompressible content so gzip cannot mask it.
+        hash<auto> hdrs = {"Accept-Encoding": "gzip"};
+        foreach int code in (StatusCodes) {
+            foreach int size in (Sizes) {
+                int data_calls = 0;
+                int total_received = 0;
+                binary accumulated = binary();
+                bool got_terminator = False;
+                code cb = sub (hash<auto> h) {
+                    if (h.hasKey("data") && exists h."data") {
+                        ++data_calls;
+                        if (h."data".typeCode() == NT_STRING) {
+                            accumulated += binary(h."data");
+                        } else {
+                            accumulated += h."data";
+                        }
+                        total_received = accumulated.size();
+                    } else if (h.hasKey("hdr") && !exists h.hdr) {
+                        got_terminator = True;
+                    }
+                };
+                hc.sendWithRecvCallback(cb, binary(), "GET",
+                    sprintf("/body/%d/%d", code, size), hdrs);
+                assertTrue(got_terminator,
+                    sprintf("code %d size %d: terminal callback fired", code, size));
+                assertEq(size, total_received,
+                    sprintf("code %d size %d: total accumulated bytes", code, size));
+                # The fix's contract: exactly ONE data callback per
+                # non-chunked, non-event-stream body.
+                assertEq(1, data_calls,
+                    sprintf("code %d size %d: data callback invocations "
+                        "(expected one per non-chunked body)", code, size));
+            }
+        }
+    }
+}
