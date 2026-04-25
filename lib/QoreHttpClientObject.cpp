@@ -5110,9 +5110,13 @@ int QoreHttpClientObject::connect(ExceptionSink* xsink) {
     // connection" double-connect that hangs single-accept test servers
     // and wastes a socket slot on real peers.  WS upgrade and poll-API
     // paths still use msock, so they stay on the legacy connect_unlocked
-    // path below.
+    // path below.  UNIX-domain socket URLs also stay on the legacy path:
+    // HttpClientConnectionManagerBase::acquireConnection only knows TCP
+    // (host:port), so its getaddrinfo on the bare socket path fails with
+    // QOREADDRINFO-GETINFO-ERROR before any UNIX-aware code runs.
     if (http_priv->use_conn_mgr && !http_priv->poll_apis_used
-            && http_priv->connection.has_url()) {
+            && http_priv->connection.has_url()
+            && !http_priv->connection.is_unix) {
         // Drop any stale msock state (prior disconnect/reconnect cycle).
         http_priv->disconnect_unlocked();
         return http_priv->connectViaConnMgr(xsink);
@@ -7304,7 +7308,11 @@ QoreHashNode* qore_httpclient_priv::send_internal(ExceptionSink* xsink, const ch
             }
             is_ws_upgrade = has_conn_upgrade && has_upgrade_ws;
         }
-        if (use_conn_mgr && !is_ws_upgrade) {
+        // UNIX-socket URLs cannot use the conn_mgr path: it is TCP-only
+        // and resolves the host via getaddrinfo, which fails for a bare
+        // socket path.  Fall through to the legacy msock path which
+        // honours connection.is_unix end-to-end.
+        if (use_conn_mgr && !is_ws_upgrade && !connection.is_unix) {
             return send_internal_conn_mgr(xsink, mname, meth, mpath, headers,
                 msg_body, data, size, send_callback, getbody, info, timeout_ms,
                 recv_callback, obj, os, is, max_chunk_size, trailer_callback, streaming);
