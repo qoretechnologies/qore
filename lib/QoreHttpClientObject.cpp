@@ -4649,6 +4649,11 @@ int QoreHttpClientObject::sendHttp2StreamData(int32_t stream_id, const BinaryNod
         bool end_stream, int timeout_ms, ExceptionSink* xsink) {
     SafeLocker sl(priv->m);
 
+    my_socket_priv::SyncIoGuard sg(*http_priv->msock, xsink);
+    if (!sg) {
+        return -1;
+    }
+
     if (!http_priv->http2_active || !http_priv->getH2Session()) {
         xsink->raiseException("HTTP2-ERROR", "HTTP/2 is not active");
         return -1;
@@ -4699,6 +4704,11 @@ int QoreHttpClientObject::sendHttp2StreamData(int32_t stream_id, const BinaryNod
 
 BinaryNode* QoreHttpClientObject::readHttp2StreamData(int32_t stream_id, int timeout_ms, ExceptionSink* xsink) {
     SafeLocker sl(priv->m);
+
+    my_socket_priv::SyncIoGuard sg(*http_priv->msock, xsink);
+    if (!sg) {
+        return nullptr;
+    }
 
     if (!http_priv->http2_active || !http_priv->getH2Session()) {
         xsink->raiseException("HTTP2-ERROR", "HTTP/2 is not active");
@@ -4802,12 +4812,13 @@ bool QoreHttpClientObject::isHttp2DataAvailable(int32_t stream_id, int timeout_m
 
     SafeLocker sl(priv->m);
 
+    my_socket_priv::SyncIoGuard sg(*http_priv->msock, xsink);
+    if (!sg) {
+        return false;
+    }
+
     if (!http_priv->http2_active || !http_priv->getH2Session()) {
         // Fall back to socket-level check if not in HTTP/2 mode
-        my_socket_priv::SyncIoGuard sg(*http_priv->msock, xsink, NB_RECV);
-        if (!sg) {
-            return false;
-        }
         return http_priv->msock->socket->isDataAvailable(xsink, timeout_ms);
     }
 
