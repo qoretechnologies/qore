@@ -228,6 +228,23 @@ public:
     DLLLOCAL virtual const QoreTypeInfo* getElementType() const {
         return h->getValueTypeInfo();
     }
+
+    // Native fast-path: HashListIterator::getValue() resolves to getRow().
+    DLLLOCAL bool supportsNativeIteration() const override { return true; }
+
+    DLLLOCAL bool nativeNext(ExceptionSink* xsink) override {
+        if (check(xsink)) {
+            return false;
+        }
+        return next();
+    }
+
+    DLLLOCAL QoreValue nativeGetValue(ExceptionSink* xsink) override {
+        if (check(xsink)) {
+            return QoreValue();
+        }
+        return getRow(xsink);
+    }
 };
 
 #endif // _QORE_QOREHASHLISTITERATOR_H

@@ -1,0 +1,252 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/** @file QC_StringSplitIterator.qpp StringSplitIterator class definition */
+/*
+    Qore Programming Language
+
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    Note that the Qore library is released under a choice of three open-source
+    licenses: MIT (as above), LGPL 2+, or GPL 2+; see README-LICENSE for more
+    information.
+*/
+
+#include <qore/Qore.h>
+#include "qore/intern/QC_StringSplitIterator.h"
+#include "qore/intern/qore_string_private.h"
+
+#include <cstring>
+
+StringSplitIterator::StringSplitIterator(const QoreStringNode* s, const QoreString* separator, int m)
+        : src(const_cast<QoreStringNode*>(s)),
+          sep(separator ? separator->c_str() : "", separator ? separator->size() : 0),
+          mode(m) {
+    if (src) {
+        src->ref();
+    }
+}
+
+StringSplitIterator::StringSplitIterator(const StringSplitIterator& old)
+        : src(old.src), sep(old.sep), mode(old.mode) {
+    // Fresh iterator over the same source + delimiter, positioned at the start.
+    // cursor / piece_off / piece_len / m_valid / exhausted default-initialise.
+    if (src) {
+        src->ref();
+    }
+}
+
+StringSplitIterator::~StringSplitIterator() {
+    if (src) {
+        src->deref();
+    }
+}
+
+bool StringSplitIterator::next(ExceptionSink* xsink) {
+    if (exhausted) {
+        m_valid = false;
+        return false;
+    }
+    if (!src) {
+        exhausted = true;
+        m_valid = false;
+        return false;
+    }
+    const size_t src_len = src->size();
+
+    // SPLIT_CHARS: yield one character (codepoint) at a time.  getUnicodePointFromBytePos
+    // handles any encoding Qore supports and reports the character's byte width via out-param.
+    if (mode & SPLIT_CHARS) {
+        if (cursor >= src_len) {
+            exhausted = true;
+            m_valid = false;
+            return false;
+        }
+        unsigned clen = 0;
+        src->getUnicodePointFromBytePos(cursor, clen, xsink);
+        if (xsink && *xsink) {
+            exhausted = true;
+            m_valid = false;
+            return false;
+        }
+        // Defensive floor: an encoding bug that returns clen=0 would loop forever.
+        if (clen == 0) {
+            clen = 1;
+        }
+        piece_off = cursor;
+        piece_len = clen;
+        cursor += clen;
+        if (cursor >= src_len) {
+            exhausted = true;
+        }
+        m_valid = true;
+        return true;
+    }
+
+    const char* src_buf = src->c_str();
+
+    // Empty separator: yield the whole string once, then done.
+    if (sep.empty()) {
+        piece_off = 0;
+        piece_len = src_len;
+        exhausted = true;
+        m_valid = true;
+        return true;
+    }
+
+    // Search for the next separator starting at cursor.
+    if (cursor > src_len) {
+        exhausted = true;
+        m_valid = false;
+        return false;
+    }
+    const char* hit = nullptr;
+    if (cursor < src_len) {
+        // q_memmem() is libqore's portable wrapper around memmem(3); it falls
+        // back to a hand-rolled scan on platforms where HAVE_MEMMEM is unset.
+        // Calling memmem() directly here would break those builds.
+        hit = static_cast<const char*>(
+            q_memmem(src_buf + cursor, src_len - cursor, sep.data(), sep.size()));
+    }
+    if (hit) {
+        piece_off = cursor;
+        piece_len = static_cast<size_t>(hit - (src_buf + cursor));
+        cursor = static_cast<size_t>(hit - src_buf) + sep.size();
+    } else {
+        // No more separators — yield the trailing piece (possibly empty if
+        // the string ended on a separator) and mark exhausted.
+        piece_off = cursor;
+        piece_len = src_len - cursor;
+        exhausted = true;
+    }
+    m_valid = true;
+    return true;
+}
+
+QoreValue StringSplitIterator::getValue(ExceptionSink* xsink) {
+    if (!m_valid) {
+        xsink->raiseException("INVALID-ITERATOR", "the iterator is not pointing at a valid element");
+        return QoreValue();
+    }
+    size_t eff_len = piece_len;
+    // STRIP_TRAILING_CR: trim a "\r" byte at the end of the piece so
+    // "\r\n"-delimited input is handled transparently alongside "\n".
+    if ((mode & STRIP_TRAILING_CR) && eff_len > 0) {
+        const char* sb = qore_string_private::get(src)->effective_buf();
+        if (sb[piece_off + eff_len - 1] == '\r') {
+            --eff_len;
+        }
+    }
+    return QoreValue(QoreStringNode::makeView(src, piece_off, eff_len));
+}
+
+void StringSplitIterator::reset() {
+    cursor = 0;
+    piece_off = 0;
+    piece_len = 0;
+    m_valid = false;
+    exhausted = false;
+}
+
+const QoreTypeInfo* StringSplitIterator::getElementType() const {
+    return stringTypeInfo;
+}
+
+//! Lazy iterator over a string split by a byte-wise delimiter, yielding zero-copy views.
+/** Each element returned by getValue() is a view onto the original string's
+    buffer; no copy is made until the view is mutated, at which point
+    copy-on-write materialises the slice.  This is the streaming counterpart
+    of @ref Qore::split() and is the recommended form when feeding
+    @ref map, @ref select, or @ref foldl — the functional operators consume
+    the iterator element-by-element and the intermediate list is never built.
+
+    Iteration semantics match @ref Qore::split(): `"a,b,".splitString(",")`
+    yields `"a"`, `"b"`, `""`; an empty delimiter yields the whole string once.
+
+    @par Example
+    @code{.py}
+int errors = foldl $1 + ($2 =~ /ERROR/ ? 1 : 0), 0, log.splitString("\n");
+    @endcode
+
+    @since %Qore 2.3
+*/
+qclass StringSplitIterator [arg=StringSplitIterator* i; ns=Qore; vparent=AbstractIterator];
+
+//! Creates the iterator with a source string and delimiter.
+/** @param src the string to iterate over (captured by reference)
+    @param sep the byte-wise delimiter; an empty delimiter yields the whole
+           source once
+
+    @par Example:
+    @code{.py}
+StringSplitIterator it("a,b,c", ",");
+    @endcode
+ */
+StringSplitIterator::constructor(string src, string sep) {
+    self->setPrivate(CID_STRINGSPLITITERATOR,
+        new StringSplitIterator(src, sep));
+}
+
+//! Creates a copy of the iterator.
+/** Returns a fresh iterator positioned at the start; positional fidelity is
+    not preserved, matching the loose semantics of other iterator copy()
+    methods.
+ */
+StringSplitIterator::copy() {
+    self->setPrivate(CID_STRINGSPLITITERATOR, new StringSplitIterator(*i));
+}
+
+//! Advances to the next piece; returns True if a piece is available, False at end.
+/** @throw ITERATOR-THREAD-ERROR this exception is thrown if this method is called
+    from any thread other than the thread that created the object
+ */
+bool StringSplitIterator::next() {
+    if (i->check(xsink))
+        return false;
+    return i->next(xsink);
+}
+
+//! Returns the current piece as a zero-copy view onto the source string.
+/** @throw INVALID-ITERATOR the iterator is not pointing at a valid element
+    @throw ITERATOR-THREAD-ERROR this exception is thrown if this method is called
+    from any thread other than the thread that created the object
+ */
+string StringSplitIterator::getValue() [flags=RET_VALUE_ONLY] {
+    if (i->check(xsink))
+        return QoreValue();
+    return i->getValue(xsink);
+}
+
+//! Returns True if the iterator is currently pointing at a valid element.
+/** @return True if a piece is currently available via getValue(), False otherwise.
+ */
+bool StringSplitIterator::valid() [flags=CONSTANT] {
+    return i->valid();
+}
+
+//! Resets the iterator to its initial state.
+/** A subsequent next() call will yield the first piece again.
+    @throw ITERATOR-THREAD-ERROR this exception is thrown if this method is called
+    from any thread other than the thread that created the object
+ */
+StringSplitIterator::reset() {
+    if (i->check(xsink))
+        return QoreValue();
+    i->reset();
+}

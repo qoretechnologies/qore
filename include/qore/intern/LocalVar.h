@@ -627,4 +627,34 @@ private:
 
 typedef LocalVar* lvar_ptr_t;
 
+//! RAII helper that pairs LocalVar::instantiateSelf() with uninstantiateSelf()
+/** Without this helper, a C++ exception unwinding through the function/method
+    body (e.g., a JNI bridge re-throw, std::bad_alloc) skips the manual
+    uninstantiateSelf() call at the bottom of the eval routine — leaving the
+    self lvalue assigned in the per-thread lvstack with \c static_assignment=true.
+    The next program-teardown that walks the per-thread var table then trips
+    the \c assert(!static_assignment) in QoreLValue::removeValue() (debug
+    build) or, in release, derefs the orphaned spop_obj pointer concurrently
+    with a worker that holds the only strong reference, producing the
+    QoreCallDispatcher::workerLoop+0x3c6 SIGSEGV signature.
+*/
+class SelfInstantiationHelper {
+public:
+    DLLLOCAL SelfInstantiationHelper(const LocalVar* selfid, QoreObject* self) : selfid(self ? selfid : nullptr) {
+        if (this->selfid) {
+            this->selfid->instantiateSelf(self);
+        }
+    }
+    DLLLOCAL ~SelfInstantiationHelper() {
+        if (selfid) {
+            selfid->uninstantiateSelf();
+        }
+    }
+    SelfInstantiationHelper(const SelfInstantiationHelper&) = delete;
+    SelfInstantiationHelper& operator=(const SelfInstantiationHelper&) = delete;
+
+private:
+    const LocalVar* selfid;
+};
+
 #endif

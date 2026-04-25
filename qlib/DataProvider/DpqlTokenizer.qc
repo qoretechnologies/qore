@@ -226,13 +226,18 @@ public class DpqlTokenizer {
     private {
         #! Input text
         string input;
-        #! Current position (character index)
+        #! Current position (byte index)
+        /** Switched from a character index to a byte index in %Qore 2.3 to
+            eliminate the O(N) UTF-8 walk that @c input[pos] performed on
+            every call.  Hot paths use @ref Qore::zzz8stringzzz9::getByte()
+            (O(1)).  DPQL source is ASCII for tokens; UTF-8 inside string
+            literals is preserved byte-for-byte through the scan. */
         int pos = 0;
         #! Current line number (1-based)
         int line = 1;
         #! Current column number (1-based)
         int column = 1;
-        #! Input length in characters
+        #! Input length in bytes
         int len;
         #! Cached next token for peek()
         *hash<DpqlTokenInfo> peeked;
@@ -243,11 +248,16 @@ public class DpqlTokenizer {
     }
 
     #! Creates a tokenizer for the given DPQL expression
-    /** @param text the DPQL expression to tokenize
+    /** @param text the DPQL expression to tokenize.  Converted to UTF-8
+        internally if necessary; the byte-indexed scan loop relies on the
+        UTF-8 invariant that ASCII bytes (0x00..0x7F) only appear as
+        themselves and never as part of a multi-byte sequence.  Source in
+        UTF-16 / UTF-32 / other non-ASCII-compatible encodings would produce
+        garbage tokens under byte-wise scanning, so we convert once up front.
     */
     constructor(string text) {
-        input = text;
-        len = text.length();
+        input = text.encoding() == "UTF-8" ? text : convert_encoding(text, "UTF-8");
+        len = input.size();
     }
 
     #! Returns True if at end of input
@@ -280,11 +290,11 @@ public class DpqlTokenizer {
     #! Returns the previous non-whitespace character, or "" if none
     private string prevNonWhitespaceChar() {
         for (int i = pos - 1; i >= 0; --i) {
-            string c = input[i];
-            if (c =~ /[ \t\r\n]/) {
+            int b = input.getByte(i);
+            if (b == ord(" ") || b == ord("\t") || b == ord("\r") || b == ord("\n")) {
                 continue;
             }
-            return c;
+            return chr(b);
         }
         return "";
     }
@@ -300,17 +310,29 @@ public class DpqlTokenizer {
     string peekAheadSkipWhitespace() {
         # pos is already past the peeked token (scanToken advances pos)
         int scan_pos = pos;
-        # Skip whitespace
-        while (scan_pos < len && input[scan_pos] =~ /[ \t\r\n]/) {
+        # Skip whitespace (byte-wise — ASCII)
+        while (scan_pos < len) {
+            int b = input.getByte(scan_pos);
+            if (b != ord(" ") && b != ord("\t") && b != ord("\r") && b != ord("\n")) {
+                break;
+            }
             ++scan_pos;
         }
         if (scan_pos >= len) {
             return "";
         }
-        # Read identifier
+        # Read identifier — ASCII letters and underscore.  Build byte-by-byte
+        # to be byte-correct regardless of UTF-8 elsewhere in the source.
         string result = "";
-        while (scan_pos < len && input[scan_pos] =~ /[a-zA-Z_]/) {
-            result += input[scan_pos];
+        while (scan_pos < len) {
+            int b = input.getByte(scan_pos);
+            bool is_ident = (b >= ord("a") && b <= ord("z"))
+                || (b >= ord("A") && b <= ord("Z"))
+                || b == ord("_");
+            if (!is_ident) {
+                break;
+            }
+            result += chr(b);
             ++scan_pos;
         }
         return result.lwr();
@@ -344,27 +366,37 @@ public class DpqlTokenizer {
         return column;
     }
 
-    #! Returns the character at the current position, or NOTHING if at end
+    #! Returns the byte at the current position as a 1-byte string, or NOTHING.
+    /** Uses @ref Qore::zzz8stringzzz9::getByte() for O(1) byte access
+        (vs O(N) UTF-8 walk on @c input[pos]).  Returning a 1-byte string
+        keeps existing comparisons (`c == "#"`) and concatenation
+        (`value += currentChar()`) working unchanged. */
     private:internal *string currentChar() {
-        if (pos >= len) {
+        *int b = input.getByte(pos);
+        if (!b) {
             return NOTHING;
         }
-        return input[pos];
+        return chr(b);
     }
 
-    #! Returns the character at offset from current position, or NOTHING if out of bounds
+    #! Returns the byte at offset from current position as a 1-byte string, or NOTHING
     private:internal *string peekChar(int offset = 1) {
-        int p = pos + offset;
-        if (p >= len || p < 0) {
+        *int b = input.getByte(pos + offset);
+        if (!b) {
             return NOTHING;
         }
-        return input[p];
+        return chr(b);
     }
 
-    #! Advances position by count characters, updating line/column
+    #! Advances position by count bytes, updating line/column
+    /** Newline tracking on byte 0x0A; UTF-8 continuation bytes never collide. */
     private:internal advance(int count = 1) {
         for (int i = 0; i < count && pos < len; ++i) {
-            if (input[pos] == "\n") {
+            *int b = input.getByte(pos);
+            if (!b) {
+                break;
+            }
+            if (b == 0x0a) {
                 ++line;
                 column = 1;
             } else {
@@ -1025,7 +1057,7 @@ public class DpqlTokenizer {
             if (c =~ /[a-zA-Z0-9_]/) {
                 value += c;
                 advance();
-            } else if (c == "-" && pos + 1 < len && input[pos + 1] =~ /[a-zA-Z]/) {
+            } else if (c == "-" && pos + 1 < len && chr(input.getByte(pos + 1)) =~ /[a-zA-Z]/) {
                 # Hyphenated identifier: treat '-' followed by a letter as part of the name
                 value += c;
                 advance();
@@ -1095,7 +1127,7 @@ public class DpqlTokenizer {
 
     #! Returns True if the next token is a list literal
     private bool looksLikeListLiteral() {
-        if (input[pos] != "(") {
+        if (chr(input.getByte(pos)) != "(") {
             return False;
         }
 
@@ -1107,7 +1139,7 @@ public class DpqlTokenizer {
         bool has_delim = False;
 
         for (int i = pos; i < len; ++i) {
-            string c = input[i];
+            string c = chr(input.getByte(i));
             if (escape) {
                 escape = False;
                 continue;
@@ -1162,11 +1194,11 @@ public class DpqlTokenizer {
                 if (c == ",") {
                     has_delim = True;
                 } else if (c == "=") {
-                    if ((i + 1) < len && (input[i + 1] == "=" || input[i + 1] == "~")) {
+                    if ((i + 1) < len && (chr(input.getByte(i + 1)) == "=" || chr(input.getByte(i + 1)) == "~")) {
                         continue;
                     }
-                    if (i > 0 && (input[i - 1] == "!" || input[i - 1] == "="
-                        || input[i - 1] == "<" || input[i - 1] == ">")) {
+                    if (i > 0 && (chr(input.getByte(i - 1)) == "!" || chr(input.getByte(i - 1)) == "="
+                        || chr(input.getByte(i - 1)) == "<" || chr(input.getByte(i - 1)) == ">")) {
                         continue;
                     }
                     has_delim = True;
@@ -1325,15 +1357,15 @@ public class DpqlTokenizer {
         if (pos + 9 >= len) {
             return False;
         }
-        if (input[pos] !~ /[0-9]/ || input[pos + 1] !~ /[0-9]/ || input[pos + 2] !~ /[0-9]/
-            || input[pos + 3] !~ /[0-9]/) {
+        if (chr(input.getByte(pos)) !~ /[0-9]/ || chr(input.getByte(pos + 1)) !~ /[0-9]/ || chr(input.getByte(pos + 2)) !~ /[0-9]/
+            || chr(input.getByte(pos + 3)) !~ /[0-9]/) {
             return False;
         }
-        if (input[pos + 4] != "-" || input[pos + 7] != "-") {
+        if (chr(input.getByte(pos + 4)) != "-" || chr(input.getByte(pos + 7)) != "-") {
             return False;
         }
-        if (input[pos + 5] !~ /[0-9]/ || input[pos + 6] !~ /[0-9]/ || input[pos + 8] !~ /[0-9]/
-            || input[pos + 9] !~ /[0-9]/) {
+        if (chr(input.getByte(pos + 5)) !~ /[0-9]/ || chr(input.getByte(pos + 6)) !~ /[0-9]/ || chr(input.getByte(pos + 8)) !~ /[0-9]/
+            || chr(input.getByte(pos + 9)) !~ /[0-9]/) {
             return False;
         }
         return True;
@@ -1394,17 +1426,17 @@ public class DpqlTokenizer {
 
     #! Returns True if the next token is a binary literal
     private bool looksLikeBinaryLiteral() {
-        if (pos + 2 >= len || input[pos] != "<") {
+        if (pos + 2 >= len || chr(input.getByte(pos)) != "<") {
             return False;
         }
-        if (input[pos + 1] !~ /[0-9A-Fa-f]/) {
+        if (chr(input.getByte(pos + 1)) !~ /[0-9A-Fa-f]/) {
             return False;
         }
         for (int i = pos + 1; i < len; ++i) {
-            if (input[i] == ">") {
+            if (chr(input.getByte(i)) == ">") {
                 return True;
             }
-            if (input[i] !~ /[0-9A-Fa-f]/) {
+            if (chr(input.getByte(i)) !~ /[0-9A-Fa-f]/) {
                 return False;
             }
         }

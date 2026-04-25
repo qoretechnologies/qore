@@ -47,6 +47,12 @@
 
 %exec-class SseAllProtocolsTest
 
+#! Maximum time for protocol events to arrive in this end-to-end test.  The
+#! H2/H3 paths are intentionally covered under valgrind as well, where normal
+#! protocol handshakes and scheduler handoffs can exceed short wall-clock
+#! deadlines without indicating a missed wakeup.
+const SseTestTimeout = 30s;
+
 #! Minimal SSE handler that records connections so the test can push events
 class RecordingSseHandler inherits ServerSentEventHandler::ServerSentEventHandler {
     public {
@@ -67,11 +73,352 @@ class RecordingSseHandler inherits ServerSentEventHandler::ServerSentEventHandle
     }
 }
 
+class RecordingSseObserver inherits DataProvider::Observer {
+    public {
+        list<hash<auto>> events = ();
+        Mutex m();
+        Condition cond();
+    }
+
+    update(string event_id, hash<auto> data_) {
+        AutoLock al(m);
+        push events, {
+            "event_id": event_id,
+            "data": data_,
+        };
+        cond.broadcast();
+    }
+
+    bool waitForCount(int count, timeout t = SseTestTimeout) {
+        AutoLock al(m);
+        date end_time = now_us() + t;
+        while (events.size() < count) {
+            date remaining = end_time - now_us();
+            if (remaining <= 0us) {
+                return False;
+            }
+            cond.wait(m, remaining);
+        }
+        return True;
+    }
+
+    bool waitForDataEvent(string event_name, timeout t = SseTestTimeout) {
+        AutoLock al(m);
+        date end_time = now_us() + t;
+        while (True) {
+            foreach hash<auto> evt in (events) {
+                if (evt.event_id == HttpClientStreamingIo::EVENT_SSE_DATA
+                        && evt.data.event == event_name) {
+                    return True;
+                }
+            }
+
+            date remaining = end_time - now_us();
+            if (remaining <= 0us) {
+                return False;
+            }
+            cond.wait(m, remaining);
+        }
+    }
+
+    bool waitForDataEventCount(string event_name, int count, timeout t = SseTestTimeout) {
+        AutoLock al(m);
+        date end_time = now_us() + t;
+        while (True) {
+            int found = 0;
+            foreach hash<auto> evt in (events) {
+                if (evt.event_id == HttpClientStreamingIo::EVENT_SSE_DATA
+                        && evt.data.event == event_name) {
+                    ++found;
+                }
+            }
+            if (found >= count) {
+                return True;
+            }
+
+            date remaining = end_time - now_us();
+            if (remaining <= 0us) {
+                return False;
+            }
+            cond.wait(m, remaining);
+        }
+    }
+
+    string describeEvents() {
+        AutoLock al(m);
+        return sprintf("%y", events);
+    }
+}
+
+#! SSE handler that mirrors Qorus' REST callback-drainer path
+class CallbackSseHandler inherits HttpServer::AbstractHttpSocketHandler {
+    public {
+        Counter registered(1);
+    }
+
+    private {
+        Mutex callbacks_lock();
+        hash<string, code<*string()>> callbacks;
+        Mutex state_lock();
+        Condition state_cond();
+        Counter drainers_waiting_for_ready(0);
+        list<string> actions = ();
+        bool ready = False;
+        int generation = 0;
+        int tick_ms = 10000;
+    }
+
+    constructor() : HttpServer::AbstractHttpSocketHandler() {
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data b) {
+        callbacks_lock.lock();
+        {
+            on_exit callbacks_lock.unlock();
+            callbacks{string(cx.id)} = makeCallback();
+        }
+        registered.dec();
+        return <HttpResponseInfo>{
+            "code": 200,
+            "hdr": {
+                "Cache-Control": "no-cache",
+                "Connection": "Keep-Alive",
+                "Content-Type": MimeTypeSse,
+            },
+        };
+    }
+
+    reset(int expected_connections) {
+        resetWithTick(expected_connections, 10000);
+    }
+
+    resetWithTick(int expected_connections, int tick_ms) {
+        callbacks_lock.lock();
+        {
+            on_exit callbacks_lock.unlock();
+            callbacks = {};
+        }
+        state_lock.lock();
+        {
+            on_exit state_lock.unlock();
+            ready = False;
+            ++generation;
+            self.tick_ms = tick_ms;
+            actions = ();
+        }
+        registered = new Counter(expected_connections);
+        drainers_waiting_for_ready = new Counter(expected_connections);
+    }
+
+    int waitForDrainersWaitingForReady(timeout t = SseTestTimeout) {
+        return drainers_waiting_for_ready.waitForZero(t);
+    }
+
+    string describeActions() {
+        AutoLock al(state_lock);
+        return sprintf("%y", actions);
+    }
+
+    private recordAction(string action) {
+        AutoLock al(state_lock);
+        push actions, action;
+    }
+
+    markReady() {
+        state_lock.lock();
+        {
+            on_exit state_lock.unlock();
+            ready = True;
+            ++generation;
+            push actions, "mark-ready";
+            state_cond.broadcast();
+        }
+    }
+
+    private static string makeEvent(string event_name, string data) {
+        return sprintf("event: %s\ndata: %s\n\n", event_name, data);
+    }
+
+    private code<*string()> makeCallback() {
+        bool done = False;
+        bool have_emitted = False;
+        bool wait_registered = False;
+        int last_generation = -1;
+        Counter ready_wait_counter = drainers_waiting_for_ready;
+
+        return *string sub () {
+            while (True) {
+                if (done) {
+                    return NOTHING;
+                }
+
+                state_lock.lock();
+                {
+                    on_exit state_lock.unlock();
+                    if (ready) {
+                        done = True;
+                        return CallbackSseHandler::makeEvent("ready", "ready");
+                    }
+
+                    if (!have_emitted) {
+                        have_emitted = True;
+                        last_generation = generation;
+                        return CallbackSseHandler::makeEvent("progress", "waiting");
+                    }
+
+                    date deadline = now_us() + milliseconds(tick_ms);
+                    if (!wait_registered) {
+                        wait_registered = True;
+                        ready_wait_counter.dec();
+                    }
+                    while (!ready && generation == last_generation) {
+                        date remaining = deadline - now_us();
+                        if (remaining <= 0us) {
+                            break;
+                        }
+                        state_cond.wait(state_lock, remaining);
+                    }
+
+                    if (ready) {
+                        done = True;
+                        return CallbackSseHandler::makeEvent("ready", "ready");
+                    }
+
+                    last_generation = generation;
+                    return CallbackSseHandler::makeEvent("progress", "waiting");
+                }
+            }
+        };
+    }
+
+    private *code<*string()> takeCallback(string cid) {
+        *list<string> match = (cid =~ x/^([^:]+)(?::.*)?$/);
+        string key = match[0] ?? cid;
+        callbacks_lock.lock();
+        on_exit callbacks_lock.unlock();
+        return remove callbacks{key};
+    }
+
+    private static startDrainer(string cid, code<*string()> cb,
+            code<nothing(string)> queueChunk, code<nothing()> closeStream,
+            code<nothing()> abortStream) {
+        background sub () {
+            bool aborted = False;
+            try {
+                while (True) {
+                    *string chunk = cb();
+                    if (!exists chunk) {
+                        break;
+                    }
+                    queueChunk(chunk);
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                aborted = True;
+                abortStream();
+            }
+
+            if (!aborted) {
+                closeStream();
+            }
+        }();
+    }
+
+    HttpServerAsyncIo::HttpSseStreamPollOperation setupAsyncSseConnection(
+            Socket sock, hash<auto> cx, hash<auto> hdr, string cid) {
+        HttpServerAsyncIo::HttpSseStreamPollOperation poll_op(sock);
+        *code<*string()> cb = takeCallback(cid);
+        if (cb) {
+            CallbackSseHandler::startDrainer(cid, cb,
+                sub (string chunk) {
+                    self.recordAction("h1 queue " + chunk);
+                    poll_op.queueRawString(chunk);
+                },
+                sub () {
+                    self.recordAction("h1 close");
+                    poll_op.abort();
+                },
+                sub () {
+                    self.recordAction("h1 abort");
+                    poll_op.abort();
+                });
+        }
+        return poll_op;
+    }
+
+    HttpServerAsyncIo::Http2SseStream setupAsyncSseConnectionHttp2(
+            Socket sock, hash<auto> cx, hash<auto> hdr, string cid,
+            int stream_id, *code<nothing()> wake_callback) {
+        HttpServerAsyncIo::Http2SseStream sse_stream(sock, stream_id,
+            wake_callback, True);
+        *code<*string()> cb = takeCallback(cid);
+        if (cb) {
+            CallbackSseHandler::startDrainer(cid, cb,
+                sub (string chunk) {
+                    self.recordAction("h2 queue " + chunk);
+                    sse_stream.queueRawString(chunk);
+                },
+                sub () {
+                    self.recordAction("h2 close");
+                    sse_stream.close();
+                },
+                sub () {
+                    self.recordAction("h2 abort");
+                    sse_stream.abort();
+                });
+        }
+        return sse_stream;
+    }
+
+    HttpServerAsyncIo::Http3SseStream setupAsyncSseConnectionHttp3(
+            Socket sock, hash<auto> cx, hash<auto> hdr, string cid,
+            int session_id, int stream_id, *code<nothing()> wake_callback) {
+        HttpServerAsyncIo::Http3SseStream sse_stream(sock, session_id,
+            stream_id, wake_callback);
+        *code<*string()> cb = takeCallback(cid);
+        if (cb) {
+            CallbackSseHandler::startDrainer(cid, cb,
+                sub (string chunk) {
+                    self.recordAction("h3 queue " + chunk);
+                    sse_stream.queueRawString(chunk);
+                },
+                sub () {
+                    self.recordAction("h3 close");
+                    sse_stream.close();
+                },
+                sub () {
+                    self.recordAction("h3 abort");
+                    sse_stream.abort();
+                });
+        }
+        return sse_stream;
+    }
+
+    private bool startImpl(softstring lid, hash<auto> cx, hash<auto> hdr,
+            Socket s) {
+        throw "CALLBACK-SSE-SYNC-UNSUPPORTED",
+            "CallbackSseHandler only supports async SSE setup";
+    }
+}
+
+#! Plain handler used to interleave normal HTTP/3 requests while an SSE stream waits
+class PingHandler inherits HttpServer::AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return <HttpResponseInfo>{
+            "code": 200,
+            "hdr": {
+                "Content-Type": MimeTypeText,
+            },
+            "body": "pong",
+        };
+    }
+}
+
 class SseAllProtocolsTest inherits Test {
     private {
         *Logger::Logger mLogger;
         HttpServer::HttpServer server;
         RecordingSseHandler handler();
+        CallbackSseHandler callback_handler();
         int h1_port;
         int h2_port;
         int h3_port;
@@ -131,6 +478,25 @@ l50Xb2GWQesIt9k5jF5IOw==
         addTestCase("H1 SSE events flow end-to-end", \testHttp1Sse());
         addTestCase("H2 SSE events flow end-to-end", \testHttp2Sse());
         addTestCase("H3 SSE events flow end-to-end", \testHttp3Sse());
+        addTestCase("H1 SSE observable receives parsed events", \testHttp1SseObservable());
+        addTestCase("H2 SSE observable receives parsed events and close",
+            \testHttp2SseObservable());
+        addTestCase("H3 SSE observable receives parsed events and close",
+            \testHttp3SseObservable());
+        addTestCase("H2 callback-drained SSE readiness streams complete",
+            \testHttp2CallbackDrainedSse());
+        addTestCase("H3 callback-drained SSE readiness streams complete",
+            \testHttp3CallbackDrainedSse());
+        addTestCase("H3 callback-drained SSE readiness streams complete on separate connections",
+            \testHttp3CallbackDrainedSseSeparateConnections());
+        addTestCase("H3 callback-drained SSE completes after delayed second stream",
+            \testHttp3CallbackDrainedDelayedSecondStream());
+        addTestCase("H3 callback-drained SSE survives interleaved H3 requests",
+            \testHttp3CallbackDrainedSseWithInterleavedRequests());
+        addTestCase("H2 callback-drained SSE immediate ready completes",
+            \testHttp2CallbackDrainedImmediateReadySse());
+        addTestCase("H3 callback-drained SSE immediate ready completes",
+            \testHttp3CallbackDrainedImmediateReadySse());
         set_return_value(main());
     }
 
@@ -145,6 +511,8 @@ l50Xb2GWQesIt9k5jF5IOw==
             "debug": True,
         });
         server.setDefaultHandler("sse", handler);
+        server.setHandler("callback-sse", "/callback", NOTHING, callback_handler);
+        server.setHandler("ping", "/ping", NOTHING, new PingHandler());
         server.waitForAsyncIo();
 
         # H1 plaintext listener
@@ -194,7 +562,7 @@ l50Xb2GWQesIt9k5jF5IOw==
 
         # The handler registers the connection in connectionRegisteredImpl(),
         # so wait for that before pushing events.
-        assertEq(0, handler.registered.waitForZero(5s),
+        assertEq(0, handler.registered.waitForZero(SseTestTimeout),
             label + ": connection should register on server");
 
         # Push two events from the server, from a different thread than the
@@ -209,15 +577,311 @@ l50Xb2GWQesIt9k5jF5IOw==
             "data": "world",
         });
 
-        *hash<SseMessageInfo> evt1 = reader.readEvent(5s);
+        *hash<SseMessageInfo> evt1 = reader.readEvent(SseTestTimeout);
         assertEq(True, exists evt1, label + ": first event received");
         assertEq("one", evt1.event, label + ": first event name");
         assertEq("hello", evt1.data, label + ": first event data");
 
-        *hash<SseMessageInfo> evt2 = reader.readEvent(5s);
+        *hash<SseMessageInfo> evt2 = reader.readEvent(SseTestTimeout);
         assertEq(True, exists evt2, label + ": second event received");
         assertEq("two", evt2.event, label + ": second event name");
         assertEq("world", evt2.data, label + ": second event data");
+    }
+
+    private runSseObservableFlow(string label, HttpClientIo::HttpClientConnectionManager mgr,
+            string url, bool close_after_send) {
+        HttpClientStreamingIo::SseObservable obs(mgr, url, "GET", "/");
+        on_exit obs.stopEvents();
+
+        RecordingSseObserver observer();
+        obs.registerObserver(observer);
+        obs.observersReady();
+
+        assertEq(0, handler.registered.waitForZero(SseTestTimeout),
+            label + ": observable connection should register on server");
+
+        handler.last_conn.send(<SseMessageInfo>{
+            "event": "ready",
+            "data": "payload",
+        });
+        if (close_after_send) {
+            handler.last_conn.getAsyncSseConnection().close();
+        }
+
+        int expected = close_after_send ? 3 : 2;
+        assertTrue(observer.waitForCount(expected, SseTestTimeout),
+            sprintf("%s: observable received expected events; events=%s",
+                label, observer.describeEvents()));
+
+        assertEq(HttpClientStreamingIo::EVENT_SSE_CONNECTED,
+            observer.events[0].event_id, label + ": connected event");
+
+        list<hash<auto>> data_events = (
+            select observer.events,
+            $1.event_id == HttpClientStreamingIo::EVENT_SSE_DATA
+        );
+        assertEq(1, data_events.size(), label + ": one parsed data event");
+        assertEq("ready", data_events[0].data.event, label + ": parsed event name");
+        assertEq("payload", data_events[0].data.data, label + ": parsed event data");
+
+        if (close_after_send) {
+            assertEq(HttpClientStreamingIo::EVENT_SSE_CLOSED,
+                observer.events[observer.events.size() - 1].event_id, label + ": closed event");
+        }
+    }
+
+    private runCallbackDrainedSseFlow(string label, HttpClientIo::HttpClientConnectionManager mgr,
+            string url) {
+        callback_handler.reset(2);
+
+        HttpClientStreamingIo::SseObservable obs1(mgr, url, "GET", "/callback");
+        on_exit obs1.stopEvents();
+        RecordingSseObserver observer1();
+        obs1.registerObserver(observer1);
+        obs1.observersReady();
+
+        assertTrue(observer1.waitForDataEvent("progress", SseTestTimeout),
+            label + ": first stream receives initial progress");
+
+        HttpClientStreamingIo::SseObservable obs2(mgr, url, "GET", "/callback");
+        on_exit obs2.stopEvents();
+        RecordingSseObserver observer2();
+        obs2.registerObserver(observer2);
+        obs2.observersReady();
+
+        assertEq(0, callback_handler.registered.waitForZero(SseTestTimeout),
+            label + ": both callback streams should register");
+        assertTrue(observer2.waitForDataEvent("progress", SseTestTimeout),
+            label + ": second stream receives initial progress");
+        assertEq(0, callback_handler.waitForDrainersWaitingForReady(SseTestTimeout),
+            label + ": callback streams should be waiting for ready");
+
+        callback_handler.markReady();
+
+        assertTrue(observer1.waitForDataEvent("ready", SseTestTimeout),
+            sprintf("%s: first stream receives terminal ready event; events=%s actions=%s",
+                label, observer1.describeEvents(), callback_handler.describeActions()));
+        assertTrue(observer2.waitForDataEvent("ready", SseTestTimeout),
+            sprintf("%s: second stream receives terminal ready event; events=%s actions=%s",
+                label, observer2.describeEvents(), callback_handler.describeActions()));
+
+        assertTrue(observer1.waitForCount(4, SseTestTimeout),
+            label + ": first stream receives closed event");
+        assertEq(HttpClientStreamingIo::EVENT_SSE_CLOSED,
+            observer1.events[observer1.events.size() - 1].event_id,
+            label + ": first stream closes after ready");
+
+        assertTrue(observer2.waitForCount(4, SseTestTimeout),
+            label + ": second stream receives closed event");
+        assertEq(HttpClientStreamingIo::EVENT_SSE_CLOSED,
+            observer2.events[observer2.events.size() - 1].event_id,
+            label + ": second stream closes after ready");
+    }
+
+    private runCallbackDrainedSseFlowSeparateManagers(string label,
+            HttpClientIo::HttpClientConnectionManager mgr1,
+            HttpClientIo::HttpClientConnectionManager mgr2, string url) {
+        callback_handler.reset(2);
+
+        HttpClientStreamingIo::SseObservable obs1(mgr1, url, "GET", "/callback");
+        on_exit obs1.stopEvents();
+        RecordingSseObserver observer1();
+        obs1.registerObserver(observer1);
+        obs1.observersReady();
+
+        assertTrue(observer1.waitForDataEvent("progress", SseTestTimeout),
+            label + ": first stream receives initial progress");
+
+        HttpClientStreamingIo::SseObservable obs2(mgr2, url, "GET", "/callback");
+        on_exit obs2.stopEvents();
+        RecordingSseObserver observer2();
+        obs2.registerObserver(observer2);
+        obs2.observersReady();
+
+        assertEq(0, callback_handler.registered.waitForZero(SseTestTimeout),
+            label + ": both callback streams should register");
+        assertTrue(observer2.waitForDataEvent("progress", SseTestTimeout),
+            label + ": second stream receives initial progress");
+        assertEq(0, callback_handler.waitForDrainersWaitingForReady(SseTestTimeout),
+            label + ": callback streams should be waiting for ready");
+
+        callback_handler.markReady();
+
+        assertTrue(observer1.waitForDataEvent("ready", SseTestTimeout),
+            sprintf("%s: first stream receives terminal ready event; events=%s actions=%s",
+                label, observer1.describeEvents(), callback_handler.describeActions()));
+        assertTrue(observer2.waitForDataEvent("ready", SseTestTimeout),
+            sprintf("%s: second stream receives terminal ready event; events=%s actions=%s",
+                label, observer2.describeEvents(), callback_handler.describeActions()));
+
+        assertTrue(observer1.waitForCount(4, SseTestTimeout),
+            label + ": first stream receives closed event");
+        assertEq(HttpClientStreamingIo::EVENT_SSE_CLOSED,
+            observer1.events[observer1.events.size() - 1].event_id,
+            label + ": first stream closes after ready");
+
+        assertTrue(observer2.waitForCount(4, SseTestTimeout),
+            label + ": second stream receives closed event");
+        assertEq(HttpClientStreamingIo::EVENT_SSE_CLOSED,
+            observer2.events[observer2.events.size() - 1].event_id,
+            label + ": second stream closes after ready");
+    }
+
+    private runCallbackDrainedDelayedSecondStreamFlow(string label, string url) {
+        callback_handler.resetWithTick(2, 1000);
+
+        HttpClientIo::HttpClientConnectionManager mgr1(
+            <HttpClientIo::HttpClientConnectionManagerOptions>{
+                "protocol": "h3",
+                "accept_all_certs": True,
+                "request_timeout": 20s,
+                "connect_timeout": 5s,
+            });
+        on_exit delete mgr1;
+        HttpClientIo::HttpClientConnectionManager mgr2(
+            <HttpClientIo::HttpClientConnectionManagerOptions>{
+                "protocol": "h3",
+                "accept_all_certs": True,
+                "request_timeout": 20s,
+                "connect_timeout": 5s,
+            });
+        on_exit delete mgr2;
+
+        HttpClientStreamingIo::SseObservable obs1(mgr1, url, "GET", "/callback");
+        on_exit obs1.stopEvents();
+        RecordingSseObserver observer1();
+        obs1.registerObserver(observer1);
+        obs1.observersReady();
+
+        assertTrue(observer1.waitForDataEventCount("progress", 7, SseTestTimeout),
+            label + ": first stream receives repeated progress before second stream");
+
+        HttpClientStreamingIo::SseObservable obs2(mgr2, url, "GET", "/callback");
+        on_exit obs2.stopEvents();
+        RecordingSseObserver observer2();
+        obs2.registerObserver(observer2);
+        obs2.observersReady();
+
+        assertEq(0, callback_handler.registered.waitForZero(SseTestTimeout),
+            label + ": both callback streams should register");
+        assertTrue(observer2.waitForDataEvent("progress", SseTestTimeout),
+            label + ": second stream receives initial progress");
+        assertEq(0, callback_handler.waitForDrainersWaitingForReady(SseTestTimeout),
+            label + ": callback streams should be waiting for ready");
+
+        for (int i = 0; i < 3; ++i) {
+            HttpClientIo::HttpClientConnectionManager ping_mgr(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+                    "protocol": "h3",
+                    "accept_all_certs": True,
+                    "request_timeout": 10s,
+                    "connect_timeout": 5s,
+                });
+            hash<auto> resp = ping_mgr.request(url, "GET", "/ping");
+            assertEq(200, resp.status_code,
+                sprintf("%s: interleaved ping %d should return 200", label, i));
+            delete ping_mgr;
+        }
+
+        callback_handler.markReady();
+
+        assertTrue(observer1.waitForDataEvent("ready", SseTestTimeout),
+            sprintf("%s: first stream receives terminal ready event; events=%s actions=%s",
+                label, observer1.describeEvents(), callback_handler.describeActions()));
+        assertTrue(observer2.waitForDataEvent("ready", SseTestTimeout),
+            sprintf("%s: second stream receives terminal ready event; events=%s actions=%s",
+                label, observer2.describeEvents(), callback_handler.describeActions()));
+
+        assertTrue(observer1.waitForCount(10, SseTestTimeout),
+            label + ": first stream receives closed event");
+        assertEq(HttpClientStreamingIo::EVENT_SSE_CLOSED,
+            observer1.events[observer1.events.size() - 1].event_id,
+            label + ": first stream closes after delayed ready");
+
+        assertTrue(observer2.waitForCount(4, SseTestTimeout),
+            label + ": second stream receives closed event");
+        assertEq(HttpClientStreamingIo::EVENT_SSE_CLOSED,
+            observer2.events[observer2.events.size() - 1].event_id,
+            label + ": second stream closes after ready");
+    }
+
+    private runCallbackDrainedSseWithInterleavedRequests(string label, string url) {
+        callback_handler.reset(1);
+
+        HttpClientIo::HttpClientConnectionManager sse_mgr(
+            <HttpClientIo::HttpClientConnectionManagerOptions>{
+                "protocol": "h3",
+                "accept_all_certs": True,
+                "request_timeout": 20s,
+                "connect_timeout": 5s,
+            });
+        on_exit delete sse_mgr;
+
+        HttpClientStreamingIo::SseObservable obs(sse_mgr, url, "GET", "/callback");
+        on_exit obs.stopEvents();
+        RecordingSseObserver observer();
+        obs.registerObserver(observer);
+        obs.observersReady();
+
+        assertEq(0, callback_handler.registered.waitForZero(SseTestTimeout),
+            label + ": callback stream should register");
+        assertTrue(observer.waitForDataEvent("progress", SseTestTimeout),
+            label + ": stream receives initial progress");
+        assertEq(0, callback_handler.waitForDrainersWaitingForReady(SseTestTimeout),
+            label + ": callback stream should be waiting for ready");
+
+        # These requests use separate H3 connections/sessions on the same
+        # listener while the SSE stream is waiting.  This covers the case where
+        # one shared UDP listener poll operation must keep servicing an older
+        # long-lived stream after newer H3 sessions complete ordinary requests.
+        for (int i = 0; i < 3; ++i) {
+            HttpClientIo::HttpClientConnectionManager ping_mgr(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+                    "protocol": "h3",
+                    "accept_all_certs": True,
+                    "request_timeout": 10s,
+                    "connect_timeout": 5s,
+                });
+            hash<auto> resp = ping_mgr.request(url, "GET", "/ping");
+            assertEq(200, resp.status_code,
+                sprintf("%s: interleaved ping %d should return 200", label, i));
+            delete ping_mgr;
+        }
+
+        callback_handler.markReady();
+
+        assertTrue(observer.waitForDataEvent("ready", SseTestTimeout),
+            sprintf("%s: stream receives terminal ready event after interleaved requests; events=%s actions=%s",
+                label, observer.describeEvents(), callback_handler.describeActions()));
+        assertTrue(observer.waitForCount(4, SseTestTimeout),
+            label + ": stream receives closed event after interleaved requests");
+        assertEq(HttpClientStreamingIo::EVENT_SSE_CLOSED,
+            observer.events[observer.events.size() - 1].event_id,
+            label + ": stream closes after ready");
+    }
+
+    private runCallbackDrainedImmediateReadySseFlow(string label,
+            HttpClientIo::HttpClientConnectionManager mgr, string url) {
+        callback_handler.reset(1);
+        callback_handler.markReady();
+
+        HttpClientStreamingIo::SseObservable obs(mgr, url, "GET", "/callback");
+        on_exit obs.stopEvents();
+        RecordingSseObserver observer();
+        obs.registerObserver(observer);
+        obs.observersReady();
+
+        assertEq(0, callback_handler.registered.waitForZero(SseTestTimeout),
+            label + ": callback stream should register");
+        assertTrue(observer.waitForDataEvent("ready", SseTestTimeout),
+            sprintf("%s: stream receives immediate terminal ready event; events=%s actions=%s",
+                label, observer.describeEvents(), callback_handler.describeActions()));
+
+        assertTrue(observer.waitForCount(3, SseTestTimeout),
+            label + ": stream receives closed event");
+        assertEq(HttpClientStreamingIo::EVENT_SSE_CLOSED,
+            observer.events[observer.events.size() - 1].event_id,
+            label + ": stream closes after immediate ready");
     }
 
     testHttp1Sse() {
@@ -256,5 +920,132 @@ l50Xb2GWQesIt9k5jF5IOw==
             });
         on_exit delete mgr;
         runSseFlow("H3", mgr, sprintf("https://127.0.0.1:%d/", h3_port));
+    }
+
+    testHttp1SseObservable() {
+        resetHandler();
+        HttpClientIo::HttpClientConnectionManager mgr(
+            <HttpClientIo::HttpClientConnectionManagerOptions>{
+                "protocol": "h1",
+                "request_timeout": 10s,
+                "connect_timeout": 5s,
+            });
+        on_exit delete mgr;
+        runSseObservableFlow("H1 observable", mgr, sprintf("http://127.0.0.1:%d/", h1_port),
+            False);
+    }
+
+    testHttp2SseObservable() {
+        resetHandler();
+        HttpClientIo::HttpClientConnectionManager mgr(
+            <HttpClientIo::HttpClientConnectionManagerOptions>{
+                "protocol": "h2",
+                "accept_all_certs": True,
+                "request_timeout": 10s,
+                "connect_timeout": 5s,
+            });
+        on_exit delete mgr;
+        runSseObservableFlow("H2 observable", mgr, sprintf("https://127.0.0.1:%d/", h2_port),
+            True);
+    }
+
+    testHttp3SseObservable() {
+        resetHandler();
+        HttpClientIo::HttpClientConnectionManager mgr(
+            <HttpClientIo::HttpClientConnectionManagerOptions>{
+                "protocol": "h3",
+                "accept_all_certs": True,
+                "request_timeout": 10s,
+                "connect_timeout": 5s,
+            });
+        on_exit delete mgr;
+        runSseObservableFlow("H3 observable", mgr, sprintf("https://127.0.0.1:%d/", h3_port),
+            True);
+    }
+
+    testHttp2CallbackDrainedSse() {
+        HttpClientIo::HttpClientConnectionManager mgr(
+            <HttpClientIo::HttpClientConnectionManagerOptions>{
+                "protocol": "h2",
+                "accept_all_certs": True,
+                "request_timeout": 15s,
+                "connect_timeout": 5s,
+            });
+        on_exit delete mgr;
+        runCallbackDrainedSseFlow("H2 callback-drained", mgr,
+            sprintf("https://127.0.0.1:%d", h2_port));
+    }
+
+    testHttp3CallbackDrainedSse() {
+        HttpClientIo::HttpClientConnectionManager mgr(
+            <HttpClientIo::HttpClientConnectionManagerOptions>{
+                "protocol": "h3",
+                "accept_all_certs": True,
+                "request_timeout": 15s,
+                "connect_timeout": 5s,
+            });
+        on_exit delete mgr;
+        runCallbackDrainedSseFlow("H3 callback-drained", mgr,
+            sprintf("https://127.0.0.1:%d", h3_port));
+    }
+
+    testHttp3CallbackDrainedSseSeparateConnections() {
+        HttpClientIo::HttpClientConnectionManager mgr1(
+            <HttpClientIo::HttpClientConnectionManagerOptions>{
+                "protocol": "h3",
+                "accept_all_certs": True,
+                "request_timeout": 15s,
+                "connect_timeout": 5s,
+            });
+        on_exit delete mgr1;
+        HttpClientIo::HttpClientConnectionManager mgr2(
+            <HttpClientIo::HttpClientConnectionManagerOptions>{
+                "protocol": "h3",
+                "accept_all_certs": True,
+                "request_timeout": 15s,
+                "connect_timeout": 5s,
+            });
+        on_exit delete mgr2;
+
+        runCallbackDrainedSseFlowSeparateManagers("H3 callback-drained separate connections",
+            mgr1, mgr2, sprintf("https://127.0.0.1:%d", h3_port));
+    }
+
+    testHttp3CallbackDrainedDelayedSecondStream() {
+        runCallbackDrainedDelayedSecondStreamFlow(
+            "H3 callback-drained delayed second stream",
+            sprintf("https://127.0.0.1:%d", h3_port));
+    }
+
+    testHttp3CallbackDrainedSseWithInterleavedRequests() {
+        runCallbackDrainedSseWithInterleavedRequests(
+            "H3 callback-drained interleaved requests",
+            sprintf("https://127.0.0.1:%d", h3_port));
+    }
+
+    testHttp2CallbackDrainedImmediateReadySse() {
+        HttpClientIo::HttpClientConnectionManager mgr(
+            <HttpClientIo::HttpClientConnectionManagerOptions>{
+                "protocol": "h2",
+                "accept_all_certs": True,
+                "request_timeout": 15s,
+                "connect_timeout": 5s,
+            });
+        on_exit delete mgr;
+        runCallbackDrainedImmediateReadySseFlow("H2 callback-drained immediate ready", mgr,
+            sprintf("https://127.0.0.1:%d", h2_port));
+    }
+
+    testHttp3CallbackDrainedImmediateReadySse() {
+        HttpClientIo::HttpClientConnectionManager mgr(
+            <HttpClientIo::HttpClientConnectionManagerOptions>{
+                "protocol": "h3",
+                "accept_all_certs": True,
+                "request_timeout": 15s,
+                "connect_timeout": 5s,
+            });
+        on_exit delete mgr;
+        runCallbackDrainedImmediateReadySseFlow("H3 callback-drained immediate ready", mgr,
+            sprintf("https://127.0.0.1:%d", h3_port));
     }
 }

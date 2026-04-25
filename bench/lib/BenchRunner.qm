@@ -1,0 +1,222 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file BenchRunner.qm Qore user module providing a benchmark harness for the text-processing perf kit
+
+/*  BenchRunner.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%requires qore >= 2.0
+
+%new-style
+%strict-args
+%require-types
+%enable-all-warnings
+
+%requires json
+
+module BenchRunner {
+    version = "0.1";
+    desc    = "Benchmark harness for the Qore text-processing performance kit";
+    author  = "Qore developers";
+    url     = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace Bench {
+    #! Benchmark harness; configure with closures and call run().
+    public class BenchRunner {
+        public {
+            string name;
+            int iterations = 10;
+            int warmup = 2;
+            int bytes_processed = 0;
+            *code setup;
+            code measure;
+            *string save_path;
+            bool quiet = False;
+            string commit = "unknown";
+            string qore_version = Qore::VersionString;
+        }
+
+        constructor(string n) {
+            name = n;
+            captureCommit();
+        }
+
+        private parseArgv() {
+            list<auto> keep = ();
+            foreach string arg in (ARGV) {
+                if (arg =~ /^--iterations=/) {
+                    iterations = arg.substr(13).toInt();
+                } else if (arg =~ /^--warmup=/) {
+                    warmup = arg.substr(9).toInt();
+                } else if (arg =~ /^--save=/) {
+                    save_path = arg.substr(7);
+                } else if (arg == "--quiet") {
+                    quiet = True;
+                } else {
+                    keep += arg;
+                }
+            }
+            ARGV = keep;
+        }
+
+        private captureCommit() {
+            try {
+                string out = backquote("git rev-parse --short HEAD 2>/dev/null");
+                commit = trim(out);
+                if (!commit.size()) {
+                    commit = "unknown";
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                commit = "unknown";
+            }
+        }
+
+        int run() {
+            parseArgv();
+            if (!measure) {
+                stderr.printf("ERROR: bench '%s' has no measure closure\n", name);
+                return 2;
+            }
+            if (setup) {
+                setup();
+            }
+            for (int i = 0; i < warmup; i++) {
+                measure();
+            }
+
+            list<float> timings_ms = ();
+            int rss_before = readRssKb();
+            for (int i = 0; i < iterations; i++) {
+                date t0 = now_us();
+                measure();
+                date t1 = now_us();
+                int us = get_duration_microseconds(t1 - t0);
+                timings_ms += us / 1000.0;
+            }
+            int rss_after = readRssKb();
+
+            hash<auto> result = buildResult(timings_ms, rss_after - rss_before);
+
+            if (save_path) {
+                File f();
+                f.open2(save_path, O_WRONLY | O_CREAT | O_TRUNC);
+                f.write(make_json(result, JGF_ADD_FORMATTING));
+                f.write("\n");
+            }
+            if (!quiet) {
+                printReport(result);
+            }
+            return 0;
+        }
+
+        private hash<auto> buildResult(list<float> timings_ms, int rss_delta_kb) {
+            list<auto> sorted_t = sort(timings_ms);
+            int n = sorted_t.size();
+            float min_ms = sorted_t[0].toFloat();
+            float max_ms = sorted_t[n - 1].toFloat();
+            float median_ms = sorted_t[n / 2].toFloat();
+            float sum_ms = 0.0;
+            foreach auto t in (sorted_t) {
+                sum_ms += t.toFloat();
+            }
+            float mean_ms = sum_ms / n;
+            float sq_sum = 0.0;
+            foreach auto t in (sorted_t) {
+                float tf = t.toFloat();
+                sq_sum += (tf - mean_ms) * (tf - mean_ms);
+            }
+            float stdev_ms = sqrt(sq_sum / n);
+
+            hash<auto> r = {
+                "name": name,
+                "iterations": iterations,
+                "warmup": warmup,
+                "timings_ms": timings_ms,
+                "min_ms": min_ms,
+                "max_ms": max_ms,
+                "median_ms": median_ms,
+                "mean_ms": mean_ms,
+                "stdev_ms": stdev_ms,
+                "rss_delta_kb": rss_delta_kb,
+                "bytes_processed": bytes_processed,
+                "commit": commit,
+                "timestamp": format_date("YYYY-MM-DDTHH:mm:SS", now_us()),
+                "qore_version": qore_version,
+            };
+            if (bytes_processed > 0 && median_ms > 0.0) {
+                r.throughput_mb_s = (bytes_processed / 1048576.0) / (median_ms / 1000.0);
+            }
+            return r;
+        }
+
+        private printReport(hash<auto> r) {
+            printf("%-28s  mean %8.3f ms   min %8.3f   median %8.3f   stdev %7.3f",
+                   r.name, r.mean_ms, r.min_ms, r.median_ms, r.stdev_ms);
+            if (r.throughput_mb_s) {
+                printf("   %8.1f MB/s", r.throughput_mb_s);
+            }
+            if (r.rss_delta_kb) {
+                printf("   RSS%+d KB", r.rss_delta_kb);
+            }
+            printf("\n");
+        }
+
+        private int readRssKb() {
+            try {
+                File f();
+                f.open2("/proc/self/status", O_RDONLY);
+                string data = f.read(-1);
+                *list<*string> m = regex_extract(data, "VmRSS:\\s+([0-9]+)\\s+kB");
+                if (m && m[0]) {
+                    return m[0].toInt();
+                }
+            } catch (hash<ExceptionInfo> ex) {
+            }
+            return 0;
+        }
+
+        #! Compare two saved suite JSON files and print a diff report.
+        static int compareSuites(string baseline_path, string current_path) {
+            hash<auto> base = parse_json(ReadOnlyFile::readTextFile(baseline_path));
+            hash<auto> curr = parse_json(ReadOnlyFile::readTextFile(current_path));
+            printf("\n%-28s  %12s  %12s  %10s\n", "benchmark", "baseline ms", "current ms", "speedup");
+            printf("%s\n", strmul("-", 72));
+            int regressions = 0;
+            foreach string k in (keys curr.benchmarks) {
+                *hash<auto> b = base.benchmarks{k};
+                hash<auto> c = curr.benchmarks{k};
+                if (!b) {
+                    printf("%-28s  %12s  %12.3f  %10s\n", k, "NEW", c.median_ms, "-");
+                    continue;
+                }
+                float ratio = b.median_ms / c.median_ms;
+                printf("%-28s  %12.3f  %12.3f  %9.2fx%s\n", k, b.median_ms, c.median_ms, ratio,
+                    ratio < 0.95 ? "  REGRESSION" : "");
+                if (ratio < 0.95) {
+                    regressions++;
+                }
+            }
+            printf("\n");
+            return regressions ? 1 : 0;
+        }
+    }
+}

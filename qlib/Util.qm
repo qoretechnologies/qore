@@ -840,8 +840,17 @@ const EtMap = {
 const Suffixes = ("th", "st", "nd", "rd", "th", "th", "th", "th", "th", "th");
 
 # private scanner for parse_to_qore_value()
+/** Byte-indexed: walks UTF-8 bytes via getByte() for O(1) per-call access
+    instead of arg[i]'s O(N) char index → O(N^2) total.  Input is
+    normalized to UTF-8 once at entry; bracket/quote/placeholder tokens
+    are all ASCII so byte-wise compares are correct.  Multi-byte UTF-8
+    inside quoted/bracket bodies is preserved byte-for-byte through the
+    `str += chr(b)` accumulator (matches the original char-at-a-time
+    concat semantics for any UTF-8 source). */
 list<hash> sub scan_exp(string arg) {
-    #printf("DBG se: %y\n", arg);
+    if (arg.encoding() != "UTF-8") {
+        arg = convert_encoding(arg, "UTF-8");
+    }
 
     list<hash> l = ();
 
@@ -854,13 +863,13 @@ list<hash> sub scan_exp(string arg) {
     # active file ref
     *string placeholder;
 
-    int len = arg.length();
+    int len = arg.size();
     string str;
 
     for (int i = 0; i < len; ++i) {
-        string c = arg[i];
+        int b = arg.getByte(i);
         if (placeholder) {
-            if (c == ">") {
+            if (b == ord(">")) {
                 l += {
                     "type": ET_Placeholder,
                     "val": {
@@ -872,9 +881,8 @@ list<hash> sub scan_exp(string arg) {
                 continue;
             }
         } else {
-            if (c == ",") {
+            if (b == ord(",")) {
                 if (!quote && !bracket_stack) {
-                    #printf("DBG: got comma i:%d\n", i);
                     trim str;
                     if (str.val()) {
                         l += ("type": ET_RawString, "val": str);
@@ -883,7 +891,7 @@ list<hash> sub scan_exp(string arg) {
                     l += ("type": ET_Comma);
                     continue;
                 }
-            } else if (c == "=") {
+            } else if (b == ord("=")) {
                 if (!quote && !bracket_stack) {
                     trim str;
                     if (str.val()) {
@@ -893,7 +901,8 @@ list<hash> sub scan_exp(string arg) {
                     l += ("type": ET_Eq);
                     continue;
                 }
-            } else if (c == '"' || c == "'") {
+            } else if (b == ord('"') || b == ord("'")) {
+                string c = chr(b);
                 if (quote) {
                     if (c == quote) {
                         delete quote;
@@ -915,6 +924,7 @@ list<hash> sub scan_exp(string arg) {
                     }
                 }
             } else if (!quote) {
+                string c = chr(b);
                 *string p = FwdParenMap{c};
                 if (p) {
                     bool first;
@@ -933,32 +943,47 @@ list<hash> sub scan_exp(string arg) {
                 } else if (ParenMap{c} && (c == bracket_stack[-1])) {
                     splice bracket_stack, -1;
                     if (!bracket_stack) {
-                        #printf("DBG: got bracket string: %y\n", str);
                         l += {
-                            "type": c == "}" ? ET_CurlyBracketString : ET_BracketString,
+                            "type": b == ord("}") ? ET_CurlyBracketString : ET_BracketString,
                             "val": str,
                         };
                         str = "";
                         continue;
                     }
-                } else if (!bracket_stack && (c == "$")
-                    && exists (*string ft = (arg[(i + 1)..] =~ x/^([a-z0-9]*<)/i)[0])) {
-                    if (str.val()) {
-                        l += {"type": ET_RawString, "val": str};
-                        str = "";
+                } else if (!bracket_stack && (b == ord("$"))) {
+                    # Look ahead for $TYPE< placeholder syntax: scan ASCII
+                    # letters/digits then a '<'.  Replaces the original
+                    # arg[(i+1)..] =~ x/^([a-z0-9]*<)/i regex+slice (which
+                    # mixed char and byte semantics under multi-byte input).
+                    int j = i + 1;
+                    while (j < len) {
+                        int b2 = arg.getByte(j);
+                        bool is_letter_digit = (b2 >= ord("a") && b2 <= ord("z"))
+                            || (b2 >= ord("A") && b2 <= ord("Z"))
+                            || (b2 >= ord("0") && b2 <= ord("9"));
+                        if (!is_letter_digit) {
+                            break;
+                        }
+                        ++j;
                     }
-                    i += ft.length();
-                    if (ft == "<") {
-                        placeholder = "string";
-                    } else {
-                        splice ft, -1;
-                        placeholder = ft;
+                    if (j < len && arg.getByte(j) == ord("<")) {
+                        if (str.val()) {
+                            l += {"type": ET_RawString, "val": str};
+                            str = "";
+                        }
+                        # ft = TYPE (without trailing '<'); ASCII chars only
+                        string ft = "";
+                        for (int k = i + 1; k < j; ++k) {
+                            ft += chr(arg.getByte(k));
+                        }
+                        i = j;  # advance past the '<'
+                        placeholder = ft.empty() ? "string" : ft;
+                        continue;
                     }
-                    continue;
                 }
             }
         }
-        str += c;
+        str += chr(b);
     }
 
     if (quote) {
@@ -2589,15 +2614,31 @@ public class TerminalColor {
     }
 
     #! Strips ANSI escape codes from text
+    /** Byte-indexed scan: ANSI escape sequences (ESC `[` … `m`) are pure
+        ASCII, so we walk byte-by-byte using
+        @ref Qore::zzz8stringzzz9::getByte() (O(1) per call) instead of
+        @c text[i] (O(N) UTF-8 walk per call → O(N^2) overall).  Non-ASCII
+        bytes outside escape sequences pass through to the output unchanged.
+
+        For UTF-16 / other non-ASCII-compatible encodings, the input is
+        normalized to UTF-8 once at entry — a no-op for the common case.
+    */
     static string stripAnsi(string text) {
+        # Remember the input encoding so we can return the result in the
+        # same encoding the caller passed in.
+        string input_enc = text.encoding();
+        if (input_enc != "UTF-8") {
+            text = convert_encoding(text, "UTF-8");
+        }
         string out = "";
         int i = 0;
-        int len = text.length();
+        int len = text.size();
         while (i < len) {
-            string c = text[i];
-            if (c == "\033" && (i + 1) < len && text[i + 1] == "[") {
+            int b = text.getByte(i);
+            # ESC = 0x1B; '[' = 0x5B; 'm' = 0x6D
+            if (b == 0x1b && (i + 1) < len && text.getByte(i + 1) == 0x5b) {
                 i += 2;
-                while (i < len && text[i] != "m") {
+                while (i < len && text.getByte(i) != 0x6d) {
                     ++i;
                 }
                 if (i < len) {
@@ -2605,10 +2646,11 @@ public class TerminalColor {
                 }
                 continue;
             }
-            out += c;
+            out += chr(b);
             ++i;
         }
-        return out;
+        # Round-trip back to the caller's encoding if we converted on entry.
+        return input_enc == "UTF-8" ? out : convert_encoding(out, input_enc);
     }
 
     #! Returns the visible length of text without ANSI codes

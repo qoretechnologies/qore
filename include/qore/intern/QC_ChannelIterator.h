@@ -103,6 +103,20 @@ public:
         return autoTypeInfo;
     }
 
+    // No native fast path is wired here on purpose:
+    //
+    //   ChannelIterator::next() calls QoreChannel::recv() which acquires
+    //   the channel mutex and may block waiting for a producer.  The
+    //   per-call mutex acquisition + cross-thread coordination dominates
+    //   any savings from skipping Qore method dispatch (the savings are
+    //   measured at ~100-200 ns; the lock-and-wait path is at minimum
+    //   microseconds, often milliseconds).
+    //
+    //   If a benchmark ever shows the dispatch is meaningful, the wiring
+    //   pattern is the same as DataLineIterator (next(xsink) +
+    //   checkValid+getValue).  Until then, leave the default
+    //   QoreIteratorBase virtuals (which return false / no-op).
+
 protected:
     DLLLOCAL virtual ~QoreChannelIterator() {}
 

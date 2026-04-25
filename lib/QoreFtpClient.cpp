@@ -562,9 +562,11 @@ struct qore_ftp_private {
         }
 
         // Create FtpControlPollOperation — this creates the socket and starts the connect
-        // We need to create the QoreObject + priv manually from C++
+        // We need to create the QoreObject + priv manually from C++.
+        //
+        // Refcount plan: new=1 (consumed below by `new QoreObject(QC_SOCKET...)`
+        // which takes ownership of the priv); +1 ref here for the connect op.
         QoreSocketObject* sock_priv = new QoreSocketObject;
-        sock_priv->ref();  // extra ref for QoreObject setPrivate
 
         QoreStringMaker target("%s:%d", host, port);
         sock_priv->ref();  // ref for connect op
@@ -572,7 +574,6 @@ struct qore_ftp_private {
             false, target.c_str(), sock_priv);
         if (*xsink) {
             connect_op->deref(xsink);
-            sock_priv->deref(xsink);
             sock_priv->deref(xsink);
             return -1;
         }
@@ -709,9 +710,10 @@ struct qore_ftp_private {
             const char* data_host, int data_port, bool recv_mode,
             BinaryNode* send_data, QoreObject*& data_op_obj_out,
             ExceptionSink* xsink) {
-        // Create data socket
+        // Create data socket.
+        // Refcount plan: new=1 (consumed below by `new QoreObject(QC_SOCKET...)`
+        // which takes ownership of the priv); +1 ref here for the connect op.
         QoreSocketObject* dsock = new QoreSocketObject;
-        dsock->ref();  // for QoreObject setPrivate
 
         QoreStringMaker dtarget("%s:%d", data_host, data_port);
         dsock->ref();  // for connect op
@@ -719,7 +721,6 @@ struct qore_ftp_private {
             false, dtarget.c_str(), dsock);
         if (*xsink) {
             dconnect->deref(xsink);
-            dsock->deref(xsink);
             dsock->deref(xsink);
             return nullptr;
         }
@@ -876,12 +877,13 @@ struct qore_ftp_private {
             return -1;
         }
 
-        // 2. Create a fresh QoreSocketObject for listening, bind + listen
+        // 2. Create a fresh QoreSocketObject for listening, bind + listen.
+        // Refcount plan: new=1 (consumed below by `new QoreObject(QC_SOCKET...)`
+        // which takes ownership of the priv); +1 ref for the accept op added
+        // further down right before SocketAcceptPollOperation creation.
         QoreSocketObject* listen_sock = new QoreSocketObject;
-        listen_sock->ref();  // extra ref for QoreObject setPrivate (derefAll)
         char ifname_buf[80];
         if (!inet_ntop(AF_INET, &add.sin_addr, ifname_buf, sizeof(ifname_buf))) {
-            listen_sock->deref(xsink);
             listen_sock->deref(xsink);
             xsink->raiseErrnoException("FTP-CONNECT-ERROR", errno,
                 "cannot determine local interface address");
@@ -890,7 +892,6 @@ struct qore_ftp_private {
         // Bind on the control connection's local IPv4 interface, ephemeral port
         if (listen_sock->bindINET(ifname_buf, "0", true, Q_AF_INET, Q_SOCK_STREAM, 0, xsink)) {
             listen_sock->deref(xsink);
-            listen_sock->deref(xsink);
             return -1;
         }
         int dataport = listen_sock->getPort();
@@ -898,7 +899,6 @@ struct qore_ftp_private {
         strncpy(ifname, ifname_buf, sizeof(ifname) - 1);
         ifname[sizeof(ifname) - 1] = '\0';
         if (listen_sock->listen(5)) {
-            listen_sock->deref(xsink);
             listen_sock->deref(xsink);
             return -1;
         }
@@ -981,8 +981,16 @@ struct qore_ftp_private {
             return -1;
         }
         QoreObject* accepted_obj = accepted_val->get<QoreObject>();
-        QoreSocketObject* accepted_sock = static_cast<QoreSocketObject*>(
-            accepted_obj->getReferencedPrivateData(CID_SOCKET, xsink));
+        // getReferencedPrivateData returns the priv with a +1 ref.  Wrap in
+        // a SimpleRefHolder so we own the release on every exit path: the
+        // FtpDataPollOperationPriv ctor stores `data_sock` as a raw pointer
+        // without ref/deref, and the underlying priv is also kept alive by
+        // the "sock" member QoreObject for as long as data_op_obj exists, so
+        // it is safe to release our local ref here once the priv is adopted.
+        SimpleRefHolder<QoreSocketObject> accepted_sock_holder(
+            static_cast<QoreSocketObject*>(
+                accepted_obj->getReferencedPrivateData(CID_SOCKET, xsink)));
+        QoreSocketObject* accepted_sock = *accepted_sock_holder;
         if (*xsink || !accepted_sock) {
             if (!*xsink) {
                 xsink->raiseException("FTP-CONNECT-ERROR", "failed to get accepted socket");
@@ -990,15 +998,13 @@ struct qore_ftp_private {
             return -1;
         }
 
-        // 8. Create FtpDataPollOperation with adopt-socket constructor
-        accepted_sock->ref();  // for QoreObject setPrivate
+        // 8. Create FtpDataPollOperation with adopt-socket constructor.
         QoreObject* data_op_obj = new QoreObject(QC_FTPDATAPOLLOPERATION, getProgram());
         accepted_obj->ref();
         data_op_obj->setMemberValue("sock", QC_FTPDATAPOLLOPERATION, accepted_obj, xsink);
         data_op_obj->setMemberValue("goal", QC_FTPDATAPOLLOPERATION,
             new QoreStringNode(recv_output ? "ftp-data-recv" : "ftp-data-send"), xsink);
         if (*xsink) {
-            accepted_sock->deref(xsink);
             data_op_obj->deref(xsink);
             return -1;
         }

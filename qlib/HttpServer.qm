@@ -2387,14 +2387,22 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
 
         string base_name = info.name ?? "listener";
 
-        for (int attempt = 1; attempt <= max_attempts; ++attempt) {
-            int id = seqListeners.next();
-            info.name = base_name + sprintf("-%d", id);
+        # Allocate the listener ID once, OUTSIDE the retry loop.  Each H3
+        # random-port retry tears down the just-bound TCP listener and rebinds
+        # on a fresh kernel-assigned port, but the logical listener identity
+        # (id and name) does not change across attempts.  Burning a fresh
+        # sequence number per attempt would let the final listener land at
+        # id=N>0 when retries fire, breaking callers that look up the first
+        # listener by its conventional name "listener-0".
+        int id = seqListeners.next();
+        info.name = base_name + sprintf("-%d", id);
 
-            if (nmap{info.name}) {
-                throw "HTTPSERVER-ADDLISTENER-ERROR",
-                    sprintf("there is already an active listener with name %y", info.name);
-            }
+        if (nmap{info.name}) {
+            throw "HTTPSERVER-ADDLISTENER-ERROR",
+                sprintf("there is already an active listener with name %y", info.name);
+        }
+
+        for (int attempt = 1; attempt <= max_attempts; ++attempt) {
 
             c.add();
             #printf("HttpServer::addListenerIntern() %y c=%y\n", sock, c.getCount());

@@ -1,0 +1,185 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/** @file QC_StringCharIterator.qpp StringCharIterator class definition */
+/*
+    Qore Programming Language
+
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    Note that the Qore library is released under a choice of three open-source
+    licenses: MIT (as above), LGPL 2+, or GPL 2+; see README-LICENSE for more
+    information.
+*/
+
+#include <qore/Qore.h>
+#include "qore/intern/QC_StringCharIterator.h"
+
+StringCharIterator::StringCharIterator(const QoreStringNode* s)
+        : src(const_cast<QoreStringNode*>(s)) {
+    if (src) {
+        src->ref();
+    }
+}
+
+StringCharIterator::StringCharIterator(const StringCharIterator& old)
+        : src(old.src) {
+    // Fresh iterator over same source; cursor / current_cp / m_valid /
+    // exhausted default-initialise.
+    if (src) {
+        src->ref();
+    }
+}
+
+StringCharIterator::~StringCharIterator() {
+    if (src) {
+        src->deref();
+    }
+}
+
+bool StringCharIterator::next(ExceptionSink* xsink) {
+    if (exhausted || !src) {
+        m_valid = false;
+        if (!exhausted) {
+            exhausted = true;
+        }
+        return false;
+    }
+    const size_t src_len = src->size();
+    if (cursor >= src_len) {
+        exhausted = true;
+        m_valid = false;
+        return false;
+    }
+
+    unsigned clen = 0;
+    current_cp = src->getUnicodePointFromBytePos(cursor, clen, xsink);
+    if (xsink && *xsink) {
+        exhausted = true;
+        m_valid = false;
+        return false;
+    }
+    // Defensive floor — invalid encoding could in principle return clen=0
+    // and trap us in an infinite loop.  Advance by at least one byte.
+    if (clen == 0) {
+        clen = 1;
+    }
+    cursor += clen;
+    if (cursor >= src_len) {
+        exhausted = true;
+    }
+    m_valid = true;
+    return true;
+}
+
+QoreValue StringCharIterator::getValue(ExceptionSink* xsink) {
+    if (!m_valid) {
+        xsink->raiseException("INVALID-ITERATOR",
+            "the iterator is not pointing at a valid element");
+        return QoreValue();
+    }
+    return QoreValue((int64)current_cp);
+}
+
+void StringCharIterator::reset() {
+    cursor = 0;
+    current_cp = 0;
+    m_valid = false;
+    exhausted = false;
+}
+
+const QoreTypeInfo* StringCharIterator::getElementType() const {
+    return bigIntTypeInfo;
+}
+
+//! Lazy iterator over a string's Unicode codepoints.
+/** Yields each codepoint as an integer, decoded from the source string's
+    encoding.  Designed for character-aware tokenizers and parsers; works
+    with UTF-8, UTF-16LE/BE, Latin-1, and any other encoding Qore supports.
+
+    For pure ASCII / byte-oriented parsing,
+    @ref Qore::zzz8stringzzz9::getByte() is faster — it skips codepoint
+    decoding entirely.
+
+    @par Example
+    @code{.py}
+int letters = 0;
+foreach int cp in (text.codePointIterator()) {
+    if ((cp >= ord("A") && cp <= ord("Z")) || (cp >= ord("a") && cp <= ord("z"))) {
+        ++letters;
+    }
+}
+    @endcode
+
+    @since %Qore 2.3
+*/
+qclass StringCharIterator [arg=StringCharIterator* i; ns=Qore; vparent=AbstractIterator];
+
+//! Creates the iterator from a source string.
+/** @param src the string to iterate over (captured by reference)
+ */
+StringCharIterator::constructor(string src) {
+    self->setPrivate(CID_STRINGCHARITERATOR, new StringCharIterator(src));
+}
+
+//! Creates a copy of the iterator, positioned at the start.
+/** Returns a fresh iterator over the same source string with cursor reset
+    to the beginning; positional fidelity is not preserved (matches the
+    convention of other iterator copy() methods).
+ */
+StringCharIterator::copy() {
+    self->setPrivate(CID_STRINGCHARITERATOR, new StringCharIterator(*i));
+}
+
+//! Advances to the next codepoint; returns True if a codepoint is available, False at end.
+/** @throw ITERATOR-THREAD-ERROR if called from another thread
+    @throw INVALID-ENCODING if the source string contains malformed bytes
+ */
+bool StringCharIterator::next() {
+    if (i->check(xsink))
+        return false;
+    return i->next(xsink);
+}
+
+//! Returns the current codepoint as an integer.
+/** @throw INVALID-ITERATOR the iterator is not pointing at a valid element
+    @throw ITERATOR-THREAD-ERROR if called from another thread
+ */
+int StringCharIterator::getValue() [flags=RET_VALUE_ONLY] {
+    if (i->check(xsink))
+        return QoreValue();
+    return i->getValue(xsink);
+}
+
+//! Returns True if the iterator is currently pointing at a valid codepoint.
+/** @return True if a codepoint is available via getValue(), False otherwise.
+ */
+bool StringCharIterator::valid() [flags=CONSTANT] {
+    return i->valid();
+}
+
+//! Resets the iterator to its initial state.
+/** A subsequent next() call will yield the first codepoint again.
+    @throw ITERATOR-THREAD-ERROR if called from another thread
+ */
+StringCharIterator::reset() {
+    if (i->check(xsink))
+        return QoreValue();
+    i->reset();
+}

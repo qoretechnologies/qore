@@ -1,0 +1,56 @@
+#!/usr/bin/env qr
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%exec-class BenchSplitCsv
+
+%requires ../lib/BenchRunner.qm
+
+%strict-args
+%require-types
+%enable-all-warnings
+
+# Benchmark: naive CSV parsing over a 10 MB synthetic file (no quoting).
+# Exercises `split("\n")` + per-line `split(",")` — the classic split-of-split
+# pattern. Represents ~90% of simple CSV ingestion code in qlib.
+
+class BenchSplitCsv {
+    constructor() {
+        Bench::BenchRunner r("split_csv");
+        r.iterations = 10;
+        r.warmup = 2;
+        string data;
+        r.setup = sub () {
+            list<string> rows = ();
+            rows += "id,name,category,price,stock,updated";
+            int target = 10 * 1024 * 1024;
+            int size = rows[0].size() + 1;
+            int seed = 1;
+            while (size < target) {
+                seed = (seed * 1103515245 + 12345) % 0x7fffffff;
+                string row = sprintf("%d,widget-%d,cat-%d,%d.%02d,%d,2026-04-24T16:34:%02d",
+                                     seed, seed % 1000, seed % 20, seed % 500, seed % 100,
+                                     seed % 1000, seed % 60);
+                rows += row;
+                size += row.size() + 1;
+            }
+            data = rows.join("\n");
+            r.bytes_processed = data.size();
+        };
+        r.measure = sub () {
+            int rows = 0;
+            int sum_price_int = 0;
+            foreach string line in (data.split("\n")) {
+                list<string> fields = line.split(",");
+                if (fields.size() >= 4) {
+                    list<string> price_parts = fields[3].split(".");
+                    sum_price_int += price_parts[0].toInt();
+                }
+                rows++;
+            }
+            if (rows < 0 || sum_price_int < 0) {
+                throw "UNREACHABLE";
+            }
+        };
+        exit(r.run());
+    }
+}

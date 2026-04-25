@@ -106,6 +106,27 @@ public:
         return stringTypeInfo;
     }
 
+    // Native fast-path: next(xsink), getValue() takes no xsink and requires
+    // checkValid() (matches the QPP's getValue/getLine methods).
+    DLLLOCAL bool supportsNativeIteration() const override { return true; }
+
+    DLLLOCAL bool nativeNext(ExceptionSink* xsink) override {
+        if (check(xsink)) {
+            return false;
+        }
+        return next(xsink);
+    }
+
+    DLLLOCAL QoreValue nativeGetValue(ExceptionSink* xsink) override {
+        if (check(xsink)) {
+            return QoreValue();
+        }
+        if (checkValid(xsink)) {
+            return QoreValue();
+        }
+        return getValue();
+    }
+
 private:
     DLLLOCAL void doReset(ExceptionSink* xsink) {
         if (!str->getEncoding()->isAsciiCompat()) {

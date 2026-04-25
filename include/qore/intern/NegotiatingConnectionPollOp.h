@@ -139,6 +139,27 @@ public:
         return error_info;
     }
 
+    //! Returns a static string describing the current @ref NegState
+    //! ("connecting", "decided", "closed", or "unknown").  Safe to call
+    //! from any thread.  Used by diagnostic logging on the timeout path
+    //! so the qorus-core log shows which state the state machine was
+    //! stuck in when the negotiation timed out.
+    DLLLOCAL const char* getStateName() const {
+        switch (neg_state.load(std::memory_order_acquire)) {
+            case NegState::CONNECTING: return "connecting";
+            case NegState::DECIDED:    return "decided";
+            case NegState::CLOSED:     return "closed";
+        }
+        return "unknown";
+    }
+
+    //! Returns the wall-clock time in microseconds when the poll op was
+    //! submitted to the controller.  Used to compute elapsed-since-submit
+    //! for diagnostic logging.
+    DLLLOCAL int64_t getSubmitTimeUs() const {
+        return submit_time_us;
+    }
+
     //! Called by the destructor of the owning connection to break the
     //! raw back-pointer before the owner is freed.  Safe on any thread
     //! because the owner has already disarmed us.
@@ -172,6 +193,13 @@ private:
 
     //! Error info hash (ref'd) — set on failure paths.
     QoreHashNode* error_info = nullptr;
+
+    //! Microsecond wall-clock time at which this poll op was constructed
+    //! (immediately before submission to the AsyncIoController).  Used
+    //! by diagnostic logging to compute time-since-submit on each state
+    //! transition, so the qorus-core log can pinpoint exactly which step
+    //! stalled when an @c HTTPCLIENT-NEGOTIATE-TIMEOUT fires.
+    int64_t submit_time_us = 0;
 
     DLLLOCAL QoreHashNode* handleConnecting(ExceptionSink* xsink);
     DLLLOCAL void setError(const char* err, const char* desc, ExceptionSink* xsink);
@@ -249,6 +277,21 @@ public:
     //! Returns the negotiated ALPN id (valid after @ref waitForReadyOrError).
     DLLLOCAL const std::string& getNegotiatedAlpn() const {
         return alpn_result;
+    }
+
+    //! Returns a static string describing the inner poll op's state
+    //! (or "no-priv" if the op has been released).  Used by the manager's
+    //! @c HTTPCLIENT-NEGOTIATE-TIMEOUT diagnostic path to surface which
+    //! state the state machine was stuck in when the timeout fired.
+    DLLLOCAL const char* getNegStateName() const {
+        return neg_priv ? neg_priv->getStateName() : "no-priv";
+    }
+
+    //! Returns the wall-clock submit time of the inner poll op in
+    //! microseconds (or 0 if no priv).  Paired with the current time at
+    //! the point of a diagnostic log to compute the elapsed wait.
+    DLLLOCAL int64_t getNegSubmitTimeUs() const {
+        return neg_priv ? neg_priv->getSubmitTimeUs() : 0;
     }
 
 protected:

@@ -4,6 +4,7 @@
 %modern
 
 %requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/FsUtil.qm
 
 # Allow child Program objects to have more liberal permissions than the parent.
 %no-child-restrictions
@@ -12,6 +13,16 @@
 
 hashdecl T {
     int i = 0;
+}
+
+# Helper for ObjectIterator family tests; member declaration order
+# determines iteration order (matches the runtime member hash).
+class Foo {
+    public {
+        int x = 1;
+        int y = 2;
+        int z = 3;
+    }
 }
 
 auto sub test_4355(Counter c) {
@@ -29,9 +40,195 @@ auto sub test_4355_stable(Counter c) {
 public class ListTest inherits QUnit::Test {
     constructor() : Test("ListTest", "1.0") {
         addTestCase("list test", \listTest());
+        addTestCase("reverse iterator native fast path", \reverseIterFastPathTest());
+        addTestCase("line iterator native fast path", \lineIterFastPathTest());
+        addTestCase("hash/object iterator native fast path", \hashObjectIterFastPathTest());
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
+    }
+
+    # Regression test: ReverseIterator family must iterate backwards when
+    # driven through AbstractIteratorHelper (foreach / map / select / foldl),
+    # not just when next() is called explicitly.  The native fast-path
+    # introduced in 2026-04 inherits from forward priv classes, so reverse
+    # subclasses must override nativeNext to call prev() instead of next().
+    reverseIterFastPathTest() {
+        list<int> l = (1, 2, 3, 4, 5);
+
+        # ListReverseIterator via foreach
+        ListReverseIterator lri(l);
+        list<int> got = ();
+        foreach int v in (lri) { got += v; }
+        assertEq((5, 4, 3, 2, 1), got);
+
+        # ListReverseIterator via map
+        ListReverseIterator lri2(l);
+        assertEq((50, 40, 30, 20, 10), (map $1 * 10, lri2));
+
+        # HashListReverseIterator via foreach
+        hash<auto> data = {"col1": (1, 2, 3), "col2": ("a", "b", "c")};
+        HashListReverseIterator hlri(data);
+        list<hash<auto>> rows = ();
+        foreach hash<auto> row in (hlri) { rows += row; }
+        assertEq(({"col1": 3, "col2": "c"}, {"col1": 2, "col2": "b"}, {"col1": 1, "col2": "a"}), rows);
+
+        # ListHashReverseIterator via foreach
+        list<auto> lh = ({"x": 1, "y": 10}, {"x": 2, "y": 20}, {"x": 3, "y": 30});
+        ListHashReverseIterator lhri(lh);
+        list<auto> hr = ();
+        foreach auto row in (lhri) { hr += row; }
+        assertEq(({"x": 3, "y": 30}, {"x": 2, "y": 20}, {"x": 1, "y": 10}), hr);
+
+        # SingleValueIterator via foreach
+        SingleValueIterator svi(42);
+        list<auto> sv = ();
+        foreach auto v in (svi) { sv += v; }
+        assertEq((42,), sv);
+
+        # SingleValueIterator with NOTHING (yields nothing)
+        SingleValueIterator svn(NOTHING);
+        list<auto> svn_got = ();
+        foreach auto v in (svn) { svn_got += v; }
+        assertEq(0, svn_got.size());
+
+        # ListHashIterator via foreach must yield rows (hashes), not raw
+        # list elements — prior bug would inherit ListIterator's fast path
+        # and bypass the hash type-check in getRow().
+        ListHashIterator lhi(lh);
+        list<auto> rows_fwd = ();
+        foreach auto row in (lhi) { rows_fwd += row; }
+        assertEq(({"x": 1, "y": 10}, {"x": 2, "y": 20}, {"x": 3, "y": 30}), rows_fwd);
+
+        # HashListIterator via foreach yields rows in column-major order.
+        HashListIterator hli(data);
+        list<auto> rows_hl = ();
+        foreach auto row in (hli) { rows_hl += row; }
+        assertEq(({"col1": 1, "col2": "a"}, {"col1": 2, "col2": "b"}, {"col1": 3, "col2": "c"}), rows_hl);
+    }
+
+    lineIterFastPathTest() {
+        # InputStreamLineIterator
+        {
+            StringInputStream sis("alpha\nbeta\ngamma\n");
+            InputStreamLineIterator isli(sis, "UTF-8");
+            list<string> got = ();
+            foreach string line in (isli) { got += line; }
+            assertEq(("alpha", "beta", "gamma"), got);
+        }
+
+        # FileLineIterator
+        {
+            FsUtil::TmpFile tmp("qore_iterfp", ".txt");
+            tmp.file.printf("one\ntwo\nthree\n");
+            tmp.file.close();
+            FileLineIterator fli(tmp.path);
+            list<string> got = ();
+            foreach string line in (fli) { got += line; }
+            assertEq(("one", "two", "three"), got);
+        }
+
+        # DataLineIterator: in-memory, fast path via nativeNext(xsink)/nativeGetValue.
+        string data = "alpha\nbeta\ngamma\n";
+
+        DataLineIterator it(data);
+        list<string> got = ();
+        foreach string line in (it) { got += line; }
+        assertEq(("alpha", "beta", "gamma"), got);
+
+        # map composition exercises native fast path.
+        DataLineIterator it2(data);
+        list<int> sizes = map $1.size(), it2;
+        assertEq((5, 4, 5), sizes);
+
+        # Empty input
+        DataLineIterator empty("");
+        list<string> empty_got = ();
+        foreach string line in (empty) { empty_got += line; }
+        assertEq(0, empty_got.size());
+
+        # No trailing newline still yields the line
+        DataLineIterator nonl("solo");
+        list<string> nonl_got = ();
+        foreach string line in (nonl) { nonl_got += line; }
+        assertEq(("solo",), nonl_got);
+    }
+
+    hashObjectIterFastPathTest() {
+        # All three hash views (value / key / pair) and reverse variants
+        # share QoreHashIterator priv; the fast path branches on a view-mode
+        # flag set by the QPP ctor.  Verify each Qore class yields the right
+        # shape through foreach (drives AbstractIteratorHelper -> fast path).
+        hash<auto> h = {"a": 1, "b": 2, "c": 3};
+
+        # Forward: VIEW_VALUE
+        HashIterator hi(h);
+        list<auto> vals = ();
+        foreach auto v in (hi) { vals += v; }
+        assertEq((1, 2, 3), vals);
+
+        # Forward: VIEW_KEY
+        HashKeyIterator hki(h);
+        list<auto> ks = ();
+        foreach auto k in (hki) { ks += k; }
+        assertEq(("a", "b", "c"), ks);
+
+        # Forward: VIEW_PAIR
+        HashPairIterator hpi(h);
+        list<auto> pairs = ();
+        foreach auto p in (hpi) { pairs += p; }
+        assertEq(({"key": "a", "value": 1}, {"key": "b", "value": 2}, {"key": "c", "value": 3}), pairs);
+
+        # Reverse value
+        HashReverseIterator hri(h);
+        list<auto> rvals = ();
+        foreach auto v in (hri) { rvals += v; }
+        assertEq((3, 2, 1), rvals);
+
+        # Reverse key
+        HashKeyReverseIterator hkri(h);
+        list<auto> rks = ();
+        foreach auto k in (hkri) { rks += k; }
+        assertEq(("c", "b", "a"), rks);
+
+        # Reverse pair
+        HashPairReverseIterator hpri(h);
+        list<auto> rpairs = ();
+        foreach auto p in (hpri) { rpairs += p; }
+        assertEq(({"key": "c", "value": 3}, {"key": "b", "value": 2}, {"key": "a", "value": 1}), rpairs);
+
+        # Object family — same priv chain, different ctor source.
+        Foo o();
+        ObjectIterator oi(o);
+        list<auto> ovals = ();
+        foreach auto v in (oi) { ovals += v; }
+        assertEq((1, 2, 3), ovals);
+
+        ObjectKeyIterator oki(o);
+        list<auto> oks = ();
+        foreach auto k in (oki) { oks += k; }
+        assertEq(("x", "y", "z"), oks);
+
+        ObjectPairIterator opi(o);
+        list<auto> opairs = ();
+        foreach auto p in (opi) { opairs += p; }
+        assertEq(({"key": "x", "value": 1}, {"key": "y", "value": 2}, {"key": "z", "value": 3}), opairs);
+
+        # Reverse object
+        ObjectReverseIterator ori(o);
+        list<auto> orev = ();
+        foreach auto v in (ori) { orev += v; }
+        assertEq((3, 2, 1), orev);
+
+        ObjectKeyReverseIterator okri(o);
+        list<auto> rok = ();
+        foreach auto k in (okri) { rok += k; }
+        assertEq(("z", "y", "x"), rok);
+
+        ObjectPairReverseIterator opri(o);
+        list<auto> rop = ();
+        foreach auto p in (opri) { rop += p; }
+        assertEq(({"key": "z", "value": 3}, {"key": "y", "value": 2}, {"key": "x", "value": 1}), rop);
     }
 
     listTest() {

@@ -1,0 +1,45 @@
+#!/usr/bin/env qr
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%exec-class BenchMakeIncHexNew
+
+%requires ../lib/BenchRunner.qm
+
+%strict-args
+%require-types
+%enable-all-warnings
+
+# Benchmark: same 1 MB binary → C hex-array format as bench_make_inc_hex.qr,
+# but uses the new <binary>::toHexArray() pseudo-method that does the
+# 256-entry hex lookup in C++ instead of a per-byte printf loop in Qore.
+# Target: >=100x speedup vs bench_make_inc_hex.
+
+class BenchMakeIncHexNew {
+    const LineSize = 12;
+
+    constructor() {
+        Bench::BenchRunner r("make_inc_hex_new");
+        r.iterations = 5;
+        r.warmup = 1;
+        binary data;
+        r.setup = sub () {
+            int target = 1024 * 1024;
+            int seed = 1;
+            binary b = binary();
+            for (int i = 0; i < target; i++) {
+                seed = (seed * 1103515245 + 12345) % 0x7fffffff;
+                b += chr(seed % 256);
+            }
+            data = b;
+            r.bytes_processed = b.size();
+        };
+        r.measure = sub () {
+            # Single C++ call — produces the entire hex-array body.
+            string out = data.toHexArray(" 0x", ",", LineSize, "\n ");
+            if (!out.size()) {
+                throw "UNREACHABLE";
+            }
+        };
+        exit(r.run());
+    }
+}

@@ -40,9 +40,27 @@ extern QoreClass* QC_HASHREVERSEITERATOR;
 
 // the c++ object
 class QoreHashIterator : public QoreIteratorBase, public ConstHashIterator {
+public:
+    //! Selects what nativeGetValue() yields for AbstractIteratorHelper-driven loops.
+    /** Three Qore-visible classes share this priv (HashIterator,
+        HashKeyIterator, HashPairIterator) and yield different things from
+        getValue().  The QPP ctor for each variant calls setView() so the
+        fast path returns the right shape.
+
+        @since %Qore 2.3
+    */
+    enum HashView {
+        VIEW_VALUE = 0,  ///< default; matches HashIterator::getValue()
+        VIEW_KEY   = 1,  ///< matches HashKeyIterator::getValue()
+        VIEW_PAIR  = 2,  ///< matches HashPairIterator::getValue()
+    };
+
 protected:
     // reusable hash for pair iterator performance enhancement; provides an approx 70% speed improvement
     mutable QoreHashNode* pairHash;
+
+    // What nativeGetValue() yields; set by the QPP ctors for Key/Pair variants.
+    HashView view = VIEW_VALUE;
 
     DLLLOCAL virtual ~QoreHashIterator() {
         assert(!pairHash);
@@ -143,6 +161,35 @@ public:
     DLLLOCAL virtual const QoreTypeInfo* getElementType() const {
         return h->getValueTypeInfo();
     }
+
+    //! Sets the value shape yielded by nativeGetValue(); see @ref HashView.
+    DLLLOCAL void setView(HashView v) { view = v; }
+
+    // Native fast-path: branch on view to match HashIterator/HashKeyIterator/
+    // HashPairIterator semantics.  All three share this priv class.
+    DLLLOCAL bool supportsNativeIteration() const override { return true; }
+
+    DLLLOCAL bool nativeNext(ExceptionSink* xsink) override {
+        if (check(xsink)) {
+            return false;
+        }
+        return next();
+    }
+
+    DLLLOCAL QoreValue nativeGetValue(ExceptionSink* xsink) override {
+        if (check(xsink)) {
+            return QoreValue();
+        }
+        switch (view) {
+            case VIEW_KEY:
+                return getKey(xsink);
+            case VIEW_PAIR:
+                return getReferencedValuePair(xsink);
+            case VIEW_VALUE:
+            default:
+                return getReferencedValue(xsink);
+        }
+    }
 };
 
 // internal reverse iterator class implementation only for the getName() function - the iterators remain
@@ -160,6 +207,15 @@ public:
 
     DLLLOCAL virtual const char* getName() const {
         return "HashReverseIterator";
+    }
+
+    // Reverse fast path: nativeNext routes to prev() (the priv's backwards
+    // walker).  Yield shape (VIEW_VALUE / KEY / PAIR) is inherited.
+    DLLLOCAL bool nativeNext(ExceptionSink* xsink) override {
+        if (check(xsink)) {
+            return false;
+        }
+        return prev();
     }
 };
 

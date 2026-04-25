@@ -52,6 +52,18 @@ int QoreLoggerPattern::setPattern(const QoreStringNode* pattern, ExceptionSink* 
 
     //printd(5, "setPattern() pattern: '%s' (%d)\n", patt->c_str(), (int)patt->size());
 
+    // Helper: the Qore CoW convention requires that a QoreStringNode with
+    // refcount > 1 is cloned before in-place mutation.  Earlier iterations of
+    // this loop push QoreStringNodeView slices of `patt` into `pp` (via
+    // substr()), which hold refs on `patt` — so by the time we reach the
+    // second splice below, `patt` is usually non-unique.  Clone before
+    // splicing so the views in `pp` continue to read the pre-splice bytes.
+    auto ensure_patt_unique = [&]() {
+        if (!patt->is_unique()) {
+            patt = patt->copy();
+        }
+    };
+
     // list elements may be strings or hashes
     while (!patt->empty()) {
         ssize_t pos = 0;
@@ -63,6 +75,7 @@ int QoreLoggerPattern::setPattern(const QoreStringNode* pattern, ExceptionSink* 
                 pos = pos0;
                 if (patt->c_str()[pos + 1] == ESCAPE_CHAR) {
                     // %% found
+                    ensure_patt_unique();
                     patt->splice(pos, 1, xsink);
                     assert(!*xsink);
                     ++pos;
@@ -86,6 +99,7 @@ int QoreLoggerPattern::setPattern(const QoreStringNode* pattern, ExceptionSink* 
             pp->push(v.release(), xsink);
             assert(!*xsink);
         }
+        ensure_patt_unique();
         patt->splice(0, pos + 1, xsink);
 
         std::string pstr(patt->c_str());

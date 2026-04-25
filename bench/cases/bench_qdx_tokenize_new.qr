@@ -1,0 +1,69 @@
+#!/usr/bin/env qr
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%exec-class BenchQdxTokenizeNew
+
+%requires ../lib/BenchRunner.qm
+
+%strict-args
+%require-types
+%enable-all-warnings
+
+# Benchmark: same workload as bench_qdx_tokenize.qr but using the new
+# Qore::Scanner class instead of per-character src[i] indexing.
+#
+# The classic pattern allocates a 1-character QoreStringNode per access
+# AND walks UTF-8 boundaries from byte 0 every call → O(N^2) on a tokenizer
+# scan.  Scanner does both in O(1) per call.
+#
+# Expected: ~7-9x faster than bench_qdx_tokenize on the same source.
+#
+# @since %Qore 2.3
+
+class BenchQdxTokenizeNew {
+    constructor() {
+        Bench::BenchRunner r("qdx_tokenize_new");
+        r.iterations = 5;
+        r.warmup = 2;
+        string src;
+        r.setup = sub () {
+            src = ReadOnlyFile::readTextFile(get_script_dir() + "/../../qlib/Qdx.qm");
+            r.bytes_processed = src.size();
+        };
+        r.measure = sub () {
+            int comments = 0;
+            int strings = 0;
+            int ws = 0;
+            Scanner s(src);
+            while (!s.atEnd()) {
+                int b = s.peekByte();
+                if (b == ord("#")) {
+                    comments++;
+                    while (!s.atEnd() && s.peekByte() != ord("\n")) {
+                        s.advanceByte();
+                    }
+                } else if (b == ord("\"") || b == ord("'")) {
+                    strings++;
+                    int quote = b;
+                    s.advanceByte();
+                    while (!s.atEnd() && s.peekByte() != quote) {
+                        if (s.peekByte() == ord("\\")) {
+                            s.advanceByte();
+                        }
+                        s.advanceByte();
+                    }
+                    s.advanceByte();
+                } else if (b == ord(" ") || b == ord("\t") || b == ord("\n")) {
+                    ws++;
+                    s.advanceByte();
+                } else {
+                    s.advanceByte();
+                }
+            }
+            if (comments < 0 || strings < 0 || ws < 0) {
+                throw "UNREACHABLE";
+            }
+        };
+        exit(r.run());
+    }
+}

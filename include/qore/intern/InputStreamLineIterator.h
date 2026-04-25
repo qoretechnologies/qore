@@ -137,6 +137,28 @@ public:
         return stringTypeInfo;
     }
 
+    // Native fast-path: same shape as DataLineIterator/FileLineIterator —
+    // next(xsink) reads the next line (may block on stream I/O), getValue()
+    // requires checkValid() before yielding.
+    DLLLOCAL bool supportsNativeIteration() const override { return true; }
+
+    DLLLOCAL bool nativeNext(ExceptionSink* xsink) override {
+        if (check(xsink)) {
+            return false;
+        }
+        return next(xsink);
+    }
+
+    DLLLOCAL QoreValue nativeGetValue(ExceptionSink* xsink) override {
+        if (check(xsink)) {
+            return QoreValue();
+        }
+        if (checkValid(xsink)) {
+            return QoreValue();
+        }
+        return getValue();
+    }
+
 private:
     DLLLOCAL int assignEol(const QoreStringNode* n_eol, ExceptionSink* xsink) {
         if (!n_eol || n_eol->empty()) {

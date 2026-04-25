@@ -83,7 +83,9 @@ ObjectPairReverseIterator i(obj);
     @endcode
  */
 ObjectPairReverseIterator::constructor(object o) {
-   self->setPrivate(CID_OBJECTPAIRREVERSEITERATOR, new QoreObjectReverseIterator(o));
+   ReferenceHolder<QoreObjectReverseIterator> p(new QoreObjectReverseIterator(o), xsink);
+   p->setView(QoreHashIterator::VIEW_PAIR);
+   self->setPrivate(CID_OBJECTPAIRREVERSEITERATOR, p.release());
 }
 
 //! Creates an empty iterator object
@@ -94,7 +96,9 @@ ObjectPairReverseIterator i(obj);
     @endcode
  */
 ObjectPairReverseIterator::constructor() {
-   self->setPrivate(CID_OBJECTPAIRREVERSEITERATOR, new QoreObjectReverseIterator);
+   ReferenceHolder<QoreObjectReverseIterator> p(new QoreObjectReverseIterator, xsink);
+   p->setView(QoreHashIterator::VIEW_PAIR);
+   self->setPrivate(CID_OBJECTPAIRREVERSEITERATOR, p.release());
 }
 
 //! Creates a copy of the ObjectPairReverseIterator object, iterating the same object as the original and in the same position
@@ -104,7 +108,9 @@ ObjectPairReverseIterator ni = i.copy();
     @endcode
  */
 ObjectPairReverseIterator::copy() {
-   self->setPrivate(CID_OBJECTPAIRREVERSEITERATOR, new QoreObjectReverseIterator(*i));
+   ReferenceHolder<QoreObjectReverseIterator> p(new QoreObjectReverseIterator(*i), xsink);
+   p->setView(QoreHashIterator::VIEW_PAIR);
+   self->setPrivate(CID_OBJECTPAIRREVERSEITERATOR, p.release());
 }
 
 //! returns a hash with the current key and value (a hash with 2 keys: \c "key" and \c "value") or throws an \c INVALID-ITERATOR exception if the iterator is invalid

@@ -73,7 +73,9 @@ HashPairIterator hi(h);
     @endcode
  */
 HashPairIterator::constructor(hash<auto> h) {
-   self->setPrivate(CID_HASHPAIRITERATOR, new QoreHashIterator(h));
+   ReferenceHolder<QoreHashIterator> p(new QoreHashIterator(h), xsink);
+   p->setView(QoreHashIterator::VIEW_PAIR);
+   self->setPrivate(CID_HASHPAIRITERATOR, p.release());
 }
 
 //! Creates an empty hash iterator object
@@ -84,7 +86,9 @@ HashPairIterator hi(h);
     @endcode
  */
 HashPairIterator::constructor() {
-   self->setPrivate(CID_HASHPAIRITERATOR, new QoreHashIterator);
+   ReferenceHolder<QoreHashIterator> p(new QoreHashIterator, xsink);
+   p->setView(QoreHashIterator::VIEW_PAIR);
+   self->setPrivate(CID_HASHPAIRITERATOR, p.release());
 }
 
 //! Creates a copy of the HashPairIterator object, iterating the same object as the original and in the same position
@@ -94,7 +98,9 @@ HashPairIterator ni = i.copy();
     @endcode
  */
 HashPairIterator::copy() {
-   self->setPrivate(CID_HASHPAIRITERATOR, new QoreHashIterator(*i));
+   ReferenceHolder<QoreHashIterator> p(new QoreHashIterator(*i), xsink);
+   p->setView(QoreHashIterator::VIEW_PAIR);
+   self->setPrivate(CID_HASHPAIRITERATOR, p.release());
 }
 
 //! returns a hash with the current key and value (a hash with 2 keys: \c "key" and \c "value") or throws an \c INVALID-ITERATOR exception if the iterator is invalid

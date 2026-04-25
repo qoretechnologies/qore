@@ -183,25 +183,29 @@ public class Http2SseStream inherits AbstractSseConnection {
             return;
         }
         stream_open = False;
+        # close() is a teardown path: swallow HTTP/2 transport errors
+        # (stream already reset, session gone, GOAWAY in flight, etc.) so
+        # cleanup callers don't have to wrap every close in try/catch.
+        # stream_open has already been flipped, so isOpen() / isDisconnected()
+        # report the closed state regardless of whether END_STREAM lands.
         try {
             sock.sendHttp2StreamData(stream_id, NOTHING, True);
             if (wake_callback) {
                 wake_callback();
             }
-        } catch () {
-            # Ignore errors on close
+        } catch (hash<ExceptionInfo> ex) {
         }
     }
 
     abort() {
         stream_open = False;
+        # abort() is a teardown path: same rationale as close().
         try {
             sock.resetHttp2Stream(stream_id);
             if (wake_callback) {
                 wake_callback();
             }
-        } catch () {
-            # Ignore errors on abort
+        } catch (hash<ExceptionInfo> ex) {
         }
     }
 

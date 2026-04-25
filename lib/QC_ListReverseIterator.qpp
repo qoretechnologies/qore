@@ -46,6 +46,11 @@ public:
    DLLLOCAL virtual const char* getName() const {
       return "ListReverseIterator";
    }
+
+   // Reverse fast path: ListReverseIterator's Qore-visible next() iterates
+   // backwards (calls prev() on the priv).  Override the inherited forward
+   // fast path so AbstractIteratorHelper-driven loops match.
+   QORE_NATIVE_FAST_PATH_REVERSE_REFVAL()
 };
 
 //! This class an iterator class for lists

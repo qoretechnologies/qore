@@ -176,8 +176,22 @@ public:
         Workers that pick up items for this program will silently discard them
         instead of calling evalMethod (which would hit PROGRAM-ERROR after ptid
         is set).
+
+        This call also drops any already-queued items belonging to \a pgm and
+        releases their object references in-place.  The combined mark + drain
+        runs under the dispatcher lock, closing the race where a worker pops
+        a pgm-owned item between an out-of-band mark and a separate drain
+        and then derefs an spop_obj whose underlying class has just been torn
+        down by the program's cleanup path (libqore SIGSEGV at workerLoop+0x3c6
+        on a stale spop_obj pointing into recycled JVM-heap memory).
+
+        Items submitted AFTER this call are still protected by the worker's
+        \c pgm_shutting_down check at the top of \c workerLoop — those items
+        are skipped at the user-callback step and only their refs are released
+        by the worker's own cleanup, when the spop_obj is still valid because
+        the strong ref taken at submit time has not been torn down yet.
     */
-    DLLLOCAL void markProgramShuttingDown(QoreProgram* pgm);
+    DLLLOCAL void markProgramShuttingDown(QoreProgram* pgm, ExceptionSink* xsink);
 
     //! Remove a program from the shutting-down set
     DLLLOCAL void clearProgramShuttingDown(QoreProgram* pgm);
@@ -190,6 +204,7 @@ public:
         @param pgm the program to wait for (must already be marked as shutting down)
     */
     DLLLOCAL void waitForProgramIdle(QoreProgram* pgm);
+
 
     //! Mark an owner as shutting down so workers skip callbacks for it
     /** Workers that pick up items tagged with this owner will silently discard

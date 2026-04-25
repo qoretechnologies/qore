@@ -5110,9 +5110,13 @@ int QoreHttpClientObject::connect(ExceptionSink* xsink) {
     // connection" double-connect that hangs single-accept test servers
     // and wastes a socket slot on real peers.  WS upgrade and poll-API
     // paths still use msock, so they stay on the legacy connect_unlocked
-    // path below.
+    // path below.  UNIX-domain socket URLs also stay on the legacy path:
+    // HttpClientConnectionManagerBase::acquireConnection only knows TCP
+    // (host:port), so its getaddrinfo on the bare socket path fails with
+    // QOREADDRINFO-GETINFO-ERROR before any UNIX-aware code runs.
     if (http_priv->use_conn_mgr && !http_priv->poll_apis_used
-            && http_priv->connection.has_url()) {
+            && http_priv->connection.has_url()
+            && !http_priv->connection.is_unix) {
         // Drop any stale msock state (prior disconnect/reconnect cycle).
         http_priv->disconnect_unlocked();
         return http_priv->connectViaConnMgr(xsink);
@@ -6562,11 +6566,32 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                         if (*xsink) {
                             xsink->clear();
                         }
-                        // For non-chunked + content-encoding + recv_callback,
-                        // accumulate body to decompress at end (matches
-                        // legacy send_internal behavior — see line ~9070)
-                        if (recv_callback && !is_chunked_response
-                                && !resp_content_encoding.empty()) {
+                        // For non-chunked, non-event-stream responses with a
+                        // recv_callback, accumulate the full body and deliver it
+                        // in a single data callback at end_stream.  H3 splits a
+                        // multi-datagram response across per-DATA-frame channel
+                        // events (one event per ~1200 bytes), so delivering each
+                        // event verbatim would violate the H1/H2 contract that
+                        // a non-chunked body produces exactly one recv_callback
+                        // invocation — consumers like DataStreamClient's
+                        // ds_get_recv treat each data callback as a complete
+                        // body for non-chunked responses and overwrite earlier
+                        // chunks otherwise, leaving only the last datagram's
+                        // bytes.  text/event-stream is excluded so SSE retains
+                        // per-event delivery.
+                        bool is_event_stream = false;
+                        {
+                            const char* ct = get_string_header(xsink,
+                                **ans, "content-type", true);
+                            if (*xsink) {
+                                xsink->clear();
+                            }
+                            if (ct && strcasestr(ct, "text/event-stream")) {
+                                is_event_stream = true;
+                            }
+                        }
+                        if (recv_callback && !os && !is_chunked_response
+                                && !is_event_stream) {
                             accumulated_body = new BinaryNode();
                         }
                     }
@@ -6701,16 +6726,28 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                 // the terminal callback on every chunk.
                 QoreValue end_val = h->getKeyValue("end_stream");
                 if (end_val.getAsBool()) {
-                    // For non-chunked + content-encoding case, decompress
-                    // accumulated body and deliver as single data callback
-                    // (matches legacy send_internal behavior at line ~9070)
-                    if (recv_callback && accumulated_body) {
+                    // For accumulated non-chunked bodies (whether encoded or
+                    // not), deliver as a single data callback at end_stream.
+                    // When a content-encoding is present, decode first; when
+                    // there is none, convert the raw bytes to a UTF-8 string
+                    // to mirror the per-chunk callback path's binary→string
+                    // conversion (which itself mirrors readHttpChunkedBody).
+                    // The matching one-call-per-non-chunked-body contract is
+                    // what consumers like DataStreamClient's ds_get_recv rely
+                    // on — see the accumulated_body allocation site above.
+                    // Skip the data callback when no body bytes accumulated
+                    // (e.g. 204 No Content): consumers like DataStreamClient
+                    // would otherwise try to deserialize an empty body with
+                    // the response's content-type and raise a spurious
+                    // DESERIALIZATION-ERROR.  The terminal hdr=NOTHING
+                    // callback below still fires to signal end-of-data.
+                    if (recv_callback && accumulated_body && accumulated_body->size()) {
                         bool ignore_encoding = false;
                         qore_uncompress_to_string_t dec =
                             get_decoder_for_content_encoding(
                                 resp_content_encoding.c_str(), ignore_encoding);
                         QoreValue cb_data;
-                        if (dec && !ignore_encoding && accumulated_body->size()) {
+                        if (dec && !ignore_encoding) {
                             QoreStringNode* decoded = dec(*accumulated_body,
                                 QCS_UTF8, xsink);
                             if (*xsink) {
@@ -6718,8 +6755,12 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                                 return nullptr;
                             }
                             cb_data = decoded;
+                        } else if (resp_content_encoding.empty()) {
+                            cb_data = new QoreStringNode(
+                                (const char*)accumulated_body->getPtr(),
+                                accumulated_body->size(), QCS_UTF8);
                         } else {
-                            // Unknown encoding or empty body — pass raw binary
+                            // Unknown encoding — pass raw binary
                             cb_data = accumulated_body.release();
                         }
                         ReferenceHolder<QoreListNode> args(
@@ -7267,7 +7308,11 @@ QoreHashNode* qore_httpclient_priv::send_internal(ExceptionSink* xsink, const ch
             }
             is_ws_upgrade = has_conn_upgrade && has_upgrade_ws;
         }
-        if (use_conn_mgr && !is_ws_upgrade) {
+        // UNIX-socket URLs cannot use the conn_mgr path: it is TCP-only
+        // and resolves the host via getaddrinfo, which fails for a bare
+        // socket path.  Fall through to the legacy msock path which
+        // honours connection.is_unix end-to-end.
+        if (use_conn_mgr && !is_ws_upgrade && !connection.is_unix) {
             return send_internal_conn_mgr(xsink, mname, meth, mpath, headers,
                 msg_body, data, size, send_callback, getbody, info, timeout_ms,
                 recv_callback, obj, os, is, max_chunk_size, trailer_callback, streaming);

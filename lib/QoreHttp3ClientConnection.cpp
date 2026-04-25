@@ -336,8 +336,10 @@ int Http3ClientConnection::submitAttempt(Attempt& a, ExceptionSink* xsink) {
         return -1;
     }
 
+    // submit() takes ownership of `info` via the ReferenceHolder in
+    // AsyncIoControllerPriv::submit; use .release() not *info.
     ReferenceHolder<QoreObject> submit_rv(
-        ctl_priv_holder->submit(*ctl_obj_holder, *info, false, xsink), xsink);
+        ctl_priv_holder->submit(*ctl_obj_holder, info.release(), false, xsink), xsink);
     if (*xsink) {
         return -1;
     }

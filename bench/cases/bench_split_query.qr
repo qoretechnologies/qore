@@ -1,0 +1,50 @@
+#!/usr/bin/env qr
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%exec-class BenchSplitQuery
+
+%requires ../lib/BenchRunner.qm
+
+%strict-args
+%require-types
+%enable-all-warnings
+
+# Benchmark: URL query-string decode. Builds a ~64 KB x-www-form-urlencoded
+# payload, then parses it with `split("&")` + `split("=", 2)` — the pattern
+# used in Mime.qm::decode_url_body() and similar sites.
+
+class BenchSplitQuery {
+    constructor() {
+        Bench::BenchRunner r("split_query");
+        r.iterations = 100;
+        r.warmup = 10;
+        string data;
+        r.setup = sub () {
+            list<string> parts = ();
+            int target = 64 * 1024;
+            int size = 0;
+            int seed = 1;
+            while (size < target) {
+                seed = (seed * 1103515245 + 12345) % 0x7fffffff;
+                string kv = sprintf("field_%d=value_%d_of_length_moderately_long_%d", seed % 500, seed, seed);
+                parts += kv;
+                size += kv.size() + 1;
+            }
+            data = parts.join("&");
+            r.bytes_processed = data.size();
+        };
+        r.measure = sub () {
+            hash<auto> params = {};
+            foreach string kv in (data.split("&")) {
+                int eq = kv.find("=");
+                if (eq > 0) {
+                    params{kv.substr(0, eq)} = kv.substr(eq + 1);
+                }
+            }
+            if (!params) {
+                throw "UNREACHABLE";
+            }
+        };
+        exit(r.run());
+    }
+}

@@ -444,6 +444,26 @@ public class HttpAsyncSocketIoController {
         }
     }
 
+    #! Signals all persistent queues whose keys start with the given prefix
+    /** HTTP/3 uses one shared UDP listener socket and one poll operation for
+        multiple QUIC sessions.  The controller connection key is therefore
+        listener-scoped, while persistent handler queues remain session-scoped
+        (\c listener:quic:session).  When the shared H3 operation closes, every
+        persistent queue under that listener has to be released.
+
+        @param prefix the persistent queue key prefix to match
+    */
+    private signalPersistentQueuesForPrefix(string prefix) {
+        persistent_queue_mutex.lock();
+        on_exit persistent_queue_mutex.unlock();
+        foreach string key in (keys persistent_queues) {
+            if (key.startsWith(prefix)) {
+                log(LoggerLevel::DEBUG, "signalling persistent queue for closed connection: %y", key);
+                persistent_queues{key}.queue.push({"type": "close"});
+            }
+        }
+    }
+
     #! Adds an HTTP listener to be managed
     /** @param listener the listener socket
         @param target the target to receive HTTP events
@@ -1163,11 +1183,15 @@ public class HttpAsyncSocketIoController {
         # their own cinfo copy (Qore hashes are value types), so the shared
         # entry only needs to reflect the h3op's current poll state.
         string base_uh = listener.uniqueHash();
-        # Include session_id in the key so that each QUIC session (client
-        # connection) gets its own persistent queue.  The UDP listener socket
-        # is shared by all sessions; without the session_id, one client could
-        # steal another's persistent queue or tear it down on disconnect.
-        string uh = sprintf("%s:quic:%d", base_uh, session_id);
+        # The HTTP/3 poll operation is listener-scoped: one shared UDP socket
+        # processes packets for all QUIC sessions.  Keep the controller key
+        # stable per listener so a later session cannot remove or replace the
+        # poll operation for an earlier long-lived stream such as SSE.
+        string uh = sprintf("%s:quic", base_uh);
+        # Persistent handler queues are still session-scoped so requests from
+        # one QUIC client session cannot be routed to another session's
+        # dedicated handler thread.
+        string persistent_uh = sprintf("%s:%d", uh, session_id);
         # NOTE: cx here is intentionally minimal (just "peer" and "socket").
         # The onHttpRequest handler rebuilds the full context — including
         # "peer-info", "id", "ssl", "listener-id", etc. — via
@@ -1322,11 +1346,11 @@ public class HttpAsyncSocketIoController {
 
         # Check for persistent queue — if a dedicated thread is waiting for this
         # connection, route the request to it instead of the pool
-        *Queue pq = getPersistentQueue(uh, hdr);
+        *Queue pq = getPersistentQueue(persistent_uh, hdr);
         if (pq) {
             log(LoggerLevel::DEBUG, "HTTP/3 request routed to persistent queue: %y "
                 "session=%d stream=%d %s %s",
-                uh, session_id, stream_id, request.method, request.path);
+                persistent_uh, session_id, stream_id, request.method, request.path);
             # Build resume callback for body_streaming
             *code resume_reading;
             if (body_streaming) {
@@ -2095,6 +2119,7 @@ public class HttpAsyncSocketIoController {
                     # Notify stream listeners (e.g., WebSocketStreamProcessor) so
                     # handler threads blocked in stream_done.waitForZero() wake up
                     h3op.notifyStreamListenersClosed();
+                    signalPersistentQueuesForPrefix(uh + ":");
                     {
                         AutoWriteLock al(m);
                         remove connections{uh};

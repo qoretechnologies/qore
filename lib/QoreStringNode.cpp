@@ -51,60 +51,59 @@ QoreStringNodeMaker::QoreStringNodeMaker(const char* fmt, ...) {
 }
 
 QoreStringNode::QoreStringNode() : SimpleValueQoreNode(NT_STRING) {
-    //sset.add(this);
+    qore_string_private::get(*this)->owning_node = this;
 }
 
 QoreStringNode::~QoreStringNode() {
-    //sset.del(this);
 }
 
 QoreStringNode::QoreStringNode(const char* str, const QoreEncoding* enc) : SimpleValueQoreNode(NT_STRING),
         QoreString(str, enc) {
-    //sset.add(this);
+    qore_string_private::get(*this)->owning_node = this;
 }
 
 // copies str
 QoreStringNode::QoreStringNode(const QoreString &str) : SimpleValueQoreNode(NT_STRING), QoreString(str) {
-    //sset.add(this);
+    qore_string_private::get(*this)->owning_node = this;
 }
 
 // copies str
 QoreStringNode::QoreStringNode(const QoreStringNode &str) : SimpleValueQoreNode(NT_STRING), QoreString(str) {
-    //sset.add(this);
+    qore_string_private::get(*this)->owning_node = this;
 }
 
 // copies str
 QoreStringNode::QoreStringNode(const std::string &str, const QoreEncoding* enc) : SimpleValueQoreNode(NT_STRING),
         QoreString(str, enc) {
-    //sset.add(this);
+    qore_string_private::get(*this)->owning_node = this;
 }
 
 QoreStringNode::QoreStringNode(char c) : SimpleValueQoreNode(NT_STRING), QoreString(c) {
-    //sset.add(this);
+    qore_string_private::get(*this)->owning_node = this;
 }
 
 QoreStringNode::QoreStringNode(const BinaryNode* b) : SimpleValueQoreNode(NT_STRING), QoreString(b) {
-    //sset.add(this);
+    qore_string_private::get(*this)->owning_node = this;
 }
 
 QoreStringNode::QoreStringNode(const BinaryNode* b, size_t maxlinelen) : SimpleValueQoreNode(NT_STRING),
         QoreString(b, maxlinelen) {
-    //sset.add(this);
+    qore_string_private::get(*this)->owning_node = this;
 }
 
 QoreStringNode::QoreStringNode(struct qore_string_private *p) : SimpleValueQoreNode(NT_STRING), QoreString() {
     qore_string_private::adopt(*this, p);
-    //sset.add(this);
+    qore_string_private::get(*this)->owning_node = this;
 }
 
 QoreStringNode::QoreStringNode(char* nbuf, size_t nlen, size_t nallocated, const QoreEncoding* enc)
         : SimpleValueQoreNode(NT_STRING), QoreString(nbuf, nlen, nallocated, enc) {
-    //sset.add(this);
+    qore_string_private::get(*this)->owning_node = this;
 }
 
 QoreStringNode::QoreStringNode(const char* str, size_t len, const QoreEncoding* new_qore_encoding)
         : SimpleValueQoreNode(NT_STRING), QoreString(str, len, new_qore_encoding) {
-    //sset.add(this);
+    qore_string_private::get(*this)->owning_node = this;
 }
 
 // virtual function
@@ -148,7 +147,7 @@ bool QoreStringNode::getAsBoolImpl() const {
     if (runtime_check_parse_option(PO_STRICT_BOOLEAN_EVAL)) {
         return q_strtod(c_str());
     }
-    if (priv->len == 1 && priv->buf[0] == '0') {
+    if (priv->len == 1 && priv->effective_buf()[0] == '0') {
         return false;
     }
     return !empty();
@@ -173,7 +172,7 @@ QoreStringNode* QoreStringNode::convertEncoding(const QoreEncoding* nccs, Except
 
     QoreStringNode* targ = new QoreStringNode(nccs);
 
-    if (qore_string_private::convert_encoding_intern(priv->buf, priv->len, priv->encoding, *targ, nccs, xsink)) {
+    if (qore_string_private::convert_encoding_intern(priv->effective_buf(), priv->len, priv->encoding, *targ, nccs, xsink)) {
         targ->deref();
         return 0;
     }
@@ -183,6 +182,7 @@ QoreStringNode* QoreStringNode::convertEncoding(const QoreEncoding* nccs, Except
 // DLLLOCAL constructor
 QoreStringNode::QoreStringNode(const char* str, const QoreEncoding* from, const QoreEncoding* to,
         ExceptionSink* xsink) : SimpleValueQoreNode(NT_STRING), QoreString(to) {
+    qore_string_private::get(*this)->owning_node = this;
     qore_string_private::convert_encoding_intern(str, ::strlen(str), from, *this, to, xsink);
 }
 
@@ -193,6 +193,34 @@ QoreStringNode* QoreStringNode::createAndConvertEncoding(const char* str, const 
     return *xsink ? nullptr : rv.release();
 }
 
+// static function
+QoreStringNode* QoreStringNode::makeView(QoreStringNode* parent, size_t byte_offset, size_t byte_len) {
+    assert(parent);
+    qore_string_private* pp = qore_string_private::get(parent);
+    assert(byte_offset <= pp->len);
+    assert(byte_offset + byte_len <= pp->len);
+
+    // Collapse view-of-view: never chain. If parent is itself a view, hop once.
+    QoreStringNode* actual_parent = parent;
+    size_t actual_offset = byte_offset;
+    if (pp->view_parent) {
+        actual_parent = pp->view_parent;
+        actual_offset += pp->view_offset;
+    }
+
+    // Build the view in a fresh qore_string_private with no owned buffer, then
+    // adopt it into a QoreStringNode via the adopt ctor. The default QoreString
+    // ctor does not allocate a buffer, so there is nothing to free.
+    qore_string_private* vp = new qore_string_private;
+    vp->len = byte_len;
+    vp->encoding = actual_parent->getEncoding();
+    vp->view_parent = actual_parent;
+    vp->view_offset = actual_offset;
+
+    actual_parent->ref();
+    return new QoreStringNode(vp);
+}
+
 AbstractQoreNode* QoreStringNode::realCopy() const {
     return copy();
 }
@@ -201,30 +229,44 @@ QoreStringNode* QoreStringNode::copy() const {
     return new QoreStringNode(*this);
 }
 
+// Below this slice size, substr() copies the bytes outright instead of
+// returning a zero-copy view.  Rationale: at the measured crossover (see
+// bench/cases/bench_view_clear.qr) the malloc + memcpy that the view would
+// avoid is dominated by Qore VM dispatch (~1.8 µs), so the view delivers
+// no observable speedup below ~4 KB.  Above ~16 KB the saved memcpy
+// scales linearly and the view reaches double-digit speedups.  Forcing a
+// view for sub-threshold slices has two real downsides: (1) every view
+// pins its parent for the lifetime of the view, so a small substring
+// stashed in a long-lived hash key or cache record can keep a multi-MB
+// parent alive invisibly; (2) any later mutation on the view triggers
+// materialize() which copies the bytes anyway — net loss vs. copying up
+// front.  4096 was chosen for measurable break-even and one-page alignment.
+constexpr size_t QORE_VIEW_SUBSTR_THRESHOLD = 4096;
+
 QoreStringNode* QoreStringNode::substr(qore_offset_t offset, ExceptionSink* xsink) const {
-    SimpleRefHolder<QoreStringNode> str(new QoreStringNode(priv->encoding));
-
-    int rc;
-    if (!getEncoding()->isMultiByte()) {
-        rc = priv->substr_simple(*str, offset);
-    } else {
-        rc = priv->substr_complex(*str, offset, xsink);
+    size_t byte_offset, byte_len;
+    if (priv->compute_substr_range(offset, byte_offset, byte_len, xsink)) {
+        return nullptr;
     }
-
-    return rc ? nullptr : str.release();
+    if (byte_len < QORE_VIEW_SUBSTR_THRESHOLD) {
+        QoreStringNode* ns = new QoreStringNode(priv->getEncoding());
+        ns->concat(priv->effective_buf() + byte_offset, byte_len);
+        return ns;
+    }
+    return makeView(const_cast<QoreStringNode*>(this), byte_offset, byte_len);
 }
 
 QoreStringNode* QoreStringNode::substr(qore_offset_t offset, qore_offset_t length, ExceptionSink* xsink) const {
-    SimpleRefHolder<QoreStringNode> str(new QoreStringNode(priv->encoding));
-
-    int rc;
-    if (!getEncoding()->isMultiByte()) {
-        rc = priv->substr_simple(*str, offset, length);
-    } else {
-        rc = priv->substr_complex(*str, offset, length, xsink);
+    size_t byte_offset, byte_len;
+    if (priv->compute_substr_range(offset, length, byte_offset, byte_len, xsink)) {
+        return nullptr;
     }
-
-    return rc ? nullptr : str.release();
+    if (byte_len < QORE_VIEW_SUBSTR_THRESHOLD) {
+        QoreStringNode* ns = new QoreStringNode(priv->getEncoding());
+        ns->concat(priv->effective_buf() + byte_offset, byte_len);
+        return ns;
+    }
+    return makeView(const_cast<QoreStringNode*>(this), byte_offset, byte_len);
 }
 
 QoreStringNode* QoreStringNode::reverse() const {
@@ -245,7 +287,7 @@ QoreStringNode* QoreStringNode::regexSubst(QoreString& match, QoreString& subst,
 }
 
 QoreStringNode* QoreStringNode::parseBase64ToString(const QoreEncoding* qe, ExceptionSink* xsink) const {
-    SimpleRefHolder<BinaryNode> b(::parseBase64(priv->buf, priv->len, xsink));
+    SimpleRefHolder<BinaryNode> b(::parseBase64(priv->effective_buf(), priv->len, xsink));
     return binary_to_string<QoreStringNode>(b.release(), qe);
 }
 
@@ -254,7 +296,7 @@ QoreStringNode* QoreStringNode::parseBase64ToString(ExceptionSink* xsink) const 
 }
 
 QoreStringNode* QoreStringNode::parseBase64UrlToString(const QoreEncoding* qe, ExceptionSink* xsink) const {
-    SimpleRefHolder<BinaryNode> b(::parseBase64Url(priv->buf, priv->len, xsink));
+    SimpleRefHolder<BinaryNode> b(::parseBase64Url(priv->effective_buf(), priv->len, xsink));
     return binary_to_string<QoreStringNode>(b.release(), qe);
 }
 

@@ -1039,6 +1039,32 @@ int64_t Http2ClientPollOperationPriv::submitRequest(const char* method, const ch
 
     AutoLocker al(stream_lock);
 
+    // Re-check state under stream_lock — see Http1ClientPollOperationPriv
+    // ::submitRequest for the full race description.  In short: setError()
+    // releases stream_lock between writing error_info and storing CLOSED,
+    // so the lock-free state check at the top of this function can see the
+    // OK state, then proceed past the build phase and arrive here only
+    // after the I/O thread has already drained stream_actions via
+    // notifyPendingStreams.  The future would never resolve.  Surface the
+    // closure error eagerly instead.
+    if (h2_state.load(std::memory_order_acquire) == H2State::CLOSED) {
+        const char* err_str = "HTTP2-CONNECTION-CLOSED";
+        const char* desc_str = "connection closed before request could be submitted";
+        if (error_info) {
+            QoreValue ev = error_info->getKeyValue("err");
+            QoreValue dv = error_info->getKeyValue("desc");
+            if (ev.getType() == NT_STRING) {
+                err_str = ev.get<const QoreStringNode>()->c_str();
+            }
+            if (dv.getType() == NT_STRING) {
+                desc_str = dv.get<const QoreStringNode>()->c_str();
+            }
+        }
+        action->deref(xsink);
+        xsink->raiseException(err_str, "%s", desc_str);
+        return -1;
+    }
+
     // Capacity check
     if (max_streams && active_stream_count >= max_streams) {
         action->deref(xsink);
@@ -1581,7 +1607,7 @@ int Http2ClientPollOperationBase::submitRequestSse(string method, string path,
         notifier_ptr->deref(xsink);  // SseAction refs the notifier itself
     }
     return (int)priv->submitRequest(method->c_str(), path->c_str(), headers,
-        body_ptr, body_len, true, action, (int)max_streams, xsink);
+        body_ptr, body_len, false, action, (int)max_streams, xsink);
 }
 
 //! Cancel a stream

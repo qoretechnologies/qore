@@ -4547,27 +4547,6 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                     + ")";
             },
         },
-        OP_LIKE: {
-            "exp": <DataProviderExpressionInfo>{
-                "type": DET_Operator,
-                "name": "like",
-                "display_name": "like",
-                "short_desc": "The value to bind as the 'like' value (ex: '%some string%')",
-                "desc": "The value to bind as the 'like' value (ex: '%some string%')",
-                "symbol": "like",
-                "groups": "Comparison",
-                "args": (
-                    DataProviderSignatureStringType,
-                    DataProviderSignatureStringValueType,
-                ),
-                "return_type": AbstractDataProviderTypeMap."bool",
-            },
-            "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
-                return sprintf("%s like %s",
-                    info.table.getExpressionArg(\info, role, args[0], AbstractDataProviderTypeMap."string"),
-                    info.table.getExpressionArg(\info, role, args[1], AbstractDataProviderTypeMap."string"));
-            },
-        },
         OP_LT: {
             "exp": AbstractDataProvider::GenericExpressions{DP_SEARCH_OP_LT},
             "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
@@ -5038,26 +5017,6 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 string exp1 = info.table.getExpressionArg(\info, role, args[1], AbstractDataProviderTypeMap."any");
                 return sprintf("%s * %s", exp0, exp1);
             },
-        },
-        COP_COALESCE: {
-            "exp": <DataProviderExpressionInfo>{
-                "type": DET_Operator,
-                "name": COP_COALESCE,
-                "display_name": COP_COALESCE,
-                "short_desc": "Returns the value of the first expression with a value",
-                "desc": "Returns the value of the first expression with a value",
-                "symbol": COP_COALESCE,
-                "groups": "Data Manipulation",
-                "args": (
-                    DataProviderSignatureAnyType,
-                ),
-                "varargs": True,
-                "return_type": AbstractDataProviderTypeMap."any",
-            },
-            "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
-                return sprintf("coalesce(%s)", (foldl $1 + "," + $2,
-                    (map info.table.getExpressionArg(\info, role, $1, AbstractDataProviderTypeMap."any"), args)));
-            }
         },
         COP_LENGTH: {
             "exp": <DataProviderExpressionInfo>{

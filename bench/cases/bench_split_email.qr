@@ -1,0 +1,71 @@
+#!/usr/bin/env qr
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%exec-class BenchSplitEmail
+
+%requires ../lib/BenchRunner.qm
+
+%strict-args
+%require-types
+%enable-all-warnings
+
+# Benchmark: RFC 5322 header parsing over a synthetic 1 MB message.
+# Exercises `split("\r\n")` + per-line `split(":", 2)` — representative of
+# Pop3Client / Mime header-folding parsing.
+
+class BenchSplitEmail {
+    constructor() {
+        Bench::BenchRunner r("split_email");
+        r.iterations = 20;
+        r.warmup = 3;
+        string data;
+        r.setup = sub () {
+            list<string> headers = (
+                "From: sender@example.com",
+                "To: recipient@example.com",
+                "Subject: Benchmark message",
+                "Date: Fri, 24 Apr 2026 16:34:00 +0200",
+                "Message-ID: <abc.123@example.com>",
+                "MIME-Version: 1.0",
+                "Content-Type: text/plain; charset=utf-8",
+                "Content-Transfer-Encoding: 7bit",
+                "X-Seq: 0",
+            );
+            list<string> msgs = ();
+            int target = 1024 * 1024;
+            int size = 0;
+            int seed = 1;
+            while (size < target) {
+                seed = (seed * 1103515245 + 12345) % 0x7fffffff;
+                list<string> hdrs = ();
+                foreach string h in (headers) {
+                    if (h =~ /^X-Seq:/) {
+                        hdrs += sprintf("X-Seq: %d", seed);
+                    } else {
+                        hdrs += h;
+                    }
+                }
+                hdrs += "";    # blank line before body
+                hdrs += sprintf("Body of message %d: lorem ipsum dolor sit amet.", seed);
+                msgs += hdrs.join("\r\n");
+                size += msgs[msgs.size() - 1].size() + 4;
+            }
+            data = msgs.join("\r\n\r\n");
+            r.bytes_processed = data.size();
+        };
+        r.measure = sub () {
+            hash<auto> counts = {};
+            foreach string line in (data.split("\r\n")) {
+                int colon = line.find(":");
+                if (colon > 0) {
+                    string name = line.substr(0, colon);
+                    counts{name} = (counts{name} ?? 0) + 1;
+                }
+            }
+            if (!counts) {
+                throw "UNREACHABLE";
+            }
+        };
+        exit(r.run());
+    }
+}

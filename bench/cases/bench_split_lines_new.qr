@@ -1,0 +1,53 @@
+#!/usr/bin/env qr
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%exec-class BenchSplitLinesNew
+
+%requires ../lib/BenchRunner.qm
+
+%strict-args
+%require-types
+%enable-all-warnings
+
+# Benchmark: same 10 MB grep-style log scan as bench_split_lines.qr, but
+# uses the new zero-copy `<string>::splitString()` iterator instead of the
+# eager `split()` call.  Expected: faster + lower RSS; compare to
+# bench_split_lines baseline.
+
+class BenchSplitLinesNew {
+    constructor() {
+        Bench::BenchRunner r("split_lines_new");
+        r.iterations = 10;
+        r.warmup = 2;
+        string data;
+        r.setup = sub () {
+            list<string> levels = ("INFO", "DEBUG", "WARN", "ERROR", "INFO", "INFO");
+            list<string> parts = ();
+            int target = 10 * 1024 * 1024;
+            int size = 0;
+            int seed = 1;
+            while (size < target) {
+                seed = (seed * 1103515245 + 12345) % 0x7fffffff;
+                int lvl = seed % 6;
+                string line = sprintf("2026-04-24T16:34:%02d.%03d [%s] tid=%d msg=request handled id=%d path=/api/v1/resource",
+                                      seed % 60, seed % 1000, levels[lvl], seed % 64, seed);
+                parts += line;
+                size += line.size() + 1;
+            }
+            data = parts.join("\n");
+            r.bytes_processed = data.size();
+        };
+        r.measure = sub () {
+            int errors = 0;
+            foreach string line in (data.splitString("\n")) {
+                if (line =~ /ERROR/) {
+                    errors++;
+                }
+            }
+            if (errors < 0) {
+                throw "UNREACHABLE";
+            }
+        };
+        exit(r.run());
+    }
+}
