@@ -4689,6 +4689,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 builder->CreateCall(decref_fn, {old_val, xsink_arg});
             };
             auto clear_consumed_operand_cleanup = [&](uint32_t value_id) {
+                auto uses_it = operand_remaining_uses.find(value_id);
+                if (uses_it != operand_remaining_uses.end() && uses_it->second > 1) {
+                    return;
+                }
                 auto alloca_it = invoke_alloca_map.find(value_id);
                 if (alloca_it == invoke_alloca_map.end()) {
                     return;
@@ -9200,6 +9204,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 builder->CreateCall(decref_fn, {old_val, xsink_arg});
             };
             auto clear_consumed_operand_cleanup = [&](uint32_t value_id) {
+                auto uses_it = operand_remaining_uses.find(value_id);
+                if (uses_it != operand_remaining_uses.end() && uses_it->second > 1) {
+                    return;
+                }
                 auto alloca_it = invoke_alloca_map.find(value_id);
                 if (alloca_it == invoke_alloca_map.end()) {
                     return;
@@ -9314,6 +9322,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 builder->CreateCall(decref_fn, {old_val, xsink_arg});
             };
             auto clear_consumed_operand_cleanup = [&](uint32_t value_id) {
+                auto uses_it = operand_remaining_uses.find(value_id);
+                if (uses_it != operand_remaining_uses.end() && uses_it->second > 1) {
+                    return;
+                }
                 auto alloca_it = invoke_alloca_map.find(value_id);
                 if (alloca_it == invoke_alloca_map.end()) {
                     return;

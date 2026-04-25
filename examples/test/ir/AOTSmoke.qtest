@@ -37,6 +37,8 @@ class AOTSmokeTest inherits QUnit::Test {
             \testWeakCallArgumentReleasesRhs());
         addTestCase("AOT static method remove argument releases RHS",
             \testStaticMethodRemoveArgumentReleasesRhs());
+        addTestCase("AOT typed local initializer condition keeps RHS",
+            \testTypedLocalInitializerConditionKeepsRhs());
         addTestCase("AOT weak branch condition releases temp",
             \testWeakBranchConditionReleasesTemp());
         addTestCase("AOT weak dot-eval invoke releases base",
@@ -614,6 +616,27 @@ printf(\"after=%d\\n\", destroyed);
             + result.compile_out);
         assertEq("inside=1\nafter=1\n", result.run_out,
             "AOT static method call must consume removed argument cleanup before method body");
+    }
+
+    testTypedLocalInitializerConditionKeepsRhs() {
+        string code = "%modern
+
+hashdecl Info {
+    string name;
+}
+
+hash<auto> pending = {\"app\": <Info>{\"name\": \"demo\"}};
+if (*hash<auto> h = remove pending{\"app\"}) {
+    printf(\"name=%s remaining=%d\\n\", h.name, pending.size());
+} else {
+    printf(\"miss\\n\");
+}
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled, "typed local initializer regression fully precompiled: "
+            + result.compile_out);
+        assertEq("name=demo remaining=0\n", result.run_out,
+            "AOT StoreLocal must keep a reused RHS value alive for the following condition");
     }
 
     testWeakBranchConditionReleasesTemp() {
