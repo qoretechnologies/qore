@@ -810,7 +810,9 @@ static void removeCleanupEntry(std::vector<uint32_t>& cleanup, uint32_t id) {
     }
 }
 
-// Sets a value slot without discarding the previous value (for simple assignments like Const)
+// Sets a value slot without discarding the previous value. Only use this for
+// scalar or borrowed values; owned node values in loop-reexecuted slots must
+// use setValueSlot() so the previous iteration's value is released.
 static inline void setValueSlotDirect(IRValueSlots& values, uint32_t id, QoreValue new_val) {
     // values array is pre-sized via arena push; assert in-bounds
     assert(id < values.size());
@@ -827,6 +829,14 @@ static inline void setValueSlot(IRValueSlots& values,
     assert(id < values.size());
     values[id].discard(xsink);
     values[id] = new_val;
+}
+
+static inline void setOwnedValueSlot(IRValueSlots& values, std::vector<uint32_t>& cleanup,
+        uint32_t id, QoreValue new_val, ExceptionSink* xsink) {
+    setValueSlot(values, id, new_val, xsink);
+    if (new_val.hasNode()) {
+        cleanup.push_back(id);
+    }
 }
 
 static void cleanupValues(IRValueSlots& values, std::vector<uint32_t>& cleanup,
@@ -2767,10 +2777,7 @@ next_instruction:
                 // Large ints (outside 48-bit inline range) are boxed as QoreBigIntNode
                 // via setLargeInt() — those allocations must be tracked in cleanup.
                 QoreValue v(cinst->constant.int_value);
-                setValueSlotDirect(values, cinst->result.id, v);
-                if (v.hasNode()) {
-                    cleanup.push_back(cinst->result.id);
-                }
+                setOwnedValueSlot(values, cleanup, cinst->result.id, v, xsink);
                 ++ip;
                 break;
             }
@@ -2779,10 +2786,7 @@ next_instruction:
                 // Problematic doubles (negative NaN, etc.) are boxed as QoreBigFloatNode
                 // via setLargeFloat() — those allocations must be tracked in cleanup.
                 QoreValue v(cinst->constant.float_value);
-                setValueSlotDirect(values, cinst->result.id, v);
-                if (v.hasNode()) {
-                    cleanup.push_back(cinst->result.id);
-                }
+                setOwnedValueSlot(values, cleanup, cinst->result.id, v, xsink);
                 ++ip;
                 break;
             }
@@ -2807,8 +2811,7 @@ next_instruction:
             case QoreIROpcode::ConstString: {
                 auto* cinst = static_cast<QoreIRConstInstruction*>(inst);
                 QoreStringNode* str = new QoreStringNode(cinst->constant.string_value);
-                setValueSlotDirect(values, cinst->result.id, QoreValue(str));
-                cleanup.push_back(cinst->result.id);
+                setOwnedValueSlot(values, cleanup, cinst->result.id, QoreValue(str), xsink);
                 ++ip;
                 break;
             }
@@ -2835,8 +2838,7 @@ next_instruction:
                         ? cinst->constant.date_zone : currentTZ();
                     dt = DateTimeNode::makeAbsolute(zone, epoch_seconds, us);
                 }
-                setValueSlotDirect(values, cinst->result.id, QoreValue(dt));
-                cleanup.push_back(cinst->result.id);
+                setOwnedValueSlot(values, cleanup, cinst->result.id, QoreValue(dt), xsink);
                 ++ip;
                 break;
             }
@@ -2878,8 +2880,7 @@ next_instruction:
                     qore_list_private::get(*list)->complexTypeInfo = qore_get_complex_list_type(vtype);
                 }
                 QoreListNode* raw_list = list.release();
-                setValueSlotDirect(values, inst->result.id, QoreValue(raw_list));
-                cleanup.push_back(inst->result.id);
+                setOwnedValueSlot(values, cleanup, inst->result.id, QoreValue(raw_list), xsink);
                 ++ip;
                 break;
             }
@@ -2923,8 +2924,7 @@ next_instruction:
                     }
                     qore_hash_private::get(*hash)->complexTypeInfo = qore_get_complex_hash_type(vtype);
                 }
-                setValueSlotDirect(values, inst->result.id, QoreValue(hash.release()));
-                cleanup.push_back(inst->result.id);
+                setOwnedValueSlot(values, cleanup, inst->result.id, QoreValue(hash.release()), xsink);
                 ++ip;
                 break;
             }
@@ -2963,8 +2963,7 @@ next_instruction:
                     }
                     hp->complexTypeInfo = qore_get_complex_hash_type(vtype);
                 }
-                setValueSlotDirect(values, inst->result.id, QoreValue(hash.release()));
-                cleanup.push_back(inst->result.id);
+                setOwnedValueSlot(values, cleanup, inst->result.id, QoreValue(hash.release()), xsink);
                 ++ip;
                 break;
             }
@@ -2972,8 +2971,7 @@ next_instruction:
                 // element_type is the element type (e.g., bool); QoreListNode wraps it to list<bool>
                 const QoreTypeInfo* elem_type = inst->element_type ? inst->element_type : autoTypeInfo;
                 QoreListNode* list = new QoreListNode(elem_type);
-                setValueSlotDirect(values, inst->result.id, QoreValue(list));
-                cleanup.push_back(inst->result.id);
+                setOwnedValueSlot(values, cleanup, inst->result.id, QoreValue(list), xsink);
                 ++ip;
                 break;
             }
@@ -3038,8 +3036,7 @@ next_instruction:
                 if (capacity > 0) {
                     qore_list_private::get(*list)->reserve(static_cast<size_t>(capacity));
                 }
-                setValueSlotDirect(values, inst->result.id, QoreValue(list));
-                cleanup.push_back(inst->result.id);
+                setOwnedValueSlot(values, cleanup, inst->result.id, QoreValue(list), xsink);
                 ++ip;
                 break;
             }
@@ -3226,8 +3223,8 @@ next_instruction:
             case QoreIROpcode::StringConcat: {
                 // Multi-string concatenation - a + b + c + d in single pass
                 if (inst->operands.empty()) {
-                    setValueSlotDirect(values, inst->result.id, QoreValue(new QoreStringNode()));
-                    cleanup.push_back(inst->result.id);
+                    setOwnedValueSlot(values, cleanup, inst->result.id,
+                        QoreValue(new QoreStringNode()), xsink);
                     ++ip;
                     break;
                 }
@@ -3253,8 +3250,7 @@ next_instruction:
                     }
                     // NOTHING values are skipped (treated as empty string)
                 }
-                setValueSlotDirect(values, inst->result.id, QoreValue(result));
-                cleanup.push_back(inst->result.id);
+                setOwnedValueSlot(values, cleanup, inst->result.id, QoreValue(result), xsink);
                 ++ip;
                 break;
             }
