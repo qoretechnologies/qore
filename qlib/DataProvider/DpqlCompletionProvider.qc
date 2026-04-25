@@ -1608,25 +1608,32 @@ public class DpqlCompletionProvider {
             return NOTHING;
         }
 
-        # Normalize to UTF-8; private scan path is byte-indexed.  No-op if
-        # already UTF-8.
+        # Normalize to UTF-8; the byte-indexed scan below relies on stable
+        # byte offsets that only line up under a single encoding.
         if (text.encoding() != "UTF-8") {
             text = convert_encoding(text, "UTF-8");
         }
 
-        # Get the text up to the cursor
-        string prefix = position >= text.length() ? text : text.substr(0, position);
+        # Translate the caller's character-offset cursor to a byte offset so
+        # the byte-indexed scan stays aligned even when multi-byte UTF-8
+        # sequences appear before the cursor.  All structural tokens we
+        # search for (parens, comma, identifier chars, hyphen) are pure ASCII,
+        # so a byte-only scan is correct: every UTF-8 continuation byte has
+        # bit 0x80 set and cannot match any of those literals.
+        int prefix_byte_len = position >= text.length()
+            ? text.size()
+            : text.substr(0, position).size();
 
-        # Scan backwards from cursor to find the enclosing function call
+        # Scan backwards from the cursor to find the enclosing function call
         int depth = 0;
         int comma_count = 0;
         int paren_pos = -1;
 
-        for (int i = prefix.length() - 1; i >= 0; --i) {
-            string c = chr(prefix.getByte(i));
-            if (c == ")") {
+        for (int i = prefix_byte_len - 1; i >= 0; --i) {
+            int b = text.getByte(i);
+            if (b == 41) {              # ')'
                 ++depth;
-            } else if (c == "(") {
+            } else if (b == 40) {       # '('
                 if (depth > 0) {
                     --depth;
                 } else {
@@ -1634,7 +1641,7 @@ public class DpqlCompletionProvider {
                     paren_pos = i;
                     break;
                 }
-            } else if (c == "," && depth == 0) {
+            } else if (b == 44 && depth == 0) {     # ','
                 ++comma_count;
             }
         }
@@ -1643,23 +1650,29 @@ public class DpqlCompletionProvider {
             return NOTHING;
         }
 
-        # Extract function name: scan backwards from paren_pos to find identifier
+        # Extract function name: scan backwards from paren_pos to find identifier.
+        # Indices below are byte offsets into `text`.
         int name_end = paren_pos;
         int name_start = paren_pos - 1;
-        # Skip whitespace before the paren
-        while (name_start >= 0 && chr(prefix.getByte(name_start)) =~ /\s/) {
+        # Skip whitespace before the paren (whitespace is ASCII)
+        while (name_start >= 0 && chr(text.getByte(name_start)) =~ /\s/) {
             --name_start;
         }
         if (name_start < 0) {
             return NOTHING;
         }
-        # Scan the identifier (supports hyphenated names like "custom-func")
+        # Scan the identifier (supports hyphenated names like "custom-func").
+        # Identifier and hyphen-allowed bytes are all ASCII, so the byte-level
+        # scan correctly skips over any preceding multi-byte UTF-8 sequences
+        # (continuation bytes don't match any of the patterns and end the scan).
         int id_end = name_start + 1;
         while (name_start >= 0) {
-            string sc = chr(prefix.getByte(name_start));
+            int b = text.getByte(name_start);
+            string sc = chr(b);
             if (sc =~ /[a-zA-Z0-9_]/) {
                 --name_start;
-            } else if (sc == "-" && name_start + 1 < id_end && chr(prefix.getByte(name_start + 1)) =~ /[a-zA-Z]/) {
+            } else if (sc == "-" && name_start + 1 < id_end
+                    && chr(text.getByte(name_start + 1)) =~ /[a-zA-Z]/) {
                 # hyphenated identifier: '-' followed by a letter (looking right)
                 --name_start;
             } else {
@@ -1671,7 +1684,11 @@ public class DpqlCompletionProvider {
             return NOTHING;
         }
 
-        string func_name = prefix.substr(name_start, id_end - name_start);
+        # The identifier bytes [name_start, id_end) are guaranteed pure ASCII
+        # by the loop above, so a byte-slice → string conversion is safe.
+        # text.substr() is character-indexed and would mis-cut on multi-byte
+        # input; go through the binary representation instead.
+        string func_name = text.toBinary().substr(name_start, id_end - name_start).toString("UTF-8");
 
         # Resolve symbol to expression name, then look up in expressions
         *string resolved_name;

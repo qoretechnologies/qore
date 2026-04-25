@@ -118,8 +118,11 @@ bool StringSplitIterator::next(ExceptionSink* xsink) {
     }
     const char* hit = nullptr;
     if (cursor < src_len) {
+        // q_memmem() is libqore's portable wrapper around memmem(3); it falls
+        // back to a hand-rolled scan on platforms where HAVE_MEMMEM is unset.
+        // Calling memmem() directly here would break those builds.
         hit = static_cast<const char*>(
-            memmem(src_buf + cursor, src_len - cursor, sep.data(), sep.size()));
+            q_memmem(src_buf + cursor, src_len - cursor, sep.data(), sep.size()));
     }
     if (hit) {
         piece_off = cursor;
