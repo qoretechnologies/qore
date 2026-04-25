@@ -4,6 +4,8 @@
 %modern
 
 %requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/FsUtil.qm
 
 # Allow child Program objects to have more liberal permissions than the parent.
 %no-child-restrictions
@@ -96,6 +98,26 @@ public class ListTest inherits QUnit::Test {
     }
 
     lineIterFastPathTest() {
+        # InputStreamLineIterator
+        {
+            StringInputStream sis("alpha\nbeta\ngamma\n");
+            InputStreamLineIterator isli(sis, "UTF-8");
+            list<string> got = ();
+            foreach string line in (isli) { got += line; }
+            assertEq(("alpha", "beta", "gamma"), got);
+        }
+
+        # FileLineIterator
+        {
+            FsUtil::TmpFile tmp("qore_iterfp", ".txt");
+            tmp.file.printf("one\ntwo\nthree\n");
+            tmp.file.close();
+            FileLineIterator fli(tmp.path);
+            list<string> got = ();
+            foreach string line in (fli) { got += line; }
+            assertEq(("one", "two", "three"), got);
+        }
+
         # DataLineIterator: in-memory, fast path via nativeNext(xsink)/nativeGetValue.
         string data = "alpha\nbeta\ngamma\n";
 
