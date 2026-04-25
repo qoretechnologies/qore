@@ -586,6 +586,10 @@ static uint64_t resolveCastExprSlot(AOTExprKind kind, const char* ref1, bool or_
 
     switch (kind) {
         case AOTExprKind::CAST_HASHDECL: {
+            if (!strcmp(ref1, "hash")) {
+                auto* node = new QoreHashDeclCastOperatorNode(&loc_builtin, nullptr, QoreValue(), or_nothing);
+                return toBitsNB(QoreValue(node));
+            }
             const qore_ns_private* found_ns = nullptr;
             const TypedHashDecl* hd = qore_root_ns_private::runtimeFindHashDecl(
                 *pp->RootNS, ref1, found_ns);
@@ -611,6 +615,10 @@ static uint64_t resolveCastExprSlot(AOTExprKind kind, const char* ref1, bool or_
             return toBitsNB(QoreValue(node));
         }
         case AOTExprKind::CAST_COMPLEX_LIST: {
+            if (!strcmp(ref1, "list")) {
+                auto* node = new QoreComplexListCastOperatorNode(&loc_builtin, nullptr, QoreValue(), or_nothing);
+                return toBitsNB(QoreValue(node));
+            }
             std::string type_error;
             QoreAOTTypeResolver type_resolver(pgm);
             const QoreTypeInfo* ti = type_resolver.resolve(ref1, type_error);
@@ -1675,6 +1683,11 @@ static QoreAOTContext* buildContextFromSlotMap(
                             break;
                         }
                         case AOTExprKind::CAST_HASHDECL: {
+                            if (!strcmp(ref1, "hash")) {
+                                cast_node = new QoreHashDeclCastOperatorNode(
+                                    &loc_builtin, nullptr, QoreValue(), or_nothing != 0);
+                                break;
+                            }
                             const TypedHashDecl* hd = ti
                                 ? QoreTypeInfo::getUniqueReturnHashDecl(ti) : nullptr;
                             if (!hd && ref1) {
@@ -1702,7 +1715,10 @@ static QoreAOTContext* buildContextFromSlotMap(
                             }
                             break;
                         case AOTExprKind::CAST_COMPLEX_LIST:
-                            if (ti) {
+                            if (!strcmp(ref1, "list")) {
+                                cast_node = new QoreComplexListCastOperatorNode(
+                                    &loc_builtin, nullptr, QoreValue(), or_nothing != 0);
+                            } else if (ti) {
                                 cast_node = new QoreComplexListCastOperatorNode(
                                     &loc_builtin, ti, QoreValue(), or_nothing != 0);
                             }
@@ -5017,10 +5033,14 @@ static void transplantClassClosureValues(
             continue;  // no fallback value available
         }
 
-        // Transplant: set the main constant's value from the fallback constant.
+        // Transplant through setRuntimeValue() so pending AOT shells have both
+        // val and saved_val populated and aot_shell_pending cleared.
         ConstantEntry* writable_ce = const_cast<ConstantEntry*>(main_ce);
-        writable_ce->val = fb_ce->getReferencedValue();
-        writable_ce->init = true;
+        ExceptionSink txs;
+        writable_ce->setRuntimeValue(fb_ce->getReferencedValue(), &txs);
+        if (txs.isException()) {
+            txs.clear();
+        }
         printd(5, "AOT: transplanted namespace constant '%s::%s' from fallback\n",
             main_ns->name.c_str(), main_ce->getName());
     }

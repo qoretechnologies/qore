@@ -5218,7 +5218,7 @@ string sql = table.getSelectSql(sh, \args);
         }
     }
 
-    private *string getWhereClause(*hash<auto> cond, reference<list<auto>> args, *string cprefix,
+    private *string getWhereClause(*auto cond, reference<list<auto>> args, *string cprefix,
             *hash<string, AbstractTable> join_map) {
         hash<QueryInfo> info = <QueryInfo>{
             "table": self,
@@ -5259,7 +5259,7 @@ string sql = table.getSelectSql(sh, \args);
         return exp.code(\info, role, cond.args);
     }
 
-    private *string getWhereClauseIntern(reference<hash<QueryInfo>> info, *hash<auto> cond, *string cprefix) {
+    private *string getWhereClauseIntern(reference<hash<QueryInfo>> info, *auto cond, *string cprefix) {
         if (!cond) {
             return;
         }
@@ -5283,7 +5283,7 @@ string sql = table.getSelectSql(sh, \args);
                     throw "WHERE-ERROR", sprintf("expected \"hash\" in \"where\" list; got type %y instead",
                         c.fullType());
                 }
-                owl = getWhereClauseListIntern(\info, c, cprefix);
+                owl = getWhereClauseListIntern(\info, cast<hash<auto>>(c), cprefix);
                 if (owl) {
                     wl += "(" + (foldl $1 + " and " + $2, owl) + ")";
                 }
@@ -5292,7 +5292,11 @@ string sql = table.getSelectSql(sh, \args);
                 return " where " + (foldl $1 + " or " + $2, wl);
             }
         } else {
-            wl = getWhereClauseListIntern(\info, cond, cprefix);
+            if (cond.typeCode() != NT_HASH) {
+                throw "WHERE-ERROR", sprintf("expected \"hash\" or \"list\" in \"where\" argument; got type %y "
+                    "instead", cond.fullType());
+            }
+            wl = getWhereClauseListIntern(\info, cast<hash<auto>>(cond), cprefix);
             if (wl) {
                 return " where " + (foldl $1 + " and " + $2, wl);
             }
@@ -6777,7 +6781,8 @@ list<auto> l = table.getAlignSql(table2);
                 list<auto> cl = columns{c.name}.getModifySql(self, c);
                 if (cl) {
                     on_error rethrow $1.err, sprintf("%s (%y table: %y desc: %y)", $1.desc, c.name,
-                        columns{c.name}{"native_type", "qore_type"}, c.native_type{"native_type", "qore_type"});
+                        columns{c.name}.getDescriptionHash(){"native_type", "qore_type"},
+                        c.getDescriptionHash(){"native_type", "qore_type"});
                     l += AbstractDatabase::doCallback(opt, cl, AbstractDatabase::AC_Modify, "column", c.name, name,
                         NOTHING, c.getNativeTypeString());
                 } else

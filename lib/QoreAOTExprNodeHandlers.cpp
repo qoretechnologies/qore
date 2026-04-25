@@ -1438,11 +1438,19 @@ static QoreValue read_node_EN_CAST(AOTExprNodeReadCtx& ctx) {
             return QoreValue(new QoreComplexHashCastOperatorNode(&loc_builtin, ti, operand,
                 or_nothing != 0));
         }
+        if (type_path == "hash") {
+            return QoreValue(new QoreHashDeclCastOperatorNode(&loc_builtin, nullptr, operand,
+                or_nothing != 0));
+        }
     }
     if (bt == NT_LIST) {
         const QoreTypeInfo* cl = QoreTypeInfo::getUniqueReturnComplexList(ti);
         if (cl) {
             return QoreValue(new QoreComplexListCastOperatorNode(&loc_builtin, ti, operand,
+                or_nothing != 0));
+        }
+        if (type_path == "list") {
+            return QoreValue(new QoreComplexListCastOperatorNode(&loc_builtin, nullptr, operand,
                 or_nothing != 0));
         }
     }

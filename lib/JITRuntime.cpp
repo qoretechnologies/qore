@@ -1166,6 +1166,25 @@ extern "C" DLLEXPORT uint64_t qore_rt_cast_by_type_path(uint64_t inner_bits,
         return toBits(result);
     }
 
+    // Try plain hash cast, e.g. cast<hash>(value).  The parser lowers this to
+    // QoreHashDeclCastOperatorNode with a null hashdecl, so mirror that node's
+    // castValue() behavior instead of treating bare "hash" as unresolved.
+    if (!strcmp(resolve_path, "hash")) {
+        if (inner.isNothing() && or_nothing) {
+            return toBits(QoreValue());
+        }
+        if (inner.getType() != NT_HASH) {
+            xsink->raiseException("RUNTIME-CAST-ERROR",
+                "cannot cast from type '%s' to 'hash'", inner.getTypeName());
+            return toBits(QoreValue());
+        }
+        const QoreHashNode* h = inner.get<const QoreHashNode>();
+        if (!h->getHashDecl() && !h->getValueTypeInfo()) {
+            return inner.hasNode() ? toBits(inner.refSelf()) : toBits(inner);
+        }
+        return toBits(qore_hash_private::getPlainHash(inner.get<QoreHashNode>()->hashRefSelf()));
+    }
+
     // Try complex list cast, e.g. cast<list<X>>(value).
     if (ti && QoreTypeInfo::getUniqueReturnComplexList(ti)) {
         if (inner.isNothing() && or_nothing) {
@@ -1182,6 +1201,23 @@ extern "C" DLLEXPORT uint64_t qore_rt_cast_by_type_path(uint64_t inner_bits,
         QoreValue result = qore_list_private::newComplexListFromValue(ti,
             inner.refSelf(), xsink);
         return toBits(result);
+    }
+
+    // Try plain list cast, e.g. cast<list>(value).  For plain list casts the
+    // cast node carries a null complex type, so the AOT emitter passes "list".
+    if (!strcmp(resolve_path, "list")) {
+        if (inner.isNothing() && or_nothing) {
+            return toBits(QoreValue());
+        }
+        if (inner.getType() != NT_LIST) {
+            xsink->raiseException("RUNTIME-CAST-ERROR",
+                "cannot cast from type '%s' to 'list'", inner.getFullTypeName());
+            return toBits(QoreValue());
+        }
+        if (inner.getFullTypeInfo() == listTypeInfo) {
+            return inner.hasNode() ? toBits(inner.refSelf()) : toBits(inner);
+        }
+        return toBits(qore_list_private::getPlainList(inner.get<QoreListNode>()->listRefSelf()));
     }
 
     // Try enum cast, e.g. cast<HttpClientConnectionState>(int_value).

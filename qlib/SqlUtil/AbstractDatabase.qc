@@ -256,6 +256,21 @@ public class AbstractDatabase inherits AbstractSqlUtilBase {
         return featuresImpl();
     }
 
+    #! begins a transaction on the underlying @ref Qore::SQL::AbstractDatasource
+    beginTransaction() {
+        ds.beginTransaction();
+    }
+
+    #! commits the current transaction on the underlying @ref Qore::SQL::AbstractDatasource
+    commit() {
+        ds.commit();
+    }
+
+    #! rolls back the current transaction on the underlying @ref Qore::SQL::AbstractDatasource
+    rollback() {
+        ds.rollback();
+    }
+
     static doOkCallback(*hash<auto> opt, int ac, string type, string name, *string table, *string info) {
         if (opt.info_callback) {
             bool c = (type == "column");

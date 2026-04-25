@@ -1356,9 +1356,9 @@ static bool write_expr_cast_hashdecl(AOTExprWriteCtx& ctx) {
     const AbstractQoreNode* node = ctx.expr.getInternalNode();
     if (auto* hdc = dynamic_cast<const QoreHashDeclCastOperatorNode*>(node)) {
         const TypedHashDecl* hd = QoreTypeInfo::getUniqueReturnHashDecl(hdc->getCastTypeInfo());
-        if (hd) {
+        if (hd || hdc->getCastTypeInfo() == hashTypeInfo) {
             ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::CAST_HASHDECL));
-            ctx.writer.writeStringRef(hd->getNamespacePath().c_str());
+            ctx.writer.writeStringRef(hd ? hd->getNamespacePath().c_str() : "hash");
             ctx.writer.writeU8(hdc->isOrNothing() ? 1 : 0);
             // Serialize the inner expression being cast
             QoreValue inner = hdc->getExp();
@@ -1394,6 +1394,13 @@ static QoreValue read_expr_cast_hashdecl(AOTExprReadCtx& ctx) {
         inner.discard(nullptr);
         return QoreValue();
     }
+    // If no inner expression, use empty hash for the cast (common case: <HashdeclType>{})
+    if (!inner.hasNode()) {
+        inner = QoreValue(new QoreHashNode(autoTypeInfo));
+    }
+    if (!strcmp(hashdecl_path, "hash")) {
+        return QoreValue(new QoreHashDeclCastOperatorNode(&loc_builtin, nullptr, inner, or_nothing != 0));
+    }
     qore_program_private* pp = qore_program_private::get(*ctx.pgm);
     const qore_ns_private* found_ns = nullptr;
     const TypedHashDecl* hd = qore_root_ns_private::runtimeFindHashDecl(
@@ -1401,10 +1408,6 @@ static QoreValue read_expr_cast_hashdecl(AOTExprReadCtx& ctx) {
     if (!hd) {
         inner.discard(nullptr);
         return QoreValue();
-    }
-    // If no inner expression, use empty hash for the cast (common case: <HashdeclType>{})
-    if (!inner.hasNode()) {
-        inner = QoreValue(new QoreHashNode(autoTypeInfo));
     }
     auto* node = new QoreHashDeclCastOperatorNode(&loc_builtin, hd, inner, or_nothing != 0);
     return QoreValue(node);
@@ -1449,7 +1452,8 @@ static bool write_expr_cast_complex_list(AOTExprWriteCtx& ctx) {
     const AbstractQoreNode* node = ctx.expr.getInternalNode();
     if (auto* clc = dynamic_cast<const QoreComplexListCastOperatorNode*>(node)) {
         ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::CAST_COMPLEX_LIST));
-        ctx.writer.writeStringRef(QoreTypeInfo::getPath(clc->getCastTypeInfo()));
+        const QoreTypeInfo* ti = clc->getCastTypeInfo();
+        ctx.writer.writeStringRef(ti ? QoreTypeInfo::getPath(ti) : "list");
         ctx.writer.writeU8(clc->isOrNothing() ? 1 : 0);
         return true;
     }
@@ -1461,6 +1465,9 @@ static QoreValue read_expr_cast_complex_list(AOTExprReadCtx& ctx) {
     uint8_t or_nothing = QoreAOTBinaryReader::readU8(ctx.ptr);
     if (!type_path || !*type_path) {
         return QoreValue();
+    }
+    if (!strcmp(type_path, "list")) {
+        return QoreValue(new QoreComplexListCastOperatorNode(&loc_builtin, nullptr, QoreValue(), or_nothing != 0));
     }
     std::string type_error;
     QoreAOTTypeResolver type_resolver(ctx.pgm);

@@ -213,6 +213,9 @@ public class CsvReadDataProvider inherits DataProvider::AbstractDataProvider {
     private {
         #! the iterator object
         AbstractCsvIterator i;
+
+        #! stable object name for path-backed providers
+        *string object_name;
     }
 
     #! Creates the CsvReadDataProvider with the input data path and optionally an option hash
@@ -223,6 +226,7 @@ public class CsvReadDataProvider inherits DataProvider::AbstractDataProvider {
         is @ref True "True" and \c "headers" is also present; unknown field type
     */
     constructor(string path, *hash<auto> opts) {
+        object_name = path;
         i = new CsvFileIterator(path, opts);
     }
 
@@ -249,6 +253,7 @@ public class CsvReadDataProvider inherits DataProvider::AbstractDataProvider {
                 error("CONSTRUCTOR-ERROR", "cannot provide both \"path\" and \"data\" options; use either one or "
                     "the other");
             }
+            object_name = copts.path;
             i = new CsvIterator(FileLocationHandler::getBinaryStreamFromLocation(copts.path),
                 copts.encoding, copts{CsvIterationOptionList} - "encoding");
             return;
@@ -272,9 +277,7 @@ public class CsvReadDataProvider inherits DataProvider::AbstractDataProvider {
 
     #! Returns the object name
     string getName() {
-        return i instanceof CsvFileIterator
-            ? i.getFileName()
-            : sprintf("stream %s", self.uniqueHash());
+        return object_name ?? sprintf("stream %s", self.uniqueHash());
     }
 
     #! Returns additional data-provider-specific info

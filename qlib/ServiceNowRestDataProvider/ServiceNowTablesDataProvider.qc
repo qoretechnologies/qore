@@ -163,7 +163,7 @@ public class ServiceNowTablesDataProvider inherits ServiceNowRestDataProviderBas
 
         hash<auto> info;
         try {
-            hash<auto> rv += rest.get("table/sys_db_object?"
+            rv = rest.get("table/sys_db_object?"
                 "sysparm_fields=name,sys_id,create_access,delete_access,read_access,update_access,super_class&sysparm_query=name=" + name,
                 NOTHING, \info).body.response.result;
 
@@ -193,7 +193,7 @@ public class ServiceNowTablesDataProvider inherits ServiceNowRestDataProviderBas
 
         hash<auto> info;
         try {
-            hash<auto> rv = rest.get("table/sys_db_object?"
+            rv = rest.get("table/sys_db_object?"
                 "sysparm_fields=name,sys_id,create_access,delete_access,read_access,update_access&sysparm_query=sys_id=" + sys_id,
                 NOTHING, \info).body.response.result;
             name = rv.name;

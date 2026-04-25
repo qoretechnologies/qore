@@ -3498,9 +3498,9 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
     // QoreHashDeclCastOperatorNode: cast<StatInfo>(hash)
     if (auto* hdc = dynamic_cast<const QoreHashDeclCastOperatorNode*>(node)) {
         const TypedHashDecl* hd = QoreTypeInfo::getUniqueReturnHashDecl(hdc->getCastTypeInfo());
-        if (hd) {
+        if (hd || hdc->getCastTypeInfo() == hashTypeInfo) {
             writer.writeU8(static_cast<uint8_t>(AOTExprKind::CAST_HASHDECL));
-            writer.writeStringRef(hd->getNamespacePath().c_str());
+            writer.writeStringRef(hd ? hd->getNamespacePath().c_str() : "hash");
             writer.writeU8(hdc->isOrNothing() ? 1 : 0);
             // Serialize the inner expression being cast
             QoreValue inner = hdc->getExp();
@@ -3525,7 +3525,8 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
     // QoreComplexListCastOperatorNode: cast<list<int>>(list)
     if (auto* clc = dynamic_cast<const QoreComplexListCastOperatorNode*>(node)) {
         writer.writeU8(static_cast<uint8_t>(AOTExprKind::CAST_COMPLEX_LIST));
-        writer.writeStringRef(QoreTypeInfo::getPath(clc->getCastTypeInfo()));
+        const QoreTypeInfo* ti = clc->getCastTypeInfo();
+        writer.writeStringRef(ti ? QoreTypeInfo::getPath(ti) : "list");
         writer.writeU8(clc->isOrNothing() ? 1 : 0);
         return true;
     }

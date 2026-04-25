@@ -6644,6 +6644,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
 
             } else if (inv->invoke_opcode == QoreIROpcode::CastList
                     || inv->invoke_opcode == QoreIROpcode::CastHash
+                    || inv->invoke_opcode == QoreIROpcode::CastComplexHash
                     || inv->invoke_opcode == QoreIROpcode::CastObject
                     || inv->invoke_opcode == QoreIROpcode::CastEnum
                     || inv->invoke_opcode == QoreIROpcode::CastAny) {
@@ -6657,7 +6658,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         inv->expr.getInternalNode());
                     if (cast_node) {
                         const QoreTypeInfo* ti = cast_node->getCastTypeInfo();
-                        std::string type_path = ti ? QoreTypeInfo::getPath(ti) : "";
+                        std::string type_path = ti ? QoreTypeInfo::getPath(ti)
+                            : (inv->invoke_opcode == QoreIROpcode::CastList ? "list" : "");
                         llvm::Value* type_path_ptr = builder->CreateGlobalStringPtr(type_path);
                         llvm::Value* or_nothing_val = llvm::ConstantInt::get(i64_type,
                                 cast_node->isOrNothing() ? 1 : 0);
@@ -11538,7 +11540,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     expr_inst->expr.getInternalNode());
                 if (cast_node) {
                     const QoreTypeInfo* ti = cast_node->getCastTypeInfo();
-                    std::string type_path = ti ? QoreTypeInfo::getPath(ti) : "";
+                    std::string type_path = ti ? QoreTypeInfo::getPath(ti)
+                        : (inst->opcode == QoreIROpcode::CastList ? "list" : "");
                     llvm::Value* type_path_ptr = builder->CreateGlobalStringPtr(type_path);
                     llvm::Value* or_nothing_val = llvm::ConstantInt::get(i64_type,
                             cast_node->isOrNothing() ? 1 : 0);

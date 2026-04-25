@@ -322,7 +322,7 @@ public class QdrantCollectionTableDataProvider inherits QdrantDataProviderBase {
 
         @return a list of point IDs
     */
-    private list<auto> getPointIds(*hash<auto> where_cond, string operation) {
+    private list<auto> getPointIds(*auto where_cond, string operation) {
         if (!where_cond) {
             throw "QDRANT-" + operation.upr() + "-ERROR", sprintf("missing 'id' field in where_cond to identify "
                 "point(s) to %s in collection %y", operation, collection_name);
@@ -333,15 +333,20 @@ public class QdrantCollectionTableDataProvider inherits QdrantDataProviderBase {
             return extractIdsFromExpression(cast<hash<DataProviderExpression>>(where_cond), operation);
         }
 
-        if (!exists where_cond.id) {
+        if (where_cond.typeCode() != NT_HASH) {
+            throw "QDRANT-" + operation.upr() + "-ERROR", sprintf("where_cond must be a hash identifying "
+                "point(s) to %s in collection %y; got type %y", operation, collection_name, where_cond.fullType());
+        }
+        hash<auto> id_cond = cast<hash<auto>>(where_cond);
+        if (!exists id_cond.id) {
             throw "QDRANT-" + operation.upr() + "-ERROR", sprintf("missing 'id' field in where_cond to identify "
                 "point(s) to %s in collection %y", operation, collection_name);
         }
-        if (where_cond.size() > 1) {
+        if (id_cond.size() > 1) {
             throw "QDRANT-" + operation.upr() + "-ERROR", sprintf("only 'id' field is supported in where_cond "
-                "for %s in collection %y; got fields: %y", operation, collection_name, keys where_cond);
+                "for %s in collection %y; got fields: %y", operation, collection_name, keys id_cond);
         }
-        return where_cond.id.typeCode() == NT_LIST ? where_cond.id : (where_cond.id,);
+        return id_cond.id.typeCode() == NT_LIST ? id_cond.id : (id_cond.id,);
     }
 
     #! Extracts point IDs from a DataProviderExpression
