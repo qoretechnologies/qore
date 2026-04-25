@@ -1,0 +1,400 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/** @file QC_Scanner.qpp Scanner class definition */
+/*
+    Qore Programming Language
+
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    Note that the Qore library is released under a choice of three open-source
+    licenses: MIT (as above), LGPL 2+, or GPL 2+; see README-LICENSE for more
+    information.
+*/
+
+#include <qore/Qore.h>
+#include "qore/intern/QC_Scanner.h"
+
+#include <cstring>
+
+QoreScanner::QoreScanner(const QoreStringNode* s)
+        : src(const_cast<QoreStringNode*>(s)),
+          src_buf(s ? s->c_str() : ""),
+          src_size(s ? s->size() : 0),
+          tid(q_gettid()) {
+    if (src) {
+        src->ref();
+    }
+}
+
+QoreScanner::QoreScanner(const QoreScanner& old)
+        : src(old.src),
+          src_buf(old.src_buf),
+          src_size(old.src_size),
+          cursor(old.cursor),
+          line(old.line),
+          column(old.column),
+          tid(q_gettid()) {
+    if (src) {
+        src->ref();
+    }
+}
+
+QoreScanner::~QoreScanner() {
+    if (src) {
+        src->deref();
+    }
+}
+
+int QoreScanner::peek(ExceptionSink* xsink) const {
+    if (cursor >= src_size) {
+        return -1;
+    }
+    unsigned clen = 0;
+    unsigned cp = src->getUnicodePointFromBytePos(cursor, clen, xsink);
+    if (xsink && *xsink) {
+        return -1;
+    }
+    return (int)cp;
+}
+
+int QoreScanner::peekAt(int char_offset, ExceptionSink* xsink) const {
+    size_t pos = cursor;
+    if (char_offset > 0) {
+        // Walk forward N codepoints.
+        for (int i = 0; i < char_offset && pos < src_size; ++i) {
+            unsigned clen = 0;
+            src->getUnicodePointFromBytePos(pos, clen, xsink);
+            if (xsink && *xsink) {
+                return -1;
+            }
+            if (clen == 0) {
+                clen = 1;
+            }
+            pos += clen;
+        }
+        if (pos >= src_size) {
+            return -1;
+        }
+    } else if (char_offset < 0) {
+        // Walk backward N codepoints — UTF-8 backward walk: skip
+        // continuation bytes (0x80..0xBF) until we land on a lead byte.
+        // For non-UTF-8 encodings this falls back to byte stepping, which
+        // is correct only for single-byte encodings (Latin-1 etc.).
+        const QoreEncoding* enc = src->getEncoding();
+        bool utf8_like = (enc == QCS_UTF8);
+        for (int i = 0; i < -char_offset; ++i) {
+            if (pos == 0) {
+                return -1;
+            }
+            --pos;
+            if (utf8_like) {
+                while (pos > 0 && ((unsigned char)src_buf[pos] & 0xC0) == 0x80) {
+                    --pos;
+                }
+            }
+        }
+    }
+    if (pos >= src_size) {
+        return -1;
+    }
+    unsigned clen = 0;
+    unsigned cp = src->getUnicodePointFromBytePos(pos, clen, xsink);
+    if (xsink && *xsink) {
+        return -1;
+    }
+    return (int)cp;
+}
+
+bool QoreScanner::advance(ExceptionSink* xsink) {
+    if (cursor >= src_size) {
+        return false;
+    }
+    unsigned clen = 0;
+    unsigned cp = src->getUnicodePointFromBytePos(cursor, clen, xsink);
+    if (xsink && *xsink) {
+        return false;
+    }
+    if (clen == 0) {
+        clen = 1;
+    }
+    cursor += clen;
+    if (cp == 0x0A) {
+        ++line;
+        column = 1;
+    } else {
+        ++column;
+    }
+    return true;
+}
+
+int QoreScanner::advanceN(int n, ExceptionSink* xsink) {
+    if (n <= 0) {
+        return 0;
+    }
+    int advanced = 0;
+    for (int i = 0; i < n; ++i) {
+        if (!advance(xsink)) {
+            break;
+        }
+        ++advanced;
+    }
+    return advanced;
+}
+
+bool QoreScanner::advanceByte() {
+    if (cursor >= src_size) {
+        return false;
+    }
+    char c = src_buf[cursor];
+    ++cursor;
+    if (c == '\n') {
+        ++line;
+        column = 1;
+    } else {
+        ++column;
+    }
+    return true;
+}
+
+bool QoreScanner::match(const char* lit, size_t lit_len) {
+    if (!startsWith(lit, lit_len)) {
+        return false;
+    }
+    // Advance lit_len bytes, updating line/column for any newlines encountered.
+    for (size_t k = 0; k < lit_len; ++k) {
+        if (src_buf[cursor + k] == '\n') {
+            ++line;
+            column = 1;
+        } else {
+            ++column;
+        }
+    }
+    cursor += lit_len;
+    return true;
+}
+
+QoreStringNode* QoreScanner::extractRange(size_t start_byte, size_t len_bytes) const {
+    if (start_byte > src_size || start_byte + len_bytes > src_size) {
+        return nullptr;
+    }
+    return new QoreStringNode(src_buf + start_byte, len_bytes, src->getEncoding());
+}
+
+void QoreScanner::reset() {
+    cursor = 0;
+    line = 1;
+    column = 1;
+}
+
+QoreStringNode* QoreScanner::getStringRefSelf() const {
+    return src ? src->stringRefSelf() : nullptr;
+}
+
+//! Stateful scanner over a string for tokenizer / parser implementations.
+/** Holds a reference to a source string plus a byte cursor, line, and column
+    counter.  Provides constant-time byte access and amortised constant-time
+    codepoint access (subject to the underlying string's encoding).
+
+    Designed to replace the per-char @c input[pos] pattern used in
+    Qdx::QoreTokenizer, OpenApi3SchemaTokenizer, AsyncApiSchemaTokenizer,
+    and DpqlTokenizer.  The per-char pattern allocates a 1-character
+    @ref string on every access and walks UTF-8 boundaries from byte 0
+    each call, producing O(N^2) cost on a tokenizer scan.  Scanner does
+    both in amortised O(1) per call.
+
+    The class is thread-bound: it must be used from the same thread that
+    constructed it.  Use @ref reset() to rewind without rebuilding.
+
+    @par Example: minimal tokenizer pattern
+    @code{.py}
+Scanner s(input);
+while (!s.atEnd()) {
+    int b = s.peekByte();
+    if (b == ord("#")) {
+        # comment to end of line
+        while (!s.atEnd() && s.peekByte() != 0x0A) {
+            s.advanceByte();
+        }
+    } else if (b == ord("\"")) {
+        # string literal; preserve start position
+        int start = s.getBytePos();
+        s.advanceByte();
+        while (!s.atEnd() && s.peekByte() != ord("\"")) {
+            s.advanceByte();
+        }
+        s.advanceByte();
+        # extract literal: s.getBytePos() - start bytes
+    } else {
+        s.advance();   # codepoint-aware fallback
+    }
+}
+    @endcode
+
+    @since %Qore 2.3
+*/
+qclass Scanner [arg=QoreScanner* s; ns=Qore];
+
+//! Creates a scanner over the given string.
+/** @param src the source string to scan.  A reference is held for the
+    lifetime of the scanner; subsequent mutations to the original string
+    do not affect the scanner.
+ */
+Scanner::constructor(string src) {
+    self->setPrivate(CID_SCANNER, new QoreScanner(src));
+}
+
+//! Creates a copy of the scanner with the same source, position, line, and column.
+/** The new scanner is bound to the calling thread.  Mutations to the
+    original scanner do not affect the copy.
+ */
+Scanner::copy() {
+    self->setPrivate(CID_SCANNER, new QoreScanner(*s));
+}
+
+//! Returns the raw byte at the current position, or -1 if at end of input.
+/** Constant time; no allocation.  Use for ASCII-anchored token detection
+    (most parsers).  For codepoint-aware peek, use @ref peek().
+ */
+int Scanner::peekByte() [flags=CONSTANT] {
+    return s->peekByte();
+}
+
+//! Returns the raw byte at @a byte_offset relative to the current position.
+/** Negative offsets look backwards.  Returns -1 if out of range.
+ */
+int Scanner::peekByteAt(int byte_offset) [flags=CONSTANT] {
+    return s->peekByteAt(byte_offset);
+}
+
+//! Returns the codepoint at the current position, or -1 at end of input.
+/** Decodes one codepoint from the source string's encoding.
+    For pure ASCII / byte-oriented scanning, @ref peekByte() is faster.
+ */
+int Scanner::peek() [flags=RET_VALUE_ONLY] {
+    return s->peek(xsink);
+}
+
+//! Returns the codepoint at @a char_offset characters from the current position.
+/** O(|char_offset|) per call (must walk codepoints).  For ASCII-anchored
+    tokenizers prefer @ref peekByteAt().  Returns -1 if out of range.
+ */
+int Scanner::peekAt(int char_offset) [flags=RET_VALUE_ONLY] {
+    return s->peekAt(char_offset, xsink);
+}
+
+//! Advances by one codepoint.  Returns @ref True if advanced, @ref False if at end.
+/** Updates line and column counters (line increments on newline).
+ */
+bool Scanner::advance() [flags=RET_VALUE_ONLY] {
+    return s->advance(xsink);
+}
+
+//! Advances by exactly one byte.
+/** Caller is responsible for not splitting a multi-byte codepoint.  Use
+    only for ASCII-anchored advances after @ref peekByte() confirmed an
+    ASCII byte.  Returns @ref False if at end. */
+bool Scanner::advanceByte() [flags=CONSTANT] {
+    return s->advanceByte();
+}
+
+//! Advances by up to @a n codepoints; returns the number actually advanced.
+/** May advance fewer than @a n codepoints if end-of-input is reached or
+    an encoding error occurs.
+ */
+int Scanner::advanceN(int n) {
+    return (int64)s->advanceN(n, xsink);
+}
+
+//! Returns @ref True if cursor is at end of input.
+/** @return @ref True if no more input is available, @ref False otherwise.
+ */
+bool Scanner::atEnd() [flags=CONSTANT] {
+    return s->atEnd();
+}
+
+//! Returns the cursor's byte position (0-based).
+/** @return the byte offset of the cursor into the source string.
+ */
+int Scanner::getBytePos() [flags=CONSTANT] {
+    return s->getBytePos();
+}
+
+//! Returns the current line number (1-based).
+/** Incremented each time @ref advance(), @ref advanceByte(), or @ref match()
+    crosses a newline.
+ */
+int Scanner::getLine() [flags=CONSTANT] {
+    return s->getLine();
+}
+
+//! Returns the current column number (1-based, in codepoints since the start of the current line).
+/** Reset to 1 on each newline crossing.
+ */
+int Scanner::getColumn() [flags=CONSTANT] {
+    return s->getColumn();
+}
+
+//! Returns the number of bytes remaining from the cursor to end of input.
+/** @return the byte count from the current cursor to the end of the source string.
+ */
+int Scanner::bytesRemaining() [flags=CONSTANT] {
+    return s->bytesRemaining();
+}
+
+//! Returns @ref True if the source bytes at the cursor begin with @a literal.
+/** Does not advance.  Compares raw bytes — the literal must be in the same
+    byte representation as the source string.
+ */
+bool Scanner::startsWith(string literal) [flags=CONSTANT] {
+    return s->startsWith(literal->c_str(), literal->size());
+}
+
+//! If the bytes at the cursor begin with @a literal, advance past it and return @ref True.
+/** Otherwise leaves cursor unchanged and returns @ref False.
+ */
+bool Scanner::match(string literal) {
+    return s->match(literal->c_str(), literal->size());
+}
+
+//! Extracts a substring from the source at @a [start_byte, start_byte + len_bytes).
+/** @return the substring as a new @ref string in the source's encoding,
+    or @ref NOTHING if the range is out of bounds.
+ */
+*string Scanner::extractRange(int start_byte, int len_bytes) [flags=RET_VALUE_ONLY] {
+    if (start_byte < 0 || len_bytes < 0) {
+        return QoreValue();
+    }
+    QoreStringNode* rv = s->extractRange((size_t)start_byte, (size_t)len_bytes);
+    return rv ? QoreValue(rv) : QoreValue();
+}
+
+//! Resets cursor to the start of input; line and column reset to (1, 1).
+/** The source string reference is unchanged.
+ */
+Scanner::reset() {
+    s->reset();
+}
+
+//! Returns a fresh reference to the source string.
+/** @return the source string the scanner was constructed with.
+ */
+string Scanner::getString() [flags=CONSTANT] {
+    return s->getStringRefSelf();
+}

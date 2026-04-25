@@ -22,6 +22,7 @@ class StringTest inherits QUnit::Test {
         addTestCase("splitChars iterator", \testSplitCharsIter());
         addTestCase("getByte pseudo-method", \testGetByte());
         addTestCase("codePointIterator", \testCodePointIter());
+        addTestCase("Scanner class", \testScanner());
         addTestCase("non scalar test", \nonScalarTest());
         addTestCase("width test", \testWidth());
         addTestCase("Basic functions test", \testBasics());
@@ -355,6 +356,96 @@ class StringTest inherits QUnit::Test {
         list<auto> letters = select "He llo, World!".codePointIterator(),
             ($1 >= ord("A") && $1 <= ord("Z")) || ($1 >= ord("a") && $1 <= ord("z"));
         assertEq(10, letters.size());
+    }
+
+    testScanner() {
+        Scanner s("hello\nworld");
+
+        # Initial state
+        assertEq(0x68, s.peekByte());
+        assertEq(0x68, s.peek());
+        assertEq(0, s.getBytePos());
+        assertEq(1, s.getLine());
+        assertEq(1, s.getColumn());
+        assertFalse(s.atEnd());
+        assertEq(11, s.bytesRemaining());
+
+        # peekByteAt
+        assertEq(0x65, s.peekByteAt(1));      # 'e'
+        assertEq(0x6f, s.peekByteAt(4));      # 'o'
+        assertEq(0x0a, s.peekByteAt(5));      # '\n'
+        assertEq(-1, s.peekByteAt(99));        # out of range
+        assertEq(-1, s.peekByteAt(-1));        # before start
+
+        # advance updates line/column; line increments on newline crossing
+        Scanner s2("hello\nworld");
+        assertTrue(s2.advance());   # past 'h'
+        assertEq(2, s2.getColumn());
+        s2.advanceN(4);             # past 'ello' (now positioned at '\n')
+        assertEq(0x0a, s2.peekByte());
+        assertTrue(s2.advance());   # past '\n' — line 1 → 2
+        assertEq(2, s2.getLine());
+        assertEq(1, s2.getColumn());
+
+        # advanceByte vs advance
+        Scanner s3("aé");
+        assertEq(0x61, s3.peekByte());
+        assertTrue(s3.advanceByte());
+        assertEq(0xc3, s3.peekByte());          # first byte of UTF-8 'é'
+        # advance treats 'é' as one codepoint
+        Scanner s4("aé");
+        assertTrue(s4.advance());
+        assertTrue(s4.advance());                # past 'é' (2 bytes)
+        assertTrue(s4.atEnd());
+
+        # match advances past literal, leaves cursor unchanged on miss
+        Scanner m("foobar");
+        assertTrue(m.match("foo"));
+        assertEq(3, m.getBytePos());
+        assertFalse(m.match("xyz"));
+        assertEq(3, m.getBytePos());
+        assertTrue(m.match("bar"));
+        assertTrue(m.atEnd());
+
+        # startsWith doesn't advance
+        Scanner sw("hello");
+        assertTrue(sw.startsWith("he"));
+        assertEq(0, sw.getBytePos());
+        assertFalse(sw.startsWith("xy"));
+
+        # extractRange
+        Scanner e("hello world");
+        assertEq("hello", e.extractRange(0, 5));
+        assertEq("world", e.extractRange(6, 5));
+        assertEq("", e.extractRange(0, 0));
+        assertNothing(e.extractRange(0, 100));     # out of bounds
+        assertNothing(e.extractRange(-1, 5));      # negative
+
+        # reset
+        Scanner r("abc");
+        r.advanceN(2);
+        assertEq(2, r.getBytePos());
+        r.reset();
+        assertEq(0, r.getBytePos());
+        assertEq(1, r.getLine());
+        assertEq(1, r.getColumn());
+
+        # getString returns the source
+        Scanner gs("source text");
+        assertEq("source text", gs.getString());
+
+        # codepoint peek for non-ASCII
+        Scanner u("é");
+        assertEq(0xe9, u.peek());                  # codepoint
+        assertEq(0xc3, u.peekByte());              # first byte
+        assertEq(2, u.bytesRemaining());
+
+        # peekAt with character offsets
+        Scanner pa("aéb");
+        assertEq(0x61, pa.peekAt(0));              # 'a'
+        assertEq(0xe9, pa.peekAt(1));              # 'é'
+        assertEq(0x62, pa.peekAt(2));              # 'b'
+        assertEq(-1, pa.peekAt(3));                # past end
     }
 
     nonScalarTest() {
