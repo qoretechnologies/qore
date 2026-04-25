@@ -120,9 +120,42 @@ public list<string> sub find_std_modules() {
     }
     string modulePath = dirname(filename);
 
-    # find modules
-    list<string> moduleFiles = find_qore_files(modulePath);
-    return moduleFiles;
+    list<string> candidatePaths = ();
+    hash<auto> seen = {};
+
+    seen{modulePath} = True;
+    push candidatePaths, modulePath;
+
+    # When modules are loaded from generated qmods, QLS still needs parseable
+    # source files.  In in-tree builds, build/qlib-qmod maps back to qlib.
+    string sourceModulePath = regex_subst(modulePath, "/build/qlib-qmod($|/.*$)", "/qlib");
+    if (sourceModulePath != modulePath && is_dir(sourceModulePath)) {
+        seen{sourceModulePath} = True;
+        push candidatePaths, sourceModulePath;
+    }
+
+    # Also honor the runtime module path.  In qmod-first setups the source qlib
+    # path normally follows the qmod directory.
+    if (ENV.QORE_MODULE_DIR) {
+        foreach string path in (ENV.QORE_MODULE_DIR.split(":")) {
+            if (path && !seen{path}) {
+                seen{path} = True;
+                push candidatePaths, path;
+            }
+        }
+    }
+
+    foreach string path in (candidatePaths) {
+        if (!is_dir(path)) {
+            continue;
+        }
+        list<string> moduleFiles = find_qore_files(path);
+        if (moduleFiles.size()) {
+            return moduleFiles;
+        }
+    }
+
+    return ();
 }
 
 } # namespace Files
