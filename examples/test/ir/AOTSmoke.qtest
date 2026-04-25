@@ -80,6 +80,7 @@ class AOTSmokeTest inherits QUnit::Test {
         addTestCase("AOT module compile", \testAOTModuleCompile());
         addTestCase("AOT module no-narrow member types", \testAOTModuleNoNarrowMemberTypes());
         addTestCase("AOT module scalar local coercion", \testAOTModuleScalarLocalCoercion());
+        addTestCase("AOT module pointer NULL coalescing", \testAOTModulePointerNullCoalescing());
         addTestCase("AOT module hashdecl member compound lvalue",
             \testAOTModuleHashdeclMemberCompoundLValue());
         addTestCase("AOT module hashdecl class constants", \testAOTModuleHashdeclClassConstants());
@@ -1830,6 +1831,62 @@ printf(\"value=%d\\n\", AOTScalarLocalCoerce::runCase());
 
         assertEq(interp_out, aot_out, "compiled module scalar local coercion matches source: " + aot_out);
         assertEq("value=23\n", aot_out, "softint local is coerced before native uses");
+    }
+
+    testAOTModulePointerNullCoalescing() {
+        string tmp_dir = sprintf("/tmp/aot_pointer_null_coalesce_%d", getpid());
+        mkdir(tmp_dir);
+        on_exit {
+            backquote(sprintf("rm -rf %s", tmp_dir));
+        }
+
+        string mod_code = "%modern
+module AOTPointerNullCoalesce {
+    version = \"1.0\";
+    desc = \"AOT pointer NULL coalescing regression\";
+    author = \"Test\";
+    license = \"MIT\";
+}
+
+public namespace AOTPointerNullCoalesce {
+    public softint sub runCase(hash<auto> row) {
+        softint size = row.character_maximum_length ?? row.numeric_precision ?? 0;
+        return size;
+    }
+}
+";
+        string qm_path = tmp_dir + "/AOTPointerNullCoalesce.qm";
+        {
+            File f();
+            f.open2(qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write(mod_code);
+            f.close();
+        }
+
+        string qmod_path = tmp_dir + "/AOTPointerNullCoalesce.qmod";
+        hash<auto> result = compileModuleFile(qm_path, qmod_path, ("--strip-source",));
+        assertTrue(result.compiled, "pointer NULL coalescing module compiled: " + result.compile_out);
+        assertTrue(result.compile_out.regex("source-stripped"),
+            "pointer NULL coalescing module is source-stripped: " + result.compile_out);
+
+        string test_code = "%modern
+%requires AOTPointerNullCoalesce
+hash<auto> row = {\"character_maximum_length\": NULL, \"numeric_precision\": NULL};
+printf(\"value=%y\\n\", AOTPointerNullCoalesce::runCase(row));
+";
+        hash<auto> paths = writeTempScript(test_code);
+        on_exit {
+            unlink(paths.src);
+        }
+
+        string aot_out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --exec-mode=ast --enable-debug %s 2>&1",
+            libqore_dir, tmp_dir, qore_bin, paths.src));
+        unlink(qmod_path);
+        string interp_out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --exec-mode=ast --enable-debug %s 2>&1",
+            libqore_dir, tmp_dir, qore_bin, paths.src));
+
+        assertEq(interp_out, aot_out, "compiled module pointer NULL coalescing matches source: " + aot_out);
+        assertEq("value=0\n", aot_out, "pointer-encoded NULL coalesces before softint assignment");
     }
 
     testAOTModuleHashdeclMemberCompoundLValue() {

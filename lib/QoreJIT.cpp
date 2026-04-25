@@ -237,6 +237,7 @@ bool QoreJIT::registerRuntimeSymbols(std::string& error) {
     addSymbol("qore_rt_to_int", reinterpret_cast<void*>(&qore_rt_to_int));
     addSymbol("qore_rt_to_float", reinterpret_cast<void*>(&qore_rt_to_float));
     addSymbol("qore_rt_to_bool", reinterpret_cast<void*>(&qore_rt_to_bool));
+    addSymbol("qore_rt_is_null_or_nothing", reinterpret_cast<void*>(&qore_rt_is_null_or_nothing));
 
     // Refcount helpers
     addSymbol("qore_rt_incref", reinterpret_cast<void*>(&qore_rt_incref));

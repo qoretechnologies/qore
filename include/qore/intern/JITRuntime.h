@@ -93,6 +93,9 @@ double qore_rt_to_float(uint64_t val);
 //! Convert a QoreValue to bool
 int64_t qore_rt_to_bool(uint64_t val);
 
+//! Return true if a NaN-boxed QoreValue is NULL or NOTHING
+int64_t qore_rt_is_null_or_nothing(uint64_t val);
+
 // --- Refcount helpers ---
 
 //! Increment reference count if value is a pointer type

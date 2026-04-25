@@ -126,6 +126,8 @@ void QoreIRToLLVM::declareRuntimeHelpers(llvm::Module& module) {
     module.getOrInsertFunction("qore_rt_to_int", llvm::FunctionType::get(i64_type, {i64_type}, false));
     module.getOrInsertFunction("qore_rt_to_float", llvm::FunctionType::get(double_type, {i64_type}, false));
     module.getOrInsertFunction("qore_rt_to_bool", llvm::FunctionType::get(i64_type, {i64_type}, false));
+    module.getOrInsertFunction("qore_rt_is_null_or_nothing",
+            llvm::FunctionType::get(i64_type, {i64_type}, false));
 
     // Refcount helpers
     module.getOrInsertFunction("qore_rt_incref", llvm::FunctionType::get(void_type, {i64_type}, false));
@@ -8393,18 +8395,14 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         case QoreIROpcode::IsNullOrNothing: {
             auto* val = getVal(inst->operands[0].id, error);
             if (!val) { return false; }
-            llvm::Value* boxed = val;
-            if (val->getType() != i64_type) {
-                if (val->getType() == double_type) {
-                    boxed = boxFloat(val);
-                } else if (val->getType() == i1_type) {
-                    boxed = boxBool(val);
-                }
+            if (val->getType() != i64_type || !nanboxed_values.count(inst->operands[0].id)) {
+                values[inst->result.id] = llvm::ConstantInt::get(i1_type, 0);
+                return true;
             }
-            // NOTHING = 0, NULL = VAL_NULL
-            llvm::Value* is_nothing = builder->CreateICmpEQ(boxed, llvm::ConstantInt::get(i64_type, VAL_NOTHING));
-            llvm::Value* is_null = builder->CreateICmpEQ(boxed, llvm::ConstantInt::get(i64_type, VAL_NULL));
-            values[inst->result.id] = builder->CreateOr(is_nothing, is_null);
+            auto helper = module.getOrInsertFunction("qore_rt_is_null_or_nothing",
+                    llvm::FunctionType::get(i64_type, {i64_type}, false));
+            llvm::Value* result = builder->CreateCall(helper, {val});
+            values[inst->result.id] = builder->CreateICmpNE(result, llvm::ConstantInt::get(i64_type, 0));
             return true;
         }
 

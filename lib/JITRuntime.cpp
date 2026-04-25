@@ -350,6 +350,11 @@ extern "C" DLLEXPORT int64_t qore_rt_to_bool(uint64_t val) {
     return v.getAsBool() ? 1 : 0;
 }
 
+extern "C" DLLEXPORT int64_t qore_rt_is_null_or_nothing(uint64_t val) {
+    QoreValue v = fromBits(val);
+    return v.isNullOrNothing() ? 1 : 0;
+}
+
 // --- Refcount helpers ---
 
 extern "C" DLLEXPORT void qore_rt_incref(uint64_t val) {
