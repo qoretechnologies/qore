@@ -7,9 +7,18 @@ text-processing performance branch (`bugfix/text_processing`); the language
 changes proposed here piggyback on that break with no incremental
 compatibility cost.
 
-**Companion document:** [iter-pipe-operator.md](iter-pipe-operator.md) — a
-separate, more speculative proposal for a `|>`-style functional chain
-operator. Independent of this document; either can ship without the other.
+**Companion documents:**
+- [`streaming-operators.md`](streaming-operators.md) — independent
+  proposal for `first`/`any`/`all`/`take`/`drop`/`while`/`until`/`count`
+  keyword operators + fusion of nested operator chains. Recommended for
+  2.3 alongside this proposal.
+- [`iter-pipe-operator.md`](iter-pipe-operator.md) — separate, more
+  speculative proposal for a `|>`-style functional chain syntax.
+  Recommended deferred.
+
+The three proposals are independent: any subset can ship in 2.3.
+`char` and the streaming operators are the strong proposals; pipe sugar
+is optional.
 
 ---
 
@@ -533,7 +542,10 @@ Independent of the iter/pipe proposal — `char` can ship without it.
 - `include/qore/intern/qore_string_private.h` — string private state where
   the codepoint-offset cache lives
 - `lib/parser.ypp`, `lib/scanner.lpp` — parser/lexer touch points
-- `design/iter-pipe-operator.md` — companion (independent) proposal for the
-  pipe operator
+- [`streaming-operators.md`](streaming-operators.md) — independent
+  proposal for new keyword operators + chain fusion (recommended for 2.3
+  alongside this proposal)
+- [`iter-pipe-operator.md`](iter-pipe-operator.md) — separate proposal for
+  pipe-style sugar (recommended deferred)
 - `design/dgc.md` — memory-correctness invariants the lift-to-string path
   must honour
