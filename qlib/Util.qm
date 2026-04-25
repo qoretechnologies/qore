@@ -2589,15 +2589,28 @@ public class TerminalColor {
     }
 
     #! Strips ANSI escape codes from text
+    /** Byte-indexed scan: ANSI escape sequences (ESC `[` … `m`) are pure
+        ASCII, so we walk byte-by-byte using
+        @ref Qore::zzz8stringzzz9::getByte() (O(1) per call) instead of
+        @c text[i] (O(N) UTF-8 walk per call → O(N^2) overall).  Non-ASCII
+        bytes outside escape sequences pass through to the output unchanged.
+
+        For UTF-16 / other non-ASCII-compatible encodings, the input is
+        normalized to UTF-8 once at entry — a no-op for the common case.
+    */
     static string stripAnsi(string text) {
+        if (text.encoding() != "UTF-8") {
+            text = convert_encoding(text, "UTF-8");
+        }
         string out = "";
         int i = 0;
-        int len = text.length();
+        int len = text.size();
         while (i < len) {
-            string c = text[i];
-            if (c == "\033" && (i + 1) < len && text[i + 1] == "[") {
+            int b = text.getByte(i);
+            # ESC = 0x1B; '[' = 0x5B; 'm' = 0x6D
+            if (b == 0x1b && (i + 1) < len && text.getByte(i + 1) == 0x5b) {
                 i += 2;
-                while (i < len && text[i] != "m") {
+                while (i < len && text.getByte(i) != 0x6d) {
                     ++i;
                 }
                 if (i < len) {
@@ -2605,7 +2618,7 @@ public class TerminalColor {
                 }
                 continue;
             }
-            out += c;
+            out += chr(b);
             ++i;
         }
         return out;
