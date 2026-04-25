@@ -21,6 +21,7 @@ class StringTest inherits QUnit::Test {
         addTestCase("splitLinesRegex iterator", \testSplitLinesRegexIter());
         addTestCase("splitChars iterator", \testSplitCharsIter());
         addTestCase("getByte pseudo-method", \testGetByte());
+        addTestCase("codePointIterator", \testCodePointIter());
         addTestCase("non scalar test", \nonScalarTest());
         addTestCase("width test", \testWidth());
         addTestCase("Basic functions test", \testBasics());
@@ -306,6 +307,54 @@ class StringTest inherits QUnit::Test {
         assertEq(0x61, u.getUnicode(0));
         assertEq(0xe9, u.getUnicode(1));   # é = U+00E9
         assertEq(0x62, u.getUnicode(2));
+    }
+
+    testCodePointIter() {
+        # ASCII: each byte is one codepoint
+        list<auto> got = map $1, "abc".codePointIterator();
+        assertEq((0x61, 0x62, 0x63), got);
+
+        # Empty string yields no elements
+        list<auto> empty = map $1, "".codePointIterator();
+        assertEq(0, empty.size());
+
+        # UTF-8 multi-byte: "aéb" = U+0061, U+00E9, U+0062 (3 codepoints / 4 bytes)
+        list<auto> u8 = map $1, "aéb".codePointIterator();
+        assertEq((0x61, 0xe9, 0x62), u8);
+
+        # 4-byte UTF-8 (emoji U+1F600)
+        list<auto> em = map $1, "a😀b".codePointIterator();
+        assertEq((0x61, 0x1f600, 0x62), em);
+
+        # Direct iterator protocol
+        StringCharIterator it("xyz");
+        assertFalse(it.valid());
+        assertTrue(it.next());
+        assertEq(0x78, it.getValue());
+        assertTrue(it.next());
+        assertEq(0x79, it.getValue());
+        assertTrue(it.next());
+        assertEq(0x7a, it.getValue());
+        assertFalse(it.next());
+        assertFalse(it.valid());
+
+        # reset()
+        it.reset();
+        assertTrue(it.next());
+        assertEq(0x78, it.getValue());
+
+        # getValue() before next() throws
+        StringCharIterator je("x");
+        assertThrows("INVALID-ITERATOR", \je.getValue());
+
+        # Functional composition (exercises native fast path)
+        int sum = foldl $1 + $2, "abc".codePointIterator();
+        assertEq(0x61 + 0x62 + 0x63, sum);
+
+        # select for ASCII letter count
+        list<auto> letters = select "He llo, World!".codePointIterator(),
+            ($1 >= ord("A") && $1 <= ord("Z")) || ($1 >= ord("a") && $1 <= ord("z"));
+        assertEq(10, letters.size());
     }
 
     nonScalarTest() {

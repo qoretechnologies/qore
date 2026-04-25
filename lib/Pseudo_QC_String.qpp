@@ -34,6 +34,7 @@
 #include "qore/intern/QoreLibIntern.h"
 #include "qore/intern/QC_StringSplitIterator.h"
 #include "qore/intern/QC_StringRegexSplitIterator.h"
+#include "qore/intern/QC_StringCharIterator.h"
 
 #include <cctype>
 
@@ -521,6 +522,36 @@ int digits = foldl $1 + ($2 =~ /[0-9]/ ? 1 : 0), 0, str.splitChars();
 AbstractIterator <string>::splitChars() [flags=CONSTANT] {
     return new QoreObject(QC_STRINGSPLITITERATOR, 0,
         new StringSplitIterator(str, nullptr, StringSplitIterator::SPLIT_CHARS));
+}
+
+//! Returns a lazy iterator yielding each Unicode codepoint of the string as an integer.
+/** Each yielded value is the codepoint at the iterator's current position
+    (decoded from the source string's encoding via
+    @ref QoreString::getUnicodePointFromBytePos()).  Designed for
+    character-aware tokenizers and parsers.
+
+    For pure ASCII / byte-oriented work,
+    @ref Qore::zzz8stringzzz9::getByte() is faster (skips codepoint decoding).
+    For yielding each character as a 1-character @ref string, use
+    @ref Qore::zzz8stringzzz9::splitChars() instead.
+
+    @return a @ref Qore::StringCharIterator "StringCharIterator" yielding
+            integer codepoints
+
+    @par Example:
+    @code{.py}
+int letters = 0;
+foreach int cp in (text.codePointIterator()) {
+    if ((cp >= ord("A") && cp <= ord("Z")) || (cp >= ord("a") && cp <= ord("z"))) {
+        ++letters;
+    }
+}
+    @endcode
+
+    @since %Qore 2.3
+ */
+AbstractIterator <string>::codePointIterator() [flags=CONSTANT] {
+    return new QoreObject(QC_STRINGCHARITERATOR, 0, new StringCharIterator(str));
 }
 
 //! Returns a lazy iterator yielding each line of the string, one per element.
