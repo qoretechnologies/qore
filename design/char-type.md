@@ -9,10 +9,11 @@ compatibility cost.
 
 **Companion documents:**
 - [`streaming-operators.md`](streaming-operators.md) — independent
-  proposal for `first`/`any`/`all`/`take`/`drop`/`while`/`until`/`count`
-  keyword operators + fusion of nested operator chains. Recommended for
-  2.3 alongside this proposal.
-- [`iter-pipe-operator.md`](iter-pipe-operator.md) — separate, more
+  proposal for `first`/`any`/`all`/`take`/`drop`/`takewhile`/`takeuntil`/
+  `count` keyword operators + the `iterate` verb-form iterator factory +
+  fusion of nested operator chains. Recommended for 2.3 alongside this
+  proposal.
+- [`pipe-operator.md`](pipe-operator.md) — separate, more
   speculative proposal for a `|>`-style functional chain syntax.
   Recommended deferred.
 
@@ -96,7 +97,7 @@ is removed.
 - **No encoding.** A `char` is a pure codepoint — an integer in the Unicode
   range. When converted to `string`, the default encoding for the resulting
   string is **UTF-8**, regardless of the encoding of any string the char
-  came from. (See §3.5.)
+  came from. (See §3.6.)
 - **Inline encoding** in `QoreValue` — no allocation, like `int`/`bool`.
 - **Subtype of `string`** for concatenation and comparison.
 - **Subtype of `int`** for codepoint arithmetic and comparison.
@@ -153,8 +154,9 @@ Conversion rules:
 | `char` | identity | — |
 | `int` (compile-time const, 0..0x10FFFF) | implicit | char literal value |
 | `int` (runtime) | explicit `(char)` cast | runtime check for valid codepoint |
-| 1-char `string` | implicit at runtime | runtime check for length |
-| ≥2-char `string` | runtime error | INVALID-CHAR-CONVERSION |
+| `string` | **parse-time error** | `char c = some_string_func()` does not compile |
+| `string` literal of length 1 | **parse-time error** | use `c'a'` form for char literals |
+| `string` (any length) via `(char)` cast | runtime check | length != 1 throws `INVALID-CHAR-CONVERSION` |
 | `*char` | identity (NOTHING-aware) | — |
 
 | Source | To other types |
@@ -162,6 +164,26 @@ Conversion rules:
 | `char` → `int` | implicit; yields the codepoint value |
 | `char` → `string` | implicit; yields a length-1 UTF-8 string |
 | `char` → `bool` | implicit; True iff codepoint != 0 (consistent with int→bool) |
+
+**`char` is not assignable from `string`.** `char c = some_string_func()`
+fails at **parse time**, not at runtime — there is no implicit
+length-checking conversion that would silently throw on a string of
+length != 1. Code that wants a string-to-char conversion must use the
+explicit `(char)` cast, which carries the runtime length check
+visibly at the call site:
+
+```qore
+string s = some_func();
+char c1 = s;          # PARSE ERROR — string is not assignable to char
+char c2 = (char)s;    # OK — explicit cast; throws INVALID-CHAR-CONVERSION
+                      # at runtime if s.length() != 1
+char c3 = s[0];       # OK — string[i] returns *char (see §4); needs the
+                      # NOTHING check
+char c4 = c'a';       # OK — char literal form
+```
+
+This rule eliminates an entire class of "the function happened to return
+two characters today" runtime surprises.
 
 `char` is **distinct from `int`** at the type system level. `int sub foo()`
 returning a `char` is a compile error — the author must say `char sub foo()`
@@ -194,23 +216,110 @@ char c0 = str[0];          # c'h' (U+0068)
 char c1 = str[1];          # c'é' (U+00E9), regardless of str's encoding
 ```
 
-A new pseudo-class `<char>` exposes:
+A new pseudo-class `<char>` exposes the union of all `<string>` and
+`<int>` pseudo-methods, plus a small set of char-specific additions.
+
+**Method inheritance.** Because `char` is a subtype of both `string` and
+`int`, every method available on either supertype must be callable on a
+`char` value via the subtype lift. The `<char>` pseudo-class implements
+all of them so that:
 
 ```qore
-int    <char>::ord()                # codepoint as int
-string <char>::toString()           # length-1 UTF-8 string
-string <char>::toString(*string encoding)  # length-1 string in given encoding
+char c = c'a';
+
+# <string> methods — char lifts to length-1 string
+int n   = c.size();      # 1 — UTF-8 byte count, same as string semantics
+int l   = c.length();    # 1 — codepoint count, same as string semantics
+char d  = c.upr();       # c'A' — case mapping
+bool b1 = c.startsWith("a");
+bool b2 = c.contains("a");
+
+# <int> methods — char lifts to int (codepoint value)
+bool ip = c.intp();      # True
+int  hc = c.hash();      # codepoint hash, like int hash
+string h = c.toHex();    # "61" — hex of codepoint
+
+# Critically: this works under the indexing change (§4)
+auto x = some_string[0];
+int n = x.size();        # works — lifts via *char → *string → string method
+```
+
+This closes the type-inference compatibility risk: existing code with
+`auto x = s[0]; ... x.size() ...` continues to work after the indexing
+change, because `<char>::size()` is defined (delegating to the string
+lift).
+
+**Method-name conflicts.** The two supertypes have several methods with
+the same name but different semantics. `<char>` resolves each
+explicitly:
+
+| Method | `<string>` semantics | `<int>` semantics | `<char>` resolution |
+|---|---|---|---|
+| `toString()` | identity | decimal text of int | **string-like**: returns the 1-char string |
+| `toString(encoding)` | re-encode | (n/a) | **string-like**: returns 1-char string in given encoding |
+| `toInt()` | parse decimal | identity | **int-like**: returns the codepoint |
+| `toBool()` | non-empty? | non-zero? | both produce True for any valid codepoint |
+| `toFloat()` | parse decimal | int as float | **int-like**: codepoint as float |
+| `typeCode()` | NT_STRING | NT_INT | returns NT_CHAR |
+| `format(...)` | string format | int format | **string-like** (matches concat behaviour) |
+
+The general rule: methods that *describe* the value as a string (length,
+content, case) lift to the string side; methods that *convert* to a
+numeric type (toInt, toFloat) lift to the int side. Conflicts are
+documented in the `<char>` pseudo-class reference, not silently
+resolved.
+
+**Char-specific methods** (not on `<string>` or `<int>`):
+
+```qore
+int    <char>::ord()                # codepoint as int (alias for int lift)
 bool   <char>::isAscii()            # codepoint in 0..0x7F
 bool   <char>::isLetter()           # Unicode letter category
 bool   <char>::isDigit()            # Unicode digit category
 bool   <char>::isAlpha()            # alphabetic
 bool   <char>::isWhitespace()       # Unicode whitespace
 bool   <char>::isUpper() / isLower()
-char   <char>::upr() / lwr()        # case mapping (returns char)
-int    <char>::utf8ByteLen()        # 1..4
+int    <char>::utf8ByteLen()        # 1..4 — bytes if encoded as UTF-8
+int    <char>::utf16CodeUnits()     # 1 or 2 — UTF-16 code units (surrogates)
 ```
 
-### 3.5 char has no encoding
+`upr()` / `lwr()` deserve a separate note — see §3.5.
+
+### 3.5 Case mapping and locale awareness
+
+Unicode case mapping isn't a clean per-codepoint operation in the
+general case:
+
+- **One-to-many**: German `ß` (U+00DF) uppercases to two characters
+  `SS`. A single `<char>::upr()` returning `char` cannot represent this.
+- **Locale-dependent**: Turkish `i` (U+0069) uppercases to `İ` (U+0130)
+  in `tr_TR` locale, to plain `I` (U+0049) in most others. A pure
+  function over codepoints cannot capture this.
+
+Two alternatives:
+
+**A. `<char>::upr()` returning `char` only handles the simple cases.**
+For codepoints with one-to-one case mapping (the vast majority — basic
+Latin, Greek, Cyrillic, etc.), it returns the mapped char. For
+codepoints whose case mapping is one-to-many (`ß`, `ﬁ` ligature, etc.),
+it returns the char unchanged. Programmers needing full case mapping
+use `<string>::upr()` (which already handles the multi-char case via
+string output).
+
+**B. `<char>::upr()` returns `string`** (always, even for the simple
+cases). Type-inconvenient but always correct. Forces the caller to
+materialize a string for what's usually a single char.
+
+Recommendation: **A** with documentation. The simple-case-only behaviour
+matches what tokenizer code overwhelmingly needs (`c.upr() == c'A'` for
+ASCII-anchored work), and the rare correctness-sensitive usage already
+goes through string operations.
+
+Locale awareness: case-mapping methods take an optional `*string locale`
+parameter; absent it, default to the C/POSIX locale (Turkish-I problem
+visible only when explicitly opted in).
+
+### 3.6 char has no encoding
 
 A `char` is a Unicode codepoint, full stop. It carries no encoding tag.
 This is the right model for several reasons:
@@ -407,7 +516,29 @@ value += c;
 Same speed (the runtime indexing is O(1) via the codepoint-offset cache),
 materially better readability, no manual UTF-8 normalization at entry.
 
-### 7.2 Library deprecations
+### 7.2 Parse options — per-keyword opt-out for backward compatibility
+
+Every new keyword and lexer construct introduced by this proposal gets
+a matching parse option that disables it for older sources:
+
+| Parse directive | Parse option flag (C++) | Disables |
+|---|---|---|
+| `%no-char-type` | `PO_NO_CHAR_TYPE` | `char` type keyword in declarations / casts; `c'..'`/`c"..."` literal prefix |
+| `%no-string-index-char` | `PO_NO_STRING_INDEX_CHAR` | `string[i]` returning `*char`; the lexer keeps the indexing operator returning `*string` for compatibility with older code |
+
+The first opt-out covers programs that have an identifier named `char`
+(rare; `char` is currently not a Qore keyword, so it's possible). The
+second covers programs that depended on `string[i]` returning a
+`*string` for type-introspection reasons (code calling
+`(string[i]).typeCode()` that expected `NT_STRING`).
+
+In the common case neither opt-out is needed — the implicit
+`char → string` lift makes existing code work unchanged.
+
+The flag values share the parse-option bit space documented in
+`include/qore/qore_program_options.h`.
+
+### 7.3 Library deprecations
 
 Nothing is removed in 2.3. The byte primitives stay useful for byte-oriented
 parsers (HTTP, MIME). `<string>::splitChars()` and
@@ -479,34 +610,66 @@ Syntax highlighters need to recognize `c'..'` / `c"..."`. The `c` prefix
 collides with no existing Qore syntax (Qore has no other `<letter>'..'`
 forms today), so the lexer rule is unambiguous.
 
+### 9.5 Regex matching on char
+
+`c =~ /pattern/` requires lifting char to a length-1 string for the
+PCRE2 engine to consume it. The materialization is a small stack
+buffer (1–4 bytes for UTF-8), one allocation if the result escapes —
+strictly cheaper than today's `*string c = str[i]; c =~ /.../`. Code
+reviewers should be aware that regex on a char is *slightly* slower
+than the codepoint-comparison alternatives (`c == c'a'`, `c.isLetter()`)
+even though it's faster than today.
+
+### 9.6 Auto-typed indexing change
+
+`auto x = s[0];` continues to compile (x is `*char` instead of `*string`)
+and `x.size()`, `x.toString()`, etc. continue to work because of the
+pseudo-method inheritance from §3.4. The one observable change is in
+explicit type queries: `x.typeCode() == NT_STRING` evaluates True today,
+False after the change (it returns NT_CHAR). Code that introspects
+type codes from indexed string access has to update — minor, but
+worth a release-note entry.
+
 ---
 
 ## 10. Effort estimate
 
-| Component | Estimate |
+| Component | Estimate (sequential) |
 |---|---|
 | Lexer changes (`c'..'` literals, `\u{...}` brace escape) | 3-4 days |
 | Parser changes (char_literal production, `char` type keyword) | 4-5 days |
-| Type checker (charTypeInfo, subtype rules, indexing return-type change) | 2 weeks |
+| Type checker (charTypeInfo, subtype rules, parse-time string→char rejection, indexing return-type change) | 2 weeks |
 | QoreValue encoding (TAG_CHAR + accessors + lift-to-string path) | 1 week |
 | Codepoint-offset cache for `string::operator[]` | 2 weeks |
-| `<char>` pseudo-class | 4 days |
-| Test coverage (qtest suite for char + indexing change) | 2 weeks |
-| Doc updates (Doxygen, language guide) | 4 days |
-| **Total** | **~6-8 weeks** |
+| `<char>` pseudo-class with full string + int method inheritance | 1 week |
+| Char-specific methods (`isLetter` etc., case mapping, encoding-targeted toString) | 4 days |
+| Test coverage (qtest suite for char + indexing change + method inheritance) | 2 weeks |
+| Doc updates (Doxygen, language guide, release notes) | 4 days |
+| **Total (sequential)** | **~10-12 weeks** |
+| **Total (with parallelism, 2 developers)** | **~6-8 weeks** |
 
-Independent of the iter/pipe proposal — `char` can ship without it.
+The numbers above assume serial work; the QoreValue/lexer/runtime
+pieces parallelize well with the type-checker/pseudo-class work, so
+two developers reach the lower bound.
+
+Independent of the iterate/pipe proposal — `char` can ship without it.
 
 ---
 
 ## 11. Open questions
 
-1. **Should `c'a'` always be a `char`, or context-sensitive?**
-   Current proposal: always `char`. Alternative: context-sensitive — a
-   `c'a'` literal is `char` when the target type is `char`, otherwise
-   length-1 string. The alternative removes the explicit-prefix burden in
-   `*string s = c'a'` cases but makes literal type opaque, and the implicit
-   `char → string` lift already covers the common case.
+1. **Method-name conflict resolution for the rare ambiguous cases.**
+   §3.4 picks string-like or int-like for each conflicting method
+   explicitly. Two cases that warrant a second look:
+   - `<char>::format()` — string-style or int-style? Recommend
+     string-style for consistency with concatenation behaviour, but
+     int-style (printf-format with `%c` etc.) is plausible. Decide
+     before public release.
+   - Methods that exist on both with the *same* semantics (e.g.,
+     `intp()`/`stringp()` returning True/False) — both should return
+     True for a char (it's both an int-like and string-like value),
+     which is a small departure from existing semantics where these
+     are mutually exclusive type predicates. Document explicitly.
 
 2. **`<char>` Unicode tables — built-in or via the `unicode` module?**
    The `isLetter` / `isDigit` / `isUpper` / etc. methods need Unicode
@@ -545,7 +708,7 @@ Independent of the iter/pipe proposal — `char` can ship without it.
 - [`streaming-operators.md`](streaming-operators.md) — independent
   proposal for new keyword operators + chain fusion (recommended for 2.3
   alongside this proposal)
-- [`iter-pipe-operator.md`](iter-pipe-operator.md) — separate proposal for
+- [`pipe-operator.md`](pipe-operator.md) — separate proposal for
   pipe-style sugar (recommended deferred)
 - `design/dgc.md` — memory-correctness invariants the lift-to-string path
   must honour

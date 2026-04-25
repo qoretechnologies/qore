@@ -1,10 +1,10 @@
-# Streaming Operators (`first` / `any` / `all` / `take` / `drop` / `while` / `until` / `count`) + Operator-Chain Fusion
+# Streaming Operators (`first` / `any` / `all` / `take` / `drop` / `takewhile` / `takeuntil` / `count`) + Operator-Chain Fusion + `iterate` keyword
 
 **Status:** Design.
 
 **Target:** Qore 2.3 alongside [`char-type.md`](char-type.md).
 
-**Companion:** [`iter-pipe-operator.md`](iter-pipe-operator.md) — separate
+**Companion:** [`pipe-operator.md`](pipe-operator.md) — separate
 proposal for `|>`-style pipe syntax (recommended deferred). The operators
 proposed here are the building blocks pipe would chain; they're useful on
 their own in the existing nested-operator syntax and earn their place
@@ -19,18 +19,24 @@ performance gap. Two complementary gaps remain at the **chain** level:
 
 ### 1.1 The "find first" gap
 
-Today's `find` operator returns *all* matching elements:
+Today's `find` operator has unusual three-way return semantics
+(see `lib/FindNode.cpp:69-106`):
+
+| match count | returned value |
+|---|---|
+| 0 | NOTHING |
+| 1 | the matched element directly (not a list) |
+| 2+ | list of matched elements |
+
+The variable return type alone makes `find` awkward to compose: the
+caller can't write a single `[0]` unwrap that's correct for both the
+"single match" and "multi match" cases (in the single-match case, `[0]`
+indexes *into* the matched element). The two existing workarounds for
+"first match only" both have problems:
 
 ```qore
-list<auto> result = find $1 == "x" in some_list where ($1.value > 0);
-# returns every match, even if the caller only wanted the first
-```
-
-There is no built-in operator for "first matching element only." The
-existing workarounds:
-
-```qore
-# Workaround 1: foreach + break (no nested-operator form possible)
+# Workaround 1: foreach + break (no nested-operator form possible;
+# breaks composition with map/select/foldl)
 *hash<auto> first_match;
 foreach hash<auto> row in (some_list) {
     if (row.value > 0) {
@@ -39,12 +45,13 @@ foreach hash<auto> row in (some_list) {
     }
 }
 
-# Workaround 2: index-zero of find result (still materializes the full match list)
-*hash<auto> first_match = (find $1 == "x" in some_list where ($1.value > 0))[0];
+# Workaround 2: cast + index — only correct in the multi-match case
+list<auto> all = find $1 == "x" in some_list where ($1.value > 0);
+*hash<auto> first_match = all.size() ? all[0] : NOTHING;
+# Still allocates the entire result list to throw everything but the first away.
 ```
 
-Both leak — option 1 is verbose and breaks composability; option 2
-allocates an entire result list to throw all but the first element away.
+A consistent-return-type `find first` (always returns `*T`) is needed.
 
 The same gap exists for "does any element match?" (`any`), "do all elements
 match?" (`all`), "first N elements" (`take`), "skip first N" (`drop`),
@@ -167,26 +174,35 @@ foreach hash<auto> row in (drop 1, csv.splitLines()) {
 `take` short-circuits the source after N elements. `drop` skips the first
 N then yields the rest.
 
-### 2.4 `while` and `until`
+### 2.4 `takewhile` and `takeuntil`
 
 ```qore
-while <pred-expr>, <iterable>     # iterator yielding elements until pred returns False
-until <pred-expr>, <iterable>     # iterator yielding elements until pred returns True
+takewhile <pred-expr>, <iterable>     # iterator yielding elements until pred returns False
+takeuntil <pred-expr>, <iterable>     # iterator yielding elements until pred returns True
 ```
 
 Non-terminal, like `take`/`drop`.
 
 ```qore
 # Lines until the first blank line (e.g., HTTP header end)
-list<string> headers = while $1 != "", source.splitLines();
+list<string> headers = takewhile $1 != "", source.splitLines();
 
 # Read until we hit a sentinel
-list<string> body = until $1 == "<<END>>", source.splitLines();
+list<string> body = takeuntil $1 == "<<END>>", source.splitLines();
 ```
 
-`while` reads while the predicate holds; `until` reads until it holds.
-Both stop iterating immediately at the boundary — no peek-ahead needed by
-the caller.
+`takewhile` reads while the predicate holds; `takeuntil` reads until it
+holds. Both stop iterating immediately at the boundary — no peek-ahead
+needed by the caller.
+
+**Why not `while` / `until`?** `while` is already a Qore reserved
+keyword for control-flow statements (`while (cond) statement`). Adding
+it as an expression operator (`while EXPR, ITER`) would force the
+grammar to disambiguate `while (` between the statement and operator
+forms via parser-level lookahead — workable, but a real grammar
+maintenance burden. The renamed `takewhile` / `takeuntil` (matching
+Haskell, F#, Rust's `take_while`) avoids the issue. `until` is not a
+current keyword but is renamed for symmetry.
 
 ### 2.5 `count`
 
@@ -223,7 +239,10 @@ list<auto> matches = find $1 == "x" in some_list where ($1.value > 0);
 # New: find last match
 *hash<auto> match = find last $1 == "x" in some_list where ($1.value > 0);
 
-# New: find exactly one match (error if multiple)
+# New: find exactly one match
+# - 0 matches → NOTHING
+# - 1 match  → the element
+# - 2+ matches → throws MULTIPLE-MATCHES-ERROR with the offending count
 *hash<auto> match = find one $1 == "x" in some_list where ($1.value > 0);
 ```
 
@@ -240,7 +259,47 @@ Both compile to the same AST node; pick whichever reads better at the
 call site. `find last` and `find one` are also new and have no `select`-
 style equivalent (they're specifically `find`-family operations).
 
-### 2.7 Argument syntax summary
+### 2.7 The `iterate` keyword — uniform iterator factory
+
+The `iterate` keyword is a verb-form operator meaning "treat this as an
+iterator." It returns an iterator over the expression's **natural
+element type**, picked by the type:
+
+| `X` is | `iterate X` element type | iterator class returned |
+|---|---|---|
+| `string` | `char` | `StringCharIterator` |
+| `binary` | `int` (raw byte 0..255) | `BinaryByteIterator` (new — trivial) |
+| `list<T>` | `T` | `QoreListIterator` |
+| `hash<K, V>` | `hash<{key: K, value: V}>` (a pair) | `QoreHashIterator` (pair view) |
+| `int N` (positive) | `int` (range `0..N-1`) | `RangeIterator` |
+| `range<int>` | `int` | `RangeIterator` |
+| any object exposing `<class>::iterator()` | element type from that iterator | (delegated) |
+
+`iterate` is a uniform-naming win over the per-type factory methods. Both
+forms work — `iterate str` and `str.codePointIterator()` produce the same
+iterator value:
+
+```qore
+# Equivalent
+foreach char c in (iterate str) { ... }
+foreach char c in (str.codePointIterator()) { ... }
+
+# Equivalent — both produce a StringCharIterator
+*char first_letter = first $1.isLetter(), iterate str;
+*char first_letter = first $1.isLetter(), str.codePointIterator();
+```
+
+`iterate` is independent of the [`pipe-operator.md`](pipe-operator.md)
+proposal — it's useful in nested-form chains as a discoverability win
+and shorter syntax. If pipe ships later, `iterate` is the natural way to
+introduce a chain (`iterate str |> filter ... |> count`); without pipe,
+`iterate` still earns its keep as a uniform replacement for the per-type
+factory methods (`<string>::codePointIterator()`,
+`<hash>::pairIterator()`, etc.).
+
+The existing factory methods stay for backward compatibility.
+
+### 2.8 Argument syntax summary
 
 | Operator | Args | Returns |
 |---|---|---|
@@ -251,8 +310,8 @@ style equivalent (they're specifically `find`-family operations).
 | `all <pred>, <iterable>` | predicate + source | `bool` |
 | `take <n>, <iterable>` | int + source | iterator |
 | `drop <n>, <iterable>` | int + source | iterator |
-| `while <pred>, <iterable>` | predicate + source | iterator |
-| `until <pred>, <iterable>` | predicate + source | iterator |
+| `takewhile <pred>, <iterable>` | predicate + source | iterator |
+| `takeuntil <pred>, <iterable>` | predicate + source | iterator |
 | `count <iterable>` | source only | `int` |
 | `count <pred>, <iterable>` | predicate + source | `int` |
 | `find first <expr> in <list> where (<pred>)` | (extends existing find) | `*T` |
@@ -262,6 +321,49 @@ style equivalent (they're specifically `find`-family operations).
 In all cases, `<pred>` and `<expr>` are expressions that may use `$1` to
 refer to the current element (matching the `select`/`map`/`foldl`
 convention).
+
+### 2.9 Behaviour on hashes
+
+For all operators that take an `<iterable>`, a hash source iterates
+over **pairs** by default — same as `iterate h` (§2.7) and the existing
+`<hash>::pairIterator()`. So:
+
+```qore
+hash<auto> h = {"a": 1, "b": 2, "c": 3};
+
+# first hash pair (per the iterate element type for hashes)
+*hash<auto> p = first h;                    # {key: "a", value: 1}
+
+# count pairs whose value is positive
+int n = count $1.value > 0, h;              # 3
+```
+
+Callers that want keys-only or values-only use the existing factory
+methods or `iterate` over a derived iterator:
+
+```qore
+*string first_key = first iterate h.keyIterator();
+*int first_val    = first iterate h.valueIterator();
+```
+
+### 2.10 Side-effect ordering with short-circuit
+
+The short-circuit operators (`first`, `any`, `all`, `take`, `takewhile`,
+`takeuntil`) iterate the source only as far as needed to produce the
+result. If the predicate has side effects, **only the elements visited
+before the result is decided are processed**:
+
+```qore
+list<int> seen = ();
+*string err = first ((seen += $1.size()) || $1 =~ /ERROR/),
+                    log.splitLines();
+# After this, `seen` contains an entry for each line up to and including
+# the first ERROR — not for every line in the log.
+```
+
+This is the correct streaming behaviour but worth explicit
+documentation: programmers porting from `select`/`map` (which iterate
+the entire source) need to know that the new operators don't.
 
 ---
 
@@ -357,16 +459,18 @@ compiled to AST nodes the optimizer recognizes.
 
 100% additive at the language level:
 
-- New operator keywords (`first`, `any`, `all`, `take`, `drop`, `while`,
-  `until`, `count`) become reserved words. Any existing variable named
-  e.g. `count` becomes a parse error. Survey of qlib needed before
-  release; common collisions (`count` is the obvious one) remediated with
-  rename.
+- New operator keywords (`first`, `any`, `all`, `take`, `drop`,
+  `takewhile`, `takeuntil`, `count`, `iterate`) become reserved words. Any
+  existing identifier with these names becomes a parse error.  Survey
+  needed before release.
 - Existing operators (`find`, `select`, `map`, `foldl`, `foreach`)
   unchanged.
-- `find first` / `find last` / `find one` — extensions to existing `find`
-  syntax. Doesn't break anything because `first`/`last`/`one` after
-  `find` was a parse error before.
+- `find first` / `find last` / `find one` — extensions to existing
+  `find` syntax. Doesn't break anything because `first`/`last`/`one`
+  after `find` was a parse error before.
+- `while` is **not** added as an expression operator; renamed to
+  `takewhile`/`takeuntil` to avoid the grammar conflict with the
+  existing `while` statement keyword.
 
 ### 4.2 Behavior compatibility
 
@@ -375,16 +479,104 @@ expressions*. Programs with side effects in stage closures should observe
 the same ordering — fusion executes stages in source order per element,
 which matches the nested form's left-to-right execution per element.
 
-### 4.3 Reserved word survey
+### 4.3 Reserved-word collisions and disambiguation
 
-A grep before release: any qlib symbol named `first`, `any`, `all`,
-`take`, `drop`, `while` (already a keyword), `until`, or `count` that is
-a function or identifier rather than a keyword usage. `while` is already
-reserved as a control flow keyword — no conflict. `count` is the most
-likely user-named function (we have one in `<list>::size()` aliases and a
-few module-internal helpers). The parser uses context to disambiguate
-— `count <expr>` at expression position is the operator; `count(...)` as a
-function call is unambiguous.
+Each new operator keyword (`first`, `any`, `all`, `take`, `drop`,
+`takewhile`, `takeuntil`, `count`, `iterate`) potentially conflicts
+with existing user-code identifiers. The conflict surface differs per
+keyword:
+
+| Keyword | Conflict surface |
+|---|---|
+| `any` | **Already a Qore type name** (`any $x = ...`). Type names in Qore can also be used as variable/function/method/class names in non-type contexts, so `int any = 5;` is legal today. The new operator usage is yet another context; the parser must distinguish all three. |
+| `count` | Very common as user variable name (counters, totals). Likely the highest-volume conflict in real code. |
+| `first` | Moderately common as variable name. |
+| `iterate` | Verb-form picked deliberately to avoid `iter` (extremely common as iterator-variable name). The verb form is rarely used as a noun-style variable name. |
+| `all`, `take`, `drop`, `takewhile`, `takeuntil` | Less common but possible as identifiers. |
+
+**Disambiguation by parse context.** The parser uses position to
+distinguish operator from identifier usage:
+
+| Position | `count` interpreted as |
+|---|---|
+| Expression-statement start, no immediately-following `(` | operator (e.g., `count source;`) |
+| Expression with immediately-following `(` | function call (`count(arg);`) |
+| Identifier position (after `int`, `string`, etc.) | identifier (`int count = 0;`) |
+| Inside a `find ... in ... where` clause | not an operator (the find form has its own grammar) |
+
+This is the same disambiguation Qore already does for keyword
+operators that share names with possible identifiers. Adding the new
+operators extends an existing parsing pattern rather than introducing
+a new kind of ambiguity.
+
+**`any` specifically** — the existing duck of "any is a type AND can
+be used as an identifier" extends to "any is also an operator at
+expression position." Code that has `any` as a variable inside an
+expression (e.g., the right-hand side of an assignment) needs care.
+Mitigation: `qore-migrate-rename` can rewrite identifier uses to a
+non-keyword name; the survey before release flags how many sites need
+this. If the conflict surface in qlib is too large, we fall back to
+the alternative names below.
+
+**Alternative names if context-sensitive parsing proves insufficient:**
+
+| Primary | Fallback |
+|---|---|
+| `any <pred>, src` | `anymatch <pred>, src` |
+| `all <pred>, src` | `allmatch <pred>, src` |
+| `count <pred>, src` | `countof <pred>, src` |
+| `first <pred>, src` | `firstof <pred>, src` |
+
+The fallback names are ugly but unambiguously clash-free. We start
+with the cleaner names; switch if the qlib survey shows widespread
+breakage.
+
+**Migration tooling.** `qore-migrate-rename` ships with the release.
+Survey runs as part of the 2.3 release-readiness check; conflicts are
+listed in the migration guide.
+
+### 4.4 Parse options — per-keyword opt-out for backward compatibility
+
+Every new keyword introduced by this proposal gets a matching parse
+option that disables the keyword in the lexer for that program /
+module. Older sources that use one of the keywords as an identifier
+can opt out without rewriting:
+
+| Parse directive | Parse option flag (C++) | Disables |
+|---|---|---|
+| `%no-iterate` | `PO_NO_ITERATE` | `iterate` keyword (still parses as identifier) |
+| `%no-first` | `PO_NO_FIRST` | `first` keyword (still parses as identifier); also disables `find first` |
+| `%no-any-operator` | `PO_NO_ANY_OPERATOR` | `any` operator usage (the type-name usage is unaffected) |
+| `%no-all-operator` | `PO_NO_ALL_OPERATOR` | `all` keyword |
+| `%no-count` | `PO_NO_COUNT` | `count` keyword |
+| `%no-take` | `PO_NO_TAKE` | `take` keyword |
+| `%no-drop` | `PO_NO_DROP` | `drop` keyword |
+| `%no-takewhile` | `PO_NO_TAKEWHILE` | `takewhile` keyword |
+| `%no-takeuntil` | `PO_NO_TAKEUNTIL` | `takeuntil` keyword |
+| `%no-find-modifiers` | `PO_NO_FIND_MODIFIERS` | `find first`/`last`/`one` (the bare `find` form stays) |
+
+Plus a bundled escape hatch:
+
+| Parse directive | Parse option flag | Disables |
+|---|---|---|
+| `%no-streaming-operators` | `PO_NO_STREAMING_OPERATORS` | All of the above in one go (sets the union of bits) |
+
+Programs using the old single-name `find` form continue to parse
+unchanged whether or not these options are set. The opt-outs only
+affect new keyword recognition.
+
+**Why per-keyword granularity instead of a single bundle?** Modules
+usually have only one or two collisions, not all of them. A
+fine-grained opt-out lets a module preserve its single conflicting
+identifier while still using the rest of the new keywords.
+
+**Lifecycle.** The opt-outs ship in 2.3 and stay supported until the
+release after most callers have migrated. Removal is opt-in via the
+release notes; no automatic deprecation timer.
+
+The flag values share the parse-option bit space documented in
+`include/qore/qore_program_options.h`. We have ~14 free bits at the
+time of writing; the new flags fit comfortably.
 
 ### 4.4 Documentation
 
@@ -396,22 +588,23 @@ mentions the new reserved words.
 
 ## 5. Performance projections
 
-Numbers extrapolated from the `bugfix/text_processing` branch's measured
-fusion-style wins (the lazy iterator + native fast-path commits already
-gave us a baseline).
+**All numbers in this section are estimates** extrapolated from the
+`bugfix/text_processing` branch's measured fusion-style wins (the lazy
+iterator + native fast-path commits already gave us a baseline). They
+need to be confirmed against a fusion-pass prototype before release.
 
-### 5.1 Multi-stage chains (fusion)
+### 5.1 Multi-stage chains (fusion) — estimated
 
-| Workload | 2.3 today (post-branch) | 2.3 + fusion |
+| Workload | 2.3 today (post-branch) | 2.3 + fusion (estimated) |
 |---|---|---|
 | `foldl X, (map Y, src)` over 100K-element list | ~150 ms | ~50 ms |
 | `count P, (select Q, (map R, src))` over 100K | ~200 ms | ~40 ms |
-| Real qlib `MysqlSqlUtil` DDL emit (250 cols) | (negligible already) | (negligible) |
 | Synthetic 4-stage chain over 1M elements | ~1.2 s | ~0.3 s |
 
-The real qlib chain shapes (~2 stages, small input) gain less in absolute
-terms because the chain is short and cheap. The win is most visible in
-synthetic / future-code patterns with longer chains over larger inputs.
+Real qlib chain shapes (~2 stages over small input) gain less in
+absolute terms because the chain is short and cheap. The win is most
+visible in synthetic / future-code patterns with longer chains over
+larger inputs.
 
 ### 5.2 Short-circuit operators
 
@@ -424,42 +617,44 @@ synthetic / future-code patterns with longer chains over larger inputs.
 The `find first` case in particular goes from full O(N) to O(position-of-
 first-match) because the new operator stops iterating immediately on hit.
 
-### 5.3 Existing chains (zero migration)
+### 5.3 Existing chains (zero migration) — estimated
 
 Every existing `foldl(map(...))` chain in qlib speeds up automatically
-once fusion ships. Specific calls in the qlib survey from earlier
-analysis:
-
-- `qlib/MysqlSqlUtil.qm` DDL emit: ~10% faster (small absolute, many
-  callers)
-- `qlib/OpenApi3.qm` schema header concat: ~30% faster
-- `qlib/RestHandler.qm` subclass enumeration: ~20% faster
-
-These are micro-improvements in absolute terms but **zero risk and zero
-migration**.
+once fusion ships. The specific qlib chain shapes are short (2 stages)
+over small input (typically <1 KB column lists, schema headers, etc.),
+so the **absolute** gains are small even when the **relative** gain is
+significant. We have not benched these directly; estimating ~10–30 %
+faster on the 2-stage qlib chains, but the win is principally in the
+**zero-source-migration** property — no code review, no migration
+testing, every program improves.
 
 ---
 
 ## 6. Effort estimate
 
-| Component | Estimate |
+| Component | Estimate (sequential) |
 |---|---|
-| Lexer changes (new reserved words) | 2 days |
-| Parser changes (productions for first/any/all/take/drop/while/until/count) | 1 week |
+| Lexer changes (new reserved words: `first`, `any`, `all`, `take`, `drop`, `takewhile`, `takeuntil`, `count`, `iterate`) | 2 days |
+| Parser changes (productions for the 8 keyword operators) | 1 week |
 | Parser changes for `find first`/`last`/`one` | 3 days |
+| Parser + runtime support for `iterate` (uniform iterator factory) | 4 days |
 | AST nodes + non-fused emit for each operator | 2 weeks |
 | Fusion optimizer pass | 4-6 weeks |
-| Test coverage (qtest for each operator + property tests for fusion equivalence) | 2-3 weeks |
+| Test coverage (qtest per operator + property tests for fusion equivalence) | 2-3 weeks |
+| Reserved-word survey + `qore-migrate-rename` tool | 4 days |
 | Doc updates | 1 week |
-| **Total** | **~10-13 weeks** |
+| **Total (sequential)** | **~14-17 weeks** |
+| **Total (with parallelism, 2 developers)** | **~10-12 weeks** |
 
 Order:
 
-1. Operators + non-fused emit (~3 weeks). Releasable here — the operators
-   work, the fusion just isn't applied yet, programs are no slower than
-   before.
-2. Fusion optimizer (~5 weeks).
-3. Find-first/last/one extensions (~3 days, can land any time).
+1. Operators + non-fused emit + `iterate` keyword (~4 weeks). Releasable
+   here — the operators work, fusion just isn't applied yet, programs
+   are no slower than before. **The find-first ergonomic win is fully
+   realized at this milestone**, even without fusion.
+2. Fusion optimizer (~4-6 weeks). Adds the perf-on-existing-chains win.
+3. `find first`/`last`/`one` extensions (~3 days, can land any time
+   after step 1).
 
 The operators alone are independently shippable in case the fusion pass
 slips. Pre-fusion, a multi-stage chain still allocates intermediate
@@ -562,7 +757,7 @@ Mitigations:
 
 - [`char-type.md`](char-type.md) — the strong companion proposal (`char` value
   type)
-- [`iter-pipe-operator.md`](iter-pipe-operator.md) — separate, deferred
+- [`pipe-operator.md`](pipe-operator.md) — separate, deferred
   proposal for `|>` pipe sugar that would lower to the same fused IR as
   this proposal
 - `bugfix/text_processing` commits `8165b217b`–`bb1ea2d96` — the qlib
