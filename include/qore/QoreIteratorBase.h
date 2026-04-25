@@ -184,4 +184,29 @@ public:
         return getReferencedValue(xsink);                                       \
     }
 
+//! Reverse-iteration fast path: nativeNext routes to @c prev() so the
+//! Qore-visible @c next() (which iterates *backwards* on a reverse iterator)
+//! gets the correct dispatch.
+/** Use on @c QoreListReverseIterator and other reverse-iterator priv classes
+    that inherit a forward priv but should iterate the opposite direction at
+    the Qore-class level.  Without this override the inherited
+    @ref QORE_NATIVE_FAST_PATH_REFVAL would silently iterate forward.
+
+    @since %Qore 2.3
+ */
+#define QORE_NATIVE_FAST_PATH_REVERSE_REFVAL()                                  \
+    DLLLOCAL bool supportsNativeIteration() const override { return true; }     \
+    DLLLOCAL bool nativeNext(ExceptionSink* xsink) override {                   \
+        if (check(xsink)) {                                                     \
+            return false;                                                       \
+        }                                                                       \
+        return prev();                                                          \
+    }                                                                           \
+    DLLLOCAL QoreValue nativeGetValue(ExceptionSink* xsink) override {          \
+        if (check(xsink)) {                                                     \
+            return QoreValue();                                                 \
+        }                                                                       \
+        return getReferencedValue(xsink);                                       \
+    }
+
 #endif

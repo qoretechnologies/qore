@@ -46,6 +46,16 @@ public:
    DLLLOCAL virtual const char* getName() const {
       return "ListHashReverseIterator";
    }
+
+   // Reverse fast path: nativeNext routes to prev() (the ConstListIterator
+   // backwards walker).  Inherits getRow-based nativeGetValue from the
+   // forward priv.
+   DLLLOCAL bool nativeNext(ExceptionSink* xsink) override {
+      if (check(xsink)) {
+         return false;
+      }
+      return ConstListIterator::prev();
+   }
 };
 
 //! This class a reverse iterator class for lists of hashes as returned by Qore::SQL::Datasource::selectRows() and Qore::SQL::DatasourcePool::selectRows(), both of which return hashes with keys giving column names where the key values are lists of column values
