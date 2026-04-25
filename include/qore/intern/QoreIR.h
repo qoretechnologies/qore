@@ -1135,6 +1135,12 @@ public:
             : QoreIRInstruction(op) {
     }
 
+    ~QoreIRLValuePathInstruction() override {
+        if (owns_delete_lvalue_expr) {
+            delete_lvalue_expr.discard(nullptr);
+        }
+    }
+
     std::vector<LVPathStep> path;  //!< Root step + navigation steps
 
     //! For LValuePathAssign
@@ -1153,6 +1159,7 @@ public:
     //! destructors whose C++ member cleanup chains interact with async I/O
     //! controllers and cannot tolerate in-place setEntry(NOTHING) deref).
     QoreValue delete_lvalue_expr;
+    bool owns_delete_lvalue_expr = false; //!< True for AOT-deserialized delete_lvalue_expr values.
 
     //! For LValuePathBinaryMut
     LVBinaryMutOp binary_mut_op = LVBinaryMutOp::Push;

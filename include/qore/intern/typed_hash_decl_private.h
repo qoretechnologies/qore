@@ -92,6 +92,12 @@ public:
     }
 
     DLLLOCAL bool equal(const typed_hash_decl_private& other) const {
+        // Imported/copied hashdecls keep the same original declaration pointer.
+        // Treat that as identity before structural comparison so AOT/module load
+        // ordering cannot make copies of the same declaration temporarily diverge.
+        if (orig == other.orig) {
+            return true;
+        }
         if (name != other.name || members.size() != other.members.size())
             return false;
 

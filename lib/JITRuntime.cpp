@@ -6141,6 +6141,31 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
     bool is_remove = (inst->unary_op == LVUnaryOp::Remove || inst->unary_op == LVUnaryOp::Delete);
     QoreValue res;
 
+    // Match QoreIRInterpreter's AST-compatible delete/remove path when
+    // lowering preserved the original lvalue expression.  In particular,
+    // delete must detach the lvalue first and then destroy the detached
+    // object, so object member locks are not held across user destructors.
+    if (is_remove && inst->delete_lvalue_expr.hasNode()) {
+        bool is_delete = (inst->unary_op == LVUnaryOp::Delete);
+        LValueRemoveHelper lvrh(inst->delete_lvalue_expr, xsink, is_delete);
+        if (lvrh && !*xsink) {
+            if (is_delete) {
+                lvrh.deleteLValue();
+                res = QoreValue();
+            } else {
+                res = lvrh.removeValue();
+            }
+        }
+        if (*xsink) {
+            return toBits(QoreValue());
+        }
+        if (!inst->ref_rv) {
+            res.discard(xsink);
+            return toBits(QoreValue());
+        }
+        return toBits(res);
+    }
+
     // Multi-step hash/list remove/delete: navigate to the PARENT container,
     // then drop the final key/element.  LValueHelper::remove() only clears
     // the value without removing the hash key; we need container-level

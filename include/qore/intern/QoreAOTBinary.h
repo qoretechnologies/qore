@@ -63,6 +63,14 @@ struct QoreProgramLocation;
 //! Reverse map from constant value node pointer to fully-qualified constant name
 typedef std::unordered_map<const AbstractQoreNode*, std::string> AOTConstantReverseMap;
 
+//! Adds a constant value and any nested hash/list node values to the AOT reverse map.
+void qore_aot_add_constant_value_reverse_mappings(AOTConstantReverseMap& crm,
+    const QoreValue& v, const std::string& path);
+
+//! Resolves a top-level or encoded nested AOT constant path to a runtime value.
+QoreValue qore_aot_resolve_constant_path_value(QoreProgram* pgm, const char* path,
+    bool defer_if_pending, bool wrap_top_level_if_ready = false);
+
 //! Magic number: "QORD" in little-endian (0x44524F51)
 constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 
@@ -94,8 +102,9 @@ constexpr uint64_t QORE_AOT_FEAT_SIG_LINES       = 1ULL << 11; //!< per-variant 
 constexpr uint64_t QORE_AOT_FEAT_CONTEXT_IR      = 1ULL << 12; //!< native IR lowering of `context` statement (Context carries name+exp+where+sort; ContextMaxPos/SetPos/Destroy opcodes present)
 constexpr uint64_t QORE_AOT_FEAT_LVPATH_SLICE    = 1ULL << 13; //!< LVPathStepKind::HashKeySlice / ListIndexSlice with slice_operand_ids vector (multi-key hash / multi-index list remove/delete)
 constexpr uint64_t QORE_AOT_FEAT_MODULE_PATH_LISTS = 1ULL << 14; //!< per-Program %prepend-module-path / %append-module-path lists (MODULE_PATH_PREPEND / MODULE_PATH_APPEND sections)
+constexpr uint64_t QORE_AOT_FEAT_LVPATH_DELETE_EXPR = 1ULL << 15; //!< LValuePath records include optional original delete/remove lvalue expression for detach-then-destroy semantics
 //! Mask of all currently supported features
-constexpr uint64_t QORE_AOT_SUPPORTED_FEATURES   = 0x7FFFULL;
+constexpr uint64_t QORE_AOT_SUPPORTED_FEATURES   = 0xFFFFULL;
 
 //! Section type IDs
 enum class QoreAOTSectionType : uint16_t {
@@ -828,6 +837,9 @@ enum class AOTExprNodeKind : uint8_t {
     EN_SELF_REF      = 12,  //!< u16 name_len + bytes (member name)
     EN_STATIC_VAR    = 13,  //!< u16 class_len + bytes + u16 var_len + bytes
     EN_CONST_REF     = 14,  //!< u16 name_len + bytes (fully qualified)
+    EN_CONTEXT_REF   = 15,  //!< u16 member_len + bytes (%member)
+    EN_CONTEXT_ROW   = 16,  //!< whole current context row (%%)
+    EN_COMPLEX_CONTEXT_REF = 17, //!< u16 ctx_len + bytes + u16 member_len + bytes + u32 stack_offset (%ctx:member)
 
     // Call nodes (children = args)
     EN_FUNC_CALL     = 20,  //!< u16 name_len + bytes; children = args
@@ -1024,6 +1036,7 @@ struct AOTLVPathSlotId {
     uint8_t binary_mut_op;     //!< LVBinaryMutOp
     uint8_t ternary_op;        //!< LVTernaryOp
     uint8_t ref_rv = 1;        //!< whether the return value of the operation is used
+    QoreValue delete_lvalue_expr; //!< original lvalue expression for AST-compatible Delete/Remove
     //! For RegexSubst / Transliterate binary_mut ops — the pattern info needed to
     //! reconstruct the QoreRegexSubst / QoreTransliteration runtime object.  Empty
     //! (pattern_empty = true) for opcodes that don't use a pattern expression.

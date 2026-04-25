@@ -57,10 +57,12 @@ const QoreAOTExprNodeKindInfo AOT_EXPR_NODE_KIND_REGISTRY[256] = {
     {"EN_STATIC_VAR", 13, true, read_node_EN_STATIC_VAR, "Static class variable"},
     {"EN_CONST_REF", 14, true, read_node_EN_CONST_REF, "Constant reference"},
 
-    // [15-19] Undefined
-    {nullptr, 15, false, nullptr, nullptr},
-    {nullptr, 16, false, nullptr, nullptr},
-    {nullptr, 17, false, nullptr, nullptr},
+    // [15-17] Context references
+    {"EN_CONTEXT_REF", 15, true, read_node_EN_CONTEXT_REF, "Context member reference"},
+    {"EN_CONTEXT_ROW", 16, true, read_node_EN_CONTEXT_ROW, "Context row reference"},
+    {"EN_COMPLEX_CONTEXT_REF", 17, true, read_node_EN_COMPLEX_CONTEXT_REF, "Named context member reference"},
+
+    // [18-19] Undefined
     {nullptr, 18, false, nullptr, nullptr},
     {nullptr, 19, false, nullptr, nullptr},
 

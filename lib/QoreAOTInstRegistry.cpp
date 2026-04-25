@@ -2237,6 +2237,14 @@ static bool writeLValuePath(AOTInstWriteCtx& ctx) {
     ctx.writer.writeU8(static_cast<uint8_t>(pi->unary_op));
     ctx.writer.writeU8(static_cast<uint8_t>(pi->binary_mut_op));
     ctx.writer.writeU8(static_cast<uint8_t>(pi->ternary_op));
+    if (pi->delete_lvalue_expr.hasNode()) {
+        ctx.writer.writeU8(1);
+        if (!ctx.writeExpr(ctx.writer, pi->delete_lvalue_expr)) {
+            return false;
+        }
+    } else {
+        ctx.writer.writeU8(0);
+    }
     // Write path steps
     ctx.writer.writeU8(static_cast<uint8_t>(pi->path.size()));
     for (const auto& step : pi->path) {
@@ -2269,6 +2277,18 @@ static std::unique_ptr<QoreIRInstruction> readLValuePath(
     pi->unary_op = static_cast<LVUnaryOp>(QoreAOTBinaryReader::readU8(ctx.ptr));
     pi->binary_mut_op = static_cast<LVBinaryMutOp>(QoreAOTBinaryReader::readU8(ctx.ptr));
     pi->ternary_op = static_cast<LVTernaryOp>(QoreAOTBinaryReader::readU8(ctx.ptr));
+    if ((ctx.reader.getHeader().feature_flags & QORE_AOT_FEAT_LVPATH_DELETE_EXPR) != 0) {
+        if (QoreAOTBinaryReader::readU8(ctx.ptr)) {
+            std::string error;
+            pi->delete_lvalue_expr = ctx.readExpr(ctx.reader, ctx.ptr, ctx.end, error);
+            pi->owns_delete_lvalue_expr = true;
+            if (!error.empty()) {
+                ctx.error = error;
+                delete pi;
+                return nullptr;
+            }
+        }
+    }
     // Read path steps
     uint8_t num_steps = QoreAOTBinaryReader::readU8(ctx.ptr);
     for (uint8_t i = 0; i < num_steps; ++i) {

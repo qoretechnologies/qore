@@ -587,7 +587,7 @@ int FtpControlPollOperationPriv::submitToController(ExceptionSink* xsink, const 
 
     // Submit with replace=true — the control op is re-submitted for each command,
     // and the controller must replace the old entry to avoid ref leaks
-    ReferenceHolder<QoreObject> rv(ctl_priv->submit(*ctl_obj, info.release(), true, xsink), xsink);
+    ReferenceHolder<QoreObject> rv(ctl_priv->submit(*ctl_obj, *info, true, xsink), xsink);
     if (*xsink) {
         return -1;
     }
@@ -643,13 +643,9 @@ qclass FtpControlPollOperation [
 */
 FtpControlPollOperation::constructor(string host, int port = 21, bool secure = False,
         bool secure_data = False, *string user, *string pass) {
-    // Create control socket — refcount starts at 1 from 'new'
+    // Create control socket — the QoreObject owns the initial ref and the
+    // connect op owns the only extra ref; the FTP priv keeps a raw pointer.
     QoreSocketObject* sock_priv = new QoreSocketObject;
-
-    // QoreObject(cls, pgm, data) takes ownership of one ref but does NOT add its own ref.
-    // We need an extra ref so the socket survives when inner ops deref their copy.
-    // Refcount after this block: 1 (new) + 1 (explicit ref) = 2
-    sock_priv->ref();
 
     // Build target string for connect
     QoreStringMaker target("%s:%lld", host->c_str(), port);
@@ -660,14 +656,11 @@ FtpControlPollOperation::constructor(string host, int port = 21, bool secure = F
         false, target.c_str(), sock_priv);
     if (*xsink) {
         connect_op->deref(xsink);
-        // deref our explicit ref + the original ref
-        sock_priv->deref(xsink);
         sock_priv->deref(xsink);
         return;
     }
 
-    // Create QoreObject wrapper — consumes one ref (from 'new'): refcount stays 3
-    // (1 consumed by QoreObject, 1 explicit, 1 connect_op)
+    // Create QoreObject wrapper — consumes the initial ref from 'new'.
     QoreObject* sock_obj = new QoreObject(QC_SOCKET, getProgram(), sock_priv);
     self->setMemberValue("sock", QC_FTPCONTROLPOLLOPERATION, sock_obj, xsink);
     if (*xsink) {
@@ -1015,7 +1008,7 @@ int FtpPortAcceptPollOperationPriv::submitToController(ExceptionSink* xsink, con
         return -1;
     }
 
-    ReferenceHolder<QoreObject> rv(ctl_priv->submit(*ctl_obj, info.release(), false, xsink), xsink);
+    ReferenceHolder<QoreObject> rv(ctl_priv->submit(*ctl_obj, *info, false, xsink), xsink);
     return *xsink ? -1 : 0;
 }
 

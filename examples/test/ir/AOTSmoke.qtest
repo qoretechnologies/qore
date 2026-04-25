@@ -62,6 +62,8 @@ class AOTSmokeTest inherits QUnit::Test {
         # Module compilation tests
         addTestCase("AOT module compile", \testAOTModuleCompile());
         addTestCase("AOT module no-narrow member types", \testAOTModuleNoNarrowMemberTypes());
+        addTestCase("AOT module hashdecl member compound lvalue",
+            \testAOTModuleHashdeclMemberCompoundLValue());
         addTestCase("AOT module hashdecl class constants", \testAOTModuleHashdeclClassConstants());
         addTestCase("AOT module BCA hashdecl class constants",
             \testAOTModuleBcaHashdeclClassConstants());
@@ -142,6 +144,7 @@ class AOTSmokeTest inherits QUnit::Test {
         addTestCase("AOT operator keys", \testOperatorKeys());
         addTestCase("AOT operator instanceof", \testOperatorInstanceof());
         addTestCase("AOT operator map optimized", \testOperatorMapOptimized());
+        addTestCase("AOT context row expression", \testContextRowExpression());
         # Closure exception safety tests
         addTestCase("AOT closure exception safety", \testClosureExceptionSafety());
         addTestCase("AOT closure exception outer", \testClosureExceptionOuter());
@@ -1523,6 +1526,77 @@ printf(\"%s\", AOTNoNarrowMember::run());
         assertEq(interp_out, aot_out, "compiled module preserves hash<auto!>/list<auto!> member types: " + aot_out);
         assertTrue(aot_out.regex("alpha"), "hash member accepted mixed value types: " + aot_out);
         assertTrue(aot_out.regex("0.3"), "list member accepted mixed value types: " + aot_out);
+    }
+
+    testAOTModuleHashdeclMemberCompoundLValue() {
+        string tmp_dir = sprintf("/tmp/aot_hashdecl_member_compound_%d", getpid());
+        mkdir(tmp_dir);
+        on_exit {
+            backquote(sprintf("rm -rf %s", tmp_dir));
+        }
+
+        string mod_code = "%modern
+module AOTHashdeclMemberCompound {
+    version = \"1.0\";
+    desc = \"AOT hashdecl member compound lvalue regression\";
+    author = \"Test\";
+    url = \"http://test.example.com\";
+    license = \"MIT\";
+}
+
+public namespace AOTHashdeclMemberCompound {
+    public hashdecl QueryInfo {
+        list<auto> args;
+    }
+
+    public class C {
+        private addWhere(reference<hash<QueryInfo>> info, auto v) {
+            info.args += v;
+        }
+
+        public string run() {
+            hash<QueryInfo> qinfo = <QueryInfo>{\"args\": ()};
+            qinfo.args += \"s\";
+            addWhere(\\qinfo, 1);
+            return sprintf(\"%y\\n\", qinfo.args);
+        }
+    }
+
+    public string sub run() {
+        C c();
+        return c.run();
+    }
+}
+";
+        string qm_path = tmp_dir + "/AOTHashdeclMemberCompound.qm";
+        {
+            File f();
+            f.open2(qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write(mod_code);
+            f.close();
+        }
+
+        string qmod_path = tmp_dir + "/AOTHashdeclMemberCompound.qmod";
+        hash<auto> result = compileModuleFile(qm_path, qmod_path);
+        assertTrue(result.compiled, "hashdecl member compound module compiled: " + result.compile_out);
+
+        string test_code = "%modern
+%requires AOTHashdeclMemberCompound
+printf(\"%s\", AOTHashdeclMemberCompound::run());
+";
+        hash<auto> paths = writeTempScript(test_code);
+        on_exit {
+            unlink(paths.src);
+        }
+
+        string aot_out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, tmp_dir, qore_bin, paths.src));
+        unlink(qmod_path);
+        string interp_out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, tmp_dir, qore_bin, paths.src));
+
+        assertEq(interp_out, aot_out, "compiled module preserves hashdecl member lvalue += semantics: " + aot_out);
+        assertEq("[\"s\", 1]\n", aot_out, "hashdecl list<auto> member accepts mixed += values");
     }
 
     testAOTModuleHashdeclClassConstants() {
@@ -3902,6 +3976,28 @@ exit(0);
         hash<auto> result = compileCheckAndRun(code);
         string interp_out = runInterpreted(code);
         assertEq(interp_out, result.run_out, "map operator output matches interpreter");
+    }
+
+    testContextRowExpression() {
+        string code = "%modern
+hash q = (\"name\": (\"david\"), \"age\": (37));
+hash t = (\"name\": (\"david\"), \"label\": (\"D\"));
+hash<auto> row;
+string label;
+context q (q) {
+    context t (t) where (%q:name == %name) {
+        row = %%;
+        label = %q:name + \":\" + %t:label;
+    }
+}
+printf(\"%s|%s|%s\\n\", row.name, row.label, label);
+exit(0);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "context row/reference expressions fully precompiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out, "context row/reference output matches interpreter");
     }
 
     testClosureExceptionSafety() {

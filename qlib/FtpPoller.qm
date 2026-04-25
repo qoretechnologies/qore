@@ -845,6 +845,7 @@ public class FtpPoller {
             sleep_cond.broadcast();
         }
 
+        ftp.disconnect();
         sc.wait();
     }
 

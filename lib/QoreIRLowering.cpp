@@ -5170,6 +5170,17 @@ QoreIRValue QoreIRLowering::lowerPlusEquals(const QoreValue& expr, std::string& 
         left_var = nullptr;
     }
     if (!left_var) {
+        // Prefer true lvalue semantics for member/subscript compound assignments.
+        // The hash/list load-compute-store fast paths cannot preserve hashdecl
+        // member types (ex: list<auto> fields) or in-place container semantics.
+        {
+            QoreIRValue path_result = tryEmitLValuePathOp(QoreIROpcode::LValuePathCompound,
+                op->getLeft(), &right, op->loc, error, false, LVCompoundOp::AddAssign);
+            if (path_result.isValid()) {
+                return path_result;
+            }
+        }
+
         // Fast path: constant-key hash subscript compound assignment
         const VarRefNode* container_var = nullptr;
         std::string key_name;
@@ -5191,15 +5202,6 @@ QoreIRValue QoreIRLowering::lowerPlusEquals(const QoreValue& expr, std::string& 
             QoreIROpcode arith_op = force_int ? QoreIROpcode::AddAssignInt : QoreIROpcode::AddAssignAny;
             return emitListKeyCompoundOp(container_var, index_expr,
                 arith_op, right, expr, op->loc, error);
-        }
-
-        // Path-based compound assignment for complex lvalues (member chains, nested subscripts)
-        {
-            QoreIRValue path_result = tryEmitLValuePathOp(QoreIROpcode::LValuePathCompound,
-                op->getLeft(), &right, op->loc, error, false, LVCompoundOp::AddAssign);
-            if (path_result.isValid()) {
-                return path_result;
-            }
         }
 
         if (!op->getLeft().hasNode()) {
@@ -5340,6 +5342,15 @@ QoreIRValue QoreIRLowering::lowerMinusEquals(const QoreValue& expr, std::string&
         left_var = nullptr;
     }
     if (!left_var) {
+        // Prefer true lvalue semantics for member/subscript compound assignments.
+        {
+            QoreIRValue path_result = tryEmitLValuePathOp(QoreIROpcode::LValuePathCompound,
+                op->getLeft(), &right, op->loc, error, false, LVCompoundOp::SubAssign);
+            if (path_result.isValid()) {
+                return path_result;
+            }
+        }
+
         // Fast path: constant-key hash subscript compound assignment
         const VarRefNode* container_var = nullptr;
         std::string key_name;
@@ -5361,15 +5372,6 @@ QoreIRValue QoreIRLowering::lowerMinusEquals(const QoreValue& expr, std::string&
             QoreIROpcode arith_op = force_int ? QoreIROpcode::SubAssignInt : QoreIROpcode::SubAssignAny;
             return emitListKeyCompoundOp(container_var, index_expr,
                 arith_op, right, expr, op->loc, error);
-        }
-
-        // Path-based compound assignment for complex lvalues (member chains, nested subscripts)
-        {
-            QoreIRValue path_result = tryEmitLValuePathOp(QoreIROpcode::LValuePathCompound,
-                op->getLeft(), &right, op->loc, error, false, LVCompoundOp::SubAssign);
-            if (path_result.isValid()) {
-                return path_result;
-            }
         }
 
         if (!op->getLeft().hasNode()) {
@@ -5496,6 +5498,15 @@ QoreIRValue QoreIRLowering::lowerMultiplyEquals(const QoreValue& expr, std::stri
         left_var = nullptr;
     }
     if (!left_var) {
+        // Prefer true lvalue semantics for member/subscript compound assignments.
+        {
+            QoreIRValue path_result = tryEmitLValuePathOp(QoreIROpcode::LValuePathCompound,
+                op->getLeft(), &right, op->loc, error, false, LVCompoundOp::MulAssign);
+            if (path_result.isValid()) {
+                return path_result;
+            }
+        }
+
         // Fast path: constant-key hash subscript compound assignment
         const VarRefNode* container_var = nullptr;
         std::string key_name;
@@ -5514,15 +5525,6 @@ QoreIRValue QoreIRLowering::lowerMultiplyEquals(const QoreValue& expr, std::stri
         if (isConstIndexListSubscript(op->getLeft(), container_var, index_expr)) {
             return emitListKeyCompoundOp(container_var, index_expr,
                 QoreIROpcode::MulAssignAny, right, expr, op->loc, error);
-        }
-
-        // Path-based compound assignment for complex lvalues
-        {
-            QoreIRValue path_result = tryEmitLValuePathOp(QoreIROpcode::LValuePathCompound,
-                op->getLeft(), &right, op->loc, error, false, LVCompoundOp::MulAssign);
-            if (path_result.isValid()) {
-                return path_result;
-            }
         }
 
         if (!op->getLeft().hasNode()) {
@@ -5610,6 +5612,15 @@ QoreIRValue QoreIRLowering::lowerDivideEquals(const QoreValue& expr, std::string
         left_var = nullptr;
     }
     if (!left_var) {
+        // Prefer true lvalue semantics for member/subscript compound assignments.
+        {
+            QoreIRValue path_result = tryEmitLValuePathOp(QoreIROpcode::LValuePathCompound,
+                op->getLeft(), &right, op->loc, error, false, LVCompoundOp::DivAssign);
+            if (path_result.isValid()) {
+                return path_result;
+            }
+        }
+
         // Fast path: constant-key hash subscript compound assignment
         const VarRefNode* container_var = nullptr;
         std::string key_name;
@@ -5628,15 +5639,6 @@ QoreIRValue QoreIRLowering::lowerDivideEquals(const QoreValue& expr, std::string
         if (isConstIndexListSubscript(op->getLeft(), container_var, index_expr)) {
             return emitListKeyCompoundOp(container_var, index_expr,
                 QoreIROpcode::DivAssignAny, right, expr, op->loc, error);
-        }
-
-        // Path-based compound assignment for complex lvalues
-        {
-            QoreIRValue path_result = tryEmitLValuePathOp(QoreIROpcode::LValuePathCompound,
-                op->getLeft(), &right, op->loc, error, false, LVCompoundOp::DivAssign);
-            if (path_result.isValid()) {
-                return path_result;
-            }
         }
 
         if (!op->getLeft().hasNode()) {

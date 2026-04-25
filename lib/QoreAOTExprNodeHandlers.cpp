@@ -281,35 +281,37 @@ static QoreValue read_node_EN_CONST_REF(AOTExprNodeReadCtx& ctx) {
     std::string name = readStr(ctx.ptr, ctx.end);
     readU16(ctx.ptr, ctx.end);
     if (!name.empty()) {
-        qore_program_private* pp = qore_program_private::get(*ctx.pgm);
-        const qore_ns_private* cns = nullptr;
-        const ConstantEntry* ce = qore_root_ns_private::runtimeFindNamespaceConstant(
-            *pp->RootNS, name.c_str(), cns);
-        if (!ce) {
-            // Try class constant lookup: path format "ClassName::ConstName"
-            size_t sep = name.rfind("::");
-            if (sep != std::string::npos && sep > 0) {
-                std::string class_path = name.substr(0, sep);
-                std::string const_name = name.substr(sep + 2);
-                const qore_ns_private* found_ns = nullptr;
-                const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
-                    *pp->RootNS, class_path.c_str(), found_ns);
-                if (qc) {
-                    ce = qore_class_private::get(*qc)->constlist.findEntry(const_name.c_str());
-                }
-            }
-        }
-        if (ce) {
-            if (ce->hasValue()) {
-                return ce->getReferencedValue();
-            }
-            return QoreValue(new RuntimeConstantRefNode(&loc_builtin,
-                const_cast<ConstantEntry*>(ce), /*aot_deferred=*/true));
+        QoreValue rv = qore_aot_resolve_constant_path_value(ctx.pgm, name.c_str(), true);
+        if (rv) {
+            return rv;
         }
         printd(0, "AOT EXPR_TREE: cannot resolve constant '%s'\n", name.c_str());
     }
     ctx.failed = true;
     return QoreValue();
+}
+
+static QoreValue read_node_EN_CONTEXT_REF(AOTExprNodeReadCtx& ctx) {
+    std::string member = readStr(ctx.ptr, ctx.end);
+    readU16(ctx.ptr, ctx.end);
+    return QoreValue(new ContextrefNode(&loc_builtin, strdup(member.c_str())));
+}
+
+static QoreValue read_node_EN_CONTEXT_ROW(AOTExprNodeReadCtx& ctx) {
+    readU16(ctx.ptr, ctx.end);
+    return QoreValue(new ContextRowNode(&loc_builtin));
+}
+
+static QoreValue read_node_EN_COMPLEX_CONTEXT_REF(AOTExprNodeReadCtx& ctx) {
+    std::string name = readStr(ctx.ptr, ctx.end);
+    std::string member = readStr(ctx.ptr, ctx.end);
+    uint32_t stack_offset = readU32(ctx.ptr, ctx.end);
+    readU16(ctx.ptr, ctx.end);
+
+    std::string spec = name + ":" + member;
+    auto* node = new ComplexContextrefNode(&loc_builtin, strdup(spec.c_str()));
+    node->stack_offset = static_cast<int>(stack_offset);
+    return QoreValue(node);
 }
 
 // ============================================================================

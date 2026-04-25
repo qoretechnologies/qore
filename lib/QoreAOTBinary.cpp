@@ -291,6 +291,111 @@ static bool readDeferredMemberDefault(
     return true;
 }
 
+static constexpr const char* AOT_CONST_PATH_PREFIX = "@qore-aot-const-path:";
+
+static bool aot_is_encoded_constant_path(const char* path) {
+    return path && !strncmp(path, AOT_CONST_PATH_PREFIX, strlen(AOT_CONST_PATH_PREFIX));
+}
+
+static std::string aot_encode_constant_path_root(const std::string& base) {
+    return std::string(AOT_CONST_PATH_PREFIX) + std::to_string(base.size()) + ":" + base;
+}
+
+static std::string aot_append_constant_hash_key_path(const std::string& base, const char* key) {
+    std::string rv = aot_is_encoded_constant_path(base.c_str()) ? base : aot_encode_constant_path_root(base);
+    size_t key_len = key ? strlen(key) : 0;
+    rv += "H";
+    rv += std::to_string(key_len);
+    rv += ":";
+    if (key_len) {
+        rv.append(key, key_len);
+    }
+    return rv;
+}
+
+static std::string aot_append_constant_list_index_path(const std::string& base, size_t index) {
+    std::string rv = aot_is_encoded_constant_path(base.c_str()) ? base : aot_encode_constant_path_root(base);
+    rv += "L";
+    rv += std::to_string(index);
+    rv += ":";
+    return rv;
+}
+
+static bool aot_parse_size_component(const std::string& path, size_t& pos, size_t& value) {
+    if (pos >= path.size() || path[pos] < '0' || path[pos] > '9') {
+        return false;
+    }
+    size_t rv = 0;
+    while (pos < path.size() && path[pos] >= '0' && path[pos] <= '9') {
+        rv = (rv * 10) + static_cast<size_t>(path[pos] - '0');
+        ++pos;
+    }
+    if (pos >= path.size() || path[pos] != ':') {
+        return false;
+    }
+    ++pos;
+    value = rv;
+    return true;
+}
+
+static void aot_add_constant_value_reverse_mappings_impl(AOTConstantReverseMap& crm,
+        const QoreValue& v, const std::string& path,
+        std::unordered_set<const AbstractQoreNode*>& seen, bool root_value) {
+    if (!v.hasNode()) {
+        return;
+    }
+
+    const AbstractQoreNode* node = v.getInternalNode();
+    if (!node || !seen.insert(node).second) {
+        return;
+    }
+
+    if (root_value) {
+        auto it = crm.find(node);
+        if (it == crm.end() || aot_is_encoded_constant_path(it->second.c_str())) {
+            crm[node] = path;
+        }
+    } else {
+        crm.emplace(node, path);
+    }
+
+    if (v.getType() == NT_HASH) {
+        const QoreHashNode* h = v.get<const QoreHashNode>();
+        if (!h) {
+            return;
+        }
+        ConstHashIterator hi(*h);
+        while (hi.next()) {
+            QoreValue hv = hi.get();
+            if (hv.hasNode()) {
+                aot_add_constant_value_reverse_mappings_impl(crm, hv,
+                    aot_append_constant_hash_key_path(path, hi.getKey()), seen, false);
+            }
+        }
+        return;
+    }
+
+    if (v.getType() == NT_LIST) {
+        const QoreListNode* l = v.get<const QoreListNode>();
+        if (!l) {
+            return;
+        }
+        for (size_t i = 0, e = l->size(); i < e; ++i) {
+            QoreValue lv = l->retrieveEntry(i);
+            if (lv.hasNode()) {
+                aot_add_constant_value_reverse_mappings_impl(crm, lv,
+                    aot_append_constant_list_index_path(path, i), seen, false);
+            }
+        }
+    }
+}
+
+void qore_aot_add_constant_value_reverse_mappings(AOTConstantReverseMap& crm,
+        const QoreValue& v, const std::string& path) {
+    std::unordered_set<const AbstractQoreNode*> seen;
+    aot_add_constant_value_reverse_mappings_impl(crm, v, path, seen, true);
+}
+
 // Resolve a constant FQN (e.g. "Reflection::AutoHashType" or
 // "Some::Class::MEMBER") to its ConstantEntry via the given program, falling
 // back to a class-constant lookup when the name isn't a namespace constant.
@@ -323,6 +428,98 @@ static ConstantEntry* aot_resolve_constant_by_fqn(QoreProgram* pgm, const char* 
     }
     return const_cast<ConstantEntry*>(
         qore_class_private::get(*qc)->constlist.findEntry(const_name.c_str()));
+}
+
+QoreValue qore_aot_resolve_constant_path_value(QoreProgram* pgm, const char* path,
+        bool defer_if_pending, bool wrap_top_level_if_ready) {
+    if (!path || !*path) {
+        return QoreValue();
+    }
+
+    if (!aot_is_encoded_constant_path(path)) {
+        ConstantEntry* ce = aot_resolve_constant_by_fqn(pgm, path);
+        if (!ce) {
+            return QoreValue();
+        }
+        if (wrap_top_level_if_ready && ce->hasValue()) {
+            return QoreValue(new RuntimeConstantRefNode(&loc_builtin, ce));
+        }
+        if (ce->hasValue()) {
+            return ce->getReferencedValue();
+        }
+        if (defer_if_pending) {
+            return QoreValue(new RuntimeConstantRefNode(&loc_builtin, ce, true));
+        }
+        return ce->getReferencedValue();
+    }
+
+    std::string encoded(path);
+    size_t pos = strlen(AOT_CONST_PATH_PREFIX);
+    size_t base_len = 0;
+    if (!aot_parse_size_component(encoded, pos, base_len) || pos + base_len > encoded.size()) {
+        return QoreValue();
+    }
+    std::string base = encoded.substr(pos, base_len);
+    pos += base_len;
+
+    ConstantEntry* ce = aot_resolve_constant_by_fqn(pgm, base.c_str());
+    if (!ce) {
+        return QoreValue();
+    }
+    if (!ce->hasValue()) {
+        if (pos == encoded.size() && defer_if_pending) {
+            return QoreValue(new RuntimeConstantRefNode(&loc_builtin, ce, true));
+        }
+        return QoreValue();
+    }
+
+    QoreValue cur = ce->getReferencedValue();
+    while (pos < encoded.size()) {
+        char seg = encoded[pos++];
+        size_t len_or_index = 0;
+        if (!aot_parse_size_component(encoded, pos, len_or_index)) {
+            cur.discard(nullptr);
+            return QoreValue();
+        }
+
+        QoreValue next;
+        if (seg == 'H') {
+            if (pos + len_or_index > encoded.size() || cur.getType() != NT_HASH) {
+                cur.discard(nullptr);
+                return QoreValue();
+            }
+            std::string key = encoded.substr(pos, len_or_index);
+            pos += len_or_index;
+            const QoreHashNode* h = cur.get<const QoreHashNode>();
+            bool exists = false;
+            next = h ? h->getKeyValueExistence(key.c_str(), exists) : QoreValue();
+            if (!exists) {
+                cur.discard(nullptr);
+                return QoreValue();
+            }
+            next = next.refSelf();
+        } else if (seg == 'L') {
+            if (cur.getType() != NT_LIST) {
+                cur.discard(nullptr);
+                return QoreValue();
+            }
+            const QoreListNode* l = cur.get<const QoreListNode>();
+            if (!l || len_or_index >= l->size()) {
+                cur.discard(nullptr);
+                return QoreValue();
+            }
+            QoreValue lv = l->retrieveEntry(len_or_index);
+            next = lv.refSelf();
+        } else {
+            cur.discard(nullptr);
+            return QoreValue();
+        }
+
+        cur.discard(nullptr);
+        cur = next;
+    }
+
+    return cur;
 }
 
 // ---- QoreAOTBinaryWriter ----
@@ -1300,41 +1497,12 @@ QoreValue QoreAOTBinaryReader::readValue(const uint8_t*& ptr, const uint8_t* end
                 error = "no current program for const_ref resolution";
                 return QoreValue();
             }
-            qore_program_private* pp = qore_program_private::get(*pgm);
-            const qore_ns_private* cns = nullptr;
-            ConstantEntry* ce = const_cast<ConstantEntry*>(
-                qore_root_ns_private::runtimeFindNamespaceConstant(
-                    *pp->RootNS, fqn, cns));
-            if (!ce) {
-                // Try class constant lookup: path format "ClassName::ConstName"
-                std::string path(fqn);
-                size_t sep = path.rfind("::");
-                if (sep != std::string::npos && sep > 0) {
-                    std::string class_path = path.substr(0, sep);
-                    std::string const_name = path.substr(sep + 2);
-                    const qore_ns_private* found_ns = nullptr;
-                    const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
-                        *pp->RootNS, class_path.c_str(), found_ns);
-                    if (qc) {
-                        ce = const_cast<ConstantEntry*>(
-                            qore_class_private::get(*qc)->constlist.findEntry(
-                                const_name.c_str()));
-                    }
-                }
-            }
-            if (!ce) {
+            QoreValue rv = qore_aot_resolve_constant_path_value(pgm, fqn, false, wrap_const_ref_in_rcr);
+            if (!rv) {
                 printd(0, "AOT readValue: cannot resolve const_ref '%s'\n", fqn);
                 return QoreValue();
             }
-            if (wrap_const_ref_in_rcr && ce->hasValue()) {
-                // Preserve lazy-eval semantics for hashdecl member defaults.
-                // The RuntimeConstantRefNode ctor asserts saved_val is set;
-                // hasValue() verifies that.  Falls back to the eager-value
-                // return path below when the constant isn't fully populated
-                // (e.g. an AOT-shell that's still pending init-function run).
-                return QoreValue(new RuntimeConstantRefNode(&loc_builtin, ce));
-            }
-            return ce->getReferencedValue();
+            return rv;
         }
 
         case QoreAOTValueTag::VT_EXPR_TREE: {
@@ -1462,22 +1630,36 @@ const QoreTypeInfo* QoreAOTTypeResolver::resolveHashDeclType(const char* path) {
     if (!pgm) {
         return nullptr;
     }
-    // path format: "hash<DeclName>" — extract the name
-    const char* start = strchr(path, '<');
-    if (!start) {
+    // path format: "hash<DeclName>" or "*hash<DeclName>" — extract the hashdecl name and resolve it
+    // directly to the registered TypedHashDecl.  Do not route this through the generic string parser:
+    // anchored and unanchored paths such as hash<::SqlUtil::QueryInfo> and hash<SqlUtil::QueryInfo>
+    // can otherwise produce distinct QoreTypeInfo objects for the same hashdecl.
+    bool or_nothing = false;
+    const char* hash_path = path;
+    if (!strncmp(path, "*hash<", 6)) {
+        or_nothing = true;
+        hash_path = path + 1;
+    }
+    if (strncmp(hash_path, "hash<", 5)) {
         return nullptr;
     }
-    ++start;
+    const char* start = hash_path + 5;
     const char* end = strchr(start, '>');
     if (!end) {
         return nullptr;
     }
     std::string decl_name(start, end - start);
+    if (decl_name.find(',') != std::string::npos) {
+        return nullptr;
+    }
+    while (decl_name.rfind("::", 0) == 0) {
+        decl_name.erase(0, 2);
+    }
 
     const QoreNamespace* pns = nullptr;
     const TypedHashDecl* thd = pgm->findHashDecl(decl_name.c_str(), pns);
     if (thd) {
-        return thd->getTypeInfo();
+        return thd->getTypeInfo(or_nothing);
     }
     return nullptr;
 }
@@ -1595,6 +1777,11 @@ const QoreTypeInfo* QoreAOTTypeResolver::resolve(const char* path, std::string& 
 
     // Try builtin types (fast path)
     const QoreTypeInfo* result = resolveBuiltin(path);
+
+    // Hashdecl type paths must resolve to the canonical TypedHashDecl type object.
+    if (!result) {
+        result = resolveHashDeclType(path);
+    }
 
     // Try the parser-based resolver for complex types (handles everything)
     if (!result) {
@@ -2705,15 +2892,12 @@ static void buildProgramConstantReverseMapImpl(qore_ns_private* ns,
         if (!v.hasNode()) {
             continue;
         }
-        const AbstractQoreNode* node = v.getInternalNode();
-        if (node && crm.find(node) == crm.end()) {  // Only add if not already present
-            std::string ns_path = ns->path;
-            if (ns_path.size() >= 2) {
-                ns_path = ns_path.substr(2);  // strip leading "::"
-            }
-            std::string fqn = ns_path.empty() ? nsi.getName() : ns_path + "::" + nsi.getName();
-            crm.emplace(node, std::move(fqn));
+        std::string ns_path = ns->path;
+        if (ns_path.size() >= 2) {
+            ns_path = ns_path.substr(2);  // strip leading "::"
         }
+        std::string fqn = ns_path.empty() ? nsi.getName() : ns_path + "::" + nsi.getName();
+        qore_aot_add_constant_value_reverse_mappings(crm, v, fqn);
     }
 
     // Add class constants within this namespace
@@ -2730,11 +2914,8 @@ static void buildProgramConstantReverseMapImpl(qore_ns_private* ns,
             if (!v.hasNode()) {
                 continue;
             }
-            const AbstractQoreNode* node = v.getInternalNode();
-            if (node && crm.find(node) == crm.end()) {  // Only add if not already present
-                std::string fqn = class_prefix + cci.getName();
-                crm.emplace(node, std::move(fqn));
-            }
+            std::string fqn = class_prefix + cci.getName();
+            qore_aot_add_constant_value_reverse_mappings(crm, v, fqn);
         }
     }
 
@@ -2764,11 +2945,8 @@ static AOTConstantReverseMap buildClassConstantReverseMap(const QoreClass* qc) {
         if (!v.hasNode()) {
             continue;
         }
-        const AbstractQoreNode* node = v.getInternalNode();
-        if (node) {
-            std::string fqn = class_prefix + cci.getName();
-            crm.emplace(node, std::move(fqn));
-        }
+        std::string fqn = class_prefix + cci.getName();
+        qore_aot_add_constant_value_reverse_mappings(crm, v, fqn);
     }
 
     // Add namespace constants from the class's enclosing namespace hierarchy
@@ -2782,15 +2960,12 @@ static AOTConstantReverseMap buildClassConstantReverseMap(const QoreClass* qc) {
                 if (!v.hasNode()) {
                     continue;
                 }
-                const AbstractQoreNode* node = v.getInternalNode();
-                if (node && crm.find(node) == crm.end()) {  // Only add if not already present
-                    std::string ns_path = ns_priv->path;
-                    if (ns_path.size() >= 2) {
-                        ns_path = ns_path.substr(2);  // strip leading "::"
-                    }
-                    std::string fqn = ns_path.empty() ? nsi.getName() : ns_path + "::" + nsi.getName();
-                    crm.emplace(node, std::move(fqn));
+                std::string ns_path = ns_priv->path;
+                if (ns_path.size() >= 2) {
+                    ns_path = ns_path.substr(2);  // strip leading "::"
                 }
+                std::string fqn = ns_path.empty() ? nsi.getName() : ns_path + "::" + nsi.getName();
+                qore_aot_add_constant_value_reverse_mappings(crm, v, fqn);
             }
             // Walk up to parent namespace
             ns_priv = ns_priv->parent;
@@ -3888,6 +4063,18 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
             writer.writeU8(lvid.binary_mut_op);
             writer.writeU8(lvid.ternary_op);
             writer.writeU8(lvid.ref_rv);
+            // QORE_AOT_FEAT_LVPATH_DELETE_EXPR: preserve the original AST
+            // lvalue expression so runtime Delete/Remove can use
+            // LValueRemoveHelper's detach-then-destroy semantics when needed.
+            writer.writeU8(lvid.delete_lvalue_expr.hasNode() ? 1 : 0);
+            if (lvid.delete_lvalue_expr.hasNode()) {
+                if (!classifyAndWriteExpr(writer, lvid.delete_lvalue_expr,
+                        func.slot_ids.locals, func.slot_ids.globals, const_reverse_map)) {
+                    error = "failed to serialize LValuePath delete expression in function '"
+                        + func.name + "'";
+                    return false;
+                }
+            }
             // Pattern info for RegexSubst / Transliterate binary_mut ops.
             // Emitted unconditionally as (present_flag u8) so readers can skip.
             writer.writeU8(lvid.pattern_empty ? 0 : 1);

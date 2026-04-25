@@ -436,7 +436,7 @@ int FtpDataPollOperationPriv::submitToController(ExceptionSink* xsink, const cha
         return -1;
     }
 
-    ReferenceHolder<QoreObject> rv(ctl_priv->submit(*ctl_obj, info.release(), false, xsink), xsink);
+    ReferenceHolder<QoreObject> rv(ctl_priv->submit(*ctl_obj, *info, false, xsink), xsink);
     if (*xsink) {
         return -1;
     }
@@ -467,9 +467,9 @@ qclass FtpDataPollOperation [
     @param secure_data if True, upgrade data socket to TLS after connect
 */
 FtpDataPollOperation::constructor(string host, int port, bool secure_data = False) {
-    // Create data socket — extra ref for QoreObject (setPrivate stores raw pointer, derefAll releases)
+    // Create data socket; the QoreObject owns the initial ref and the connect
+    // op owns the only extra ref. The FTP priv keeps a raw pointer.
     QoreSocketObject* sock_priv = new QoreSocketObject;
-    sock_priv->ref();
     QoreObject* sock_obj = new QoreObject(QC_SOCKET, getProgram(), sock_priv);
     self->setMemberValue("sock", QC_FTPDATAPOLLOPERATION, sock_obj, xsink);
     if (*xsink) {
@@ -508,9 +508,9 @@ FtpDataPollOperation::constructor(string host, int port, bool secure_data = Fals
     @param secure_data if True, upgrade data socket to TLS after connect
 */
 FtpDataPollOperation::constructor(string host, int port, binary data, bool secure_data = False) {
-    // Create data socket — extra ref for QoreObject (setPrivate stores raw pointer, derefAll releases)
+    // Create data socket; the QoreObject owns the initial ref and the connect
+    // op owns the only extra ref. The FTP priv keeps a raw pointer.
     QoreSocketObject* sock_priv = new QoreSocketObject;
-    sock_priv->ref();
     QoreObject* sock_obj = new QoreObject(QC_SOCKET, getProgram(), sock_priv);
     self->setMemberValue("sock", QC_FTPDATAPOLLOPERATION, sock_obj, xsink);
     if (*xsink) {

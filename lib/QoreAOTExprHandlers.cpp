@@ -360,39 +360,12 @@ static QoreValue read_expr_runtime_const_ref(AOTExprReadCtx& ctx) {
     if (!const_name || !*const_name) {
         return QoreValue();
     }
-    qore_program_private* pp = qore_program_private::get(*ctx.pgm);
-    const qore_ns_private* cns = nullptr;
-    const ConstantEntry* ce = qore_root_ns_private::runtimeFindNamespaceConstant(
-        *pp->RootNS, const_name, cns);
-    if (!ce) {
-        // Try class constant lookup: path format "ClassName::ConstName"
-        std::string path(const_name);
-        size_t sep = path.rfind("::");
-        if (sep != std::string::npos && sep > 0) {
-            std::string class_path = path.substr(0, sep);
-            std::string cname = path.substr(sep + 2);
-            const qore_ns_private* found_ns = nullptr;
-            const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
-                *pp->RootNS, class_path.c_str(), found_ns);
-            if (qc) {
-                ce = qore_class_private::get(*qc)->constlist.findEntry(cname.c_str());
-            }
-        }
-    }
-    if (!ce) {
+    QoreValue rv = qore_aot_resolve_constant_path_value(ctx.pgm, const_name, true);
+    if (!rv) {
         printd(0, "AOT: cannot resolve constant '%s'\n", const_name);
         return QoreValue();
     }
-    // For constants with values already available (builtin module constants,
-    // already-initialized user constants), return the value directly.
-    // For constants with pending init functions (saved_val empty because
-    // the init function hasn't run yet), create a RuntimeConstantRefNode
-    // for deferred evaluation — the init function will populate saved_val
-    // via setRuntimeValue() before any user code evaluates the expression.
-    if (ce->hasValue()) {
-        return ce->getReferencedValue();
-    }
-    return QoreValue(new RuntimeConstantRefNode(&loc_builtin, const_cast<ConstantEntry*>(ce), true));
+    return rv;
 }
 
 // ============================================================================

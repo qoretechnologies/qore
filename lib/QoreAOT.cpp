@@ -149,6 +149,9 @@
 #include "qore/intern/QoreMapSelectOperatorNode.h"
 #include "qore/intern/QoreHashMapOperatorNode.h"
 #include "qore/intern/QoreHashMapSelectOperatorNode.h"
+#include "qore/intern/ContextrefNode.h"
+#include "qore/intern/ContextRowNode.h"
+#include "qore/intern/ComplexContextrefNode.h"
 #include "qore/intern/QoreRegex.h"
 #include "qore/intern/CaseNodeRegex.h"
 #include "qore/intern/QoreRegexSubst.h"
@@ -448,8 +451,8 @@ static uint64_t scanIRFeatureFlags(const QoreIRFunction& f) {
             // Per-instruction data may unlock a separate feature gate: LVPath
             // instructions carry multi-slice step kinds when a slice lvalue
             // (e.g. `remove h{"a","b"}`) was lowered natively.  Older readers
-            // cannot reconstruct slice_operand_ids from the wire format, so
-            // gate with QORE_AOT_FEAT_LVPATH_SLICE.
+            // cannot reconstruct slice_operand_ids or the optional preserved
+            // delete/remove AST expression from the wire format, so gate both.
             if (inst->opcode == QoreIROpcode::LValuePathAssign
                     || inst->opcode == QoreIROpcode::LValuePathCompound
                     || inst->opcode == QoreIROpcode::LValuePathUnary
@@ -457,6 +460,7 @@ static uint64_t scanIRFeatureFlags(const QoreIRFunction& f) {
                     || inst->opcode == QoreIROpcode::LValuePathTernary) {
                 const auto* pi
                         = static_cast<const QoreIRLValuePathInstruction*>(inst.get());
+                flags |= QORE_AOT_FEAT_LVPATH_DELETE_EXPR;
                 for (const auto& step : pi->path) {
                     if (step.kind == LVPathStepKind::HashKeySlice
                             || step.kind == LVPathStepKind::ListIndexSlice) {
@@ -1443,14 +1447,14 @@ static void buildConstantReverseMapImpl(qore_ns_private* ns, AOTConstantReverseM
     // Iterate constants in this namespace
     for (auto& kv : ns->constant.cnemap) {
         ConstantEntry* ce = kv.second;
-        if (!ce || !ce->val.hasNode()) {
+        if (!ce) {
             continue;
         }
-        const AbstractQoreNode* node = ce->val.getInternalNode();
-        if (node) {
-            std::string fqn = ns_path + ce->name;
-            crm.emplace(node, std::move(fqn));
+        QoreValue v = ce->getReferencedValue();
+        if (v.hasNode()) {
+            qore_aot_add_constant_value_reverse_mappings(crm, v, ns_path + ce->name);
         }
+        v.discard(nullptr);
     }
 
     // Iterate class constants (e.g., LoggerLevel::LevelTrace)
@@ -1467,11 +1471,7 @@ static void buildConstantReverseMapImpl(qore_ns_private* ns, AOTConstantReverseM
             if (!v.hasNode()) {
                 continue;
             }
-            const AbstractQoreNode* node = v.getInternalNode();
-            if (node) {
-                std::string fqn = class_prefix + cci.getName();
-                crm.emplace(node, std::move(fqn));
-            }
+            qore_aot_add_constant_value_reverse_mappings(crm, v, class_prefix + cci.getName());
         }
     }
 
@@ -1488,6 +1488,27 @@ static AOTConstantReverseMap buildConstantReverseMap(qore_ns_private* root_ns) {
     AOTConstantReverseMap crm;
     buildConstantReverseMapImpl(root_ns, crm);
     return crm;
+}
+
+static bool aotCrmPathBelongsToConstant(const std::string& path, const std::string& fqn) {
+    if (path == fqn) {
+        return true;
+    }
+
+    std::string encoded_prefix = "@qore-aot-const-path:" + std::to_string(fqn.size()) + ":" + fqn;
+    return path.compare(0, encoded_prefix.size(), encoded_prefix) == 0;
+}
+
+static AOTConstantReverseMap filterSelfConstantReverseMap(
+        const AOTConstantReverseMap& crm, const std::string& fqn) {
+    AOTConstantReverseMap rv;
+    rv.reserve(crm.size());
+    for (const auto& it : crm) {
+        if (!aotCrmPathBelongsToConstant(it.second, fqn)) {
+            rv.emplace(it.first, it.second);
+        }
+    }
+    return rv;
 }
 
 static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
@@ -2133,6 +2154,17 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
         }
 
         if (init_ok) {
+            std::unique_ptr<AOTConstantReverseMap> filtered_crm;
+            const AOTConstantReverseMap* init_const_reverse_map = const_reverse_map;
+            if (const_reverse_map
+                    && (target_type == AOTCompiledInitFunc::NS_CONSTANT
+                        || target_type == AOTCompiledInitFunc::CLASS_CONSTANT)) {
+                std::string current_fqn = container_path + "::" + item_name;
+                filtered_crm.reset(new AOTConstantReverseMap(
+                    filterSelfConstantReverseMap(*const_reverse_map, current_fqn)));
+                init_const_reverse_map = filtered_crm.get();
+            }
+
             // Single AOTCompiledInitFunc entry for the outer.  Its slot
             // map covers the UNION of slots referenced by the outer's
             // body and by every outlined helper — so `registerAOT
@@ -2152,10 +2184,10 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
             // helpers so the serialized metadata carries every slot the
             // shared ctx needs to populate at load time.
             extractAOTSlotIdentities(*ir_func, slots, nullptr, cif.slot_ids,
-                const_reverse_map);
+                init_const_reverse_map);
             for (auto& h : outlined_helpers) {
                 extractAOTSlotIdentities(*h.ir_func, slots, nullptr,
-                    cif.slot_ids, const_reverse_map);
+                    cif.slot_ids, init_const_reverse_map);
             }
             cif.num_exprs = static_cast<int>(cif.slot_ids.exprs.size());
             cif.num_locals = static_cast<int>(cif.slot_ids.locals.size());
@@ -9350,6 +9382,27 @@ class ExprTreeSerializer {
             return true;
         }
 
+        // Context references used inside native `context` statements.
+        if (auto* cr = dynamic_cast<const ContextrefNode*>(node)) {
+            writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_CONTEXT_REF));
+            writeStr(cr->str ? cr->str : "");
+            writeU16(0);
+            return true;
+        }
+        if (dynamic_cast<const ContextRowNode*>(node)) {
+            writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_CONTEXT_ROW));
+            writeU16(0);
+            return true;
+        }
+        if (auto* ccr = dynamic_cast<const ComplexContextrefNode*>(node)) {
+            writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_COMPLEX_CONTEXT_REF));
+            writeStr(ccr->name ? ccr->name : "");
+            writeStr(ccr->member ? ccr->member : "");
+            writeU32(static_cast<uint32_t>(ccr->stack_offset));
+            writeU16(0);
+            return true;
+        }
+
         // ---- Call nodes ----
 
         // FunctionCallNode: function call with args
@@ -10935,6 +10988,7 @@ void extractAOTSlotIdentities(const QoreIRFunction& func, const AOTSlotMap& slot
         lvid.binary_mut_op = static_cast<uint8_t>(pi->binary_mut_op);
         lvid.ternary_op = static_cast<uint8_t>(pi->ternary_op);
         lvid.ref_rv = pi->ref_rv ? 1 : 0;
+        lvid.delete_lvalue_expr = pi->delete_lvalue_expr;
         // Extract pattern info for RegexSubst / Transliterate binary_mut ops —
         // without this, the AOT-reconstructed instruction has an empty pattern_expr
         // and the runtime regex substitute / transliterate is a no-op.

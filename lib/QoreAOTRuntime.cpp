@@ -473,46 +473,12 @@ static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* 
             if (!ref1 || !*ref1) {
                 return 0;
             }
-            const qore_ns_private* cns = nullptr;
-            const ConstantEntry* ce = qore_root_ns_private::runtimeFindNamespaceConstant(
-                *pp->RootNS, ref1, cns);
-            if (!ce) {
-                // Try class constant lookup: path format "ClassName::ConstName"
-                // Split on last "::" to get class path and constant name
-                std::string path(ref1);
-                size_t sep = path.rfind("::");
-                if (sep != std::string::npos && sep > 0) {
-                    std::string class_path = path.substr(0, sep);
-                    std::string const_name = path.substr(sep + 2);
-                    const qore_ns_private* found_ns = nullptr;
-                    const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
-                        *pp->RootNS, class_path.c_str(), found_ns);
-                    if (qc) {
-                        ce = qore_class_private::get(*qc)->constlist.findEntry(const_name.c_str());
-                    }
-                }
-            }
-            if (!ce) {
+            QoreValue rv = qore_aot_resolve_constant_path_value(pgm, ref1, true, true);
+            if (!rv) {
                 printd(0, "AOT v2: cannot resolve constant '%s'\n", ref1);
                 return 0;
             }
-            // Wrap the ConstantEntry in a RuntimeConstantRefNode so the value is
-            // fetched LAZILY at execution time, not at slot-map build time.
-            //
-            // This is critical for init-function contexts: when an AOT-compiled
-            // init function (e.g., __const_init::DataProvider::AbstractDataProviderTypeMap)
-            // references another constant (e.g., DataProvider::DataTypeMap), the
-            // referenced constant's value may not have been populated yet — its
-            // own init function hasn't run yet. Deferring evaluation via
-            // RuntimeConstantRefNode ensures the value is read AFTER init functions
-            // execute in dependency order.
-            //
-            // For already-initialized constants (e.g., builtin constants or constants
-            // whose init has already run), the node still works correctly because
-            // ce->saved_val is read at runtime.
-            auto* rtcr = new RuntimeConstantRefNode(&loc_builtin,
-                const_cast<ConstantEntry*>(ce), /*aot_deferred=*/true);
-            return toBitsNB(QoreValue(rtcr));
+            return toBitsNB(rv);
         }
 
         case AOTExprKind::CALL_REF:
@@ -2584,6 +2550,20 @@ static QoreAOTContext* buildContextFromSlotMap(
             pi->binary_mut_op = static_cast<LVBinaryMutOp>(QoreAOTBinaryReader::readU8(ptr));
             pi->ternary_op = static_cast<LVTernaryOp>(QoreAOTBinaryReader::readU8(ptr));
             pi->ref_rv = QoreAOTBinaryReader::readU8(ptr) != 0;
+            if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_LVPATH_DELETE_EXPR) != 0) {
+                if (QoreAOTBinaryReader::readU8(ptr)) {
+                    std::string expr_error;
+                    pi->delete_lvalue_expr = readOneExpr(reader, ptr, end, expr_error, pgm,
+                        ctx->locals, ctx->num_locals, ctx->globals, ctx->num_globals);
+                    pi->owns_delete_lvalue_expr = true;
+                    if (!expr_error.empty()) {
+                        printd(2, "AOT buildCtx: '%s' LValuePath delete expr deser failed: %s\n",
+                            name, expr_error.c_str());
+                        delete ctx;
+                        return nullptr;
+                    }
+                }
+            }
             // Pattern info for RegexSubst / Transliterate binary_mut ops.
             // The writer always emits a present_flag u8, followed by the pattern
             // data when present.  Reconstructs the matching Qore runtime node
@@ -3634,6 +3614,16 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
             pi->unary_op = static_cast<LVUnaryOp>(QoreAOTBinaryReader::readU8(ptr));
             pi->binary_mut_op = static_cast<LVBinaryMutOp>(QoreAOTBinaryReader::readU8(ptr));
             pi->ternary_op = static_cast<LVTernaryOp>(QoreAOTBinaryReader::readU8(ptr));
+            if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_LVPATH_DELETE_EXPR) != 0) {
+                if (QoreAOTBinaryReader::readU8(ptr)) {
+                    pi->delete_lvalue_expr = readExpr(reader, ptr, end, error);
+                    pi->owns_delete_lvalue_expr = true;
+                    if (!error.empty()) {
+                        delete pi;
+                        return nullptr;
+                    }
+                }
+            }
             uint8_t num_steps = QoreAOTBinaryReader::readU8(ptr);
             for (uint8_t i = 0; i < num_steps; ++i) {
                 LVPathStep step;
