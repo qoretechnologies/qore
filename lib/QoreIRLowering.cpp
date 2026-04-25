@@ -5140,7 +5140,7 @@ QoreIRValue QoreIRLowering::lowerPlusEquals(const QoreValue& expr, std::string& 
             && !QoreTypeInfo::isReference(left_var->getTypeInfo())) {
         const AbstractQoreNode* right_node = right_expr.getInternalNode();
         auto* right_var = dynamic_cast<const VarRefNode*>(right_node);
-        if (right_var && right_var->getType() == VT_LOCAL && right_var->ref.id) {
+        if (isLocalNonClosureVar(right_var)) {
             // target += source (both typed int locals) → AddAssignLocalInt
             auto* inst = builder.createAddAssignLocalInt(
                 left_var->ref.id, right_var->ref.id, op->loc);

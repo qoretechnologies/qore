@@ -26,6 +26,7 @@ class AOTSmokeTest inherits QUnit::Test {
         addTestCase("AOT Phase 5.3 fast-path functions", \testPhase53FastPaths());
         addTestCase("AOT control flow", \testControlFlow());
         addTestCase("AOT functions", \testFunctions());
+        addTestCase("AOT reference arg local reload", \testReferenceArgLocalReload());
         addTestCase("AOT string operations", \testStringOps());
         addTestCase("AOT regex switch", \testSwitchRegex());
         addTestCase("AOT exit code", \testExitCode());
@@ -450,6 +451,29 @@ printf(\"fib(10): %d\\n\", fibonacci(10));
         string aot_out = compileAndRun(code);
         string interp_out = runInterpreted(code);
         assertEq(interp_out, aot_out, "AOT function output matches interpreter");
+    }
+
+    testReferenceArgLocalReload() {
+        string code = "%modern
+class C {
+    public static bump(reference<int> x) {
+        x += 1;
+    }
+
+    public static int test() {
+        int depth = 1;
+        int x = 0;
+        C::bump(\\x);
+        depth += x;
+        return depth;
+    }
+}
+
+printf(\"value=%d\\n\", C::test());
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled, "reference arg regression fully precompiled: " + result.compile_out);
+        assertEq("value=2\n", result.run_out, "AOT reloads locals mutated through reference args");
     }
 
     testStringOps() {
