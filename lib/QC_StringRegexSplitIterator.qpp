@@ -62,7 +62,10 @@ StringRegexSplitIterator::StringRegexSplitIterator(const QoreStringNode* s, cons
 }
 
 StringRegexSplitIterator::StringRegexSplitIterator(const StringRegexSplitIterator& old, ExceptionSink* xsink)
-        : subject(old.subject), regex(old.regex), with_separator(old.with_separator) {
+        : subject(old.subject), regex(old.regex), with_separator(old.with_separator),
+          // Subject is the same memory as `old`'s; if `old` already validated it,
+          // we can skip the first-call rescan in the new iterator too.
+          utf_validated(old.utf_validated) {
     // Fresh iterator; offset / piece_* / m_valid / exhausted default-initialise.
     if (subject) {
         subject->ref();
@@ -107,7 +110,9 @@ bool StringRegexSplitIterator::next(ExceptionSink* xsink) {
 
     int rc = pcre2_match(regex->getPattern(),
         reinterpret_cast<PCRE2_SPTR8>(subject->c_str()),
-        src_len, offset, 0, md, nullptr);
+        src_len, offset,
+        utf_validated ? PCRE2_NO_UTF_CHECK : 0,
+        md, nullptr);
 
     if (rc < 1) {
         // NOMATCH (or benign PCRE2 error): trailing piece is the rest of
@@ -129,6 +134,10 @@ bool StringRegexSplitIterator::next(ExceptionSink* xsink) {
         m_valid = true;
         return true;
     }
+
+    // Successful match — subject is verified valid UTF-8; skip rescan
+    // on subsequent pcre2_match calls.
+    utf_validated = true;
 
     PCRE2_SIZE* ovector = pcre2_get_ovector_pointer(md);
     size_t match_start = ovector[0];

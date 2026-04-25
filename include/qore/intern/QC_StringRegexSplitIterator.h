@@ -115,6 +115,13 @@ private:
 
     // true once the final piece has been produced; next() will return false.
     bool exhausted = false;
+
+    // Tracks whether pcre2_match has already validated the subject as UTF-8.
+    // PCRE2 re-validates the entire subject from byte 0 on every call by
+    // default — O(N) per call, O(N^2) per iteration loop.  After the first
+    // successful match, future calls pass PCRE2_NO_UTF_CHECK to skip the
+    // rescan.  See QoreRegex::extractWithPattern for the same pattern.
+    bool utf_validated = false;
 };
 
 #endif
