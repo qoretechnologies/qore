@@ -131,8 +131,12 @@ QoreValue FtpControlPollOperationPriv::getOutput() const {
     ExceptionSink dummy;
     h->setKeyValue("code", last_code, &dummy);
     if (*last_response) {
-        (*last_response)->ref();
-        h->setKeyValue("message", *last_response, &dummy);
+        // Return a copy rather than a shared ref: callers (e.g.
+        // QoreFtpClient::sendControlMessage) splice the response in place to
+        // strip the leading "NNN " code prefix.  Sharing last_response means
+        // those mutations would corrupt the priv's own copy and trip the
+        // QoreString CoW assertion (ref>1 mutation).
+        h->setKeyValue("message", (*last_response)->copy(), &dummy);
     }
     h->setKeyValue("login_complete", login_complete, &dummy);
     return h.release();
