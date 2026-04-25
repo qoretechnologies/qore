@@ -229,10 +229,29 @@ QoreStringNode* QoreStringNode::copy() const {
     return new QoreStringNode(*this);
 }
 
+// Below this slice size, substr() copies the bytes outright instead of
+// returning a zero-copy view.  Rationale: at the measured crossover (see
+// bench/cases/bench_view_clear.qr) the malloc + memcpy that the view would
+// avoid is dominated by Qore VM dispatch (~1.8 µs), so the view delivers
+// no observable speedup below ~4 KB.  Above ~16 KB the saved memcpy
+// scales linearly and the view reaches double-digit speedups.  Forcing a
+// view for sub-threshold slices has two real downsides: (1) every view
+// pins its parent for the lifetime of the view, so a small substring
+// stashed in a long-lived hash key or cache record can keep a multi-MB
+// parent alive invisibly; (2) any later mutation on the view triggers
+// materialize() which copies the bytes anyway — net loss vs. copying up
+// front.  4096 was chosen for measurable break-even and one-page alignment.
+constexpr size_t QORE_VIEW_SUBSTR_THRESHOLD = 4096;
+
 QoreStringNode* QoreStringNode::substr(qore_offset_t offset, ExceptionSink* xsink) const {
     size_t byte_offset, byte_len;
     if (priv->compute_substr_range(offset, byte_offset, byte_len, xsink)) {
         return nullptr;
+    }
+    if (byte_len < QORE_VIEW_SUBSTR_THRESHOLD) {
+        QoreStringNode* ns = new QoreStringNode(priv->getEncoding());
+        ns->concat(priv->effective_buf() + byte_offset, byte_len);
+        return ns;
     }
     return makeView(const_cast<QoreStringNode*>(this), byte_offset, byte_len);
 }
@@ -241,6 +260,11 @@ QoreStringNode* QoreStringNode::substr(qore_offset_t offset, qore_offset_t lengt
     size_t byte_offset, byte_len;
     if (priv->compute_substr_range(offset, length, byte_offset, byte_len, xsink)) {
         return nullptr;
+    }
+    if (byte_len < QORE_VIEW_SUBSTR_THRESHOLD) {
+        QoreStringNode* ns = new QoreStringNode(priv->getEncoding());
+        ns->concat(priv->effective_buf() + byte_offset, byte_len);
+        return ns;
     }
     return makeView(const_cast<QoreStringNode*>(this), byte_offset, byte_len);
 }
