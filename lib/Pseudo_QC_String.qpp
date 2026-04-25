@@ -1307,6 +1307,38 @@ int <string>::getUnicode(int offset = 0) [flags=RET_VALUE_ONLY] {
     return str->getUnicodePoint(offset, xsink);
 }
 
+//! Returns the raw byte at the given byte offset, or @ref nothing if the offset is out of range.
+/** Unlike @ref Qore::zzz8stringzzz9::operator[]() "string[]" which allocates a fresh
+    one-character QoreStringNode per call, this pseudo-method returns the byte as an
+    integer (0..255) with no allocation.  Designed for hot byte-oriented scan loops
+    (tokenizers, simple parsers) where the per-call string allocation dominates.
+
+    For multi-byte encodings, the returned value is a single byte of the underlying
+    encoding (UTF-8 byte, etc.), NOT a Unicode codepoint.  Use @ref getUnicode() if
+    you need codepoints.
+
+    @par Example:
+    @code{.py}
+*int b = src.getByte(pos);
+if (b == ord("#")) { ... }
+    @endcode
+
+    @param byte_offset the byte offset into the string (negative values count from the end)
+
+    @return the raw byte at the offset (0..255), or @ref nothing if the offset is
+            out of range
+
+    @since %Qore 2.3
+*/
+*int <string>::getByte(int byte_offset) [flags=CONSTANT] {
+    int64 sz = (int64)str->size();
+    int64 off = byte_offset < 0 ? sz + byte_offset : byte_offset;
+    if (off < 0 || off >= sz) {
+        return QoreValue();
+    }
+    return (int64)(unsigned char)str->c_str()[off];
+}
+
 //! Returns @ref True since strings can return a non-zero size
 /** @return @ref True since strings can return a non-zero size
 

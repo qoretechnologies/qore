@@ -20,6 +20,7 @@ class StringTest inherits QUnit::Test {
         addTestCase("splitLines iterator", \testSplitLinesIter());
         addTestCase("splitLinesRegex iterator", \testSplitLinesRegexIter());
         addTestCase("splitChars iterator", \testSplitCharsIter());
+        addTestCase("getByte pseudo-method", \testGetByte());
         addTestCase("non scalar test", \nonScalarTest());
         addTestCase("width test", \testWidth());
         addTestCase("Basic functions test", \testBasics());
@@ -269,6 +270,42 @@ class StringTest inherits QUnit::Test {
         int digits = foldl $1 + $2, (map ($1 =~ /[0-9]/ ? 1 : 0), "a1b2c3".splitChars());
         assertEq(3, digits);
 
+    }
+
+    testGetByte() {
+        # ASCII positive offsets
+        string s = "abc#";
+        assertEq(0x61, s.getByte(0));
+        assertEq(0x62, s.getByte(1));
+        assertEq(0x63, s.getByte(2));
+        assertEq(0x23, s.getByte(3));
+
+        # Negative offsets count from end
+        assertEq(0x23, s.getByte(-1));
+        assertEq(0x63, s.getByte(-2));
+
+        # Out of range returns NOTHING
+        assertNothing(s.getByte(99));
+        assertNothing(s.getByte(-100));
+        assertNothing(s.getByte(s.size()));
+
+        # Empty string: any offset is out of range
+        assertNothing("".getByte(0));
+        assertNothing("".getByte(-1));
+
+        # UTF-8 returns raw bytes, NOT codepoints
+        # "aéb" = 0x61, 0xc3, 0xa9, 0x62
+        string u = "aéb";
+        assertEq(4, u.size());
+        assertEq(0x61, u.getByte(0));
+        assertEq(0xc3, u.getByte(1));
+        assertEq(0xa9, u.getByte(2));
+        assertEq(0x62, u.getByte(3));
+
+        # Compared to getUnicode which returns codepoints
+        assertEq(0x61, u.getUnicode(0));
+        assertEq(0xe9, u.getUnicode(1));   # é = U+00E9
+        assertEq(0x62, u.getUnicode(2));
     }
 
     nonScalarTest() {
