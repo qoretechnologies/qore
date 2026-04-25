@@ -55,49 +55,61 @@ A consistent-return-type `find first` (always returns `*T`) is needed.
 
 The same gap exists for "does any element match?" (`any`), "do all elements
 match?" (`all`), "first N elements" (`take`), "skip first N" (`drop`),
-"until / while a condition holds." Every reasonably mature collections
+"take while / until a condition holds." Every reasonably mature collections
 library has these; Qore doesn't, except via the hand-rolled
 `foreach + break` pattern.
 
-### 1.2 The intermediate-list-materialization gap
+### 1.2 The remaining chain-execution gap
 
-Today's nested-operator chains materialize a list at every stage. Even
-when the source is a streaming iterator:
+Qore already has lazy functional evaluation for the existing functional
+operators. In particular, nested non-hash `map` / `select` chains under
+`foldl`, `foldr`, or `foreach` do **not** materialize a list at every
+stage:
 
 ```qore
 foldl $1 + $2, (map $1 * 2, (select source, $1 > 0))
 ```
 
-This:
+This shape is already evaluated through the `FunctionalOperatorInterface`
+chain, so the `select` and `map` stages feed values lazily to `foldl`.
 
-1. Iterates `source` through `select`, builds an intermediate list of
-   filtered elements.
-2. Iterates that list through `map`, builds another intermediate list of
-   doubled elements.
-3. Iterates *that* list through `foldl`, computes the sum.
+Materialization still exists when the expression asks for a materialized
+result, for example:
 
-Two intermediate list allocations + two extra passes. The native iterator
-fast-path on `bugfix/text_processing` reduced per-stage *dispatch* cost
-~2×, but the intermediate-list overhead remains.
+```qore
+list<int> l = map $1, source.iterator();
+```
 
-### 1.3 Both fixed by one optimizer pass
+That is correct: the root `map` expression returns a list. The remaining
+gap is different:
 
-A compiler pass that recognizes nested `OperatorNode(consumer, [...,
-OperatorNode(producer, [..., source])])` patterns and emits a single fused
-loop fixes both:
+1. The lazy path is an interpreted chain of iterator wrapper objects,
+   so every element still pays per-stage wrapper / virtual-dispatch cost.
+2. The lazy path only covers the existing operator set and the existing
+   lazy contexts.
+3. There are no terminal short-circuit operators such as `first`, `any`,
+   or `take 10` that can decide a result before walking the whole source.
+
+### 1.3 Two pieces address the gaps
+
+Together, the new operators and a compiler pass that recognizes nested
+`OperatorNode(consumer, [..., OperatorNode(producer, [..., source])])`
+patterns and emits a single fused loop close the remaining gaps:
 
 - Streaming operators with short-circuit semantics (`first`, `any`,
   `take 10`) terminate the source iteration as soon as the result is
-  decided. No intermediate list. No needless work.
-- Pure transformation chains (`select` + `map` + `foldl`) execute as a
-  single per-element pass. No intermediate list.
+  decided. No needless work.
+- Existing lazy transformation chains (`select` + `map` + `foldl`) execute
+  through a single emit node instead of a stack of iterator wrappers.
+- New operators participate in the same lazy/fused execution model from
+  day one instead of each inventing its own partial fast path.
 
 This proposal is **two pieces, both useful independently**:
 
 | Piece | Effort | Contribution |
 |---|---|---|
-| New keyword operators | ~2 weeks | Closes the find-first gap and the related any/all/take/drop/while/until gaps |
-| Operator-chain fusion optimizer | ~4-6 weeks | Eliminates intermediate list allocation in existing chains |
+| New keyword operators | ~2 weeks | Closes the find-first gap and the related any/all/take/drop/takewhile/takeuntil gaps |
+| Operator-chain fusion optimizer | ~4-6 weeks | Replaces existing lazy wrapper chains with a single fused loop and extends lazy execution to the new stages |
 
 Both ship in 2.3.
 
@@ -162,8 +174,9 @@ Unlike the other terminals, `take`/`drop` are **non-terminal** —
 they yield iterators that compose into further stages.
 
 ```qore
-list<string> first_10_errors = take 10,
-                                  (select log.splitLines(), $1 =~ /ERROR/);
+auto first_10_error_iter = take 10,
+                                (select log.splitLines(), $1 =~ /ERROR/);
+list<string> first_10_errors = map $1, first_10_error_iter;
 
 # Skip header, process body
 foreach hash<auto> row in (drop 1, csv.splitLines()) {
@@ -172,7 +185,9 @@ foreach hash<auto> row in (drop 1, csv.splitLines()) {
 ```
 
 `take` short-circuits the source after N elements. `drop` skips the first
-N then yields the rest.
+N then yields the rest. If a list is needed, materialize explicitly with
+an identity `map` (as above) or with a future `collect` helper if one is
+added.
 
 ### 2.4 `takewhile` and `takeuntil`
 
@@ -185,10 +200,12 @@ Non-terminal, like `take`/`drop`.
 
 ```qore
 # Lines until the first blank line (e.g., HTTP header end)
-list<string> headers = takewhile $1 != "", source.splitLines();
+auto header_iter = takewhile $1 != "", source.splitLines();
+list<string> headers = map $1, header_iter;
 
 # Read until we hit a sentinel
-list<string> body = takeuntil $1 == "<<END>>", source.splitLines();
+auto body_iter = takeuntil $1 == "<<END>>", source.splitLines();
+list<string> body = map $1, body_iter;
 ```
 
 `takewhile` reads while the predicate holds; `takeuntil` reads until it
@@ -223,41 +240,51 @@ iterators it walks them all. With a predicate it's equivalent to
 
 ### 2.6 Relationship to existing `find`
 
-The existing `find <expr> in <list> where (<pred>)` operator returns a
-list of all matching elements. It stays unchanged.
+The existing `find` operator is a context expression, not a collection
+operator. It iterates a data expression suitable for a Qore context
+(typically a hash of lists such as a datasource result), exposes columns
+with `%name` references, evaluates a result expression for each matching
+row, and returns:
+
+| match count | returned value |
+|---|---|
+| 0 | NOTHING |
+| 1 | the result expression directly |
+| 2+ | list of result-expression values |
+
+That legacy form stays unchanged.
 
 This proposal additionally extends it with `first` / `last` / `one`
 modifiers:
 
 ```qore
 # Existing
-list<auto> matches = find $1 == "x" in some_list where ($1.value > 0);
+auto matches = find %name, %id in rows where (%status == "open");
 
-# New: find first match (returns *T, not a list)
-*hash<auto> match = find first $1 == "x" in some_list where ($1.value > 0);
+# New: first matching row result (returns *T, not a list)
+*string first_name = find first %name in rows where (%status == "open");
 
-# New: find last match
-*hash<auto> match = find last $1 == "x" in some_list where ($1.value > 0);
+# New: last matching row result
+*string last_name = find last %name in rows where (%status == "open");
 
-# New: find exactly one match
+# New: exactly one matching row result
 # - 0 matches → NOTHING
-# - 1 match  → the element
+# - 1 match  → the result expression
 # - 2+ matches → throws MULTIPLE-MATCHES-ERROR with the offending count
-*hash<auto> match = find one $1 == "x" in some_list where ($1.value > 0);
+*string only_name = find one %name in rows where (%status == "open");
 ```
 
-`find first` and `first <pred>, <list>` are equivalent and lower to the
-same fused implementation. Two surface forms because:
+`find first` and `first <pred>, <iterable>` are related but not identical:
 
-- `find first ... in ... where (...)` is consistent with the existing
-  `find` family — the natural choice when the existing `find` shape
-  already fits.
-- `first <pred>, <list>` is consistent with `select`/`map`/`foldl` —
-  the natural choice in iterator-style pipelines.
+- `find first ... in ... where (...)` preserves context semantics
+  (`%column` references, result expression, hash-of-lists data shape).
+- `first <pred>, <iterable>` is the collection / iterator operator
+  (`$1` current element, natural iterable element type).
 
-Both compile to the same AST node; pick whichever reads better at the
-call site. `find last` and `find one` are also new and have no `select`-
-style equivalent (they're specifically `find`-family operations).
+They can share lower-level short-circuit implementation helpers, but they
+should remain distinct AST nodes because their binding and type-checking
+rules are different. `find last` and `find one` are also new and remain
+specifically `find`-family operations.
 
 ### 2.7 The `iterate` keyword — uniform iterator factory
 
@@ -314,13 +341,14 @@ The existing factory methods stay for backward compatibility.
 | `takeuntil <pred>, <iterable>` | predicate + source | iterator |
 | `count <iterable>` | source only | `int` |
 | `count <pred>, <iterable>` | predicate + source | `int` |
-| `find first <expr> in <list> where (<pred>)` | (extends existing find) | `*T` |
-| `find last <expr> in <list> where (<pred>)` | (extends existing find) | `*T` |
-| `find one <expr> in <list> where (<pred>)` | (extends existing find) | `*T` |
+| `find first <expr> in <data> where (<where>)` | (extends existing find) | `*T` |
+| `find last <expr> in <data> where (<where>)` | (extends existing find) | `*T` |
+| `find one <expr> in <data> where (<where>)` | (extends existing find) | `*T` |
 
-In all cases, `<pred>` and `<expr>` are expressions that may use `$1` to
+For collection-style operators, `<pred>` and `<expr>` may use `$1` to
 refer to the current element (matching the `select`/`map`/`foldl`
-convention).
+convention). For `find` modifiers, `<expr>` and `<where>` use existing
+find/context binding rules such as `%column`.
 
 ### 2.9 Behaviour on hashes
 
@@ -381,29 +409,34 @@ OperatorNode(consumer, [..., OperatorNode(producer, [..., source])])
 ```
 
 where `consumer` ∈ `{foldl, foreach, map, select, first, any, all, count,
-take, drop, while, until}` and `producer` is in the same set or any
-iterator-yielding expression. The pattern recurses — chains of arbitrary
-depth fuse into a single loop.
+take, drop, takewhile, takeuntil}` and `producer` is in the same set or
+any iterator-yielding expression. The pattern recurses — chains of
+arbitrary depth fuse into a single loop.
 
 ### 3.2 What the fused loop looks like
 
-For
+For a chain like:
 
 ```qore
 int n = count $1 =~ /ERROR/, (map $1.lwr(), log.splitLines());
 ```
 
-today's emit is roughly:
+the non-fused implementation should use the existing lazy functional
+operator machinery, not build temporary lists:
 
 ```cpp
-QoreListNode* tmp1 = log.splitLines();   // intermediate list
-QoreListNode* tmp2 = new QoreListNode;   // map output list
-for (auto& el : *tmp1) tmp2->push(el.lwr());
 int n = 0;
-for (auto& el : *tmp2) if (el =~ /ERROR/) ++n;
+std::unique_ptr<FunctionalOperatorInterface> f = map.getFunctionalIterator(...);
+while (!f->getNext(iv, xsink)) {
+    if (iv =~ /ERROR/) {
+        ++n;
+    }
+}
 ```
 
-Two list allocations, three passes over the data.
+That is already one pass and no intermediate result list for this shape,
+but it still routes each element through the functional-operator wrapper
+chain.
 
 After fusion:
 
@@ -425,9 +458,9 @@ The pass is conservative:
 - **Stage closures with side effects** (function calls, mutations,
   exceptions) preserve their evaluation order — fusion is sequential per
   element, not parallel, so this is automatic.
-- **Short-circuit semantics** (`first`, `any`, `take N`, `while`, `until`)
-  emit `break` from the fused loop at the boundary. Non-fused fallback
-  uses iterator `.next()` returning false.
+- **Short-circuit semantics** (`first`, `any`, `take N`, `takewhile`,
+  `takeuntil`) emit `break` from the fused loop at the boundary.
+  Non-fused fallback uses iterator `.next()` returning false.
 - **Reference holding.** The source expression is evaluated once; the
   fused loop holds a ref via existing iterator lifetime rules.
 - **Mixed sources.** If a stage's source is not a fuseable form (e.g., a
@@ -438,9 +471,10 @@ The pass is conservative:
 ### 3.4 Non-fused fallback
 
 If fusion can't apply (custom iterator class, reflection, optimizer
-disabled), the chain emits as today — nested operator nodes that build
-intermediate lists. Programs run correctly either way; fusion is a
-performance optimization, not a correctness requirement.
+disabled), the chain emits as today — existing lazy functional evaluation
+where available, otherwise ordinary operator evaluation. Programs run
+correctly either way; fusion is a performance optimization, not a
+correctness requirement.
 
 ### 3.5 What this gives us at the user level
 
@@ -474,10 +508,18 @@ compiled to AST nodes the optimizer recognizes.
 
 ### 4.2 Behavior compatibility
 
-Fusion is observationally equivalent to the non-fused form *for pure
-expressions*. Programs with side effects in stage closures should observe
-the same ordering — fusion executes stages in source order per element,
-which matches the nested form's left-to-right execution per element.
+Fusion is observationally equivalent to the accepted non-fused form.
+For currently lazy `map` / `select` / `foldl` / `foreach` chains, programs
+with side effects in stage closures should observe the same per-element
+ordering as the existing `FunctionalOperatorInterface` path. Root
+expressions that intentionally materialize, such as:
+
+```qore
+list<int> l = map $1, iter;
+```
+
+are not fused across the statement boundary; materialization remains the
+observable result.
 
 ### 4.3 Reserved-word collisions and disambiguation
 
@@ -578,7 +620,7 @@ The flag values share the parse-option bit space documented in
 `include/qore/qore_program_options.h`. We have ~14 free bits at the
 time of writing; the new flags fit comfortably.
 
-### 4.4 Documentation
+### 4.5 Documentation
 
 `doxygen/lang/operators.dox.h` (or whatever the canonical operators page
 is) gets entries for the new operators. The migration guide for 2.3
@@ -595,38 +637,43 @@ need to be confirmed against a fusion-pass prototype before release.
 
 ### 5.1 Multi-stage chains (fusion) — estimated
 
-| Workload | 2.3 today (post-branch) | 2.3 + fusion (estimated) |
-|---|---|---|
-| `foldl X, (map Y, src)` over 100K-element list | ~150 ms | ~50 ms |
-| `count P, (select Q, (map R, src))` over 100K | ~200 ms | ~40 ms |
-| Synthetic 4-stage chain over 1M elements | ~1.2 s | ~0.3 s |
+Existing `foldl X, (map Y, src)` and similar lazy-supported shapes already
+avoid intermediate list materialization. The fusion win for those cases is
+therefore expected to come from:
 
-Real qlib chain shapes (~2 stages over small input) gain less in
-absolute terms because the chain is short and cheap. The win is most
-visible in synthetic / future-code patterns with longer chains over
-larger inputs.
+- removing per-stage `FunctionalOperatorInterface` wrapper dispatch,
+- enabling more static type propagation through the whole stage chain,
+- making the new operators use the same optimized path immediately.
+
+The exact win needs a prototype benchmark against the current lazy baseline.
+It should not be estimated from an eager "one list per stage" model.
+
+Real qlib chain shapes (~2 stages over small input) are likely to gain less
+in absolute terms because the chain is short and cheap. The win is most
+visible in longer chains, in new short-circuit operators, and in cases not
+covered by the current lazy path.
 
 ### 5.2 Short-circuit operators
 
 | Workload | Today | With new operators |
 |---|---|---|
-| Find first ERROR in 50K-line log | 9095 ms (full `find` materializes) or `foreach + break` (manual) | ~5 ms (`first` short-circuits at line 1 if hit) |
+| First ERROR in 50K-line log | full `select`/`map`-style scan or `foreach + break` (manual) | ~5 ms (`first` short-circuits at line 1 if hit) |
 | `any =~ /CRITICAL/` over 50K-line log | ~50 ms (using `select` + `size() > 0`) | ~5 ms (`any` short-circuits) |
 | `take 10` matching lines from a stream | manual counter pattern | one-line operator |
 
-The `find first` case in particular goes from full O(N) to O(position-of-
-first-match) because the new operator stops iterating immediately on hit.
+The `first` / `find first` cases in particular go from full O(N) scans to
+O(position-of-first-match) because the new operators stop iterating
+immediately on hit.
 
 ### 5.3 Existing chains (zero migration) — estimated
 
-Every existing `foldl(map(...))` chain in qlib speeds up automatically
-once fusion ships. The specific qlib chain shapes are short (2 stages)
-over small input (typically <1 KB column lists, schema headers, etc.),
-so the **absolute** gains are small even when the **relative** gain is
-significant. We have not benched these directly; estimating ~10–30 %
-faster on the 2-stage qlib chains, but the win is principally in the
-**zero-source-migration** property — no code review, no migration
-testing, every program improves.
+Every existing lazy-supported `foldl(map(...))` chain in qlib is eligible
+for the lower-overhead fused path once fusion ships. The specific qlib
+chain shapes are short (2 stages) over small input (typically <1 KB column
+lists, schema headers, etc.), so the **absolute** gains may be small. We
+have not benched these directly; the release benchmark must compare
+against the existing lazy implementation, not against a materializing
+baseline.
 
 ---
 
@@ -657,9 +704,9 @@ Order:
    after step 1).
 
 The operators alone are independently shippable in case the fusion pass
-slips. Pre-fusion, a multi-stage chain still allocates intermediate
-lists, but the new operators close the find-first gap, which is the
-ergonomic win.
+slips. Pre-fusion, currently lazy-supported multi-stage chains keep using
+the existing lazy functional path, and the new operators still close the
+find-first gap, which is the ergonomic win.
 
 ---
 
@@ -670,7 +717,7 @@ ergonomic win.
 `count` is the most likely collision in user code. Mitigation: a survey
 before release catches all uses; the few that need rename can be migrated
 with `qore-migrate-rename` (a 50-line tool). Other words (`first`, `any`,
-`all`, `take`, `drop`, `until`) are less common but still possible.
+`all`, `take`, `drop`, `takeuntil`) are less common but still possible.
 
 ### 7.2 Fusion correctness
 
@@ -688,20 +735,21 @@ Mitigations:
 - **Optional flag**: `%no-fusion` parse directive disables the optimizer
   per-program for debugging. Removed once the optimizer is settled.
 
-### 7.3 Two-form duplication: `first` vs `find first`
+### 7.3 Two related forms: `first` vs `find first`
 
-Both `first <pred>, <list>` and `find first ... in ... where (...)` exist
-and do the same thing. This is "two ways to do it" — usually a smell.
+Both `first <pred>, <iterable>` and `find first ... in ... where (...)`
+exist, but they target different binding models. This is still extra
+surface area and should be justified clearly.
 Mitigations:
 
-- The forms are surface syntax for the same fused IR. No runtime
-  duplication.
 - The two forms target different idioms (operator-chain style vs
   context-row style). Programmers writing in one style don't have to
   learn the other.
 - `find first/last/one` extends an existing operator family the user
   already knows; not adding it would force users into the standalone
-  `first`/`last`/(no `one`) for what they already think of as a `find`.
+  collection operators for code that is already naturally a `find`.
+- The implementations can share lower-level short-circuit helpers without
+  pretending the AST or type-binding rules are identical.
 
 ### 7.4 Operator complexity creep
 
@@ -729,9 +777,10 @@ Mitigations:
    iterator?**
    `take 10, list<int>` could return `list<int>` (materialized) or an
    iterator. Materialized is friendlier for callers; iterator is faster
-   to compose. Recommendation: iterator — callers who need a list say
-   `list<int> l = take 10, ...;` and the implicit materialization
-   happens.
+   to compose. Recommendation: iterator — callers who need a list
+   materialize explicitly, for example `list<int> l = map $1, (take 10,
+   source);`. A dedicated `collect` operator can be considered later if
+   identity `map` is too obscure.
 
 3. **`count` of an infinite source — error or hang?**
    No infinite sources in Qore today (`xrange` requires explicit bounds).
@@ -740,10 +789,9 @@ Mitigations:
    defer.
 
 4. **Should `find first` be the *only* "find first" form?**
-   The alternative is `first $1 == "x", (select some_list, $1.value > 0)`
-   — verbose but uses only the new operators. Recommendation: ship both;
-   `find first ... in ... where (...)` is closer to existing `find` users
-   and worth the small parser cost.
+   No. `find first` serves existing context/hash-of-lists code; `first`
+   serves ordinary iterables. Recommendation: ship both, but document them
+   as related operations with different binding rules, not as aliases.
 
 5. **Lazy iterator interaction with stages that need a `size`.**
    Example: `take size(src) - 1, src` to drop the last element. `size()`
