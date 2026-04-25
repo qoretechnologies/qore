@@ -122,7 +122,7 @@ Deliverables:
 - [x] Provide deopt fallback to IR interpreter for failed guards.
       Guards branch to deopt targets; `qore_rt_deopt` placeholder; `executeWithFallback` chain.
 - [x] Add basic benchmarks and validation against IR interpreter.
-      JITSmoke.qtest: 22 tests; JITBenchmark.q: numeric loops in all 3 modes; identical results.
+      JITSmoke.qtest: 22 tests; JITBenchmark.qr: numeric loops in all 3 modes; identical results.
 - [x] Enforce PO_MODERN at JIT entry (non-modern falls back to interpreter/IR with warning).
 - [x] Make LLVM a required build dependency (remove `WITH_JIT` option and `QORE_JIT_ENABLED` guards).
 
@@ -131,7 +131,7 @@ Deliverables:
 - [x] `include/qore/intern/QoreJIT.h` / `lib/QoreJIT.cpp` — LLVM ORC JIT compiler + function cache
 - [x] `include/qore/intern/QoreIRToLLVM.h` / `lib/QoreIRToLLVM.cpp` — IR→LLVM lowering with NaN-boxing
 - [x] `examples/test/ir/JITSmoke.qtest` — 22 JIT-specific tests (23 assertions)
-- [x] `examples/test/ir/JITBenchmark.q` — benchmark comparing all three modes
+- [x] `examples/test/ir/JITBenchmark.qr` — benchmark comparing all three modes
 - [x] Valgrind clean: 0 errors, 0 leaks on all JIT tests
 
 ---

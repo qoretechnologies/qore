@@ -3,7 +3,7 @@
 #
 # JIT Benchmark: numeric loop comparing --exec-mode=jit vs --exec-mode=ir vs --exec-mode=ast
 #
-# Run with: qore --exec-mode=<mode> JITBenchmark.q
+# Run with: qore --exec-mode=<mode> JITBenchmark.qr
 
 %modern
 %disable-warning unreferenced-variable

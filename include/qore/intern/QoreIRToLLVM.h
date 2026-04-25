@@ -291,15 +291,25 @@ private:
     // Used by ScopeEnter/ScopeExit for nested on_exit handler execution
     std::unordered_map<uint32_t, llvm::Value*> scope_obe_counts;
 
-    // Entry-block load values for pre-instantiated locals (tiered compilation).
-    // qore_rt_load_local creates +1 ref at entry; these must be decref'd at function exit.
+    // Entry-block load values for native pre-instantiated locals (tiered
+    // compilation). qore_rt_load_local creates +1 ref at entry; these must be
+    // decref'd at function exit. Boxed locals use cleanup allocas below so
+    // lvalue mutation can clear the cached ref before the exit path.
     std::vector<llvm::Value*> preinstantiated_entry_loads;
+
+    // Cleanup slots for boxed pre-instantiated entry loads, keyed by LocalVar*.
+    // The alloca cache borrows this same +1 ref. Lvalue operations that mutate
+    // the local clear the slot before the runtime mutation so cached refs do not
+    // delay destruction or force copy-on-write.
+    std::vector<llvm::AllocaInst*> preinstantiated_entry_cleanup_allocas;
+    std::unordered_map<const void*, llvm::AllocaInst*> preinstantiated_entry_cleanup_by_local;
 
     // Allocas for fast entry param locals (Approach B).
     // At exit, the current alloca value is loaded and decref'd.  Combined with
     // decref-before-store in StoreLocal for IR-only locals, this correctly handles
     // both the initial param value and any reassignments.
     std::vector<llvm::AllocaInst*> fast_entry_param_allocas;
+    std::unordered_map<const void*, llvm::AllocaInst*> fast_entry_param_allocas_by_local;
 
     // Allocas for Invoke/ConstString results that need cleanup at function exit.
     // qore_rt_invoke_expr returns +1 ref; these allocas track the results so they
@@ -354,6 +364,18 @@ private:
     // This avoids creating temporary strong references from weak member
     // dereferences that would keep objects alive for the function lifetime.
     std::unordered_set<uint32_t> dot_eval_only_bases;
+
+    // Locals assigned through the weak assignment operator. Loads must go
+    // through LocalVar::eval() so weak refs are resolved to the current target
+    // (or NOTHING if the target has already been deleted), rather than reading
+    // the cached WeakReferenceNode from an LLVM alloca.
+    std::unordered_set<const void*> weak_assigned_locals;
+
+    // Result IDs produced by LoadLocal on weak-assigned locals.  These loads
+    // return temporary strong refs that must be released at last use; otherwise
+    // a loop condition like `while (weak)` keeps the referent alive until
+    // function exit in LLVM mode.
+    std::unordered_set<uint32_t> weak_load_result_ids;
 
     // Allocas tracking active iterator pointers from IteratorCreate/IteratorCreateReverse.
     // On normal exit (IteratorNext done), the alloca is nulled out.
@@ -751,6 +773,17 @@ private:
     // enabling copy-on-write to skip the copy (in-place modification).
     void clearLocalReloadTracker(const void* key, llvm::Module& module, llvm::Function* llvm_func);
 
+    // Clear the cached +1 local value loaded at function entry for a
+    // pre-instantiated local. This is required before lvalue mutation such as
+    // `remove x`: otherwise the cached load keeps the old value alive after the
+    // runtime local has been cleared.
+    void clearLocalCachedValue(const void* key, llvm::Module& module, llvm::Function* llvm_func);
+
+    // Resolve the root local key for structured lvalue-path instructions. In
+    // AOT mode LVPath roots may carry only a slot id, so this must reverse-map
+    // the slot through AOTSlotMap instead of relying on ref_ptr.
+    const void* findLVPathRootLocalKey(const QoreIRLValuePathInstruction* path_inst) const;
+
     // Clear all reload trackers for all locals.  Called before AST-delegated
     // lvalue operations (PushAny, etc.) to prevent refcount inflation.
     void clearAllLocalReloadTrackers(llvm::Module& module, llvm::Function* llvm_func);
@@ -764,12 +797,33 @@ private:
             const QoreIRLValueInstruction* lvinst,
             llvm::Module& module, llvm::Function* llvm_func);
 
+    // Drop the cleanup entry for a ref-counted temporary result immediately.
+    // Handles both alloca-backed and SSA-direct cleanup tracking.
+    void releaseCleanupForValueId(uint32_t value_id, llvm::Module& module);
+
+    // Mark a lowered IR value use as consumed.  If it is the last use of a
+    // weak-local load, drop the temporary strong reference immediately.
+    void consumeValueUse(uint32_t value_id, llvm::Module& module,
+            bool release_weak_load = true);
+
+    // Dot-eval calls consume their base during the call.  EH invoke lowerers
+    // create a terminator before lowerFunction's post-instruction cleanup can
+    // emit IR, so release a last-use base at the call boundary.
+    void releaseDotEvalBaseIfCurrentUseIsLast(const QoreIRInstruction* inst,
+            llvm::Module& module);
+
     // Build an entry-block alloca'd array of NaN-boxed args from operands[arg_start..].
     // Sets args_array and nargs.  Returns false on error.
     // If nargs == 0, args_array is set to a null pointer.
     bool buildArgsArray(const QoreIRInstruction* inst, int arg_start,
             llvm::Function* llvm_func, llvm::Value*& args_array, int& nargs,
             std::string& error);
+
+    // Build an entry-block alloca'd array of cleanup slot pointers for
+    // operands[arg_start..].  The runtime uses this to clear consumed
+    // call-argument temporaries after callee parameter instantiation.
+    llvm::Value* buildArgCleanupArray(const QoreIRInstruction* inst, int arg_start,
+            llvm::Function* llvm_func, int nargs, bool& has_cleanup);
 
     // Reload all local variable allocas from the Qore runtime stack.
     // Called after Invoke instructions (which can modify any local via AST evaluation).

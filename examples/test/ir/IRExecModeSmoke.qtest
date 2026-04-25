@@ -183,7 +183,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
         string prefix = makeFailPrefix();
         if (script_path && path_exists(script_path)) {
             try {
-                copy_file(script_path, prefix + ".q", False, True);
+                copy_file(script_path, prefix + ".qr", False, True);
             } catch (hash<ExceptionInfo> err) {
             }
         }
@@ -205,7 +205,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
             } catch (hash<ExceptionInfo> err) {
             }
         }
-        printf("Preserved failing artifacts: %s{.q,.out,.err,.time}\n", prefix);
+        printf("Preserved failing artifacts: %s{.qr,.out,.err,.time}\n", prefix);
         printf("CMD: %s\n", cmd);
     }
 
@@ -5373,7 +5373,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
             return;
         }
 
-        TmpFile script(NOTHING, ".q");
+        TmpFile script(NOTHING, ".qr");
         script.file.write("%modern\n");
         script.file.write("string result = \"\";\n");
         script.file.write("try {\n");
@@ -5411,7 +5411,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
             return;
         }
 
-        TmpFile script(NOTHING, ".q");
+        TmpFile script(NOTHING, ".qr");
         script.file.write("%modern\n");
         script.file.write("string r2 = \"\";\n");
         script.file.write("try {\n");
@@ -5453,7 +5453,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
             return;
         }
 
-        TmpFile script(NOTHING, ".q");
+        TmpFile script(NOTHING, ".qr");
         script.file.write("%modern\n");
         script.file.write("string s = \"a\";\n");
         script.file.write("try {\n");
@@ -5491,7 +5491,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
             return;
         }
 
-        TmpFile script(NOTHING, ".q");
+        TmpFile script(NOTHING, ".qr");
         script.file.write("%modern\n");
         script.file.write("hash h = (\"x\": 1, \"y\": 2, \"z\": 3);\n");
         script.file.write("hash slice = h{(\"x\", \"z\")};\n");

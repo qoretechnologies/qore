@@ -63,5 +63,5 @@ logging, and verification.
       division-by-zero, unary ops, string ops, loops, switch, try/catch,
       cross-mode correctness verification, fallback scenarios.
 - [x] Valgrind clean: 0 errors, 0 leaks on all JIT tests (`qore -b`).
-- [x] Benchmark: `examples/test/ir/JITBenchmark.q` — numeric loop comparing all three modes,
+- [x] Benchmark: `examples/test/ir/JITBenchmark.qr` — numeric loop comparing all three modes,
       identical observable behavior confirmed.

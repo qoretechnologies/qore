@@ -2134,6 +2134,18 @@ QoreValue QoreFunction::evalDynamic(const QoreListNode* args, RuntimeConfig& rc,
     return variant->evalFunction(xsink, ceh);
 }
 
+QoreValue QoreFunction::evalDynamicTmpArgs(QoreListNode* args, QoreProgram* pgm, RuntimeConfig& rc,
+        ExceptionSink* xsink) const {
+    const char* fname = getName();
+    const AbstractQoreFunctionVariant* variant = nullptr;
+    CodeEvaluationHelper ceh(xsink, rc, this, variant, fname, args);
+    if (*xsink) {
+        return QoreValue();
+    }
+    ProgramCallContextHelper pcch(pgm);
+    return variant->evalFunction(xsink, ceh);
+}
+
 void QoreFunction::addBuiltinVariant(AbstractQoreFunctionVariant* variant) {
     assert(variant->getCallType() == CT_BUILTIN);
     // Check for duplicate parameter signatures — can happen when a binary module's init()

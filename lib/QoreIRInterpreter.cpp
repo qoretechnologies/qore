@@ -1147,6 +1147,129 @@ static QoreListNode* buildArgList(const IRValueSlots& values,
     return args;
 }
 
+static void countIRValueUse(std::vector<uint32_t>& counts, QoreIRValue value) {
+    if (value.isValid() && value.id < counts.size()) {
+        ++counts[value.id];
+    }
+}
+
+static bool buildValueUseCounts(const QoreIRFunction& func,
+        std::vector<uint32_t>& counts, ExceptionSink* xsink) {
+    counts.assign(func.max_value_id + 1, 0);
+    size_t inst_count = 0;
+    for (const auto& block : func.blocks) {
+        for (const auto& inst_uptr : block->instructions) {
+            if (((++inst_count % 100) == 0)
+                    && qore_check_cancel(xsink, "IR use-count build")) {
+                return false;
+            }
+            const QoreIRInstruction* inst = inst_uptr.get();
+            for (QoreIRValue operand : inst->operands) {
+                countIRValueUse(counts, operand);
+            }
+            switch (inst->opcode) {
+                case QoreIROpcode::BrIf: {
+                    auto* br = static_cast<const QoreIRBranchIfInstruction*>(inst);
+                    countIRValueUse(counts, br->condition);
+                    break;
+                }
+                case QoreIROpcode::SwitchInt: {
+                    auto* sw = static_cast<const QoreIRSwitchIntInstruction*>(inst);
+                    countIRValueUse(counts, sw->switch_val);
+                    break;
+                }
+                case QoreIROpcode::SwitchString: {
+                    auto* sw = static_cast<const QoreIRSwitchStringInstruction*>(inst);
+                    countIRValueUse(counts, sw->switch_val);
+                    break;
+                }
+                case QoreIROpcode::Phi: {
+                    auto* phi = static_cast<const QoreIRPhiInstruction*>(inst);
+                    for (const QoreIRPhiIncoming& incoming : phi->incoming) {
+                        countIRValueUse(counts, incoming.value);
+                    }
+                    break;
+                }
+                case QoreIROpcode::Return: {
+                    auto* ret = static_cast<const QoreIRReturnInstruction*>(inst);
+                    if (ret->has_value) {
+                        countIRValueUse(counts, ret->value);
+                    }
+                    break;
+                }
+                case QoreIROpcode::IteratorCreate:
+                case QoreIROpcode::IteratorCreateReverse: {
+                    auto* iter = static_cast<const QoreIRIteratorCreateInstruction*>(inst);
+                    countIRValueUse(counts, iter->iterable);
+                    break;
+                }
+                case QoreIROpcode::IteratorNext: {
+                    auto* iter = static_cast<const QoreIRIteratorNextInstruction*>(inst);
+                    countIRValueUse(counts, iter->iterator);
+                    break;
+                }
+                default:
+                    break;
+            }
+        }
+    }
+    return true;
+}
+
+static void countCallArgOccurrences(const IRValueSlots& values,
+        const std::vector<QoreIRValue>& operands, size_t start_index,
+        const std::vector<uint32_t>& value_use_counts,
+        std::unordered_map<uint32_t, uint32_t>& occurrences) {
+    occurrences.clear();
+    occurrences.reserve(operands.size() - start_index);
+    for (size_t i = start_index; i < operands.size(); ++i) {
+        QoreIRValue operand = operands[i];
+        if (operand.isValid() && operand.id < values.size()
+                && operand.id < value_use_counts.size()) {
+            ++occurrences[operand.id];
+        }
+    }
+}
+
+static void consumeLastUseCallArgSlots(IRValueSlots& values, std::vector<uint32_t>& cleanup,
+        const std::vector<QoreIRValue>& operands, size_t start_index,
+        const std::vector<uint32_t>& value_use_counts, ExceptionSink* xsink) {
+    std::unordered_map<uint32_t, uint32_t> occurrences;
+    countCallArgOccurrences(values, operands, start_index, value_use_counts, occurrences);
+    uint32_t checked = 0;
+    for (const auto& [id, occurrences_in_args] : occurrences) {
+        if (((++checked % 100) == 0)
+                && qore_check_cancel(xsink, "IR call argument cleanup")) {
+            return;
+        }
+        if (value_use_counts[id] != occurrences_in_args) {
+            continue;
+        }
+        QoreValue& slot = values[id];
+        if (!slot.hasNode()) {
+            continue;
+        }
+        removeCleanupEntry(cleanup, id);
+        slot.discard(xsink);
+        slot = QoreValue();
+    }
+}
+
+static bool hasLastUseCallArgSlots(const IRValueSlots& values, const std::vector<QoreIRValue>& operands,
+        size_t start_index, const std::vector<uint32_t>& value_use_counts) {
+    std::unordered_map<uint32_t, uint32_t> occurrences;
+    countCallArgOccurrences(values, operands, start_index, value_use_counts, occurrences);
+    for (const auto& [id, occurrences_in_args] : occurrences) {
+        if (value_use_counts[id] != occurrences_in_args) {
+            continue;
+        }
+        if (values[id].hasNode()) {
+            return true;
+        }
+    }
+    return false;
+}
+
 // Evaluate an invoke instruction by dispatching to the appropriate eval method.
 // Unary/binary computation opcodes use evalUnary/evalBinary with the IR operand
 // values.  Expression opcodes (Call, DotEval, LoadLValue, etc.) use evalExpr
@@ -2002,6 +2125,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     auto& local_load_slots = frame.local_load_slots;
     auto& load_slot_registered = frame.load_slot_registered;
     auto& local_owned_slots = frame.local_owned_slots;
+    std::vector<uint32_t> value_use_counts;
+    if (!buildValueUseCounts(func, value_use_counts, xsink)) {
+        return false;
+    }
 
     // Phase B2: Build reverse map for parent slot TLS access (for LLVM-compiled parents)
     // Maps slot_id -> LocalVar* for slots 0..parent_slot_count-1
@@ -5114,19 +5241,46 @@ load_local_done:
                     local_owned_slots.insert(operand.id);
                 }
 
-                // Handle weak assignment by wrapping in WeakReferenceNode at runtime
-                if (local_inst->weak && val.hasNode()) {
-                    qore_type_t type = val.getType();
-                    if (type == NT_OBJECT) {
-                        QoreObject* o = val.get<QoreObject>();
-                        val = new WeakReferenceNode(o);
-                    } else if (type == NT_HASH) {
-                        QoreHashNode* h = val.get<QoreHashNode>();
-                        val = new WeakHashReferenceNode(h);
-                    } else if (type == NT_LIST) {
-                        QoreListNode* l = val.get<QoreListNode>();
-                        val = new WeakListReferenceNode(l);
+                if (local_inst->weak) {
+                    if (local_inst->slot_id != UINT32_MAX
+                            && local_inst->slot_id < locals_slot_cache.size()) {
+                        locals_slot_cache[local_inst->slot_id].discard(xsink);
+                        locals_slot_cache[local_inst->slot_id] = QoreValue();
                     }
+                    if (local_inst->slot_id != UINT32_MAX
+                            && local_inst->slot_id < locals_lvar_cache.size()) {
+                        locals_lvar_cache[local_inst->slot_id] = nullptr;
+                    }
+                    LValueHelper helper(xsink);
+                    if (local_inst->local->getLValue(helper, false, true)) {
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupLocalCaches();
+                        return false;
+                    }
+                    QoreValue stored = val.hasNode() ? val.refSelf() : val;
+                    helper.assign(stored, "<lvalue>", true, true);
+                    if (operand.id < values.size()) {
+                        removeCleanupEntry(cleanup, operand.id);
+                        values[operand.id].discard(xsink);
+                        values[operand.id] = QoreValue();
+                    }
+                    if (local_inst->slot_id != UINT32_MAX
+                            && local_inst->slot_id < local_init_slots.size()) {
+                        local_init_slots[local_inst->slot_id] = UINT32_MAX;
+                    }
+                    if (xsink && *xsink) {
+                        if (inst->exception_target) {
+                            prev_block = block;
+                            block = inst->exception_target;
+                            ip = 0;
+                            break;
+                        }
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupLocalCaches();
+                        return false;
+                    }
+                    ++ip;
+                    break;
                 }
 
                 // Don't cache closure-bound locals — closures can modify the value.
@@ -5205,28 +5359,6 @@ load_local_done:
                     }
                 } else {
                     assignLocalVarValue(local_inst->local, val, xsink);
-                }
-
-                // For weak assignments, cache the weak-wrapped value in slot cache
-                // so LoadLocal returns the WeakReferenceNode instead of calling
-                // eval() which unwraps it
-                if (local_inst->weak
-                        && (val.getType() == NT_WEAKREF
-                            || val.getType() == NT_WEAKREF_HASH
-                            || val.getType() == NT_WEAKREF_LIST)
-                        && local_inst->slot_id != UINT32_MAX
-                        && local_inst->slot_id < locals_slot_cache.size()) {
-                    locals_slot_cache[local_inst->slot_id].discard(xsink);
-                    locals_slot_cache[local_inst->slot_id] = val.hasNode() ? val.refSelf() : val;
-                }
-
-                // Drop the initial ownership ref from weak node creation;
-                // assignLocalVarValue() and the cache each took their own ref
-                if (local_inst->weak && val.hasNode()
-                        && (val.getType() == NT_WEAKREF
-                            || val.getType() == NT_WEAKREF_HASH
-                            || val.getType() == NT_WEAKREF_LIST)) {
-                    val.discard(xsink);
                 }
 
                 // If the variable holds a reference, assignLocalVarValue wrote through
@@ -7422,6 +7554,21 @@ load_local_done:
                 }
 lvalue_path_unary_done:
                 invalidateLValuePathClosureCache(path_inst);
+                if (path_inst->lvalue_slot_id < locals_slot_cache.size()) {
+                    locals_slot_cache[path_inst->lvalue_slot_id].discard(xsink);
+                    locals_slot_cache[path_inst->lvalue_slot_id] = QoreValue();
+                    clearLoadSlots(path_inst->lvalue_slot_id);
+                    if (path_inst->lvalue_slot_id < local_init_slots.size()
+                            && local_init_slots[path_inst->lvalue_slot_id] != UINT32_MAX) {
+                        uint32_t init_slot = local_init_slots[path_inst->lvalue_slot_id];
+                        if (init_slot < values.size()) {
+                            removeCleanupEntry(cleanup, init_slot);
+                            values[init_slot].discard(xsink);
+                            values[init_slot] = QoreValue();
+                        }
+                        local_init_slots[path_inst->lvalue_slot_id] = UINT32_MAX;
+                    }
+                }
                 cleanupLocalCaches();
                 if (path_inst->result.isValid()) {
                     setValueSlot(values, path_inst->result.id, res, xsink);
@@ -7945,6 +8092,40 @@ lvalue_path_unary_done:
                 auto* direct_inst = static_cast<QoreIRCallDirectInstruction*>(inst);
                 if (direct_inst->variant) {
                     int nargs = static_cast<int>(direct_inst->operands.size());
+                    if (direct_inst->func && hasLastUseCallArgSlots(values, direct_inst->operands, 0,
+                            value_use_counts)) {
+                        ReferenceHolder<QoreListNode> arg_list(
+                            buildArgList(values, direct_inst->operands, 0, xsink), xsink);
+                        if (xsink && *xsink) {
+                            return returnAfterUnhandledException();
+                        }
+                        consumeLastUseCallArgSlots(values, cleanup, direct_inst->operands, 0,
+                            value_use_counts, xsink);
+                        if (xsink && *xsink) {
+                            return returnAfterUnhandledException();
+                        }
+                        RuntimeConfig& rc = rc_get_current_ref();
+                        QoreProgram* call_pgm = direct_inst->pgm ? direct_inst->pgm : rc.getProgram();
+                        if (!call_pgm) {
+                            call_pgm = getProgram();
+                        }
+                        QoreValue res = direct_inst->func->evalFunctionTmpArgs(
+                            direct_inst->variant, *arg_list, call_pgm, rc, xsink);
+                        if (xsink && *xsink) {
+                            return returnAfterUnhandledException();
+                        }
+                        if (direct_inst->has_ref_args) {
+                            cleanupLocalCaches();
+                        } else {
+                            invalidateExternalCaches();
+                        }
+                        setValueSlot(values, inst->result.id, res, xsink);
+                        if (res.hasNode()) {
+                            cleanup.push_back(inst->result.id);
+                        }
+                        ++ip;
+                        break;
+                    }
                     // Build NaN-boxed args array from operands
                     constexpr int SMALL_BUF = 8;
                     uint64_t nb_buf[SMALL_BUF];
@@ -8101,6 +8282,44 @@ lvalue_path_unary_done:
                 auto* static_inst = static_cast<QoreIRCallStaticDirectInstruction*>(inst);
                 if (static_inst->variant) {
                     int nargs = static_cast<int>(static_inst->operands.size());
+                    if (hasLastUseCallArgSlots(values, static_inst->operands, 0,
+                            value_use_counts)) {
+                        QoreListNode* arg_list = buildArgList(values,
+                            static_inst->operands, 0, xsink);
+                        if (xsink && *xsink) {
+                            if (arg_list) {
+                                arg_list->deref(xsink);
+                            }
+                            return returnAfterUnhandledException();
+                        }
+                        consumeLastUseCallArgSlots(values, cleanup,
+                            static_inst->operands, 0, value_use_counts, xsink);
+                        if (xsink && *xsink) {
+                            if (arg_list) {
+                                arg_list->deref(xsink);
+                            }
+                            return returnAfterUnhandledException();
+                        }
+                        const StaticMethodCallNode* call = dynamic_cast<const StaticMethodCallNode*>(
+                            static_inst->expr.getInternalNode());
+                        assert(call);
+                        StaticMethodCallNode clone(*call, arg_list);
+                        QoreValue res = evalAndRef(&clone, xsink);
+                        if (xsink && *xsink) {
+                            return returnAfterUnhandledException();
+                        }
+                        if (static_inst->has_ref_args) {
+                            cleanupLocalCaches();
+                        } else {
+                            invalidateExternalCaches();
+                        }
+                        setValueSlot(values, inst->result.id, res, xsink);
+                        if (res.hasNode()) {
+                            cleanup.push_back(inst->result.id);
+                        }
+                        ++ip;
+                        break;
+                    }
                     constexpr int SMALL_BUF = 8;
                     uint64_t nb_buf[SMALL_BUF];
                     uint64_t* nanboxed_args = nargs <= SMALL_BUF ? nb_buf : new uint64_t[nargs];
@@ -8199,6 +8418,14 @@ lvalue_path_unary_done:
                     // For CallIndirect, operand[0] is the callee — skip it when building args
                     size_t arg_start = (effective_opcode == QoreIROpcode::CallIndirect) ? 1 : 0;
                     QoreListNode* arg_list = buildArgList(values, inst->operands, arg_start, xsink);
+                    if (xsink && *xsink) {
+                        if (arg_list) {
+                            arg_list->deref(xsink);
+                        }
+                        return returnAfterUnhandledException();
+                    }
+                    consumeLastUseCallArgSlots(values, cleanup, inst->operands, arg_start,
+                        value_use_counts, xsink);
                     if (xsink && *xsink) {
                         if (arg_list) {
                             arg_list->deref(xsink);

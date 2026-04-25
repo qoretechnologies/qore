@@ -20,7 +20,7 @@
 const DEFAULT_ITERATIONS = 10000000;
 
 hash<auto> sub run_test_once(string name, string code, string mode, string qore_bin, string ld_path) {
-    string tmp = sprintf("/tmp/bench_%s.q", name);
+    string tmp = sprintf("/tmp/bench_%s.qr", name);
     {
         File f();
         f.open(tmp, O_CREAT | O_WRONLY | O_TRUNC);

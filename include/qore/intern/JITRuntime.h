@@ -37,6 +37,7 @@
 class ExceptionSink;
 class QoreIRFunction;
 class QoreIRLValuePathInstruction;
+class QoreValue;
 class UserVariantBase;
 
 // C ABI helpers called by JIT-generated code.
@@ -180,11 +181,18 @@ void qore_rt_instantiate_local(LocalVar* var);
 //! variable stack.  The JIT should call this on every StoreLocal so the Qore
 //! runtime stays in sync.
 void qore_rt_assign_local(LocalVar* var, uint64_t value, ExceptionSink* xsink);
+void qore_rt_assign_local_throwing(LocalVar* var, uint64_t value, ExceptionSink* xsink);
 
 //! Assign a NaN-boxed QoreValue to a local variable without type coercion.
 //! Used when coercion has already been applied (e.g., via qore_rt_coerce_value).
 //! This avoids double-coercion for complex-typed locals.
 void qore_rt_assign_local_no_coerce(LocalVar* var, uint64_t value, ExceptionSink* xsink);
+void qore_rt_assign_local_no_coerce_throwing(LocalVar* var, uint64_t value, ExceptionSink* xsink);
+
+//! Wrap an object/hash/list value in a weak reference for weak assignment.
+//! Returns an owned value: a new weak-reference node for supported weak types,
+//! or an extra reference to unsupported node values.
+uint64_t qore_rt_make_weak_value(uint64_t value, ExceptionSink* xsink);
 
 //! Load a NaN-boxed QoreValue from a local variable on the Qore thread-local
 //! variable stack.
@@ -505,10 +513,13 @@ uint64_t qore_rt_load_local_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink*
 
 //! Assign to a local variable via AOT context slot
 void qore_rt_assign_local_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink);
+void qore_rt_assign_local_aot_throwing(QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink);
 
 //! Assign to a local variable via AOT context slot without type coercion.
 //! Used when coercion has already been applied.
 void qore_rt_assign_local_no_coerce_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink);
+void qore_rt_assign_local_no_coerce_aot_throwing(QoreAOTContext* ctx, int32_t idx, uint64_t val,
+        ExceptionSink* xsink);
 
 //! Instantiate a local variable via AOT context slot
 void qore_rt_instantiate_local_aot(QoreAOTContext* ctx, int32_t idx);
@@ -614,10 +625,19 @@ uint64_t qore_rt_call_with_args(uint64_t expr_bits, uint64_t* args, int nargs, E
 uint64_t qore_rt_call_with_args_aot(QoreAOTContext* ctx, int32_t slot, uint64_t* args, int nargs,
     ExceptionSink* xsink);
 
+//! AOT variant that also clears consumed caller temp cleanup slots after
+//! callee parameter references have been established.
+uint64_t qore_rt_call_with_args_aot_consume_args(QoreAOTContext* ctx, int32_t slot,
+    uint64_t* args, uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink);
+
 //! AOT fast direct call: resolve FunctionCallNode from context slot, extract function/variant/pgm,
 //! then call qore_rt_call_fast() for fast function dispatch.
 uint64_t qore_rt_call_direct_aot(QoreAOTContext* ctx, int32_t slot, uint64_t* args, int nargs,
     ExceptionSink* xsink);
+
+//! AOT fast direct call with consumed caller temp cleanup slots.
+uint64_t qore_rt_call_direct_aot_consume_args(QoreAOTContext* ctx, int32_t slot,
+    uint64_t* args, uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink);
 
 //! Direct function call — resolved at parse time, bypasses dynamic_cast chain and AST node copy.
 //! Calls QoreFunction::evalFunctionTmpArgs() directly.
@@ -714,6 +734,10 @@ uint64_t qore_rt_call_static_method_direct(const QoreMethod* method,
 //! AOT variant of qore_rt_call_static_method_direct: resolves method from context slot.
 uint64_t qore_rt_call_static_method_direct_aot(QoreAOTContext* ctx, int32_t slot, uint64_t* args,
     int nargs, ExceptionSink* xsink);
+
+//! AOT static method call with consumed caller temp cleanup slots.
+uint64_t qore_rt_call_static_method_direct_aot_consume_args(QoreAOTContext* ctx, int32_t slot,
+    uint64_t* args, uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink);
 
 //! Cast operation with pre-evaluated inner value.
 //! cast_expr_bits is the NaN-boxed cast operator AST node (QoreCastOperatorNode*).

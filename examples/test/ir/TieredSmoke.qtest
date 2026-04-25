@@ -50,9 +50,10 @@ class TieredSmokeTest inherits QUnit::Test {
         set_return_value(main());
     }
 
-    private string runScript(string code, *string exec_mode, *string extra_opts) {
+    private string runScript(string code, *string exec_mode, *string extra_opts,
+            *string suffix) {
         string mode = exec_mode ?? "tiered";
-        TmpFile tmp(NOTHING, ".q");
+        TmpFile tmp(NOTHING, suffix ?? ".qr");
         tmp.file.write(code);
         tmp.file.close();
         string path = tmp.path;
@@ -139,7 +140,7 @@ sub compute($n) {
 }
 printf(\"%d\\n\", compute(41));
 ";
-        string result = runScript(code, "tiered");
+        string result = runScript(code, "tiered", NOTHING, ".q");
         assertRegex("42", result, "non-modern: stays on AST, correct output");
     }
 

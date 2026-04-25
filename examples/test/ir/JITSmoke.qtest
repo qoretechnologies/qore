@@ -183,12 +183,10 @@ class JITSmokeTest inherits QUnit::Test {
         set_return_value(main());
     }
 
-    private string runScript(string code, *string exec_mode) {
+    private string runScript(string code, *string exec_mode, *string suffix) {
         string mode = exec_mode ?? "jit";
-        # .q suffix — extension-based auto-enable treats .q as legacy, which is
-        # the semantics this harness relied on (JIT gating depends on whether the
-        # source file's effective parse options include %modern).
-        TmpFile tmp(NOTHING, ".q");
+        # .qr implies %modern for standalone smoke scripts.
+        TmpFile tmp(NOTHING, suffix ?? ".qr");
         tmp.file.write(code);
         tmp.file.close();
         string path = tmp.path;
@@ -395,7 +393,7 @@ printf(\"%s\\n\", h.key);
     testJitNonModernFallback() {
         # Non-%modern code should fail with EXEC-MODE-ERROR in JIT mode
         string code = "printf(\"%d\\n\", 42);\n";
-        string result = runScript(code);
+        string result = runScript(code, NOTHING, ".q");
         assertRegex("EXEC-MODE-ERROR", result, "non-modern code should fail in JIT mode");
     }
 

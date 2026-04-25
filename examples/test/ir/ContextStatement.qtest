@@ -44,7 +44,7 @@ class ContextStatementTest inherits QUnit::Test {
 
     private string runAndExpect(string code, string expect, string label) {
         string modern = "%modern\n" + code;
-        TmpFile tmp(NOTHING, ".q");
+        TmpFile tmp(NOTHING, ".qr");
         tmp.file.write(modern);
         tmp.file.close();
         string path = tmp.path;

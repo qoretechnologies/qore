@@ -541,9 +541,9 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
 
     <b>Compiling Scripts to Standalone Executables:</b>
 
-    The \c --compile-script option compiles a %Qore script to a standalone ELF executable:
+    The \c --compile option compiles a %Qore script to a standalone ELF executable:
     @code{.sh}
-qore --compile-script myscript.q -o myscript
+qore --compile myscript.qr --output myscript
 ./myscript [args...]
     @endcode
 
@@ -570,7 +570,7 @@ qore --compile-module MyModule.qm
 
     The \c --strip-source option removes source code from compiled binaries:
     @code{.sh}
-qore --compile-script myscript.q --strip-source -o myscript
+qore --compile myscript.qr --strip-source --output myscript
 qore --compile-module MyModule.qm --strip-source
     @endcode
 
@@ -593,7 +593,7 @@ qore --compile-module MyModule.qm --strip-source
     Two new parse directives let programs extend their own @ref qore_modules "module"
     search path declaratively, replacing the previous C++ \c MM.addModuleDir() hack
     and the \c QORE_MODULE_DIR env-var launcher indirection.  The declared paths are
-    persisted into @ref aot_builds "AOT-compiled binaries" and re-applied by the AOT
+    persisted into @ref exec_mode_aot "AOT-compiled binaries" and re-applied by the AOT
     loader before dependency modules load, making AOT-compiled scripts self-contained
     with respect to their module search surface.
 

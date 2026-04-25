@@ -267,6 +267,11 @@ bool QoreJIT::registerRuntimeSymbols(std::string& error) {
     // Local variable helpers
     addSymbol("qore_rt_instantiate_local", reinterpret_cast<void*>(&qore_rt_instantiate_local));
     addSymbol("qore_rt_assign_local", reinterpret_cast<void*>(&qore_rt_assign_local));
+    addSymbol("qore_rt_assign_local_no_coerce", reinterpret_cast<void*>(&qore_rt_assign_local_no_coerce));
+    addSymbol("qore_rt_assign_local_throwing", reinterpret_cast<void*>(&qore_rt_assign_local_throwing));
+    addSymbol("qore_rt_assign_local_no_coerce_throwing",
+        reinterpret_cast<void*>(&qore_rt_assign_local_no_coerce_throwing));
+    addSymbol("qore_rt_make_weak_value", reinterpret_cast<void*>(&qore_rt_make_weak_value));
     addSymbol("qore_rt_load_local", reinterpret_cast<void*>(&qore_rt_load_local));
     addSymbol("qore_rt_uninstantiate_local", reinterpret_cast<void*>(&qore_rt_uninstantiate_local));
 
@@ -331,6 +336,10 @@ bool QoreJIT::registerRuntimeSymbols(std::string& error) {
     // AOT context-based helpers (Phase 7b)
     addSymbol("qore_rt_load_local_aot", reinterpret_cast<void*>(&qore_rt_load_local_aot));
     addSymbol("qore_rt_assign_local_aot", reinterpret_cast<void*>(&qore_rt_assign_local_aot));
+    addSymbol("qore_rt_assign_local_no_coerce_aot", reinterpret_cast<void*>(&qore_rt_assign_local_no_coerce_aot));
+    addSymbol("qore_rt_assign_local_aot_throwing", reinterpret_cast<void*>(&qore_rt_assign_local_aot_throwing));
+    addSymbol("qore_rt_assign_local_no_coerce_aot_throwing",
+        reinterpret_cast<void*>(&qore_rt_assign_local_no_coerce_aot_throwing));
     addSymbol("qore_rt_instantiate_local_aot", reinterpret_cast<void*>(&qore_rt_instantiate_local_aot));
     addSymbol("qore_rt_uninstantiate_local_aot", reinterpret_cast<void*>(&qore_rt_uninstantiate_local_aot));
     addSymbol("qore_rt_pop_closure_var_aot", reinterpret_cast<void*>(&qore_rt_pop_closure_var_aot));
@@ -364,6 +373,12 @@ bool QoreJIT::registerRuntimeSymbols(std::string& error) {
     // Call with pre-evaluated args helpers
     addSymbol("qore_rt_call_with_args", reinterpret_cast<void*>(&qore_rt_call_with_args));
     addSymbol("qore_rt_call_with_args_aot", reinterpret_cast<void*>(&qore_rt_call_with_args_aot));
+    addSymbol("qore_rt_call_with_args_aot_consume_args",
+            reinterpret_cast<void*>(&qore_rt_call_with_args_aot_consume_args));
+    addSymbol("qore_rt_call_direct_aot_consume_args",
+            reinterpret_cast<void*>(&qore_rt_call_direct_aot_consume_args));
+    addSymbol("qore_rt_call_static_method_direct_aot_consume_args",
+            reinterpret_cast<void*>(&qore_rt_call_static_method_direct_aot_consume_args));
 
     // DotEval with pre-evaluated base helpers
     addSymbol("qore_rt_dot_eval_with_base", reinterpret_cast<void*>(&qore_rt_dot_eval_with_base));

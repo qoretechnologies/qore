@@ -29,6 +29,18 @@ class AOTSmokeTest inherits QUnit::Test {
         addTestCase("AOT reference arg local reload", \testReferenceArgLocalReload());
         addTestCase("AOT closure-use reference params teardown",
             \testClosureUseReferenceParamsTeardown());
+        addTestCase("AOT weak local assignment releases RHS",
+            \testWeakLocalAssignmentReleasesRhs());
+        addTestCase("AOT weak assignment preserves non-weak node values",
+            \testWeakAssignmentPreservesNonWeakNodeValues());
+        addTestCase("AOT weak call argument releases RHS",
+            \testWeakCallArgumentReleasesRhs());
+        addTestCase("AOT static method remove argument releases RHS",
+            \testStaticMethodRemoveArgumentReleasesRhs());
+        addTestCase("AOT weak branch condition releases temp",
+            \testWeakBranchConditionReleasesTemp());
+        addTestCase("AOT weak dot-eval invoke releases base",
+            \testWeakDotEvalInvokeReleasesBase());
         addTestCase("AOT string operations", \testStringOps());
         addTestCase("AOT regex switch", \testSwitchRegex());
         addTestCase("AOT exit code", \testExitCode());
@@ -157,11 +169,11 @@ class AOTSmokeTest inherits QUnit::Test {
         set_return_value(main());
     }
 
-    #! Write code to a temp .q file and return {src_path, out_path}
+    #! Write code to a temp .qr file and return {src_path, out_path}
     private hash<auto> writeTempScript(string code) {
-        # Use a unique name with proper .q extension
+        # .qr implies %modern for standalone scripts.
         string base = sprintf("/tmp/aot_test_%d_%d", getpid(), rand());
-        string src_path = base + ".q";
+        string src_path = base + ".qr";
         string out_path = base;
 
         File f();
@@ -509,6 +521,161 @@ printf(\"ok\\n\");
         assertEq("ok\n", result.run_out, "AOT does not pop caller-owned closure-use parameters");
     }
 
+    testWeakLocalAssignmentReleasesRhs() {
+        string code = "%modern
+%allow-weak-references
+
+our int destroyed = 0;
+
+class C {
+    destructor() {
+        destroyed++;
+    }
+}
+
+C strong();
+C weak := remove strong;
+printf(\"destroyed=%d\\n\", destroyed);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled, "weak assignment regression fully precompiled: "
+            + result.compile_out);
+        assertEq("destroyed=1\n", result.run_out,
+            "AOT weak assignment must not retain the consumed RHS object");
+    }
+
+    testWeakAssignmentPreservesNonWeakNodeValues() {
+        string code = "%modern
+%allow-weak-references
+
+string strong = \"abc\";
+auto weak := strong;
+printf(\"%y\\n\", weak);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled, "weak non-weakable node regression fully precompiled: "
+            + result.compile_out);
+        assertEq("\"abc\"\n", result.run_out,
+            "AOT weak assignment must keep an owned reference for non-weak node values");
+    }
+
+    testWeakCallArgumentReleasesRhs() {
+        string code = "%modern
+%allow-weak-references
+
+our int destroyed = 0;
+
+class C {
+    destructor() {
+        destroyed++;
+    }
+}
+
+sub check(C c0) {
+    remove c0;
+    printf(\"inside=%d\\n\", destroyed);
+}
+
+C strong();
+check(remove strong);
+printf(\"after=%d\\n\", destroyed);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled, "weak call argument regression fully precompiled: "
+            + result.compile_out);
+        assertEq("inside=1\nafter=1\n", result.run_out,
+            "AOT call argument ownership must not retain consumed objects");
+    }
+
+    testStaticMethodRemoveArgumentReleasesRhs() {
+        string code = "%modern
+
+our int destroyed = 0;
+
+class C {
+    destructor() {
+        destroyed++;
+    }
+}
+
+class Holder {
+    static check(C c0) {
+        remove c0;
+        printf(\"inside=%d\\n\", destroyed);
+    }
+}
+
+C strong();
+Holder::check(remove strong);
+printf(\"after=%d\\n\", destroyed);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled, "static method remove-arg regression fully precompiled: "
+            + result.compile_out);
+        assertEq("inside=1\nafter=1\n", result.run_out,
+            "AOT static method call must consume removed argument cleanup before method body");
+    }
+
+    testWeakBranchConditionReleasesTemp() {
+        string code = "%modern
+%allow-weak-references
+
+our int destroyed = 0;
+
+class C {
+    destructor() {
+        destroyed++;
+    }
+}
+
+C strong();
+C weak := strong;
+if (weak) {
+    remove strong;
+    printf(\"inside=%d\\n\", destroyed);
+}
+printf(\"after=%d\\n\", destroyed);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled, "weak branch cleanup regression fully precompiled: "
+            + result.compile_out);
+        assertEq("inside=1\nafter=1\n", result.run_out,
+            "AOT BrIf must release weak-load temporaries before entering the branch body");
+    }
+
+    testWeakDotEvalInvokeReleasesBase() {
+        string code = "%modern
+%allow-weak-references
+
+our int destroyed = 0;
+
+class C {
+    ping() {
+    }
+
+    destructor() {
+        destroyed++;
+    }
+}
+
+C strong();
+C weak := strong;
+try {
+    weak.ping();
+    remove strong;
+    printf(\"inside=%d\\n\", destroyed);
+} catch (hash<ExceptionInfo> ex) {
+    rethrow;
+}
+printf(\"after=%d\\n\", destroyed);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled, "weak dot-eval invoke cleanup regression fully precompiled: "
+            + result.compile_out);
+        assertEq("inside=1\nafter=1\n", result.run_out,
+            "AOT InvokeDotEvalMethodDirect must release weak-load base before exception branch");
+    }
+
     testStringOps() {
         string code = "%modern
 string s = \"Hello\";
@@ -618,7 +785,7 @@ c.run();
 
     testCompileMissingFile() {
         # Compiling a non-existent file should fail
-        string cmd = sprintf("QORE_LIBDIR=%s %s -b --compile /tmp/nonexistent_file_12345.q --output /tmp/nonexistent_out 2>&1",
+        string cmd = sprintf("QORE_LIBDIR=%s %s -b --compile /tmp/nonexistent_file_12345.qr --output /tmp/nonexistent_out 2>&1",
             libqore_dir, qore_bin);
         string out = backquote(cmd);
         assertTrue(out.size() > 0, "error message for missing source file");
@@ -4266,7 +4433,7 @@ public namespace CorruptQmodTest {
 
         # Load the corrupt .qmod with -l. Before the fix this process
         # hung forever; now it exits quickly with a MODULE-LOAD-ERROR.
-        string script = tmp_dir + "/noop.q";
+        string script = tmp_dir + "/noop.qr";
         {
             File f();
             f.open2(script, O_WRONLY | O_CREAT | O_TRUNC);
