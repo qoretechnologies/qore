@@ -133,10 +133,10 @@ public:
         emit_debug_info = v;
     }
 
-    //! Enable deferred exception checking for init functions.
-    //! When set, skip per-instruction exception checks and emit a single consolidated
-    //! check at function end.  This reduces BasicBlock count from 200+ to ~3 for
-    //! large constant init functions, avoiding exponential LLVM code generator hang.
+    //! Enable deferred exception checking for code proven not to observe exceptions
+    //! before function exit.
+    //! This is not semantics-preserving for ordinary code: later instructions can
+    //! otherwise run after a dirty ExceptionSink and observe uninitialized values.
     void setDeferredExceptionChecking(bool v) {
         deferred_exception_checking = v;
     }
@@ -174,11 +174,10 @@ private:
     const AOTSlotMap* aot_slots = nullptr;
     llvm::Value* aot_ctx_arg = nullptr;   //!< QoreAOTContext* first parameter in AOT mode
 
-    // Deferred exception checking for init functions (Phase 3: LLVM hang fix)
-    // When enabled, skip per-instruction exception checks and accumulate a flag
-    // to emit a single consolidated check at function end.  Reduces BB/inst count
-    // for large constant init functions, avoiding exponential code generator hang.
-    bool deferred_exception_checking = false;  // enabled for __const_init:: functions
+    // Deferred exception checking for code proven not to observe exceptions before
+    // function exit. Ordinary AOT code must keep this disabled to preserve Qore's
+    // immediate exception propagation semantics.
+    bool deferred_exception_checking = false;
     bool deferred_check_needed = false;        // set when a throwable was skipped
 
     // Deopt counter: pointer to variant's deopt_count atomic for guard failure tracking

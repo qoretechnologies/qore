@@ -31,6 +31,7 @@ class AOTSmokeTest inherits QUnit::Test {
         addTestCase("AOT exit code", \testExitCode());
         addTestCase("AOT ARGV passthrough", \testArgvPassthrough());
         addTestCase("AOT error handling", \testErrorHandling());
+        addTestCase("AOT exception stops method execution", \testExceptionStopsMethodExecution());
         addTestCase("AOT compile missing file", \testCompileMissingFile());
         addTestCase("AOT compile default output", \testCompileDefaultOutput());
         # Phase 7b: pointer indirection tests
@@ -522,6 +523,36 @@ try {
         string aot_out = compileAndRun(code);
         string interp_out = runInterpreted(code);
         assertEq(interp_out, aot_out, "AOT error handling matches interpreter");
+    }
+
+    testExceptionStopsMethodExecution() {
+        string code = "%modern
+class P {
+    getFuture() {
+        printf(\"unexpected future\\n\");
+    }
+}
+
+class C {
+    fail() {
+        throw \"EXPECTED\", \"stop\";
+    }
+
+    run() {
+        fail();
+        P p();
+        p.getFuture();
+    }
+}
+
+C c();
+c.run();
+";
+        string aot_out = compileAndRun(code);
+        assertTrue(aot_out.regex("EXPECTED: stop"), "AOT preserves the original exception: " + aot_out);
+        assertFalse(aot_out.regex("chained exception"), "AOT stops execution after exception: " + aot_out);
+        assertFalse(aot_out.regex("PSEUDO-METHOD-DOES-NOT-EXIST"),
+            "AOT does not run post-exception pseudo-method call: " + aot_out);
     }
 
     testCompileMissingFile() {

@@ -1349,22 +1349,7 @@ static bool compileModuleInitClosureAsInitFunc(const QoreValue& init_c, const ch
 
     QoreIRToLLVM lowerer(ctx);
     lowerer.setAOTMode(&slots);
-    // Module init closures can contain on_exit / on_error / on_success handlers;
-    // deferred_exception_checking would bypass handler execution on the exception
-    // path (see main function-compilation site for details).
-    bool mi_has_obe = false;
-    for (const auto& bb : ir_func->blocks) {
-        for (const auto& inst : bb->instructions) {
-            if (inst->opcode == QoreIROpcode::OnBlockExit) {
-                mi_has_obe = true;
-                break;
-            }
-        }
-        if (mi_has_obe) {
-            break;
-        }
-    }
-    lowerer.setDeferredExceptionChecking(!mi_has_obe);
+    lowerer.setDeferredExceptionChecking(false);
     lowerer.setSharedDebugInfo(&di_builder, di_cu);
     lowerer.setEmitDebugInfo(aotEmitDebugInfo());
     if (getenv("QORE_AOT_DUMP_IR")) {
@@ -1699,28 +1684,11 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                     lowerer.setAOTMode(&slots);
                     lowerer.setSharedDebugInfo(&di_builder, di_cu);
                     lowerer.setEmitDebugInfo(aotEmitDebugInfo());
-                    // Enable deferred exception checking to reduce BasicBlock count.
-                    // This prevents LLVM SimplifyCFG from hanging on functions with 200+ BBs.
-                    // Safe: only defers checks for code outside try blocks; code inside try blocks
-                    // still gets immediate checks via emitExceptionCheck's !inst->exception_target condition.
-                    // **Except** when the function has `on_exit` / `on_error` / `on_success`
-                    // handlers. Deferring past a throwing call would bypass handler execution
-                    // (ScopeExit with inline_lowered=true pops handlers without firing them,
-                    // leaving locks held, resources leaked, etc.). Scan for OnBlockExit and
-                    // disable deferral if found.
-                    bool has_obe = false;
-                    for (const auto& bb : ir_func->blocks) {
-                        for (const auto& inst : bb->instructions) {
-                            if (inst->opcode == QoreIROpcode::OnBlockExit) {
-                                has_obe = true;
-                                break;
-                            }
-                        }
-                        if (has_obe) {
-                            break;
-                        }
-                    }
-                    lowerer.setDeferredExceptionChecking(!has_obe);
+                    // Deferring exception checks is not semantics-preserving for
+                    // ordinary code: a throwing call must stop execution before
+                    // later constructors, assignments, or pseudo-method calls can
+                    // observe uninitialized values and raise chained exceptions.
+                    lowerer.setDeferredExceptionChecking(false);
                     if (!fast_entry_name.empty()) {
                         // Pass FE so the self-recursion check in the
                         // lowerer compares pointer identity — base-name
@@ -1774,7 +1742,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                         fast_lowerer.setAOTMode(&slots);
                         fast_lowerer.setSharedDebugInfo(&di_builder, di_cu);
                         fast_lowerer.setEmitDebugInfo(aotEmitDebugInfo());
-                        fast_lowerer.setDeferredExceptionChecking(!has_obe);  // See comment above
+                        fast_lowerer.setDeferredExceptionChecking(false);
                         fast_lowerer.setFastEntryMode(fast_entry_name, &param_map);
                         fast_lowerer.setAOTSelfRecursiveFastEntry(fast_entry_name, fe);
                         std::string fast_error;
@@ -1974,20 +1942,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                         lowerer.setAOTMode(&slots);
                         lowerer.setSharedDebugInfo(&di_builder, di_cu);
                         lowerer.setEmitDebugInfo(aotEmitDebugInfo());
-                        // See comment in function compilation above about OnBlockExit guard
-                        bool has_obe = false;
-                        for (const auto& bb : ir_func->blocks) {
-                            for (const auto& inst : bb->instructions) {
-                                if (inst->opcode == QoreIROpcode::OnBlockExit) {
-                                    has_obe = true;
-                                    break;
-                                }
-                            }
-                            if (has_obe) {
-                                break;
-                            }
-                        }
-                        lowerer.setDeferredExceptionChecking(!has_obe);
+                        lowerer.setDeferredExceptionChecking(false);
                         // Count total IR instructions and warn for large functions
                         size_t total_ir_insts = 0;
                         for (const auto& block : ir_func->blocks) {
@@ -2150,7 +2105,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
             }
             QoreIRToLLVM lowerer(ctx);
             lowerer.setAOTMode(&slots);
-            lowerer.setDeferredExceptionChecking(true);
+            lowerer.setDeferredExceptionChecking(false);
             lowerer.setSharedDebugInfo(&di_builder, di_cu);
             lowerer.setEmitDebugInfo(aotEmitDebugInfo());
             if (getenv("QORE_AOT_DUMP_IR")) {
@@ -3068,20 +3023,7 @@ bool QoreAOT::compile(QoreProgram* pgm,
                 llvm_lowerer.setAOTMode(&slots);
                 llvm_lowerer.setSharedDebugInfo(&di_builder, di_cu);
                 llvm_lowerer.setEmitDebugInfo(aotEmitDebugInfo());
-                // See comment in function compilation above about OnBlockExit guard
-                bool has_obe = false;
-                for (const auto& bb : ir_func->blocks) {
-                    for (const auto& inst : bb->instructions) {
-                        if (inst->opcode == QoreIROpcode::OnBlockExit) {
-                            has_obe = true;
-                            break;
-                        }
-                    }
-                    if (has_obe) {
-                        break;
-                    }
-                }
-                llvm_lowerer.setDeferredExceptionChecking(!has_obe);
+                llvm_lowerer.setDeferredExceptionChecking(false);
                 std::string llvm_error;
                 if (llvm_lowerer.lowerFunction(*ir_func, *module, llvm_error)) {
                     AOTCompiledFunc cf;

@@ -32,6 +32,18 @@
 #include "qore/intern/QoreJITIncludes.h"
 #include <qore/intern/QoreIRBuilder.h>
 
+QoreIRSwitchRegexMatchInstruction::~QoreIRSwitchRegexMatchInstruction() {
+    if (owns_regex_case) {
+        delete const_cast<CaseNodeRegex*>(regex_case);
+    }
+}
+
+QoreIRSwitchCaseMatchInstruction::~QoreIRSwitchCaseMatchInstruction() {
+    if (owns_case_node) {
+        delete case_node;
+    }
+}
+
 QoreIRBuilder::QoreIRBuilder(QoreIRFunction* n_func) : func(n_func) {
 }
 

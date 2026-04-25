@@ -1932,11 +1932,7 @@ public:
             : QoreIRInstruction(QoreIROpcode::SwitchRegexMatch), regex_case(n_regex_case) {
     }
 
-    ~QoreIRSwitchRegexMatchInstruction() override {
-        if (owns_regex_case) {
-            delete const_cast<CaseNodeRegex*>(regex_case);
-        }
-    }
+    ~QoreIRSwitchRegexMatchInstruction() override;
 
     const CaseNodeRegex* regex_case = nullptr;  //!< The regex case node containing the regex
     bool owns_regex_case = false;  //!< true when deserialized (we own the CaseNodeRegex)
@@ -1952,11 +1948,7 @@ public:
             : QoreIRInstruction(QoreIROpcode::SwitchCaseMatch), case_node(n_case_node) {
     }
 
-    ~QoreIRSwitchCaseMatchInstruction() override {
-        if (owns_case_node) {
-            delete case_node;
-        }
-    }
+    ~QoreIRSwitchCaseMatchInstruction() override;
 
     const CaseNode* case_node = nullptr;  //!< The case node for match evaluation
     bool owns_case_node = false;  //!< True when case_node was created during deserialization
