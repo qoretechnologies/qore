@@ -108,7 +108,7 @@ This proposal is **two pieces, both useful independently**:
 
 | Piece | Effort | Contribution |
 |---|---|---|
-| New keyword operators | ~2 weeks | Closes the find-first gap and the related any/all/take/drop/takewhile/takeuntil gaps |
+| New keyword operators + hard-list materialization | ~2-3 weeks | Closes the find-first gap and the related any/all/take/drop/takewhile/takeuntil gaps; lets iterator-returning stages materialize naturally at a `list<T>` target |
 | Operator-chain fusion optimizer | ~4-6 weeks | Replaces existing lazy wrapper chains with a single fused loop and extends lazy execution to the new stages |
 
 Both ship in 2.3.
@@ -176,7 +176,7 @@ they yield iterators that compose into further stages.
 ```qore
 auto first_10_error_iter = take 10,
                                 (select log.splitLines(), $1 =~ /ERROR/);
-list<string> first_10_errors = map $1, first_10_error_iter;
+list<string> first_10_errors = first_10_error_iter;
 
 # Skip header, process body
 foreach hash<auto> row in (drop 1, csv.splitLines()) {
@@ -185,9 +185,8 @@ foreach hash<auto> row in (drop 1, csv.splitLines()) {
 ```
 
 `take` short-circuits the source after N elements. `drop` skips the first
-N then yields the rest. If a list is needed, materialize explicitly with
-an identity `map` (as above) or with a future `collect` helper if one is
-added.
+N then yields the rest. If a list is needed, assign the iterator to a
+hard-list target (§2.11).
 
 ### 2.4 `takewhile` and `takeuntil`
 
@@ -201,11 +200,11 @@ Non-terminal, like `take`/`drop`.
 ```qore
 # Lines until the first blank line (e.g., HTTP header end)
 auto header_iter = takewhile $1 != "", source.splitLines();
-list<string> headers = map $1, header_iter;
+list<string> headers = header_iter;
 
 # Read until we hit a sentinel
 auto body_iter = takeuntil $1 == "<<END>>", source.splitLines();
-list<string> body = map $1, body_iter;
+list<string> body = body_iter;
 ```
 
 `takewhile` reads while the predicate holds; `takeuntil` reads until it
@@ -393,6 +392,52 @@ This is the correct streaming behaviour but worth explicit
 documentation: programmers porting from `select`/`map` (which iterate
 the entire source) need to know that the new operators don't.
 
+### 2.11 Materialization on hard-list assignment
+
+Iterator-yielding expressions can be materialized by assigning them to a
+hard-list target:
+
+```qore
+auto limited_iter = take 10, source;       # still lazy
+list<int> limited = limited_iter;          # consumes the remaining iterator elements
+
+list<string> headers = takewhile $1 != "", source.splitLines();
+```
+
+This is part of the initial proposal because `take` / `drop` /
+`takewhile` / `takeuntil` intentionally return iterators for composition,
+but callers often need the final result as a list. Without target-driven
+materialization, the practical spelling would be an identity `map`:
+
+```qore
+list<int> limited = map $1, (take 10, source);
+```
+
+That is correct but too obscure to make the streaming operators feel
+natural.
+
+The rule is deliberately narrow:
+
+| Target type | Assignment from `AbstractIterator` |
+|---|---|
+| `list<T>` / `*list<T>` | materializes the iterator's remaining elements into a list, folding each element through `T` |
+| `auto`, `any`, `object`, `AbstractIterator` | stores the iterator object |
+| `softlist<T>` | keeps existing soft-list semantics; an iterator object is one value, not a stream to collect |
+
+Materialization consumes the iterator from its current position to
+exhaustion. The new list owns referenced copies of the yielded values.
+Element type errors are reported at the element that fails type folding,
+after any earlier elements have already been pulled from the iterator.
+This is the same unavoidable side-effect boundary as manual
+materialization with `map $1, iter` or a `foreach` loop.
+
+This feature is **not** general "iterators materialize on assignment."
+The broad rule would be too surprising: assignment to `auto` would no
+longer preserve iterator objects, and assigning a file, SQL, channel, or
+user-defined iterator could unexpectedly block or drain an external
+resource. Hard-list assignment is explicit enough at the target type and
+matches the programmer's stated request for a list.
+
 ---
 
 ## 3. Operator-chain fusion
@@ -516,10 +561,17 @@ expressions that intentionally materialize, such as:
 
 ```qore
 list<int> l = map $1, iter;
+list<int> l2 = take 10, iter;
 ```
 
 are not fused across the statement boundary; materialization remains the
 observable result.
+
+Hard-list assignment materialization is an additive behavior change for
+assignments that are currently rejected at parse time, for example
+`list<int> l = some_iterator;`. It does not change assignment to `auto`,
+`any`, `object`, `AbstractIterator`, or `softlist<T>`, which continue to
+preserve the iterator object under existing rules.
 
 ### 4.3 Reserved-word collisions and disambiguation
 
@@ -685,20 +737,22 @@ baseline.
 | Parser changes (productions for the 8 keyword operators) | 1 week |
 | Parser changes for `find first`/`last`/`one` | 3 days |
 | Parser + runtime support for `iterate` (uniform iterator factory) | 4 days |
+| Hard-list assignment materialization for `AbstractIterator` | 3-4 days |
 | AST nodes + non-fused emit for each operator | 2 weeks |
 | Fusion optimizer pass | 4-6 weeks |
-| Test coverage (qtest per operator + property tests for fusion equivalence) | 2-3 weeks |
+| Test coverage (qtest per operator, hard-list materialization tests, property tests for fusion equivalence) | 2-3 weeks |
 | Reserved-word survey + `qore-migrate-rename` tool | 4 days |
 | Doc updates | 1 week |
-| **Total (sequential)** | **~14-17 weeks** |
+| **Total (sequential)** | **~15-18 weeks** |
 | **Total (with parallelism, 2 developers)** | **~10-12 weeks** |
 
 Order:
 
-1. Operators + non-fused emit + `iterate` keyword (~4 weeks). Releasable
-   here — the operators work, fusion just isn't applied yet, programs
-   are no slower than before. **The find-first ergonomic win is fully
-   realized at this milestone**, even without fusion.
+1. Operators + non-fused emit + `iterate` keyword + hard-list assignment
+   materialization (~4-5 weeks). Releasable here — the operators work,
+   fusion just isn't applied yet, programs are no slower than before.
+   **The find-first ergonomic win and the `take`/`drop` materialization
+   ergonomics are fully realized at this milestone**, even without fusion.
 2. Fusion optimizer (~4-6 weeks). Adds the perf-on-existing-chains win.
 3. `find first`/`last`/`one` extensions (~3 days, can land any time
    after step 1).
@@ -763,6 +817,23 @@ Mitigations:
 - They share a common AST shape (predicate + source for most), so the
   parser productions are mostly templated.
 
+### 7.5 Assignment materialization side effects
+
+Hard-list assignment materialization makes an assignment expression able
+to consume an iterator. For bounded in-memory iterators this is expected;
+for file, SQL, channel, or user-defined iterators it can perform I/O,
+block, or consume an unbounded stream.
+
+Mitigations:
+
+- Limit the rule to hard-list targets only (`list<T>` / `*list<T>`).
+  Assignment to `auto`, `any`, `object`, `AbstractIterator`, and
+  `softlist<T>` preserves the iterator object.
+- Document the operation as consuming the iterator's remaining elements,
+  not as copying a reusable collection.
+- Keep the new streaming operators' non-terminal forms lazy; only the
+  hard-list assignment boundary materializes.
+
 ---
 
 ## 8. Open questions
@@ -777,10 +848,10 @@ Mitigations:
    iterator?**
    `take 10, list<int>` could return `list<int>` (materialized) or an
    iterator. Materialized is friendlier for callers; iterator is faster
-   to compose. Recommendation: iterator — callers who need a list
-   materialize explicitly, for example `list<int> l = map $1, (take 10,
-   source);`. A dedicated `collect` operator can be considered later if
-   identity `map` is too obscure.
+   to compose. Recommendation: iterator — callers who need a list assign
+   to a hard-list target, for example `list<int> l = take 10, source;`.
+   A dedicated `collect` operator can still be considered later for cases
+   where the target type is not a hard-list assignment.
 
 3. **`count` of an infinite source — error or hang?**
    No infinite sources in Qore today (`xrange` requires explicit bounds).
