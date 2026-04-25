@@ -2161,7 +2161,7 @@ qore_user_module("qlib/FtpClientDataProvider" "DataProvider" "ftp-logo-white.svg
 qore_user_module("qlib/HttpClientDataProvider" "DataProvider;FileLocationHandler")
 qore_user_module("qlib/ServerSentEventHandler" "HttpServerUtil;Logger;WebSocketUtil")
 qore_user_module("qlib/SqlUtil" "Util;DataProvider" "SqlUtil-Full.svg")
-qore_user_module("qlib/ConnectionProvider" "Util;DataProvider")
+qore_user_module("qlib/ConnectionProvider" "AsyncSocketIo;DataProvider;Logger;ProviderIndexUtil;Util;reflection")
 qore_user_module("qlib/CsvUtil" "Util;DataProvider")
 qore_user_module("qlib/FixedLengthUtil" "Util;DataProvider")
 qore_user_module("qlib/Mapper.qm" "MapperUtil;DataProvider")
