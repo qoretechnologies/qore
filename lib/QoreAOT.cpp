@@ -161,6 +161,7 @@
 
 // Defined in Function.cpp - collects all local variables from a StatementBlock and nested blocks
 extern void collectAllStatementLocals(const StatementBlock* block, std::vector<LocalVar*>& locals);
+extern void removeSignatureLocalsFromBodyLocals(std::vector<LocalVar*>& locals, const UserSignature* sig);
 
 //! AOT compile-time optimization Phase 1: emit_debug_info flag.
 //! Returns true if DWARF debug info should be emitted (default: true).
@@ -721,6 +722,7 @@ static int tryLowerFunction(UserVariantBase* uvb, const char* name, QoreProgram*
     // in AOT mode to avoid cvstack ordering issues.  The LLVM lowerer checks
     // closureUse() + aot_mode to emit instantiation for them at block scope boundaries.
     collectAllStatementLocals(statements, ir_func->all_body_locals);
+    removeSignatureLocalsFromBodyLocals(ir_func->all_body_locals, sig);
     for (LocalVar* lv : ir_func->all_body_locals) {
         ir_func->pre_instantiated_locals.insert(reinterpret_cast<const void*>(lv));
     }

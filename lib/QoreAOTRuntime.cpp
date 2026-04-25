@@ -171,6 +171,7 @@
 
 // Defined in Function.cpp - collects all local variables from a StatementBlock and nested blocks
 extern void collectAllStatementLocals(const StatementBlock* block, std::vector<LocalVar*>& locals);
+extern void removeSignatureLocalsFromBodyLocals(std::vector<LocalVar*>& locals, const UserSignature* sig);
 // collectStmtSlotStatements() declared in QoreAOT.h, defined in Function.cpp
 
 // Defined in QoreAOT.cpp - generates unique variant key with parameter types
@@ -4117,6 +4118,7 @@ static QoreAOTContext* buildContextForVariant(UserVariantBase* uvb, const char* 
     // Collect ALL body locals from the statement tree (includes nested blocks from
     // for/while/if/try/switch statements) so they can be instantiated at runtime.
     collectAllStatementLocals(statements, ir_func->all_body_locals);
+    removeSignatureLocalsFromBodyLocals(ir_func->all_body_locals, sig);
 
     // Build the context from the fresh IR (same walk order → same slot indices)
     QoreAOTContext* ctx = buildAOTContext(*ir_func, aot_func.num_locals, aot_func.num_globals, aot_func.num_exprs, aot_func.num_stmts, aot_func.num_regex_cases);

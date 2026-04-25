@@ -57,6 +57,7 @@
 #include "qore/intern/QoreAOT.h"
 #include "qore/intern/FunctionCallNode.h"
 
+#include <algorithm>
 #include <atomic>
 #include <cassert>
 #include <cctype>
@@ -67,6 +68,7 @@
 #include <pthread.h>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 
 static void duplicateSignatureException(const char* cname, const char* name, const UserSignature* sig) {
     parseException(*sig->getParseLocation(), "DUPLICATE-SIGNATURE", "%s%s%s(%s) has already been declared",
@@ -2368,6 +2370,28 @@ static void collectBlockLocals(const LVList* lvars, std::vector<LocalVar*>& loca
 // forward declaration — non-static for non-SCU visibility
 void collectAllStatementLocals(const StatementBlock* block, std::vector<LocalVar*>& locals);
 
+void removeSignatureLocalsFromBodyLocals(std::vector<LocalVar*>& locals, const UserSignature* sig) {
+    if (!sig || locals.empty()) {
+        return;
+    }
+
+    std::unordered_set<LocalVar*> signature_locals;
+    for (unsigned i = 0; i < sig->numParams(); ++i) {
+        signature_locals.insert(sig->lv[i]);
+    }
+    if (sig->argvid) {
+        signature_locals.insert(sig->argvid);
+    }
+    if (sig->selfid) {
+        signature_locals.insert(sig->selfid);
+    }
+
+    locals.erase(std::remove_if(locals.begin(), locals.end(),
+        [&signature_locals](LocalVar* lv) {
+            return signature_locals.count(lv) > 0;
+        }), locals.end());
+}
+
 // helper: collect all locals from a single statement and recurse into nested blocks.
 // Recurses into statement types that are fully lowered to IR (if/for/while/try/switch/block/on_block_exit).
 // With Phase 1 inline handler lowering, on_block_exit handler code is lowered directly into the
@@ -2564,6 +2588,7 @@ void UserVariantBase::attemptIRLowering(const char* name, bool raise_on_failure)
     // fully-lowered statements).  These are instantiated by evalTiered() before IR/JIT
     // execution so AST Invoke callbacks can find them on the thread-local stack.
     collectAllStatementLocals(statements, func->all_body_locals);
+    removeSignatureLocalsFromBodyLocals(func->all_body_locals, &signature);
     for (LocalVar* lv : func->all_body_locals) {
         func->pre_instantiated_locals.insert(reinterpret_cast<const void*>(lv));
         func->pre_instantiated_cache.insert(lv);

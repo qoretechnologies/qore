@@ -27,6 +27,8 @@ class AOTSmokeTest inherits QUnit::Test {
         addTestCase("AOT control flow", \testControlFlow());
         addTestCase("AOT functions", \testFunctions());
         addTestCase("AOT reference arg local reload", \testReferenceArgLocalReload());
+        addTestCase("AOT closure-use reference params teardown",
+            \testClosureUseReferenceParamsTeardown());
         addTestCase("AOT string operations", \testStringOps());
         addTestCase("AOT regex switch", \testSwitchRegex());
         addTestCase("AOT exit code", \testExitCode());
@@ -474,6 +476,37 @@ printf(\"value=%d\\n\", C::test());
         hash<auto> result = compileCheckAndRun(code);
         assertTrue(result.all_precompiled, "reference arg regression fully precompiled: " + result.compile_out);
         assertEq("value=2\n", result.run_out, "AOT reloads locals mutated through reference args");
+    }
+
+    testClosureUseReferenceParamsTeardown() {
+        string code = "%modern
+class C {
+    public hash<auto> m(string shdr, code<string(hash<auto>)> signer, string method, string path,
+            auto body, *hash<auto> hdr) {
+        hash<auto> prepared = prepare(method, \\path, body, \\hdr);
+        auto sig = signer({\"path\": path, \"body\": prepared.body, \"hdr\": hdr - shdr});
+        hdr{shdr} = sig;
+        return prepared;
+    }
+
+    private hash<auto> prepare(string method, reference<string> path, auto body,
+            reference<*hash<auto>> hdr) {
+        if (path.val() && path[0] != \"/\") {
+            path = \"/\" + path;
+        }
+        return {\"body\": body};
+    }
+}
+
+C c();
+hash<auto> h = {};
+hash<auto> r = c.m(\"S\", string sub (hash<auto> hh) { return \"sig\"; }, \"GET\", \"x\", NOTHING, h);
+printf(\"ok\\n\");
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled, "closure-use param teardown regression fully precompiled: "
+            + result.compile_out);
+        assertEq("ok\n", result.run_out, "AOT does not pop caller-owned closure-use parameters");
     }
 
     testStringOps() {

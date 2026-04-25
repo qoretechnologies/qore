@@ -827,27 +827,33 @@ void QoreIRToLLVM::emitLocalInstantiation(llvm::Module& module) {
     if (aot_mode) {
         auto helper = module.getOrInsertFunction("qore_rt_instantiate_local_aot",
                 llvm::FunctionType::get(void_type, {ptr_type, i32_type}, false));
-        // Track which closure-use vars we've already instantiated at function
-        // entry so we can instantiate any closure-use body locals that were
-        // not classified as entry_locals.
+        std::unordered_set<const void*> body_local_set;
+        if (current_ir_func) {
+            for (LocalVar* var : current_ir_func->all_body_locals) {
+                body_local_set.insert(reinterpret_cast<const void*>(var));
+            }
+        }
+        // Track which callee-owned closure-use vars we've already instantiated
+        // at function entry so we can instantiate any closure-use body locals
+        // that were not classified as entry_locals.
         std::unordered_set<const void*> instantiated_closure_use;
         for (LocalVar* var : entry_locals) {
+            const void* key = reinterpret_cast<const void*>(var);
             if (pre_instantiated_locals &&
-                    pre_instantiated_locals->count(reinterpret_cast<const void*>(var))) {
-                // Closure-use vars ARE in pre_instantiated_locals (for membership
-                // identification), but evalTiered does NOT actually pre-instantiate
-                // them in AOT mode.  We must instantiate them here so they are on
-                // the cvstack before any StoreLocal, LoadLocal, or CreateClosure.
-                if (!var->closureUse()) {
+                    pre_instantiated_locals->count(key)) {
+                // Signature locals are genuinely pre-instantiated by the caller.
+                // Closure-use body locals are only in pre_instantiated_locals for
+                // ownership/membership and must be managed by the AOT callee.
+                if (!var->closureUse() || !body_local_set.count(key)) {
                     continue;
                 }
             }
             int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(
-                    reinterpret_cast<const void*>(var));
+                    key);
             builder->CreateCall(helper, {aot_ctx_arg,
                     llvm::ConstantInt::get(i32_type, slot)});
             if (var->closureUse()) {
-                instantiated_closure_use.insert(reinterpret_cast<const void*>(var));
+                instantiated_closure_use.insert(key);
             }
         }
         // Also instantiate closure-use body locals that are NOT entry_locals
@@ -1043,6 +1049,12 @@ void QoreIRToLLVM::emitLocalUninstantiation(llvm::Module& module) {
                 llvm::FunctionType::get(void_type, {ptr_type, i32_type, ptr_type}, false));
         auto pop_helper = module.getOrInsertFunction("qore_rt_pop_closure_var_aot",
                 llvm::FunctionType::get(void_type, {ptr_type, i32_type, ptr_type}, false));
+        std::unordered_set<const void*> body_local_set;
+        if (current_ir_func) {
+            for (LocalVar* var : current_ir_func->all_body_locals) {
+                body_local_set.insert(reinterpret_cast<const void*>(var));
+            }
+        }
         // First pop closure-use body locals that were pre-instantiated at function
         // entry by emitLocalInstantiation (the all_body_locals loop). These are NOT
         // in entry_locals, so the entry_locals reverse loop below won't cover them.
@@ -1070,20 +1082,22 @@ void QoreIRToLLVM::emitLocalUninstantiation(llvm::Module& module) {
             }
         }
         for (auto it = entry_locals.rbegin(); it != entry_locals.rend(); ++it) {
+            const void* key = reinterpret_cast<const void*>(*it);
             if (pre_instantiated_locals &&
-                    pre_instantiated_locals->count(reinterpret_cast<const void*>(*it))) {
-                // Closure-use vars were instantiated by emitLocalInstantiation
-                // (not by evalTiered), so we must pop them from the cvstack.
-                if ((*it)->closureUse()) {
+                    pre_instantiated_locals->count(key)) {
+                // Signature locals are caller-owned and must be popped by the
+                // dispatch helper. Closure-use body locals are callee-owned and
+                // were instantiated by emitLocalInstantiation, so pop them here.
+                if ((*it)->closureUse() && body_local_set.count(key)) {
                     int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(
-                            reinterpret_cast<const void*>(*it));
+                            key);
                     builder->CreateCall(pop_helper, {aot_ctx_arg,
                             llvm::ConstantInt::get(i32_type, slot), xsink_arg});
                 }
                 continue;
             }
             int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(
-                    reinterpret_cast<const void*>(*it));
+                    key);
             builder->CreateCall(helper, {aot_ctx_arg,
                     llvm::ConstantInt::get(i32_type, slot), xsink_arg});
         }
