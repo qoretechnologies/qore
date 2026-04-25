@@ -187,11 +187,17 @@ while (!tok.atEnd()) {
         }
 
         #! Creates a tokenizer for the given input text
-        /** @param text the Qore source code to tokenize
+        /** @param text the Qore source code to tokenize.  Converted to UTF-8
+            internally if necessary; the byte-indexed scan loop relies on the
+            UTF-8 invariant that ASCII bytes (0x00..0x7F) only appear as
+            themselves and never as part of a multi-byte sequence.  Source in
+            UTF-16 / UTF-32 / other non-ASCII-compatible encodings would
+            produce garbage tokens under byte-wise scanning, so we convert
+            once up front.
         */
         constructor(string text) {
-            input = text;
-            len = text.size();
+            input = text.encoding() == "UTF-8" ? text : convert_encoding(text, "UTF-8");
+            len = input.size();
         }
 
         #! Returns True if at end of input
