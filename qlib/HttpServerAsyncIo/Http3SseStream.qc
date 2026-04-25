@@ -149,8 +149,8 @@ public class Http3SseStream inherits AbstractSseConnection {
                 if (wake_callback) {
                     wake_callback();
                 }
-            } catch () {
-                # Ignore errors on close
+            } catch (hash<ExceptionInfo> ex) {
+                rethrow;
             }
         }
     }
@@ -159,8 +159,8 @@ public class Http3SseStream inherits AbstractSseConnection {
         stream_open = False;
         try {
             sock.cancelQuicStream(session_id, stream_id);
-        } catch () {
-            # Ignore errors on abort
+        } catch (hash<ExceptionInfo> ex) {
+            rethrow;
         }
     }
 

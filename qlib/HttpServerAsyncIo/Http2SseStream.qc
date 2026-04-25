@@ -188,8 +188,8 @@ public class Http2SseStream inherits AbstractSseConnection {
             if (wake_callback) {
                 wake_callback();
             }
-        } catch () {
-            # Ignore errors on close
+        } catch (hash<ExceptionInfo> ex) {
+            rethrow;
         }
     }
 
@@ -200,8 +200,8 @@ public class Http2SseStream inherits AbstractSseConnection {
             if (wake_callback) {
                 wake_callback();
             }
-        } catch () {
-            # Ignore errors on abort
+        } catch (hash<ExceptionInfo> ex) {
+            rethrow;
         }
     }
 

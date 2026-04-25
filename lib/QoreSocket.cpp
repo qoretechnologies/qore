@@ -3118,13 +3118,21 @@ QoreHashNode* parseSseEvent(ExceptionSink* xsink, const QoreString& buf) {
 void SseAction::execute(QoreValue output, ExceptionSink* xsink) {
     std::lock_guard<std::mutex> lg(mtx);
 
-    // Extract body binary from the streaming data hash
+    // Extract body data from the streaming data hash.  Intermediate H2/H3
+    // chunks are binary, but an H2 DATA+END_STREAM completion can pass through
+    // the regular completed-response path where text/event-stream is decoded
+    // to a Qore string before the action sees it.
     if (output.getType() == NT_HASH) {
         QoreValue body_val = output.get<QoreHashNode>()->getKeyValue("body");
         if (body_val.getType() == NT_BINARY) {
             const BinaryNode* data = body_val.get<const BinaryNode>();
             if (data->size() > 0) {
                 sse_buffer.concat((const char*)data->getPtr(), data->size());
+            }
+        } else if (body_val.getType() == NT_STRING) {
+            const QoreStringNode* data = body_val.get<const QoreStringNode>();
+            if (!data->empty()) {
+                sse_buffer.concat(data->c_str(), data->size());
             }
         }
     }

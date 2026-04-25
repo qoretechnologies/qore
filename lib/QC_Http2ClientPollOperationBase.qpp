@@ -1581,7 +1581,7 @@ int Http2ClientPollOperationBase::submitRequestSse(string method, string path,
         notifier_ptr->deref(xsink);  // SseAction refs the notifier itself
     }
     return (int)priv->submitRequest(method->c_str(), path->c_str(), headers,
-        body_ptr, body_len, true, action, (int)max_streams, xsink);
+        body_ptr, body_len, false, action, (int)max_streams, xsink);
 }
 
 //! Cancel a stream

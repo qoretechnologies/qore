@@ -639,6 +639,24 @@ void QoreCallDispatcher::workerEntry(ExceptionSink* xsink, void* arg) {
     }
 }
 
+static const char* getDispatchTypeName(QoreCallDispatcher::DispatchType type) {
+    switch (type) {
+        case QoreCallDispatcher::DT_ABORT:
+            return "abort";
+        case QoreCallDispatcher::DT_ON_COMPLETE:
+            return "onComplete";
+        case QoreCallDispatcher::DT_CALLBACK:
+            return "callback";
+        case QoreCallDispatcher::DT_CONTINUE_POLL:
+            return "continuePoll";
+        case QoreCallDispatcher::DT_STREAM_DATA_NOTIFY:
+            return "onStreamData";
+        case QoreCallDispatcher::DT_POLL_COMPLETE_NOTIFY:
+            return "onPollComplete";
+    }
+    return "unknown";
+}
+
 void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
     while (true) {
         AsyncWorkItem async_item{nullptr, nullptr, nullptr, nullptr, DT_ABORT, nullptr, std::string()};
@@ -810,18 +828,27 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
         if (work_xsink) {
             const QoreStringNode* err_str = work_xsink.getExceptionErr().get<const QoreStringNode>();
             const QoreStringNode* desc_str = work_xsink.getExceptionDesc().get<const QoreStringNode>();
+            const char* type_name = getDispatchTypeName(async_item.type);
+            const char* class_name = async_item.spop_obj ? async_item.spop_obj->getClassName() : "null";
+            const char* owner = async_item.owner.empty() ? "-" : async_item.owner.c_str();
+            const char* key = async_item.key.empty() ? "-" : async_item.key.c_str();
+            const char* stream_key = async_item.stream_key.empty() ? "-" : async_item.stream_key.c_str();
             // Use the controller's logger if available; fall back to stderr
             if (ctrl) {
                 ctrl->log(QORE_LOG_LEVEL_ERROR,
-                    "QoreCallDispatcher::workerLoop() %s exception: %s: %s",
+                    "QoreCallDispatcher::workerLoop() %s exception: %s: %s "
+                    "(type=%s class=%s owner=%s key=%s stream_key=%s)",
                     method_name ? method_name : "unknown",
                     err_str ? err_str->c_str() : "?",
-                    desc_str ? desc_str->c_str() : "?");
+                    desc_str ? desc_str->c_str() : "?",
+                    type_name, class_name, owner, key, stream_key);
             } else {
-                fprintf(stderr, "QoreCallDispatcher::workerLoop() %s exception: %s: %s\n",
+                fprintf(stderr, "QoreCallDispatcher::workerLoop() %s exception: %s: %s "
+                    "(type=%s class=%s owner=%s key=%s stream_key=%s)\n",
                     method_name ? method_name : "unknown",
                     err_str ? err_str->c_str() : "?",
-                    desc_str ? desc_str->c_str() : "?");
+                    desc_str ? desc_str->c_str() : "?",
+                    type_name, class_name, owner, key, stream_key);
             }
             work_xsink.clear();
         }
