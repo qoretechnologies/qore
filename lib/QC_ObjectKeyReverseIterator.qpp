@@ -83,7 +83,9 @@ ObjectKeyReverseIterator i(obj);
     @endcode
  */
 ObjectKeyReverseIterator::constructor(object o) {
-   self->setPrivate(CID_OBJECTKEYREVERSEITERATOR, new QoreObjectReverseIterator(o));
+   ReferenceHolder<QoreObjectReverseIterator> p(new QoreObjectReverseIterator(o), xsink);
+   p->setView(QoreHashIterator::VIEW_KEY);
+   self->setPrivate(CID_OBJECTKEYREVERSEITERATOR, p.release());
 }
 
 //! Creates an empty iterator object
@@ -94,7 +96,9 @@ ObjectKeyReverseIterator i(obj);
     @endcode
  */
 ObjectKeyReverseIterator::constructor() {
-   self->setPrivate(CID_OBJECTKEYREVERSEITERATOR, new QoreObjectReverseIterator);
+   ReferenceHolder<QoreObjectReverseIterator> p(new QoreObjectReverseIterator, xsink);
+   p->setView(QoreHashIterator::VIEW_KEY);
+   self->setPrivate(CID_OBJECTKEYREVERSEITERATOR, p.release());
 }
 
 //! Creates a copy of the ObjectKeyReverseIterator object, iterating the same object as the original and in the same position
@@ -104,7 +108,9 @@ ObjectKeyReverseIterator ni = i.copy();
     @endcode
  */
 ObjectKeyReverseIterator::copy() {
-   self->setPrivate(CID_OBJECTKEYREVERSEITERATOR, new QoreObjectReverseIterator(*i));
+   ReferenceHolder<QoreObjectReverseIterator> p(new QoreObjectReverseIterator(*i), xsink);
+   p->setView(QoreHashIterator::VIEW_KEY);
+   self->setPrivate(CID_OBJECTKEYREVERSEITERATOR, p.release());
 }
 
 //! returns the current key value or throws an \c INVALID-ITERATOR exception if the iterator is invalid

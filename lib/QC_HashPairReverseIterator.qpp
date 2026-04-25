@@ -78,7 +78,9 @@ HashPairReverseIterator hi(h);
     @endcode
  */
 HashPairReverseIterator::constructor(hash<auto> h) {
-    self->setPrivate(CID_HASHPAIRREVERSEITERATOR, new QoreHashReverseIterator(h));
+    ReferenceHolder<QoreHashReverseIterator> p(new QoreHashReverseIterator(h), xsink);
+    p->setView(QoreHashIterator::VIEW_PAIR);
+    self->setPrivate(CID_HASHPAIRREVERSEITERATOR, p.release());
 }
 
 //! Creates an empty iterator object
@@ -89,7 +91,9 @@ HashPairReverseIterator hi(h);
     @endcode
  */
 HashPairReverseIterator::constructor() {
-    self->setPrivate(CID_HASHPAIRREVERSEITERATOR, new QoreHashReverseIterator);
+    ReferenceHolder<QoreHashReverseIterator> p(new QoreHashReverseIterator, xsink);
+    p->setView(QoreHashIterator::VIEW_PAIR);
+    self->setPrivate(CID_HASHPAIRREVERSEITERATOR, p.release());
 }
 
 //! Creates a copy of the HashPairReverseIterator object, iterating the same object as the original and in the same position
@@ -99,7 +103,9 @@ HashPairReverseIterator ni = i.copy();
     @endcode
  */
 HashPairReverseIterator::copy() {
-    self->setPrivate(CID_HASHPAIRREVERSEITERATOR, new QoreHashReverseIterator(*i));
+    ReferenceHolder<QoreHashReverseIterator> p(new QoreHashReverseIterator(*i), xsink);
+    p->setView(QoreHashIterator::VIEW_PAIR);
+    self->setPrivate(CID_HASHPAIRREVERSEITERATOR, p.release());
 }
 
 //! returns a hash with the current key and value (a hash with 2 keys: \c "key" and \c "value") or throws an \c INVALID-ITERATOR exception if the iterator is invalid

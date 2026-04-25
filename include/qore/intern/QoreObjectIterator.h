@@ -72,6 +72,16 @@ public:
     DLLLOCAL virtual const char* getName() const {
         return "ObjectReverseIterator";
     }
+
+    // Reverse fast path: nativeNext routes to prev() (the priv's backwards
+    // walker).  Without this override the inherited QoreHashIterator fast
+    // path would call next() and iterate forward.
+    DLLLOCAL bool nativeNext(ExceptionSink* xsink) override {
+        if (check(xsink)) {
+            return false;
+        }
+        return prev();
+    }
 };
 
 #endif // _QORE_QOREOBJECTITERATOR_H
