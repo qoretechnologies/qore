@@ -7538,9 +7538,14 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     auto helper = module.getOrInsertFunction("qore_rt_pseudo_size",
                             llvm::FunctionType::get(i64_type, {i64_type}, false));
                     call_result = builder->CreateCall(helper, {base_boxed});
-                } else if (!strcmp(method_name, "strlen") || !strcmp(method_name, "length")) {
-                    // Fast: strlen/length returns NaN-boxed int
+                } else if (!strcmp(method_name, "strlen")) {
+                    // Fast: strlen() returns byte length as a NaN-boxed int
                     auto helper = module.getOrInsertFunction("qore_rt_pseudo_size",
+                            llvm::FunctionType::get(i64_type, {i64_type}, false));
+                    call_result = builder->CreateCall(helper, {base_boxed});
+                } else if (!strcmp(method_name, "length")) {
+                    // Fast: length() returns character count as a NaN-boxed int
+                    auto helper = module.getOrInsertFunction("qore_rt_pseudo_length",
                             llvm::FunctionType::get(i64_type, {i64_type}, false));
                     call_result = builder->CreateCall(helper, {base_boxed});
                 } else if (!strcmp(method_name, "empty")) {
@@ -7693,9 +7698,14 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     auto helper = module.getOrInsertFunction("qore_rt_pseudo_size",
                             llvm::FunctionType::get(i64_type, {i64_type}, false));
                     call_result = builder->CreateCall(helper, {base_boxed});
-                } else if (!strcmp(method_name, "strlen") || !strcmp(method_name, "length")) {
-                    // Fast: strlen/length returns NaN-boxed int
+                } else if (!strcmp(method_name, "strlen")) {
+                    // Fast: strlen() returns byte length as a NaN-boxed int
                     auto helper = module.getOrInsertFunction("qore_rt_pseudo_size",
+                            llvm::FunctionType::get(i64_type, {i64_type}, false));
+                    call_result = builder->CreateCall(helper, {base_boxed});
+                } else if (!strcmp(method_name, "length")) {
+                    // Fast: length() returns character count as a NaN-boxed int
+                    auto helper = module.getOrInsertFunction("qore_rt_pseudo_length",
                             llvm::FunctionType::get(i64_type, {i64_type}, false));
                     call_result = builder->CreateCall(helper, {base_boxed});
                 } else if (!strcmp(method_name, "empty")) {

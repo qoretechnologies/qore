@@ -486,7 +486,7 @@ public namespace DebugProgramControl {
                                         result = sprintf('program ID %d not added', pgmb.getProgramId());
                                         break;
                                     }
-                                    delete ctxConnection{cx.id}.program{pgmb.getProgramId()};
+                                    remove r;
                                 }
                                 removeProgram(pgmb);
                                 result = 'ok';

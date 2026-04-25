@@ -1846,8 +1846,12 @@ set_target_properties(qcc PROPERTIES BUILD_RPATH ${CMAKE_BINARY_DIR})
 set(_qcc_format_sources
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreAOTBinary.h
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreIR.h
+    ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreIRLowering.h
+    ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreIRToLLVM.h
     ${CMAKE_SOURCE_DIR}/lib/QoreAOT.cpp
     ${CMAKE_SOURCE_DIR}/lib/QoreAOTBinary.cpp
+    ${CMAKE_SOURCE_DIR}/lib/QoreIRLowering.cpp
+    ${CMAKE_SOURCE_DIR}/lib/QoreIRToLLVM.cpp
     ${CMAKE_SOURCE_DIR}/qcc-main.cpp
 )
 set(QCC_FORMAT_STAMP ${CMAKE_BINARY_DIR}/qcc-format.stamp)
