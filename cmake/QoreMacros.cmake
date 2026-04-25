@@ -781,6 +781,12 @@ MACRO (QORE_USER_MODULE _module_file _mod_deps)
             QORE_USER_MODULE_AOT_RULES(${f} 0
                 ${CMAKE_SOURCE_DIR}/${_module_file} ${_mod_targets})
         endif()
+        foreach(_dep ${_mod_deps})
+            get_filename_component(_dep_name ${_dep} NAME_WE)
+            if (TARGET ${_dep_name}-qmod)
+                add_dependencies(${f}-qmod ${_dep_name}-qmod)
+            endif()
+        endforeach()
     endif()
 ENDMACRO (QORE_USER_MODULE)
 
