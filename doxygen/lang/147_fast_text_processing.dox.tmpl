@@ -1,0 +1,146 @@
+/** @page fast_text_processing Fast Text Processing
+
+    @tableofcontents
+
+    @section ftp_overview Overview
+
+    %Qore 2.3 introduces a coordinated set of zero-allocation text-scanning primitives aimed at
+    tokenizers, parsers, log scrubbers, and any other code that traverses large strings on a hot
+    path.  Three layers cooperate:
+
+    1. <b>Internal string views</b> — read-only @ref string_views "string view" infrastructure
+       lets @ref <string>::substr() "<string>::substr()" and the
+       @ref string_slicing "[] slice operator" share the original buffer instead of copying.
+    2. <b>Allocation-free byte/codepoint access</b> — the
+       @ref <string>::getByte() "<string>::getByte()" pseudo-method and the
+       @ref Qore::Scanner "Scanner" class expose cursor-based reads that never allocate
+       per-character.
+    3. <b>Lazy iterators</b> — @ref Qore::StringCharIterator "StringCharIterator",
+       @ref Qore::StringSplitIterator "StringSplitIterator", and
+       @ref Qore::StringRegexSplitIterator "StringRegexSplitIterator" yield codepoints,
+       delimited tokens, and regex-delimited lines on demand, replacing eager
+       @ref <string>::split() "<string>::split()" / list-returning patterns where memory or
+       latency matters.
+
+    None of these APIs change existing language semantics; they sit alongside the older
+    @ref <string>::split() "<string>::split()", @ref <string>::substr() "<string>::substr()",
+    and list-returning regex helpers.  Adopt them when profiles point at string churn, then
+    leave the rest of the code base alone.
+
+    @section ftp_byte_access Byte- and Codepoint-Indexed Access
+
+    @par @ref <string>::getByte() "<string>::getByte()"
+    @parblock
+    Returns the byte value (\c 0-255) at the given byte offset, or @ref nothing if the offset is
+    out of range.  No allocation, no copy, no encoding conversion.  Negative offsets count from
+    the end of the string.
+
+    @code{.py}
+string s = "abc";
+*int b = s.getByte(0);  # 97 (ASCII 'a')
+*int e = s.getByte(-1); # 99 (ASCII 'c')
+*int x = s.getByte(99); # NOTHING
+    @endcode
+
+    Use @ref <string>::getByte() "getByte()" as the primitive in tight scan loops where the
+    input is known to be ASCII or where you only care about specific byte values (e.g.
+    delimiters, escape characters, ASCII control bytes).  For codepoint-aware reads use the
+    @ref Qore::Scanner "Scanner" class or a @ref Qore::StringCharIterator "StringCharIterator".
+    @endparblock
+
+    @par @ref Qore::Scanner "Scanner"
+    @parblock
+    @ref Qore::Scanner "Scanner" wraps a string with a cursor exposing byte-level and
+    codepoint-level peek/advance/match operations.  Construction is allocation-free for the
+    string buffer (the source is shared via the view layer); the only allocations during scanning
+    are explicit substring captures.
+
+    @code{.py}
+Scanner sc("key=value;next=other");
+string key = sc.captureUntil("=");
+sc.advance();                          # consume '='
+string value = sc.captureUntil(";");
+sc.advance();                          # consume ';'
+    @endcode
+
+    Typical applications include hand-written tokenizers (@ref qdxintro "Qdx",
+    @ref dataproviderintro "DPQL", JSON-like protocols), URL and header parsers, log-line
+    scrubbers, and any place where a regex would be over-powered for the matching but a
+    per-character function-call loop would be too slow.
+    @endparblock
+
+    @section ftp_iterators Lazy Iterators
+
+    The lazy text iterators all return immediately and produce one element at a time when
+    iterated, with constant memory regardless of input size.
+
+    @par @ref <string>::codePointIterator() "<string>::codePointIterator()" / @ref Qore::StringCharIterator "StringCharIterator"
+    Iterate codepoints (not bytes) without materialising a list.  Supports forward and reverse
+    iteration; the codepoint is exposed as a single-character string.
+
+    @par @ref <string>::splitString() "<string>::splitString()" / @ref Qore::StringSplitIterator "StringSplitIterator"
+    Lazy delimiter split.  Equivalent to @ref <string>::split() "<string>::split()" but without
+    building the full list up front — useful for very large inputs or when the consumer can
+    short-circuit.
+
+    @par @ref <string>::splitChars() "<string>::splitChars()" / @ref Qore::StringCharIterator "StringCharIterator"
+    Lazy per-codepoint split, yielding each codepoint as a string.
+
+    @par @ref <string>::splitLines() "<string>::splitLines()" / @ref Qore::StringSplitIterator "StringSplitIterator"
+    Lazy newline-delimited line split.
+
+    @par @ref <string>::splitLinesRegex() "<string>::splitLinesRegex()" / @ref Qore::StringRegexSplitIterator "StringRegexSplitIterator"
+    Lazy regex-delimited split.  Replaces the previous eager list-returning behaviour of the
+    @ref <string>::splitLinesRegex() "<string>::splitLinesRegex()" pseudo-method.
+
+    @par Iterator native fast-path dispatch
+    @parblock
+    The @ref <list>::map() "<list>::map()", @ref <list>::select() "<list>::select()", and
+    @ref <list>::foldl() "<list>::foldl()" pseudo-methods (and their hash/object analogues)
+    detect these iterators and dispatch them through a native C++ fast path that bypasses
+    @ref Qore::AbstractIterator "AbstractIterator" virtual calls per element.  Iterator
+    subclasses written in %Qore retain the original dispatch path, so the fast path is opt-in
+    by data type rather than a behavioural change.
+    @endparblock
+
+    @section ftp_when_to_use When to Use Which API
+
+    | Goal | Recommended API |
+    |------|-----------------|
+    | Read a single byte at a known offset | @ref <string>::getByte() "<string>::getByte()" |
+    | Hand-written tokenizer / parser | @ref Qore::Scanner "Scanner" |
+    | Iterate codepoints | @ref <string>::codePointIterator() "<string>::codePointIterator()" |
+    | Lazy delimiter split (large input or short-circuit) | @ref <string>::splitString() "<string>::splitString()" |
+    | Lazy line split | @ref <string>::splitLines() "<string>::splitLines()" |
+    | Lazy regex split | @ref <string>::splitLinesRegex() "<string>::splitLinesRegex()" |
+    | Format a binary as hex | @ref <binary>::toHexArray() "<binary>::toHexArray()" |
+    | Existing eager full-split is fine | @ref <string>::split() "<string>::split()" (unchanged) |
+
+    @section ftp_perf_notes Performance Notes
+
+    The internal infrastructure that makes the new APIs fast also accelerates several existing
+    operations on large strings:
+
+    - @ref <string>::substr() "<string>::substr()" and the @ref string_slicing "[] slice operator"
+      no longer copy the slice buffer when the result is consumed read-only — the result aliases
+      the source until the first write.
+    - The internal @ref Util::stripAnsi() "Util::stripAnsi()" helper, the
+      @ref Qdx::QoreTokenizer "Qdx::QoreTokenizer" lexical analyser, and the
+      @ref dataproviderintro "DataProvider" DPQL tokenizer were all ported to byte-indexed
+      cursor patterns and observed end-user speedups in the 4x–100x range depending on
+      workload.
+
+    @see
+    - @ref string_views — internal view layer description in the @ref string "string section"
+    - @ref Qore::Scanner "Scanner" — full Scanner API reference
+    - @ref Qore::StringCharIterator "StringCharIterator",
+      @ref Qore::StringSplitIterator "StringSplitIterator",
+      @ref Qore::StringRegexSplitIterator "StringRegexSplitIterator" — iterator API reference
+    - @ref <string>::getByte() "<string>::getByte()",
+      @ref <string>::codePointIterator() "<string>::codePointIterator()",
+      @ref <string>::splitString() "<string>::splitString()",
+      @ref <string>::splitChars() "<string>::splitChars()",
+      @ref <string>::splitLines() "<string>::splitLines()",
+      @ref <string>::splitLinesRegex() "<string>::splitLinesRegex()",
+      @ref <binary>::toHexArray() "<binary>::toHexArray()" — pseudo-method reference
+*/

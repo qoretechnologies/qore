@@ -138,8 +138,6 @@ public const SseSchemes = {
     },
 };
 
-/** @defgroup WSClientRawCallbackReturnCodes ServerSentEventClient Raw Callback Return Codes
-*/
 #! Application name
 public const AppName = "ServerSentEvents";
 

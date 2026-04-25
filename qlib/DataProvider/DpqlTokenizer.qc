@@ -373,7 +373,7 @@ public class DpqlTokenizer {
         (`value += currentChar()`) working unchanged. */
     private:internal *string currentChar() {
         *int b = input.getByte(pos);
-        if (!b) {
+        if (!exists b) {
             return NOTHING;
         }
         return chr(b);
@@ -382,7 +382,7 @@ public class DpqlTokenizer {
     #! Returns the byte at offset from current position as a 1-byte string, or NOTHING
     private:internal *string peekChar(int offset = 1) {
         *int b = input.getByte(pos + offset);
-        if (!b) {
+        if (!exists b) {
             return NOTHING;
         }
         return chr(b);
@@ -393,7 +393,7 @@ public class DpqlTokenizer {
     private:internal advance(int count = 1) {
         for (int i = 0; i < count && pos < len; ++i) {
             *int b = input.getByte(pos);
-            if (!b) {
+            if (!exists b) {
                 break;
             }
             if (b == 0x0a) {
