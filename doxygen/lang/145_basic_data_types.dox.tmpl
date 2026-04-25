@@ -61,6 +61,8 @@ on more than 1 line";
     See @ref string_escape_chars "string escape characters" for a description of escape characters in double-quoted strings.\n\n
     Internally, strings are stored as a pointer to a sequence of bytes terminated by a null (or zero byte), an unsigned integer giving the length of the string, and a pointer to an object giving the string's @ref character_encoding "character encoding".\n\n
     <string>::strlen() is a constant-time operation (ie <i>O(1)</i>), however if the string has a multi-byte encoding, then <string>::length() (returning the length of the string in characters, not bytes) computational complexity is <i>O(n)</i> (however if the character encoding is a single-byte encoding <string>::length() is also <i>O(1)</i>).\n\n
+    @anchor string_views
+    Internally, %Qore strings use a copy-on-write (CoW) view layer that lets read-only operations on substrings of larger strings — most importantly <string>::substr() and the @ref string_slicing "[] slice operator" — share the original buffer instead of allocating and copying the slice.  The first write to a viewed string materialises a private copy automatically, so the optimisation is transparent to user code.  This makes byte- and codepoint-indexed scanning over large strings allocation-free; see @ref fast_text_processing for the suite of cursor- and iterator-based APIs that build on it.\n\n
 
     @par Immediate Value Example:
     \c "this is a string"

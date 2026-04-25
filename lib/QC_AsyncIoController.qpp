@@ -217,7 +217,11 @@ static *Queue AsyncIoController::submit(hash<SocketPollOperationInfo> info, *boo
     }
     ReferenceHolder<AsyncIoControllerPriv> ctrl_holder(ctrl, xsink);
     ReferenceHolder<QoreObject> obj_holder(obj, xsink);
-    return ctrl->submit(obj, const_cast<QoreHashNode*>(info), replace, xsink);
+    // submit() takes ownership of `info` (see the ReferenceHolder in
+    // AsyncIoControllerPriv::submit that plugs the per-call leak); our
+    // QPP-generated caller still owns its own ref on the method arg, so
+    // hand submit() an explicit self-ref via hashRefSelf().
+    return ctrl->submit(obj, info->hashRefSelf(), replace, xsink);
 }
 
 //! Cancels an operation by socket on the global singleton

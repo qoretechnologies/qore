@@ -100,6 +100,14 @@ public:
         return const_cast<QoreRegex*>(this);
     }
 
+    //! Returns the compiled PCRE2 pattern for callers that drive matching incrementally.
+    /** Required by lazy iterators (e.g. StringRegexSplitIterator) that call pcre2_match()
+        directly from an offset.  Never returns nullptr for a successfully-constructed regex.
+     */
+    DLLLOCAL pcre2_code* getPattern() const {
+        return p;
+    }
+
 private:
     bool global = false;
 };

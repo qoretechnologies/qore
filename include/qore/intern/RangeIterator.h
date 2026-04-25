@@ -121,6 +121,11 @@ public:
         return val.isNothing() ? bigIntTypeInfo : val.getTypeInfo();
     }
 
+    // Native fast-path: bypasses Qore method dispatch when driven through
+    // map/select/foldl/foreach.  See QORE_NATIVE_FAST_PATH_DEFAULT in
+    // QoreIteratorBase.h for the macro expansion.
+    QORE_NATIVE_FAST_PATH_DEFAULT()
+
 private:
     DLLLOCAL int64 calculateCurrent() {
         if (m_increasing) {

@@ -70,6 +70,9 @@ public:
         return myElementTypeInfo;
     }
 
+    // Native fast-path: ConstListIterator::next() + getReferencedValue.
+    QORE_NATIVE_FAST_PATH_REFVAL()
+
 protected:
     const QoreTypeInfo* myElementTypeInfo;
 

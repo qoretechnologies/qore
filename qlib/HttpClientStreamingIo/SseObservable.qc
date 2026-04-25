@@ -174,9 +174,6 @@ public class SseObservable inherits DataProvider::DelayedObservable {
         #! Data serialization: "json" or "none"
         string serialization = "none";
 
-        #! I/O timeout retained for compatibility with the original options
-        timeout timeout_ms = 30s;
-
         #! Idle-timeout deadline; if no SSE traffic (events or heartbeat comments)
         #! arrives within this window, the stream is treated as dead and closed.
         #! Set \c 0 to disable idle-timeout detection.
@@ -230,7 +227,8 @@ public class SseObservable inherits DataProvider::DelayedObservable {
         @param body request body (optional)
         @param opts options:
         - \c serialization: "json" or "none" (default: "none") — deserialize event data
-        - \c timeout: I/O timeout for reading events (default: 30s)
+        - \c timeout: legacy alias for \c idle_timeout when \c idle_timeout is
+          not provided
         - \c idle_timeout: inactivity deadline; if no SSE traffic (events or
           heartbeat comments) arrives within this window, the stream is treated
           as dead and closed via @ref EVENT_SSE_CLOSED with
@@ -253,8 +251,8 @@ public class SseObservable inherits DataProvider::DelayedObservable {
         if (self.opts.serialization) {
             serialization = self.opts.serialization;
         }
-        if (self.opts.timeout) {
-            timeout_ms = self.opts.timeout;
+        if (self.opts.timeout && !(exists self.opts.idle_timeout)) {
+            idle_timeout_ms = self.opts.timeout;
         }
         if (exists self.opts.idle_timeout) {
             idle_timeout_ms = self.opts.idle_timeout;
@@ -319,6 +317,12 @@ public class SseObservable inherits DataProvider::DelayedObservable {
                 "owner": self.uniqueHash(),
                 "key": poll_key,
                 "has_on_complete": True,
+                # SSE streams are long-lived; use idle_timeout_ms and
+                # poll_timeout_ms for inactivity detection instead of the
+                # controller's absolute operation timeout.  -1s is the
+                # codebase convention for "no timeout" (see e.g.
+                # HttpAsyncSocketIoController accept submissions).
+                "to": -1s,
             }, True);
         } catch (hash<ExceptionInfo> ex) {
             {
@@ -475,7 +479,10 @@ public class SseObservable inherits DataProvider::DelayedObservable {
             # vs parsed SseMessageInfo hash — distinguish by hasKey("err")
             hash<auto> evt_hash = cast<hash<auto>>(evt);
             if (evt_hash.hasKey("err")) {
-                notifyClosed();
+                notifyClosed({
+                    "reason": "stream-error",
+                    "error": evt_hash,
+                });
                 terminate = True;
                 return True;
             }
@@ -502,7 +509,13 @@ public class SseObservable inherits DataProvider::DelayedObservable {
                     evt_hash.id = evt_hash.id.toInt();
                 }
             } catch (hash<ExceptionInfo> ex) {
-                continue;
+                notifyClosed({
+                    "reason": "deserialize-error",
+                    "error": ex,
+                    "event": evt_hash,
+                });
+                terminate = True;
+                return True;
             }
 
             if (!self) {
@@ -513,7 +526,7 @@ public class SseObservable inherits DataProvider::DelayedObservable {
         }
     }
 
-    private notifyClosed() {
+    private notifyClosed(*hash<auto> data) {
         bool do_notify = False;
         {
             AutoLock al(m);
@@ -523,7 +536,7 @@ public class SseObservable inherits DataProvider::DelayedObservable {
             }
         }
         if (do_notify) {
-            notifyObservers(EVENT_SSE_CLOSED, {});
+            notifyObservers(EVENT_SSE_CLOSED, data ?? {});
         }
     }
 

@@ -32,6 +32,9 @@
 #include <qore/Qore.h>
 #include "qore/intern/ql_crypto.h"
 #include "qore/intern/QoreLibIntern.h"
+#include "qore/intern/QC_StringSplitIterator.h"
+#include "qore/intern/QC_StringRegexSplitIterator.h"
+#include "qore/intern/QC_StringCharIterator.h"
 
 #include <cctype>
 
@@ -465,6 +468,154 @@ list<string> <string>::split(string sep, bool with_separator = False) [flags=RET
 
     return split_intern(temp->c_str(), temp->strlen(), str->c_str(), str->strlen(), str->getEncoding(),
         with_separator);
+}
+
+//! Returns a lazy @ref Qore::StringSplitIterator iterator yielding zero-copy views of each piece.
+/** Streaming counterpart of @ref split(); the intermediate @ref list "list" is
+    never built when the iterator is consumed by @ref map, @ref select, or
+    @ref foldl.  Each yielded element is a view onto the original string's
+    buffer, materialised lazily only if the caller mutates it.
+
+    @param sep the byte-wise delimiter; an empty delimiter yields the whole
+           string once
+
+    @return an @ref Qore::StringSplitIterator "StringSplitIterator"
+
+    @par Example:
+    @code{.py}
+int errors = foldl $1 + ($2 =~ /ERROR/ ? 1 : 0), 0, log.splitString("\n");
+    @endcode
+
+    @since %Qore 2.3
+ */
+AbstractIterator <string>::splitString(string sep) [flags=CONSTANT] {
+    // Convert separator encoding if needed; use c_str()/size() on the source
+    // (the iterator holds its own ref and walks bytes — encoding matters only
+    // for the separator search).
+    TempEncodingHelper temp(sep, str->getEncoding(), xsink);
+    if (*xsink)
+        return QoreValue();
+    return new QoreObject(QC_STRINGSPLITITERATOR, 0,
+        new StringSplitIterator(str, *temp));
+}
+
+//! Returns a lazy iterator yielding each character of the string, one per element.
+/** Each element is a zero-copy @ref Qore::StringSplitIterator "StringSplitIterator"
+    view covering one codepoint of the source string.  Works with any encoding
+    Qore supports (the iterator walks codepoints using
+    @ref QoreString::getUnicodePointFromBytePos()).
+
+    Streaming counterpart of iterating over @ref <string>::toList or of
+    iterating over `str.chars()`-style composition; the intermediate list is
+    never materialised.
+
+    @return a @ref Qore::StringSplitIterator "StringSplitIterator" in
+            SPLIT_CHARS mode
+
+    @par Example:
+    @code{.py}
+int digits = foldl $1 + ($2 =~ /[0-9]/ ? 1 : 0), 0, str.splitChars();
+    @endcode
+
+    @since %Qore 2.3
+ */
+AbstractIterator <string>::splitChars() [flags=CONSTANT] {
+    return new QoreObject(QC_STRINGSPLITITERATOR, 0,
+        new StringSplitIterator(str, nullptr, StringSplitIterator::SPLIT_CHARS));
+}
+
+//! Returns a lazy iterator yielding each Unicode codepoint of the string as an integer.
+/** Each yielded value is the codepoint at the iterator's current position
+    (decoded from the source string's encoding via
+    @ref QoreString::getUnicodePointFromBytePos()).  Designed for
+    character-aware tokenizers and parsers.
+
+    For pure ASCII / byte-oriented work,
+    @ref Qore::zzz8stringzzz9::getByte() is faster (skips codepoint decoding).
+    For yielding each character as a 1-character @ref string, use
+    @ref Qore::zzz8stringzzz9::splitChars() instead.
+
+    @return a @ref Qore::StringCharIterator "StringCharIterator" yielding
+            integer codepoints
+
+    @par Example:
+    @code{.py}
+int letters = 0;
+foreach int cp in (text.codePointIterator()) {
+    if ((cp >= ord("A") && cp <= ord("Z")) || (cp >= ord("a") && cp <= ord("z"))) {
+        ++letters;
+    }
+}
+    @endcode
+
+    @since %Qore 2.3
+ */
+AbstractIterator <string>::codePointIterator() [flags=CONSTANT] {
+    return new QoreObject(QC_STRINGCHARITERATOR, 0, new StringCharIterator(str));
+}
+
+//! Returns a lazy iterator yielding each line of the string, one per element.
+/** Splits on "\n"; a trailing "\r" byte on each piece is trimmed so files
+    with "\r\n" line endings iterate identically to "\n"-delimited files.
+    Streaming counterpart of splitting on "\n" and then mapping \c chomp;
+    the intermediate list is never built when consumed by @ref map,
+    @ref select, or @ref foldl.
+
+    @return an @ref Qore::StringSplitIterator "StringSplitIterator"
+
+    @par Example:
+    @code{.py}
+int errors = foldl $1 + ($2 =~ /ERROR/ ? 1 : 0), 0, log.splitLines();
+    @endcode
+
+    @since %Qore 2.3
+ */
+AbstractIterator <string>::splitLines() [flags=CONSTANT] {
+    QoreString nl("\n");
+    return new QoreObject(QC_STRINGSPLITITERATOR, 0,
+        new StringSplitIterator(str, &nl, StringSplitIterator::STRIP_TRAILING_CR));
+}
+
+//! Returns a lazy iterator yielding the pieces produced by splitting on a regex.
+/** Streaming counterpart of @ref <string>::splitRegex; returns a
+    @ref Qore::StringRegexSplitIterator "StringRegexSplitIterator"
+    that runs one @c pcre2_match per element and yields zero-copy
+    views onto the (UTF-8) subject string.  Composes directly with
+    @ref map, @ref select, @ref foldl, and @c foreach — the
+    intermediate list is never built, and early termination
+    (select / first) stops the scan at the first hit.
+
+    Eager splitting is still available via
+    @ref <string>::splitRegex when every piece is needed and
+    throughput matters more than memory.
+
+    @param regex_sep the separator regular expression
+    @param options regex options (e.g. \c RE_Caseless)
+    @param with_separator include the separator match in each element
+
+    @return a @ref Qore::StringRegexSplitIterator "StringRegexSplitIterator"
+
+    @par Example:
+    @code{.py}
+# first line containing FATAL — stops at first hit
+*string fatal = first(select text.splitLinesRegex("\r?\n|\r"),
+                      $1 =~ /FATAL/);
+    @endcode
+
+    @since %Qore 2.3
+ */
+AbstractIterator <string>::splitLinesRegex(string regex_sep, int options = 0,
+        bool with_separator = False) [flags=RET_VALUE_ONLY] {
+    SimpleRefHolder<QoreRegex> re(new QoreRegex(*regex_sep, options, xsink));
+    if (*xsink) {
+        return QoreValue();
+    }
+    ReferenceHolder<StringRegexSplitIterator> it(
+        new StringRegexSplitIterator(str, *re, with_separator, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return new QoreObject(QC_STRINGREGEXSPLITITERATOR, 0, it.release());
 }
 
 //! Splits a string into a list of components based on a separator string and a quote character
@@ -1185,6 +1336,38 @@ int uc = str.getUnicode(0);
 */
 int <string>::getUnicode(int offset = 0) [flags=RET_VALUE_ONLY] {
     return str->getUnicodePoint(offset, xsink);
+}
+
+//! Returns the raw byte at the given byte offset, or @ref nothing if the offset is out of range.
+/** Unlike @ref Qore::zzz8stringzzz9::operator[]() "string[]" which allocates a fresh
+    one-character QoreStringNode per call, this pseudo-method returns the byte as an
+    integer (0..255) with no allocation.  Designed for hot byte-oriented scan loops
+    (tokenizers, simple parsers) where the per-call string allocation dominates.
+
+    For multi-byte encodings, the returned value is a single byte of the underlying
+    encoding (UTF-8 byte, etc.), NOT a Unicode codepoint.  Use @ref getUnicode() if
+    you need codepoints.
+
+    @par Example:
+    @code{.py}
+*int b = src.getByte(pos);
+if (b == ord("#")) { ... }
+    @endcode
+
+    @param byte_offset the byte offset into the string (negative values count from the end)
+
+    @return the raw byte at the offset (0..255), or @ref nothing if the offset is
+            out of range
+
+    @since %Qore 2.3
+*/
+*int <string>::getByte(int byte_offset) [flags=CONSTANT] {
+    int64 sz = (int64)str->size();
+    int64 off = byte_offset < 0 ? sz + byte_offset : byte_offset;
+    if (off < 0 || off >= sz) {
+        return QoreValue();
+    }
+    return (int64)(unsigned char)str->c_str()[off];
 }
 
 //! Returns @ref True since strings can return a non-zero size

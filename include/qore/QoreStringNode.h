@@ -225,6 +225,28 @@ public:
     //! creates a new QoreStringNode from a string and converts its encoding
     DLLEXPORT static QoreStringNode* createAndConvertEncoding(const char* str, const QoreEncoding* from, const QoreEncoding* to, ExceptionSink* xsink);
 
+    //! Creates a zero-copy read-only view over \a parent's buffer starting at \a byte_offset, of \a byte_len bytes.
+    /** The returned string shares \a parent's bytes; the parent is ref'd and kept alive as long as the view exists.
+        Reads on the view go through the parent's buffer. On any mutation, the view promotes itself to an owned
+        copy (copy-on-write) and releases the parent.
+
+        Arguments are **byte** offsets and lengths; the caller is responsible for ensuring that \a byte_offset and
+        \a byte_offset + \a byte_len fall on codepoint boundaries for multibyte encodings. (In debug builds an
+        assertion enforces that the offsets are <= parent->size().)
+
+        If \a parent is itself a view, the returned view points at \a parent's parent instead, avoiding chained
+        indirection in read accessors.
+
+        @param parent the string to view; must not be null and must outlive any mutations on the view (the view
+                      itself refs the parent to guarantee this)
+        @param byte_offset byte offset into \a parent's buffer
+        @param byte_len number of bytes in the view
+        @return a new QoreStringNode in view state, owned by the caller
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT static QoreStringNode* makeView(QoreStringNode* parent, size_t byte_offset, size_t byte_len);
+
     //! parses the string as a base64-encoded binary and returns the decoded value as a QoreStringNode
     DLLEXPORT QoreStringNode* parseBase64ToString(ExceptionSink* xsink) const;
 

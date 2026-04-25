@@ -442,6 +442,100 @@ string <binary>::toHex() [flags=CONSTANT] {
    return rv;
 }
 
+//! returns a hexadecimal representation with configurable per-byte delimiters and line wrapping
+/** Each byte is emitted as \a byte_prefix + 2-char lowercase hex + \a byte_suffix.
+    If \a bytes_per_line > 0, \a line_separator is inserted between successive
+    groups of that many bytes.  All separator arguments are optional; null /
+    omitted means empty.  The 2-char hex conversion is performed via a 16-entry
+    lookup table in C++, which is roughly two orders of magnitude faster than
+    a per-byte sprintf("%02x") loop in Qore code.
+
+    This API is intentionally general: with the right combination of
+    arguments it emits a C \c unsigned\ char[] literal, a Python \c bytes
+    literal, a plain hex dump, IPv6-style colon-separated bytes, or any
+    other fixed-width-per-byte textual format.
+
+    @par Example: C \c unsigned\ char[] literal body
+    @code{.py}
+string body = b.toHexArray(" 0x", ",", 12, "\n ");
+# "\n  0x00, 0x01, ...\n  0x0c, 0x0d, ..."
+    @endcode
+
+    @par Example: Python bytes literal body
+    @code{.py}
+string py = b.toHexArray("\\x");
+# "\\xff\\xab..."
+    @endcode
+
+    @par Example: IPv6-style colon-separated bytes
+    @code{.py}
+string addr = b.toHexArray(NOTHING, ":");
+# "ff:ab:01:02:..."
+    @endcode
+
+    @par Example: simple dump
+    @code{.py}
+string dump = b.toHexArray(NOTHING, NOTHING, 16, "\n");
+# "00010203...0f\n10111213...1f\n..."
+    @endcode
+
+    @param byte_prefix optional string emitted before each byte's hex digits
+    @param byte_suffix optional string emitted after each byte's hex digits
+    @param bytes_per_line if > 0, a line break is inserted every N bytes
+    @param line_separator optional separator inserted between lines when
+           \a bytes_per_line is > 0 (if omitted and \a bytes_per_line > 0,
+           a newline is used)
+
+    @return the formatted hex string
+
+    @since %Qore 2.3
+ */
+string <binary>::toHexArray(*string byte_prefix, *string byte_suffix, int bytes_per_line = 0,
+        *string line_separator) [flags=CONSTANT] {
+    static const char hexdig[] = "0123456789abcdef";
+
+    const size_t size = b->size();
+    const unsigned char* src = static_cast<const unsigned char*>(b->getPtr());
+
+    const char* bp = byte_prefix ? byte_prefix->c_str() : "";
+    const size_t bp_len = byte_prefix ? byte_prefix->size() : 0;
+    const char* bs = byte_suffix ? byte_suffix->c_str() : "";
+    const size_t bs_len = byte_suffix ? byte_suffix->size() : 0;
+    const char* ls = line_separator ? line_separator->c_str() : (bytes_per_line > 0 ? "\n" : "");
+    const size_t ls_len = line_separator ? line_separator->size() : (bytes_per_line > 0 ? 1 : 0);
+
+    // Pre-compute output size to avoid realloc inside the hot loop
+    size_t per_byte = bp_len + 2 + bs_len;
+    size_t out_size = size * per_byte;
+    if (bytes_per_line > 0 && size > 0) {
+        size_t line_count = (size - 1) / static_cast<size_t>(bytes_per_line);
+        out_size += line_count * ls_len;
+    }
+
+    QoreStringNode* rv = new QoreStringNode;
+    rv->reserve(out_size + 1);
+
+    const int bpl = bytes_per_line;
+    int col = 0;
+    for (size_t i = 0; i < size; ++i) {
+        if (bpl > 0 && col == bpl) {
+            rv->concat(ls, ls_len);
+            col = 0;
+        }
+        if (bp_len) {
+            rv->concat(bp, bp_len);
+        }
+        unsigned char c = src[i];
+        char hex[2] = { hexdig[c >> 4], hexdig[c & 0xf] };
+        rv->concat(hex, 2);
+        if (bs_len) {
+            rv->concat(bs, bs_len);
+        }
+        ++col;
+    }
+    return rv;
+}
+
 //! Returns the base64-encoded representation of the binary object
 /** @par Example:
     @code{.py}

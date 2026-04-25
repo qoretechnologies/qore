@@ -241,6 +241,10 @@ set(LIBQORE_QPP_SRC
     lib/QC_AbstractDatasource.qpp
     lib/QC_AbstractSQLStatement.qpp
     lib/QC_RangeIterator.qpp
+    lib/QC_StringSplitIterator.qpp
+    lib/QC_StringRegexSplitIterator.qpp
+    lib/QC_StringCharIterator.qpp
+    lib/QC_Scanner.qpp
     lib/QC_Datasource.qpp
     lib/QC_DatasourcePool.qpp
     lib/QC_AbstractConnectionPool.qpp
@@ -400,6 +404,7 @@ set(QORE_DOX_TMPL_SRC
     doxygen/lang/135_comments.dox.tmpl
     doxygen/lang/140_variables.dox.tmpl
     doxygen/lang/145_basic_data_types.dox.tmpl
+    doxygen/lang/147_fast_text_processing.dox.tmpl
     doxygen/lang/150_container_data_types.dox.tmpl
     doxygen/lang/152_code_data_types.dox.tmpl
     doxygen/lang/155_data_type_declarations.dox.tmpl
@@ -1595,6 +1600,10 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_BINARY_DIR}/QC_InputStreamLineIterator.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_SingleValueIterator.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_RangeIterator.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_StringSplitIterator.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_StringRegexSplitIterator.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_StringCharIterator.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_Scanner.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_ThreadPool.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_AbstractDatasource.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_AbstractSQLStatement.cpp\"
@@ -2144,6 +2153,7 @@ qore_user_module("qlib/QoreModelRegistry" "DataProvider;modules/ml/ml;Mime;Util"
 qore_user_module("qlib/QoreOnnxExport" "modules/protobuf/protobuf;modules/ml/ml;Util")
 qore_user_module("qlib/QoreMLUtils" "modules/ml/ml")
 qore_user_module("qlib/QoreTokenizerUtils" "modules/tokenizer/tokenizer")
+qore_user_module("qlib/QoreCrypto" "")
 qore_user_module("qlib/QoreLlmUtils" "")
 qore_user_module("qlib/QoreStructuredExtraction" "QoreLlmUtils")
 qore_user_module("qlib/QoreGuardrails" "QoreLlmUtils")

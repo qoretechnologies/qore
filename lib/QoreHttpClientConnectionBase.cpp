@@ -157,23 +157,23 @@ bool HttpClientConnectionBase::waitForReadyOrError(int64_t timeout_ms, Exception
         return true;
     }
 
-    // The wait may have returned because the connection moved CONNECTING →
-    // READY → CLOSED faster than this thread could observe the READY tick
-    // (e.g. peer drops the accepted socket immediately).  In that case the
-    // connect itself succeeded — report success here.  Callers that need a
-    // usable connection (send/recv) re-check isClosed() after this returns
-    // and surface the closure error themselves.
-    if (wasReady()) {
-        return true;
-    }
-
-    // Either we timed out or the state transitioned to CLOSED / DRAINING
-    // without ever reaching READY.  Distinguish CLOSED (raise error) from
-    // timeout (return false quietly).
+    // CLOSED takes precedence over wasReady().  A connection can transition
+    // CONNECTING → READY → CLOSED faster than this thread can observe the
+    // READY tick (common with TLS handshakes that complete locally before
+    // the peer's fatal alert is read — e.g. mutual-auth where the server
+    // rejects the client cert: SSL_connect succeeds, ALPN is read,
+    // onConnectionReady() fires, then the next read on the I/O thread
+    // surfaces the alert and setClosed() fires).  Surfacing the error info
+    // here (rather than returning true via wasReady()) ensures callers like
+    // HttpClientConnectionManagerBase::request see SOCKET-SSL-ERROR instead
+    // of the misleading "cannot submit request: connection is closed" they
+    // would otherwise get from submitRequest on the dead connection.
     if (isClosed()) {
         ReferenceHolder<QoreHashNode> err(getReferencedErrorInfo(), xsink);
         const char* err_str = "HTTPCLIENT-CONNECT-ERROR";
-        const char* desc_str = "connection closed before READY";
+        const char* desc_str = wasReady()
+            ? "connection closed after handshake, before request could be sent"
+            : "connection closed before READY";
         if (err) {
             QoreValue err_v = err->getKeyValue("err");
             if (err_v.getType() == NT_STRING) {
@@ -186,6 +186,14 @@ bool HttpClientConnectionBase::waitForReadyOrError(int64_t timeout_ms, Exception
         }
         xsink->raiseException(err_str, "%s", desc_str);
         return false;
+    }
+
+    // Connection went READY → DRAINING (e.g. GOAWAY received) without
+    // dropping into CLOSED.  Existing streams may continue; the take-over /
+    // submit path will decide whether DRAINING is acceptable for its
+    // workload.  Report success so the caller can proceed.
+    if (wasReady()) {
+        return true;
     }
 
     // Timeout: no exception, caller decides what to do.

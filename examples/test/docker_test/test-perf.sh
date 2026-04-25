@@ -25,9 +25,17 @@ fi
 export MAKE_JOBS=${MAKE_JOBS:-6}
 
 # install from pre-built artifact
+#
+# Use `cmake --install` directly instead of `make install`.  The build-perf
+# job strips intermediate *.o files from the build/ artifact to keep its
+# size down, but `make install` depends transitively on `make all` and
+# therefore recompiles + relinks libqore + qore (~2 min wasted on the
+# single-compilation-unit) just to satisfy missing intermediates that are
+# not actually needed for installation.  `cmake --install` runs the install
+# rule directly and only copies the final binaries / headers / .qm files
+# the artifact already contains.
 echo && echo "-- installing Qore (Release) --"
-cd ${QORE_SRC_DIR}/build
-make install
+cmake --install ${QORE_SRC_DIR}/build
 
 # run only performance tests
 export QORE_MODULE_DIR=${QORE_SRC_DIR}/qlib:${QORE_MODULE_DIR}

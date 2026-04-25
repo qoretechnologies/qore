@@ -144,6 +144,10 @@ DLLLOCAL QoreClass* initDataLineIteratorClass(QoreNamespace& ns);
 DLLLOCAL QoreClass* initInputStreamLineIteratorClass(QoreNamespace& ns);
 DLLLOCAL QoreClass* initSingleValueIteratorClass(QoreNamespace& ns);
 DLLLOCAL QoreClass* initRangeIteratorClass(QoreNamespace& ns);
+DLLLOCAL QoreClass* initStringSplitIteratorClass(QoreNamespace& ns);
+DLLLOCAL QoreClass* initStringRegexSplitIteratorClass(QoreNamespace& ns);
+DLLLOCAL QoreClass* initStringCharIteratorClass(QoreNamespace& ns);
+DLLLOCAL QoreClass* initScannerClass(QoreNamespace& ns);
 DLLLOCAL QoreClass* initStreamBaseClass(QoreNamespace& ns);
 DLLLOCAL QoreClass* initInputStreamClass(QoreNamespace& ns);
 DLLLOCAL QoreClass* initBinaryInputStreamClass(QoreNamespace& ns);
@@ -1433,6 +1437,10 @@ StaticSystemNamespace::StaticSystemNamespace() : RootQoreNamespace(new qore_root
     qns.addSystemClass(initInputStreamLineIteratorClass(qns));
     qns.addSystemClass(initSingleValueIteratorClass(qns));
     qns.addSystemClass(initRangeIteratorClass(qns));
+    qns.addSystemClass(initStringSplitIteratorClass(qns));
+    qns.addSystemClass(initStringRegexSplitIteratorClass(qns));
+    qns.addSystemClass(initStringCharIteratorClass(qns));
+    qns.addSystemClass(initScannerClass(qns));
     qns.addSystemClass(initTreeMapClass(qns));
     qns.addSystemClass(initSerializableClass(qns));
 

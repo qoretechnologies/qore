@@ -126,6 +126,28 @@ public:
         return stringTypeInfo;
     }
 
+    // Native fast-path: same shape as DataLineIterator.  next() blocks on
+    // disk I/O for each line; the dispatch elision is small per call but
+    // multiplies on big files (the read itself is the dominant cost).
+    DLLLOCAL bool supportsNativeIteration() const override { return true; }
+
+    DLLLOCAL bool nativeNext(ExceptionSink* xsink) override {
+        if (check(xsink)) {
+            return false;
+        }
+        return next(xsink);
+    }
+
+    DLLLOCAL QoreValue nativeGetValue(ExceptionSink* xsink) override {
+        if (check(xsink)) {
+            return QoreValue();
+        }
+        if (checkValid(xsink)) {
+            return QoreValue();
+        }
+        return getValue();
+    }
+
 private:
     DLLLOCAL void doReset(ExceptionSink* xsink) {
         fis = new FileInputStream(*filename, -1, flags, xsink);

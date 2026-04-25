@@ -142,12 +142,17 @@ QoreListNode* QoreRegex::extractSubstrings(const QoreString* target, ExceptionSi
     pcre2_match_data* md = pcre2_match_data_create_from_pattern(p, nullptr);
     ON_BLOCK_EXIT(pcre2_match_data_free, md);
 
+    // See extractWithPattern() below for the rationale; first call validates,
+    // subsequent calls skip the O(N) UTF-8 rescan.
+    uint32_t match_options = 0;
+
     while (true) {
         if (offset >= t->size()) {
             break;
         }
 
-        int rc = pcre2_match(p, reinterpret_cast<PCRE2_SPTR8>(t->c_str()), t->size(), offset, 0, md, nullptr);
+        int rc = pcre2_match(p, reinterpret_cast<PCRE2_SPTR8>(t->c_str()), t->size(), offset,
+            match_options, md, nullptr);
         //printd(5, "QoreRegex::extractSubstrings('%s') =~ /xxx/ = %d (global: %d)\n", t->c_str() + offset, rc, global);
         // rc == 0 means the ovector was not large enough, which should not happen when using
         // pcre2_match_data_create_from_pattern()
@@ -199,6 +204,8 @@ QoreListNode* QoreRegex::extractSubstrings(const QoreString* target, ExceptionSi
         if (!global) {
             break;
         }
+        // Subject is verified UTF-8 after the first successful match; skip rescan.
+        match_options = PCRE2_NO_UTF_CHECK;
     }
 
     return l.release();
@@ -220,6 +227,15 @@ QoreListNode* QoreRegex::extractWithPattern(const QoreString& target, bool inclu
     pcre2_match_data* md = pcre2_match_data_create_from_pattern(p, nullptr);
     ON_BLOCK_EXIT(pcre2_match_data_free, md);
 
+    // PCRE2 re-validates the entire subject as UTF-8 from byte 0 on every
+    // pcre2_match() call.  In a split loop that's O(N) per call, O(N^2)
+    // overall.  We pay the validation once on the first call, then pass
+    // PCRE2_NO_UTF_CHECK so subsequent calls skip the rescan.  Anything
+    // less than UTF-8 valid would have surfaced as a UTF-8 error code on
+    // the first call (handled below) — once we see a successful match the
+    // subject is known good.
+    uint32_t match_options = 0;
+
     while (true) {
         if (offset >= t->size()) {
             break;
@@ -232,7 +248,8 @@ QoreListNode* QoreRegex::extractWithPattern(const QoreString& target, bool inclu
             break;
         }
 
-        int rc = pcre2_match(p, reinterpret_cast<PCRE2_SPTR8>(t->c_str()), t->size(), offset, 0, md, nullptr);
+        int rc = pcre2_match(p, reinterpret_cast<PCRE2_SPTR8>(t->c_str()), t->size(), offset,
+            match_options, md, nullptr);
         printd(5, "QoreRegex::extractWithPattern('%s') = %d\n", t->c_str() + offset, rc);
 
         assert(rc);
@@ -263,6 +280,9 @@ QoreListNode* QoreRegex::extractWithPattern(const QoreString& target, bool inclu
         l->push(tstr.release(), xsink);
         offset = ovector[pos + 1];
         ++split_count;
+        // First successful match — subject is verified valid UTF-8; skip
+        // re-validation on subsequent calls.
+        match_options = PCRE2_NO_UTF_CHECK;
     }
 
     return l.release();
@@ -280,12 +300,17 @@ int64 QoreRegex::countMatches(const QoreString* target, ExceptionSink* xsink) co
     pcre2_match_data* md = pcre2_match_data_create_from_pattern(p, nullptr);
     ON_BLOCK_EXIT(pcre2_match_data_free, md);
 
+    // See extractWithPattern() for the rationale; first call validates,
+    // subsequent calls pass PCRE2_NO_UTF_CHECK to avoid O(N^2) UTF-8 rescans.
+    uint32_t match_options = 0;
+
     while (true) {
         if (offset >= t->size()) {
             break;
         }
 
-        int rc = pcre2_match(p, reinterpret_cast<PCRE2_SPTR8>(t->c_str()), t->size(), offset, 0, md, nullptr);
+        int rc = pcre2_match(p, reinterpret_cast<PCRE2_SPTR8>(t->c_str()), t->size(), offset,
+            match_options, md, nullptr);
         if (rc < 1) {
             break;
         }
@@ -303,6 +328,7 @@ int64 QoreRegex::countMatches(const QoreString* target, ExceptionSink* xsink) co
         } else {
             offset = ovector[1];
         }
+        match_options = PCRE2_NO_UTF_CHECK;
     }
 
     return count;
@@ -332,13 +358,16 @@ QoreValue QoreRegex::extractNamedGroups(const QoreString* target, ExceptionSink*
 
     ReferenceHolder<QoreListNode> result_list(xsink);  // for global mode
     PCRE2_SIZE offset = 0;
+    // See extractWithPattern() for the rationale.
+    uint32_t match_options = 0;
 
     while (true) {
         if (offset >= t->size()) {
             break;
         }
 
-        int rc = pcre2_match(p, reinterpret_cast<PCRE2_SPTR8>(t->c_str()), t->size(), offset, 0, md, nullptr);
+        int rc = pcre2_match(p, reinterpret_cast<PCRE2_SPTR8>(t->c_str()), t->size(), offset,
+            match_options, md, nullptr);
         if (rc < 1) {
             break;
         }
@@ -384,6 +413,7 @@ QoreValue QoreRegex::extractNamedGroups(const QoreString* target, ExceptionSink*
         } else {
             offset = ovector[1];
         }
+        match_options = PCRE2_NO_UTF_CHECK;
     }
 
     return result_list ? result_list.release() : QoreValue();
@@ -411,13 +441,16 @@ QoreListNode* QoreRegex::extractDetailed(const QoreString* target, ExceptionSink
 
     ReferenceHolder<QoreListNode> result_list(xsink);
     PCRE2_SIZE offset = 0;
+    // See extractWithPattern() for the rationale.
+    uint32_t match_options = 0;
 
     while (true) {
         if (offset >= t->size()) {
             break;
         }
 
-        int rc = pcre2_match(p, reinterpret_cast<PCRE2_SPTR8>(t->c_str()), t->size(), offset, 0, md, nullptr);
+        int rc = pcre2_match(p, reinterpret_cast<PCRE2_SPTR8>(t->c_str()), t->size(), offset,
+            match_options, md, nullptr);
         if (rc < 1) {
             break;
         }
@@ -497,6 +530,7 @@ QoreListNode* QoreRegex::extractDetailed(const QoreString* target, ExceptionSink
         if (!global) {
             break;
         }
+        match_options = PCRE2_NO_UTF_CHECK;
     }
 
     return result_list.release();

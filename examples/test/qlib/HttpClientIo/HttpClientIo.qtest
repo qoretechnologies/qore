@@ -292,6 +292,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
 
         # Protocol selection tests
         addTestCase("protocol selection constants", \testProtocolSelectionConstants());
+        addTestCase("connection error classification", \testConnectionErrorClassification());
 
         # State tests
         addTestCase("stream state transitions", \testStreamStateTransitions());
@@ -346,6 +347,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         addTestCase("invalid protocol option", \testInvalidProtocolOption());
         addTestCase("invalid max connections option", \testInvalidMaxConnectionsOption());
         addTestCase("invalid max streams option", \testInvalidMaxStreamsOption());
+        addTestCase("invalid max request retries option", \testInvalidMaxRequestRetriesOption());
         addTestCase("double startStreaming error", \testDoubleStartStreaming());
         addTestCase("getConnectionInfo", \testGetConnectionInfo());
         addTestCase("stream cancel during readiness", \testStreamCancelDuringReadiness());
@@ -504,6 +506,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         assertTrue(HttpClientIo::DefaultConnectionIdleTimeout > 0, "unified default idle timeout > 0");
         assertTrue(HttpClientIo::DefaultConnectTimeout > 0, "unified default connect timeout > 0");
         assertTrue(HttpClientIo::DefaultRequestTimeout > 0, "unified default request timeout > 0");
+        assertEq(3, HttpClientIo::DefaultMaxRequestRetries, "unified default max request retries");
 
         # Unified manager options hashdecl
         hash<HttpClientIo::HttpClientConnectionManagerOptions> mgr_opts =
@@ -513,6 +516,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             "idle_timeout": 30s,
             "connect_timeout": 15s,
             "request_timeout": 45s,
+            "max_request_retries": 0,
             "accept_all_certs": True,
             "protocol": "h2",
         };
@@ -521,6 +525,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         assertEq(30000, int(mgr_opts.idle_timeout), "unified mgr opts idle_timeout");
         assertEq(15000, int(mgr_opts.connect_timeout), "unified mgr opts connect_timeout");
         assertEq(45000, int(mgr_opts.request_timeout), "unified mgr opts request_timeout");
+        assertEq(0, mgr_opts.max_request_retries, "unified mgr opts max_request_retries");
         assertEq(True, mgr_opts.accept_all_certs, "unified mgr opts accept_all_certs");
         assertEq("h2", mgr_opts.protocol, "unified mgr opts protocol");
 
@@ -528,6 +533,8 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         hash<HttpClientIo::HttpClientConnectionManagerOptions> default_opts =
                 <HttpClientIo::HttpClientConnectionManagerOptions>{};
         assertEq("auto", default_opts.protocol, "default protocol is auto");
+        assertEq(HttpClientIo::DefaultMaxRequestRetries, default_opts.max_request_retries,
+            "default max request retries");
 
         # Unified request options hashdecl
         hash<HttpClientIo::HttpClientRequestOptions> req_opts =
@@ -710,6 +717,15 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         # Verify protocol selection-related constants exist
         assertEq(5m, HttpClientIo::HttpClientConnectionManager::H3_REPROBE_INTERVAL,
             "H3 reprobe interval");
+    }
+
+    testConnectionErrorClassification() {
+        assertTrue(HttpClientIo::HttpClientConnectionManager::isConnectionErrorStatic(
+            "HTTP3-CONNECTION-CLOSED"), "HTTP3 close must be retried before wrapping");
+        assertTrue(HttpClientIo::HttpClientConnectionManager::isConnectionErrorStatic(
+            "HTTP3-READ-ERROR"), "HTTP3 read errors must be retried before wrapping");
+        assertFalse(HttpClientIo::HttpClientConnectionManager::isConnectionErrorStatic(
+            "HTTPCLIENT-REQUEST-ERROR"), "wrapped request errors are not transport retry signals");
     }
 
     # ---- State Tests ----
@@ -1698,6 +1714,16 @@ Do+Sl1gfqlpgpszQaOMjR4M=
                     "max_streams_per_connection": -1,
                 });
             }, NOTHING, "negative max_streams should throw");
+    }
+
+    testInvalidMaxRequestRetriesOption() {
+        assertThrows("HTTPCLIENT-OPTION-ERROR",
+            sub () {
+                new HttpClientIo::HttpClientConnectionManager(
+                    <HttpClientIo::HttpClientConnectionManagerOptions>{
+                    "max_request_retries": -1,
+                });
+            }, NOTHING, "negative max_request_retries should throw");
     }
 
     testDoubleStartStreaming() {

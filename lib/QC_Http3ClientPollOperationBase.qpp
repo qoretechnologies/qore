@@ -652,6 +652,35 @@ int64_t Http3ClientPollOperationPriv::submitRequest(const char* method, const ch
         if (buffered) {
             buffered->deref(xsink);
         }
+        // need_cancel == true means the state transitioned to CLOSED between
+        // our isClosed() check at the top of submitRequest and registerStream
+        // taking stream_lock — the same pattern fixed in H1/H2 submitRequest.
+        // Without this branch the action is never registered in stream_actions
+        // and never deref'd, so notifyPendingStreams cannot fire on it; the
+        // caller's future would hang for the full request_timeout (300s by
+        // default), surfacing as FUTURE-TIMEOUT.  Surface the closure error
+        // eagerly and release the action's ref.
+        if (need_cancel) {
+            const char* err_str = "HTTP3-CONNECTION-CLOSED";
+            const char* desc_str = "connection closed before request could be submitted";
+            if (error_info) {
+                QoreValue ev = error_info->getKeyValue("err");
+                QoreValue dv = error_info->getKeyValue("desc");
+                if (ev.getType() == NT_STRING) {
+                    err_str = ev.get<const QoreStringNode>()->c_str();
+                }
+                if (dv.getType() == NT_STRING) {
+                    desc_str = dv.get<const QoreStringNode>()->c_str();
+                }
+            }
+            ExceptionSink fire_xs;
+            action->executeError(err_str, desc_str, &fire_xs);
+            fire_xs.clear();
+            if (!*xsink) {
+                xsink->raiseException(err_str, "%s", desc_str);
+            }
+        }
+        action->deref(xsink);
         return -1;
     }
 

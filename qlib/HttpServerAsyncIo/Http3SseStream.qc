@@ -143,24 +143,27 @@ public class Http3SseStream inherits AbstractSseConnection {
     close() {
         if (stream_open) {
             stream_open = False;
+            # close() is a teardown path: swallow QUIC transport errors
+            # (stream/session already gone, GOAWAY in flight, etc.) so
+            # cleanup callers don't have to wrap every close in try/catch.
+            # stream_open has already been flipped, so isOpen() / isDisconnected()
+            # report the closed state regardless of whether END_STREAM lands.
             try {
-                # Send END_STREAM to close the HTTP/3 stream
                 sock.submitQuicStreamData(session_id, stream_id, NOTHING, True);
                 if (wake_callback) {
                     wake_callback();
                 }
-            } catch () {
-                # Ignore errors on close
+            } catch (hash<ExceptionInfo> ex) {
             }
         }
     }
 
     abort() {
         stream_open = False;
+        # abort() is a teardown path: same rationale as close().
         try {
             sock.cancelQuicStream(session_id, stream_id);
-        } catch () {
-            # Ignore errors on abort
+        } catch (hash<ExceptionInfo> ex) {
         }
     }
 

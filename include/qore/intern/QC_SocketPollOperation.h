@@ -129,6 +129,17 @@ public:
                 AutoLocker al(sock->priv->m);
                 sock->priv->clearNonBlockAccept();
             }
+            // If an accept completed but the caller never collected the
+            // socket via getOutput() (e.g. the controller was cancelled before
+            // the FtpPortAcceptPollOperationPriv could extract the accepted
+            // socket), the QoreSocketObject we built in checkContinuePoll
+            // would otherwise leak here: the SimpleRefHolder dtor runs as
+            // part of the implicit ~SocketAcceptPollOperation, but only when
+            // this object actually reaches delete — and we're that path.
+            // An explicit discard() before delete makes the release explicit
+            // and survives any future reordering in the destructor chain.
+            accepted_socket_obj = nullptr;
+            accepted_socket.discard();
             sock->deref(xsink);
             delete this;
         }

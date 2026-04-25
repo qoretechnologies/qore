@@ -2112,6 +2112,35 @@ int64_t Http1ClientPollOperationPriv::submitRequest(const char* method, const ch
     // Under stream_lock: store and register
     AutoLocker al(stream_lock);
 
+    // Re-check state under stream_lock.  The lock-free state read at the
+    // top of this function races with setError() on the I/O thread: setError
+    // releases stream_lock between writing error_info and storing the
+    // CLOSED state, so a window exists where this thread sees the OK state,
+    // proceeds to build the request, and then arrives here only after the
+    // I/O thread has already drained stream_action via notifyPendingStreams.
+    // Without this re-check, our action would attach AFTER the drain — the
+    // future would never resolve, manifesting as a FUTURE-TIMEOUT in the
+    // caller (mgr.request → q_future_get_blocking).  Surface the closure
+    // error eagerly instead.
+    if (h1_state.load(std::memory_order_acquire) == H1State::CLOSED) {
+        bin->deref(xsink);
+        const char* err_str = "HTTP1-CONNECTION-CLOSED";
+        const char* desc_str = "connection closed before request could be submitted";
+        if (error_info) {
+            QoreValue ev = error_info->getKeyValue("err");
+            QoreValue dv = error_info->getKeyValue("desc");
+            if (ev.getType() == NT_STRING) {
+                err_str = ev.get<const QoreStringNode>()->c_str();
+            }
+            if (dv.getType() == NT_STRING) {
+                desc_str = dv.get<const QoreStringNode>()->c_str();
+            }
+        }
+        action->deref(xsink);
+        xsink->raiseException(err_str, "%s", desc_str);
+        return -1;
+    }
+
     // Capacity check
     if (max_streams && active_stream_count >= max_streams) {
         bin->deref(xsink);

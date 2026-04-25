@@ -225,7 +225,9 @@ map printf("+ %s\n", $1), obj.keyIterator();
     @since %Qore 0.8.6.2
  */
 ObjectKeyIterator <object>::keyIterator() [flags=CONSTANT] {
-    return new QoreObject(QC_OBJECTKEYITERATOR, 0, new QoreObjectIterator(obj));
+    ReferenceHolder<QoreObjectIterator> p(new QoreObjectIterator(obj), xsink);
+    p->setView(QoreHashIterator::VIEW_KEY);
+    return new QoreObject(QC_OBJECTKEYITERATOR, 0, p.release());
 }
 
 //! Returns a @ref Qore::ObjectPairIterator "ObjectPairIterator" object for the object's members
@@ -239,7 +241,9 @@ map printf("+ %s\n", $1), obj.pairIterator();
     @since %Qore 0.8.6.2
  */
 ObjectPairIterator <object>::pairIterator() [flags=CONSTANT] {
-   return new QoreObject(QC_OBJECTPAIRITERATOR, 0, new QoreObjectIterator(obj));
+   ReferenceHolder<QoreObjectIterator> p(new QoreObjectIterator(obj), xsink);
+   p->setView(QoreHashIterator::VIEW_PAIR);
+   return new QoreObject(QC_OBJECTPAIRITERATOR, 0, p.release());
 }
 
 //! Returns @ref True "True" if the given method exists (can be non-static or static) and is callable from the current context

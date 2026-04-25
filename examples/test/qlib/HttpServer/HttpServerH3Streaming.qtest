@@ -1027,7 +1027,8 @@ l50Xb2GWQesIt9k5jF5IOw==
     }
 
     #! Creates an HTTP/3 client connection manager
-    private HttpClientIo::HttpClientConnectionManager createH3Manager() {
+    private HttpClientIo::HttpClientConnectionManager createH3Manager(
+            int max_request_retries = HttpClientIo::DefaultMaxRequestRetries) {
         return new HttpClientIo::HttpClientConnectionManager(
             <HttpClientIo::HttpClientConnectionManagerOptions>{
                 "protocol": "h3",
@@ -1035,6 +1036,7 @@ l50Xb2GWQesIt9k5jF5IOw==
                 "logger": mLogger,
                 "request_timeout": 30s,
                 "connect_timeout": 15s,
+                "max_request_retries": max_request_retries,
             },
         );
     }
@@ -1459,6 +1461,7 @@ l50Xb2GWQesIt9k5jF5IOw==
         # Start streaming POST in background with short request timeout
         Counter cnt(1);
         background sub () {
+            on_exit cnt.dec();
             try {
                 HttpClientIo::HttpClientConnectionManager mgr =
                     new HttpClientIo::HttpClientConnectionManager(
@@ -1477,7 +1480,6 @@ l50Xb2GWQesIt9k5jF5IOw==
             } catch (hash<ExceptionInfo> ex) {
                 # Expected: connection error due to server shutdown
             }
-            cnt.dec();
         }();
 
         # Wait for the handler to start reading (deterministic, no sleep)
@@ -1705,21 +1707,28 @@ l50Xb2GWQesIt9k5jF5IOw==
         server.waitForAsyncIo();
         string url = sprintf("https://127.0.0.1:%d", info.port);
 
-        HttpClientIo::HttpClientConnectionManager mgr = createH3Manager();
+        HttpClientIo::HttpClientConnectionManager mgr =
+            new HttpClientIo::HttpClientConnectionManager(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+                    "protocol": "h3",
+                    "accept_all_certs": True,
+                    "logger": mLogger,
+                    "request_timeout": 16s,
+                    "connect_timeout": 15s,
+                },
+            );
         on_exit delete mgr;
 
         # Launch concurrent requests in background; each call blocks in the
         # handler's sleep(60).  Collect results in a hash keyed by stream id.
-        list<Counter> done = ();
-        hash<string, hash<auto>> results;
+        Counter done(concurrency);
+        hash<string, hash<auto>> results = {};
         Mutex results_lock();
         for (int i = 0; i < concurrency; ++i) {
-            Counter c(1);
-            push done, c;
             int idx = i;
             string key = sprintf("s%d", idx);
             background sub () {
-                on_exit c.dec();
+                on_exit done.dec();
                 date start = now_us();
                 try {
                     hash<auto> resp = mgr.request(url, "POST", "/slow",
@@ -1737,7 +1746,14 @@ l50Xb2GWQesIt9k5jF5IOw==
         }
 
         # Wait for all requests to reach the handler (in flight)
-        slow_handler.getReadyCounter().waitForZero(10s);
+        int ready_rc = slow_handler.getReadyCounter().waitForZero(10s);
+        assertEq(0, ready_rc, "multi-stream crash: all requests reached the slow handler");
+        if (ready_rc) {
+            slow_handler.signalStop();
+            delete server;
+            done.waitForZero(20s);
+            return;
+        }
 
         # Now simulate server crash by stopping the server.  Release the
         # blocked handler threads first so server shutdown doesn't wait on
@@ -1757,21 +1773,28 @@ l50Xb2GWQesIt9k5jF5IOw==
         # with a stream/connection error.  What we enforce:
         #   (a) every client terminates (success or error) within the bound
         #   (b) cleanup is fast — not bounded by per-stream request timeouts
-        foreach Counter c in (done) {
-            c.waitForZero(20s);
-        }
+        int done_rc = done.waitForZero(20s);
         int total_elapsed_ms = (now_us() - crash_time).durationMilliseconds();
+
+        hash<string, hash<auto>> result_snapshot = {};
+        {
+            AutoLock al(results_lock);
+            result_snapshot += results;
+        }
 
         int completed = 0;
         for (int i = 0; i < concurrency; ++i) {
             string key = sprintf("s%d", i);
-            if (results{key}.err || results{key}.ok) {
+            if (result_snapshot{key}.err || result_snapshot{key}.ok) {
                 ++completed;
             }
         }
+        assertEq(0, done_rc,
+            sprintf("multi-stream crash: background requests completed within 20s (results: %y)",
+                result_snapshot));
         assertEq(concurrency, completed,
             sprintf("multi-stream crash: all %d streams terminated (success or "
-                "clean error) within 20s (results: %y)", concurrency, results));
+                "clean error) within 20s (results: %y)", concurrency, result_snapshot));
 
         # Cleanup time should be reasonable — under 15s for all streams combined.
         # Without multi-stream cleanup, each stream waits its own request_timeout

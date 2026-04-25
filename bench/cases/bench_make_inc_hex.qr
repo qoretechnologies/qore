@@ -1,0 +1,52 @@
+#!/usr/bin/env qr
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%exec-class BenchMakeIncHex
+
+%requires ../lib/BenchRunner.qm
+
+%strict-args
+%require-types
+%enable-all-warnings
+
+# Benchmark: the inner loop from module-jni/make-inc doClassFile().
+# Formats a 1 MB binary to a C unsigned-char[] literal at 12 bytes/line.
+# Target: Phase 5 Binary::toCArray() / StreamWriter::writeCHexArray()
+# should show >=100x speedup by moving the loop into C++.
+
+class BenchMakeIncHex {
+    const LineSize = 12;
+
+    constructor() {
+        Bench::BenchRunner r("make_inc_hex");
+        r.iterations = 3;
+        r.warmup = 1;
+        binary data;
+        r.setup = sub () {
+            # deterministic 1 MB binary
+            int target = 1024 * 1024;
+            int seed = 1;
+            binary b = binary();
+            for (int i = 0; i < target; i++) {
+                seed = (seed * 1103515245 + 12345) % 0x7fffffff;
+                b += chr(seed % 256);
+            }
+            data = b;
+            r.bytes_processed = b.size();
+        };
+        r.measure = sub () {
+            int size = data.size();
+            int cc = 0;
+            StreamWriter w(new StringOutputStream());
+            for (int i = 0; i < size; i++) {
+                if (!(cc % LineSize)) {
+                    cc = 0;
+                    w.write("\n ");
+                }
+                w.printf(" 0x%02x,", data[i]);
+                cc++;
+            }
+        };
+        exit(r.run());
+    }
+}

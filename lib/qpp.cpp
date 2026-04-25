@@ -928,6 +928,14 @@ static int get_dox_comment(const char* fileName, unsigned &lineNumber, std::stri
         }
 
         str += buf;
+
+        // Handle the single-line case: `/** ... */` all on one line.  Without
+        // this check the byte loop below scans forward past the (already
+        // consumed) `*/`, ends up consuming the next method's signature and
+        // body looking for a `*/` — silently dropping that method.
+        if (buf.find("*/", 3) != std::string::npos) {
+            return 0;
+        }
     }
 
     int lc = 0;

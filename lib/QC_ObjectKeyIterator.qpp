@@ -78,7 +78,9 @@ ObjectKeyIterator i(h);
     @endcode
  */
 ObjectKeyIterator::constructor(object o) {
-   self->setPrivate(CID_OBJECTKEYITERATOR, new QoreObjectIterator(o));
+   ReferenceHolder<QoreObjectIterator> p(new QoreObjectIterator(o), xsink);
+   p->setView(QoreHashIterator::VIEW_KEY);
+   self->setPrivate(CID_OBJECTKEYITERATOR, p.release());
 }
 
 //! Creates an empty object iterator object
@@ -89,7 +91,9 @@ ObjectKeyIterator i(o);
     @endcode
  */
 ObjectKeyIterator::constructor() {
-   self->setPrivate(CID_OBJECTKEYITERATOR, new QoreObjectIterator);
+   ReferenceHolder<QoreObjectIterator> p(new QoreObjectIterator, xsink);
+   p->setView(QoreHashIterator::VIEW_KEY);
+   self->setPrivate(CID_OBJECTKEYITERATOR, p.release());
 }
 
 //! Creates a copy of the ObjectKeyIterator object, iterating the same object as the original and in the same position
@@ -99,7 +103,9 @@ ObjectKeyIterator ni = i.copy();
     @endcode
  */
 ObjectKeyIterator::copy() {
-   self->setPrivate(CID_OBJECTKEYITERATOR, new QoreObjectIterator(*i));
+   ReferenceHolder<QoreObjectIterator> p(new QoreObjectIterator(*i), xsink);
+   p->setView(QoreHashIterator::VIEW_KEY);
+   self->setPrivate(CID_OBJECTKEYITERATOR, p.release());
 }
 
 //! returns the current key value or throws an \c INVALID-ITERATOR exception if the iterator is invalid

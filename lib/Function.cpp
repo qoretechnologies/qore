@@ -3506,10 +3506,13 @@ QoreValue UserVariantBase::evalIntern(const char* name, ReferenceHolder<QoreList
 
     QoreValue val{};  // value-initialized to NOTHING (bits=0)
     if (statements) {
-        // self might be 0 if instantiated by a constructor call
-        if (self && signature.selfid) {
-            signature.selfid->instantiateSelf(self);
-        }
+        // RAII so uninstantiateSelf() runs even on C++ exception unwind through
+        // statements->exec() (e.g., a JNI bridge re-throw); without this, the
+        // orphaned self lvalue stays in the per-thread lvstack with
+        // static_assignment=true and trips the assert in QoreLValue::removeValue
+        // (or in release, races a worker dereffing the same QoreObject).
+        // self may be nullptr when called from a constructor — the helper no-ops in that case.
+        SelfInstantiationHelper self_helper(signature.selfid, self);
 
         // instantiate argv and push id on stack
         assert(signature.argvid);
@@ -3533,11 +3536,7 @@ QoreValue UserVariantBase::evalIntern(const char* name, ReferenceHolder<QoreList
         // uninstantiate argv
         signature.argvid->uninstantiate(xsink);
 
-        // if self then uninstantiate
-        // self might be 0 if instantiated by a constructor call
-        if (self && signature.selfid) {
-            signature.selfid->uninstantiateSelf();
-        }
+        // self uninstantiation now handled by SelfInstantiationHelper RAII above
     } else {
         argv = nullptr; // dereference argv now
     }

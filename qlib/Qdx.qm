@@ -165,24 +165,39 @@ while (!tok.atEnd()) {
         private {
             #! Input text
             string input;
-            #! Current position (character index)
+            #! Current position (byte index)
+            /** Switched from a character index to a byte index in %Qore 2.3 to
+                eliminate the O(N) UTF-8 walk that @c input[pos] performed on
+                every call (was O(N^2) over a tokenizer scan).  All accesses
+                go through @ref Qore::zzz8stringzzz9::getByte() which is O(1)
+                per call.  Multi-byte UTF-8 codepoints in the source are
+                preserved correctly because tokens of interest (delimiters,
+                operators, identifiers) are all ASCII-anchored, and multi-byte
+                bodies (string literals, comments) are passed through to the
+                token value byte-for-byte. */
             int pos = 0;
             #! Current line number (1-based)
             int line = 1;
             #! Current column number (1-based)
             int column = 1;
-            #! Input length in characters
+            #! Input length in bytes
             int len;
             #! Cached next token for peek()
             *hash<TokenInfo> peeked;
         }
 
         #! Creates a tokenizer for the given input text
-        /** @param text the Qore source code to tokenize
+        /** @param text the Qore source code to tokenize.  Converted to UTF-8
+            internally if necessary; the byte-indexed scan loop relies on the
+            UTF-8 invariant that ASCII bytes (0x00..0x7F) only appear as
+            themselves and never as part of a multi-byte sequence.  Source in
+            UTF-16 / UTF-32 / other non-ASCII-compatible encodings would
+            produce garbage tokens under byte-wise scanning, so we convert
+            once up front.
         */
         constructor(string text) {
-            input = text;
-            len = text.length();
+            input = text.encoding() == "UTF-8" ? text : convert_encoding(text, "UTF-8");
+            len = input.size();
         }
 
         #! Returns True if at end of input
@@ -251,27 +266,48 @@ while (!tok.atEnd()) {
             return column;
         }
 
-        #! Returns the character at the current position, or NOTHING if at end
+        #! Returns the byte at the current position as a 1-byte string, or NOTHING.
+        /** Replaces the old @c input[pos] indexing with the O(1)
+            @ref Qore::zzz8stringzzz9::getByte() primitive.  Returns a 1-byte
+            string (via @c chr) so existing comparisons like
+            @code{.py}c == "\n"@endcode and concatenations like
+            @code{.py}value += currentChar()@endcode continue to work
+            unchanged.
+
+            For UTF-8 multi-byte codepoints, the per-byte concat builds the
+            same target string as the original char-at-a-time concat — UTF-8
+            continuation bytes (0x80..0xBF) accumulate into the same byte
+            sequence the source contains.
+        */
         private:internal *string currentChar() {
-            if (pos >= len) {
+            *int b = input.getByte(pos);
+            if (!exists b) {
                 return NOTHING;
             }
-            return input[pos];
+            return chr(b);
         }
 
-        #! Returns the character at offset from current position, or NOTHING if out of bounds
+        #! Returns the byte at offset from current position as a 1-byte string, or NOTHING.
         private:internal *string peekChar(int offset = 1) {
-            int p = pos + offset;
-            if (p >= len || p < 0) {
+            *int b = input.getByte(pos + offset);
+            if (!exists b) {
                 return NOTHING;
             }
-            return input[p];
+            return chr(b);
         }
 
-        #! Advances position by count characters, updating line/column
+        #! Advances position by count bytes, updating line/column.
+        /** Newline tracking: only ASCII LF (0x0A) increments the line
+            counter; any other byte advances the column.  This matches the
+            original behaviour because UTF-8 continuation bytes never have
+            value 0x0A. */
         private:internal advance(int count = 1) {
             for (int i = 0; i < count && pos < len; ++i) {
-                if (input[pos] == "\n") {
+                *int b = input.getByte(pos);
+                if (!exists b) {
+                    break;
+                }
+                if (b == 0x0a) {
                     ++line;
                     column = 1;
                 } else {
@@ -854,21 +890,37 @@ while (!tok.atEnd()) {
                 }
 
                 if (at_line_start) {
-                    # Check if this line starts with the marker
+                    # Check if this line starts with the marker.
+                    # Marker is ASCII (only [a-zA-Z0-9_] chars), so byte-wise
+                    # comparison is correct and matches the original
+                    # character-wise compare.  Both pos and marker are now
+                    # byte-indexed; size() == length() for ASCII markers.
+                    int marker_size = marker.size();
                     bool found = True;
-                    for (int i = 0; i < marker.length(); ++i) {
-                        if (pos + i >= len || input[pos + i] != marker[i]) {
+                    for (int i = 0; i < marker_size; ++i) {
+                        if (pos + i >= len || input.getByte(pos + i) != marker.getByte(i)) {
                             found = False;
                             break;
                         }
                     }
                     if (found) {
                         # Check that marker is followed by non-identifier char or EOL
-                        int end_pos = pos + marker.length();
-                        if (end_pos >= len || input[end_pos] !~ /[a-zA-Z0-9_]/) {
+                        int end_pos = pos + marker_size;
+                        if (end_pos >= len) {
                             # Include the marker in the value (don't add 'c' first)
                             value += marker;
-                            advance(marker.length());
+                            advance(marker_size);
+                            break;
+                        }
+                        # ASCII identifier-byte test: [a-zA-Z0-9_]
+                        int b = input.getByte(end_pos);
+                        bool is_ident = (b >= ord("a") && b <= ord("z"))
+                            || (b >= ord("A") && b <= ord("Z"))
+                            || (b >= ord("0") && b <= ord("9"))
+                            || b == ord("_");
+                        if (!is_ident) {
+                            value += marker;
+                            advance(marker_size);
                             break;
                         }
                     }

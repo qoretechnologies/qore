@@ -5684,9 +5684,11 @@ void UserConstructorVariant::evalConstructor(const QoreClass &thisclass, QoreObj
     CodeContextHelper cch(xsink, CT_USER, "constructor", self, qore_class_private::get(thisclass), false);
 
     // instantiate "self" before executing base class constructors in case base class constructor arguments reference
-    // "self"
+    // "self"; RAII so uninstantiateSelf() runs even on C++ exception unwind through evalIntern
+    // (otherwise the orphaned self lvalue trips QoreLValue::removeValue's static_assignment assert
+    // at later program teardown — or in release races a dispatcher worker holding the same object's ref)
     assert(signature.selfid);
-    signature.selfid->instantiateSelf(self);
+    SelfInstantiationHelper self_helper(signature.selfid, self);
 
     // instantiate argv and push id on stack for base class constructors
     if (bcl) {
@@ -5703,8 +5705,7 @@ void UserConstructorVariant::evalConstructor(const QoreClass &thisclass, QoreObj
     if (bcl)
         signature.argvid->uninstantiate(xsink);
 
-    // if self then uninstantiate
-    signature.selfid->uninstantiateSelf();
+    // self uninstantiation now handled by SelfInstantiationHelper RAII above
 }
 
 int UserConstructorVariant::parseInit(QoreFunction* f) {

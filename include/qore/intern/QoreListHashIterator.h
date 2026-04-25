@@ -107,6 +107,16 @@ public:
         return myHashTypeInfo;
     }
 
+    // Native fast-path: ListHashIterator::getValue() resolves to getRow() —
+    // override the inherited QoreListIterator fast path which would yield
+    // the raw list element and bypass the hash type check.
+    DLLLOCAL QoreValue nativeGetValue(ExceptionSink* xsink) override {
+        if (check(xsink)) {
+            return QoreValue();
+        }
+        return getRow(xsink);
+    }
+
 protected:
     const QoreTypeInfo* myHashTypeInfo;
 

@@ -88,6 +88,27 @@ public:
         return val.getTypeInfo();
     }
 
+    // Native fast-path: getValue() takes no xsink, so use a custom override
+    // that checks thread ownership and validity inline.
+    DLLLOCAL bool supportsNativeIteration() const override { return true; }
+
+    DLLLOCAL bool nativeNext(ExceptionSink* xsink) override {
+        if (check(xsink)) {
+            return false;
+        }
+        return next();
+    }
+
+    DLLLOCAL QoreValue nativeGetValue(ExceptionSink* xsink) override {
+        if (check(xsink)) {
+            return QoreValue();
+        }
+        if (checkValid(xsink)) {
+            return QoreValue();
+        }
+        return getValue();
+    }
+
 protected:
     QoreValue val{};
     bool validp;
