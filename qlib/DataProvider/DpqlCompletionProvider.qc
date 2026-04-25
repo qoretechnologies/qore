@@ -268,6 +268,12 @@ public class DpqlCompletionProvider {
     */
     list<hash<DpqlCompletionItem>> getCompletions(string text, int position,
             hash<string, AbstractDataField> fields, *hash<auto> template_context) {
+        # Normalize to UTF-8 once at the public boundary; the private scan
+        # paths use byte-indexed access and require ASCII-compatible bytes
+        # (UTF-8 / ASCII / Latin-1).  No-op if already UTF-8.
+        if (text.encoding() != "UTF-8") {
+            text = convert_encoding(text, "UTF-8");
+        }
         return getCompletionsWithContext(<DpqlCompletionContext>{
             "text": text,
             "position": position,
@@ -572,8 +578,8 @@ public class DpqlCompletionProvider {
         int comma_count = 0;
         int paren_pos = -1;
 
-        for (int i = text.length() - 1; i >= 0; --i) {
-            string c = text[i];
+        for (int i = text.size() - 1; i >= 0; --i) {
+            string c = chr(text.getByte(i));
             if (c == ")") {
                 ++depth;
             } else if (c == "(") {
@@ -594,7 +600,7 @@ public class DpqlCompletionProvider {
 
         # Extract function name before the paren
         int name_start = paren_pos - 1;
-        while (name_start >= 0 && text[name_start] =~ /\s/) {
+        while (name_start >= 0 && chr(text.getByte(name_start)) =~ /\s/) {
             --name_start;
         }
         if (name_start < 0) {
@@ -602,10 +608,10 @@ public class DpqlCompletionProvider {
         }
         int id_end = name_start + 1;
         while (name_start >= 0) {
-            string sc = text[name_start];
+            string sc = chr(text.getByte(name_start));
             if (sc =~ /[a-zA-Z0-9_]/) {
                 --name_start;
-            } else if (sc == "-" && name_start + 1 < id_end && text[name_start + 1] =~ /[a-zA-Z]/) {
+            } else if (sc == "-" && name_start + 1 < id_end && chr(text.getByte(name_start + 1)) =~ /[a-zA-Z]/) {
                 --name_start;
             } else {
                 break;
@@ -648,7 +654,7 @@ public class DpqlCompletionProvider {
         string quote_char;
 
         for (int i = 0; i < text.size(); ++i) {
-            string c = text[i];
+            string c = chr(text.getByte(i));
             if (escaped) {
                 escaped = False;
                 continue;
@@ -685,7 +691,7 @@ public class DpqlCompletionProvider {
         bool in_field_context = False;
 
         for (int i = 0; i < text.size(); ++i) {
-            string c = text[i];
+            string c = chr(text.getByte(i));
             if (escaped) {
                 escaped = False;
                 continue;
@@ -724,7 +730,7 @@ public class DpqlCompletionProvider {
         bool escaped = False;
 
         for (int i = 0; i < text.size(); ++i) {
-            string c = text[i];
+            string c = chr(text.getByte(i));
             if (escaped) {
                 escaped = False;
                 continue;
@@ -1280,7 +1286,7 @@ public class DpqlCompletionProvider {
         string quote_char;
 
         for (int i = text.size() - 1; i >= 0; --i) {
-            string c = text[i];
+            string c = chr(text.getByte(i));
             # When scanning backwards, we handle strings differently
             # Just look for @ not inside a string
             if (c == "@" && !in_string) {
@@ -1288,7 +1294,7 @@ public class DpqlCompletionProvider {
                 break;
             }
             # Track string state (simplified backwards scan)
-            if ((c == '"' || c == "'") && (i == 0 || text[i-1] != "\\")) {
+            if ((c == '"' || c == "'") && (i == 0 || chr(text.getByte(i-1)) != "\\")) {
                 if (in_string && c == quote_char) {
                     in_string = False;
                 } else if (!in_string) {
@@ -1309,12 +1315,12 @@ public class DpqlCompletionProvider {
         }
 
         string field_name;
-        if (text[pos] == '"') {
+        if (chr(text.getByte(pos)) == '"') {
             # Quoted field name
             ++pos;  # Skip opening quote
             int start = pos;
-            while (pos < text.size() && text[pos] != '"') {
-                if (text[pos] == "\\" && pos + 1 < text.size()) {
+            while (pos < text.size() && chr(text.getByte(pos)) != '"') {
+                if (chr(text.getByte(pos)) == "\\" && pos + 1 < text.size()) {
                     pos += 2;
                 } else {
                     ++pos;
@@ -1328,7 +1334,7 @@ public class DpqlCompletionProvider {
             # as accessors (matches eval semantics where @record.address traverses
             # field "record" then key "address", not a single field "record.address")
             int start = pos;
-            while (pos < text.size() && text[pos] =~ /[a-zA-Z0-9_]/) {
+            while (pos < text.size() && chr(text.getByte(pos)) =~ /[a-zA-Z0-9_]/) {
                 ++pos;
             }
             field_name = substr(text, start, pos - start);
@@ -1342,7 +1348,7 @@ public class DpqlCompletionProvider {
         list<hash<auto>> accessors = ();
 
         while (pos < text.size()) {
-            string c = text[pos];
+            string c = chr(text.getByte(pos));
 
             if (c == "[") {
                 # Index/slice accessor
@@ -1350,8 +1356,8 @@ public class DpqlCompletionProvider {
                 int bracket_start = pos;
                 int depth = 1;
                 while (pos < text.size() && depth > 0) {
-                    if (text[pos] == "[") ++depth;
-                    else if (text[pos] == "]") --depth;
+                    if (chr(text.getByte(pos)) == "[") ++depth;
+                    else if (chr(text.getByte(pos)) == "]") --depth;
                     ++pos;
                 }
                 # Only add accessor if it was properly closed
@@ -1371,8 +1377,8 @@ public class DpqlCompletionProvider {
                 int brace_start = pos;
                 int depth = 1;
                 while (pos < text.size() && depth > 0) {
-                    if (text[pos] == "{") ++depth;
-                    else if (text[pos] == "}") --depth;
+                    if (chr(text.getByte(pos)) == "{") ++depth;
+                    else if (chr(text.getByte(pos)) == "}") --depth;
                     ++pos;
                 }
                 # Only add accessor if it was properly closed
@@ -1390,7 +1396,7 @@ public class DpqlCompletionProvider {
                 # Dot accessor - next identifier becomes a key accessor
                 ++pos;
                 int start = pos;
-                while (pos < text.size() && text[pos] =~ /[a-zA-Z0-9_]/) {
+                while (pos < text.size() && chr(text.getByte(pos)) =~ /[a-zA-Z0-9_]/) {
                     ++pos;
                 }
                 if (pos > start) {
@@ -1602,6 +1608,12 @@ public class DpqlCompletionProvider {
             return NOTHING;
         }
 
+        # Normalize to UTF-8; private scan path is byte-indexed.  No-op if
+        # already UTF-8.
+        if (text.encoding() != "UTF-8") {
+            text = convert_encoding(text, "UTF-8");
+        }
+
         # Get the text up to the cursor
         string prefix = position >= text.length() ? text : text.substr(0, position);
 
@@ -1611,7 +1623,7 @@ public class DpqlCompletionProvider {
         int paren_pos = -1;
 
         for (int i = prefix.length() - 1; i >= 0; --i) {
-            string c = prefix[i];
+            string c = chr(prefix.getByte(i));
             if (c == ")") {
                 ++depth;
             } else if (c == "(") {
@@ -1635,7 +1647,7 @@ public class DpqlCompletionProvider {
         int name_end = paren_pos;
         int name_start = paren_pos - 1;
         # Skip whitespace before the paren
-        while (name_start >= 0 && prefix[name_start] =~ /\s/) {
+        while (name_start >= 0 && chr(prefix.getByte(name_start)) =~ /\s/) {
             --name_start;
         }
         if (name_start < 0) {
@@ -1644,10 +1656,10 @@ public class DpqlCompletionProvider {
         # Scan the identifier (supports hyphenated names like "custom-func")
         int id_end = name_start + 1;
         while (name_start >= 0) {
-            string sc = prefix[name_start];
+            string sc = chr(prefix.getByte(name_start));
             if (sc =~ /[a-zA-Z0-9_]/) {
                 --name_start;
-            } else if (sc == "-" && name_start + 1 < id_end && prefix[name_start + 1] =~ /[a-zA-Z]/) {
+            } else if (sc == "-" && name_start + 1 < id_end && chr(prefix.getByte(name_start + 1)) =~ /[a-zA-Z]/) {
                 # hyphenated identifier: '-' followed by a letter (looking right)
                 --name_start;
             } else {
