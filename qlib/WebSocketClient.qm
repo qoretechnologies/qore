@@ -2683,6 +2683,26 @@ ws.setEventQueue();
         }
     }
 
+    #! Normalizes HttpClientIo response hashes to the legacy connect() return shape
+    /** HttpClientIo returns response headers under a \c headers key, while the
+        documented WebSocketClient::connect() return value follows
+        Socket::readHTTPHeader() with response headers available directly in the
+        returned hash.  Preserve the nested \c headers hash and copy response
+        headers to the top level for compatibility.
+    */
+    private hash<auto> normalizeConnectResponse(hash<auto> rh) {
+        *hash<auto> headers = rh.headers;
+        if (!headers) {
+            return rh;
+        }
+        foreach string key in (keys headers) {
+            if (!rh.hasKey(key)) {
+                rh{key} = headers{key};
+            }
+        }
+        return rh;
+    }
+
     #! Performs the HTTP socket connection to the WebSocket server
     /** All connections use the HttpClientIo path. TLS connections with "auto" or
         explicit H2/H3 race protocols via the HCIO manager; all other connections
@@ -2700,7 +2720,7 @@ ws.setEventQueue();
         if (isUrlTls() && http_opts.http_version != "1.1"
                 && http_opts.http_version != "1.0") {
             try {
-                return connectViaHcioAuto(hdr, \info, reconnect);
+                return normalizeConnectResponse(connectViaHcioAuto(hdr, \info, reconnect));
             } catch (hash<ExceptionInfo> ex) {
                 if (http_opts.http_version == "auto"
                         && isHcioFallbackError(ex.err)) {
@@ -2717,7 +2737,7 @@ ws.setEventQueue();
 
         # HTTP/1.1 path: plain ws:// or explicit "1.1" or TLS fallback
         # Uses HttpClientIo with PROTOCOL_SWITCHED for fully async H1 WS
-        return connectHttp1WebSocketViaHcio(hdr, \info, reconnect);
+        return normalizeConnectResponse(connectHttp1WebSocketViaHcio(hdr, \info, reconnect));
     }
 
     #! Returns True if the error warrants falling back from H2/H3 to H1

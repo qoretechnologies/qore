@@ -197,10 +197,12 @@ public class DebugHandlerTest inherits QUnit::Test {
         hash<auto> conn = connectClient();
         on_exit conn.wsc.disconnect();
 
-        # verify protocol header (connect() returns {status_code, headers: {...}})
-        *string prot_ver = conn.hdr.headers{QoreDebugWsProtocolHeader.lwr()};
+        # verify protocol header in both the documented top-level connect() return
+        # shape and the HttpClientIo nested response header hash
+        *string prot_ver = conn.hdr{QoreDebugWsProtocolHeader.lwr()};
         assertTrue(prot_ver.val());
         assertEq(QoreDebugProtocolVersion, prot_ver);
+        assertEq(QoreDebugProtocolVersion, conn.hdr.headers{QoreDebugWsProtocolHeader.lwr()});
     }
 
     welcomeMessageTests() {

@@ -134,6 +134,9 @@ class BlockingSlowHandler inherits AbstractHttpRequestHandler {
 }
 
 # WebSocket connection for async mode tests
+const TestWsProtocolHeader = "X-Qore-Test-Ws-Protocol";
+const TestWsProtocolVersion = "1.0";
+
 class TestWsConnection inherits WebSocketConnection {
     constructor(WebSocketHandler handler) : WebSocketConnection(handler) {
     }
@@ -146,6 +149,12 @@ class TestWsConnection inherits WebSocketConnection {
 # WebSocket handler for async mode tests
 class TestWsHandler inherits WebSocketHandler {
     constructor(*hash<auto> opts) : WebSocketHandler(NOTHING, opts) {
+    }
+
+    hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        hash<auto> rv = WebSocketHandler::handleRequest(cx, hdr, body);
+        rv.hdr{TestWsProtocolHeader} = TestWsProtocolVersion;
+        return rv;
     }
 
     WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
@@ -1088,8 +1097,10 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         # Connect WebSocket client to async server
         string wsUrl = "ws://localhost:" + asyncPort + "/ws";
         WebSocketClient wsc(callback, {"url": wsUrl, "timeout": 5s});
-        wsc.connect();
+        hash<auto> connect_info = wsc.connect();
         on_exit wsc.disconnect();
+        assertEq(TestWsProtocolVersion, connect_info{TestWsProtocolHeader.lwr()});
+        assertEq(TestWsProtocolVersion, connect_info.headers{TestWsProtocolHeader.lwr()});
 
         # Send a message and wait for echo
         wsc.send("hello");
@@ -1124,10 +1135,12 @@ OKKqgBjNAlYDdPhOy8O8Agk=
             "ssl_verify_cert": False,  # Self-signed cert
             "http_version": "2.0",  # Force HTTP/2 for WebSocket over SSL
         });
-        wsc.connect();
+        hash<auto> connect_info = wsc.connect();
         on_exit wsc.disconnect();
 
         assertTrue(wsc.isHttp2(), "WebSocket should negotiate HTTP/2 by default over SSL");
+        assertEq(TestWsProtocolVersion, connect_info{TestWsProtocolHeader.lwr()});
+        assertEq(TestWsProtocolVersion, connect_info.headers{TestWsProtocolHeader.lwr()});
 
         # Send a message and wait for echo
         wsc.send("hello-ssl");
