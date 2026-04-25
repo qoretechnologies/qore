@@ -43,8 +43,10 @@
 #include "qore/intern/qore_socket_private.h"
 #include "qore/intern/QoreLibIntern.h"
 #include "qore/intern/QoreAsyncIoLogger.h"
+#include "qore/intern/qore_thread_intern.h"
 
 #include <cstdarg>
+#include <memory>
 
 extern qore_classid_t CID_QUEUE;
 extern QoreClass* QC_QUEUE;
@@ -467,6 +469,20 @@ void QoreCallDispatcher::enqueue(AsyncWorkItem&& item) {
 
     AutoLocker al(m);
 
+    // Reject enqueues for programs whose teardown is already in progress.
+    // markProgramShuttingDown() drained the queue under this same lock; without
+    // this check, an I/O thread could complete a poll AFTER cancelByProgram
+    // returned but BEFORE waitForTerminationAndClear sets ptid, enqueue an item
+    // for the dying pgm, and a worker would pop it and run the cleanup-deref
+    // concurrently with main thread's clearLocalVars (the workerLoop+0x3c6
+    // SIGSEGV signature with stale spop_obj pointer in JVM-heap range).  The
+    // synchronous cleanup below mirrors the `stopping` branch — it runs on the
+    // calling thread (typically the I/O thread), which is fine because the
+    // strong ref was taken at submit time and the destructor chain runs while
+    // the program is still in its post-cancelByProgram / pre-data-clearance
+    // window.
+    bool pgm_shutting_down_now = item.pgm && shutting_down_programs.count(item.pgm) > 0;
+
     // Increment per-owner tracking at enqueue time (before the early-return
     // path below, so discarded items are not counted).  Counting at enqueue —
     // rather than at pop time in the worker — makes waitForOwnerIdle() a
@@ -475,11 +491,11 @@ void QoreCallDispatcher::enqueue(AsyncWorkItem&& item) {
     // callback enqueued before markOwnerShuttingDown() but popped after
     // clearOwnerShuttingDown() runs past the barrier — defeating the whole
     // point of flushCallbacksByOwner().
-    if (!stopping && !item.owner.empty()) {
+    if (!stopping && !pgm_shutting_down_now && !item.owner.empty()) {
         ++active_per_owner[item.owner];
     }
 
-    if (stopping) {
+    if (stopping || pgm_shutting_down_now) {
         // Cannot dispatch — clean up refs synchronously
         ExceptionSink xsink;
         if (item.spop_obj) {
@@ -591,9 +607,58 @@ void QoreCallDispatcher::waitForProgramIdle(QoreProgram* pgm) {
     }
 }
 
-void QoreCallDispatcher::markProgramShuttingDown(QoreProgram* pgm) {
+void QoreCallDispatcher::markProgramShuttingDown(QoreProgram* pgm, ExceptionSink* xsink) {
     AutoLocker al(m);
     shutting_down_programs.insert(pgm);
+
+    // Drop already-queued items belonging to this program in the same critical
+    // section as the mark, so workers cannot pop a pgm-owned item between the
+    // mark and the drain.  See the header comment on this method for the full
+    // rationale (workerLoop+0x3c6 SIGSEGV on stale spop_obj).  Mirrors the
+    // per-item cleanup in stop() (line 538+) and workerLoop (line 876+).
+    auto it = async_queue.begin();
+    while (it != async_queue.end()) {
+        if (it->pgm == pgm) {
+            if (it->spop_obj) {
+                it->spop_obj->deref(xsink);
+            }
+            if (it->result) {
+                it->result->deref(xsink);
+            }
+            if (it->callback) {
+                it->callback->deref(xsink);
+            }
+            if (it->args) {
+                it->args->deref(xsink);
+            }
+            if (it->controller) {
+                it->controller->deref(xsink);
+            }
+            // depDeref matches the depRef taken at enqueue (line 464);
+            // it->pgm is non-null because we just compared it to pgm.
+            it->pgm->depDeref();
+            // active_per_owner is incremented at enqueue time (line 479);
+            // the matching decrement must happen here for drained items, or
+            // waitForOwnerIdle() would hang on items that will never be popped.
+            // active_per_program is NOT decremented: it is incremented only
+            // when a worker pops an item (workerLoop line 691), not at enqueue.
+            if (!it->owner.empty()) {
+                auto oit = active_per_owner.find(it->owner);
+                if (oit != active_per_owner.end()) {
+                    if (--oit->second <= 0) {
+                        active_per_owner.erase(oit);
+                        owner_idle_cond.broadcast();
+                    }
+                }
+            }
+            it = async_queue.erase(it);
+        } else {
+            ++it;
+        }
+    }
+    if (async_queue.empty() && active_processing == 0) {
+        idle_cond.broadcast();
+    }
 }
 
 void QoreCallDispatcher::clearProgramShuttingDown(QoreProgram* pgm) {
@@ -693,6 +758,27 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
             // NOTE: per-owner count was already incremented at enqueue() time
             // (see there for rationale).  It is decremented below after the
             // work item is fully processed or discarded.
+        }
+
+        // Enter program context for the duration of dispatch + cleanup so the
+        // worker contributes to the target program's thread_count.  Without
+        // this, qore_program_private::waitForTerminationAndClear() can advance
+        // past waitForAllThreadsToTerminateIntern() while this worker is still
+        // running object destructors that depend on program data — causing
+        // PROGRAM-ERROR or stale-pointer SIGSEGVs (esp. for module-jni twins
+        // whose finalize() re-enters Qore through evalMethod).  The dep-ref
+        // already keeps program memory alive; this helper adds the missing
+        // thread_count contribution so the teardown thread blocks at
+        // pcond.wait until the worker completes its iteration.  set() may fail
+        // if ptid is already set (program past the teardown gate); in that
+        // case we proceed best-effort without program context — same behavior
+        // as before this fix.
+        std::unique_ptr<ProgramThreadCountContextHelper> pgm_guard;
+        if (async_item.pgm) {
+            pgm_guard.reset(new ProgramThreadCountContextHelper);
+            ExceptionSink ignore_xsink;
+            pgm_guard->set(&ignore_xsink, async_item.pgm, true);
+            ignore_xsink.clear();
         }
 
         ExceptionSink work_xsink;
@@ -931,6 +1017,12 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
                 idle_cond.broadcast();
             }
         }
+
+        // Drop pgm_guard before depDeref: pgm_guard's destructor calls
+        // decThreadCount, which dereferences the program — and depDeref
+        // below may release the last memory ref.  Order: leave program
+        // context first, then release memory.
+        pgm_guard.reset();
 
         // Release the program dependency reference last.  Object derefs
         // above may still need the program struct alive (e.g., QoreObject
@@ -1828,10 +1920,15 @@ void AsyncIoControllerPriv::cancelByProgram(QoreProgram* pgm, ExceptionSink* xsi
     // will silently discard it, even if the callback was dispatched after
     // our flush.  This eliminates the race between flushCallbacks() returning
     // and ptid being set in waitForTerminationAndClear().
+    //
+    // markProgramShuttingDown() also drops already-queued items in the same
+    // critical section, so a worker cannot pop a pgm-owned item whose spop_obj
+    // is about to be torn down by the program's class-cleanup path (which
+    // would crash in the worker's deref sequence at workerLoop+0x3c6).
     {
         QoreCallDispatcher* cd = call_dispatcher.load(std::memory_order_acquire);
         if (cd) {
-            cd->markProgramShuttingDown(pgm);
+            cd->markProgramShuttingDown(pgm, xsink);
         }
     }
 
@@ -2081,11 +2178,13 @@ void AsyncIoControllerPriv::cancelByProgram(QoreProgram* pgm, ExceptionSink* xsi
 
     // Re-mark the program if the dispatcher was lazily created by the I/O
     // thread since our initial mark (handles the case where call_dispatcher
-    // was null at the start but created during Phase 2 processing).
+    // was null at the start but created during Phase 2 processing).  Also
+    // drains any items that were enqueued onto the lazily-created dispatcher
+    // before the I/O thread observed the original mark.
     {
         QoreCallDispatcher* cd = call_dispatcher.load(std::memory_order_acquire);
         if (cd) {
-            cd->markProgramShuttingDown(pgm);
+            cd->markProgramShuttingDown(pgm, xsink);
         }
     }
 
