@@ -66,8 +66,8 @@ problems at once:
   manual `convert_encoding()` step at tokenizer entries goes away.
 
 This document proposes the `char` type, the `string[i]` indexing change that
-returns it, and the runtime support needed to keep that change O(1) for any
-encoding.
+returns it, and the runtime support needed to avoid rescanning from byte 0
+on repeated indexed access in any encoding.
 
 ---
 
@@ -75,9 +75,9 @@ encoding.
 
 | Today | Under this design |
 |---|---|
-| `*string c = input[pos]; if (c == "#") {...}` (slow + alloc) | `*char c = input[pos]; if (c == '#') {...}` (O(1), no alloc) |
+| `*string c = input[pos]; if (c == "#") {...}` (slow + alloc) | `*char c = input[pos]; if (c == '#') {...}` (fast indexed access, no alloc) |
 | `int b = input.getByte(pos); if (b == ord("#")) {...}` (fast, byte-only) | `*char c = input[pos]; if (c == '#') {...}` (fast AND encoding-correct) |
-| `value += chr(b);` (allocation, byte-only) | `value += c;` (lifts to UTF-8 1-char string) |
+| `value += chr(b);` (allocation, byte-only) | `value += c;` (lifts to a 1-char string in the target/default encoding) |
 | `convert_encoding(text, "UTF-8")` at every tokenizer entry | (not needed; runtime handles encoding) |
 
 `<string>::getByte()`, `<string>::codePointIterator()`, `<string>::splitChars()`,
@@ -95,12 +95,14 @@ is removed.
 (0–0x10FFFF). It has:
 
 - **No encoding.** A `char` is a pure codepoint — an integer in the Unicode
-  range. When converted to `string`, the default encoding for the resulting
-  string is **UTF-8**, regardless of the encoding of any string the char
-  came from. (See §3.6.)
+  range. When converted to a standalone `string`, the default encoding for
+  the resulting string is **UTF-8**. When appended to an existing string,
+  the char is encoded according to the target string's encoding. (See
+  §3.6.)
 - **Inline encoding** in `QoreValue` — no allocation, like `int`/`bool`.
-- **Subtype of `string`** for concatenation and comparison.
-- **Subtype of `int`** for codepoint arithmetic and comparison.
+- **String-compatible** for concatenation and comparison.
+- **Codepoint-compatible** for arithmetic and numeric comparison through
+  explicit or operator-specific lifts.
 - **Distinct nominal type** so function signatures can require `char`
   specifically.
 
@@ -109,15 +111,15 @@ is removed.
 A new lexer prefix `c'..'` / `c"..."` introduces a char literal:
 
 ```qore
-c'a'           // U+0061
-c'\n'          // U+000A
-c'\t'          // U+0009
-c'\\'          // U+005C
-c'\''          // U+0027
-c"'"           // U+0027 — apostrophe without escape
-c'é'           // U+00E9
-c'\u{1F600}'   // U+1F600 (😀; brace form for codepoints > 0xFFFF)
-c'\x7F'        // U+007F (byte-style escape, restricted to <= 0x7F)
+c'a'           # U+0061
+c'\n'          # U+000A
+c'\t'          # U+0009
+c'\\'          # U+005C
+c'\''          # U+0027
+c"'"           # U+0027 — apostrophe without escape
+c'é'           # U+00E9
+c'\u{1F600}'   # U+1F600 (😀; brace form for codepoints > 0xFFFF)
+c'\x7F'        # U+007F (byte-style escape, restricted to <= 0x7F)
 ```
 
 The prefix can be lowercase `c` only (uppercase `C` reserved for potential
@@ -137,14 +139,15 @@ double-quote.
 
 ### 3.3 Type system semantics
 
-The type lattice gains one node, sitting beneath both `string` and `int`:
+The type lattice gains one node under `string`, with explicit and
+operator-specific codepoint conversion to `int`:
 
 ```
               auto
            ╱   │   ╲
          …   string  int
-              │    │
-              char─┘
+              │      ▲
+              char ──┘  (explicit / operator lift)
 ```
 
 Conversion rules:
@@ -161,9 +164,9 @@ Conversion rules:
 
 | Source | To other types |
 |---|---|
-| `char` → `int` | implicit; yields the codepoint value |
-| `char` → `string` | implicit; yields a length-1 UTF-8 string |
-| `char` → `bool` | implicit; True iff codepoint != 0 (consistent with int→bool) |
+| `char` → `int` | explicit in assignment/return contexts with `(int)` or `.ord()`; arithmetic and numeric comparison operators lift to the codepoint value |
+| `char` → `string` | implicit in string contexts; yields a length-1 string (UTF-8 for standalone materialization, target encoding for append/concat) |
+| `char` → `bool` | implicit; True for every valid char, including U+0000, because the string view has length 1 |
 
 **`char` is not assignable from `string`.** `char c = some_string_func()`
 fails at **parse time**, not at runtime — there is no implicit
@@ -187,11 +190,12 @@ two characters today" runtime surprises.
 
 `char` is **distinct from `int`** at the type system level. `int sub foo()`
 returning a `char` is a compile error — the author must say `char sub foo()`
-or explicitly cast. This prevents accidental codepoint-as-count confusions.
+or explicitly cast to `int`. This prevents accidental codepoint-as-count
+confusions.
 
 ### 3.4 Operations
 
-All operations come for free via the subtype rules:
+Operations use the conversion/lift rules above:
 
 ```qore
 char c = c'a';
@@ -202,7 +206,7 @@ c == "a"               # char == string (lifts char → length-1 string)
 c == 0x61              # char == int (lifts char → codepoint int)
 c >= c'a' && c <= c'z' # char range
 
-# Arithmetic (treats char as int, returns int)
+# Arithmetic (operator-specific lift to codepoint int, returns int)
 int i = c + 1;             # 0x62
 char d = (char)(c + 1);    # explicit re-cast back to char
 
@@ -216,13 +220,13 @@ char c0 = str[0];          # c'h' (U+0068)
 char c1 = str[1];          # c'é' (U+00E9), regardless of str's encoding
 ```
 
-A new pseudo-class `<char>` exposes the union of all `<string>` and
-`<int>` pseudo-methods, plus a small set of char-specific additions.
+A new pseudo-class `<char>` exposes the useful string-view and
+codepoint-view pseudo-methods, plus a small set of char-specific additions.
 
-**Method inheritance.** Because `char` is a subtype of both `string` and
-`int`, every method available on either supertype must be callable on a
-`char` value via the subtype lift. The `<char>` pseudo-class implements
-all of them so that:
+**Method availability.** Because a `char` can be viewed as both a
+length-1 string and a Unicode codepoint, methods from both views should be
+available where they make sense. The `<char>` pseudo-class implements them
+explicitly so that:
 
 ```qore
 char c = c'a';
@@ -234,8 +238,8 @@ char d  = c.upr();       # c'A' — case mapping
 bool b1 = c.startsWith("a");
 bool b2 = c.contains("a");
 
-# <int> methods — char lifts to int (codepoint value)
-bool ip = c.intp();      # True
+# codepoint-view methods
+bool cp = c.charp();     # True
 int  hc = c.hash();      # codepoint hash, like int hash
 string h = c.toHex();    # "61" — hex of codepoint
 
@@ -249,7 +253,7 @@ This closes the type-inference compatibility risk: existing code with
 change, because `<char>::size()` is defined (delegating to the string
 lift).
 
-**Method-name conflicts.** The two supertypes have several methods with
+**Method-name conflicts.** The string and codepoint views have several methods with
 the same name but different semantics. `<char>` resolves each
 explicitly:
 
@@ -258,7 +262,7 @@ explicitly:
 | `toString()` | identity | decimal text of int | **string-like**: returns the 1-char string |
 | `toString(encoding)` | re-encode | (n/a) | **string-like**: returns 1-char string in given encoding |
 | `toInt()` | parse decimal | identity | **int-like**: returns the codepoint |
-| `toBool()` | non-empty? | non-zero? | both produce True for any valid codepoint |
+| `toBool()` | non-empty? | non-zero? | **string-like**: True for every valid char, including U+0000 |
 | `toFloat()` | parse decimal | int as float | **int-like**: codepoint as float |
 | `typeCode()` | NT_STRING | NT_INT | returns NT_CHAR |
 | `format(...)` | string format | int format | **string-like** (matches concat behaviour) |
@@ -273,6 +277,7 @@ resolved.
 
 ```qore
 int    <char>::ord()                # codepoint as int (alias for int lift)
+bool   <char>::charp()              # True
 bool   <char>::isAscii()            # codepoint in 0..0x7F
 bool   <char>::isLetter()           # Unicode letter category
 bool   <char>::isDigit()            # Unicode digit category
@@ -330,13 +335,20 @@ This is the right model for several reasons:
 - It eliminates an entire class of "what encoding is this char in?" bugs.
   `char c0 = utf8_string[0]; char c1 = utf16_string[0]; c0 == c1` compares
   codepoints, which is encoding-independent.
-- When a char is materialized as a string (via implicit conversion or
-  `c.toString()`), the default encoding is always **UTF-8**. To produce a
+- When a char is materialized as a standalone string (via assignment to a
+  new `string`, return-from-function, list/hash insertion, or
+  `c.toString()`), the default encoding is **UTF-8**. To produce a
   different encoding, use `c.toString(encoding)` explicitly.
+- When a char is appended to or concatenated with an existing string, it is
+  encoded into the target string's encoding before the existing string
+  concatenation rules run. If the target encoding cannot represent the
+  codepoint, the operation raises the same encoding-conversion exception as
+  an explicit string conversion would.
 
-The codepoint-offset cache (§5) makes `string[i]` O(1) for any source
-encoding *internally*, but the `char` it returns is just a codepoint — the
-encoding awareness is handled by the runtime, not exposed in the value.
+The codepoint-offset cache (§5) makes repeated `string[i]` access avoid
+rescanning from byte 0 for any source encoding *internally*, but the `char`
+it returns is just a codepoint — the encoding awareness is handled by the
+runtime, not exposed in the value.
 
 For tokenizer migration, this means:
 
@@ -412,10 +424,11 @@ that switch on type tag.
 ### 5.2 char → string lift
 
 When a `char` is consumed by a string-typed sink (assignment, concat,
-parameter passing), the runtime materializes a 1–4-byte UTF-8 buffer for
-the codepoint. The materialization happens on-demand in
-`QoreValue::getStringNode()` (or a new `getString()` accessor for
-non-allocating callers).
+parameter passing), the runtime materializes a 1-character buffer for the
+codepoint. Standalone materialization uses UTF-8 by default; append/concat
+uses the target string's encoding as described in §3.6. The materialization
+happens on-demand in `QoreValue::getStringNode()` (or a new `getString()`
+accessor for non-allocating callers).
 
 For most consumers (concat, comparison, sprintf-style formatting) the
 1-character string can live on the stack — only escapes (assignment to a
@@ -424,33 +437,42 @@ heap-allocated `QoreStringNode`.
 
 ### 5.3 Encoding-aware indexing — the codepoint-offset cache
 
-`string::operator[]` returning `*char` needs to be O(1) for any encoding.
-Today `qore_string_private::operator[]` walks UTF-8 from byte 0 every
-call — that's the O(N²) cost the byte-indexed migrations work around.
+`string::operator[]` returning `*char` must not walk from byte 0 on every
+access. Today `qore_string_private::operator[]` does that for multibyte
+encodings, which is the O(N²) cost the byte-indexed migrations work around.
 
-Fix: a per-string **cached codepoint-offset table** in
+Fix: a per-string **cached codepoint-offset index** in
 `qore_string_private`:
 
-- For UTF-8 sources, an array of byte offsets — one per codepoint — built
-  lazily on first indexed access. Memory: 4 bytes per codepoint (8 for
-  strings >2 GB).
 - For pure-ASCII strings (detected by an existing flag during hash/compare
   operations), byte offset == codepoint offset, no table needed.
-- For other encodings (UTF-16LE/BE, Latin-1, etc.), the same table caches
-  per-codepoint byte offsets. The runtime no longer needs the
+- For small non-ASCII strings, a dense byte-offset table can be built lazily
+  on first indexed access. Access is O(1) after the table is built; the
+  first build is O(N).
+- For large non-ASCII strings, use a chunked index (for example one
+  checkpoint every 64 codepoints, with optional dense pages for hot
+  regions). Access is bounded by the checkpoint stride instead of the full
+  string length, so repeated scans stay linear without requiring a
+  multi-gigabyte offset table.
+- For other encodings (UTF-16LE/BE, Latin-1, etc.), the same index stores
+  source-byte offsets. The runtime no longer needs the
   `convert_encoding(text, "UTF-8")` step that the migrated tokenizers
   perform today.
 
 Cache invalidation: any mutation that changes the byte representation
 (splice, replace, in-place concat) bumps a version counter on
-`qore_string_private`. The cache rebuilds lazily on the next indexed
-access.
+`qore_string_private`. The affected dense table or chunked pages rebuild
+lazily on the next indexed access.
 
-Memory cost worst case: a 1 MB UTF-8 string with mixed scripts (~500 K
-codepoints) keeps a 2 MB cache. Mitigations:
+Memory cost is proportional to the chosen index representation. A dense
+table costs 4 bytes per codepoint while byte offsets fit in 32 bits (8 for
+larger strings), so it must be capped or avoided for very large strings.
+Mitigations:
 
 - Built lazily; strings that are never indexed pay nothing.
 - ASCII-only strings skip the cache entirely.
+- Large strings use the chunked representation instead of a full dense
+  table.
 - The cache is per-string-instance; copies share the underlying buffer +
   cache via the existing shared-string mechanism.
 
@@ -478,8 +500,10 @@ codepoints) keeps a 2 MB cache. Mitigations:
 
 - Add `charTypeInfo` and `charOrNothingTypeInfo` (matching the
   `intTypeInfo`/`intOrNothingTypeInfo` pattern).
-- `charTypeInfo` is a subtype of `stringTypeInfo` and of `intTypeInfo`
-  (assignment/comparison compat).
+- `charTypeInfo` is string-compatible for assignment/comparison contexts
+  and has explicit / operator-specific codepoint conversion for numeric
+  operations. It is **not** a general subtype of `intTypeInfo` for
+  assignment or return-type compatibility.
 - For the indexing change, `<string>::operator[]` (in
   `lib/Pseudo_QC_String.qpp`) declares return type `*char`.
 
@@ -513,8 +537,9 @@ if (c == c'#') { comments++; ... }
 value += c;
 ```
 
-Same speed (the runtime indexing is O(1) via the codepoint-offset cache),
-materially better readability, no manual UTF-8 normalization at entry.
+Same asymptotic scanning behavior as the byte-indexed version (the runtime
+index avoids rescanning from byte 0), materially better readability, no
+manual UTF-8 normalization at entry.
 
 ### 7.2 Parse options — per-keyword opt-out for backward compatibility
 
@@ -524,7 +549,7 @@ a matching parse option that disables it for older sources:
 | Parse directive | Parse option flag (C++) | Disables |
 |---|---|---|
 | `%no-char-type` | `PO_NO_CHAR_TYPE` | `char` type keyword in declarations / casts; `c'..'`/`c"..."` literal prefix |
-| `%no-string-index-char` | `PO_NO_STRING_INDEX_CHAR` | `string[i]` returning `*char`; the lexer keeps the indexing operator returning `*string` for compatibility with older code |
+| `%no-string-index-char` | `PO_NO_STRING_INDEX_CHAR` | `string[i]` returning `*char`; parser/type/runtime keep string indexing returning `*string` for compatibility with older code |
 
 The first opt-out covers programs that have an identifier named `char`
 (rare; `char` is currently not a Qore keyword, so it's possible). The
@@ -573,8 +598,9 @@ byte path was too risky:
 - Regex-heavy tokenizers where the byte path collides with PCRE2's
   codepoint matching
 
-These all become straightforward with `char` indexing: O(1) codepoint
-access, encoding-correct by construction, no `convert_encoding` at entry.
+These all become straightforward with `char` indexing: codepoint access
+without rescanning from byte 0, encoding-correct by construction, no
+`convert_encoding` at entry.
 
 ---
 
@@ -582,10 +608,11 @@ access, encoding-correct by construction, no `convert_encoding` at entry.
 
 ### 9.1 Type checker complexity
 
-`char` being a subtype of *both* `string` and `int` is unusual — most
-languages would require an explicit cast in one direction. The motivation
-is ergonomics: tokenizer code reads naturally if `c == c'#'` and `c + 1`
-both work without ceremony.
+`char` having string-compatible behavior plus numeric operator lifts is
+unusual — most languages would require an explicit cast in one direction.
+The motivation is ergonomics: tokenizer code reads naturally if
+`c == c'#'` and `c + 1` both work without ceremony, while assignment and
+return types still distinguish `char` from `int`.
 
 Risk: subtle type-inference edge cases. Mitigation: prototype the type
 rules against the existing test suite before committing to public API.
@@ -593,9 +620,9 @@ The existing test suite is a substantial benchmark of the type system.
 
 ### 9.2 Codepoint cache memory cost
 
-Documented in §5.3. Lazy + ASCII-fast-path + shared-string-aware. Realistic
-upper bound: 8 MB for a 1 GB indexed string. For everything but huge text
-processing this is invisible.
+Documented in §5.3. Lazy + ASCII-fast-path + shared-string-aware. Dense
+offset tables can be large, so the implementation must cap dense caches
+and use the chunked representation for large strings.
 
 ### 9.3 Standard library churn
 
@@ -624,7 +651,7 @@ even though it's faster than today.
 
 `auto x = s[0];` continues to compile (x is `*char` instead of `*string`)
 and `x.size()`, `x.toString()`, etc. continue to work because of the
-pseudo-method inheritance from §3.4. The one observable change is in
+pseudo-method availability from §3.4. The one observable change is in
 explicit type queries: `x.typeCode() == NT_STRING` evaluates True today,
 False after the change (it returns NT_CHAR). Code that introspects
 type codes from indexed string access has to update — minor, but
@@ -638,12 +665,12 @@ worth a release-note entry.
 |---|---|
 | Lexer changes (`c'..'` literals, `\u{...}` brace escape) | 3-4 days |
 | Parser changes (char_literal production, `char` type keyword) | 4-5 days |
-| Type checker (charTypeInfo, subtype rules, parse-time string→char rejection, indexing return-type change) | 2 weeks |
+| Type checker (charTypeInfo, string-compatible + numeric-lift rules, parse-time string→char rejection, indexing return-type change) | 2 weeks |
 | QoreValue encoding (TAG_CHAR + accessors + lift-to-string path) | 1 week |
 | Codepoint-offset cache for `string::operator[]` | 2 weeks |
-| `<char>` pseudo-class with full string + int method inheritance | 1 week |
+| `<char>` pseudo-class with explicit string-view and codepoint-view methods | 1 week |
 | Char-specific methods (`isLetter` etc., case mapping, encoding-targeted toString) | 4 days |
-| Test coverage (qtest suite for char + indexing change + method inheritance) | 2 weeks |
+| Test coverage (qtest suite for char + indexing change + method availability) | 2 weeks |
 | Doc updates (Doxygen, language guide, release notes) | 4 days |
 | **Total (sequential)** | **~10-12 weeks** |
 | **Total (with parallelism, 2 developers)** | **~6-8 weeks** |
@@ -665,11 +692,10 @@ Independent of the iterate/pipe proposal — `char` can ship without it.
      string-style for consistency with concatenation behaviour, but
      int-style (printf-format with `%c` etc.) is plausible. Decide
      before public release.
-   - Methods that exist on both with the *same* semantics (e.g.,
-     `intp()`/`stringp()` returning True/False) — both should return
-     True for a char (it's both an int-like and string-like value),
-     which is a small departure from existing semantics where these
-     are mutually exclusive type predicates. Document explicitly.
+   - Type predicates such as `intp()` / `stringp()` should continue to
+     describe the concrete value type. Recommendation: add `charp()` and
+     make `intp()` / `stringp()` return False for `char`; callers that want
+     the converted views can use `c.ord().intp()` or `c.toString().stringp()`.
 
 2. **`<char>` Unicode tables — built-in or via the `unicode` module?**
    The `isLetter` / `isDigit` / `isUpper` / etc. methods need Unicode

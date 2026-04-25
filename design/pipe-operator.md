@@ -32,15 +32,14 @@ that desugars at parse time into the same nested AST:
 # Without pipe (existing keyword-operator syntax, with new operators)
 int letters = count $1.isLetter(), iterate str;
 
-list<string> errs = take 10, (select log.splitLines(), $1 =~ /ERROR/);
+list<string> errs = map $1, (take 10, (select log.splitLines(), $1 =~ /ERROR/));
 
 # With pipe (proposed sugar)
 int letters = iterate str
                 |> filter $1.isLetter()
                 |> count;
 
-list<string> errs = iterate log
-                       |> splitLines
+list<string> errs = iterate log.splitLines()
                        |> filter $1 =~ /ERROR/
                        |> take 10
                        |> collect;
@@ -50,6 +49,11 @@ Pipe is **purely a surface choice** — the runtime sees the same fused
 loop either way. The question this document addresses is: is the new
 syntax worth the cognitive load of having two ways to write the same
 chain?
+
+The examples below use pipe-stage names, not new standalone keyword
+operators. Normative lowering is in §4.1. In particular, `filter` is the
+pipe spelling of `select`, `reduce` is the pipe spelling of `foldl`, and
+`collect` materializes the current lazy stream with an identity `map`.
 
 ---
 
@@ -64,7 +68,7 @@ int total       = foldl $1 + $2, source;
 
 # Pipe
 list<auto> evens = iterate source |> filter $1 % 2 == 0 |> collect;
-int total       = iterate source |> reduce 0, $1 + $2;
+int total       = iterate source |> reduce $1 + $2;
 ```
 
 More verbose, no gain. **Lose.**
@@ -80,7 +84,7 @@ sql += foldl $1 + ",\n" + $2, (map "  " + $1.getCreateSql(self), columns.iterato
 # Pipe equivalent
 sql += iterate columns
             |> map "  " + $1.getCreateSql(self)
-            |> reduce "", $1 + ",\n" + $2;
+            |> reduce $1 + ",\n" + $2;
 ```
 
 Roughly equal. The existing one-line form fits the screen; pipe needs a
@@ -93,18 +97,15 @@ the dominant existing chain shape. Pipe doesn't help these.
 
 ```qore
 # Today (right-to-left mental order)
-int n = elements (foldl $1 + 1, 0,
-                    (select
-                        (map $1.lwr(),
-                            (select text.splitLinesRegex("\\s+"), $1.size() > 3))
-                    ));
+int n = count $1 =~ /^[a-z]+$/,
+              (map $1.lwr(),
+                  (select text.splitLinesRegex("\\s+"), $1.size() > 3));
 
 # Pipe (left-to-right matches execution order)
-int n = iterate text
-          |> splitLinesRegex "\\s+"
+int n = iterate text.splitLinesRegex("\\s+")
           |> filter $1.size() > 3
           |> map    $1.lwr()
-          |> count;
+          |> count $1 =~ /^[a-z]+$/;
 ```
 
 Pipe is ~30 % clearer because the reader doesn't have to mentally
@@ -125,23 +126,19 @@ Roughly the same effort to write either; pipe still slightly clearer.
 ### 2.4 4+ stage chains — pipe meaningfully better
 
 ```qore
-# Process CSV: skip comments, parse, dedupe by first column, take first 100
+# Process CSV: skip blanks/comments, parse, take first 100
 # Today: requires intermediate variables for sanity (no nested form is readable)
 list<auto> rows = csv.splitLines();
-list<auto> data_rows = select rows, $1 !~ /^#/;
+list<auto> non_empty = select rows, $1 != "";
+list<auto> data_rows = select non_empty, $1 !~ /^#/;
 list<auto> parsed = map $1.split(","), data_rows;
-hash<auto> seen = {};
-foreach list<auto> row in (parsed) {
-    seen{row[0]} = row;
-}
-list<auto> sample = take 100, seen.values();
+list<auto> sample = map $1, (take 100, parsed);
 
 # Pipe
-list<auto> sample = iterate csv
-                       |> splitLines
+list<auto> sample = iterate csv.splitLines()
+                       |> filter $1 != ""
                        |> filter $1 !~ /^#/
                        |> map    $1.split(",")
-                       |> dedupe-by $1[0]
                        |> take 100
                        |> collect;
 ```
@@ -209,7 +206,7 @@ iterate <iterable-expression>
     |> drop   <n>
     |> takewhile <pred>
     |> takeuntil <pred>
-    |> reduce <init>, <expr>
+    |> reduce <expr>
     |> count                    # or: count <pred>
     |> first                    # or: first <pred>
     |> any                      # or: any <pred>
@@ -222,6 +219,29 @@ iterate <iterable-expression>
 stages. The whole chain parses as a single AST node (`IterChain` with
 `source` and a list of `Stage` records) and lowers to the same
 fused-loop IR that nested-form chains lower to.
+
+Stage lowering:
+
+| Pipe stage | Nested-form lowering |
+|---|---|
+| `filter <pred>` | `select <source>, <pred>` |
+| `map <expr>` | `map <expr>, <source>` |
+| `take <n>` | `take <n>, <source>` |
+| `drop <n>` | `drop <n>, <source>` |
+| `takewhile <pred>` | `takewhile <pred>, <source>` |
+| `takeuntil <pred>` | `takeuntil <pred>, <source>` |
+| `reduce <expr>` | `foldl <expr>, <source>` |
+| `count` / `count <pred>` | `count <source>` / `count <pred>, <source>` |
+| `first` / `first <pred>` | `first <source>` / `first <pred>, <source>` |
+| `any` / `any <pred>` | `any <source>` / `any <pred>, <source>` |
+| `all <pred>` | `all <pred>, <source>` |
+| `collect` | `map $1, <source>` (identity materialization) |
+| `foreach <body>` | `foreach` statement over `<source>` with `<body>` |
+
+This proposal does **not** add method-call stages such as `|> splitLines`
+or new domain stages such as `|> dedupe-by`. Callers write those operations
+in the source expression (`iterate text.splitLinesRegex("\\s+")`) or add a
+separate future proposal.
 
 The `iterate` keyword and the per-type element protocol come from
 [`streaming-operators.md`](streaming-operators.md) — pipe just consumes
