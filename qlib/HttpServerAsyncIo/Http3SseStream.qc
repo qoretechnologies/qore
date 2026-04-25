@@ -143,25 +143,17 @@ public class Http3SseStream inherits AbstractSseConnection {
     close() {
         if (stream_open) {
             stream_open = False;
-            try {
-                # Send END_STREAM to close the HTTP/3 stream
-                sock.submitQuicStreamData(session_id, stream_id, NOTHING, True);
-                if (wake_callback) {
-                    wake_callback();
-                }
-            } catch (hash<ExceptionInfo> ex) {
-                rethrow;
+            # Send END_STREAM to close the HTTP/3 stream
+            sock.submitQuicStreamData(session_id, stream_id, NOTHING, True);
+            if (wake_callback) {
+                wake_callback();
             }
         }
     }
 
     abort() {
         stream_open = False;
-        try {
-            sock.cancelQuicStream(session_id, stream_id);
-        } catch (hash<ExceptionInfo> ex) {
-            rethrow;
-        }
+        sock.cancelQuicStream(session_id, stream_id);
     }
 
     #! Returns the QUIC session ID

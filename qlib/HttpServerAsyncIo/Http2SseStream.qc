@@ -183,25 +183,17 @@ public class Http2SseStream inherits AbstractSseConnection {
             return;
         }
         stream_open = False;
-        try {
-            sock.sendHttp2StreamData(stream_id, NOTHING, True);
-            if (wake_callback) {
-                wake_callback();
-            }
-        } catch (hash<ExceptionInfo> ex) {
-            rethrow;
+        sock.sendHttp2StreamData(stream_id, NOTHING, True);
+        if (wake_callback) {
+            wake_callback();
         }
     }
 
     abort() {
         stream_open = False;
-        try {
-            sock.resetHttp2Stream(stream_id);
-            if (wake_callback) {
-                wake_callback();
-            }
-        } catch (hash<ExceptionInfo> ex) {
-            rethrow;
+        sock.resetHttp2Stream(stream_id);
+        if (wake_callback) {
+            wake_callback();
         }
     }
 

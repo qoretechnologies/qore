@@ -319,8 +319,10 @@ public class SseObservable inherits DataProvider::DelayedObservable {
                 "has_on_complete": True,
                 # SSE streams are long-lived; use idle_timeout_ms and
                 # poll_timeout_ms for inactivity detection instead of the
-                # controller's absolute operation timeout.
-                "to": -1,
+                # controller's absolute operation timeout.  -1s is the
+                # codebase convention for "no timeout" (see e.g.
+                # HttpAsyncSocketIoController accept submissions).
+                "to": -1s,
             }, True);
         } catch (hash<ExceptionInfo> ex) {
             {

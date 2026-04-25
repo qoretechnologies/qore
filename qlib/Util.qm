@@ -2624,7 +2624,10 @@ public class TerminalColor {
         normalized to UTF-8 once at entry — a no-op for the common case.
     */
     static string stripAnsi(string text) {
-        if (text.encoding() != "UTF-8") {
+        # Remember the input encoding so we can return the result in the
+        # same encoding the caller passed in.
+        string input_enc = text.encoding();
+        if (input_enc != "UTF-8") {
             text = convert_encoding(text, "UTF-8");
         }
         string out = "";
@@ -2646,7 +2649,8 @@ public class TerminalColor {
             out += chr(b);
             ++i;
         }
-        return out;
+        # Round-trip back to the caller's encoding if we converted on entry.
+        return input_enc == "UTF-8" ? out : convert_encoding(out, input_enc);
     }
 
     #! Returns the visible length of text without ANSI codes
