@@ -5258,11 +5258,17 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 // Check for exceptions from type-checked assignment (e.g. RUNTIME-TYPE-ERROR
                 // when assigning NOTHING to a typed variable like hash<ExceptionInfo>)
                 emitExceptionCheck(module, llvm_func, inst);
-                // If the variable holds a reference, qore_rt_assign_local wrote through
-                // the reference to another variable on the thread-local stack.  Reload all
-                // local allocas from runtime to prevent stale reads from the target variable.
+                // qore_rt_assign_local* may normalize the stored value (for example,
+                // a heap-backed QoreBigIntNode assigned to an int local is stored as
+                // an inline scalar and the temporary node is dereferenced).  Refresh
+                // the LLVM cache from the runtime local so subsequent StoreLocal
+                // results / LoadLocal reads do not keep a stale borrowed pointer.
                 if (QoreTypeInfo::isReference(linst->local->getTypeInfo())) {
+                    // Reference locals write through to another variable; any local
+                    // cache could now be stale.
                     reloadAllLocalsFromRuntime(module, llvm_func);
+                } else {
+                    reloadLocalFromRuntime(key, module, llvm_func);
                 }
             }
             return true;
