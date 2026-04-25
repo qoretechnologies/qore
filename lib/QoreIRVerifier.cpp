@@ -1273,6 +1273,16 @@ void QoreIRFunction::computeSlotIdsAndEmbed() {
                 if (lis->container && lis->container->ref.id) {
                     assign_slot(reinterpret_cast<const LocalVar*>(lis->container->ref.id));
                 }
+            } else if (static_cast<int>(inst->opcode) >= static_cast<int>(QoreIROpcode::LValuePathAssign)
+                    && static_cast<int>(inst->opcode) <= static_cast<int>(QoreIROpcode::LValuePathTernary)) {
+                auto* path_inst = static_cast<QoreIRLValuePathInstruction*>(inst.get());
+                if (!path_inst->path.empty()) {
+                    const LVPathStep& root = path_inst->path[0];
+                    if ((root.kind == LVPathStepKind::LocalVar || root.kind == LVPathStepKind::ClosureVar)
+                            && root.ref_ptr) {
+                        assign_slot(reinterpret_cast<const LocalVar*>(root.ref_ptr));
+                    }
+                }
             }
         }
     }

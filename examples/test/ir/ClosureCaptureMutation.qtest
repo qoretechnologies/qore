@@ -33,8 +33,12 @@ class ClosureCaptureMutationTest inherits QUnit::Test {
         addTestCase("auto-vivify captured hash local via foreach", \testAutoVivifyForeach());
         addTestCase("TSAI sortOptions pattern", \testSortOptionsPattern());
         addTestCase("COW write to captured hash", \testCowWriteCaptured());
+        addTestCase("path assign on captured nested hash", \testPathAssignCaptured());
         addTestCase("compound op on captured hash key", \testCompoundHashKeyCaptured());
         addTestCase("compound op on captured list index", \testCompoundListIndexCaptured());
+        addTestCase("unary op on captured hash key", \testUnaryHashKeyCaptured());
+        addTestCase("binary mutation on captured nested list", \testBinaryMutationCaptured());
+        addTestCase("extract on captured nested list", \testExtractCaptured());
         set_return_value(main());
     }
 
@@ -178,8 +182,8 @@ printf(\"alias=%y captured=%y\\n\", alias, cap_hash);
     }
 
     testCompoundHashKeyCaptured() {
-        # emitHashKeyCompoundOp fast path ends with HashKeyStore; verify that
-        # closures-cache invalidation covers compound operators on captured hashes.
+        # LValuePathCompound mutates the captured hash through the CVV stack;
+        # the interpreter's LoadClosure cache must be invalidated as well.
         string code = "
 hash<auto> h = {\"n\": 10};
 code cap = sub () {
@@ -193,7 +197,7 @@ printf(\"%y\\n\", h);
     }
 
     testCompoundListIndexCaptured() {
-        # emitListKeyCompoundOp fast path ends with ListIndexStore.
+        # Same LValuePathCompound cache-coherency check for list indices.
         string code = "
 list<auto> l = (10, 20, 30);
 code cap = sub () {
@@ -204,5 +208,54 @@ l[0] *= 3;
 printf(\"%y\\n\", l);
 ";
         assertSameInAllModes(code, "[30, 25, 30]\n", "compound op on captured list index");
+    }
+
+    testPathAssignCaptured() {
+        string code = "
+hash<auto> h = {\"outer\": {}};
+code<nothing()> cap = sub () {
+    any _dummy = h;
+};
+h{\"outer\"}{\"n\"} = 7;
+printf(\"%y\\n\", h);
+";
+        assertSameInAllModes(code, "{outer: {n: 7}}\n", "path assign on captured nested hash");
+    }
+
+    testUnaryHashKeyCaptured() {
+        string code = "
+hash<auto> h = {\"n\": 10};
+code<nothing()> cap = sub () {
+    any _dummy = h;
+};
+++h{\"n\"};
+h{\"n\"}++;
+printf(\"%y\\n\", h);
+";
+        assertSameInAllModes(code, "{n: 12}\n", "unary op on captured hash key");
+    }
+
+    testBinaryMutationCaptured() {
+        string code = "
+hash<auto> h = {\"items\": (1, 2)};
+code<nothing()> cap = sub () {
+    any _dummy = h;
+};
+push h.items, 3;
+printf(\"%y\\n\", h.items);
+";
+        assertSameInAllModes(code, "[1, 2, 3]\n", "binary mutation on captured nested list");
+    }
+
+    testExtractCaptured() {
+        string code = "
+hash<auto> h = {\"items\": (1, 2, 3, 4)};
+code<nothing()> cap = sub () {
+    any _dummy = h;
+};
+list<auto> r = extract h.items, 1, 2;
+printf(\"r=%y h=%y\\n\", r, h.items);
+";
+        assertSameInAllModes(code, "r=[2, 3] h=[1, 4]\n", "extract on captured nested list");
     }
 }

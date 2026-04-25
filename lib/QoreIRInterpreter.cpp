@@ -2432,6 +2432,16 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             }
         }
     };
+    auto invalidateLValuePathClosureCache = [&](const QoreIRLValuePathInstruction* path_inst) {
+        if (!path_inst || path_inst->path.empty()) {
+            return;
+        }
+        const LVPathStep& root = path_inst->path[0];
+        if ((root.kind == LVPathStepKind::LocalVar || root.kind == LVPathStepKind::ClosureVar)
+                && root.ref_ptr) {
+            invalidateClosureCacheLv(static_cast<const LocalVar*>(root.ref_ptr));
+        }
+    };
 
     // Helper: make a private copy of an LValuePath instruction's path with
     // dynamic operands resolved for the current invocation.  MUST be used by
@@ -6826,6 +6836,7 @@ load_local_done:
                 // Per-invocation private path copy; see patchLVPathLocal for why
                 // mutating path_inst->path directly is a data race.
                 std::vector<LVPathStep> path_copy = patchLVPathLocal(path_inst);
+                invalidateLValuePathClosureCache(path_inst);
 
                 QoreValue val = getIRValue(values, path_inst->operands[0]);
                 ValueHolder val_holder(val.refSelf(), xsink);
@@ -6847,6 +6858,7 @@ load_local_done:
                     }
                 }
                 // lvh is now destructed — object lock released
+                invalidateLValuePathClosureCache(path_inst);
 
                 // Cache invalidation: broad for reference roots (write-through can modify
                 // any variable), targeted for non-reference roots.
@@ -6895,6 +6907,7 @@ load_local_done:
                 // Per-invocation private path copy; see patchLVPathLocal for why
                 // mutating path_inst->path directly is a data race.
                 std::vector<LVPathStep> path_copy = patchLVPathLocal(path_inst);
+                invalidateLValuePathClosureCache(path_inst);
                 QoreValue rhs = getIRValue(values, path_inst->operands[0]);
                 ValueHolder rhs_holder(rhs.refSelf(), xsink);
                 QoreValue res;
@@ -6949,6 +6962,7 @@ load_local_done:
                     }
                 }
                 // lvh is now destructed — object lock released
+                invalidateLValuePathClosureCache(path_inst);
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
                     cleanupLocalCaches();
@@ -7004,6 +7018,7 @@ load_local_done:
                 // between threads, corrupting the string pointers and SEGV'ing in
                 // QoreStringValueHelper::setup on the first (dangling) key_val.
                 std::vector<LVPathStep> path_copy = patchLVPathLocal(path_inst);
+                invalidateLValuePathClosureCache(path_inst);
                 QoreValue res;
                 bool is_remove = (path_inst->unary_op == LVUnaryOp::Remove
                                 || path_inst->unary_op == LVUnaryOp::Delete);
@@ -7214,7 +7229,7 @@ load_local_done:
                     if (lvh.navigatePath(path_copy.data(), path_copy.size(), no_vivify)) {
                         if (no_vivify && !*xsink) {
                             // navigatePath failed without error — lvalue doesn't exist, no-op
-                            break;
+                            goto lvalue_path_unary_done;
                         }
                         cleanupValues(values, cleanup, xsink, true, cleanup_log);
                         cleanupLocalCaches();
@@ -7406,6 +7421,7 @@ load_local_done:
                     return false;
                 }
 lvalue_path_unary_done:
+                invalidateLValuePathClosureCache(path_inst);
                 cleanupLocalCaches();
                 if (path_inst->result.isValid()) {
                     setValueSlot(values, path_inst->result.id, res, xsink);
@@ -7429,6 +7445,7 @@ lvalue_path_unary_done:
                 // Per-invocation private path copy; see patchLVPathLocal for why
                 // mutating path_inst->path directly is a data race.
                 std::vector<LVPathStep> path_copy = patchLVPathLocal(path_inst);
+                invalidateLValuePathClosureCache(path_inst);
                 // Get RHS value (operands[0] for push/unshift)
                 QoreValue rhs;
                 if (!path_inst->operands.empty()) {
@@ -7536,6 +7553,7 @@ lvalue_path_unary_done:
                     cleanupLocalCaches();
                     return false;
                 }
+                invalidateLValuePathClosureCache(path_inst);
                 cleanupLocalCaches();
                 if (path_inst->result.isValid()) {
                     setValueSlot(values, path_inst->result.id, res, xsink);
@@ -7559,6 +7577,7 @@ lvalue_path_unary_done:
                 // Per-invocation private path copy; see patchLVPathLocal for why
                 // mutating path_inst->path directly is a data race.
                 std::vector<LVPathStep> path_copy = patchLVPathLocal(path_inst);
+                invalidateLValuePathClosureCache(path_inst);
                 // Get the ternary operands: offset, length, replacement
                 QoreValue offset_val = (path_inst->operands.size() > 0)
                     ? getIRValue(values, path_inst->operands[0]) : QoreValue();
@@ -7666,6 +7685,7 @@ lvalue_path_unary_done:
                     res.discard(xsink);
                     res = QoreValue();
                 }
+                invalidateLValuePathClosureCache(path_inst);
                 if (path_inst->result.isValid()) {
                     setValueSlot(values, path_inst->result.id, res, xsink);
                     if (res.hasNode()) {

@@ -4369,8 +4369,15 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         && !QoreTypeInfo::isReference(outer_ti)
                         && (QoreTypeInfo::isHashType(outer_ti)
                             || QoreTypeInfo::isListType(outer_ti));
-                if (is_complex_typed_outer) {
-                    // Apply type coercion for outer-scope complex-typed locals
+                bool needs_scalar_coerce_outer = QoreTypeInfo::hasType(outer_ti)
+                        && !QoreTypeInfo::isReference(outer_ti)
+                        && !is_complex_typed_outer
+                        && !needs_type_strip_outer
+                        && !QoreTypeInfo::getTypedHash(outer_ti);
+                bool needs_value_coerce_outer = is_complex_typed_outer || needs_scalar_coerce_outer;
+                if (needs_value_coerce_outer) {
+                    // Apply assignment coercion before publishing the value to
+                    // keep any StoreLocal result aligned with the runtime stack.
                     llvm::Function* func = builder->GetInsertBlock()->getParent();
                     llvm::BasicBlock* entry = &func->getEntryBlock();
                     llvm::IRBuilder<> alloca_builder(entry, entry->begin());
@@ -4453,7 +4460,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 }
 
                 if (aot_mode) {
-                    bool use_no_coerce_outer = is_complex_typed_outer || needs_type_strip_outer;
+                    bool use_no_coerce_outer = needs_value_coerce_outer || needs_type_strip_outer;
                     const char* helper_name = use_no_coerce_outer ? "qore_rt_assign_local_no_coerce_aot"
                             : "qore_rt_assign_local_aot";
                     auto assign_helper = module.getOrInsertFunction(helper_name,
@@ -4462,7 +4469,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     builder->CreateCall(assign_helper, {aot_ctx_arg,
                             llvm::ConstantInt::get(i32_type, slot), boxed, xsink_arg});
                 } else {
-                    bool use_no_coerce_outer_jit = is_complex_typed_outer || needs_type_strip_outer;
+                    bool use_no_coerce_outer_jit = needs_value_coerce_outer || needs_type_strip_outer;
                     const char* helper_name = use_no_coerce_outer_jit ? "qore_rt_assign_local_no_coerce"
                             : "qore_rt_assign_local";
                     auto assign_helper = module.getOrInsertFunction(helper_name,
@@ -4643,14 +4650,25 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 && (QoreTypeInfo::isHashType(local_ti)
                     || QoreTypeInfo::isListType(local_ti));
 
+            // Case 3: Scalar typed locals also need assignment coercion before
+            // storing into the LLVM alloca.  Otherwise a softint local assigned
+            // from a string is coerced on the runtime stack but remains a string
+            // in the native local cache, so later native uses see the wrong type.
+            bool needs_scalar_coerce = linst->local
+                && QoreTypeInfo::hasType(local_ti)
+                && !QoreTypeInfo::isReference(local_ti)
+                && !is_complex_typed
+                && !needs_type_strip
+                && !QoreTypeInfo::getTypedHash(local_ti);
+            bool needs_value_coerce = is_complex_typed || needs_scalar_coerce;
+
             // IR-only locals still need their cached alloca value to match
             // the declared container type.  Only runtime-stack sync is
             // skipped for IR-only locals; otherwise a literal like
             // {"initialized": False} stored into hash<auto!> keeps its
             // inferred hash<bool> type and later key writes reject floats.
-            if (is_complex_typed) {
-                // Complex type coercion: stores complexTypeInfo on the value for
-                // runtime variant matching.  Must happen BEFORE storing to alloca.
+            if (needs_value_coerce) {
+                // Assignment coercion must happen BEFORE storing to alloca.
                 // Coerce once here; use no-coerce assign variant below to avoid
                 // double-coercion on the runtime stack.
                 llvm::Function* func = builder->GetInsertBlock()->getParent();
@@ -4775,14 +4793,14 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     builder->SetInsertPoint(after_reinst);
                 }
 
-                // For complex-typed or type-stripped locals (and hashdecl), use no-coerce variant.
-                // Complex types: coercion was already applied above via qore_rt_coerce_value.
+                // For pre-coerced, type-stripped, or hashdecl locals, use no-coerce variant.
+                // Typed values: coercion was already applied above via qore_rt_coerce_value.
                 // Type-stripped: qore_rt_coerce_value already produced the
                 // plain hash/list value.
                 // Hashdecl types: runtime type checking via acceptAssignment rejects hashes
                 // that have complexTypeInfo set instead of hashdecl (a valid state that the
                 // IR interpreter's fast path accepts). Using no-coerce aligns with IR behavior.
-                bool use_no_coerce = is_complex_typed || needs_type_strip
+                bool use_no_coerce = needs_value_coerce || needs_type_strip
                     || QoreTypeInfo::getTypedHash(local_ti);
                 const char* aot_helper_name = use_no_coerce ? "qore_rt_assign_local_no_coerce_aot"
                         : "qore_rt_assign_local_aot";

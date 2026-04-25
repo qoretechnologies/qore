@@ -62,6 +62,7 @@ class AOTSmokeTest inherits QUnit::Test {
         # Module compilation tests
         addTestCase("AOT module compile", \testAOTModuleCompile());
         addTestCase("AOT module no-narrow member types", \testAOTModuleNoNarrowMemberTypes());
+        addTestCase("AOT module scalar local coercion", \testAOTModuleScalarLocalCoercion());
         addTestCase("AOT module hashdecl member compound lvalue",
             \testAOTModuleHashdeclMemberCompoundLValue());
         addTestCase("AOT module hashdecl class constants", \testAOTModuleHashdeclClassConstants());
@@ -1526,6 +1527,62 @@ printf(\"%s\", AOTNoNarrowMember::run());
         assertEq(interp_out, aot_out, "compiled module preserves hash<auto!>/list<auto!> member types: " + aot_out);
         assertTrue(aot_out.regex("alpha"), "hash member accepted mixed value types: " + aot_out);
         assertTrue(aot_out.regex("0.3"), "list member accepted mixed value types: " + aot_out);
+    }
+
+    testAOTModuleScalarLocalCoercion() {
+        string tmp_dir = sprintf("/tmp/aot_scalar_local_coerce_%d", getpid());
+        mkdir(tmp_dir);
+        on_exit {
+            backquote(sprintf("rm -rf %s", tmp_dir));
+        }
+
+        string mod_code = "%modern
+module AOTScalarLocalCoerce {
+    version = \"1.0\";
+    desc = \"AOT scalar local coercion regression\";
+    author = \"Test\";
+    license = \"MIT\";
+}
+
+public namespace AOTScalarLocalCoerce {
+    public int sub runCase() {
+        hash<auto> h = {\"content-length\": \"23\"};
+        softint content_length = h.\"content-length\" ?? 0;
+        return get_random_bytes(content_length).size();
+    }
+}
+";
+        string qm_path = tmp_dir + "/AOTScalarLocalCoerce.qm";
+        {
+            File f();
+            f.open2(qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write(mod_code);
+            f.close();
+        }
+
+        string qmod_path = tmp_dir + "/AOTScalarLocalCoerce.qmod";
+        hash<auto> result = compileModuleFile(qm_path, qmod_path, ("--strip-source",));
+        assertTrue(result.compiled, "scalar local coercion module compiled: " + result.compile_out);
+        assertTrue(result.compile_out.regex("source-stripped"),
+            "scalar local coercion module is source-stripped: " + result.compile_out);
+
+        string test_code = "%modern
+%requires AOTScalarLocalCoerce
+printf(\"value=%d\\n\", AOTScalarLocalCoerce::runCase());
+";
+        hash<auto> paths = writeTempScript(test_code);
+        on_exit {
+            unlink(paths.src);
+        }
+
+        string aot_out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, tmp_dir, qore_bin, paths.src));
+        unlink(qmod_path);
+        string interp_out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, tmp_dir, qore_bin, paths.src));
+
+        assertEq(interp_out, aot_out, "compiled module scalar local coercion matches source: " + aot_out);
+        assertEq("value=23\n", aot_out, "softint local is coerced before native uses");
     }
 
     testAOTModuleHashdeclMemberCompoundLValue() {

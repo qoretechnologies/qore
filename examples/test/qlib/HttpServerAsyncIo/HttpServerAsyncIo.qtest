@@ -927,6 +927,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         c.connect("127.0.0.1:" + port, 2s);
         c.send(sprintf("POST /echo HTTP/1.0\r\nHost: localhost\r\nContent-Length: %d\r\n\r\n",
             body.size()));
+        # Force the body-read operation to wait for socket readiness instead
+        # of finding the whole request body already buffered.
+        usleep(50ms);
         c.send(body);
         # Drain the response so the handler can finish cleanly
         c.recv(4096, 2s);
