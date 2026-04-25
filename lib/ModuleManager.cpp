@@ -99,6 +99,16 @@ static void module_load_clear(const char* path) {
     modset.erase(i);
 }
 
+static bool has_separated_module_main(const char* path, const char* feature) {
+    QoreString modulePath(path);
+    modulePath += QORE_DIR_SEP_STR;
+    modulePath += feature;
+    modulePath += ".qm";
+
+    struct stat sb;
+    return !stat(modulePath.c_str(), &sb) && S_ISREG(sb.st_mode);
+}
+
 ModuleReExportHelper::ModuleReExportHelper(QoreAbstractModule* mi, bool reexp) : m(set_reexport(mi, reexp, reexport)) {
     //printd(5, "ModuleReExportHelper::ModuleReExportHelper() %p '%s' (reexp: %d) to %p '%s' (reexp: %d)\n", mi, mi ? mi->getName() : "n/a", reexp, m, m ? m->getName() : "n/a", reexport);
     if (m && mi && reexp) {
@@ -1187,6 +1197,11 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
             mi = loadBinaryModuleFromPath(xsink, raw_path, name, reexport, pholder.release(),
                 load_opt & QMLO_REINJECT ? mpgm : nullptr, load_opt, mod_desc_func);
         } else if (QoreDir::folder_exists(modulePath, xsink)) {
+            if (!has_separated_module_main(raw_path, name)) {
+                xsink.raiseException("LOAD-MODULE-ERROR", "cannot load separated user module '%s' from directory "
+                    "'%s': missing main module source '%s.qm'", name, raw_path, name);
+                return nullptr;
+            }
             mi = loadSeparatedModule(xsink, wsink, raw_path, name, pgm, reexport, pholder.release(),
                 load_opt & QMLO_REINJECT ? mpgm : nullptr, load_opt, warning_mask);
         } else {
@@ -1319,6 +1334,9 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
         modulePath += name;
 
         if (QoreDir::folder_exists(modulePath, xsink)) {
+            if (!has_separated_module_main(modulePath.c_str(), name)) {
+                continue;
+            }
             //printd(5, "ModuleManager::loadModule(%s) found separated module: %s\n", name, modulePath.c_str());
             mi = loadSeparatedModule(xsink, wsink, modulePath.c_str(), name, pgm, reexport, pholder.release(),
                 load_opt & QMLO_REINJECT ? mpgm : nullptr, load_opt, warning_mask);

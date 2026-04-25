@@ -1,0 +1,32 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class SeparatedModuleShadowTest
+
+class SeparatedModuleShadowTest inherits QUnit::Test {
+    constructor() : QUnit::Test("Separated module shadow test", "1.0") {
+        addTestCase("invalid separated-module directory is skipped", \testInvalidSeparatedDirectoryIsSkipped());
+        set_return_value(main());
+    }
+
+    testInvalidSeparatedDirectoryIsSkipped() {
+        string script_dir = get_script_dir();
+
+        Program p(PO_NEW_STYLE);
+        p.disableParseOptions(PO_NO_TOP_LEVEL_STATEMENTS);
+        p.parse(
+            "%prepend-module-path " + script_dir + "/invalid-shadow\n"
+            "%append-module-path " + script_dir + "/valid-shadow\n"
+            "%requires SeparatedFallback\n"
+            "int sub get_value() { return SeparatedFallbackTest::value(); }\n",
+            "separated-module-shadow"
+        );
+
+        assertEq(5164, p.callFunction("get_value"));
+    }
+}
