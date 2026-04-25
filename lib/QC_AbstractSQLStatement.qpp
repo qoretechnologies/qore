@@ -30,6 +30,22 @@
 
 #include <qore/Qore.h>
 
+// Type tag only — `AbstractSQLStatement` is a Qore-language abstract class
+// implemented per-driver (e.g. Qore::SQL::SQLStatement).  No C++ iterator
+// fast path applies here for two reasons:
+//
+//   1. There is no concrete C++ iterator priv class to override — every
+//      next()/getValue() dispatch ends up in driver code (Qore code,
+//      C++ DBI module code, or both).
+//   2. Even if the dispatch could be elided, every next() call holds the
+//      driver lock and may issue a network round-trip to the database
+//      server.  The Qore-method-dispatch overhead (~100-200 ns) is dwarfed
+//      by the per-row driver cost (typically tens of microseconds in the
+//      best case, milliseconds for remote DBs).
+//
+// In short: if SQL row iteration is a bottleneck, the answer is to fetch
+// rows in larger batches via selectRows()/fetchRows(), not to optimise
+// the iterator dispatch.
 class AbstractSQLStatement {};
 
 //! This class defines an abstract interface for the @ref Qore::SQL::SQLStatement "SQLStatement" class
