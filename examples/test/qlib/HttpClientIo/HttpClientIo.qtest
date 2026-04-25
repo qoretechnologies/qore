@@ -291,6 +291,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
 
         # Protocol selection tests
         addTestCase("protocol selection constants", \testProtocolSelectionConstants());
+        addTestCase("connection error classification", \testConnectionErrorClassification());
 
         # State tests
         addTestCase("stream state transitions", \testStreamStateTransitions());
@@ -709,6 +710,15 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         # Verify protocol selection-related constants exist
         assertEq(5m, HttpClientIo::HttpClientConnectionManager::H3_REPROBE_INTERVAL,
             "H3 reprobe interval");
+    }
+
+    testConnectionErrorClassification() {
+        assertTrue(HttpClientIo::HttpClientConnectionManager::isConnectionErrorStatic(
+            "HTTP3-CONNECTION-CLOSED"), "HTTP3 close must be retried before wrapping");
+        assertTrue(HttpClientIo::HttpClientConnectionManager::isConnectionErrorStatic(
+            "HTTP3-READ-ERROR"), "HTTP3 read errors must be retried before wrapping");
+        assertFalse(HttpClientIo::HttpClientConnectionManager::isConnectionErrorStatic(
+            "HTTPCLIENT-REQUEST-ERROR"), "wrapped request errors are not transport retry signals");
     }
 
     # ---- State Tests ----
