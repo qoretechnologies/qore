@@ -81,7 +81,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         const H2C_PROBE_TIMEOUT = 1s;
 
         #! Maximum retry count for connection and capacity errors in request() and submitRequestAsync()
-        const MaxRequestRetries = 3;
+        const MaxRequestRetries = DefaultMaxRequestRetries;
     }
 
     private {
@@ -200,6 +200,11 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
                 sprintf("max_streams_per_connection must be >= 0 (0 = unlimited), got %d",
                     self.opts.max_streams_per_connection);
         }
+        if (self.opts.max_request_retries < 0) {
+            throw "HTTPCLIENT-OPTION-ERROR",
+                sprintf("max_request_retries must be >= 0 (0 = disabled), got %d",
+                    self.opts.max_request_retries);
+        }
         # Parse proxy URL if provided
         if (self.opts.proxy_url.val()) {
             hash<auto> purl;
@@ -231,10 +236,12 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
             cookie_jar = new CookieJar();
         }
 
-        log(LoggerLevel::DEBUG, "connection manager created: protocol=%s max_conn=%d max_streams=%d idle=%d cookies=%y",
+        log(LoggerLevel::DEBUG, "connection manager created: protocol=%s max_conn=%d max_streams=%d "
+            "max_retries=%d idle=%d cookies=%y",
             self.opts.protocol,
             self.opts.max_connections_per_host,
             self.opts.max_streams_per_connection,
+            self.opts.max_request_retries,
             self.opts.idle_timeout / 1s,
             self.opts.enable_cookies);
     }
@@ -404,7 +411,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
     #! Acquires a stream and starts streaming with automatic retry on stale connections
     /** If the server closed the connection between acquisition and streaming start
         (a race inherent in pooled HTTP/1.1 connections), this method retries with a
-        fresh connection up to \c MaxRequestRetries times.
+        fresh connection up to \c HttpClientConnectionManagerOptions::max_request_retries times.
 
         @param url the target URL; only scheme, host, and port are used for connection
         management — the URL's path is \b not prepended to \c path
@@ -429,6 +436,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         # Pin @c pool_lock across this method: see @ref pool_lock_pin.
         RWLock pool_lock_pin = pool_lock;
         int retries = 0;
+        int max_retries = opts.max_request_retries;
         bool timeout_retried = False;
         bool h3_close_retried = False;
         while (True) {
@@ -443,29 +451,36 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
                 # is truly down — burning MaxRequestRetries × connect_timeout
                 # turns a single dead-server failure into a 45s+ hang.
                 if (isHttp3ConnectionCloseError(ex.err)) {
-                    if (!h3_close_retried) {
+                    if (!h3_close_retried && retries < max_retries
+                            && canRetryRequest(method, stream)) {
                         h3_close_retried = True;
-                        log(LoggerLevel::DEBUG, "streaming %s, retrying once on fresh connection",
-                            ex.err);
+                        ++retries;
+                        log(LoggerLevel::DEBUG, "streaming %s, retrying once on fresh connection (%d/%d)",
+                            ex.err, retries, max_retries);
                         evictDeadConnections(url);
                         continue;
                     }
                     rethrow;
                 }
-                if (isConnectionError(ex.err) && ++retries <= MaxRequestRetries) {
+                if (isConnectionError(ex.err) && retries < max_retries
+                        && canRetryRequest(method, stream)) {
+                    ++retries;
                     log(LoggerLevel::DEBUG, "streaming connection error %s, retrying (%d/%d)",
-                        ex.err, retries, MaxRequestRetries);
+                        ex.err, retries, max_retries);
                     evictDeadConnections(url);
                     continue;
                 }
                 # Only retry timeout on reused pooled connections (stale connection)
                 if (ex.err == "HTTPCLIENT-TIMEOUT"
-                        && stream.wasConnectionReused() && !timeout_retried) {
+                        && stream.wasConnectionReused() && !timeout_retried
+                        && retries < max_retries && canRetryRequest(method, stream)) {
                     timeout_retried = True;
+                    ++retries;
                     HttpClientConnection timed_out_conn = stream.getConnection();
                     log(LoggerLevel::DEBUG, "streaming timed out on pooled %s connection %d, "
-                        "evicting stale connection and retrying",
-                        timed_out_conn.getProtocol(), timed_out_conn.getConnectionId());
+                        "evicting stale connection and retrying (%d/%d)",
+                        timed_out_conn.getProtocol(), timed_out_conn.getConnectionId(),
+                        retries, max_retries);
                     try { timed_out_conn.close(); } catch () {}
                     evictDeadConnections(url);
                     continue;
@@ -515,6 +530,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         }
 
         int retries = 0;
+        int max_retries = opts.max_request_retries;
         bool h3_close_retried = False;
         while (True) {
             *HttpClientStreamHandle stream;
@@ -541,25 +557,29 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
                 # (waitForReady timeout, cancel, submitAsyncImpl exception), and
                 # the destructor is a final safety net
                 if (isHttp3ConnectionCloseError(ex.err)) {
-                    if (!h3_close_retried) {
+                    if (!h3_close_retried && retries < max_retries
+                            && canRetryRequest(method, stream)) {
                         h3_close_retried = True;
-                        log(LoggerLevel::DEBUG, "async %s, retrying once on fresh connection",
-                            ex.err);
+                        ++retries;
+                        log(LoggerLevel::DEBUG, "async %s, retrying once on fresh connection (%d/%d)",
+                            ex.err, retries, max_retries);
                         evictDeadConnections(url);
                         continue;
                     }
                     rethrow;
                 }
                 if ((isCapacityError(ex.err) || isConnectionError(ex.err))
-                        && ++retries <= MaxRequestRetries) {
+                        && retries < max_retries && canRetryRequest(method, stream)) {
+                    ++retries;
                     if (isConnectionError(ex.err)) {
                         log(LoggerLevel::DEBUG, "connection error %s, evicting and retrying (%d/%d)",
-                            ex.err, retries, MaxRequestRetries);
+                            ex.err, retries, max_retries);
                         evictDeadConnections(url);
                         # h2c failure on plain HTTP → fall back to h1 for this host
                         handleProtocolFallback(url, ex.err);
                     } else {
-                        log(LoggerLevel::DEBUG, "capacity error %s (retry %d/3)", ex.err, retries);
+                        log(LoggerLevel::DEBUG, "capacity error %s (retry %d/%d)",
+                            ex.err, retries, max_retries);
                     }
                     continue;
                 }
@@ -611,6 +631,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         }
 
         int retries = 0;
+        int max_retries = opts.max_request_retries;
         bool h3_close_retried = False;
         while (True) {
             *HttpClientStreamHandle stream;
@@ -630,24 +651,28 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
                 return new HttpCancellableFuture(raw_future, stream);
             } catch (hash<ExceptionInfo> ex) {
                 if (isHttp3ConnectionCloseError(ex.err)) {
-                    if (!h3_close_retried) {
+                    if (!h3_close_retried && retries < max_retries
+                            && canRetryRequest(method, stream)) {
                         h3_close_retried = True;
-                        log(LoggerLevel::DEBUG, "cancellable async %s, retrying once on fresh connection",
-                            ex.err);
+                        ++retries;
+                        log(LoggerLevel::DEBUG, "cancellable async %s, retrying once on fresh connection (%d/%d)",
+                            ex.err, retries, max_retries);
                         evictDeadConnections(url);
                         continue;
                     }
                     rethrow;
                 }
                 if ((isCapacityError(ex.err) || isConnectionError(ex.err))
-                        && ++retries <= MaxRequestRetries) {
+                        && retries < max_retries && canRetryRequest(method, stream)) {
+                    ++retries;
                     if (isConnectionError(ex.err)) {
                         log(LoggerLevel::DEBUG, "connection error %s, evicting and retrying (%d/%d)",
-                            ex.err, retries, MaxRequestRetries);
+                            ex.err, retries, max_retries);
                         evictDeadConnections(url);
                         handleProtocolFallback(url, ex.err);
                     } else {
-                        log(LoggerLevel::DEBUG, "capacity error %s (retry %d/3)", ex.err, retries);
+                        log(LoggerLevel::DEBUG, "capacity error %s (retry %d/%d)",
+                            ex.err, retries, max_retries);
                     }
                     continue;
                 }
@@ -769,6 +794,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
     private hash<auto> requestIntern(string url, string method, string path,
             *hash<auto> headers, *data body, *timeout timeout_ms) {
         int retries = 0;
+        int max_retries = opts.max_request_retries;
         bool timeout_retried = False;
         bool h3_close_retried = False;
         while (True) {
@@ -819,13 +845,15 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
                 # only retry once on a reused pooled connection (stale detection),
                 # never on a fresh connection (genuinely unreachable).
                 if (ex.err == "HTTPCLIENT-TIMEOUT") {
-                    if (stream && stream.wasConnectionReused() && !timeout_retried) {
+                    if (stream && stream.wasConnectionReused() && !timeout_retried
+                            && retries < max_retries && canRetryRequest(method, stream)) {
                         timeout_retried = True;
+                        ++retries;
                         HttpClientConnection timed_out_conn = stream.getConnection();
                         log(LoggerLevel::DEBUG, "request timed out on pooled %s connection %d, "
-                            "evicting stale connection and retrying with connect_timeout=%y",
+                            "evicting stale connection and retrying with connect_timeout=%y (%d/%d)",
                             timed_out_conn.getProtocol(), timed_out_conn.getConnectionId(),
-                            opts.connect_timeout);
+                            opts.connect_timeout, retries, max_retries);
                         try { timed_out_conn.close(); } catch () {}
                         evictDeadConnections(url);
                         continue;
@@ -835,25 +863,28 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
                 # HTTP3-CONNECTION-CLOSED / HTTP3-READ-ERROR retry ONCE only —
                 # see acquireAndStartStreaming for rationale.
                 if (isHttp3ConnectionCloseError(ex.err)) {
-                    if (!h3_close_retried) {
+                    if (!h3_close_retried && retries < max_retries
+                            && canRetryRequest(method, stream)) {
                         h3_close_retried = True;
-                        log(LoggerLevel::DEBUG, "sync request %s, retrying once on fresh connection",
-                            ex.err);
+                        ++retries;
+                        log(LoggerLevel::DEBUG, "sync request %s, retrying once on fresh connection (%d/%d)",
+                            ex.err, retries, max_retries);
                         evictDeadConnections(url);
                         continue;
                     }
                     rethrow;
                 }
                 if ((isCapacityError(ex.err) || isConnectionError(ex.err))
-                        && ++retries <= MaxRequestRetries) {
+                        && retries < max_retries && canRetryRequest(method, stream)) {
+                    ++retries;
                     if (isConnectionError(ex.err)) {
                         log(LoggerLevel::DEBUG, "connection error %s, evicting and retrying (%d/%d)",
-                            ex.err, retries, MaxRequestRetries);
+                            ex.err, retries, max_retries);
                         evictDeadConnections(url);
                         handleProtocolFallback(url, ex.err);
                     } else {
                         log(LoggerLevel::DEBUG, "capacity error %s (retry %d/%d)",
-                            ex.err, retries, MaxRequestRetries);
+                            ex.err, retries, max_retries);
                     }
                     continue;
                 }
@@ -1752,6 +1783,33 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
             || err == "HTTP2-CAPACITY-ERROR"
             || err == "HTTP3-CAPACITY-ERROR"
             || err == "HTTPCLIENT-CAPACITY-ERROR";
+    }
+
+    #! Internal: checks if a method can be retried after request submission
+    private bool isIdempotentMethod(string method) {
+        string m = toupper(method);
+        return m == "GET"
+            || m == "HEAD"
+            || m == "PUT"
+            || m == "DELETE"
+            || m == "OPTIONS"
+            || m == "TRACE";
+    }
+
+    #! Internal: checks if the failure happened before request submission
+    /** Before stream submission, the failure is connection-only: no request
+        has been put on the wire, so retrying is safe for any HTTP method.
+    */
+    private bool isConnectionOnlyFailure(*HttpClientStreamHandle stream) {
+        return !(stream && stream.isSubmitted());
+    }
+
+    #! Internal: checks if a failed request may be retried safely
+    /** Connection-only failures can be retried for any method.  After stream
+        submission, only idempotent methods are retried automatically.
+    */
+    private bool canRetryRequest(string method, *HttpClientStreamHandle stream) {
+        return isConnectionOnlyFailure(stream) || isIdempotentMethod(method);
     }
 
     #! Internal: checks if an error indicates a dead connection

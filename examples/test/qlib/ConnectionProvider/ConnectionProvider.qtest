@@ -465,7 +465,8 @@ public class ConnectionProviderTest inherits QUnit::Test {
             hash<string, bool> seen;
             for (int i = 0; i < 3; ++i) {
                 hash<auto> result = pcm.waitForResult();
-                assertEq("OK", result.result);
+                assertEq("OK", result.result,
+                    sprintf("multi polling result for %y: %y", result.name, result));
                 seen{result.name} = True;
             }
             assertTrue(seen{"multi-1"});
@@ -733,10 +734,14 @@ class TestPollingConnectionMonitor inherits PollingConnectionMonitor {
 class SimpleTcpServer {
     private:internal {
         Socket sock();
+        Mutex m();
+        list<Socket> accepted;
         bool exit_flag;
     }
 
     constructor() {
+        exit_flag = False;
+        accepted = ();
         if (sock.bind("127.0.0.1:0")) {
             throw "BIND-ERROR", strerror();
         }
@@ -747,7 +752,16 @@ class SimpleTcpServer {
     }
 
     stop() {
-        exit_flag = True;
+        {
+            AutoLock al(m);
+            exit_flag = True;
+            accepted = ();
+        }
+        try {
+            sock.close();
+        } catch () {
+            # ignore close errors during shutdown
+        }
     }
 
     int getPort() {
@@ -755,13 +769,24 @@ class SimpleTcpServer {
     }
 
     private acceptLoop() {
-        while (!exit_flag) {
+        while (!shouldExit()) {
             try {
                 *Socket a = sock.accept(100ms);
+                if (a) {
+                    AutoLock al(m);
+                    if (!exit_flag) {
+                        push accepted, a;
+                    }
+                }
             } catch () {
                 # ignore accept errors during shutdown
             }
         }
+    }
+
+    private bool shouldExit() {
+        AutoLock al(m);
+        return exit_flag ?? False;
     }
 }
 

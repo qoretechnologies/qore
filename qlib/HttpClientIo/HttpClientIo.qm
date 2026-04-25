@@ -143,6 +143,11 @@ auto mgr_h3 = new HttpClientConnectionManager({"protocol": "h3"});
       for connection-manager-level async request submission with automatic retry
     - Added @ref HttpClientConnectionManager::ensureConnectionAsync() "ensureConnectionAsync()"
       for non-blocking connection pre-warming
+    - Added \c max_request_retries to @ref HttpClientConnectionManagerOptions
+      to make automatic request retry behavior configurable
+    - Non-idempotent requests are only retried automatically before stream
+      submission, avoiding duplicate \c POST-style requests after transport
+      errors
 
     @subsection httpclientio_v1_1 Version 1.1
     - Added HTTP/1.1 support via @ref Http1ClientConnection, @ref Http1ClientPollOperation,
@@ -185,6 +190,9 @@ public namespace HttpClientIo {
 
     #! Default request timeout (60 seconds)
     public const DefaultRequestTimeout = 60s;
+
+    #! Default maximum request retries for retryable connection and capacity errors
+    public const DefaultMaxRequestRetries = 3;
 
     #! Maximum pending stream reservations on a Connecting connection
     /** Limits the blast radius when a QUIC handshake fails — once this many
@@ -431,6 +439,14 @@ public namespace HttpClientIo {
 
         #! Default request timeout
         timeout request_timeout = DefaultRequestTimeout;
+
+        #! Maximum request retries for retryable connection and capacity errors
+        /** Set to 0 to disable automatic request retries.  This applies to
+            synchronous requests, connection-manager async requests, and
+            streaming request startup.  Non-idempotent requests are retried only
+            before stream submission.
+        */
+        int max_request_retries = DefaultMaxRequestRetries;
 
         #! SSL/TLS verification mode
         /** @see Qore::SSL_VERIFY_NONE, Qore::SSL_VERIFY_PEER, etc.
