@@ -12610,7 +12610,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     return false;
             }
 
-            // Store result and track for cleanup
+            // Store result and track for cleanup.  If lowering deliberately
+            // invalidated the result (statement-form remove/delete/etc.), the
+            // runtime helper still returns an owned value; discard it here to
+            // match the IR interpreter's invalid-result epilogue.
             if (inst->result.isValid()) {
                 values[inst->result.id] = result_val;
                 nanboxed_values.insert(inst->result.id);
@@ -12620,6 +12623,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     builder->CreateStore(result_val,
                         static_cast<llvm::AllocaInst*>(it->second));
                 }
+            } else {
+                auto decref_fn = module.getOrInsertFunction("qore_rt_decref",
+                        llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+                builder->CreateCall(decref_fn, {result_val, xsink_arg});
             }
 
             // Reload all locals (conservative: lvalue ops can modify any local via references)
