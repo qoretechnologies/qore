@@ -278,6 +278,35 @@ struct qore_ftp_private {
         return data.getSocketInfo(xsink, host_lookup);
     }
 
+    DLLLOCAL const char* getSSLCipherName() const {
+        AutoLocker al(m);
+        QoreSocketObject* sock = getAsyncControlSocketUnlocked();
+        return sock ? sock->getSSLCipherName() : control.getSSLCipherName();
+    }
+
+    DLLLOCAL const char* getSSLCipherVersion() const {
+        AutoLocker al(m);
+        QoreSocketObject* sock = getAsyncControlSocketUnlocked();
+        return sock ? sock->getSSLCipherVersion() : control.getSSLCipherVersion();
+    }
+
+    DLLLOCAL long verifyPeerCertificate() const {
+        AutoLocker al(m);
+        QoreSocketObject* sock = getAsyncControlSocketUnlocked();
+        return sock ? sock->verifyPeerCertificate() : control.verifyPeerCertificate();
+    }
+
+    DLLLOCAL bool isControlConnectedUnlocked() const {
+        if (use_async) {
+            return ctrl_op && ctrl_op->isReady();
+        }
+        return control.isOpen();
+    }
+
+    DLLLOCAL QoreSocketObject* getAsyncControlSocketUnlocked() const {
+        return ctrl_op ? ctrl_op->getControlSocket() : nullptr;
+    }
+
     DLLLOCAL void setControlEventQueue(ExceptionSink* xsink, Queue* q, QoreValue arg, bool with_data) {
         AutoLocker al(m);
         control.setEventQueue(xsink, q, arg, with_data);
@@ -337,7 +366,7 @@ struct qore_ftp_private {
         // one assert here catches any I/O-thread misuse at the FtpClient API
         // level with a clear class name in the error message.
         SocketSyncPoll::assertNotOnIoThread("FtpClient", "ftp", xsink);
-        return (!loggedin || !control.isOpen()) && connectUnlocked(xsink) ? -1 : 0;
+        return (!loggedin || !isControlConnectedUnlocked()) && connectUnlocked(xsink) ? -1 : 0;
     }
 
     DLLLOCAL void disconnectIntern() {
@@ -2550,15 +2579,15 @@ bool QoreFtpClient::isConnected() const {
 }
 
 const char* QoreFtpClient::getSSLCipherName() const {
-    return priv->control.getSSLCipherName();
+    return priv->getSSLCipherName();
 }
 
 const char* QoreFtpClient::getSSLCipherVersion() const {
-    return priv->control.getSSLCipherVersion();
+    return priv->getSSLCipherVersion();
 }
 
 long QoreFtpClient::verifyPeerCertificate() const {
-    return priv->control.verifyPeerCertificate();
+    return priv->verifyPeerCertificate();
 }
 
 void QoreFtpClient::setModeAuto() {
@@ -2611,15 +2640,15 @@ const char* QoreFtpClient::getHostName() const {
 }
 
 void QoreFtpClient::setEventQueue(ExceptionSink* xsink, Queue* q, QoreValue arg, bool with_data) {
-    priv->setEventQueue(xsink, q, arg, xsink);
+    priv->setEventQueue(xsink, q, arg, with_data);
 }
 
 void QoreFtpClient::setControlEventQueue(ExceptionSink* xsink, Queue* q, QoreValue arg, bool with_data) {
-    priv->setControlEventQueue(xsink, q, arg, xsink);
+    priv->setControlEventQueue(xsink, q, arg, with_data);
 }
 
 void QoreFtpClient::setDataEventQueue(ExceptionSink* xsink, Queue* q, QoreValue arg, bool with_data) {
-    priv->setDataEventQueue(xsink, q, arg, xsink);
+    priv->setDataEventQueue(xsink, q, arg, with_data);
 }
 
 void QoreFtpClient::cleanup(ExceptionSink* xsink) {
