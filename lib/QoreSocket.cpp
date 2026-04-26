@@ -803,6 +803,23 @@ void my_socket_priv::doDataEvent(int event, int source, const QoreStringNode& st
     socket->priv->do_data_event(event, source, str);
 }
 
+void my_socket_priv::doDataEvent(int event, int source, const void* data, size_t size) const {
+    socket->priv->do_data_event(event, source, data, size);
+}
+
+int my_socket_priv::getSendHttpMessageHeaders(ExceptionSink* xsink, QoreString& hdr, QoreHashNode* info,
+        const char* method, const char* path, const char* http_version, const QoreHashNode* headers,
+        size_t size, int source) const {
+    if (socket->priv->h2_session) {
+        xsink->raiseException("HTTP2-ERROR",
+            "HTTP/1 message attempted on HTTP/2 connection (Socket::sendHTTPMessage)");
+        return -1;
+    }
+
+    socket->priv->getSendHttpMessageHeaders(hdr, info, method, path, http_version, headers, size, source);
+    return 0;
+}
+
 int my_socket_priv::checkOpen(ExceptionSink* xsink) {
     // must be called with the lock held
     assert(m.trylock());

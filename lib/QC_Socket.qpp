@@ -194,6 +194,32 @@ static int socket_exec_send_bytes(QoreObject* self, QoreSocketObject* s, const v
     return socket_exec_send_binary(self, s, bin.release(), timeout_ms, xsink);
 }
 
+static int socket_exec_send_http_message(QoreObject* self, QoreSocketObject* s, QoreHashNode* info,
+        const char* method, const char* path, const char* http_version, const QoreHashNode* headers,
+        const void* data, size_t size, const QoreStringNode* body_event, int timeout_ms, ExceptionSink* xsink) {
+    QoreString hdr(s->getEncoding());
+    if (my_socket_priv::getPriv(*s)->getSendHttpMessageHeaders(xsink, hdr, info, method, path, http_version,
+            headers, size, QORE_SOURCE_SOCKET)) {
+        return -1;
+    }
+
+    SimpleRefHolder<BinaryNode> msg(new BinaryNode());
+    msg->append(hdr.c_str(), hdr.size());
+    if (size && data) {
+        msg->append(data, size);
+    }
+
+    int rc = socket_exec_send_binary(self, s, msg.release(), timeout_ms, xsink);
+    if (!rc && size && data) {
+        if (body_event) {
+            my_socket_priv::getPriv(*s)->doDataEvent(QORE_EVENT_SOCKET_DATA_SENT, QORE_SOURCE_SOCKET, *body_event);
+        } else {
+            my_socket_priv::getPriv(*s)->doDataEvent(QORE_EVENT_SOCKET_DATA_SENT, QORE_SOURCE_SOCKET, data, size);
+        }
+    }
+    return rc;
+}
+
 static int socket_exec_connect_operation(QoreObject* self, SocketPollOperationBase* connect_poller, int timeout_ms,
         bool ssl, ExceptionSink* xsink) {
     ReferenceHolder<SocketPollOperationBase> poller(connect_poller, xsink);
@@ -3627,8 +3653,12 @@ sock.sendHTTPMessage("POST", "/RPC2", "1.1", ("Content-Type" : "text/xml"), xml)
 nothing Socket::sendHTTPMessage(string method, string path, string http_version, hash<auto> headers, string body,
         *reference<hash> info, timeout timeout_ms = -1) {
     OptHashRefHelper ohrh(info, xsink);
-    s->sendHTTPMessage(xsink, *ohrh, method->c_str(), path->c_str(), http_version->c_str(), headers, *body,
-        QORE_SOURCE_SOCKET, timeout_ms);
+    QoreStringNodeValueHelper tstr(body, s->getEncoding(), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    socket_exec_send_http_message(self, s, *ohrh, method->c_str(), path->c_str(), http_version->c_str(), headers,
+        tstr->c_str(), tstr->size(), *tstr, timeout_ms, xsink);
 }
 
 //! Sends an HTTP message with a method and user-defined headers given as a hash and an optional message body
@@ -3667,8 +3697,8 @@ sock.sendHTTPMessage("POST", "/RPC2", "1.1", ("Content-Type" : "text/xml"), xml)
 nothing Socket::sendHTTPMessage(string method, string path, string http_version, hash<auto> headers, *binary body,
         *reference<hash<auto>> info, timeout timeout_ms = -1) {
     OptHashRefHelper ohrh(info, xsink);
-    s->sendHTTPMessage(xsink, *ohrh, method->c_str(), path->c_str(), http_version->c_str(), headers,
-        body ? body->getPtr() : nullptr, body ? body->size() : 0, QORE_SOURCE_SOCKET, timeout_ms);
+    socket_exec_send_http_message(self, s, *ohrh, method->c_str(), path->c_str(), http_version->c_str(), headers,
+        body ? body->getPtr() : nullptr, body ? body->size() : 0, nullptr, timeout_ms, xsink);
 }
 
 //! Sends an HTTP message with a method and user-defined headers given as a hash and an optional message body
