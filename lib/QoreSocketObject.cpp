@@ -33,11 +33,231 @@
 #include <qore/Qore.h>
 #include <qore/QoreSocketObject.h>
 #include <qore/InputStream.h>
+#include <qore/SocketPollOperation.h>
+#include "qore/intern/AsyncIoControllerPriv.h"
 #include "qore/intern/qore_socket_private.h"
 #include "qore/intern/QC_Socket.h"
 #include "qore/intern/QC_SSLCertificate.h"
 #include "qore/intern/QC_SSLPrivateKey.h"
 #include "qore/intern/Http2Session.h"
+
+#include <limits>
+
+static void qore_socket_object_raise_poll_result_exception(const QoreHashNode* ex, ExceptionSink* xsink) {
+    QoreValue err = ex->getKeyValue("err");
+    QoreValue desc = ex->getKeyValue("desc");
+    QoreValue arg = ex->getKeyValue("arg");
+    xsink->raiseException(
+        err.getType() == NT_STRING
+            ? err.get<const QoreStringNode>()->stringRefSelf()
+            : new QoreStringNode("ASYNC-IO-ERROR"),
+        desc.getType() == NT_STRING
+            ? desc.get<const QoreStringNode>()->stringRefSelf()
+            : new QoreStringNode("async socket operation failed"),
+        arg.refSelf());
+}
+
+static QoreHashNode* qore_socket_object_exec_poll_operation(QoreSocketObject* s, QoreObject* sock_obj,
+        QoreObject* op_obj, int timeout_ms, const char* owner_name, ExceptionSink* xsink) {
+    ReferenceHolder<QoreObject> ctl_obj(qore_get_async_io_controller_obj(xsink), xsink);
+    if (!ctl_obj) {
+        return nullptr;
+    }
+    ReferenceHolder<AsyncIoControllerPriv> ctrl(
+        static_cast<AsyncIoControllerPriv*>(
+            (*ctl_obj)->getReferencedPrivateData(CID_ASYNCIOCONTROLLER, xsink)), xsink);
+    if (*xsink || !ctrl) {
+        return nullptr;
+    }
+
+    std::string owner("QoreSocketObject::sync:");
+    owner += owner_name;
+    owner += ':';
+    owner += s->getUniqueHash();
+
+    std::string key("QoreSocketObject::sync:");
+    key += owner_name;
+    key += ':';
+    key += s->getUniqueHash();
+
+    ReferenceHolder<QoreHashNode> info(new QoreHashNode(hashdeclSocketPollOperationInfo, xsink), xsink);
+    info->setKeyValue("sock", sock_obj->objectRefSelf(), xsink);
+    info->setKeyValue("spop", op_obj->objectRefSelf(), xsink);
+    info->setKeyValue("owner", new QoreStringNode(owner), xsink);
+    info->setKeyValue("key", new QoreStringNode(key), xsink);
+    info->setKeyValue("to", timeout_ms, xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
+    ReferenceHolder<QoreHashNode> result(ctrl->exec(*ctl_obj, info.release(), false, xsink), xsink);
+    if (*xsink || !result) {
+        return nullptr;
+    }
+
+    QoreValue ex = result->getKeyValue("ex");
+    if (ex.getType() == NT_HASH) {
+        qore_socket_object_raise_poll_result_exception(ex.get<const QoreHashNode>(), xsink);
+        return nullptr;
+    }
+    return result.release();
+}
+
+static QoreObject* qore_socket_object_make_pollable_wrapper(QoreSocketObject* s) {
+    s->ref();
+    return new QoreObject(QC_ABSTRACTPOLLABLEIOOBJECTBASE, getProgram(), s);
+}
+
+static QoreObject* qore_socket_object_make_poll_op(QoreObject* sock_obj, SocketPollOperationBase* poller,
+        const char* goal, ExceptionSink* xsink) {
+    ReferenceHolder<SocketPollOperationBase> poller_holder(poller, xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
+    ReferenceHolder<QoreObject> op_obj(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller_holder),
+        xsink);
+    poller_holder->setSelf(*op_obj);
+    poller_holder.release();
+
+    if (!*xsink) {
+        op_obj->setValue("sock", sock_obj->objectRefSelf(), xsink);
+        op_obj->setValue("goal", new QoreStringNode(goal), xsink);
+    }
+    return *xsink ? nullptr : op_obj.release();
+}
+
+static int qore_socket_object_exec_send_poll(QoreSocketObject* s, SocketPollOperationBase* poller,
+        int timeout_ms, ExceptionSink* xsink) {
+    ReferenceHolder<QoreObject> sock_obj(qore_socket_object_make_pollable_wrapper(s), xsink);
+    ReferenceHolder<QoreObject> op_obj(
+        qore_socket_object_make_poll_op(*sock_obj, poller, "send", xsink), xsink);
+    if (*xsink) {
+        return -1;
+    }
+
+    ReferenceHolder<QoreHashNode> result(
+        qore_socket_object_exec_poll_operation(s, *sock_obj, *op_obj, timeout_ms, "send", xsink), xsink);
+    return *xsink ? -1 : 0;
+}
+
+static int qore_socket_object_exec_send_binary(QoreSocketObject* s, BinaryNode* data,
+        int timeout_ms, ExceptionSink* xsink) {
+    s->ref();
+    return qore_socket_object_exec_send_poll(s, new SocketSendPollOperation(xsink, data, s), timeout_ms, xsink);
+}
+
+static int qore_socket_object_exec_send_bytes(QoreSocketObject* s, const void* data, size_t size,
+        int timeout_ms, ExceptionSink* xsink) {
+    SimpleRefHolder<BinaryNode> bin(new BinaryNode());
+    bin->append(data, size);
+    return qore_socket_object_exec_send_binary(s, bin.release(), timeout_ms, xsink);
+}
+
+static int qore_socket_object_exec_send_string(QoreSocketObject* s, const QoreStringNode& data,
+        int timeout_ms, ExceptionSink* xsink, QoreStringNode** sent_data = nullptr) {
+    SimpleRefHolder<QoreStringNode> tmp;
+    if (data.getEncoding() != s->getEncoding()) {
+        tmp = data.convertEncoding(s->getEncoding(), xsink);
+        if (*xsink) {
+            return -1;
+        }
+    }
+
+    if (sent_data) {
+        *sent_data = tmp ? tmp->stringRefSelf() : data.stringRefSelf();
+    }
+
+    s->ref();
+    return qore_socket_object_exec_send_poll(s,
+        new SocketSendPollOperation(xsink, tmp ? tmp.release() : data.stringRefSelf(), s), timeout_ms, xsink);
+}
+
+static QoreValue qore_socket_object_exec_recv_poll(QoreSocketObject* s, SocketRecvPollOperationBase* poller,
+        int timeout_ms, const char* owner_name, ExceptionSink* xsink) {
+    SocketRecvPollOperationBase* recv_poller = poller;
+    ReferenceHolder<QoreObject> sock_obj(qore_socket_object_make_pollable_wrapper(s), xsink);
+    ReferenceHolder<QoreObject> op_obj(
+        qore_socket_object_make_poll_op(*sock_obj, poller, "received", xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    ReferenceHolder<QoreHashNode> result(
+        qore_socket_object_exec_poll_operation(s, *sock_obj, *op_obj, timeout_ms, owner_name, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return recv_poller->getOutput();
+}
+
+static QoreValue qore_socket_object_exec_recv_value(QoreSocketObject* s, int64 size, int timeout_ms,
+        bool to_string, ExceptionSink* xsink) {
+    s->ref();
+    if (size > 0) {
+        if (size > std::numeric_limits<ssize_t>::max()) {
+            xsink->raiseException("SOCKET-RECV-ERROR",
+                "requested receive size " QLLD " exceeds the maximum supported size",
+                size);
+            s->deref(xsink);
+            return QoreValue();
+        }
+        return qore_socket_object_exec_recv_poll(s,
+            new SocketRecvPollOperation(xsink, static_cast<ssize_t>(size), s, to_string),
+            timeout_ms, "recv", xsink);
+    }
+    return qore_socket_object_exec_recv_poll(s, new SocketRecvDataPollOperation(xsink, s, to_string),
+        timeout_ms, "recv", xsink);
+}
+
+static QoreStringNode* qore_socket_object_exec_recv_string(QoreSocketObject* s, int64 size,
+        int timeout_ms, ExceptionSink* xsink) {
+    ValueHolder result(qore_socket_object_exec_recv_value(s, size, timeout_ms, true, xsink), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    if (result->isNothing()) {
+        return new QoreStringNode;
+    }
+    if (result->getType() != NT_STRING) {
+        xsink->raiseException("SOCKET-RECV-ERROR", "expected string data from async receive operation, got '%s'",
+            result->getFullTypeName());
+        return nullptr;
+    }
+    return result.release().get<QoreStringNode>();
+}
+
+static BinaryNode* qore_socket_object_exec_recv_binary(QoreSocketObject* s, int64 size,
+        int timeout_ms, ExceptionSink* xsink) {
+    ValueHolder result(qore_socket_object_exec_recv_value(s, size, timeout_ms, false, xsink), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    if (result->isNothing()) {
+        return new BinaryNode;
+    }
+    if (result->getType() != NT_BINARY) {
+        xsink->raiseException("SOCKET-RECV-ERROR", "expected binary data from async receive operation, got '%s'",
+            result->getFullTypeName());
+        return nullptr;
+    }
+    return result.release().get<BinaryNode>();
+}
+
+static BinaryNode* qore_socket_object_exec_recv_bytes(QoreSocketObject* s, size_t size,
+        int timeout_ms, ExceptionSink* xsink) {
+    SimpleRefHolder<BinaryNode> bin(qore_socket_object_exec_recv_binary(s, size, timeout_ms, xsink));
+    if (*xsink) {
+        return nullptr;
+    }
+    if (bin->size() != size) {
+        xsink->raiseException("SOCKET-RECV-ERROR",
+            "expected " QLLD " byte(s) from async receive operation, got " QLLD,
+            static_cast<int64>(size), static_cast<int64>(bin->size()));
+        return nullptr;
+    }
+    return bin.release();
+}
 
 QoreSocketObject::QoreSocketObject(QoreSocket* s, QoreSSLCertificate* cert, QoreSSLPrivateKey* pk)
         : priv(new my_socket_priv(s, cert, pk)) {
@@ -316,54 +536,47 @@ int QoreSocketObject::listen(int backlog) {
 
 // send a buffer of a particular size
 int QoreSocketObject::send(const char* buf, int size) {
-    AutoLocker al(priv->m);
     ExceptionSink xsink;
-    my_socket_priv::SyncIoGuard sg(*priv, &xsink, NB_SEND);
-    if (!sg) {
+    int rc = qore_socket_object_exec_send_bytes(this, buf, size, -1, &xsink);
+    if (xsink) {
         xsink.clear();
         return -1;
     }
-    return priv->socket->send(buf, size);
+    return rc;
 }
 
 int QoreSocketObject::send(const char* buf, int size, int timeout_ms, ExceptionSink* xsink) {
-    AutoLocker al(priv->m);
-    my_socket_priv::SyncIoGuard sg(*priv, xsink, NB_SEND);
-    if (!sg) {
-        return -1;
-    }
-    return priv->socket->send(buf, size, timeout_ms, xsink);
+    return qore_socket_object_exec_send_bytes(this, buf, size, timeout_ms, xsink);
 }
 
 // send a null-terminated string
 int QoreSocketObject::send(const QoreStringNode& msg, int timeout_ms, ExceptionSink* xsink) {
-    AutoLocker al(priv->m);
-    my_socket_priv::SyncIoGuard sg(*priv, xsink, NB_SEND);
-    if (!sg) {
-        return -1;
+    QoreStringNode* sent_data = nullptr;
+    int rc = qore_socket_object_exec_send_string(this, msg, timeout_ms, xsink, &sent_data);
+    SimpleRefHolder<QoreStringNode> sent_data_holder(sent_data);
+    if (!rc) {
+        priv->socket->priv->do_data_event(QORE_EVENT_SOCKET_DATA_SENT, QORE_SOURCE_SOCKET, **sent_data_holder);
     }
-    return priv->socket->send(msg, timeout_ms, xsink);
+    return rc;
 }
 
 // send a binary object
 int QoreSocketObject::send(const BinaryNode* b, int timeout_ms, ExceptionSink* xsink) {
-    AutoLocker al(priv->m);
-    my_socket_priv::SyncIoGuard sg(*priv, xsink, NB_SEND);
-    if (!sg) {
-        return -1;
+    int rc = qore_socket_object_exec_send_binary(this, b->binRefSelf(), timeout_ms, xsink);
+    if (!rc) {
+        priv->socket->priv->do_data_event(QORE_EVENT_SOCKET_DATA_SENT, QORE_SOURCE_SOCKET, *b);
     }
-    return priv->socket->send(b, timeout_ms, xsink);
+    return rc;
 }
 
 int QoreSocketObject::send(const BinaryNode* b) {
-    AutoLocker al(priv->m);
     ExceptionSink xsink;
-    my_socket_priv::SyncIoGuard sg(*priv, &xsink, NB_SEND);
-    if (!sg) {
+    int rc = send(b, -1, &xsink);
+    if (xsink) {
         xsink.clear();
         return -1;
     }
-    return priv->socket->send(b);
+    return rc;
 }
 
 void QoreSocketObject::sendFromInputStream(InputStream *is, int64 size, int64 timeout_ms, ExceptionSink *xsink) {
@@ -389,106 +602,77 @@ int QoreSocketObject::send(int fd, int size) {
 
 // send bytes and convert to network order
 int QoreSocketObject::sendi1(char b, int timeout_ms, ExceptionSink* xsink) {
-    AutoLocker al(priv->m);
-    my_socket_priv::SyncIoGuard sg(*priv, xsink, NB_SEND);
-    if (!sg) {
-        return -1;
-    }
-    return priv->socket->sendi1(b, timeout_ms, xsink);
+    return qore_socket_object_exec_send_bytes(this, &b, sizeof(b), timeout_ms, xsink);
 }
 
 int QoreSocketObject::sendi2(short b, int timeout_ms, ExceptionSink* xsink) {
-    AutoLocker al(priv->m);
-    my_socket_priv::SyncIoGuard sg(*priv, xsink, NB_SEND);
-    if (!sg) {
-        return -1;
-    }
-    return priv->socket->sendi2(b, timeout_ms, xsink);
+    b = htons(b);
+    return qore_socket_object_exec_send_bytes(this, &b, sizeof(b), timeout_ms, xsink);
 }
 
 int QoreSocketObject::sendi4(int b, int timeout_ms, ExceptionSink* xsink) {
-    AutoLocker al(priv->m);
-    my_socket_priv::SyncIoGuard sg(*priv, xsink, NB_SEND);
-    if (!sg) {
-        return -1;
-    }
-    return priv->socket->sendi4(b, timeout_ms, xsink);
+    b = htonl(b);
+    return qore_socket_object_exec_send_bytes(this, &b, sizeof(b), timeout_ms, xsink);
 }
 
 int QoreSocketObject::sendi8(int64 b, int timeout_ms, ExceptionSink* xsink) {
-    AutoLocker al(priv->m);
-    my_socket_priv::SyncIoGuard sg(*priv, xsink, NB_SEND);
-    if (!sg) {
-        return -1;
-    }
-    return priv->socket->sendi8(b, timeout_ms, xsink);
+    b = i8MSB(b);
+    return qore_socket_object_exec_send_bytes(this, &b, sizeof(b), timeout_ms, xsink);
 }
 
 int QoreSocketObject::sendi2LSB(short b, int timeout_ms, ExceptionSink* xsink) {
-    AutoLocker al(priv->m);
-    my_socket_priv::SyncIoGuard sg(*priv, xsink, NB_SEND);
-    if (!sg) {
-        return -1;
-    }
-    return priv->socket->sendi2LSB(b, timeout_ms, xsink);
+    b = i2LSB(b);
+    return qore_socket_object_exec_send_bytes(this, &b, sizeof(b), timeout_ms, xsink);
 }
 
 int QoreSocketObject::sendi4LSB(int b, int timeout_ms, ExceptionSink* xsink) {
-    AutoLocker al(priv->m);
-    my_socket_priv::SyncIoGuard sg(*priv, xsink, NB_SEND);
-    if (!sg) {
-        return -1;
-    }
-    return priv->socket->sendi4LSB(b, timeout_ms, xsink);
+    b = i4LSB(b);
+    return qore_socket_object_exec_send_bytes(this, &b, sizeof(b), timeout_ms, xsink);
 }
 
 int QoreSocketObject::sendi8LSB(int64 b, int timeout_ms, ExceptionSink* xsink) {
-    AutoLocker al(priv->m);
-    my_socket_priv::SyncIoGuard sg(*priv, xsink, NB_SEND);
-    if (!sg) {
-        return -1;
-    }
-    return priv->socket->sendi8LSB(b, timeout_ms, xsink);
+    b = i8LSB(b);
+    return qore_socket_object_exec_send_bytes(this, &b, sizeof(b), timeout_ms, xsink);
 }
 
 // receive a packet of bytes as a string
 QoreStringNode* QoreSocketObject::recv(int timeout_ms, ExceptionSink* xsink) {
-    AutoLocker al(priv->m);
-    my_socket_priv::SyncIoGuard sg(*priv, xsink, NB_RECV);
-    if (!sg) {
+    SimpleRefHolder<QoreStringNode> str(qore_socket_object_exec_recv_string(this, 0, timeout_ms, xsink));
+    if (*xsink) {
         return nullptr;
     }
-    return priv->socket->recv(timeout_ms, xsink);
+    priv->socket->priv->do_data_event(QORE_EVENT_SOCKET_DATA_READ, QORE_SOURCE_SOCKET, **str);
+    return str.release();
 }
 
 // receive a certain number of bytes as a string
 QoreStringNode* QoreSocketObject::recv(qore_offset_t bufsize, int timeout_ms, ExceptionSink* xsink) {
-    AutoLocker al(priv->m);
-    my_socket_priv::SyncIoGuard sg(*priv, xsink, NB_RECV);
-    if (!sg) {
+    SimpleRefHolder<QoreStringNode> str(qore_socket_object_exec_recv_string(this, bufsize, timeout_ms, xsink));
+    if (*xsink) {
         return nullptr;
     }
-    return priv->socket->recv(bufsize, timeout_ms, xsink);
+    priv->socket->priv->do_data_event(QORE_EVENT_SOCKET_DATA_READ, QORE_SOURCE_SOCKET, **str);
+    return str.release();
 }
 
 // receive a packet of bytes as a binary
 BinaryNode* QoreSocketObject::recvBinary(int timeout_ms, ExceptionSink* xsink) {
-    AutoLocker al(priv->m);
-    my_socket_priv::SyncIoGuard sg(*priv, xsink, NB_RECV);
-    if (!sg) {
+    SimpleRefHolder<BinaryNode> bin(qore_socket_object_exec_recv_binary(this, 0, timeout_ms, xsink));
+    if (*xsink) {
         return nullptr;
     }
-    return priv->socket->recvBinary(timeout_ms, xsink);
+    priv->socket->priv->do_data_event(QORE_EVENT_SOCKET_DATA_READ, QORE_SOURCE_SOCKET, **bin);
+    return bin.release();
 }
 
 // receive a certain number of bytes as a binary object
 BinaryNode* QoreSocketObject::recvBinary(int bufsize, int timeout_ms, ExceptionSink* xsink) {
-    AutoLocker al(priv->m);
-    my_socket_priv::SyncIoGuard sg(*priv, xsink, NB_RECV);
-    if (!sg) {
+    SimpleRefHolder<BinaryNode> bin(qore_socket_object_exec_recv_binary(this, bufsize, timeout_ms, xsink));
+    if (*xsink) {
         return nullptr;
     }
-    return priv->socket->recvBinary(bufsize, timeout_ms, xsink);
+    priv->socket->priv->do_data_event(QORE_EVENT_SOCKET_DATA_READ, QORE_SOURCE_SOCKET, **bin);
+    return bin.release();
 }
 
 void QoreSocketObject::recvToOutputStream(OutputStream *os, int64 size, int64 timeout_ms, ExceptionSink *xsink) {
@@ -514,112 +698,134 @@ int QoreSocketObject::recv(int fd, int size, int timeout_ms) {
 
 // receive integers and convert from network byte order
 int64 QoreSocketObject::recvi1(int timeout_ms, char* b, ExceptionSink* xsink) {
-    AutoLocker al(priv->m);
-    my_socket_priv::SyncIoGuard sg(*priv, xsink, NB_RECV);
-    if (!sg) {
+    SimpleRefHolder<BinaryNode> data(qore_socket_object_exec_recv_bytes(this, sizeof(*b), timeout_ms, xsink));
+    if (*xsink) {
         return -1;
     }
-    return priv->socket->recvi1(timeout_ms, b, xsink);
+    memcpy(b, data->getPtr(), sizeof(*b));
+    priv->socket->priv->do_data_event(QORE_EVENT_SOCKET_DATA_READ, QORE_SOURCE_SOCKET, **data);
+    return sizeof(*b);
 }
 
 int64 QoreSocketObject::recvi2(int timeout_ms, short* b, ExceptionSink* xsink) {
-    AutoLocker al(priv->m);
-    my_socket_priv::SyncIoGuard sg(*priv, xsink, NB_RECV);
-    if (!sg) {
+    SimpleRefHolder<BinaryNode> data(qore_socket_object_exec_recv_bytes(this, sizeof(*b), timeout_ms, xsink));
+    if (*xsink) {
         return -1;
     }
-    return priv->socket->recvi2(timeout_ms, b, xsink);
+    memcpy(b, data->getPtr(), sizeof(*b));
+    priv->socket->priv->do_data_event(QORE_EVENT_SOCKET_DATA_READ, QORE_SOURCE_SOCKET, **data);
+    *b = ntohs(*b);
+    return sizeof(*b);
 }
 
 int64 QoreSocketObject::recvi4(int timeout_ms, int* b, ExceptionSink* xsink) {
-    AutoLocker al(priv->m);
-    my_socket_priv::SyncIoGuard sg(*priv, xsink, NB_RECV);
-    if (!sg) {
+    SimpleRefHolder<BinaryNode> data(qore_socket_object_exec_recv_bytes(this, sizeof(*b), timeout_ms, xsink));
+    if (*xsink) {
         return -1;
     }
-    return priv->socket->recvi4(timeout_ms, b, xsink);
+    memcpy(b, data->getPtr(), sizeof(*b));
+    priv->socket->priv->do_data_event(QORE_EVENT_SOCKET_DATA_READ, QORE_SOURCE_SOCKET, **data);
+    *b = ntohl(*b);
+    return sizeof(*b);
 }
 
 int64 QoreSocketObject::recvi8(int timeout_ms, int64* b, ExceptionSink* xsink) {
-    AutoLocker al(priv->m);
-    my_socket_priv::SyncIoGuard sg(*priv, xsink, NB_RECV);
-    if (!sg) {
+    SimpleRefHolder<BinaryNode> data(qore_socket_object_exec_recv_bytes(this, sizeof(*b), timeout_ms, xsink));
+    if (*xsink) {
         return -1;
     }
-    return priv->socket->recvi8(timeout_ms, b, xsink);
+    memcpy(b, data->getPtr(), sizeof(*b));
+    priv->socket->priv->do_data_event(QORE_EVENT_SOCKET_DATA_READ, QORE_SOURCE_SOCKET, **data);
+    *b = MSBi8(*b);
+    return sizeof(*b);
 }
 
 int64 QoreSocketObject::recvi2LSB(int timeout_ms, short* b, ExceptionSink* xsink) {
-    AutoLocker al(priv->m);
-    my_socket_priv::SyncIoGuard sg(*priv, xsink, NB_RECV);
-    if (!sg) {
+    SimpleRefHolder<BinaryNode> data(qore_socket_object_exec_recv_bytes(this, sizeof(*b), timeout_ms, xsink));
+    if (*xsink) {
         return -1;
     }
-    return priv->socket->recvi2LSB(timeout_ms, b, xsink);
+    memcpy(b, data->getPtr(), sizeof(*b));
+    priv->socket->priv->do_data_event(QORE_EVENT_SOCKET_DATA_READ, QORE_SOURCE_SOCKET, **data);
+    *b = LSBi2(*b);
+    return sizeof(*b);
 }
 
 int64 QoreSocketObject::recvi4LSB(int timeout_ms, int* b, ExceptionSink* xsink) {
-    AutoLocker al(priv->m);
-    my_socket_priv::SyncIoGuard sg(*priv, xsink, NB_RECV);
-    if (!sg) {
+    SimpleRefHolder<BinaryNode> data(qore_socket_object_exec_recv_bytes(this, sizeof(*b), timeout_ms, xsink));
+    if (*xsink) {
         return -1;
     }
-    return priv->socket->recvi4LSB(timeout_ms, b, xsink);
+    memcpy(b, data->getPtr(), sizeof(*b));
+    priv->socket->priv->do_data_event(QORE_EVENT_SOCKET_DATA_READ, QORE_SOURCE_SOCKET, **data);
+    *b = LSBi4(*b);
+    return sizeof(*b);
 }
 
 int64 QoreSocketObject::recvi8LSB(int timeout_ms, int64* b, ExceptionSink* xsink) {
-    AutoLocker al(priv->m);
-    my_socket_priv::SyncIoGuard sg(*priv, xsink, NB_RECV);
-    if (!sg) {
+    SimpleRefHolder<BinaryNode> data(qore_socket_object_exec_recv_bytes(this, sizeof(*b), timeout_ms, xsink));
+    if (*xsink) {
         return -1;
     }
-    return priv->socket->recvi8LSB(timeout_ms, b, xsink);
+    memcpy(b, data->getPtr(), sizeof(*b));
+    priv->socket->priv->do_data_event(QORE_EVENT_SOCKET_DATA_READ, QORE_SOURCE_SOCKET, **data);
+    *b = LSBi8(*b);
+    return sizeof(*b);
 }
 
 // receive integers and convert from network byte order
 int64 QoreSocketObject::recvu1(int timeout_ms, unsigned char* b, ExceptionSink* xsink) {
-    AutoLocker al(priv->m);
-    my_socket_priv::SyncIoGuard sg(*priv, xsink, NB_RECV);
-    if (!sg) {
+    SimpleRefHolder<BinaryNode> data(qore_socket_object_exec_recv_bytes(this, sizeof(*b), timeout_ms, xsink));
+    if (*xsink) {
         return -1;
     }
-    return priv->socket->recvu1(timeout_ms, b, xsink);
+    memcpy(b, data->getPtr(), sizeof(*b));
+    priv->socket->priv->do_data_event(QORE_EVENT_SOCKET_DATA_READ, QORE_SOURCE_SOCKET, **data);
+    return sizeof(*b);
 }
 
 int64 QoreSocketObject::recvu2(int timeout_ms, unsigned short* b, ExceptionSink* xsink) {
-    AutoLocker al(priv->m);
-    my_socket_priv::SyncIoGuard sg(*priv, xsink, NB_RECV);
-    if (!sg) {
+    SimpleRefHolder<BinaryNode> data(qore_socket_object_exec_recv_bytes(this, sizeof(*b), timeout_ms, xsink));
+    if (*xsink) {
         return -1;
     }
-    return priv->socket->recvu2(timeout_ms, b, xsink);
+    memcpy(b, data->getPtr(), sizeof(*b));
+    priv->socket->priv->do_data_event(QORE_EVENT_SOCKET_DATA_READ, QORE_SOURCE_SOCKET, **data);
+    *b = ntohs(*b);
+    return sizeof(*b);
 }
 
 int64 QoreSocketObject::recvu4(int timeout_ms, unsigned int* b, ExceptionSink* xsink) {
-    AutoLocker al(priv->m);
-    my_socket_priv::SyncIoGuard sg(*priv, xsink, NB_RECV);
-    if (!sg) {
+    SimpleRefHolder<BinaryNode> data(qore_socket_object_exec_recv_bytes(this, sizeof(*b), timeout_ms, xsink));
+    if (*xsink) {
         return -1;
     }
-    return priv->socket->recvu4(timeout_ms, b, xsink);
+    memcpy(b, data->getPtr(), sizeof(*b));
+    priv->socket->priv->do_data_event(QORE_EVENT_SOCKET_DATA_READ, QORE_SOURCE_SOCKET, **data);
+    *b = ntohl(*b);
+    return sizeof(*b);
 }
 
 int64 QoreSocketObject::recvu2LSB(int timeout_ms, unsigned short* b, ExceptionSink* xsink) {
-    AutoLocker al(priv->m);
-    my_socket_priv::SyncIoGuard sg(*priv, xsink, NB_RECV);
-    if (!sg) {
+    SimpleRefHolder<BinaryNode> data(qore_socket_object_exec_recv_bytes(this, sizeof(*b), timeout_ms, xsink));
+    if (*xsink) {
         return -1;
     }
-    return priv->socket->recvu2LSB(timeout_ms, b, xsink);
+    memcpy(b, data->getPtr(), sizeof(*b));
+    priv->socket->priv->do_data_event(QORE_EVENT_SOCKET_DATA_READ, QORE_SOURCE_SOCKET, **data);
+    *b = LSBi2(*b);
+    return sizeof(*b);
 }
 
 int64 QoreSocketObject::recvu4LSB(int timeout_ms, unsigned int* b, ExceptionSink* xsink) {
-    AutoLocker al(priv->m);
-    my_socket_priv::SyncIoGuard sg(*priv, xsink, NB_RECV);
-    if (!sg) {
+    SimpleRefHolder<BinaryNode> data(qore_socket_object_exec_recv_bytes(this, sizeof(*b), timeout_ms, xsink));
+    if (*xsink) {
         return -1;
     }
-    return priv->socket->recvu4LSB(timeout_ms, b, xsink);
+    memcpy(b, data->getPtr(), sizeof(*b));
+    priv->socket->priv->do_data_event(QORE_EVENT_SOCKET_DATA_READ, QORE_SOURCE_SOCKET, **data);
+    *b = LSBi4(*b);
+    return sizeof(*b);
 }
 
 // send HTTP message
