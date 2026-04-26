@@ -926,6 +926,123 @@ private:
     bool active = false;
 };
 
+class SocketReadinessPollOperation : public SocketPollOperationBase {
+public:
+    SocketReadinessPollOperation(ExceptionSink* xsink, QoreSocketObject* sock, unsigned direction, int events,
+            const char* waiting_state, const char* ready_state)
+            : sock(sock), direction(direction), events(events), waiting_state(waiting_state), ready_state(ready_state) {
+        my_socket_priv* priv = my_socket_priv::getPriv(*sock);
+        AutoLocker al(priv->m);
+        if (priv->checkOpen(xsink) || priv->setNonBlock(xsink, direction)) {
+            return;
+        }
+        set_non_block = true;
+    }
+
+    DLLLOCAL virtual void deref(ExceptionSink* xsink) {
+        if (ROdereference()) {
+            clearNonBlock();
+            sock->deref(xsink);
+            delete this;
+        }
+    }
+
+    DLLLOCAL virtual bool goalReached() const override {
+        return ready;
+    }
+
+    DLLLOCAL virtual void abort(ExceptionSink* xsink) override {
+        clearNonBlock();
+    }
+
+    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override {
+        if (!waiting) {
+            waiting = true;
+            return getSocketPollInfoHash(xsink, events);
+        }
+
+        my_socket_priv* priv = my_socket_priv::getPriv(*sock);
+        AutoLocker al(priv->m);
+        if (set_non_block) {
+            priv->clearNonBlock(direction);
+            set_non_block = false;
+        }
+        if (priv->checkOpen(xsink)) {
+            return nullptr;
+        }
+        ready = true;
+        return nullptr;
+    }
+
+    DLLLOCAL virtual QoreValue getOutput() const override {
+        return ready;
+    }
+
+    DLLLOCAL virtual const char* getStateImpl() const override {
+        return ready ? ready_state : waiting_state;
+    }
+
+private:
+    DLLLOCAL void clearNonBlock() {
+        if (set_non_block) {
+            my_socket_priv* priv = my_socket_priv::getPriv(*sock);
+            AutoLocker al(priv->m);
+            priv->clearNonBlock(direction);
+            set_non_block = false;
+        }
+    }
+
+    QoreSocketObject* sock;
+    unsigned direction;
+    int events;
+    const char* waiting_state;
+    const char* ready_state;
+    bool waiting = false;
+    bool ready = false;
+    bool set_non_block = false;
+};
+
+static bool socket_exec_wait_readiness(QoreObject* self, QoreSocketObject* s, int timeout_ms, unsigned direction,
+        int events, const char* owner_name, const char* waiting_state, const char* ready_state,
+        ExceptionSink* xsink) {
+    s->ref();
+    SocketReadinessPollOperation* readiness_poller = new SocketReadinessPollOperation(xsink, s, direction, events,
+        waiting_state, ready_state);
+    ReferenceHolder<SocketPollOperationBase> poller(readiness_poller, xsink);
+    if (*xsink) {
+        return false;
+    }
+
+    ReferenceHolder<QoreObject> op_obj(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller), xsink);
+    poller->setSelf(*op_obj);
+    poller.release();
+
+    if (!*xsink) {
+        op_obj->setValue("sock", self->objectRefSelf(), xsink);
+        op_obj->setValue("goal", new QoreStringNode(owner_name), xsink);
+    }
+    if (*xsink) {
+        return false;
+    }
+
+    QoreHashNode* ex = nullptr;
+    ReferenceHolder<QoreHashNode> result(
+        socket_exec_poll_operation(self, *op_obj, timeout_ms, owner_name, xsink, &ex), xsink);
+    ReferenceHolder<QoreHashNode> ex_holder(ex, xsink);
+    if (*xsink) {
+        return false;
+    }
+    if (ex_holder) {
+        if (socket_exec_exception_is(*ex_holder, "SOCKET-TIMEOUT")) {
+            return false;
+        }
+        socket_raise_poll_result_exception(*ex_holder, xsink);
+        return false;
+    }
+
+    return readiness_poller->goalReached();
+}
+
 static size_t socket_exec_http_line_payload_size(const QoreStringNode& line) {
     size_t len = line.size();
     const char* str = line.c_str();
@@ -5230,7 +5347,8 @@ bool b = sock.isWriteFinished();
     @throw SOCKET-CLOSED The remote end closed the connection without sending any data
 */
 bool Socket::isWriteFinished(timeout timeout_ms = 0) {
-    return s->isWriteFinished(xsink, (int)timeout_ms);
+    return socket_exec_wait_readiness(self, s, (int)timeout_ms, NB_SEND, SOCK_POLLOUT, "isWriteFinished",
+        "waiting-write", "write-ready", xsink);
 }
 
 //! Returns @ref True if the socket is open
