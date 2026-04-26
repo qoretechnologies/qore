@@ -1916,6 +1916,8 @@ cargo install tree-sitter-cli@0.26.5
       - implements the @ref RestClient::AbstractRestClient "AbstractRestClient" interface for drop-in compatibility
       - async API with Future-returning methods (@ref RestClientIo::RestClientIo::restGetAsync() "restGetAsync()",
         @ref RestClientIo::RestClientIo::restPostAsync() "restPostAsync()", etc.)
+      - Server-Sent Event streams now report HTTP error responses before the stream is opened, so
+        clients receive the response status and body instead of an empty event stream
       - supports shared @ref HttpClientIo::HttpClientConnectionManager "HttpClientConnectionManager" for
         connection sharing across multiple @ref RestClientIo::RestClientIo "RestClientIo" instances
       - data serialization/deserialization for JSON, YAML, XML, CBOR, URL-encoded, text, and binary formats
