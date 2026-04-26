@@ -5965,8 +5965,12 @@ int SocketConnectPollOperation::checkContinuePoll(ExceptionSink* xsink) {
 }
 
 SocketAcceptPollOperation::SocketAcceptPollOperation(ExceptionSink* xsink, QoreSocketObject* sock)
+        : SocketAcceptPollOperation(xsink, sock, sock->priv->cert && sock->priv->pk) {
+}
+
+SocketAcceptPollOperation::SocketAcceptPollOperation(ExceptionSink* xsink, QoreSocketObject* sock, bool ssl)
         : SocketAcceptPollSocketOperationBase(sock), accepted_socket_obj(xsink) {
-    sgoal = sock->priv->cert && sock->priv->pk ? SPS_ACCEPTING_SSL : SPS_ACCEPTING;
+    sgoal = ssl ? SPG_ACCEPT_SSL : SPG_ACCEPT;
 
     AutoLocker al(sock->priv->m);
 
@@ -6080,6 +6084,10 @@ int SocketAcceptPollOperation::startSslAccept(ExceptionSink* xsink) {
     assert(sock->priv->m.trylock());
 
     state = SPS_ACCEPTING_SSL;
+    // The poll socket switches from the listening socket to the accepted client socket for the TLS handshake.  The
+    // controller caches registrations by event mask, so force a full registration update even if both phases wait
+    // for the same events.
+    bumpFdGeneration();
 
     assert(accepted_socket);
     // we have the original socket locked, but do the SSL accept operation on the new socket without any locks,

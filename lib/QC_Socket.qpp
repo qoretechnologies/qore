@@ -90,7 +90,7 @@ static void socket_raise_poll_result_exception(const QoreHashNode* ex, Exception
 }
 
 static QoreHashNode* socket_exec_poll_operation(QoreObject* self, QoreObject* op_obj,
-        int timeout_ms, const char* owner_name, ExceptionSink* xsink) {
+        int timeout_ms, const char* owner_name, ExceptionSink* xsink, QoreHashNode** ex_out = nullptr) {
     ReferenceHolder<QoreObject> ctl_obj(qore_get_async_io_controller_obj(xsink), xsink);
     if (!ctl_obj) {
         return nullptr;
@@ -124,6 +124,10 @@ static QoreHashNode* socket_exec_poll_operation(QoreObject* self, QoreObject* op
 
     QoreValue ex = result->getKeyValue("ex");
     if (ex.getType() == NT_HASH) {
+        if (ex_out) {
+            *ex_out = ex.get<const QoreHashNode>()->hashRefSelf();
+            return nullptr;
+        }
         socket_raise_poll_result_exception(ex.get<const QoreHashNode>(), xsink);
         return nullptr;
     }
@@ -244,6 +248,75 @@ static int socket_exec_upgrade_ssl(QoreObject* self, QoreSocketObject* s, int ti
     ReferenceHolder<QoreHashNode> result(
         socket_exec_poll_operation(self, *op_obj, timeout_ms, goal, xsink), xsink);
     return *xsink ? -1 : 0;
+}
+
+static bool socket_exec_exception_is(const QoreHashNode* ex, const char* err_name) {
+    QoreValue err = ex->getKeyValue("err");
+    return err.getType() == NT_STRING && !strcmp(err.get<const QoreStringNode>()->c_str(), err_name);
+}
+
+static QoreValue socket_exec_accept(QoreObject* self, QoreSocketObject* s, int timeout_ms, bool ssl,
+        bool accept_timeout_returns_nothing, ExceptionSink* xsink) {
+    s->ref();
+    SocketAcceptPollOperation* accept_poller = new SocketAcceptPollOperation(xsink, s, ssl);
+    ReferenceHolder<SocketPollOperationBase> poller(accept_poller, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    ReferenceHolder<QoreObject> op_obj(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller), xsink);
+    poller->setSelf(*op_obj);
+    poller.release();
+
+    const char* goal = ssl ? "accept-ssl" : "accept";
+    if (!*xsink) {
+        op_obj->setValue("sock", self->objectRefSelf(), xsink);
+        op_obj->setValue("goal", new QoreStringNode(goal), xsink);
+    }
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    QoreHashNode* ex = nullptr;
+    ReferenceHolder<QoreHashNode> result(
+        socket_exec_poll_operation(self, *op_obj, timeout_ms, goal, xsink, &ex), xsink);
+    ReferenceHolder<QoreHashNode> ex_holder(ex, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    if (ex_holder) {
+        if (accept_timeout_returns_nothing && socket_exec_exception_is(*ex_holder, "SOCKET-TIMEOUT")
+                && !strcmp(static_cast<SocketPollOperationBase*>(accept_poller)->getStateImpl(), "accepting")) {
+            return QoreValue();
+        }
+        socket_raise_poll_result_exception(*ex_holder, xsink);
+        return QoreValue();
+    }
+
+    ValueHolder output(accept_poller->getOutput(), xsink);
+    if (output->isNothing()) {
+        return QoreValue();
+    }
+    if (output->getType() != NT_OBJECT) {
+        xsink->raiseException("SOCKET-ACCEPT-ERROR",
+            "expected Socket object from async accept operation, got '%s'",
+            output->getFullTypeName());
+        return QoreValue();
+    }
+
+    QoreObject* ns = output->get<QoreObject>();
+    SimpleRefHolder<QoreSocketObject> n(
+        static_cast<QoreSocketObject*>(ns->getReferencedPrivateData(CID_SOCKET, xsink)));
+    if (*xsink) {
+        return QoreValue();
+    }
+    if (!n) {
+        xsink->raiseException("SOCKET-ACCEPT-ERROR", "accepted object does not contain Socket private data");
+        return QoreValue();
+    }
+
+    my_socket_priv::setAccept(**n, ns);
+    return output.release();
 }
 
 static QoreValue socket_exec_recv_poll(QoreObject* self, SocketRecvPollOperationBase* poller,
@@ -2274,22 +2347,7 @@ nothing Socket::bindINET(*string iface, *softstring service, softbool reuseaddr 
     @see Socket::acceptSSL(), Socket::listen(), Socket::getPeerInfo()
 */
 Socket Socket::accept() {
-    QoreSocketObject *n = s->accept(-1, xsink);
-    if (!n) {
-        assert(*xsink);
-        return QoreValue();
-    }
-
-    assert(n);
-
-    // ensure that a socket object is returned (and not a subclass)
-    QoreObject *ns = new QoreObject(QC_SOCKET, getProgram(), n);
-
-    // save backwards-compatible peer parameters as members in new object (deprecated: Socket::getPeerInfo() should
-    // be used in the future)
-    my_socket_priv::setAccept(*n, ns);
-
-    return ns;
+    return socket_exec_accept(self, s, -1, false, false, xsink);
 }
 
 //! Accepts connections on a listening socket (see Socket::listen()) accepting a timeout value with a millisecond resolution
@@ -2310,17 +2368,7 @@ Socket Socket::accept() {
     @see Socket::acceptSSL(), Socket::listen(), Socket::getPeerInfo()
 */
 *Socket Socket::accept(timeout timeout_ms) {
-    QoreSocketObject *n = s->accept(timeout_ms, xsink);
-    if (!n)
-        return QoreValue();
-
-    // ensure that a socket object is returned (and not a subclass)
-    QoreObject* ns = new QoreObject(QC_SOCKET, getProgram(), n);
-
-    // save backwards-compatible peer parameters as members in new object (deprecated: Socket::getPeerInfo() should be used in the future)
-    my_socket_priv::setAccept(*n, ns);
-
-    return ns;
+    return socket_exec_accept(self, s, timeout_ms, false, true, xsink);
 }
 
 //! Accepts connections on a listening socket and attempts to negotiate a TLS/SSL connection
@@ -2342,20 +2390,7 @@ Socket Socket::accept() {
     @see Socket::accept(), Socket::listen(), Socket::getPeerInfo()
 */
 Socket Socket::acceptSSL() {
-    QoreSocketObject *n = s->acceptSSL(xsink, -1);
-    if (!n) {
-        assert(*xsink);
-        return QoreValue();
-    }
-
-    // ensure that a socket object is returned (and not a subclass)
-    QoreObject *ns = new QoreObject(QC_SOCKET, getProgram(), n);
-
-    // save backwards-compatible peer parameters as members in new object (deprecated: Socket::getPeerInfo() should be
-    // used in the future)
-    my_socket_priv::setAccept(*n, ns);
-
-    return ns;
+    return socket_exec_accept(self, s, -1, true, false, xsink);
 }
 
 //! Accepts connections on a listening socket and attempts to negotiate a TLS/SSL connection accepting a timeout value with a millisecond resolution
@@ -2376,17 +2411,7 @@ Socket Socket::acceptSSL() {
     @see Socket::acceptSSL(), Socket::listen(), Socket::getPeerInfo()
 */
 *Socket Socket::acceptSSL(timeout timeout_ms) {
-    QoreSocketObject* n = s->acceptSSL(xsink, timeout_ms);
-    if (!n)
-        return QoreValue();
-
-    // ensure that a socket object is returned (and not a subclass)
-    QoreObject* ns = new QoreObject(QC_SOCKET, getProgram(), n);
-
-    // save backwards-compatible peer parameters as members in new object (deprecated: Socket::getPeerInfo() should be used in the future)
-    my_socket_priv::setAccept(*n, ns);
-
-    return ns;
+    return socket_exec_accept(self, s, timeout_ms, true, true, xsink);
 }
 
 //! Listens for connections on a bound socket; sets the socket in a listening state

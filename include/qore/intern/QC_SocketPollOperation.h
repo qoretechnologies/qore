@@ -122,6 +122,7 @@ protected:
 class SocketAcceptPollOperation : public SocketAcceptPollSocketOperationBase {
 public:
     DLLLOCAL SocketAcceptPollOperation(ExceptionSink* xsink, QoreSocketObject* sock);
+    DLLLOCAL SocketAcceptPollOperation(ExceptionSink* xsink, QoreSocketObject* sock, bool ssl);
 
     DLLLOCAL void deref(ExceptionSink* xsink) {
         if (ROdereference()) {
