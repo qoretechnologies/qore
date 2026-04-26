@@ -1998,7 +1998,7 @@ static void ut_socket_iomode_async_blocks_sync(UnitTestCounters& c) {
 
     // Create a socket object
     QoreSocketObject* sock = new QoreSocketObject;
-    QoreObject* sock_obj = new QoreObject(QC_SOCKET, getProgram(), sock);
+    ReferenceHolder<QoreObject> sock_obj(new QoreObject(QC_SOCKET, getProgram(), sock), &xsink);
     my_socket_priv* sp = my_socket_priv::getPriv(*sock);
 
     // Manually set I/O mode to Async (simulates what a poll op does)
@@ -2035,7 +2035,6 @@ static void ut_socket_iomode_async_blocks_sync(UnitTestCounters& c) {
         sp->io_mode = SocketIoMode::Unclaimed;
     }
 
-    sock_obj->deref(&xsink);
     xsink.clear();
 }
 
