@@ -2749,7 +2749,7 @@ struct qore_httpclient_priv {
         OutputStream* os = nullptr, InputStream* is = nullptr, size_t max_chunk_size = 0,
         const ResolvedCallReferenceNode* trailer_callback = nullptr, bool streaming = false);
 
-    //! Conn_mgr dispatch path for simple H1 request/response (no streaming, no proxy)
+    //! Conn_mgr dispatch path for synchronous request/response and streaming operations
     DLLLOCAL QoreHashNode* send_internal_conn_mgr(ExceptionSink* xsink, const char* mname, const char* meth,
         const char* mpath, const QoreHashNode* headers, const QoreStringNode* msg_body, const void* data,
         unsigned size, const ResolvedCallReferenceNode* send_callback, bool getbody, QoreHashNode* info,

@@ -831,7 +831,7 @@ public:
     **/
     DLLEXPORT int getConnectTimeout() const;
 
-    //! Enables or disables async connection manager dispatch for simple H1 requests
+    //! Enables or disables async connection manager dispatch for synchronous HTTP requests
     /** @param enable true to enable, false to disable
 
         @since %Qore 2.3
