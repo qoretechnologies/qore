@@ -262,6 +262,70 @@ private:
     QoreEventNotifier* notifier;
 };
 
+//! Resolves a Promise on streaming response headers and signals an EventNotifier
+/** Used by header-only streaming poll APIs such as SSE connect checks.  The
+    action advertises streaming mode so protocol poll operations dispatch
+    response headers before reading the long-lived body, then resolves the
+    promise exactly once from that header hash.
+*/
+class StreamingHeadersPromiseNotifierAction : public AbstractAsyncAction {
+public:
+    DLLLOCAL StreamingHeadersPromiseNotifierAction(QorePromise* promise, QoreEventNotifier* notifier)
+        : promise(promise), notifier(notifier) {
+        assert(promise);
+        assert(notifier);
+        promise->ref();
+        notifier->ref();
+    }
+
+    DLLLOCAL bool isStreaming() const override { return true; }
+
+    DLLLOCAL void execute(QoreValue output, ExceptionSink* xsink) override {
+        if (!done && output.getType() == NT_HASH
+                && output.get<QoreHashNode>()->getKeyValue("status_code").getType()) {
+            done = true;
+            promise->set(output, xsink);
+            notifier->notify();
+            return;
+        }
+        output.discard(xsink);
+    }
+
+    DLLLOCAL void executeError(const char* err, const char* desc,
+            ExceptionSink* xsink) override {
+        if (!done) {
+            done = true;
+            promise->setError(err, desc, QoreValue(), xsink);
+            notifier->notify();
+        }
+    }
+
+    DLLLOCAL void complete(ExceptionSink* xsink) override {
+        if (!done) {
+            done = true;
+            promise->setError("HTTPCLIENT-STREAM-CLOSED",
+                "stream closed before response headers were received", QoreValue(), xsink);
+            notifier->notify();
+        }
+    }
+
+    DLLLOCAL void cleanup(ExceptionSink* xsink) override {
+        if (promise) {
+            promise->deref(xsink);
+            promise = nullptr;
+        }
+        if (notifier) {
+            notifier->deref(xsink);
+            notifier = nullptr;
+        }
+    }
+
+private:
+    QorePromise* promise;
+    QoreEventNotifier* notifier;
+    bool done = false;
+};
+
 //! Parses a single SSE message from a text buffer into an SseMessageInfo hash
 /** Standalone version of qore_socket_private::parseServerSentEvent().
     @param xsink exception sink

@@ -768,7 +768,7 @@ int64_t Http1ClientConnection::submitRequestWithAction(const char* method, const
     }
 
     int64_t stream_id = poll_op_priv->submitRequest(method, path, headers,
-        body, body_len, /* streaming */ false, action, /* max_streams */ 1,
+        body, body_len, /* streaming */ action->isStreaming(), action, /* max_streams */ 1,
         /* streaming_send */ false, xsink);
     if (*xsink || stream_id < 0) {
         return -1;
