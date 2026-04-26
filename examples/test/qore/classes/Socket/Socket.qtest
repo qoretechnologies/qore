@@ -503,6 +503,64 @@ class SocketTest inherits QUnit::Test {
         assertEq("chunked", response_headers."transfer-encoding");
         assertEq("hello", response_body.body);
         assertEq("done", response_body."x-trailer");
+
+        Queue q();
+        background sub () {
+            try {
+                Socket server4();
+                server4.bind("localhost:0");
+                server4.listen();
+                q.push(server4.getSocketInfo().port);
+
+                Socket peer = server4.accept(5s);
+                peer.send("HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n"
+                    "2\r\nhe\r\n3\r\nllo\r\n0\r\nX-Trailer: done\r\n\r\n", 5s);
+                q.push(True);
+            } catch (hash<ExceptionInfo> ex) {
+                q.push(ex);
+            }
+        }();
+
+        Socket client4();
+        client4.connect("localhost:" + q.get(5s));
+        response_headers = client4.readHTTPHeader(5s);
+        response_body = client4.readHTTPChunkedBodyBinary(5s);
+        assertEq("chunked", response_headers."transfer-encoding");
+        assertEq(<68656c6c6f>, response_body.body);
+        assertEq("done", response_body."x-trailer");
+        auto server_result = q.get(5s);
+        if (server_result.typeCode() == NT_HASH) {
+            fail(sprintf("Server exception: %s: %s", server_result.err, server_result.desc));
+        }
+        assertTrue(server_result);
+
+        background sub () {
+            try {
+                Socket server5();
+                server5.bind("localhost:0");
+                server5.listen();
+                q.push(server5.getSocketInfo().port);
+
+                Socket peer = server5.accept(5s);
+                peer.send("2\r\nhe\r\n0\r\nX-Trailer: done\r\n\r\n", 5s);
+                q.push(True);
+            } catch (hash<ExceptionInfo> ex) {
+                q.push(ex);
+            }
+        }();
+
+        Socket client5();
+        client5.connect("localhost:" + q.get(5s));
+        response_body = client5.readHTTPChunk(5s);
+        assertEq(<6865>, response_body.body);
+        response_body = client5.readHTTPChunk(5s);
+        assertEq(0, response_body.body.size());
+        assertEq("done", response_body."x-trailer");
+        server_result = q.get(5s);
+        if (server_result.typeCode() == NT_HASH) {
+            fail(sprintf("Server exception: %s: %s", server_result.err, server_result.desc));
+        }
+        assertTrue(server_result);
     }
 
     sendBinaryTest() {

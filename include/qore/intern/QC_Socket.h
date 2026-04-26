@@ -437,6 +437,21 @@ public:
     //! Posts a socket header event through the underlying socket private implementation
     DLLLOCAL void doHeaderEvent(int event, int source, const QoreHashNode& hdr) const;
 
+    //! Posts a socket HTTP chunked read event through the underlying socket private implementation
+    DLLLOCAL void doChunkedReadEvent(int event, size_t bytes, size_t total_read, int source) const;
+
+    //! Posts a socket HTTP header read event through the underlying socket private implementation
+    DLLLOCAL void doReadHttpHeaderEvent(int event, const QoreHashNode& hdr, int source) const;
+
+    //! Parses HTTP header lines into a hash using the underlying socket private implementation
+    DLLLOCAL void convertHeaderToHash(QoreHashNode& h, QoreString& hdr) const;
+
+    //! Clears the pending chunked body expectation flag on the underlying socket private implementation
+    DLLLOCAL void clearHttpExpectChunkedBody() const;
+
+    //! Returns the configured maximum chunked body size, or 0 if unlimited
+    DLLLOCAL int64 getMaxChunkedBodySize() const;
+
     //! Builds HTTP request headers and emits the legacy HTTP send-message event
     DLLLOCAL int getSendHttpMessageHeaders(ExceptionSink* xsink, QoreString& hdr, QoreHashNode* info,
             const char* method, const char* path, const char* http_version, const QoreHashNode* headers,

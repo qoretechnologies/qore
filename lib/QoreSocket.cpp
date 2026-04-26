@@ -811,6 +811,29 @@ void my_socket_priv::doHeaderEvent(int event, int source, const QoreHashNode& hd
     socket->priv->do_header_event(event, source, hdr);
 }
 
+void my_socket_priv::doChunkedReadEvent(int event, size_t bytes, size_t total_read, int source) const {
+    socket->priv->do_chunked_read(event, bytes, total_read, source);
+}
+
+void my_socket_priv::doReadHttpHeaderEvent(int event, const QoreHashNode& hdr, int source) const {
+    socket->priv->do_read_http_header(event, &hdr, source);
+}
+
+void my_socket_priv::convertHeaderToHash(QoreHashNode& h, QoreString& hdr) const {
+    socket->priv->convertHeaderToHash(&h, const_cast<char*>(hdr.c_str()), 0, nullptr, nullptr,
+        "response-headers-raw");
+}
+
+void my_socket_priv::clearHttpExpectChunkedBody() const {
+    if (socket->priv->http_exp_chunked_body) {
+        socket->priv->http_exp_chunked_body = false;
+    }
+}
+
+int64 my_socket_priv::getMaxChunkedBodySize() const {
+    return socket->priv->max_chunked_body_size;
+}
+
 int my_socket_priv::getSendHttpMessageHeaders(ExceptionSink* xsink, QoreString& hdr, QoreHashNode* info,
         const char* method, const char* path, const char* http_version, const QoreHashNode* headers,
         size_t size, int source) const {
