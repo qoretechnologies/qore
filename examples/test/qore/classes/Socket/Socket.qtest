@@ -468,6 +468,41 @@ class SocketTest inherits QUnit::Test {
         });
         cnt.waitForZero(5s);
         assertEq(expected, received);
+
+        Socket server3();
+        server3.bind("localhost:0");
+        server3.listen();
+        port = server3.getSocketInfo().port;
+
+        hash<auto> response_headers;
+        hash<auto> response_body;
+        cnt.inc();
+        background sub () {
+            Socket client();
+            client.connect("localhost:" + port);
+            response_headers = client.readHTTPHeader(5s);
+            response_body = client.readHTTPChunkedBody(5s);
+            cnt.dec();
+        }();
+
+        conn = server3.accept(5s);
+        int callback_pos = 0;
+        hash<auto> info;
+        conn.sendHTTPResponseWithCallback(auto sub () {
+            ++callback_pos;
+            if (callback_pos == 1) {
+                return "he";
+            }
+            if (callback_pos == 2) {
+                return "llo";
+            }
+            return {"X-Trailer": "done"};
+        }, 200, "OK", "1.1", http_headers, \info, 5s);
+        cnt.waitForZero(5s);
+        assertEq("HTTP/1.1 200 OK", info."response-uri");
+        assertEq("chunked", response_headers."transfer-encoding");
+        assertEq("hello", response_body.body);
+        assertEq("done", response_body."x-trailer");
     }
 
     sendBinaryTest() {

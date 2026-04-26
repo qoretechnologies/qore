@@ -442,6 +442,11 @@ public:
             const char* method, const char* path, const char* http_version, const QoreHashNode* headers,
             size_t size, int source) const;
 
+    //! Builds HTTP chunked request headers and emits the legacy HTTP send-message event
+    DLLLOCAL int getSendHttpMessageChunkedHeaders(ExceptionSink* xsink, QoreString& hdr, QoreHashNode* info,
+            const char* method, const char* path, const char* http_version, const QoreHashNode* headers,
+            int source) const;
+
     //! Returns the active HTTP/2 server stream ID for this thread, or <= 0 if no HTTP/2 response is active
     DLLLOCAL int32_t getH2ActiveServerStreamId() const;
 
@@ -452,6 +457,10 @@ public:
     //! Builds HTTP/1 response headers and emits the legacy HTTP send-message event
     DLLLOCAL int getSendHttpResponseHeaders(ExceptionSink* xsink, QoreString& hdr, QoreHashNode* info, int code,
             const char* desc, const char* http_version, const QoreHashNode* headers, size_t size, int source) const;
+
+    //! Builds HTTP/1 chunked response headers and emits the legacy HTTP send-message event
+    DLLLOCAL int getSendHttpResponseChunkedHeaders(ExceptionSink* xsink, QoreString& hdr, QoreHashNode* info, int code,
+            const char* desc, const char* http_version, const QoreHashNode* headers, int source) const;
 };
 
 #endif // _QORE_CLASS_QORESOCKET_H

@@ -4645,14 +4645,14 @@ struct qore_socket_private {
     }
 
     DLLLOCAL void getSendHttpMessageHeadersCommon(QoreString& hdr, QoreHashNode* info, const QoreHashNode* headers,
-            size_t size, int source, bool addsize = true) {
+            size_t size, int source, bool addsize = true, bool add_chunked = false) {
         // send event
         do_send_http_message_event(hdr, headers, source);
 
         // add headers
         hdr.concat("\r\n");
         // insert headers
-        do_headers(hdr, headers, size, addsize);
+        do_headers(hdr, headers, size, addsize, add_chunked);
     }
 
     DLLLOCAL int sendHttpMessage(ExceptionSink* xsink, QoreHashNode* info, const char* cname, const char* mname,

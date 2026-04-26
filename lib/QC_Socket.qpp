@@ -354,6 +354,106 @@ static int socket_exec_send_http_chunked_body_input_stream(QoreObject* self, Qor
     }
 }
 
+static int socket_exec_send_http_chunked_body_callback(QoreObject* self, QoreSocketObject* s,
+        const ResolvedCallReferenceNode* send_callback, int timeout_ms, ExceptionSink* xsink) {
+    while (true) {
+        ValueHolder res(send_callback->execValue(nullptr, xsink), xsink);
+        if (*xsink) {
+            return -1;
+        }
+
+        const void* data = nullptr;
+        size_t size = 0;
+        const QoreStringNode* body_event = nullptr;
+        bool done = false;
+
+        switch (res->getType()) {
+            case NT_STRING: {
+                const QoreStringNode* str = res->get<const QoreStringNode>();
+                if (str->empty()) {
+                    done = true;
+                    break;
+                }
+                data = str->c_str();
+                size = str->size();
+                body_event = str;
+                break;
+            }
+            case NT_BINARY: {
+                const BinaryNode* bin = res->get<const BinaryNode>();
+                if (bin->empty()) {
+                    done = true;
+                    break;
+                }
+                data = bin->getPtr();
+                size = bin->size();
+                break;
+            }
+            case NT_HASH:
+                return socket_exec_send_http_chunked_body_trailer(self, s, res->get<const QoreHashNode>(),
+                    timeout_ms, xsink);
+            case NT_NOTHING:
+            case NT_NULL:
+                done = true;
+                break;
+            default:
+                xsink->raiseException("SOCKET-CALLBACK-ERROR", "HTTP chunked data callback returned type '%s'; "
+                    "expecting one of: 'string', 'binary', 'hash', 'nothing' (or 'NULL')", res->getTypeName());
+                return -1;
+        }
+
+        if (done) {
+            return socket_exec_send_bytes(self, s, "0\r\n\r\n", 5, timeout_ms, xsink);
+        }
+
+        QoreString prefix;
+        prefix.sprintf("%x\r\n", (int)size);
+        if (socket_exec_send_bytes(self, s, prefix.c_str(), prefix.size(), timeout_ms, xsink)
+                || socket_exec_send_bytes(self, s, data, size, timeout_ms, xsink)
+                || socket_exec_send_bytes(self, s, "\r\n", 2, timeout_ms, xsink)) {
+            return -1;
+        }
+
+        if (body_event) {
+            my_socket_priv::getPriv(*s)->doDataEvent(QORE_EVENT_HTTP_CHUNKED_DATA_SENT, QORE_SOURCE_SOCKET,
+                *body_event);
+        } else {
+            my_socket_priv::getPriv(*s)->doDataEvent(QORE_EVENT_HTTP_CHUNKED_DATA_SENT, QORE_SOURCE_SOCKET,
+                data, size);
+        }
+    }
+}
+
+static int socket_exec_send_http_message_callback(QoreObject* self, QoreSocketObject* s, QoreHashNode* info,
+        const char* method, const char* path, const char* http_version, const QoreHashNode* headers,
+        const ResolvedCallReferenceNode* send_callback, int timeout_ms, ExceptionSink* xsink) {
+    QoreString hdr(s->getEncoding());
+    if (my_socket_priv::getPriv(*s)->getSendHttpMessageChunkedHeaders(xsink, hdr, info, method, path,
+            http_version, headers, QORE_SOURCE_SOCKET)) {
+        return -1;
+    }
+
+    if (socket_exec_send_bytes(self, s, hdr.c_str(), hdr.size(), timeout_ms, xsink)) {
+        return -1;
+    }
+    return socket_exec_send_http_chunked_body_callback(self, s, send_callback, timeout_ms, xsink);
+}
+
+static int socket_exec_send_http_response_callback(QoreObject* self, QoreSocketObject* s, QoreHashNode* info,
+        int code, const char* desc, const char* http_version, const QoreHashNode* headers,
+        const ResolvedCallReferenceNode* send_callback, int timeout_ms, ExceptionSink* xsink) {
+    QoreString hdr(s->getEncoding());
+    if (my_socket_priv::getPriv(*s)->getSendHttpResponseChunkedHeaders(xsink, hdr, info, code, desc, http_version,
+            headers, QORE_SOURCE_SOCKET)) {
+        return -1;
+    }
+
+    if (socket_exec_send_bytes(self, s, hdr.c_str(), hdr.size(), timeout_ms, xsink)) {
+        return -1;
+    }
+    return socket_exec_send_http_chunked_body_callback(self, s, send_callback, timeout_ms, xsink);
+}
+
 static int socket_exec_send_http_response_input_stream(QoreObject* self, QoreSocketObject* s, QoreHashNode* info,
         int code, const char* desc, const char* http_version, const QoreHashNode* headers, InputStream* input_stream,
         size_t max_chunk_size, const ResolvedCallReferenceNode* trailer_callback, int timeout_ms,
@@ -3893,8 +3993,8 @@ sock.sendHTTPMessageWithCallback(send_callback, "POST", "/RPC2", "1.1", ("Conten
 nothing Socket::sendHTTPMessageWithCallback(code scb, string method, string path, string http_version,
         hash<auto> headers, *reference<hash<auto>> info, timeout timeout_ms = -1) {
     OptHashRefHelper ohrh(info, xsink);
-    s->sendHTTPMessageWithCallback(xsink, *ohrh, method->c_str(), path->c_str(), http_version->c_str(), headers, *scb,
-        QORE_SOURCE_SOCKET, timeout_ms);
+    socket_exec_send_http_message_callback(self, s, *ohrh, method->c_str(), path->c_str(), http_version->c_str(),
+        headers, scb, timeout_ms, xsink);
 }
 
 //! Sends an HTTP response with user-defined headers given as a hash and an optional message body
@@ -4177,8 +4277,8 @@ nothing Socket::sendHTTPResponseWithCallback(code scb, softint status_code, stri
         return QoreValue();
     }
 
-    s->sendHTTPResponseWithCallback(xsink, nullptr, status_code, status_desc->c_str(), http_version->c_str(), headers,
-        *scb, QORE_SOURCE_SOCKET, timeout_ms);
+    socket_exec_send_http_response_callback(self, s, nullptr, status_code, status_desc->c_str(),
+        http_version->c_str(), headers, scb, timeout_ms, xsink);
 }
 
 //! Sends an HTTP response with user-defined headers given as a hash and a message body to send with chunked transfer encoding provided by a callback
@@ -4227,8 +4327,8 @@ nothing Socket::sendHTTPResponseWithCallback(code scb, softint status_code, stri
     }
 
     OptHashRefHelper ohrh(info, xsink);
-    s->sendHTTPResponseWithCallback(xsink, *ohrh, status_code, status_desc->c_str(), http_version->c_str(), headers,
-        *scb, QORE_SOURCE_SOCKET, timeout_ms);
+    socket_exec_send_http_response_callback(self, s, *ohrh, status_code, status_desc->c_str(),
+        http_version->c_str(), headers, scb, timeout_ms, xsink);
 }
 
 //! Sends an HTTP message body in chunked transfer encoding

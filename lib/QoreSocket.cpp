@@ -824,6 +824,23 @@ int my_socket_priv::getSendHttpMessageHeaders(ExceptionSink* xsink, QoreString& 
     return 0;
 }
 
+int my_socket_priv::getSendHttpMessageChunkedHeaders(ExceptionSink* xsink, QoreString& hdr, QoreHashNode* info,
+        const char* method, const char* path, const char* http_version, const QoreHashNode* headers,
+        int source) const {
+    if (socket->priv->h2_session) {
+        xsink->raiseException("HTTP2-ERROR",
+            "HTTP/1 message attempted on HTTP/2 connection (Socket::sendHTTPMessageWithCallback)");
+        return -1;
+    }
+
+    hdr.sprintf("%s %s HTTP/%s", method, path && path[0] ? path : "/", http_version);
+    if (info) {
+        info->setKeyValue("request-uri", new QoreStringNode(hdr), nullptr);
+    }
+    socket->priv->getSendHttpMessageHeadersCommon(hdr, info, headers, 0, source, false, true);
+    return 0;
+}
+
 int32_t my_socket_priv::getH2ActiveServerStreamId() const {
     int32_t stream_id = socket->priv->getH2ActiveStreamId();
     return socket->priv->h2_session && socket->priv->h2_session->isServer() && stream_id > 0 ? stream_id : -1;
@@ -847,6 +864,26 @@ int my_socket_priv::getSendHttpResponseHeaders(ExceptionSink* xsink, QoreString&
 
     getSendHttpResponseStatusLine(hdr, info, code, desc, http_version);
     socket->priv->getSendHttpMessageHeadersCommon(hdr, info, headers, size, source);
+    return 0;
+}
+
+int my_socket_priv::getSendHttpResponseChunkedHeaders(ExceptionSink* xsink, QoreString& hdr, QoreHashNode* info,
+        int code, const char* desc, const char* http_version, const QoreHashNode* headers, int source) const {
+    getSendHttpResponseStatusLine(hdr, info, code, desc, http_version);
+
+    int32_t stream_id = socket->priv->getH2ActiveStreamId();
+    if (socket->priv->h2_session && socket->priv->h2_session->isServer() && stream_id > 0) {
+        xsink->raiseException("HTTP2-ERROR",
+            "chunked/streaming responses are not supported via Socket::sendHTTPResponse() on HTTP/2");
+        return -1;
+    }
+    if (socket->priv->h2_session) {
+        xsink->raiseException("HTTP2-ERROR",
+            "HTTP/1 message attempted on HTTP/2 connection (Socket::sendHTTPResponseWithCallback)");
+        return -1;
+    }
+
+    socket->priv->getSendHttpMessageHeadersCommon(hdr, info, headers, 0, source, false, true);
     return 0;
 }
 
