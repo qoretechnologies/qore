@@ -201,29 +201,37 @@ int Http1ClientConnection::buildAndSubmit(ExceptionSink* xsink) {
         }
     }
 
-    // 2. Build the TCP connect target string "host:port".
-    //    When a proxy is configured, we connect to the proxy, not the target.
+    // 2. Build the connect operation. When a proxy is configured, we
+    //    connect to the proxy, not the target. For UNIX-domain HTTP
+    //    targets, target_host carries the socket path and target_port is 0.
     bool use_proxy = !proxy_host.empty();
     bool use_proxy_tunnel = use_proxy && ssl_required;
     bool use_proxy_plain = use_proxy && !ssl_required;
+    bool use_unix_target = !use_proxy && target_port == 0
+        && !target_host.empty() && target_host[0] == '/';
 
     const char* connect_host = use_proxy ? proxy_host.c_str() : target_host.c_str();
     int connect_port = use_proxy ? proxy_port : target_port;
 
-    char target_str[256];
-    int n = snprintf(target_str, sizeof(target_str), "%s:%d", connect_host, connect_port);
-    if (n <= 0 || (size_t)n >= sizeof(target_str)) {
-        xsink->raiseException("HTTPCLIENT-CONNECT-ERROR",
-            "connect target host:port string too long: host='%s' port=%d",
-            connect_host, connect_port);
-        return -1;
+    char target_str[256] = {};
+    if (!use_unix_target) {
+        int n = snprintf(target_str, sizeof(target_str), "%s:%d", connect_host, connect_port);
+        if (n <= 0 || (size_t)n >= sizeof(target_str)) {
+            xsink->raiseException("HTTPCLIENT-CONNECT-ERROR",
+                "connect target host:port string too long: host='%s' port=%d",
+                connect_host, connect_port);
+            return -1;
+        }
     }
 
     // 3. Create the SocketConnectPollOperation.  The ctor takes an already-ref'd
     //    QoreSocketObject pointer and adopts it.
     sock_priv_raw->ref();
     ReferenceHolder<SocketConnectPollOperation> connect_op(
-        new SocketConnectPollOperation(xsink, false, target_str, sock_priv_raw), xsink);
+        use_unix_target
+            ? new SocketConnectPollOperation(xsink, false, target_host.c_str(), SOCK_STREAM, 0, sock_priv_raw)
+            : new SocketConnectPollOperation(xsink, false, target_str, sock_priv_raw),
+        xsink);
     if (*xsink) {
         return -1;
     }

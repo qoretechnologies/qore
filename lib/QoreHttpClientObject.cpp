@@ -1374,7 +1374,9 @@ struct qore_httpclient_priv {
             bool h2_auto_ssl = http2_mode == HTTP2_MODE_AUTO && connection.ssl
                 && gm != HTTP2_MODE_DISABLED && !ld;
             HttpClientProtocol want_proto;
-            if (http3_mode.load(std::memory_order_relaxed)
+            if (connection.is_unix) {
+                want_proto = HttpClientProtocol::H1;
+            } else if (http3_mode.load(std::memory_order_relaxed)
                     == HTTP3_MODE_REQUIRED
                     || (http3_active && connection.ssl)) {
                 want_proto = HttpClientProtocol::H3;
@@ -1417,7 +1419,9 @@ struct qore_httpclient_priv {
                     && connection.ssl
                     && global_mode != HTTP2_MODE_DISABLED && !lib_disabled;
 
-                if (http3_mode.load(std::memory_order_relaxed)
+                if (connection.is_unix) {
+                    opts.protocol = HttpClientProtocol::H1;
+                } else if (http3_mode.load(std::memory_order_relaxed)
                         == HTTP3_MODE_REQUIRED
                         || (http3_active && connection.ssl)) {
                     opts.protocol = HttpClientProtocol::H3;
@@ -5130,13 +5134,10 @@ int QoreHttpClientObject::connect(ExceptionSink* xsink) {
     // connection" double-connect that hangs single-accept test servers
     // and wastes a socket slot on real peers.  WS upgrade and poll-API
     // paths still use msock, so they stay on the legacy connect_unlocked
-    // path below.  UNIX-domain socket URLs also stay on the legacy path:
-    // HttpClientConnectionManagerBase::acquireConnection only knows TCP
-    // (host:port), so its getaddrinfo on the bare socket path fails with
-    // QOREADDRINFO-GETINFO-ERROR before any UNIX-aware code runs.
+    // path below. UNIX targets through a proxy stay on the legacy path.
     if (http_priv->use_conn_mgr && !http_priv->poll_apis_used
             && http_priv->connection.has_url()
-            && !http_priv->connection.is_unix) {
+            && !(http_priv->connection.is_unix && http_priv->proxy_connection.has_url())) {
         // Drop any stale msock state (prior disconnect/reconnect cycle).
         http_priv->disconnect_unlocked();
         return http_priv->connectViaConnMgr(xsink);
@@ -5993,7 +5994,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
         // minute backoff in mgr.request's error handling so repeated
         // requests don't keep retrying H3.
         bool attempted_h3_upgrade = false;
-        if (!http3_active && http3_mode != HTTP3_MODE_DISABLED
+        if (!this_connection.is_unix && !http3_active && http3_mode != HTTP3_MODE_DISABLED
                 && this_connection.ssl) {
             auto alt = lookupAltSvc(this_connection.host.c_str(),
                 this_connection.port);
@@ -7328,11 +7329,7 @@ QoreHashNode* qore_httpclient_priv::send_internal(ExceptionSink* xsink, const ch
             }
             is_ws_upgrade = has_conn_upgrade && has_upgrade_ws;
         }
-        // UNIX-socket URLs cannot use the conn_mgr path: it is TCP-only
-        // and resolves the host via getaddrinfo, which fails for a bare
-        // socket path.  Fall through to the legacy msock path which
-        // honours connection.is_unix end-to-end.
-        if (use_conn_mgr && !is_ws_upgrade && !connection.is_unix) {
+        if (use_conn_mgr && !is_ws_upgrade && !(connection.is_unix && proxy_connection.has_url())) {
             return send_internal_conn_mgr(xsink, mname, meth, mpath, headers,
                 msg_body, data, size, send_callback, getbody, info, timeout_ms,
                 recv_callback, obj, os, is, max_chunk_size, trailer_callback, streaming);

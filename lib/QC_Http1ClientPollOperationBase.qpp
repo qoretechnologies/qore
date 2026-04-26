@@ -2028,7 +2028,16 @@ int64_t Http1ClientPollOperationPriv::submitRequest(const char* method, const ch
     // Compute host header value
     int default_port = ssl_required ? 443 : 80;
     std::string host_str;
-    if (target_port == default_port) {
+    if (target_port == 0 && !target_host.empty() && target_host[0] == '/') {
+        QoreString tmp_path(target_host.c_str());
+        QoreString encoded_path;
+        encoded_path.concatEncodeUrl(xsink, tmp_path, true);
+        if (*xsink) {
+            action->deref(xsink);
+            return -1;
+        }
+        host_str = encoded_path.c_str();
+    } else if (target_port == default_port) {
         host_str = target_host;
     } else {
         host_str = target_host + ":" + std::to_string(target_port);

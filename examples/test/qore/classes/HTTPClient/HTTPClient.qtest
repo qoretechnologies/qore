@@ -381,6 +381,7 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
         addTestCase("pre-encoded-urls", \preEncodedUrlsTest());
         addTestCase("poll proxy test", \pollProxyTest());
         addTestCase("poll test", \pollTest());
+        addTestCase("UNIX socket conn_mgr test", \unixSocketConnMgrTest());
         addTestCase("chunked HEAD test", \chunkedHeadTest());
         addTestCase("assume encoding", \assumedEncoding());
         addTestCase("chunked disconnect test", \chunkedDisconnectTest());
@@ -747,6 +748,54 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
                 testSkip("HTTP/3 not active (server did not advertise Alt-Svc)");
             }
         }
+    }
+
+    unixSocketConnMgrTest() {
+%ifdef Windows
+        testSkip("skipping because UNIX sockets are not available on Windows");
+%endif
+
+        string path = sprintf("%s%sqore-httpclient-%d-%s.sock", tmp_location(), DirSep, getpid(),
+            get_random_string(12));
+        on_exit unlink(path);
+
+        Queue q();
+        background sub () {
+            try {
+                Socket server();
+                server.bindUNIX(path);
+                server.listen();
+                q.push(True);
+
+                Socket peer = server.accept(15s);
+                hash<auto> hdr = peer.readHTTPHeader(15s);
+                q.push(hdr);
+                peer.send("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 2\r\n"
+                    "Connection: close\r\n\r\nok");
+                peer.close();
+                server.close();
+            } catch (hash<ExceptionInfo> ex) {
+                q.push(ex);
+            }
+        }();
+
+        auto ready = q.get();
+        if (ready.typeCode() == NT_HASH) {
+            fail(sprintf("%s: %s", ready.err, ready.desc));
+        }
+
+        HTTPClient hc({"url": "http://socket=" + encode_url(path, True), "timeout": 5s});
+        hash<auto> info;
+        *string body = hc.get("/unix-test?x=1", NOTHING, \info);
+        assertEq("ok", body);
+
+        auto hdr = q.get();
+        if (hdr.typeCode() == NT_HASH && hdr.hasKey("err")) {
+            fail(sprintf("%s: %s", hdr.err, hdr.desc));
+        }
+        assertEq("GET", hdr.method);
+        assertEq("/unix-test?x=1", hdr.path);
+        assertEq(encode_url(path, True), hdr.host);
     }
 
     assumedEncoding() {
