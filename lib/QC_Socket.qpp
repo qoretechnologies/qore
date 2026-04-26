@@ -942,6 +942,39 @@ static bool socket_exec_http_blank_line(const QoreStringNode& line) {
     return !socket_exec_http_line_payload_size(line);
 }
 
+static int socket_exec_run_http_recv_data_callback(const ResolvedCallReferenceNode* recv_callback,
+        const AbstractQoreNode& data, ExceptionSink* xsink) {
+    ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), xsink);
+    ReferenceHolder<QoreHashNode> arg(new QoreHashNode(autoTypeInfo), xsink);
+    arg->setKeyValue("data", data.realCopy(), xsink);
+    arg->setKeyValue("chunked", true, xsink);
+    args->push(arg.release(), nullptr);
+    if (*xsink) {
+        return -1;
+    }
+
+    ValueHolder rv(recv_callback->execValue(*args, xsink), xsink);
+    return *xsink ? -1 : 0;
+}
+
+static int socket_exec_run_http_recv_header_callback(QoreObject* self,
+        const ResolvedCallReferenceNode* recv_callback, const QoreHashNode* hdr, QoreHashNode* info,
+        ExceptionSink* xsink) {
+    ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), xsink);
+    ReferenceHolder<QoreHashNode> arg(new QoreHashNode(autoTypeInfo), xsink);
+    arg->setKeyValue("hdr", hdr ? hdr->refSelf() : nullptr, xsink);
+    arg->setKeyValue("info", info, xsink);
+    arg->setKeyValue("obj", self->objectRefSelf(), xsink);
+    arg->setKeyValue("send_aborted", false, xsink);
+    args->push(arg.release(), nullptr);
+    if (*xsink) {
+        return -1;
+    }
+
+    ValueHolder rv(recv_callback->execValue(*args, xsink), xsink);
+    return *xsink ? -1 : 0;
+}
+
 static QoreStringNode* socket_exec_recv_http_line(QoreObject* self, QoreSocketObject* s, int timeout_ms,
         const char* owner_name, ExceptionSink* xsink) {
     SimpleRefHolder<QoreStringNode> pattern(new QoreStringNode("\r\n"));
@@ -960,7 +993,8 @@ static QoreStringNode* socket_exec_recv_http_line(QoreObject* self, QoreSocketOb
 }
 
 static int socket_exec_read_http_chunked_trailers(QoreObject* self, QoreSocketObject* s, QoreHashNode& output,
-        int timeout_ms, const char* owner_name, ExceptionSink* xsink) {
+        int timeout_ms, const char* owner_name, ExceptionSink* xsink, QoreHashNode* info = nullptr,
+        bool* has_trailers = nullptr) {
     QoreString trailers(s->getEncoding());
     unsigned cancel_check = 0;
     while (true) {
@@ -978,17 +1012,22 @@ static int socket_exec_read_http_chunked_trailers(QoreObject* self, QoreSocketOb
         trailers.concat(line->c_str(), line->size());
     }
 
+    if (has_trailers) {
+        *has_trailers = !trailers.empty();
+    }
     if (!trailers.empty()) {
         my_socket_priv* priv = my_socket_priv::getPriv(*s);
-        priv->convertHeaderToHash(output, trailers);
+        priv->convertHeaderToHash(output, trailers, info);
         priv->doReadHttpHeaderEvent(QORE_EVENT_HTTP_FOOTERS_RECEIVED, output, QORE_SOURCE_SOCKET);
     }
     return 0;
 }
 
 static QoreHashNode* socket_exec_read_http_chunked_body(QoreObject* self, QoreSocketObject* s, int timeout_ms,
-        bool binary_body, bool read_once, const char* owner_name, ExceptionSink* xsink, OutputStream* os = nullptr) {
-    assert(!os || (binary_body && !read_once));
+        bool binary_body, bool read_once, const char* owner_name, ExceptionSink* xsink, OutputStream* os = nullptr,
+        const ResolvedCallReferenceNode* recv_callback = nullptr) {
+    assert(!os || (binary_body && !read_once && !recv_callback));
+    assert(!recv_callback || !read_once);
 
     my_socket_priv* priv = my_socket_priv::getPriv(*s);
     SocketExecAsyncIoGuard async_guard(*priv, xsink);
@@ -998,8 +1037,8 @@ static QoreHashNode* socket_exec_read_http_chunked_body(QoreObject* self, QoreSo
 
     priv->clearHttpExpectChunkedBody();
 
-    SimpleRefHolder<BinaryNode> body_bin(binary_body && !os ? new BinaryNode : nullptr);
-    SimpleRefHolder<QoreStringNode> body_str(binary_body ? nullptr : new QoreStringNode(s->getEncoding()));
+    SimpleRefHolder<BinaryNode> body_bin(binary_body && !os && !recv_callback ? new BinaryNode : nullptr);
+    SimpleRefHolder<QoreStringNode> body_str(binary_body || recv_callback ? nullptr : new QoreStringNode(s->getEncoding()));
 
     unsigned cancel_check = 0;
     while (true) {
@@ -1028,14 +1067,24 @@ static QoreHashNode* socket_exec_read_http_chunked_body(QoreObject* self, QoreSo
 
         if (!chunk_size) {
             ReferenceHolder<QoreHashNode> output(new QoreHashNode(autoTypeInfo), xsink);
-            if (!os) {
+            if (!os && !recv_callback) {
                 if (binary_body) {
                     output->setKeyValue("body", body_bin.release(), xsink);
                 } else {
                     output->setKeyValue("body", body_str.release(), xsink);
                 }
             }
-            if (*xsink || socket_exec_read_http_chunked_trailers(self, s, **output, timeout_ms, owner_name, xsink)) {
+            ReferenceHolder<QoreHashNode> info(recv_callback ? new QoreHashNode(autoTypeInfo) : nullptr, xsink);
+            bool has_trailers = false;
+            if (*xsink || socket_exec_read_http_chunked_trailers(self, s, **output, timeout_ms, owner_name, xsink,
+                    *info, &has_trailers)) {
+                return nullptr;
+            }
+            if (recv_callback) {
+                if (socket_exec_run_http_recv_header_callback(self, recv_callback,
+                        has_trailers ? *output : nullptr, info.release(), xsink)) {
+                    return nullptr;
+                }
                 return nullptr;
             }
             return output.release();
@@ -1059,14 +1108,16 @@ static QoreHashNode* socket_exec_read_http_chunked_body(QoreObject* self, QoreSo
             if (*xsink) {
                 return nullptr;
             }
-        } else if (binary_body) {
+        } else if (!recv_callback && binary_body) {
             body_bin->append(chunk->getPtr(), chunk->size());
-        } else {
+        } else if (!recv_callback) {
             body_str->concat(static_cast<const char*>(chunk->getPtr()), chunk->size());
         }
 
         if (!os) {
-            int64 body_size = binary_body ? static_cast<int64>(body_bin->size()) : static_cast<int64>(body_str->size());
+            int64 body_size = recv_callback
+                ? static_cast<int64>(chunk->size())
+                : binary_body ? static_cast<int64>(body_bin->size()) : static_cast<int64>(body_str->size());
             int64 max_chunked_body_size = priv->getMaxChunkedBodySize();
             if (max_chunked_body_size > 0 && body_size > max_chunked_body_size) {
                 xsink->raiseException("HTTP-BODY-TOO-LARGE", "chunked body size " QLLD " exceeds maximum " QLLD,
@@ -1081,6 +1132,20 @@ static QoreHashNode* socket_exec_read_http_chunked_body(QoreObject* self, QoreSo
         }
         priv->doChunkedReadEvent(QORE_EVENT_HTTP_CHUNKED_DATA_RECEIVED, static_cast<size_t>(chunk_size),
             static_cast<size_t>(chunk_size) + 2, QORE_SOURCE_SOCKET);
+
+        if (recv_callback) {
+            if (binary_body) {
+                if (socket_exec_run_http_recv_data_callback(recv_callback, **chunk, xsink)) {
+                    return nullptr;
+                }
+            } else {
+                SimpleRefHolder<QoreStringNode> chunk_str(new QoreStringNode(
+                    static_cast<const char*>(chunk->getPtr()), chunk->size(), s->getEncoding()));
+                if (socket_exec_run_http_recv_data_callback(recv_callback, **chunk_str, xsink)) {
+                    return nullptr;
+                }
+            }
+        }
 
         if (read_once) {
             ReferenceHolder<QoreHashNode> output(new QoreHashNode(autoTypeInfo), xsink);
@@ -4826,7 +4891,8 @@ sock.readHTTPChunkedBodyWithCallback(recv_callback, 20s);
     @since %Qore 0.8.10
 */
 Socket::readHTTPChunkedBodyWithCallback(code rcb, timeout timeout_ms = -1) {
-    s->readHTTPChunkedBodyWithCallback(*rcb, self, timeout_ms, xsink);
+    ReferenceHolder<QoreHashNode> ignored(socket_exec_read_http_chunked_body(self, s, timeout_ms, false, false,
+        "readHTTPChunkedBodyWithCallback", xsink, nullptr, rcb), xsink);
 }
 
 //! Reads in an HTTP message body sent in chunked transfer encoding and returns it with any footers received as a string in the \c "body" key of a hash (including footers received)
@@ -4863,7 +4929,8 @@ sock.readHTTPChunkedBodyBinaryWithCallback(recv_callback, 20s);
     @since %Qore 0.8.10
 */
 Socket::readHTTPChunkedBodyBinaryWithCallback(code rcb, timeout timeout_ms = -1) {
-    s->readHTTPChunkedBodyBinaryWithCallback(*rcb, self, timeout_ms, xsink);
+    ReferenceHolder<QoreHashNode> ignored(socket_exec_read_http_chunked_body(self, s, timeout_ms, true, false,
+        "readHTTPChunkedBodyBinaryWithCallback", xsink, nullptr, rcb), xsink);
 }
 
 //! Read a server sent event message

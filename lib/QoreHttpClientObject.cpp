@@ -7856,6 +7856,7 @@ http2_body_done:
         }
     }
 
+    sg.clear();
     sl.unlock();
 
     // for content-encoding processing we can run unlocked

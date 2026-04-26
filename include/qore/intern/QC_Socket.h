@@ -278,8 +278,13 @@ public:
         }
 
         DLLLOCAL ~SyncIoGuard() {
+            clear();
+        }
+
+        DLLLOCAL void clear() {
             if (active) {
                 p.clearSyncIo();
+                active = false;
             }
         }
 
@@ -444,7 +449,7 @@ public:
     DLLLOCAL void doReadHttpHeaderEvent(int event, const QoreHashNode& hdr, int source) const;
 
     //! Parses HTTP header lines into a hash using the underlying socket private implementation
-    DLLLOCAL void convertHeaderToHash(QoreHashNode& h, QoreString& hdr) const;
+    DLLLOCAL void convertHeaderToHash(QoreHashNode& h, QoreString& hdr, QoreHashNode* info = nullptr) const;
 
     //! Clears the pending chunked body expectation flag on the underlying socket private implementation
     DLLLOCAL void clearHttpExpectChunkedBody() const;

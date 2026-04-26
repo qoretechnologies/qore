@@ -819,8 +819,8 @@ void my_socket_priv::doReadHttpHeaderEvent(int event, const QoreHashNode& hdr, i
     socket->priv->do_read_http_header(event, &hdr, source);
 }
 
-void my_socket_priv::convertHeaderToHash(QoreHashNode& h, QoreString& hdr) const {
-    socket->priv->convertHeaderToHash(&h, const_cast<char*>(hdr.c_str()), 0, nullptr, nullptr,
+void my_socket_priv::convertHeaderToHash(QoreHashNode& h, QoreString& hdr, QoreHashNode* info) const {
+    socket->priv->convertHeaderToHash(&h, const_cast<char*>(hdr.c_str()), 0, info, nullptr,
         "response-headers-raw");
 }
 

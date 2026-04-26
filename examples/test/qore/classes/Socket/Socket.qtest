@@ -588,6 +588,68 @@ class SocketTest inherits QUnit::Test {
             fail(sprintf("Server exception: %s: %s", server_result.err, server_result.desc));
         }
         assertTrue(server_result);
+
+        background sub () {
+            try {
+                Socket server7();
+                server7.bind("localhost:0");
+                server7.listen();
+                q.push(server7.getSocketInfo().port);
+
+                Socket peer = server7.accept(5s);
+                peer.send("2\r\nhe\r\n3\r\nllo\r\n0\r\nX-Trailer: done\r\n\r\n", 5s);
+                q.push(True);
+            } catch (hash<ExceptionInfo> ex) {
+                q.push(ex);
+            }
+        }();
+
+        Socket client7();
+        client7.connect("localhost:" + q.get(5s));
+        list<hash<auto>> callback_events = ();
+        client7.readHTTPChunkedBodyWithCallback(sub (hash<auto> h) {
+            callback_events += h;
+        }, 5s);
+        assertEq(3, callback_events.size());
+        assertEq("he", callback_events[0].data);
+        assertEq("llo", callback_events[1].data);
+        assertEq("done", callback_events[2].hdr."x-trailer");
+        server_result = q.get(5s);
+        if (server_result.typeCode() == NT_HASH) {
+            fail(sprintf("Server exception: %s: %s", server_result.err, server_result.desc));
+        }
+        assertTrue(server_result);
+
+        background sub () {
+            try {
+                Socket server8();
+                server8.bind("localhost:0");
+                server8.listen();
+                q.push(server8.getSocketInfo().port);
+
+                Socket peer = server8.accept(5s);
+                peer.send("2\r\nhe\r\n3\r\nllo\r\n0\r\nX-Trailer: done\r\n\r\n", 5s);
+                q.push(True);
+            } catch (hash<ExceptionInfo> ex) {
+                q.push(ex);
+            }
+        }();
+
+        Socket client8();
+        client8.connect("localhost:" + q.get(5s));
+        callback_events = ();
+        client8.readHTTPChunkedBodyBinaryWithCallback(sub (hash<auto> h) {
+            callback_events += h;
+        }, 5s);
+        assertEq(3, callback_events.size());
+        assertEq(<6865>, callback_events[0].data);
+        assertEq(<6c6c6f>, callback_events[1].data);
+        assertEq("done", callback_events[2].hdr."x-trailer");
+        server_result = q.get(5s);
+        if (server_result.typeCode() == NT_HASH) {
+            fail(sprintf("Server exception: %s: %s", server_result.err, server_result.desc));
+        }
+        assertTrue(server_result);
     }
 
     sendBinaryTest() {
