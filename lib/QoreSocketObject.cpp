@@ -259,6 +259,26 @@ static BinaryNode* qore_socket_object_exec_recv_bytes(QoreSocketObject* s, size_
     return bin.release();
 }
 
+static BinaryNode* qore_socket_object_exec_recv_some_binary(QoreSocketObject* s, size_t size,
+        int timeout_ms, ExceptionSink* xsink, const char* owner_name = "recvToOutputStream") {
+    s->ref();
+    ValueHolder result(qore_socket_object_exec_recv_poll(s,
+        new SocketRecvSomePollOperation(xsink, static_cast<ssize_t>(size), s, false),
+        timeout_ms, owner_name, xsink), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    if (result->isNothing()) {
+        return new BinaryNode;
+    }
+    if (result->getType() != NT_BINARY) {
+        xsink->raiseException("SOCKET-RECV-ERROR", "expected binary data from async receive operation, got '%s'",
+            result->getFullTypeName());
+        return nullptr;
+    }
+    return result.release().get<BinaryNode>();
+}
+
 QoreSocketObject::QoreSocketObject(QoreSocket* s, QoreSSLCertificate* cert, QoreSSLPrivateKey* pk)
         : priv(new my_socket_priv(s, cert, pk)) {
 }
@@ -580,12 +600,29 @@ int QoreSocketObject::send(const BinaryNode* b) {
 }
 
 void QoreSocketObject::sendFromInputStream(InputStream *is, int64 size, int64 timeout_ms, ExceptionSink *xsink) {
-    AutoLocker al(priv->m);
-    my_socket_priv::SyncIoGuard sg(*priv, xsink, NB_SEND);
-    if (!sg) {
-        return;
+    char buf[DEFAULT_SOCKET_BUFSIZE];
+    int64 sent = 0;
+    int timeout = static_cast<int>(timeout_ms);
+    while (size < 0 || sent < size) {
+        int64 to_read = size < 0 ? DEFAULT_SOCKET_BUFSIZE : QORE_MIN(size - sent, (int64)DEFAULT_SOCKET_BUFSIZE);
+        int64 read = is->read(buf, to_read, xsink);
+        if (*xsink) {
+            return;
+        }
+        if (read <= 0) {
+            if (size >= 0) {
+                xsink->raiseException("SOCKET-SEND-ERROR", "Unexpected end of stream");
+            }
+            return;
+        }
+
+        qore_socket_object_exec_send_bytes(this, buf, read, timeout, xsink);
+        if (*xsink) {
+            return;
+        }
+        priv->socket->priv->do_data_event(QORE_EVENT_SOCKET_DATA_SENT, QORE_SOURCE_SOCKET, buf, read);
+        sent += read;
     }
-    priv->socket->priv->sendFromInputStream(is, size, timeout_ms, xsink, &priv->m);
 }
 
 // send from a file descriptor
@@ -676,12 +713,34 @@ BinaryNode* QoreSocketObject::recvBinary(int bufsize, int timeout_ms, ExceptionS
 }
 
 void QoreSocketObject::recvToOutputStream(OutputStream *os, int64 size, int64 timeout_ms, ExceptionSink *xsink) {
-    AutoLocker al(priv->m);
-    my_socket_priv::SyncIoGuard sg(*priv, xsink, NB_RECV);
-    if (!sg) {
-        return;
+    int64 received = 0;
+    int timeout = static_cast<int>(timeout_ms);
+    while (size < 0 || received < size) {
+        if (size < 0 && received > 0 && !isOpen()) {
+            return;
+        }
+        size_t to_read = size < 0
+            ? DEFAULT_SOCKET_BUFSIZE
+            : static_cast<size_t>(QORE_MIN(size - received, (int64)DEFAULT_SOCKET_BUFSIZE));
+        SimpleRefHolder<BinaryNode> bin(qore_socket_object_exec_recv_some_binary(this, to_read, timeout, xsink));
+        if (*xsink) {
+            return;
+        }
+        if (!bin->size()) {
+            if (size >= 0) {
+                xsink->raiseException("SOCKET-RECV-ERROR", "Unexpected end of stream");
+            }
+            return;
+        }
+
+        priv->socket->priv->do_data_event(QORE_EVENT_SOCKET_DATA_READ, QORE_SOURCE_SOCKET,
+            bin->getPtr(), bin->size());
+        os->write(bin->getPtr(), bin->size(), xsink);
+        if (*xsink) {
+            return;
+        }
+        received += bin->size();
     }
-    priv->socket->priv->recvToOutputStream(os, size, timeout_ms, xsink, &priv->m);
 }
 
 // receive and write data to a file descriptor
