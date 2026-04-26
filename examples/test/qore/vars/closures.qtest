@@ -33,11 +33,22 @@ code<string()> sub nestedClosureFactory() {
     };
 }
 
+code<int()> sub closureValueCaptureFactory() {
+    code<int()> inner = int sub () {
+        return 1;
+    };
+
+    return int sub () {
+        return inner();
+    };
+}
+
 public class ClosuresTest inherits QUnit::Test {
     constructor() : Test("Closures test", "1.0") {
         addTestCase("First test", \testPart1(), NOTHING);
         addTestCase("Second test", \testPart2(), NOTHING);
         addTestCase("Nested transitive capture", \testNestedTransitiveCapture(), NOTHING);
+        addTestCase("Captured closure value", \testCapturedClosureValue(), NOTHING);
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
@@ -72,5 +83,11 @@ public class ClosuresTest inherits QUnit::Test {
 
         assertEq("nested-3", c(), "first nested closure call");
         assertEq("nested-4", c(), "second nested closure call");
+    }
+
+    testCapturedClosureValue() {
+        code<int()> c = closureValueCaptureFactory();
+
+        assertEq(1, c(), "returned closure can call captured closure value");
     }
 }

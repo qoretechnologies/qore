@@ -1389,10 +1389,8 @@ void QoreIRFunction::computeSlotIdsAndEmbed() {
                     assign_slot(lv);
                 }
             };
-            if (inst->opcode == QoreIROpcode::LoadLocal ||
-                inst->opcode == QoreIROpcode::StoreLocal ||
-                inst->opcode == QoreIROpcode::UninstantiateLocal) {
-                assign_slot(static_cast<QoreIRLocalInstruction*>(inst.get())->local);
+            if (auto* local_inst = dynamic_cast<QoreIRLocalInstruction*>(inst.get())) {
+                assign_slot(local_inst->local);
             } else if (inst->opcode == QoreIROpcode::AddAssignLocalInt) {
                 auto* f = static_cast<QoreIRAddAssignLocalIntInstruction*>(inst.get());
                 assign_slot(f->target);
@@ -1501,11 +1499,7 @@ void QoreIRFunction::computeSlotIdsAndEmbed() {
     // to eliminate hash map lookups on the hot path in the interpreter
     for (const auto& block : blocks) {
         for (const auto& inst : block->instructions) {
-            if (inst->opcode == QoreIROpcode::LoadLocal
-                    || inst->opcode == QoreIROpcode::StoreLocal
-                    || inst->opcode == QoreIROpcode::UninstantiateLocal
-                    || inst->opcode == QoreIROpcode::InstantiateLocal) {
-                auto* local_inst = static_cast<QoreIRLocalInstruction*>(inst.get());
+            if (auto* local_inst = dynamic_cast<QoreIRLocalInstruction*>(inst.get())) {
                 if (local_inst->local) {
                     auto it = slot_map.find(local_inst->local);
                     if (it != slot_map.end()) {

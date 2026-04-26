@@ -3967,8 +3967,10 @@ load_local_done:
                         // When a function with closureUse() vars executes in its own
                         // body (not as a closure), evalTiered skips instantiating these
                         // vars. ensureLocalInstantiated puts them on the cvstack.
-                        if (local_inst->slot_id >= locals_instantiated.size()
-                                || !locals_instantiated[local_inst->slot_id]) {
+                        bool has_env_cvv = thread_has_runtime_closure_env()
+                            && thread_try_get_runtime_closure_var(local_inst->local);
+                        if (!has_env_cvv && (local_inst->slot_id >= locals_instantiated.size()
+                                || !locals_instantiated[local_inst->slot_id])) {
                             ensureLocalInstantiated(local_inst->local, instantiated_locals,
                                 instantiated_locals_ordered, pre_instantiated,
                                 function_own_locals, &locally_uninstantiated);
@@ -5758,8 +5760,10 @@ load_local_done:
                 }
 
                 // Ensure variable is instantiated before store (same as LoadClosure)
-                if (local_inst->slot_id >= locals_instantiated.size()
-                        || !locals_instantiated[local_inst->slot_id]) {
+                bool has_env_cvv = thread_has_runtime_closure_env()
+                    && thread_try_get_runtime_closure_var(local_inst->local);
+                if (!has_env_cvv && (local_inst->slot_id >= locals_instantiated.size()
+                        || !locals_instantiated[local_inst->slot_id])) {
                     ensureLocalInstantiated(local_inst->local, instantiated_locals,
                         instantiated_locals_ordered, pre_instantiated,
                         function_own_locals, &locally_uninstantiated);
