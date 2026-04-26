@@ -37,6 +37,7 @@
 #include "qore/intern/AsyncIoControllerPriv.h"
 #include "qore/intern/qore_socket_private.h"
 #include "qore/intern/QC_Socket.h"
+#include "qore/intern/QC_SocketPollOperation.h"
 #include "qore/intern/QC_SSLCertificate.h"
 #include "qore/intern/QC_SSLPrivateKey.h"
 #include "qore/intern/Http2Session.h"
@@ -57,8 +58,14 @@ static void qore_socket_object_raise_poll_result_exception(const QoreHashNode* e
         arg.refSelf());
 }
 
+static bool qore_socket_object_exec_exception_is(const QoreHashNode& ex, const char* err) {
+    QoreValue ex_err = ex.getKeyValue("err");
+    return ex_err.getType() == NT_STRING && !strcmp(ex_err.get<const QoreStringNode>()->c_str(), err);
+}
+
 static QoreHashNode* qore_socket_object_exec_poll_operation(QoreSocketObject* s, QoreObject* sock_obj,
-        QoreObject* op_obj, int timeout_ms, const char* owner_name, ExceptionSink* xsink) {
+        QoreObject* op_obj, int timeout_ms, const char* owner_name, ExceptionSink* xsink,
+        QoreHashNode** ex_out = nullptr) {
     ReferenceHolder<QoreObject> ctl_obj(qore_get_async_io_controller_obj(xsink), xsink);
     if (!ctl_obj) {
         return nullptr;
@@ -97,11 +104,91 @@ static QoreHashNode* qore_socket_object_exec_poll_operation(QoreSocketObject* s,
 
     QoreValue ex = result->getKeyValue("ex");
     if (ex.getType() == NT_HASH) {
+        if (ex_out) {
+            *ex_out = ex.get<const QoreHashNode>()->hashRefSelf();
+            return nullptr;
+        }
         qore_socket_object_raise_poll_result_exception(ex.get<const QoreHashNode>(), xsink);
         return nullptr;
     }
     return result.release();
 }
+
+class QoreSocketObjectReadinessPollOperation : public SocketPollOperationBase {
+public:
+    QoreSocketObjectReadinessPollOperation(ExceptionSink* xsink, QoreSocketObject* sock, unsigned direction,
+            int events, const char* waiting_state, const char* ready_state)
+            : sock(sock), direction(direction), events(events), waiting_state(waiting_state), ready_state(ready_state) {
+        my_socket_priv* priv = my_socket_priv::getPriv(*sock);
+        AutoLocker al(priv->m);
+        if (priv->checkOpen(xsink) || priv->setNonBlock(xsink, direction)) {
+            return;
+        }
+        set_non_block = true;
+    }
+
+    DLLLOCAL virtual void deref(ExceptionSink* xsink) {
+        if (ROdereference()) {
+            clearNonBlock();
+            sock->deref(xsink);
+            delete this;
+        }
+    }
+
+    DLLLOCAL virtual bool goalReached() const override {
+        return ready;
+    }
+
+    DLLLOCAL virtual void abort(ExceptionSink* xsink) override {
+        clearNonBlock();
+    }
+
+    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override {
+        if (!waiting) {
+            waiting = true;
+            return getSocketPollInfoHash(xsink, events);
+        }
+
+        my_socket_priv* priv = my_socket_priv::getPriv(*sock);
+        AutoLocker al(priv->m);
+        if (set_non_block) {
+            priv->clearNonBlock(direction);
+            set_non_block = false;
+        }
+        if (priv->checkOpen(xsink)) {
+            return nullptr;
+        }
+        ready = true;
+        return nullptr;
+    }
+
+    DLLLOCAL virtual QoreValue getOutput() const override {
+        return ready;
+    }
+
+    DLLLOCAL virtual const char* getStateImpl() const override {
+        return ready ? ready_state : waiting_state;
+    }
+
+private:
+    DLLLOCAL void clearNonBlock() {
+        if (set_non_block) {
+            my_socket_priv* priv = my_socket_priv::getPriv(*sock);
+            AutoLocker al(priv->m);
+            priv->clearNonBlock(direction);
+            set_non_block = false;
+        }
+    }
+
+    QoreSocketObject* sock;
+    unsigned direction;
+    int events;
+    const char* waiting_state;
+    const char* ready_state;
+    bool waiting = false;
+    bool ready = false;
+    bool set_non_block = false;
+};
 
 static QoreObject* qore_socket_object_make_pollable_wrapper(QoreSocketObject* s) {
     s->ref();
@@ -277,6 +364,68 @@ static BinaryNode* qore_socket_object_exec_recv_some_binary(QoreSocketObject* s,
         return nullptr;
     }
     return result.release().get<BinaryNode>();
+}
+
+static bool qore_socket_object_exec_wait_readiness(QoreSocketObject* s, int timeout_ms, unsigned direction,
+        int events, const char* owner_name, const char* waiting_state, const char* ready_state,
+        ExceptionSink* xsink) {
+    s->ref();
+    QoreSocketObjectReadinessPollOperation* readiness_poller = new QoreSocketObjectReadinessPollOperation(xsink, s,
+        direction, events, waiting_state, ready_state);
+
+    ReferenceHolder<QoreObject> sock_obj(qore_socket_object_make_pollable_wrapper(s), xsink);
+    ReferenceHolder<QoreObject> op_obj(
+        qore_socket_object_make_poll_op(*sock_obj, readiness_poller, owner_name, xsink), xsink);
+    if (*xsink) {
+        return false;
+    }
+
+    QoreHashNode* ex = nullptr;
+    ReferenceHolder<QoreHashNode> result(qore_socket_object_exec_poll_operation(s, *sock_obj, *op_obj, timeout_ms,
+        owner_name, xsink, &ex), xsink);
+    ReferenceHolder<QoreHashNode> ex_holder(ex, xsink);
+    if (*xsink) {
+        return false;
+    }
+    if (ex_holder) {
+        if (qore_socket_object_exec_exception_is(**ex_holder, "SOCKET-TIMEOUT")) {
+            return false;
+        }
+        qore_socket_object_raise_poll_result_exception(*ex_holder, xsink);
+        return false;
+    }
+
+    return readiness_poller->goalReached();
+}
+
+static bool qore_socket_object_exec_is_data_available(QoreSocketObject* s, int timeout_ms,
+        ExceptionSink* xsink) {
+    s->ref();
+    SocketDataAvailablePollOperation* data_available_poller = new SocketDataAvailablePollOperation(xsink, s);
+
+    ReferenceHolder<QoreObject> sock_obj(qore_socket_object_make_pollable_wrapper(s), xsink);
+    ReferenceHolder<QoreObject> op_obj(
+        qore_socket_object_make_poll_op(*sock_obj, data_available_poller, "isDataAvailable", xsink), xsink);
+    if (*xsink) {
+        return false;
+    }
+
+    QoreHashNode* ex = nullptr;
+    ReferenceHolder<QoreHashNode> result(qore_socket_object_exec_poll_operation(s, *sock_obj, *op_obj, timeout_ms,
+        "isDataAvailable", xsink, &ex), xsink);
+    ReferenceHolder<QoreHashNode> ex_holder(ex, xsink);
+    if (*xsink) {
+        return false;
+    }
+    if (ex_holder) {
+        if (qore_socket_object_exec_exception_is(**ex_holder, "SOCKET-TIMEOUT")) {
+            return false;
+        }
+        qore_socket_object_raise_poll_result_exception(*ex_holder, xsink);
+        return false;
+    }
+
+    return data_available_poller->goalReached();
 }
 
 QoreSocketObject::QoreSocketObject(QoreSocket* s, QoreSSLCertificate* cert, QoreSSLPrivateKey* pk)
@@ -1548,21 +1697,12 @@ const QoreEncoding* QoreSocketObject::getEncoding() const {
 }
 
 bool QoreSocketObject::isDataAvailable(ExceptionSink* xsink, int timeout_ms) {
-    AutoLocker al(priv->m);
-    my_socket_priv::SyncIoGuard sg(*priv, xsink, NB_RECV);
-    if (!sg) {
-        return false;
-    }
-    return priv->socket->isDataAvailable(xsink, timeout_ms);
+    return qore_socket_object_exec_is_data_available(this, timeout_ms, xsink);
 }
 
 bool QoreSocketObject::isWriteFinished(ExceptionSink* xsink, int timeout_ms) {
-    AutoLocker al(priv->m);
-    my_socket_priv::SyncIoGuard sg(*priv, xsink, NB_SEND);
-    if (!sg) {
-        return false;
-    }
-    return priv->socket->isWriteFinished(xsink, timeout_ms);
+    return qore_socket_object_exec_wait_readiness(this, timeout_ms, NB_SEND, SOCK_POLLOUT, "isWriteFinished",
+        "waiting-write", "write-ready", xsink);
 }
 
 bool QoreSocketObject::isOpen() const {
