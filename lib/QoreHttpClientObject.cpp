@@ -1338,6 +1338,12 @@ struct qore_httpclient_priv {
     */
     QoreChannel* streaming_recv_channel = nullptr;
 
+    //! Active conn_mgr-backed HTTP/2 extended CONNECT stream state.
+    HttpClientConnectionBase* h2_connect_conn = nullptr;
+    QoreChannel* h2_connect_channel = nullptr;
+    int32_t h2_connect_stream_id = 0;
+    bool h2_connect_stream_closed = false;
+
     //! Buffer for accumulating partial SSE event text across channel messages
     std::string sse_recv_buffer;
 
@@ -1867,6 +1873,7 @@ struct qore_httpclient_priv {
         persistent = false;
         persistent_count = 0;
         clearH2Session();
+        clearH2ConnectStream();
         disconnectQuic();
         clearStreamingChannel();
     }
@@ -1941,6 +1948,25 @@ struct qore_httpclient_priv {
             streaming_recv_channel = nullptr;
         }
         sse_recv_buffer.clear();
+    }
+
+    //! Clears the conn_mgr-backed HTTP/2 extended CONNECT stream state.
+    DLLLOCAL void clearH2ConnectStream(bool close_channel = true) {
+        ExceptionSink xsink;
+        if (h2_connect_channel) {
+            if (close_channel) {
+                h2_connect_channel->close();
+            }
+            h2_connect_channel->deref(&xsink);
+            h2_connect_channel = nullptr;
+        }
+        if (h2_connect_conn) {
+            h2_connect_conn->deref(&xsink);
+            h2_connect_conn = nullptr;
+        }
+        xsink.clear();
+        h2_connect_stream_id = 0;
+        h2_connect_stream_closed = false;
     }
 
     // Disconnect QUIC session and clean up state
@@ -4301,174 +4327,186 @@ QoreStringNode* QoreHttpClientObject::getHttpVersion() const {
 
 QoreHashNode* QoreHttpClientObject::sendHttp2Connect(const char* path, const QoreHashNode* headers,
         const char* protocol, QoreHashNode* info, ExceptionSink* xsink) {
-    SafeLocker sl(priv->m);
-
-    // Ensure we're connected with HTTP/2
-    if (!http_priv->http2_active || !http_priv->getH2Session()) {
-        // Try to connect first
-        if (http_priv->connect_unlocked(xsink, http_priv->connection)) {
-            return nullptr;
-        }
-        if (!http_priv->http2_active || !http_priv->getH2Session()) {
-            xsink->raiseException("HTTP2-ERROR", "HTTP/2 connection required for extended CONNECT");
-            return nullptr;
-        }
-    }
-
-    // RFC 8441: Check if server supports extended CONNECT before sending.
-    // Some nghttp2 versions silently drop :protocol when ENABLE_CONNECT_PROTOCOL
-    // is not advertised, causing the CONNECT to be processed as a bare tunnel
-    // request with no response sent to the client.
-    if (http_priv->getH2Session()->isExtendedConnectRejected()) {
-        xsink->raiseException("HTTP2-CONNECT-ERROR",
-            "server does not support extended CONNECT "
-            "(ENABLE_CONNECT_PROTOCOL not advertised in SETTINGS)");
+    SocketSyncPoll::assertNotOnIoThread("HTTPClient", "sendHttp2Connect", xsink);
+    if (*xsink) {
         return nullptr;
     }
 
-    // Build headers map with :protocol for extended CONNECT (RFC 8441)
-    strcase_str_map_t h2_headers;
-    h2_headers[":protocol"] = protocol;
+    con_info this_connection = http_priv->connection;
+    const char* scheme = this_connection.ssl ? "https" : "http";
+    int timeout_ms = http_priv->timeout;
 
-    // Add Host header with port when needed (used to derive :authority)
-    SimpleRefHolder<QoreStringNode> host_header(http_priv->getHostHeaderValueUnlocked(http_priv->connection));
-    if (host_header) {
-        h2_headers["host"] = host_header->c_str();
+    if (this_connection.is_unix) {
+        xsink->raiseException("HTTP2-ERROR", "HTTP/2 extended CONNECT is not supported over UNIX sockets");
+        return nullptr;
     }
 
-    // Copy custom headers
+    QoreString pathstr(http_priv->enc ? http_priv->enc : QCS_UTF8);
+    bool path_already_encoded = false;
+    const char* msgpath = http_priv->getMsgPath(xsink, this_connection, path, pathstr, path_already_encoded, false);
+    if (*xsink) {
+        return nullptr;
+    }
+
+    ReferenceHolder<QoreHashNode> h2_headers(new QoreHashNode(autoTypeInfo), xsink);
+    h2_headers->setKeyValue(":protocol", new QoreStringNode(protocol), xsink);
+    h2_headers->setKeyValue("host", http_priv->getHostHeaderValueUnlocked(this_connection), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
     if (headers) {
         ConstHashIterator hi(headers);
         while (hi.next()) {
-            const char* key = hi.getKey();
             QoreValue val = hi.get();
-            if (val.getType() == NT_STRING) {
-                h2_headers[key] = val.get<const QoreStringNode>()->c_str();
+            if (val.getType() == NT_STRING || val.getType() == NT_LIST) {
+                h2_headers->setKeyValue(hi.getKey(), val.refSelf(), xsink);
+                if (*xsink) {
+                    return nullptr;
+                }
             }
         }
     }
 
-    // Submit CONNECT request
-    int32_t stream_id = http_priv->getH2Session()->submitRequest("CONNECT", path, h2_headers,
-        nullptr, 0, xsink);
-    if (stream_id < 0) {
+    HttpClientConnectionManagerBase& mgr = http_priv->getConnMgr(xsink);
+    if (*xsink) {
         return nullptr;
     }
 
-    // Send the request (use blocking version for client-side operations)
-    if (http_priv->getH2Session()->sendPendingDataBlocking(http_priv->timeout, xsink) < 0) {
+    HttpClientConnectionBase* conn = mgr.acquireConnection(scheme, this_connection.host.c_str(),
+        this_connection.port, xsink);
+    if (!conn || *xsink) {
         return nullptr;
     }
 
-    // Read the response with overall timeout
-    int64 deadline_ms = http_priv->timeout < 0 ? -1 : q_clock_getmillis() + http_priv->timeout;
+    conn->ref();
+    ReferenceHolder<HttpClientConnectionBase> conn_holder(conn, xsink);
+    conn->waitForReadyOrError(timeout_ms, xsink);
+    if (*xsink || conn->isClosed()) {
+        if (!*xsink) {
+            xsink->raiseException("HTTP-CLIENT-CONNECT-ERROR",
+                "connection closed before HTTP/2 CONNECT request");
+        }
+        mgr.closeAndEvict(conn, xsink);
+        return nullptr;
+    }
+
+    if (conn->getProtocol() != HttpClientProtocol::H2) {
+        mgr.releaseConnection(conn);
+        xsink->raiseException("HTTP2-ERROR", "HTTP/2 connection required for extended CONNECT");
+        return nullptr;
+    }
+
+    QoreChannel* channel_raw = nullptr;
+    ReferenceHolder<QoreHashNode> submit_result(
+        conn->submitRequestStreamingSend("CONNECT", msgpath, *h2_headers, true, channel_raw, xsink), xsink);
+    if (*xsink || !submit_result || !channel_raw) {
+        mgr.releaseConnection(conn);
+        if (channel_raw) {
+            channel_raw->deref(xsink);
+        }
+        return nullptr;
+    }
+
+    int64_t submitted_stream_id = submit_result->getKeyValue("stream_id").getAsBigInt();
+    if (submitted_stream_id <= 0 || submitted_stream_id > INT32_MAX) {
+        channel_raw->close();
+        channel_raw->deref(xsink);
+        xsink->raiseException("HTTP2-CONNECT-ERROR", "invalid HTTP/2 CONNECT stream id " QLLD,
+            submitted_stream_id);
+        return nullptr;
+    }
+    int32_t stream_id = static_cast<int32_t>(submitted_stream_id);
+
     while (true) {
-        int recv_timeout = http_priv->timeout;
-        if (deadline_ms >= 0) {
-            int64 now_ms = q_clock_getmillis();
-            if (now_ms >= deadline_ms) {
-                xsink->raiseException("HTTP2-CONNECT-ERROR",
-                    "timeout waiting for HTTP/2 CONNECT response (timeout: %d ms)",
-                    (int)http_priv->timeout);
-                return nullptr;
-            }
-            recv_timeout = static_cast<int>(deadline_ms - now_ms);
-        }
-        int rv = http_priv->getH2Session()->receiveData(recv_timeout, xsink);
-        if (rv < 0) {
+        bool timed_out = false;
+        bool has_value = false;
+        ValueHolder rv(channel_raw->recv(timeout_ms, xsink, timed_out, has_value), xsink);
+        if (*xsink) {
+            channel_raw->close();
+            channel_raw->deref(xsink);
             return nullptr;
         }
-        // Flush pending output (SETTINGS_ACK, etc.) after processing received frames.
-        // Following nginx pattern: always send pending data after recv processing.
-        // Recompute timeout from deadline since receiveData() may have consumed time.
-        // NOTE: unlike the loop entry deadline check above, we use zero-timeout (non-blocking)
-        // rather than raising an error when the deadline has passed, because this flush is a
-        // necessary consequence of processing inbound frames — the pending data (typically small
-        // control frames like SETTINGS_ACK) must be sent for the protocol to proceed, and a
-        // non-blocking send will almost always succeed for small frames in the kernel buffer.
-        int flush_timeout = recv_timeout;
-        if (deadline_ms >= 0) {
-            int64 now_ms = q_clock_getmillis();
-            flush_timeout = now_ms >= deadline_ms ? 0 : static_cast<int>(deadline_ms - now_ms);
-        }
-        if (http_priv->getH2Session()->sendPendingDataBlocking(flush_timeout, xsink) < 0) {
-            return nullptr;
-        }
-        if (rv == 1) {
-            // Connection was closed by peer - check if we got a response first
-            Http2StreamInfo* stream = http_priv->getH2Session()->getStream(stream_id);
-            if (stream && stream->headers_complete) {
-                // Process the response we received before connection close
-                // Fall through to normal processing
-            } else {
-                // Connection closed without receiving a complete response
-                xsink->raiseException("HTTP2-CONNECT-ERROR",
-                    "HTTP/2 connection closed by peer before CONNECT response was received");
-                return nullptr;
-            }
-        }
-
-        // Check if SETTINGS revealed that server doesn't support extended CONNECT.
-        // This catches the case where SETTINGS are received after the CONNECT was sent;
-        // some nghttp2 versions silently drop :protocol, so no RST_STREAM will arrive.
-        if (http_priv->getH2Session()->isExtendedConnectRejected()) {
-            // Cancel the submitted stream to prevent leaking it in the session map
-            // and notify the server to stop processing the bare CONNECT.
-            // sendPendingDataBlocking() triggers onStreamCloseCallback which removes
-            // the stream from the session map.
-            http_priv->getH2Session()->submitRstStream(stream_id, NGHTTP2_CANCEL, xsink);
-            if (!*xsink) {
-                http_priv->getH2Session()->sendPendingDataBlocking(0, xsink);
-            }
-            // Clear cleanup errors — the real error is missing ENABLE_CONNECT_PROTOCOL
-            xsink->clear();
+        if (timed_out) {
+            channel_raw->close();
+            channel_raw->deref(xsink);
             xsink->raiseException("HTTP2-CONNECT-ERROR",
-                "server does not support extended CONNECT "
-                "(ENABLE_CONNECT_PROTOCOL not advertised in SETTINGS)");
+                "timeout waiting for HTTP/2 CONNECT response (timeout: %d ms)", timeout_ms);
+            return nullptr;
+        }
+        if (!has_value) {
+            channel_raw->close();
+            channel_raw->deref(xsink);
+            xsink->raiseException("HTTP2-CONNECT-ERROR",
+                "HTTP/2 connection closed before CONNECT response was received");
+            return nullptr;
+        }
+        if (rv->getType() != NT_HASH) {
+            continue;
+        }
+
+        QoreHashNode* h = rv->get<QoreHashNode>();
+        QoreValue err_val = h->getKeyValue("err");
+        if (err_val.getType() == NT_STRING) {
+            const char* err_str = err_val.get<const QoreStringNode>()->c_str();
+            QoreValue desc_val = h->getKeyValue("desc");
+            const char* desc_str = desc_val.getType() == NT_STRING
+                ? desc_val.get<const QoreStringNode>()->c_str()
+                : "HTTP/2 CONNECT request failed";
+            channel_raw->close();
+            channel_raw->deref(xsink);
+            xsink->raiseException(err_str, "%s", desc_str);
             return nullptr;
         }
 
-        // Check if the stream was reset (e.g., RST_STREAM from server)
+        QoreValue sc_val = h->getKeyValue("status_code");
+        if (sc_val.isNullOrNothing()) {
+            continue;
+        }
+
+        int status_code = (int)sc_val.getAsBigInt();
+        ReferenceHolder<QoreHashNode> out(new QoreHashNode(autoTypeInfo), xsink);
+        out->setKeyValue("status_code", status_code, xsink);
+        out->setKeyValue("stream_id", stream_id, xsink);
+        QoreValue hdr_val = h->getKeyValue("headers");
+        if (hdr_val.getType() == NT_HASH) {
+            out->setKeyValue("headers", hdr_val.refSelf(), xsink);
+        }
+        if (*xsink) {
+            channel_raw->close();
+            channel_raw->deref(xsink);
+            return nullptr;
+        }
+
+        if (info) {
+            info->setKeyValue("http2", true, xsink);
+            info->setKeyValue("stream_id", stream_id, xsink);
+            info->setKeyValue("status_code", status_code, xsink);
+            if (hdr_val.getType() == NT_HASH) {
+                info->setKeyValue("response-headers", hdr_val.refSelf(), xsink);
+            }
+        }
+
+        if (status_code != 200) {
+            channel_raw->close();
+            channel_raw->deref(xsink);
+            xsink->raiseException("HTTP2-CONNECT-ERROR",
+                "HTTP/2 CONNECT request failed with status %d", status_code);
+            return nullptr;
+        }
+
         {
-            Http2StreamInfo* stream = http_priv->getH2Session()->getStream(stream_id);
-            if (stream && stream->reset) {
-                xsink->raiseException("HTTP2-CONNECT-ERROR",
-                    "HTTP/2 CONNECT request was rejected by the server "
-                    "(stream reset with error code %d)", (int)stream->error_code);
-                return nullptr;
-            }
-        }
-
-        // Check if we have a response
-        Http2StreamInfo* stream = http_priv->getH2Session()->getStream(stream_id);
-        if (stream && stream->headers_complete) {
-            // Build response hash
-            ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
-            rv->setKeyValue("status_code", stream->status_code, xsink);
-            rv->setKeyValue("stream_id", stream_id, xsink);
-
-            // Add response headers (handle duplicate headers per RFC 7540)
-            rv->setKeyValue("headers", httpMultiHeadersToQoreHash(stream->headers), xsink);
-
-            // Store stream ID on both HTTPClient and socket for isDataAvailable()
+            SafeLocker sl(priv->m);
+            http_priv->clearH2ConnectStream();
+            conn->ref();
+            http_priv->h2_connect_conn = conn;
+            http_priv->h2_connect_channel = channel_raw;
+            http_priv->h2_connect_stream_id = stream_id;
+            http_priv->h2_connect_stream_closed = false;
+            http_priv->http2_active = true;
             http_priv->setActiveH2StreamId(stream_id);
-
-            // Add info if requested
-            if (info) {
-                info->setKeyValue("http2", true, xsink);
-                info->setKeyValue("stream_id", stream_id, xsink);
-                info->setKeyValue("status_code", stream->status_code, xsink);
-            }
-
-            // RFC 8441: 200 OK means CONNECT succeeded
-            if (stream->status_code != 200) {
-                xsink->raiseException("HTTP2-CONNECT-ERROR",
-                    "HTTP/2 CONNECT request failed with status %d", stream->status_code);
-                return nullptr;
-            }
-
-            return rv.release();
         }
+        return out.release();
     }
 }
 
@@ -4638,6 +4676,32 @@ QoreHashNode* QoreHttpClientObject::sendHttp3Connect(const char* path, const Qor
 // serialized and cannot run concurrently for the same connection.
 int QoreHttpClientObject::sendHttp2StreamData(int32_t stream_id, const BinaryNode* data,
         bool end_stream, int timeout_ms, ExceptionSink* xsink) {
+    HttpClientConnectionBase* conn = nullptr;
+    {
+        SafeLocker sl(priv->m);
+        if (http_priv->h2_connect_conn) {
+            if (stream_id != http_priv->h2_connect_stream_id) {
+                xsink->raiseException("HTTP2-ERROR",
+                    "HTTP/2 stream id %d is not active on this HTTPClient", stream_id);
+                return -1;
+            }
+            conn = http_priv->h2_connect_conn;
+            conn->ref();
+        }
+    }
+    if (conn) {
+        ReferenceHolder<HttpClientConnectionBase> conn_holder(conn, xsink);
+        const void* ptr = data ? data->getPtr() : nullptr;
+        size_t len = data ? data->size() : 0;
+        if (len) {
+            conn->pushSendData(ptr, len, xsink);
+        }
+        if (!*xsink && end_stream) {
+            conn->pushSendData(nullptr, 0, xsink);
+        }
+        return *xsink ? -1 : 0;
+    }
+
     SafeLocker sl(priv->m);
 
     my_socket_priv::SyncIoGuard sg(*http_priv->msock, xsink);
@@ -4694,6 +4758,94 @@ int QoreHttpClientObject::sendHttp2StreamData(int32_t stream_id, const BinaryNod
 }
 
 BinaryNode* QoreHttpClientObject::readHttp2StreamData(int32_t stream_id, int timeout_ms, ExceptionSink* xsink) {
+    QoreChannel* ch = nullptr;
+    {
+        SafeLocker sl(priv->m);
+        if (http_priv->h2_connect_channel) {
+            if (stream_id != http_priv->h2_connect_stream_id) {
+                xsink->raiseException("HTTP2-ERROR",
+                    "HTTP/2 stream id %d is not active on this HTTPClient", stream_id);
+                return nullptr;
+            }
+            if (http_priv->h2_connect_stream_closed) {
+                return nullptr;
+            }
+            ch = http_priv->h2_connect_channel;
+            ch->ref();
+        }
+    }
+    if (ch) {
+        ReferenceHolder<QoreChannel> channel(ch, xsink);
+        while (true) {
+            bool timed_out = false;
+            bool has_value = false;
+            ValueHolder rv(channel->recv(timeout_ms, xsink, timed_out, has_value), xsink);
+            if (*xsink) {
+                return nullptr;
+            }
+            if (timed_out) {
+                return nullptr;
+            }
+            if (!has_value) {
+                SafeLocker sl(priv->m);
+                if (stream_id == http_priv->h2_connect_stream_id) {
+                    http_priv->h2_connect_stream_closed = true;
+                }
+                return nullptr;
+            }
+            if (rv->getType() != NT_HASH) {
+                continue;
+            }
+
+            QoreHashNode* h = rv->get<QoreHashNode>();
+            QoreValue err_val = h->getKeyValue("err");
+            if (err_val.getType() == NT_STRING) {
+                const char* err_str = err_val.get<const QoreStringNode>()->c_str();
+                QoreValue desc_val = h->getKeyValue("desc");
+                const char* desc_str = desc_val.getType() == NT_STRING
+                    ? desc_val.get<const QoreStringNode>()->c_str()
+                    : "HTTP/2 stream read failed";
+                xsink->raiseException(err_str, "%s", desc_str);
+                return nullptr;
+            }
+            QoreValue legacy_error = h->getKeyValue("error");
+            if (legacy_error.getAsBool()) {
+                SafeLocker sl(priv->m);
+                if (stream_id == http_priv->h2_connect_stream_id) {
+                    http_priv->h2_connect_stream_closed = true;
+                }
+                return nullptr;
+            }
+
+            bool end_stream = h->getKeyValue("end_stream").getAsBool();
+            QoreValue body_val = h->getKeyValue("body");
+            if (!body_val.isNullOrNothing()) {
+                if (end_stream) {
+                    SafeLocker sl(priv->m);
+                    if (stream_id == http_priv->h2_connect_stream_id) {
+                        http_priv->h2_connect_stream_closed = true;
+                    }
+                }
+                if (body_val.getType() == NT_BINARY) {
+                    return static_cast<BinaryNode*>(body_val.get<const BinaryNode>()->refSelf());
+                }
+                if (body_val.getType() == NT_STRING) {
+                    const QoreStringNode* str = body_val.get<const QoreStringNode>();
+                    SimpleRefHolder<BinaryNode> bin(new BinaryNode);
+                    bin->append(str->c_str(), str->size());
+                    return bin.release();
+                }
+            }
+            if (end_stream) {
+                SafeLocker sl(priv->m);
+                if (stream_id == http_priv->h2_connect_stream_id) {
+                    http_priv->h2_connect_stream_closed = true;
+                }
+                return nullptr;
+            }
+        }
+    }
+
     SafeLocker sl(priv->m);
 
     my_socket_priv::SyncIoGuard sg(*http_priv->msock, xsink);
@@ -4761,11 +4913,17 @@ BinaryNode* QoreHttpClientObject::readHttp2StreamData(int32_t stream_id, int tim
 }
 
 int32_t QoreHttpClientObject::getHttp2StreamId() const {
+    if (http_priv->h2_connect_stream_id) {
+        return http_priv->h2_connect_stream_id;
+    }
     return http_priv->h2_stream_id;
 }
 
 bool QoreHttpClientObject::hasHttp2StreamData(int32_t stream_id) const {
     SafeLocker sl(priv->m);
+    if (http_priv->h2_connect_channel && stream_id == http_priv->h2_connect_stream_id) {
+        return !http_priv->h2_connect_channel->empty();
+    }
     if (!http_priv->http2_active || !http_priv->getH2Session()) {
         return false;
     }
@@ -4775,6 +4933,9 @@ bool QoreHttpClientObject::hasHttp2StreamData(int32_t stream_id) const {
 
 bool QoreHttpClientObject::isHttp2StreamClosed(int32_t stream_id) const {
     SafeLocker sl(priv->m);
+    if (http_priv->h2_connect_channel && stream_id == http_priv->h2_connect_stream_id) {
+        return http_priv->h2_connect_stream_closed;
+    }
     if (!http_priv->http2_active || !http_priv->getH2Session()) {
         return true;
     }
@@ -4800,6 +4961,22 @@ bool QoreHttpClientObject::isHttp2DataAvailable(int32_t stream_id, int timeout_m
     // 1. Under lock: check HTTP/2 stream buffer and SSL/socket buffered data
     // 2. Without lock: raw fd poll (thread-safe, no SSL involvement)
     // 3. Under lock: process received HTTP/2 frames via SSL_read
+
+    QoreChannel* ch = nullptr;
+    {
+        SafeLocker sl(priv->m);
+        if (http_priv->h2_connect_channel && stream_id == http_priv->h2_connect_stream_id) {
+            if (http_priv->h2_connect_stream_closed) {
+                return false;
+            }
+            ch = http_priv->h2_connect_channel;
+            ch->ref();
+        }
+    }
+    if (ch) {
+        ReferenceHolder<QoreChannel> channel(ch, xsink);
+        return channel->waitReadable(timeout_ms, xsink);
+    }
 
     SafeLocker sl(priv->m);
 
