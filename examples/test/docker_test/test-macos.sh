@@ -39,6 +39,21 @@ elif [ "$PM" = "homebrew" ]; then
     export LDFLAGS="-L${HB}/lib ${LDFLAGS:-}"
     export CPPFLAGS="-I${HB}/include ${CPPFLAGS:-}"
     export PKG_CONFIG_PATH="${HB}/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
+
+    # Self-heal: install build-critical Homebrew packages that may be
+    # missing from a stale Tart VM image (image was built before the
+    # package was added to qore-test-base/prep-macos.sh).  CMakeLists
+    # requires Eigen3 unconditionally for the ml/kalman modules; the
+    # build aborts at find_package(Eigen3 REQUIRED) if it isn't
+    # present.  brew install is idempotent (no-op if already installed)
+    # so this is safe to run on a fresh image too.
+    REQUIRED_BREW_PKGS=(eigen)
+    for pkg in "${REQUIRED_BREW_PKGS[@]}"; do
+        if ! brew list "$pkg" >/dev/null 2>&1; then
+            echo "=== Installing missing Homebrew package: $pkg ==="
+            brew install "$pkg"
+        fi
+    done
 fi
 
 # Add cargo bin to PATH (tree-sitter CLI installed via cargo)

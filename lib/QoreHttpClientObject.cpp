@@ -5104,24 +5104,37 @@ int QoreHttpClientObject::connect(ExceptionSink* xsink) {
         return -1;
     }
 
-    // When the conn_mgr is the active dispatch path (use_conn_mgr &&
-    // !poll_apis_used), connect() pre-populates the conn_mgr pool instead
-    // of opening the legacy msock.  Every subsequent non-WS send() goes
-    // through the same pool entry, so there is a single TCP connection
-    // per logical session — no more "warm-up msock + real conn_mgr
-    // connection" double-connect that hangs single-accept test servers
-    // and wastes a socket slot on real peers.  WS upgrade and poll-API
-    // paths still use msock, so they stay on the legacy connect_unlocked
-    // path below.  UNIX-domain socket URLs also stay on the legacy path:
-    // HttpClientConnectionManagerBase::acquireConnection only knows TCP
-    // (host:port), so its getaddrinfo on the bare socket path fails with
-    // QOREADDRINFO-GETINFO-ERROR before any UNIX-aware code runs.
     if (http_priv->use_conn_mgr && !http_priv->poll_apis_used
             && http_priv->connection.has_url()
             && !http_priv->connection.is_unix) {
-        // Drop any stale msock state (prior disconnect/reconnect cycle).
-        http_priv->disconnect_unlocked();
-        return http_priv->connectViaConnMgr(xsink);
+        int global_mode = qore_global_http2_mode.load(std::memory_order_relaxed);
+        bool lib_disabled = qore_check_option(QLO_DISABLE_HTTP2);
+        bool h2_hard = (http_priv->http2_mode == HTTP2_MODE_REQUIRED
+                || http_priv->http2_mode == HTTP2_MODE_H2C_DIRECT)
+            && global_mode != HTTP2_MODE_DISABLED && !lib_disabled;
+        bool h2_auto_ssl = http_priv->http2_mode == HTTP2_MODE_AUTO
+            && http_priv->connection.ssl
+            && global_mode != HTTP2_MODE_DISABLED && !lib_disabled;
+        bool h3 = http_priv->http3_mode.load(std::memory_order_relaxed)
+                == HTTP3_MODE_REQUIRED
+            || (http_priv->http3_active && http_priv->connection.ssl);
+
+        if (h2_hard || h2_auto_ssl || h3) {
+            // Protocols negotiated or driven by the connection manager must
+            // stay on that path; the legacy msock send path only handles
+            // HTTP/1.x request/response dispatch correctly.
+            http_priv->disconnect_unlocked();
+            return http_priv->connectViaConnMgr(xsink);
+        }
+
+        // HTTPClient inherits Socket, and H1 connect() has always promised
+        // to leave that inherited socket open for direct Socket APIs such
+        // as sendHTTPMessage().  The connection-manager path keeps its
+        // sockets in a private pool, so explicit H1 connect() switches this
+        // client instance back to the legacy msock path for the lifetime of
+        // the current config.
+        http_priv->use_conn_mgr = false;
+        http_priv->resetConnMgr();
     }
 
     http_priv->disconnect_unlocked();

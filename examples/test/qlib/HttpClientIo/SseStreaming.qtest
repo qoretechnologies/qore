@@ -50,15 +50,43 @@ class TestSseHandler inherits ServerSentEventHandler {
     }
 }
 
+class CallbackSseResponseHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        setPersistent(True);
+        list<string> chunks = (
+            "data: one\n\n",
+            "data: [DONE]\n\n",
+        );
+
+        return <HttpResponseInfo>{
+            "code": 200,
+            "hdr": {
+                "Cache-Control": "no-cache",
+                "Content-Type": MimeTypeSse + "; charset=utf-8",
+            },
+            "send_callback": *string sub () {
+                if (!chunks) {
+                    setPersistent(False);
+                    return NOTHING;
+                }
+                return shift chunks;
+            },
+        };
+    }
+}
+
 class SseStreamingTest inherits Test {
     private {
         HttpServer server;
         int port;
         TestSseHandler handler();
+        CallbackSseResponseHandler callback_handler();
     }
 
     constructor() : Test("SseStreamingTest", "1.0") {
         addTestCase("SSE streaming receives events", \testSseReceivesEvents());
+        addTestCase("H1 SSE response has deterministic framing", \testH1SseResponseFraming());
+        addTestCase("H1 SSE callback response is chunked", \testH1SseCallbackResponseIsChunked());
         addTestCase("SSE streaming multiple events", \testSseMultipleEvents());
         addTestCase("SSE streaming notifier wakes on events", \testSseNotifierEvents());
         set_return_value(main());
@@ -72,6 +100,7 @@ class SseStreamingTest inherits Test {
         };
         server = new HttpServer(http_opts);
         server.setDefaultHandler("sse", handler);
+        server.setHandler("callback-sse", "/callback-sse", NOTHING, callback_handler);
         port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
     }
 
@@ -103,6 +132,55 @@ class SseStreamingTest inherits Test {
         assertEq(False, reader.isDone(), "stream still open after timeout");
 
         stream.cancel();
+    }
+
+    private hash<auto> sendRawSseRequest(Socket sock, string path) {
+        sock.connect("127.0.0.1:" + port, 5s);
+        hash<auto> send_info;
+        sock.sendHTTPMessage("GET", path, "1.1", {
+            "Host": sprintf("127.0.0.1:%d", port),
+            "Accept": MimeTypeSse,
+        }, NOTHING, \send_info);
+        return sock.readHTTPHeader(5s);
+    }
+
+    private assertValidH1SseFraming(hash<auto> hdr, string label) {
+        assertEq(200, hdr.status_code, label + " status");
+        assertTrue(string(hdr."content-type").lwr().startsWith(MimeTypeSse),
+            label + " content type");
+
+        bool has_chunked = hdr."transfer-encoding"
+            && string(hdr."transfer-encoding").lwr() =~ /chunked/;
+        bool has_length = hdr."content-length".val();
+        bool says_close = hdr.connection && string(hdr.connection).lwr() =~ /close/;
+        assertTrue(has_chunked || has_length || says_close,
+            label + " must use chunked, Content-Length, or Connection: close framing");
+    }
+
+    testH1SseResponseFraming() {
+        Socket sock();
+        on_exit sock.close();
+
+        hash<auto> hdr = sendRawSseRequest(sock, "/sse");
+        assertValidH1SseFraming(hdr, "dedicated H1 SSE");
+        assertEq("close", string(hdr.connection).lwr(),
+            "dedicated H1 SSE without length or chunking advertises close");
+    }
+
+    testH1SseCallbackResponseIsChunked() {
+        Socket sock();
+        on_exit sock.close();
+
+        hash<auto> hdr = sendRawSseRequest(sock, "/callback-sse");
+        assertValidH1SseFraming(hdr, "callback H1 SSE");
+        assertTrue(hdr."transfer-encoding"
+                && string(hdr."transfer-encoding").lwr() =~ /chunked/,
+            "callback H1 SSE uses chunked transfer encoding");
+
+        hash<auto> chunked = sock.readHTTPChunkedBody(5s);
+        string body = chunked.body.typeCode() == NT_BINARY
+            ? chunked.body.toString() : chunked.body;
+        assertTrue(body =~ /data:\s*\[DONE\]/, "callback H1 SSE body includes DONE event");
     }
 
     testSseMultipleEvents() {

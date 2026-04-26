@@ -161,9 +161,11 @@ public:
     }
 
     //! Called by the destructor of the owning connection to break the
-    //! raw back-pointer before the owner is freed.  Safe on any thread
-    //! because the owner has already disarmed us.
+    //! raw back-pointer before the owner is freed.  Synchronizes with
+    //! in-flight I/O-thread owner notifications so the caller can safely
+    //! destroy the owner after this returns.
     DLLLOCAL void clearOwner() {
+        AutoLocker al(owner_lock);
         owner_conn = nullptr;
     }
 
@@ -185,10 +187,15 @@ private:
     //! Target port (for diagnostics only).
     int target_port;
 
+    //! Protects @ref owner_conn against close/destroy racing with I/O-thread
+    //! ready/error callbacks.
+    mutable QoreThreadLock owner_lock;
+
     //! Raw back-pointer to the owning connection — provides access to
     //! the ALPN storage slot and the @c onConnectionReady hook.  The
     //! strong Qore ref (for DGC cycle detection) is held via the poll
     //! op QoreObject's @c "connection_ref" member.
+    //! Protected by @ref owner_lock.
     NegotiatingHttpClientConnection* owner_conn = nullptr;
 
     //! Error info hash (ref'd) — set on failure paths.
@@ -203,6 +210,8 @@ private:
 
     DLLLOCAL QoreHashNode* handleConnecting(ExceptionSink* xsink);
     DLLLOCAL void setError(const char* err, const char* desc, ExceptionSink* xsink);
+    DLLLOCAL void notifyOwnerReady(std::string&& alpn);
+    DLLLOCAL void notifyOwnerClosed();
     DLLLOCAL void releaseCurrentOp(ExceptionSink* xsink);
 };
 
