@@ -277,6 +277,10 @@ static int socket_exec_send_http_chunked_body_trailer(QoreObject* self, QoreSock
     return rc;
 }
 
+static void socket_exec_set_http_chunk_prefix(QoreString& prefix, size_t size) {
+    prefix.sprintf(QLLX "\r\n", static_cast<unsigned long long>(size));
+}
+
 static int socket_exec_run_http_trailer_callback(const ResolvedCallReferenceNode* trailer_callback,
         ReferenceHolder<QoreHashNode>& trailer, ExceptionSink* xsink) {
     if (!trailer_callback) {
@@ -308,14 +312,19 @@ static int socket_exec_send_http_chunked_body_input_stream(QoreObject* self, Qor
     SimpleRefHolder<BinaryNode> buf(new BinaryNode);
     buf->preallocate(max_chunk_size);
 
+    unsigned cancel_check = 0;
     while (true) {
-        int64 r = input_stream->read((void*)buf->getPtr(), max_chunk_size, xsink);
+        if (!(cancel_check++ % 100) && qore_check_cancel(xsink, "socket chunked input stream send")) {
+            return -1;
+        }
+
+        int64 r = input_stream->read(const_cast<void*>(buf->getPtr()), max_chunk_size, xsink);
         if (*xsink) {
             return -1;
         }
 
         QoreString prefix;
-        prefix.sprintf("%x\r\n", (int)r);
+        socket_exec_set_http_chunk_prefix(prefix, static_cast<size_t>(r));
         if (socket_exec_send_bytes(self, s, prefix.c_str(), prefix.size(), timeout_ms, xsink)) {
             return -1;
         }
@@ -356,7 +365,12 @@ static int socket_exec_send_http_chunked_body_input_stream(QoreObject* self, Qor
 
 static int socket_exec_send_http_chunked_body_callback(QoreObject* self, QoreSocketObject* s,
         const ResolvedCallReferenceNode* send_callback, int timeout_ms, ExceptionSink* xsink) {
+    unsigned cancel_check = 0;
     while (true) {
+        if (!(cancel_check++ % 100) && qore_check_cancel(xsink, "socket chunked callback send")) {
+            return -1;
+        }
+
         ValueHolder res(send_callback->execValue(nullptr, xsink), xsink);
         if (*xsink) {
             return -1;
@@ -407,7 +421,7 @@ static int socket_exec_send_http_chunked_body_callback(QoreObject* self, QoreSoc
         }
 
         QoreString prefix;
-        prefix.sprintf("%x\r\n", (int)size);
+        socket_exec_set_http_chunk_prefix(prefix, size);
         if (socket_exec_send_bytes(self, s, prefix.c_str(), prefix.size(), timeout_ms, xsink)
                 || socket_exec_send_bytes(self, s, data, size, timeout_ms, xsink)
                 || socket_exec_send_bytes(self, s, "\r\n", 2, timeout_ms, xsink)) {
