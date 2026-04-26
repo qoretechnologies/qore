@@ -164,11 +164,6 @@ bool qore_is_async_io_controller_singleton(AsyncIoControllerPriv* ctrl) {
 //! must be avoided on the I/O thread to prevent deadlock.
 static thread_local bool on_async_io_thread = false;
 
-//! True while a callback worker is executing AsyncIoController-driven continuePoll().
-//! Qore poll operations run on workers specifically so bounded legacy sync I/O
-//! can be used without blocking the I/O thread.
-static thread_local bool on_async_io_continue_poll_thread = false;
-
 //! Thread-local index of the current I/O thread into AsyncIoControllerPriv::io_threads.
 //! -1 when not on an I/O thread.  Used by cancelByOwner/cancelByProgram to access
 //! the current thread's own cache directly (safe — I/O-thread-local invariant) while
@@ -190,10 +185,6 @@ static thread_local bool inside_continue_poll_batch = false;
 
 bool qore_on_async_io_thread() {
     return on_async_io_thread;
-}
-
-bool qore_on_async_io_continue_poll_thread() {
-    return on_async_io_continue_poll_thread;
 }
 
 //! Returns the current time in microseconds since the epoch
@@ -884,18 +875,6 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
                     QoreHashNode* new_poll_info = nullptr;
                     QoreHashNode* ex_hash = nullptr;
                     bool completed = false;
-
-                    struct ContinuePollWorkerGuard {
-                        bool old;
-
-                        ContinuePollWorkerGuard() : old(on_async_io_continue_poll_thread) {
-                            on_async_io_continue_poll_thread = true;
-                        }
-
-                        ~ContinuePollWorkerGuard() {
-                            on_async_io_continue_poll_thread = old;
-                        }
-                    } continue_poll_guard;
 
                     ValueHolder rv(async_item.spop_obj->evalMethod("continuePoll", nullptr, &work_xsink),
                         &work_xsink);

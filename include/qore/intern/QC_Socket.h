@@ -45,8 +45,6 @@ DLLLOCAL TypedHashDecl* init_hashdecl_SseMessageInfo(QoreNamespace& ns);
 DLLLOCAL TypedHashDecl* init_hashdecl_DatagramInfo(QoreNamespace& ns);
 DLLLOCAL TypedHashDecl* init_hashdecl_QuicGoawayStateInfo(QoreNamespace& ns);
 
-DLLLOCAL bool qore_on_async_io_continue_poll_thread();
-
 #include <qore/QoreSocket.h>
 #include <qore/AbstractPrivateData.h>
 #include <qore/QoreThreadLock.h>
@@ -113,8 +111,7 @@ public:
         // must be called with the lock held
         assert(m.trylock());
 
-        if ((io_mode == SocketIoMode::Async || async_io_count > 0)
-                && !qore_on_async_io_continue_poll_thread()) {
+        if (io_mode == SocketIoMode::Async || async_io_count > 0) {
             xsink->raiseException("SOCKET-ASYNC-MODE-ERROR",
                 "cannot perform synchronous I/O on a socket managed by "
                 "the async I/O controller");

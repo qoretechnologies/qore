@@ -239,13 +239,6 @@ struct qore_socketsource_private {
 */
 DLLLOCAL bool qore_on_async_io_thread();
 
-//! Returns true if the calling thread is executing AsyncIoController-dispatched continuePoll()
-/** Qore poll operations run on worker threads specifically so legacy bounded
-    sync socket calls do not block the I/O thread.  Such calls are still
-    controller-owned and may operate while the socket has an async owner claim.
-*/
-DLLLOCAL bool qore_on_async_io_continue_poll_thread();
-
 class OptionalNonBlockingHelper {
 public:
     qore_socket_private& sock;
