@@ -265,9 +265,9 @@ static int qore_socket_object_exec_upgrade_ssl(QoreSocketObject* s, int timeout_
 }
 
 static QoreSocketObject* qore_socket_object_exec_accept(QoreSocketObject* s, int timeout_ms, bool ssl,
-        ExceptionSink* xsink) {
+        ExceptionSink* xsink, SocketSource* source = nullptr) {
     s->ref();
-    SocketAcceptPollOperation* accept_poller = new SocketAcceptPollOperation(xsink, s, ssl);
+    SocketAcceptPollOperation* accept_poller = new SocketAcceptPollOperation(xsink, s, ssl, source);
 
     ReferenceHolder<QoreObject> sock_obj(qore_socket_object_make_pollable_wrapper(s), xsink);
     const char* goal = ssl ? "accept-ssl" : "accept";
@@ -2626,33 +2626,11 @@ int QoreSocketObject::connectSSL(ExceptionSink* xsink, const char* name, int tim
 }
 
 QoreSocketObject* QoreSocketObject::accept(SocketSource* source, ExceptionSink* xsink) {
-    QoreSocket* s;
-    {
-        AutoLocker al(priv->m);
-        my_socket_priv::SyncIoGuard sg(*priv, xsink);
-        if (!sg) {
-            return nullptr;
-        }
-        s = priv->socket->accept(source, xsink);
-    }
-    return s ? new QoreSocketObject(s, priv->cert ? priv->cert->certRefSelf() : nullptr,
-        priv->pk ? priv->pk->pkRefSelf() : nullptr) : nullptr;
+    return qore_socket_object_exec_accept(this, -1, false, xsink, source);
 }
 
 QoreSocketObject* QoreSocketObject::acceptSSL(ExceptionSink* xsink, SocketSource* source) {
-    QoreSocket* s;
-    {
-        AutoLocker al(priv->m);
-        my_socket_priv::SyncIoGuard sg(*priv, xsink);
-        if (!sg) {
-            return nullptr;
-        }
-        s = priv->socket->acceptSSL(xsink, source, priv->cert, priv->pk);
-    }
-    return s
-        ? new QoreSocketObject(s, priv->cert ? priv->cert->certRefSelf() : nullptr,
-            priv->pk ? priv->pk->pkRefSelf() : nullptr)
-        : nullptr;
+    return qore_socket_object_exec_accept(this, -1, true, xsink, source);
 }
 
 QoreSocketObject* QoreSocketObject::accept(int timeout_ms, ExceptionSink* xsink) {

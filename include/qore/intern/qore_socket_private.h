@@ -469,7 +469,7 @@ private:
 
 class SocketAcceptPollState : public AbstractPollState {
 public:
-    DLLLOCAL SocketAcceptPollState(ExceptionSink* xsink, qore_socket_private* sock);
+    DLLLOCAL SocketAcceptPollState(ExceptionSink* xsink, qore_socket_private* sock, SocketSource* source = nullptr);
 
     /** returns:
         - SOCK_POLLIN = wait for read and call this again
@@ -486,6 +486,7 @@ public:
 
 private:
     qore_socket_private* sock;
+    SocketSource* source = nullptr;
     int descriptor = -1;
 };
 

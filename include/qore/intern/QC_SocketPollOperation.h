@@ -155,6 +155,8 @@ class SocketAcceptPollOperation : public SocketAcceptPollSocketOperationBase {
 public:
     DLLLOCAL SocketAcceptPollOperation(ExceptionSink* xsink, QoreSocketObject* sock);
     DLLLOCAL SocketAcceptPollOperation(ExceptionSink* xsink, QoreSocketObject* sock, bool ssl);
+    DLLLOCAL SocketAcceptPollOperation(ExceptionSink* xsink, QoreSocketObject* sock, bool ssl,
+            SocketSource* source);
 
     DLLLOCAL void deref(ExceptionSink* xsink) {
         if (ROdereference()) {
@@ -198,6 +200,7 @@ protected:
     mutable SimpleRefHolder<QoreSocketObject> accepted_socket;
     //! Cached QoreObject wrapper for the accepted socket during SSL handshake
     mutable ReferenceHolder<QoreObject> accepted_socket_obj;
+    SocketSource* source = nullptr;
 
     //! Called in the constructor
     DLLLOCAL virtual int preVerify(ExceptionSink* xsink) {

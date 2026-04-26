@@ -1869,7 +1869,8 @@ int SocketSendPollState::continuePoll(ExceptionSink* xsink) {
     return 0;
 }
 
-SocketAcceptPollState::SocketAcceptPollState(ExceptionSink* xsink, qore_socket_private* sock) : sock(sock) {
+SocketAcceptPollState::SocketAcceptPollState(ExceptionSink* xsink, qore_socket_private* sock, SocketSource* source)
+        : sock(sock), source(source) {
 }
 
 /** returns:
@@ -1880,7 +1881,7 @@ SocketAcceptPollState::SocketAcceptPollState(ExceptionSink* xsink, qore_socket_p
 */
 int SocketAcceptPollState::continuePoll(ExceptionSink* xsink) {
     // try an accept with no timeout
-    int rc = sock->accept_internal(xsink, nullptr, 0);
+    int rc = sock->accept_internal(xsink, source, 0);
     if (*xsink) {
         return -1;
     }
@@ -6256,7 +6257,12 @@ SocketAcceptPollOperation::SocketAcceptPollOperation(ExceptionSink* xsink, QoreS
 }
 
 SocketAcceptPollOperation::SocketAcceptPollOperation(ExceptionSink* xsink, QoreSocketObject* sock, bool ssl)
-        : SocketAcceptPollSocketOperationBase(sock), accepted_socket_obj(xsink) {
+        : SocketAcceptPollOperation(xsink, sock, ssl, nullptr) {
+}
+
+SocketAcceptPollOperation::SocketAcceptPollOperation(ExceptionSink* xsink, QoreSocketObject* sock, bool ssl,
+        SocketSource* source) : SocketAcceptPollSocketOperationBase(sock), accepted_socket_obj(xsink),
+        source(source) {
     sgoal = ssl ? SPG_ACCEPT_SSL : SPG_ACCEPT;
 
     AutoLocker al(sock->priv->m);
@@ -6271,7 +6277,7 @@ SocketAcceptPollOperation::SocketAcceptPollOperation(ExceptionSink* xsink, QoreS
     }
     if (!sock->priv->setNonBlockAccept(xsink)) {
         set_non_block_accept = true;
-        poll_state.reset(sock->priv->socket->startAccept(xsink));
+        poll_state.reset(new SocketAcceptPollState(xsink, sock->priv->socket->priv, source));
         if (!*xsink) {
             assert(poll_state);
             state = SPS_ACCEPTING;
