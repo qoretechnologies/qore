@@ -264,6 +264,57 @@ static int qore_socket_object_exec_upgrade_ssl(QoreSocketObject* s, int timeout_
         timeout_ms, goal, goal, xsink);
 }
 
+static QoreSocketObject* qore_socket_object_exec_accept(QoreSocketObject* s, int timeout_ms, bool ssl,
+        ExceptionSink* xsink) {
+    s->ref();
+    SocketAcceptPollOperation* accept_poller = new SocketAcceptPollOperation(xsink, s, ssl);
+
+    ReferenceHolder<QoreObject> sock_obj(qore_socket_object_make_pollable_wrapper(s), xsink);
+    const char* goal = ssl ? "accept-ssl" : "accept";
+    ReferenceHolder<QoreObject> op_obj(
+        qore_socket_object_make_poll_op(*sock_obj, accept_poller, goal, xsink), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
+    QoreHashNode* ex = nullptr;
+    ReferenceHolder<QoreHashNode> result(
+        qore_socket_object_exec_poll_operation(s, *sock_obj, *op_obj, timeout_ms, goal, xsink, &ex), xsink);
+    ReferenceHolder<QoreHashNode> ex_holder(ex, xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    if (ex_holder) {
+        if (qore_socket_object_exec_exception_is(**ex_holder, "SOCKET-TIMEOUT")
+                && !strcmp(static_cast<SocketPollOperationBase*>(accept_poller)->getStateImpl(), "accepting")) {
+            return nullptr;
+        }
+        qore_socket_object_raise_poll_result_exception(*ex_holder, xsink);
+        return nullptr;
+    }
+
+    ValueHolder output(accept_poller->getOutput(), xsink);
+    if (*xsink || output->isNothing()) {
+        return nullptr;
+    }
+    if (output->getType() != NT_OBJECT) {
+        xsink->raiseException("SOCKET-ACCEPT-ERROR",
+            "expected Socket object from async accept operation, got '%s'",
+            output->getFullTypeName());
+        return nullptr;
+    }
+
+    QoreObject* ns = output->get<QoreObject>();
+    QoreSocketObject* accepted = static_cast<QoreSocketObject*>(ns->getReferencedPrivateData(CID_SOCKET, xsink));
+    if (*xsink) {
+        return nullptr;
+    }
+    if (!accepted) {
+        xsink->raiseException("SOCKET-ACCEPT-ERROR", "accepted object does not contain Socket private data");
+    }
+    return accepted;
+}
+
 static int qore_socket_object_exec_send_poll(QoreSocketObject* s, SocketPollOperationBase* poller,
         int timeout_ms, ExceptionSink* xsink) {
     ReferenceHolder<QoreObject> sock_obj(qore_socket_object_make_pollable_wrapper(s), xsink);
@@ -1856,35 +1907,11 @@ QoreSocketObject* QoreSocketObject::acceptSSL(ExceptionSink* xsink, SocketSource
 }
 
 QoreSocketObject* QoreSocketObject::accept(int timeout_ms, ExceptionSink* xsink) {
-    QoreSocket* s;
-    {
-        AutoLocker al(priv->m);
-        my_socket_priv::SyncIoGuard sg(*priv, xsink);
-        if (!sg) {
-            return nullptr;
-        }
-        s = priv->socket->accept(timeout_ms, xsink);
-    }
-    return s
-        ? new QoreSocketObject(s, priv->cert ? priv->cert->certRefSelf() : nullptr,
-            priv->pk ? priv->pk->pkRefSelf() : nullptr)
-        : nullptr;
+    return qore_socket_object_exec_accept(this, timeout_ms, false, xsink);
 }
 
 QoreSocketObject* QoreSocketObject::acceptSSL(ExceptionSink* xsink, int timeout_ms) {
-    QoreSocket* s;
-    {
-        AutoLocker al(priv->m);
-        my_socket_priv::SyncIoGuard sg(*priv, xsink);
-        if (!sg) {
-            return nullptr;
-        }
-        s = priv->socket->acceptSSL(xsink, timeout_ms, priv->cert, priv->pk);
-    }
-    return s
-        ? new QoreSocketObject(s, priv->cert ? priv->cert->certRefSelf() : nullptr,
-            priv->pk ? priv->pk->pkRefSelf() : nullptr)
-        : nullptr;
+    return qore_socket_object_exec_accept(this, timeout_ms, true, xsink);
 }
 
 // c must be already referenced before this call
