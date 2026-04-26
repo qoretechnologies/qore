@@ -351,15 +351,15 @@ public:
     */
     DLLEXPORT bool hasHttp2StreamData(int32_t stream_id) const;
 
-    //! Checks if HTTP/2 stream data is available, polling the socket if needed
+    //! Checks if HTTP/2 stream data is available on the active CONNECT stream
     /** @param stream_id the stream ID to check
         @param timeout_ms timeout in milliseconds for polling
         @param xsink if an error occurs, the Qore-language exception information will be added here
         @return true if data is available, false otherwise
 
-        @note This method first checks for buffered data, then polls the socket for new
-        HTTP/2 frames if no data is buffered. This is the correct way to check for
-        data availability when using HTTP/2 streams.
+        @note For HTTP/2 streams created by sendHttp2Connect(), this method waits on the
+        connection-manager stream channel. If HTTP/2 is not active, the method falls back to
+        the inherited Socket data-availability check for HTTP/1 upgraded connections.
 
         @since %Qore 2.3
     */

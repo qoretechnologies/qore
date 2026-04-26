@@ -965,7 +965,7 @@ bool HTTPClient::isHttp3StreamClosed(int stream_id) [flags=CONSTANT] {
     return client->isHttp3StreamClosed((int64_t)stream_id);
 }
 
-//! Checks if HTTP/2 stream data is available, polling the socket if needed
+//! Checks if HTTP/2 stream data is available on the active CONNECT stream
 /** @param stream_id the stream ID to check
     @param timeout_ms optional timeout in milliseconds for polling (default 0 for immediate check)
 
@@ -978,11 +978,12 @@ if (httpclient.isHttp2DataAvailable(stream_id, 1000)) {
 }
     @endcode
 
-    @note This method first checks for already-buffered HTTP/2 stream data, then polls the
-    socket for new HTTP/2 frames if no data is buffered. This is the correct way to check for
-    data availability when using HTTP/2 streams (e.g., for WebSocket over HTTP/2).
+    @note For HTTP/2 streams created by @ref sendHttp2Connect(), this method waits on the
+    connection-manager stream channel.  If HTTP/2 is not active, the method falls back to the
+    inherited Socket data-availability check for HTTP/1 upgraded connections.
 
-    @throw HTTP2-ERROR if HTTP/2 support is not available
+    @throw HTTP2-ERROR if HTTP/2 is active but there is no active CONNECT stream for the given
+    HTTPClient
 
     @since %Qore 2.3
 */
