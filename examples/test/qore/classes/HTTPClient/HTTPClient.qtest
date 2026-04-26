@@ -382,6 +382,7 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
         addTestCase("poll proxy test", \pollProxyTest());
         addTestCase("poll test", \pollTest());
         addTestCase("UNIX socket conn_mgr test", \unixSocketConnMgrTest());
+        addTestCase("UNIX socket proxy conn_mgr test", \unixSocketProxyConnMgrTest());
         addTestCase("conn_mgr isConnected test", \connMgrIsConnectedTest());
         addTestCase("chunked HEAD test", \chunkedHeadTest());
         addTestCase("assume encoding", \assumedEncoding());
@@ -797,6 +798,54 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
         assertEq("GET", hdr.method);
         assertEq("/unix-test?x=1", hdr.path);
         assertEq(encode_url(path, True), hdr.host);
+    }
+
+    unixSocketProxyConnMgrTest() {
+%ifdef Windows
+        testSkip("skipping because UNIX socket URLs are not available on Windows");
+%endif
+
+        string path = sprintf("%s%sqore-httpclient-proxy-%d-%s.sock", tmp_location(), DirSep, getpid(),
+            get_random_string(12));
+        string encoded_path = encode_url(path, True);
+
+        Queue q();
+        background sub () {
+            try {
+                Socket proxy();
+                proxy.bind(0);
+                proxy.listen();
+                q.push(proxy.getSocketInfo().port);
+
+                Socket peer = proxy.accept(15s);
+                hash<auto> hdr = peer.readHTTPHeader(15s);
+                q.push(hdr);
+                peer.send("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 2\r\n"
+                    "Connection: close\r\n\r\nok");
+                peer.close();
+                proxy.close();
+            } catch (hash<ExceptionInfo> ex) {
+                q.push(ex);
+            }
+        }();
+
+        int proxy_port = q.get();
+        HTTPClient hc({
+            "url": "http://socket=" + encoded_path,
+            "proxy": "http://localhost:" + proxy_port,
+            "timeout": 5s,
+        });
+        hash<auto> info;
+        *string body = hc.get("/unix-proxy?x=1", NOTHING, \info);
+        assertEq("ok", body);
+
+        auto hdr = q.get();
+        if (hdr.typeCode() == NT_HASH && hdr.hasKey("err")) {
+            fail(sprintf("%s: %s", hdr.err, hdr.desc));
+        }
+        assertEq("GET", hdr.method);
+        assertEq("http://" + encoded_path + "/unix-proxy?x=1", hdr.path);
+        assertEq(encoded_path, hdr.host);
     }
 
     connMgrIsConnectedTest() {

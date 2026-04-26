@@ -2367,7 +2367,7 @@ struct qore_httpclient_priv {
 
     // called locked
     DLLLOCAL const char* getMsgPath(ExceptionSink* xsink, const con_info& connection, const char* mpath,
-            QoreString& pstr, bool already_encoded = false) {
+            QoreString& pstr, bool already_encoded = false, bool include_proxy_prefix = true) {
         pstr.clear();
 
         // use default path if no path is set
@@ -2377,7 +2377,7 @@ struct qore_httpclient_priv {
                 : (const char*)connection.path.c_str();
         }
 
-        if (proxy_connection.has_url() && !proxy_connected) {
+        if (include_proxy_prefix && proxy_connection.has_url() && !proxy_connected) {
             // create URL string for path for proxy
             pstr.concat("http");
             if (connection.ssl) {
@@ -5116,10 +5116,8 @@ int QoreHttpClientObject::connect(ExceptionSink* xsink) {
     // When the conn_mgr is active, connect() pre-populates the conn_mgr
     // pool instead of opening the legacy msock. Every subsequent non-WS
     // send() goes through the same pool entry, so there is a single TCP
-    // connection per logical session. UNIX targets through a proxy stay
-    // on the legacy path.
-    if (http_priv->connection.has_url()
-            && !(http_priv->connection.is_unix && http_priv->proxy_connection.has_url())) {
+    // connection per logical session.
+    if (http_priv->connection.has_url()) {
         // Drop any stale msock state (prior disconnect/reconnect cycle).
         http_priv->disconnect_unlocked();
         return http_priv->connectViaConnMgr(xsink);
@@ -5936,7 +5934,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
     int code = 0;
 
     while (true) {
-        const char* msgpath = getMsgPath(xsink, this_connection, mpath, pathstr, path_already_encoded);
+        const char* msgpath = getMsgPath(xsink, this_connection, mpath, pathstr, path_already_encoded, false);
         if (*xsink) {
             return nullptr;
         }
@@ -7314,7 +7312,7 @@ QoreHashNode* qore_httpclient_priv::send_internal(ExceptionSink* xsink, const ch
             }
             is_ws_upgrade = has_conn_upgrade && has_upgrade_ws;
         }
-        if (!is_ws_upgrade && !(connection.is_unix && proxy_connection.has_url())) {
+        if (!is_ws_upgrade) {
             return send_internal_conn_mgr(xsink, mname, meth, mpath, headers,
                 msg_body, data, size, send_callback, getbody, info, timeout_ms,
                 recv_callback, obj, os, is, max_chunk_size, trailer_callback, streaming);
@@ -8474,7 +8472,7 @@ QoreObject* qore_httpclient_priv::startPollSendRecvConnMgr(ExceptionSink* xsink,
     const char* scheme = this_connection.ssl ? "https" : "http";
     QoreString pathstr(enc ? enc : QCS_UTF8);
     bool path_already_encoded = false;
-    const char* msgpath = getMsgPath(xsink, this_connection, path, pathstr, path_already_encoded);
+    const char* msgpath = getMsgPath(xsink, this_connection, path, pathstr, path_already_encoded, false);
     if (*xsink) {
         return nullptr;
     }
