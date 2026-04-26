@@ -2105,7 +2105,8 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     // for recursive functions like fibonacci where millions of calls would otherwise
     // malloc/free a dozen vectors per invocation.
     size_t reserve_size = func.max_value_id > 0 ? func.max_value_id + 1 : 128;
-    size_t local_slot_count = func.local_var_slots.size();
+    size_t local_slot_count = func.local_var_slots.empty()
+        ? 0 : static_cast<size_t>(func.max_local_slot_id) + 1;
     IRCallFrame& frame = tl_frame_pool.push(reserve_size, local_slot_count);
     // RAII guard: return the frame to the pool on any exit path
     struct FrameGuard {
@@ -8609,17 +8610,21 @@ lvalue_path_unary_done:
                 ReferenceHolder<QoreListNode> arg_list(
                     direct_inst->operands.empty() ? nullptr
                         : new QoreListNode(autoTypeInfo), xsink);
-                for (const auto& operand : direct_inst->operands) {
-                    QoreValue arg_val = getIRValue(values, operand);
-                    if (arg_val.hasNode()) {
-                        arg_val.refSelf();
+                if (!direct_inst->operands.empty()) {
+                    qore_list_private* priv = qore_list_private::get(**arg_list);
+                    priv->reserve(direct_inst->operands.size());
+                    for (const auto& operand : direct_inst->operands) {
+                        QoreValue arg_val = getIRValue(values, operand);
+                        if (arg_val.hasNode()) {
+                            arg_val.refSelf();
+                        }
+                        priv->pushIntern(arg_val);
                     }
-                    arg_list->push(arg_val, xsink);
                 }
 
                 // Get runtime config and call the method directly
                 RuntimeConfig& rc = rc_get_current_ref();
-                QoreValue res = qore_method_private::eval(*method, xsink, rc, self, *arg_list);
+                QoreValue res = qore_method_private::evalTmpArgs(*method, xsink, rc, self, *arg_list);
 
                 if (xsink && *xsink) {
                     return returnAfterUnhandledException();
@@ -8705,17 +8710,21 @@ lvalue_path_unary_done:
                 ReferenceHolder<QoreListNode> arg_list(
                     invoke_inst->operands.empty() ? nullptr
                         : new QoreListNode(autoTypeInfo), xsink);
-                for (const auto& operand : invoke_inst->operands) {
-                    QoreValue arg_val = getIRValue(values, operand);
-                    if (arg_val.hasNode()) {
-                        arg_val.refSelf();
+                if (!invoke_inst->operands.empty()) {
+                    qore_list_private* priv = qore_list_private::get(**arg_list);
+                    priv->reserve(invoke_inst->operands.size());
+                    for (const auto& operand : invoke_inst->operands) {
+                        QoreValue arg_val = getIRValue(values, operand);
+                        if (arg_val.hasNode()) {
+                            arg_val.refSelf();
+                        }
+                        priv->pushIntern(arg_val);
                     }
-                    arg_list->push(arg_val, xsink);
                 }
 
                 // Get runtime config and call the method directly
                 RuntimeConfig& rc = rc_get_current_ref();
-                QoreValue res = qore_method_private::eval(*method, xsink, rc, self, *arg_list);
+                QoreValue res = qore_method_private::evalTmpArgs(*method, xsink, rc, self, *arg_list);
 
                 // Method call runs in its own frame and cannot modify caller's locals
                 // Skip invalidation for built-in methods without reference arguments

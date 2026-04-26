@@ -1294,8 +1294,8 @@ static bool write_expr_parse_ref(AOTExprWriteCtx& ctx) {
     const AbstractQoreNode* node = ctx.expr.getInternalNode();
     if (auto* prn = dynamic_cast<const ParseReferenceNode*>(node)) {
         ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::PARSE_REF));
-        classifyAndWriteExpr(ctx.writer, prn->getLVExp(), ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map);
-        return true;
+        return classifyAndWriteExpr(ctx.writer, prn->getLVExp(), ctx.parent_locals, ctx.parent_globals,
+            ctx.const_reverse_map);
     }
     return false;
 }

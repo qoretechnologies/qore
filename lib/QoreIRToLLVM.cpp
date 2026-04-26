@@ -6991,13 +6991,22 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 } else {
                     const auto* parse_ref = dynamic_cast<const ParseReferenceNode*>(
                             inv->expr.getInternalNode());
-                    assert(parse_ref);
-                    llvm::Value* node_ptr = llvm::ConstantInt::get(i64_type,
-                            reinterpret_cast<uint64_t>(parse_ref));
-                    llvm::Value* node_as_ptr = builder->CreateIntToPtr(node_ptr, ptr_type);
-                    auto helper = module.getOrInsertFunction("qore_rt_create_parse_ref",
-                            llvm::FunctionType::get(i64_type, {ptr_type, ptr_type}, false));
-                    result = builder->CreateCall(helper, {node_as_ptr, xsink_arg});
+                    if (parse_ref) {
+                        llvm::Value* node_ptr = llvm::ConstantInt::get(i64_type,
+                                reinterpret_cast<uint64_t>(parse_ref));
+                        llvm::Value* node_as_ptr = builder->CreateIntToPtr(node_ptr, ptr_type);
+                        auto helper = module.getOrInsertFunction("qore_rt_create_parse_ref",
+                                llvm::FunctionType::get(i64_type, {ptr_type, ptr_type}, false));
+                        result = builder->CreateCall(helper, {node_as_ptr, xsink_arg});
+                    } else {
+                        QoreValue expr_val = inv->expr;
+                        uint64_t bits;
+                        std::memcpy(&bits, &expr_val, sizeof(bits));
+                        llvm::Value* expr_const = llvm::ConstantInt::get(i64_type, bits);
+                        auto helper = module.getOrInsertFunction("qore_rt_invoke_expr",
+                                llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false));
+                        result = builder->CreateCall(helper, {expr_const, xsink_arg});
+                    }
                 }
                 // CreateParseRef may access locals via lvalue resolution
                 reloadAllLocalsFromRuntime(module, llvm_func);
@@ -9998,16 +10007,30 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         llvm::ConstantInt::get(i32_type, slot), xsink_arg});
                 }
             } else {
-                llvm::Value* node_ptr = llvm::ConstantInt::get(i64_type,
-                        reinterpret_cast<uint64_t>(prinst->node));
-                llvm::Value* node_as_ptr = builder->CreateIntToPtr(node_ptr, ptr_type);
-                auto pr_ft = llvm::FunctionType::get(i64_type,
-                        {ptr_type, ptr_type}, false);
-                auto helper = module.getOrInsertFunction("qore_rt_create_parse_ref", pr_ft);
-                auto helper_throwing = module.getOrInsertFunction(
-                        "qore_rt_create_parse_ref_throwing", pr_ft);
-                result = emitMaybeInvoke(helper, helper_throwing,
-                        {node_as_ptr, xsink_arg}, module, llvm_func, inst);
+                if (prinst->node) {
+                    llvm::Value* node_ptr = llvm::ConstantInt::get(i64_type,
+                            reinterpret_cast<uint64_t>(prinst->node));
+                    llvm::Value* node_as_ptr = builder->CreateIntToPtr(node_ptr, ptr_type);
+                    auto pr_ft = llvm::FunctionType::get(i64_type,
+                            {ptr_type, ptr_type}, false);
+                    auto helper = module.getOrInsertFunction("qore_rt_create_parse_ref", pr_ft);
+                    auto helper_throwing = module.getOrInsertFunction(
+                            "qore_rt_create_parse_ref_throwing", pr_ft);
+                    result = emitMaybeInvoke(helper, helper_throwing,
+                            {node_as_ptr, xsink_arg}, module, llvm_func, inst);
+                } else {
+                    QoreValue expr_val = prinst->expr;
+                    uint64_t expr_bits;
+                    std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
+                    llvm::Value* expr_const = llvm::ConstantInt::get(i64_type, expr_bits);
+                    auto ie_ft = llvm::FunctionType::get(i64_type,
+                            {i64_type, ptr_type}, false);
+                    auto helper = module.getOrInsertFunction("qore_rt_invoke_expr", ie_ft);
+                    auto helper_throwing = module.getOrInsertFunction(
+                            "qore_rt_invoke_expr_throwing", ie_ft);
+                    result = emitMaybeInvoke(helper, helper_throwing,
+                            {expr_const, xsink_arg}, module, llvm_func, inst);
+                }
             }
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);

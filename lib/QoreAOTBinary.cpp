@@ -3679,8 +3679,8 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
     // ParseReferenceNode: \var lvalue reference — serialize inner lvalue expression
     if (auto* prn = dynamic_cast<const ParseReferenceNode*>(node)) {
         writer.writeU8(static_cast<uint8_t>(AOTExprKind::PARSE_REF));
-        classifyAndWriteExpr(writer, prn->getLVExp(), parent_locals, parent_globals, const_reverse_map);
-        return true;
+        bool ok = classifyAndWriteExpr(writer, prn->getLVExp(), parent_locals, parent_globals, const_reverse_map);
+        return ok;
     }
 
     // NewHashDeclNode: hashdecl construction (e.g., <StatInfo>{"size": 1})

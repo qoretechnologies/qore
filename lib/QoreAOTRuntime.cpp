@@ -2390,7 +2390,6 @@ static QoreAOTContext* buildContextFromSlotMap(
             if (mc) {
                 ctx->call_targets[i].method = mc->getMethod();
                 ctx->call_targets[i].qc = mc->getClass();
-                ctx->call_targets[i].variant = mc->getVariant();
                 ctx->call_targets[i].is_pseudo = mc->isPseudo();
                 ctx->call_targets[i].method_name = mc->getName();
                 // Resolve variant from method only when the method has exactly
@@ -2405,11 +2404,12 @@ static QoreAOTContext* buildContextFromSlotMap(
                 // routed to `append(Processor)` with id standing in for
                 // processor — a plain integer — producing
                 // `append(integer, integer)` overload errors).
-                if (ctx->call_targets[i].method && !ctx->call_targets[i].variant) {
+                if (ctx->call_targets[i].method) {
                     MethodFunctionBase* mfb = qore_method_private::get(
                         *ctx->call_targets[i].method)->getFunction();
                     if (mfb && mfb->numVariants() == 1) {
-                        ctx->call_targets[i].variant = mfb->first();
+                        const AbstractQoreFunctionVariant* v = mc->getVariant();
+                        ctx->call_targets[i].variant = v ? v : mfb->first();
                     }
                 }
             }
@@ -3926,11 +3926,65 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
         func->return_type_info = type_resolver.resolve(return_type_path, type_error);
     }
 
-    // 2. Read local variable slot table and build name→LocalVar* map
+    // 2. Read local variable slot table and build name→LocalVar* map.
+    //
+    // The serialized slot table is authoritative for local identity.  Multiple
+    // block-scoped locals can legitimately have the same name and type in one
+    // function (for example two separate `string sql` declarations in if/else
+    // branches).  Only locals supplied by the enclosing scope may be reused by
+    // name; function-owned locals from the slot table must remain distinct by
+    // slot ID.
     std::unordered_map<std::string, LocalVar*> local_map;
+    std::unordered_set<LocalVar*> enclosing_local_set;
     if (enclosing_locals) {
         local_map = *enclosing_locals;
+        for (const auto& i : *enclosing_locals) {
+            if (i.second) {
+                enclosing_local_set.insert(i.second);
+            }
+        }
     }
+    std::unordered_map<std::string, std::vector<LocalVar*>> created_slot_locals;
+    auto makeLocalKey = [](const char* lname, const char* ltype) -> std::string {
+        std::string key(lname ? lname : "");
+        if (ltype && *ltype) {
+            key += '\x1f';
+            key += ltype;
+        }
+        return key;
+    };
+    auto rememberCreatedSlotLocal = [&created_slot_locals, &makeLocalKey](
+            const char* lname, const char* ltype, LocalVar* lv) {
+        if (!lv || !lname || !*lname) {
+            return;
+        }
+        created_slot_locals[makeLocalKey(lname, ltype)].push_back(lv);
+        created_slot_locals[lname].push_back(lv);
+    };
+    auto findEnclosingLocal = [&local_map, &enclosing_local_set, &makeLocalKey](
+            const char* lname, const char* ltype) -> LocalVar* {
+        if (ltype && *ltype) {
+            auto cit = local_map.find(makeLocalKey(lname, ltype));
+            if (cit != local_map.end() && enclosing_local_set.count(cit->second)) {
+                return cit->second;
+            }
+        }
+        auto it = local_map.find(lname);
+        return it != local_map.end() && enclosing_local_set.count(it->second)
+            ? it->second : nullptr;
+    };
+    auto createLocal = [pgm](const char* lname, const char* ltype) -> LocalVar* {
+        if (!pgm) {
+            printd(5, "AOT IR deser: local '%s' not found in enclosing scope and no pgm\n", lname);
+            return nullptr;
+        }
+        std::string type_error;
+        QoreAOTTypeResolver type_resolver(pgm);
+        const QoreTypeInfo* ti = (ltype && *ltype)
+            ? type_resolver.resolve(ltype, type_error) : nullptr;
+        qore_program_private* pp = qore_program_private::get(*pgm);
+        return pp->createLocalVar(lname, ti);
+    };
     for (int i = 0; i < num_local_slots; ++i) {
         const char* lname = reader.readStringRef(ptr);
         const char* ltype = reader.readStringRef(ptr);
@@ -3949,48 +4003,23 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
             LocalVar* parent_lv = parent_locals_arr[slot_id];
             func->local_var_slots[parent_lv] = slot_id;
             local_map[lname] = parent_lv;
+            enclosing_local_set.insert(parent_lv);
             continue;
         }
 
-        // Prefer composite (name|type_path) lookup so a handler local that
-        // shadows a same-named parent var with a different type picks the
-        // correct LocalVar* from the enclosing scope's all_body_locals.
-        // Fall back to bare-name lookup when no type was serialized.
-        if (ltype && *ltype) {
-            std::string ck(lname);
-            ck += '\x1f';
-            ck += ltype;
-            auto cit = local_map.find(ck);
-            if (cit != local_map.end()) {
-                func->local_var_slots[cit->second] = slot_id;
-                // Keep the bare-name mapping for handler-internal references
-                // that didn't supply a type (rare; defensive only).
-                if (local_map.find(lname) == local_map.end()) {
-                    local_map[lname] = cit->second;
-                }
-                continue;
-            }
-        }
-
-        // Check if local is already provided by enclosing scope (name-based fallback)
-        auto it = local_map.find(lname);
-        if (it != local_map.end()) {
-            func->local_var_slots[it->second] = slot_id;
+        if (LocalVar* enclosing_lv = findEnclosingLocal(lname, ltype)) {
+            func->local_var_slots[enclosing_lv] = slot_id;
             continue;
         }
 
         // Create a new local variable (handler-specific local not in enclosing scope)
-        if (pgm) {
-            std::string type_error;
-            QoreAOTTypeResolver type_resolver(pgm);
-            const QoreTypeInfo* ti = (ltype && *ltype)
-                ? type_resolver.resolve(ltype, type_error) : nullptr;
-            qore_program_private* pp = qore_program_private::get(*pgm);
-            LocalVar* lv = pp->createLocalVar(lname, ti);
-            local_map[lname] = lv;
+        if (LocalVar* lv = createLocal(lname, ltype)) {
             func->local_var_slots[lv] = slot_id;
-        } else {
-            printd(5, "AOT IR deser: local '%s' not found in enclosing scope and no pgm\n", lname);
+            local_map.emplace(lname, lv);
+            if (ltype && *ltype) {
+                local_map.emplace(makeLocalKey(lname, ltype), lv);
+            }
+            rememberCreatedSlotLocal(lname, ltype, lv);
         }
     }
 
@@ -4009,9 +4038,25 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
         const char* bltype = reader.readStringRef(ptr);
 
         if (blname && *blname) {
-            auto it = local_map.find(blname);
-            if (it != local_map.end()) {
-                func->all_body_locals.push_back(it->second);
+            LocalVar* lv = nullptr;
+            auto key = makeLocalKey(blname, bltype);
+            auto cit = created_slot_locals.find(key);
+            if (cit == created_slot_locals.end() || cit->second.empty()) {
+                cit = created_slot_locals.find(blname);
+            }
+            if (cit != created_slot_locals.end() && !cit->second.empty()) {
+                lv = cit->second.front();
+                cit->second.erase(cit->second.begin());
+            } else if (LocalVar* enclosing_lv = findEnclosingLocal(blname, bltype)) {
+                lv = enclosing_lv;
+            } else {
+                auto it = local_map.find(blname);
+                if (it != local_map.end()) {
+                    lv = it->second;
+                }
+            }
+            if (lv) {
+                func->all_body_locals.push_back(lv);
             }
         }
     }
