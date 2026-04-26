@@ -1171,13 +1171,145 @@ void QoreIRToLLVM::emitPreInstClosureReInstantiation(llvm::Module& module) {
     }
 }
 
+void QoreIRToLLVM::syncLocalsToRuntimeForHandlers(llvm::Module& module) {
+    if (!has_on_block_exit_handlers || local_allocas.empty()) {
+        return;
+    }
+
+    auto sync_jit = module.getOrInsertFunction("qore_rt_sync_local",
+            llvm::FunctionType::get(void_type, {ptr_type, i64_type}, false));
+    auto sync_aot = module.getOrInsertFunction("qore_rt_sync_local_aot",
+            llvm::FunctionType::get(void_type, {ptr_type, i32_type, i64_type}, false));
+    auto decref_nothrow = module.getOrInsertFunction("qore_rt_decref_nothrow",
+            llvm::FunctionType::get(void_type, {i64_type}, false));
+
+    for (auto& [key, alloca] : local_allocas) {
+        if (ir_only_locals_set && ir_only_locals_set->count(key)) {
+            continue;
+        }
+
+        auto* local = reinterpret_cast<const LocalVar*>(key);
+        if (local && local->closureUse()) {
+            continue;
+        }
+
+        llvm::Value* val;
+        bool boxed_temp = false;
+        if (native_int_locals.count(key)) {
+            val = boxInt(builder->CreateLoad(i64_type, alloca));
+            boxed_temp = true;
+        } else if (native_float_locals.count(key)) {
+            val = boxFloat(builder->CreateLoad(double_type, alloca));
+        } else {
+            val = builder->CreateLoad(i64_type, alloca);
+        }
+
+        if (aot_mode) {
+            int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(key);
+            builder->CreateCall(sync_aot, {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), val});
+        } else {
+            llvm::Value* var_ptr = llvm::ConstantInt::get(i64_type, reinterpret_cast<uint64_t>(key));
+            llvm::Value* var_as_ptr = builder->CreateIntToPtr(var_ptr, ptr_type);
+            builder->CreateCall(sync_jit, {var_as_ptr, val});
+        }
+
+        if (boxed_temp) {
+            builder->CreateCall(decref_nothrow, {val});
+        }
+    }
+}
+
+llvm::Value* QoreIRToLLVM::beginNativeHandlerSlotCache(llvm::Module& module) {
+    if (!has_on_block_exit_handlers || !current_ir_func) {
+        return nullptr;
+    }
+
+    int32_t slot_count = current_ir_func->local_var_slots.empty()
+        ? 0 : static_cast<int32_t>(current_ir_func->max_local_slot_id) + 1;
+    auto begin_helper = module.getOrInsertFunction("qore_rt_begin_native_ir_slot_cache",
+            llvm::FunctionType::get(ptr_type, {i32_type}, false));
+    llvm::Value* guard = builder->CreateCall(begin_helper,
+            {llvm::ConstantInt::get(i32_type, slot_count)});
+
+    if (slot_count == 0 || local_allocas.empty()) {
+        return guard;
+    }
+
+    auto set_jit = module.getOrInsertFunction("qore_rt_set_native_ir_slot_cache_value",
+            llvm::FunctionType::get(void_type, {ptr_type, i32_type, ptr_type, i64_type}, false));
+    auto set_aot = module.getOrInsertFunction("qore_rt_set_native_ir_slot_cache_value_aot",
+            llvm::FunctionType::get(void_type,
+                {ptr_type, ptr_type, i32_type, i32_type, i64_type}, false));
+    auto decref_nothrow = module.getOrInsertFunction("qore_rt_decref_nothrow",
+            llvm::FunctionType::get(void_type, {i64_type}, false));
+
+    for (const auto& [local, ir_slot] : current_ir_func->local_var_slots) {
+        if (!local || ir_slot >= static_cast<uint32_t>(slot_count)) {
+            continue;
+        }
+        if (local->closureUse()) {
+            // Closure-use locals live on the cvstack / closure environment.  Their
+            // LLVM allocas are not authoritative, so publishing them through the
+            // native handler slot cache can overwrite the real CVV value.
+            continue;
+        }
+
+        const void* key = reinterpret_cast<const void*>(local);
+        auto it = local_allocas.find(key);
+        if (it == local_allocas.end()) {
+            continue;
+        }
+
+        llvm::Value* val;
+        bool boxed_temp = false;
+        if (native_int_locals.count(key)) {
+            val = boxInt(builder->CreateLoad(i64_type, it->second));
+            boxed_temp = true;
+        } else if (native_float_locals.count(key)) {
+            val = boxFloat(builder->CreateLoad(double_type, it->second));
+        } else {
+            val = builder->CreateLoad(i64_type, it->second);
+        }
+
+        if (aot_mode) {
+            int32_t local_slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(key);
+            builder->CreateCall(set_aot, {aot_ctx_arg, guard,
+                    llvm::ConstantInt::get(i32_type, ir_slot),
+                    llvm::ConstantInt::get(i32_type, local_slot), val});
+        } else {
+            llvm::Value* var_ptr = llvm::ConstantInt::get(i64_type, reinterpret_cast<uint64_t>(local));
+            llvm::Value* var_as_ptr = builder->CreateIntToPtr(var_ptr, ptr_type);
+            builder->CreateCall(set_jit, {guard, llvm::ConstantInt::get(i32_type, ir_slot), var_as_ptr, val});
+        }
+
+        if (boxed_temp) {
+            builder->CreateCall(decref_nothrow, {val});
+        }
+    }
+
+    return guard;
+}
+
+void QoreIRToLLVM::endNativeHandlerSlotCache(llvm::Module& module, llvm::Value* guard) {
+    if (!guard) {
+        return;
+    }
+
+    auto end_helper = module.getOrInsertFunction("qore_rt_end_native_ir_slot_cache",
+            llvm::FunctionType::get(void_type, {ptr_type, ptr_type}, false));
+    builder->CreateCall(end_helper, {guard, xsink_arg});
+}
+
 void QoreIRToLLVM::emitOnBlockExitExec(llvm::Module& module) {
     if (!obe_saved_count) {
         return;
     }
+    syncLocalsToRuntimeForHandlers(module);
+    llvm::Value* native_slot_cache = beginNativeHandlerSlotCache(module);
     auto helper = module.getOrInsertFunction("qore_rt_exec_on_block_exit",
             llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
     builder->CreateCall(helper, {obe_saved_count, xsink_arg});
+    endNativeHandlerSlotCache(module, native_slot_cache);
 }
 
 void QoreIRToLLVM::emitPreinstantiatedCleanup(llvm::Module& module) {
@@ -1807,13 +1939,21 @@ void QoreIRToLLVM::reloadLocalFromRuntime(const void* key, llvm::Module& module,
         return;
     }
 
+    // Skip special locals whose LLVM alloca cache is stable for the function.
+    // `self` is a static constructor/method binding: member writes mutate the
+    // object, not the local variable, so reload tracking only creates stale
+    // duplicate object cleanup refs on constructor exception paths.
+    const LocalVar* var_ptr = reinterpret_cast<const LocalVar*>(key);
+    if (var_ptr && var_ptr->isSelf()) {
+        return;
+    }
+
     // Skip closure-use variables — their allocas are never read by LoadLocal
     // (which always calls qore_rt_load_local() for closure vars directly).
     // Reloading them is unnecessary and dangerous: block-scoped closure-use
     // vars (like loop-body `int captured`) have their CVV popped by
     // UninstantiateLocal mid-function, so calling qore_rt_load_local() at a
     // reload point after that pop would crash (null CVV).
-    const LocalVar* var_ptr = reinterpret_cast<const LocalVar*>(key);
     if (var_ptr && var_ptr->closureUse()) {
         return;
     }
@@ -1909,6 +2049,11 @@ void QoreIRToLLVM::reloadLocalFromRuntime(const void* key, llvm::Module& module,
 
 void QoreIRToLLVM::clearLocalReloadTracker(const void* key, llvm::Module& module,
         llvm::Function* llvm_func) {
+    const LocalVar* var_ptr = reinterpret_cast<const LocalVar*>(key);
+    if (var_ptr && (var_ptr->isSelf() || var_ptr->closureUse())) {
+        return;
+    }
+
     auto tracker_it = local_reload_trackers.find(key);
     if (tracker_it == local_reload_trackers.end()) {
         // Tracker doesn't exist yet at compile time — proactively create it so
@@ -1959,6 +2104,11 @@ void QoreIRToLLVM::clearLocalReloadTracker(const void* key, llvm::Module& module
 
 void QoreIRToLLVM::clearLocalCachedValue(const void* key, llvm::Module& module,
         llvm::Function* llvm_func) {
+    const LocalVar* var_ptr = reinterpret_cast<const LocalVar*>(key);
+    if (var_ptr && var_ptr->isSelf()) {
+        return;
+    }
+
     auto decref_fn = module.getOrInsertFunction("qore_rt_decref",
             llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
 
@@ -3189,6 +3339,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     error_return_block = nullptr;
     jit_deopt_block = nullptr;
     landingpad_blocks.clear();
+    has_on_block_exit_handlers = false;
 
     // Collect all unique LocalVar* pointers from the function and emit
     // instantiation calls at the start of the entry block so the Qore
@@ -7374,7 +7525,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     llvm::Value* saved_count = it->second;
                     auto helper = module.getOrInsertFunction("qore_rt_exec_on_block_exit",
                             llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+                    syncLocalsToRuntimeForHandlers(module);
+                    llvm::Value* native_slot_cache = beginNativeHandlerSlotCache(module);
                     builder->CreateCall(helper, {saved_count, xsink_arg});
+                    endNativeHandlerSlotCache(module, native_slot_cache);
                     // On-block-exit handlers execute through the AST path and can modify
                     // any local variable on the thread-local stack
                     reloadAllLocalsFromRuntime(module, llvm_func);
@@ -12309,6 +12463,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         // === Statement operations ===
         case QoreIROpcode::OnBlockExit: {
             const auto* sinst = static_cast<const QoreIROnBlockExitInstruction*>(inst);
+            has_on_block_exit_handlers = true;
             // Register the on_block_exit handler for deferred execution at function exit.
             // The IR interpreter records handlers and executes them at return time;
             // the JIT does the same via thread-local runtime helpers.
@@ -12601,7 +12756,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 auto helper = module.getOrInsertFunction("qore_rt_exec_on_block_exit_impl",
                         llvm::FunctionType::get(void_type, {i64_type, ptr_type, builder->getInt1Ty()}, false));
                 llvm::Value* inline_lowered_val = llvm::ConstantInt::get(builder->getInt1Ty(), sinst->inline_lowered ? 1 : 0);
+                syncLocalsToRuntimeForHandlers(module);
+                llvm::Value* native_slot_cache = beginNativeHandlerSlotCache(module);
                 builder->CreateCall(helper, {saved_count, xsink_arg, inline_lowered_val});
+                endNativeHandlerSlotCache(module, native_slot_cache);
                 // On-block-exit handlers execute through the AST path and can modify
                 // any local variable on the thread-local stack. Reload all local
                 // allocas so subsequent LoadLocal sees the updated values.

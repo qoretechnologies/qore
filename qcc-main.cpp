@@ -33,6 +33,7 @@
 #include <qore/Qore.h>
 #include <qore/ParseOptionMap.h>
 #include "qore/intern/QoreAOT.h"
+#include "qore/intern/QoreIR.h"
 
 #include <algorithm>
 #include <cctype>
@@ -41,10 +42,20 @@
 #include <cstring>
 #include <cerrno>
 #include <dirent.h>
+#include <limits>
+#include <map>
+#include <memory>
+#include <set>
 #include <string>
 #include <vector>
 #include <getopt.h>
 #include <sys/stat.h>
+#include <zlib.h>
+
+#include <llvm/Object/Binary.h>
+#include <llvm/Object/ObjectFile.h>
+#include <llvm/Object/SymbolSize.h>
+#include <llvm/Support/Error.h>
 
 static const char* QCC_VERSION = "1.0";
 
@@ -260,6 +271,9 @@ static bool include_source = false;
 static bool verbose = false;
 static bool show_help = false;
 static bool show_version = false;
+static bool dump_info = false;
+static bool dump_symbols = false;
+static bool dump_sections = false;
 
 static bool apply_parse_option_flags(QoreParseOptions& po, std::string& error) {
     for (const std::string& raw : parse_option_flags) {
@@ -426,6 +440,11 @@ static void print_usage(const char* prog) {
     printf("  -v, --verbose          Verbose output\n");
     printf("  -h, --help             Show this help message\n");
     printf("  -V, --version          Show version information\n");
+    printf("      --dump-info        Inspect embedded Qore AOT metadata in object files,\n"
+           "                         .qmod modules, .qo fragments, .qoa archives, or\n"
+           "                         linked AOT executables without executing them\n");
+    printf("      --dump-symbols     Include an nm-like symbol table view\n");
+    printf("      --dump-sections    Include object and AOT section tables\n");
     printf("\n");
     printf("Examples:\n");
     printf("  %s script.q                    # Compile to 'script' executable\n", prog);
@@ -470,6 +489,9 @@ static struct option long_options[] = {
     {"depfile",           required_argument, nullptr, 0x102},
     {"define",            required_argument, nullptr, 0x103},
     {"parse-option",      required_argument, nullptr, 0x104},
+    {"dump-info",         no_argument,       nullptr, 0x105},
+    {"dump-symbols",      no_argument,       nullptr, 0x106},
+    {"dump-sections",     no_argument,       nullptr, 0x107},
     {"from-objects",      no_argument,       nullptr, 'F'},
     {"archive",           no_argument,       nullptr, 'a'},
     {"entry",             required_argument, nullptr, 'e'},
@@ -558,6 +580,15 @@ static int parse_options_cmdline(int argc, char** argv) {
             case 0x104:  // --parse-option
                 parse_option_flags.emplace_back(optarg);
                 break;
+            case 0x105:  // --dump-info
+                dump_info = true;
+                break;
+            case 0x106:  // --dump-symbols
+                dump_symbols = true;
+                break;
+            case 0x107:  // --dump-sections
+                dump_sections = true;
+                break;
             case 'F':
                 from_objects = true;
                 break;
@@ -609,12 +640,666 @@ static bool read_file(const char* path, std::string& content) {
         return false;
     }
 
-    content.resize(fsize);
-    size_t nread = fread(&content[0], 1, fsize, f);
-    fclose(f);
-    content.resize(nread);
+    if (!fsize) {
+        content.clear();
+        if (fclose(f) != 0) {
+            fprintf(stderr, "error: cannot close '%s': %s\n", path, strerror(errno));
+            return false;
+        }
+        return true;
+    }
+
+    size_t expected = static_cast<size_t>(fsize);
+    content.resize(expected);
+    size_t nread = fread(&content[0], 1, expected, f);
+    if (nread != expected) {
+        if (ferror(f)) {
+            fprintf(stderr, "error: cannot read '%s': %s\n", path, strerror(errno));
+        } else {
+            fprintf(stderr, "error: short read from '%s': expected %zu bytes, got %zu\n",
+                path, expected, nread);
+        }
+        fclose(f);
+        content.clear();
+        return false;
+    }
+    if (fclose(f) != 0) {
+        fprintf(stderr, "error: cannot close '%s': %s\n", path, strerror(errno));
+        content.clear();
+        return false;
+    }
 
     return true;
+}
+
+struct AOTDumpMetadataBlob {
+    std::string source;
+    std::vector<uint8_t> bytes;
+};
+
+static uint16_t read_u16_le(const uint8_t* p) {
+    return static_cast<uint16_t>(p[0])
+        | (static_cast<uint16_t>(p[1]) << 8);
+}
+
+static uint32_t read_u32_le(const uint8_t* p) {
+    return static_cast<uint32_t>(p[0])
+        | (static_cast<uint32_t>(p[1]) << 8)
+        | (static_cast<uint32_t>(p[2]) << 16)
+        | (static_cast<uint32_t>(p[3]) << 24);
+}
+
+static bool find_aot_metadata_length(const uint8_t* data, size_t avail, size_t& len) {
+    len = 0;
+    if (avail < QORE_AOT_HEADER_SIZE) {
+        return false;
+    }
+    if (read_u32_le(data) != QORE_AOT_BINARY_MAGIC) {
+        return false;
+    }
+    uint16_t version = read_u16_le(data + 4);
+    if (version == 0 || version > QORE_AOT_BINARY_VERSION) {
+        return false;
+    }
+
+    uint8_t compression = data[34];
+    if (compression == 0) {
+        uint32_t section_count = read_u32_le(data + 16);
+        if (section_count > 100000) {
+            return false;
+        }
+        constexpr size_t section_header_size = 12;
+        size_t section_dir_size = static_cast<size_t>(section_count) * section_header_size;
+        size_t string_pool_size_pos = QORE_AOT_HEADER_SIZE + section_dir_size;
+        if (string_pool_size_pos + 4 > avail) {
+            return false;
+        }
+        uint32_t string_pool_size = read_u32_le(data + string_pool_size_pos);
+        size_t data_area_offset = string_pool_size_pos + 4 + string_pool_size;
+        if (data_area_offset > avail) {
+            return false;
+        }
+
+        uint64_t data_area_size = 0;
+        const uint8_t* sec = data + QORE_AOT_HEADER_SIZE;
+        for (uint32_t i = 0; i < section_count; ++i, sec += section_header_size) {
+            uint32_t offset = read_u32_le(sec + 4);
+            uint32_t size = read_u32_le(sec + 8);
+            uint64_t end = static_cast<uint64_t>(offset) + size;
+            if (end > data_area_size) {
+                data_area_size = end;
+            }
+        }
+        uint64_t total = static_cast<uint64_t>(data_area_offset) + data_area_size;
+        if (total > avail) {
+            return false;
+        }
+        len = static_cast<size_t>(total);
+        return true;
+    }
+
+    if (compression == 1) {
+        if (avail < QORE_AOT_HEADER_SIZE + 4) {
+            return false;
+        }
+        uint32_t uncompressed_size = read_u32_le(data + QORE_AOT_HEADER_SIZE);
+        if (uncompressed_size > 100 * 1024 * 1024) {
+            return false;
+        }
+        if (uncompressed_size == 0) {
+            len = QORE_AOT_HEADER_SIZE + 4;
+            return true;
+        }
+
+        std::vector<uint8_t> out(uncompressed_size);
+        z_stream strm{};
+        int rc = inflateInit(&strm);
+        if (rc != Z_OK) {
+            return false;
+        }
+        strm.next_in = const_cast<Bytef*>(data + QORE_AOT_HEADER_SIZE + 4);
+        strm.avail_in = static_cast<uInt>(std::min<size_t>(
+            avail - QORE_AOT_HEADER_SIZE - 4, std::numeric_limits<uInt>::max()));
+        strm.next_out = out.data();
+        strm.avail_out = static_cast<uInt>(std::min<uint32_t>(
+            uncompressed_size, std::numeric_limits<uInt>::max()));
+        rc = inflate(&strm, Z_FINISH);
+        bool ok = rc == Z_STREAM_END && strm.total_out == uncompressed_size;
+        size_t consumed = static_cast<size_t>(strm.total_in);
+        inflateEnd(&strm);
+        if (!ok) {
+            return false;
+        }
+        len = QORE_AOT_HEADER_SIZE + 4 + consumed;
+        return len <= avail;
+    }
+
+    return false;
+}
+
+static const char* aot_section_type_name(uint16_t type) {
+    switch (static_cast<QoreAOTSectionType>(type)) {
+        case QoreAOTSectionType::STRINGS: return "STRINGS";
+        case QoreAOTSectionType::NAMESPACES: return "NAMESPACES";
+        case QoreAOTSectionType::CLASSES: return "CLASSES";
+        case QoreAOTSectionType::HASHDECLS: return "HASHDECLS";
+        case QoreAOTSectionType::ENUMS: return "ENUMS";
+        case QoreAOTSectionType::TYPEDEFS: return "TYPEDEFS";
+        case QoreAOTSectionType::CONSTANTS: return "CONSTANTS";
+        case QoreAOTSectionType::GLOBALS: return "GLOBALS";
+        case QoreAOTSectionType::FUNCTIONS: return "FUNCTIONS";
+        case QoreAOTSectionType::METHODS: return "METHODS";
+        case QoreAOTSectionType::SLOT_MAPS: return "SLOT_MAPS";
+        case QoreAOTSectionType::TOPLEVEL: return "TOPLEVEL";
+        case QoreAOTSectionType::FUNC_SOURCES: return "FUNC_SOURCES";
+        case QoreAOTSectionType::DEPENDENCIES: return "DEPENDENCIES";
+        case QoreAOTSectionType::REEXPORT_MODULES: return "REEXPORT_MODULES";
+        case QoreAOTSectionType::PROGRAM_METADATA: return "PROGRAM_METADATA";
+        case QoreAOTSectionType::INIT_FUNCS: return "INIT_FUNCS";
+        case QoreAOTSectionType::TYPE_TABLE: return "TYPE_TABLE";
+        case QoreAOTSectionType::MODULE_PATH_PREPEND: return "MODULE_PATH_PREPEND";
+        case QoreAOTSectionType::MODULE_PATH_APPEND: return "MODULE_PATH_APPEND";
+        case QoreAOTSectionType::BUILD_INFO: return "BUILD_INFO";
+    }
+    return "UNKNOWN";
+}
+
+static std::string aot_metadata_key(const QoreAOTBinaryReader& reader, size_t size) {
+    const QoreAOTBinaryHeader& hdr = reader.getHeader();
+    const char* label = reader.getLabel();
+    return std::string(label ? label : "") + "|" + std::to_string(hdr.source_hash)
+        + "|" + std::to_string(hdr.flags) + "|" + std::to_string(hdr.feature_flags)
+        + "|" + std::to_string(size);
+}
+
+static bool add_aot_metadata_blob(std::vector<AOTDumpMetadataBlob>& blobs,
+        std::set<std::string>& seen, std::vector<uint8_t>&& bytes,
+        const std::string& source) {
+    if (bytes.size() < QORE_AOT_HEADER_SIZE) {
+        return false;
+    }
+    QoreAOTBinaryReader reader;
+    std::string error;
+    if (!reader.open(bytes.data(), static_cast<uint32_t>(bytes.size()), error)) {
+        return false;
+    }
+    std::string key = aot_metadata_key(reader, bytes.size());
+    if (!seen.insert(key).second) {
+        return true;
+    }
+
+    AOTDumpMetadataBlob blob;
+    blob.source = source;
+    blob.bytes = std::move(bytes);
+    blobs.push_back(std::move(blob));
+    return true;
+}
+
+static bool is_aot_metadata_symbol(llvm::StringRef name) {
+    return name == "qore_aot_metadata"
+        || name == "qore_aot_mod_metadata"
+        || name.ends_with("_fragment_blob");
+}
+
+static bool is_qore_relevant_symbol(const std::string& name) {
+    return name.rfind("qore_", 0) == 0
+        || name.rfind("_qore_", 0) == 0
+        || name.rfind("_qaot_", 0) == 0
+        || name.find("qore_aot") != std::string::npos
+        || name.find("qore_module") != std::string::npos;
+}
+
+static std::string symbol_section_name(const llvm::object::ObjectFile& obj,
+        const llvm::object::SymbolRef& sym) {
+    auto sec_or = sym.getSection();
+    if (!sec_or) {
+        llvm::consumeError(sec_or.takeError());
+        return "";
+    }
+    llvm::object::section_iterator sec = *sec_or;
+    if (sec == obj.section_end()) {
+        return "";
+    }
+    auto name_or = sec->getName();
+    if (!name_or) {
+        llvm::consumeError(name_or.takeError());
+        return "";
+    }
+    return name_or->str();
+}
+
+static uint64_t symbol_value(const llvm::object::SymbolRef& sym) {
+    auto value_or = sym.getValue();
+    if (!value_or) {
+        llvm::consumeError(value_or.takeError());
+        return 0;
+    }
+    return *value_or;
+}
+
+static uint32_t symbol_flags(const llvm::object::SymbolRef& sym) {
+    auto flags_or = sym.getFlags();
+    if (!flags_or) {
+        llvm::consumeError(flags_or.takeError());
+        return 0;
+    }
+    return *flags_or;
+}
+
+static std::string symbol_key(const llvm::object::ObjectFile& obj,
+        const llvm::object::SymbolRef& sym) {
+    auto name_or = sym.getName();
+    std::string name;
+    if (name_or) {
+        name = name_or->str();
+    } else {
+        llvm::consumeError(name_or.takeError());
+    }
+    return name + "|" + std::to_string(symbol_value(sym)) + "|" + symbol_section_name(obj, sym);
+}
+
+static char symbol_kind(const llvm::object::SymbolRef& sym) {
+    uint32_t flags = symbol_flags(sym);
+    if (flags & llvm::object::SymbolRef::SF_Undefined) {
+        return 'U';
+    }
+    if (flags & llvm::object::SymbolRef::SF_Common) {
+        return 'C';
+    }
+
+    char c = '?';
+    auto type_or = sym.getType();
+    if (type_or) {
+        switch (*type_or) {
+            case llvm::object::SymbolRef::ST_Function:
+                c = 'T';
+                break;
+            case llvm::object::SymbolRef::ST_Data:
+                c = 'D';
+                break;
+            case llvm::object::SymbolRef::ST_Debug:
+            case llvm::object::SymbolRef::ST_File:
+                c = 'N';
+                break;
+            default:
+                break;
+        }
+    } else {
+        llvm::consumeError(type_or.takeError());
+    }
+    if (c == '?' && (flags & llvm::object::SymbolRef::SF_Executable)) {
+        c = 'T';
+    }
+    if (c == '?' && (flags & llvm::object::SymbolRef::SF_Const)) {
+        c = 'R';
+    }
+    if (!(flags & llvm::object::SymbolRef::SF_Global) && c >= 'A' && c <= 'Z') {
+        c = static_cast<char>(std::tolower(c));
+    }
+    return c;
+}
+
+static void extract_aot_metadata_from_object(const llvm::object::ObjectFile& obj,
+        std::vector<AOTDumpMetadataBlob>& blobs, std::set<std::string>& seen) {
+    auto symbol_sizes = llvm::object::computeSymbolSizes(obj);
+    for (const auto& [sym, size] : symbol_sizes) {
+        if (!size) {
+            continue;
+        }
+        auto name_or = sym.getName();
+        if (!name_or) {
+            llvm::consumeError(name_or.takeError());
+            continue;
+        }
+        llvm::StringRef name = *name_or;
+        if (!is_aot_metadata_symbol(name)) {
+            continue;
+        }
+
+        auto sec_or = sym.getSection();
+        if (!sec_or) {
+            llvm::consumeError(sec_or.takeError());
+            continue;
+        }
+        llvm::object::section_iterator sec = *sec_or;
+        if (sec == obj.section_end()) {
+            continue;
+        }
+        auto addr_or = sym.getAddress();
+        if (!addr_or) {
+            llvm::consumeError(addr_or.takeError());
+            continue;
+        }
+        auto contents_or = sec->getContents();
+        if (!contents_or) {
+            llvm::consumeError(contents_or.takeError());
+            continue;
+        }
+
+        uint64_t section_address = sec->getAddress();
+        if (*addr_or < section_address) {
+            continue;
+        }
+        uint64_t offset = *addr_or - section_address;
+        llvm::StringRef contents = *contents_or;
+        uint64_t contents_size = static_cast<uint64_t>(contents.size());
+        if (offset > contents_size || size > contents_size - offset) {
+            continue;
+        }
+        const uint8_t* p = reinterpret_cast<const uint8_t*>(contents.data() + offset);
+        std::vector<uint8_t> bytes(p, p + size);
+        add_aot_metadata_blob(blobs, seen, std::move(bytes), "symbol " + name.str());
+    }
+}
+
+static void scan_aot_metadata_blobs(const std::string& contents,
+        std::vector<AOTDumpMetadataBlob>& blobs, std::set<std::string>& seen) {
+    size_t pos = 0;
+    while ((pos = contents.find("QORD", pos)) != std::string::npos) {
+        const uint8_t* data = reinterpret_cast<const uint8_t*>(contents.data() + pos);
+        size_t len = 0;
+        if (find_aot_metadata_length(data, contents.size() - pos, len) && len > 0) {
+            std::vector<uint8_t> bytes(data, data + len);
+            add_aot_metadata_blob(blobs, seen, std::move(bytes),
+                "embedded metadata at file offset " + std::to_string(pos));
+            pos += len;
+        } else {
+            ++pos;
+        }
+    }
+}
+
+static void print_string_list(const char* label, const std::vector<std::string>& values) {
+    if (values.empty()) {
+        printf("    %s: (none)\n", label);
+        return;
+    }
+    printf("    %s:\n", label);
+    for (const std::string& value : values) {
+        printf("      %s\n", value.c_str());
+    }
+}
+
+static void print_aot_feature_flags(uint64_t flags) {
+    static const struct {
+        uint64_t bit;
+        const char* name;
+    } feature_names[] = {
+        {QORE_AOT_FEAT_FOREACH_REF, "foreach-ref"},
+        {QORE_AOT_FEAT_NATIVE_CAST, "native-cast"},
+        {QORE_AOT_FEAT_BLOCK_EXIT, "block-exit"},
+        {QORE_AOT_FEAT_DIRECT_INDEX, "direct-index"},
+        {QORE_AOT_FEAT_HASH_KEY_ACCESS, "hash-key-access"},
+        {QORE_AOT_FEAT_FAST_CALL, "fast-call"},
+        {QORE_AOT_FEAT_COMPLEX_RETURN, "complex-return"},
+        {QORE_AOT_FEAT_HASH_KEY_STORE, "hash-key-store"},
+        {QORE_AOT_FEAT_LIST_INDEX_STORE, "list-index-store"},
+        {QORE_AOT_FEAT_TYPE_TABLE, "type-table"},
+        {QORE_AOT_FEAT_CONST_PENDING, "const-pending"},
+        {QORE_AOT_FEAT_SIG_LINES, "sig-lines"},
+        {QORE_AOT_FEAT_CONTEXT_IR, "context-ir"},
+        {QORE_AOT_FEAT_LVPATH_SLICE, "lvpath-slice"},
+        {QORE_AOT_FEAT_MODULE_PATH_LISTS, "module-path-lists"},
+        {QORE_AOT_FEAT_LVPATH_DELETE_EXPR, "lvpath-delete-expr"},
+        {QORE_AOT_FEAT_LVPATH_PATTERN, "lvpath-pattern"},
+        {QORE_AOT_FEAT_FUNC_CALL_VARIANT, "func-call-variant"},
+    };
+
+    printf("    features: 0x%016llx", static_cast<unsigned long long>(flags));
+    bool first = true;
+    for (const auto& feature : feature_names) {
+        if (flags & feature.bit) {
+            printf("%s%s", first ? " (" : ", ", feature.name);
+            first = false;
+        }
+    }
+    if (!first) {
+        printf(")");
+    }
+    printf("\n");
+
+    uint64_t unsupported = flags & ~QORE_AOT_SUPPORTED_FEATURES;
+    if (unsupported) {
+        printf("    unsupported features in this runtime: 0x%016llx\n",
+            static_cast<unsigned long long>(unsupported));
+    }
+}
+
+static void dump_aot_metadata_blob(const AOTDumpMetadataBlob& blob, size_t index) {
+    QoreAOTBinaryReader reader;
+    std::string error;
+    if (!reader.open(blob.bytes.data(), static_cast<uint32_t>(blob.bytes.size()), error)) {
+        printf("  AOT metadata #%zu: invalid: %s\n", index, error.c_str());
+        return;
+    }
+
+    const QoreAOTBinaryHeader& hdr = reader.getHeader();
+    const char* label = reader.getLabel();
+    printf("  AOT metadata #%zu (%s):\n", index, blob.source.c_str());
+    printf("    size: %zu bytes%s\n", blob.bytes.size(), hdr.compression ? " compressed" : "");
+    printf("    label: %s\n", label ? label : "");
+    printf("    kind:%s%s\n",
+        (hdr.flags & QORE_AOT_FLAG_IS_MODULE) ? " module" : "",
+        (hdr.flags & QORE_AOT_FLAG_HAS_TOPLEVEL) ? " toplevel" : "");
+    printf("    format: %u (current %u)%s\n", hdr.version, QORE_AOT_BINARY_VERSION,
+        hdr.version == QORE_AOT_BINARY_VERSION ? "" : " MISMATCH");
+    printf("    compiled qore: %u.%u.%u (runtime %s)\n",
+        hdr.qore_version_major, hdr.qore_version_minor, hdr.qore_version_patch,
+        qore_version_string);
+    printf("    parse options: lo=0x%016llx hi=0x%016llx\n",
+        static_cast<unsigned long long>(hdr.parse_options_lo),
+        static_cast<unsigned long long>(hdr.parse_options_hi));
+    printf("    source hash: 0x%016llx\n",
+        static_cast<unsigned long long>(hdr.source_hash));
+    printf("    max opcode: %u (runtime %u)%s\n", hdr.max_opcode_id,
+        QORE_IR_MAX_OPCODE, hdr.max_opcode_id <= QORE_IR_MAX_OPCODE ? "" : " MISMATCH");
+    print_aot_feature_flags(hdr.feature_flags);
+
+    std::vector<std::string> deps;
+    if (readDependencies(blob.bytes.data(), static_cast<uint32_t>(blob.bytes.size()), deps, error)) {
+        print_string_list("dependencies", deps);
+    } else {
+        printf("    dependencies: error: %s\n", error.c_str());
+        error.clear();
+    }
+
+    std::vector<std::string> reexports;
+    if (readReexportModules(blob.bytes.data(), static_cast<uint32_t>(blob.bytes.size()), reexports, error)) {
+        print_string_list("reexports", reexports);
+    } else {
+        printf("    reexports: error: %s\n", error.c_str());
+        error.clear();
+    }
+
+    std::vector<std::string> prepended;
+    std::vector<std::string> appended;
+    if (readModulePathLists(reader, prepended, appended, error)) {
+        print_string_list("prepend module paths", prepended);
+        print_string_list("append module paths", appended);
+    } else {
+        printf("    module paths: error: %s\n", error.c_str());
+        error.clear();
+    }
+
+    std::string exec_class;
+    if (readProgramMetadata(blob.bytes.data(), static_cast<uint32_t>(blob.bytes.size()), exec_class, error)
+            && !exec_class.empty()) {
+        printf("    exec class: %s\n", exec_class.c_str());
+    } else if (!error.empty()) {
+        printf("    program metadata: error: %s\n", error.c_str());
+        error.clear();
+    }
+
+    std::vector<std::pair<std::string, std::string>> build_info;
+    if (readBuildInfo(reader, build_info, error)) {
+        if (!build_info.empty()) {
+            printf("    build info:\n");
+            for (const auto& [key, value] : build_info) {
+                printf("      %s: %s\n", key.c_str(), value.c_str());
+            }
+        }
+    } else {
+        printf("    build info: error: %s\n", error.c_str());
+        error.clear();
+    }
+
+    printf("    sections: %u\n", reader.getSectionCount());
+    if (dump_sections) {
+        for (uint32_t i = 0; i < reader.getSectionCount(); ++i) {
+            const QoreAOTSectionHeader* sec = reader.getSection(i);
+            if (!sec) {
+                continue;
+            }
+            printf("      %-20s type=%u offset=%u size=%u\n",
+                aot_section_type_name(sec->type), sec->type, sec->offset, sec->size);
+        }
+    }
+}
+
+struct AOTDumpSymbolRow {
+    std::string name;
+    std::string section;
+    uint64_t value = 0;
+    uint64_t size = 0;
+    char kind = '?';
+    bool qore_relevant = false;
+};
+
+static std::vector<AOTDumpSymbolRow> collect_symbol_rows(const llvm::object::ObjectFile& obj) {
+    std::map<std::string, uint64_t> size_by_key;
+    for (const auto& [sym, size] : llvm::object::computeSymbolSizes(obj)) {
+        size_by_key[symbol_key(obj, sym)] = size;
+    }
+
+    std::vector<AOTDumpSymbolRow> rows;
+    for (const llvm::object::SymbolRef& sym : obj.symbols()) {
+        auto name_or = sym.getName();
+        if (!name_or) {
+            llvm::consumeError(name_or.takeError());
+            continue;
+        }
+        AOTDumpSymbolRow row;
+        row.name = name_or->str();
+        row.section = symbol_section_name(obj, sym);
+        row.value = symbol_value(sym);
+        row.kind = symbol_kind(sym);
+        row.qore_relevant = is_qore_relevant_symbol(row.name);
+        auto size_it = size_by_key.find(symbol_key(obj, sym));
+        if (size_it != size_by_key.end()) {
+            row.size = size_it->second;
+        }
+        rows.push_back(std::move(row));
+    }
+    return rows;
+}
+
+static void dump_object_sections(const llvm::object::ObjectFile& obj) {
+    printf("  object sections:\n");
+    for (const llvm::object::SectionRef& sec : obj.sections()) {
+        auto name_or = sec.getName();
+        std::string name;
+        if (name_or) {
+            name = name_or->str();
+        } else {
+            llvm::consumeError(name_or.takeError());
+        }
+        printf("    0x%016llx %10llu %s\n",
+            static_cast<unsigned long long>(sec.getAddress()),
+            static_cast<unsigned long long>(sec.getSize()),
+            name.c_str());
+    }
+}
+
+static void dump_object_symbols(const llvm::object::ObjectFile& obj, bool all_symbols) {
+    std::vector<AOTDumpSymbolRow> rows = collect_symbol_rows(obj);
+    size_t qore_count = 0;
+    for (const AOTDumpSymbolRow& row : rows) {
+        if (row.qore_relevant) {
+            ++qore_count;
+        }
+    }
+
+    printf("  symbols: %zu total, %zu qore/aot%s\n", rows.size(), qore_count,
+        all_symbols ? "" : " (important symbols shown)");
+    for (const AOTDumpSymbolRow& row : rows) {
+        if (!all_symbols && !row.qore_relevant) {
+            continue;
+        }
+        printf("    %016llx %8llu %c %-18s %s\n",
+            static_cast<unsigned long long>(row.value),
+            static_cast<unsigned long long>(row.size),
+            row.kind, row.section.c_str(), row.name.c_str());
+    }
+}
+
+static void dump_object_symbol_summary(const llvm::object::ObjectFile& obj) {
+    std::vector<AOTDumpSymbolRow> rows = collect_symbol_rows(obj);
+    size_t qore_count = 0;
+    for (const AOTDumpSymbolRow& row : rows) {
+        if (row.qore_relevant) {
+            ++qore_count;
+        }
+    }
+
+    printf("  symbols: %zu total, %zu qore/aot (use --dump-symbols to list)\n",
+        rows.size(), qore_count);
+}
+
+static void inspect_object_file(const char* path,
+        std::vector<AOTDumpMetadataBlob>& blobs, std::set<std::string>& seen) {
+    auto binary_or = llvm::object::createBinary(path);
+    if (!binary_or) {
+        if (dump_symbols || dump_sections) {
+            std::string msg = llvm::toString(binary_or.takeError());
+            printf("  object: not recognized: %s\n", msg.c_str());
+        } else {
+            llvm::consumeError(binary_or.takeError());
+        }
+        return;
+    }
+
+    llvm::object::Binary* binary = binary_or->getBinary();
+    auto* obj = llvm::dyn_cast<llvm::object::ObjectFile>(binary);
+    if (!obj) {
+        printf("  object: %s\n", binary->getFileName().str().c_str());
+        printf("  object symbols/sections: unsupported container type\n");
+        return;
+    }
+
+    printf("  object: %s\n", obj->getFileFormatName().str().c_str());
+    extract_aot_metadata_from_object(*obj, blobs, seen);
+    if (dump_sections) {
+        dump_object_sections(*obj);
+    }
+    if (dump_symbols) {
+        dump_object_symbols(*obj, true);
+    } else if (dump_info) {
+        dump_object_symbol_summary(*obj);
+    }
+}
+
+static int dump_aot_info_for_file(const char* path) {
+    printf("%s:\n", path);
+
+    std::vector<AOTDumpMetadataBlob> blobs;
+    std::set<std::string> seen;
+    inspect_object_file(path, blobs, seen);
+
+    std::string contents;
+    if (!read_file(path, contents)) {
+        return 1;
+    }
+    scan_aot_metadata_blobs(contents, blobs, seen);
+
+    if (blobs.empty()) {
+        printf("  AOT metadata: none found\n");
+    } else {
+        for (size_t i = 0; i < blobs.size(); ++i) {
+            dump_aot_metadata_blob(blobs[i], i + 1);
+        }
+    }
+
+    return 0;
 }
 
 static std::string get_default_output(const char* input_path, bool is_module,
@@ -685,6 +1370,23 @@ int main(int argc, char** argv) {
     if (show_targets) {
         QoreAOT::printSupportedTargets();
         return 0;
+    }
+
+    if (dump_symbols || dump_sections) {
+        dump_info = true;
+    }
+    if (dump_info) {
+        if (optind >= argc) {
+            fprintf(stderr, "error: --dump-info requires at least one binary/object path\n");
+            return 1;
+        }
+        int rc = 0;
+        for (int i = optind; i < argc; ++i) {
+            if (dump_aot_info_for_file(argv[i])) {
+                rc = 1;
+            }
+        }
+        return rc;
     }
 
     // Phase C Item 2: link-mode — `qcc -o <binary> *.qo` emits a

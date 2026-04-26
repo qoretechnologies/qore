@@ -287,6 +287,9 @@ private:
     // Saved on_block_exit handler count at function entry (for LIFO cleanup)
     llvm::Value* obe_saved_count = nullptr;
 
+    // True when the current function contains deferred on_block_exit handlers.
+    bool has_on_block_exit_handlers = false;
+
     // Per-scope saved on_block_exit counts (scope_id -> saved count value)
     // Used by ScopeEnter/ScopeExit for nested on_exit handler execution
     std::unordered_map<uint32_t, llvm::Value*> scope_obe_counts;
@@ -579,6 +582,15 @@ private:
 
     // Emit qore_rt_exec_on_block_exit call to execute registered on_block_exit handlers
     void emitOnBlockExitExec(llvm::Module& module);
+
+    // Publish current LLVM local allocas to the runtime local stack before
+    // deferred handlers execute through AST/IR and read parent locals.
+    void syncLocalsToRuntimeForHandlers(llvm::Module& module);
+
+    // Install an exact parent slot cache for deferred handler IR executed by a
+    // native/JIT/AOT parent.  This avoids name-based TLS lookup collisions.
+    llvm::Value* beginNativeHandlerSlotCache(llvm::Module& module);
+    void endNativeHandlerSlotCache(llvm::Module& module, llvm::Value* guard);
 
     // Emit qore_rt_decref calls for pre-instantiated local entry loads
     void emitPreinstantiatedCleanup(llvm::Module& module);

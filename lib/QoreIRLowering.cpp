@@ -2702,6 +2702,12 @@ int QoreIRLowering::compileBlockHandlerIRs(const std::vector<InlineHandler>& han
         return -1;
     }
 
+    // Block-level handlers are compiled during statement-block lowering, before
+    // the owning function's normal post-lowering slot pass.  Refresh parent slots
+    // here so handler IR inherits the same slot IDs that the parent runtime frame
+    // will use when the deferred handler executes.
+    parent_func->computeSlotIdsAndEmbed();
+
     // Iterate through the handlers provided for this block level
     for (const InlineHandler& handler : handlers) {
         // Skip if already compiled or invalid
@@ -2810,6 +2816,11 @@ int QoreIRLowering::compileAllHandlerIRs(std::string& error) {
         error = "no parent function available for handler compilation";
         return -1;
     }
+
+    // Keep this invariant local to handler compilation as well.  Most callers
+    // already run the slot pass before compileAllHandlerIRs(), but closure and
+    // nested-handler paths can reach this point first.
+    parent_func->computeSlotIdsAndEmbed();
 
     // Iterate through all registered handlers for this lowering context
     for (InlineHandler& handler : saved_top_level_handlers) {

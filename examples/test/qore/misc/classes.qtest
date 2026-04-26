@@ -563,6 +563,16 @@ class BaseClassExceptionTest inherits Base {
     }
 }
 
+class MemberGateOnlySliceTest {
+    private {
+        hash h = ("a": 1, "b": 2);
+    }
+
+    auto memberGate(string m) {
+        return h{m};
+    }
+}
+
 class Base1 {
     public {
         int i;
@@ -1130,6 +1140,8 @@ sub test() {
 
         # test memberGate
         assertEq("memberGate-a", t.a, "object memberGate() methods");
+        MemberGateOnlySliceTest mgs();
+        assertEq(("a": 1), mgs.(list("a")), "object memberGate() slice");
 
         # test memberNotification()
         t.x = 1;

@@ -1607,9 +1607,7 @@ void QoreIRFunction::computeSlotIdsAndEmbed() {
                             // for a closure/handler body (where AOTRuntime does
                             // not walk the path to re-resolve ref_ptr from
                             // ctx->locals).
-                            if (root.slot_id == UINT32_MAX) {
-                                root.slot_id = it->second;
-                            }
+                            root.slot_id = it->second;
                         }
                     } else {
                         path_inst->lvalue_slot_id = QoreIRLValuePathInstruction::LVALUE_NON_LOCAL;

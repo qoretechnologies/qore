@@ -222,14 +222,29 @@ QoreHashNode* qore_object_private::getSlice(const QoreListNode* l, ExceptionSink
         int rc = checkMemberAccessIntern(key->c_str(), has_public_members, class_ctx, member_class_ctx);
         if (!rc) {
             if (member_class_ctx) {
-                SliceKeyMap::iterator i = int_km.find(member_class_ctx);
-                if (i == int_km.end()) {
-                    i = int_km.insert(SliceKeyMap::value_type(member_class_ctx,
-                        new QoreListNode(autoTypeInfo))).first;
+                const QoreHashNode* odata = getInternalData(member_class_ctx);
+                bool exists = false;
+                if (odata)
+                    odata->getKeyValueExistence(key->c_str(), exists);
+                if (exists) {
+                    SliceKeyMap::iterator i = int_km.find(member_class_ctx);
+                    if (i == int_km.end()) {
+                        i = int_km.insert(SliceKeyMap::value_type(member_class_ctx,
+                            new QoreListNode(autoTypeInfo))).first;
+                    }
+                    i->second->push(new QoreStringNode(*key), nullptr);
+                } else if (mgl) {
+                    mgl->push(new QoreStringNode(*key), nullptr);
                 }
-                i->second->push(new QoreStringNode(*key), nullptr);
             } else {
-                nl->push(new QoreStringNode(*key), nullptr);
+                bool exists = false;
+                data->getKeyValueExistence(key->c_str(), exists, xsink);
+                if (*xsink)
+                    return nullptr;
+                if (exists)
+                    nl->push(new QoreStringNode(*key), nullptr);
+                else if (mgl)
+                    mgl->push(new QoreStringNode(*key), nullptr);
             }
         } else {
             if (mgl) {

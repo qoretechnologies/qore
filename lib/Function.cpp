@@ -822,13 +822,16 @@ void UserSignature::setupFromAOTMetadata(
     // selfid per class — interned across every method variant of a class
     // using the program-scoped cache.  Same safety argument as the argv
     // intern above (LocalVar* is the identity, thread-local stack holds
-    // the per-call value).  AOT doesn't need the `is_self` flag that
-    // parseInitPushLocalVars sets — the pre-AOT setupFromAOTMetadata
-    // path never called setSelf() either.
+    // the per-call value).  Keep the normal `self` marker: AOT slot metadata
+    // and LLVM lowering rely on it for the static borrowed-reference semantics
+    // of constructor/method self.
     if (classTypeInfo) {
         LocalVar*& cached = pp->shared_aot_self[classTypeInfo];
         if (!cached) {
             cached = pp->createLocalVar("self", classTypeInfo->getTypeInfo());
+            cached->setSelf();
+        } else if (!cached->isSelf()) {
+            cached->setSelf();
         }
         selfid = cached;
     }

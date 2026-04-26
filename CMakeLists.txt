@@ -1831,7 +1831,7 @@ target_link_libraries(qore libqore)
 
 # qcc - Qore Code Compiler (AOT)
 add_executable(qcc qcc-main.cpp)
-target_link_libraries(qcc libqore)
+target_link_libraries(qcc libqore ${ZLIB_LIBRARIES})
 set_target_properties(qcc PROPERTIES INSTALL_RPATH ${CMAKE_INSTALL_FULL_LIBDIR})
 set_target_properties(qcc PROPERTIES BUILD_RPATH ${CMAKE_BINARY_DIR})
 
@@ -1843,10 +1843,10 @@ set_target_properties(qcc PROPERTIES BUILD_RPATH ${CMAKE_BINARY_DIR})
 #
 # The stamp's mtime tracks only files that actually affect qmod output:
 # the wire-format headers, the writer, the compile pipeline, the IR
-# opcode/lowering headers, and qcc itself.  Runtime files
-# (QoreAOTRuntime.cpp, Function.cpp's evalIntern tiering, etc.) are
-# excluded — they affect how qmods are executed, not how they're
-# generated.
+# opcode/lowering headers, signature/local metadata construction, and
+# qcc itself.  Runtime-only files (QoreAOTRuntime.cpp, evalTiered hot
+# path changes, etc.) are excluded — they affect how qmods are executed,
+# not how they're generated.
 #
 # If a file affecting qmod output is missed here, it would cause
 # silently stale qmods.  The feature-flag machinery
@@ -1867,6 +1867,9 @@ set(_qcc_format_sources
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreIRExprRegistry.h
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreIRLowering.h
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreIRToLLVM.h
+    ${CMAKE_SOURCE_DIR}/include/qore/intern/Function.h
+    ${CMAKE_SOURCE_DIR}/include/qore/intern/LocalVar.h
+    ${CMAKE_SOURCE_DIR}/lib/Function.cpp
     ${CMAKE_SOURCE_DIR}/lib/QoreAOT.cpp
     ${CMAKE_SOURCE_DIR}/lib/QoreAOTBinary.cpp
     ${CMAKE_SOURCE_DIR}/lib/QoreAOTExprHandlers.cpp

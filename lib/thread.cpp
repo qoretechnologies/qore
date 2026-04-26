@@ -2329,7 +2329,9 @@ ProgramThreadCountContextHelper::~ProgramThreadCountContextHelper() {
     td->tlpd = old_tlpd;
     td->current_pgm_ctx = old_ctx;
 
-    qore_program_private::decThreadCount(*pgm, td->tid);
+    if (thread_count_incremented) {
+        qore_program_private::decThreadCount(*pgm, td->tid);
+    }
 }
 
 void ProgramThreadCountContextHelper::set(ExceptionSink* xsink, QoreProgram* pgm, bool runtime) {
@@ -2339,7 +2341,11 @@ void ProgramThreadCountContextHelper::set(ExceptionSink* xsink, QoreProgram* pgm
     assert(!old_pgm);
 
     ThreadData* td = thread_data.get();
-    if (pgm == td->current_pgm) {
+    // ProgramRuntimeParseContextHelper can set current_pgm without setting
+    // tlpd.  User-code execution still needs tlpd for local and closure
+    // variable access, so only skip setup when the current program already has
+    // a live thread-local program data frame.
+    if (pgm == td->current_pgm && td->tlpd) {
         return;
     }
     old_pgm = td->current_pgm;
@@ -2352,10 +2358,17 @@ void ProgramThreadCountContextHelper::set(ExceptionSink* xsink, QoreProgram* pgm
         old_pgm ? old_pgm->getProgramId() : -1, pgm, pgm?pgm->getProgramId():-1, old_tlpd, old_ctx,
         old_frameCount);
     qore_program_private* pp = qore_program_private::get(*pgm);
-    // try to increment thread count
-    if (pp->incThreadCount(xsink)) {
-        printd(5, "ProgramThreadCountContextHelper::set() failed\n");
-        return;
+    // ProgramRuntimeParseContextHelper locks the current program for parsing
+    // without creating tlpd.  In that state we only need a local frame; calling
+    // incThreadCount() is invalid while parsing_in_progress is set.
+    const bool skip_thread_count = pgm == old_pgm && pp->parsingLocked();
+    if (!skip_thread_count) {
+        // try to increment thread count
+        if (pp->incThreadCount(xsink)) {
+            printd(5, "ProgramThreadCountContextHelper::set() failed\n");
+            return;
+        }
+        thread_count_incremented = true;
     }
 
     // set up thread stacks

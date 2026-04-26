@@ -436,7 +436,8 @@ int FtpDataPollOperationPriv::submitToController(ExceptionSink* xsink, const cha
         return -1;
     }
 
-    ReferenceHolder<QoreObject> rv(ctl_priv->submit(*ctl_obj, *info, false, xsink), xsink);
+    // submit() takes ownership of `info`; transfer our ref explicitly.
+    ReferenceHolder<QoreObject> rv(ctl_priv->submit(*ctl_obj, info.release(), false, xsink), xsink);
     if (*xsink) {
         return -1;
     }

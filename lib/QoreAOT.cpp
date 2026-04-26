@@ -270,6 +270,7 @@ static std::vector<std::string> extractAllDependencies(const char* source, int s
 #include <llvm/Support/TargetSelect.h>
 #include <llvm/Support/TimeProfiler.h>
 #include <llvm/Support/raw_ostream.h>
+#include <llvm/Config/llvm-config.h>
 #include <llvm/Target/TargetMachine.h>
 #include <llvm/Target/TargetOptions.h>
 #include <llvm/TargetParser/Host.h>
@@ -526,6 +527,36 @@ static void appendModulePathListSections(QoreAOTBinaryWriter& writer,
     }
     serializeModulePathLists(writer, pp->prepended_module_paths,
         pp->appended_module_paths, feature_flags);
+}
+
+//! Append producer/build diagnostics to the AOT metadata blob.  This section is
+//! intentionally informational: runtimes ignore it, while qcc --dump-info can
+//! use it to identify stale or shadowed AOT binaries without executing them.
+static void appendBuildInfoSection(QoreAOTBinaryWriter& writer, const char* binary_kind,
+        const char* target_triple, int opt_level, bool include_source) {
+    std::vector<std::pair<std::string, std::string>> info;
+    auto add = [&info](const char* key, const std::string& value) {
+        info.emplace_back(key, value);
+    };
+
+    add("producer", "qcc");
+    add("binary-kind", binary_kind ? binary_kind : "");
+    add("qore-version", std::to_string(QORE_VERSION_MAJOR) + "."
+        + std::to_string(QORE_VERSION_MINOR) + "." + std::to_string(QORE_VERSION_PATCH));
+    add("qore-git-hash", qore_git_hash ? qore_git_hash : "");
+    add("aot-format-version", std::to_string(QORE_AOT_BINARY_VERSION));
+    add("supported-features", std::to_string(QORE_AOT_SUPPORTED_FEATURES));
+    add("max-opcode", std::to_string(QORE_IR_MAX_OPCODE));
+    add("llvm-version", LLVM_VERSION_STRING);
+    add("target-triple", target_triple && *target_triple
+        ? target_triple : llvm::sys::getDefaultTargetTriple());
+    add("opt-level", std::to_string(opt_level));
+    add("include-source", include_source ? "true" : "false");
+    add("debug-info", getenv("QORE_AOT_NO_DEBUG_INFO") ? "false" : "true");
+    const char* big_fn = getenv("QORE_AOT_BIG_FN_THRESHOLD");
+    add("big-fn-threshold", big_fn ? big_fn : "");
+
+    serializeBuildInfo(writer, info);
 }
 
 //! Compute xxHash64 of source file bytes
@@ -3141,6 +3172,7 @@ bool QoreAOT::compile(QoreProgram* pgm,
         hdr.source_hash = computeSourceHash(label);
         hdr.feature_flags = computeFeatureFlags(compiled_funcs);
         appendModulePathListSections(writer, pgm, hdr.feature_flags);
+        appendBuildInfoSection(writer, "script", target_triple, opt_level, include_source);
 
         // Serialize dependencies from the parsed program's feature lists.
         // This captures ALL module dependencies including those from %include'd files,
@@ -4793,6 +4825,7 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
         hdr.source_hash = computeSourceHash(label);
         hdr.feature_flags = computeFeatureFlags(compiled_funcs);
         appendModulePathListSections(writer, *qpgm, hdr.feature_flags);
+        appendBuildInfoSection(writer, "module", target_triple, opt_level, include_source);
 
         // Serialize ALL dependencies (including reexport) so they can be loaded
         // at runtime before deserializing the namespace tree
@@ -5233,6 +5266,7 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
             hdr.source_hash = computeSourceHash(qm_path.c_str());
             hdr.feature_flags = computeFeatureFlags(compiled_funcs);
             appendModulePathListSections(writer, *qpgm, hdr.feature_flags);
+            appendBuildInfoSection(writer, "split-module", target_triple, opt_level, include_source);
 
             // Serialize ALL dependencies (including reexport) so they can be loaded
             // at runtime before deserializing the namespace tree
@@ -5595,6 +5629,7 @@ static bool emitScriptQoFromParsedProgram(QoreProgram* qpgm,
         hdr.source_hash = computeSourceHash(target_canon.c_str());
         hdr.feature_flags = computeFeatureFlags(compiled_funcs);
         appendModulePathListSections(writer, qpgm, hdr.feature_flags);
+        appendBuildInfoSection(writer, "script-fragment", target_triple, opt_level, include_source);
 
         if (!serializeNamespaceTree(writer, root_ns, nullptr, nullptr,
                 target_canon.c_str())) {
@@ -6225,6 +6260,7 @@ bool QoreAOT::compileScriptFile(const char* target_file,
         hdr.source_hash = computeSourceHash(target_canon.c_str());
         hdr.feature_flags = computeFeatureFlags(compiled_funcs);
         appendModulePathListSections(writer, *qpgm, hdr.feature_flags);
+        appendBuildInfoSection(writer, "script-fragment", target_triple, opt_level, include_source);
 
         if (!serializeNamespaceTree(writer, root_ns, nullptr, nullptr,
                 target_canon.c_str())) {
@@ -6690,6 +6726,7 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
             hdr.source_hash = computeSourceHash(qm_path.c_str());
             hdr.feature_flags = computeFeatureFlags(compiled_funcs);
             appendModulePathListSections(writer, *qpgm, hdr.feature_flags);
+            appendBuildInfoSection(writer, "module-fragment", target_triple, opt_level, include_source);
 
             std::vector<std::string> reexport_mods;
             std::vector<std::string> all_deps = extractAllDependencies(
@@ -7095,6 +7132,7 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
             hdr.source_hash = computeSourceHash(qm_path.c_str());
             hdr.feature_flags = computeFeatureFlags(compiled_funcs);
             appendModulePathListSections(writer, *qpgm, hdr.feature_flags);
+            appendBuildInfoSection(writer, "aggregated-module", target_triple, opt_level, include_source);
 
             std::vector<std::string> reexport_mods;
             std::vector<std::string> all_deps = extractAllDependencies(
@@ -7547,6 +7585,7 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
             hdr.source_hash = computeSourceHash(qm_path.c_str());
             hdr.feature_flags = computeFeatureFlags(compiled_funcs);
             appendModulePathListSections(writer, *qpgm, hdr.feature_flags);
+            appendBuildInfoSection(writer, "archive", target_triple, opt_level, include_source);
 
             std::vector<std::string> reexport_mods;
             std::vector<std::string> all_deps = extractAllDependencies(
@@ -7809,6 +7848,17 @@ static void registerLValueBaseVars(const QoreValue& lvalue, AOTSlotMap& slots) {
 }
 
 void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots) {
+    // Preserve the IR local slot identity in the AOT local table.  Handler IR
+    // inherits parent locals by IR slot ID, and AOT handler deserialization uses
+    // ctx->locals[slot_id] for those parent slots.  If AOT local slots are
+    // allocated by instruction-walk order instead, handlers can inherit the
+    // wrong parent value when the two orders diverge.
+    for (const auto& [lv, slot_id] : func.local_var_slots) {
+        if (lv) {
+            slots.local_slots[reinterpret_cast<const void*>(lv)] = static_cast<int32_t>(slot_id);
+        }
+    }
+
     // Walk blocks and instructions in deterministic order (same as LLVM lowering)
     // to assign slot indices for each unique process-specific pointer.
     for (auto& block : func.blocks) {

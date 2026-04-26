@@ -33,6 +33,7 @@
 #include "qore/intern/QoreAOTInstRegistry.h"
 #include "qore/intern/QoreAOTBinary.h"
 #include "qore/intern/CaseNodeRegex.h"
+#include "qore/intern/QorePseudoMethods.h"
 #include "qore/QoreValue.h"
 
 // Forward declarations for recursive serialization functions
@@ -41,6 +42,34 @@
 
 // Forward decl for getLocalTypePath
 const char* getLocalTypePath(const LocalVar* lv);
+
+//! Resolve a pseudo-class by its serialized path (e.g. "::Qore::<value>").
+//! Pseudo-classes are not in the normal namespace hierarchy, so runtimeFindClass()
+//! cannot resolve them when rebuilding direct dot-eval instructions from AOT IR.
+static const QoreClass* instRegistryFindPseudoClassByPath(const char* path) {
+    if (!path || !*path) {
+        return nullptr;
+    }
+
+    for (qore_type_t t = 0; t <= NT_NUMBER; ++t) {
+        const QoreClass* pc = qore_pseudo_get_class(t);
+        if (pc && !strcmp(pc->getPath(), path)) {
+            return pc;
+        }
+    }
+
+    const QoreClass* pc = qore_pseudo_get_class(NT_FUNCREF);
+    if (pc && !strcmp(pc->getPath(), path)) {
+        return pc;
+    }
+
+    pc = qore_pseudo_get_class(NT_RUNTIME_CLOSURE);
+    if (pc && !strcmp(pc->getPath(), path)) {
+        return pc;
+    }
+
+    return nullptr;
+}
 
 // Error propagation convention for instruction read_fn handlers:
 // Every read_fn that calls ctx.readExpr(...) with a LOCAL `std::string error`
@@ -833,6 +862,9 @@ static std::unique_ptr<QoreIRInstruction> readDotEvalMethodDirect(
         qore_program_private* pp = qore_program_private::get(*ctx.pgm);
         const qore_ns_private* found_ns = nullptr;
         qc = qore_root_ns_private::runtimeFindClass(*pp->RootNS, class_path, found_ns);
+        if (!qc && pseudo) {
+            qc = instRegistryFindPseudoClassByPath(class_path);
+        }
         if (qc && method_name && *method_name) {
             method = qc->findMethod(method_name);
             if (!method) {
@@ -898,6 +930,9 @@ static std::unique_ptr<QoreIRInstruction> readInvokeDotEvalMethodDirect(
         qore_program_private* pp = qore_program_private::get(*ctx.pgm);
         const qore_ns_private* found_ns = nullptr;
         qc = qore_root_ns_private::runtimeFindClass(*pp->RootNS, class_path, found_ns);
+        if (!qc && pseudo) {
+            qc = instRegistryFindPseudoClassByPath(class_path);
+        }
         if (qc && method_name && *method_name) {
             method = qc->findMethod(method_name);
             if (!method) {

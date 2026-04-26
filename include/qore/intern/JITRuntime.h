@@ -192,6 +192,12 @@ void qore_rt_assign_local_throwing(LocalVar* var, uint64_t value, ExceptionSink*
 void qore_rt_assign_local_no_coerce(LocalVar* var, uint64_t value, ExceptionSink* xsink);
 void qore_rt_assign_local_no_coerce_throwing(LocalVar* var, uint64_t value, ExceptionSink* xsink);
 
+//! Publish a compiled local alloca value to the runtime local stack before
+//! executing deferred handlers.  This intentionally ignores any pre-existing
+//! exception in the caller's ExceptionSink because on_error handlers run while
+//! that exception is active.
+void qore_rt_sync_local(LocalVar* var, uint64_t value);
+
 //! Wrap an object/hash/list value in a weak reference for weak assignment.
 //! Returns an owned value: a new weak-reference node for supported weak types,
 //! or an extra reference to unsupported node values.
@@ -323,6 +329,24 @@ struct QoreAOTContext;
 
 //! Register an on_block_exit handler via AOT context slot
 void qore_rt_push_on_block_exit_aot(QoreAOTContext* ctx, int32_t idx, int type);
+
+//! AOT slot-indexed variant of qore_rt_sync_local().
+void qore_rt_sync_local_aot(QoreAOTContext* ctx, int32_t idx, uint64_t value);
+
+//! Begin an exact parent slot cache for deferred handler IR executed by a
+//! native/JIT/AOT parent.  Returns an opaque guard consumed by
+//! qore_rt_end_native_ir_slot_cache().
+void* qore_rt_begin_native_ir_slot_cache(int32_t count);
+
+//! Populate one native/JIT parent slot cache entry from a raw LocalVar*.
+void qore_rt_set_native_ir_slot_cache_value(void* guard, int32_t ir_slot, LocalVar* var, uint64_t value);
+
+//! Populate one native/AOT parent slot cache entry from an AOT local slot.
+void qore_rt_set_native_ir_slot_cache_value_aot(QoreAOTContext* ctx, void* guard,
+        int32_t ir_slot, int32_t local_slot, uint64_t value);
+
+//! End a native parent slot cache and publish any handler write-backs to TLS.
+void qore_rt_end_native_ir_slot_cache(void* guard, ExceptionSink* xsink);
 
 // --- Guard type helper ---
 
@@ -764,6 +788,10 @@ uint64_t qore_rt_switch_case_match(const void* case_node_ptr, uint64_t switch_va
 //! Phase 2, Fix 2a: Used by QoreIRInterpreter to set/restore the current IR frame's slot cache
 //! Returns address of thread-local pointer (cast to void** for C ABI compatibility)
 void** qore_rt_get_ir_slot_cache_ptr();
+
+//! Get pointer to the TLS dirty bitmap associated with a native IR slot cache.
+//! Returns address of thread-local pointer (cast to void** for C ABI compatibility).
+void** qore_rt_get_ir_slot_cache_dirty_ptr();
 
 //! Call a closure/call reference with 0 arguments
 uint64_t qore_rt_call_closure_0(uint64_t ref_bits, ExceptionSink* xsink);

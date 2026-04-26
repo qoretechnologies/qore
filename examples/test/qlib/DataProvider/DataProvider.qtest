@@ -3153,6 +3153,7 @@ public class DataProviderTest inherits QUnit::Test {
         assertEq(1, type_cache.size());
         assertFalse(type_cache.empty());
         assertThrows("TYPE-ERROR", \type_cache.registerType(), ("test/one", h2));
+        assertNothing(h2.getPath());
         hash<DataProviderTypeEntryInfo> type_info = type_cache.getTypeInfo("test/one");
         assertEq(-1, type_info.epheremal_type_id);
         assertEq("one", type_info.name);
@@ -3173,7 +3174,9 @@ public class DataProviderTest inherits QUnit::Test {
         type_cache.registerType("test/two", h2);
         assertEq(2, type_cache.size());
         assertThrows("TYPE-ARG-ERROR", \type_cache.registerType(), ("test/two", h1));
+        assertEq("/test/one", h1.getPath());
         assertThrows("TYPE-ERROR", \type_cache.registerType(), ("test/two", hx));
+        assertNothing(hx.getPath());
         type_info = type_cache.getTypeInfo("test/two");
         assertEq(-2, type_info.epheremal_type_id);
         assertEq("two", type_info.name);
@@ -3192,7 +3195,9 @@ public class DataProviderTest inherits QUnit::Test {
         type_cache.registerType("test/three", h3, True);
         assertEq(3, type_cache.size());
         assertThrows("TYPE-ARG-ERROR", \type_cache.registerType(), ("test/three", h1));
+        assertEq("/test/one", h1.getPath());
         assertThrows("TYPE-ERROR", \type_cache.registerType(), ("test/three", hx));
+        assertNothing(hx.getPath());
         assertEq(("/test/one", "/test/two", "/test/three"), type_cache.listTypes());
         assertEq(h1, type_cache.getType("test/one"));
         assertEq(h1, type_cache.getType("/test/one"));

@@ -49,6 +49,7 @@
 
 #include <cstring>
 #include <functional>
+#include <memory>
 #include <optional>
 #include <set>
 
@@ -60,6 +61,7 @@
 #include <qore/DateTimeNode.h>
 #include <qore/intern/QoreIRInterpreter.h>
 #include <qore/intern/QoreIR.h>
+#include <qore/intern/QoreAOT.h>
 #include <qore/intern/LocalVar.h>
 #include <qore/intern/Variable.h>
 #include <qore/intern/AbstractStatement.h>
@@ -830,6 +832,48 @@ extern "C" DLLEXPORT void qore_rt_assign_local_no_coerce(LocalVar* var, uint64_t
     QoreValue stored = val.hasNode() ? val.refSelf() : val;
     // check_types=false — coercion has already been applied via qore_rt_coerce_value
     helper.assign(stored, "<lvalue>", false);
+}
+
+extern "C" DLLEXPORT void qore_rt_sync_local(LocalVar* var, uint64_t value) {
+    if (!var) {
+        return;
+    }
+    if (var->isSelf()) {
+        return;
+    }
+    if (var->closureUse()) {
+        return;
+    }
+
+    ExceptionSink xsink;
+    QoreValue val = fromBits(value);
+
+    // This helper publishes the native local cache before running deferred
+    // handlers.  It is not a Qore-level assignment, so reference locals must be
+    // written to their raw stack slot; LocalVar::getLValue() would follow the
+    // reference and write through to the referenced lvalue.
+    LocalVarValue* lvv = thread_find_lvar(var->getName());
+    if (lvv && lvv->isRef()) {
+        if (val.getType() == NT_REFERENCE) {
+            QoreValue stored = val.refSelf();
+            lvv->syncValue(stored, &xsink);
+            if (xsink) {
+                xsink.clear();
+            }
+        }
+        return;
+    }
+
+    LValueHelper helper(&xsink);
+    if (!var->getLValue(helper, false, true)) {
+        QoreValue stored = val.hasNode() ? val.refSelf() : val;
+        // This is a cache publication before running deferred handlers.  The
+        // value has already passed normal StoreLocal/type checks in compiled code.
+        helper.assign(stored, "<lvalue>", false);
+    }
+    if (xsink) {
+        xsink.clear();
+    }
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_make_weak_value(uint64_t value, ExceptionSink* xsink) {
@@ -5320,10 +5364,104 @@ static thread_local std::vector<JITOnBlockExitHandler> jit_obe_handlers;
 // Set/restored by QoreIRInterpreter::execute() to allow qore_rt_exec_on_block_exit_impl
 // to pass parent_slot_cache when executing handler IR functions (Phase 2, Fix 2a)
 static thread_local std::vector<QoreValue>* current_ir_slot_cache = nullptr;
+static thread_local std::vector<bool>* current_ir_slot_cache_dirty = nullptr;
+static thread_local bool current_native_ir_slot_cache_active = false;
+
+struct NativeIRSlotCache {
+    std::vector<QoreValue> slots;
+    std::vector<bool> dirty;
+    std::vector<LocalVar*> slot_to_lvar;
+    std::vector<QoreValue>* prev_slot_cache = nullptr;
+    std::vector<bool>* prev_slot_cache_dirty = nullptr;
+    bool prev_native_slot_cache_active = false;
+
+    explicit NativeIRSlotCache(int32_t count)
+            : slots(count > 0 ? static_cast<size_t>(count) : 0),
+              dirty(count > 0 ? static_cast<size_t>(count) : 0, false),
+              slot_to_lvar(count > 0 ? static_cast<size_t>(count) : 0, nullptr) {
+    }
+
+    ~NativeIRSlotCache() {
+        ExceptionSink xsink;
+        for (QoreValue& v : slots) {
+            v.discard(&xsink);
+            v = QoreValue();
+        }
+        if (xsink) {
+            xsink.clear();
+        }
+    }
+};
 
 // Accessor exported for IR interpreter (returns void** for C ABI compatibility)
 extern "C" DLLEXPORT void** qore_rt_get_ir_slot_cache_ptr() {
     return reinterpret_cast<void**>(&current_ir_slot_cache);
+}
+
+extern "C" DLLEXPORT void** qore_rt_get_ir_slot_cache_dirty_ptr() {
+    return reinterpret_cast<void**>(&current_ir_slot_cache_dirty);
+}
+
+extern "C" DLLEXPORT void* qore_rt_begin_native_ir_slot_cache(int32_t count) {
+    std::unique_ptr<NativeIRSlotCache> guard(new NativeIRSlotCache(count));
+    guard->prev_slot_cache = current_ir_slot_cache;
+    guard->prev_slot_cache_dirty = current_ir_slot_cache_dirty;
+    guard->prev_native_slot_cache_active = current_native_ir_slot_cache_active;
+    current_ir_slot_cache = &guard->slots;
+    current_ir_slot_cache_dirty = &guard->dirty;
+    current_native_ir_slot_cache_active = true;
+    return guard.release();
+}
+
+extern "C" DLLEXPORT void qore_rt_set_native_ir_slot_cache_value(void* guard_ptr, int32_t ir_slot,
+        LocalVar* var, uint64_t value) {
+    NativeIRSlotCache* guard = static_cast<NativeIRSlotCache*>(guard_ptr);
+    if (!guard || ir_slot < 0 || static_cast<size_t>(ir_slot) >= guard->slots.size()) {
+        return;
+    }
+
+    QoreValue& slot = guard->slots[ir_slot];
+    ExceptionSink xsink;
+    slot.discard(&xsink);
+    if (xsink) {
+        xsink.clear();
+    }
+
+    QoreValue qv = fromBits(value);
+    slot = qv.hasNode() ? qv.refSelf() : qv;
+    guard->slot_to_lvar[ir_slot] = var;
+}
+
+extern "C" DLLEXPORT void qore_rt_set_native_ir_slot_cache_value_aot(QoreAOTContext* ctx, void* guard,
+        int32_t ir_slot, int32_t local_slot, uint64_t value) {
+    assert(ctx && local_slot >= 0 && local_slot < ctx->num_locals);
+    qore_rt_set_native_ir_slot_cache_value(guard, ir_slot, ctx->locals[local_slot], value);
+}
+
+extern "C" DLLEXPORT void qore_rt_end_native_ir_slot_cache(void* guard_ptr, ExceptionSink* xsink) {
+    NativeIRSlotCache* guard = static_cast<NativeIRSlotCache*>(guard_ptr);
+    if (!guard) {
+        return;
+    }
+
+    current_ir_slot_cache = guard->prev_slot_cache;
+    current_ir_slot_cache_dirty = guard->prev_slot_cache_dirty;
+    current_native_ir_slot_cache_active = guard->prev_native_slot_cache_active;
+
+    // Handler IR writes parent-slot changes back to the slot cache.  Publish the
+    // final cache values to TLS so existing post-handler reload logic updates the
+    // compiled parent's LLVM allocas and AST fallback observes the same values.
+    for (size_t i = 0; i < guard->slots.size(); ++i) {
+        if (i >= guard->dirty.size() || !guard->dirty[i]) {
+            continue;
+        }
+        LocalVar* var = guard->slot_to_lvar[i];
+        if (var) {
+            qore_rt_sync_local(var, toBits(guard->slots[i]));
+        }
+    }
+
+    delete guard;
 }
 
 extern "C" DLLEXPORT void qore_rt_push_on_block_exit(int type, StatementBlock* code) {
@@ -5352,6 +5490,45 @@ extern "C" DLLEXPORT void qore_rt_exec_on_block_exit_impl(int64_t saved_count, E
 
     ExceptionSink obe_xsink;
     bool error = xsink && xsink->isException();
+
+    // This helper is called by LLVM/AOT-compiled parents.  If such a parent is
+    // itself running under an outer IR interpreter frame, current_ir_slot_cache
+    // belongs to that outer caller, not to the compiled parent whose deferred
+    // handlers are being executed.  Compiled parents publish current locals to
+    // the runtime local stack before this call; force handler IR to use that TLS
+    // fallback instead of copying unrelated outer-frame slots.
+    std::vector<QoreValue>* saved_ir_slot_cache = nullptr;
+    std::vector<bool>* saved_ir_slot_cache_dirty = nullptr;
+    bool saved_native_slot_cache_active = false;
+    bool clear_stale_outer_slot_cache = !current_native_ir_slot_cache_active;
+    if (clear_stale_outer_slot_cache) {
+        saved_ir_slot_cache = current_ir_slot_cache;
+        saved_ir_slot_cache_dirty = current_ir_slot_cache_dirty;
+        saved_native_slot_cache_active = current_native_ir_slot_cache_active;
+        current_ir_slot_cache = nullptr;
+        current_ir_slot_cache_dirty = nullptr;
+        current_native_ir_slot_cache_active = false;
+    }
+    struct NativeOBESlotCacheGuard {
+        std::vector<QoreValue>*& slot_cache;
+        std::vector<QoreValue>* saved;
+        std::vector<bool>*& slot_cache_dirty;
+        std::vector<bool>* saved_dirty;
+        bool& native_slot_cache_active;
+        bool saved_native_slot_cache_active;
+        bool active;
+
+        ~NativeOBESlotCacheGuard() {
+            if (active) {
+                slot_cache = saved;
+                slot_cache_dirty = saved_dirty;
+                native_slot_cache_active = saved_native_slot_cache_active;
+            }
+        }
+    } native_obe_slot_cache_guard{current_ir_slot_cache, saved_ir_slot_cache,
+        current_ir_slot_cache_dirty, saved_ir_slot_cache_dirty,
+        current_native_ir_slot_cache_active, saved_native_slot_cache_active,
+        clear_stale_outer_slot_cache};
 
     // Skip handler execution if handlers were already inlined; just clean up the vector
     if (!inline_lowered) {
@@ -5434,8 +5611,6 @@ extern "C" DLLEXPORT void qore_rt_exec_on_block_exit(int64_t saved_count, Except
 
 // --- AOT context-based helpers (Phase 7b) ---
 
-#include "qore/intern/QoreAOT.h"
-
 extern "C" DLLEXPORT void qore_rt_push_on_block_exit_aot(QoreAOTContext* ctx, int32_t idx, int type) {
     assert(ctx && idx >= 0 && idx < ctx->num_stmts);
     // Check if handler IR is available (strip-source mode or optimized path)
@@ -5467,6 +5642,11 @@ extern "C" DLLEXPORT void qore_rt_assign_local_aot(QoreAOTContext* ctx, int32_t 
 extern "C" DLLEXPORT void qore_rt_assign_local_no_coerce_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink) {
     assert(ctx && idx >= 0 && idx < ctx->num_locals);
     qore_rt_assign_local_no_coerce(ctx->locals[idx], val, xsink);
+}
+
+extern "C" DLLEXPORT void qore_rt_sync_local_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val) {
+    assert(ctx && idx >= 0 && idx < ctx->num_locals);
+    qore_rt_sync_local(ctx->locals[idx], val);
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_coerce_value_aot(QoreAOTContext* ctx, int32_t local_idx,

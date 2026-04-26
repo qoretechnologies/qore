@@ -590,8 +590,9 @@ int FtpControlPollOperationPriv::submitToController(ExceptionSink* xsink, const 
     }
 
     // Submit with replace=true — the control op is re-submitted for each command,
-    // and the controller must replace the old entry to avoid ref leaks
-    ReferenceHolder<QoreObject> rv(ctl_priv->submit(*ctl_obj, *info, true, xsink), xsink);
+    // and the controller must replace the old entry to avoid ref leaks.
+    // submit() takes ownership of `info`; transfer our ref explicitly.
+    ReferenceHolder<QoreObject> rv(ctl_priv->submit(*ctl_obj, info.release(), true, xsink), xsink);
     if (*xsink) {
         return -1;
     }
@@ -1022,7 +1023,8 @@ int FtpPortAcceptPollOperationPriv::submitToController(ExceptionSink* xsink, con
         return -1;
     }
 
-    ReferenceHolder<QoreObject> rv(ctl_priv->submit(*ctl_obj, *info, false, xsink), xsink);
+    // submit() takes ownership of `info`; transfer our ref explicitly.
+    ReferenceHolder<QoreObject> rv(ctl_priv->submit(*ctl_obj, info.release(), false, xsink), xsink);
     return *xsink ? -1 : 0;
 }
 

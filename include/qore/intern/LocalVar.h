@@ -213,6 +213,15 @@ public:
             const QoreTypeInfo* refTypeInfo) const;
     DLLLOCAL void remove(LValueRemoveHelper& lvrh, const QoreTypeInfo* typeInfo);
 
+    DLLLOCAL void syncValue(QoreValue nval, ExceptionSink* xsink) {
+        if (checkFinalized(xsink)) {
+            nval.discard(xsink);
+            return;
+        }
+        discard(val.assign(nval), xsink);
+        block_cleared = false;
+    }
+
     DLLLOCAL QoreValue eval(bool& needs_deref, ExceptionSink* xsink) const {
         //printd(5, "LocalVarValue::eval() this: %p '%s' type: %d '%s'\n", this, id, val.getType(),
         //    val.getTypeName());

@@ -858,6 +858,7 @@ protected:
     int old_frameCount = 0;
     bool restore = false;
     bool init_tlpd = false;
+    bool thread_count_incremented = false;
 };
 
 class ProgramRuntimeParseContextHelper {

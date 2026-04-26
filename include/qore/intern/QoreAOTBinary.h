@@ -130,6 +130,7 @@ enum class QoreAOTSectionType : uint16_t {
     TYPE_TABLE       = 18,  //!< Per-blob interned type-path table (bulk-resolved at shell phase)
     MODULE_PATH_PREPEND = 19,  //!< Per-Program %prepend-module-path expanded path list (count u32 + count × StringRef)
     MODULE_PATH_APPEND  = 20,  //!< Per-Program %append-module-path expanded path list (count u32 + count × StringRef)
+    BUILD_INFO      = 21,  //!< Producer/build metadata as key-value string pairs
 };
 
 //! Value type tags for serialized constant values
@@ -760,6 +761,23 @@ void serializeProgramMetadata(QoreAOTBinaryWriter& writer, const char* exec_clas
 */
 bool readProgramMetadata(const uint8_t* data, uint32_t size, std::string& exec_class_name, std::string& error);
 
+//! Serialize producer/build metadata into the BUILD_INFO binary section.
+/** Wire format: u32 count, then count x (StringRef key, StringRef value).
+    The section is informational only; runtimes can ignore it safely.
+*/
+void serializeBuildInfo(QoreAOTBinaryWriter& writer,
+        const std::vector<std::pair<std::string, std::string>>& info);
+
+//! Read producer/build metadata from an opened binary reader.
+bool readBuildInfo(const QoreAOTBinaryReader& reader,
+        std::vector<std::pair<std::string, std::string>>& info,
+        std::string& error);
+
+//! data+size convenience overload of readBuildInfo
+bool readBuildInfo(const uint8_t* data, uint32_t size,
+        std::vector<std::pair<std::string, std::string>>& info,
+        std::string& error);
+
 /** Read fallback source from a v2 AOT binary metadata blob without full deserialization.
     @param data pointer to the metadata blob
     @param size size of the metadata blob
@@ -1243,6 +1261,10 @@ class QoreAOTBinaryDeserializer {
         int8_t pending_complex_default_kind = -1;
         std::string pending_complex_default_path;
         std::vector<QoreValue> pending_complex_default_args;
+        //! Deferred VT_EXPR_TREE default.  Expression trees can reference
+        //! class/namespace constants that are not registered while class shells
+        //! are being read, so they are materialized after constants are added.
+        std::vector<uint8_t> pending_expr_tree_blob;
     };
     std::vector<std::vector<PendingInstanceMember>> pending_instance_members;
 
@@ -1262,6 +1284,8 @@ class QoreAOTBinaryDeserializer {
         int8_t pending_complex_default_kind = -1;
         std::string pending_complex_default_path;
         std::vector<QoreValue> pending_complex_default_args;
+        //! Same deferred-expression-tree channel as PendingInstanceMember.
+        std::vector<uint8_t> pending_expr_tree_blob;
     };
     std::vector<std::vector<PendingStaticMember>> pending_static_members;
 
@@ -1307,6 +1331,9 @@ class QoreAOTBinaryDeserializer {
         int8_t pending_complex_default_kind = -1;
         std::string pending_complex_default_path;
         std::vector<QoreValue> pending_complex_default_args;
+
+        // Deferred VT_EXPR_TREE member default.
+        std::vector<uint8_t> pending_expr_tree_blob;
     };
     // Map from hashdecl pointer to pending members
     std::vector<std::pair<TypedHashDecl*, std::vector<PendingHashdeclMember>>> pending_hashdecl_members;
@@ -1451,8 +1478,22 @@ public:
         sibling session. */
     bool resolveAll(std::string& error);
 
-    //! Phase-split 2a — resolve base classes, types, and this
-    //! session's OWN members (no inherited imports yet).
+    //! Phase-split 2a-1 — resolve base classes and type-only metadata.
+    bool resolveTypes(std::string& error);
+
+    //! Phase-split 2a-2 — register class and namespace constants.
+    /** Must run across all sessions after resolveTypes() and before
+        resolveMembers(), because member default expressions can reference
+        constants from any sibling AOT blob in the batch. */
+    bool resolveConstants(std::string& error);
+
+    //! Phase-split 2a-3 — resolve this session's OWN instance members.
+    /** Must run after resolveConstants() so expression-tree member defaults
+        can resolve class and namespace constants. */
+    bool resolveMembers(std::string& error);
+
+    //! Phase-split 2a compatibility entry point — resolve base classes, types,
+    //! constants, and this session's OWN members (no inherited imports yet).
     /** Must run before importInheritedMembersPhase() on ANY
         session, because that phase reads members from base
         classes that may live in sibling sessions. */
@@ -1477,12 +1518,11 @@ public:
 
     //! Phase-split 2a-import — copy base-class members into derived
     //! classes.  Batch mode: must wait until every session has
-    //! finished resolveTypesAndMembers() so base classes' member
-    //! maps are populated. */
+    //! finished resolveMembers() so base classes' member maps are
+    //! populated. */
     bool importInheritedMembersPhase(std::string& error);
 
-    //! Phase-split 2a-post — static members, class constants,
-    //! global constants, top-level globals.
+    //! Phase-split 2a-post — static members and top-level globals.
     bool resolveStaticsAndConstants(std::string& error);
 
     //! Phase-split 2b — deserialize functions and methods.
@@ -1799,10 +1839,18 @@ public:
             }                                                        \
         } while (0)
 
-        // 2a: types, bases, and each session's OWN members.
+        // 2a: types/bases first, then constants across all sessions, then
+        // each session's OWN members.  The cross-session constant barrier is
+        // required for member defaults like Class::Defaults.Key.
         AOT_PHASE_TIME(1, {
             for (auto& sess : sessions) {
-                if (!sess->resolveTypesAndMembers(error)) return false;
+                if (!sess->resolveTypes(error)) return false;
+            }
+            for (auto& sess : sessions) {
+                if (!sess->resolveConstants(error)) return false;
+            }
+            for (auto& sess : sessions) {
+                if (!sess->resolveMembers(error)) return false;
             }
         });
         // 2a-sml: re-propagate super-class map lists now that

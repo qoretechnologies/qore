@@ -210,6 +210,26 @@ static bool readDeferredMemberDefault(
         default_val = QoreValue();
         return true;
     }
+    if (tag_byte == static_cast<uint8_t>(QoreAOTValueTag::VT_EXPR_TREE)) {
+        // Expression-tree defaults may reference class/namespace constants
+        // from the same AOT blob.  Those constants are not registered while
+        // class shells are being read, so defer materializing the AST until
+        // the member-resolution pass.
+        ++ptr;  // consume tag
+        if (ptr + 4 > end) {
+            error = "unexpected end of data reading expr_tree size";
+            return false;
+        }
+        uint32_t blob_size = QoreAOTBinaryReader::readU32(ptr);
+        if (ptr + blob_size > end) {
+            error = "expr_tree blob exceeds section bounds";
+            return false;
+        }
+        pim.pending_expr_tree_blob.assign(ptr, ptr + blob_size);
+        ptr += blob_size;
+        default_val = QoreValue();
+        return true;
+    }
     if (tag_byte != static_cast<uint8_t>(QoreAOTValueTag::VT_NEW_OBJECT)) {
         // Normal case: use the standard reader
         default_val = reader.readValue(ptr, end, error);
@@ -289,6 +309,25 @@ static bool readDeferredMemberDefault(
     }
     (void)save;  // save no longer needed — ptr correctly advanced
     return true;
+}
+
+static void resolveDeferredExprTreeDefault(std::vector<uint8_t>& blob,
+        QoreValue& default_val, QoreProgram* pgm, const char* kind,
+        const char* owner_name, const char* member_name) {
+    if (blob.empty()) {
+        return;
+    }
+    if (default_val.hasNode()) {
+        default_val.discard(nullptr);
+        default_val = QoreValue();
+    }
+    QoreValue v = deserializeExprTreeFromBlob(blob.data(),
+        static_cast<uint32_t>(blob.size()), pgm, nullptr, 0);
+    default_val = v;
+    blob.clear();
+    (void)kind;
+    (void)owner_name;
+    (void)member_name;
 }
 
 static constexpr const char* AOT_CONST_PATH_PREFIX = "@qore-aot-const-path:";
@@ -4765,11 +4804,8 @@ bool QoreAOTBinaryDeserializer::openAndDeserializeShells(QoreProgram* in_pgm,
 // index rebuild, deferred BCA resolution.  Expected to run AFTER
 // openAndDeserializeShells has completed for every blob in the
 // current batch.
-// Phase-split 2a.  Resolves types, bases, and each session's OWN
-// members.  Does not import inherited base-class members — that
-// must wait until sibling sessions have finished their own
-// resolveInstanceMembers (cross-session sync point).
-bool QoreAOTBinaryDeserializer::resolveTypesAndMembers(std::string& error) {
+// Phase-split 2a-1.  Resolves types and bases only.
+bool QoreAOTBinaryDeserializer::resolveTypes(std::string& error) {
     // Resolve class base classes (looks up bases via pgm->findClass,
     // so blobs from a sibling session are reachable after all shells
     // exist).
@@ -4787,11 +4823,36 @@ bool QoreAOTBinaryDeserializer::resolveTypesAndMembers(std::string& error) {
     if (!resolveHashdeclMembers(error)) {
         return false;
     }
-    // Resolve class members and constants after all types are available
+    return true;
+}
+
+// Phase-split 2a-2.  Register constants before member defaults are
+// deserialized, because expression-tree member defaults can refer to same-class
+// or same-module constants (for example Class::Defaults.Key).
+bool QoreAOTBinaryDeserializer::resolveConstants(std::string& error) {
+    if (!resolveClassConstants(error)) {
+        return false;
+    }
+    if (!deserializeConstants(error)) {
+        return false;
+    }
+    return true;
+}
+
+// Phase-split 2a-3.  Resolve each session's OWN instance members.  Does not
+// import inherited base-class members — that must wait until sibling sessions
+// have finished their own resolveInstanceMembers (cross-session sync point).
+bool QoreAOTBinaryDeserializer::resolveMembers(std::string& error) {
     if (!resolveInstanceMembers(error)) {
         return false;
     }
     return true;
+}
+
+bool QoreAOTBinaryDeserializer::resolveTypesAndMembers(std::string& error) {
+    return resolveTypes(error)
+        && resolveConstants(error)
+        && resolveMembers(error);
 }
 
 // Phase-split 2a-sml.  Re-propagate super-class map list entries
@@ -4858,16 +4919,11 @@ bool QoreAOTBinaryDeserializer::importInheritedMembersPhase(std::string& error) 
     return importInheritedMembers(error);
 }
 
-// Phase-split 2a-c.  Static members, class constants, global
-// constants, top-level globals.  Safe to interleave per session.
+// Phase-split 2a-c.  Static members and top-level globals.  Class and
+// namespace constants are already registered in resolveConstants() so both
+// instance and static member defaults can resolve them.
 bool QoreAOTBinaryDeserializer::resolveStaticsAndConstants(std::string& error) {
     if (!resolveStaticMembers(error)) {
-        return false;
-    }
-    if (!resolveClassConstants(error)) {
-        return false;
-    }
-    if (!deserializeConstants(error)) {
         return false;
     }
     if (!deserializeGlobals(error)) {
@@ -5708,6 +5764,10 @@ bool QoreAOTBinaryDeserializer::resolveInstanceMembers(std::string& error) {
                 pim.pending_complex_default_path.clear();
             }
 
+            resolveDeferredExprTreeDefault(pim.pending_expr_tree_blob,
+                pim.default_val, getProgram(), "class", qc->getName(),
+                pim.name.c_str());
+
             // Transfer ownership of the default value to the class member
             QoreValue default_val = pim.default_val;
             pim.default_val = QoreValue();  // Clear to prevent double-deref
@@ -5907,6 +5967,10 @@ bool QoreAOTBinaryDeserializer::resolveStaticMembers(std::string& error) {
                 psm.pending_complex_default_kind = -1;
                 psm.pending_complex_default_path.clear();
             }
+
+            resolveDeferredExprTreeDefault(psm.pending_expr_tree_blob,
+                psm.default_val, getProgram(), "class", qc->getName(),
+                psm.name.c_str());
 
             // Create the static variable info. The default value is
             // installed via assignInit() below (after construction) so the
@@ -6149,6 +6213,10 @@ bool QoreAOTBinaryDeserializer::resolveHashdeclMembers(std::string& error) {
                 phm.pending_complex_default_path.clear();
             }
 
+            resolveDeferredExprTreeDefault(phm.pending_expr_tree_blob,
+                phm.default_val, getProgram(), "hashdecl", hd->getName(),
+                phm.name.c_str());
+
             const QoreTypeInfo* mti = type_resolver->resolve(phm.type_path.c_str(), error);
             if (!error.empty()) {
                 // Fall back to auto type when the type can't be resolved
@@ -6320,6 +6388,7 @@ bool QoreAOTBinaryDeserializer::deserializeHashDecls(std::string& error) {
             int8_t pending_complex_default_kind = -1;
             std::string pending_complex_default_path;
             std::vector<QoreValue> pending_complex_default_args;
+            std::vector<uint8_t> pending_expr_tree_blob;
         };
         std::vector<MemberInfo> members;
 
@@ -6412,6 +6481,7 @@ bool QoreAOTBinaryDeserializer::deserializeHashDecls(std::string& error) {
             phm.pending_complex_default_kind = mi.pending_complex_default_kind;
             phm.pending_complex_default_path = std::move(mi.pending_complex_default_path);
             phm.pending_complex_default_args = std::move(mi.pending_complex_default_args);
+            phm.pending_expr_tree_blob = std::move(mi.pending_expr_tree_blob);
             pending_members.push_back(std::move(phm));
         }
         pending_hashdecl_members.push_back({hd, std::move(pending_members)});
@@ -8123,6 +8193,75 @@ bool readProgramMetadata(const uint8_t* data, uint32_t size, std::string& exec_c
     }
 
     return true;
+}
+
+void serializeBuildInfo(QoreAOTBinaryWriter& writer,
+        const std::vector<std::pair<std::string, std::string>>& info) {
+    if (info.empty()) {
+        return;
+    }
+
+    uint32_t sec_idx = writer.beginSection(QoreAOTSectionType::BUILD_INFO);
+    writer.writeU32(static_cast<uint32_t>(info.size()));
+    for (const auto& [key, value] : info) {
+        writer.writeStringRef(key.c_str());
+        writer.writeStringRef(value.c_str());
+    }
+    writer.endSection(sec_idx);
+}
+
+bool readBuildInfo(const QoreAOTBinaryReader& reader,
+        std::vector<std::pair<std::string, std::string>>& info,
+        std::string& error) {
+    info.clear();
+
+    const QoreAOTSectionHeader* sec = reader.findSection(QoreAOTSectionType::BUILD_INFO);
+    if (!sec) {
+        return true;
+    }
+
+    const uint8_t* ptr = reader.getSectionData(*sec);
+    if (!ptr) {
+        error = "invalid BUILD_INFO section data";
+        return false;
+    }
+    const uint8_t* end = ptr + sec->size;
+    if (ptr + 4 > end) {
+        error = "BUILD_INFO section too small for count";
+        return false;
+    }
+
+    uint32_t count = QoreAOTBinaryReader::readU32(ptr);
+    if (count > (sec->size - 4) / 8) {
+        error = "BUILD_INFO count exceeds section capacity";
+        return false;
+    }
+    info.reserve(count);
+    for (uint32_t i = 0; i < count; ++i) {
+        if (ptr + 8 > end) {
+            error = "unexpected end of BUILD_INFO section";
+            return false;
+        }
+        const char* key = reader.readStringRef(ptr);
+        const char* value = reader.readStringRef(ptr);
+        if (!key) {
+            error = "invalid BUILD_INFO key at index " + std::to_string(i);
+            return false;
+        }
+        info.emplace_back(key, value ? value : "");
+    }
+
+    return true;
+}
+
+bool readBuildInfo(const uint8_t* data, uint32_t size,
+        std::vector<std::pair<std::string, std::string>>& info,
+        std::string& error) {
+    QoreAOTBinaryReader reader;
+    if (!reader.open(data, size, error)) {
+        return false;
+    }
+    return readBuildInfo(reader, info, error);
 }
 
 bool readFallbackSource(const uint8_t* data, uint32_t size, const char*& source, size_t& source_len,

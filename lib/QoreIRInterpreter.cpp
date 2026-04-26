@@ -2131,11 +2131,12 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         return false;
     }
 
-    // Phase B2: Build reverse map for parent slot TLS access (for LLVM-compiled parents)
-    // Maps slot_id -> LocalVar* for slots 0..parent_slot_count-1
-    // Used when parent_slot_cache is null (LLVM-compiled parents without IR frames)
+    // Phase B2: Build reverse map for parent slot TLS access.
+    // Maps slot_id -> LocalVar* for slots 0..parent_slot_count-1.
+    // Dirty parent-slot writeback uses this to read the authoritative runtime
+    // local value instead of an invalidated cache entry.
     std::vector<LocalVar*> parent_slot_to_lvar;
-    if (func.parent_slot_count > 0 && !parent_slot_cache) {
+    if (func.parent_slot_count > 0) {
         parent_slot_to_lvar.resize(func.parent_slot_count, nullptr);
         for (auto& [lvar, slot_id] : func.local_var_slots) {
             if (lvar && slot_id < func.parent_slot_count) {
@@ -2143,6 +2144,31 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             }
         }
     }
+    std::vector<bool> parent_slot_dirty(func.parent_slot_count, false);
+    std::vector<bool>* parent_slot_cache_dirty = nullptr;
+    if (parent_slot_cache) {
+        void** dirty_ptr = qore_rt_get_ir_slot_cache_dirty_ptr();
+        if (dirty_ptr) {
+            parent_slot_cache_dirty = reinterpret_cast<std::vector<bool>*>(*dirty_ptr);
+            if (parent_slot_cache_dirty && parent_slot_cache_dirty->size() < func.parent_slot_count) {
+                parent_slot_cache_dirty = nullptr;
+            }
+        }
+    }
+    auto markParentSlotDirty = [&](uint32_t slot_id) {
+        if (slot_id < parent_slot_dirty.size()) {
+            parent_slot_dirty[slot_id] = true;
+        }
+    };
+    auto markParentLocalStoreDirty = [&](const QoreIRLocalInstruction* local_inst) {
+        if (!local_inst || local_inst->slot_id == UINT32_MAX) {
+            return;
+        }
+        if (local_inst->local && QoreTypeInfo::isReference(local_inst->local->getTypeInfo())) {
+            return;
+        }
+        markParentSlotDirty(local_inst->slot_id);
+    };
 
     // Phase B2: Copy parent's local values into handler frame (parent slot inheritance)
     // When this handler IR function is called from a parent, it inherits the parent's
@@ -2186,15 +2212,38 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         uint32_t parent_slot_count;
         std::vector<QoreValue>& locals_slot_cache;
         std::vector<QoreValue>* parent_slot_cache;
-        std::vector<LocalVar*>* slot_to_lvar_ptr;  // for TLS write-back (LLVM parents)
-        std::vector<bool>& locals_instantiated;
+        std::vector<LocalVar*>& slot_to_lvar;
+        std::vector<bool>& parent_slot_dirty;
+        std::vector<bool>* parent_slot_cache_dirty;
         ExceptionSink* xsink;
 
         ParentSlotWriteback(uint32_t psc, std::vector<QoreValue>& lsc,
-                           std::vector<QoreValue>* psc_ptr, std::vector<LocalVar*>* stl,
-                           std::vector<bool>& li, ExceptionSink* xs)
+                           std::vector<QoreValue>* psc_ptr, std::vector<LocalVar*>& stl,
+                           std::vector<bool>& psd, std::vector<bool>* psc_dirty, ExceptionSink* xs)
             : parent_slot_count(psc), locals_slot_cache(lsc), parent_slot_cache(psc_ptr),
-              slot_to_lvar_ptr(stl), locals_instantiated(li), xsink(xs) {
+              slot_to_lvar(stl), parent_slot_dirty(psd),
+              parent_slot_cache_dirty(psc_dirty), xsink(xs) {
+        }
+
+        QoreValue getWritebackValue(uint32_t i) {
+            if (i < slot_to_lvar.size() && slot_to_lvar[i]) {
+                bool needs_deref = true;
+                QoreValue value = slot_to_lvar[i]->eval(needs_deref, xsink);
+                if (xsink && *xsink) {
+                    if (needs_deref && value.hasNode()) {
+                        value.discard(xsink);
+                    }
+                    return QoreValue();
+                }
+                QoreValue rv = value.hasNode() ? value.refSelf() : value;
+                if (needs_deref && value.hasNode()) {
+                    value.discard(xsink);
+                }
+                return rv;
+            }
+
+            QoreValue value = locals_slot_cache[i];
+            return value.hasNode() ? value.refSelf() : value;
         }
 
         ~ParentSlotWriteback() {
@@ -2202,45 +2251,58 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             if (parent_slot_count > 0 && parent_slot_cache) {
                 assert(parent_slot_cache->size() >= parent_slot_count);
                 for (uint32_t i = 0; i < parent_slot_count; ++i) {
-                    // Discard parent's old reference and copy new value
+                    if (!parent_slot_dirty[i]) {
+                        continue;
+                    }
+                    QoreValue value = getWritebackValue(i);
                     (*parent_slot_cache)[i].discard(xsink);
-                    (*parent_slot_cache)[i] = locals_slot_cache[i];
-                    // Handler now transfers ownership back to parent
-                    if (locals_slot_cache[i].hasNode()) {
-                        // Already has refSelf() from parent, no additional ref needed
+                    (*parent_slot_cache)[i] = value;
+                    if (parent_slot_cache_dirty) {
+                        (*parent_slot_cache_dirty)[i] = true;
                     }
                 }
-            } else if (parent_slot_count > 0 && slot_to_lvar_ptr && !slot_to_lvar_ptr->empty()) {
+            } else if (parent_slot_count > 0 && !slot_to_lvar.empty()) {
                 // TLS write-back for LLVM-compiled parents
                 // Write modified parent slot values back to TLS using assignLocalVarValue
                 for (uint32_t i = 0; i < parent_slot_count; ++i) {
-                    LocalVar* lvar = (*slot_to_lvar_ptr)[i];
-                    if (lvar && locals_instantiated[i]) {
-                        assignLocalVarValue(lvar, locals_slot_cache[i], xsink);
+                    if (!parent_slot_dirty[i]) {
+                        continue;
+                    }
+                    LocalVar* lvar = slot_to_lvar[i];
+                    if (lvar) {
+                        QoreValue value = getWritebackValue(i);
+                        assignLocalVarValue(lvar, value, xsink);
+                        value.discard(xsink);
                     }
                 }
             }
         }
-    } parent_slot_writeback(func.parent_slot_count, locals_slot_cache, parent_slot_cache,
-                            parent_slot_to_lvar.empty() ? nullptr : &parent_slot_to_lvar,
-                            locals_instantiated, xsink);
+    };
 
     // Phase 2, Fix 2b: TLS guard for slot cache threading to exception-path handlers
     // When this IR interpreter frame is on the stack, nested handler IR functions can
     // access the parent's locals_slot_cache via qore_rt_exec_on_block_exit_impl
     struct TLSSlotCacheGuard {
         void** tls_slot_ptr;
+        void** tls_dirty_ptr;
         std::vector<QoreValue>* prev_slot_cache;
+        std::vector<bool>* prev_slot_cache_dirty;
 
         TLSSlotCacheGuard(std::vector<QoreValue>& locals_slot_cache) {
             tls_slot_ptr = qore_rt_get_ir_slot_cache_ptr();
+            tls_dirty_ptr = qore_rt_get_ir_slot_cache_dirty_ptr();
             prev_slot_cache = reinterpret_cast<std::vector<QoreValue>*>(*tls_slot_ptr);
+            prev_slot_cache_dirty = reinterpret_cast<std::vector<bool>*>(*tls_dirty_ptr);
             *tls_slot_ptr = reinterpret_cast<void*>(&locals_slot_cache);
+            *tls_dirty_ptr = nullptr;
         }
 
         ~TLSSlotCacheGuard() {
             if (tls_slot_ptr) {
                 *tls_slot_ptr = reinterpret_cast<void*>(prev_slot_cache);
+            }
+            if (tls_dirty_ptr) {
+                *tls_dirty_ptr = reinterpret_cast<void*>(prev_slot_cache_dirty);
             }
         }
     } tls_slot_guard(locals_slot_cache);
@@ -2509,6 +2571,11 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         }
     } slot_cache_cleanup{locals_slot_cache, xsink};
 
+    // Declared after SlotCacheCleanup so dirty parent slots are published before
+    // this frame releases its cached local references.
+    ParentSlotWriteback parent_slot_writeback(func.parent_slot_count, locals_slot_cache, parent_slot_cache,
+        parent_slot_to_lvar, parent_slot_dirty, parent_slot_cache_dirty, xsink);
+
     // RAII guard: delete active iterators on any function exit path.
     // IteratorNext deletes iterators on the normal done path, but return/exception
     // can exit without reaching done, leaking the iterator stored as raw int64_t.
@@ -2529,9 +2596,6 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     std::unordered_set<const void*> function_own_locals_storage(func.pre_instantiated_locals);
     for (LocalVar* lv : func.all_body_locals) {
         function_own_locals_storage.insert(reinterpret_cast<const void*>(lv));
-    }
-    for (const auto& i : func.local_var_slots) {
-        function_own_locals_storage.insert(reinterpret_cast<const void*>(i.first));
     }
     const std::unordered_set<const void*>* function_own_locals = &function_own_locals_storage;
 
@@ -2574,6 +2638,37 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             invalidateClosureCacheLv(static_cast<const LocalVar*>(root.ref_ptr));
         }
     };
+    auto markParentLValueDirty = [&](const QoreIRLValueInstruction* lval_inst,
+            const VarRefNode* lval_vrn) {
+        if (parent_slot_dirty.empty() || !lval_inst) {
+            return;
+        }
+        if (lval_vrn && lval_vrn->getTypeInfo()
+                && QoreTypeInfo::isReference(lval_vrn->getTypeInfo())) {
+            return;
+        }
+        uint32_t sid = lval_inst->lvalue_slot_id;
+        if (!lval_inst->hasLocalTarget() && lval_vrn
+                && (lval_vrn->getType() == VT_LOCAL || lval_vrn->getType() == VT_LOCAL_TS)
+                && lval_vrn->ref.id) {
+            auto it = func.local_var_slots.find(lval_vrn->ref.id);
+            if (it != func.local_var_slots.end()) {
+                sid = it->second;
+            }
+        }
+        markParentSlotDirty(sid);
+    };
+    auto markParentLValuePathDirty = [&](const QoreIRLValuePathInstruction* path_inst) {
+        if (parent_slot_dirty.empty() || !path_inst || !path_inst->hasLocalTarget()
+                || path_inst->path.empty()) {
+            return;
+        }
+        const LVPathStep& root = path_inst->path[0];
+        if (root.type_info && QoreTypeInfo::isReference(root.type_info)) {
+            return;
+        }
+        markParentSlotDirty(path_inst->lvalue_slot_id);
+    };
 
     // Helper: make a private copy of an LValuePath instruction's path with
     // dynamic operands resolved for the current invocation.  MUST be used by
@@ -2607,6 +2702,25 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             }
         }
         return path_copy;
+    };
+
+    // LValuePath roots are resolved through LValueHelper, so owned local roots
+    // need the same stack instantiation invariant as StoreLocal/StoreLValue.
+    auto ensureLValuePathRootLocal = [&](const QoreIRLValuePathInstruction* path_inst) {
+        if (!path_inst || path_inst->path.empty()) {
+            return;
+        }
+        const LVPathStep& root = path_inst->path[0];
+        if ((root.kind != LVPathStepKind::LocalVar && root.kind != LVPathStepKind::ClosureVar)
+                || !root.ref_ptr) {
+            return;
+        }
+        auto* lv = const_cast<LocalVar*>(static_cast<const LocalVar*>(root.ref_ptr));
+        ensureLocalInstantiated(lv, instantiated_locals, instantiated_locals_ordered,
+            pre_instantiated, function_own_locals, &locally_uninstantiated);
+        if (path_inst->lvalue_slot_id < locals_instantiated.size()) {
+            locals_instantiated[path_inst->lvalue_slot_id] = true;
+        }
     };
 
     // Helper: prepare slot cache before a lvalue operation.
@@ -2691,6 +2805,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 locals_slot_cache[sid] = QoreValue();
             }
             clearLoadSlots(sid);
+            markParentLValueDirty(lval_inst, lval_vrn);
         }
     };
 
@@ -4553,6 +4668,7 @@ load_local_done:
                         assignLocalVarValue(fused_inst->target, QoreValue(result_val), xsink);
                     }
                 }
+                markParentSlotDirty(fused_inst->target_slot_id);
                 // Set result value
                 if (fused_inst->result.isValid()) {
                     setValueSlot(values, fused_inst->result.id, QoreValue(result_val), xsink);
@@ -4611,6 +4727,7 @@ load_local_done:
                         assignLocalVarValue(fused_inst->local, QoreValue(result_val), xsink);
                     }
                 }
+                markParentSlotDirty(fused_inst->slot_id);
                 // Set result value
                 if (fused_inst->result.isValid()) {
                     setValueSlot(values, fused_inst->result.id, QoreValue(result_val), xsink);
@@ -5314,6 +5431,7 @@ load_local_done:
                         cleanupLocalCaches();
                         return false;
                     }
+                    markParentLocalStoreDirty(local_inst);
                     ++ip;
                     break;
                 }
@@ -5419,6 +5537,7 @@ load_local_done:
                     cleanupLocalCaches();
                     return false;
                 }
+                markParentLocalStoreDirty(local_inst);
                 ++ip;
                 break;
             }
@@ -5795,6 +5914,7 @@ load_local_done:
                     cleanupLocalCaches();
                     return false;
                 }
+                markParentSlotDirty(local_inst->slot_id);
                 ++ip;
                 break;
             }
@@ -6888,6 +7008,7 @@ load_local_done:
                 }
                 updateLocalVarFromLvalue(instantiated_locals, instantiated_locals_ordered, lval_inst->lvalue, res, xsink, pre_instantiated, function_own_locals, &locally_uninstantiated,
                     &func.local_var_slots, &locals_slot_cache);
+                markParentLValueDirty(lval_inst, extractLValueBaseVarRef(lval_inst->lvalue));
                 ++ip;
                 break;
             }
@@ -6990,6 +7111,7 @@ load_local_done:
                 } else {
                     res.discard(xsink);
                 }
+                markParentLValueDirty(lval_inst, base_var);
                 ++ip;
                 break;
             }
@@ -7005,6 +7127,7 @@ load_local_done:
                 // Per-invocation private path copy; see patchLVPathLocal for why
                 // mutating path_inst->path directly is a data race.
                 std::vector<LVPathStep> path_copy = patchLVPathLocal(path_inst);
+                ensureLValuePathRootLocal(path_inst);
                 invalidateLValuePathClosureCache(path_inst);
 
                 QoreValue val = getIRValue(values, path_inst->operands[0]);
@@ -7052,6 +7175,7 @@ load_local_done:
                         clearLoadSlots(path_inst->lvalue_slot_id);
                     }
                 }
+                markParentLValuePathDirty(path_inst);
 
                 if (path_inst->result.isValid()) {
                     // Use refSelf() to create an independent reference — val also exists
@@ -7076,6 +7200,7 @@ load_local_done:
                 // Per-invocation private path copy; see patchLVPathLocal for why
                 // mutating path_inst->path directly is a data race.
                 std::vector<LVPathStep> path_copy = patchLVPathLocal(path_inst);
+                ensureLValuePathRootLocal(path_inst);
                 invalidateLValuePathClosureCache(path_inst);
                 QoreValue rhs = getIRValue(values, path_inst->operands[0]);
                 ValueHolder rhs_holder(rhs.refSelf(), xsink);
@@ -7160,6 +7285,7 @@ load_local_done:
                         clearLoadSlots(path_inst->lvalue_slot_id);
                     }
                 }
+                markParentLValuePathDirty(path_inst);
                 if (path_inst->result.isValid()) {
                     setValueSlot(values, path_inst->result.id, res, xsink);
                     if (res.hasNode()) {
@@ -7187,6 +7313,7 @@ load_local_done:
                 // between threads, corrupting the string pointers and SEGV'ing in
                 // QoreStringValueHelper::setup on the first (dangling) key_val.
                 std::vector<LVPathStep> path_copy = patchLVPathLocal(path_inst);
+                ensureLValuePathRootLocal(path_inst);
                 invalidateLValuePathClosureCache(path_inst);
                 QoreValue res;
                 bool is_remove = (path_inst->unary_op == LVUnaryOp::Remove
@@ -7606,6 +7733,7 @@ lvalue_path_unary_done:
                         local_init_slots[path_inst->lvalue_slot_id] = UINT32_MAX;
                     }
                 }
+                markParentLValuePathDirty(path_inst);
                 cleanupLocalCaches();
                 if (path_inst->result.isValid()) {
                     setValueSlot(values, path_inst->result.id, res, xsink);
@@ -7629,6 +7757,7 @@ lvalue_path_unary_done:
                 // Per-invocation private path copy; see patchLVPathLocal for why
                 // mutating path_inst->path directly is a data race.
                 std::vector<LVPathStep> path_copy = patchLVPathLocal(path_inst);
+                ensureLValuePathRootLocal(path_inst);
                 invalidateLValuePathClosureCache(path_inst);
                 // Get RHS value (operands[0] for push/unshift)
                 QoreValue rhs;
@@ -7738,6 +7867,7 @@ lvalue_path_unary_done:
                     return false;
                 }
                 invalidateLValuePathClosureCache(path_inst);
+                markParentLValuePathDirty(path_inst);
                 cleanupLocalCaches();
                 if (path_inst->result.isValid()) {
                     setValueSlot(values, path_inst->result.id, res, xsink);
@@ -7761,6 +7891,7 @@ lvalue_path_unary_done:
                 // Per-invocation private path copy; see patchLVPathLocal for why
                 // mutating path_inst->path directly is a data race.
                 std::vector<LVPathStep> path_copy = patchLVPathLocal(path_inst);
+                ensureLValuePathRootLocal(path_inst);
                 invalidateLValuePathClosureCache(path_inst);
                 // Get the ternary operands: offset, length, replacement
                 QoreValue offset_val = (path_inst->operands.size() > 0)
@@ -7870,6 +8001,7 @@ lvalue_path_unary_done:
                     res = QoreValue();
                 }
                 invalidateLValuePathClosureCache(path_inst);
+                markParentLValuePathDirty(path_inst);
                 if (path_inst->result.isValid()) {
                     setValueSlot(values, path_inst->result.id, res, xsink);
                     if (res.hasNode()) {
@@ -7908,6 +8040,7 @@ lvalue_path_unary_done:
                     cleanupLocalCaches();
                     return false;
                 }
+                markParentLValueDirty(lval_inst, inc_vrn);
                 setValueSlot(values, lval_inst->result.id, res, xsink);
                 if (res.hasNode()) {
                     cleanup.push_back(lval_inst->result.id);
