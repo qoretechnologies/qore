@@ -27,8 +27,8 @@
 %requires ../../../../qlib/HttpServer.qm
 %requires ../../../../qlib/HttpServerAsyncIo
 %requires ../../../../qlib/ServerSentEventHandler
-%requires ../../../../qlib/RestClientIo.qm
 %requires ../../../../qlib/HttpClientStreamingIo
+%requires ../../../../qlib/RestClientIo.qm
 %requires ../../../../qlib/Mime.qm
 %requires ../../../../qlib/Logger.qm
 %requires ../../../../qlib/QUnit.qm
@@ -62,6 +62,14 @@ class TestCommentThenDataSseHandler inherits ServerSentEventHandler {
     }
 }
 
+class TestSseErrorHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(400,
+            "{\"error\":{\"message\":\"bad SSE request\",\"type\":\"invalid_request\"}}",
+            {"Content-Type": "application/json"});
+    }
+}
+
 class SseRestClientIoTest inherits Test {
     private {
         HttpServer server;
@@ -77,6 +85,8 @@ class SseRestClientIoTest inherits Test {
         addTestCase("restSseStream callback stop", \testRestSseStreamStop());
         addTestCase("restSseReader skips comment-only keepalives",
             \testRestSseReaderSkipsComments());
+        addTestCase("restSseReader throws HTTP response errors",
+            \testRestSseReaderThrowsResponseError());
         addTestCase("HttpSseStreamPollOperation heartbeat defaults on",
             \testPollOperationHeartbeatDefault());
         set_return_value(main());
@@ -91,6 +101,7 @@ class SseRestClientIoTest inherits Test {
         });
         server.setDefaultHandler("sse", handler);
         server.setHandler("sse-comment", "/comment", NOTHING, comment_handler);
+        server.setHandler("sse-error", "/error", NOTHING, new TestSseErrorHandler());
         port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
     }
 
@@ -189,6 +200,30 @@ class SseRestClientIoTest inherits Test {
         assertTrue(exists evt, "data event received after comment-only frame");
         assertEq("after-comment", evt.event, "comment-only frame skipped");
         assertEq("\"payload\"", evt.data, "data payload preserved");
+    }
+
+    testRestSseReaderThrowsResponseError() {
+        RestClientIo rest({
+            "url": sprintf("http://localhost:%d", port),
+            "data": "json",
+        });
+
+        try {
+            rest.restSseReader("GET", "/error");
+            fail("restSseReader should throw REST-RESPONSE-ERROR on HTTP error response");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("REST-RESPONSE-ERROR", ex.err);
+            assertEq(400, ex.arg.status_code);
+            assertEq("GET", ex.arg.request_method);
+            assertEq("/error", ex.arg.request_path);
+            if (ex.arg.body.typeCode() == NT_HASH) {
+                assertEq("bad SSE request", ex.arg.body.error.message);
+                assertEq("invalid_request", ex.arg.body.error."type");
+            } else {
+                assertTrue(string(ex.arg.body).find("bad SSE request") >= 0,
+                    "raw error body is preserved");
+            }
+        }
     }
 
     testPollOperationHeartbeatDefault() {
