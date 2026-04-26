@@ -2271,6 +2271,32 @@ static void ut_socket_iomode_sync_lifecycle(UnitTestCounters& c) {
 
     {
         ExceptionSink async_xsink;
+        AbstractPollState* ps = sock->startConnect(&async_xsink, "127.0.0.1:9");
+        UT_ASSERT(c, !ps, "direct async startConnect fails while sync I/O is active");
+        UT_ASSERT(c, (bool)async_xsink, "direct async startConnect raises while sync I/O is active");
+        const QoreValue err_val = async_xsink.getExceptionErr();
+        const QoreStringNode* err = err_val.get<const QoreStringNode>();
+        UT_ASSERT(c, err && *err == "SOCKET-SYNC-MODE-ERROR",
+            "direct async startConnect exception is SOCKET-SYNC-MODE-ERROR while sync I/O is active");
+        async_xsink.clear();
+        delete ps;
+    }
+
+    {
+        ExceptionSink async_xsink;
+        AbstractPollState* ps = sock->startAccept(&async_xsink);
+        UT_ASSERT(c, !ps, "direct async startAccept fails while sync I/O is active");
+        UT_ASSERT(c, (bool)async_xsink, "direct async startAccept raises while sync I/O is active");
+        const QoreValue err_val = async_xsink.getExceptionErr();
+        const QoreStringNode* err = err_val.get<const QoreStringNode>();
+        UT_ASSERT(c, err && *err == "SOCKET-SYNC-MODE-ERROR",
+            "direct async startAccept exception is SOCKET-SYNC-MODE-ERROR while sync I/O is active");
+        async_xsink.clear();
+        delete ps;
+    }
+
+    {
+        ExceptionSink async_xsink;
         int rv = sock->checkIdleData(&async_xsink);
         UT_ASSERT(c, rv == -1, "async idle-data check fails while sync I/O is active");
         UT_ASSERT(c, (bool)async_xsink, "async idle-data check raises while sync I/O is active");

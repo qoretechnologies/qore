@@ -143,50 +143,67 @@ void QoreSocketObject::invalidate(ExceptionSink* xsink) {
 
 AbstractPollState* QoreSocketObject::startConnect(ExceptionSink* xsink, const char* name) {
     AutoLocker al(priv->m);
+    if (priv->checkAsyncAllowed(xsink) || priv->checkValid(xsink)) {
+        return nullptr;
+    }
     return priv->socket->startConnect(xsink, name);
 }
 
 AbstractPollState* QoreSocketObject::startSslConnect(ExceptionSink* xsink) {
     AutoLocker al(priv->m);
+    if (priv->checkAsyncAllowed(xsink) || priv->checkValid(xsink)) {
+        return nullptr;
+    }
     return priv->socket->startSslConnect(xsink, priv->cert, priv->pk);
 }
 
 AbstractPollState* QoreSocketObject::startSend(ExceptionSink* xsink, const char* data, size_t size) {
     AutoLocker al(priv->m);
+    if (priv->checkAsyncAllowed(xsink) || priv->checkValid(xsink)) {
+        return nullptr;
+    }
     return priv->socket->startSend(xsink, data, size);
 }
 
 AbstractPollState* QoreSocketObject::startSslAccept(ExceptionSink* xsink) {
     AutoLocker al(priv->m);
+    if (priv->checkAsyncAllowed(xsink) || priv->checkValid(xsink)) {
+        return nullptr;
+    }
     return priv->socket->startSslAccept(xsink, priv->cert, priv->pk);
 }
 
 AbstractPollState* QoreSocketObject::startRecv(ExceptionSink* xsink, size_t size) {
     AutoLocker al(priv->m);
+    if (priv->checkAsyncAllowed(xsink) || priv->checkValid(xsink)) {
+        return nullptr;
+    }
     return priv->socket->startRecv(xsink, size);
 }
 
 AbstractPollState* QoreSocketObject::startRecvUntilBytes(ExceptionSink* xsink, const char* pattern, size_t size) {
     AutoLocker al(priv->m);
+    if (priv->checkAsyncAllowed(xsink) || priv->checkValid(xsink)) {
+        return nullptr;
+    }
     return priv->socket->startRecvUntilBytes(xsink, pattern, size);
 }
 
 AbstractPollState* QoreSocketObject::startRecvPacket(ExceptionSink* xsink) {
     AutoLocker al(priv->m);
+    if (priv->checkAsyncAllowed(xsink) || priv->checkValid(xsink)) {
+        return nullptr;
+    }
     return priv->socket->startRecvPacket(xsink);
 }
 
-/*
-int QoreSocketObject::startAccept(ExceptionSink* xsink) {
+AbstractPollState* QoreSocketObject::startAccept(ExceptionSink* xsink) {
     AutoLocker al(priv->m);
+    if (priv->checkAsyncAllowed(xsink) || priv->checkValid(xsink)) {
+        return nullptr;
+    }
     return priv->socket->startAccept(xsink);
 }
-
-int QoreSocketObject::startSslAccept(ExceptionSink* xsink) {
-    AutoLocker al(priv->m);
-    return priv->socket->startSslAccept(xsink, priv->cert, priv->pk);
-}
-*/
 
 int QoreSocketObject::connect(const char* name, int timeout_ms, ExceptionSink* xsink) {
     AutoLocker al(priv->m);
