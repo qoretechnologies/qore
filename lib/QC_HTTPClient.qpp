@@ -1448,14 +1448,13 @@ hash<auto> HTTPClient::sendAndStream(string method, *string path, *data body, *h
     return *xsink ? QoreValue() : rv.release();
 }
 
-//! Reports whether the client is currently open, including conn_mgr streaming state
-/** Overrides @c Socket::isOpen so that clients using the conn_mgr streaming
-    channel (e.g. after @c sendAndStream for SSE) report open while the channel
-    is still active, even though the inherited @c msock socket was never
-    directly connected.
+//! Reports whether the client is currently open, including conn_mgr state
+/** Overrides @c Socket::isOpen so that clients using the conn_mgr report open
+    when a pooled connection or streaming channel is still active, even though
+    the inherited @c msock socket was never directly connected.
 
-    @return @ref True if a conn_mgr streaming channel is held and not yet
-        closed, or the underlying socket is open
+    @return @ref True if a conn_mgr connection or streaming channel is active,
+        or the underlying socket is open
 
     @since %Qore 2.3
 */

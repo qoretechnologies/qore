@@ -9329,7 +9329,10 @@ bool QoreHttpClientObject::isConnected() const {
     if (http_priv->streaming_recv_channel) {
         return !http_priv->streaming_recv_channel->isClosed();
     }
-    return http_priv->msock->socket->isOpen();
+    if (http_priv->msock->socket->isOpen()) {
+        return true;
+    }
+    return http_priv->conn_mgr && http_priv->conn_mgr->getPoolSize() > 0;
 }
 
 bool QoreHttpClientObject::isOpen() const {

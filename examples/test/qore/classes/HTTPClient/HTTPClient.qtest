@@ -382,6 +382,7 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
         addTestCase("poll proxy test", \pollProxyTest());
         addTestCase("poll test", \pollTest());
         addTestCase("UNIX socket conn_mgr test", \unixSocketConnMgrTest());
+        addTestCase("conn_mgr isConnected test", \connMgrIsConnectedTest());
         addTestCase("chunked HEAD test", \chunkedHeadTest());
         addTestCase("assume encoding", \assumedEncoding());
         addTestCase("chunked disconnect test", \chunkedDisconnectTest());
@@ -796,6 +797,38 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
         assertEq("GET", hdr.method);
         assertEq("/unix-test?x=1", hdr.path);
         assertEq(encode_url(path, True), hdr.host);
+    }
+
+    connMgrIsConnectedTest() {
+        Queue q();
+        background sub () {
+            try {
+                Socket server();
+                server.bind(0);
+                server.listen();
+                q.push(server.getSocketInfo().port);
+
+                Socket peer = server.accept(15s);
+                q.push(True);
+                peer.recv(1, 15s);
+                peer.close();
+                server.close();
+            } catch (hash<ExceptionInfo> ex) {
+                q.push(ex);
+            }
+        }();
+
+        int port = q.get();
+        HTTPClient hc({"url": "http://localhost:" + port, "timeout": 5s});
+        hc.connect();
+
+        auto accepted = q.get();
+        if (accepted.typeCode() == NT_HASH) {
+            fail(sprintf("%s: %s", accepted.err, accepted.desc));
+        }
+        assertTrue(hc.isConnected(), "conn_mgr-backed connect() should report connected");
+        hc.disconnect();
+        assertFalse(hc.isConnected(), "disconnect() should clear conn_mgr connection state");
     }
 
     assumedEncoding() {
