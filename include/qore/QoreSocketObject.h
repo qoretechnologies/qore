@@ -85,6 +85,7 @@ class QoreSocketObject : public AbstractPollableIoObjectBase {
     friend class SocketUpgradeClientSslPollOperation;
     friend class SocketUpgradeServerSslPollOperation;
     friend class SocketShutdownSslPollOperation;
+    friend class SocketSetupPollOperation;
     friend class HttpClientConnectPollOperation;
     friend class SocketHttp2ServerPollOperation;
     friend class SocketHttp2SendResponsePollOperation;

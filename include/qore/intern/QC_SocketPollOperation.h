@@ -45,6 +45,7 @@
 class QoreEventNotifier;
 
 #include <deque>
+#include <string>
 
 //! Max single QUIC UDP datagram receive buffer (1500 typical MTU + headroom for jumbo frames)
 //! @note Assumes GSO/GRO is not used; if Generic Segmentation Offload is enabled in the future,
@@ -104,6 +105,76 @@ public:
     }
 
 private:
+    bool done = false;
+};
+
+class SocketSetupPollOperation : public SocketPollSocketOperationBase {
+private:
+    enum class Action {
+        BindName,
+        BindPort,
+        BindInterfacePort,
+        BindUnix,
+        BindInet,
+        Listen,
+    };
+
+public:
+    DLLLOCAL SocketSetupPollOperation(ExceptionSink* xsink, QoreSocketObject* sock, const char* name,
+        bool reuseaddr);
+    DLLLOCAL SocketSetupPollOperation(ExceptionSink* xsink, QoreSocketObject* sock, int port, bool reuseaddr);
+    DLLLOCAL SocketSetupPollOperation(ExceptionSink* xsink, QoreSocketObject* sock, const char* iface, int port,
+        bool reuseaddr);
+    DLLLOCAL SocketSetupPollOperation(ExceptionSink* xsink, QoreSocketObject* sock, const char* name, int socktype,
+        int protocol);
+    DLLLOCAL SocketSetupPollOperation(ExceptionSink* xsink, QoreSocketObject* sock, const char* name,
+        const char* service, bool reuseaddr, int family, int socktype, int protocol);
+    DLLLOCAL SocketSetupPollOperation(ExceptionSink* xsink, QoreSocketObject* sock, int backlog);
+
+    DLLLOCAL void deref(ExceptionSink* xsink) {
+        if (ROdereference()) {
+            if (set_non_block) {
+                sock->clearNonBlock();
+            }
+            sock->deref(xsink);
+            delete this;
+        }
+    }
+
+    DLLLOCAL virtual bool goalReached() const override {
+        return done;
+    }
+
+    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override;
+
+    DLLLOCAL virtual QoreValue getOutput() const override {
+        return rc;
+    }
+
+    DLLLOCAL virtual const char* getStateImpl() const override {
+        return done ? "done" : action == Action::Listen ? "listening" : "binding";
+    }
+
+    DLLLOCAL int getRc() const {
+        return rc;
+    }
+
+private:
+    DLLLOCAL void init(ExceptionSink* xsink);
+    DLLLOCAL void clearNonBlockLocked();
+
+    Action action;
+    std::string name;
+    std::string service;
+    bool has_name = false;
+    bool has_service = false;
+    bool reuseaddr = false;
+    int port = 0;
+    int family = 0;
+    int socktype = 0;
+    int protocol = 0;
+    int backlog = 0;
+    int rc = -1;
     bool done = false;
 };
 

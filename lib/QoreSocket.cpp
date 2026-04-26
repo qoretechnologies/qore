@@ -6657,6 +6657,104 @@ QoreHashNode* SocketShutdownSslPollOperation::continuePoll(ExceptionSink* xsink)
     return getSocketPollInfoHash(xsink, rc);
 }
 
+SocketSetupPollOperation::SocketSetupPollOperation(ExceptionSink* xsink, QoreSocketObject* sock, const char* name,
+        bool reuseaddr) : SocketPollSocketOperationBase(sock), action(Action::BindName), name(name),
+        has_name(true), reuseaddr(reuseaddr) {
+    init(xsink);
+}
+
+SocketSetupPollOperation::SocketSetupPollOperation(ExceptionSink* xsink, QoreSocketObject* sock, int port,
+        bool reuseaddr) : SocketPollSocketOperationBase(sock), action(Action::BindPort), reuseaddr(reuseaddr),
+        port(port) {
+    init(xsink);
+}
+
+SocketSetupPollOperation::SocketSetupPollOperation(ExceptionSink* xsink, QoreSocketObject* sock, const char* iface,
+        int port, bool reuseaddr) : SocketPollSocketOperationBase(sock), action(Action::BindInterfacePort),
+        name(iface), has_name(true), reuseaddr(reuseaddr), port(port) {
+    init(xsink);
+}
+
+SocketSetupPollOperation::SocketSetupPollOperation(ExceptionSink* xsink, QoreSocketObject* sock, const char* name,
+        int socktype, int protocol) : SocketPollSocketOperationBase(sock), action(Action::BindUnix), name(name),
+        has_name(true), socktype(socktype), protocol(protocol) {
+    init(xsink);
+}
+
+SocketSetupPollOperation::SocketSetupPollOperation(ExceptionSink* xsink, QoreSocketObject* sock, const char* name,
+        const char* service, bool reuseaddr, int family, int socktype, int protocol)
+        : SocketPollSocketOperationBase(sock), action(Action::BindInet), reuseaddr(reuseaddr), family(family),
+        socktype(socktype), protocol(protocol) {
+    if (name) {
+        this->name = name;
+        has_name = true;
+    }
+    if (service) {
+        this->service = service;
+        has_service = true;
+    }
+    init(xsink);
+}
+
+SocketSetupPollOperation::SocketSetupPollOperation(ExceptionSink* xsink, QoreSocketObject* sock, int backlog)
+        : SocketPollSocketOperationBase(sock), action(Action::Listen), backlog(backlog) {
+    init(xsink);
+}
+
+void SocketSetupPollOperation::init(ExceptionSink* xsink) {
+    AutoLocker al(sock->priv->m);
+    if (!sock->priv->checkNonBlock(xsink)) {
+        sock->priv->setNonBlock();
+        set_non_block = true;
+    }
+}
+
+void SocketSetupPollOperation::clearNonBlockLocked() {
+    if (set_non_block) {
+        sock->priv->clearNonBlock();
+        set_non_block = false;
+    }
+}
+
+QoreHashNode* SocketSetupPollOperation::continuePoll(ExceptionSink* xsink) {
+    AutoLocker al(sock->priv->m);
+
+    if (done) {
+        return nullptr;
+    }
+
+    if (sock->priv->checkValid(xsink)) {
+        clearNonBlockLocked();
+        return nullptr;
+    }
+
+    switch (action) {
+        case Action::BindName:
+            rc = sock->priv->socket->bind(name.c_str(), reuseaddr);
+            break;
+        case Action::BindPort:
+            rc = sock->priv->socket->bind(port, reuseaddr);
+            break;
+        case Action::BindInterfacePort:
+            rc = sock->priv->socket->bind(name.c_str(), port, reuseaddr);
+            break;
+        case Action::BindUnix:
+            rc = sock->priv->socket->bindUNIX(name.c_str(), socktype, protocol, xsink);
+            break;
+        case Action::BindInet:
+            rc = sock->priv->socket->bindINET(has_name ? name.c_str() : nullptr,
+                has_service ? service.c_str() : nullptr, reuseaddr, family, socktype, protocol, xsink);
+            break;
+        case Action::Listen:
+            rc = sock->priv->socket->listen(backlog);
+            break;
+    }
+
+    clearNonBlockLocked();
+    done = true;
+    return nullptr;
+}
+
 SocketDataAvailablePollOperation::SocketDataAvailablePollOperation(ExceptionSink* xsink, QoreSocketObject* sock)
         : SocketPollSocketOperationBase(sock, NB_RECV) {
     my_socket_priv* priv = my_socket_priv::getPriv(*sock);

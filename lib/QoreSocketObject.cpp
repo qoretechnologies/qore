@@ -270,6 +270,21 @@ static int qore_socket_object_exec_shutdown_ssl(QoreSocketObject* s, ExceptionSi
         "shutdownSSL", "shutdown-ssl", xsink);
 }
 
+static int qore_socket_object_exec_setup(QoreSocketObject* s, SocketSetupPollOperation* setup_poller,
+        const char* owner_name, const char* goal, ExceptionSink* xsink) {
+    s->ref();
+    ReferenceHolder<QoreObject> sock_obj(qore_socket_object_make_pollable_wrapper(s), xsink);
+    ReferenceHolder<QoreObject> op_obj(
+        qore_socket_object_make_poll_op(*sock_obj, setup_poller, goal, xsink), xsink);
+    if (*xsink) {
+        return -1;
+    }
+
+    ReferenceHolder<QoreHashNode> result(
+        qore_socket_object_exec_poll_operation(s, *sock_obj, *op_obj, -1, owner_name, xsink), xsink);
+    return *xsink ? -1 : setup_poller->getRc();
+}
+
 static QoreSocketObject* qore_socket_object_exec_accept(QoreSocketObject* s, int timeout_ms, bool ssl,
         ExceptionSink* xsink, SocketSource* source = nullptr) {
     s->ref();
@@ -1640,57 +1655,49 @@ int QoreSocketObject::connectUNIX(const char* p, int sock_type, int protocol, Ex
 
 // to bind to either a UNIX socket or an INET interface:port
 int QoreSocketObject::bind(const char* name, bool reuseaddr) {
-    AutoLocker al(priv->m);
     ExceptionSink xsink;
-    my_socket_priv::SyncIoGuard sg(*priv, &xsink);
-    if (!sg) {
+    int rc = qore_socket_object_exec_setup(this, new SocketSetupPollOperation(&xsink, this, name, reuseaddr),
+        "bind", "bind", &xsink);
+    if (xsink) {
         xsink.clear();
         return -1;
     }
-    return priv->socket->bind(name, reuseaddr);
+    return rc;
 }
 
 // to bind to an INET tcp port on all interfaces
 int QoreSocketObject::bind(int port, bool reuseaddr) {
-    AutoLocker al(priv->m);
     ExceptionSink xsink;
-    my_socket_priv::SyncIoGuard sg(*priv, &xsink);
-    if (!sg) {
+    int rc = qore_socket_object_exec_setup(this, new SocketSetupPollOperation(&xsink, this, port, reuseaddr),
+        "bind", "bind", &xsink);
+    if (xsink) {
         xsink.clear();
         return -1;
     }
-    return priv->socket->bind(port, reuseaddr);
+    return rc;
 }
 
 // to bind an open socket to an INET tcp port on a specific interface
 int QoreSocketObject::bind(const char* iface, int port, bool reuseaddr) {
-    AutoLocker al(priv->m);
     ExceptionSink xsink;
-    my_socket_priv::SyncIoGuard sg(*priv, &xsink);
-    if (!sg) {
+    int rc = qore_socket_object_exec_setup(this, new SocketSetupPollOperation(&xsink, this, iface, port, reuseaddr),
+        "bind", "bind", &xsink);
+    if (xsink) {
         xsink.clear();
         return -1;
     }
-    return priv->socket->bind(iface, port, reuseaddr);
+    return rc;
 }
 
 int QoreSocketObject::bindUNIX(const char* name, int socktype, int protocol, ExceptionSink* xsink) {
-    AutoLocker al(priv->m);
-    my_socket_priv::SyncIoGuard sg(*priv, xsink);
-    if (!sg) {
-        return -1;
-    }
-    return priv->socket->bindUNIX(name, socktype, protocol, xsink);
+    return qore_socket_object_exec_setup(this, new SocketSetupPollOperation(xsink, this, name, socktype, protocol),
+        "bind", "bind", xsink);
 }
 
 int QoreSocketObject::bindINET(const char* name, const char* service, bool reuseaddr, int family, int socktype,
         int protocol, ExceptionSink* xsink) {
-    AutoLocker al(priv->m);
-    my_socket_priv::SyncIoGuard sg(*priv, xsink);
-    if (!sg) {
-        return -1;
-    }
-    return priv->socket->bindINET(name, service, reuseaddr, family, socktype, protocol, xsink);
+    return qore_socket_object_exec_setup(this, new SocketSetupPollOperation(xsink, this, name, service, reuseaddr,
+        family, socktype, protocol), "bind", "bind", xsink);
 }
 
 // get port number for INET sockets
@@ -1700,14 +1707,14 @@ int QoreSocketObject::getPort() {
 }
 
 int QoreSocketObject::listen(int backlog) {
-    AutoLocker al(priv->m);
     ExceptionSink xsink;
-    my_socket_priv::SyncIoGuard sg(*priv, &xsink);
-    if (!sg) {
+    int rc = qore_socket_object_exec_setup(this, new SocketSetupPollOperation(&xsink, this, backlog), "listen",
+        "listen", &xsink);
+    if (xsink) {
         xsink.clear();
         return -1;
     }
-    return priv->socket->listen(backlog);
+    return rc;
 }
 
 // send a buffer of a particular size
