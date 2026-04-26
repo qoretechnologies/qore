@@ -324,6 +324,7 @@ class PgsqlTest inherits SqlTestBase {
             addTestCase("default value", \testDefaultValue());
             addTestCase("pgsqlutil: schema align with trigger drop #2963", \test2963());
             addTestCase("proxy bulk upsert", \proxyBulkUpsertTest());
+            addTestCase("pgvector extension alignment SQL", \pgvectorExtensionAlignmentSqlTest());
             addTestCase("pgvector type support", \pgvectorTest());
             addTestCase("pgvector ivfflat index", \pgvectorIvfflatIndexTest());
             addTestCase("pg_get_indexdef parser", \pgIndexDefParserTest());
@@ -462,6 +463,44 @@ class PgsqlTest inherits SqlTestBase {
         # proxy because it is not a Datasource or DatasourcePool
         AbstractDatasource ads = proxy;
         assertThrows("RUNTIME-OVERLOAD-ERROR", sub () { new SQLStatement(ads); });
+    }
+
+    private pgvectorExtensionAlignmentSqlTest() {
+        if (!table) {
+            testSkip("no DB connection");
+        }
+
+        AbstractDatasource ds = getDatasource();
+        on_exit ds.rollback();
+
+        *hash<auto> ext_row = ds.selectRow("select 1 from pg_extension where extname = %v", "vector");
+        hash<auto> schema_hash = {
+            "tables": {
+                "pgsql_vector_extension_probe": {
+                    "columns": {
+                        "id": {"qore_type": Type::Int, "notnull": True},
+                        "embedding": {"driver": {"pgsql": {"native_type": "vector", "size": 3}}},
+                    },
+                    "primary_key": {"name": "pk_pgsql_vector_extension_probe", "columns": ("id",)},
+                },
+            },
+        };
+
+        AbstractDatabase db = (new Database(ds)).getDatabase();
+        Tables tc();
+        list<string> sql = db.getAlignSql(schema_hash, ("force": True), tc);
+        string joined = sql.join("\n").lwr();
+
+        bool has_ext_sql = joined.find("create extension if not exists vector") >= 0;
+        assertEq(ext_row ? False : True, has_ext_sql,
+            "pgvector extension DDL emitted only when extension is missing");
+
+        if (has_ext_sql) {
+            int ext_pos = joined.find("create extension if not exists vector");
+            int table_pos = joined.find("create table");
+            assertTrue(table_pos < 0 || ext_pos < table_pos,
+                "pgvector extension DDL precedes table DDL");
+        }
     }
 
     private pgvectorTest() {
