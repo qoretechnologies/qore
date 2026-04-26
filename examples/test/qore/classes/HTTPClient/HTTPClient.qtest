@@ -827,6 +827,9 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
             fail(sprintf("%s: %s", accepted.err, accepted.desc));
         }
         assertTrue(hc.isConnected(), "conn_mgr-backed connect() should report connected");
+        hc.setPersistent();
+        assertTrue(hc.getUseConnectionManager(), "setPersistent() should keep conn_mgr enabled");
+        assertTrue(hc.isPersistent(), "setPersistent() should mark the conn_mgr session persistent");
         hc.disconnect();
         assertFalse(hc.isConnected(), "disconnect() should clear conn_mgr connection state");
     }

@@ -1866,11 +1866,11 @@ struct qore_httpclient_priv {
     DLLLOCAL void disconnect_unlocked() {
         if (msock->socket->isOpen()) {
             msock->socket->close();
-            proxy_connected = false;
-            persistent = false;
-            persistent_count = 0;
-            clearH2Session();
         }
+        proxy_connected = false;
+        persistent = false;
+        persistent_count = 0;
+        clearH2Session();
         disconnectQuic();
         clearStreamingChannel();
     }
@@ -2008,22 +2008,16 @@ struct qore_httpclient_priv {
     DLLLOCAL void setPersistent(ExceptionSink* xsink) {
         AutoLocker al(msock->m);
 
-        if (!msock->socket->isOpen()) {
-            // setPersistent() is a legacy feature that sticks a single
-            // msock connection across repeated send() calls.  It has no
-            // meaning for the conn_mgr pool (which already keeps
-            // connections alive across requests).  If the caller asks
-            // for persistence on a client whose connect() went through
-            // conn_mgr, drop back to the legacy path: disable conn_mgr
-            // for this instance and open an msock connection now.
-            // Subsequent send()s route through send_internal's legacy
-            // branch, which is what setPersistent() callers expect.
-            if (use_conn_mgr) {
-                use_conn_mgr = false;
-                // Tear down any conn_mgr state so stale pooled
-                // connections don't linger for this client.
-                resetConnMgr();
+        if (use_conn_mgr) {
+            // Persistence pins the current logical HTTPClient session to
+            // an already-open manager connection.  Warm the pool here so
+            // later sends can fail with PERSISTENCE-ERROR instead of
+            // silently creating a replacement connection.
+            if ((!conn_mgr || !conn_mgr->getConnectionCount(connection.host.c_str(), connection.port))
+                    && connectViaConnMgr(xsink)) {
+                return;
             }
+        } else if (!msock->socket->isOpen()) {
             if (connect_unlocked(xsink, connection)) {
                 return;
             }
@@ -2033,6 +2027,15 @@ struct qore_httpclient_priv {
             persistent = true;
         }
         ++persistent_count;
+    }
+
+    DLLLOCAL bool checkPersistentConnMgrConnection(const con_info& c, ExceptionSink* xsink) const {
+        if (persistent && (!conn_mgr || !conn_mgr->getConnectionCount(c.host.c_str(), c.port))) {
+            xsink->raiseException("PERSISTENCE-ERROR", "the current connection has been temporarily marked as "
+                "persistent, but has been disconnected");
+            return false;
+        }
+        return true;
     }
 
     DLLLOCAL void clearPersistent() {
@@ -5982,7 +5985,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
         // minute backoff in mgr.request's error handling so repeated
         // requests don't keep retrying H3.
         bool attempted_h3_upgrade = false;
-        if (!this_connection.is_unix && !http3_active && http3_mode != HTTP3_MODE_DISABLED
+        if (!persistent && !this_connection.is_unix && !http3_active && http3_mode != HTTP3_MODE_DISABLED
                 && this_connection.ssl) {
             auto alt = lookupAltSvc(this_connection.host.c_str(),
                 this_connection.port);
@@ -5999,6 +6002,9 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
         // Submit request via conn_mgr
         HttpClientConnectionManagerBase& mgr = getConnMgr(xsink);
         if (*xsink) {
+            return nullptr;
+        }
+        if (!checkPersistentConnMgrConnection(this_connection, xsink)) {
             return nullptr;
         }
 
