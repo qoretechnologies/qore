@@ -280,7 +280,12 @@ private:
         Attempt& operator=(const Attempt&) = delete;
     };
 
-    //! Abort + deref + zero an attempt (assumes @c attempts_mu_ held).
+    //! Abort + deref + zero an attempt.  Acquires @c attempts_mu_
+    //! internally to atomically null the resource fields before the
+    //! (potentially blocking) abort/deref so a concurrent
+    //! @ref submitAttempt either sees both refs alive (and refSelf's
+    //! them under the lock) or sees both nulled (and bails out).
+    //! Callers MUST NOT hold @c attempts_mu_ when calling.
     DLLLOCAL void clearAttempt(Attempt& a, ExceptionSink* xsink);
 
     //! Build one QUIC handshake attempt for a specific address family and
@@ -307,7 +312,15 @@ private:
         @c onInnerHandshakeReady wins; the others are aborted.
         @{
     */
-    std::vector<std::unique_ptr<Attempt>> attempts_;
+    //! Use shared_ptr (not unique_ptr) so the submit loop in
+    //! @ref buildAndSubmit can hold its own refs to in-flight Attempts —
+    //! otherwise a concurrent @ref onInnerHandshakeReady (winner commit
+    //! on the I/O thread) can move losing attempts out of @c attempts_
+    //! into a local vector that's destroyed at function exit, freeing
+    //! the Attempt struct mid-loop.  shared_ptr ownership across the
+    //! main thread + I/O thread keeps the Attempt alive until both
+    //! drop their refs.
+    std::vector<std::shared_ptr<Attempt>> attempts_;
     std::mutex attempts_mu_;
     //! Index of the winning attempt in @c attempts_; -1 while racing.
     /** Written under @c attempts_mu_; read under the same or during
