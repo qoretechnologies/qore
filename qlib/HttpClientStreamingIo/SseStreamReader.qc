@@ -113,7 +113,6 @@ public class SseStreamReader {
         @return the parsed SSE event, or \c NOTHING on timeout or stream end
 
         @throw SSE-STREAM-ERROR if the stream reported an error
-        @throw HTTPCLIENT-STREAM-CLOSED if the stream was closed unexpectedly
 
         @par SSE Event Format
         Each event is delimited by \c "\\n\\n" and parsed into a
@@ -150,7 +149,14 @@ public class SseStreamReader {
                     pending_data_offset = 0;
                 }
             } else {
-                data = stream.readData(timeout_ms);
+                try {
+                    data = stream.readData(timeout_ms);
+                } catch (hash<ExceptionInfo> ex) {
+                    if (ex.err == "HTTPCLIENT-STREAM-CLOSED") {
+                        return finishStream();
+                    }
+                    rethrow;
+                }
             }
             if (!exists data) {
                 # Timeout — return NOTHING without marking done
@@ -159,16 +165,7 @@ public class SseStreamReader {
 
             if (data.typeCode() == NT_HASH) {
                 if (data.end_stream) {
-                    done = True;
-                    # Parse any remaining buffered data
-                    if (sse_buffer.val()) {
-                        *hash<SseMessageInfo> last_evt = Socket::parseServerSentEvent(sse_buffer);
-                        sse_buffer = "";
-                        if (last_evt && last_evt.data.val()) {
-                            return last_evt;
-                        }
-                    }
-                    return NOTHING;
+                    return finishStream();
                 }
                 if (data.error) {
                     done = True;
@@ -197,6 +194,19 @@ public class SseStreamReader {
     cancel() {
         stream.cancel();
         done = True;
+    }
+
+    #! Marks the stream complete and returns any final buffered SSE event
+    private *hash<SseMessageInfo> finishStream() {
+        done = True;
+        if (sse_buffer.val()) {
+            *hash<SseMessageInfo> last_evt = Socket::parseServerSentEvent(sse_buffer);
+            sse_buffer = "";
+            if (last_evt && last_evt.data.val()) {
+                return last_evt;
+            }
+        }
+        return NOTHING;
     }
 
     #! Returns True if the parsed frame is an SSE comment-only keep-alive

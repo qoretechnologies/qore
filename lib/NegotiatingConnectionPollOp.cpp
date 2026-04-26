@@ -202,16 +202,14 @@ QoreHashNode* NegotiatingConnectionPollOpPriv::handleConnecting(ExceptionSink* x
     // the app thread.  The ownership transition from I/O thread to app
     // thread is ordered by the AbstractHttpPollConnectionPriv condition
     // variable internal to onConnectionReady().
-    if (owner_conn) {
-        ASYNC_IO_TRACE("onAlpnDecided fire alpn='%s' target='%s:%d' priv=%p elapsed_us=%lld\n",
-            alpn_id.c_str(), target_host.c_str(), target_port, (void*)this,
-            (long long)elapsed_us);
-        qore_async_io_log(QORE_LOG_LEVEL_DEBUG,
-            "negotiate-alpn-decided alpn='%s' target='%s:%d' priv=%p elapsed_us=%lld",
-            alpn_id.c_str(), target_host.c_str(), target_port, (void*)this,
-            (long long)elapsed_us);
-        owner_conn->onAlpnDecided(std::move(alpn_id));
-    }
+    ASYNC_IO_TRACE("onAlpnDecided fire alpn='%s' target='%s:%d' priv=%p elapsed_us=%lld\n",
+        alpn_id.c_str(), target_host.c_str(), target_port, (void*)this,
+        (long long)elapsed_us);
+    qore_async_io_log(QORE_LOG_LEVEL_DEBUG,
+        "negotiate-alpn-decided alpn='%s' target='%s:%d' priv=%p elapsed_us=%lld",
+        alpn_id.c_str(), target_host.c_str(), target_port, (void*)this,
+        (long long)elapsed_us);
+    notifyOwnerReady(std::move(alpn_id));
 
     // Drop the inner connect op — its dtor clears the socket's
     // non_block_flags, leaving the socket ready to be adopted by an
@@ -258,10 +256,7 @@ void NegotiatingConnectionPollOpPriv::setError(const char* err, const char* desc
     //
     // setClosed() is thread-safe (AbstractHttpPollConnectionPriv takes
     // its own lock) so calling it from the I/O thread is fine.
-    if (owner_conn) {
-        owner_conn->setClosed();
-        owner_conn = nullptr;
-    }
+    notifyOwnerClosed();
 }
 
 void NegotiatingConnectionPollOpPriv::abort(ExceptionSink* xsink) {
@@ -275,6 +270,18 @@ void NegotiatingConnectionPollOpPriv::abort(ExceptionSink* xsink) {
 
     neg_state.store(NegState::CLOSED, std::memory_order_release);
     releaseCurrentOp(xsink);
+    notifyOwnerClosed();
+}
+
+void NegotiatingConnectionPollOpPriv::notifyOwnerReady(std::string&& alpn) {
+    AutoLocker al(owner_lock);
+    if (owner_conn) {
+        owner_conn->onAlpnDecided(std::move(alpn));
+    }
+}
+
+void NegotiatingConnectionPollOpPriv::notifyOwnerClosed() {
+    AutoLocker al(owner_lock);
     if (owner_conn) {
         owner_conn->setClosed();
         owner_conn = nullptr;
@@ -565,17 +572,24 @@ HttpClientConnectionBase* NegotiatingHttpClientConnection::takeOver(
 }
 
 void NegotiatingHttpClientConnection::closeConnection(ExceptionSink* xsink) {
+    markInvalidated();
+    drainInFlight();
+
+    if (neg_priv) {
+        neg_priv->clearOwner();
+    }
+
     if (taken_over) {
         setClosed();
-        return;
-    }
-    if (isClosed()) {
         return;
     }
 
     // Cancel from the AsyncIoController.  doCancelIntern will abort our
     // neg poll op which transitions it to CLOSED and clears the inner
-    // connect op (which in turn clears non_block_flags).
+    // connect op (which in turn clears non_block_flags).  Always cancel
+    // when submitted, even if the base connection state is already CLOSED:
+    // the I/O controller can still hold the poll op until the current
+    // callback is finalized.
     if (submitted_to_controller && sock_priv) {
         ExceptionSink cancel_xsink;
         ReferenceHolder<QoreObject> ctl_obj_holder(
@@ -592,6 +606,8 @@ void NegotiatingHttpClientConnection::closeConnection(ExceptionSink* xsink) {
         }
         cancel_xsink.clear();
         submitted_to_controller = false;
+    } else if (!isClosed() && neg_priv) {
+        neg_priv->abort(xsink);
     }
 
     setClosed();

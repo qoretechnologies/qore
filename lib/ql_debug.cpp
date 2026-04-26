@@ -42,6 +42,7 @@
 #include "qore/intern/QoreHttp1ClientConnection.h"
 #include "qore/intern/QoreHttp2ClientConnection.h"
 #include "qore/intern/QoreHttp3ClientConnection.h"
+#include "qore/intern/NegotiatingConnectionPollOp.h"
 #include <qore/HttpClientConnectionManager.h>
 #include <qore/QoreHttpClientObject.h>
 
@@ -55,7 +56,10 @@
 #include <unistd.h>
 
 #include <atomic>
+#include <chrono>
+#include <condition_variable>
 #include <functional>
+#include <mutex>
 #include <set>
 #include <thread>
 
@@ -1568,6 +1572,103 @@ static void ut_manager_negotiate_refused_port(UnitTestCounters& c) {
     xsink.clear();
 }
 
+static void ut_negotiate_close_cancels_after_closed_state(UnitTestCounters& c) {
+    ExceptionSink xsink;
+
+    ReferenceHolder<QoreObject> ctl_obj_holder(
+        qore_get_async_io_controller_obj(&xsink), &xsink);
+    ReferenceHolder<AsyncIoControllerPriv> ctl_priv_holder(
+        ctl_obj_holder
+            ? static_cast<AsyncIoControllerPriv*>(
+                ctl_obj_holder->getReferencedPrivateData(CID_ASYNCIOCONTROLLER, &xsink))
+            : nullptr,
+        &xsink);
+    UT_ASSERT(c, !xsink && ctl_priv_holder,
+        "global AsyncIoController private data is available");
+    if (xsink || !ctl_priv_holder) {
+        xsink.clear();
+        return;
+    }
+
+    int cache_before = ctl_priv_holder->getCacheSize();
+
+    UtH1Server server;
+    if (server.start() != 0) {
+        UT_ASSERT(c, false, "negotiate close test server bind/listen failed");
+        return;
+    }
+
+    Http1SslConfig ssl_cfg;
+    ssl_cfg.accept_all = true;
+    ReferenceHolder<NegotiatingHttpClientConnection> conn(
+        new NegotiatingHttpClientConnection("127.0.0.1", server.port, ssl_cfg, &xsink),
+        &xsink);
+    UT_ASSERT(c, !xsink, "NegotiatingHttpClientConnection construction succeeds");
+    if (xsink) {
+        xsink.clear();
+        return;
+    }
+
+    std::mutex mu;
+    std::condition_variable cv;
+    bool accepted = false;
+    bool release_server = false;
+
+    server.serveOnce([&](int cfd) {
+        (void)cfd;
+        std::unique_lock<std::mutex> lk(mu);
+        accepted = true;
+        cv.notify_all();
+        cv.wait(lk, [&release_server]() { return release_server; });
+    });
+
+    bool got_accept;
+    {
+        std::unique_lock<std::mutex> lk(mu);
+        got_accept = cv.wait_for(lk, std::chrono::seconds(5),
+            [&accepted]() { return accepted; });
+        UT_ASSERT(c, got_accept, "negotiate close test server accepted connection");
+    }
+    if (!got_accept) {
+        int wake_fd = socket(AF_INET, SOCK_STREAM, 0);
+        if (wake_fd >= 0) {
+            sockaddr_in addr{};
+            addr.sin_family = AF_INET;
+            addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+            addr.sin_port = htons(server.port);
+            (void)connect(wake_fd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
+            ::close(wake_fd);
+        }
+    }
+
+    bool processed = ctl_priv_holder->waitForProcessing(5000, &xsink);
+    UT_ASSERT(c, !xsink && processed, "negotiate submit processed by I/O controller");
+    xsink.clear();
+    UT_ASSERT(c, ctl_priv_holder->getCacheSize() > cache_before,
+        "negotiating poll op is cached before close");
+
+    // Simulate the I/O thread having already driven the base connection state
+    // to CLOSED before the app thread closes/destroys the connection.  The
+    // close path must still cancel the submitted poll op and wait for the
+    // controller to drop its ref.
+    conn->setClosed();
+    conn->closeConnection(&xsink);
+    UT_ASSERT(c, !xsink, "closeConnection after CLOSED succeeds");
+    xsink.clear();
+
+    processed = ctl_priv_holder->waitForProcessing(5000, &xsink);
+    UT_ASSERT(c, !xsink && processed, "negotiate cancel processed by I/O controller");
+    xsink.clear();
+    UT_ASSERT_EQ(c, cache_before, ctl_priv_holder->getCacheSize(),
+        "closeConnection cancels submitted negotiate op after CLOSED");
+
+    {
+        std::lock_guard<std::mutex> lk(mu);
+        release_server = true;
+    }
+    cv.notify_all();
+}
+
 static void ut_manager_h2_dispatch(UnitTestCounters& c) {
     ExceptionSink xsink;
     HttpClientConnectionManagerBase::Options opts;
@@ -2235,6 +2336,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_http2_adopt_socket_construct(c);
     ut_manager_negotiate_requires_ssl(c);
     ut_manager_negotiate_refused_port(c);
+    ut_negotiate_close_cancels_after_closed_state(c);
     ut_manager_h2_dispatch(c);
     ut_http3_connection_construct(c);
     ut_manager_h3_dispatch(c);

@@ -85,6 +85,8 @@ class SseRestClientIoTest inherits Test {
         addTestCase("restSseStream callback stop", \testRestSseStreamStop());
         addTestCase("restSseReader skips comment-only keepalives",
             \testRestSseReaderSkipsComments());
+        addTestCase("restSseReader returns NOTHING at close-delimited EOF",
+            \testRestSseReaderCloseDelimitedEof());
         addTestCase("restSseReader throws HTTP response errors",
             \testRestSseReaderThrowsResponseError());
         addTestCase("HttpSseStreamPollOperation heartbeat defaults on",
@@ -200,6 +202,65 @@ class SseRestClientIoTest inherits Test {
         assertTrue(exists evt, "data event received after comment-only frame");
         assertEq("after-comment", evt.event, "comment-only frame skipped");
         assertEq("\"payload\"", evt.data, "data payload preserved");
+    }
+
+    testRestSseReaderCloseDelimitedEof() {
+        Socket listener();
+        listener.bind("127.0.0.1:0");
+        listener.listen();
+        on_exit listener.close();
+
+        int lport = listener.getSocketInfo().port;
+
+        background sub () {
+            Socket conn = listener.accept(5s);
+            on_exit conn.close();
+
+            hash<auto> req = conn.readHTTPHeader(5s);
+            if (req."content-length") {
+                conn.recv(req."content-length", 5s);
+            }
+
+            conn.send("HTTP/1.1 200 OK\r\n"
+                "Content-Type: text/event-stream\r\n"
+                "Connection: close\r\n"
+                "\r\n");
+            conn.send("data: {\"id\":\"one\",\"object\":\"chat.completion.chunk\"}\n\n");
+            conn.send("data: [DONE]\n\n");
+        }();
+
+        RestClientIo rest({
+            "url": sprintf("http://127.0.0.1:%d", lport),
+            "data": "json",
+            "connect_timeout": 2s,
+            "timeout": 5s,
+            "protocol": "h1",
+            "allow_any_response": True,
+        });
+        on_exit rest.close();
+
+        SseStreamReader reader = rest.restSseReader("POST", "/sse",
+            {"Content-Type": "application/json"}, "{}");
+        on_exit {
+            try {
+                reader.cancel();
+            } catch () {
+            }
+        }
+
+        *hash<SseMessageInfo> evt1 = reader.readEvent(5s);
+        assertTrue(exists evt1, "first close-delimited SSE event received");
+        assertEq("{\"id\":\"one\",\"object\":\"chat.completion.chunk\"}", evt1.data);
+        assertEq(False, reader.isDone(), "reader remains open before EOF");
+
+        *hash<SseMessageInfo> evt2 = reader.readEvent(5s);
+        assertTrue(exists evt2, "DONE SSE event received");
+        assertEq("[DONE]", evt2.data);
+        assertEq(False, reader.isDone(), "reader remains open before close notification");
+
+        *hash<SseMessageInfo> evt3 = reader.readEvent(5s);
+        assertEq(NOTHING, evt3, "close-delimited EOF returns NOTHING");
+        assertEq(True, reader.isDone(), "reader is done after close-delimited EOF");
     }
 
     testRestSseReaderThrowsResponseError() {

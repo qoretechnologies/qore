@@ -3346,6 +3346,19 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             }
         }
 
+        bool is_h1 = !(cx."header-info".http2 ?? False) && !(cx."header-info".http3 ?? False);
+        bool has_content_length = rv.hdr."Content-Length" || rv.hdr."content-length";
+        bool has_transfer_encoding = rv.hdr."Transfer-Encoding" || rv.hdr."transfer-encoding";
+        if (is_h1 && rv.send_callback && !has_content_length && !has_transfer_encoding) {
+            rv.hdr."Transfer-Encoding" = "chunked";
+            has_transfer_encoding = True;
+        }
+        if (is_h1 && is_sse && !rv.body && !rv.hasKey("chunked_body") && !rv.send_callback
+                && !has_content_length && !has_transfer_encoding) {
+            remove rv.hdr{"Connection", "connection"};
+            rv.hdr.Connection = "close";
+        }
+
         if (!head && rv."code" == 200 && hdr.method != "OPTIONS" && !rv.streaming && !is_sse
             && !rv.hasKey("chunked_body") && !(rv.body instanceof InputStream) && !rv.send_callback) {
             bool empty_body = !rv.hasKey("body");
