@@ -60,6 +60,7 @@ public:
     mutable QoreThreadLock m;
     unsigned non_block_flags = 0;
     int non_block_accept_count = 0;
+    int sync_io_count = 0;
     bool valid = true;
     SocketIoMode io_mode = SocketIoMode::Unclaimed;
 
@@ -126,7 +127,7 @@ public:
         // must be called with the lock held
         assert(m.trylock());
 
-        if (io_mode == SocketIoMode::Sync) {
+        if (io_mode == SocketIoMode::Sync || sync_io_count > 0) {
             xsink->raiseException("SOCKET-SYNC-MODE-ERROR",
                 "cannot perform async I/O on a socket with active "
                 "synchronous operations");
@@ -193,6 +194,73 @@ public:
 
     //! Throws a \c SOCKET-NOT-OPEN exception if the socket is not open or valid
     DLLLOCAL int checkOpen(ExceptionSink* xsink);
+
+    //! Starts a synchronous I/O operation and claims sync I/O mode until clearSyncIo() is called
+    DLLLOCAL int startSyncIo(ExceptionSink* xsink) {
+        // must be called with the lock held
+        assert(m.trylock());
+
+        if (checkNonBlock(xsink)) {
+            return -1;
+        }
+        ++sync_io_count;
+        io_mode = SocketIoMode::Sync;
+        return 0;
+    }
+
+    //! Starts a directional synchronous I/O operation and claims sync I/O mode until clearSyncIo() is called
+    DLLLOCAL int startSyncIo(ExceptionSink* xsink, unsigned direction) {
+        // must be called with the lock held
+        assert(m.trylock());
+
+        if (checkNonBlock(xsink, direction)) {
+            return -1;
+        }
+        ++sync_io_count;
+        io_mode = SocketIoMode::Sync;
+        return 0;
+    }
+
+    //! Clears a synchronous I/O operation claim
+    DLLLOCAL void clearSyncIo() {
+        // must be called with the lock held
+        assert(m.trylock());
+        assert(sync_io_count > 0);
+
+        --sync_io_count;
+        if (!sync_io_count && !non_block_flags && non_block_accept_count == 0
+                && io_mode == SocketIoMode::Sync) {
+            io_mode = SocketIoMode::Unclaimed;
+        }
+    }
+
+    class SyncIoGuard {
+    public:
+        DLLLOCAL SyncIoGuard(my_socket_priv& p, ExceptionSink* xsink) : p(p) {
+            active = !p.startSyncIo(xsink);
+        }
+
+        DLLLOCAL SyncIoGuard(my_socket_priv& p, ExceptionSink* xsink, unsigned direction) : p(p) {
+            active = !p.startSyncIo(xsink, direction);
+        }
+
+        DLLLOCAL ~SyncIoGuard() {
+            if (active) {
+                p.clearSyncIo();
+            }
+        }
+
+        DLLLOCAL explicit operator bool() const {
+            return active;
+        }
+
+        SyncIoGuard(const SyncIoGuard&) = delete;
+        SyncIoGuard& operator=(const SyncIoGuard&) = delete;
+
+    private:
+        my_socket_priv& p;
+        bool active = false;
+    };
 
     //! Throws an exception if the socket is not open or valid or if SSL is already connected
     DLLLOCAL int checkOpenAndNotSsl(ExceptionSink* xsink);
