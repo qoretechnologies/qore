@@ -585,6 +585,9 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
                 "none": True,
             };
 
+            #! Maximum bytes captured from a failed SSE response body.
+            const MaxSseErrorBodyBytes = 1024 * 1024;
+
             #! Custom token refresh options (all-or-nothing); mirrors
             #! @ref RestClient::RestClient::CustomTokenOptions
             const CustomTokenOptions = {
@@ -1279,6 +1282,9 @@ while (*hash<SseMessageInfo> evt = reader.readEvent(30s)) {
             @ref HttpClientStreamingIo::SseStreamReader::readEvent() "readEvent()" calls
 
             @throw HTTPCLIENT-CONNECT-ERROR if the connection cannot be established
+            @throw REST-RESPONSE-ERROR if an HTTP error response is received
+            before a valid SSE stream is opened; the exception argument contains
+            the response status, headers, and any collected response body
 
             @since %RestClientIo 1.5
 
@@ -1308,7 +1314,14 @@ while (*hash<SseMessageInfo> evt = reader.readEvent(30s)) {
             hdr = lc_hdr;
             HttpClientIo::HttpClientStreamHandle stream =
                 mgr.acquireAndStartStreaming(url, method, path, hdr, False, body);
-            return new HttpClientStreamingIo::SseStreamReader(stream);
+            list<auto> initial_data;
+            try {
+                initial_data = validateSseResponse(stream, method, path, hdr, body);
+            } catch (hash<ExceptionInfo> ex) {
+                stream.cancel();
+                rethrow;
+            }
+            return new HttpClientStreamingIo::SseStreamReader(stream, NOTHING, initial_data);
         }
 
         #! Opens an SSE stream and calls a callback for each event
@@ -1335,6 +1348,8 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
             @ref NOTHING is returned on timeout, which terminates the loop
 
             @throw HTTPCLIENT-CONNECT-ERROR if the connection cannot be established
+            @throw REST-RESPONSE-ERROR if an HTTP error response is received
+            before a valid SSE stream is opened
             @throw SSE-STREAM-ERROR if the stream reported an error
 
             @since %RestClientIo 1.5
@@ -2120,6 +2135,132 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
                 "request_body": request_body,
                 "protocol": raw.protocol,
             };
+        }
+
+        #! Validates the HTTP response that opens an SSE stream.
+        /** @return body/end-stream data consumed during validation that must
+            be replayed to the SSE reader
+
+            @throw REST-RESPONSE-ERROR if the server returned an HTTP error
+            response instead of an SSE stream
+        */
+        private list<auto> validateSseResponse(HttpClientIo::HttpClientStreamHandle stream,
+                string method, string path, hash<auto> request_headers, *data request_body) {
+            timeout response_timeout = milliseconds(getTimeout());
+            auto first_data = stream.readData(response_timeout);
+            if (!exists first_data) {
+                throw "HTTPCLIENT-TIMEOUT",
+                    sprintf("timeout waiting for SSE response headers for %s %s",
+                        method, path);
+            }
+
+            *hash<auto> response = stream.getResponse();
+            if (first_data.typeCode() == NT_HASH) {
+                if (first_data.error) {
+                    throw "SSE-STREAM-ERROR", sprintf("stream error: %y", first_data.error);
+                }
+                if (first_data.status_code || first_data.headers) {
+                    response = first_data;
+                }
+            }
+
+            if (response && response.status_code) {
+                hash<auto> raw_response;
+                raw_response += response;
+                if (!raw_response.headers) {
+                    raw_response.headers = {};
+                }
+                if (raw_response.status_code >= 300) {
+                    bool req_allow_any_response;
+                    {
+                        AutoReadLock al(config_lock);
+                        req_allow_any_response = allow_any_response;
+                    }
+                    raw_response.body = drainSseErrorBody(stream, first_data,
+                        response_timeout);
+                    buildResponse(raw_response, False, req_allow_any_response,
+                        method, path, request_headers, request_body);
+                }
+            }
+
+            list<auto> initial_data = ();
+            if (first_data.typeCode() == NT_HASH) {
+                if (exists first_data.body) {
+                    initial_data += first_data.body;
+                }
+                if (first_data.end_stream) {
+                    initial_data += {"end_stream": True};
+                }
+            } else {
+                initial_data += first_data;
+            }
+            return initial_data;
+        }
+
+        #! Drains a non-SSE HTTP error body before throwing REST-RESPONSE-ERROR.
+        private *data drainSseErrorBody(HttpClientIo::HttpClientStreamHandle stream,
+                auto first_data, timeout read_timeout) {
+            string error_body = "";
+            bool got_body = False;
+            bool done = False;
+
+            if (first_data.typeCode() == NT_HASH) {
+                if (exists first_data.body) {
+                    error_body = appendSseErrorBodyChunk(error_body, first_data.body);
+                    got_body = True;
+                }
+                if (first_data.end_stream) {
+                    done = True;
+                }
+            } else {
+                error_body = appendSseErrorBodyChunk(error_body, first_data);
+                got_body = True;
+            }
+
+            while (!done && error_body.size() < MaxSseErrorBodyBytes) {
+                auto data;
+                try {
+                    data = stream.readData(read_timeout);
+                } catch (hash<ExceptionInfo> ex) {
+                    if (ex.err == "HTTPCLIENT-STREAM-CLOSED") {
+                        break;
+                    }
+                    rethrow;
+                }
+                if (!exists data) {
+                    break;
+                }
+                if (data.typeCode() == NT_HASH) {
+                    if (data.error) {
+                        break;
+                    }
+                    if (exists data.body) {
+                        error_body = appendSseErrorBodyChunk(error_body, data.body);
+                        got_body = True;
+                    }
+                    if (data.end_stream) {
+                        done = True;
+                    }
+                    continue;
+                }
+                error_body = appendSseErrorBodyChunk(error_body, data);
+                got_body = True;
+            }
+
+            return got_body ? error_body : NOTHING;
+        }
+
+        #! Appends one stream chunk to a bounded text error body buffer.
+        private string appendSseErrorBodyChunk(string error_body, auto chunk) {
+            string chunk_str = chunk.typeCode() == NT_BINARY ? chunk.toString() : string(chunk);
+            int remaining = MaxSseErrorBodyBytes - error_body.size();
+            if (remaining <= 0) {
+                return error_body;
+            }
+            if (chunk_str.size() > remaining) {
+                return error_body + chunk_str.substr(0, remaining);
+            }
+            return error_body + chunk_str;
         }
 
         #! Sets the data serialization format

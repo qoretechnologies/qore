@@ -69,6 +69,12 @@ public class SseStreamReader {
         #! Accumulated SSE text buffer awaiting event boundary parsing
         string sse_buffer = "";
 
+        #! Data chunks consumed by a caller before constructing this reader
+        list<auto> pending_data = ();
+
+        #! Current offset in @ref pending_data
+        int pending_data_offset = 0;
+
         #! True when the stream has ended (end_stream received or error)
         bool done = False;
     }
@@ -80,24 +86,33 @@ public class SseStreamReader {
         @param stream an HttpClientStreamHandle in streaming mode
         @param content_encoding optional Content-Encoding for decompression
         (e.g., \c "gzip", \c "br"); pass \c NOTHING for uncompressed streams
+        @param initial_data optional stream data already read by the caller
+        while validating response metadata
 
         @throw ENCODING-ERROR if the content encoding is not supported
     */
-    constructor(HttpClientIo::HttpClientStreamHandle stream, *string content_encoding) {
+    constructor(HttpClientIo::HttpClientStreamHandle stream, *string content_encoding,
+            *list<auto> initial_data) {
         self.stream = stream;
         decompressor = new StreamDecompressor(content_encoding);
+        if (initial_data) {
+            pending_data = initial_data;
+        }
     }
 
     #! Reads the next SSE event from the stream
     /** Blocks until an SSE event is available, the stream ends, or the timeout
-        expires.  Returns \c NOTHING on timeout or when the stream is complete.
+        expires.  Comment-only SSE frames are consumed internally as
+        keep-alives and do not get returned to callers; the timeout applies
+        to idle reads, so keep-alive frames reset the timeout while this
+        method continues waiting for a dispatchable event.  Returns
+        \c NOTHING on timeout or when the stream is complete.
 
         @param timeout_ms timeout for waiting; blocks indefinitely if not specified
 
         @return the parsed SSE event, or \c NOTHING on timeout or stream end
 
         @throw SSE-STREAM-ERROR if the stream reported an error
-        @throw HTTPCLIENT-STREAM-CLOSED if the stream was closed unexpectedly
 
         @par SSE Event Format
         Each event is delimited by \c "\\n\\n" and parsed into a
@@ -114,11 +129,35 @@ public class SseStreamReader {
             if (sep >= 0) {
                 string event_text = sse_buffer.substr(0, sep + 2);
                 sse_buffer = sse_buffer.substr(sep + 2);
-                return Socket::parseServerSentEvent(event_text);
+                *hash<SseMessageInfo> evt =
+                    Socket::parseServerSentEvent(event_text);
+                if (isCommentOnlyEvent(evt)) {
+                    continue;
+                }
+                return evt;
             }
 
-            # Read more data from the stream
-            auto data = stream.readData(timeout_ms);
+            # Read more data from the stream.  RestClientIo may have
+            # consumed the first body/end-stream item while validating the
+            # response status, so replay those items before reading the
+            # underlying stream handle again.
+            auto data;
+            if (pending_data_offset < pending_data.size()) {
+                data = pending_data[pending_data_offset++];
+                if (pending_data_offset >= pending_data.size()) {
+                    pending_data = ();
+                    pending_data_offset = 0;
+                }
+            } else {
+                try {
+                    data = stream.readData(timeout_ms);
+                } catch (hash<ExceptionInfo> ex) {
+                    if (ex.err == "HTTPCLIENT-STREAM-CLOSED") {
+                        return finishStream();
+                    }
+                    rethrow;
+                }
+            }
             if (!exists data) {
                 # Timeout — return NOTHING without marking done
                 return NOTHING;
@@ -126,16 +165,7 @@ public class SseStreamReader {
 
             if (data.typeCode() == NT_HASH) {
                 if (data.end_stream) {
-                    done = True;
-                    # Parse any remaining buffered data
-                    if (sse_buffer.val()) {
-                        *hash<SseMessageInfo> last_evt = Socket::parseServerSentEvent(sse_buffer);
-                        sse_buffer = "";
-                        if (last_evt && last_evt.data.val()) {
-                            return last_evt;
-                        }
-                    }
-                    return NOTHING;
+                    return finishStream();
                 }
                 if (data.error) {
                     done = True;
@@ -164,6 +194,25 @@ public class SseStreamReader {
     cancel() {
         stream.cancel();
         done = True;
+    }
+
+    #! Marks the stream complete and returns any final buffered SSE event
+    private *hash<SseMessageInfo> finishStream() {
+        done = True;
+        if (sse_buffer.val()) {
+            *hash<SseMessageInfo> last_evt = Socket::parseServerSentEvent(sse_buffer);
+            sse_buffer = "";
+            if (last_evt && last_evt.data.val()) {
+                return last_evt;
+            }
+        }
+        return NOTHING;
+    }
+
+    #! Returns True if the parsed frame is an SSE comment-only keep-alive
+    private static bool isCommentOnlyEvent(*hash<SseMessageInfo> evt) {
+        return evt && evt.comment.val() && !evt.data.val()
+            && !evt.event.val() && !evt.id.val() && !evt.retry.val();
     }
 }
 

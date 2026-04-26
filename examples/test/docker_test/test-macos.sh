@@ -3,14 +3,27 @@
 set -e
 set -x
 
-# macOS CI test script for GitLab Runner (Tart VM executor)
+# macOS CI test script for GitLab Runner.
 #
-# Prerequisites: the Tart VM image (qore-test-base-macos-develop) must have
-# qore and essential binary modules (json, yaml, xml, uuid, process) already
-# installed via prep-macos.sh in the qore-test-base repo.
+# Package manager preference: MacPorts (/opt/local) is preferred and used by
+# the prof CI runner.  Homebrew (/opt/homebrew) is supported as a fallback for
+# ad-hoc local runs only.  We detect MacPorts via /opt/local/bin/port (not
+# just directory presence) so a stray /opt/homebrew tree on a MacPorts host
+# does not flip the script into Homebrew mode.
 
-# Setup Homebrew environment (Apple Silicon)
-if [ -x /opt/homebrew/bin/brew ]; then
+PM=
+if [ -x /opt/local/bin/port ]; then
+    PM=macports
+elif [ -x /opt/homebrew/bin/brew ]; then
+    PM=homebrew
+fi
+
+if [ "$PM" = "macports" ]; then
+    export PATH="/opt/local/bin:/opt/local/sbin:${PATH}"
+    export PKG_CONFIG_PATH="/opt/local/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
+    export LDFLAGS="-L/opt/local/lib ${LDFLAGS:-}"
+    export CPPFLAGS="-I/opt/local/include ${CPPFLAGS:-}"
+elif [ "$PM" = "homebrew" ]; then
     eval "$(/opt/homebrew/bin/brew shellenv)"
     HB="$(brew --prefix)"
     # Add keg-only package paths so CMake/find_program can locate them
@@ -26,6 +39,21 @@ if [ -x /opt/homebrew/bin/brew ]; then
     export LDFLAGS="-L${HB}/lib ${LDFLAGS:-}"
     export CPPFLAGS="-I${HB}/include ${CPPFLAGS:-}"
     export PKG_CONFIG_PATH="${HB}/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
+
+    # Self-heal: install build-critical Homebrew packages that may be
+    # missing from a stale Tart VM image (image was built before the
+    # package was added to qore-test-base/prep-macos.sh).  CMakeLists
+    # requires Eigen3 unconditionally for the ml/kalman modules; the
+    # build aborts at find_package(Eigen3 REQUIRED) if it isn't
+    # present.  brew install is idempotent (no-op if already installed)
+    # so this is safe to run on a fresh image too.
+    REQUIRED_BREW_PKGS=(eigen)
+    for pkg in "${REQUIRED_BREW_PKGS[@]}"; do
+        if ! brew list "$pkg" >/dev/null 2>&1; then
+            echo "=== Installing missing Homebrew package: $pkg ==="
+            brew install "$pkg"
+        fi
+    done
 fi
 
 # Add cargo bin to PATH (tree-sitter CLI installed via cargo)
@@ -61,17 +89,19 @@ fi
 echo "=== Building Qore on macOS ==="
 cd "${BUILD_DIR}"
 
-# Configure with CMake
-# Detect package manager prefix: Homebrew (/opt/homebrew) or MacPorts (/opt/local)
-if [ -d /opt/homebrew ]; then
-    # Homebrew on Apple Silicon; include keg-only package prefixes for CMake
-    CMAKE_PREFIX="/opt/homebrew;/opt/homebrew/opt/openssl@3;/opt/homebrew/opt/libxml2;/opt/homebrew/opt/ossp-uuid"
-elif [ -d /opt/local ]; then
-    # MacPorts
-    CMAKE_PREFIX="/opt/local"
-else
-    CMAKE_PREFIX=""
-fi
+# Configure with CMake using the package-manager prefix selected above
+case "$PM" in
+    macports)
+        CMAKE_PREFIX="/opt/local"
+        ;;
+    homebrew)
+        # Homebrew on Apple Silicon; include keg-only package prefixes for CMake
+        CMAKE_PREFIX="/opt/homebrew;/opt/homebrew/opt/openssl@3;/opt/homebrew/opt/libxml2;/opt/homebrew/opt/ossp-uuid"
+        ;;
+    *)
+        CMAKE_PREFIX=""
+        ;;
+esac
 
 cmake .. \
     -DCMAKE_BUILD_TYPE=release \
@@ -84,21 +114,21 @@ make -j${MAKE_JOBS}
 echo "=== Running Tests ==="
 cd "${QORE_SRC_DIR}"
 
-# Set module path to include built modules and pre-installed binary modules
+# Set module path to include built modules and pre-installed binary modules.
 # The built qore defaults to /usr/local prefix, but binary modules (json, yaml,
-# uuid, etc.) are installed under the Homebrew or MacPorts prefix in the VM
+# uuid, etc.) are installed under the package manager's prefix on the runner.
 EXTRA_MODULE_DIRS=""
-if [ -n "${HB:-}" ]; then
-    # Add Homebrew module paths (versioned and unversioned)
+case "$PM" in
+    macports) PM_PREFIX="/opt/local" ;;
+    homebrew) PM_PREFIX="${HB:-/opt/homebrew}" ;;
+    *)        PM_PREFIX="" ;;
+esac
+if [ -n "${PM_PREFIX}" ]; then
     QORE_API_VER=$(build/qore --module-api 2>/dev/null || true)
-    [ -d "${HB}/lib/qore-modules/${QORE_API_VER}" ] && EXTRA_MODULE_DIRS="${HB}/lib/qore-modules/${QORE_API_VER}:${EXTRA_MODULE_DIRS}"
-    [ -d "${HB}/lib/qore-modules" ] && EXTRA_MODULE_DIRS="${HB}/lib/qore-modules:${EXTRA_MODULE_DIRS}"
-    [ -d "${HB}/share/qore-modules/${QORE_API_VER}" ] && EXTRA_MODULE_DIRS="${HB}/share/qore-modules/${QORE_API_VER}:${EXTRA_MODULE_DIRS}"
-    [ -d "${HB}/share/qore-modules" ] && EXTRA_MODULE_DIRS="${HB}/share/qore-modules:${EXTRA_MODULE_DIRS}"
-elif [ -d /opt/local/lib/qore-modules ]; then
-    QORE_API_VER=$(build/qore --module-api 2>/dev/null || true)
-    [ -d "/opt/local/lib/qore-modules/${QORE_API_VER}" ] && EXTRA_MODULE_DIRS="/opt/local/lib/qore-modules/${QORE_API_VER}:${EXTRA_MODULE_DIRS}"
-    [ -d "/opt/local/lib/qore-modules" ] && EXTRA_MODULE_DIRS="/opt/local/lib/qore-modules:${EXTRA_MODULE_DIRS}"
+    [ -d "${PM_PREFIX}/lib/qore-modules/${QORE_API_VER}" ] && EXTRA_MODULE_DIRS="${PM_PREFIX}/lib/qore-modules/${QORE_API_VER}:${EXTRA_MODULE_DIRS}"
+    [ -d "${PM_PREFIX}/lib/qore-modules" ] && EXTRA_MODULE_DIRS="${PM_PREFIX}/lib/qore-modules:${EXTRA_MODULE_DIRS}"
+    [ -d "${PM_PREFIX}/share/qore-modules/${QORE_API_VER}" ] && EXTRA_MODULE_DIRS="${PM_PREFIX}/share/qore-modules/${QORE_API_VER}:${EXTRA_MODULE_DIRS}"
+    [ -d "${PM_PREFIX}/share/qore-modules" ] && EXTRA_MODULE_DIRS="${PM_PREFIX}/share/qore-modules:${EXTRA_MODULE_DIRS}"
 fi
 export QORE_MODULE_DIR="${QORE_SRC_DIR}/qlib:${EXTRA_MODULE_DIRS}${QORE_MODULE_DIR:-}"
 

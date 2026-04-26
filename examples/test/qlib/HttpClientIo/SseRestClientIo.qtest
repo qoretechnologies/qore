@@ -27,8 +27,8 @@
 %requires ../../../../qlib/HttpServer.qm
 %requires ../../../../qlib/HttpServerAsyncIo
 %requires ../../../../qlib/ServerSentEventHandler
-%requires ../../../../qlib/RestClientIo.qm
 %requires ../../../../qlib/HttpClientStreamingIo
+%requires ../../../../qlib/RestClientIo.qm
 %requires ../../../../qlib/Mime.qm
 %requires ../../../../qlib/Logger.qm
 %requires ../../../../qlib/QUnit.qm
@@ -47,11 +47,35 @@ class TestSseHandler inherits ServerSentEventHandler {
     }
 }
 
+class TestCommentThenDataSseHandler inherits ServerSentEventHandler {
+    constructor() : ServerSentEventHandler() {
+    }
+
+    connectionRegisteredImpl(ServerSentEventConnection conn) {
+        conn.send(<SseMessageInfo>{
+            "comment": "hb",
+        });
+        conn.send(<SseMessageInfo>{
+            "event": "after-comment",
+            "data": "payload",
+        });
+    }
+}
+
+class TestSseErrorHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(400,
+            "{\"error\":{\"message\":\"bad SSE request\",\"type\":\"invalid_request\"}}",
+            {"Content-Type": "application/json"});
+    }
+}
+
 class SseRestClientIoTest inherits Test {
     private {
         HttpServer server;
         int port;
         TestSseHandler handler();
+        TestCommentThenDataSseHandler comment_handler();
     }
 
     constructor() : Test("SseRestClientIoTest", "1.0") {
@@ -59,6 +83,14 @@ class SseRestClientIoTest inherits Test {
         addTestCase("restSseReader multiple events", \testRestSseReaderMultiple());
         addTestCase("restSseStream callback", \testRestSseStream());
         addTestCase("restSseStream callback stop", \testRestSseStreamStop());
+        addTestCase("restSseReader skips comment-only keepalives",
+            \testRestSseReaderSkipsComments());
+        addTestCase("restSseReader returns NOTHING at close-delimited EOF",
+            \testRestSseReaderCloseDelimitedEof());
+        addTestCase("restSseReader throws HTTP response errors",
+            \testRestSseReaderThrowsResponseError());
+        addTestCase("HttpSseStreamPollOperation heartbeat defaults on",
+            \testPollOperationHeartbeatDefault());
         set_return_value(main());
     }
 
@@ -70,6 +102,8 @@ class SseRestClientIoTest inherits Test {
             "enable_h3": False,
         });
         server.setDefaultHandler("sse", handler);
+        server.setHandler("sse-comment", "/comment", NOTHING, comment_handler);
+        server.setHandler("sse-error", "/error", NOTHING, new TestSseErrorHandler());
         port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
     }
 
@@ -156,5 +190,128 @@ class SseRestClientIoTest inherits Test {
         }, NOTHING, NOTHING, 5s);
 
         assertEq(1, count, "callback stopped after first event");
+    }
+
+    testRestSseReaderSkipsComments() {
+        RestClientIo rest({"url": sprintf("http://localhost:%d", port)});
+
+        SseStreamReader reader = rest.restSseReader("GET", "/comment");
+        on_exit reader.cancel();
+
+        *hash<SseMessageInfo> evt = reader.readEvent(5s);
+        assertTrue(exists evt, "data event received after comment-only frame");
+        assertEq("after-comment", evt.event, "comment-only frame skipped");
+        assertEq("\"payload\"", evt.data, "data payload preserved");
+    }
+
+    testRestSseReaderCloseDelimitedEof() {
+        Socket listener();
+        listener.bind("127.0.0.1:0");
+        listener.listen();
+        on_exit listener.close();
+
+        int lport = listener.getSocketInfo().port;
+
+        background sub () {
+            Socket conn = listener.accept(5s);
+            on_exit conn.close();
+
+            hash<auto> req = conn.readHTTPHeader(5s);
+            if (req."content-length") {
+                conn.recv(req."content-length", 5s);
+            }
+
+            conn.send("HTTP/1.1 200 OK\r\n"
+                "Content-Type: text/event-stream\r\n"
+                "Connection: close\r\n"
+                "\r\n");
+            conn.send("data: {\"id\":\"one\",\"object\":\"chat.completion.chunk\"}\n\n");
+            conn.send("data: [DONE]\n\n");
+        }();
+
+        RestClientIo rest({
+            "url": sprintf("http://127.0.0.1:%d", lport),
+            "data": "json",
+            "connect_timeout": 2s,
+            "timeout": 5s,
+            "protocol": "h1",
+            "allow_any_response": True,
+        });
+        on_exit rest.close();
+
+        SseStreamReader reader = rest.restSseReader("POST", "/sse",
+            {"Content-Type": "application/json"}, "{}");
+        on_exit {
+            try {
+                reader.cancel();
+            } catch () {
+            }
+        }
+
+        *hash<SseMessageInfo> evt1 = reader.readEvent(5s);
+        assertTrue(exists evt1, "first close-delimited SSE event received");
+        assertEq("{\"id\":\"one\",\"object\":\"chat.completion.chunk\"}", evt1.data);
+        assertEq(False, reader.isDone(), "reader remains open before EOF");
+
+        *hash<SseMessageInfo> evt2 = reader.readEvent(5s);
+        assertTrue(exists evt2, "DONE SSE event received");
+        assertEq("[DONE]", evt2.data);
+        assertEq(False, reader.isDone(), "reader remains open before close notification");
+
+        *hash<SseMessageInfo> evt3 = reader.readEvent(5s);
+        assertEq(NOTHING, evt3, "close-delimited EOF returns NOTHING");
+        assertEq(True, reader.isDone(), "reader is done after close-delimited EOF");
+    }
+
+    testRestSseReaderThrowsResponseError() {
+        RestClientIo rest({
+            "url": sprintf("http://localhost:%d", port),
+            "data": "json",
+        });
+
+        try {
+            rest.restSseReader("GET", "/error");
+            fail("restSseReader should throw REST-RESPONSE-ERROR on HTTP error response");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("REST-RESPONSE-ERROR", ex.err);
+            assertEq(400, ex.arg.status_code);
+            assertEq("GET", ex.arg.request_method);
+            assertEq("/error", ex.arg.request_path);
+            if (ex.arg.body.typeCode() == NT_HASH) {
+                assertEq("bad SSE request", ex.arg.body.error.message);
+                assertEq("invalid_request", ex.arg.body.error."type");
+            } else {
+                assertTrue(string(ex.arg.body).find("bad SSE request") >= 0,
+                    "raw error body is preserved");
+            }
+        }
+    }
+
+    testPollOperationHeartbeatDefault() {
+        Socket listener();
+        listener.bindINET("localhost", 0, True, AF_INET, SOCK_STREAM);
+        listener.listen();
+        on_exit listener.close();
+
+        int lport = listener.getSocketInfo().port;
+        Socket client();
+        client.connect("localhost:" + lport, 5s);
+        on_exit client.close();
+
+        Socket server_sock = listener.accept(5s);
+        on_exit server_sock.close();
+
+        HttpServerAsyncIo::HttpSseStreamPollOperation op(server_sock);
+
+        *hash<SocketPollInfo> poll_info = op.continuePoll();
+        assertTrue(exists poll_info, "open SSE poll operation returns poll info");
+        assertEq(HttpServerAsyncIo::DefaultSseHeartbeatIntervalMs,
+            poll_info.poll_timeout_ms, "heartbeat is enabled by default");
+
+        op.setHeartbeat(0);
+        *hash<SocketPollInfo> disabled_info = op.continuePoll();
+        assertTrue(exists disabled_info, "open SSE poll operation still waits for notifier");
+        assertEq(NOTHING, disabled_info.poll_timeout_ms,
+            "heartbeat can be disabled explicitly");
     }
 }

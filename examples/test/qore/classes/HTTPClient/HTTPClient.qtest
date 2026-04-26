@@ -379,6 +379,7 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
         addTestCase("serialization", \serializationTest());
         addTestCase("timeouts", \timeoutTest());
         addTestCase("pre-encoded-urls", \preEncodedUrlsTest());
+        addTestCase("connect opens inherited socket", \connectOpensInheritedSocketTest());
         addTestCase("poll proxy test", \pollProxyTest());
         addTestCase("poll test", \pollTest());
         addTestCase("UNIX socket conn_mgr test", \unixSocketConnMgrTest());
@@ -458,6 +459,66 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
 
         assertEq("hello[]", hc.send(NOTHING, "PUT", "?hello[]").body);
         assertEq("hello%5B%5D", hc.send(NOTHING, "PUT", "?hello%5B%5D").body);
+    }
+
+    connectOpensInheritedSocketTest() {
+        Socket server();
+        if (server.bind("127.0.0.1:0", True)) {
+            throw "SOCKET-BIND-ERROR", strerror();
+        }
+        if (server.listen()) {
+            throw "SOCKET-LISTEN-ERROR", strerror();
+        }
+        on_exit {
+            server.close();
+            server.shutdown();
+        }
+
+        int port = server.getSocketInfo().port;
+        Counter done(1);
+        *hash<auto> req;
+        *hash<ExceptionInfo> server_ex;
+
+        background sub () {
+            on_exit done.dec();
+            try {
+                Socket conn = server.accept(5s);
+                on_exit conn.close();
+
+                req = conn.readHTTPHeader(5s);
+                conn.send("HTTP/1.1 204 No Content\r\n"
+                    "Connection: close\r\n"
+                    "Content-Length: 0\r\n"
+                    "\r\n");
+            } catch (hash<ExceptionInfo> ex) {
+                server_ex = ex;
+            }
+        }();
+
+        HTTPClient hc({
+            "url": sprintf("http://127.0.0.1:%d", port),
+            "connect_timeout": 2s,
+            "timeout": 2s,
+            "http_version": "1.1",
+        });
+        on_exit hc.disconnect();
+
+        hc.connect();
+        assertTrue(hc.isOpen(), "HTTPClient::connect() must leave inherited Socket open");
+
+        hash<auto> send_info;
+        hc.sendHTTPMessage("GET", "/", "1.1", {
+            "Host": sprintf("127.0.0.1:%d", port),
+            "Connection": "close",
+        }, NOTHING, \send_info);
+
+        assertEq(0, done.waitForZero(5s), "server received inherited Socket request");
+        if (server_ex) {
+            fail(sprintf("server failed while reading inherited Socket request: %s: %s",
+                server_ex.err, server_ex.desc));
+        }
+        assertEq("GET", req.method);
+        assertEq("/", req.path);
     }
 
     pollProxyTest() {

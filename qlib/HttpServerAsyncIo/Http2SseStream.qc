@@ -40,9 +40,6 @@ public namespace HttpServerAsyncIo {
     Backpressure from @ref Qore::Socket::sendHttp2StreamData() is handled
     by waking the controller and blocking on
     @ref Qore::Socket::waitForHttp2StreamDrain().
-
-    @since %HttpServerAsyncIo 1.3 unified with @ref HttpSseStreamPollOperation
-    via @ref AbstractSseConnection
 */
 public class Http2SseStream inherits AbstractSseConnection {
     public {
@@ -73,6 +70,24 @@ public class Http2SseStream inherits AbstractSseConnection {
 
         #! True once response headers have been submitted
         bool headers_sent = False;
+
+        #! Mutex protecting heartbeat timer state
+        Mutex heartbeat_mutex();
+
+        #! Heartbeat interval in milliseconds; 0 disables the heartbeat
+        int heartbeat_ms = DefaultSseHeartbeatIntervalMs;
+
+        #! Heartbeat payload sent when the interval expires with no outbound traffic
+        string heartbeat_msg = DefaultSseHeartbeatMsg;
+
+        #! Async I/O controller timer ID for the next heartbeat
+        *int heartbeat_timer_id;
+
+        #! Generation value used to ignore canceled or superseded timer callbacks
+        int heartbeat_generation = 0;
+
+        #! Epoch microseconds of the last successful SSE DATA write
+        int last_send_us = clock_getmicros();
     }
 
     #! Creates an SSE stream over HTTP/2 using an existing poll operation
@@ -96,8 +111,6 @@ public class Http2SseStream inherits AbstractSseConnection {
         @param headers_already_sent set to True if the caller already submitted
             the response headers (via @ref Qore::Socket::submitHttp2StreamingResponseHeaders());
             in that case @ref sendHeaders() must not be called again
-
-        @since %HttpServerAsyncIo 1.3
     */
     constructor(Socket sock, int stream_id, *code<nothing()> wake_callback,
             bool headers_already_sent = False) {
@@ -105,6 +118,9 @@ public class Http2SseStream inherits AbstractSseConnection {
         self.stream_id = stream_id;
         self.wake_callback = wake_callback;
         self.headers_sent = headers_already_sent;
+        if (headers_sent) {
+            rescheduleHeartbeatTimer();
+        }
     }
 
     string getProtocol() {
@@ -135,9 +151,36 @@ public class Http2SseStream inherits AbstractSseConnection {
         @param data the pre-formatted SSE frame text
     */
     queueRawString(string data) {
-        if (!stream_open) {
+        if (!isStreamOpen()) {
             throw "SSE-CLOSED", "SSE stream is closed";
         }
+        try {
+            sendRawStringIntern(data);
+            noteSseDataSent();
+        } catch (hash<ExceptionInfo> ex) {
+            markStreamClosed();
+            rethrow;
+        }
+    }
+
+    #! Configures the SSE heartbeat for this stream
+    /** The heartbeat is an SSE comment frame sent only after the stream has had
+        no outbound SSE DATA traffic for \a interval_ms.  Timers are driven by
+        the async I/O controller, and each heartbeat wakes the HTTP/2 connection
+        so queued DATA frames are flushed promptly.
+
+        @param interval_ms heartbeat interval in milliseconds; 0 disables the heartbeat
+        @param msg raw bytes to send (must already be SSE-framed, e.g. \c ":hb\\n\\n")
+    */
+    setHeartbeat(int interval_ms, string msg = DefaultSseHeartbeatMsg) {
+        AutoLock al(heartbeat_mutex);
+        heartbeat_ms = interval_ms;
+        heartbeat_msg = msg;
+        last_send_us = clock_getmicros();
+        rescheduleHeartbeatTimerLocked();
+    }
+
+    private sendRawStringIntern(string data) {
         binary bin = binary(data);
         while (True) {
             try {
@@ -151,12 +194,6 @@ public class Http2SseStream inherits AbstractSseConnection {
                     sock.waitForHttp2StreamDrain(stream_id, DefaultDrainTimeout);
                     continue;
                 }
-                # Any other failure (stream closed/reset, session gone, etc.) means the
-                # underlying HTTP/2 stream is effectively dead.  Flip stream_open so
-                # isOpen()/isDisconnected() report the true state and subsequent sends
-                # fail fast with SSE-CLOSED rather than surfacing raw transport errors
-                # to every caller.
-                stream_open = False;
                 rethrow;
             }
         }
@@ -166,10 +203,12 @@ public class Http2SseStream inherits AbstractSseConnection {
     }
 
     bool isOpen() {
+        AutoLock al(heartbeat_mutex);
         return stream_open && sock.isOpen();
     }
 
     bool isDisconnected() {
+        AutoLock al(heartbeat_mutex);
         return !stream_open || !sock.isOpen();
     }
 
@@ -179,10 +218,9 @@ public class Http2SseStream inherits AbstractSseConnection {
     }
 
     close() {
-        if (!stream_open) {
+        if (!markStreamClosed()) {
             return;
         }
-        stream_open = False;
         # close() is a teardown path: swallow HTTP/2 transport errors
         # (stream already reset, session gone, GOAWAY in flight, etc.) so
         # cleanup callers don't have to wrap every close in try/catch.
@@ -198,7 +236,7 @@ public class Http2SseStream inherits AbstractSseConnection {
     }
 
     abort() {
-        stream_open = False;
+        markStreamClosed();
         # abort() is a teardown path: same rationale as close().
         try {
             sock.resetHttp2Stream(stream_id);
@@ -238,6 +276,7 @@ public class Http2SseStream inherits AbstractSseConnection {
         if (wake_callback) {
             wake_callback();
         }
+        noteSseDataSent();
     }
 
     #! Formats an SSE event according to the spec
@@ -265,6 +304,87 @@ public class Http2SseStream inherits AbstractSseConnection {
         }
         msg += "\n";  # Empty line terminates the event
         return msg;
+    }
+
+    private bool isStreamOpen() {
+        AutoLock al(heartbeat_mutex);
+        return stream_open;
+    }
+
+    private bool markStreamClosed() {
+        AutoLock al(heartbeat_mutex);
+        if (!stream_open) {
+            return False;
+        }
+        stream_open = False;
+        cancelHeartbeatTimerLocked();
+        return True;
+    }
+
+    private noteSseDataSent() {
+        AutoLock al(heartbeat_mutex);
+        last_send_us = clock_getmicros();
+        rescheduleHeartbeatTimerLocked();
+    }
+
+    private rescheduleHeartbeatTimer() {
+        AutoLock al(heartbeat_mutex);
+        rescheduleHeartbeatTimerLocked();
+    }
+
+    private rescheduleHeartbeatTimerLocked() {
+        cancelHeartbeatTimerLocked();
+        if (heartbeat_ms <= 0 || !stream_open || !headers_sent) {
+            return;
+        }
+        int elapsed_ms = (clock_getmicros() - last_send_us) / 1000;
+        int delay_ms = heartbeat_ms - elapsed_ms;
+        if (delay_ms < 1) {
+            delay_ms = 1;
+        }
+        int generation = heartbeat_generation;
+        AsyncSocketIo::AsyncSocketIoController controller =
+            AsyncSocketIo::getGlobalAsyncIoController();
+        heartbeat_timer_id = controller.addTimer(now_us() + milliseconds(delay_ms),
+            sub () { self.handleHeartbeatTimer(generation); });
+    }
+
+    private cancelHeartbeatTimerLocked() {
+        ++heartbeat_generation;
+        if (heartbeat_timer_id) {
+            try {
+                AsyncSocketIo::AsyncSocketIoController controller =
+                    AsyncSocketIo::getGlobalAsyncIoController();
+                controller.cancelTimer(heartbeat_timer_id);
+            } catch (hash<ExceptionInfo> ex) {
+            }
+            remove heartbeat_timer_id;
+        }
+    }
+
+    private handleHeartbeatTimer(int generation) {
+        string msg;
+        {
+            AutoLock al(heartbeat_mutex);
+            if (!stream_open || !headers_sent || heartbeat_ms <= 0
+                    || generation != heartbeat_generation) {
+                return;
+            }
+            remove heartbeat_timer_id;
+            int elapsed_ms = (clock_getmicros() - last_send_us) / 1000;
+            if (elapsed_ms < heartbeat_ms) {
+                rescheduleHeartbeatTimerLocked();
+                return;
+            }
+            msg = heartbeat_msg;
+        }
+
+        try {
+            sendRawStringIntern(msg);
+            noteSseDataSent();
+        } catch (hash<ExceptionInfo> ex) {
+            markStreamClosed();
+        }
     }
 }
 

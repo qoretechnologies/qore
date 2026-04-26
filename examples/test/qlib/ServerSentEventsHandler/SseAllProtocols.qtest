@@ -73,6 +73,28 @@ class RecordingSseHandler inherits ServerSentEventHandler::ServerSentEventHandle
     }
 }
 
+#! SSE handler with a short heartbeat interval for keep-alive coverage
+class HeartbeatSseHandler inherits ServerSentEventHandler::ServerSentEventHandler {
+    public {
+        Counter registered(1);
+        *ServerSentEventHandler::ServerSentEventConnection last_conn;
+    }
+
+    constructor() : ServerSentEventHandler::ServerSentEventHandler({"data": "none"}) {
+        setHeartbeat(1);
+    }
+
+    reset() {
+        registered = new Counter(1);
+        last_conn = NOTHING;
+    }
+
+    connectionRegisteredImpl(ServerSentEventHandler::ServerSentEventConnection conn) {
+        last_conn = conn;
+        registered.dec();
+    }
+}
+
 class RecordingSseObserver inherits DataProvider::Observer {
     public {
         list<hash<auto>> events = ();
@@ -134,6 +156,25 @@ class RecordingSseObserver inherits DataProvider::Observer {
             }
             if (found >= count) {
                 return True;
+            }
+
+            date remaining = end_time - now_us();
+            if (remaining <= 0us) {
+                return False;
+            }
+            cond.wait(m, remaining);
+        }
+    }
+
+    bool waitForHeartbeat(timeout t = SseTestTimeout) {
+        AutoLock al(m);
+        date end_time = now_us() + t;
+        while (True) {
+            foreach hash<auto> evt in (events) {
+                if (evt.event_id == HttpClientStreamingIo::EVENT_SSE_HEARTBEAT
+                        && evt.data.comment == "hb") {
+                    return True;
+                }
             }
 
             date remaining = end_time - now_us();
@@ -373,7 +414,7 @@ class CallbackSseHandler inherits HttpServer::AbstractHttpSocketHandler {
             Socket sock, hash<auto> cx, hash<auto> hdr, string cid,
             int session_id, int stream_id, *code<nothing()> wake_callback) {
         HttpServerAsyncIo::Http3SseStream sse_stream(sock, session_id,
-            stream_id, wake_callback);
+            stream_id, wake_callback, True);
         *code<*string()> cb = takeCallback(cid);
         if (cb) {
             CallbackSseHandler::startDrainer(cid, cb,
@@ -418,6 +459,7 @@ class SseAllProtocolsTest inherits Test {
         *Logger::Logger mLogger;
         HttpServer::HttpServer server;
         RecordingSseHandler handler();
+        HeartbeatSseHandler heartbeat_handler();
         CallbackSseHandler callback_handler();
         int h1_port;
         int h2_port;
@@ -483,6 +525,12 @@ l50Xb2GWQesIt9k5jF5IOw==
             \testHttp2SseObservable());
         addTestCase("H3 SSE observable receives parsed events and close",
             \testHttp3SseObservable());
+        addTestCase("H1 SSE observable receives heartbeat keep-alive",
+            \testHttp1SseHeartbeat());
+        addTestCase("H2 SSE observable receives heartbeat keep-alive",
+            \testHttp2SseHeartbeat());
+        addTestCase("H3 SSE observable receives heartbeat keep-alive",
+            \testHttp3SseHeartbeat());
         addTestCase("H2 callback-drained SSE readiness streams complete",
             \testHttp2CallbackDrainedSse());
         addTestCase("H3 callback-drained SSE readiness streams complete",
@@ -511,6 +559,7 @@ l50Xb2GWQesIt9k5jF5IOw==
             "debug": True,
         });
         server.setDefaultHandler("sse", handler);
+        server.setHandler("heartbeat-sse", "/heartbeat", NOTHING, heartbeat_handler);
         server.setHandler("callback-sse", "/callback", NOTHING, callback_handler);
         server.setHandler("ping", "/ping", NOTHING, new PingHandler());
         server.waitForAsyncIo();
@@ -628,6 +677,31 @@ l50Xb2GWQesIt9k5jF5IOw==
             assertEq(HttpClientStreamingIo::EVENT_SSE_CLOSED,
                 observer.events[observer.events.size() - 1].event_id, label + ": closed event");
         }
+    }
+
+    private runSseHeartbeatFlow(string label, HttpClientIo::HttpClientConnectionManager mgr,
+            string url) {
+        heartbeat_handler.reset();
+
+        HttpClientStreamingIo::SseObservable obs(mgr, url, "GET", "/heartbeat",
+            NOTHING, NOTHING, {
+                "idle_timeout": 5s,
+                "emit_heartbeat": True,
+            });
+        on_exit obs.stopEvents();
+
+        RecordingSseObserver observer();
+        obs.registerObserver(observer);
+        obs.observersReady();
+
+        assertEq(0, heartbeat_handler.registered.waitForZero(SseTestTimeout),
+            label + ": heartbeat connection should register on server");
+
+        assertTrue(observer.waitForHeartbeat(5s),
+            sprintf("%s: observable received heartbeat; events=%s",
+                label, observer.describeEvents()));
+
+        heartbeat_handler.last_conn.stop();
     }
 
     private runCallbackDrainedSseFlow(string label, HttpClientIo::HttpClientConnectionManager mgr,
@@ -961,6 +1035,41 @@ l50Xb2GWQesIt9k5jF5IOw==
         on_exit delete mgr;
         runSseObservableFlow("H3 observable", mgr, sprintf("https://127.0.0.1:%d/", h3_port),
             True);
+    }
+
+    testHttp1SseHeartbeat() {
+        HttpClientIo::HttpClientConnectionManager mgr(
+            <HttpClientIo::HttpClientConnectionManagerOptions>{
+                "protocol": "h1",
+                "request_timeout": 10s,
+                "connect_timeout": 5s,
+            });
+        on_exit delete mgr;
+        runSseHeartbeatFlow("H1 heartbeat", mgr, sprintf("http://127.0.0.1:%d/", h1_port));
+    }
+
+    testHttp2SseHeartbeat() {
+        HttpClientIo::HttpClientConnectionManager mgr(
+            <HttpClientIo::HttpClientConnectionManagerOptions>{
+                "protocol": "h2",
+                "accept_all_certs": True,
+                "request_timeout": 10s,
+                "connect_timeout": 5s,
+            });
+        on_exit delete mgr;
+        runSseHeartbeatFlow("H2 heartbeat", mgr, sprintf("https://127.0.0.1:%d/", h2_port));
+    }
+
+    testHttp3SseHeartbeat() {
+        HttpClientIo::HttpClientConnectionManager mgr(
+            <HttpClientIo::HttpClientConnectionManagerOptions>{
+                "protocol": "h3",
+                "accept_all_certs": True,
+                "request_timeout": 10s,
+                "connect_timeout": 5s,
+            });
+        on_exit delete mgr;
+        runSseHeartbeatFlow("H3 heartbeat", mgr, sprintf("https://127.0.0.1:%d/", h3_port));
     }
 
     testHttp2CallbackDrainedSse() {

@@ -275,7 +275,7 @@ int Http3ClientConnection::buildAttempt(int family, int64_t not_before_ns_abs,
     //    on error) — submission is deferred until the full list of
     //    attempts is known so that onInnerHandshakeReady/Failed callbacks
     //    firing from the I/O thread see a complete attempts_ vector.
-    auto a = std::make_unique<Attempt>();
+    auto a = std::make_shared<Attempt>();
     a->sock_priv = sock_priv_raw;
     a->sock_obj = sock_obj_holder.release();
     a->poll_op_priv = priv_raw;
@@ -310,6 +310,32 @@ int Http3ClientConnection::submitAttempt(Attempt& a, ExceptionSink* xsink) {
         return -1;
     }
 
+    // Snapshot the resource fields under attempts_mu_ so a concurrent
+    // clearAttempt (e.g., from onInnerHandshakeReady moving this
+    // attempt to losers when a sibling attempt wins) cannot null
+    // a.sock_obj / a.poll_op_obj between the read and the refSelf, and
+    // cannot deref the QoreObjects to refcount 0 between the refSelf
+    // and the use.  refSelf increments the refcount under the lock;
+    // after we release the lock, our local refs keep the objects alive
+    // even if clearAttempt subsequently nulls a's fields and derefs.
+    int family_local;
+    ReferenceHolder<QoreObject> sock_obj_ref(xsink);
+    ReferenceHolder<QoreObject> poll_op_obj_ref(xsink);
+    {
+        std::lock_guard<std::mutex> lk(attempts_mu_);
+        if (!a.sock_obj || !a.poll_op_obj) {
+            // Already cleared by the I/O thread (winner committed and
+            // moved this attempt to losers, or all-failed teardown).
+            // Treat as a no-op success-equivalent skip — buildAndSubmit
+            // counts only successful submits and will fall through to
+            // the "no attempts submitted" error path if appropriate.
+            return -1;
+        }
+        sock_obj_ref = a.sock_obj->objectRefSelf();
+        poll_op_obj_ref = a.poll_op_obj->objectRefSelf();
+        family_local = a.family;
+    }
+
     char owner_buf[64];
     const char* owner_to_use;
     if (!owner_str.empty()) {
@@ -317,18 +343,18 @@ int Http3ClientConnection::submitAttempt(Attempt& a, ExceptionSink* xsink) {
         // family so concurrent HE submissions hit distinct cache keys.
         snprintf(owner_buf, sizeof(owner_buf), "%s-%s",
             owner_str.c_str(),
-            (a.family == AF_INET6) ? "v6" : "v4");
+            (family_local == AF_INET6) ? "v6" : "v4");
         owner_to_use = owner_buf;
     } else {
         snprintf(owner_buf, sizeof(owner_buf), "http3-cpp-conn-%p-%s",
             static_cast<const void*>(&a),
-            (a.family == AF_INET6) ? "v6" : "v4");
+            (family_local == AF_INET6) ? "v6" : "v4");
         owner_to_use = owner_buf;
     }
 
     ReferenceHolder<QoreHashNode> info(new QoreHashNode(autoTypeInfo), xsink);
-    info->setKeyValue("sock", a.sock_obj->refSelf(), xsink);
-    info->setKeyValue("spop", a.poll_op_obj->refSelf(), xsink);
+    info->setKeyValue("sock", sock_obj_ref.release(), xsink);
+    info->setKeyValue("spop", poll_op_obj_ref.release(), xsink);
     info->setKeyValue("owner", new QoreStringNode(owner_to_use), xsink);
     // Disable controller-level timeout; the H3 poll op manages its own idle timeout.
     info->setKeyValue("to", -1, xsink);
@@ -343,17 +369,50 @@ int Http3ClientConnection::submitAttempt(Attempt& a, ExceptionSink* xsink) {
     if (*xsink) {
         return -1;
     }
-    a.submitted = true;
+    {
+        std::lock_guard<std::mutex> lk(attempts_mu_);
+        // Only mark submitted if the attempt hasn't been cleared in
+        // the meantime — clearAttempt resets submitted=false and a
+        // late write here would resurrect a stale flag.
+        if (a.sock_obj || a.poll_op_obj) {
+            a.submitted = true;
+        }
+    }
     return 0;
 }
 
 void Http3ClientConnection::clearAttempt(Attempt& a, ExceptionSink* xsink) {
+    // Snapshot+null the resource fields atomically under attempts_mu_.
+    // A concurrent submitAttempt acquires the same lock to refSelf the
+    // QoreObject wrappers; this ordering guarantees it sees either
+    // (sock_obj && poll_op_obj) both alive (and bumps their refcounts
+    // before we deref) or both nulled (and bails out).  Without this
+    // lock, submitAttempt could read a non-null sock_obj at line 330,
+    // we could deref it to refcount 0 here, and submitAttempt's
+    // refSelf would then dereference freed memory.
+    //
+    // The expensive operations (disarm, abort, deref) run AFTER the
+    // unlock so the I/O thread's clearAttempt path doesn't serialize
+    // on the brief field-null window.
+    QoreObject* poll_op_obj_to_deref;
+    QoreObject* sock_obj_to_deref;
+    Http3ClientPollOperationPriv* poll_op_priv_local;
+    {
+        std::lock_guard<std::mutex> lk(attempts_mu_);
+        poll_op_obj_to_deref = a.poll_op_obj;   a.poll_op_obj = nullptr;
+        sock_obj_to_deref = a.sock_obj;         a.sock_obj = nullptr;
+        poll_op_priv_local = a.poll_op_priv;    a.poll_op_priv = nullptr;
+        a.sock_priv = nullptr;
+        a.submitted = false;
+        a.finished = true;
+    }
+
     // Disarm both back-pointers on the poll op so the subsequent abort()
     // does NOT call setClosed on the connection (we're a losing attempt —
     // the connection may still be racing or already committed to a
     // different winner).
-    if (a.poll_op_priv) {
-        a.poll_op_priv->disarmConnectionPriv();
+    if (poll_op_priv_local) {
+        poll_op_priv_local->disarmConnectionPriv();
     }
 
     // Cancel strategy: call abort() directly instead of the controller's
@@ -374,26 +433,20 @@ void Http3ClientConnection::clearAttempt(Attempt& a, ExceptionSink* xsink) {
     //   - After disarmConnectionPriv, connection_priv and h3_owner_ are
     //     nullptr, so abort's setClosed-path becomes a no-op — no state
     //     transition on the enclosing connection.
-    if (a.poll_op_priv) {
-        a.poll_op_priv->abort(xsink);
+    if (poll_op_priv_local) {
+        poll_op_priv_local->abort(xsink);
     }
 
     // Deref the QoreObject wrappers (our construction-time refs).  The
     // controller still holds its own ref via the PollInfo until it
     // processes the CLOSED state, so these derefs just drop OUR ref —
     // the objects stay alive until the controller's cleanup.
-    if (a.poll_op_obj) {
-        a.poll_op_obj->deref(xsink);
-        a.poll_op_obj = nullptr;
+    if (poll_op_obj_to_deref) {
+        poll_op_obj_to_deref->deref(xsink);
     }
-    if (a.sock_obj) {
-        a.sock_obj->deref(xsink);
-        a.sock_obj = nullptr;
+    if (sock_obj_to_deref) {
+        sock_obj_to_deref->deref(xsink);
     }
-    a.poll_op_priv = nullptr;
-    a.sock_priv = nullptr;
-    a.submitted = false;
-    a.finished = true;
 }
 
 int Http3ClientConnection::buildAndSubmit(ExceptionSink* xsink) {
@@ -442,27 +495,47 @@ int Http3ClientConnection::buildAndSubmit(ExceptionSink* xsink) {
     // SocketQuicClientPollOperation honors its own not_before_ns_ gate, so
     // the secondary stays silent on the wire until its deadline elapses.
     //
-    // Snapshot raw Attempt pointers under the lock, then submit outside —
-    // submit() is a cross-thread cmd enqueue that can block briefly, so
-    // doing it under attempts_mu_ would serialize unnecessarily and could
-    // deadlock if the I/O thread tries to call onInnerHandshakeFailed
-    // before the submission loop finishes.
-    std::vector<Attempt*> to_submit;
+    // Snapshot the Attempts as shared_ptr copies under the lock so they
+    // outlive the loop body even if a sibling attempt completes its
+    // handshake (winner commit) on the I/O thread mid-loop and moves
+    // the unsubmitted Attempt into a local losers vector that's
+    // destroyed when onInnerHandshakeReady returns.  Without the
+    // shared_ptr ownership, that destructor would free the Attempt
+    // struct under our raw pointer (use-after-free at submitAttempt's
+    // a.sock_obj read).
+    //
+    // Submit outside attempts_mu_ — submit() is a cross-thread cmd
+    // enqueue that can block briefly, so holding the lock across the
+    // loop would serialize unnecessarily and could deadlock if the I/O
+    // thread tries to call onInnerHandshakeFailed (which acquires
+    // attempts_mu_) before the submission loop finishes.
+    std::vector<std::shared_ptr<Attempt>> to_submit;
     {
         std::lock_guard<std::mutex> lk(attempts_mu_);
         for (int idx : built_indices) {
-            to_submit.push_back(attempts_[idx].get());
+            to_submit.push_back(attempts_[idx]);
         }
     }
     int submitted_count = 0;
-    for (Attempt* a : to_submit) {
+    for (auto& a_ptr : to_submit) {
+        // Stop submitting once a winner is committed by the I/O thread —
+        // remaining attempts are now redundant, would race uselessly,
+        // and would just be torn down immediately by onInnerHandshakeReady's
+        // loser cleanup.  Brief lock acquisition matches submitAttempt's
+        // own internal locking discipline.
+        {
+            std::lock_guard<std::mutex> lk(attempts_mu_);
+            if (winner_idx_ >= 0) {
+                break;
+            }
+        }
         ExceptionSink submit_xsink;
-        if (submitAttempt(*a, &submit_xsink) == 0) {
+        if (submitAttempt(*a_ptr, &submit_xsink) == 0) {
             ++submitted_count;
         } else {
             submit_xsink.clear();
             ExceptionSink clr_xsink;
-            clearAttempt(*a, &clr_xsink);
+            clearAttempt(*a_ptr, &clr_xsink);
             clr_xsink.clear();
         }
     }
@@ -477,14 +550,38 @@ int Http3ClientConnection::buildAndSubmit(ExceptionSink* xsink) {
     // closeConnection (pre-winner) has something to cancel.  The winner
     // selection in onInnerHandshakeReady may re-point these to a
     // different attempt.
+    //
+    // The submit loop above ran without attempts_mu_ held, so the I/O
+    // thread may have already run onInnerHandshakeReady (winner committed
+    // and attempts_ cleared) or onInnerHandshakeFailed (all-failed
+    // teardown: attempts_ moved out and connection members nulled).  In
+    // either of those cases, attempts_[built_indices.front()] is null or
+    // out-of-bounds and the connection members are already in their final
+    // state — re-publishing would either segfault on a null Attempt* or
+    // overwrite the winner's tuple with stale pointers.  Guard against
+    // both by checking winner_idx_ and attempts_ first.
     {
         std::lock_guard<std::mutex> lk(attempts_mu_);
-        Attempt* primary = attempts_[built_indices.front()].get();
-        sock_priv = primary->sock_priv;
-        sock_obj = primary->sock_obj;
-        poll_op_priv = primary->poll_op_priv;
-        poll_op_obj = primary->poll_op_obj;
-        submitted_to_controller = true;
+        if (winner_idx_ < 0 && !attempts_.empty()) {
+            Attempt* primary = attempts_[built_indices.front()].get();
+            if (primary) {
+                sock_priv = primary->sock_priv;
+                sock_obj = primary->sock_obj;
+                poll_op_priv = primary->poll_op_priv;
+                poll_op_obj = primary->poll_op_obj;
+                submitted_to_controller = true;
+            }
+        } else if (winner_idx_ >= 0) {
+            // Winner committed by onInnerHandshakeReady before we
+            // re-acquired the lock.  sock_priv et al. already point at
+            // the winner's tuple; just flag the controller as holding
+            // our op so a subsequent closeConnection cancels it via the
+            // controller path.
+            submitted_to_controller = true;
+        }
+        // else: onInnerHandshakeFailed cleared attempts_ and set
+        // submitted_to_controller=false on its way to setClosed().  The
+        // connection is already torn down — leave it that way.
     }
     return 0;
 }
@@ -537,7 +634,7 @@ void Http3ClientConnection::onInnerHandshakeReady(Http3ClientPollOperationPriv* 
     // release the mutex before calling clearAttempt (which invokes
     // ctl_priv_holder->cancel — a potentially blocking cross-thread
     // operation that must not be held under attempts_mu_).
-    std::vector<std::unique_ptr<Attempt>> losers;
+    std::vector<std::shared_ptr<Attempt>> losers;
     const size_t winner_idx_sz = static_cast<size_t>(my_idx);
     for (size_t i = 0; i < attempts_.size(); ++i) {
         if (i != winner_idx_sz && attempts_[i]) {
@@ -599,7 +696,7 @@ void Http3ClientConnection::onInnerHandshakeFailed(Http3ClientPollOperationPriv*
     // still has last_err_/last_desc_ via the base-class error surface,
     // so callers observing the CLOSED transition see a meaningful
     // diagnostic.
-    std::vector<std::unique_ptr<Attempt>> losers = std::move(attempts_);
+    std::vector<std::shared_ptr<Attempt>> losers = std::move(attempts_);
     attempts_.clear();
     // Null the primary-attempt pointers on the connection — the primary
     // is in losers now and about to be torn down, so the raw members
@@ -1059,7 +1156,7 @@ void Http3ClientConnection::closeConnection(ExceptionSink* xsink) {
     // dropping into the clear loop so the post-loop path skips the
     // dangling-pointer branch.
     bool was_racing;
-    std::vector<std::unique_ptr<Attempt>> to_clear;
+    std::vector<std::shared_ptr<Attempt>> to_clear;
     {
         std::lock_guard<std::mutex> lk(attempts_mu_);
         was_racing = !attempts_.empty();
