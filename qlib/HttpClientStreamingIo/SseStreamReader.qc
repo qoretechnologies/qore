@@ -69,6 +69,12 @@ public class SseStreamReader {
         #! Accumulated SSE text buffer awaiting event boundary parsing
         string sse_buffer = "";
 
+        #! Data chunks consumed by a caller before constructing this reader
+        list<auto> pending_data = ();
+
+        #! Current offset in @ref pending_data
+        int pending_data_offset = 0;
+
         #! True when the stream has ended (end_stream received or error)
         bool done = False;
     }
@@ -80,12 +86,18 @@ public class SseStreamReader {
         @param stream an HttpClientStreamHandle in streaming mode
         @param content_encoding optional Content-Encoding for decompression
         (e.g., \c "gzip", \c "br"); pass \c NOTHING for uncompressed streams
+        @param initial_data optional stream data already read by the caller
+        while validating response metadata
 
         @throw ENCODING-ERROR if the content encoding is not supported
     */
-    constructor(HttpClientIo::HttpClientStreamHandle stream, *string content_encoding) {
+    constructor(HttpClientIo::HttpClientStreamHandle stream, *string content_encoding,
+            *list<auto> initial_data) {
         self.stream = stream;
         decompressor = new StreamDecompressor(content_encoding);
+        if (initial_data) {
+            pending_data = initial_data;
+        }
     }
 
     #! Reads the next SSE event from the stream
@@ -126,8 +138,20 @@ public class SseStreamReader {
                 return evt;
             }
 
-            # Read more data from the stream
-            auto data = stream.readData(timeout_ms);
+            # Read more data from the stream.  RestClientIo may have
+            # consumed the first body/end-stream item while validating the
+            # response status, so replay those items before reading the
+            # underlying stream handle again.
+            auto data;
+            if (pending_data_offset < pending_data.size()) {
+                data = pending_data[pending_data_offset++];
+                if (pending_data_offset >= pending_data.size()) {
+                    pending_data = ();
+                    pending_data_offset = 0;
+                }
+            } else {
+                data = stream.readData(timeout_ms);
+            }
             if (!exists data) {
                 # Timeout — return NOTHING without marking done
                 return NOTHING;
