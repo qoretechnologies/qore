@@ -35,6 +35,7 @@
 #include "qore/intern/QC_Socket.h"
 #include "qore/intern/QC_SocketPollOperation.h"
 #include "qore/intern/QC_Queue.h"
+#include "qore/intern/AsyncIoControllerPriv.h"
 #include "qore/intern/ssl_constants.h"
 #include "qore/intern/qore_socket_private.h"
 #include "qore/QoreSSLCertificate.h"
@@ -42,6 +43,9 @@
 
 #include <cerrno>
 #include <cstring>
+#include <string>
+
+extern qore_classid_t CID_ASYNCIOCONTROLLER;
 
 static void hash_set_int_key(QoreHashNode& h, int k, const char* str) {
     char buf[15];
@@ -68,6 +72,114 @@ static int64 checkOpenResult(int rc, const char *method_name, ExceptionSink *xsi
         return 0;
     }
     return rc;
+}
+
+static void socket_raise_poll_result_exception(const QoreHashNode* ex, ExceptionSink* xsink) {
+    QoreValue err = ex->getKeyValue("err");
+    QoreValue desc = ex->getKeyValue("desc");
+    QoreValue arg = ex->getKeyValue("arg");
+    xsink->raiseException(
+        err.getType() == NT_STRING
+            ? err.get<const QoreStringNode>()->stringRefSelf()
+            : new QoreStringNode("ASYNC-IO-ERROR"),
+        desc.getType() == NT_STRING
+            ? desc.get<const QoreStringNode>()->stringRefSelf()
+            : new QoreStringNode("async socket operation failed"),
+        arg.refSelf());
+}
+
+static QoreHashNode* socket_exec_poll_operation(QoreObject* self, QoreObject* op_obj,
+        int timeout_ms, const char* owner_name, ExceptionSink* xsink) {
+    ReferenceHolder<QoreObject> ctl_obj(qore_get_async_io_controller_obj(xsink), xsink);
+    if (!ctl_obj) {
+        return nullptr;
+    }
+    ReferenceHolder<AsyncIoControllerPriv> ctrl(
+        static_cast<AsyncIoControllerPriv*>(
+            (*ctl_obj)->getReferencedPrivateData(CID_ASYNCIOCONTROLLER, xsink)), xsink);
+    if (*xsink || !ctrl) {
+        return nullptr;
+    }
+
+    SimpleRefHolder<QoreStringNode> socket_hash(self->getUniqueHash());
+    std::string owner("Socket::sync:");
+    owner += owner_name;
+    owner += ':';
+    owner += socket_hash->c_str();
+
+    ReferenceHolder<QoreHashNode> info(new QoreHashNode(hashdeclSocketPollOperationInfo, xsink), xsink);
+    info->setKeyValue("sock", self->objectRefSelf(), xsink);
+    info->setKeyValue("spop", op_obj->objectRefSelf(), xsink);
+    info->setKeyValue("owner", new QoreStringNode(owner), xsink);
+    info->setKeyValue("to", timeout_ms, xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
+    ReferenceHolder<QoreHashNode> result(ctrl->exec(*ctl_obj, info.release(), false, xsink), xsink);
+    if (*xsink || !result) {
+        return nullptr;
+    }
+
+    QoreValue ex = result->getKeyValue("ex");
+    if (ex.getType() == NT_HASH) {
+        socket_raise_poll_result_exception(ex.get<const QoreHashNode>(), xsink);
+        return nullptr;
+    }
+    return result.release();
+}
+
+static int socket_exec_send_poll(QoreObject* self, SocketPollOperationBase* poller,
+        int timeout_ms, ExceptionSink* xsink) {
+    ReferenceHolder<SocketPollOperationBase> poller_holder(poller, xsink);
+    if (*xsink) {
+        return -1;
+    }
+
+    ReferenceHolder<QoreObject> op_obj(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller_holder),
+        xsink);
+    poller_holder->setSelf(*op_obj);
+    poller_holder.release();
+
+    if (!*xsink) {
+        op_obj->setValue("sock", self->objectRefSelf(), xsink);
+        op_obj->setValue("goal", new QoreStringNode("send"), xsink);
+    }
+    if (*xsink) {
+        return -1;
+    }
+
+    ReferenceHolder<QoreHashNode> result(
+        socket_exec_poll_operation(self, *op_obj, timeout_ms, "send", xsink), xsink);
+    return *xsink ? -1 : 0;
+}
+
+static int socket_exec_send_binary(QoreObject* self, QoreSocketObject* s, BinaryNode* data,
+        int timeout_ms, ExceptionSink* xsink) {
+    s->ref();
+    return socket_exec_send_poll(self, new SocketSendPollOperation(xsink, data, s), timeout_ms, xsink);
+}
+
+static int socket_exec_send_string(QoreObject* self, QoreSocketObject* s, const QoreStringNode* data,
+        int timeout_ms, bool convert_encoding, ExceptionSink* xsink) {
+    SimpleRefHolder<QoreStringNode> tmp;
+    if (convert_encoding && data->getEncoding() != s->getEncoding()) {
+        tmp = data->convertEncoding(s->getEncoding(), xsink);
+        if (*xsink) {
+            return -1;
+        }
+    }
+
+    s->ref();
+    return socket_exec_send_poll(self, new SocketSendPollOperation(xsink,
+        tmp ? tmp.release() : data->stringRefSelf(), s), timeout_ms, xsink);
+}
+
+static int socket_exec_send_string_bytes(QoreObject* self, QoreSocketObject* s, const QoreStringNode* data,
+        int timeout_ms, ExceptionSink* xsink) {
+    SimpleRefHolder<BinaryNode> bin(new BinaryNode());
+    bin->append(data->c_str(), data->strlen());
+    return socket_exec_send_binary(self, s, bin.release(), timeout_ms, xsink);
 }
 
 static int check_response_code(int status_code, ExceptionSink* xsink) {
@@ -2163,7 +2275,7 @@ sock.send(data, 20s);
     made because it was not possible to catch SSL errors with this method with the previous implementation
 */
 int Socket::send(binary bin, timeout timeout_ms = -1) {
-    return s->send(bin, timeout_ms, xsink);
+    return socket_exec_send_binary(self, s, bin->binRefSelf(), timeout_ms, xsink);
 }
 
 //! Sends string data over the socket; string data is converted to the socket's encoding if necessary; if any errors occur, an exception is thrown
@@ -2196,7 +2308,7 @@ sock.send(str, 20s);
     made because it was not possible to catch SSL errors with this method with the previous implementation
 */
 int Socket::send(string str, timeout timeout_ms = -1) {
-    return s->send(*str, timeout_ms, xsink);
+    return socket_exec_send_string(self, s, str, timeout_ms, true, xsink);
 }
 
 //! Sends string data over the socket without converting the string to the socket's encoding, but instead is sent exactly as-is; if any errors occur, an exception is thrown
@@ -2227,7 +2339,7 @@ sock.sendBinary(str);
     made because it was not possible to catch SSL errors with this method with the previous implementation
 */
 int Socket::sendBinary(string str, timeout timeout_ms = -1) {
-    return s->send(str->c_str(), str->strlen(), timeout_ms, xsink);
+    return socket_exec_send_string_bytes(self, s, str, timeout_ms, xsink);
 }
 
 //! Sends binary data over the socket; if any errors occur, an exception is thrown
@@ -2258,7 +2370,7 @@ sock.sendBinary2(data);
     made because it was not possible to catch SSL errors with this method with the previous implementation
 */
 int Socket::sendBinary(binary bin, timeout timeout_ms = -1) {
-    return s->send(bin, timeout_ms, xsink);
+    return socket_exec_send_binary(self, s, bin->binRefSelf(), timeout_ms, xsink);
 }
 
 //! Sends binary data over the socket; if any errors occur, an exception is thrown
@@ -2287,7 +2399,7 @@ sock.send2(data);
     @since %Qore 0.8.4
 */
 nothing Socket::send2(binary bin, timeout timeout_ms = -1) {
-    s->send(bin, timeout_ms, xsink);
+    socket_exec_send_binary(self, s, bin->binRefSelf(), timeout_ms, xsink);
 }
 
 //! Sends string data over the socket; string data is converted to the socket's encoding if necessary; if any errors occur, an exception is thrown
@@ -2317,7 +2429,7 @@ sock.send2(str);
     @since %Qore 0.8.4
 */
 nothing Socket::send2(string str, timeout timeout_ms = -1) {
-    s->send(*str, timeout_ms, xsink);
+    socket_exec_send_string(self, s, str, timeout_ms, true, xsink);
 }
 
 //! Sends string data over the socket without converting the string to the socket's encoding, but instead is sent exactly as-is; if any errors occur, an exception is thrown
@@ -2345,7 +2457,7 @@ sock.sendBinary2(str);
     @since %Qore 0.8.4
 */
 nothing Socket::sendBinary2(string str, timeout timeout_ms = -1) {
-    s->send(str->c_str(), str->strlen(), timeout_ms, xsink);
+    socket_exec_send_string_bytes(self, s, str, timeout_ms, xsink);
 }
 
 //! Sends binary data over the socket; if any errors occur, an exception is thrown
@@ -2373,7 +2485,7 @@ sock.sendBinary2(data);
     @since %Qore 0.8.4
 */
 nothing Socket::sendBinary2(binary bin, timeout timeout_ms = -1) {
-    s->send(bin, timeout_ms, xsink);
+    socket_exec_send_binary(self, s, bin->binRefSelf(), timeout_ms, xsink);
 }
 
 //! Reads data from an @ref InputStream and sends the bytes over the socket
