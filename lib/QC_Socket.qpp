@@ -190,6 +190,32 @@ static int socket_exec_send_bytes(QoreObject* self, QoreSocketObject* s, const v
     return socket_exec_send_binary(self, s, bin.release(), timeout_ms, xsink);
 }
 
+static int socket_exec_connect(QoreObject* self, QoreSocketObject* s, const char* target, int timeout_ms,
+        bool ssl, ExceptionSink* xsink) {
+    s->ref();
+    ReferenceHolder<SocketPollOperationBase> poller(new SocketConnectPollOperation(xsink, ssl, target, s), xsink);
+    if (*xsink) {
+        return -1;
+    }
+
+    ReferenceHolder<QoreObject> op_obj(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller), xsink);
+    poller->setSelf(*op_obj);
+    poller.release();
+
+    const char* goal = ssl ? "connect-ssl" : "connect";
+    if (!*xsink) {
+        op_obj->setValue("sock", self->objectRefSelf(), xsink);
+        op_obj->setValue("goal", new QoreStringNode(goal), xsink);
+    }
+    if (*xsink) {
+        return -1;
+    }
+
+    ReferenceHolder<QoreHashNode> result(
+        socket_exec_poll_operation(self, *op_obj, timeout_ms, goal, xsink), xsink);
+    return *xsink ? -1 : 0;
+}
+
 static QoreValue socket_exec_recv_poll(QoreObject* self, SocketRecvPollOperationBase* poller,
         int timeout_ms, const char* owner_name, ExceptionSink* xsink) {
     SocketRecvPollOperationBase* recv_poller = poller;
@@ -1943,7 +1969,7 @@ sock.connect("/tmp/socket");@endcode
     Socket::connectUNIXSSL()
 */
 nothing Socket::connect(string target, timeout timeout_ms = -1) {
-    s->connect(target->c_str(), timeout_ms, xsink);
+    socket_exec_connect(self, s, target->c_str(), timeout_ms, false, xsink);
 }
 
 //! Connects to the given host and port with an optional timeout value with a millisecond resolution
@@ -2033,7 +2059,7 @@ sock.connectSSL("/tmp/socket"); @endcode
     @see Socket::connect(), Socket::connectUNIX(), Socket::connectUNIXSSL(), Socket::connectINETSSL(), and Socket::connectINET()
 */
 nothing Socket::connectSSL(string target, timeout timeout_ms = -1) {
-    s->connectSSL(xsink, target->c_str(), timeout_ms);
+    socket_exec_connect(self, s, target->c_str(), timeout_ms, true, xsink);
 }
 
 //! Connects to the given host and port and attempts to establish a TLS/SSL connection; accepts an optional timeout value with a millisecond resolution
