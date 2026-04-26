@@ -1194,8 +1194,12 @@ static int qore_socket_object_exec_send_http_chunked_body_callback(QoreSocketObj
                 break;
             }
             case NT_HASH:
-                return qore_socket_object_exec_send_http_chunked_body_trailer(s, res->get<const QoreHashNode>(),
-                    source, timeout_ms, xsink);
+                if (qore_socket_object_exec_send_http_chunked_body_trailer(s, res->get<const QoreHashNode>(),
+                        source, timeout_ms, xsink)
+                        && !qore_socket_object_exec_try_clear_send_error_as_aborted(s, aborted, xsink)) {
+                    return -1;
+                }
+                return 0;
             case NT_NOTHING:
             case NT_NULL:
                 done = true;
