@@ -621,6 +621,131 @@ static int qore_socket_object_exec_send_http_response(QoreSocketObject* s, QoreH
     return rc;
 }
 
+static int qore_socket_object_exec_send_http_chunked_body_trailer(QoreSocketObject* s,
+        const QoreHashNode* trailer, int timeout_ms, ExceptionSink* xsink) {
+    QoreString hdr(s->getEncoding());
+    hdr.concat("0\r\n");
+    qore_socket_private::do_headers(hdr, trailer, 0, false);
+
+    int rc = qore_socket_object_exec_send_bytes(s, hdr.c_str(), hdr.size(), timeout_ms, xsink);
+    if (!rc && trailer) {
+        my_socket_priv::getPriv(*s)->doHeaderEvent(QORE_EVENT_HTTP_FOOTERS_SENT, QORE_SOURCE_SOCKET, *trailer);
+    }
+    return rc;
+}
+
+static void qore_socket_object_exec_set_http_chunk_prefix(QoreString& prefix, size_t size) {
+    prefix.sprintf(QLLX "\r\n", static_cast<unsigned long long>(size));
+}
+
+static int qore_socket_object_exec_run_http_trailer_callback(
+        const ResolvedCallReferenceNode* trailer_callback, ReferenceHolder<QoreHashNode>& trailer,
+        ExceptionSink* xsink) {
+    if (!trailer_callback) {
+        return 0;
+    }
+
+    ValueHolder rv(trailer_callback->execValue(nullptr, xsink), xsink);
+    if (*xsink) {
+        return -1;
+    }
+
+    switch (rv->getType()) {
+        case NT_NOTHING:
+            break;
+        case NT_HASH:
+            trailer = rv.release().get<QoreHashNode>();
+            break;
+        default:
+            xsink->raiseException("HTTP-TRAILER-ERROR", "chunked callback returned type '%s'; expecting 'hash' "
+                "or 'NOTHING'", rv->getTypeName());
+            return -1;
+    }
+    return 0;
+}
+
+static int qore_socket_object_exec_send_http_chunked_body_input_stream(QoreSocketObject* s,
+        InputStream* input_stream, size_t max_chunk_size, const ResolvedCallReferenceNode* trailer_callback,
+        int timeout_ms, ExceptionSink* xsink) {
+    SimpleRefHolder<BinaryNode> buf(new BinaryNode);
+    buf->preallocate(max_chunk_size);
+
+    unsigned cancel_check = 0;
+    while (true) {
+        if (!(cancel_check++ % 100) && qore_check_cancel(xsink, "socket chunked input stream send")) {
+            return -1;
+        }
+
+        int64 r = input_stream->read(const_cast<void*>(buf->getPtr()), max_chunk_size, xsink);
+        if (*xsink) {
+            return -1;
+        }
+
+        QoreString prefix;
+        qore_socket_object_exec_set_http_chunk_prefix(prefix, static_cast<size_t>(r));
+        if (qore_socket_object_exec_send_bytes(s, prefix.c_str(), prefix.size(), timeout_ms, xsink)) {
+            return -1;
+        }
+
+        bool trailers = false;
+        if (r > 0) {
+            if (qore_socket_object_exec_send_bytes(s, buf->getPtr(), r, timeout_ms, xsink)) {
+                return -1;
+            }
+            my_socket_priv::getPriv(*s)->doDataEvent(QORE_EVENT_HTTP_CHUNKED_DATA_SENT, QORE_SOURCE_SOCKET,
+                buf->getPtr(), r);
+        } else {
+            ReferenceHolder<QoreHashNode> trailer(xsink);
+            if (qore_socket_object_exec_run_http_trailer_callback(trailer_callback, trailer, xsink)) {
+                return -1;
+            }
+            if (trailer) {
+                QoreString hdr(s->getEncoding());
+                qore_socket_private::do_headers(hdr, *trailer, 0, false);
+                if (qore_socket_object_exec_send_bytes(s, hdr.c_str(), hdr.size(), timeout_ms, xsink)) {
+                    return -1;
+                }
+                my_socket_priv::getPriv(*s)->doHeaderEvent(QORE_EVENT_HTTP_FOOTERS_SENT, QORE_SOURCE_SOCKET,
+                    **trailer);
+                trailers = true;
+            }
+        }
+
+        if (!trailers && qore_socket_object_exec_send_bytes(s, "\r\n", 2, timeout_ms, xsink)) {
+            return -1;
+        }
+
+        if (!r) {
+            return 0;
+        }
+    }
+}
+
+static int qore_socket_object_exec_send_http_response_input_stream(QoreSocketObject* s, QoreHashNode* info,
+        int code, const char* desc, const char* http_version, const QoreHashNode* headers, InputStream* input_stream,
+        size_t max_chunk_size, const ResolvedCallReferenceNode* trailer_callback, int source, int timeout_ms,
+        ExceptionSink* xsink) {
+    my_socket_priv* priv = my_socket_priv::getPriv(*s);
+    if (priv->getH2ActiveServerStreamId() > 0) {
+        QoreString status_line(s->getEncoding());
+        priv->getSendHttpResponseStatusLine(status_line, info, code, desc, http_version);
+        xsink->raiseException("HTTP2-ERROR",
+            "chunked/streaming responses are not supported via Socket::sendHTTPResponse() on HTTP/2");
+        return -1;
+    }
+
+    QoreString hdr(s->getEncoding());
+    if (priv->getSendHttpResponseHeaders(xsink, hdr, info, code, desc, http_version, headers, 0, source)) {
+        return -1;
+    }
+
+    if (qore_socket_object_exec_send_bytes(s, hdr.c_str(), hdr.size(), timeout_ms, xsink)) {
+        return -1;
+    }
+    return qore_socket_object_exec_send_http_chunked_body_input_stream(s, input_stream, max_chunk_size,
+        trailer_callback, timeout_ms, xsink);
+}
+
 static int qore_socket_object_exec_send_fd(QoreSocketObject* s, int fd, int size) {
     if (!size) {
         return 0;
@@ -1390,14 +1515,8 @@ int QoreSocketObject::sendHTTPResponse(ExceptionSink* xsink, QoreHashNode* info,
 int QoreSocketObject::sendHTTPResponse(ExceptionSink* xsink, QoreHashNode* info, int code, const char* desc,
         const char* http_version, const QoreHashNode* headers, InputStream *input_stream, size_t max_chunked_size,
         const ResolvedCallReferenceNode* trailer_callback, int source, int timeout_ms) {
-    AutoLocker al(priv->m);
-    my_socket_priv::SyncIoGuard sg(*priv, xsink, NB_SEND);
-    if (!sg) {
-        return -1;
-    }
-    return priv->socket->priv->sendHttpResponse(xsink, info, "Socket", "sendHTTPResponse", code, desc, http_version,
-        headers, nullptr, nullptr, 0, nullptr, input_stream, max_chunked_size, trailer_callback, source, timeout_ms,
-        &priv->m);
+    return qore_socket_object_exec_send_http_response_input_stream(this, info, code, desc, http_version, headers,
+        input_stream, max_chunked_size, trailer_callback, source, timeout_ms, xsink);
 }
 
 int QoreSocketObject::sendHTTPResponseWithCallback(ExceptionSink* xsink, QoreHashNode* info, int code,
@@ -1416,22 +1535,12 @@ int QoreSocketObject::sendHTTPResponseWithCallback(ExceptionSink* xsink, QoreHas
 // send data in HTTP chunked format
 void QoreSocketObject::sendHTTPChunkedBodyFromInputStream(InputStream* is, size_t max_chunked_size,
         const int timeout_ms, const ResolvedCallReferenceNode* trailer_callback, ExceptionSink* xsink) {
-    AutoLocker al(priv->m);
-    my_socket_priv::SyncIoGuard sg(*priv, xsink, NB_SEND);
-    if (!sg) {
-        return;
-    }
-    return priv->socket->priv->sendHttpChunkedBodyFromInputStream(is, max_chunked_size, timeout_ms, xsink, &priv->m,
-        trailer_callback);
+    qore_socket_object_exec_send_http_chunked_body_input_stream(this, is, max_chunked_size, trailer_callback,
+        timeout_ms, xsink);
 }
 
 void QoreSocketObject::sendHTTPChunkedBodyTrailer(const QoreHashNode* headers, int timeout_ms, ExceptionSink* xsink) {
-    AutoLocker al(priv->m);
-    my_socket_priv::SyncIoGuard sg(*priv, xsink, NB_SEND);
-    if (!sg) {
-        return;
-    }
-    return priv->socket->priv->sendHttpChunkedBodyTrailer(headers, timeout_ms, xsink);
+    qore_socket_object_exec_send_http_chunked_body_trailer(this, headers, timeout_ms, xsink);
 }
 
 QoreHashNode* QoreSocketObject::readHttpChunk(int timeout_ms, ExceptionSink* xsink) {
