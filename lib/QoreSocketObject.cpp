@@ -467,6 +467,29 @@ static BinaryNode* qore_socket_object_exec_recv_some_binary(QoreSocketObject* s,
     return result.release().get<BinaryNode>();
 }
 
+class QoreSocketObjectAsyncIoGuard {
+public:
+    QoreSocketObjectAsyncIoGuard(my_socket_priv& priv, ExceptionSink* xsink) : priv(priv) {
+        AutoLocker al(priv.m);
+        active = !priv.startAsyncIo(xsink);
+    }
+
+    ~QoreSocketObjectAsyncIoGuard() {
+        if (active) {
+            AutoLocker al(priv.m);
+            priv.clearAsyncIo();
+        }
+    }
+
+    explicit operator bool() const {
+        return active;
+    }
+
+private:
+    my_socket_priv& priv;
+    bool active = false;
+};
+
 static QoreHashNode* qore_socket_object_exec_read_http_header(QoreSocketObject* s, QoreHashNode* info,
         int timeout_ms, ExceptionSink* xsink) {
     s->ref();
@@ -548,6 +571,362 @@ static QoreStringNode* qore_socket_object_exec_read_http_header_string(QoreSocke
 
     my_socket_priv::getPriv(*s)->doDataEvent(QORE_EVENT_HTTP_HEADERS_READ, QORE_SOURCE_SOCKET, **hdr);
     return hdr.release();
+}
+
+static size_t qore_socket_object_exec_http_line_payload_size(const QoreStringNode& line) {
+    size_t len = line.size();
+    while (len && (line.c_str()[len - 1] == '\r' || line.c_str()[len - 1] == '\n')) {
+        --len;
+    }
+    return len;
+}
+
+static bool qore_socket_object_exec_http_blank_line(const QoreStringNode& line) {
+    return !qore_socket_object_exec_http_line_payload_size(line);
+}
+
+static int qore_socket_object_exec_run_http_recv_data_callback(
+        const ResolvedCallReferenceNode* recv_callback, const AbstractQoreNode& data, ExceptionSink* xsink) {
+    ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), xsink);
+    ReferenceHolder<QoreHashNode> arg(new QoreHashNode(autoTypeInfo), xsink);
+    arg->setKeyValue("data", data.realCopy(), xsink);
+    arg->setKeyValue("chunked", true, xsink);
+    args->push(arg.release(), nullptr);
+    if (*xsink) {
+        return -1;
+    }
+
+    ValueHolder rv(recv_callback->execValue(*args, xsink), xsink);
+    return *xsink ? -1 : 0;
+}
+
+static int qore_socket_object_exec_run_http_recv_header_callback(QoreObject* obj,
+        const ResolvedCallReferenceNode* recv_callback, const QoreHashNode* hdr, QoreHashNode* info,
+        ExceptionSink* xsink) {
+    ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), xsink);
+    ReferenceHolder<QoreHashNode> arg(new QoreHashNode(autoTypeInfo), xsink);
+    arg->setKeyValue("hdr", hdr ? hdr->refSelf() : nullptr, xsink);
+    arg->setKeyValue("info", info, xsink);
+    if (obj) {
+        arg->setKeyValue("obj", obj->objectRefSelf(), xsink);
+    }
+    arg->setKeyValue("send_aborted", false, xsink);
+    args->push(arg.release(), nullptr);
+    if (*xsink) {
+        return -1;
+    }
+
+    ValueHolder rv(recv_callback->execValue(*args, xsink), xsink);
+    return *xsink ? -1 : 0;
+}
+
+static QoreStringNode* qore_socket_object_exec_recv_http_line(QoreSocketObject* s, int timeout_ms,
+        const char* owner_name, ExceptionSink* xsink) {
+    SimpleRefHolder<QoreStringNode> pattern(new QoreStringNode("\r\n"));
+    s->ref();
+    ValueHolder result(qore_socket_object_exec_recv_poll(s,
+        new SocketRecvUntilBytesPollOperation(xsink, *pattern, s, true),
+        timeout_ms, owner_name, xsink), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    if (result->getType() != NT_STRING) {
+        xsink->raiseException("SOCKET-RECV-ERROR", "expected string data from async receive operation, got '%s'",
+            result->getFullTypeName());
+        return nullptr;
+    }
+    return result.release().get<QoreStringNode>();
+}
+
+static int qore_socket_object_exec_read_http_chunked_trailers(QoreSocketObject* s, QoreHashNode& output,
+        int timeout_ms, const char* owner_name, ExceptionSink* xsink, QoreHashNode* info = nullptr,
+        bool* has_trailers = nullptr) {
+    QoreString trailers(s->getEncoding());
+    unsigned cancel_check = 0;
+    while (true) {
+        if (!(cancel_check++ % 100) && qore_check_cancel(xsink, "socket chunked trailer read")) {
+            return -1;
+        }
+
+        SimpleRefHolder<QoreStringNode> line(
+            qore_socket_object_exec_recv_http_line(s, timeout_ms, owner_name, xsink));
+        if (*xsink) {
+            return -1;
+        }
+        if (qore_socket_object_exec_http_blank_line(**line)) {
+            break;
+        }
+        trailers.concat(line->c_str(), line->size());
+    }
+
+    if (has_trailers) {
+        *has_trailers = !trailers.empty();
+    }
+    if (!trailers.empty()) {
+        my_socket_priv* priv = my_socket_priv::getPriv(*s);
+        priv->convertHeaderToHash(output, trailers, info);
+        priv->doReadHttpHeaderEvent(QORE_EVENT_HTTP_FOOTERS_RECEIVED, output, QORE_SOURCE_SOCKET);
+    }
+    return 0;
+}
+
+static QoreHashNode* qore_socket_object_exec_read_http_chunked_body(QoreSocketObject* s, int timeout_ms,
+        bool binary_body, bool read_once, const char* owner_name, ExceptionSink* xsink, OutputStream* os = nullptr,
+        const ResolvedCallReferenceNode* recv_callback = nullptr, QoreObject* obj = nullptr) {
+    assert(!os || (binary_body && !read_once && !recv_callback));
+    assert(!recv_callback || !read_once);
+
+    my_socket_priv* priv = my_socket_priv::getPriv(*s);
+    QoreSocketObjectAsyncIoGuard async_guard(*priv, xsink);
+    if (!async_guard) {
+        return nullptr;
+    }
+
+    priv->clearHttpExpectChunkedBody();
+
+    SimpleRefHolder<BinaryNode> body_bin(binary_body && !os && !recv_callback ? new BinaryNode : nullptr);
+    SimpleRefHolder<QoreStringNode> body_str(binary_body || recv_callback
+        ? nullptr
+        : new QoreStringNode(s->getEncoding()));
+
+    unsigned cancel_check = 0;
+    while (true) {
+        if (!(cancel_check++ % 100) && qore_check_cancel(xsink, "socket chunked body read")) {
+            return nullptr;
+        }
+
+        SimpleRefHolder<QoreStringNode> line(
+            qore_socket_object_exec_recv_http_line(s, timeout_ms, owner_name, xsink));
+        if (*xsink) {
+            return nullptr;
+        }
+
+        size_t line_len = qore_socket_object_exec_http_line_payload_size(**line);
+        const char* line_str = line->c_str();
+        const char* semi = static_cast<const char*>(memchr(line_str, ';', line_len));
+        size_t hex_len = semi ? static_cast<size_t>(semi - line_str) : line_len;
+        std::string hex(line_str, hex_len);
+        long chunk_size = strtol(hex.c_str(), nullptr, 16);
+        if (chunk_size < 0) {
+            xsink->raiseException("READ-HTTP-CHUNK-ERROR", "negative value given for chunk size (%ld)", chunk_size);
+            return nullptr;
+        }
+
+        priv->doChunkedReadEvent(QORE_EVENT_HTTP_CHUNK_SIZE, static_cast<size_t>(chunk_size), line_len,
+            QORE_SOURCE_SOCKET);
+
+        if (!chunk_size) {
+            ReferenceHolder<QoreHashNode> output(new QoreHashNode(autoTypeInfo), xsink);
+            if (!os && !recv_callback) {
+                if (binary_body) {
+                    output->setKeyValue("body", body_bin.release(), xsink);
+                } else {
+                    output->setKeyValue("body", body_str.release(), xsink);
+                }
+            }
+            ReferenceHolder<QoreHashNode> info(recv_callback ? new QoreHashNode(autoTypeInfo) : nullptr, xsink);
+            bool has_trailers = false;
+            if (*xsink || qore_socket_object_exec_read_http_chunked_trailers(s, **output, timeout_ms, owner_name,
+                    xsink, *info, &has_trailers)) {
+                return nullptr;
+            }
+            if (recv_callback) {
+                if (qore_socket_object_exec_run_http_recv_header_callback(obj, recv_callback,
+                        has_trailers ? *output : nullptr, info.release(), xsink)) {
+                    return nullptr;
+                }
+                return nullptr;
+            }
+            return output.release();
+        }
+
+        if (static_cast<unsigned long>(chunk_size) > static_cast<unsigned long>(std::numeric_limits<ssize_t>::max())) {
+            xsink->raiseException("READ-HTTP-CHUNK-ERROR", "chunk size %ld exceeds the maximum supported size",
+                chunk_size);
+            return nullptr;
+        }
+
+        SimpleRefHolder<BinaryNode> chunk(qore_socket_object_exec_recv_bytes(s, static_cast<size_t>(chunk_size),
+            timeout_ms, xsink));
+        if (*xsink) {
+            return nullptr;
+        }
+
+        priv->doDataEvent(QORE_EVENT_HTTP_CHUNKED_DATA_READ, QORE_SOURCE_SOCKET, chunk->getPtr(), chunk->size());
+        if (os) {
+            os->write(chunk->getPtr(), chunk->size(), xsink);
+            if (*xsink) {
+                return nullptr;
+            }
+        } else if (!recv_callback && binary_body) {
+            body_bin->append(chunk->getPtr(), chunk->size());
+        } else if (!recv_callback) {
+            body_str->concat(static_cast<const char*>(chunk->getPtr()), chunk->size());
+        }
+
+        if (!os) {
+            int64 body_size = recv_callback
+                ? static_cast<int64>(chunk->size())
+                : binary_body ? static_cast<int64>(body_bin->size()) : static_cast<int64>(body_str->size());
+            int64 max_chunked_body_size = priv->getMaxChunkedBodySize();
+            if (max_chunked_body_size > 0 && body_size > max_chunked_body_size) {
+                xsink->raiseException("HTTP-BODY-TOO-LARGE", "chunked body size " QLLD " exceeds maximum " QLLD,
+                    body_size, max_chunked_body_size);
+                return nullptr;
+            }
+        }
+
+        SimpleRefHolder<BinaryNode> crlf(qore_socket_object_exec_recv_bytes(s, 2, timeout_ms, xsink));
+        if (*xsink) {
+            return nullptr;
+        }
+        priv->doChunkedReadEvent(QORE_EVENT_HTTP_CHUNKED_DATA_RECEIVED, static_cast<size_t>(chunk_size),
+            static_cast<size_t>(chunk_size) + 2, QORE_SOURCE_SOCKET);
+
+        if (recv_callback) {
+            if (binary_body) {
+                if (qore_socket_object_exec_run_http_recv_data_callback(recv_callback, **chunk, xsink)) {
+                    return nullptr;
+                }
+            } else {
+                SimpleRefHolder<QoreStringNode> chunk_str(new QoreStringNode(
+                    static_cast<const char*>(chunk->getPtr()), chunk->size(), s->getEncoding()));
+                if (qore_socket_object_exec_run_http_recv_data_callback(recv_callback, **chunk_str, xsink)) {
+                    return nullptr;
+                }
+            }
+        }
+
+        if (read_once) {
+            ReferenceHolder<QoreHashNode> output(new QoreHashNode(autoTypeInfo), xsink);
+            assert(binary_body);
+            output->setKeyValue("body", body_bin.release(), xsink);
+            return *xsink ? nullptr : output.release();
+        }
+    }
+}
+
+static bool qore_socket_object_exec_process_sse_char(my_socket_priv* priv, QoreString& str, int& eol_count,
+        char c) {
+    if (priv->takeSseGotCr()) {
+        if (c == '\n') {
+            return false;
+        }
+    }
+
+    if (c == '\r') {
+        str.concat('\n');
+        priv->setSseGotCr(true);
+        return ++eol_count == 2;
+    }
+
+    if (c == '\n') {
+        str.concat('\n');
+        return ++eol_count == 2;
+    }
+
+    if (eol_count) {
+        eol_count = 0;
+    }
+    str.concat(c);
+    return false;
+}
+
+static QoreHashNode* qore_socket_object_exec_read_server_sent_event(QoreSocketObject* s, int timeout_ms,
+        ExceptionSink* xsink) {
+    my_socket_priv* priv = my_socket_priv::getPriv(*s);
+    QoreSocketObjectAsyncIoGuard async_guard(*priv, xsink);
+    if (!async_guard) {
+        return nullptr;
+    }
+
+    QoreString str(QCS_UTF8);
+    int eol_count = 0;
+    unsigned cancel_check = 0;
+    while (true) {
+        if (!(cancel_check++ % 100) && qore_check_cancel(xsink, "socket SSE read")) {
+            return nullptr;
+        }
+
+        SimpleRefHolder<BinaryNode> data(qore_socket_object_exec_recv_bytes(s, 1, timeout_ms, xsink));
+        if (*xsink) {
+            return nullptr;
+        }
+        char c = *static_cast<const char*>(data->getPtr());
+        if (qore_socket_object_exec_process_sse_char(priv, str, eol_count, c)) {
+            break;
+        }
+    }
+
+    return QoreSocket::parseServerSentEvent(xsink, str);
+}
+
+static QoreHashNode* qore_socket_object_exec_read_server_sent_event_encoded(QoreSocketObject* s,
+        const QoreStringNode* content_encoding, int timeout_ms, ExceptionSink* xsink) {
+    SimpleRefHolder<Transform> transform(CompressionTransforms::getDecompressor(content_encoding, xsink));
+    if (*xsink) {
+        return nullptr;
+    }
+
+    my_socket_priv* priv = my_socket_priv::getPriv(*s);
+    QoreSocketObjectAsyncIoGuard async_guard(*priv, xsink);
+    if (!async_guard) {
+        return nullptr;
+    }
+
+    QoreString str(QCS_UTF8);
+    int eol_count = 0;
+
+    size_t tbufsize = transform->outputBufferSize();
+    char* tbuf = tbufsize ? static_cast<char*>(malloc(tbufsize * sizeof(char))) : nullptr;
+    if (tbufsize && !tbuf) {
+        xsink->outOfMemory();
+        return nullptr;
+    }
+    ON_BLOCK_EXIT(free, tbuf);
+    size_t tlen = 0;
+    size_t tpos = 0;
+    QoreString cibuf;
+
+    unsigned cancel_check = 0;
+    while (true) {
+        if (!(cancel_check++ % 100) && qore_check_cancel(xsink, "socket encoded SSE read")) {
+            return nullptr;
+        }
+
+        if (tpos >= tlen) {
+            SimpleRefHolder<BinaryNode> data(qore_socket_object_exec_recv_some_binary(s, DEFAULT_SOCKET_BUFSIZE,
+                timeout_ms, xsink, "readServerSentEvent"));
+            if (*xsink) {
+                return nullptr;
+            }
+            if (!data->size()) {
+                se_closed("Socket", "readServerSentEvent", xsink);
+                return nullptr;
+            }
+
+            cibuf.concat(static_cast<const char*>(data->getPtr()), data->size());
+            tpos = 0;
+            std::pair<int64, int64> result = transform->apply(cibuf.c_str(), cibuf.size(), tbuf, tbufsize, xsink);
+            if (*xsink) {
+                return nullptr;
+            }
+            if (result.first) {
+                cibuf.removeBytes(result.first);
+            }
+            if (!result.second) {
+                continue;
+            }
+            tlen = static_cast<size_t>(result.second);
+        }
+
+        char c = tbuf[tpos++];
+        if (qore_socket_object_exec_process_sse_char(priv, str, eol_count, c)) {
+            break;
+        }
+    }
+
+    return QoreSocket::parseServerSentEvent(xsink, str);
 }
 
 static int qore_socket_object_exec_send_http_message(QoreSocketObject* s, QoreHashNode* info,
@@ -1544,65 +1923,38 @@ void QoreSocketObject::sendHTTPChunkedBodyTrailer(const QoreHashNode* headers, i
 }
 
 QoreHashNode* QoreSocketObject::readHttpChunk(int timeout_ms, ExceptionSink* xsink) {
-    AutoLocker al(priv->m);
-    my_socket_priv::SyncIoGuard sg(*priv, xsink, NB_RECV);
-    if (!sg) {
-        return nullptr;
-    }
-    return priv->socket->readHttpChunk(timeout_ms, xsink);
+    return qore_socket_object_exec_read_http_chunked_body(this, timeout_ms, true, true, "readHTTPChunk", xsink);
 }
 
 // receive a binary message in HTTP chunked format
 QoreHashNode* QoreSocketObject::readHTTPChunkedBodyBinary(int timeout_ms, ExceptionSink* xsink) {
-    AutoLocker al(priv->m);
-    my_socket_priv::SyncIoGuard sg(*priv, xsink, NB_RECV);
-    if (!sg) {
-        return nullptr;
-    }
-    return priv->socket->readHTTPChunkedBodyBinary(timeout_ms, xsink);
+    return qore_socket_object_exec_read_http_chunked_body(this, timeout_ms, true, false,
+        "readHTTPChunkedBodyBinary", xsink);
 }
 
 // receive a binary message in HTTP chunked format
 QoreHashNode* QoreSocketObject::readHTTPChunkedBodyToOutputStream(OutputStream* os, int timeout_ms, ExceptionSink* xsink) {
-    AutoLocker al(priv->m);
-    my_socket_priv::SyncIoGuard sg(*priv, xsink, NB_RECV);
-    if (!sg) {
-        return nullptr;
-    }
-    return priv->socket->priv->readHttpChunkedBodyBinary(timeout_ms, xsink, "Socket", QORE_SOURCE_SOCKET, 0, &priv->m, 0, os);
+    return qore_socket_object_exec_read_http_chunked_body(this, timeout_ms, true, false,
+        "readHTTPChunkedBodyToOutputStream", xsink, os);
 }
 
 // receive a string message in HTTP chunked format
 QoreHashNode* QoreSocketObject::readHTTPChunkedBody(int timeout_ms, ExceptionSink* xsink) {
-    AutoLocker al(priv->m);
-    my_socket_priv::SyncIoGuard sg(*priv, xsink, NB_RECV);
-    if (!sg) {
-        return nullptr;
-    }
-    return priv->socket->readHTTPChunkedBody(timeout_ms, xsink);
+    return qore_socket_object_exec_read_http_chunked_body(this, timeout_ms, false, false,
+        "readHTTPChunkedBody", xsink);
 }
 
 void QoreSocketObject::readHTTPChunkedBodyBinaryWithCallback(const ResolvedCallReferenceNode& recv_callback,
         QoreObject* obj, int timeout_ms, ExceptionSink* xsink) {
-    AutoLocker al(priv->m);
-    my_socket_priv::SyncIoGuard sg(*priv, xsink, NB_RECV);
-    if (!sg) {
-        return;
-    }
-    priv->socket->priv->readHttpChunkedBodyBinary(timeout_ms, xsink, "Socket", QORE_SOURCE_SOCKET, &recv_callback,
-        &priv->m, obj);
+    qore_socket_object_exec_read_http_chunked_body(this, timeout_ms, true, false,
+        "readHTTPChunkedBodyBinaryWithCallback", xsink, nullptr, &recv_callback, obj);
 }
 
 // receive a string message in HTTP chunked format
 void QoreSocketObject::readHTTPChunkedBodyWithCallback(const ResolvedCallReferenceNode& recv_callback,
         QoreObject* obj, int timeout_ms, ExceptionSink* xsink) {
-    AutoLocker al(priv->m);
-    my_socket_priv::SyncIoGuard sg(*priv, xsink, NB_RECV);
-    if (!sg) {
-        return;
-    }
-    priv->socket->priv->readHttpChunkedBody(timeout_ms, xsink, "Socket", QORE_SOURCE_SOCKET, &recv_callback, &priv->m,
-        obj);
+    qore_socket_object_exec_read_http_chunked_body(this, timeout_ms, false, false,
+        "readHTTPChunkedBodyWithCallback", xsink, nullptr, &recv_callback, obj);
 }
 
 // read and parse HTTP header
@@ -1616,12 +1968,9 @@ QoreStringNode* QoreSocketObject::readHTTPHeaderString(ExceptionSink* xsink, int
 
 QoreHashNode* QoreSocketObject::readServerSentEvent(ExceptionSink* xsink, const QoreStringNode* content_encoding,
         int timeout_ms) {
-    AutoLocker al(priv->m);
-    my_socket_priv::SyncIoGuard sg(*priv, xsink, NB_RECV);
-    if (!sg) {
-        return nullptr;
-    }
-    return priv->socket->readServerSentEvent(xsink, content_encoding, timeout_ms);
+    return content_encoding
+        ? qore_socket_object_exec_read_server_sent_event_encoded(this, content_encoding, timeout_ms, xsink)
+        : qore_socket_object_exec_read_server_sent_event(this, timeout_ms, xsink);
 }
 
 int QoreSocketObject::setSendTimeout(int ms) {
