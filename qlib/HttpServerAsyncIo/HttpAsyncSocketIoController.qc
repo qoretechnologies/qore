@@ -686,6 +686,7 @@ public class HttpAsyncSocketIoController {
         @assert(http_listener, "http_listener cannot be null");
         @assert(cert && key, "cert and key cannot be null");
         string target_lhash;
+        *Http3ServerPollOperation target_h3op;
         {
             AutoWriteLock al(m);
             foreach string lhash in (keys listeners) {
@@ -693,6 +694,7 @@ public class HttpAsyncSocketIoController {
                     listeners{lhash}.cert = cert;
                     listeners{lhash}.key = key;
                     target_lhash = lhash;
+                    target_h3op = listeners{lhash}.h3op;
                     break;
                 }
             }
@@ -700,19 +702,19 @@ public class HttpAsyncSocketIoController {
         if (!target_lhash) {
             return False;
         }
-        # NOTE: for the QUIC paired listener the udp_sock's `priv->cert/pk`
-        # (set once at addQuicListener() time) is the actual TLS-1.3 endpoint
-        # inside the QUIC handshake.  A live `udp_sock.setCertificate()` here
-        # races with the in-flight Http3ServerPollOperation's non-blocking I/O
-        # — `cancelByOwner` + `flushCallbacksByOwner` is *not* sufficient to
-        # quiesce a running Http3ServerPollOperation (it owns its own
-        # completion lifecycle), so the swap raises
-        # SOCKET-NON-BLOCK-ERROR.  Until a proper QUIC-aware
-        # quiesce-and-resubmit is implemented, this method only updates the
-        # listeners-map cert/key; the live udp_sock keeps its original cert
-        # until qorus is restarted.  See task notes for the QUIC quiesce work.
-        log(LoggerLevel::INFO, "Reloaded listeners-map certificate for listener %y "
-            "(QUIC udp_sock cert/key NOT swapped — see TODO)", target_lhash);
+        # Stage the cert/key swap on the H3 server poll op.  The op picks it up
+        # at the top of its next continuePoll() iteration on the I/O thread and
+        # applies setCertificateAndPrivateKey + freeQuicServerSslCtx without
+        # contending with itself for the udp_sock's mutex.  In-flight
+        # QuicSessions hold their own SSL_CTX_up_ref and continue with the cert
+        # they handshook against; new handshakes pick up the new material.
+        if (target_h3op && cert instanceof SSLCertificate && key instanceof SSLPrivateKey) {
+            target_h3op.reloadCertificate(cert, key);
+            log(LoggerLevel::INFO, "Staged QUIC certificate reload for listener %y", target_lhash);
+        } else {
+            log(LoggerLevel::INFO, "Reloaded listeners-map certificate for listener %y "
+                "(no live H3 op to swap — listener may not be active yet)", target_lhash);
+        }
         return True;
     }
 
@@ -1198,6 +1200,14 @@ public class HttpAsyncSocketIoController {
         log(LoggerLevel::DEBUG, "submitQuicAcceptOp: key=%s listener=%s", op_key, owner);
 
         h3op.setCompletionContext(self, listener, target, owner);
+        # Record the live h3op on the listener entry so reloadCertificate can
+        # reach it without scanning the controller's ops cache.
+        {
+            AutoWriteLock al(m);
+            if (listeners{owner}) {
+                listeners{owner}.h3op = h3op;
+            }
+        }
         controller.submit(<SocketPollOperationInfo>{
             "sock": listener,
             "spop": h3op,
@@ -3766,6 +3776,13 @@ hashdecl HttpListenerInfo {
 
     #! HTTP listener object for handler dispatch (used for QUIC/HTTP/3 listeners)
     *HttpServer::HttpListenerInterface http_listener;
+
+    #! The Http3ServerPollOperation accepting QUIC connections (QUIC listeners only)
+    /** Used by reloadListenerCertificateByHttpListener() to stage a TLS-material
+        swap that the H3 op applies on the I/O thread without contending for the
+        udp_sock's mutex.
+    */
+    *Http3ServerPollOperation h3op;
 }
 
 #! Internal hashdecl for active connection info

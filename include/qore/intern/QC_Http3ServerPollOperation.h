@@ -44,6 +44,8 @@
 
 // Forward declarations
 class Queue;
+class QoreSSLCertificate;
+class QoreSSLPrivateKey;
 
 //! C++ implementation of Http3ServerPollOperation for I/O thread execution
 /** Manages an HTTP/3 server connection lifecycle entirely in C++ so that
@@ -196,6 +198,17 @@ public:
     //! Sets the maximum request body size on the underlying QUIC server operation
     DLLLOCAL void setMaxRequestBodySize(int64_t size);
 
+    //! Stages a certificate / private key swap to be applied on the I/O thread
+    /** Safe to call from any thread. The actual swap happens at the top of the
+        next continuePoll() iteration on the I/O thread, where we can update the
+        udp_sock's cert/pk and free the cached shared QUIC server SSL_CTX without
+        deadlocking against the I/O thread's own hold on the socket mutex.
+
+        cert and pk must already be referenced by the caller; ownership of those
+        references transfers to this object (consumed on apply or in cleanup()).
+    */
+    DLLLOCAL void setPendingCertificate(QoreSSLCertificate* cert, QoreSSLPrivateKey* pk);
+
 protected:
     DLLLOCAL const char* getStateImpl() const override;
 
@@ -252,6 +265,19 @@ private:
     //! Stream keys with data available (populated by continuePoll, consumed by controller)
     std::vector<std::string> data_ready_streams;
 
+    //! Lock for the pending-cert staging slot (separate from op_lock and the
+    //! socket's priv->m so that setPendingCertificate() never contends with I/O)
+    mutable QoreThreadLock pending_cert_lock;
+
+    //! Pending replacement certificate (ref'd, or nullptr)
+    QoreSSLCertificate* pending_cert = nullptr;
+
+    //! Pending replacement private key (ref'd, or nullptr)
+    QoreSSLPrivateKey* pending_pk = nullptr;
+
+    //! Cheap flag probed on each continuePoll() entry to skip the lock fast path
+    std::atomic<bool> has_pending_cert{false};
+
     static constexpr int MAX_EMPTY_READS = 100;
 
     // --- Internal methods (I/O thread only) ---
@@ -263,6 +289,9 @@ private:
 
     //! Check stream queues and populate data_ready_streams
     DLLLOCAL void checkStreamQueues();
+
+    //! Apply any staged cert/key swap; runs on the I/O thread before op_lock
+    DLLLOCAL void applyPendingCertificate();
 };
 
 DLLLOCAL QoreClass* initHttp3ServerPollOperationClass(QoreNamespace& qorens);
