@@ -216,6 +216,36 @@ static int socket_exec_connect(QoreObject* self, QoreSocketObject* s, const char
     return *xsink ? -1 : 0;
 }
 
+static int socket_exec_upgrade_ssl(QoreObject* self, QoreSocketObject* s, int timeout_ms, bool server,
+        ExceptionSink* xsink) {
+    s->ref();
+    ReferenceHolder<SocketPollOperationBase> poller(
+        server
+            ? static_cast<SocketPollOperationBase*>(new SocketUpgradeServerSslPollOperation(xsink, s))
+            : static_cast<SocketPollOperationBase*>(new SocketUpgradeClientSslPollOperation(xsink, s)),
+        xsink);
+    if (*xsink) {
+        return -1;
+    }
+
+    ReferenceHolder<QoreObject> op_obj(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller), xsink);
+    poller->setSelf(*op_obj);
+    poller.release();
+
+    const char* goal = server ? "upgrade-server-ssl" : "upgrade-client-ssl";
+    if (!*xsink) {
+        op_obj->setValue("sock", self->objectRefSelf(), xsink);
+        op_obj->setValue("goal", new QoreStringNode(goal), xsink);
+    }
+    if (*xsink) {
+        return -1;
+    }
+
+    ReferenceHolder<QoreHashNode> result(
+        socket_exec_poll_operation(self, *op_obj, timeout_ms, goal, xsink), xsink);
+    return *xsink ? -1 : 0;
+}
+
 static QoreValue socket_exec_recv_poll(QoreObject* self, SocketRecvPollOperationBase* poller,
         int timeout_ms, const char* owner_name, ExceptionSink* xsink) {
     SocketRecvPollOperationBase* recv_poller = poller;
@@ -4728,7 +4758,7 @@ sock.upgradeClientToSSL();
     @since %Qore 0.8.12 the timeout_ms parameter was added
 */
 nothing Socket::upgradeClientToSSL(timeout timeout_ms = -1) {
-    s->upgradeClientToSSL(xsink, timeout_ms);
+    socket_exec_upgrade_ssl(self, s, timeout_ms, false, xsink);
 }
 
 //! Upgrades a server socket connection to a TLS/SSL connection
@@ -4747,7 +4777,7 @@ sock.upgradeServerToSSL();
     @since %Qore 0.8.12 the timeout_ms parameter was added
 */
 nothing Socket::upgradeServerToSSL(timeout timeout_ms = -1) {
-    s->upgradeServerToSSL(xsink, timeout_ms);
+    socket_exec_upgrade_ssl(self, s, timeout_ms, true, xsink);
 }
 
 //! Removes any warning @ref Qore::Thread::Queue "Queue" object from the Socket

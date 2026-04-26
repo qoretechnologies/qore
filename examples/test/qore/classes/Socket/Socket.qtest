@@ -155,6 +155,7 @@ class SocketTest inherits QUnit::Test {
         addTestCase("Unconnected Socket tests", \unconnectedSocketTest());
         addTestCase("Random Port tests", \randomPortSocketTest());
         addTestCase("SSL read test", \sslReadTest());
+        addTestCase("SSL upgrade test", \sslUpgradeTest());
         addTestCase("SSL poll send partial test", \sslPollSendPartialTest());
         addTestCase("SSL write disconnect test", \sslWriteDisconnectTest());
         addTestCase("ALPN test", \alpnTest());
@@ -1109,6 +1110,43 @@ class SocketTest inherits QUnit::Test {
         s.setPrivateKey(TestCert);
         q.push(s.getSocketInfo().port);
         s.acceptSSL(15s);
+    }
+
+    sslUpgradeTest() {
+        Queue q();
+
+        background sub () {
+            try {
+                Socket server();
+                server.bind(0);
+                server.listen();
+                server.setCertificate(TestCert);
+                server.setPrivateKey(TestCert);
+                q.push(server.getSocketInfo().port);
+
+                Socket peer = server.accept(15s);
+                peer.upgradeServerToSSL(15s);
+                assertTrue(peer.isSecure());
+                peer.upgradeServerToSSL(15s);
+                peer.send("ok");
+                q.push(True);
+            } catch (hash<ExceptionInfo> ex) {
+                q.push(ex);
+            }
+        }();
+
+        Socket client();
+        client.connect("127.0.0.1:" + q.get());
+        client.upgradeClientToSSL(15s);
+        assertTrue(client.isSecure());
+        client.upgradeClientToSSL(15s);
+        assertEq("ok", client.recv(2));
+
+        auto server_result = q.get();
+        if (server_result.typeCode() == NT_HASH) {
+            fail(sprintf("Server exception: %s: %s", server_result.err, server_result.desc));
+        }
+        assertTrue(server_result);
     }
 
     # Reproduces an SSL async send edge case: partial writes that require polling.

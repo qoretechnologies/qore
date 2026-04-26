@@ -6139,9 +6139,13 @@ SocketUpgradeClientSslPollOperation::SocketUpgradeClientSslPollOperation(Excepti
         : SocketPollSocketOperationBase(sock) {
     AutoLocker al(sock->priv->m);
 
-    // throw an exception and exit if the object is no longer open and valid or if a TLS/SSL connection has already
-    // been established
-    if (sock->priv->checkOpenAndNotSsl(xsink)) {
+    // Throw an exception and exit if the object is no longer open and valid. If SSL is already active, then the
+    // upgrade is already complete.
+    if (sock->priv->checkOpen(xsink)) {
+        return;
+    }
+    if (sock->priv->socket->isSecure()) {
+        done = true;
         return;
     }
 
@@ -6194,9 +6198,13 @@ SocketUpgradeServerSslPollOperation::SocketUpgradeServerSslPollOperation(Excepti
         : SocketPollSocketOperationBase(sock) {
     AutoLocker al(sock->priv->m);
 
-    // throw an exception and exit if the object is no longer open and valid or if a TLS/SSL connection has already
-    // been established
-    if (sock->priv->checkOpenAndNotSsl(xsink)) {
+    // Throw an exception and exit if the object is no longer open and valid. If SSL is already active, then the
+    // upgrade is already complete.
+    if (sock->priv->checkOpen(xsink)) {
+        return;
+    }
+    if (sock->priv->socket->isSecure()) {
+        done = true;
         return;
     }
 
