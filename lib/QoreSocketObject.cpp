@@ -366,6 +366,81 @@ static BinaryNode* qore_socket_object_exec_recv_some_binary(QoreSocketObject* s,
     return result.release().get<BinaryNode>();
 }
 
+static int qore_socket_object_exec_send_fd(QoreSocketObject* s, int fd, int size) {
+    if (!size) {
+        return 0;
+    }
+
+    char buf[DEFAULT_SOCKET_BUFSIZE];
+    int sent = 0;
+    ExceptionSink xsink;
+    while (size < 0 || sent < size) {
+        int to_read = size < 0 ? DEFAULT_SOCKET_BUFSIZE : QORE_MIN(size - sent, DEFAULT_SOCKET_BUFSIZE);
+        ssize_t rc = 0;
+        while (true) {
+            rc = ::read(fd, buf, to_read);
+            if (rc >= 0 || errno != EINTR) {
+                break;
+            }
+        }
+        if (!rc) {
+            return 0;
+        }
+        if (rc < 0) {
+            return -1;
+        }
+
+        if (qore_socket_object_exec_send_bytes(s, buf, rc, -1, &xsink)) {
+            xsink.clear();
+            return -1;
+        }
+        sent += rc;
+    }
+
+    return 0;
+}
+
+static int qore_socket_object_exec_recv_fd(QoreSocketObject* s, int fd, int size, int timeout_ms) {
+    if (!size) {
+        return 0;
+    }
+
+    int received = 0;
+    ExceptionSink xsink;
+    while (size < 0 || received < size) {
+        size_t to_read = size < 0
+            ? DEFAULT_SOCKET_BUFSIZE
+            : static_cast<size_t>(QORE_MIN(size - received, DEFAULT_SOCKET_BUFSIZE));
+        SimpleRefHolder<BinaryNode> bin(qore_socket_object_exec_recv_some_binary(s, to_read, timeout_ms, &xsink,
+            "recv"));
+        if (xsink) {
+            xsink.clear();
+            return -1;
+        }
+        if (!bin->size()) {
+            return 0;
+        }
+
+        const char* ptr = reinterpret_cast<const char*>(bin->getPtr());
+        size_t remaining = bin->size();
+        while (remaining) {
+            ssize_t rc = ::write(fd, ptr, remaining);
+            if (rc > 0) {
+                ptr += rc;
+                remaining -= rc;
+                continue;
+            }
+            if (rc < 0 && errno == EINTR) {
+                continue;
+            }
+            return -1;
+        }
+        received += bin->size();
+    }
+
+    return 0;
+}
+
 static bool qore_socket_object_exec_wait_readiness(QoreSocketObject* s, int timeout_ms, unsigned direction,
         int events, const char* owner_name, const char* waiting_state, const char* ready_state,
         ExceptionSink* xsink) {
@@ -776,14 +851,7 @@ void QoreSocketObject::sendFromInputStream(InputStream *is, int64 size, int64 ti
 
 // send from a file descriptor
 int QoreSocketObject::send(int fd, int size) {
-    AutoLocker al(priv->m);
-    ExceptionSink xsink;
-    my_socket_priv::SyncIoGuard sg(*priv, &xsink, NB_SEND);
-    if (!sg) {
-        xsink.clear();
-        return -1;
-    }
-    return priv->socket->send(fd, size);
+    return qore_socket_object_exec_send_fd(this, fd, size);
 }
 
 // send bytes and convert to network order
@@ -894,14 +962,7 @@ void QoreSocketObject::recvToOutputStream(OutputStream *os, int64 size, int64 ti
 
 // receive and write data to a file descriptor
 int QoreSocketObject::recv(int fd, int size, int timeout_ms) {
-    AutoLocker al(priv->m);
-    ExceptionSink xsink;
-    my_socket_priv::SyncIoGuard sg(*priv, &xsink, NB_RECV);
-    if (!sg) {
-        xsink.clear();
-        return -1;
-    }
-    return priv->socket->recv(fd, size, timeout_ms);
+    return qore_socket_object_exec_recv_fd(this, fd, size, timeout_ms);
 }
 
 // receive integers and convert from network byte order
