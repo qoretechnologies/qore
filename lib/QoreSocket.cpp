@@ -799,6 +799,10 @@ my_socket_priv::my_socket_priv() : socket(new QoreSocket) {
     socket->priv->outer_lock = &m;
 }
 
+void my_socket_priv::doDataEvent(int event, int source, const QoreStringNode& str) const {
+    socket->priv->do_data_event(event, source, str);
+}
+
 int my_socket_priv::checkOpen(ExceptionSink* xsink) {
     // must be called with the lock held
     assert(m.trylock());

@@ -146,6 +146,7 @@ class SocketTest inherits QUnit::Test {
 
         addTestCase("Accept poll test", \acceptPollTest());
         addTestCase("HTTP response poll test", \httpResponsePollTest());
+        addTestCase("HTTP header string test", \httpHeaderStringTest());
         addTestCase("send binary test", \sendBinaryTest());
         addTestCase("send close test", \sendCloseTest());
         addTestCase("poll test", \pollTest());
@@ -403,6 +404,26 @@ class SocketTest inherits QUnit::Test {
             assertEq("4", http_response."content-length");
             assertEq("test", http_response.body);
         }
+    }
+
+    httpHeaderStringTest() {
+        Socket server();
+        server.bind("localhost:0");
+        server.listen();
+        int port = server.getSocketInfo().port;
+
+        Counter cnt(1);
+        background sub () {
+            Socket client();
+            client.connect("localhost:" + port);
+            client.send("HTTP/1.1 204 No Content\r\nX-Test: value\r\n\r\n");
+            cnt.dec();
+        }();
+
+        Socket conn = server.accept(5s);
+        string header = conn.readHTTPHeaderString(5s);
+        cnt.waitForZero(5s);
+        assertEq("HTTP/1.1 204 No Content\r\nX-Test: value\n", header);
     }
 
     sendBinaryTest() {

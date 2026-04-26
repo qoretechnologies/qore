@@ -427,6 +427,9 @@ public:
     DLLLOCAL static my_socket_priv* getPriv(QoreSocketObject& sock) {
         return sock.priv;
     }
+
+    //! Posts a socket data event through the underlying socket private implementation
+    DLLLOCAL void doDataEvent(int event, int source, const QoreStringNode& str) const;
 };
 
 #endif // _QORE_CLASS_QORESOCKET_H
