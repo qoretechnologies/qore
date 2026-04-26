@@ -1046,6 +1046,12 @@ static int qore_socket_object_exec_run_http_trailer_callback(
 static int qore_socket_object_exec_send_http_chunked_body_input_stream(QoreSocketObject* s,
         InputStream* input_stream, size_t max_chunk_size, const ResolvedCallReferenceNode* trailer_callback,
         int timeout_ms, ExceptionSink* xsink) {
+    my_socket_priv* priv = my_socket_priv::getPriv(*s);
+    QoreSocketObjectAsyncIoGuard async_guard(*priv, xsink);
+    if (!async_guard) {
+        return -1;
+    }
+
     SimpleRefHolder<BinaryNode> buf(new BinaryNode);
     buf->preallocate(max_chunk_size);
 
@@ -1071,8 +1077,7 @@ static int qore_socket_object_exec_send_http_chunked_body_input_stream(QoreSocke
             if (qore_socket_object_exec_send_bytes(s, buf->getPtr(), r, timeout_ms, xsink)) {
                 return -1;
             }
-            my_socket_priv::getPriv(*s)->doDataEvent(QORE_EVENT_HTTP_CHUNKED_DATA_SENT, QORE_SOURCE_SOCKET,
-                buf->getPtr(), r);
+            priv->doDataEvent(QORE_EVENT_HTTP_CHUNKED_DATA_SENT, QORE_SOURCE_SOCKET, buf->getPtr(), r);
         } else {
             ReferenceHolder<QoreHashNode> trailer(xsink);
             if (qore_socket_object_exec_run_http_trailer_callback(trailer_callback, trailer, xsink)) {
@@ -1084,8 +1089,7 @@ static int qore_socket_object_exec_send_http_chunked_body_input_stream(QoreSocke
                 if (qore_socket_object_exec_send_bytes(s, hdr.c_str(), hdr.size(), timeout_ms, xsink)) {
                     return -1;
                 }
-                my_socket_priv::getPriv(*s)->doHeaderEvent(QORE_EVENT_HTTP_FOOTERS_SENT, QORE_SOURCE_SOCKET,
-                    **trailer);
+                priv->doHeaderEvent(QORE_EVENT_HTTP_FOOTERS_SENT, QORE_SOURCE_SOCKET, **trailer);
                 trailers = true;
             }
         }
@@ -1140,6 +1144,12 @@ static int qore_socket_object_exec_send_http_chunked_body_callback(QoreSocketObj
         const ResolvedCallReferenceNode* send_callback, int source, int timeout_ms, bool* aborted,
         ExceptionSink* xsink) {
     assert(!aborted || !(*aborted));
+
+    my_socket_priv* priv = my_socket_priv::getPriv(*s);
+    QoreSocketObjectAsyncIoGuard async_guard(*priv, xsink);
+    if (!async_guard) {
+        return -1;
+    }
 
     unsigned cancel_check = 0;
     while (true) {
@@ -1213,9 +1223,9 @@ static int qore_socket_object_exec_send_http_chunked_body_callback(QoreSocketObj
         }
 
         if (body_event) {
-            my_socket_priv::getPriv(*s)->doDataEvent(QORE_EVENT_HTTP_CHUNKED_DATA_SENT, source, *body_event);
+            priv->doDataEvent(QORE_EVENT_HTTP_CHUNKED_DATA_SENT, source, *body_event);
         } else {
-            my_socket_priv::getPriv(*s)->doDataEvent(QORE_EVENT_HTTP_CHUNKED_DATA_SENT, source, data, size);
+            priv->doDataEvent(QORE_EVENT_HTTP_CHUNKED_DATA_SENT, source, data, size);
         }
     }
 }
@@ -1224,9 +1234,14 @@ static int qore_socket_object_exec_send_http_message_callback(QoreSocketObject* 
         const char* method, const char* path, const char* http_version, const QoreHashNode* headers,
         const ResolvedCallReferenceNode* send_callback, int source, int timeout_ms, bool* aborted,
         ExceptionSink* xsink) {
+    my_socket_priv* priv = my_socket_priv::getPriv(*s);
+    QoreSocketObjectAsyncIoGuard async_guard(*priv, xsink);
+    if (!async_guard) {
+        return -1;
+    }
+
     QoreString hdr(s->getEncoding());
-    if (my_socket_priv::getPriv(*s)->getSendHttpMessageChunkedHeaders(xsink, hdr, info, method, path,
-            http_version, headers, source)) {
+    if (priv->getSendHttpMessageChunkedHeaders(xsink, hdr, info, method, path, http_version, headers, source)) {
         return -1;
     }
 
@@ -1241,9 +1256,14 @@ static int qore_socket_object_exec_send_http_response_callback(QoreSocketObject*
         int code, const char* desc, const char* http_version, const QoreHashNode* headers,
         const ResolvedCallReferenceNode* send_callback, int source, int timeout_ms, bool* aborted,
         ExceptionSink* xsink) {
+    my_socket_priv* priv = my_socket_priv::getPriv(*s);
+    QoreSocketObjectAsyncIoGuard async_guard(*priv, xsink);
+    if (!async_guard) {
+        return -1;
+    }
+
     QoreString hdr(s->getEncoding());
-    if (my_socket_priv::getPriv(*s)->getSendHttpResponseChunkedHeaders(xsink, hdr, info, code, desc, http_version,
-            headers, source)) {
+    if (priv->getSendHttpResponseChunkedHeaders(xsink, hdr, info, code, desc, http_version, headers, source)) {
         return -1;
     }
 
@@ -1259,6 +1279,11 @@ static int qore_socket_object_exec_send_http_response_input_stream(QoreSocketObj
         size_t max_chunk_size, const ResolvedCallReferenceNode* trailer_callback, int source, int timeout_ms,
         ExceptionSink* xsink) {
     my_socket_priv* priv = my_socket_priv::getPriv(*s);
+    QoreSocketObjectAsyncIoGuard async_guard(*priv, xsink);
+    if (!async_guard) {
+        return -1;
+    }
+
     if (priv->getH2ActiveServerStreamId() > 0) {
         QoreString status_line(s->getEncoding());
         priv->getSendHttpResponseStatusLine(status_line, info, code, desc, http_version);
