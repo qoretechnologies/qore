@@ -214,6 +214,56 @@ static QoreObject* qore_socket_object_make_poll_op(QoreObject* sock_obj, SocketP
     return *xsink ? nullptr : op_obj.release();
 }
 
+static int qore_socket_object_exec_poll_no_output(QoreSocketObject* s, SocketPollOperationBase* poller,
+        int timeout_ms, const char* owner_name, const char* goal, ExceptionSink* xsink) {
+    ReferenceHolder<QoreObject> sock_obj(qore_socket_object_make_pollable_wrapper(s), xsink);
+    ReferenceHolder<QoreObject> op_obj(
+        qore_socket_object_make_poll_op(*sock_obj, poller, goal, xsink), xsink);
+    if (*xsink) {
+        return -1;
+    }
+
+    ReferenceHolder<QoreHashNode> result(
+        qore_socket_object_exec_poll_operation(s, *sock_obj, *op_obj, timeout_ms, owner_name, xsink), xsink);
+    return *xsink ? -1 : 0;
+}
+
+static int qore_socket_object_exec_connect(QoreSocketObject* s, const char* target, int timeout_ms, bool ssl,
+        ExceptionSink* xsink) {
+    s->ref();
+    const char* goal = ssl ? "connect-ssl" : "connect";
+    return qore_socket_object_exec_poll_no_output(s, new SocketConnectPollOperation(xsink, ssl, target, s),
+        timeout_ms, goal, goal, xsink);
+}
+
+static int qore_socket_object_exec_connect_inet(QoreSocketObject* s, const char* host, const char* service,
+        int family, int socktype, int protocol, int timeout_ms, bool ssl, ExceptionSink* xsink) {
+    s->ref();
+    const char* goal = ssl ? "connect-ssl" : "connect";
+    return qore_socket_object_exec_poll_no_output(s,
+        new SocketConnectPollOperation(xsink, ssl, host, service, family, socktype, protocol, s),
+        timeout_ms, goal, goal, xsink);
+}
+
+static int qore_socket_object_exec_connect_unix(QoreSocketObject* s, const char* path, int socktype, int protocol,
+        int timeout_ms, bool ssl, ExceptionSink* xsink) {
+    s->ref();
+    const char* goal = ssl ? "connect-ssl" : "connect";
+    return qore_socket_object_exec_poll_no_output(s,
+        new SocketConnectPollOperation(xsink, ssl, path, socktype, protocol, s), timeout_ms, goal, goal, xsink);
+}
+
+static int qore_socket_object_exec_upgrade_ssl(QoreSocketObject* s, int timeout_ms, bool server,
+        ExceptionSink* xsink) {
+    s->ref();
+    const char* goal = server ? "upgrade-server-ssl" : "upgrade-client-ssl";
+    return qore_socket_object_exec_poll_no_output(s,
+        server
+            ? static_cast<SocketPollOperationBase*>(new SocketUpgradeServerSslPollOperation(xsink, s))
+            : static_cast<SocketPollOperationBase*>(new SocketUpgradeClientSslPollOperation(xsink, s)),
+        timeout_ms, goal, goal, xsink);
+}
+
 static int qore_socket_object_exec_send_poll(QoreSocketObject* s, SocketPollOperationBase* poller,
         int timeout_ms, ExceptionSink* xsink) {
     ReferenceHolder<QoreObject> sock_obj(qore_socket_object_make_pollable_wrapper(s), xsink);
@@ -670,40 +720,24 @@ AbstractPollState* QoreSocketObject::startAccept(ExceptionSink* xsink) {
 }
 
 int QoreSocketObject::connect(const char* name, int timeout_ms, ExceptionSink* xsink) {
-    AutoLocker al(priv->m);
-    my_socket_priv::SyncIoGuard sg(*priv, xsink);
-    if (!sg) {
-        return -1;
-    }
-    return priv->socket->connect(name, timeout_ms, xsink);
+    return qore_socket_object_exec_connect(this, name, timeout_ms, false, xsink);
 }
 
 int QoreSocketObject::connectINET(const char* host, int port, int timeout_ms, ExceptionSink* xsink) {
-    AutoLocker al(priv->m);
-    my_socket_priv::SyncIoGuard sg(*priv, xsink);
-    if (!sg) {
-        return -1;
-    }
-    return priv->socket->connectINET(host, port, timeout_ms, xsink);
+    QoreString service;
+    service.sprintf("%d", port);
+    return qore_socket_object_exec_connect_inet(this, host, service.c_str(), AF_UNSPEC, SOCK_STREAM, 0, timeout_ms,
+        false, xsink);
 }
 
 int QoreSocketObject::connectINET2(const char* name, const char* service, int family, int sock_type, int protocol,
         int timeout_ms, ExceptionSink* xsink) {
-    AutoLocker al(priv->m);
-    my_socket_priv::SyncIoGuard sg(*priv, xsink);
-    if (!sg) {
-        return -1;
-    }
-    return priv->socket->connectINET2(name, service, family, sock_type, protocol, timeout_ms, xsink);
+    return qore_socket_object_exec_connect_inet(this, name, service, family, sock_type, protocol, timeout_ms, false,
+        xsink);
 }
 
 int QoreSocketObject::connectUNIX(const char* p, int sock_type, int protocol, ExceptionSink* xsink) {
-    AutoLocker al(priv->m);
-    my_socket_priv::SyncIoGuard sg(*priv, xsink);
-    if (!sg) {
-        return -1;
-    }
-    return priv->socket->connectUNIX(p, sock_type, protocol, xsink);
+    return qore_socket_object_exec_connect_unix(this, p, sock_type, protocol, -1, false, xsink);
 }
 
 // to bind to either a UNIX socket or an INET interface:port
@@ -1771,41 +1805,24 @@ bool QoreSocketObject::isOpen() const {
 }
 
 int QoreSocketObject::connectINETSSL(ExceptionSink* xsink, const char* host, int port, int timeout_ms) {
-    AutoLocker al(priv->m);
-    my_socket_priv::SyncIoGuard sg(*priv, xsink);
-    if (!sg) {
-        return -1;
-    }
-    return priv->socket->connectINETSSL(xsink, host, port, timeout_ms, priv->cert, priv->pk);
+    QoreString service;
+    service.sprintf("%d", port);
+    return qore_socket_object_exec_connect_inet(this, host, service.c_str(), AF_UNSPEC, SOCK_STREAM, 0, timeout_ms,
+        true, xsink);
 }
 
 int QoreSocketObject::connectINET2SSL(ExceptionSink* xsink, const char* name, const char* service, int family,
         int sock_type, int protocol, int timeout_ms) {
-    AutoLocker al(priv->m);
-    my_socket_priv::SyncIoGuard sg(*priv, xsink);
-    if (!sg) {
-        return -1;
-    }
-    return priv->socket->connectINET2SSL(xsink, name, service, family, sock_type, protocol, timeout_ms,
-        priv->cert, priv->pk);
+    return qore_socket_object_exec_connect_inet(this, name, service, family, sock_type, protocol, timeout_ms, true,
+        xsink);
 }
 
 int QoreSocketObject::connectUNIXSSL(ExceptionSink* xsink, const char* p, int sock_type, int protocol) {
-    AutoLocker al(priv->m);
-    my_socket_priv::SyncIoGuard sg(*priv, xsink);
-    if (!sg) {
-        return -1;
-    }
-    return priv->socket->connectUNIXSSL(xsink, p, sock_type, protocol, priv->cert, priv->pk);
+    return qore_socket_object_exec_connect_unix(this, p, sock_type, protocol, -1, true, xsink);
 }
 
 int QoreSocketObject::connectSSL(ExceptionSink* xsink, const char* name, int timeout_ms) {
-    AutoLocker al(priv->m);
-    my_socket_priv::SyncIoGuard sg(*priv, xsink);
-    if (!sg) {
-        return -1;
-    }
-    return priv->socket->connectSSL(xsink, name, timeout_ms, priv->cert, priv->pk);
+    return qore_socket_object_exec_connect(this, name, timeout_ms, true, xsink);
 }
 
 QoreSocketObject* QoreSocketObject::accept(SocketSource* source, ExceptionSink* xsink) {
@@ -1904,21 +1921,11 @@ void QoreSocketObject::freeQuicServerSslCtx() {
 }
 
 void QoreSocketObject::upgradeClientToSSL(ExceptionSink* xsink, int timeout_ms) {
-    AutoLocker al(priv->m);
-    my_socket_priv::SyncIoGuard sg(*priv, xsink);
-    if (!sg) {
-        return;
-    }
-    priv->socket->upgradeClientToSSL(xsink, timeout_ms, priv->cert, priv->pk);
+    qore_socket_object_exec_upgrade_ssl(this, timeout_ms, false, xsink);
 }
 
 void QoreSocketObject::upgradeServerToSSL(ExceptionSink* xsink, int timeout_ms) {
-    AutoLocker al(priv->m);
-    my_socket_priv::SyncIoGuard sg(*priv, xsink);
-    if (!sg) {
-        return;
-    }
-    priv->socket->upgradeServerToSSL(xsink, timeout_ms, priv->cert, priv->pk);
+    qore_socket_object_exec_upgrade_ssl(this, timeout_ms, true, xsink);
 }
 
 void QoreSocketObject::setEventQueue(ExceptionSink* xsink, Queue* q, QoreValue arg, bool with_data) {
