@@ -53,9 +53,10 @@ static bool write_slot_SCOPED_NEW_OBJECT(AOTExprSlotWriteCtx& ctx) {
     return write_slot_NEW_OBJECT(ctx);
 }
 
-//! FUNC_CALL: ref1 = function name
+//! FUNC_CALL: ref1 = function name, ref2 = optional "sig:" + parse-time variant signature
 static bool write_slot_FUNC_CALL(AOTExprSlotWriteCtx& ctx) {
     ctx.writer.writeStringRef(ctx.expr.ref1.c_str());
+    ctx.writer.writeStringRef(ctx.expr.ref2.c_str());
     return true;
 }
 

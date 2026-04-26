@@ -3337,6 +3337,17 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
         } else {
             writer.writeStringRef(call->getName());
         }
+        if (const AbstractQoreFunctionVariant* v = call->getVariant()) {
+            if (AbstractFunctionSignature* sig = const_cast<AbstractQoreFunctionVariant*>(v)->getSignature()) {
+                std::string sig_ref = "sig:";
+                sig_ref += sig->getSignatureText();
+                writer.writeStringRef(sig_ref.c_str());
+            } else {
+                writer.writeStringRef("");
+            }
+        } else {
+            writer.writeStringRef("");
+        }
         return true;
     }
 

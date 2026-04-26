@@ -1239,6 +1239,19 @@ public:
         return vlist.singular() ? first()->getSignature() : 0;
     }
 
+    DLLLOCAL const AbstractQoreFunctionVariant* findVariantBySignatureText(const char* sig_text) const {
+        if (!sig_text) {
+            return nullptr;
+        }
+        for (auto* v : vlist) {
+            AbstractFunctionSignature* sig = v->getSignature();
+            if (sig && !strcmp(sig->getSignatureText(), sig_text)) {
+                return v;
+            }
+        }
+        return nullptr;
+    }
+
     DLLLOCAL AbstractFunctionSignature* parseGetUniqueSignature() const;
 
     DLLLOCAL int64 parseGetUniqueFunctionality() const {

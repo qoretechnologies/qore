@@ -103,8 +103,10 @@ constexpr uint64_t QORE_AOT_FEAT_CONTEXT_IR      = 1ULL << 12; //!< native IR lo
 constexpr uint64_t QORE_AOT_FEAT_LVPATH_SLICE    = 1ULL << 13; //!< LVPathStepKind::HashKeySlice / ListIndexSlice with slice_operand_ids vector (multi-key hash / multi-index list remove/delete)
 constexpr uint64_t QORE_AOT_FEAT_MODULE_PATH_LISTS = 1ULL << 14; //!< per-Program %prepend-module-path / %append-module-path lists (MODULE_PATH_PREPEND / MODULE_PATH_APPEND sections)
 constexpr uint64_t QORE_AOT_FEAT_LVPATH_DELETE_EXPR = 1ULL << 15; //!< LValuePath records include optional original delete/remove lvalue expression for detach-then-destroy semantics
+constexpr uint64_t QORE_AOT_FEAT_LVPATH_PATTERN = 1ULL << 16; //!< serialized IR LValuePath records include optional regex/transliteration pattern metadata
+constexpr uint64_t QORE_AOT_FEAT_FUNC_CALL_VARIANT = 1ULL << 17; //!< FUNC_CALL expression slots include parse-time variant signature metadata
 //! Mask of all currently supported features
-constexpr uint64_t QORE_AOT_SUPPORTED_FEATURES   = 0xFFFFULL;
+constexpr uint64_t QORE_AOT_SUPPORTED_FEATURES   = 0x3FFFFULL;
 
 //! Section type IDs
 enum class QoreAOTSectionType : uint16_t {

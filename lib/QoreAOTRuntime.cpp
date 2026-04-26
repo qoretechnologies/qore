@@ -246,6 +246,12 @@ static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* 
             }
             // Create a FunctionCallNode with no args (args handled by native code)
             FunctionCallNode* fcn = new FunctionCallNode(&loc_builtin, fe, (QoreListNode*)nullptr, pgm);
+            if (ref2 && strncmp(ref2, "sig:", 4) == 0) {
+                if (const AbstractQoreFunctionVariant* v =
+                        fe->getFunction()->findVariantBySignatureText(ref2 + 4)) {
+                    fcn->setVariant(v);
+                }
+            }
             return toBitsNB(QoreValue(fcn));
         }
 
@@ -1302,6 +1308,11 @@ static QoreAOTContext* buildContextFromSlotMap(
                 continue;
             }
             case AOTExprKind::FUNC_CALL:
+                ref1 = reader.readStringRef(ptr);
+                if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_FUNC_CALL_VARIANT) != 0) {
+                    ref2 = reader.readStringRef(ptr);
+                }
+                break;
             case AOTExprKind::RUNTIME_CONST_REF:
             case AOTExprKind::LOCAL_VARREF:
             case AOTExprKind::GLOBAL_VARREF:

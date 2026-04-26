@@ -77,6 +77,10 @@ public:
         return variant;
     }
 
+    DLLLOCAL void setVariant(const AbstractQoreFunctionVariant* v) {
+        variant = v;
+    }
+
     //! Resolves parse_args into evaluated args for AOT-deserialized nodes
     /** AOT EXPR_TREE deserialization creates nodes with parse_args that may contain
         unevaluated AST sub-expressions (e.g., StaticMethodCallNode). This method

@@ -1139,6 +1139,9 @@ public:
         if (owns_delete_lvalue_expr) {
             delete_lvalue_expr.discard(nullptr);
         }
+        if (owns_pattern_expr) {
+            const_cast<QoreValue&>(pattern_expr).discard(nullptr);
+        }
     }
 
     std::vector<LVPathStep> path;  //!< Root step + navigation steps
@@ -1169,6 +1172,7 @@ public:
 
     //! For RegexSubst/Transliterate — pattern info
     const QoreValue pattern_expr;   //!< Regex/transliteration pattern (for runtime eval)
+    bool owns_pattern_expr = false; //!< True for AOT-deserialized pattern_expr values.
 
     //! Whether the return value of the operation is used (from QoreOperatorNode::ref_rv)
     bool ref_rv = true;

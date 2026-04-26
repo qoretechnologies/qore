@@ -148,6 +148,10 @@ class AOTSmokeTest inherits QUnit::Test {
         addTestCase("AOT closure typed params defaults", \testClosureTypedParamsDefaults());
         addTestCase("AOT closure multi capture", \testClosureMultiCapture());
         addTestCase("AOT closure strip source", \testClosureStripSource());
+        addTestCase("AOT closure strip source captured local return",
+            \testClosureStripSourceCapturedLocalReturn());
+        addTestCase("AOT closure strip source regex substitution",
+            \testClosureStripSourceRegexSubst());
         addTestCase("AOT method closure param", \testAOTMethodClosureParam());
         addTestCase("AOT regex switch in on_exit", \testRegexSwitchInOnExit());
         addTestCase("AOT nested on_exit", \testNestedOnExit());
@@ -4072,6 +4076,49 @@ exit(0);
         string interp_out = runInterpreted(code);
         assertEq(interp_out, result.run_out,
             "closure-strip-source output matches interpreter");
+    }
+
+    testClosureStripSourceCapturedLocalReturn() {
+        string code = "%modern
+list<auto> sub captured() {
+    list<auto> ce = ();
+    code c = sub () {
+        ce += \"x\";
+    };
+    return ce;
+}
+
+printf(\"%y\\n\", captured());
+exit(0);
+";
+        hash<auto> result = compileStripSourceAndRun(code);
+        assertTrue(result.all_precompiled,
+            "closure captured-local strip-source: all pre-compiled: " + result.compile_out);
+        assertEq("[]\n", result.run_out,
+            "closure captured-local strip-source returns the captured list");
+    }
+
+    testClosureStripSourceRegexSubst() {
+        string code = "%modern
+list<auto> sub subst_capture() {
+    list<auto> ce = ();
+    code c = sub (string v) {
+        string s = v;
+        s =~ s/([a-z]+)_f/$1/;
+        ce += s;
+    };
+    c(\"char_f\");
+    return ce;
+}
+
+printf(\"%y\\n\", subst_capture());
+exit(0);
+";
+        hash<auto> result = compileStripSourceAndRun(code);
+        assertTrue(result.all_precompiled,
+            "closure regex-subst strip-source: all pre-compiled: " + result.compile_out);
+        assertEq("[\"char\"]\n", result.run_out,
+            "closure regex-subst strip-source preserves regex metadata");
     }
 
     testAOTMethodClosureParam() {

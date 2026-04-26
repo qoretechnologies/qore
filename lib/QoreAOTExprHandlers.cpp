@@ -79,6 +79,17 @@ static bool write_expr_func_call(AOTExprWriteCtx& ctx) {
             // fall back to the bare name.  Reader tolerates both.
             ctx.writer.writeStringRef(call->getName());
         }
+        if (const AbstractQoreFunctionVariant* v = call->getVariant()) {
+            if (AbstractFunctionSignature* sig = const_cast<AbstractQoreFunctionVariant*>(v)->getSignature()) {
+                std::string sig_ref = "sig:";
+                sig_ref += sig->getSignatureText();
+                ctx.writer.writeStringRef(sig_ref.c_str());
+            } else {
+                ctx.writer.writeStringRef("");
+            }
+        } else {
+            ctx.writer.writeStringRef("");
+        }
         return true;
     }
     return false;
@@ -86,6 +97,10 @@ static bool write_expr_func_call(AOTExprWriteCtx& ctx) {
 
 static QoreValue read_expr_func_call(AOTExprReadCtx& ctx) {
     const char* func_name = ctx.reader.readStringRef(ctx.ptr);
+    const char* sig_ref = nullptr;
+    if ((ctx.reader.getHeader().feature_flags & QORE_AOT_FEAT_FUNC_CALL_VARIANT) != 0) {
+        sig_ref = ctx.reader.readStringRef(ctx.ptr);
+    }
     if (!func_name || !*func_name) {
         return QoreValue();
     }
@@ -100,6 +115,12 @@ static QoreValue read_expr_func_call(AOTExprReadCtx& ctx) {
         return QoreValue();
     }
     FunctionCallNode* fcn = new FunctionCallNode(&loc_builtin, fe, (QoreListNode*)nullptr, ctx.pgm);
+    if (sig_ref && strncmp(sig_ref, "sig:", 4) == 0) {
+        if (const AbstractQoreFunctionVariant* v =
+                fe->getFunction()->findVariantBySignatureText(sig_ref + 4)) {
+            fcn->setVariant(v);
+        }
+    }
     return QoreValue(fcn);
 }
 

@@ -449,11 +449,11 @@ static uint64_t scanIRFeatureFlags(const QoreIRFunction& f) {
     for (const auto& block : f.blocks) {
         for (const auto& inst : block->instructions) {
             flags |= opcodeToFeatureFlag(inst->opcode);
-            // Per-instruction data may unlock a separate feature gate: LVPath
+            // Per-instruction data may unlock separate feature gates: LVPath
             // instructions carry multi-slice step kinds when a slice lvalue
-            // (e.g. `remove h{"a","b"}`) was lowered natively.  Older readers
-            // cannot reconstruct slice_operand_ids or the optional preserved
-            // delete/remove AST expression from the wire format, so gate both.
+            // (e.g. `remove h{"a","b"}`) was lowered natively, plus optional
+            // delete/remove AST and regex/transliteration pattern metadata.
+            // Older readers cannot reconstruct those extra fields, so gate them.
             if (inst->opcode == QoreIROpcode::LValuePathAssign
                     || inst->opcode == QoreIROpcode::LValuePathCompound
                     || inst->opcode == QoreIROpcode::LValuePathUnary
@@ -462,6 +462,7 @@ static uint64_t scanIRFeatureFlags(const QoreIRFunction& f) {
                 const auto* pi
                         = static_cast<const QoreIRLValuePathInstruction*>(inst.get());
                 flags |= QORE_AOT_FEAT_LVPATH_DELETE_EXPR;
+                flags |= QORE_AOT_FEAT_LVPATH_PATTERN;
                 for (const auto& step : pi->path) {
                     if (step.kind == LVPathStepKind::HashKeySlice
                             || step.kind == LVPathStepKind::ListIndexSlice) {
@@ -498,6 +499,15 @@ static uint64_t computeFeatureFlags(const std::vector<AOTCompiledFunc>& funcs) {
     // `xsink->overrideLocation(*sig->getParseLocation())` report the
     // declaring source line instead of `:0 (Qore)`.
     flags |= QORE_AOT_FEAT_SIG_LINES;
+    // Serialized closure IR can be nested inside expression-slot metadata, so
+    // advertise the current LValuePath wire format at the blob level even when
+    // the top-level native functions themselves do not contain LValuePath ops.
+    flags |= QORE_AOT_FEAT_LVPATH_SLICE;
+    flags |= QORE_AOT_FEAT_LVPATH_DELETE_EXPR;
+    flags |= QORE_AOT_FEAT_LVPATH_PATTERN;
+    // Function-call expression slots carry the parse-time variant signature so
+    // source-stripped direct calls can bind the same variant without AST args.
+    flags |= QORE_AOT_FEAT_FUNC_CALL_VARIANT;
     return flags;
 }
 
@@ -10337,6 +10347,12 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
             id.ref1 = std::move(qualified);
         } else {
             id.ref1 = call->getName();
+        }
+        if (const AbstractQoreFunctionVariant* v = call->getVariant()) {
+            if (AbstractFunctionSignature* sig = const_cast<AbstractQoreFunctionVariant*>(v)->getSignature()) {
+                id.ref2 = "sig:";
+                id.ref2 += sig->getSignatureText();
+            }
         }
         return id;
     }

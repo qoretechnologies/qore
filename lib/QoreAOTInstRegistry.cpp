@@ -2229,6 +2229,118 @@ static std::unique_ptr<QoreIRInstruction> readHashKeyStoreDynamic(
 // Group 59: LValuePath - Structured lvalue path operations
 // ============================================================================
 
+static void writeLValuePathPattern(QoreAOTBinaryWriter& writer,
+        const QoreIRLValuePathInstruction* pi) {
+    if (pi->opcode != QoreIROpcode::LValuePathBinaryMut || !pi->pattern_expr.hasNode()) {
+        writer.writeU8(0);
+        return;
+    }
+
+    if (pi->binary_mut_op == LVBinaryMutOp::RegexSubst) {
+        auto* regex_op = dynamic_cast<const QoreRegexSubstOperatorNode*>(
+            pi->pattern_expr.getInternalNode());
+        if (!regex_op || !regex_op->getRegexSubst()) {
+            writer.writeU8(0);
+            return;
+        }
+
+        QoreRegexSubst* rs = regex_op->getRegexSubst();
+        writer.writeU8(1);
+        writer.writeStringRef(rs->getPatternCStr() ? rs->getPatternCStr() : "");
+        if (const QoreString* ns = rs->getNewStr()) {
+            writer.writeStringRef(ns->c_str());
+        } else {
+            writer.writeStringRef("");
+        }
+        writer.writeI64(rs->getOptions());
+        writer.writeU8(rs->isGlobal() ? 1 : 0);
+        return;
+    }
+
+    if (pi->binary_mut_op == LVBinaryMutOp::Transliterate) {
+        auto* trans_op = dynamic_cast<const QoreTransliterationOperatorNode*>(
+            pi->pattern_expr.getInternalNode());
+        if (!trans_op || !trans_op->getTransliteration()) {
+            writer.writeU8(0);
+            return;
+        }
+
+        QoreTransliteration* tr = trans_op->getTransliteration();
+        writer.writeU8(1);
+        const QoreString& src = tr->getSource();
+        const QoreString& tgt = tr->getTarget();
+        writer.writeStringRef(src.c_str());
+        writer.writeStringRef(tgt.c_str());
+        writer.writeI64(0);
+        writer.writeU8(0);
+        return;
+    }
+
+    writer.writeU8(0);
+}
+
+static bool readLValuePathPattern(QoreIRLValuePathInstruction* pi,
+        AOTInstReadCtx& ctx) {
+    uint8_t pattern_present = QoreAOTBinaryReader::readU8(ctx.ptr);
+    if (!pattern_present) {
+        return true;
+    }
+
+    const char* pattern_str = ctx.reader.readStringRef(ctx.ptr);
+    const char* newstr_str = ctx.reader.readStringRef(ctx.ptr);
+    int64_t pat_options = QoreAOTBinaryReader::readI64(ctx.ptr);
+    uint8_t pat_global = QoreAOTBinaryReader::readU8(ctx.ptr);
+
+    if (pi->binary_mut_op == LVBinaryMutOp::RegexSubst) {
+        auto* rs = new QoreRegexSubst();
+        if (pattern_str) {
+            for (const char* p = pattern_str; *p; ++p) {
+                rs->concatSource(*p);
+            }
+        }
+        rs->addOptions(static_cast<int>(pat_options));
+        if (pat_global) {
+            rs->setGlobal();
+        }
+        if (newstr_str) {
+            for (const char* p = newstr_str; *p; ++p) {
+                rs->concatTarget(*p);
+            }
+        }
+        if (rs->parse() == 0) {
+            auto* op_node = new QoreRegexSubstOperatorNode(&loc_builtin,
+                QoreValue(), rs);
+            const_cast<QoreValue&>(pi->pattern_expr) = op_node;
+            pi->owns_pattern_expr = true;
+        } else {
+            rs->deref();
+        }
+        return true;
+    }
+
+    if (pi->binary_mut_op == LVBinaryMutOp::Transliterate) {
+        auto* tr = new QoreTransliteration(&loc_builtin);
+        if (pattern_str) {
+            for (const char* p = pattern_str; *p; ++p) {
+                tr->concatSource(*p);
+            }
+        }
+        tr->finishSource();
+        if (newstr_str) {
+            for (const char* p = newstr_str; *p; ++p) {
+                tr->concatTarget(*p);
+            }
+        }
+        tr->finishTarget();
+        auto* op_node = new QoreTransliterationOperatorNode(&loc_builtin,
+            QoreValue(), tr);
+        const_cast<QoreValue&>(pi->pattern_expr) = op_node;
+        pi->owns_pattern_expr = true;
+    }
+
+    return true;
+}
+
 static bool writeLValuePath(AOTInstWriteCtx& ctx) {
     auto* pi = static_cast<const QoreIRLValuePathInstruction*>(ctx.inst);
     // Write opcode sub-fields
@@ -2245,6 +2357,9 @@ static bool writeLValuePath(AOTInstWriteCtx& ctx) {
     } else {
         ctx.writer.writeU8(0);
     }
+    // RegexSubst/Transliterate operators store their compiled pattern on the
+    // instruction, not in operands. Preserve it for serialized closure/handler IR.
+    writeLValuePathPattern(ctx.writer, pi);
     // Write path steps
     ctx.writer.writeU8(static_cast<uint8_t>(pi->path.size()));
     for (const auto& step : pi->path) {
@@ -2287,6 +2402,12 @@ static std::unique_ptr<QoreIRInstruction> readLValuePath(
                 delete pi;
                 return nullptr;
             }
+        }
+    }
+    if ((ctx.reader.getHeader().feature_flags & QORE_AOT_FEAT_LVPATH_PATTERN) != 0) {
+        if (!readLValuePathPattern(pi, ctx)) {
+            delete pi;
+            return nullptr;
         }
     }
     // Read path steps
