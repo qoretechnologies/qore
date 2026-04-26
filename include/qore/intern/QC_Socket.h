@@ -438,6 +438,17 @@ public:
     DLLLOCAL int getSendHttpMessageHeaders(ExceptionSink* xsink, QoreString& hdr, QoreHashNode* info,
             const char* method, const char* path, const char* http_version, const QoreHashNode* headers,
             size_t size, int source) const;
+
+    //! Returns the active HTTP/2 server stream ID for this thread, or <= 0 if no HTTP/2 response is active
+    DLLLOCAL int32_t getH2ActiveServerStreamId() const;
+
+    //! Builds the HTTP response status line and sets the legacy response-uri info key
+    DLLLOCAL void getSendHttpResponseStatusLine(QoreString& hdr, QoreHashNode* info, int code, const char* desc,
+            const char* http_version) const;
+
+    //! Builds HTTP/1 response headers and emits the legacy HTTP send-message event
+    DLLLOCAL int getSendHttpResponseHeaders(ExceptionSink* xsink, QoreString& hdr, QoreHashNode* info, int code,
+            const char* desc, const char* http_version, const QoreHashNode* headers, size_t size, int source) const;
 };
 
 #endif // _QORE_CLASS_QORESOCKET_H

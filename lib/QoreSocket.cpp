@@ -820,6 +820,32 @@ int my_socket_priv::getSendHttpMessageHeaders(ExceptionSink* xsink, QoreString& 
     return 0;
 }
 
+int32_t my_socket_priv::getH2ActiveServerStreamId() const {
+    int32_t stream_id = socket->priv->getH2ActiveStreamId();
+    return socket->priv->h2_session && socket->priv->h2_session->isServer() && stream_id > 0 ? stream_id : -1;
+}
+
+void my_socket_priv::getSendHttpResponseStatusLine(QoreString& hdr, QoreHashNode* info, int code, const char* desc,
+        const char* http_version) const {
+    hdr.sprintf("HTTP/%s %03d %s", http_version, code, desc);
+    if (info) {
+        info->setKeyValue("response-uri", new QoreStringNode(hdr), nullptr);
+    }
+}
+
+int my_socket_priv::getSendHttpResponseHeaders(ExceptionSink* xsink, QoreString& hdr, QoreHashNode* info, int code,
+        const char* desc, const char* http_version, const QoreHashNode* headers, size_t size, int source) const {
+    if (socket->priv->h2_session) {
+        xsink->raiseException("HTTP2-ERROR",
+            "HTTP/1 message attempted on HTTP/2 connection (Socket::sendHTTPResponse)");
+        return -1;
+    }
+
+    getSendHttpResponseStatusLine(hdr, info, code, desc, http_version);
+    socket->priv->getSendHttpMessageHeadersCommon(hdr, info, headers, size, source);
+    return 0;
+}
+
 int my_socket_priv::checkOpen(ExceptionSink* xsink) {
     // must be called with the lock held
     assert(m.trylock());

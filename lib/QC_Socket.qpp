@@ -220,6 +220,50 @@ static int socket_exec_send_http_message(QoreObject* self, QoreSocketObject* s, 
     return rc;
 }
 
+static int socket_exec_send_http_response(QoreObject* self, QoreSocketObject* s, QoreHashNode* info,
+        int code, const char* desc, const char* http_version, const QoreHashNode* headers,
+        const void* data, size_t size, const QoreStringNode* body_event, int timeout_ms, ExceptionSink* xsink) {
+    my_socket_priv* priv = my_socket_priv::getPriv(*s);
+    int32_t stream_id = priv->getH2ActiveServerStreamId();
+    if (stream_id > 0) {
+        QoreString status_line(s->getEncoding());
+        priv->getSendHttpResponseStatusLine(status_line, info, code, desc, http_version);
+
+        SimpleRefHolder<BinaryNode> body_bin;
+        if (size && data) {
+            body_bin = new BinaryNode;
+            body_bin->append(data, size);
+        }
+
+        s->ref();
+        return socket_exec_send_poll(self,
+            new SocketHttp2SendResponsePollOperation(xsink, s, nullptr, stream_id, code, headers, *body_bin),
+            timeout_ms, xsink);
+    }
+
+    QoreString hdr(s->getEncoding());
+    if (priv->getSendHttpResponseHeaders(xsink, hdr, info, code, desc, http_version, headers, size,
+            QORE_SOURCE_SOCKET)) {
+        return -1;
+    }
+
+    SimpleRefHolder<BinaryNode> msg(new BinaryNode());
+    msg->append(hdr.c_str(), hdr.size());
+    if (size && data) {
+        msg->append(data, size);
+    }
+
+    int rc = socket_exec_send_binary(self, s, msg.release(), timeout_ms, xsink);
+    if (!rc && size && data) {
+        if (body_event) {
+            priv->doDataEvent(QORE_EVENT_SOCKET_DATA_SENT, QORE_SOURCE_SOCKET, *body_event);
+        } else {
+            priv->doDataEvent(QORE_EVENT_SOCKET_DATA_SENT, QORE_SOURCE_SOCKET, data, size);
+        }
+    }
+    return rc;
+}
+
 static int socket_exec_connect_operation(QoreObject* self, SocketPollOperationBase* connect_poller, int timeout_ms,
         bool ssl, ExceptionSink* xsink) {
     ReferenceHolder<SocketPollOperationBase> poller(connect_poller, xsink);
@@ -3768,8 +3812,12 @@ nothing Socket::sendHTTPResponse(softint status_code, string status_desc, string
         return QoreValue();
     }
 
-    s->sendHTTPResponse(xsink, nullptr, status_code, status_desc->c_str(), http_version->c_str(), headers, *body,
-        QORE_SOURCE_SOCKET, timeout_ms);
+    QoreStringNodeValueHelper tstr(body, s->getEncoding(), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    socket_exec_send_http_response(self, s, nullptr, status_code, status_desc->c_str(), http_version->c_str(),
+        headers, tstr->c_str(), tstr->size(), *tstr, timeout_ms, xsink);
 }
 
 //! Sends an HTTP response with user-defined headers given as a hash and an optional message body
@@ -3818,8 +3866,12 @@ nothing Socket::sendHTTPResponse(softint status_code, string status_desc, string
     }
 
     OptHashRefHelper ohrh(info, xsink);
-    s->sendHTTPResponse(xsink, *ohrh, status_code, status_desc->c_str(), http_version->c_str(), headers, *body,
-        QORE_SOURCE_SOCKET, timeout_ms);
+    QoreStringNodeValueHelper tstr(body, s->getEncoding(), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    socket_exec_send_http_response(self, s, *ohrh, status_code, status_desc->c_str(), http_version->c_str(),
+        headers, tstr->c_str(), tstr->size(), *tstr, timeout_ms, xsink);
 }
 
 //! Sends an HTTP response with user-defined headers given as a hash and a message body as literal binary data
@@ -3858,8 +3910,8 @@ nothing Socket::sendHTTPResponse(softint status_code, string status_desc, string
         return QoreValue();
     }
 
-    s->sendHTTPResponse(xsink, nullptr, status_code, status_desc->c_str(), http_version->c_str(), headers,
-        body ? body->getPtr() : nullptr, body ? body->size() : 0, QORE_SOURCE_SOCKET, timeout_ms);
+    socket_exec_send_http_response(self, s, nullptr, status_code, status_desc->c_str(), http_version->c_str(),
+        headers, body ? body->getPtr() : nullptr, body ? body->size() : 0, nullptr, timeout_ms, xsink);
 }
 
 //! Sends an HTTP response with user-defined headers given as a hash and a message body as literal binary data
@@ -3904,8 +3956,8 @@ nothing Socket::sendHTTPResponse(softint status_code, string status_desc, string
     }
 
     OptHashRefHelper ohrh(info, xsink);
-    s->sendHTTPResponse(xsink, *ohrh, status_code, status_desc->c_str(), http_version->c_str(), headers,
-        body ? body->getPtr() : nullptr, body ? body->size() : 0, QORE_SOURCE_SOCKET, timeout_ms);
+    socket_exec_send_http_response(self, s, *ohrh, status_code, status_desc->c_str(), http_version->c_str(),
+        headers, body ? body->getPtr() : nullptr, body ? body->size() : 0, nullptr, timeout_ms, xsink);
 }
 
 //! Sends an HTTP response with user-defined headers and a message body from an input stream in chunked transfer encoding
