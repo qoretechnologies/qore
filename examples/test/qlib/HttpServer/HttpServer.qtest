@@ -919,16 +919,27 @@ OKKqgBjNAlYDdPhOy8O8Agk=
     }
 
     secondWildcardListener() {
+        list<int> listener_ids;
+        on_exit {
+            foreach int id in (listener_ids) {
+                try {
+                    mServer.stopListenerID(id);
+                } catch () {
+                }
+            }
+        }
         hash<auto> h = mServer.addListener(<HttpListenerOptionInfo>{
             "node": "localhost",
             "service": 0,
         });
+        listener_ids += h.id;
         assertEq(Type::String, h.bind.type());
         # issue #2155 this call will fail without the fix
         h = mServer.addListener(<HttpListenerOptionInfo>{
             "node": "localhost",
             "service": 0,
         });
+        listener_ids += h.id;
         assertEq(Type::String, h.bind.type());
     }
 

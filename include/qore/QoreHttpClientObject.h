@@ -104,6 +104,13 @@ public:
             const QoreString* path, const AbstractQoreNode* data_save, const void* data, size_t size,
             const QoreHashNode* headers, const QoreEncoding* enc = nullptr);
 
+    //! Starts a non-blocking, polling HTTP send operation that completes after response headers
+    /** @since %Qore 2.3
+    */
+    DLLEXPORT QoreObject* startPollSendAndStream(ExceptionSink* xsink, QoreObject* self,
+            const QoreString* method, const QoreString* path, const AbstractQoreNode* data_save,
+            const void* data, size_t size, const QoreHashNode* headers, const QoreEncoding* enc = nullptr);
+
     //! set options with a hash, returns -1 if an exception was thrown, 0 for OK
     /** options are:
         - protocols: a hash where each key is a protocol name and the value must be set to a integer giving a port

@@ -294,7 +294,9 @@ const char* HttpClientPingPollOperationPriv::getStateImpl() const {
         return "complete";
     }
     if (inner_op) {
-        return inner_op->getState()->c_str();
+        SimpleRefHolder<QoreStringNode> state(inner_op->getState());
+        inner_state = state->c_str();
+        return inner_state.c_str();
     }
     return "none";
 }
