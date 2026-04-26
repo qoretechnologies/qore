@@ -2864,6 +2864,17 @@ tc.constraint_name, c1.ordinal_position", schema, name);
         return False;
     }
 
+    #! MSSQL accepts non-unique orderby + offset/limit at the SQL level;
+    #! the determinism check in AbstractTable is overly strict here.
+    /** OFFSET/FETCH NEXT requires ORDER BY but does not require it to be
+        unique.  Pagination across orderby ties may still yield non-
+        deterministic ordering — that's the caller's concern, not a SQL-
+        validity issue.
+    */
+    bool requireUniqueOrderByWithOffsetLimit() {
+        return False;
+    }
+
     #! processes a string for use in SQL select statements with "limit" but no "orderby" or "offset"
     private doSelectLimitOnlyInternImpl(reference<hash<QueryInfo>> info, reference<string> sql) {
         if (!info.query_hash.limit) {

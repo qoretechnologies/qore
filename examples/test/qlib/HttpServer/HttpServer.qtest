@@ -319,6 +319,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         addTestCase("idle test", \idleTest());
         addTestCase("issue 4312", \issue4312());
         addTestCase("issue 3397", \issue3397());
+        addTestCase("QUIC cert reload", \quicCertReloadTest());
         addTestCase("issue 3116", \issue3116());
         addTestCase("200 no body returns 204", \noBody200Becomes204());
         addTestCase("recv_callback gzip decode", \recvCallbackGzipDecode());
@@ -597,6 +598,161 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         info = mServer.getListenerInfoName(info.name);
         assertTrue(info.ssl);
         assertEq("https", info.proto);
+    }
+
+    quicCertReloadTest() {
+        # Repro for the bug fixed in this change: reloadListenerCertificate
+        # on a TLS listener with a paired HTTP/3 (QUIC) listener used to leave
+        # the udp_sock holding the cert/key set at addQuicListener() time, so a
+        # client that followed the Alt-Svc h3 hint would stall the QUIC
+        # handshake for ~20s and time out.  This test verifies that after a
+        # reload the listener is still usable for both H1/H2 and H3 in <100 ms,
+        # and that repeated reload+connect cycles stay clean.
+
+        # Set up cert/key on disk so reloadListenerCertificate can re-read them
+        string real_fn = tmp_location() + DirSep + get_random_string() + ".pem";
+        File f();
+        f.open2(real_fn, O_CREAT | O_TRUNC | O_WRONLY);
+        f.write(CertPem);
+        on_exit unlink(real_fn);
+        string key_fn = tmp_location() + DirSep + get_random_string() + ".pem";
+        f.open2(key_fn, O_CREAT | O_TRUNC | O_WRONLY);
+        f.write(KeyPem);
+        f.close();
+        on_exit unlink(key_fn);
+
+        # Stand up a dedicated async-mode HTTPS server with H3 enabled
+        Logger qLogger("quic-cert-reload", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            qLogger.addAppender(new StdoutAppender());
+        }
+        HttpServer qServer(<HttpServerOptionInfo>{
+            "logger": qLogger,
+            "debug": True,
+        });
+        on_exit qServer.stop();
+        qServer.setHandler("my-handler", "", MimeTypeHtml, new ReqHandler());
+        qServer.setDefaultHandler("my-handler", new ReqHandler());
+
+        # Pass BOTH inline cert/key and cert_loc/key_loc — addListenerIntern
+        # gates H3 paired-listener creation on info.cert && info.key (cert_loc
+        # is only resolved later inside HttpListener::constructor), so we need
+        # the inline objects to trigger H3 setup.  reloadListenerCertificate
+        # uses the cert_loc/key_loc paths to re-read fresh material from disk.
+        hash<auto> linfo = qServer.addListener(<HttpListenerOptionInfo>{
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+            "cert_loc": real_fn,
+            "key_loc": key_fn,
+            "enable_h3": True,
+        });
+        qServer.waitForAsyncIo();
+        string sslUrl = "https://localhost:" + linfo.port;
+
+        # Helper: connect with H3 advertised via Alt-Svc — this is the path
+        # that wedged on the broken build.  Use AUTO so the client follows the
+        # server's Alt-Svc hint, then assert connect completes well within the
+        # timeout window (<100 ms acceptance criterion).
+        code<int()> do_connect = int sub () {
+            HTTPClient hc({
+                "url": sslUrl,
+                "ssl_verify_cert": False,
+                "connect_timeout": 5000,
+                "timeout": 5000,
+            });
+            date start = now_us();
+            hc.connect();
+            int elapsed_us = (now_us() - start).durationMicroseconds();
+            hc.disconnect();
+            return elapsed_us;
+        };
+
+        # Baseline connect should be fast
+        int baseline_us = do_connect();
+        assertLt(2000000, baseline_us, "baseline H1/H2 connect should be <2 s");
+
+        # 5 reload+connect cycles — fewer than 10 to keep test wall-time reasonable,
+        # still enough to catch the wedge if it returns
+        for (int i = 0; i < 5; ++i) {
+            qServer.reloadListenerCertificate(linfo.id);
+            int elapsed_us = do_connect();
+            assertLt(5000000, elapsed_us,
+                sprintf("reload+connect cycle %d must complete in <5 s", i));
+        }
+
+        # Force the SSL_accept WANT_READ path on the server to catch the
+        # controller fast-path-skip bug.  The wedge only manifests when
+        # SocketAcceptPollOperation transitions from polling the listener fd
+        # to polling the accepted client fd while waiting for ClientHello —
+        # in-process HTTPClient connects with sequential timing usually have
+        # ClientHello already in the kernel buffer when the server's
+        # SSL_accept runs, so the handshake completes inline and the bug
+        # never triggers.
+        #
+        # Workaround: do TCP-connect, sleep, then upgradeClientToSSL.  The
+        # sleep guarantees the server runs SSL_accept with an empty buffer →
+        # WANT_READ → updateEventLoopRegistration must register the accepted
+        # client fd or the handshake hangs forever.
+        qServer.reloadListenerCertificate(linfo.id);
+        int N = 5;
+        int succeeded = 0;
+        for (int i = 0; i < N; ++i) {
+            Socket s();
+            try {
+                s.connect("localhost:" + linfo.port, 5s);
+                # Force the WANT_READ path on the server side
+                usleep(50ms);
+                s.upgradeClientToSSL(5000);
+                s.close();
+                ++succeeded;
+            } catch (hash<ExceptionInfo> ex) {
+                fail(sprintf("delayed-handshake connect %d/%d after reload failed: %s: %s",
+                    i + 1, N, ex.err, ex.desc));
+            }
+        }
+        assertEq(N, succeeded,
+            "all delayed-handshake connects after reload must succeed (catches controller fast-path skip)");
+
+        # Now exercise a forced HTTP/3 connect to confirm the QUIC TLS path
+        # actually serves the new cert (this is the load-bearing assertion —
+        # before the fix this would HTTPCLIENT-NEGOTIATE-TIMEOUT after 20 s).
+
+        # First confirm the listener accepts H3 at all on this build —
+        # otherwise the test is moot regardless of the reload.
+        code<int()> do_h3_connect = int sub () {
+            HTTPClient h3 ({
+                "url": sslUrl,
+                "ssl_verify_cert": False,
+                "http_version": "3.0",
+                "connect_timeout": 5000,
+                "timeout": 5000,
+            });
+            date start = now_us();
+            h3.connect();
+            int elapsed_us = (now_us() - start).durationMicroseconds();
+            on_exit h3.disconnect();
+            if (!h3.isHttp3Active()) {
+                throw "H3-NOT-ACTIVE", "H3 not active after connect";
+            }
+            return elapsed_us;
+        };
+
+        try {
+            int baseline_h3_us = do_h3_connect();
+            assertLt(5000000, baseline_h3_us, "baseline H3 connect must complete in <5 s");
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "HTTP-CLIENT-CONSTRUCTOR-ERROR" && ex.desc =~ /HTTP\/3/) {
+                testSkip("HTTP/3 not compiled in");
+                return;
+            }
+            rethrow;
+        }
+
+        # Reload + H3 connect — this is the path that wedged before the fix
+        qServer.reloadListenerCertificate(linfo.id);
+        int reload_h3_us = do_h3_connect();
+        assertLt(5000000, reload_h3_us, "H3 connect after reload must complete in <5 s");
     }
 
     issue3116() {

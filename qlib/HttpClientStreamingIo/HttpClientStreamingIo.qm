@@ -51,6 +51,9 @@ module HttpClientStreamingIo {
       @ref EVENT_SSE_HEARTBEAT
     - @ref HttpClientStreamingIo::SseObservable "SseObservable" gains \c idle_timeout and
       \c emit_heartbeat options for dead-connection detection and heartbeat delivery
+    - @ref HttpClientStreamingIo::SseStreamReader "SseStreamReader" consumes
+      comment-only SSE keep-alive frames internally and returns only dispatchable
+      SSE events to callers.
 */
 
 #! Main namespace for the HttpClientStreamingIo module

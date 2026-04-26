@@ -63,6 +63,24 @@ public class Http3SseStream inherits AbstractSseConnection {
 
         #! True if response headers have been sent
         bool headers_sent = False;
+
+        #! Mutex protecting heartbeat timer state
+        Mutex heartbeat_mutex();
+
+        #! Heartbeat interval in milliseconds; 0 disables the heartbeat
+        int heartbeat_ms = DefaultSseHeartbeatIntervalMs;
+
+        #! Heartbeat payload sent when the interval expires with no outbound traffic
+        string heartbeat_msg = DefaultSseHeartbeatMsg;
+
+        #! Async I/O controller timer ID for the next heartbeat
+        *int heartbeat_timer_id;
+
+        #! Generation value used to ignore canceled or superseded timer callbacks
+        int heartbeat_generation = 0;
+
+        #! Epoch microseconds of the last successful SSE DATA write
+        int last_send_us = clock_getmicros();
     }
 
     #! Creates an SSE stream over HTTP/3
@@ -70,12 +88,20 @@ public class Http3SseStream inherits AbstractSseConnection {
         @param session_id the QUIC session ID
         @param stream_id the HTTP/3 stream ID to use for SSE
         @param wake_callback optional callback to wake the I/O thread after data submission
+        @param headers_already_sent set to True if the caller already submitted
+            the response headers (via @ref Qore::Socket::submitQuicResponseStreaming());
+            in that case @ref sendHeaders() must not be called again
     */
-    constructor(Socket sock, int session_id, int stream_id, *code<nothing()> wake_callback) {
+    constructor(Socket sock, int session_id, int stream_id, *code<nothing()> wake_callback,
+            bool headers_already_sent = False) {
         self.sock = sock;
         self.session_id = session_id;
         self.stream_id = stream_id;
         self.wake_callback = wake_callback;
+        self.headers_sent = headers_already_sent;
+        if (headers_sent) {
+            rescheduleHeartbeatTimer();
+        }
     }
 
     string getProtocol() {
@@ -104,9 +130,36 @@ public class Http3SseStream inherits AbstractSseConnection {
         @param data the pre-formatted SSE frame text
     */
     queueRawString(string data) {
-        if (!stream_open) {
+        if (!isStreamOpen()) {
             throw "SSE-CLOSED", "SSE stream is closed";
         }
+        try {
+            sendRawStringIntern(data);
+            noteSseDataSent();
+        } catch (hash<ExceptionInfo> ex) {
+            markStreamClosed();
+            rethrow;
+        }
+    }
+
+    #! Configures the SSE heartbeat for this stream
+    /** The heartbeat is an SSE comment frame sent only after the stream has had
+        no outbound SSE DATA traffic for \a interval_ms.  Timers are driven by
+        the async I/O controller, and each heartbeat wakes the HTTP/3 connection
+        so queued DATA frames are flushed promptly.
+
+        @param interval_ms heartbeat interval in milliseconds; 0 disables the heartbeat
+        @param msg raw bytes to send (must already be SSE-framed, e.g. \c ":hb\\n\\n")
+    */
+    setHeartbeat(int interval_ms, string msg = DefaultSseHeartbeatMsg) {
+        AutoLock al(heartbeat_mutex);
+        heartbeat_ms = interval_ms;
+        heartbeat_msg = msg;
+        last_send_us = clock_getmicros();
+        rescheduleHeartbeatTimerLocked();
+    }
+
+    private sendRawStringIntern(string data) {
         try {
             while (sock.submitQuicStreamData(session_id, stream_id, data, False) == 1) {
                 if (wake_callback) {
@@ -118,21 +171,17 @@ public class Http3SseStream inherits AbstractSseConnection {
                 wake_callback();
             }
         } catch (hash<ExceptionInfo> ex) {
-            # Any failure here (QUIC-ERROR from a gone session/stream, drain timeout,
-            # GOAWAY, etc.) means the underlying QUIC stream is effectively dead.
-            # Flip stream_open so isOpen()/isDisconnected() report the true state
-            # and subsequent sends fail fast with SSE-CLOSED rather than surfacing
-            # raw transport errors to every caller.
-            stream_open = False;
             rethrow;
         }
     }
 
     bool isOpen() {
+        AutoLock al(heartbeat_mutex);
         return stream_open && sock.isOpen();
     }
 
     bool isDisconnected() {
+        AutoLock al(heartbeat_mutex);
         return !stream_open || !sock.isOpen();
     }
 
@@ -141,25 +190,25 @@ public class Http3SseStream inherits AbstractSseConnection {
     }
 
     close() {
-        if (stream_open) {
-            stream_open = False;
-            # close() is a teardown path: swallow QUIC transport errors
-            # (stream/session already gone, GOAWAY in flight, etc.) so
-            # cleanup callers don't have to wrap every close in try/catch.
-            # stream_open has already been flipped, so isOpen() / isDisconnected()
-            # report the closed state regardless of whether END_STREAM lands.
-            try {
-                sock.submitQuicStreamData(session_id, stream_id, NOTHING, True);
-                if (wake_callback) {
-                    wake_callback();
-                }
-            } catch (hash<ExceptionInfo> ex) {
+        if (!markStreamClosed()) {
+            return;
+        }
+        # close() is a teardown path: swallow QUIC transport errors
+        # (stream/session already gone, GOAWAY in flight, etc.) so
+        # cleanup callers don't have to wrap every close in try/catch.
+        # stream_open has already been flipped, so isOpen() / isDisconnected()
+        # report the closed state regardless of whether END_STREAM lands.
+        try {
+            sock.submitQuicStreamData(session_id, stream_id, NOTHING, True);
+            if (wake_callback) {
+                wake_callback();
             }
+        } catch (hash<ExceptionInfo> ex) {
         }
     }
 
     abort() {
-        stream_open = False;
+        markStreamClosed();
         # abort() is a teardown path: same rationale as close().
         try {
             sock.cancelQuicStream(session_id, stream_id);
@@ -206,6 +255,7 @@ public class Http3SseStream inherits AbstractSseConnection {
         if (wake_callback) {
             wake_callback();
         }
+        noteSseDataSent();
     }
 
     #! Sends an SSE event on the HTTP/3 stream
@@ -215,24 +265,13 @@ public class Http3SseStream inherits AbstractSseConnection {
         @param event hash with optional keys: type, data, id, retry
     */
     sendEvent(hash<auto> event) {
-        if (!stream_open) {
+        if (!isStreamOpen()) {
             throw "SSE-CLOSED", "SSE stream is closed";
         }
         if (!headers_sent) {
             sendHeaders();
         }
-        string msg = Http2SseStream::formatSseEvent(event);
-        # Send data with backpressure handling
-        while (sock.submitQuicStreamData(session_id, stream_id, msg, False) == 1) {
-            if (wake_callback) {
-                wake_callback();
-            }
-            sock.waitForQuicStreamDrain(session_id, stream_id, 5s);
-        }
-        # Wake the I/O thread so it sends the queued data
-        if (wake_callback) {
-            wake_callback();
-        }
+        queueRawEvent(event);
     }
 
     #! Gets the next event from the queue (for sending)
@@ -246,6 +285,87 @@ public class Http3SseStream inherits AbstractSseConnection {
                 return NOTHING;
             }
             rethrow;
+        }
+    }
+
+    private bool isStreamOpen() {
+        AutoLock al(heartbeat_mutex);
+        return stream_open;
+    }
+
+    private bool markStreamClosed() {
+        AutoLock al(heartbeat_mutex);
+        if (!stream_open) {
+            return False;
+        }
+        stream_open = False;
+        cancelHeartbeatTimerLocked();
+        return True;
+    }
+
+    private noteSseDataSent() {
+        AutoLock al(heartbeat_mutex);
+        last_send_us = clock_getmicros();
+        rescheduleHeartbeatTimerLocked();
+    }
+
+    private rescheduleHeartbeatTimer() {
+        AutoLock al(heartbeat_mutex);
+        rescheduleHeartbeatTimerLocked();
+    }
+
+    private rescheduleHeartbeatTimerLocked() {
+        cancelHeartbeatTimerLocked();
+        if (heartbeat_ms <= 0 || !stream_open || !headers_sent) {
+            return;
+        }
+        int elapsed_ms = (clock_getmicros() - last_send_us) / 1000;
+        int delay_ms = heartbeat_ms - elapsed_ms;
+        if (delay_ms < 1) {
+            delay_ms = 1;
+        }
+        int generation = heartbeat_generation;
+        AsyncSocketIo::AsyncSocketIoController controller =
+            AsyncSocketIo::getGlobalAsyncIoController();
+        heartbeat_timer_id = controller.addTimer(now_us() + milliseconds(delay_ms),
+            sub () { self.handleHeartbeatTimer(generation); });
+    }
+
+    private cancelHeartbeatTimerLocked() {
+        ++heartbeat_generation;
+        if (heartbeat_timer_id) {
+            try {
+                AsyncSocketIo::AsyncSocketIoController controller =
+                    AsyncSocketIo::getGlobalAsyncIoController();
+                controller.cancelTimer(heartbeat_timer_id);
+            } catch (hash<ExceptionInfo> ex) {
+            }
+            remove heartbeat_timer_id;
+        }
+    }
+
+    private handleHeartbeatTimer(int generation) {
+        string msg;
+        {
+            AutoLock al(heartbeat_mutex);
+            if (!stream_open || !headers_sent || heartbeat_ms <= 0
+                    || generation != heartbeat_generation) {
+                return;
+            }
+            remove heartbeat_timer_id;
+            int elapsed_ms = (clock_getmicros() - last_send_us) / 1000;
+            if (elapsed_ms < heartbeat_ms) {
+                rescheduleHeartbeatTimerLocked();
+                return;
+            }
+            msg = heartbeat_msg;
+        }
+
+        try {
+            sendRawStringIntern(msg);
+            noteSseDataSent();
+        } catch (hash<ExceptionInfo> ex) {
+            markStreamClosed();
         }
     }
 }

@@ -567,6 +567,14 @@ public:
     DLLEXPORT void setPrivateKey(QoreSSLPrivateKey* p);
     // c and p must be already referenced before this call
     DLLEXPORT void setCertificateAndPrivateKey(QoreSSLCertificate* c, QoreSSLPrivateKey* p);
+    //! Frees the cached shared QUIC server SSL_CTX (rebuilt lazily on next handshake)
+    /** Used during certificate rotation: after updating cert/pk on this socket
+        the cached shared SSL_CTX must be invalidated so the next QUIC handshake
+        rebuilds it from the new material.  Existing QuicSessions hold their own
+        SSL_CTX_up_ref and are unaffected.  Thread-safe: uses the socket's
+        dedicated quic_server_ssl_ctx_lock_, separate from the socket mutex.
+    */
+    DLLEXPORT void freeQuicServerSslCtx();
     DLLEXPORT int setNoDelay(int nodelay);
     DLLEXPORT int getNoDelay();
     DLLEXPORT void setEventQueue(ExceptionSink* xsink, Queue* q, QoreValue arg, bool with_data);

@@ -67,6 +67,10 @@ Supported column types:
 | `halfvec` | pgvector half-precision vector (pgsql only) | `native_type: halfvec` |
 | `sparsevec` | pgvector sparse vector (pgsql only) | `native_type: sparsevec` |
 
+When a PostgreSQL schema template uses any pgvector type, schema alignment emits
+`CREATE EXTENSION IF NOT EXISTS vector` before table DDL if the extension is not already installed
+in the target database.
+
 ### Column Properties
 
 ```yaml

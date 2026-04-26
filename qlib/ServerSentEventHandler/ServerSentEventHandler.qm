@@ -88,6 +88,8 @@ module ServerSentEventHandler {
       I/O controller, replacing the legacy synchronous \c startImpl() entry point
     - \c startImpl() now throws \c SSE-SYNC-NOT-SUPPORTED; all SSE connections are managed by
       the async I/O controller
+    - async SSE heartbeats are enabled by default across HTTP/1.x, HTTP/2, and
+      HTTP/3; set the handler \c heartbeat option to \c 0 to opt out
 
     @subsection serversenteventhandler_v1_0_2 Version 1.0.2
     - added support for customizable heartbeat messages to support JSON-RPC requests as heartbeat message in MCP

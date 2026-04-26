@@ -1105,6 +1105,13 @@ public class PgsqlDatabase inherits SqlUtil::AbstractDatabase {
 
         const PGSQL_TempSavepoint = "qore_pgsql_tmp_savepoint";
 
+        #! PostgreSQL native types provided by the pgvector extension
+        const PgsqlVectorNativeTypes = {
+            "vector": True,
+            "halfvec": True,
+            "sparsevec": True,
+        };
+
         #! Options for reclaimSpace()
         const PgsqlReclaimSpaceOptions = ReclaimSpaceOptions + (
             "full"              : Type::Boolean,
@@ -1423,6 +1430,11 @@ public class PgsqlDatabase inherits SqlUtil::AbstractDatabase {
         string drv = getDriverName();
         list l = ();
         if (opt.start) {
+            if (schemaUsesPgvector(schema_hash) && !pgExtensionExists("vector")) {
+                l += AbstractDatabase::doCallback(opt, "create extension if not exists vector",
+                    AbstractDatabase::AC_Create, "extension", "vector");
+            }
+
             hash type_cache;
 
             # rename any types
@@ -1468,6 +1480,58 @@ public class PgsqlDatabase inherits SqlUtil::AbstractDatabase {
             return l;
         }
         return l;
+    }
+
+    private bool pgExtensionExists(string name) {
+        *hash<auto> row = ds.selectRow("select 1 from pg_extension where extname = %v", name);
+        return row ? True : False;
+    }
+
+    private bool schemaUsesPgvector(hash<auto> schema_hash) {
+        return usesPgvectorType(schema_hash.tables);
+    }
+
+    private bool usesPgvectorType(auto value) {
+        switch (value.typeCode()) {
+            case NT_HASH: {
+                hash<auto> h = value;
+
+                if (h.native_type.typeCode() == NT_STRING
+                        && PgsqlVectorNativeTypes{h.native_type.lwr()}) {
+                    return True;
+                }
+
+                if (h.type.typeCode() == NT_STRING && PgsqlVectorNativeTypes{h.type.lwr()}) {
+                    return True;
+                }
+
+                if (h.driver.typeCode() == NT_HASH && h.driver.pgsql.typeCode() == NT_HASH
+                        && usesPgvectorType(h.driver.pgsql)) {
+                    return True;
+                }
+
+                foreach hash<auto> pair in (h.pairIterator()) {
+                    if (pair.key == "driver") {
+                        continue;
+                    }
+                    if (usesPgvectorType(pair.value)) {
+                        return True;
+                    }
+                }
+                break;
+            }
+
+            case NT_LIST: {
+                foreach auto elem in (value) {
+                    if (usesPgvectorType(elem)) {
+                        return True;
+                    }
+                }
+                break;
+            }
+        }
+
+        return False;
     }
 
     #! returns a list of string table names in the database
@@ -4218,6 +4282,15 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
     #! returns @ref True "True" if the database support tablespaces
     private bool supportsTablespacesImpl() {
         return True;
+    }
+
+    #! PostgreSQL accepts non-unique orderby + offset/limit at the SQL level;
+    #! the determinism check in AbstractTable is overly strict here.
+    /** Pagination across orderby ties may still yield non-deterministic
+        ordering — that's the caller's concern, not a SQL-validity issue.
+    */
+    bool requireUniqueOrderByWithOffsetLimit() {
+        return False;
     }
 
     #! processes a string for use in SQL select statements when there is a "limit" argument, but no "orderby" or "offset" arguments

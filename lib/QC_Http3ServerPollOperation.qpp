@@ -35,6 +35,8 @@
 #include "qore/intern/QC_Http3ServerPollOperation.h"
 #include "qore/intern/QC_SocketPollOperation.h"
 #include "qore/QoreQueue.h"
+#include "qore/QoreSSLCertificate.h"
+#include "qore/QoreSSLPrivateKey.h"
 #include "qore/intern/QC_Queue.h"
 #include "qore/intern/QoreAsyncIoLogger.h"
 
@@ -60,7 +62,8 @@ void Http3ServerPollOperationPriv::setMaxRequestBodySize(int64_t size) {
 Http3ServerPollOperationPriv::~Http3ServerPollOperationPriv() {
     // cleanup() should have been called before destructor via QPP destructor.
     // Defensive cleanup to avoid leaks in program shutdown paths.
-    if (read_op || send_op || sock_obj || cached_request || error_info) {
+    if (read_op || send_op || sock_obj || cached_request || error_info
+            || has_pending_cert.load(std::memory_order_acquire)) {
         ExceptionSink xsink;
         cleanup(&xsink);
     }
@@ -91,6 +94,68 @@ void Http3ServerPollOperationPriv::cleanup(ExceptionSink* xsink) {
     }
     stream_queues.clear();
     data_ready_streams.clear();
+    // Drain any unconsumed pending cert/key staged for swap
+    {
+        AutoLocker al(pending_cert_lock);
+        has_pending_cert.store(false, std::memory_order_release);
+        if (pending_cert) {
+            pending_cert->deref();
+            pending_cert = nullptr;
+        }
+        if (pending_pk) {
+            pending_pk->deref();
+            pending_pk = nullptr;
+        }
+    }
+}
+
+void Http3ServerPollOperationPriv::setPendingCertificate(QoreSSLCertificate* cert,
+        QoreSSLPrivateKey* pk) {
+    // cert and pk must already be referenced by the caller; ownership transfers here
+    AutoLocker al(pending_cert_lock);
+    if (pending_cert) {
+        pending_cert->deref();
+    }
+    if (pending_pk) {
+        pending_pk->deref();
+    }
+    pending_cert = cert;
+    pending_pk = pk;
+    has_pending_cert.store(true, std::memory_order_release);
+    ASYNC_IO_TRACE("Http3ServerPollOperationPriv::setPendingCertificate staged cert=%p pk=%p\n",
+        (void*)cert, (void*)pk);
+}
+
+void Http3ServerPollOperationPriv::applyPendingCertificate() {
+    if (!has_pending_cert.load(std::memory_order_acquire)) {
+        return;
+    }
+    QoreSSLCertificate* cert = nullptr;
+    QoreSSLPrivateKey* pk = nullptr;
+    {
+        AutoLocker al(pending_cert_lock);
+        cert = pending_cert;
+        pk = pending_pk;
+        pending_cert = nullptr;
+        pending_pk = nullptr;
+        has_pending_cert.store(false, std::memory_order_release);
+    }
+    if (!sock_obj) {
+        // op was already cleaned up; release the staged refs
+        if (cert) cert->deref();
+        if (pk) pk->deref();
+        return;
+    }
+    // setCertificateAndPrivateKey takes ownership of the refs we already hold.
+    // It briefly takes the udp_sock's priv->m; on the I/O thread there is no
+    // contention because we have not yet entered the H3 op's continuePoll lock
+    // chain.  After the swap we invalidate the cached shared QUIC server
+    // SSL_CTX so the next handshake rebuilds it from the new cert/key.  In-
+    // flight QuicSessions hold their own SSL_CTX_up_ref and are unaffected.
+    sock_obj->setCertificateAndPrivateKey(cert, pk);
+    sock_obj->freeQuicServerSslCtx();
+    ASYNC_IO_TRACE("Http3ServerPollOperationPriv::applyPendingCertificate swapped cert=%p pk=%p; "
+        "shared QUIC SSL_CTX invalidated\n", (void*)cert, (void*)pk);
 }
 
 const char* Http3ServerPollOperationPriv::getStateImpl() const {
@@ -125,6 +190,12 @@ QoreValue Http3ServerPollOperationPriv::getOutput() const {
 // --- continuePoll state machine (I/O thread) ---
 
 QoreHashNode* Http3ServerPollOperationPriv::continuePoll(ExceptionSink* xsink) {
+    // Drain any staged cert/key swap before entering the op_lock / socket-lock
+    // chain.  This is the safe boundary: we are on the I/O thread but not yet
+    // holding any of the locks that setCertificateAndPrivateKey acquires, so
+    // the swap completes without contention.
+    applyPendingCertificate();
+
     AutoLocker al(op_lock);
     // Check stream Queues on exit — data arrives during the inner op's
     // continuePoll (via h3RecvDataCallback → Queue push), so checking
@@ -778,6 +849,28 @@ nothing Http3ServerPollOperation::shutdown(*int session_id) {
 */
 nothing Http3ServerPollOperation::abort() {
     priv->abort(xsink);
+}
+
+//! Stages a certificate / private key swap to be applied on the I/O thread
+/** Used by the async I/O controller to rotate the QUIC listener's TLS material
+    without restarting the server.  The swap is staged here and then applied at
+    the top of the next continuePoll() iteration, so this call returns
+    immediately and never contends with the I/O thread for the socket mutex.
+
+    In-flight QuicSessions hold their own SSL_CTX_up_ref and continue with the
+    cert/key snapshotted at handshake time; new handshakes after the swap pick
+    up the new material via a freshly built shared SSL_CTX.
+
+    @param cert the new X.509 certificate
+    @param key the new private key
+
+    @since %Qore 2.3
+*/
+nothing Http3ServerPollOperation::reloadCertificate(SSLCertificate[QoreSSLCertificate] cert,
+        SSLPrivateKey[QoreSSLPrivateKey] key) {
+    // ReferenceHolder-style release: ownership of the underlying ref'd
+    // private data transfers to the priv class.
+    priv->setPendingCertificate(cert.release(), key.release());
 }
 
 //! Sets the completion context for accept operations

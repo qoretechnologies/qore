@@ -198,6 +198,9 @@ module Schema {
             comment: "Dense embedding vector"
     @endcode
 
+    PostgreSQL schema alignment creates the \c vector extension automatically when a template
+    uses \c vector, \c halfvec, or \c sparsevec and the extension is not already installed.
+
     @par Example: Index access methods (pgvector IVFFlat, HNSW, etc.)
     @code{.yaml}
     tables:
@@ -800,6 +803,8 @@ module Schema {
       driver block (allows combining \c type shorthand with driver-specific tweaks)
     - pgvector column \c size is now routed to \c driver.pgsql.size (matching PgsqlSqlUtilBase
       conventions) rather than the top level
+    - PostgreSQL schema alignment now creates the \c vector extension before table DDL when a
+      schema template uses pgvector native types and the extension is missing
 
     @subsection schema_v1_5_0 Schema Module v1.5.0
     - separated module into individual \c .qc files for better maintainability
@@ -1063,7 +1068,8 @@ public namespace Schema {
         @param notnull @ref True "True" for a <tt>NOT NULL</tt> constraint on the column
         @param comment an optional comment for the column
 
-        @note only supported with PostgreSQL and requires the pgvector extension
+        @note only supported with PostgreSQL; schema alignment creates the pgvector extension
+        automatically if needed
 
         @since Schema 1.6
     */
@@ -1078,7 +1084,8 @@ public namespace Schema {
     /** @param dimensions the number of dimensions for the vector
         @param comment the comment for the column
 
-        @note only supported with PostgreSQL and requires the pgvector extension
+        @note only supported with PostgreSQL; schema alignment creates the pgvector extension
+        automatically if needed
 
         @since Schema 1.6
     */
@@ -1094,7 +1101,8 @@ public namespace Schema {
         @param notnull @ref True "True" for a <tt>NOT NULL</tt> constraint on the column
         @param comment an optional comment for the column
 
-        @note only supported with PostgreSQL and requires the pgvector extension
+        @note only supported with PostgreSQL; schema alignment creates the pgvector extension
+        automatically if needed
 
         @since Schema 1.6
     */
@@ -1109,7 +1117,8 @@ public namespace Schema {
     /** @param dimensions the number of dimensions for the vector
         @param comment the comment for the column
 
-        @note only supported with PostgreSQL and requires the pgvector extension
+        @note only supported with PostgreSQL; schema alignment creates the pgvector extension
+        automatically if needed
 
         @since Schema 1.6
     */
@@ -1125,7 +1134,8 @@ public namespace Schema {
         @param notnull @ref True "True" for a <tt>NOT NULL</tt> constraint on the column
         @param comment an optional comment for the column
 
-        @note only supported with PostgreSQL and requires the pgvector extension
+        @note only supported with PostgreSQL; schema alignment creates the pgvector extension
+        automatically if needed
 
         @since Schema 1.6
     */
@@ -1140,7 +1150,8 @@ public namespace Schema {
     /** @param dimensions the number of dimensions for the vector
         @param comment the comment for the column
 
-        @note only supported with PostgreSQL and requires the pgvector extension
+        @note only supported with PostgreSQL; schema alignment creates the pgvector extension
+        automatically if needed
 
         @since Schema 1.6
     */

@@ -61,10 +61,19 @@ public class AbstractSseConnection {
         all HTTP protocol versions through a uniform write path.
 
         @param data the pre-formatted SSE frame text
-
-        @since %HttpServerAsyncIo 1.3
     */
     abstract queueRawString(string data);
+
+    #! Configures the SSE heartbeat for this connection
+    /** A heartbeat is a comment-only SSE frame sent automatically when the
+        stream has had no outbound traffic for \a interval_ms; this prevents
+        proxies and load balancers from dropping idle connections.  Heartbeats
+        are enabled by default; pass \a interval_ms = \c 0 to opt out.
+
+        @param interval_ms heartbeat interval in milliseconds; 0 disables the heartbeat
+        @param msg raw bytes to send (must already be SSE-framed, e.g. \c ":hb\\n\\n")
+    */
+    abstract setHeartbeat(int interval_ms, string msg = DefaultSseHeartbeatMsg);
 
     #! Returns True if the connection is still open
     abstract bool isOpen();
@@ -111,6 +120,10 @@ public class Http1SseConnection inherits AbstractSseConnection {
 
     queueRawString(string data) {
         poll_op.queueRawString(data);
+    }
+
+    setHeartbeat(int interval_ms, string msg = DefaultSseHeartbeatMsg) {
+        poll_op.setHeartbeat(interval_ms, msg);
     }
 
     bool isOpen() {

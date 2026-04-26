@@ -1295,6 +1295,11 @@ void QoreSocketObject::setCertificateAndPrivateKey(QoreSSLCertificate* c, QoreSS
     priv->pk = p;
 }
 
+void QoreSocketObject::freeQuicServerSslCtx() {
+    // Uses the socket's dedicated quic_server_ssl_ctx_lock_ — does not take priv->m
+    priv->socket->priv->freeQuicServerSslCtx();
+}
+
 void QoreSocketObject::upgradeClientToSSL(ExceptionSink* xsink, int timeout_ms) {
     AutoLocker al(priv->m);
     if (priv->checkNonBlock(xsink)) {

@@ -94,6 +94,9 @@ module HttpServerAsyncIo {
       @c Socket HTTP/2 methods followed by @c io_wake().  All built-in
       response paths (regular, send_callback, InputStream, SSE setup,
       RST_STREAM-on-error) use this convention.
+    - SSE streams send comment heartbeats by default across HTTP/1.x, HTTP/2,
+      and HTTP/3; callers can opt out with the stream's \c setHeartbeat(0)
+      method.
 */
 
 #! Main namespace for HttpServerAsyncIo module
@@ -111,6 +114,12 @@ public namespace HttpServerAsyncIo {
 
     #! Default idle connection timeout (75 seconds)
     public const DefaultIdleTimeout = 75s;
+
+    #! Default SSE heartbeat interval in milliseconds
+    public const DefaultSseHeartbeatIntervalMs = 20000;
+
+    #! Default SSE heartbeat comment frame
+    public const DefaultSseHeartbeatMsg = ":hb\n\n";
 
     #! Result info for HTTP request callbacks
     public hashdecl HttpRequestResultInfo {
