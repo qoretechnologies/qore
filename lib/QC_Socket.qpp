@@ -1156,6 +1156,56 @@ static QoreHashNode* socket_exec_read_http_chunked_body(QoreObject* self, QoreSo
     }
 }
 
+static QoreHashNode* socket_exec_read_server_sent_event(QoreObject* self, QoreSocketObject* s, int timeout_ms,
+        ExceptionSink* xsink) {
+    my_socket_priv* priv = my_socket_priv::getPriv(*s);
+    SocketExecAsyncIoGuard async_guard(*priv, xsink);
+    if (!async_guard) {
+        return nullptr;
+    }
+
+    QoreString str(QCS_UTF8);
+    int eol_count = 0;
+    unsigned cancel_check = 0;
+    while (true) {
+        if (!(cancel_check++ % 100) && qore_check_cancel(xsink, "socket SSE read")) {
+            return nullptr;
+        }
+
+        SimpleRefHolder<BinaryNode> data(socket_exec_recv_bytes(self, s, 1, timeout_ms, xsink));
+        if (*xsink) {
+            return nullptr;
+        }
+        char c = *static_cast<const char*>(data->getPtr());
+
+        if (priv->takeSseGotCr()) {
+            if (c == '\n') {
+                continue;
+            }
+        }
+
+        if (c == '\r') {
+            str.concat('\n');
+            priv->setSseGotCr(true);
+            if (++eol_count == 2) {
+                break;
+            }
+        } else if (c == '\n') {
+            str.concat('\n');
+            if (++eol_count == 2) {
+                break;
+            }
+        } else {
+            if (eol_count) {
+                eol_count = 0;
+            }
+            str.concat(c);
+        }
+    }
+
+    return QoreSocket::parseServerSentEvent(xsink, str);
+}
+
 static int check_response_code(int status_code, ExceptionSink* xsink) {
     if (status_code < 100 || status_code >= 600) {
         xsink->raiseException("SOCKET-SENDHTTPRESPONSE-STATUS-ERROR", "expecting valid HTTP status code " \
@@ -4951,6 +5001,9 @@ Socket::readHTTPChunkedBodyBinaryWithCallback(code rcb, timeout timeout_ms = -1)
     @since %Qore 2.0
 */
 hash<SseMessageInfo> Socket::readServerSentEvent(*string content_encoding, timeout timeout_ms = -1) {
+    if (!content_encoding || (*content_encoding == "identity")) {
+        return socket_exec_read_server_sent_event(self, s, timeout_ms, xsink);
+    }
     return s->readServerSentEvent(xsink, content_encoding, timeout_ms);
 }
 
@@ -4971,7 +5024,7 @@ hash<SseMessageInfo> Socket::readServerSentEvent(*string content_encoding, timeo
     @since %Qore 2.0
 */
 hash<SseMessageInfo> Socket::readServerSentEvent(timeout timeout_ms = -1) {
-    return s->readServerSentEvent(xsink, nullptr, timeout_ms);
+    return socket_exec_read_server_sent_event(self, s, timeout_ms, xsink);
 }
 
 //! Closes an open socket

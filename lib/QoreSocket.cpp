@@ -834,6 +834,20 @@ int64 my_socket_priv::getMaxChunkedBodySize() const {
     return socket->priv->max_chunked_body_size;
 }
 
+bool my_socket_priv::takeSseGotCr() const {
+    AutoLocker al(m);
+    bool got_cr = socket->priv->sse_got_cr;
+    if (got_cr) {
+        socket->priv->sse_got_cr = false;
+    }
+    return got_cr;
+}
+
+void my_socket_priv::setSseGotCr(bool got_cr) const {
+    AutoLocker al(m);
+    socket->priv->sse_got_cr = got_cr;
+}
+
 int my_socket_priv::getSendHttpMessageHeaders(ExceptionSink* xsink, QoreString& hdr, QoreHashNode* info,
         const char* method, const char* path, const char* http_version, const QoreHashNode* headers,
         size_t size, int source) const {

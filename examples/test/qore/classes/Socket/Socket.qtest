@@ -148,6 +148,7 @@ class SocketTest inherits QUnit::Test {
         addTestCase("HTTP response poll test", \httpResponsePollTest());
         addTestCase("HTTP header string test", \httpHeaderStringTest());
         addTestCase("HTTP chunked body trailer test", \httpChunkedBodyTrailerTest());
+        addTestCase("SSE read test", \serverSentEventReadTest());
         addTestCase("send binary test", \sendBinaryTest());
         addTestCase("send close test", \sendCloseTest());
         addTestCase("poll test", \pollTest());
@@ -646,6 +647,41 @@ class SocketTest inherits QUnit::Test {
         assertEq(<6c6c6f>, callback_events[1].data);
         assertEq("done", callback_events[2].hdr."x-trailer");
         server_result = q.get(5s);
+        if (server_result.typeCode() == NT_HASH) {
+            fail(sprintf("Server exception: %s: %s", server_result.err, server_result.desc));
+        }
+        assertTrue(server_result);
+    }
+
+    serverSentEventReadTest() {
+        Queue q();
+        background sub () {
+            try {
+                Socket server();
+                server.bind("localhost:0");
+                server.listen();
+                q.push(server.getSocketInfo().port);
+
+                Socket peer = server.accept(5s);
+                peer.send("event: alpha\r\ndata: one\r\nid: 1\r\n\r\ndata: two\n\n", 5s);
+                q.push(True);
+            } catch (hash<ExceptionInfo> ex) {
+                q.push(ex);
+            }
+        }();
+
+        Socket client();
+        client.connect("localhost:" + q.get(5s));
+
+        hash<SseMessageInfo> event1 = client.readServerSentEvent(5s);
+        assertEq("alpha", event1.event);
+        assertEq("one", event1.data);
+        assertEq("1", event1.id);
+
+        hash<SseMessageInfo> event2 = client.readServerSentEvent("identity", 5s);
+        assertEq("two", event2.data);
+
+        auto server_result = q.get(5s);
         if (server_result.typeCode() == NT_HASH) {
             fail(sprintf("Server exception: %s: %s", server_result.err, server_result.desc));
         }

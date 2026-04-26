@@ -457,6 +457,12 @@ public:
     //! Returns the configured maximum chunked body size, or 0 if unlimited
     DLLLOCAL int64 getMaxChunkedBodySize() const;
 
+    //! Returns and clears the persisted SSE CR state
+    DLLLOCAL bool takeSseGotCr() const;
+
+    //! Sets the persisted SSE CR state
+    DLLLOCAL void setSseGotCr(bool got_cr) const;
+
     //! Builds HTTP request headers and emits the legacy HTTP send-message event
     DLLLOCAL int getSendHttpMessageHeaders(ExceptionSink* xsink, QoreString& hdr, QoreHashNode* info,
             const char* method, const char* path, const char* http_version, const QoreHashNode* headers,
