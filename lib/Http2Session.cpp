@@ -165,39 +165,43 @@ int Http2Session::init(ExceptionSink* xsink) {
     return 0;
 }
 
-int Http2Session::sendConnectionPreface(ExceptionSink* xsink) {
+int Http2Session::sendConnectionPrefaceNonBlocking(ExceptionSink* xsink) {
     std::lock_guard<std::recursive_mutex> lg(m);
-    // Both client and server must send SETTINGS frame as part of the connection preface
-    // For client: magic string + SETTINGS
-    // For server: SETTINGS (sent in response to client preface)
-    //
-    // Note: SETTINGS_ENABLE_PUSH MUST NOT be sent by servers with value 1
-    // (RFC 7540 Section 6.5.2: "An endpoint MUST NOT send a SETTINGS frame with
-    // SETTINGS_ENABLE_PUSH set to 1 when it is not a client.")
-    // So we only include it for client sessions.
 
-    std::vector<nghttp2_settings_entry> iv;
-    iv.push_back({NGHTTP2_SETTINGS_HEADER_TABLE_SIZE, local_settings.header_table_size});
-    if (!is_server) {
-        // Only clients can send ENABLE_PUSH setting
-        iv.push_back({NGHTTP2_SETTINGS_ENABLE_PUSH, local_settings.enable_push});
-    }
-    iv.push_back({NGHTTP2_SETTINGS_MAX_CONCURRENT_STREAMS, local_settings.max_concurrent_streams});
-    iv.push_back({NGHTTP2_SETTINGS_INITIAL_WINDOW_SIZE, local_settings.initial_window_size});
-    iv.push_back({NGHTTP2_SETTINGS_MAX_FRAME_SIZE, local_settings.max_frame_size});
-    iv.push_back({NGHTTP2_SETTINGS_MAX_HEADER_LIST_SIZE, local_settings.max_header_list_size});
-    // RFC 8441: Enable extended CONNECT protocol for WebSocket over HTTP/2
-    if (local_settings.enable_connect_protocol) {
-        iv.push_back({NGHTTP2_SETTINGS_ENABLE_CONNECT_PROTOCOL, local_settings.enable_connect_protocol});
+    if (!connection_preface_submitted) {
+        // Both client and server must send SETTINGS as part of the connection preface.
+        // SETTINGS_ENABLE_PUSH MUST NOT be sent by servers with value 1
+        // (RFC 7540 Section 6.5.2), so only client sessions include it.
+        std::vector<nghttp2_settings_entry> iv;
+        iv.push_back({NGHTTP2_SETTINGS_HEADER_TABLE_SIZE, local_settings.header_table_size});
+        if (!is_server) {
+            iv.push_back({NGHTTP2_SETTINGS_ENABLE_PUSH, local_settings.enable_push});
+        }
+        iv.push_back({NGHTTP2_SETTINGS_MAX_CONCURRENT_STREAMS, local_settings.max_concurrent_streams});
+        iv.push_back({NGHTTP2_SETTINGS_INITIAL_WINDOW_SIZE, local_settings.initial_window_size});
+        iv.push_back({NGHTTP2_SETTINGS_MAX_FRAME_SIZE, local_settings.max_frame_size});
+        iv.push_back({NGHTTP2_SETTINGS_MAX_HEADER_LIST_SIZE, local_settings.max_header_list_size});
+        // RFC 8441: Enable extended CONNECT protocol for WebSocket over HTTP/2
+        if (local_settings.enable_connect_protocol) {
+            iv.push_back({NGHTTP2_SETTINGS_ENABLE_CONNECT_PROTOCOL, local_settings.enable_connect_protocol});
+        }
+
+        int rv = nghttp2_submit_settings(session, NGHTTP2_FLAG_NONE, iv.data(), iv.size());
+        if (rv != 0) {
+            xsink->raiseException("HTTP2-ERROR", "failed to submit SETTINGS: %s",
+                nghttp2_strerror(rv));
+            return -1;
+        }
+        connection_preface_submitted = true;
     }
 
-    int rv = nghttp2_submit_settings(session, NGHTTP2_FLAG_NONE, iv.data(), iv.size());
-    if (rv != 0) {
-        xsink->raiseException("HTTP2-ERROR", "failed to submit SETTINGS: %s",
-            nghttp2_strerror(rv));
+    return sendPendingData(0, xsink);
+}
+
+int Http2Session::sendConnectionPreface(ExceptionSink* xsink) {
+    if (sendConnectionPrefaceNonBlocking(xsink) < 0 || *xsink) {
         return -1;
     }
-    // Use blocking version to ensure preface is sent completely
     return sendPendingDataBlocking(-1, xsink);
 }
 

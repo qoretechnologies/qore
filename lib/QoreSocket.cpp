@@ -8201,13 +8201,15 @@ QoreHashNode* SocketHttp2ServerPollOperation::continuePoll(ExceptionSink* xsink)
         switch (h2_state) {
             case H2S_SEND_PREFACE: {
                 // Send server connection preface (SETTINGS frame)
-                int rv = h2_session->sendConnectionPreface(xsink);
+                int rv = h2_session->sendConnectionPrefaceNonBlocking(xsink);
                 if (*xsink) {
                     return nullptr;
                 }
-                if (rv == -1) {
-                    // Would block - need to poll for write
-                    return getSocketPollInfoHash(xsink, SOCK_POLLOUT);
+                if (rv < 0) {
+                    return nullptr;
+                }
+                if (rv == SOCK_POLLIN || rv == SOCK_POLLOUT) {
+                    return getSocketPollInfoHash(xsink, rv);
                 }
                 h2_state = H2S_RECV_PREFACE;
                 // Fall through to receive preface
@@ -9046,6 +9048,9 @@ QoreHashNode* SocketHttp2FlushPollOperation::continuePoll(ExceptionSink* xsink) 
                 if (*xsink) {
                     return nullptr;
                 }
+                if (rv < 0) {
+                    return nullptr;
+                }
                 if (rv == SOCK_POLLIN || rv == SOCK_POLLOUT) {
                     return getSocketPollInfoHash(xsink, rv);
                 }
@@ -9427,13 +9432,15 @@ QoreHashNode* SocketHttp2ClientMultiplexPollOperation::continuePoll(ExceptionSin
         switch (h2_state) {
             case H2C_SEND_PREFACE: {
                 // Send client connection preface (SETTINGS frame)
-                int rv = h2_session->sendConnectionPreface(xsink);
+                int rv = h2_session->sendConnectionPrefaceNonBlocking(xsink);
                 if (*xsink) {
                     return nullptr;
                 }
-                if (rv == -1) {
-                    // Would block - need to poll for write
-                    return getSocketPollInfoHash(xsink, SOCK_POLLOUT);
+                if (rv < 0) {
+                    return nullptr;
+                }
+                if (rv == SOCK_POLLIN || rv == SOCK_POLLOUT) {
+                    return getSocketPollInfoHash(xsink, rv);
                 }
                 h2_state = H2C_RECV_PREFACE;
                 // Fall through to receive preface

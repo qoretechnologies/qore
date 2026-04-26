@@ -196,8 +196,17 @@ public:
     //! Returns the maximum request body size
     DLLLOCAL int64 getMaxRequestBodySize() const { return max_request_body_size; }
 
-    //! Send the connection preface (client) or SETTINGS (server)
+    //! Send the connection preface (client) or SETTINGS (server) using blocking I/O
     DLLLOCAL int sendConnectionPreface(ExceptionSink* xsink);
+
+    //! Queue and flush the connection preface using non-blocking I/O
+    /** Idempotently queues the initial SETTINGS frame and then flushes pending
+        output with @ref sendPendingData().
+
+        @return 0 on success, @ref SOCK_POLLIN or @ref SOCK_POLLOUT when the
+        caller must poll and retry, -1 on error
+    */
+    DLLLOCAL int sendConnectionPrefaceNonBlocking(ExceptionSink* xsink);
 
     //! Submit a SETTINGS frame
     DLLLOCAL int submitSettings(const Http2Settings& settings, ExceptionSink* xsink);
@@ -737,6 +746,7 @@ private:
     Http2Settings local_settings;
     Http2Settings remote_settings;
     bool remote_settings_received = false;  //!< True after first SETTINGS frame from peer
+    bool connection_preface_submitted = false;
 
     //! Maximum request body size in bytes (0 = unlimited), propagated to new streams
     int64 max_request_body_size = 0;
