@@ -33,6 +33,7 @@
 #include <qore/intern/QoreIRVerifier.h>
 
 #include <unordered_set>
+#include <vector>
 
 #include <qore/intern/QoreIR.h>
 #include <qore/intern/LocalVar.h>
@@ -560,7 +561,7 @@ static void collectLocalsFromExpr(const QoreValue& expr,
     if (ntype == NT_VARREF) {
         auto* var_ref = reinterpret_cast<const VarRefNode*>(node);
         qore_var_t type = var_ref->getType();
-        if ((type == VT_LOCAL || type == VT_LOCAL_TS) && var_ref->ref.id) {
+        if ((type == VT_LOCAL || type == VT_LOCAL_TS || type == VT_CLOSURE) && var_ref->ref.id) {
             ast_locals.insert(reinterpret_cast<const void*>(var_ref->ref.id));
         }
         // VarRefNewObjectNode inherits from both VarRefNode and FunctionCallBase;
@@ -711,6 +712,135 @@ static void collectLocalsFromExpr(const QoreValue& expr,
 
     // Unknown node type — conservatively mark for fallback
     unknown_node_found = true;
+}
+
+//! Recursively walk an expression in source order and collect LocalVar* slots
+//! needed to serialize embedded AST expression trees.
+static void collectLocalSlotsFromExpr(const QoreValue& expr,
+        std::vector<const LocalVar*>& locals, std::unordered_set<const void*>& seen) {
+    if (!expr.hasNode()) {
+        return;
+    }
+    const AbstractQoreNode* node = expr.getInternalNode();
+    if (!node) {
+        return;
+    }
+
+    auto addVarRef = [&locals, &seen](const VarRefNode* var_ref) {
+        qore_var_t type = var_ref->getType();
+        if ((type == VT_LOCAL || type == VT_LOCAL_TS || type == VT_CLOSURE) && var_ref->ref.id) {
+            const void* key = reinterpret_cast<const void*>(var_ref->ref.id);
+            if (seen.insert(key).second) {
+                locals.push_back(reinterpret_cast<const LocalVar*>(var_ref->ref.id));
+            }
+        }
+    };
+
+    qore_type_t ntype = expr.getType();
+    if (ntype == NT_VARREF) {
+        auto* var_ref = reinterpret_cast<const VarRefNode*>(node);
+        addVarRef(var_ref);
+        if (auto* vrn = dynamic_cast<const VarRefNewObjectNode*>(node)) {
+            if (const QoreParseListNode* pargs = vrn->getParseArgs()) {
+                for (size_t i = 0; i < pargs->size(); ++i) {
+                    collectLocalSlotsFromExpr(pargs->get(i), locals, seen);
+                }
+            }
+            if (const QoreListNode* eargs = vrn->getArgs()) {
+                ConstListIterator li(eargs);
+                while (li.next()) {
+                    collectLocalSlotsFromExpr(li.getValue(), locals, seen);
+                }
+            }
+        }
+        return;
+    }
+
+    if (auto* binop = dynamic_cast<const QoreBinaryOperatorNode<>*>(node)) {
+        collectLocalSlotsFromExpr(binop->getLeft(), locals, seen);
+        collectLocalSlotsFromExpr(binop->getRight(), locals, seen);
+        return;
+    }
+    if (auto* binop = dynamic_cast<const QoreBinaryIntLValueOperatorNode*>(node)) {
+        collectLocalSlotsFromExpr(binop->getLeft(), locals, seen);
+        collectLocalSlotsFromExpr(binop->getRight(), locals, seen);
+        return;
+    }
+    if (auto* unop = dynamic_cast<const QoreSingleExpressionOperatorNode<>*>(node)) {
+        collectLocalSlotsFromExpr(unop->getExp(), locals, seen);
+        return;
+    }
+    if (auto* unop = dynamic_cast<const QoreSingleExpressionOperatorNode<LValueOperatorNode>*>(node)) {
+        collectLocalSlotsFromExpr(unop->getExp(), locals, seen);
+        return;
+    }
+    if (auto* unop = dynamic_cast<const QoreSingleValueExpressionOperatorNode<>*>(node)) {
+        collectLocalSlotsFromExpr(unop->getExp(), locals, seen);
+        return;
+    }
+    if (auto* dot = dynamic_cast<const QoreDotEvalOperatorNode*>(node)) {
+        collectLocalSlotsFromExpr(dot->getExpression(), locals, seen);
+        if (const MethodCallNode* m = dot->getMethodCall()) {
+            if (const QoreParseListNode* pargs = m->getParseArgs()) {
+                for (size_t i = 0; i < pargs->size(); ++i) {
+                    collectLocalSlotsFromExpr(pargs->get(i), locals, seen);
+                }
+            }
+            if (const QoreListNode* rargs = m->getArgs()) {
+                ConstListIterator li(rargs);
+                while (li.next()) {
+                    collectLocalSlotsFromExpr(li.getValue(), locals, seen);
+                }
+            }
+        }
+        return;
+    }
+    if (auto* call = dynamic_cast<const FunctionCallBase*>(node)) {
+        if (const QoreParseListNode* args = call->getParseArgs()) {
+            for (size_t i = 0; i < args->size(); ++i) {
+                collectLocalSlotsFromExpr(args->get(i), locals, seen);
+            }
+        }
+        if (const QoreListNode* args = call->getArgs()) {
+            ConstListIterator li(args);
+            while (li.next()) {
+                collectLocalSlotsFromExpr(li.getValue(), locals, seen);
+            }
+        }
+        return;
+    }
+    if (auto* crc = dynamic_cast<const CallReferenceCallNode*>(node)) {
+        collectLocalSlotsFromExpr(crc->getExp(), locals, seen);
+        if (const QoreParseListNode* args = crc->getParseArgs()) {
+            for (size_t i = 0; i < args->size(); ++i) {
+                collectLocalSlotsFromExpr(args->get(i), locals, seen);
+            }
+        }
+        if (const QoreListNode* args = crc->getArgs()) {
+            ConstListIterator li(args);
+            while (li.next()) {
+                collectLocalSlotsFromExpr(li.getValue(), locals, seen);
+            }
+        }
+        return;
+    }
+    if (ntype == NT_OBJMETHREF) {
+        if (auto* omr = dynamic_cast<const ParseObjectMethodReferenceNode*>(node)) {
+            collectLocalSlotsFromExpr(omr->getExp(), locals, seen);
+        }
+        return;
+    }
+    if (ntype == NT_PARSEREFERENCE) {
+        auto* pref = reinterpret_cast<const ParseReferenceNode*>(node);
+        collectLocalSlotsFromExpr(pref->getLVExp(), locals, seen);
+        return;
+    }
+    if (ntype == NT_PARSE_LIST) {
+        auto* plist = expr.get<const QoreParseListNode>();
+        for (size_t i = 0; i < plist->size(); ++i) {
+            collectLocalSlotsFromExpr(plist->get(i), locals, seen);
+        }
+    }
 }
 
 //! Recursively walks a StatementBlock AST tree to find all local variable references.
@@ -952,6 +1082,32 @@ static const QoreValue* getInstructionExpr(const QoreIRInstruction* inst) {
         case QoreIROpcode::BackgroundInt:
             return &static_cast<const QoreIRExprInstruction*>(inst)->expr;
 
+        default:
+            return nullptr;
+    }
+}
+
+//! Extracts an expression that is kept only so AOT serialization can rebuild
+//! call identity metadata. These expressions are not runtime AST fallbacks, but
+//! their local references still need slots in serialized nested IR functions.
+static const QoreValue* getSerializationOnlyInstructionExpr(const QoreIRInstruction* inst) {
+    switch (inst->opcode) {
+        case QoreIROpcode::CallDirect:
+            return &static_cast<const QoreIRCallDirectInstruction*>(inst)->expr;
+        case QoreIROpcode::CallMethodDirect: {
+            const QoreValue& expr = static_cast<const QoreIRCallMethodDirectInstruction*>(inst)->expr;
+            return expr ? &expr : nullptr;
+        }
+        case QoreIROpcode::InvokeMethodDirect: {
+            const QoreValue& expr = static_cast<const QoreIRInvokeMethodDirectInstruction*>(inst)->expr;
+            return expr ? &expr : nullptr;
+        }
+        case QoreIROpcode::CallStaticDirect:
+            return &static_cast<const QoreIRCallStaticDirectInstruction*>(inst)->expr;
+        case QoreIROpcode::DotEvalMethodDirect:
+            return &static_cast<const QoreIRDotEvalMethodDirectInstruction*>(inst)->expr;
+        case QoreIROpcode::InvokeDotEvalMethodDirect:
+            return &static_cast<const QoreIRInvokeDotEvalMethodDirectInstruction*>(inst)->expr;
         default:
             return nullptr;
     }
@@ -1225,6 +1381,14 @@ void QoreIRFunction::computeSlotIdsAndEmbed() {
                     slot_map[lv] = next_local_slot++;
                 }
             };
+            auto assign_expr_slots = [&](const QoreValue& expr) {
+                std::vector<const LocalVar*> expr_locals;
+                std::unordered_set<const void*> seen;
+                collectLocalSlotsFromExpr(expr, expr_locals, seen);
+                for (const LocalVar* lv : expr_locals) {
+                    assign_slot(lv);
+                }
+            };
             if (inst->opcode == QoreIROpcode::LoadLocal ||
                 inst->opcode == QoreIROpcode::StoreLocal ||
                 inst->opcode == QoreIROpcode::UninstantiateLocal) {
@@ -1297,6 +1461,16 @@ void QoreIRFunction::computeSlotIdsAndEmbed() {
                         assign_slot(reinterpret_cast<const LocalVar*>(root.ref_ptr));
                     }
                 }
+            }
+            if (isLValueOp(inst->opcode)) {
+                auto* lval_inst = static_cast<QoreIRLValueInstruction*>(inst.get());
+                assign_expr_slots(lval_inst->lvalue);
+            }
+            if (const QoreValue* expr = getInstructionExpr(inst.get())) {
+                assign_expr_slots(*expr);
+            }
+            if (const QoreValue* expr = getSerializationOnlyInstructionExpr(inst.get())) {
+                assign_expr_slots(*expr);
             }
         }
     }
