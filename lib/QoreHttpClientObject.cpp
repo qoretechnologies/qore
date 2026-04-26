@@ -1681,7 +1681,7 @@ struct qore_httpclient_priv {
     DLLLOCAL QoreObject* startPollSendRecvConnMgr(ExceptionSink* xsink, QoreObject* self,
             QoreHttpClientObject* client, const char* method, const char* path,
             const void* data, size_t size, const QoreHashNode* headers,
-            const QoreEncoding* body_enc = nullptr);
+            const QoreEncoding* body_enc = nullptr, bool streaming_response = false);
 
     //! Creates a conn_mgr-backed poll operation for startPollConnect
     DLLLOCAL QoreObject* startPollConnectConnMgr(ExceptionSink* xsink, QoreObject* self,
@@ -1712,6 +1712,15 @@ struct qore_httpclient_priv {
         return startPollSendRecvConnMgr(xsink, self, client,
             method->c_str(), path ? path->c_str() : nullptr,
             data, size, headers, enc);
+    }
+
+    DLLLOCAL QoreObject* startPollSendAndStream(ExceptionSink* xsink, QoreObject* self,
+            QoreHttpClientObject* client, const QoreString* method, const QoreString* path,
+            const AbstractQoreNode* data_save, const void* data, size_t size,
+            const QoreHashNode* headers, const QoreEncoding* enc = nullptr) {
+        return startPollSendRecvConnMgr(xsink, self, client,
+            method->c_str(), path ? path->c_str() : nullptr,
+            data, size, headers, enc, true);
     }
 
     DLLLOCAL QoreObject* startPollConnect(ExceptionSink* xsink, QoreObject* self, QoreHttpClientObject* client) {
@@ -3695,6 +3704,12 @@ QoreObject* QoreHttpClientObject::startPollSendRecv(ExceptionSink* xsink, QoreOb
             const QoreString* path, const AbstractQoreNode* data_save, const void* data, size_t size,
             const QoreHashNode* headers, const QoreEncoding* enc) {
     return http_priv->startPollSendRecv(xsink, self, this, method, path, data_save, data, size, headers, enc);
+}
+
+QoreObject* QoreHttpClientObject::startPollSendAndStream(ExceptionSink* xsink, QoreObject* self,
+            const QoreString* method, const QoreString* path, const AbstractQoreNode* data_save,
+            const void* data, size_t size, const QoreHashNode* headers, const QoreEncoding* enc) {
+    return http_priv->startPollSendAndStream(xsink, self, this, method, path, data_save, data, size, headers, enc);
 }
 
 void QoreHttpClientObject::setDefaultPort(int def_port) {
@@ -7937,10 +7952,16 @@ public:
     //! Constructor for sendRecv mode — fast path (connection already READY)
     HttpClientConnMgrPollOp(QoreFuture* future, QoreEventNotifier* notifier,
             qore_httpclient_priv* priv_ref = nullptr,
-            QoreObject* client_obj = nullptr)
+            QoreObject* client_obj = nullptr,
+            HttpClientConnectionBase* submitted_conn = nullptr,
+            int64_t submitted_stream_id = -1,
+            bool close_submitted_on_done = false)
         : future(future), notifier(notifier), priv_ref(priv_ref),
           client_obj(client_obj),
-          phase(Phase::WAITING_RESPONSE) {
+          phase(Phase::WAITING_RESPONSE),
+          submitted_conn(submitted_conn),
+          submitted_stream_id(submitted_stream_id),
+          close_submitted_on_done(close_submitted_on_done) {
         assert(notifier);
         if (future) {
             future->ref();
@@ -7948,6 +7969,9 @@ public:
         notifier->ref();
         if (client_obj) {
             client_obj->ref();
+        }
+        if (submitted_conn) {
+            submitted_conn->ref();
         }
     }
 
@@ -7982,7 +8006,8 @@ public:
             QorePromise* pending_promise,
             QoreFuture* future, QoreEventNotifier* notifier,
             qore_httpclient_priv* priv_ref,
-            QoreObject* client_obj)
+            QoreObject* client_obj,
+            bool pending_streaming_response = false)
         : future(future), notifier(notifier), priv_ref(priv_ref),
           client_obj(client_obj),
           phase(Phase::WAITING_CONNECT),
@@ -7992,7 +8017,8 @@ public:
           pending_path(std::move(path)),
           pending_headers(pending_headers),
           pending_body(pending_body),
-          pending_promise(pending_promise) {
+          pending_promise(pending_promise),
+          pending_streaming_response(pending_streaming_response) {
         assert(notifier);
         assert(pending_conn);
         assert(pending_mgr);
@@ -8058,6 +8084,7 @@ public:
         // we skip op_lock here.  Acquiring it would be wasted work and also
         // risk asserting under a debug mutex if the lock is ever promoted.
         ExceptionSink xsink;
+        closeSubmittedConnection();
         clearPendingUnlocked(&xsink);
         if (future) {
             future->deref(&xsink);
@@ -8070,6 +8097,10 @@ public:
         if (client_obj) {
             client_obj->deref(&xsink);
             client_obj = nullptr;
+        }
+        if (submitted_conn) {
+            submitted_conn->deref(&xsink);
+            submitted_conn = nullptr;
         }
     }
 
@@ -8209,6 +8240,7 @@ public:
                 pv.discard(&peek_xsink);
                 peek_xsink.clear();
             }
+            closeSubmittedConnection();
             // If the future was rejected (error), surface the error.
             // Map HTTP1-ABORT to SOCKET-NOT-OPEN only when a user-initiated
             // disconnect is in progress (priv_ref->user_disconnect_in_progress).
@@ -8317,8 +8349,11 @@ public:
         // raises HTTPCLIENT-NOT-IMPLEMENTED.
         // PromiseNotifierAction refs both promise and notifier; we still
         // hold our own refs, which are deref'd via clearPending / ~dtor.
-        PromiseNotifierAction* action =
-            new PromiseNotifierAction(pending_promise, notifier);
+        AbstractAsyncAction* action = pending_streaming_response
+            ? static_cast<AbstractAsyncAction*>(
+                new StreamingHeadersPromiseNotifierAction(pending_promise, notifier))
+            : static_cast<AbstractAsyncAction*>(
+                new PromiseNotifierAction(pending_promise, notifier));
         const void* body_ptr = nullptr;
         size_t body_len = 0;
         if (pending_body) {
@@ -8337,13 +8372,22 @@ public:
             return nullptr;
         }
 
+        if (pending_streaming_response) {
+            submitted_conn = pending_conn;
+            submitted_stream_id = stream_id;
+            close_submitted_on_done = true;
+        }
+
         // Successful submit: the connection has consumed its reservation
         // (submitRequestWithAction called releaseStreamReservation
-        // internally).  Release our own connection ref explicitly, then
-        // null pending_conn/mgr so clearPending does NOT double-release
-        // the stream reservation.  Drop the other pending refs — the
-        // future + notifier remain and will be used by WAITING_RESPONSE.
-        pending_conn->deref(xsink);
+        // internally).  Release our own connection ref explicitly unless it
+        // has been transferred to submitted_conn for a header-only streaming
+        // poll.  Then null pending_conn/mgr so clearPending does NOT
+        // double-release the stream reservation.  Drop the other pending refs
+        // — the future + notifier remain and will be used by WAITING_RESPONSE.
+        if (!pending_streaming_response) {
+            pending_conn->deref(xsink);
+        }
         pending_conn = nullptr;
         pending_mgr = nullptr;
         clearPendingUnlocked(xsink);
@@ -8356,6 +8400,7 @@ public:
         done = true;
         phase = Phase::DONE;
         clearPendingUnlocked(xsink);
+        closeSubmittedConnection();
         cleanup(xsink);
     }
 
@@ -8422,6 +8467,20 @@ public:
         }
     }
 
+    void closeSubmittedConnection() {
+        if (!close_submitted_on_done || !submitted_conn) {
+            return;
+        }
+        ExceptionSink close_xsink;
+        submitted_conn->closeConnection(&close_xsink);
+        close_xsink.clear();
+        submitted_conn->deref(&close_xsink);
+        close_xsink.clear();
+        submitted_conn = nullptr;
+        submitted_stream_id = -1;
+        close_submitted_on_done = false;
+    }
+
 private:
     QoreFuture* future = nullptr;
     QoreEventNotifier* notifier = nullptr;
@@ -8450,6 +8509,12 @@ private:
     QoreHashNode* pending_headers = nullptr;
     BinaryNode* pending_body = nullptr;
     QorePromise* pending_promise = nullptr;
+    bool pending_streaming_response = false;
+
+    //! Submitted streaming-header request to close once response headers arrive.
+    HttpClientConnectionBase* submitted_conn = nullptr;
+    int64_t submitted_stream_id = -1;
+    bool close_submitted_on_done = false;
 
     //! Serializes continuePoll() vs abort()/clearPendingUnlocked() so a
     //! concurrent cancel can't null pending_* fields mid-continuePoll.  The
@@ -8464,7 +8529,7 @@ private:
 QoreObject* qore_httpclient_priv::startPollSendRecvConnMgr(ExceptionSink* xsink, QoreObject* self,
         QoreHttpClientObject* client, const char* method, const char* path,
         const void* data, size_t size, const QoreHashNode* headers,
-        const QoreEncoding* body_enc) {
+        const QoreEncoding* body_enc, bool streaming_response) {
     SocketSyncPoll::assertNotOnIoThread("HTTPClient", "startPollSendRecv", xsink);
 
     con_info this_connection = connection;
@@ -8599,8 +8664,11 @@ QoreObject* qore_httpclient_priv::startPollSendRecvConnMgr(ExceptionSink* xsink,
         // like the pre-async implementation.  Dispatches via the virtual
         // HttpClientConnectionBase::submitRequestWithAction, so H1 and H2
         // are both supported.
-        PromiseNotifierAction* action = new PromiseNotifierAction(
-            promise_raw, notifier_raw);
+        AbstractAsyncAction* action = streaming_response
+            ? static_cast<AbstractAsyncAction*>(
+                new StreamingHeadersPromiseNotifierAction(promise_raw, notifier_raw))
+            : static_cast<AbstractAsyncAction*>(
+                new PromiseNotifierAction(promise_raw, notifier_raw));
         int64_t stream_id = conn->submitRequestWithAction(method, msgpath,
             *nh, data, size, action, xsink);
         if (*xsink || stream_id < 0) {
@@ -8609,7 +8677,8 @@ QoreObject* qore_httpclient_priv::startPollSendRecvConnMgr(ExceptionSink* xsink,
             return nullptr;
         }
         poller = new HttpClientConnMgrPollOp(future_raw, notifier_for_op,
-            this, self);
+            this, self, streaming_response ? conn : nullptr, stream_id,
+            streaming_response);
 
         // Drop our local promise ref — the action owns one now.
         promise_holder.release()->deref(xsink);
@@ -8669,8 +8738,11 @@ QoreObject* qore_httpclient_priv::startPollSendRecvConnMgr(ExceptionSink* xsink,
                 return rv.release();
             }
             // READY now — fall into the fast-path synchronous submit.
-            PromiseNotifierAction* action = new PromiseNotifierAction(
-                promise_raw, notifier_raw);
+            AbstractAsyncAction* action = streaming_response
+                ? static_cast<AbstractAsyncAction*>(
+                    new StreamingHeadersPromiseNotifierAction(promise_raw, notifier_raw))
+                : static_cast<AbstractAsyncAction*>(
+                    new PromiseNotifierAction(promise_raw, notifier_raw));
             int64_t stream_id = conn->submitRequestWithAction(method,
                 msgpath, *nh, data, size, action, xsink);
             if (*xsink || stream_id < 0) {
@@ -8679,7 +8751,8 @@ QoreObject* qore_httpclient_priv::startPollSendRecvConnMgr(ExceptionSink* xsink,
                 return nullptr;
             }
             poller = new HttpClientConnMgrPollOp(future_raw, notifier_for_op,
-                this, self);
+                this, self, streaming_response ? conn : nullptr, stream_id,
+                streaming_response);
             promise_holder.release()->deref(xsink);
         } else {
             // Queued: build a WAITING_CONNECT poll op that will submit
@@ -8696,7 +8769,7 @@ QoreObject* qore_httpclient_priv::startPollSendRecvConnMgr(ExceptionSink* xsink,
             poller = new HttpClientConnMgrPollOp(conn, &mgr,
                 std::string(method), std::string(msgpath),
                 headers_raw, body_raw, promise_raw_consumed,
-                future_raw, notifier_for_op, this, self);
+                future_raw, notifier_for_op, this, self, streaming_response);
         }
     }
 

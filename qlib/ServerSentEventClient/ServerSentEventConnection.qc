@@ -310,8 +310,9 @@ public class ServerSentEventConnection inherits ConnectionProvider::AbstractConn
 
     Uses the C++ HttpClientPingPollOperationBase for I/O thread fast path.
     The static @ref create() method creates the HTTPClient, builds SSE headers,
-    starts the inner poll operation, and passes it to the C++ base which handles
-    delegation and response validation (status 200, Content-Type: text/event-stream).
+    starts the header-only streaming poll operation, and passes it to the C++
+    base which handles delegation and response validation (status 200,
+    Content-Type: text/event-stream).
 
     @since ServerSentEventClient 1.1
 */
@@ -322,7 +323,7 @@ public class SseConnectPollOperation inherits Qore::HttpClientPingPollOperationB
     }
 
     #! Creates the poll operation from a pre-computed inner poll op
-    /** @param inner_op the inner poll operation from HTTPClient.startPollSendRecv()
+    /** @param inner_op the inner poll operation from HTTPClient.startPollSendAndStream()
         @param logger optional logger
 
         @note Use the static @ref create() method to construct this object.
@@ -374,7 +375,7 @@ public class SseConnectPollOperation inherits Qore::HttpClientPingPollOperationB
         if (logger) {
             logger.logArgs("INFO", "SSE async connect start: url=%y method=%y", (base_url, sse_method));
         }
-        auto inner_op = hc.startPollSendRecv(sse_method, "", send_body, sse_headers);
+        auto inner_op = hc.startPollSendAndStream(sse_method, "", send_body, sse_headers);
         return new SseConnectPollOperation(inner_op, logger);
     }
 }

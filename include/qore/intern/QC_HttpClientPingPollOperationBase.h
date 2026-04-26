@@ -146,6 +146,9 @@ private:
     //! Pre-computed expected Sec-WebSocket-Accept value (empty = no WS check)
     std::string expected_ws_accept;
 
+    //! Cached state returned from the inner poll operation
+    mutable std::string inner_state;
+
     // --- Output ---
 
     //! Response output hash (ref'd or nullptr)

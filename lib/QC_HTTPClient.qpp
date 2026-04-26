@@ -1241,6 +1241,39 @@ AbstractPollOperation HTTPClient::startPollSendRecv(string method, *string path,
         body ? body->size() : 0, headers);
 }
 
+//! Returns an @ref Qore::AbstractPollOperation "AbstractPollOperation" object to send a message and complete after response headers
+/** This method is intended for long-lived streaming responses where the caller
+    only needs to validate the HTTP response headers, such as SSE connection
+    checks.  The response body is not returned; the underlying streaming
+    request is closed after the headers are received.
+
+    @param method The HTTP method
+    @param path The request path
+    @param body The message body to send
+    @param headers Optional headers to include in the message
+
+    @return an @ref Qore::AbstractPollOperation "AbstractPollOperation" object whose output has the same shape as
+    @ref startPollSendRecv() after response headers are received
+
+    @since %Qore 2.3
+*/
+AbstractPollOperation HTTPClient::startPollSendAndStream(string method, *string path, string body,
+        *hash<auto> headers) {
+    return client->startPollSendAndStream(xsink, self, method, path, body, body->c_str(), body->size(), headers,
+        body->getEncoding());
+}
+
+//! Returns an @ref Qore::AbstractPollOperation "AbstractPollOperation" object to send a message and complete after response headers
+/** @see startPollSendAndStream(string, *string, string, *hash<auto>)
+
+    @since %Qore 2.3
+*/
+AbstractPollOperation HTTPClient::startPollSendAndStream(string method, *string path, *binary body,
+        *hash<auto> headers) {
+    return client->startPollSendAndStream(xsink, self, method, path, body, body ? body->getPtr() : nullptr,
+        body ? body->size() : 0, headers);
+}
+
 //! Sends an HTTP request with the specified method and optional message body
 /** If a connection has not already been established, an internal call to HTTPClient::connect() will be made before
     sending the message
