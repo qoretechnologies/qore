@@ -987,7 +987,9 @@ static int socket_exec_read_http_chunked_trailers(QoreObject* self, QoreSocketOb
 }
 
 static QoreHashNode* socket_exec_read_http_chunked_body(QoreObject* self, QoreSocketObject* s, int timeout_ms,
-        bool binary_body, bool read_once, const char* owner_name, ExceptionSink* xsink) {
+        bool binary_body, bool read_once, const char* owner_name, ExceptionSink* xsink, OutputStream* os = nullptr) {
+    assert(!os || (binary_body && !read_once));
+
     my_socket_priv* priv = my_socket_priv::getPriv(*s);
     SocketExecAsyncIoGuard async_guard(*priv, xsink);
     if (!async_guard) {
@@ -996,7 +998,7 @@ static QoreHashNode* socket_exec_read_http_chunked_body(QoreObject* self, QoreSo
 
     priv->clearHttpExpectChunkedBody();
 
-    SimpleRefHolder<BinaryNode> body_bin(binary_body ? new BinaryNode : nullptr);
+    SimpleRefHolder<BinaryNode> body_bin(binary_body && !os ? new BinaryNode : nullptr);
     SimpleRefHolder<QoreStringNode> body_str(binary_body ? nullptr : new QoreStringNode(s->getEncoding()));
 
     unsigned cancel_check = 0;
@@ -1026,10 +1028,12 @@ static QoreHashNode* socket_exec_read_http_chunked_body(QoreObject* self, QoreSo
 
         if (!chunk_size) {
             ReferenceHolder<QoreHashNode> output(new QoreHashNode(autoTypeInfo), xsink);
-            if (binary_body) {
-                output->setKeyValue("body", body_bin.release(), xsink);
-            } else {
-                output->setKeyValue("body", body_str.release(), xsink);
+            if (!os) {
+                if (binary_body) {
+                    output->setKeyValue("body", body_bin.release(), xsink);
+                } else {
+                    output->setKeyValue("body", body_str.release(), xsink);
+                }
             }
             if (*xsink || socket_exec_read_http_chunked_trailers(self, s, **output, timeout_ms, owner_name, xsink)) {
                 return nullptr;
@@ -1050,18 +1054,25 @@ static QoreHashNode* socket_exec_read_http_chunked_body(QoreObject* self, QoreSo
         }
 
         priv->doDataEvent(QORE_EVENT_HTTP_CHUNKED_DATA_READ, QORE_SOURCE_SOCKET, chunk->getPtr(), chunk->size());
-        if (binary_body) {
+        if (os) {
+            os->write(chunk->getPtr(), chunk->size(), xsink);
+            if (*xsink) {
+                return nullptr;
+            }
+        } else if (binary_body) {
             body_bin->append(chunk->getPtr(), chunk->size());
         } else {
             body_str->concat(static_cast<const char*>(chunk->getPtr()), chunk->size());
         }
 
-        int64 body_size = binary_body ? static_cast<int64>(body_bin->size()) : static_cast<int64>(body_str->size());
-        int64 max_chunked_body_size = priv->getMaxChunkedBodySize();
-        if (max_chunked_body_size > 0 && body_size > max_chunked_body_size) {
-            xsink->raiseException("HTTP-BODY-TOO-LARGE", "chunked body size " QLLD " exceeds maximum " QLLD,
-                body_size, max_chunked_body_size);
-            return nullptr;
+        if (!os) {
+            int64 body_size = binary_body ? static_cast<int64>(body_bin->size()) : static_cast<int64>(body_str->size());
+            int64 max_chunked_body_size = priv->getMaxChunkedBodySize();
+            if (max_chunked_body_size > 0 && body_size > max_chunked_body_size) {
+                xsink->raiseException("HTTP-BODY-TOO-LARGE", "chunked body size " QLLD " exceeds maximum " QLLD,
+                    body_size, max_chunked_body_size);
+                return nullptr;
+            }
         }
 
         SimpleRefHolder<BinaryNode> crlf(socket_exec_recv_bytes(self, s, 2, timeout_ms, xsink));
@@ -4781,7 +4792,8 @@ hash<auto> ans = sock.readHTTPChunkedBodyToOutputStream(outputStream, 20s);
     @throw READ-HTTP-CHUNK-ERROR negative value given for chunk size by server
 */
 hash<auto> Socket::readHTTPChunkedBodyToOutputStream(Qore::OutputStream[OutputStream] os, timeout timeout_ms = -1) {
-    return s->readHTTPChunkedBodyToOutputStream(*os, timeout_ms, xsink);
+    return socket_exec_read_http_chunked_body(self, s, timeout_ms, true, false,
+        "readHTTPChunkedBodyToOutputStream", xsink, *os);
 }
 
 //! Reads in an HTTP message body sent in chunked transfer encoding and returns it with any footers received as a string in the \c "body" key of a hash (including footers received)

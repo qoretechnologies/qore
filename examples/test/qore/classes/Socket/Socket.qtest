@@ -561,6 +561,33 @@ class SocketTest inherits QUnit::Test {
             fail(sprintf("Server exception: %s: %s", server_result.err, server_result.desc));
         }
         assertTrue(server_result);
+
+        background sub () {
+            try {
+                Socket server6();
+                server6.bind("localhost:0");
+                server6.listen();
+                q.push(server6.getSocketInfo().port);
+
+                Socket peer = server6.accept(5s);
+                peer.send("2\r\nhe\r\n3\r\nllo\r\n0\r\nX-Trailer: done\r\n\r\n", 5s);
+                q.push(True);
+            } catch (hash<ExceptionInfo> ex) {
+                q.push(ex);
+            }
+        }();
+
+        Socket client6();
+        client6.connect("localhost:" + q.get(5s));
+        BinaryOutputStream output_stream();
+        response_body = client6.readHTTPChunkedBodyToOutputStream(output_stream, 5s);
+        assertEq(<68656c6c6f>, output_stream.getData());
+        assertEq("done", response_body."x-trailer");
+        server_result = q.get(5s);
+        if (server_result.typeCode() == NT_HASH) {
+            fail(sprintf("Server exception: %s: %s", server_result.err, server_result.desc));
+        }
+        assertTrue(server_result);
     }
 
     sendBinaryTest() {
