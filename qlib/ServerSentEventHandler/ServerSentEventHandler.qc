@@ -103,8 +103,8 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
         @ref HttpServer::AbstractAuthenticator "AbstractAuthenticator" object is passed, then by default no
         authentication will be required
         @param opts options for the object with the following optional keys:
-        - \c heartbeat: a positive integer value giving seconds for the heartbeat interval for the server connection
-          (default: 20 seconds)
+        - \c heartbeat: a non-negative integer value giving seconds for the heartbeat interval for the server
+          connection; \c 0 disables heartbeats (default: 20 seconds)
         - \c logger: a LoggerInterface object for logging
 
         @throw SERVERSENTEVENTHANDLER-OPTION-ERROR unknown or invalid option
@@ -130,9 +130,9 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
     /** @param seconds the heartbeat interval as a number of seconds
     */
     setHeartbeat(softint seconds) {
-        if (seconds <= 0) {
-            throw "SERVERSENTEVENTHANDLER-OPTION-ERROR", sprintf("option \"heartbeat\" value %y is not a positive "
-                "integer giving the number of seconds in the heartbeat interval", seconds);
+        if (seconds < 0) {
+            throw "SERVERSENTEVENTHANDLER-OPTION-ERROR", sprintf("option \"heartbeat\" value %y is not a "
+                "non-negative integer giving the number of seconds in the heartbeat interval", seconds);
         }
         heartbeat = seconds;
         logDebug("Set heartbeat to %d second%s", heartbeat, heartbeat == 1 ? "" : "s");
@@ -143,9 +143,9 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
     */
     setHeartbeat(date seconds) {
         int secs = seconds.durationSeconds();
-        if (secs <= 0) {
-            throw "SERVERSENTEVENTHANDLER-OPTION-ERROR", sprintf("option \"heartbeat\" value %y is not a positive "
-                "integer giving the number of seconds in the heartbeat interval", seconds);
+        if (secs < 0) {
+            throw "SERVERSENTEVENTHANDLER-OPTION-ERROR", sprintf("option \"heartbeat\" value %y is not a "
+                "non-negative integer giving the number of seconds in the heartbeat interval", seconds);
         }
         heartbeat = secs;
         logDebug("Set heartbeat to %d second%s", heartbeat, heartbeat == 1 ? "" : "s");
@@ -264,6 +264,7 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
             cid, stream_id);
 
         HttpServerAsyncIo::Http2SseStream sse_stream(sock, stream_id, wake_callback, True);
+        sse_stream.setHeartbeat(heartbeat * 1000, heartbeat_msg);
 
         ServerSentEventConnection conn = getConnectionImpl(sock, cx, hdr, cid);
         conn.setAsyncSseConnection(sse_stream);
@@ -301,7 +302,8 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
         logDebug("ServerSentEventHandler::setupAsyncSseConnectionHttp3() cid: %y session: %d stream: %d",
             cid, session_id, stream_id);
 
-        HttpServerAsyncIo::Http3SseStream sse_stream(sock, session_id, stream_id, wake_callback);
+        HttpServerAsyncIo::Http3SseStream sse_stream(sock, session_id, stream_id, wake_callback, True);
+        sse_stream.setHeartbeat(heartbeat * 1000, heartbeat_msg);
 
         ServerSentEventConnection conn = getConnectionImpl(sock, cx, hdr, cid);
         conn.setAsyncSseConnection(sse_stream);

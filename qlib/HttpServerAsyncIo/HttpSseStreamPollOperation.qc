@@ -71,10 +71,10 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
         int pending_offset = 0;
 
         #! Heartbeat interval in milliseconds; 0 disables the heartbeat
-        int heartbeat_ms = 0;
+        int heartbeat_ms = DefaultSseHeartbeatIntervalMs;
 
         #! Heartbeat payload sent when the interval expires with no outbound traffic
-        string heartbeat_msg = ":hb\n\n";
+        string heartbeat_msg = DefaultSseHeartbeatMsg;
 
         #! Epoch microseconds of the last successful send (or construction)
         int last_send_us = clock_getmicros();
@@ -96,16 +96,15 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
 
     #! Configures the SSE heartbeat
     /** The async I/O controller wakes the operation via \c poll_timeout_ms when the
-        interval elapses with no outbound traffic; the operation then sends \a msg
-        (typically a \c ":hb\\n\\n" comment) to keep proxies and load balancers from
-        dropping the idle connection.
+        interval elapses with no outbound traffic; the operation then sends
+        \a msg (typically a \c ":hb\\n\\n" comment) to keep proxies and load
+        balancers from dropping the idle connection.  Heartbeats are enabled
+        by default; call this method with \a interval_ms set to \c 0 to opt out.
 
         @param interval_ms heartbeat interval in milliseconds; 0 disables the heartbeat
         @param msg raw bytes to send (must already be SSE-framed, e.g. \c ":hb\\n\\n")
-
-        @since HttpServerAsyncIo 1.0.1
     */
-    setHeartbeat(int interval_ms, string msg = ":hb\n\n") {
+    setHeartbeat(int interval_ms, string msg = DefaultSseHeartbeatMsg) {
         heartbeat_ms = interval_ms;
         heartbeat_msg = msg;
     }
@@ -116,8 +115,6 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
         @ref continuePoll(); this method is retained for source compatibility.
 
         @param cb the wake callback
-
-        @since %HttpServerAsyncIo 1.2
     */
     setWakeCallback(*code<nothing()> cb) {
         wake_callback = cb;

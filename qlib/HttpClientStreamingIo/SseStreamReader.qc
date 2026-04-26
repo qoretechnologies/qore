@@ -90,7 +90,11 @@ public class SseStreamReader {
 
     #! Reads the next SSE event from the stream
     /** Blocks until an SSE event is available, the stream ends, or the timeout
-        expires.  Returns \c NOTHING on timeout or when the stream is complete.
+        expires.  Comment-only SSE frames are consumed internally as
+        keep-alives and do not get returned to callers; the timeout applies
+        to idle reads, so keep-alive frames reset the timeout while this
+        method continues waiting for a dispatchable event.  Returns
+        \c NOTHING on timeout or when the stream is complete.
 
         @param timeout_ms timeout for waiting; blocks indefinitely if not specified
 
@@ -114,7 +118,12 @@ public class SseStreamReader {
             if (sep >= 0) {
                 string event_text = sse_buffer.substr(0, sep + 2);
                 sse_buffer = sse_buffer.substr(sep + 2);
-                return Socket::parseServerSentEvent(event_text);
+                *hash<SseMessageInfo> evt =
+                    Socket::parseServerSentEvent(event_text);
+                if (isCommentOnlyEvent(evt)) {
+                    continue;
+                }
+                return evt;
             }
 
             # Read more data from the stream
@@ -164,6 +173,12 @@ public class SseStreamReader {
     cancel() {
         stream.cancel();
         done = True;
+    }
+
+    #! Returns True if the parsed frame is an SSE comment-only keep-alive
+    private static bool isCommentOnlyEvent(*hash<SseMessageInfo> evt) {
+        return evt && evt.comment.val() && !evt.data.val()
+            && !evt.event.val() && !evt.id.val() && !evt.retry.val();
     }
 }
 
