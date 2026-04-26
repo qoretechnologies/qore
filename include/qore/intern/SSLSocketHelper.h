@@ -119,6 +119,9 @@ public:
     //! Starts an SSL negotiation for a server in nonblocking mode
     DLLLOCAL int startAccept(ExceptionSink* xsink);
 
+    //! Starts an SSL shutdown in nonblocking mode
+    DLLLOCAL int startShutdown(ExceptionSink* xsink);
+
     DLLLOCAL const char* getCipherName() const;
     DLLLOCAL const char* getCipherVersion() const;
     DLLLOCAL X509* getPeerCertificate() const;

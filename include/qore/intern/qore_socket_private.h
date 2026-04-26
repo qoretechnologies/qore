@@ -507,6 +507,22 @@ private:
     qore_socket_private* sock;
 };
 
+class SocketShutdownSslPollState : public AbstractPollState {
+public:
+    DLLLOCAL SocketShutdownSslPollState(ExceptionSink* xsink, qore_socket_private* sock);
+
+    /** returns:
+        - SOCK_POLLIN = wait for read and call this again
+        - SOCK_POLLOUT = wait for write and call this again
+        - 0 = done
+        - < 0 = error (exception raised)
+    */
+    DLLLOCAL virtual int continuePoll(ExceptionSink* xsink);
+
+private:
+    qore_socket_private* sock;
+};
+
 class SocketSendPollState : public AbstractPollState {
 public:
     DLLLOCAL SocketSendPollState(ExceptionSink* xsink, qore_socket_private* sock, const char* data, size_t size);

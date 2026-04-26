@@ -79,6 +79,34 @@ private:
     bool done = false;
 };
 
+class SocketShutdownSslPollOperation : public SocketPollSocketOperationBase {
+public:
+    DLLLOCAL SocketShutdownSslPollOperation(ExceptionSink* xsink, QoreSocketObject* sock);
+
+    DLLLOCAL void deref(ExceptionSink* xsink) {
+        if (ROdereference()) {
+            if (set_non_block) {
+                sock->clearNonBlock();
+            }
+            sock->deref(xsink);
+            delete this;
+        }
+    }
+
+    DLLLOCAL virtual bool goalReached() const override {
+        return done;
+    }
+
+    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override;
+
+    DLLLOCAL virtual const char* getStateImpl() const override {
+        return done ? "done" : "shutting-down-ssl";
+    }
+
+private:
+    bool done = false;
+};
+
 class SocketDataAvailablePollOperation : public SocketPollSocketOperationBase {
 public:
     DLLLOCAL SocketDataAvailablePollOperation(ExceptionSink* xsink, QoreSocketObject* sock);

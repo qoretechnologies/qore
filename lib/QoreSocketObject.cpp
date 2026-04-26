@@ -264,6 +264,12 @@ static int qore_socket_object_exec_upgrade_ssl(QoreSocketObject* s, int timeout_
         timeout_ms, goal, goal, xsink);
 }
 
+static int qore_socket_object_exec_shutdown_ssl(QoreSocketObject* s, ExceptionSink* xsink) {
+    s->ref();
+    return qore_socket_object_exec_poll_no_output(s, new SocketShutdownSslPollOperation(xsink, s), -1,
+        "shutdownSSL", "shutdown-ssl", xsink);
+}
+
 static QoreSocketObject* qore_socket_object_exec_accept(QoreSocketObject* s, int timeout_ms, bool ssl,
         ExceptionSink* xsink, SocketSource* source = nullptr) {
     s->ref();
@@ -2190,12 +2196,7 @@ int QoreSocketObject::shutdown() {
 }
 
 int QoreSocketObject::shutdownSSL(ExceptionSink* xsink) {
-    AutoLocker al(priv->m);
-    my_socket_priv::SyncIoGuard sg(*priv, xsink);
-    if (!sg) {
-        return -1;
-    }
-    return priv->socket->shutdownSSL(xsink);
+    return qore_socket_object_exec_shutdown_ssl(this, xsink);
 }
 
 const char* QoreSocketObject::getSSLCipherName() {

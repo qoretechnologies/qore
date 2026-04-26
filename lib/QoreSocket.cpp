@@ -716,6 +716,36 @@ int SSLSocketHelper::startAccept(ExceptionSink* xsink) {
     return 0;
 }
 
+int SSLSocketHelper::startShutdown(ExceptionSink* xsink) {
+    SSLSocketReferenceHelper ssrh(this, true);
+
+    OptionalNonBlockingHelper nbh(qs, true, xsink);
+    if (*xsink) {
+        return QSE_SSL_ERR;
+    }
+
+    ERR_clear_error();
+    int rc = SSL_shutdown(ssl);
+    if (rc < 0) {
+        int err = SSL_get_error(ssl, rc);
+        switch (err) {
+            case SSL_ERROR_WANT_READ:
+                return SOCK_POLLIN;
+            case SSL_ERROR_WANT_WRITE:
+                return SOCK_POLLOUT;
+            case SSL_ERROR_SYSCALL:
+                return sysCallError(xsink, rc, "shutdownSSL", "SSL_shutdown");
+            default:
+                break;
+        }
+        if (sslError(xsink, "shutdownSSL", "SSL_shutdown", true)) {
+            return QSE_SSL_ERR;
+        }
+    }
+
+    return 0;
+}
+
 int SSLSocketHelper::sysCallError(ExceptionSink* xsink, int rc, const char* mname, const char* ssl_func) {
      if (!sslError(xsink, mname, ssl_func)) {
         if (!rc) {
@@ -1914,6 +1944,17 @@ SocketAcceptSslPollState::SocketAcceptSslPollState(ExceptionSink* xsink, qore_so
 
 int SocketAcceptSslPollState::continuePoll(ExceptionSink* xsink) {
     return sock->ssl->startAccept(xsink);
+}
+
+SocketShutdownSslPollState::SocketShutdownSslPollState(ExceptionSink* xsink, qore_socket_private* sock)
+        : sock(sock) {
+}
+
+int SocketShutdownSslPollState::continuePoll(ExceptionSink* xsink) {
+    if (!sock->ssl) {
+        return 0;
+    }
+    return sock->ssl->startShutdown(xsink);
 }
 
 SocketRecvPacketPollState::SocketRecvPacketPollState(ExceptionSink* xsink, qore_socket_private* sock) : sock(sock),
@@ -6548,6 +6589,67 @@ QoreHashNode* SocketUpgradeServerSslPollOperation::continuePoll(ExceptionSink* x
         poll_state.reset();
         sock->priv->clearNonBlock();
         set_non_block = false;
+        done = true;
+        return nullptr;
+    }
+
+    return getSocketPollInfoHash(xsink, rc);
+}
+
+SocketShutdownSslPollOperation::SocketShutdownSslPollOperation(ExceptionSink* xsink, QoreSocketObject* sock)
+        : SocketPollSocketOperationBase(sock) {
+    AutoLocker al(sock->priv->m);
+
+    if (sock->priv->checkValid(xsink)) {
+        return;
+    }
+    if (!sock->priv->socket->isOpen() || !sock->priv->socket->isSecure()) {
+        done = true;
+        return;
+    }
+
+    if (!sock->priv->setNonBlock(xsink)) {
+        set_non_block = true;
+        poll_state.reset(new SocketShutdownSslPollState(xsink, qore_socket_private::get(*sock->priv->socket)));
+        if (*xsink) {
+            poll_state.reset();
+            sock->priv->clearNonBlock();
+            set_non_block = false;
+        }
+    }
+}
+
+QoreHashNode* SocketShutdownSslPollOperation::continuePoll(ExceptionSink* xsink) {
+    AutoLocker al(sock->priv->m);
+
+    if (done) {
+        return nullptr;
+    }
+
+    if (sock->priv->checkValid(xsink)) {
+        return nullptr;
+    }
+    if (!sock->priv->socket->isOpen() || !sock->priv->socket->isSecure()) {
+        if (set_non_block) {
+            sock->priv->clearNonBlock();
+            set_non_block = false;
+        }
+        done = true;
+        return nullptr;
+    }
+
+    assert(poll_state);
+    int rc = poll_state->continuePoll(xsink);
+    if (*xsink) {
+        assert(rc < 0);
+        return nullptr;
+    }
+    if (!rc) {
+        poll_state.reset();
+        if (set_non_block) {
+            sock->priv->clearNonBlock();
+            set_non_block = false;
+        }
         done = true;
         return nullptr;
     }

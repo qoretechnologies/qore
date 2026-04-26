@@ -1516,6 +1516,7 @@ class SocketTest inherits QUnit::Test {
                 assertTrue(peer.isSecure());
                 peer.upgradeServerToSSL(15s);
                 peer.send("ok");
+                peer.shutdownSSL();
                 q.push(True);
             } catch (hash<ExceptionInfo> ex) {
                 q.push(ex);
@@ -1528,6 +1529,7 @@ class SocketTest inherits QUnit::Test {
         assertTrue(client.isSecure());
         client.upgradeClientToSSL(15s);
         assertEq("ok", client.recv(2));
+        client.shutdownSSL();
 
         auto server_result = q.get();
         if (server_result.typeCode() == NT_HASH) {
@@ -1771,6 +1773,7 @@ class SocketTest inherits QUnit::Test {
         assertThrows("SOCKET-NOT-OPEN", \s.recvBinary(), 1);
         assertThrows("SOCKET-NOT-OPEN", \s.send(), "1");
         assertThrows("SOCKET-NOT-OPEN", \s.sendi1(), 1);
+        s.shutdownSSL();
 
         assertEq(NOTHING, s.verifyPeerCertificate());
         assertEq(NOTHING, s.getSSLCipherName());
