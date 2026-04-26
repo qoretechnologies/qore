@@ -1327,10 +1327,6 @@ struct qore_httpclient_priv {
     */
     std::unique_ptr<HttpClientConnectionManagerBase> conn_mgr;
 
-    //! When true, send_internal delegates to the C++ conn_mgr for
-    //! synchronous request/response and streaming flows where possible.
-    bool use_conn_mgr = true;
-
     //! Set during user-initiated disconnect() to map HTTP1-ABORT errors
     //! on pending poll ops to SOCKET-NOT-OPEN (matching legacy semantics).
     std::atomic<bool> user_disconnect_in_progress{false};
@@ -1899,11 +1895,10 @@ struct qore_httpclient_priv {
 
     //! Pre-populate the conn_mgr pool for HTTPClient::connect().
     /** Returns 0 on success, -1 on error (with xsink set).  Called from
-        QoreHttpClientObject::connect() when use_conn_mgr is active so
-        the legacy HTTPClient::connect() API still does what callers
-        expect (fail fast on unreachable server, warm up the socket) but
-        uses the conn_mgr pool instead of the legacy msock — so the
-        first subsequent send() reuses the same TCP connection.
+        QoreHttpClientObject::connect() so the legacy HTTPClient::connect()
+        API still does what callers expect (fail fast on unreachable server,
+        warm up the socket) but uses the conn_mgr pool instead of the legacy
+        msock — so the first subsequent send() reuses the same TCP connection.
 
         Acquires a connection with the configured connect timeout,
         then releases its stream reservation so the next request can
@@ -2008,19 +2003,13 @@ struct qore_httpclient_priv {
     DLLLOCAL void setPersistent(ExceptionSink* xsink) {
         AutoLocker al(msock->m);
 
-        if (use_conn_mgr) {
-            // Persistence pins the current logical HTTPClient session to
-            // an already-open manager connection.  Warm the pool here so
-            // later sends can fail with PERSISTENCE-ERROR instead of
-            // silently creating a replacement connection.
-            if ((!conn_mgr || !conn_mgr->getConnectionCount(connection.host.c_str(), connection.port))
-                    && connectViaConnMgr(xsink)) {
-                return;
-            }
-        } else if (!msock->socket->isOpen()) {
-            if (connect_unlocked(xsink, connection)) {
-                return;
-            }
+        // Persistence pins the current logical HTTPClient session to an
+        // already-open manager connection.  Warm the pool here so later
+        // sends can fail with PERSISTENCE-ERROR instead of silently
+        // creating a replacement connection.
+        if ((!conn_mgr || !conn_mgr->getConnectionCount(connection.host.c_str(), connection.port))
+                && connectViaConnMgr(xsink)) {
+            return;
         }
 
         if (!persistent) {
@@ -4110,12 +4099,14 @@ int QoreHttpClientObject::getConnectTimeout() const {
     return http_priv->connect_timeout_ms;
 }
 
-void QoreHttpClientObject::setUseConnectionManager(bool enable) {
-    http_priv->use_conn_mgr = enable;
+void QoreHttpClientObject::setUseConnectionManager(bool) {
+    // Retained for source compatibility. Synchronous HTTPClient I/O now
+    // delegates through the async connection manager wherever the API
+    // contract allows it, so disabling the manager is no longer supported.
 }
 
 bool QoreHttpClientObject::getUseConnectionManager() const {
-    return http_priv->use_conn_mgr;
+    return true;
 }
 
 int QoreHttpClientObject::setURL(const char* str, ExceptionSink* xsink) {
@@ -5127,7 +5118,7 @@ int QoreHttpClientObject::connect(ExceptionSink* xsink) {
     // send() goes through the same pool entry, so there is a single TCP
     // connection per logical session. UNIX targets through a proxy stay
     // on the legacy path.
-    if (http_priv->use_conn_mgr && http_priv->connection.has_url()
+    if (http_priv->connection.has_url()
             && !(http_priv->connection.is_unix && http_priv->proxy_connection.has_url())) {
         // Drop any stale msock state (prior disconnect/reconnect cycle).
         http_priv->disconnect_unlocked();
@@ -7323,7 +7314,7 @@ QoreHashNode* qore_httpclient_priv::send_internal(ExceptionSink* xsink, const ch
             }
             is_ws_upgrade = has_conn_upgrade && has_upgrade_ws;
         }
-        if (use_conn_mgr && !is_ws_upgrade && !(connection.is_unix && proxy_connection.has_url())) {
+        if (!is_ws_upgrade && !(connection.is_unix && proxy_connection.has_url())) {
             return send_internal_conn_mgr(xsink, mname, meth, mpath, headers,
                 msg_body, data, size, send_callback, getbody, info, timeout_ms,
                 recv_callback, obj, os, is, max_chunk_size, trailer_callback, streaming);

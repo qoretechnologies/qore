@@ -2620,15 +2620,13 @@ int HTTPClient::getConnectTimeout() [flags=CONSTANT] {
    return client->getConnectTimeout();
 }
 
-//! Enables or disables the async connection manager for synchronous HTTP dispatch
-/** When enabled, synchronous request/response and streaming operations delegate
-    to the internal C++ connection manager instead of the legacy sync socket
-    dispatch where possible.  This provides connection pooling and async I/O
-    integration for the sync HTTPClient API.  The remaining legacy fallbacks
-    are protocol-upgrade paths such as WebSocket, explicit disabling via this
-    method, and compatibility cases that need direct access to the legacy socket.
+//! Compatibility setter for async connection manager dispatch
+/** Synchronous request/response and streaming operations delegate to the
+    internal C++ connection manager instead of the legacy sync socket dispatch
+    wherever possible.  This method is retained for source compatibility;
+    passing @ref False no longer disables the connection manager.
 
-    @param enable @ref True to enable, @ref False to disable
+    @param enable ignored
 
     @since %Qore 2.3
 */
@@ -2636,9 +2634,8 @@ nothing HTTPClient::setUseConnectionManager(softbool enable = True) {
     client->setUseConnectionManager(enable);
 }
 
-//! Returns @ref True if the async connection manager is enabled
-/** @return @ref True if the async connection manager dispatch is enabled,
-    @ref False otherwise
+//! Returns @ref True because async connection manager dispatch is always enabled
+/** @return @ref True
 
     @since %Qore 2.3
 */

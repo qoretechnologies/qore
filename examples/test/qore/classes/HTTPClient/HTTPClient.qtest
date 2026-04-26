@@ -820,6 +820,8 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
 
         int port = q.get();
         HTTPClient hc({"url": "http://localhost:" + port, "timeout": 5s});
+        hc.setUseConnectionManager(False);
+        assertTrue(hc.getUseConnectionManager(), "conn_mgr disabling should be ignored");
         hc.connect();
 
         auto accepted = q.get();

@@ -701,13 +701,11 @@ public:
     */
     DLLEXPORT bool hasStreamingChannel() const;
 
-    //! Reports whether the client is open, including when a conn_mgr streaming channel is held.
-    /** When the client is using conn_mgr (`use_conn_mgr=true`), the
-        legacy @c msock socket is never connected, so the inherited
-        @c Socket::isOpen reports @c false even while the client is
-        actively streaming.  This override reports @c true whenever a
-        conn_mgr streaming channel is held; otherwise it falls through
-        to the legacy socket check.
+    //! Reports whether the client is open, including conn_mgr state.
+    /** With conn_mgr-backed dispatch, the legacy @c msock socket is not
+        connected for regular request/response flows.  This override reports
+        @c true whenever a conn_mgr connection or streaming channel is active;
+        otherwise it falls through to the legacy socket check.
 
         @since %Qore 2.3
     */
@@ -831,15 +829,19 @@ public:
     **/
     DLLEXPORT int getConnectTimeout() const;
 
-    //! Enables or disables async connection manager dispatch for synchronous HTTP requests
-    /** @param enable true to enable, false to disable
+    //! Compatibility setter for async connection manager dispatch
+    /** Synchronous HTTPClient I/O now delegates through the async connection
+        manager wherever possible.  This setter is retained for source
+        compatibility; passing @c false no longer disables the manager.
+
+        @param enable ignored
 
         @since %Qore 2.3
     */
     DLLEXPORT void setUseConnectionManager(bool enable);
 
-    //! Returns true if async connection manager dispatch is enabled
-    /** @return true if the connection manager is enabled
+    //! Returns true because async connection manager dispatch is always enabled
+    /** @return true
 
         @since %Qore 2.3
     */
