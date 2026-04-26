@@ -1001,14 +1001,14 @@ static int qore_socket_object_exec_send_http_response(QoreSocketObject* s, QoreH
 }
 
 static int qore_socket_object_exec_send_http_chunked_body_trailer(QoreSocketObject* s,
-        const QoreHashNode* trailer, int timeout_ms, ExceptionSink* xsink) {
+        const QoreHashNode* trailer, int source, int timeout_ms, ExceptionSink* xsink) {
     QoreString hdr(s->getEncoding());
     hdr.concat("0\r\n");
     qore_socket_private::do_headers(hdr, trailer, 0, false);
 
     int rc = qore_socket_object_exec_send_bytes(s, hdr.c_str(), hdr.size(), timeout_ms, xsink);
     if (!rc && trailer) {
-        my_socket_priv::getPriv(*s)->doHeaderEvent(QORE_EVENT_HTTP_FOOTERS_SENT, QORE_SOURCE_SOCKET, *trailer);
+        my_socket_priv::getPriv(*s)->doHeaderEvent(QORE_EVENT_HTTP_FOOTERS_SENT, source, *trailer);
     }
     return rc;
 }
@@ -1098,6 +1098,160 @@ static int qore_socket_object_exec_send_http_chunked_body_input_stream(QoreSocke
             return 0;
         }
     }
+}
+
+static bool qore_socket_object_exec_is_data_available(QoreSocketObject* s, int timeout_ms, ExceptionSink* xsink);
+
+static bool qore_socket_object_exec_check_send_aborted(QoreSocketObject* s, bool* aborted, ExceptionSink* xsink) {
+    if (!aborted) {
+        return false;
+    }
+
+    bool data_available = qore_socket_object_exec_is_data_available(s, 0, xsink);
+    if (data_available || *xsink) {
+        *aborted = true;
+        return true;
+    }
+    return false;
+}
+
+static bool qore_socket_object_exec_try_clear_send_error_as_aborted(QoreSocketObject* s, bool* aborted,
+        ExceptionSink* xsink) {
+    if (!aborted || !*xsink) {
+        return false;
+    }
+
+    ExceptionSink aborted_xsink;
+    bool data_available = qore_socket_object_exec_is_data_available(s, 0, &aborted_xsink);
+    if (aborted_xsink) {
+        aborted_xsink.clear();
+        return false;
+    }
+    if (!data_available) {
+        return false;
+    }
+
+    xsink->clear();
+    *aborted = true;
+    return true;
+}
+
+static int qore_socket_object_exec_send_http_chunked_body_callback(QoreSocketObject* s,
+        const ResolvedCallReferenceNode* send_callback, int source, int timeout_ms, bool* aborted,
+        ExceptionSink* xsink) {
+    assert(!aborted || !(*aborted));
+
+    unsigned cancel_check = 0;
+    while (true) {
+        if (!(cancel_check++ % 100) && qore_check_cancel(xsink, "socket chunked callback send")) {
+            return -1;
+        }
+
+        if (qore_socket_object_exec_check_send_aborted(s, aborted, xsink)) {
+            return *xsink ? -1 : 0;
+        }
+
+        ValueHolder res(send_callback->execValue(nullptr, xsink), xsink);
+        if (*xsink) {
+            return -1;
+        }
+
+        const void* data = nullptr;
+        size_t size = 0;
+        const QoreStringNode* body_event = nullptr;
+        bool done = false;
+
+        switch (res->getType()) {
+            case NT_STRING: {
+                const QoreStringNode* str = res->get<const QoreStringNode>();
+                if (str->empty()) {
+                    done = true;
+                    break;
+                }
+                data = str->c_str();
+                size = str->size();
+                body_event = str;
+                break;
+            }
+            case NT_BINARY: {
+                const BinaryNode* bin = res->get<const BinaryNode>();
+                if (bin->empty()) {
+                    done = true;
+                    break;
+                }
+                data = bin->getPtr();
+                size = bin->size();
+                break;
+            }
+            case NT_HASH:
+                return qore_socket_object_exec_send_http_chunked_body_trailer(s, res->get<const QoreHashNode>(),
+                    source, timeout_ms, xsink);
+            case NT_NOTHING:
+            case NT_NULL:
+                done = true;
+                break;
+            default:
+                xsink->raiseException("SOCKET-CALLBACK-ERROR", "HTTP chunked data callback returned type '%s'; "
+                    "expecting one of: 'string', 'binary', 'hash', 'nothing' (or 'NULL')", res->getTypeName());
+                return -1;
+        }
+
+        if (done) {
+            if (qore_socket_object_exec_send_bytes(s, "0\r\n\r\n", 5, timeout_ms, xsink)
+                    && !qore_socket_object_exec_try_clear_send_error_as_aborted(s, aborted, xsink)) {
+                return -1;
+            }
+            return 0;
+        }
+
+        QoreString prefix;
+        qore_socket_object_exec_set_http_chunk_prefix(prefix, size);
+        if (qore_socket_object_exec_send_bytes(s, prefix.c_str(), prefix.size(), timeout_ms, xsink)
+                || qore_socket_object_exec_send_bytes(s, data, size, timeout_ms, xsink)
+                || qore_socket_object_exec_send_bytes(s, "\r\n", 2, timeout_ms, xsink)) {
+            return qore_socket_object_exec_try_clear_send_error_as_aborted(s, aborted, xsink) ? 0 : -1;
+        }
+
+        if (body_event) {
+            my_socket_priv::getPriv(*s)->doDataEvent(QORE_EVENT_HTTP_CHUNKED_DATA_SENT, source, *body_event);
+        } else {
+            my_socket_priv::getPriv(*s)->doDataEvent(QORE_EVENT_HTTP_CHUNKED_DATA_SENT, source, data, size);
+        }
+    }
+}
+
+static int qore_socket_object_exec_send_http_message_callback(QoreSocketObject* s, QoreHashNode* info,
+        const char* method, const char* path, const char* http_version, const QoreHashNode* headers,
+        const ResolvedCallReferenceNode* send_callback, int source, int timeout_ms, bool* aborted,
+        ExceptionSink* xsink) {
+    QoreString hdr(s->getEncoding());
+    if (my_socket_priv::getPriv(*s)->getSendHttpMessageChunkedHeaders(xsink, hdr, info, method, path,
+            http_version, headers, source)) {
+        return -1;
+    }
+
+    if (qore_socket_object_exec_send_bytes(s, hdr.c_str(), hdr.size(), timeout_ms, xsink)) {
+        return -1;
+    }
+    return qore_socket_object_exec_send_http_chunked_body_callback(s, send_callback, source, timeout_ms, aborted,
+        xsink);
+}
+
+static int qore_socket_object_exec_send_http_response_callback(QoreSocketObject* s, QoreHashNode* info,
+        int code, const char* desc, const char* http_version, const QoreHashNode* headers,
+        const ResolvedCallReferenceNode* send_callback, int source, int timeout_ms, bool* aborted,
+        ExceptionSink* xsink) {
+    QoreString hdr(s->getEncoding());
+    if (my_socket_priv::getPriv(*s)->getSendHttpResponseChunkedHeaders(xsink, hdr, info, code, desc, http_version,
+            headers, source)) {
+        return -1;
+    }
+
+    if (qore_socket_object_exec_send_bytes(s, hdr.c_str(), hdr.size(), timeout_ms, xsink)) {
+        return -1;
+    }
+    return qore_socket_object_exec_send_http_chunked_body_callback(s, send_callback, source, timeout_ms, aborted,
+        xsink);
 }
 
 static int qore_socket_object_exec_send_http_response_input_stream(QoreSocketObject* s, QoreHashNode* info,
@@ -1862,14 +2016,8 @@ int QoreSocketObject::sendHTTPMessage(ExceptionSink* xsink, QoreHashNode* info, 
 int QoreSocketObject::sendHTTPMessageWithCallback(ExceptionSink* xsink, QoreHashNode* info, const char* method,
         const char* path, const char* http_version, const QoreHashNode* headers,
         const ResolvedCallReferenceNode& send_callback, int source, int timeout_ms, bool* aborted) {
-    AutoLocker al(priv->m);
-    my_socket_priv::SyncIoGuard sg(*priv, xsink, NB_SEND);
-    if (!sg) {
-        return -1;
-    }
-    return priv->socket->priv->sendHttpMessage(xsink, info, "Socket", "sendHTTPMessageWithCallback", method, path,
-        http_version, headers, nullptr, nullptr, 0, &send_callback, nullptr, 0, nullptr, source, timeout_ms, &priv->m,
-        aborted);
+    return qore_socket_object_exec_send_http_message_callback(this, info, method, path, http_version, headers,
+        &send_callback, source, timeout_ms, aborted, xsink);
 }
 
 // send HTTP response
@@ -1901,14 +2049,8 @@ int QoreSocketObject::sendHTTPResponse(ExceptionSink* xsink, QoreHashNode* info,
 int QoreSocketObject::sendHTTPResponseWithCallback(ExceptionSink* xsink, QoreHashNode* info, int code,
         const char* desc, const char* http_version, const QoreHashNode* headers,
     const ResolvedCallReferenceNode& send_callback, int source, int timeout_ms, bool* aborted) {
-    AutoLocker al(priv->m);
-    my_socket_priv::SyncIoGuard sg(*priv, xsink, NB_SEND);
-    if (!sg) {
-        return -1;
-    }
-    return priv->socket->priv->sendHttpResponse(xsink, info, "Socket", "sendHTTPResponseWithCallback", code, desc,
-        http_version, headers, nullptr, nullptr, 0, &send_callback, nullptr, 0, nullptr, source, timeout_ms, &priv->m,
-        aborted);
+    return qore_socket_object_exec_send_http_response_callback(this, info, code, desc, http_version, headers,
+        &send_callback, source, timeout_ms, aborted, xsink);
 }
 
 // send data in HTTP chunked format
@@ -1919,7 +2061,7 @@ void QoreSocketObject::sendHTTPChunkedBodyFromInputStream(InputStream* is, size_
 }
 
 void QoreSocketObject::sendHTTPChunkedBodyTrailer(const QoreHashNode* headers, int timeout_ms, ExceptionSink* xsink) {
-    qore_socket_object_exec_send_http_chunked_body_trailer(this, headers, timeout_ms, xsink);
+    qore_socket_object_exec_send_http_chunked_body_trailer(this, headers, QORE_SOURCE_SOCKET, timeout_ms, xsink);
 }
 
 QoreHashNode* QoreSocketObject::readHttpChunk(int timeout_ms, ExceptionSink* xsink) {
