@@ -32,7 +32,8 @@ public class BaseLinkerOrderSourceDataType inherits HashDataType {
             },
         };
     }
-    constructor() : HashDataType("BaseLinkerOrderSourceDataType", Fields) {}
+    constructor() : HashDataType("BaseLinkerOrderSourceDataType") {
+        addQoreFields(Fields);
+    }
 }
-
 } # namespace BaseLinkerDataProvider

@@ -14,7 +14,8 @@ public class BaseLinkerCourierDataType inherits HashDataType {
                 "short_desc": "Courier display name", "type": SoftStringOrNothingType},
         };
     }
-    constructor() : HashDataType("BaseLinkerCourierDataType", Fields) {}
+    constructor() : HashDataType("BaseLinkerCourierDataType") {
+        addQoreFields(Fields);
+    }
 }
-
 } # namespace BaseLinkerDataProvider

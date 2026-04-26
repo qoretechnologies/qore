@@ -53,7 +53,8 @@ public class BaseLinkerOrderReturnDataType inherits HashDataType {
             },
         };
     }
-    constructor() : HashDataType("BaseLinkerOrderReturnDataType", Fields) {}
+    constructor() : HashDataType("BaseLinkerOrderReturnDataType") {
+        addQoreFields(Fields);
+    }
 }
-
 } # namespace BaseLinkerDataProvider

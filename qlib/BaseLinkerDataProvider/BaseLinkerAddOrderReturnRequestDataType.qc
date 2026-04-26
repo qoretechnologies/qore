@@ -42,11 +42,14 @@ public class BaseLinkerAddOrderReturnRequestDataType inherits HashDataType {
             },
             "date_add": {
                 "display_name": "Date Added",
-                "short_desc": "Return creation timestamp (Unix seconds)",
-                "type": SoftIntType,
+                "short_desc": "Return creation timestamp",
+                "type": DateType,
                 "required": True,
-                "desc": "Return creation timestamp as Unix seconds.",
-                "example_value": 1745280000,
+                "desc": "When the return was created. Sent to the BaseLinker "
+                    "`addOrderReturn` API as Unix seconds (the conversion is performed "
+                    "inside `doRequestImpl()`); the field is exposed as a date so the UI "
+                    "can render a date/time picker rather than asking the user for a "
+                    "raw epoch number.",
             },
             "currency": {
                 "display_name": "Currency",
@@ -164,7 +167,8 @@ public class BaseLinkerAddOrderReturnRequestDataType inherits HashDataType {
             },
         };
     }
-    constructor() : HashDataType("BaseLinkerAddOrderReturnRequestDataType", Fields) {}
+    constructor() : HashDataType("BaseLinkerAddOrderReturnRequestDataType") {
+        addQoreFields(Fields);
+    }
 }
-
 } # namespace BaseLinkerDataProvider

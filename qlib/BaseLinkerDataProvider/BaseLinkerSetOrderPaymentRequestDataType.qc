@@ -46,7 +46,8 @@ public class BaseLinkerSetOrderPaymentRequestDataType inherits HashDataType {
             },
         };
     }
-    constructor() : HashDataType("BaseLinkerSetOrderPaymentRequestDataType", Fields) {}
+    constructor() : HashDataType("BaseLinkerSetOrderPaymentRequestDataType") {
+        addQoreFields(Fields);
+    }
 }
-
 } # namespace BaseLinkerDataProvider

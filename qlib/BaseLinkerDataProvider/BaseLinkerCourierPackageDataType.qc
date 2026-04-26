@@ -29,7 +29,8 @@ public class BaseLinkerCourierPackageDataType inherits HashDataType {
                 "type": SoftIntOrNothingType},
         };
     }
-    constructor() : HashDataType("BaseLinkerCourierPackageDataType", Fields) {}
+    constructor() : HashDataType("BaseLinkerCourierPackageDataType") {
+        addQoreFields(Fields);
+    }
 }
-
 } # namespace BaseLinkerDataProvider

@@ -128,7 +128,8 @@ public class BaseLinkerOrderProductDataType inherits HashDataType {
         };
     }
 
-    constructor() : HashDataType("BaseLinkerOrderProductDataType", Fields) {}
+    constructor() : HashDataType("BaseLinkerOrderProductDataType") {
+        addQoreFields(Fields);
+    }
 }
-
 } # namespace BaseLinkerDataProvider

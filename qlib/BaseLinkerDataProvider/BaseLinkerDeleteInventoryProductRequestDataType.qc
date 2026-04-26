@@ -25,7 +25,8 @@ public class BaseLinkerDeleteInventoryProductRequestDataType inherits HashDataTy
             },
         };
     }
-    constructor() : HashDataType("BaseLinkerDeleteInventoryProductRequestDataType", Fields) {}
+    constructor() : HashDataType("BaseLinkerDeleteInventoryProductRequestDataType") {
+        addQoreFields(Fields);
+    }
 }
-
 } # namespace BaseLinkerDataProvider

@@ -48,7 +48,8 @@ public class BaseLinkerSetOrderReturnRefundRequestDataType inherits HashDataType
             },
         };
     }
-    constructor() : HashDataType("BaseLinkerSetOrderReturnRefundRequestDataType", Fields) {}
+    constructor() : HashDataType("BaseLinkerSetOrderReturnRefundRequestDataType") {
+        addQoreFields(Fields);
+    }
 }
-
 } # namespace BaseLinkerDataProvider

@@ -27,7 +27,8 @@ public class BaseLinkerSetOrderReturnStatusRequestDataType inherits HashDataType
             },
         };
     }
-    constructor() : HashDataType("BaseLinkerSetOrderReturnStatusRequestDataType", Fields) {}
+    constructor() : HashDataType("BaseLinkerSetOrderReturnStatusRequestDataType") {
+        addQoreFields(Fields);
+    }
 }
-
 } # namespace BaseLinkerDataProvider

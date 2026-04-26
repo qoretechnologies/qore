@@ -39,7 +39,8 @@ public class BaseLinkerJournalLogDataType inherits HashDataType {
             },
         };
     }
-    constructor() : HashDataType("BaseLinkerJournalLogDataType", Fields) {}
+    constructor() : HashDataType("BaseLinkerJournalLogDataType") {
+        addQoreFields(Fields);
+    }
 }
-
 } # namespace BaseLinkerDataProvider

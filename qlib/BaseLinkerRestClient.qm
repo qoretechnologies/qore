@@ -146,7 +146,7 @@ public class BaseLinkerRestClientBase {
         };
 
         #! Default connection URL
-        const DefaultConnectionUrl = "baselinkerrests://api.baselinker.com/connector.php";
+        const DefaultConnectionUrl = "baselinkerrest://api.baselinker.com/connector.php";
     }
 
     #! returns options for the BaseLinkerRestClient constructor
@@ -308,8 +308,10 @@ public class BaseLinkerRestConnection inherits RestClient::RestConnection {
 
     #! returns config for @ref BaseLinkerRestConnection::constructor()
     private static hash<auto> getConfig(hash<auto> config) {
+        # BaseLinker has a single fixed endpoint, so always force the default URL
+        # (the framework's auto_url fallback would otherwise leave url as <scheme>://localhost)
         return config + {
-            "url": config.url ?? BaseLinkerRestClientBase::DefaultConnectionUrl,
+            "url": BaseLinkerRestClientBase::DefaultConnectionUrl,
         };
     }
 
@@ -357,6 +359,23 @@ public class BaseLinkerRestConnection inherits RestClient::RestConnection {
     #! Returns the ConnectionSchemeInfo hash for this object
     private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
         return ConnectionScheme;
+    }
+
+    #! Fixes URL for auto_url connections
+    setUpdateOptionsCode(*code update_options) {
+        UpdateOptionsInterface::setUpdateOptionsCode(update_options);
+        if (update_options) {
+            hash<auto> update;
+            if (url != BaseLinkerRestClientBase::DefaultConnectionUrl) {
+                update.url = BaseLinkerRestClientBase::DefaultConnectionUrl;
+            }
+            if (opts.ping_path =~ /^\//) {
+                update.ping_path = opts.ping_path.substr(1);
+            }
+            if (update) {
+                doUpdateOptions(self, update);
+            }
+        }
     }
 }
 

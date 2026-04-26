@@ -51,7 +51,8 @@ public class BaseLinkerInvoiceAddressDataType inherits HashDataType {
             },
         };
     }
-    constructor() : HashDataType("BaseLinkerInvoiceAddressDataType", Fields) {}
+    constructor() : HashDataType("BaseLinkerInvoiceAddressDataType") {
+        addQoreFields(Fields);
+    }
 }
-
 } # namespace BaseLinkerDataProvider

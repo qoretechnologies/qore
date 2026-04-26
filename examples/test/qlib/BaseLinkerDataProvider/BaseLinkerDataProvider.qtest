@@ -375,7 +375,7 @@ public class BaseLinkerDataProviderTest inherits QUnit::Test {
         hash<auto> order_payload = {
             "order_status_id": initial_status_id,
             "custom_source_id": 0,
-            "date_add":         int(get_epoch_seconds(now_us())),
+            "date_add":         now_us(),
             "user_comments":    "Qore integration test " + get_random_string(8),
             "admin_comments":   "created by BaseLinkerDataProvider.qtest",
             "email":            test_email,
@@ -605,7 +605,7 @@ public class BaseLinkerDataProviderTest inherits QUnit::Test {
             AbstractDataProvider add_dp = orders_dp.getChildProvider("add-order");
             hash<auto> res = add_dp.doRequest({
                 "order_status_id": 0,
-                "date_add":        int(get_epoch_seconds(now_us())),
+                "date_add":        now_us(),
                 "email":           "qore-watch-" + get_random_string(8) + "@example.com",
                 "phone":           "+48123456789",
                 "currency":        "PLN",

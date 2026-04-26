@@ -70,7 +70,8 @@ public class BaseLinkerInventoryManufacturerDataType inherits HashDataType {
             },
         };
     }
-    constructor() : HashDataType("BaseLinkerInventoryManufacturerDataType", Fields) {}
+    constructor() : HashDataType("BaseLinkerInventoryManufacturerDataType") {
+        addQoreFields(Fields);
+    }
 }
-
 } # namespace BaseLinkerDataProvider

@@ -23,7 +23,8 @@ public class BaseLinkerCourierFieldDataType inherits HashDataType {
             },
         };
     }
-    constructor() : HashDataType("BaseLinkerCourierFieldDataType", Fields) {}
+    constructor() : HashDataType("BaseLinkerCourierFieldDataType") {
+        addQoreFields(Fields);
+    }
 }
-
 } # namespace BaseLinkerDataProvider

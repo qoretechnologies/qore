@@ -28,7 +28,8 @@ public class BaseLinkerEanAdditionalDataType inherits HashDataType {
             },
         };
     }
-    constructor() : HashDataType("BaseLinkerEanAdditionalDataType", Fields) {}
+    constructor() : HashDataType("BaseLinkerEanAdditionalDataType") {
+        addQoreFields(Fields);
+    }
 }
-
 } # namespace BaseLinkerDataProvider

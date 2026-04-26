@@ -34,7 +34,8 @@ public class BaseLinkerInventoryDataType inherits HashDataType {
                 "type": SoftBoolOrNothingType},
         };
     }
-    constructor() : HashDataType("BaseLinkerInventoryDataType", Fields) {}
+    constructor() : HashDataType("BaseLinkerInventoryDataType") {
+        addQoreFields(Fields);
+    }
 }
-
 } # namespace BaseLinkerDataProvider

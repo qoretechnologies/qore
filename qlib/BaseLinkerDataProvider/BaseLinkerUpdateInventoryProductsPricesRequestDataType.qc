@@ -28,7 +28,8 @@ public class BaseLinkerUpdateInventoryProductsPricesRequestDataType inherits Has
             },
         };
     }
-    constructor() : HashDataType("BaseLinkerUpdateInventoryProductsPricesRequestDataType", Fields) {}
+    constructor() : HashDataType("BaseLinkerUpdateInventoryProductsPricesRequestDataType") {
+        addQoreFields(Fields);
+    }
 }
-
 } # namespace BaseLinkerDataProvider

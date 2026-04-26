@@ -38,6 +38,8 @@ const SchemeMap = {
 };
 ```
 
+**Critical: every URL constant in the module must use a scheme that is actually registered.** If the module registers `myservice` but the `DefaultConnectionUrl` constant uses `myservices://` (with a typo'd trailing `s`, or any other unregistered variant), the framework parses the URL, sees an unknown scheme, marks the connection as `(InvalidConnection)` with `type: "invalid"`, no `app`, no `has_provider` — and the connection silently disappears from the action picker because invalid connections are filtered out. This is the kind of bug that `qrest connections/<name>` will surface as a `URL-ARG-ERROR: ... references unknown scheme ... known schemes: [...]` alert, but only after a connection actually exists. Always grep your module for every scheme literal (`grep -rn '<schemename>' qlib/<Module>*`) and verify each appears in the schemes list registered via `ConnectionSchemeCache::registerScheme()`.
+
 ### Connection Options
 
 Use `apikey` instead of `token` (inherited `token` has special handling that causes issues):
@@ -86,6 +88,43 @@ private static hash<auto> getConfig(hash<auto> config) {
     return config + {"url": sprintf("myscheme://api.service%s/v1", domain)};
 }
 ```
+
+**`auto_url: True` without source options is a footgun.** When `auto_url: True` is declared but the connection has no domain/region/host option for the framework to build the URL from (and `getConfig()` doesn't override it), the framework silently substitutes `<scheme>://localhost` as the URL. Every connection then attempts to talk to `localhost:443` and fails with `SOCKET-CONNECT-ERROR: Connection refused`.
+
+**For fixed-endpoint APIs** (a single global URL like `https://api.service.com/v1` with no per-tenant domain), either:
+
+- Hard-code the URL in `getConfig()` so the framework's auto-fallback can never run:
+
+  ```qore
+  private static hash<auto> getConfig(hash<auto> config) {
+      # Single fixed endpoint — always use the canonical URL regardless of what
+      # the framework's auto_url machinery passes in (which would otherwise
+      # default to "<scheme>://localhost" because there is no domain option).
+      return config + {"url": MyServiceRestClientBase::DefaultConnectionUrl};
+  }
+  ```
+
+- Also override `setUpdateOptionsCode()` so any subsequent options update re-corrects the URL (mirrors the existing OAuth2 URL-rebuild pattern):
+
+  ```qore
+  setUpdateOptionsCode(*code update_options) {
+      UpdateOptionsInterface::setUpdateOptionsCode(update_options);
+      if (update_options) {
+          hash<auto> update;
+          if (url != MyServiceRestClientBase::DefaultConnectionUrl) {
+              update.url = MyServiceRestClientBase::DefaultConnectionUrl;
+          }
+          if (opts.ping_path =~ /^\//) {
+              update.ping_path = opts.ping_path.substr(1);
+          }
+          if (update) {
+              doUpdateOptions(self, update);
+          }
+      }
+  }
+  ```
+
+The `DefaultConnectionUrl` scheme **must** match the registered scheme (see [Connection Scheme Registration](#connection-scheme-registration)).
 
 ### OAuth2 Configuration
 
@@ -304,6 +343,20 @@ private *list<hash<AllowedValueInfo>> getReferenceDataImpl(string type, *hash<au
 }
 ```
 
+**Both names and signatures must match the abstract base exactly.** Qore's method dispatch matches overrides by name AND parameter list. A mismatch silently falls through to the no-op base implementation — there is no "method not overridden" warning at module load, no exception at runtime, no log message. The dropdown just stays empty and you spend hours grepping for `getOrderStatusList` HTTP calls that never happen.
+
+The two failure modes:
+
+1. **Wrong method name (`Impl` suffix on the wrong method)**
+
+   `getSupportedReferenceData()` has **no `Impl` suffix** in `AbstractDataProvider`. Overriding `getSupportedReferenceDataImpl()` (with `Impl`) does nothing — the framework calls the un-suffixed method, which returns the empty default. Every `ref_data` lookup then fails with `UNSUPPORTED-REFERENCE-DATA` on the strict path or quietly returns nothing on the lenient path.
+
+2. **Wrong signature (extra parameters on `getReferenceDataImpl`)**
+
+   The canonical signature is exactly `(string type, *hash<auto> action_opts)` — two parameters. Any divergence (e.g., a 3-arg `(string kind, *string filter_value, *hash<auto> depends_on_values)`) doesn't match what the framework calls, so the override is never invoked. No API request, no warning, empty dropdown.
+
+Both bugs are invisible to the type system because the override is a separate method declaration, not an abstract method implementation that fails at parse time. The only safe practice is to copy the canonical signature verbatim from `qlib/DataProvider/AbstractDataProvider.qc`.
+
 ### Cascading ref_data (Dependent Dropdowns)
 
 When a ref_data dropdown depends on the value of another field (e.g., listing applied tags for a
@@ -453,9 +506,167 @@ public class MyCreateDataProvider inherits MyDataProviderBase {
 
 These are referenced in action registration as `MyCreateDataProvider::ResponseType`.
 
+### HashDataType Constructor Pattern
+
+Type classes that inherit from `HashDataType` MUST register their fields via `addQoreFields(Fields)` from inside the constructor body, NOT by passing `Fields` as a positional argument to the parent constructor.
+
+**Wrong** — silently drops every field:
+
+```qore
+public class MyCreateRequestDataType inherits HashDataType {
+    public {
+        const Fields = { ... };
+    }
+    constructor() : HashDataType("MyCreateRequestDataType", Fields) {}  # BUG
+}
+```
+
+**Why this is wrong:** the matching `HashDataType` constructor overload is `(string name = AutoHashType.getName(), *hash<auto> options, *hash<auto> tags, ...)`. When the call passes `Fields` as the second argument, Qore's overload resolution sees a `hash<auto>` and binds it to the `*hash<auto> options` parameter — `Fields` is silently absorbed as connection options. The dedicated fields-aware overload `(string name, hash<string, AbstractDataField> fields, ...)` only matches when the second arg is `hash<string, AbstractDataField>` — a typed hash of `AbstractDataField` instances, not the plain `{ "field": { ... } }` literal that `Fields` actually contains.
+
+The damage: the type ends up with the right name but **zero registered fields**. Wire-level data still flows (the request body is just a JSON hash) so the bug doesn't show up in tests, but every UI that introspects the type schema sees a generic empty hash. Lists of these types render with `element_type: "hash"` instead of the structured form. `getActionOptionFromFields(MyType::Fields)` happens to work because it reads from the const directly, not from the type instance — masking the problem further.
+
+**Correct** — both styles work:
+
+```qore
+public class MyCreateRequestDataType inherits HashDataType {
+    public {
+        const Fields = { ... };
+    }
+    constructor() : HashDataType("MyCreateRequestDataType") {
+        addQoreFields(Fields);
+    }
+}
+```
+
+```qore
+public class MyCreateRequestDataType inherits HashDataType {
+    public {
+        const Fields = { ... };
+    }
+    constructor() {
+        addQoreFields(Fields);
+    }
+}
+```
+
+`addQoreFields(hash<auto> new_fields)` ([qlib/DataProvider/HashDataType.qc:356](../qlib/DataProvider/HashDataType.qc)) iterates the hash and constructs `QoreDataField` instances from each entry — the proper field-registration path. Apply this same pattern to every `HashDataType` subclass in the module: request types, response types, shared sub-types.
+
+### Timestamp Field Types
+
+Date/time fields require special handling because the type that the API consumes on the wire is rarely the type that the UI should expose to a no-code user.
+
+**Rule:** the request type field should be `DateType` (or `DateOrNothingType`) regardless of the API's wire format. The UI then renders a date/time picker. If the API requires another representation (Unix epoch seconds/milliseconds, an ISO 8601 string in a specific format, etc.) the data provider converts the value inside `doRequestImpl()` immediately before serializing the request.
+
+| API wire format | Request type field | Conversion in `doRequestImpl()` |
+|---|---|---|
+| ISO 8601 string (any flavor) | `DateType` / `DateOrNothingType` | `format_date("YYYY-MM-DDTHH:mm:SSZ", req.field)` (or whichever format the API documents) |
+| Unix seconds (integer) | `DateType` / `DateOrNothingType` | `int(get_epoch_seconds(req.field))` |
+| Unix milliseconds (integer) | `DateType` / `DateOrNothingType` | `(get_epoch_seconds(req.field) * 1000) + (req.field.microseconds() / 1000)` |
+| Local-date string (`YYYY-MM-DD`) | `DateType` / `DateOrNothingType` | `format_date("YYYY-MM-DD", req.field)` |
+
+**Anti-pattern (do not do this):**
+
+```qore
+const Fields = {
+    "date_add": {
+        "type": SoftIntType,        # API wants Unix seconds, but UI now gets a number input
+        "display_name": "Date Added",
+        "example_value": 1745280000, # nobody wants to type this
+    },
+};
+```
+
+This is wrong even though the type "matches" the API: the user sees a plain number input and has to know what a Unix timestamp is. The check that the field type matches the API literally is *not* the bar — the bar is what the UI renders.
+
+**Correct pattern:**
+
+```qore
+const Fields = {
+    "date_add": {
+        "type": DateType,
+        "display_name": "Date Added",
+        "short_desc": "Order creation timestamp",
+        "desc": "When the order was created. Sent to the API as Unix seconds.",
+        "required": True,
+    },
+};
+
+# In the corresponding *DataProvider.qc:
+private auto doRequestImpl(auto req, *hash<auto> request_options) {
+    hash<auto> body = req;
+    if (exists req.date_add) {
+        body.date_add = int(get_epoch_seconds(req.date_add));
+    }
+    return base.callMethod("addOrder", body);
+}
+```
+
+The same rule applies to event/output types: surface dates as `DateType` in the response schema and convert from the API's wire format when building the example/output hash, so downstream FSM steps get a real `date` value to pass into other actions.
+
 ---
 
 ## Action Registration
+
+### Action Path Resolution (CRITICAL)
+
+Every `registerAction()` call has a `path` field. **The framework resolves that path against the root data provider's child tree to acquire the data provider that backs the action.** If the path doesn't resolve, the action's data provider is `null`, which silently disables:
+
+- **`ref_data` lookups** — the framework needs the resolved provider to call `getReferenceData()`. No provider → `addExtraOptions opt "X" allowed_values: null` → empty dropdown.
+- **`doRequestImpl()` / `searchRecordsImpl()`** — the action can't actually run.
+- **Output type schema retrieval** — `output_type` is read from the provider.
+
+The failure mode is silent: the action still appears in the catalog, the option form still renders, but every `ref_data` dropdown is empty and the action throws `INVALID-CHILD-PROVIDER` only when the user actually clicks "execute".
+
+**Two valid layouts**, choose one consistently per provider:
+
+#### Layout A — Flat ChildMap (Aftership convention, recommended for most)
+
+Root provider's `ChildMap` exposes every action provider as a direct child:
+
+```qore
+const ChildMap = {
+    # Resource/grouping providers
+    "trackings": Class::forName("MyService::TrackingsDataProvider"),
+    "returns": Class::forName("MyService::ReturnsDataProvider"),
+
+    # Action providers — every DPAT_API action has an entry here
+    "create-tracking": Class::forName("MyService::CreateTrackingDataProvider"),
+    "delete-tracking": Class::forName("MyService::DeleteTrackingDataProvider"),
+    "create-return": Class::forName("MyService::CreateReturnDataProvider"),
+    # ...
+};
+```
+
+Action paths are flat: `path: "/create-tracking"`. Resolves to the `create-tracking` child of the root provider.
+
+#### Layout B — Nested paths matching provider hierarchy
+
+Root provider exposes only resource groupings; each grouping's `ChildMap` contains its own action providers. Action paths must include the full nested path:
+
+```qore
+# Root ChildMap
+const ChildMap = {
+    "trackings": Class::forName("MyService::TrackingsDataProvider"),
+};
+
+# In TrackingsDataProvider, its own ChildMap
+const ChildMap = {
+    "create": Class::forName("MyService::CreateTrackingDataProvider"),
+};
+```
+
+Action path: `path: "/trackings/create"` (full nested path).
+
+#### What you must NOT do
+
+The bug to avoid is mixing the two: registering an action with a flat path (`/create-tracking`) while only nesting its provider under a grouping (`trackings/create-tracking`). The flat path doesn't resolve, the action is silently broken. Verify by listing root's children and checking that every action's `path.split("/")` first segment is in that list:
+
+```bash
+grep -A2 'const ChildMap' qlib/<Module>/<Module>DataProvider.qc
+grep -nE '"path":' qlib/<Module>/<Module>DataProvider.qm
+```
+
+Reference implementation: [qlib/AftershipDataProvider/AftershipDataProvider.qc](../qlib/AftershipDataProvider/AftershipDataProvider.qc) (flat ChildMap with both grouping and action providers).
 
 ### DPAT_FIND - Critical Rule
 
@@ -1298,6 +1509,21 @@ Type classes declared in a `.qc` file **must** be inside the `public namespace M
 - **Lowercase sentence starts**: Every sentence in `desc` must start with a capital letter
 - **Wall-of-text long descriptions**: Descriptions >500 chars should use bold section headers (`**Section**:`) and bullet lists (`- `item``) — see [Description Formatting](#description-formatting)
 - **Unclosed backticks**: Always verify backtick pairs are matched; a missing opening or closing backtick breaks markdown rendering for the rest of the description
+
+### 16. Scheme literal must match registered scheme (silent InvalidConnection)
+URL constants (`DefaultConnectionUrl`, default values, examples in comments) must use a scheme that's actually registered via `ConnectionSchemeCache::registerScheme()`. A typo'd scheme like `myservices://` (extra `s`) when only `myservice` is registered makes every connection an `(InvalidConnection)` with `type: "invalid"`, `app: nothing`, no provider — and the connection silently disappears from the action picker. Surfaces as `URL-ARG-ERROR: ... references unknown scheme ...` in connection alerts. See [Connection Scheme Registration](#connection-scheme-registration).
+
+### 17. `auto_url: True` with no source options falls back to `<scheme>://localhost`
+When `auto_url: True` is declared but there's no domain/region option to build a URL from, and `getConfig()` doesn't override the URL, the framework substitutes `<scheme>://localhost`. Every connection then gets `SOCKET-CONNECT-ERROR: Connection refused` against localhost. For fixed-endpoint APIs, hard-code the URL in `getConfig()` (and add a `setUpdateOptionsCode()` re-fix). See [Auto-URL Connections](#auto-url-connections).
+
+### 18. Action `path` must resolve to the root provider's child tree
+Every `registerAction()` `path` is resolved against the root provider's `ChildMap` to acquire the backing data provider. If the path doesn't resolve, the framework leaves `prov` null and silently disables `ref_data` lookups (empty dropdowns) and action execution (`INVALID-CHILD-PROVIDER`). Choose either flat `ChildMap` with flat paths, or nested `ChildMap` with nested paths — never mix. See [Action Path Resolution](#action-path-resolution-critical).
+
+### 19. Method name/signature mismatches silently disable overrides
+Qore's method dispatch matches overrides by both name AND parameter list against the abstract base. A typo in the method name (`getSupportedReferenceDataImpl` instead of `getSupportedReferenceData`) or an extra parameter (`getReferenceDataImpl(string, *string, *hash)` instead of `(string, *hash)`) means the override is never installed — the framework falls through to the no-op base. No exception, no log, just silent feature failure. Always copy the signature verbatim from `qlib/DataProvider/AbstractDataProvider.qc`. See [Reference Data (Dropdowns)](#reference-data-dropdowns).
+
+### 20. `HashDataType("Name", Fields)` constructor pattern silently drops fields
+The constructor overload `(string name, *hash<auto> options, ...)` matches before the fields-aware overload, so passing `Fields` as the second positional arg makes Qore treat it as `options`. The type ends up with the right name but no registered fields. Tests pass (wire payload still serializes), but the UI sees a generic empty hash for every typed field. Always register fields with `addQoreFields(Fields)` from inside the constructor body. See [HashDataType Constructor Pattern](#hashdatatype-constructor-pattern).
 
 ### 15. Wrong `getRecordTypeImpl()` return type
 

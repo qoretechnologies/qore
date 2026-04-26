@@ -54,7 +54,8 @@ public class BaseLinkerSuccessIdResponseDataType inherits HashDataType {
             },
         };
     }
-    constructor() : HashDataType("BaseLinkerSuccessIdResponseDataType", Fields) {}
+    constructor() : HashDataType("BaseLinkerSuccessIdResponseDataType") {
+        addQoreFields(Fields);
+    }
 }
-
 } # namespace BaseLinkerDataProvider

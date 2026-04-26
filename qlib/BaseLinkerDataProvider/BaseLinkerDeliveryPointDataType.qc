@@ -36,7 +36,8 @@ public class BaseLinkerDeliveryPointDataType inherits HashDataType {
             },
         };
     }
-    constructor() : HashDataType("BaseLinkerDeliveryPointDataType", Fields) {}
+    constructor() : HashDataType("BaseLinkerDeliveryPointDataType") {
+        addQoreFields(Fields);
+    }
 }
-
 } # namespace BaseLinkerDataProvider

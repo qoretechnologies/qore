@@ -48,7 +48,8 @@ public class BaseLinkerCreatePackageRequestDataType inherits HashDataType {
             },
         };
     }
-    constructor() : HashDataType("BaseLinkerCreatePackageRequestDataType", Fields) {}
+    constructor() : HashDataType("BaseLinkerCreatePackageRequestDataType") {
+        addQoreFields(Fields);
+    }
 }
-
 } # namespace BaseLinkerDataProvider

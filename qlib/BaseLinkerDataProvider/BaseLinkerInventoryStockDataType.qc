@@ -21,7 +21,8 @@ public class BaseLinkerInventoryStockDataType inherits HashDataType {
             },
         };
     }
-    constructor() : HashDataType("BaseLinkerInventoryStockDataType", Fields) {}
+    constructor() : HashDataType("BaseLinkerInventoryStockDataType") {
+        addQoreFields(Fields);
+    }
 }
-
 } # namespace BaseLinkerDataProvider

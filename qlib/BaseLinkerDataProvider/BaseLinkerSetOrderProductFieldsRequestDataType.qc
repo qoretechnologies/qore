@@ -26,7 +26,8 @@ public class BaseLinkerSetOrderProductFieldsRequestDataType inherits HashDataTyp
         } + BaseLinkerDataProviderBase::makeFieldsOptional(
             BaseLinkerOrderProductDataType::Fields);
     }
-    constructor() : HashDataType("BaseLinkerSetOrderProductFieldsRequestDataType", Fields) {}
+    constructor() : HashDataType("BaseLinkerSetOrderProductFieldsRequestDataType") {
+        addQoreFields(Fields);
+    }
 }
-
 } # namespace BaseLinkerDataProvider

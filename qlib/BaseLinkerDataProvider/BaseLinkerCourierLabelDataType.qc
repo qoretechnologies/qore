@@ -33,7 +33,8 @@ public class BaseLinkerCourierLabelDataType inherits HashDataType {
             },
         };
     }
-    constructor() : HashDataType("BaseLinkerCourierLabelDataType", Fields) {}
+    constructor() : HashDataType("BaseLinkerCourierLabelDataType") {
+        addQoreFields(Fields);
+    }
 }
-
 } # namespace BaseLinkerDataProvider

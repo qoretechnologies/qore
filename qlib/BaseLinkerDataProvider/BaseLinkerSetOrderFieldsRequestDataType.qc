@@ -73,7 +73,8 @@ public class BaseLinkerSetOrderFieldsRequestDataType inherits HashDataType {
             BaseLinkerAddOrderRequestDataType::Fields - ExcludedAddOrderFields)
           + ExtraFields;
     }
-    constructor() : HashDataType("BaseLinkerSetOrderFieldsRequestDataType", Fields) {}
+    constructor() : HashDataType("BaseLinkerSetOrderFieldsRequestDataType") {
+        addQoreFields(Fields);
+    }
 }
-
 } # namespace BaseLinkerDataProvider

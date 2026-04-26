@@ -164,7 +164,8 @@ public class BaseLinkerOrderDataType inherits HashDataType {
             },
         };
     }
-    constructor() : HashDataType("BaseLinkerOrderDataType", Fields) {}
+    constructor() : HashDataType("BaseLinkerOrderDataType") {
+        addQoreFields(Fields);
+    }
 }
-
 } # namespace BaseLinkerDataProvider

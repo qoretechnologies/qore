@@ -45,7 +45,17 @@ public class BaseLinkerDataProvider inherits BaseLinkerDataProviderBase {
         const ConstructorOptions = BaseConstructorOptions;
 
         #! Child provider map
+        /** Includes both resource/grouping providers AND every DPAT_API action provider as a
+            direct child of root. Action paths registered in the action catalog are flat (e.g.
+            \c /add-order, \c /set-order-fields) so they must resolve to a child of the root
+            provider — without that resolution the framework leaves \c prov as null when
+            building the action option schema, and \c ref_data lookups (e.g. order statuses
+            for \c order_status_id) never run, leaving the UI dropdown empty. The same
+            grouping providers (\c orders, \c inventory-products, etc.) keep their own
+            ChildMaps so the action providers remain reachable both flat and nested.
+        */
         const ChildMap = {
+            # Resource/grouping providers
             "orders": Class::forName("BaseLinkerDataProvider::BaseLinkerOrdersDataProvider"),
             "order-returns":
                 Class::forName("BaseLinkerDataProvider::BaseLinkerOrderReturnsDataProvider"),
@@ -75,6 +85,52 @@ public class BaseLinkerDataProvider inherits BaseLinkerDataProviderBase {
             "order-sources":
                 Class::forName("BaseLinkerDataProvider::BaseLinkerOrderSourcesDataProvider"),
             "events": Class::forName("BaseLinkerDataProvider::BaseLinkerEventsDataProvider"),
+
+            # Order action providers
+            "add-order":
+                Class::forName("BaseLinkerDataProvider::BaseLinkerAddOrderDataProvider"),
+            "set-order-fields":
+                Class::forName("BaseLinkerDataProvider::BaseLinkerSetOrderFieldsDataProvider"),
+            "set-order-status":
+                Class::forName("BaseLinkerDataProvider::BaseLinkerSetOrderStatusDataProvider"),
+            "set-order-payment":
+                Class::forName("BaseLinkerDataProvider::BaseLinkerSetOrderPaymentDataProvider"),
+            "delete-order":
+                Class::forName("BaseLinkerDataProvider::BaseLinkerDeleteOrdersDataProvider"),
+            "add-order-product":
+                Class::forName("BaseLinkerDataProvider::BaseLinkerAddOrderProductDataProvider"),
+            "set-order-product-fields":
+                Class::forName("BaseLinkerDataProvider::BaseLinkerSetOrderProductFieldsDataProvider"),
+            "delete-order-product":
+                Class::forName("BaseLinkerDataProvider::BaseLinkerDeleteOrderProductDataProvider"),
+
+            # Order return action providers
+            "add-order-return":
+                Class::forName("BaseLinkerDataProvider::BaseLinkerAddOrderReturnDataProvider"),
+            "set-order-return-fields":
+                Class::forName("BaseLinkerDataProvider::BaseLinkerSetOrderReturnFieldsDataProvider"),
+            "set-order-return-status":
+                Class::forName("BaseLinkerDataProvider::BaseLinkerSetOrderReturnStatusDataProvider"),
+            "set-order-return-refund":
+                Class::forName("BaseLinkerDataProvider::BaseLinkerSetOrderReturnRefundDataProvider"),
+
+            # Inventory action providers
+            "add-inventory-product":
+                Class::forName("BaseLinkerDataProvider::BaseLinkerAddInventoryProductDataProvider"),
+            "delete-inventory-product":
+                Class::forName("BaseLinkerDataProvider::BaseLinkerDeleteInventoryProductDataProvider"),
+            "update-inventory-stock":
+                Class::forName("BaseLinkerDataProvider::BaseLinkerUpdateInventoryProductsStockDataProvider"),
+            "update-inventory-prices":
+                Class::forName("BaseLinkerDataProvider::BaseLinkerUpdateInventoryProductsPricesDataProvider"),
+
+            # Courier package action providers
+            "add-package":
+                Class::forName("BaseLinkerDataProvider::BaseLinkerCreatePackageDataProvider"),
+            "get-label":
+                Class::forName("BaseLinkerDataProvider::BaseLinkerGetLabelDataProvider"),
+            "delete-courier-package":
+                Class::forName("BaseLinkerDataProvider::BaseLinkerDeleteCourierPackageDataProvider"),
         };
     }
 

@@ -40,7 +40,13 @@ public class BaseLinkerAddOrderReturnDataProvider inherits BaseLinkerDataProvide
     }
 
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        return callMethod("addOrderReturn", req);
+        hash<auto> body = req;
+        # date_add is a DateType in the request schema (so the UI gets a date picker);
+        # the BaseLinker addOrderReturn API expects Unix seconds, so convert here.
+        if (body.date_add instanceof date) {
+            body.date_add = int(get_epoch_seconds(body.date_add));
+        }
+        return callMethod("addOrderReturn", body);
     }
 
     private hash<DataProviderInfo> getStaticInfoImpl() {

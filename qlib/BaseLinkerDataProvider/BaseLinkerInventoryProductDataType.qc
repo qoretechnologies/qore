@@ -58,7 +58,8 @@ public class BaseLinkerInventoryProductDataType inherits HashDataType {
                 "type": AbstractDataProviderType::get(AutoHashOrNothingType)},
         };
     }
-    constructor() : HashDataType("BaseLinkerInventoryProductDataType", Fields) {}
+    constructor() : HashDataType("BaseLinkerInventoryProductDataType") {
+        addQoreFields(Fields);
+    }
 }
-
 } # namespace BaseLinkerDataProvider

@@ -38,7 +38,8 @@ public class BaseLinkerPackageDimensionsDataType inherits HashDataType {
             },
         };
     }
-    constructor() : HashDataType("BaseLinkerPackageDimensionsDataType", Fields) {}
+    constructor() : HashDataType("BaseLinkerPackageDimensionsDataType") {
+        addQoreFields(Fields);
+    }
 }
-
 } # namespace BaseLinkerDataProvider

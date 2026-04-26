@@ -32,7 +32,8 @@ public class BaseLinkerGetLabelRequestDataType inherits HashDataType {
             },
         };
     }
-    constructor() : HashDataType("BaseLinkerGetLabelRequestDataType", Fields) {}
+    constructor() : HashDataType("BaseLinkerGetLabelRequestDataType") {
+        addQoreFields(Fields);
+    }
 }
-
 } # namespace BaseLinkerDataProvider

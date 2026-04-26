@@ -39,7 +39,8 @@ public class BaseLinkerDeleteCourierPackageRequestDataType inherits HashDataType
             },
         };
     }
-    constructor() : HashDataType("BaseLinkerDeleteCourierPackageRequestDataType", Fields) {}
+    constructor() : HashDataType("BaseLinkerDeleteCourierPackageRequestDataType") {
+        addQoreFields(Fields);
+    }
 }
-
 } # namespace BaseLinkerDataProvider

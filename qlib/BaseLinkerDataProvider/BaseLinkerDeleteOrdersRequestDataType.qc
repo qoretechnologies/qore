@@ -18,7 +18,8 @@ public class BaseLinkerDeleteOrdersRequestDataType inherits HashDataType {
             },
         };
     }
-    constructor() : HashDataType("BaseLinkerDeleteOrdersRequestDataType", Fields) {}
+    constructor() : HashDataType("BaseLinkerDeleteOrdersRequestDataType") {
+        addQoreFields(Fields);
+    }
 }
-
 } # namespace BaseLinkerDataProvider

@@ -294,7 +294,12 @@ public class BaseLinkerDataProviderBase inherits DataProvider::AbstractDataProvi
     }
 
     #! Returns the list of reference data kinds supported by this module
-    *hash<string, bool> getSupportedReferenceDataImpl() {
+    /** Method name is \c getSupportedReferenceData (no \c Impl suffix) — the abstract base
+        declares it without the suffix and any \c Impl-suffixed override will not match,
+        leaving the framework to use the empty default and reject every \c ref_data type
+        as @c UNSUPPORTED-REFERENCE-DATA.
+    */
+    *hash<string, bool> getSupportedReferenceData() {
         return {
             "orders": True,
             "order_returns": True,
@@ -312,34 +317,39 @@ public class BaseLinkerDataProviderBase inherits DataProvider::AbstractDataProvi
         };
     }
 
-    #! Returns reference data for the requested kind
-    private *list<hash<AllowedValueInfo>> getReferenceDataImpl(string kind,
-            *string filter_value, *hash<auto> depends_on_values) {
+    #! Returns reference data for the requested type
+    /** Signature must match @ref AbstractDataProvider::getReferenceDataImpl() exactly
+        (\c string \c type, \c *hash<auto> \c action_opts) — Qore's method dispatch will not
+        invoke an override with a different signature, so any deviation silently disables
+        ref_data resolution for every action option in the module.
+    */
+    private *list<hash<AllowedValueInfo>> getReferenceDataImpl(string type,
+            *hash<auto> action_opts) {
         try {
-            switch (kind) {
+            switch (type) {
                 case "orders": return getReferenceOrders();
                 case "order_returns": return getReferenceOrderReturns();
                 case "order_products":
-                    return getReferenceOrderProducts(depends_on_values.order_id);
+                    return getReferenceOrderProducts(action_opts.order_id);
                 case "order_statuses": return getReferenceOrderStatuses();
                 case "order_return_statuses": return getReferenceOrderReturnStatuses();
                 case "order_sources": return getReferenceOrderSources();
                 case "inventories": return getReferenceInventories();
                 case "inventory_products":
-                    return getReferenceInventoryProducts(depends_on_values.inventory_id);
+                    return getReferenceInventoryProducts(action_opts.inventory_id);
                 case "inventory_manufacturers":
                     return getReferenceInventoryManufacturers();
                 case "inventory_categories":
-                    return getReferenceInventoryCategories(depends_on_values.inventory_id);
+                    return getReferenceInventoryCategories(action_opts.inventory_id);
                 case "couriers": return getReferenceCouriers();
                 case "courier_services":
-                    return getReferenceCourierServices(depends_on_values.courier_code);
+                    return getReferenceCourierServices(action_opts.courier_code);
                 case "courier_accounts":
-                    return getReferenceCourierAccounts(depends_on_values.courier_code);
+                    return getReferenceCourierAccounts(action_opts.courier_code);
             }
         } catch (hash<ExceptionInfo> ex) {
             log(LoggerLevel::WARN, "BaseLinker reference data (%s) failed: %s: %s",
-                kind, ex.err, ex.desc);
+                type, ex.err, ex.desc);
         }
     }
 

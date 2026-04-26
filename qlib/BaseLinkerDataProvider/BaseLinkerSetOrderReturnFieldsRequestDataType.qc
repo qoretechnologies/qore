@@ -35,7 +35,8 @@ public class BaseLinkerSetOrderReturnFieldsRequestDataType inherits HashDataType
         } + BaseLinkerDataProviderBase::makeFieldsOptional(
             BaseLinkerAddOrderReturnRequestDataType::Fields - ExcludedAddReturnFields);
     }
-    constructor() : HashDataType("BaseLinkerSetOrderReturnFieldsRequestDataType", Fields) {}
+    constructor() : HashDataType("BaseLinkerSetOrderReturnFieldsRequestDataType") {
+        addQoreFields(Fields);
+    }
 }
-
 } # namespace BaseLinkerDataProvider
