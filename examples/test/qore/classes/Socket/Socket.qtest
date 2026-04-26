@@ -869,6 +869,7 @@ class SocketTest inherits QUnit::Test {
             assertTrue(s0.isOpen());
             assertTrue(s0.isDataAvailable());
             assertTrue(s2.isWriteFinished(5s));
+            assertFalse(s2.isDataAvailable());
 
             Socket s3 = s0.accept(1ms);
             string test_msg = get_random_string();

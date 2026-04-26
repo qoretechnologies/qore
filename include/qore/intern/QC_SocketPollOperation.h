@@ -79,6 +79,38 @@ private:
     bool done = false;
 };
 
+class SocketDataAvailablePollOperation : public SocketPollSocketOperationBase {
+public:
+    DLLLOCAL SocketDataAvailablePollOperation(ExceptionSink* xsink, QoreSocketObject* sock);
+
+    DLLLOCAL void deref(ExceptionSink* xsink);
+
+    DLLLOCAL virtual bool goalReached() const override {
+        return ready;
+    }
+
+    DLLLOCAL virtual void abort(ExceptionSink* xsink) override {
+        clearNonBlock();
+    }
+
+    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override;
+
+    DLLLOCAL virtual QoreValue getOutput() const override {
+        return ready;
+    }
+
+    DLLLOCAL virtual const char* getStateImpl() const override {
+        return ready ? "data-available" : "waiting-read";
+    }
+
+private:
+    DLLLOCAL void clearNonBlock();
+    DLLLOCAL bool complete(bool value);
+
+    bool waiting = false;
+    bool ready = false;
+};
+
 // goals: accept, accept-ssl
 constexpr int SPG_ACCEPT = 1;
 constexpr int SPG_ACCEPT_SSL = 2;

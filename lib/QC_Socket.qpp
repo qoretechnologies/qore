@@ -1043,6 +1043,45 @@ static bool socket_exec_wait_readiness(QoreObject* self, QoreSocketObject* s, in
     return readiness_poller->goalReached();
 }
 
+static bool socket_exec_is_data_available(QoreObject* self, QoreSocketObject* s, int timeout_ms,
+        ExceptionSink* xsink) {
+    s->ref();
+    SocketDataAvailablePollOperation* data_available_poller = new SocketDataAvailablePollOperation(xsink, s);
+    ReferenceHolder<SocketPollOperationBase> poller(data_available_poller, xsink);
+    if (*xsink) {
+        return false;
+    }
+
+    ReferenceHolder<QoreObject> op_obj(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller), xsink);
+    poller->setSelf(*op_obj);
+    poller.release();
+
+    if (!*xsink) {
+        op_obj->setValue("sock", self->objectRefSelf(), xsink);
+        op_obj->setValue("goal", new QoreStringNode("isDataAvailable"), xsink);
+    }
+    if (*xsink) {
+        return false;
+    }
+
+    QoreHashNode* ex = nullptr;
+    ReferenceHolder<QoreHashNode> result(
+        socket_exec_poll_operation(self, *op_obj, timeout_ms, "isDataAvailable", xsink, &ex), xsink);
+    ReferenceHolder<QoreHashNode> ex_holder(ex, xsink);
+    if (*xsink) {
+        return false;
+    }
+    if (ex_holder) {
+        if (socket_exec_exception_is(*ex_holder, "SOCKET-TIMEOUT")) {
+            return false;
+        }
+        socket_raise_poll_result_exception(*ex_holder, xsink);
+        return false;
+    }
+
+    return data_available_poller->goalReached();
+}
+
 static size_t socket_exec_http_line_payload_size(const QoreStringNode& line) {
     size_t len = line.size();
     const char* str = line.c_str();
@@ -5325,7 +5364,7 @@ bool b = sock.isDataAvailable();
     @throw SOCKET-CLOSED The remote end closed the connection without sending any data
 */
 bool Socket::isDataAvailable(timeout timeout_ms = 0) {
-    return s->isDataAvailable(xsink, (int)timeout_ms);
+    return socket_exec_is_data_available(self, s, (int)timeout_ms, xsink);
 }
 
 //! Returns @ref True or @ref False depending on whether all the data has been written to the socket

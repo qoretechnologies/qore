@@ -6549,6 +6549,105 @@ QoreHashNode* SocketUpgradeServerSslPollOperation::continuePoll(ExceptionSink* x
     return getSocketPollInfoHash(xsink, rc);
 }
 
+SocketDataAvailablePollOperation::SocketDataAvailablePollOperation(ExceptionSink* xsink, QoreSocketObject* sock)
+        : SocketPollSocketOperationBase(sock, NB_RECV) {
+    my_socket_priv* priv = my_socket_priv::getPriv(*sock);
+    AutoLocker al(priv->m);
+
+    if (priv->checkOpen(xsink)) {
+        return;
+    }
+    if (!priv->setNonBlock(xsink, NB_RECV)) {
+        set_non_block = true;
+    }
+}
+
+void SocketDataAvailablePollOperation::deref(ExceptionSink* xsink) {
+    if (ROdereference()) {
+        clearNonBlock();
+        sock->deref(xsink);
+        delete this;
+    }
+}
+
+void SocketDataAvailablePollOperation::clearNonBlock() {
+    if (set_non_block) {
+        my_socket_priv* priv = my_socket_priv::getPriv(*sock);
+        AutoLocker al(priv->m);
+        if (set_non_block) {
+            priv->clearNonBlock(NB_RECV);
+            set_non_block = false;
+        }
+    }
+}
+
+bool SocketDataAvailablePollOperation::complete(bool value) {
+    if (set_non_block) {
+        my_socket_priv::getPriv(*sock)->clearNonBlock(NB_RECV);
+        set_non_block = false;
+    }
+    ready = value;
+    return ready;
+}
+
+QoreHashNode* SocketDataAvailablePollOperation::continuePoll(ExceptionSink* xsink) {
+    my_socket_priv* priv = my_socket_priv::getPriv(*sock);
+    AutoLocker al(priv->m);
+
+    if (ready) {
+        return nullptr;
+    }
+
+    if (priv->checkOpen(xsink)) {
+        complete(false);
+        return nullptr;
+    }
+
+    qore_socket_private* sp = qore_socket_private::get(*priv->socket);
+    if (sp->buflen > sp->bufoffset) {
+        complete(true);
+        return nullptr;
+    }
+
+    int32_t h2_active_stream_id = sp->getH2ActiveStreamId();
+    if (sp->h2_session && sp->h2_session->isServer() && h2_active_stream_id > 0 && !sp->h2_receiving_frames) {
+        xsink->raiseException("SOCKET-H2-SYNC-ERROR",
+            "Socket::isDataAvailable() is not supported on an HTTP/2-active "
+            "server socket; use HttpServerAsyncIo + register_body_queue "
+            "for inbound DATA");
+        complete(false);
+        return nullptr;
+    }
+
+    if (sp->ssl) {
+        char c;
+        size_t real_io = 0;
+        OptionalNonBlockingHelper nbh(*sp, true, xsink);
+        if (*xsink) {
+            complete(false);
+            return nullptr;
+        }
+        int rc = sp->ssl->doNonBlockingIo(xsink, "isDataAvailable", &c, 1, PEEK, real_io);
+        if (*xsink) {
+            complete(false);
+            return nullptr;
+        }
+        if (!rc) {
+            complete(real_io > 0);
+            return nullptr;
+        }
+        return getSocketPollInfoHash(xsink, rc);
+    }
+
+    if (!waiting) {
+        waiting = true;
+        return getSocketPollInfoHash(xsink, SOCK_POLLIN);
+    }
+
+    complete(true);
+    return nullptr;
+}
+
 SocketSendPollOperation::SocketSendPollOperation(ExceptionSink* xsink, QoreStringNode* data, QoreSocketObject* sock)
         : SocketPollSocketOperationBase(sock, NB_SEND), data(data), buf(data->c_str()), size(data->size()) {
     AutoLocker al(sock->priv->m);
