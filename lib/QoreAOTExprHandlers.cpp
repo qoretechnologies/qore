@@ -721,6 +721,17 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
         }
     }
 
+    LocalVar* closure_selfid = closure_sig->selfid;
+    if (!closure_selfid) {
+        auto self_it = enclosing_locals.find("self");
+        if (self_it != enclosing_locals.end()) {
+            closure_selfid = self_it->second;
+        }
+    }
+    if (closure_selfid && !closure_sig->selfid) {
+        closure_sig->setSelfId(closure_selfid);
+    }
+
     // Populate pre_instantiated_locals
     for (unsigned p = 0; p < closure_sig->numParams(); ++p) {
         if (closure_sig->lv[p]) {
@@ -732,9 +743,9 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
         closure_ir->pre_instantiated_locals.insert(
             reinterpret_cast<const void*>(closure_sig->argvid));
     }
-    if (closure_sig->selfid) {
+    if (closure_selfid) {
         closure_ir->pre_instantiated_locals.insert(
-            reinterpret_cast<const void*>(closure_sig->selfid));
+            reinterpret_cast<const void*>(closure_selfid));
     }
     for (LocalVar* lv : closure_ir->all_body_locals) {
         closure_ir->pre_instantiated_locals.insert(
@@ -751,8 +762,8 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
     if (closure_sig->argvid) {
         cached_pre_inst->insert(closure_sig->argvid);
     }
-    if (closure_sig->selfid) {
-        cached_pre_inst->insert(closure_sig->selfid);
+    if (closure_selfid) {
+        cached_pre_inst->insert(closure_selfid);
     }
     closure_ir->cached_pre_instantiated = cached_pre_inst;
 

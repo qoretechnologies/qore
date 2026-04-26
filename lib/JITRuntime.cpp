@@ -501,6 +501,26 @@ static thread_local bool tl_jit_deopt_requested = false;
 // Empty string used as fallback call name when no cached IR function is available.
 static const std::string jit_empty_call_name;
 
+static LocalVar* findIRSelfLocal(const QoreIRFunction* ir) {
+    if (!ir) {
+        return nullptr;
+    }
+    LocalVar* named_self = nullptr;
+    for (const auto& [lv, slot_id] : ir->local_var_slots) {
+        (void)slot_id;
+        if (!lv || !lv->getName()) {
+            continue;
+        }
+        if (lv->isSelf()) {
+            return const_cast<LocalVar*>(lv);
+        }
+        if (!named_self && !strcmp(lv->getName(), "self")) {
+            named_self = const_cast<LocalVar*>(lv);
+        }
+    }
+    return named_self;
+}
+
 extern "C" DLLEXPORT void qore_rt_request_jit_deopt(void* deopt_counter_ptr) {
     tl_jit_deopt_requested = true;
     if (deopt_counter_ptr) {
@@ -4711,20 +4731,23 @@ static uint64_t execClosureDirect(const QoreClosureBase* cb, const UserVariantBa
     bool use_direct_params = ir && ir->direct_params_eligible
         && !uvb->hasCachedFunction() && nargs >= (int)num_params;
 
+    LocalVar* selfid = sig->selfid ? sig->selfid : findIRSelfLocal(ir);
+    bool selfid_instantiated = self && selfid;
+    if (selfid_instantiated) {
+        selfid->instantiateSelf(self);
+    }
+
     if (!use_direct_params) {
-        // Standard path: push selfid + params to TLS
-        if (self && sig->selfid) {
-            sig->selfid->instantiateSelf(self);
-        }
+        // Standard path: push params to TLS
         if (instantiateFastCallParams(sig, num_params, nargs, args, xsink) < 0) {
-            if (self && sig->selfid) {
-                sig->selfid->uninstantiateSelf();
+            if (selfid_instantiated) {
+                selfid->uninstantiateSelf();
             }
             return toBits(QoreValue());
         }
     }
-    // else: direct_params path — selfid not instantiated (ObjectSubstitutionHelper
-    // above handles implicit self resolution), params pre-populated in IR slot cache
+    // else: direct_params path — params are pre-populated in the IR slot cache.
+    // selfid still lives in TLS because IR can load `self` explicitly.
 
     // Build argv for excess arguments (varargs)
     ReferenceHolder<QoreListNode> argv(xsink);
@@ -4794,13 +4817,13 @@ static uint64_t execClosureDirect(const QoreClosureBase* cb, const UserVariantBa
         sig->argvid->uninstantiate(xsink);
     }
     if (!use_direct_params) {
-        // Standard path: uninstantiate params + selfid from TLS
+        // Standard path: uninstantiate params from TLS
         for (int i = (int)num_params - 1; i >= 0; --i) {
             sig->lv[i]->uninstantiate(xsink);
         }
-        if (self && sig->selfid) {
-            sig->selfid->uninstantiateSelf();
-        }
+    }
+    if (selfid_instantiated) {
+        selfid->uninstantiateSelf();
     }
 
     // Apply return type coercion
@@ -5117,20 +5140,23 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_method_fast(const QoreMethod* method,
     bool use_direct_params = ir && ir->direct_params_eligible
         && !uvb->hasCachedFunction() && nargs >= (int)num_params;
 
+    LocalVar* selfid = sig->selfid ? sig->selfid : findIRSelfLocal(ir);
+    bool selfid_instantiated = selfid;
+    if (selfid_instantiated) {
+        selfid->instantiateSelf(self);
+    }
+
     if (!use_direct_params) {
-        // Standard path: push selfid + params to TLS
-        if (sig->selfid) {
-            sig->selfid->instantiateSelf(self);
-        }
+        // Standard path: push params to TLS
         if (instantiateFastCallParams(sig, num_params, nargs, args, xsink) < 0) {
-            if (sig->selfid) {
-                sig->selfid->uninstantiate(xsink);
+            if (selfid_instantiated) {
+                selfid->uninstantiateSelf();
             }
             return toBits(QoreValue());
         }
     }
-    // else: direct_params path — selfid not needed (LoadSelfMember uses
-    // ObjectSubstitutionHelper), params pre-populated in IR slot cache
+    // else: direct_params path — params are pre-populated in the IR slot cache.
+    // selfid still lives in TLS because IR can load `self` explicitly.
 
     // Build argv for excess arguments (varargs)
     // Use pushIntern() to preserve complex types (e.g., hash<string, bool>)
@@ -5209,13 +5235,13 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_method_fast(const QoreMethod* method,
     }
 
     if (!use_direct_params) {
-        // Standard path: uninstantiate params + selfid from TLS
+        // Standard path: uninstantiate params from TLS
         for (int i = (int)num_params - 1; i >= 0; --i) {
             sig->lv[i]->uninstantiate(xsink);
         }
-        if (sig->selfid) {
-            sig->selfid->uninstantiateSelf();
-        }
+    }
+    if (selfid_instantiated) {
+        selfid->uninstantiateSelf();
     }
 
     // Apply return type coercion (e.g. softlist wrapping) to match
@@ -8037,21 +8063,24 @@ static bool try_dispatch_method_fast(QoreObject* o, const QoreMethod* method,
     bool use_direct_params = ir && ir->direct_params_eligible
         && !uvb->hasCachedFunction() && nargs >= (int)num_params;
 
+    LocalVar* selfid = sig->selfid ? sig->selfid : findIRSelfLocal(ir);
+    bool selfid_instantiated = selfid;
+    if (selfid_instantiated) {
+        selfid->instantiateSelf(o);
+    }
+
     if (!use_direct_params) {
-        // Standard path: push selfid + params to TLS
-        if (sig->selfid) {
-            sig->selfid->instantiateSelf(o);
-        }
+        // Standard path: push params to TLS
         if (instantiateFastCallParams(sig, num_params, nargs, args, xsink) < 0) {
-            if (sig->selfid) {
-                sig->selfid->uninstantiate(xsink);
+            if (selfid_instantiated) {
+                selfid->uninstantiateSelf();
             }
             result = toBits(QoreValue());
             return true;
         }
     }
-    // else: direct_params path — selfid not needed (LoadSelfMember uses
-    // ObjectSubstitutionHelper), params pre-populated in IR slot cache
+    // else: direct_params path — params are pre-populated in the IR slot cache.
+    // selfid still lives in TLS because IR can load `self` explicitly.
 
     // Build argv for excess arguments (varargs)
     // Use pushIntern() to preserve complex types (e.g., hash<string, bool>)
@@ -8124,13 +8153,13 @@ static bool try_dispatch_method_fast(QoreObject* o, const QoreMethod* method,
     }
 
     if (!use_direct_params) {
-        // Standard path: uninstantiate params + selfid from TLS
+        // Standard path: uninstantiate params from TLS
         for (int i = (int)num_params - 1; i >= 0; --i) {
             sig->lv[i]->uninstantiate(xsink);
         }
-        if (sig->selfid) {
-            sig->selfid->uninstantiateSelf();
-        }
+    }
+    if (selfid_instantiated) {
+        selfid->uninstantiateSelf();
     }
 
     // Apply return type coercion (e.g. softlist wrapping) to match
