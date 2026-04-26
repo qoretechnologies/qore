@@ -287,6 +287,102 @@ void AsyncIoControllerPriv::PollInfo::cleanup(ExceptionSink* xsink) {
     }
 }
 
+void AsyncIoControllerPriv::snapshotSocketWaitGeneration(PollInfo& pinfo, QoreHashNode* poll_info) {
+    pinfo.socket_wait_generation_valid = false;
+    pinfo.socket_wait_fd = -1;
+    pinfo.socket_wait_fd_generation = 0;
+    if (!poll_info) {
+        return;
+    }
+
+    QoreValue v = poll_info->getKeyValue("socket");
+    QoreObject* obj = v.getType() == NT_OBJECT ? v.get<QoreObject>() : nullptr;
+    if (!obj) {
+        return;
+    }
+
+    ExceptionSink xsink;
+    QoreSocketObject* sock = static_cast<QoreSocketObject*>(obj->getReferencedPrivateData(CID_SOCKET, &xsink));
+    if (!sock) {
+        if (xsink) {
+            xsink.clear();
+        }
+        return;
+    }
+
+    {
+        AutoLocker al(sock->priv->m);
+        qore_socket_private* sp = qore_socket_private::get(*sock->priv->socket);
+        if (sp->sock != QORE_INVALID_SOCKET) {
+            pinfo.socket_wait_fd = sp->sock;
+            pinfo.socket_wait_fd_generation = sp->fd_generation;
+            pinfo.socket_wait_generation_valid = true;
+#ifdef DEBUG
+            // Match SocketSyncPoll::waitReleasingLock(): simulate an fd swap inside the wait window.
+            if (sp->debug_force_fd_swap_next_wait) {
+                sp->debug_force_fd_swap_next_wait = false;
+                ++sp->fd_generation;
+            }
+#endif
+        }
+    }
+
+    sock->deref(&xsink);
+    if (xsink) {
+        xsink.clear();
+    }
+}
+
+QoreHashNode* AsyncIoControllerPriv::makeSocketWaitGenerationException(PollInfo& pinfo, ExceptionSink* xsink) {
+    if (!pinfo.socket_wait_generation_valid || !pinfo.poll_info) {
+        return nullptr;
+    }
+
+    QoreValue v = pinfo.poll_info->getKeyValue("socket");
+    QoreObject* obj = v.getType() == NT_OBJECT ? v.get<QoreObject>() : nullptr;
+    if (!obj) {
+        return nullptr;
+    }
+
+    ExceptionSink local_xsink;
+    QoreSocketObject* sock = static_cast<QoreSocketObject*>(
+        obj->getReferencedPrivateData(CID_SOCKET, &local_xsink));
+    if (!sock) {
+        if (local_xsink) {
+            local_xsink.clear();
+        }
+        return nullptr;
+    }
+
+    bool changed = false;
+    {
+        AutoLocker al(sock->priv->m);
+        qore_socket_private* sp = qore_socket_private::get(*sock->priv->socket);
+        changed = sp->fd_generation != pinfo.socket_wait_fd_generation
+            || sp->sock != pinfo.socket_wait_fd;
+    }
+
+    sock->deref(&local_xsink);
+    if (local_xsink) {
+        local_xsink.clear();
+    }
+
+    if (!changed) {
+        return nullptr;
+    }
+
+    pinfo.socket_wait_generation_valid = false;
+    ReferenceHolder<QoreHashNode> ex(new QoreHashNode(hashdeclExceptionInfo, xsink), xsink);
+    if (!*xsink) {
+        ex->setKeyValue("err", new QoreStringNode("SOCKET-CLOSED"), xsink);
+        ex->setKeyValue("desc",
+            new QoreStringNode("the underlying socket was closed or replaced while Socket async I/O was waiting "
+                "for I/O readiness"), xsink);
+        ex->setKeyValue("type", new QoreStringNode("User"), xsink);
+    }
+    return *xsink ? nullptr : ex.release();
+}
+
 void AsyncIoControllerPriv::cleanupAbandonedCommand(Command& cmd, ExceptionSink* xsink) {
     // Release refs and signal waiters for a command drained from cmdq that
     // will not be processed (because the I/O thread received Quit or is
@@ -3214,6 +3310,15 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
             result.completed = false;
             result.was_ready = op.was_ready;
 
+            auto wait_it = t.cache.find(op.key);
+            if (wait_it != t.cache.end()) {
+                result.ex_hash = makeSocketWaitGenerationException(wait_it->second, xsink);
+                if (result.ex_hash) {
+                    poll_results.push_back(std::move(result));
+                    continue;
+                }
+            }
+
             if (op.timed_out) {
                 // Create timeout exception hash
                 ReferenceHolder<QoreHashNode> ex(new QoreHashNode(hashdeclExceptionInfo, xsink), xsink);
@@ -3493,6 +3598,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                     if (!result.new_poll_info) {
                         // No poll_info — needs unconditional polling next iteration
                         pinfo.cached_sock_hash.clear();
+                        pinfo.socket_wait_generation_valid = false;
                         t.new_entry_keys.push_back(result.key);
                     } else {
                         // Extract events from poll_info (single hash lookup)
@@ -3564,6 +3670,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                         } else {
                             sock_hash = pinfo.cached_sock_hash;
                         }
+                        snapshotSocketWaitGeneration(pinfo, result.new_poll_info);
 
                         // Defer SSL pending check to next iteration (nginx pattern).
                         // We always re-defer when hasPendingData() is true — the
@@ -4806,6 +4913,7 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
 
                             if (!cmd.continue_poll_result) {
                                 pinfo.cached_sock_hash.clear();
+                                pinfo.socket_wait_generation_valid = false;
                                 t.new_entry_keys.push_back(cmd.key);
                             } else {
                                 std::string sock_hash;
@@ -4819,6 +4927,7 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                                     updateExtraFds(t, cmd.key, poll_sock,
                                         cmd.continue_poll_result, xsink);
                                 }
+                                snapshotSocketWaitGeneration(pinfo, cmd.continue_poll_result);
 
                                 // Store absolute deadline for protocol-level poll timeout
                                 QoreValue ptv = cmd.continue_poll_result->getKeyValue(

@@ -610,6 +610,9 @@ private:
         std::string cached_sock_hash;   //!< Cached socket hash for O(1) Phase 1 readiness check
         int cached_events = 0;          //!< Cached poll events for Phase 3 fast path
         uint32_t cached_fd_gen = 0;     //!< Cached fd generation for QUIC migration detection
+        uint32_t socket_wait_fd_generation = 0; //!< Socket fd generation snapshot for current wait
+        int socket_wait_fd = -1;        //!< Socket fd snapshot for current wait
+        bool socket_wait_generation_valid = false; //!< True when socket wait snapshot is usable
         uint64_t last_queued_gen = 0;   //!< Phase 1 generation when last queued (duplicate prevention)
         //! Back-ref to the owning controller (not ref'd; outlives pinfo).
         //! Used by cleanup() to erase the submit-time obj_to_sock_hash entry
@@ -956,6 +959,12 @@ private:
 
     //! Cancel an operation internally (delivers result, called from I/O thread)
     DLLLOCAL void doCancelIntern(PollInfo& pinfo, ExceptionSink* xsink);
+
+    //! Snapshot the Socket fd generation for the next controller wait
+    DLLLOCAL static void snapshotSocketWaitGeneration(PollInfo& pinfo, QoreHashNode* poll_info);
+
+    //! Returns SOCKET-CLOSED if a Socket fd changed during the controller wait
+    DLLLOCAL static QoreHashNode* makeSocketWaitGenerationException(PollInfo& pinfo, ExceptionSink* xsink);
 
     //! Update EventLoop registration for an operation
     DLLLOCAL void updateEventLoopRegistration(IoThreadContext& t, const std::string& key,

@@ -43,6 +43,7 @@
 
 #include <cerrno>
 #include <cstring>
+#include <limits>
 #include <string>
 
 extern qore_classid_t CID_ASYNCIOCONTROLLER;
@@ -187,6 +188,103 @@ static int socket_exec_send_bytes(QoreObject* self, QoreSocketObject* s, const v
     SimpleRefHolder<BinaryNode> bin(new BinaryNode());
     bin->append(data, size);
     return socket_exec_send_binary(self, s, bin.release(), timeout_ms, xsink);
+}
+
+static QoreValue socket_exec_recv_poll(QoreObject* self, SocketRecvPollOperationBase* poller,
+        int timeout_ms, const char* owner_name, ExceptionSink* xsink) {
+    SocketRecvPollOperationBase* recv_poller = poller;
+    ReferenceHolder<SocketPollOperationBase> poller_holder(poller, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    ReferenceHolder<QoreObject> op_obj(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller_holder),
+        xsink);
+    poller_holder->setSelf(*op_obj);
+    poller_holder.release();
+
+    if (!*xsink) {
+        op_obj->setValue("sock", self->objectRefSelf(), xsink);
+        op_obj->setValue("goal", new QoreStringNode("received"), xsink);
+    }
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    ReferenceHolder<QoreHashNode> result(
+        socket_exec_poll_operation(self, *op_obj, timeout_ms, owner_name, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return recv_poller->getOutput();
+}
+
+static QoreValue socket_exec_recv_value(QoreObject* self, QoreSocketObject* s, int64 size, int timeout_ms,
+        bool to_string, ExceptionSink* xsink) {
+    s->ref();
+    if (size > 0) {
+        if (size > std::numeric_limits<ssize_t>::max()) {
+            xsink->raiseException("SOCKET-RECV-ERROR",
+                "requested receive size " QLLD " exceeds the maximum supported size",
+                size);
+            s->deref(xsink);
+            return QoreValue();
+        }
+        return socket_exec_recv_poll(self,
+            new SocketRecvPollOperation(xsink, static_cast<ssize_t>(size), s, to_string),
+            timeout_ms, "recv", xsink);
+    }
+    return socket_exec_recv_poll(self, new SocketRecvDataPollOperation(xsink, s, to_string),
+        timeout_ms, "recv", xsink);
+}
+
+static QoreStringNode* socket_exec_recv_string(QoreObject* self, QoreSocketObject* s, int64 size,
+        int timeout_ms, ExceptionSink* xsink) {
+    ValueHolder result(socket_exec_recv_value(self, s, size, timeout_ms, true, xsink), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    if (result->isNothing()) {
+        return new QoreStringNode;
+    }
+    if (result->getType() != NT_STRING) {
+        xsink->raiseException("SOCKET-RECV-ERROR", "expected string data from async receive operation, got '%s'",
+            result->getFullTypeName());
+        return nullptr;
+    }
+    return result.release().get<QoreStringNode>();
+}
+
+static BinaryNode* socket_exec_recv_binary(QoreObject* self, QoreSocketObject* s, int64 size,
+        int timeout_ms, ExceptionSink* xsink) {
+    ValueHolder result(socket_exec_recv_value(self, s, size, timeout_ms, false, xsink), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    if (result->isNothing()) {
+        return new BinaryNode;
+    }
+    if (result->getType() != NT_BINARY) {
+        xsink->raiseException("SOCKET-RECV-ERROR", "expected binary data from async receive operation, got '%s'",
+            result->getFullTypeName());
+        return nullptr;
+    }
+    return result.release().get<BinaryNode>();
+}
+
+static BinaryNode* socket_exec_recv_bytes(QoreObject* self, QoreSocketObject* s, size_t size,
+        int timeout_ms, ExceptionSink* xsink) {
+    SimpleRefHolder<BinaryNode> bin(socket_exec_recv_binary(self, s, size, timeout_ms, xsink));
+    if (*xsink) {
+        return nullptr;
+    }
+    if (bin->size() != size) {
+        xsink->raiseException("SOCKET-RECV-ERROR",
+            "expected " QLLD " byte(s) from async receive operation, got " QLLD,
+            static_cast<int64>(size), static_cast<int64>(bin->size()));
+        return nullptr;
+    }
+    return bin.release();
 }
 
 static int check_response_code(int status_code, ExceptionSink* xsink) {
@@ -2752,11 +2850,7 @@ string data = sock.recv(-1); # read all data available
     - Socket::recvBinary()
 */
 string Socket::recv(softint size = 0, timeout timeout_ms = -1) {
-    if (size > 0)
-        return s->recv(size, timeout_ms, xsink);
-
-    QoreStringNode* str = s->recv(timeout_ms, xsink);
-    return !*xsink && !str ? new QoreStringNode : str;
+    return socket_exec_recv_string(self, s, size, timeout_ms, xsink);
 }
 
 //! Receives data from the socket and returns a binary object
@@ -2784,11 +2878,7 @@ binary data = sock.recvBinary(-1); # read all data available
     @see Socket::recv()
 */
 binary Socket::recvBinary(softint size = 0, timeout timeout_ms = -1) {
-    if (size > 0)
-        return s->recvBinary(size, timeout_ms, xsink);
-
-    BinaryNode* str = s->recvBinary(timeout_ms, xsink);
-    return !*xsink && !str ? new BinaryNode : str;
+    return socket_exec_recv_binary(self, s, size, timeout_ms, xsink);
 }
 
 //! Receives data from the socket and writes the bytes to an @ref OutputStream
@@ -2844,7 +2934,11 @@ int val = sock.recvi1();
 */
 int Socket::recvi1(timeout timeout_ms = -1) {
     char b = 0;
-    s->recvi1(timeout_ms, &b, xsink);
+    SimpleRefHolder<BinaryNode> data(socket_exec_recv_bytes(self, s, sizeof(b), timeout_ms, xsink));
+    if (*xsink) {
+        return 0;
+    }
+    memcpy(&b, data->getPtr(), sizeof(b));
     return b;
 }
 
@@ -2873,7 +2967,12 @@ int val = sock.recvi2();
 */
 int Socket::recvi2(timeout timeout_ms = -1) {
     short b = 0;
-    s->recvi2(timeout_ms, &b, xsink);
+    SimpleRefHolder<BinaryNode> data(socket_exec_recv_bytes(self, s, sizeof(b), timeout_ms, xsink));
+    if (*xsink) {
+        return 0;
+    }
+    memcpy(&b, data->getPtr(), sizeof(b));
+    b = ntohs(b);
     return b;
 }
 
@@ -2907,7 +3006,12 @@ int val = sock.recvi4();
 */
 int Socket::recvi4(timeout timeout_ms = -1) {
     int b = 0;
-    s->recvi4(timeout_ms, &b, xsink);
+    SimpleRefHolder<BinaryNode> data(socket_exec_recv_bytes(self, s, sizeof(b), timeout_ms, xsink));
+    if (*xsink) {
+        return 0;
+    }
+    memcpy(&b, data->getPtr(), sizeof(b));
+    b = ntohl(b);
     return b;
 }
 
@@ -2936,8 +3040,12 @@ int val = sock.recvi8();
 */
 int Socket::recvi8(timeout timeout_ms = -1) {
     int64 b = 0;
-    s->recvi8(timeout_ms, &b, xsink);
-    return b;
+    SimpleRefHolder<BinaryNode> data(socket_exec_recv_bytes(self, s, sizeof(b), timeout_ms, xsink));
+    if (*xsink) {
+        return 0;
+    }
+    memcpy(&b, data->getPtr(), sizeof(b));
+    return MSBi8(b);
 }
 
 //! Receives a 2-byte (16-bit) signed integer in little-endian format from the socket
@@ -2965,7 +3073,12 @@ int val = sock.recvi2LSB();
 */
 int Socket::recvi2LSB(timeout timeout_ms = -1) {
     short b = 0;
-    s->recvi2LSB(timeout_ms, &b, xsink);
+    SimpleRefHolder<BinaryNode> data(socket_exec_recv_bytes(self, s, sizeof(b), timeout_ms, xsink));
+    if (*xsink) {
+        return 0;
+    }
+    memcpy(&b, data->getPtr(), sizeof(b));
+    b = LSBi2(b);
     return b;
 }
 
@@ -2994,7 +3107,12 @@ int val = sock.recvi4LSB();
 */
 int Socket::recvi4LSB(timeout timeout_ms = -1) {
     int b = 0;
-    s->recvi4LSB(timeout_ms, &b, xsink);
+    SimpleRefHolder<BinaryNode> data(socket_exec_recv_bytes(self, s, sizeof(b), timeout_ms, xsink));
+    if (*xsink) {
+        return 0;
+    }
+    memcpy(&b, data->getPtr(), sizeof(b));
+    b = LSBi4(b);
     return b;
 }
 
@@ -3023,7 +3141,12 @@ int val = sock.recvi8LSB();
 */
 int Socket::recvi8LSB(timeout timeout_ms = -1) {
     int64 b = 0;
-    s->recvi8LSB(timeout_ms, &b, xsink);
+    SimpleRefHolder<BinaryNode> data(socket_exec_recv_bytes(self, s, sizeof(b), timeout_ms, xsink));
+    if (*xsink) {
+        return 0;
+    }
+    memcpy(&b, data->getPtr(), sizeof(b));
+    b = LSBi8(b);
     return b;
 }
 
@@ -3052,7 +3175,11 @@ int val = sock.recvu1();
 */
 int Socket::recvu1(timeout timeout_ms = -1) {
     unsigned char b = 0;
-    s->recvu1(timeout_ms, &b, xsink);
+    SimpleRefHolder<BinaryNode> data(socket_exec_recv_bytes(self, s, sizeof(b), timeout_ms, xsink));
+    if (*xsink) {
+        return 0;
+    }
+    memcpy(&b, data->getPtr(), sizeof(b));
     return b;
 }
 
@@ -3081,7 +3208,12 @@ int val = sock.recvu2();
 */
 int Socket::recvu2(timeout timeout_ms = -1) {
     unsigned short b = 0;
-    s->recvu2(timeout_ms, &b, xsink);
+    SimpleRefHolder<BinaryNode> data(socket_exec_recv_bytes(self, s, sizeof(b), timeout_ms, xsink));
+    if (*xsink) {
+        return 0;
+    }
+    memcpy(&b, data->getPtr(), sizeof(b));
+    b = ntohs(b);
     return b;
 }
 
@@ -3110,7 +3242,12 @@ int val = sock.recvu4();
 */
 int Socket::recvu4(timeout timeout_ms = -1) {
     unsigned int b = 0;
-    s->recvu4(timeout_ms, &b, xsink);
+    SimpleRefHolder<BinaryNode> data(socket_exec_recv_bytes(self, s, sizeof(b), timeout_ms, xsink));
+    if (*xsink) {
+        return 0;
+    }
+    memcpy(&b, data->getPtr(), sizeof(b));
+    b = ntohl(b);
     return b;
 }
 
@@ -3139,7 +3276,12 @@ int val = sock.recvi2LSB();
 */
 int Socket::recvu2LSB(timeout timeout_ms = -1) {
     unsigned short b = 0;
-    s->recvu2LSB(timeout_ms, &b, xsink);
+    SimpleRefHolder<BinaryNode> data(socket_exec_recv_bytes(self, s, sizeof(b), timeout_ms, xsink));
+    if (*xsink) {
+        return 0;
+    }
+    memcpy(&b, data->getPtr(), sizeof(b));
+    b = LSBi2(b);
     return b;
 }
 
@@ -3168,7 +3310,12 @@ int val = sock.recvu4LSB();
 */
 int Socket::recvu4LSB(timeout timeout_ms = -1) {
     unsigned b = 0;
-    s->recvu4LSB(timeout_ms, &b, xsink);
+    SimpleRefHolder<BinaryNode> data(socket_exec_recv_bytes(self, s, sizeof(b), timeout_ms, xsink));
+    if (*xsink) {
+        return 0;
+    }
+    memcpy(&b, data->getPtr(), sizeof(b));
+    b = LSBi4(b);
     return b;
 }
 

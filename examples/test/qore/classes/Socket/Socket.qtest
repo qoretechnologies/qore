@@ -12,6 +12,9 @@ const i1 = 10;
 const i2 = 5121;
 const i4 = 2393921;
 const i8 = 12309309203932;
+const u1 = 250;
+const u2 = 60000;
+const u4 = 4000000000;
 
 const http_headers = (
     "Accept"       : "text",
@@ -1449,6 +1452,26 @@ class SocketTest inherits QUnit::Test {
         assertEq(i8, m, who + " sendi8LSB");
         s.send("OK");
 
+        m = s.recvu1();
+        assertEq(u1, m, who + " recvu1");
+        s.send("OK");
+
+        m = s.recvu2();
+        assertEq(u2, m, who + " recvu2");
+        s.send("OK");
+
+        m = s.recvu4();
+        assertEq(u4, m, who + " recvu4");
+        s.send("OK");
+
+        m = s.recvu2LSB();
+        assertEq(u2, m, who + " recvu2LSB");
+        s.send("OK");
+
+        m = s.recvu4LSB();
+        assertEq(u4, m, who + " recvu4LSB");
+        s.send("OK");
+
         hash<auto> info;
         m = s.readHTTPHeader(-1, \info);
         assertEq(Type::Hash, info."headers-raw".type());
@@ -1492,6 +1515,18 @@ class SocketTest inherits QUnit::Test {
         get_response(s);
         SocketTest::check_send(s.sendi8LSB(i8), "i8LSB");
         get_response(s);
+
+        SocketTest::check_send(s.send(binary("\xfa")), "u1");
+        get_response(s);
+        SocketTest::check_send(s.send(binary("\xea\x60")), "u2");
+        get_response(s);
+        SocketTest::check_send(s.send(binary("\xee\x6b\x28\x00")), "u4");
+        get_response(s);
+        SocketTest::check_send(s.send(binary("\x60\xea")), "u2LSB");
+        get_response(s);
+        SocketTest::check_send(s.send(binary("\x00\x28\x6b\xee")), "u4LSB");
+        get_response(s);
+
         s.sendHTTPMessage("POST", "none", "1.1", http_headers, XString);
         get_http_response(s);
         s.sendHTTPMessage("GET", "none", "1.1", http_headers);
