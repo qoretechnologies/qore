@@ -142,6 +142,30 @@ public:
     DLLEXPORT SocketConnectPollOperation(ExceptionSink* xsink, bool ssl, const char* target,
             QoreSocketObject* sock);
 
+    //! Creates the INET connect poll operation
+    /** @param xsink exception sink
+        @param ssl if true, perform TLS handshake after TCP connect
+        @param host host name or address
+        @param service service name or port string
+        @param family address family
+        @param socktype socket type
+        @param protocol protocol number
+        @param sock the socket (will be ref'd)
+    */
+    DLLEXPORT SocketConnectPollOperation(ExceptionSink* xsink, bool ssl, const char* host, const char* service,
+            int family, int socktype, int protocol, QoreSocketObject* sock);
+
+    //! Creates the UNIX-domain connect poll operation
+    /** @param xsink exception sink
+        @param ssl if true, perform TLS handshake after connect
+        @param path UNIX-domain socket path
+        @param socktype socket type
+        @param protocol protocol number
+        @param sock the socket (will be ref'd)
+    */
+    DLLEXPORT SocketConnectPollOperation(ExceptionSink* xsink, bool ssl, const char* path, int socktype,
+            int protocol, QoreSocketObject* sock);
+
     //! Dereferences the operation; clears non-block and deref's the socket on last ref
     DLLEXPORT void deref(ExceptionSink* xsink);
 
@@ -167,7 +191,22 @@ protected:
     DLLEXPORT int checkContinuePoll(ExceptionSink* xsink);
 
 private:
+    enum class ConnectTarget {
+        Auto,
+        Inet,
+        Unix,
+    };
+
+    DLLEXPORT void init(ExceptionSink* xsink, bool ssl);
+    DLLEXPORT AbstractPollState* startConnect(ExceptionSink* xsink);
+    DLLEXPORT std::string getTraceTarget() const;
+
     std::string target;
+    std::string service;
+    ConnectTarget connect_target = ConnectTarget::Auto;
+    int family = Q_AF_UNSPEC;
+    int socktype = Q_SOCK_STREAM;
+    int protocol = 0;
     int sgoal = 0;
 };
 

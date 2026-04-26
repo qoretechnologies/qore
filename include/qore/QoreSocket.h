@@ -172,6 +172,34 @@ public:
     */
     DLLEXPORT AbstractPollState* startConnect(ExceptionSink* xsink, const char* name);
 
+    //! Starts a non-blocking INET connection and returns a poll state object
+    /** @param xsink if an error occurs, the Qore-language exception information will be added here
+        @param host the name or address of the host
+        @param service the port number or service name of the remote socket
+        @param family address family
+        @param socktype socket type
+        @param protocol protocol number
+
+        @return a socket poll state object or nullptr in case of an exception or an immediate connection
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT AbstractPollState* startConnectINET(ExceptionSink* xsink, const char* host, const char* service,
+            int family = Q_AF_UNSPEC, int socktype = Q_SOCK_STREAM, int protocol = 0);
+
+    //! Starts a non-blocking UNIX-domain connection and returns a poll state object
+    /** @param xsink if an error occurs, the Qore-language exception information will be added here
+        @param path UNIX-domain socket path
+        @param socktype socket type
+        @param protocol protocol number
+
+        @return a socket poll state object or nullptr in case of an exception or an immediate connection
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT AbstractPollState* startConnectUNIX(ExceptionSink* xsink, const char* path,
+            int socktype = Q_SOCK_STREAM, int protocol = 0);
+
     //! Starts a non-blocking upgrade to an SSL connection on a connected client connection
     /**
         @param xsink if an error occurs, the Qore-language exception information will be added here

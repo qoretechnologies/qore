@@ -4167,6 +4167,21 @@ AbstractPollState* QoreSocket::startConnect(ExceptionSink* xsink, const char* na
 #endif
 }
 
+AbstractPollState* QoreSocket::startConnectINET(ExceptionSink* xsink, const char* host, const char* service,
+        int family, int socktype, int protocol) {
+    return new SocketConnectInetHappyEyeballsPollState(xsink, priv, host, service, family, socktype, protocol);
+}
+
+AbstractPollState* QoreSocket::startConnectUNIX(ExceptionSink* xsink, const char* path, int socktype,
+        int protocol) {
+#ifndef _Q_WINDOWS
+    return new SocketConnectUnixPollState(xsink, priv, path, socktype, protocol);
+#else
+    missing_function_error("Socket::startConnectUNIX()", "UNIX_FILEMGT", xsink);
+    return nullptr;
+#endif
+}
+
 AbstractPollState* QoreSocket::startSslConnect(ExceptionSink* xsink, QoreSSLCertificate* cert,
         QoreSSLPrivateKey* pkey) {
     if (priv->sock == QORE_INVALID_SOCKET) {
@@ -5787,7 +5802,25 @@ AbstractAsyncAction* createPromiseWithNotifierAction(QoreObject* promise_obj,
 // --- End of out-of-line implementations ---
 
 SocketConnectPollOperation::SocketConnectPollOperation(ExceptionSink* xsink, bool ssl, const char* target,
-        QoreSocketObject* sock) : SocketPollSocketOperationBase(sock) {
+        QoreSocketObject* sock) : SocketPollSocketOperationBase(sock), target(target) {
+    init(xsink, ssl);
+}
+
+SocketConnectPollOperation::SocketConnectPollOperation(ExceptionSink* xsink, bool ssl, const char* host,
+        const char* service, int family, int socktype, int protocol, QoreSocketObject* sock)
+        : SocketPollSocketOperationBase(sock), target(host), service(service), connect_target(ConnectTarget::Inet),
+            family(family), socktype(socktype), protocol(protocol) {
+    init(xsink, ssl);
+}
+
+SocketConnectPollOperation::SocketConnectPollOperation(ExceptionSink* xsink, bool ssl, const char* path,
+        int socktype, int protocol, QoreSocketObject* sock)
+        : SocketPollSocketOperationBase(sock), target(path), connect_target(ConnectTarget::Unix),
+            socktype(socktype), protocol(protocol) {
+    init(xsink, ssl);
+}
+
+void SocketConnectPollOperation::init(ExceptionSink* xsink, bool ssl) {
     sgoal = ssl ? SPG_CONNECT_SSL : SPG_CONNECT;
 
     AutoLocker al(sock->priv->m);
@@ -5802,15 +5835,16 @@ SocketConnectPollOperation::SocketConnectPollOperation(ExceptionSink* xsink, boo
     }
     if (!sock->priv->setNonBlock(xsink)) {
         set_non_block = true;
+        std::string trace_target = getTraceTarget();
         ASYNC_IO_TRACE("SocketConnectPoll: startConnect target='%s' ssl=%d\n",
-            target, (int)ssl);
-        poll_state.reset(sock->priv->socket->startConnect(xsink, target));
+            trace_target.c_str(), (int)ssl);
+        poll_state.reset(startConnect(xsink));
         if (!*xsink) {
             if (poll_state) {
-                ASYNC_IO_TRACE("SocketConnectPoll: connect EINPROGRESS target='%s'\n", target);
+                ASYNC_IO_TRACE("SocketConnectPoll: connect EINPROGRESS target='%s'\n", trace_target.c_str());
                 state = SPS_CONNECTING;
             } else {
-                ASYNC_IO_TRACE("SocketConnectPoll: connect IMMEDIATE target='%s'\n", target);
+                ASYNC_IO_TRACE("SocketConnectPoll: connect IMMEDIATE target='%s'\n", trace_target.c_str());
                 if (sgoal == SPG_CONNECT) {
                     sock->priv->clearNonBlock();
                     set_non_block = false;
@@ -5821,13 +5855,38 @@ SocketConnectPollOperation::SocketConnectPollOperation(ExceptionSink* xsink, boo
                 }
             }
         } else {
-            ASYNC_IO_TRACE("SocketConnectPoll: startConnect FAILED target='%s'\n", target);
+            ASYNC_IO_TRACE("SocketConnectPoll: startConnect FAILED target='%s'\n", trace_target.c_str());
         }
         if (*xsink) {
             sock->priv->clearNonBlock();
             set_non_block = false;
         }
     }
+}
+
+AbstractPollState* SocketConnectPollOperation::startConnect(ExceptionSink* xsink) {
+    switch (connect_target) {
+        case ConnectTarget::Auto:
+            return sock->priv->socket->startConnect(xsink, target.c_str());
+        case ConnectTarget::Inet:
+            return sock->priv->socket->startConnectINET(xsink, target.c_str(), service.c_str(), family, socktype,
+                protocol);
+        case ConnectTarget::Unix:
+            return sock->priv->socket->startConnectUNIX(xsink, target.c_str(), socktype, protocol);
+        default:
+            assert(false);
+    }
+    return nullptr;
+}
+
+std::string SocketConnectPollOperation::getTraceTarget() const {
+    if (connect_target == ConnectTarget::Inet) {
+        std::string rv = target;
+        rv += ':';
+        rv += service;
+        return rv;
+    }
+    return target;
 }
 
 QoreHashNode* SocketConnectPollOperation::continuePoll(ExceptionSink* xsink) {
