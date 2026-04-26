@@ -264,6 +264,19 @@ static int socket_exec_send_http_response(QoreObject* self, QoreSocketObject* s,
     return rc;
 }
 
+static int socket_exec_send_http_chunked_body_trailer(QoreObject* self, QoreSocketObject* s,
+        const QoreHashNode* trailer, int timeout_ms, ExceptionSink* xsink) {
+    QoreString hdr(s->getEncoding());
+    hdr.concat("0\r\n");
+    qore_socket_private::do_headers(hdr, trailer, 0, false);
+
+    int rc = socket_exec_send_bytes(self, s, hdr.c_str(), hdr.size(), timeout_ms, xsink);
+    if (!rc && trailer) {
+        my_socket_priv::getPriv(*s)->doHeaderEvent(QORE_EVENT_HTTP_FOOTERS_SENT, QORE_SOURCE_SOCKET, *trailer);
+    }
+    return rc;
+}
+
 static int socket_exec_connect_operation(QoreObject* self, SocketPollOperationBase* connect_poller, int timeout_ms,
         bool ssl, ExceptionSink* xsink) {
     ReferenceHolder<SocketPollOperationBase> poller(connect_poller, xsink);
@@ -4182,7 +4195,7 @@ sock.sendHTTPChunkedBodyTrailer({});
     @since %Qore 0.8.13
 */
 nothing Socket::sendHTTPChunkedBodyTrailer(*hash<auto> trailer, timeout timeout_ms = -1) {
-    s->sendHTTPChunkedBodyTrailer(trailer, timeout_ms, xsink);
+    socket_exec_send_http_chunked_body_trailer(self, s, trailer, timeout_ms, xsink);
 }
 
 //! Retuns a hash representing the data in the HTTP header read, or, if the data cannot be parsed as an HTTP header, then an exception is thrown, and the data read is returned as a string in the \c arg key of the exception hash

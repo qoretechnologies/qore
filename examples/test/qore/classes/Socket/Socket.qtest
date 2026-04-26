@@ -147,6 +147,7 @@ class SocketTest inherits QUnit::Test {
         addTestCase("Accept poll test", \acceptPollTest());
         addTestCase("HTTP response poll test", \httpResponsePollTest());
         addTestCase("HTTP header string test", \httpHeaderStringTest());
+        addTestCase("HTTP chunked body trailer test", \httpChunkedBodyTrailerTest());
         addTestCase("send binary test", \sendBinaryTest());
         addTestCase("send close test", \sendCloseTest());
         addTestCase("poll test", \pollTest());
@@ -424,6 +425,27 @@ class SocketTest inherits QUnit::Test {
         string header = conn.readHTTPHeaderString(5s);
         cnt.waitForZero(5s);
         assertEq("HTTP/1.1 204 No Content\r\nX-Test: value\n", header);
+    }
+
+    httpChunkedBodyTrailerTest() {
+        Socket server();
+        server.bind("localhost:0");
+        server.listen();
+        int port = server.getSocketInfo().port;
+
+        Counter cnt(1);
+        string received;
+        background sub () {
+            Socket client();
+            client.connect("localhost:" + port);
+            received = client.recv(22, 5s);
+            cnt.dec();
+        }();
+
+        Socket conn = server.accept(5s);
+        conn.sendHTTPChunkedBodyTrailer({"X-Trailer": "done"}, 5s);
+        cnt.waitForZero(5s);
+        assertEq("0\r\nX-Trailer: done\r\n\r\n", received);
     }
 
     sendBinaryTest() {

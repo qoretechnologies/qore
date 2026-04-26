@@ -807,6 +807,10 @@ void my_socket_priv::doDataEvent(int event, int source, const void* data, size_t
     socket->priv->do_data_event(event, source, data, size);
 }
 
+void my_socket_priv::doHeaderEvent(int event, int source, const QoreHashNode& hdr) const {
+    socket->priv->do_header_event(event, source, hdr);
+}
+
 int my_socket_priv::getSendHttpMessageHeaders(ExceptionSink* xsink, QoreString& hdr, QoreHashNode* info,
         const char* method, const char* path, const char* http_version, const QoreHashNode* headers,
         size_t size, int source) const {

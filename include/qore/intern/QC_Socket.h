@@ -434,6 +434,9 @@ public:
     //! Posts a socket data event with raw bytes through the underlying socket private implementation
     DLLLOCAL void doDataEvent(int event, int source, const void* data, size_t size) const;
 
+    //! Posts a socket header event through the underlying socket private implementation
+    DLLLOCAL void doHeaderEvent(int event, int source, const QoreHashNode& hdr) const;
+
     //! Builds HTTP request headers and emits the legacy HTTP send-message event
     DLLLOCAL int getSendHttpMessageHeaders(ExceptionSink* xsink, QoreString& hdr, QoreHashNode* info,
             const char* method, const char* path, const char* http_version, const QoreHashNode* headers,
