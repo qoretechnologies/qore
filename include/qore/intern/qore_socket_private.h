@@ -239,6 +239,13 @@ struct qore_socketsource_private {
 */
 DLLLOCAL bool qore_on_async_io_thread();
 
+#ifdef DEBUG
+//! Overrides the async I/O thread flag for focused unit tests
+/** @return the previous async I/O thread flag value
+*/
+DLLLOCAL bool qore_set_async_io_thread_for_test(bool value);
+#endif
+
 class OptionalNonBlockingHelper {
 public:
     qore_socket_private& sock;

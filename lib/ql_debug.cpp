@@ -1988,6 +1988,39 @@ static void ut_asyncio_stop_clear(UnitTestCounters& c) {
     UT_ASSERT(c, !xsink, "cleanup succeeds");
 }
 
+#ifdef DEBUG
+static void ut_asyncio_exec_rejects_io_thread(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    AsyncIoControllerPriv* ctrl = new AsyncIoControllerPriv(true, &xsink);
+    UT_ASSERT(c, !xsink, "construction succeeds");
+    if (xsink) {
+        xsink.clear();
+        return;
+    }
+
+    QoreHashNode* info = new QoreHashNode(hashdeclSocketPollOperationInfo, &xsink);
+    bool old = qore_set_async_io_thread_for_test(true);
+    ReferenceHolder<QoreHashNode> result(ctrl->exec(nullptr, info, false, &xsink), &xsink);
+    qore_set_async_io_thread_for_test(old);
+
+    UT_ASSERT(c, !result, "exec returns no result from async I/O thread");
+    UT_ASSERT(c, (bool)xsink, "exec raises from async I/O thread");
+    if (xsink) {
+        const QoreValue err_val = xsink.getExceptionErr();
+        const QoreStringNode* err = err_val.get<const QoreStringNode>();
+        UT_ASSERT(c, err && *err == "ASYNC-IO-ERROR", "exception is ASYNC-IO-ERROR");
+
+        QoreStringValueHelper desc(xsink.getExceptionDesc());
+        UT_ASSERT(c, !strcmp(desc->c_str(), "exec() cannot be called from the async I/O thread"),
+            "exception describes async I/O thread rejection");
+        xsink.clear();
+    }
+
+    ctrl->deref(&xsink);
+    UT_ASSERT(c, !xsink, "cleanup succeeds");
+}
+#endif
+
 // ============================================================
 // SocketIoMode enforcement unit tests
 // ============================================================
@@ -2477,6 +2510,9 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_asyncio_logger(c);
     ut_asyncio_wait_for_processing_empty(c);
     ut_asyncio_stop_clear(c);
+#ifdef DEBUG
+    ut_asyncio_exec_rejects_io_thread(c);
+#endif
     ut_socket_iomode_async_blocks_sync(c);
     ut_socket_iomode_sync_blocks_async(c);
     ut_socket_iomode_unclaimed_allows_both(c);

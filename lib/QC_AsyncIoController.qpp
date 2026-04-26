@@ -234,7 +234,7 @@ static *Queue AsyncIoController::submit(hash<SocketPollOperationInfo> info, *boo
 
     @throw ASYNC-IO-ERROR if the controller is shutting down, the info hash is invalid,
     or the operation uses an @ref AbstractPollOperation::onComplete() "onComplete()"
-    callback
+    callback, or if called from the async I/O thread
 
     @since %Qore 2.3
 */

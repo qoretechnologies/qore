@@ -187,6 +187,14 @@ bool qore_on_async_io_thread() {
     return on_async_io_thread;
 }
 
+#ifdef DEBUG
+bool qore_set_async_io_thread_for_test(bool value) {
+    bool old = on_async_io_thread;
+    on_async_io_thread = value;
+    return old;
+}
+#endif
+
 //! Returns the current time in microseconds since the epoch
 static int64 get_epoch_us() {
     int us;
@@ -1610,6 +1618,12 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
 QoreHashNode* AsyncIoControllerPriv::exec(QoreObject* self, QoreHashNode* info, bool replace,
         ExceptionSink* xsink) {
     ReferenceHolder<QoreHashNode> info_holder(info, xsink);
+
+    if (qore_on_async_io_thread()) {
+        xsink->raiseException("ASYNC-IO-ERROR",
+            "exec() cannot be called from the async I/O thread");
+        return nullptr;
+    }
 
     QoreValue v = info->getKeyValue("spop");
     QoreObject* spop_obj = v.getType() == NT_OBJECT ? v.get<QoreObject>() : nullptr;
