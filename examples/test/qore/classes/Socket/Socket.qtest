@@ -653,6 +653,14 @@ class SocketTest inherits QUnit::Test {
         assertTrue(server_result);
     }
 
+    private binary gzipSseMessage(string msg) {
+        BinaryOutputStream bos();
+        TransformOutputStream tos(bos, get_compressor(COMPRESSION_ALG_GZIP));
+        tos.write(binary(msg));
+        tos.close();
+        return bos.getData();
+    }
+
     serverSentEventReadTest() {
         Queue q();
         background sub () {
@@ -686,6 +694,39 @@ class SocketTest inherits QUnit::Test {
             fail(sprintf("Server exception: %s: %s", server_result.err, server_result.desc));
         }
         assertTrue(server_result);
+
+        binary payload = gzipSseMessage("event: beta\r\ndata: zipped\r\nid: 2\r\n\r\n");
+
+        Queue q2();
+        background sub () {
+            try {
+                Socket server();
+                server.bind("localhost:0");
+                server.listen();
+                q2.push(server.getSocketInfo().port);
+
+                Socket peer = server.accept(5s);
+                peer.send(payload, 5s);
+                q2.push(True);
+            } catch (hash<ExceptionInfo> ex) {
+                q2.push(ex);
+            }
+        }();
+
+        Socket encoded_client();
+        encoded_client.connect("localhost:" + q2.get(5s));
+
+        hash<SseMessageInfo> encoded_event = encoded_client.readServerSentEvent(COMPRESSION_ALG_GZIP, 5s);
+        assertEq("beta", encoded_event.event);
+        assertEq("zipped", encoded_event.data);
+        assertEq("2", encoded_event.id);
+
+        auto encoded_server_result = q2.get(5s);
+        if (encoded_server_result.typeCode() == NT_HASH) {
+            fail(sprintf("Encoded SSE server exception: %s: %s", encoded_server_result.err,
+                encoded_server_result.desc));
+        }
+        assertTrue(encoded_server_result);
     }
 
     sendBinaryTest() {
