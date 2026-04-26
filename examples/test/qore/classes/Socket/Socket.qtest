@@ -155,6 +155,7 @@ class SocketTest inherits QUnit::Test {
         addTestCase("Unconnected Socket tests", \unconnectedSocketTest());
         addTestCase("Random Port tests", \randomPortSocketTest());
         addTestCase("UNIX socket connect", \unixSocketConnectTest());
+        addTestCase("Stream socket transfer", \streamSocketTransferTest());
         addTestCase("SSL read test", \sslReadTest());
         addTestCase("SSL upgrade test", \sslUpgradeTest());
         addTestCase("SSL poll send partial test", \sslPollSendPartialTest());
@@ -1330,6 +1331,48 @@ class SocketTest inherits QUnit::Test {
 
         Socket peer = server.accept(10s);
         assertEq(msg, peer.recv(msg.size()));
+    }
+
+    streamSocketTransferTest() {
+        Socket server();
+        server.bindINET("127.0.0.1", 0);
+        server.listen();
+
+        int port = server.getSocketInfo().port;
+        string payload = strmul("stream-data-", 10000);
+        Counter c(1);
+
+        background sub () {
+            on_exit c.dec();
+            Socket client();
+            client.connectINET("127.0.0.1", port, 10s);
+            StringInputStream input_stream(payload);
+            client.sendFromInputStream(input_stream, payload.size(), 10s);
+            assertEq("OK", client.recv(2, 10s));
+        }();
+
+        Socket peer = server.accept(10s);
+        StringOutputStream output_stream();
+        peer.recvToOutputStream(output_stream, payload.size(), 10s);
+        assertEq(payload, output_stream.getData());
+        peer.send("OK");
+        c.waitForZero();
+
+        c.inc();
+        background sub () {
+            on_exit c.dec();
+            Socket client();
+            client.connectINET("127.0.0.1", port, 10s);
+            StringInputStream input_stream(payload);
+            client.sendFromInputStream(input_stream, -1, 10s);
+            client.close();
+        }();
+
+        peer = server.accept(10s);
+        StringOutputStream output_stream2();
+        peer.recvToOutputStream(output_stream2, -1, 10s);
+        assertEq(payload, output_stream2.getData());
+        c.waitForZero();
     }
 
     unconnectedSocketTest() {

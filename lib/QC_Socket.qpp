@@ -437,6 +437,80 @@ static BinaryNode* socket_exec_recv_bytes(QoreObject* self, QoreSocketObject* s,
     return bin.release();
 }
 
+static BinaryNode* socket_exec_recv_some_binary(QoreObject* self, QoreSocketObject* s, size_t size,
+        int timeout_ms, ExceptionSink* xsink) {
+    s->ref();
+    ValueHolder result(socket_exec_recv_poll(self,
+        new SocketRecvSomePollOperation(xsink, static_cast<ssize_t>(size), s, false),
+        timeout_ms, "recvToOutputStream", xsink), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    if (result->isNothing()) {
+        return new BinaryNode;
+    }
+    if (result->getType() != NT_BINARY) {
+        xsink->raiseException("SOCKET-RECV-ERROR", "expected binary data from async receive operation, got '%s'",
+            result->getFullTypeName());
+        return nullptr;
+    }
+    return result.release().get<BinaryNode>();
+}
+
+static void socket_exec_send_input_stream(QoreObject* self, QoreSocketObject* s, InputStream* input_stream,
+        int64 size, int timeout_ms, ExceptionSink* xsink) {
+    char buf[DEFAULT_SOCKET_BUFSIZE];
+    int64 sent = 0;
+    while (size < 0 || sent < size) {
+        int64 to_read = size < 0 ? DEFAULT_SOCKET_BUFSIZE : QORE_MIN(size - sent, (int64)DEFAULT_SOCKET_BUFSIZE);
+        int64 read = input_stream->read(buf, to_read, xsink);
+        if (*xsink) {
+            return;
+        }
+        if (read <= 0) {
+            if (size >= 0) {
+                xsink->raiseException("SOCKET-SEND-ERROR", "Unexpected end of stream");
+            }
+            return;
+        }
+
+        socket_exec_send_bytes(self, s, buf, read, timeout_ms, xsink);
+        if (*xsink) {
+            return;
+        }
+        sent += read;
+    }
+}
+
+static void socket_exec_recv_to_output_stream(QoreObject* self, QoreSocketObject* s, OutputStream* os,
+        int64 size, int timeout_ms, ExceptionSink* xsink) {
+    int64 received = 0;
+    while (size < 0 || received < size) {
+        if (size < 0 && received > 0 && !s->isOpen()) {
+            return;
+        }
+        size_t to_read = size < 0
+            ? DEFAULT_SOCKET_BUFSIZE
+            : static_cast<size_t>(QORE_MIN(size - received, (int64)DEFAULT_SOCKET_BUFSIZE));
+        SimpleRefHolder<BinaryNode> bin(socket_exec_recv_some_binary(self, s, to_read, timeout_ms, xsink));
+        if (*xsink) {
+            return;
+        }
+        if (!bin->size()) {
+            if (size >= 0) {
+                xsink->raiseException("SOCKET-RECV-ERROR", "Unexpected end of stream");
+            }
+            return;
+        }
+
+        os->write(bin->getPtr(), bin->size(), xsink);
+        if (*xsink) {
+            return;
+        }
+        received += bin->size();
+    }
+}
+
 static int check_response_code(int status_code, ExceptionSink* xsink) {
     if (status_code < 100 || status_code >= 600) {
         xsink->raiseException("SOCKET-SENDHTTPRESPONSE-STATUS-ERROR", "expecting valid HTTP status code " \
@@ -2721,7 +2795,7 @@ sock.sendFromInputStream(input_stream, -1); # write all data available
 */
 nothing Socket::sendFromInputStream(Qore::InputStream[InputStream] input_stream, softint size = -1,
         timeout timeout_ms = -1) {
-    s->sendFromInputStream(*input_stream, size, timeout_ms, xsink);
+    socket_exec_send_input_stream(self, s, *input_stream, size, timeout_ms, xsink);
 }
 
 //! Sends a 1-byte integer over the socket
@@ -3010,7 +3084,7 @@ sock.recvToOutputStream(os, -1); # read all data available
     @since %Qore 0.8.13
 */
 nothing Socket::recvToOutputStream(Qore::OutputStream[OutputStream] os, softint size = -1, timeout timeout_ms = -1) {
-    s->recvToOutputStream(*os, size, timeout_ms, xsink);
+    socket_exec_recv_to_output_stream(self, s, *os, size, timeout_ms, xsink);
 }
 
 //! Receives a 1-byte signed integer from the socket

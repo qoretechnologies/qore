@@ -260,6 +260,17 @@ public:
     */
     DLLEXPORT AbstractPollState* startRecv(ExceptionSink* xsink, size_t size);
 
+    //! Starts a non-blocking receive operation for up to a given number of bytes on a connected socket
+    /**
+        @param xsink if an error occurs, the Qore-language exception information will be added here
+        @param size the maximum number of bytes to read, must be > 0
+
+        @return a socket poll state object or nullptr in case of an exception or an immediate receive
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT AbstractPollState* startRecvSome(ExceptionSink* xsink, size_t size);
+
     //! Starts a non-blocking receive operation on a connected socket
     /**
         @param xsink if an error occurs, the Qore-language exception information will be added here

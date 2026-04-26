@@ -561,6 +561,37 @@ private:
     size_t received = 0;
 };
 
+class SocketRecvSomePollState : public AbstractPollState {
+public:
+    DLLLOCAL SocketRecvSomePollState(ExceptionSink* xsink, qore_socket_private* sock, size_t size);
+
+    /** returns:
+        - SOCK_POLLIN = wait for read and call this again
+        - SOCK_POLLOUT = wait for write and call this again
+        - 0 = done
+        - < 0 = error (exception raised)
+    */
+    DLLLOCAL virtual int continuePoll(ExceptionSink* xsink);
+
+    //! Returns the data read
+    DLLLOCAL virtual QoreValue takeOutput() {
+        QoreValue rv = bin.release();
+        bin = nullptr;
+        return rv;
+    }
+
+    //! Returns the number of bytes received
+    DLLLOCAL size_t getBytesReceived() const {
+        return bin ? bin->size() : 0;
+    }
+
+private:
+    qore_socket_private* sock;
+    SimpleRefHolder<BinaryNode> bin;
+    size_t size;
+    bool io = false;
+};
+
 class SocketRecvPacketPollState : public AbstractPollState {
 public:
     DLLLOCAL SocketRecvPacketPollState(ExceptionSink* xsink, qore_socket_private* sock);

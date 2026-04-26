@@ -311,6 +311,26 @@ private:
     DLLEXPORT virtual bool abortNeedsClose() const override;
 };
 
+//! Receives up to N bytes non-blockingly
+/** @since %Qore 2.3
+*/
+class SocketRecvSomePollOperation : public SocketRecvPollOperationBase {
+public:
+    //! Creates the operation to receive up to @a size bytes
+    /** @param xsink exception sink
+        @param size maximum number of bytes to receive
+        @param sock the socket (will be ref'd)
+        @param to_string if true, return a string; otherwise binary
+    */
+    DLLEXPORT SocketRecvSomePollOperation(ExceptionSink* xsink, ssize_t size, QoreSocketObject* sock,
+            bool to_string);
+
+private:
+    size_t size;
+
+    DLLEXPORT virtual bool abortNeedsClose() const override;
+};
+
 //! Receives all available data non-blockingly
 /** @since %Qore 2.3
 */

@@ -2085,6 +2085,96 @@ int SocketRecvPollState::continuePoll(ExceptionSink* xsink) {
     return 0;
 }
 
+SocketRecvSomePollState::SocketRecvSomePollState(ExceptionSink* xsink, qore_socket_private* sock, size_t size)
+        : sock(sock), bin(new BinaryNode), size(size) {
+    if (!size) {
+        io = true;
+        return;
+    }
+
+    if (sock->buflen) {
+        size_t read_size = QORE_MIN(sock->buflen, size);
+        bin->append(sock->rbuf + sock->bufoffset, read_size);
+        if (sock->buflen == read_size) {
+            sock->buflen = 0;
+            sock->bufoffset = 0;
+        } else {
+            sock->buflen -= read_size;
+            sock->bufoffset += read_size;
+        }
+        io = true;
+        return;
+    }
+}
+
+/** returns:
+    - SOCK_POLLIN = wait for read and call this again
+    - SOCK_POLLOUT = wait for write and call this again
+    - 0 = done
+    - < 0 = error (exception raised)
+*/
+int SocketRecvSomePollState::continuePoll(ExceptionSink* xsink) {
+    if (io) {
+        return 0;
+    }
+
+    OptionalNonBlockingHelper nbh(*sock, true, xsink);
+    if (*xsink) {
+        return -1;
+    }
+
+    size_t read_size = QORE_MIN(size, (size_t)DEFAULT_SOCKET_BUFSIZE);
+    char buf[DEFAULT_SOCKET_BUFSIZE];
+
+    ssize_t rc;
+    if (sock->ssl) {
+        size_t real_io = 0;
+        rc = sock->ssl->doNonBlockingIo(xsink, "read", buf, read_size, SslAction::READ, real_io);
+        if (*xsink) {
+            assert(!real_io);
+            return -1;
+        }
+        if (real_io) {
+            bin->append(buf, real_io);
+            io = true;
+            return 0;
+        }
+        if (!rc && !sock->isOpen()) {
+            io = true;
+            return 0;
+        }
+        return rc;
+    }
+
+    while (true) {
+        rc = ::recv(sock->sock, buf, read_size, 0);
+        if (rc > 0) {
+            bin->append(buf, rc);
+            io = true;
+            return 0;
+        }
+        if (rc == 0) {
+            sock->close();
+            io = true;
+            return 0;
+        }
+
+        sock_get_error();
+        if (errno == EINTR) {
+            continue;
+        }
+        if (errno == EAGAIN
+#ifdef EWOULDBLOCK
+            || errno == EWOULDBLOCK
+#endif
+        ) {
+            return SOCK_POLLIN;
+        }
+        xsink->raiseErrnoException("SOCKET-RECV-ERROR", errno, "error while executing Socket::recv()");
+        return -1;
+    }
+}
+
 SocketRecvUntilBytesPollState::SocketRecvUntilBytesPollState(ExceptionSink* xsink, qore_socket_private* sock,
         const char* bytes, size_t size) : sock(sock), bin(new QoreStringNode), bytes(bytes), size(size) {
 }
@@ -4211,6 +4301,15 @@ AbstractPollState* QoreSocket::startRecv(ExceptionSink* xsink, size_t size) {
     }
 
     return new SocketRecvPollState(xsink, priv, size);
+}
+
+AbstractPollState* QoreSocket::startRecvSome(ExceptionSink* xsink, size_t size) {
+    if (priv->sock == QORE_INVALID_SOCKET) {
+        se_not_open("Socket", "startRecvSome", xsink);
+        return nullptr;
+    }
+
+    return new SocketRecvSomePollState(xsink, priv, size);
 }
 
 AbstractPollState* QoreSocket::startRecvUntilBytes(ExceptionSink* xsink, const char* pattern, size_t size) {
@@ -6504,6 +6603,29 @@ bool SocketRecvPollOperation::abortNeedsClose() const {
     if (poll_state) {
         assert(dynamic_cast<SocketRecvPollState*>(poll_state.get()));
         return reinterpret_cast<SocketRecvPollState*>(poll_state.get())->getBytesReceived() ? true : false;
+    }
+    return true;
+}
+
+SocketRecvSomePollOperation::SocketRecvSomePollOperation(ExceptionSink* xsink, ssize_t size, QoreSocketObject* sock,
+        bool to_string) : SocketRecvPollOperationBase(sock, to_string), size(size > 0 ? size : 0) {
+    AutoLocker al(sock->priv->m);
+
+    if (initIntern(xsink)) {
+        return;
+    }
+
+    poll_state.reset(sock->priv->socket->startRecvSome(xsink, this->size));
+    if (*xsink) {
+        sock->priv->clearNonBlock(NB_RECV);
+        set_non_block = false;
+    }
+}
+
+bool SocketRecvSomePollOperation::abortNeedsClose() const {
+    if (poll_state) {
+        assert(dynamic_cast<SocketRecvSomePollState*>(poll_state.get()));
+        return reinterpret_cast<SocketRecvSomePollState*>(poll_state.get())->getBytesReceived() ? true : false;
     }
     return true;
 }
