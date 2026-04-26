@@ -164,6 +164,11 @@ bool qore_is_async_io_controller_singleton(AsyncIoControllerPriv* ctrl) {
 //! must be avoided on the I/O thread to prevent deadlock.
 static thread_local bool on_async_io_thread = false;
 
+//! True while a callback worker is executing AsyncIoController-driven continuePoll().
+//! Qore poll operations run on workers specifically so bounded legacy sync I/O
+//! can be used without blocking the I/O thread.
+static thread_local bool on_async_io_continue_poll_thread = false;
+
 //! Thread-local index of the current I/O thread into AsyncIoControllerPriv::io_threads.
 //! -1 when not on an I/O thread.  Used by cancelByOwner/cancelByProgram to access
 //! the current thread's own cache directly (safe — I/O-thread-local invariant) while
@@ -187,11 +192,37 @@ bool qore_on_async_io_thread() {
     return on_async_io_thread;
 }
 
+bool qore_on_async_io_continue_poll_thread() {
+    return on_async_io_continue_poll_thread;
+}
+
 //! Returns the current time in microseconds since the epoch
 static int64 get_epoch_us() {
     int us;
     int64 secs = q_epoch_us(us);
     return secs * 1000000LL + us;
+}
+
+static int start_socket_async_io_owner(AbstractPollableIoObjectBase* sock, ExceptionSink* xsink) {
+    QoreSocketObject* socket = dynamic_cast<QoreSocketObject*>(sock);
+    if (!socket) {
+        return 0;
+    }
+
+    my_socket_priv* sp = my_socket_priv::getPriv(*socket);
+    AutoLocker al(sp->m);
+    return sp->startAsyncIo(xsink);
+}
+
+static void clear_socket_async_io_owner(AbstractPollableIoObjectBase* sock, ExceptionSink* xsink) {
+    QoreSocketObject* socket = dynamic_cast<QoreSocketObject*>(sock);
+    if (!socket) {
+        return;
+    }
+
+    my_socket_priv* sp = my_socket_priv::getPriv(*socket);
+    AutoLocker al(sp->m);
+    sp->clearAsyncIo();
 }
 
 // --- SocketPollOperationBase::wakeIoThread ---
@@ -222,6 +253,10 @@ void AsyncIoControllerPriv::PollInfo::cleanup(ExceptionSink* xsink) {
     if (controller && sock_obj) {
         AutoLocker al(controller->sock_route_lock);
         controller->obj_to_sock_hash.erase(sock_obj);
+    }
+    if (socket_async_io) {
+        clear_socket_async_io_owner(sock, xsink);
+        socket_async_io = false;
     }
     if (sock_obj) {
         sock_obj->deref(xsink);
@@ -309,6 +344,10 @@ void AsyncIoControllerPriv::cleanupAbandonedCommand(Command& cmd, ExceptionSink*
                 // In both cases it drops the original queue ref — clear
                 // the cmd field to avoid double-deref.
                 cmd.submit_queue = nullptr;
+            }
+            if (cmd.submit_socket_async_io) {
+                clear_socket_async_io_owner(cmd.submit_sock, xsink);
+                cmd.submit_socket_async_io = false;
             }
             if (cmd.submit_sock_obj) {
                 cmd.submit_sock_obj->deref(xsink);
@@ -846,6 +885,18 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
                     QoreHashNode* ex_hash = nullptr;
                     bool completed = false;
 
+                    struct ContinuePollWorkerGuard {
+                        bool old;
+
+                        ContinuePollWorkerGuard() : old(on_async_io_continue_poll_thread) {
+                            on_async_io_continue_poll_thread = true;
+                        }
+
+                        ~ContinuePollWorkerGuard() {
+                            on_async_io_continue_poll_thread = old;
+                        }
+                    } continue_poll_guard;
+
                     ValueHolder rv(async_item.spop_obj->evalMethod("continuePoll", nullptr, &work_xsink),
                         &work_xsink);
                     if (work_xsink) {
@@ -1367,6 +1418,36 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
         res.result_queue->ref();  // extra ref for PollInfo storage
     }
 
+    struct SocketAsyncIoOwnerGuard {
+        AbstractPollableIoObjectBase* sock = nullptr;
+        ExceptionSink* xsink = nullptr;
+        bool active = false;
+
+        ~SocketAsyncIoOwnerGuard() {
+            if (active) {
+                clear_socket_async_io_owner(sock, xsink);
+            }
+        }
+
+        int start(AbstractPollableIoObjectBase* s, ExceptionSink* xs) {
+            if (start_socket_async_io_owner(s, xs)) {
+                return -1;
+            }
+            sock = s;
+            xsink = xs;
+            active = dynamic_cast<QoreSocketObject*>(s) != nullptr;
+            return 0;
+        }
+
+        void release() {
+            active = false;
+        }
+    } socket_async_io_guard;
+
+    if (socket_async_io_guard.start(sock, xsink)) {
+        return nullptr;
+    }
+
     // Ensure the target I/O thread is running (rare path: first submit or
     // per-thread autostop restart).  In multi-threaded mode, threads autostop
     // independently — checking only ctx() (thread 0) misses the case where
@@ -1437,6 +1518,8 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
         pinfo.has_qore_on_complete = has_qore_on_complete;
         pinfo.spop_base = spop_base;
         spop_base_holder.release();
+        pinfo.socket_async_io = socket_async_io_guard.active;
+        socket_async_io_guard.release();
         pinfo.controller = this;
 
         // Publish sock_hash → thread_idx BEFORE releasing submit_seq so a
@@ -1472,6 +1555,7 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
         cmd.submit_timeout_us = timeout_us;
         cmd.submit_has_qore_abort = has_qore_abort;
         cmd.submit_has_qore_on_complete = has_qore_on_complete;
+        cmd.submit_socket_async_io = socket_async_io_guard.active;
 
         // Compute socket hash BEFORE publishing the cmd so it is read while
         // the sock pointer is still safe to deref: once target->cmdq.push()
@@ -1486,6 +1570,7 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
             AutoLocker al(m);
             target = &getThreadForKey(uh);
             target->cmdq.push(std::move(cmd));
+            socket_async_io_guard.release();
             // Bump submit_seq immediately after push, BEFORE notify().  Queue
             // mutation and the I/O thread's empty checks are synchronized by m,
             // so a command visible to the I/O thread has a visible sequence bump.
@@ -4402,6 +4487,10 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                     auto ck_it = t.cancelled_keys.find(cmd.key);
                     if (ck_it != t.cancelled_keys.end()) {
                         ck_it->second = 2;
+                        if (cmd.submit_socket_async_io) {
+                            clear_socket_async_io_owner(cmd.submit_sock, xsink);
+                            cmd.submit_socket_async_io = false;
+                        }
                         if (cmd.submit_sock) { cmd.submit_sock->deref(xsink); }
                         if (cmd.submit_sock_obj) { cmd.submit_sock_obj->deref(xsink); }
                         if (cmd.submit_spop_obj) { cmd.submit_spop_obj->deref(xsink); }
@@ -4437,6 +4526,7 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                             pinfo.owner = cmd.owner;
                             pinfo.has_qore_abort = cmd.submit_has_qore_abort;
                             pinfo.has_qore_on_complete = cmd.submit_has_qore_on_complete;
+                            pinfo.socket_async_io = cmd.submit_socket_async_io;
                             pinfo.controller = this;
                             // Null command fields to prevent double-deref on
                             // command destruction — pinfo.cleanup() owns them now.
@@ -4447,6 +4537,7 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                             cmd.submit_poll_info = nullptr;
                             cmd.submit_other = nullptr;
                             cmd.submit_queue = nullptr;
+                            cmd.submit_socket_async_io = false;
                             doCancelIntern(pinfo, xsink);
                             pinfo.cleanup(xsink);
                             break;
@@ -4505,6 +4596,7 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                     pinfo.timeout_date_us = 0;
                     pinfo.has_qore_abort = cmd.submit_has_qore_abort;
                     pinfo.has_qore_on_complete = cmd.submit_has_qore_on_complete;
+                    pinfo.socket_async_io = cmd.submit_socket_async_io;
                     pinfo.controller = this;
 
                     // Set controller back-reference so wakeIoThread() works
@@ -4523,6 +4615,7 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                     cmd.submit_poll_info = nullptr;
                     cmd.submit_other = nullptr;
                     cmd.submit_queue = nullptr;
+                    cmd.submit_socket_async_io = false;
                     break;
                 }
 

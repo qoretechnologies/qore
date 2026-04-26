@@ -45,6 +45,8 @@ DLLLOCAL TypedHashDecl* init_hashdecl_SseMessageInfo(QoreNamespace& ns);
 DLLLOCAL TypedHashDecl* init_hashdecl_DatagramInfo(QoreNamespace& ns);
 DLLLOCAL TypedHashDecl* init_hashdecl_QuicGoawayStateInfo(QoreNamespace& ns);
 
+DLLLOCAL bool qore_on_async_io_continue_poll_thread();
+
 #include <qore/QoreSocket.h>
 #include <qore/AbstractPrivateData.h>
 #include <qore/QoreThreadLock.h>
@@ -60,6 +62,7 @@ public:
     mutable QoreThreadLock m;
     unsigned non_block_flags = 0;
     int non_block_accept_count = 0;
+    int async_io_count = 0;
     int sync_io_count = 0;
     bool valid = true;
     SocketIoMode io_mode = SocketIoMode::Unclaimed;
@@ -110,7 +113,8 @@ public:
         // must be called with the lock held
         assert(m.trylock());
 
-        if (io_mode == SocketIoMode::Async) {
+        if ((io_mode == SocketIoMode::Async || async_io_count > 0)
+                && !qore_on_async_io_continue_poll_thread()) {
             xsink->raiseException("SOCKET-ASYNC-MODE-ERROR",
                 "cannot perform synchronous I/O on a socket managed by "
                 "the async I/O controller");
@@ -221,6 +225,35 @@ public:
         return 0;
     }
 
+    //! Starts an async controller operation and claims async I/O mode until clearAsyncIo() is called
+    DLLLOCAL int startAsyncIo(ExceptionSink* xsink) {
+        // must be called with the lock held
+        assert(m.trylock());
+
+        if (checkAsyncAllowed(xsink)) {
+            return -1;
+        }
+        if (checkValid(xsink)) {
+            return -1;
+        }
+        ++async_io_count;
+        io_mode = SocketIoMode::Async;
+        return 0;
+    }
+
+    //! Clears an async controller operation claim
+    DLLLOCAL void clearAsyncIo() {
+        // must be called with the lock held
+        assert(m.trylock());
+        assert(async_io_count > 0);
+
+        --async_io_count;
+        if (!async_io_count && !non_block_flags && non_block_accept_count == 0
+                && io_mode == SocketIoMode::Async) {
+            io_mode = SocketIoMode::Unclaimed;
+        }
+    }
+
     //! Clears a synchronous I/O operation claim
     DLLLOCAL void clearSyncIo() {
         // must be called with the lock held
@@ -228,9 +261,12 @@ public:
         assert(sync_io_count > 0);
 
         --sync_io_count;
-        if (!sync_io_count && !non_block_flags && non_block_accept_count == 0
-                && io_mode == SocketIoMode::Sync) {
-            io_mode = SocketIoMode::Unclaimed;
+        if (!sync_io_count && io_mode == SocketIoMode::Sync) {
+            if (async_io_count) {
+                io_mode = SocketIoMode::Async;
+            } else if (!non_block_flags && non_block_accept_count == 0) {
+                io_mode = SocketIoMode::Unclaimed;
+            }
         }
     }
 
@@ -330,7 +366,7 @@ public:
         // must be called with the lock held
         assert(m.trylock());
         non_block_flags = 0;
-        if (non_block_accept_count == 0) {
+        if (!async_io_count && non_block_accept_count == 0) {
             io_mode = SocketIoMode::Unclaimed;
         }
     }
@@ -340,7 +376,7 @@ public:
         // must be called with the lock held
         assert(m.trylock());
         non_block_flags &= ~direction;
-        if (!non_block_flags && non_block_accept_count == 0) {
+        if (!async_io_count && !non_block_flags && non_block_accept_count == 0) {
             io_mode = SocketIoMode::Unclaimed;
         }
     }
@@ -371,7 +407,7 @@ public:
         assert(m.trylock());
         assert(non_block_accept_count > 0);
         --non_block_accept_count;
-        if (!non_block_flags && non_block_accept_count == 0) {
+        if (!async_io_count && !non_block_flags && non_block_accept_count == 0) {
             io_mode = SocketIoMode::Unclaimed;
         }
     }

@@ -582,6 +582,7 @@ private:
         int64 submit_timeout_us = 0;                     //!< Timeout in microseconds
         bool submit_has_qore_abort = false;              //!< True if abort() is overridden in Qore
         bool submit_has_qore_on_complete = false;        //!< True if onComplete() is overridden in Qore
+        bool submit_socket_async_io = false;             //!< True if SubmitOp owns a Socket async I/O claim
     };
 
     //! Internal poll info (mirrors Qore Priv::PollInfo)
@@ -599,6 +600,7 @@ private:
         bool has_qore_abort;            //!< True if abort() is overridden in Qore
         bool has_qore_on_complete;      //!< True if onComplete() is overridden in Qore
         bool continue_poll_in_flight;   //!< True when continuePoll() dispatched to worker
+        bool socket_async_io;           //!< True if this operation owns a Socket async I/O claim
         int64 poll_timeout_deadline_us; //!< Absolute deadline for protocol-level poll timeout (QUIC)
         std::string cached_sock_hash;   //!< Cached socket hash for O(1) Phase 1 readiness check
         int cached_events = 0;          //!< Cached poll events for Phase 3 fast path
@@ -616,7 +618,7 @@ private:
             spop_obj(nullptr), poll_info(nullptr), timeout_us(DEFAULT_IO_TIMEOUT_US),
             other(nullptr), queue(nullptr),
             spop_base(nullptr), has_qore_abort(false), has_qore_on_complete(false),
-            continue_poll_in_flight(false), poll_timeout_deadline_us(0) {
+            continue_poll_in_flight(false), socket_async_io(false), poll_timeout_deadline_us(0) {
         }
 
         DLLLOCAL ~PollInfo() {

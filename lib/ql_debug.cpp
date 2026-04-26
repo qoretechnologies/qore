@@ -2172,6 +2172,59 @@ static void ut_socket_iomode_async_lifecycle(UnitTestCounters& c) {
     xsink.clear();
 }
 
+//! Test that async controller ownership outlives transient non-blocking flags
+static void ut_socket_iomode_async_owner_lifecycle(UnitTestCounters& c) {
+    ExceptionSink xsink;
+
+    QoreSocketObject* sock = new QoreSocketObject;
+    ReferenceHolder<QoreObject> sock_obj(new QoreObject(QC_SOCKET, getProgram(), sock), &xsink);
+    my_socket_priv* sp = my_socket_priv::getPriv(*sock);
+
+    {
+        AutoLocker al(sp->m);
+
+        int rv = sp->startAsyncIo(&xsink);
+        UT_ASSERT(c, rv == 0, "startAsyncIo succeeds on Unclaimed socket");
+        UT_ASSERT(c, !xsink, "no exception from startAsyncIo");
+        UT_ASSERT(c, sp->async_io_count == 1,
+            "async_io_count is incremented after startAsyncIo");
+        UT_ASSERT(c, sp->io_mode == SocketIoMode::Async,
+            "io_mode is Async after startAsyncIo");
+
+        rv = sp->setNonBlock(&xsink, NB_SEND);
+        UT_ASSERT(c, rv == 0, "setNonBlock succeeds while async owner is active");
+        UT_ASSERT(c, !xsink, "no exception from setNonBlock with async owner");
+
+        sp->clearNonBlock(NB_SEND);
+        UT_ASSERT(c, sp->io_mode == SocketIoMode::Async,
+            "io_mode stays Async after clearNonBlock while async owner is active");
+
+        rv = sp->checkSyncAllowed(&xsink);
+        UT_ASSERT(c, rv == -1, "checkSyncAllowed fails while async owner is active");
+        UT_ASSERT(c, (bool)xsink, "checkSyncAllowed raises while async owner is active");
+        xsink.clear();
+
+        rv = sp->startAsyncIo(&xsink);
+        UT_ASSERT(c, rv == 0, "nested startAsyncIo succeeds");
+        UT_ASSERT(c, sp->async_io_count == 2,
+            "async_io_count tracks nested async owners");
+
+        sp->clearAsyncIo();
+        UT_ASSERT(c, sp->async_io_count == 1,
+            "async_io_count decrements after first clearAsyncIo");
+        UT_ASSERT(c, sp->io_mode == SocketIoMode::Async,
+            "io_mode remains Async while nested async owner is active");
+
+        sp->clearAsyncIo();
+        UT_ASSERT(c, sp->async_io_count == 0,
+            "async_io_count is zero after final clearAsyncIo");
+        UT_ASSERT(c, sp->io_mode == SocketIoMode::Unclaimed,
+            "io_mode resets after final async owner clears");
+    }
+
+    xsink.clear();
+}
+
 //! Test that no-ExceptionSink sync wrappers still honor async ownership
 static void ut_socket_iomode_no_xsink_sync_wrappers(UnitTestCounters& c) {
     ExceptionSink xsink;
@@ -2428,6 +2481,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_socket_iomode_sync_blocks_async(c);
     ut_socket_iomode_unclaimed_allows_both(c);
     ut_socket_iomode_async_lifecycle(c);
+    ut_socket_iomode_async_owner_lifecycle(c);
     ut_socket_iomode_no_xsink_sync_wrappers(c);
     ut_socket_iomode_sync_lifecycle(c);
     ut_socket_iomode_nested_sync_lifecycle(c);
