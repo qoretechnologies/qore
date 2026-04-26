@@ -149,6 +149,7 @@ class SocketTest inherits QUnit::Test {
         addTestCase("HTTP header string test", \httpHeaderStringTest());
         addTestCase("HTTP chunked body trailer test", \httpChunkedBodyTrailerTest());
         addTestCase("SSE read test", \serverSentEventReadTest());
+        addTestCase("concurrent sync send/recv test", \concurrentSyncSendRecvTest());
         addTestCase("send binary test", \sendBinaryTest());
         addTestCase("send close test", \sendCloseTest());
         addTestCase("poll test", \pollTest());
@@ -727,6 +728,64 @@ class SocketTest inherits QUnit::Test {
                 encoded_server_result.desc));
         }
         assertTrue(encoded_server_result);
+    }
+
+    concurrentSyncSendRecvTest() {
+        binary client_payload = get_random_bytes(128 * 1024);
+        binary server_payload = get_random_bytes(128 * 1024);
+
+        Queue q();
+        background sub () {
+            try {
+                Socket server();
+                if (server.bind("127.0.0.1:0", True)) {
+                    throw "SOCKET-BIND-ERROR", strerror();
+                }
+                server.listen();
+                q.push(server.getSocketInfo().port);
+
+                Socket peer = server.accept(5s);
+                binary received;
+                while (received.size() < client_payload.size()) {
+                    received += peer.recvBinary(client_payload.size() - received.size(), 5s);
+                }
+                peer.send(server_payload, 5s);
+                q.push(received);
+            } catch (hash<ExceptionInfo> ex) {
+                q.push(ex);
+            }
+        }();
+
+        Socket client();
+        client.connect("127.0.0.1:" + q.get(5s));
+
+        Queue recv_result();
+        background sub () {
+            try {
+                binary received;
+                while (received.size() < server_payload.size()) {
+                    received += client.recvBinary(server_payload.size() - received.size(), 5s);
+                }
+                recv_result.push(received);
+            } catch (hash<ExceptionInfo> ex) {
+                recv_result.push(ex);
+            }
+        }();
+
+        usleep(100ms);
+        client.send(client_payload, 5s);
+
+        auto client_received = recv_result.get(5s);
+        if (client_received.typeCode() == NT_HASH) {
+            fail(sprintf("Client recv exception: %s: %s", client_received.err, client_received.desc));
+        }
+        assertEq(server_payload, client_received);
+
+        auto server_received = q.get(5s);
+        if (server_received.typeCode() == NT_HASH) {
+            fail(sprintf("Server exception: %s: %s", server_received.err, server_received.desc));
+        }
+        assertEq(client_payload, server_received);
     }
 
     sendBinaryTest() {

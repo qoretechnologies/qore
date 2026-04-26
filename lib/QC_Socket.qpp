@@ -110,10 +110,16 @@ static QoreHashNode* socket_exec_poll_operation(QoreObject* self, QoreObject* op
     owner += ':';
     owner += socket_hash->c_str();
 
+    std::string key("Socket::sync:");
+    key += owner_name;
+    key += ':';
+    key += socket_hash->c_str();
+
     ReferenceHolder<QoreHashNode> info(new QoreHashNode(hashdeclSocketPollOperationInfo, xsink), xsink);
     info->setKeyValue("sock", self->objectRefSelf(), xsink);
     info->setKeyValue("spop", op_obj->objectRefSelf(), xsink);
     info->setKeyValue("owner", new QoreStringNode(owner), xsink);
+    info->setKeyValue("key", new QoreStringNode(key), xsink);
     info->setKeyValue("to", timeout_ms, xsink);
     if (*xsink) {
         return nullptr;
