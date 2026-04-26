@@ -182,6 +182,13 @@ static int socket_exec_send_string_bytes(QoreObject* self, QoreSocketObject* s, 
     return socket_exec_send_binary(self, s, bin.release(), timeout_ms, xsink);
 }
 
+static int socket_exec_send_bytes(QoreObject* self, QoreSocketObject* s, const void* data, size_t size,
+        int timeout_ms, ExceptionSink* xsink) {
+    SimpleRefHolder<BinaryNode> bin(new BinaryNode());
+    bin->append(data, size);
+    return socket_exec_send_binary(self, s, bin.release(), timeout_ms, xsink);
+}
+
 static int check_response_code(int status_code, ExceptionSink* xsink) {
     if (status_code < 100 || status_code >= 600) {
         xsink->raiseException("SOCKET-SENDHTTPRESPONSE-STATUS-ERROR", "expecting valid HTTP status code " \
@@ -2540,7 +2547,8 @@ sock.sendi1(val, 20s);
     made because it was not possible to catch SSL errors with this method with the previous implementation
 */
 int Socket::sendi1(softint i = 0, timeout timeout_ms = -1) {
-    return s->sendi1((char)i, timeout_ms, xsink);
+    char v = (char)i;
+    return socket_exec_send_bytes(self, s, &v, sizeof(v), timeout_ms, xsink);
 }
 
 //! Sends a 2-byte (16-bit) integer in big-endian format (network byte order) over the socket
@@ -2568,7 +2576,8 @@ sock.sendi2(val, 20s);
     made because it was not possible to catch SSL errors with this method with the previous implementation
 */
 int Socket::sendi2(softint i = 0, timeout timeout_ms = -1) {
-    return s->sendi2((short)i, timeout_ms, xsink);
+    short v = htons((short)i);
+    return socket_exec_send_bytes(self, s, &v, sizeof(v), timeout_ms, xsink);
 }
 
 //! Sends a 4-byte (32-bit) integer in big-endian format (network byte order) over the socket
@@ -2596,7 +2605,8 @@ sock.sendi4(val, 20s);
     made because it was not possible to catch SSL errors with this method with the previous implementation
 */
 int Socket::sendi4(softint i = 0, timeout timeout_ms = -1) {
-    return s->sendi4((int)i, timeout_ms, xsink);
+    int v = htonl((int)i);
+    return socket_exec_send_bytes(self, s, &v, sizeof(v), timeout_ms, xsink);
 }
 
 //! Sends an 8-byte (64-bit) integer in big-endian format (network byte order) over the socket
@@ -2624,7 +2634,8 @@ sock.sendi8(val, 20s);
     made because it was not possible to catch SSL errors with this method with the previous implementation
 */
 int Socket::sendi8(softint i = 0, timeout timeout_ms = -1) {
-    return s->sendi8(i, timeout_ms, xsink);
+    int64 v = i8MSB(i);
+    return socket_exec_send_bytes(self, s, &v, sizeof(v), timeout_ms, xsink);
 }
 
 //! Sends a 2-byte (16-bit) integer in little-endian format over the socket
@@ -2652,7 +2663,8 @@ sock.sendi2LSB(val, 20s);
     made because it was not possible to catch SSL errors with this method with the previous implementation
 */
 int Socket::sendi2LSB(softint i = 0, timeout timeout_ms = -1) {
-    return s->sendi2LSB((short)i, timeout_ms, xsink);
+    short v = i2LSB((short)i);
+    return socket_exec_send_bytes(self, s, &v, sizeof(v), timeout_ms, xsink);
 }
 
 //! Sends a 4-byte (32-bit) integer in little-endian format over the socket
@@ -2680,7 +2692,8 @@ sock.sendi4LSB(val, 20s);
     made because it was not possible to catch SSL errors with this method with the previous implementation
 */
 int Socket::sendi4LSB(softint i = 0, timeout timeout_ms = -1) {
-    return s->sendi4LSB((int)i, timeout_ms, xsink);
+    int v = i4LSB((int)i);
+    return socket_exec_send_bytes(self, s, &v, sizeof(v), timeout_ms, xsink);
 }
 
 //! Sends an 8-byte (64-bit) integer in little-endian format over the socket
@@ -2708,7 +2721,8 @@ sock.sendi8LSB(val, 20s);
     made because it was not possible to catch SSL errors with this method with the previous implementation
 */
 int Socket::sendi8LSB(softint i = 0, timeout timeout_ms = -1) {
-    return s->sendi8LSB(i, timeout_ms, xsink);
+    int64 v = i8LSB(i);
+    return socket_exec_send_bytes(self, s, &v, sizeof(v), timeout_ms, xsink);
 }
 
 //! Receives data from the socket and returns a string tagged with the Socket's character encoding
