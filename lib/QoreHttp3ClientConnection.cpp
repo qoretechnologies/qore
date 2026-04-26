@@ -477,14 +477,38 @@ int Http3ClientConnection::buildAndSubmit(ExceptionSink* xsink) {
     // closeConnection (pre-winner) has something to cancel.  The winner
     // selection in onInnerHandshakeReady may re-point these to a
     // different attempt.
+    //
+    // The submit loop above ran without attempts_mu_ held, so the I/O
+    // thread may have already run onInnerHandshakeReady (winner committed
+    // and attempts_ cleared) or onInnerHandshakeFailed (all-failed
+    // teardown: attempts_ moved out and connection members nulled).  In
+    // either of those cases, attempts_[built_indices.front()] is null or
+    // out-of-bounds and the connection members are already in their final
+    // state — re-publishing would either segfault on a null Attempt* or
+    // overwrite the winner's tuple with stale pointers.  Guard against
+    // both by checking winner_idx_ and attempts_ first.
     {
         std::lock_guard<std::mutex> lk(attempts_mu_);
-        Attempt* primary = attempts_[built_indices.front()].get();
-        sock_priv = primary->sock_priv;
-        sock_obj = primary->sock_obj;
-        poll_op_priv = primary->poll_op_priv;
-        poll_op_obj = primary->poll_op_obj;
-        submitted_to_controller = true;
+        if (winner_idx_ < 0 && !attempts_.empty()) {
+            Attempt* primary = attempts_[built_indices.front()].get();
+            if (primary) {
+                sock_priv = primary->sock_priv;
+                sock_obj = primary->sock_obj;
+                poll_op_priv = primary->poll_op_priv;
+                poll_op_obj = primary->poll_op_obj;
+                submitted_to_controller = true;
+            }
+        } else if (winner_idx_ >= 0) {
+            // Winner committed by onInnerHandshakeReady before we
+            // re-acquired the lock.  sock_priv et al. already point at
+            // the winner's tuple; just flag the controller as holding
+            // our op so a subsequent closeConnection cancels it via the
+            // controller path.
+            submitted_to_controller = true;
+        }
+        // else: onInnerHandshakeFailed cleared attempts_ and set
+        // submitted_to_controller=false on its way to setClosed().  The
+        // connection is already torn down — leave it that way.
     }
     return 0;
 }
