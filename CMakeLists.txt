@@ -1842,32 +1842,68 @@ set_target_properties(qcc PROPERTIES BUILD_RPATH ${CMAKE_BINARY_DIR})
 # (e.g. a runtime-only fix in QoreAOTRuntime.cpp).
 #
 # The stamp's mtime tracks only files that actually affect qmod output:
-# the wire-format header, the writer, the compile pipeline, the IR
-# opcode header, and qcc itself.  Runtime files (QoreAOTRuntime.cpp,
-# Function.cpp's evalIntern tiering, etc.) are excluded — they affect
-# how qmods are executed, not how they're generated.
+# the wire-format headers, the writer, the compile pipeline, the IR
+# opcode/lowering headers, and qcc itself.  Runtime files
+# (QoreAOTRuntime.cpp, Function.cpp's evalIntern tiering, etc.) are
+# excluded — they affect how qmods are executed, not how they're
+# generated.
 #
 # If a file affecting qmod output is missed here, it would cause
 # silently stale qmods.  The feature-flag machinery
 # (QORE_AOT_SUPPORTED_FEATURES) catches wire-format drift at load
 # time, but behavioral drift (e.g. slot-map layout changes) wouldn't
 # be caught — err on the side of including rather than excluding.
+# Keep the handler .cpp files explicit: they are #include'd by registry
+# .cpp files, but this custom command does not inherit compiler depfile
+# scanning from the libqore/qcc compilation rules.
 set(_qcc_format_sources
+    ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreAOT.h
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreAOTBinary.h
+    ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreAOTExprRegistry.h
+    ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreAOTExprSlotRegistry.h
+    ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreAOTInstRegistry.h
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreIR.h
+    ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreIRBuilder.h
+    ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreIRExprRegistry.h
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreIRLowering.h
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreIRToLLVM.h
     ${CMAKE_SOURCE_DIR}/lib/QoreAOT.cpp
     ${CMAKE_SOURCE_DIR}/lib/QoreAOTBinary.cpp
+    ${CMAKE_SOURCE_DIR}/lib/QoreAOTExprHandlers.cpp
+    ${CMAKE_SOURCE_DIR}/lib/QoreAOTExprRegistry.cpp
+    ${CMAKE_SOURCE_DIR}/lib/QoreAOTExprSlotHandlers.cpp
+    ${CMAKE_SOURCE_DIR}/lib/QoreAOTExprSlotRegistry.cpp
+    ${CMAKE_SOURCE_DIR}/lib/QoreAOTInstRegistry.cpp
+    ${CMAKE_SOURCE_DIR}/lib/QoreIRBuilder.cpp
+    ${CMAKE_SOURCE_DIR}/lib/QoreIRExprHandlers.cpp
+    ${CMAKE_SOURCE_DIR}/lib/QoreIRExprRegistry.cpp
     ${CMAKE_SOURCE_DIR}/lib/QoreIRLowering.cpp
     ${CMAKE_SOURCE_DIR}/lib/QoreIRToLLVM.cpp
     ${CMAKE_SOURCE_DIR}/qcc-main.cpp
 )
+
+# Rebuild qmods when this source set itself changes.  Otherwise an
+# existing build tree can miss a newly-added dependency if the file is
+# older than the current stamp.
+set(_qcc_format_sources_manifest ${CMAKE_BINARY_DIR}/qcc-format-sources.txt)
+set(_qcc_format_sources_manifest_content "")
+foreach(_qcc_format_source IN LISTS _qcc_format_sources)
+    string(APPEND _qcc_format_sources_manifest_content "${_qcc_format_source}\n")
+endforeach()
+if (EXISTS "${_qcc_format_sources_manifest}")
+    file(READ "${_qcc_format_sources_manifest}" _qcc_format_sources_manifest_old)
+else()
+    set(_qcc_format_sources_manifest_old "")
+endif()
+if (NOT _qcc_format_sources_manifest_old STREQUAL _qcc_format_sources_manifest_content)
+    file(WRITE "${_qcc_format_sources_manifest}" "${_qcc_format_sources_manifest_content}")
+endif()
+
 set(QCC_FORMAT_STAMP ${CMAKE_BINARY_DIR}/qcc-format.stamp)
 add_custom_command(
     OUTPUT ${QCC_FORMAT_STAMP}
     COMMAND ${CMAKE_COMMAND} -E touch ${QCC_FORMAT_STAMP}
-    DEPENDS ${_qcc_format_sources}
+    DEPENDS ${_qcc_format_sources} ${_qcc_format_sources_manifest}
     COMMENT "Updating qcc format-version stamp"
     VERBATIM
 )
