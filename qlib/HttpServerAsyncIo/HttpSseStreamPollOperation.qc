@@ -41,8 +41,6 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
         const STATE_DISCONNECTED = "disconnected";
         const STATE_ERROR = "error";
 
-        #! Default socket send timeout
-        const DefaultSocketSendTimeout = 30s;
     }
 
     private {
@@ -64,11 +62,8 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
         #! Current data being written (partial write support)
         *string pending_data;
 
-        #! Bytes already written from pending_data
-        /** @note Currently unused because \c send2() guarantees full delivery; retained for
-            future partial-write support if non-blocking sends are introduced.
-        */
-        int pending_offset = 0;
+        #! Active non-blocking send operation for pending_data
+        *AbstractPollOperation send_op;
 
         #! Heartbeat interval in milliseconds; 0 disables the heartbeat
         int heartbeat_ms = 0;
@@ -157,22 +152,19 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
         # Do not register the client socket for read readiness while an H1 SSE
         # stream is idle.  A closed peer makes the fd permanently readable, and
         # this Qore poll operation does not consume from it.  EventNotifier
-        # wakeups are enough to flush queued events; send2() reports a disconnect
-        # when the next event is written.
+        # wakeups are enough to flush queued events; a non-blocking send detects
+        # disconnects when the next event is written.
 
-        # Send queued data using send2(), which guarantees full delivery. Since
-        # send2() blocks with a bounded timeout, flush data in this worker call
-        # instead of depending on a follow-up POLLOUT wake to make progress.
+        # Send queued data through Socket::startPollSend(), keeping all socket
+        # I/O in the async poll state machine.
         while (True) {
             if (pending_data) {
-                try {
-                    sock.send2(pending_data, DefaultSocketSendTimeout);
-                    remove pending_data;
-                    pending_offset = 0;
-                    last_send_us = clock_getmicros();
-                } catch (hash<ExceptionInfo> ex) {
-                    state = STATE_DISCONNECTED;
+                *hash<SocketPollInfo> info = continueSend();
+                if (state != STATE_STREAMING) {
                     return NOTHING;
+                }
+                if (info) {
+                    return info;
                 }
                 continue;
             }
@@ -186,7 +178,6 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
             pending_data = result.value.typeCode() == NT_STRING
                 ? result.value
                 : formatSseEvent(result.value);
-            pending_offset = 0;
         }
 
         # No data to send — send a heartbeat inline if the interval has
@@ -197,12 +188,13 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
         if (heartbeat_ms > 0) {
             int elapsed_ms = (clock_getmicros() - last_send_us) / 1000;
             if (elapsed_ms >= heartbeat_ms) {
-                try {
-                    sock.send2(heartbeat_msg, DefaultSocketSendTimeout);
-                    last_send_us = clock_getmicros();
-                } catch (hash<ExceptionInfo> ex) {
-                    state = STATE_DISCONNECTED;
+                pending_data = heartbeat_msg;
+                *hash<SocketPollInfo> info = continueSend();
+                if (state != STATE_STREAMING) {
                     return NOTHING;
+                }
+                if (info) {
+                    return info;
                 }
                 return <SocketPollInfo>{
                     "events": SOCK_POLLIN,
@@ -220,6 +212,37 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
             "events": SOCK_POLLIN,
             "socket": notifier,
         };
+    }
+
+    #! Continues the active non-blocking send operation
+    /** @return poll info when the socket must wait for writability, or NOTHING
+        when pending_data was fully sent or the stream was disconnected
+    */
+    private *hash<SocketPollInfo> continueSend() {
+        try {
+            if (!send_op) {
+                send_op = sock.startPollSend(pending_data);
+            }
+
+            *hash<SocketPollInfo> info = send_op.continuePoll();
+            if (info) {
+                return info;
+            }
+            if (!send_op.goalReached()) {
+                state = STATE_DISCONNECTED;
+                remove send_op;
+                return NOTHING;
+            }
+
+            remove send_op;
+            remove pending_data;
+            last_send_us = clock_getmicros();
+            return NOTHING;
+        } catch (hash<ExceptionInfo> ex) {
+            state = STATE_DISCONNECTED;
+            remove send_op;
+            return NOTHING;
+        }
     }
 
     #! Queues an SSE event for sending
