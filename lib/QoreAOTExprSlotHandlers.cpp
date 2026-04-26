@@ -365,42 +365,28 @@ static bool write_slot_CLOSURE_CREATE(AOTExprSlotWriteCtx& ctx) {
         uint32_t size_pos = ctx.writer.position();
         ctx.writer.writeU32(0);  // placeholder
 
-        // Build the closure's extended locals vector in the same order the
-        // reader (CLOSURE_CREATE handler in lib/QoreAOTRuntime.cpp) builds
-        // its closure_locals_vec:
-        //   parent_locals + closure params + argv + body_locals
-        // Keeping writer/reader ordering identical is required so that
-        // EXPR_TREE blobs inside the closure body (or any other readExpr-
-        // bound field) encode and decode LocalVar slot indices against the
-        // same LocalVar* sequence on both sides.  Without this, any
-        // VarRefNode inside an EXPR_TREE blob that falls through the
-        // LOCAL_VARREF/name match paths (e.g. a body local like a
-        // `foreach auto <var>` loop variable) is silently mapped to a
-        // different LocalVar at deserialization time, corrupting the
-        // reconstructed AST.
-        std::vector<AOTLocalSlotId> closure_locals = ctx.parent_locals;
-        if (sig) {
-            for (unsigned p = 0; p < sig->numParams(); ++p) {
-                if (sig->lv[p]) {
-                    AOTLocalSlotId slot;
-                    slot.local_var_ptr = reinterpret_cast<const void*>(sig->lv[p]);
-                    slot.name = sig->lv[p]->getName();
-                    closure_locals.push_back(slot);
+        // Expression trees inside serialized closure IR use the closure IR's
+        // own local slot IDs.  The reader fills closure_locals_vec from the
+        // serialized local slot table before instruction expressions are read.
+        std::vector<AOTLocalSlotId> closure_locals;
+        uint32_t max_slot = 0;
+        bool has_slots = false;
+        for (const auto& [lv, slot_id] : closure_ir->local_var_slots) {
+            if (lv) {
+                if (!has_slots || slot_id > max_slot) {
+                    max_slot = slot_id;
                 }
-            }
-            if (sig->argvid) {
-                AOTLocalSlotId slot;
-                slot.local_var_ptr = reinterpret_cast<const void*>(sig->argvid);
-                slot.name = "argv";
-                closure_locals.push_back(slot);
+                has_slots = true;
             }
         }
-        for (LocalVar* bl : closure_ir->all_body_locals) {
-            if (bl) {
-                AOTLocalSlotId slot;
-                slot.local_var_ptr = reinterpret_cast<const void*>(bl);
-                slot.name = bl->getName() ? bl->getName() : "";
-                closure_locals.push_back(slot);
+        if (has_slots) {
+            closure_locals.resize(static_cast<size_t>(max_slot) + 1);
+            for (const auto& [lv, slot_id] : closure_ir->local_var_slots) {
+                if (lv) {
+                    AOTLocalSlotId& slot = closure_locals[slot_id];
+                    slot.local_var_ptr = reinterpret_cast<const void*>(lv);
+                    slot.name = lv->getName() ? lv->getName() : "";
+                }
             }
         }
 

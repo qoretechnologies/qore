@@ -1273,6 +1273,20 @@ void QoreIRFunction::computeSlotIdsAndEmbed() {
                 if (lis->container && lis->container->ref.id) {
                     assign_slot(reinterpret_cast<const LocalVar*>(lis->container->ref.id));
                 }
+            } else if (inst->opcode == QoreIROpcode::CreateParseRef) {
+                auto* pr = static_cast<QoreIRCreateParseRefInstruction*>(inst.get());
+                const ParseReferenceNode* prn = pr->node
+                    ? pr->node
+                    : dynamic_cast<const ParseReferenceNode*>(pr->expr.getInternalNode());
+                if (prn) {
+                    const VarRefNode* base_var = extractLValueBaseVarRef(prn->getLVExp());
+                    if (base_var && base_var->ref.id) {
+                        qore_var_t vtype = base_var->getType();
+                        if (vtype == VT_LOCAL || vtype == VT_LOCAL_TS || vtype == VT_CLOSURE) {
+                            assign_slot(reinterpret_cast<const LocalVar*>(base_var->ref.id));
+                        }
+                    }
+                }
             } else if (static_cast<int>(inst->opcode) >= static_cast<int>(QoreIROpcode::LValuePathAssign)
                     && static_cast<int>(inst->opcode) <= static_cast<int>(QoreIROpcode::LValuePathTernary)) {
                 auto* path_inst = static_cast<QoreIRLValuePathInstruction*>(inst.get());

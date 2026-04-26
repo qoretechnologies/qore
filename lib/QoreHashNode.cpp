@@ -389,17 +389,19 @@ QoreHashNode* qore_hash_private::newComplexHashFromHash(const QoreTypeInfo* type
     }
 
     // Apply value type coercion if the hash has a typed value type
-    // (e.g. hash<string, softint> converts "23" → 23)
-    // Only for constructor calls, not for cast<> which is intentionally type-unsafe for values
-    const QoreTypeInfo* vti = coerce_values ? QoreTypeInfo::getUniqueReturnComplexHash(typeInfo) : nullptr;
+    // (e.g. hash<string, softint> converts "23" -> 23).  Use the same
+    // assignment path as normal hash stores so hashdecl and complex-hash
+    // metadata is preserved instead of being collapsed to the base NT_HASH.
+    const QoreTypeInfo* vti = coerce_values ? QoreTypeInfo::getReturnComplexHashOrNothing(typeInfo) : nullptr;
     if (QoreTypeInfo::hasType(vti)) {
-        for (auto& m : init->priv->member_list) {
-            if (!QoreTypeInfo::superSetOf(vti, m->val.getTypeInfo())) {
-                QoreTypeInfo::acceptAssignment(vti,
-                    "<hash value assignment>", m->val, xsink);
-                if (*xsink) {
-                    return nullptr;
-                }
+        HashIterator i(*init);
+        while (i.next()) {
+            HashAssignmentHelper hah(i);
+            QoreValue qv(hash_assignment_priv::get(hah)->swap(QoreValue()));
+            QoreTypeInfo::acceptInputKey(vti, i.getKey(), qv, xsink);
+            hash_assignment_priv::get(hah)->swap(qv);
+            if (*xsink) {
+                return nullptr;
             }
         }
     }

@@ -3631,15 +3631,27 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
         const QoreParseHashNode::nvec_t& vals = phn->getValues();
         assert(keys.size() == vals.size());
         if (keys.size() <= 255) {
-            writer.writeU8(static_cast<uint8_t>(AOTExprKind::HASH_LITERAL));
-            writer.writeU8(static_cast<uint8_t>(keys.size()));
-            for (size_t i = 0; i < keys.size(); ++i) {
-                // Keys are typically string constants
-                QoreStringValueHelper key(keys[i]);
-                writer.writeStringRef(key->c_str());
-                classifyAndWriteExpr(writer, vals[i], parent_locals, parent_globals, const_reverse_map);
+            bool const_keys = true;
+            for (const QoreValue& key : keys) {
+                if (key.needsEval()) {
+                    const_keys = false;
+                    break;
+                }
             }
-            return true;
+            if (!const_keys) {
+                // Dynamic key expressions need EXPR_TREE serialization below;
+                // HASH_LITERAL only carries pre-stringified constant keys.
+            } else {
+                writer.writeU8(static_cast<uint8_t>(AOTExprKind::HASH_LITERAL));
+                writer.writeU8(static_cast<uint8_t>(keys.size()));
+                for (size_t i = 0; i < keys.size(); ++i) {
+                    // Keys are typically string constants
+                    QoreStringValueHelper key(keys[i]);
+                    writer.writeStringRef(key->c_str());
+                    classifyAndWriteExpr(writer, vals[i], parent_locals, parent_globals, const_reverse_map);
+                }
+                return true;
+            }
         }
         // Hash too large for u8 count — fall through to GENERIC_EVAL
     }
@@ -3839,42 +3851,30 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
                     uint32_t size_pos = writer.position();
                     writer.writeU32(0);  // placeholder
 
-                    // Build extended locals list: parent + closure params + argv +
-                    // body_locals.  The reader side (read_expr_closure_create in
-                    // lib/QoreAOTExprHandlers.cpp and the slot-map CLOSURE_CREATE
-                    // handler in lib/QoreAOTRuntime.cpp) builds its
-                    // closure_locals_vec in the same order; keeping the ordering
-                    // identical is required so VarRefNode slot indices inside
-                    // EXPR_TREE blobs resolve to the same LocalVar* on both
-                    // sides.  Body locals especially matter: a `foreach auto arg
-                    // in (...)` loop variable is a body local whose StoreLValue
-                    // lvalue is serialized via EXPR_TREE.  If body_locals are
-                    // missing from closure_locals, `arg` gets a slot past the
-                    // closure_locals size that mis-resolves to the first closure
-                    // param at read time.
-                    std::vector<AOTLocalSlotId> closure_locals = parent_locals;
-                    if (sig) {
-                        for (unsigned p = 0; p < sig->numParams(); ++p) {
-                            if (sig->lv[p]) {
-                                AOTLocalSlotId slot;
-                                slot.local_var_ptr = reinterpret_cast<const void*>(sig->lv[p]);
-                                slot.name = sig->lv[p]->getName();
-                                closure_locals.push_back(slot);
+                    // Expression trees inside serialized closure IR use the
+                    // same slot domain as the closure IR local slot table.
+                    // This keeps ParseReferenceNode lvalues and other embedded
+                    // VarRefNodes aligned with the LocalVar* objects resolved by
+                    // deserializeIRFunction().
+                    std::vector<AOTLocalSlotId> closure_locals;
+                    uint32_t max_slot = 0;
+                    bool has_slots = false;
+                    for (const auto& [lv, slot_id] : closure_ir->local_var_slots) {
+                        if (lv) {
+                            if (!has_slots || slot_id > max_slot) {
+                                max_slot = slot_id;
                             }
-                        }
-                        if (sig->argvid) {
-                            AOTLocalSlotId slot;
-                            slot.local_var_ptr = reinterpret_cast<const void*>(sig->argvid);
-                            slot.name = "argv";
-                            closure_locals.push_back(slot);
+                            has_slots = true;
                         }
                     }
-                    for (LocalVar* bl : closure_ir->all_body_locals) {
-                        if (bl) {
-                            AOTLocalSlotId slot;
-                            slot.local_var_ptr = reinterpret_cast<const void*>(bl);
-                            slot.name = bl->getName() ? bl->getName() : "";
-                            closure_locals.push_back(slot);
+                    if (has_slots) {
+                        closure_locals.resize(static_cast<size_t>(max_slot) + 1);
+                        for (const auto& [lv, slot_id] : closure_ir->local_var_slots) {
+                            if (lv) {
+                                AOTLocalSlotId& slot = closure_locals[slot_id];
+                                slot.local_var_ptr = reinterpret_cast<const void*>(lv);
+                                slot.name = lv->getName() ? lv->getName() : "";
+                            }
                         }
                     }
 

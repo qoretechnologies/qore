@@ -2077,33 +2077,17 @@ static QoreAOTContext* buildContextFromSlotMap(
                     enclosing_locals["self"] = closure_sig->selfid;
                 }
 
-                // Build extended locals array for EXPR_TREE blob deserialization.
-                // The writer (classifyAndWriteExpr in QoreAOTBinary.cpp) uses
-                // closure_locals = parent_locals + closure params + argv +
-                // body_locals when serializing the closure body's IR. The reader
-                // must mirror that ordering so that LOCAL_VARREF slot indices
-                // inside EXPR_TREE blobs (or any other readExpr-bound field)
-                // resolve to the correct LocalVar*.  Body locals aren't known
-                // until the IR header is read, so we capture closure_locals_vec
-                // by reference here and let deserializeIRFunction append body
-                // locals to it between reading the header and the instructions
-                // (see extended_closure_locals parameter).
+                // Build the locals array used by EXPR_TREE blob deserialization.
+                // Closure body expressions are serialized against the closure IR
+                // local slot table; deserializeIRFunction() fills this vector by
+                // slot ID after reading that table and before reading instruction
+                // expression fields.
                 std::vector<LocalVar*> closure_locals_vec;
-                closure_locals_vec.reserve(num_locals + closure_sig->numParams() + 1);
-                for (int l = 0; l < num_locals; ++l) {
-                    closure_locals_vec.push_back(ctx->locals[l]);
-                }
-                for (unsigned p = 0; p < closure_sig->numParams(); ++p) {
-                    closure_locals_vec.push_back(closure_sig->lv[p]);
-                }
-                if (closure_sig->argvid) {
-                    closure_locals_vec.push_back(closure_sig->argvid);
-                }
 
                 // Deserialize closure body IR.  Capture closure_locals_vec by
-                // reference so deserializeIRFunction's in-band body-locals
-                // extension (via the extended_closure_locals param) is visible
-                // to readExprCb when instruction reading fires readExpr calls.
+                // reference so deserializeIRFunction's local-slot-table fill is
+                // visible to readExprCb when instruction reading fires readExpr
+                // calls.
                 std::string ir_error;
                 auto readExprCb = [pgm, ctx, num_globals, &closure_locals_vec]
                         (const QoreAOTBinaryReader& rdr, const uint8_t*& p,
@@ -3985,6 +3969,15 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
         }
     }
 
+    if (extended_closure_locals) {
+        for (const auto& i : func->local_var_slots) {
+            if (extended_closure_locals->size() <= i.second) {
+                extended_closure_locals->resize(i.second + 1, nullptr);
+            }
+            (*extended_closure_locals)[i.second] = const_cast<LocalVar*>(i.first);
+        }
+    }
+
     // 3. Read body locals
     for (int i = 0; i < num_body_locals; ++i) {
         const char* blname = reader.readStringRef(ptr);
@@ -3995,22 +3988,6 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
             if (it != local_map.end()) {
                 func->all_body_locals.push_back(it->second);
             }
-        }
-    }
-
-    // 3b. Extend caller-supplied closure locals vector with body locals.
-    // The writer side (classifyAndWriteExpr's closure branch and
-    // write_slot_CLOSURE_CREATE) appends body locals to its closure_locals
-    // after parent+params+argv so that VarRefNode references to body locals
-    // inside EXPR_TREE blobs serialize to slot indices past the parent/params
-    // range.  The reader must mirror that layout; since body locals are only
-    // known after reading the IR header (steps 2+3), the caller captures
-    // closure_locals_vec by reference in its readExprCb and we extend it
-    // here — between header and instruction reading — so that step 5's
-    // readExprCb calls see the full vector when resolving EXPR_TREE slots.
-    if (extended_closure_locals) {
-        for (LocalVar* bl : func->all_body_locals) {
-            extended_closure_locals->push_back(bl);
         }
     }
 

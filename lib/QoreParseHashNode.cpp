@@ -233,7 +233,8 @@ QoreValue QoreParseHashNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) c
         //printd(5, "QoreParseHashNode::evalImpl() '%s' this->vtype: '%s' (c: %d) vt: '%s' (c: %d)\n",
         //  key->c_str(), QoreTypeInfo::getName(this->vtype), QoreTypeInfo::hasComplexType(this->vtype),
         //  QoreTypeInfo::getName(vt), QoreTypeInfo::hasComplexType(vt));
-        if (this->vtype != vt && !QoreTypeInfo::hasComplexType(this->vtype) && QoreTypeInfo::hasComplexType(vt)) {
+        if (this->vtype && this->vtype != vt && !QoreTypeInfo::hasComplexType(this->vtype)
+                && QoreTypeInfo::hasComplexType(vt)) {
             // this can never throw an exception; it's only used for type folding/stripping
             QoreTypeInfo::acceptInputKey(this->vtype, key->c_str(), val, xsink);
         }

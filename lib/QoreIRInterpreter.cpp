@@ -2520,15 +2520,19 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         }
     } iter_cleanup{active_iterators};
 
-    // Pointer to the function's own locals set (pre_instantiated_locals from QoreIRFunction).
-    // Used by ensureLocalInstantiated() to distinguish function-own locals from outer-scope
-    // variables (e.g. top-level locals accessed from a sub, enclosing-function params
-    // accessed from on_exit handler bodies).  Outer-scope variables are already on the
-    // thread-local stack and must NOT be re-instantiated.
-    // Always point to pre_instantiated_locals — even when empty, it correctly
-    // indicates that ALL LoadLocal targets are outer-scope variables (e.g. handler
-    // bodies with no own locals that reference enclosing-function params).
-    const std::unordered_set<const void*>* function_own_locals = &func.pre_instantiated_locals;
+    // Locals owned by this function.  Used by ensureLocalInstantiated() to
+    // distinguish body locals from outer-scope variables (e.g. enclosing
+    // function params referenced from handler bodies).  Body locals are always
+    // function-owned even when a deserialized/cached IR producer did not include
+    // them in pre_instantiated_locals.
+    std::unordered_set<const void*> function_own_locals_storage(func.pre_instantiated_locals);
+    for (LocalVar* lv : func.all_body_locals) {
+        function_own_locals_storage.insert(reinterpret_cast<const void*>(lv));
+    }
+    for (const auto& i : func.local_var_slots) {
+        function_own_locals_storage.insert(reinterpret_cast<const void*>(i.first));
+    }
+    const std::unordered_set<const void*>* function_own_locals = &function_own_locals_storage;
 
     // Helper: invalidate the closure variable cache for a given VarRefNode.
     // LoadClosure caches values in the closures map; lvalue operations modify the
@@ -2631,6 +2635,31 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             }
         }
         return lval_vrn;
+    };
+
+    auto prepareParseReferenceLocal = [&](const ParseReferenceNode* prn) {
+        if (!prn) {
+            return;
+        }
+        const VarRefNode* vrn = extractLValueBaseVarRef(prn->getLVExp());
+        if (!vrn || !vrn->ref.id) {
+            return;
+        }
+        qore_var_t vtype = vrn->getType();
+        if (vtype != VT_LOCAL && vtype != VT_LOCAL_TS && vtype != VT_CLOSURE) {
+            return;
+        }
+        ensureLocalInstantiated(vrn->ref.id, instantiated_locals,
+            instantiated_locals_ordered, pre_instantiated,
+            function_own_locals, &locally_uninstantiated);
+
+        if ((vtype == VT_LOCAL_TS || vtype == VT_CLOSURE || vrn->ref.id->closureUse())
+                && !thread_try_find_closure_var(vrn->ref.id->getName())
+                && !thread_try_get_runtime_closure_var(vrn->ref.id)) {
+            ensureLocalInstantiated(vrn->ref.id, instantiated_locals,
+                instantiated_locals_ordered, pre_instantiated, nullptr,
+                &locally_uninstantiated);
+        }
     };
 
     // Helper: finalize slot cache after a lvalue operation.
@@ -3993,8 +4022,7 @@ load_local_done:
                             // with closureUse() set (captured by inner closures) but the
                             // current execution context is the function's own body, not a
                             // closure. In that case, the variable lives on the local stack.
-                            LocalVarValue* lvv = thread_find_lvar(local_inst->local->getName());
-                            if (lvv) {
+                            if (LocalVarValue* lvv = thread_find_lvar(local_inst->local->getName())) {
                                 bool needs_deref = false;
                                 out = lvv->eval(needs_deref, xsink);
                                 if (xsink && *xsink) {
@@ -5054,12 +5082,16 @@ load_local_done:
                 bool needs_deref = true;
                 QoreValue out;
                 if (pr_inst->node) {
+                    prepareParseReferenceLocal(pr_inst->node);
                     out = const_cast<ParseReferenceNode*>(pr_inst->node)->eval(needs_deref, xsink);
                     if (!needs_deref && out.hasNode()) {
                         out = out.refSelf();
                     }
                 } else if (pr_inst->expr.hasNode()) {
                     // AOT mode: node is null; expr holds the reconstructed ParseReferenceNode
+                    const ParseReferenceNode* prn = dynamic_cast<const ParseReferenceNode*>(
+                        pr_inst->expr.getInternalNode());
+                    prepareParseReferenceLocal(prn);
                     out = pr_inst->expr.getInternalNode()->eval(needs_deref, xsink);
                     if (!needs_deref && out.hasNode()) {
                         out = out.refSelf();

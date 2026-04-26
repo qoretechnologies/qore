@@ -671,27 +671,11 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
         enclosing_locals["self"] = closure_sig->selfid;
     }
 
-    // Build extended locals array for EXPR_TREE blob deserialization.
-    // Writer side (classifyAndWriteExpr's QoreClosureParseNode branch in
-    // lib/QoreAOTBinary.cpp) uses
-    //   closure_locals = parent_locals + closure params + argv + body_locals
-    // when serializing the closure body's IR.  The reader must mirror that
-    // layout so LOCAL_VARREF slot indices inside EXPR_TREE blobs resolve to
-    // the correct LocalVar*.  Body locals aren't known until the IR header is
-    // read, so we capture the vector by reference and let deserializeIRFunction
-    // extend it (see extended_closure_locals parameter) between header and
-    // instruction reading.
+    // Build the locals array used by EXPR_TREE blob deserialization.  Closure
+    // body expressions are serialized against the closure IR local slot table;
+    // deserializeIRFunction() fills this vector by slot ID after reading that
+    // table and before reading instruction expression fields.
     std::vector<LocalVar*> closure_locals_vec;
-    closure_locals_vec.reserve(ctx.num_locals + closure_sig->numParams() + 1);
-    for (int l = 0; l < ctx.num_locals; ++l) {
-        closure_locals_vec.push_back(ctx.locals[l]);
-    }
-    for (unsigned p = 0; p < closure_sig->numParams(); ++p) {
-        closure_locals_vec.push_back(closure_sig->lv[p]);
-    }
-    if (closure_sig->argvid) {
-        closure_locals_vec.push_back(closure_sig->argvid);
-    }
 
     // Deserialize closure body IR
     std::string ir_error;
@@ -715,7 +699,6 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
         ctx.error = "closure IR deserialization failed: " + ir_error;
         return QoreValue();
     }
-
     // Set up captured variables in LVarSet and ensure closureUse
     LVarSet* closure_vlist = ucf->getVList();
     for (uint16_t ci = 0; ci < num_captured; ++ci) {
@@ -1202,6 +1185,11 @@ static bool write_expr_hash_literal(AOTExprWriteCtx& ctx) {
         const QoreParseHashNode::nvec_t& keys = phn->getKeys();
         const QoreParseHashNode::nvec_t& vals = phn->getValues();
         if (keys.size() <= 255) {
+            for (const QoreValue& key : keys) {
+                if (key.needsEval()) {
+                    return false;
+                }
+            }
             ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::HASH_LITERAL));
             ctx.writer.writeU8(static_cast<uint8_t>(keys.size()));
             for (size_t i = 0; i < keys.size(); ++i) {

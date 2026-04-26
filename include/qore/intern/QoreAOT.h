@@ -33,6 +33,7 @@
 #define _QORE_QOREAOT_H
 
 #include <cassert>
+#include <algorithm>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
@@ -205,7 +206,10 @@ struct AOTSlotMap {
         if (it != local_slots.end()) {
             return it->second;
         }
-        int32_t slot = static_cast<int32_t>(local_slots.size());
+        int32_t slot = 0;
+        for (const auto& i : local_slots) {
+            slot = std::max(slot, i.second + 1);
+        }
         local_slots[local] = slot;
         return slot;
     }
