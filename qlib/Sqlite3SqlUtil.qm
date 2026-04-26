@@ -1365,6 +1365,15 @@ string str = table.getSqlValue(date);
             return False;
         }
 
+        #! SQLite accepts non-unique orderby + offset/limit at the SQL level;
+        #! the determinism check in AbstractTable is overly strict here.
+        /** Pagination across orderby ties may still yield non-deterministic
+            ordering — that's the caller's concern, not a SQL-validity issue.
+        */
+        bool requireUniqueOrderByWithOffsetLimit() {
+            return False;
+        }
+
         #! processes a string for use in SQL select statements when there is a "limit" argument, but no "orderby" or "offset" arguments
         private doSelectLimitOnlyInternImpl(reference<hash<QueryInfo>> info, reference<string> sql) {
            sql += " limit %v";

@@ -4564,6 +4564,26 @@ string sql = table.getSelectSql(sh, \args);
         return False;
     }
 
+    #! Returns True if this DB requires the orderby columns to match a unique
+    #! key (PK / unique constraint / unique index) when used with offset+limit.
+    /** Pure determinism guard — no DB rejects non-unique orderby+offset+limit
+        at the SQL level; the check exists so pagination across pages doesn't
+        silently mis-order rows that share an orderby key.  Strict callers
+        should opt in via the @ref select_option_orderby_no_unique
+        "orderby_no_unique" select option (default: False — i.e. require
+        uniqueness) or override this method in a DB-specific subclass.
+
+        Default returns True (current behavior preserved); DB-specific
+        subclasses should override to False only when they have a meaningful
+        reason to skip the check (e.g., the caller has accepted that
+        pagination across orderby ties may be non-deterministic).
+
+        @since SqlUtil 1.10
+    */
+    bool requireUniqueOrderByWithOffsetLimit() {
+        return True;
+    }
+
     *AbstractUniqueConstraint matchAnyUnique(softlist<auto> cols) {
         if (!manual) {
             getPrimaryKeyUnlocked();
@@ -4921,9 +4941,20 @@ string sql = table.getSelectSql(sh, \args);
                         throw "SELECT-ERROR", sprintf("%s: select %y supplied but no 'orderby' and the "
                             "table has no primary key", getDesc(), info.query_hash{"offset", "limit"});
                     }
-                } else if (!testMatchAnyUnique(info.query_hash.orderby)) {
+                } else if (requireUniqueOrderByWithOffsetLimit()
+                        && !info.query_hash.orderby_no_unique
+                        && !testMatchAnyUnique(info.query_hash.orderby)) {
+                    # Determinism guard: if the orderby doesn't include a
+                    # unique key, paginated results may shift between pages
+                    # for rows sharing an orderby value.  The DB itself
+                    # accepts the SQL — this check is a client-side safety
+                    # rail.  Bypass via the per-query 'orderby_no_unique'
+                    # option, or by overriding requireUniqueOrderByWithOffsetLimit()
+                    # in a DB-specific table subclass.
                     throw "SELECT-ERROR", sprintf("%s: 'orderby %y' with 'offset %d', 'limit %d' does not match "
-                        "any unique constraint", getDesc(), info.query_hash.orderby, info.query_hash.offset,
+                        "any unique constraint; pass 'orderby_no_unique: True' in the select options to "
+                        "accept potentially non-deterministic pagination",
+                        getDesc(), info.query_hash.orderby, info.query_hash.offset,
                         info.query_hash.limit);
                 }
 

@@ -490,8 +490,9 @@ public class DbTableDataProvider inherits DbDataProviderBase {
         @throw MULTIPLE-RECORDS-ERROR multiple records found
     */
     private *hash<auto> searchSingleRecordImpl(*hash<auto> where_cond, *hash<auto> search_options) {
+        DbTableTransactionHelper db(table);
         try {
-            return table.selectRow(search_options - ("requires_result", "max_records") + {"where": where_cond});
+            return db.selectRow(search_options - ("requires_result", "max_records") + {"where": where_cond});
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err == "DBI-SELECT-ROW-ERROR") {
                 rethrow "MULTIPLE-RECORDS-ERROR", ex.desc, ex.arg;

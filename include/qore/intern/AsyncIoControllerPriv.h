@@ -613,6 +613,18 @@ private:
         uint32_t socket_wait_fd_generation = 0; //!< Socket fd generation snapshot for current wait
         int socket_wait_fd = -1;        //!< Socket fd snapshot for current wait
         bool socket_wait_generation_valid = false; //!< True when socket wait snapshot is usable
+        //! Cached socket QoreObject* used as a cheap pointer-compare in Phase 3
+        /** Set whenever updateEventLoopRegistration is called.  Used in the fast
+            path to detect when a poll op transitions to polling a different
+            socket (e.g. SocketAcceptPollOperation moving from the listener fd
+            to the accepted client fd when SSL_accept returns WANT_READ).  The
+            socket hash and events both stay the same in that case, so without
+            an identity check the new client fd would never get registered
+            with epoll/kqueue and the SSL handshake would hang.  Not ref'd —
+            registered_sockets[key] holds the live reference; this is just an
+            identity tag.
+        */
+        QoreObject* cached_sock_obj = nullptr;
         uint64_t last_queued_gen = 0;   //!< Phase 1 generation when last queued (duplicate prevention)
         //! Back-ref to the owning controller (not ref'd; outlives pinfo).
         //! Used by cleanup() to erase the submit-time obj_to_sock_hash entry

@@ -1308,7 +1308,27 @@ public class HttpServer inherits HttpServer::AbstractLogger {
             throw "INVALID-LISTENER-ERROR", sprintf("there is no listener with ID %d", id);
         }
 
+        # Reload the TCP listener: re-reads cert/key from disk, updates the
+        # listener Socket and the async controller's listeners-map entry.
         listeners{id}.reloadCertificate();
+
+        # Paired listeners must share certificate state — a cert rotated only on
+        # the TCP side leaves the QUIC udp_sock holding the original cert/key,
+        # which then stalls HTTP/3 handshakes for clients that follow the
+        # advertised Alt-Svc and triggers HTTPCLIENT-NEGOTIATE-TIMEOUT on the
+        # client side (and vice versa for QUIC-only reloads).  Push the cert
+        # objects we just loaded onto the paired listener too.
+        if (asyncIo && quic_listener_map.hasKey(id)) {
+            int quic_id = quic_listener_map{id};
+            *HttpListener quic_listener = listeners{quic_id};
+            if (quic_listener) {
+                *Qore::SSLCertificate cert = listeners{id}.getSslCertificateObject();
+                *Qore::SSLPrivateKey key = listeners{id}.getSslPrivateKey();
+                if (cert && key) {
+                    asyncIo.reloadListenerCertificateByHttpListener(quic_listener, cert, key);
+                }
+            }
+        }
     }
 
     #! Reloads an HTTPS certificate from the original location for the given listener from the listener name
@@ -1326,7 +1346,21 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         lm.enter();
         on_exit lm.exit();
 
-        listeners{getListenerIdFromBindUnlocked(name)}.reloadCertificate();
+        softstring id = getListenerIdFromBindUnlocked(name);
+        listeners{id}.reloadCertificate();
+
+        # Paired listeners share the cert; see comment in reloadListenerCertificate(int).
+        if (asyncIo && quic_listener_map.hasKey(id)) {
+            int quic_id = quic_listener_map{id};
+            *HttpListener quic_listener = listeners{quic_id};
+            if (quic_listener) {
+                *Qore::SSLCertificate cert = listeners{id}.getSslCertificateObject();
+                *Qore::SSLPrivateKey key = listeners{id}.getSslPrivateKey();
+                if (cert && key) {
+                    asyncIo.reloadListenerCertificateByHttpListener(quic_listener, cert, key);
+                }
+            }
+        }
     }
 
     #! returns the number of running HTTP listeners
@@ -3966,10 +4000,6 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         #! accept all certificates
         bool ssl_accept_all_certs = True;
 
-        #! thread waiting on lock
-        int lock_waiting;
-
-
         const PollInterval = 250ms;
         const ListenQueue = 1024;
         const BodyLogLimit = 40;
@@ -4121,10 +4151,22 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
 
         on_error rethrow "REFRESH-CERTIFICATE-ERROR", sprintf("%s: %s", $1.err, $1.desc);
         hash<HttpCertInfo> info = http_get_ssl_objects(opts.cert_loc, opts.key_loc, opts.key_password);
-        # signal to connection thread that it should allow the lock to be acquired by this thread
-        ++lock_waiting;
-        on_exit --lock_waiting;
+        # update the listener Socket's own cert/key so any code path that reads them
+        # via the Socket inheritance gets the new values
         setCertificateAndPrivateKey(info.cert, info.key);
+        # also keep the new objects on the listener-options snapshot so getInfo()
+        # / getSslCertificateObject() agree with what the async controller will use
+        opts.cert = info.cert;
+        opts.key = info.key;
+        # in async-I/O mode every replenished accept poll operation reads the
+        # cert/key out of the controller's listeners map; without this push the
+        # controller keeps handing out the original cert/key references
+        # forever and TLS handshakes for new connections quietly stall
+        # (HTTPCLIENT-NEGOTIATE-TIMEOUT after 20 s).
+        *HttpServerAsyncIo::HttpAsyncSocketIoController async_ctrl = serv ? serv.getHttpAsyncIo() : NOTHING;
+        if (async_ctrl) {
+            async_ctrl.reloadListenerCertificate(self, info.cert, info.key);
+        }
     }
 
     #! add handlers to the listener

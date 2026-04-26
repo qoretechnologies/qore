@@ -3355,6 +3355,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                         auto cit = t.cache.find(op.key);
                         if (cit != t.cache.end()) {
                             cit->second.cached_sock_hash.clear();
+                            cit->second.cached_sock_obj = nullptr;
                         }
                     }
                     this->ref();
@@ -3487,6 +3488,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                     auto cit = t.cache.find(op.key);
                     if (cit != t.cache.end()) {
                         cit->second.cached_sock_hash.clear();
+                        cit->second.cached_sock_obj = nullptr;
                     }
                 }
                 this->ref();  // keep controller alive until worker delivers result
@@ -3599,15 +3601,25 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                         // No poll_info — needs unconditional polling next iteration
                         pinfo.cached_sock_hash.clear();
                         pinfo.socket_wait_generation_valid = false;
+                        pinfo.cached_sock_obj = nullptr;
                         t.new_entry_keys.push_back(result.key);
                     } else {
                         // Extract events from poll_info (single hash lookup)
                         int events = (int)result.new_poll_info->getKeyValue("events").getAsBigInt();
 
-                        // Fast path: if socket hash, events, AND fd generation are
-                        // unchanged, skip updateEventLoopRegistration entirely — no
-                        // getReferencedPrivateData, no epoll_ctl/kqueue, no hash lookups.
-                        // This is the steady-state path for echo/streaming.
+                        // Fast path: if socket identity, events, AND fd generation
+                        // are unchanged, skip updateEventLoopRegistration entirely —
+                        // no getReferencedPrivateData, no epoll_ctl/kqueue, no hash
+                        // lookups.  This is the steady-state path for echo/streaming.
+                        //
+                        // The cached_sock_obj pointer-compare catches the case where
+                        // a single poll op transitions to polling a different socket
+                        // — e.g. SocketAcceptPollOperation moving from the listener
+                        // fd to the accepted client fd when SSL_accept returns
+                        // WANT_READ.  Without this check the listener and client
+                        // share the same cached events (POLLIN), so the events-only
+                        // check would wrongly skip registration and the client fd
+                        // would never enter epoll/kqueue.
                         //
                         // The fd generation check is essential for QUIC connection
                         // migration: the socket object and events stay the same, but
@@ -3615,8 +3627,12 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                         // On macOS, closing a kqueue-monitored fd silently removes
                         // the filter without delivering an event.  Without this check,
                         // the new fd is never registered and the connection hangs.
+                        QoreValue sock_v = result.new_poll_info->getKeyValue("socket");
+                        QoreObject* new_sock_obj = sock_v.getType() == NT_OBJECT
+                            ? sock_v.get<QoreObject>() : nullptr;
                         bool needs_full_update = pinfo.cached_sock_hash.empty()
-                            || events != pinfo.cached_events;
+                            || events != pinfo.cached_events
+                            || new_sock_obj != pinfo.cached_sock_obj;
                         if (!needs_full_update && pinfo.spop_obj) {
                             SocketPollOperationBase* spop =
                                 static_cast<SocketPollOperationBase*>(
@@ -3639,6 +3655,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                             if (!*xsink && poll_sock) {
                                 pinfo.cached_sock_hash = sock_hash;
                                 pinfo.cached_events = events;
+                                pinfo.cached_sock_obj = poll_sock;
                                 ASYNC_IO_TRACE("Phase3 UPDATE key='%s' sock='%s' events=%d\n",
                                     result.key.c_str(), sock_hash.c_str(), events);
                                 updateEventLoopRegistration(t, result.key, poll_sock, sock_hash,
@@ -4914,6 +4931,7 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                             if (!cmd.continue_poll_result) {
                                 pinfo.cached_sock_hash.clear();
                                 pinfo.socket_wait_generation_valid = false;
+                                pinfo.cached_sock_obj = nullptr;
                                 t.new_entry_keys.push_back(cmd.key);
                             } else {
                                 std::string sock_hash;
@@ -4922,6 +4940,8 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                                     cmd.continue_poll_result, sock_hash, events, xsink);
                                 if (!*xsink && poll_sock) {
                                     pinfo.cached_sock_hash = sock_hash;
+                                    pinfo.cached_events = events;
+                                    pinfo.cached_sock_obj = poll_sock;
                                     updateEventLoopRegistration(t, cmd.key, poll_sock,
                                         sock_hash, events, xsink);
                                     updateExtraFds(t, cmd.key, poll_sock,

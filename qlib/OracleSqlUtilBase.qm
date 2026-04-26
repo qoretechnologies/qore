@@ -3711,6 +3711,15 @@ public class OracleTable inherits SqlUtil::AbstractTable {
         splice sql, i + 5, 0, sprintf(" /*+ first_rows(%d) */", qh.limit);
     }
 
+    #! Oracle accepts non-unique orderby + offset/limit at the SQL level;
+    #! the determinism check in AbstractTable is overly strict here.
+    /** Pagination across orderby ties may still yield non-deterministic
+        ordering — that's the caller's concern, not a SQL-validity issue.
+    */
+    bool requireUniqueOrderByWithOffsetLimit() {
+        return False;
+    }
+
     private doSelectOrderByWithOffsetSqlInternImpl(reference<hash<QueryInfo>> info, reference<string> sql,
             list<auto> coll) {
         # Oracle 12c+ supports limit (fetch) and offset
