@@ -680,6 +680,39 @@ OKKqgBjNAlYDdPhOy8O8Agk=
                 sprintf("reload+connect cycle %d must complete in <5 s", i));
         }
 
+        # Force the SSL_accept WANT_READ path on the server to catch the
+        # controller fast-path-skip bug.  The wedge only manifests when
+        # SocketAcceptPollOperation transitions from polling the listener fd
+        # to polling the accepted client fd while waiting for ClientHello —
+        # in-process HTTPClient connects with sequential timing usually have
+        # ClientHello already in the kernel buffer when the server's
+        # SSL_accept runs, so the handshake completes inline and the bug
+        # never triggers.
+        #
+        # Workaround: do TCP-connect, sleep, then upgradeClientToSSL.  The
+        # sleep guarantees the server runs SSL_accept with an empty buffer →
+        # WANT_READ → updateEventLoopRegistration must register the accepted
+        # client fd or the handshake hangs forever.
+        qServer.reloadListenerCertificate(linfo.id);
+        int N = 5;
+        int succeeded = 0;
+        for (int i = 0; i < N; ++i) {
+            Socket s();
+            try {
+                s.connect("localhost:" + linfo.port, 5s);
+                # Force the WANT_READ path on the server side
+                usleep(50ms);
+                s.upgradeClientToSSL(5000);
+                s.close();
+                ++succeeded;
+            } catch (hash<ExceptionInfo> ex) {
+                fail(sprintf("delayed-handshake connect %d/%d after reload failed: %s: %s",
+                    i + 1, N, ex.err, ex.desc));
+            }
+        }
+        assertEq(N, succeeded,
+            "all delayed-handshake connects after reload must succeed (catches controller fast-path skip)");
+
         # Now exercise a forced HTTP/3 connect to confirm the QUIC TLS path
         # actually serves the new cert (this is the load-bearing assertion —
         # before the fix this would HTTPCLIENT-NEGOTIATE-TIMEOUT after 20 s).
