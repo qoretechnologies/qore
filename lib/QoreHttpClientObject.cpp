@@ -4809,8 +4809,11 @@ bool QoreHttpClientObject::isHttp2DataAvailable(int32_t stream_id, int timeout_m
     }
 
     if (!http_priv->http2_active || !http_priv->getH2Session()) {
-        // Fall back to socket-level check if not in HTTP/2 mode
-        return http_priv->msock->socket->isDataAvailable(xsink, timeout_ms);
+        // Fall back to the Socket method if not in HTTP/2 mode; it executes
+        // readiness through the async I/O controller.
+        sg.clear();
+        sl.unlock();
+        return QoreSocketObject::isDataAvailable(xsink, timeout_ms);
     }
 
     // Step 1a: Check HTTP/2 stream buffer for already-decoded data
@@ -9103,13 +9106,9 @@ bool QoreHttpClientObject::isDataAvailable(int timeout_ms, ExceptionSink* xsink)
         // legacy msock path did.
         return http_priv->streaming_recv_channel->waitReadable(timeout_ms, xsink);
     }
-    // No streaming channel — legacy msock path
-    SafeLocker sl(http_priv->msock->m);
-    my_socket_priv::SyncIoGuard sg(*http_priv->msock, xsink, NB_RECV);
-    if (!sg) {
-        return false;
-    }
-    return http_priv->msock->socket->isDataAvailable(xsink, timeout_ms);
+    // No streaming channel: delegate to the Socket method, which executes its
+    // readiness poll through the async I/O controller.
+    return const_cast<QoreHttpClientObject*>(this)->QoreSocketObject::isDataAvailable(xsink, timeout_ms);
 }
 
 QoreHashNode* QoreHttpClientObject::sendAndStream(const char* meth, const char* new_path, const QoreHashNode* headers,

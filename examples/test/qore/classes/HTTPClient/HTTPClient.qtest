@@ -384,6 +384,7 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
         addTestCase("UNIX socket conn_mgr test", \unixSocketConnMgrTest());
         addTestCase("UNIX socket proxy conn_mgr test", \unixSocketProxyConnMgrTest());
         addTestCase("conn_mgr isConnected test", \connMgrIsConnectedTest());
+        addTestCase("upgrade isDataAvailable test", \upgradeIsDataAvailableTest());
         addTestCase("chunked HEAD test", \chunkedHeadTest());
         addTestCase("assume encoding", \assumedEncoding());
         addTestCase("chunked disconnect test", \chunkedDisconnectTest());
@@ -883,6 +884,54 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
         assertTrue(hc.isPersistent(), "setPersistent() should mark the conn_mgr session persistent");
         hc.disconnect();
         assertFalse(hc.isConnected(), "disconnect() should clear conn_mgr connection state");
+    }
+
+    upgradeIsDataAvailableTest() {
+        Queue q();
+        Queue send_data();
+        Queue done();
+        background sub () {
+            try {
+                Socket server();
+                server.bind(0);
+                server.listen();
+                q.push(server.getSocketInfo().port);
+
+                Socket peer = server.accept(15s);
+                hash<auto> hdr = peer.readHTTPHeader(15s);
+                q.push(hdr);
+                peer.send("HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\n"
+                    "Connection: Upgrade\r\n\r\n");
+                send_data.get(15s);
+                peer.send("abc");
+                done.get(15s);
+                peer.close();
+                server.close();
+            } catch (hash<ExceptionInfo> ex) {
+                q.push(ex);
+            }
+        }();
+
+        int port = q.get();
+        HTTPClient hc({
+            "url": "http://localhost:" + port,
+            "timeout": 5s,
+        });
+        hash<auto> resp = hc.send(NOTHING, "GET", "/", {
+            "Upgrade": "websocket",
+            "Connection": "Upgrade",
+        });
+        assertEq(101, resp.status_code);
+
+        auto hdr = q.get();
+        if (hdr.typeCode() == NT_HASH && hdr.hasKey("err")) {
+            fail(sprintf("%s: %s", hdr.err, hdr.desc));
+        }
+        assertEq("GET", hdr.method);
+        send_data.push(True);
+        assertTrue(hc.isDataAvailable(5s));
+        assertTrue(hc.isHttp2DataAvailable(1, 5s));
+        done.push(True);
     }
 
     assumedEncoding() {
