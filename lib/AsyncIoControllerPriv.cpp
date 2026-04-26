@@ -1607,6 +1607,72 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
     return nullptr;
 }
 
+QoreHashNode* AsyncIoControllerPriv::exec(QoreObject* self, QoreHashNode* info, bool replace,
+        ExceptionSink* xsink) {
+    ReferenceHolder<QoreHashNode> info_holder(info, xsink);
+
+    QoreValue v = info->getKeyValue("spop");
+    QoreObject* spop_obj = v.getType() == NT_OBJECT ? v.get<QoreObject>() : nullptr;
+    if (!spop_obj) {
+        xsink->raiseException("ASYNC-IO-ERROR", "missing 'spop' field in SocketPollOperationInfo");
+        return nullptr;
+    }
+
+    // exec() waits on the result Queue, so callback-based operations cannot be
+    // submitted through this API: deliverResult() would route the result to
+    // onComplete() instead of the Queue and the caller would block forever.
+    const QoreClass* spop_cls = spop_obj->getClass();
+    const QoreMethod* on_complete_meth = spop_cls->findMethod("onComplete");
+    bool has_qore_on_complete = on_complete_meth
+        && on_complete_meth->getClass()->getID() != CID_ABSTRACTPOLLOPERATION;
+    if (!has_qore_on_complete) {
+        v = info->getKeyValue("has_on_complete");
+        has_qore_on_complete = v.getAsBool();
+    }
+    if (has_qore_on_complete) {
+        xsink->raiseException("ASYNC-IO-ERROR",
+            "exec() cannot be used with onComplete callback operations");
+        return nullptr;
+    }
+
+    ReferenceHolder<QoreObject> queue_obj(submit(self, info_holder.release(), replace, xsink),
+        xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    if (!queue_obj) {
+        xsink->raiseException("ASYNC-IO-ERROR", "exec() did not receive a result Queue");
+        return nullptr;
+    }
+
+    ReferenceHolder<Queue> queue(
+        static_cast<Queue*>(queue_obj->getReferencedPrivateData(CID_QUEUE, xsink)), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    if (!queue) {
+        xsink->raiseException("ASYNC-IO-ERROR", "exec() received an invalid result Queue");
+        return nullptr;
+    }
+
+    bool timed_out = false;
+    ValueHolder result(queue->shift(xsink, 0, &timed_out), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    if (timed_out) {
+        xsink->raiseException("ASYNC-IO-ERROR", "timed out waiting for async operation result");
+        return nullptr;
+    }
+    if (result->getType() != NT_HASH) {
+        xsink->raiseException("ASYNC-IO-ERROR",
+            "expected SocketPollResultInfo hash from async operation, got '%s'",
+            result->getFullTypeName());
+        return nullptr;
+    }
+    return result.release().get<QoreHashNode>();
+}
+
 bool AsyncIoControllerPriv::cancel(AbstractPollableIoObjectBase* sock, ExceptionSink* xsink) {
     std::string uh = getSocketHash(sock);
     SimpleRefHolder<QoreStringNode> key(new QoreStringNode(uh));

@@ -316,6 +316,11 @@ public:
     /** @param self the QoreObject wrapping this controller
         @param info the SocketPollOperationInfo hash
         @param replace if true, cancel any existing operation with the same key
+        @param xsink for exception handling
+        @return the SocketPollResultInfo hash
+    */
+    DLLLOCAL QoreHashNode* exec(QoreObject* self, QoreHashNode* info, bool replace, ExceptionSink* xsink);
+
     //! Cancel an operation by socket
     /** @param sock the socket to cancel
         @param xsink for exception handling
