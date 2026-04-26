@@ -511,6 +511,67 @@ static void socket_exec_recv_to_output_stream(QoreObject* self, QoreSocketObject
     }
 }
 
+static QoreHashNode* socket_exec_read_http_header(QoreObject* self, QoreSocketObject* s, QoreHashNode* info,
+        int timeout_ms, ExceptionSink* xsink) {
+    s->ref();
+    SocketReadHttpHeaderPollOperation* header_poller = new SocketReadHttpHeaderPollOperation(xsink, s);
+    ReferenceHolder<SocketPollOperationBase> poller(header_poller, xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
+    ReferenceHolder<QoreObject> op_obj(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller), xsink);
+    poller->setSelf(*op_obj);
+    poller.release();
+
+    if (!*xsink) {
+        op_obj->setValue("sock", self->objectRefSelf(), xsink);
+        op_obj->setValue("goal", new QoreStringNode("received"), xsink);
+    }
+    if (*xsink) {
+        return nullptr;
+    }
+
+    ReferenceHolder<QoreHashNode> result(
+        socket_exec_poll_operation(self, *op_obj, timeout_ms, "readHTTPHeader", xsink), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
+    ValueHolder output(header_poller->getOutput(), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    if (output->getType() != NT_HASH) {
+        xsink->raiseException("SOCKET-HTTP-ERROR",
+            "expected hash output from async HTTP header operation, got '%s'",
+            output->getFullTypeName());
+        return nullptr;
+    }
+
+    QoreHashNode* output_hash = output->get<QoreHashNode>();
+    QoreValue hdr_val = output_hash->getKeyValue("hdr");
+    if (hdr_val.getType() != NT_HASH) {
+        xsink->raiseException("SOCKET-HTTP-ERROR",
+            "expected 'hdr' hash output from async HTTP header operation, got '%s'",
+            hdr_val.getFullTypeName());
+        return nullptr;
+    }
+
+    ReferenceHolder<QoreHashNode> hdr(hdr_val.get<const QoreHashNode>()->hashRefSelf(), xsink);
+    if (info) {
+        QoreValue info_val = output_hash->getKeyValue("info");
+        if (info_val.getType() != NT_HASH) {
+            xsink->raiseException("SOCKET-HTTP-ERROR",
+                "expected 'info' hash output from async HTTP header operation, got '%s'",
+                info_val.getFullTypeName());
+            return nullptr;
+        }
+        info->merge(info_val.get<const QoreHashNode>(), xsink);
+    }
+    return *xsink ? nullptr : hdr.release();
+}
+
 static int check_response_code(int status_code, ExceptionSink* xsink) {
     if (status_code < 100 || status_code >= 600) {
         xsink->raiseException("SOCKET-SENDHTTPRESPONSE-STATUS-ERROR", "expecting valid HTTP status code " \
@@ -4062,7 +4123,7 @@ hash<auto> ans = sock.readHTTPHeader(10s);
 */
 hash<auto> Socket::readHTTPHeader(timeout timeout_ms = -1, *reference<hash<auto>> info) {
     OptHashRefHelper ohrh(info, xsink);
-    return s->readHTTPHeader(xsink, *ohrh, timeout_ms);
+    return socket_exec_read_http_header(self, s, *ohrh, timeout_ms, xsink);
 }
 
 //! Retuns a string representing the data in the HTTP header read (reads until \c "\r\n\r\n")

@@ -2198,8 +2198,12 @@ int SocketRecvUntilBytesPollState::continuePoll(ExceptionSink* xsink) {
                 rc, sock->buflen, sock->bufoffset, matched, size, sock->ssl ? 1 : 0);
             if (!rc) {
                 if (!sock->buflen) {
-                    xsink->raiseException("SOCKET-HTTP-ERROR", "remote end closed connection while reading "
-                        "HTTP data");
+                    if (bin->empty()) {
+                        se_closed("Socket", "recvUntilBytes", xsink);
+                    } else {
+                        xsink->raiseException("SOCKET-HTTP-ERROR", "remote end closed connection while reading "
+                            "HTTP data");
+                    }
                     return -1;
                 }
                 continue;
