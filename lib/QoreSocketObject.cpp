@@ -467,6 +467,89 @@ static BinaryNode* qore_socket_object_exec_recv_some_binary(QoreSocketObject* s,
     return result.release().get<BinaryNode>();
 }
 
+static QoreHashNode* qore_socket_object_exec_read_http_header(QoreSocketObject* s, QoreHashNode* info,
+        int timeout_ms, ExceptionSink* xsink) {
+    s->ref();
+    SocketReadHttpHeaderPollOperation* header_poller = new SocketReadHttpHeaderPollOperation(xsink, s);
+
+    ReferenceHolder<QoreObject> sock_obj(qore_socket_object_make_pollable_wrapper(s), xsink);
+    ReferenceHolder<QoreObject> op_obj(
+        qore_socket_object_make_poll_op(*sock_obj, header_poller, "received", xsink), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
+    ReferenceHolder<QoreHashNode> result(
+        qore_socket_object_exec_poll_operation(s, *sock_obj, *op_obj, timeout_ms, "readHTTPHeader", xsink), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
+    ValueHolder output(header_poller->getOutput(), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    if (output->getType() != NT_HASH) {
+        xsink->raiseException("SOCKET-HTTP-ERROR",
+            "expected hash output from async HTTP header operation, got '%s'",
+            output->getFullTypeName());
+        return nullptr;
+    }
+
+    QoreHashNode* output_hash = output->get<QoreHashNode>();
+    QoreValue hdr_val = output_hash->getKeyValue("hdr");
+    if (hdr_val.getType() != NT_HASH) {
+        xsink->raiseException("SOCKET-HTTP-ERROR",
+            "expected 'hdr' hash output from async HTTP header operation, got '%s'",
+            hdr_val.getFullTypeName());
+        return nullptr;
+    }
+
+    ReferenceHolder<QoreHashNode> hdr(hdr_val.get<const QoreHashNode>()->hashRefSelf(), xsink);
+    if (info) {
+        QoreValue info_val = output_hash->getKeyValue("info");
+        if (info_val.getType() != NT_HASH) {
+            xsink->raiseException("SOCKET-HTTP-ERROR",
+                "expected 'info' hash output from async HTTP header operation, got '%s'",
+                info_val.getFullTypeName());
+            return nullptr;
+        }
+        info->merge(info_val.get<const QoreHashNode>(), xsink);
+    }
+    return *xsink ? nullptr : hdr.release();
+}
+
+static QoreStringNode* qore_socket_object_exec_read_http_header_string(QoreSocketObject* s,
+        int timeout_ms, ExceptionSink* xsink) {
+    SimpleRefHolder<QoreStringNode> pattern(new QoreStringNode("\r\n\r\n"));
+    s->ref();
+    ValueHolder result(qore_socket_object_exec_recv_poll(s,
+        new SocketRecvUntilBytesPollOperation(xsink, *pattern, s, true),
+        timeout_ms, "readHTTPHeaderString", xsink), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    if (result->getType() != NT_STRING) {
+        xsink->raiseException("SOCKET-HTTP-ERROR",
+            "expected string output from async HTTP header string operation, got '%s'",
+            result->getFullTypeName());
+        return nullptr;
+    }
+
+    QoreStringNode* raw = result->get<QoreStringNode>();
+    const size_t len = raw->size();
+    SimpleRefHolder<QoreStringNode> hdr;
+    if (len >= 4 && !memcmp(raw->c_str() + len - 4, "\r\n\r\n", 4)) {
+        hdr = new QoreStringNode(raw->c_str(), len - 4, raw->getEncoding());
+        hdr->concat('\n');
+    } else {
+        hdr = raw->stringRefSelf();
+    }
+
+    my_socket_priv::getPriv(*s)->doDataEvent(QORE_EVENT_HTTP_HEADERS_READ, QORE_SOURCE_SOCKET, **hdr);
+    return hdr.release();
+}
+
 static int qore_socket_object_exec_send_fd(QoreSocketObject* s, int fd, int size) {
     if (!size) {
         return 0;
@@ -1364,21 +1447,11 @@ void QoreSocketObject::readHTTPChunkedBodyWithCallback(const ResolvedCallReferen
 
 // read and parse HTTP header
 AbstractQoreNode* QoreSocketObject::readHTTPHeader(ExceptionSink* xsink, QoreHashNode* info, int timeout_ms) {
-    AutoLocker al(priv->m);
-    my_socket_priv::SyncIoGuard sg(*priv, xsink, NB_RECV);
-    if (!sg) {
-        return nullptr;
-    }
-    return priv->socket->readHTTPHeader(xsink, info, timeout_ms);
+    return qore_socket_object_exec_read_http_header(this, info, timeout_ms, xsink);
 }
 
 QoreStringNode* QoreSocketObject::readHTTPHeaderString(ExceptionSink* xsink, int timeout_ms) {
-    AutoLocker al(priv->m);
-    my_socket_priv::SyncIoGuard sg(*priv, xsink, NB_RECV);
-    if (!sg) {
-        return nullptr;
-    }
-    return priv->socket->readHTTPHeaderString(xsink, timeout_ms);
+    return qore_socket_object_exec_read_http_header_string(this, timeout_ms, xsink);
 }
 
 QoreHashNode* QoreSocketObject::readServerSentEvent(ExceptionSink* xsink, const QoreStringNode* content_encoding,
