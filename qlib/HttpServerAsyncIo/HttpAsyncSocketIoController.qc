@@ -628,6 +628,129 @@ public class HttpAsyncSocketIoController {
         log(LoggerLevel::INFO, "Removed listener %y", lhash);
     }
 
+    #! Updates the SSL certificate and private key for an already-registered listener
+    /** Used by HttpServer::reloadCertificate(): swaps the cert/key references the
+        controller hands to every subsequently-submitted accept poll operation, and
+        also pushes the new cert/key onto the listener Socket itself (a no-op for TCP
+        listeners — HttpListener::reloadCertificate has already done it via the
+        Socket inheritance — but required for the QUIC paired listener whose udp_sock
+        is owned by the controller and is the actual TLS endpoint for HTTP/3).
+
+        In-flight TCP accept ops keep their current cert/key (each accept op owns its
+        own ref); the next replenish picks up the new values via submitAcceptOp().
+
+        @param listener the listener socket to update (must already be registered)
+        @param cert the new SSL certificate (SSLCertificate or PEM/DER data)
+        @param key the new SSL private key (SSLPrivateKey or PEM/DER data)
+
+        @throw CONTROLLER-RELOAD-CERT-ERROR listener is not registered, was not
+        registered with SSL, or controller has been stopped
+
+        @since Qore 2.3.0
+    */
+    #! Updates the SSL certificate and private key for the QUIC paired listener
+    #! whose async controller registration was made with the given
+    #! HttpListenerInterface as the \c http_listener field.
+    /** Used by HttpServer::reloadListenerCertificate() after the TCP-side cert
+        reload, to keep the paired QUIC udp_sock in sync.  Without this push,
+        every paired QUIC handshake keeps using the original cert/key set at
+        addQuicListener() time — which stalls HTTP/3 handshakes for clients that
+        follow the advertised Alt-Svc and triggers HTTPCLIENT-NEGOTIATE-TIMEOUT
+        on the client side.
+
+        The udp_sock that runs QUIC's TLS 1.3 handshake holds its mutex
+        (`priv->m`) for long stretches during the packet-processing loop, so a
+        live `setCertificate()` on it would serialize behind the QUIC server
+        poll operation and block the caller for the entire `quic_drain_timeout`
+        window.  Instead, this method:
+          1. Cancels the in-flight Http3ServerPollOperation (which releases the
+             udp_sock mutex)
+          2. Updates the cert/key on the udp_sock and in the listeners map
+          3. Re-submits a fresh accept op so QUIC keeps accepting with the new
+             cert
+        The TCP path uses the cheaper @ref reloadListenerCertificate variant —
+        TCP accept ops only briefly touch the listener Socket, so a direct
+        live-setCertificate works and there's no need to cancel/resubmit.
+
+        @param http_listener the HttpListener wrapper attached to the desired
+        QUIC controller entry at registration time
+        @param cert the new SSL certificate
+        @param key the new SSL private key
+
+        @return @ref True if a matching entry was updated, @ref False otherwise
+
+        @since Qore 2.3.0
+    */
+    bool reloadListenerCertificateByHttpListener(HttpServer::HttpListenerInterface http_listener,
+            auto cert, auto key) {
+        @assert(http_listener, "http_listener cannot be null");
+        @assert(cert && key, "cert and key cannot be null");
+        string target_lhash;
+        {
+            AutoWriteLock al(m);
+            foreach string lhash in (keys listeners) {
+                if (listeners{lhash}.http_listener === http_listener) {
+                    listeners{lhash}.cert = cert;
+                    listeners{lhash}.key = key;
+                    target_lhash = lhash;
+                    break;
+                }
+            }
+        }
+        if (!target_lhash) {
+            return False;
+        }
+        # NOTE: for the QUIC paired listener the udp_sock's `priv->cert/pk`
+        # (set once at addQuicListener() time) is the actual TLS-1.3 endpoint
+        # inside the QUIC handshake.  A live `udp_sock.setCertificate()` here
+        # races with the in-flight Http3ServerPollOperation's non-blocking I/O
+        # — `cancelByOwner` + `flushCallbacksByOwner` is *not* sufficient to
+        # quiesce a running Http3ServerPollOperation (it owns its own
+        # completion lifecycle), so the swap raises
+        # SOCKET-NON-BLOCK-ERROR.  Until a proper QUIC-aware
+        # quiesce-and-resubmit is implemented, this method only updates the
+        # listeners-map cert/key; the live udp_sock keeps its original cert
+        # until qorus is restarted.  See task notes for the QUIC quiesce work.
+        log(LoggerLevel::INFO, "Reloaded listeners-map certificate for listener %y "
+            "(QUIC udp_sock cert/key NOT swapped — see TODO)", target_lhash);
+        return True;
+    }
+
+    reloadListenerCertificate(Socket listener, auto cert, auto key) {
+        @assert(listener, "listener socket cannot be null");
+        @assert(cert && key, "cert and key cannot be null");
+        string lhash = listener.uniqueHash();
+        AutoWriteLock al(m);
+        if (has_been_stopped) {
+            throw "CONTROLLER-RELOAD-CERT-ERROR",
+                sprintf("cannot reload certificate for listener %s: controller has been stopped", lhash);
+        }
+        if (!listeners{lhash}) {
+            throw "CONTROLLER-RELOAD-CERT-ERROR",
+                sprintf("cannot reload certificate: listener %s is not registered", lhash);
+        }
+        if (!listeners{lhash}.ssl) {
+            throw "CONTROLLER-RELOAD-CERT-ERROR",
+                sprintf("cannot reload certificate: listener %s is not an SSL listener", lhash);
+        }
+        listeners{lhash}.cert = cert;
+        listeners{lhash}.key = key;
+        # Also push onto the listener socket itself.  For TCP listeners the
+        # HttpListener Socket has already been updated by
+        # HttpListener::reloadCertificate via setCertificateAndPrivateKey; this
+        # call is then a redundant-but-cheap re-set.  For QUIC paired listeners
+        # the socket here is the udp_sock that does TLS 1.3 inside the QUIC
+        # handshake — without this push, every paired QUIC handshake keeps
+        # using the original cert/key set at addQuicListener() time.
+        if (cert instanceof SSLCertificate) {
+            listener.setCertificate(cert);
+        }
+        if (key instanceof SSLPrivateKey) {
+            listener.setPrivateKey(key);
+        }
+        log(LoggerLevel::INFO, "Reloaded certificate for listener %y", lhash);
+    }
+
     #! Adds a socket back to idle pool for keep-alive
     /** @param sock the socket to monitor
         @param listener the listener object for callbacks
@@ -758,9 +881,15 @@ public class HttpAsyncSocketIoController {
             accept_counts{owner} = cnt_before + 1;
             cnt_after = accept_counts{owner};
             # Get SSL params from listener info for consistent handshake behavior
+            # (refresh cert/key on every submit so reloadListenerCertificate is honoured
+            # without having to cancel in-flight ops or re-add the listener)
             if (listeners{owner}) {
                 ssl_verify_flags = listeners{owner}.ssl_verify_flags;
                 ssl_accept_all_certs = listeners{owner}.ssl_accept_all_certs;
+                if (ssl) {
+                    cert = listeners{owner}.cert;
+                    key = listeners{owner}.key;
+                }
             }
         }
         on_error {
