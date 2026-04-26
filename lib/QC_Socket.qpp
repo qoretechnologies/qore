@@ -2547,7 +2547,7 @@ sock.sendi1(val, 20s);
     made because it was not possible to catch SSL errors with this method with the previous implementation
 */
 int Socket::sendi1(softint i = 0, timeout timeout_ms = -1) {
-    char v = (char)i;
+    char v = static_cast<char>(i);
     return socket_exec_send_bytes(self, s, &v, sizeof(v), timeout_ms, xsink);
 }
 
@@ -2576,7 +2576,7 @@ sock.sendi2(val, 20s);
     made because it was not possible to catch SSL errors with this method with the previous implementation
 */
 int Socket::sendi2(softint i = 0, timeout timeout_ms = -1) {
-    short v = htons((short)i);
+    short v = htons(static_cast<short>(i));
     return socket_exec_send_bytes(self, s, &v, sizeof(v), timeout_ms, xsink);
 }
 
@@ -2605,7 +2605,7 @@ sock.sendi4(val, 20s);
     made because it was not possible to catch SSL errors with this method with the previous implementation
 */
 int Socket::sendi4(softint i = 0, timeout timeout_ms = -1) {
-    int v = htonl((int)i);
+    int v = htonl(static_cast<int>(i));
     return socket_exec_send_bytes(self, s, &v, sizeof(v), timeout_ms, xsink);
 }
 
@@ -2663,7 +2663,7 @@ sock.sendi2LSB(val, 20s);
     made because it was not possible to catch SSL errors with this method with the previous implementation
 */
 int Socket::sendi2LSB(softint i = 0, timeout timeout_ms = -1) {
-    short v = i2LSB((short)i);
+    short v = i2LSB(static_cast<short>(i));
     return socket_exec_send_bytes(self, s, &v, sizeof(v), timeout_ms, xsink);
 }
 
@@ -2692,7 +2692,7 @@ sock.sendi4LSB(val, 20s);
     made because it was not possible to catch SSL errors with this method with the previous implementation
 */
 int Socket::sendi4LSB(softint i = 0, timeout timeout_ms = -1) {
-    int v = i4LSB((int)i);
+    int v = i4LSB(static_cast<int>(i));
     return socket_exec_send_bytes(self, s, &v, sizeof(v), timeout_ms, xsink);
 }
 
