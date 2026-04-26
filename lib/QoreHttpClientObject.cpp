@@ -1328,15 +1328,8 @@ struct qore_httpclient_priv {
     std::unique_ptr<HttpClientConnectionManagerBase> conn_mgr;
 
     //! When true, send_internal delegates to the C++ conn_mgr for
-    //! non-streaming request/response flows (all protocols, including proxy).
-    //! Disabled when poll APIs are used (poll_apis_used flag) to preserve
-    //! legacy msock state for startPollConnect/startPollSendRecv.
+    //! synchronous request/response and streaming flows where possible.
     bool use_conn_mgr = true;
-
-    //! Set when poll APIs (startPollConnect, startPollSendRecv) are used on
-    //! this HTTPClient.  Once set, send_internal falls back to the legacy
-    //! msock dispatch so that poll APIs (which use msock) find it connected.
-    bool poll_apis_used = false;
 
     //! Set during user-initiated disconnect() to map HTTP1-ABORT errors
     //! on pending poll ops to SOCKET-NOT-OPEN (matching legacy semantics).
@@ -5126,17 +5119,12 @@ int QoreHttpClientObject::connect(ExceptionSink* xsink) {
         return -1;
     }
 
-    // When the conn_mgr is the active dispatch path (use_conn_mgr &&
-    // !poll_apis_used), connect() pre-populates the conn_mgr pool instead
-    // of opening the legacy msock.  Every subsequent non-WS send() goes
-    // through the same pool entry, so there is a single TCP connection
-    // per logical session — no more "warm-up msock + real conn_mgr
-    // connection" double-connect that hangs single-accept test servers
-    // and wastes a socket slot on real peers.  WS upgrade and poll-API
-    // paths still use msock, so they stay on the legacy connect_unlocked
-    // path below. UNIX targets through a proxy stay on the legacy path.
-    if (http_priv->use_conn_mgr && !http_priv->poll_apis_used
-            && http_priv->connection.has_url()
+    // When the conn_mgr is active, connect() pre-populates the conn_mgr
+    // pool instead of opening the legacy msock. Every subsequent non-WS
+    // send() goes through the same pool entry, so there is a single TCP
+    // connection per logical session. UNIX targets through a proxy stay
+    // on the legacy path.
+    if (http_priv->use_conn_mgr && http_priv->connection.has_url()
             && !(http_priv->connection.is_unix && http_priv->proxy_connection.has_url())) {
         // Drop any stale msock state (prior disconnect/reconnect cycle).
         http_priv->disconnect_unlocked();
