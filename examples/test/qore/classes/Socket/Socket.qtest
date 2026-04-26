@@ -446,6 +446,28 @@ class SocketTest inherits QUnit::Test {
         conn.sendHTTPChunkedBodyTrailer({"X-Trailer": "done"}, 5s);
         cnt.waitForZero(5s);
         assertEq("0\r\nX-Trailer: done\r\n\r\n", received);
+
+        Socket server2();
+        server2.bind("localhost:0");
+        server2.listen();
+        port = server2.getSocketInfo().port;
+
+        string expected = "2\r\nhe\r\n2\r\nll\r\n1\r\no\r\n0\r\nX-Trailer: done\r\n\r\n";
+        cnt.inc();
+        background sub () {
+            Socket client();
+            client.connect("localhost:" + port);
+            received = client.recv(expected.size(), 5s);
+            cnt.dec();
+        }();
+
+        conn = server2.accept(5s);
+        StringInputStream input_stream("hello");
+        conn.sendHTTPChunkedBodyFromInputStream(input_stream, 2, 5s, hash<auto> sub () {
+            return {"X-Trailer": "done"};
+        });
+        cnt.waitForZero(5s);
+        assertEq(expected, received);
     }
 
     sendBinaryTest() {
