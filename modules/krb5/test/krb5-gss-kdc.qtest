@@ -6,13 +6,84 @@
 %requires ../../../qlib/QUnit.qm
 %requires krb5
 %requires ../../../qlib/Krb5Util/Krb5Util.qm
+%requires ../../../qlib/HttpServer.qm
+%requires ../../../qlib/RestClient.qm
+%requires ../../../qlib/RestClientIo.qm
 
 %exec-class Krb5GssKdcIntegrationTest
+
+class Krb5HttpNegotiateAuthenticator inherits AbstractAuthenticator {
+    private {
+        Qore::Krb5::GssCredential acceptor_cred;
+        hash<Qore::Krb5::GssAcceptorContextOptions> acceptor_opts;
+    }
+
+    constructor(Qore::Krb5::GssCredential cred, hash<Qore::Krb5::GssAcceptorContextOptions> opts) {
+        acceptor_cred = cred;
+        acceptor_opts = opts;
+    }
+
+    bool requiresAuthentication() {
+        return True;
+    }
+
+    private *string getNegotiateAuthHeader(hash<auto> cx) {
+        return "Negotiate";
+    }
+
+    private *hash<HttpResponseInfo> processNegotiateAuthorizationHeader(HttpListenerInterface listener,
+            hash<auto> hdr, reference<hash<auto>> cx, reference<bool> authenticated) {
+        try {
+            Qore::Krb5::GssAcceptorContext acceptor(acceptor_cred, acceptor_opts);
+            hash<Krb5Util::NegotiateServerStepInfo> step =
+                Krb5Util::acceptNegotiateAuthorizationHeader(acceptor, hdr.authorization);
+
+            if (!step.complete) {
+                return <HttpResponseInfo>{
+                    "code": 401,
+                    "body": "Negotiate authentication continues",
+                    "hdr": {
+                        "WWW-Authenticate": step.www_authenticate_header,
+                    },
+                };
+            }
+
+            cx.user = step.initiator_name;
+            cx."negotiate-final-header" = step.www_authenticate_header;
+            authenticated = True;
+        } catch (hash<ExceptionInfo> ex) {
+            throw "AUTHENTICATION-ERROR", sprintf("Negotiate authentication failed: %s", ex.err);
+        }
+    }
+
+    authenticateByIP(reference<hash<auto>> cx, string ip, reference<bool> authenticated) {
+        throw "AUTHENTICATION-ERROR", "IP authentication is disabled for Negotiate tests";
+    }
+}
+
+class Krb5HttpNegotiateHandler inherits AbstractHttpRequestHandler {
+    constructor(AbstractAuthenticator auth) : AbstractHttpRequestHandler(auth) {
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        hash<auto> response_headers = {
+            "Content-Type": MimeTypeText,
+        };
+        if (exists cx."negotiate-final-header") {
+            response_headers."WWW-Authenticate" = cx."negotiate-final-header";
+        }
+        return makeResponse(200, cx.user, response_headers);
+    }
+}
 
 public class Krb5GssKdcIntegrationTest inherits QUnit::Test {
     constructor() : Test("Krb5GssKdcIntegrationTest", "1.0") {
         addTestCase("full gss initiator acceptor exchange", \testFullGssExchange());
         addTestCase("http negotiate helper exchange", \testHttpNegotiateHelperExchange());
+        addTestCase("HttpServerUtil RestClientIo negotiate exchange",
+            \testHttpServerUtilRestClientIoNegotiate());
+        addTestCase("HttpServerUtil RestConnection ping negotiate exchange",
+            \testHttpServerUtilPingNegotiate());
         addTestCase("initial credentials reject wrong password", \testInitialCredentialsRejectWrongPassword());
         addTestCase("initial credentials boolean options accepted",
             \testInitialCredentialsBooleanOptionsAccepted());
@@ -104,6 +175,7 @@ public class Krb5GssKdcIntegrationTest inherits QUnit::Test {
             "cache": cc,
             "clientPrincipal": clientPrincipal,
             "servicePrincipal": servicePrincipal,
+            "cacheName": cc.getFullName(),
             "initiatorCred": initiatorCred,
             "acceptorCred": acceptorCred,
         };
@@ -235,6 +307,83 @@ public class Krb5GssKdcIntegrationTest inherits QUnit::Test {
         hash<Qore::Krb5::GssWrapInfo> wrapped = initiator.wrap("68656c6c6f", True);
         hash<Qore::Krb5::GssUnwrapInfo> plain = acceptor.unwrap(wrapped.token);
         assertEq("68656c6c6f", plain.message);
+    }
+
+    private hash<auto> createHttpNegotiateServer(Qore::Krb5::GssCredential acceptorCred) {
+        hash<Qore::Krb5::GssAcceptorContextOptions> acceptorOpts();
+        Krb5HttpNegotiateAuthenticator auth(acceptorCred, acceptorOpts);
+        Krb5HttpNegotiateHandler handler(auth);
+
+        HttpServer server();
+        server.setHandler("krb5-http-negotiate", "", MimeTypeText, handler);
+        server.setDefaultHandler("krb5-http-negotiate", handler);
+        hash<auto> info = server.addListener(<HttpListenerOptionInfo>{"service": 0});
+        server.waitForAsyncIo();
+
+        return {
+            "server": server,
+            "url": "http://localhost:" + info.port,
+        };
+    }
+
+    private hash<auto> getHttpNegotiateClientOptions(hash<auto> setup, string url) {
+        return {
+            "url": url,
+            "data": "text",
+            "negotiate_auth": True,
+            "negotiate_service_principal": setup.servicePrincipal,
+            "negotiate_credential_cache": setup.cacheName,
+        };
+    }
+
+    private static *hash<ExceptionInfo> drivePingOp(Qore::AbstractPollOperation op) {
+        try {
+            while (!op.goalReached()) {
+                *hash<SocketPollInfo> info = op.continuePoll();
+                if (!info) {
+                    break;
+                }
+                Socket::poll((info,), 10s);
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            return ex;
+        }
+        return NOTHING;
+    }
+
+    private testHttpServerUtilRestClientIoNegotiate() {
+        hash<auto> setup = setupGssCredentials("httpserverutil-restclientio");
+        hash<auto> serverSetup = createHttpNegotiateServer(setup.acceptorCred);
+        HttpServer server = serverSetup.server;
+        on_exit delete server;
+
+        RestClientIo::RestClientIo rest(getHttpNegotiateClientOptions(setup, serverSetup.url));
+        on_exit rest.close();
+
+        hash<RestClient::RestResponseInfo> response = rest.restGet("/protected");
+        assertEq(200, response.status_code);
+        assertEq(setup.clientPrincipal, response.body);
+    }
+
+    private testHttpServerUtilPingNegotiate() {
+        hash<auto> setup = setupGssCredentials("httpserverutil-ping");
+        hash<auto> serverSetup = createHttpNegotiateServer(setup.acceptorCred);
+        HttpServer server = serverSetup.server;
+        on_exit delete server;
+
+        hash<auto> opts = getHttpNegotiateClientOptions(setup, serverSetup.url) - "url" + {
+            "ping_method": "GET",
+            "ping_path": "/ping",
+        };
+        RestClient::RestConnection rc("krb5-httpserverutil-ping", "krb5-httpserverutil-ping",
+            serverSetup.url, {}, opts);
+        Qore::AbstractPollOperation op = rc.startPollConnect();
+        assertEq("ping", op.getGoal());
+
+        *hash<ExceptionInfo> ex = drivePingOp(op);
+        on_error printf("HttpServerUtil Negotiate ping error: %y\n", ex);
+        assertFalse(exists ex, "Negotiate-enabled ping should authenticate against HttpServerUtil");
+        assertTrue(op.goalReached());
     }
 
     private testInitialCredentialsRejectWrongPassword() {
