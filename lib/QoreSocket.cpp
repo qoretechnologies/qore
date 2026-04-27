@@ -8049,7 +8049,7 @@ SocketSendPollOperation::SocketSendPollOperation(ExceptionSink* xsink, BinaryNod
 bool SocketSendPollOperation::abortNeedsClose() const {
     if (poll_state) {
         assert(dynamic_cast<SocketSendPollState*>(poll_state.get()));
-        return reinterpret_cast<SocketSendPollState*>(poll_state.get())->getBytesSent() ? true : false;
+        return static_cast<SocketSendPollState*>(poll_state.get())->getBytesSent() ? true : false;
     }
     return true;
 }
@@ -8081,6 +8081,252 @@ QoreHashNode* SocketSendPollOperation::continuePoll(ExceptionSink* xsink) {
         return nullptr;
     }
     return getSocketPollInfoHash(xsink, rc);
+}
+
+SocketSendInputStreamPollOperation::SocketSendInputStreamPollOperation(ExceptionSink* xsink, QoreSocketObject* sock,
+        InputStream* input_stream, QoreObject* input_stream_obj, int64 size, int timeout_ms, bool emit_data_events)
+        : SocketPollSocketOperationBase(sock, NB_SEND), input_stream(input_stream), input_stream_obj(input_stream_obj),
+          size(size), timeout_ms(timeout_ms), emit_data_events(emit_data_events) {
+    if (!input_stream->isIoThreadSafe()) {
+        xsink->raiseException("SOCKET-SEND-ERROR", "InputStream is not I/O thread safe");
+        return;
+    }
+
+    is_pollable = input_stream->supportsNonBlockingIo();
+    if (is_pollable) {
+        stream_fd = input_stream->getPollableDescriptor();
+        if (stream_fd < 0) {
+            is_pollable = false;
+        }
+    }
+
+    AutoLocker al(sock->priv->m);
+    if (sock->priv->checkOpen(xsink)) {
+        return;
+    }
+
+    if (!sock->priv->setNonBlock(xsink, NB_SEND)) {
+        set_non_block = true;
+    }
+}
+
+QoreHashNode* SocketSendInputStreamPollOperation::getPollInfo(ExceptionSink* xsink, int events) {
+    int64 poll_timeout_ms = -1;
+    if (timeout_ms >= 0) {
+        int us;
+        int64 now_s = q_epoch_us(us);
+        int64 now_ms = now_s * 1000 + us / 1000;
+        if (!wait_deadline_ms) {
+            wait_deadline_ms = now_ms + timeout_ms;
+        }
+        poll_timeout_ms = wait_deadline_ms - now_ms;
+        if (poll_timeout_ms < 0) {
+            poll_timeout_ms = 0;
+        }
+    }
+
+    QoreHashNode* raw_info = nullptr;
+    if (is_pollable && stream_fd >= 0) {
+        std::vector<std::pair<int, int>> extra_fds{{stream_fd, SOCK_POLLIN}};
+        raw_info = getSocketPollInfoHash(xsink, events, extra_fds);
+    } else {
+        raw_info = getSocketPollInfoHash(xsink, events);
+    }
+    if (!raw_info) {
+        return nullptr;
+    }
+    ReferenceHolder<QoreHashNode> info(raw_info, xsink);
+    if (poll_timeout_ms >= 0) {
+        info->setKeyValue("poll_timeout_ms", poll_timeout_ms, xsink);
+    }
+    return info.release();
+}
+
+int64 SocketSendInputStreamPollOperation::getNextChunkSize() const {
+    if (size < 0) {
+        return DEFAULT_SOCKET_BUFSIZE;
+    }
+    return QORE_MIN(size - bytes_sent, (int64)DEFAULT_SOCKET_BUFSIZE);
+}
+
+void SocketSendInputStreamPollOperation::complete(ExceptionSink* xsink) {
+    if (input_stream && !need_reassign) {
+        input_stream->unassignThread(xsink);
+        if (*xsink) {
+            phase = Phase::Error;
+            return;
+        }
+    }
+    input_stream = nullptr;
+    phase = Phase::Done;
+    if (set_non_block) {
+        sock->priv->clearNonBlock(NB_SEND);
+        set_non_block = false;
+    }
+}
+
+bool SocketSendInputStreamPollOperation::checkTimeout(ExceptionSink* xsink) {
+    if (wait_deadline_ms <= 0) {
+        return false;
+    }
+    int us;
+    int64 now_s = q_epoch_us(us);
+    int64 now_ms = now_s * 1000 + us / 1000;
+    if (now_ms < wait_deadline_ms) {
+        return false;
+    }
+    xsink->raiseException("SOCKET-TIMEOUT", "socket operation timed out");
+    phase = Phase::Error;
+    return true;
+}
+
+void SocketSendInputStreamPollOperation::clearTimeout() {
+    wait_deadline_ms = 0;
+}
+
+QoreHashNode* SocketSendInputStreamPollOperation::continuePoll(ExceptionSink* xsink) {
+    if (need_reassign) {
+        need_reassign = false;
+        if (input_stream) {
+            input_stream->reassignThread(xsink);
+            if (*xsink) {
+                phase = Phase::Error;
+                return nullptr;
+            }
+        }
+    }
+
+    AutoLocker al(sock->priv->m);
+    if (sock->priv->checkOpen(xsink)) {
+        phase = Phase::Error;
+        return nullptr;
+    }
+    if (checkTimeout(xsink)) {
+        return nullptr;
+    }
+
+    unsigned loop = 0;
+    while (true) {
+        switch (phase) {
+            case Phase::ReadChunk: {
+                if (size >= 0 && bytes_sent >= size) {
+                    complete(xsink);
+                    return nullptr;
+                }
+
+                int64 chunk_size = getNextChunkSize();
+                if (chunk_size <= 0) {
+                    complete(xsink);
+                    return nullptr;
+                }
+
+                if (is_pollable) {
+                    assert(stream_fd >= 0);
+                    struct pollfd pfd;
+                    pfd.fd = stream_fd;
+                    pfd.events = POLLIN;
+                    pfd.revents = 0;
+                    int poll_rv = ::poll(&pfd, 1, 0);
+                    if (poll_rv < 0) {
+                        xsink->raiseException("SOCKET-SEND-ERROR", "poll() on stream fd failed: %s",
+                            strerror(errno));
+                        phase = Phase::Error;
+                        return nullptr;
+                    }
+                    if (poll_rv == 0) {
+                        return getPollInfo(xsink, SOCK_POLLIN);
+                    }
+
+                    SimpleRefHolder<BinaryNode> chunk(new BinaryNode);
+                    chunk->preallocate(chunk_size);
+                    int64 count = input_stream->readNonBlock(
+                        const_cast<void*>(chunk->getPtr()), chunk_size, xsink);
+                    if (*xsink) {
+                        phase = Phase::Error;
+                        return nullptr;
+                    }
+                    if (count <= 0) {
+                        if (size >= 0) {
+                            xsink->raiseException("SOCKET-SEND-ERROR", "Unexpected end of stream");
+                            phase = Phase::Error;
+                            return nullptr;
+                        }
+                        complete(xsink);
+                        return nullptr;
+                    }
+                    chunk->setSize(count);
+                    current_chunk = chunk.release();
+                    clearTimeout();
+                } else {
+                    current_chunk = input_stream->readHelper(chunk_size, xsink);
+                    if (*xsink) {
+                        phase = Phase::Error;
+                        return nullptr;
+                    }
+                    if (!current_chunk) {
+                        if (size >= 0) {
+                            xsink->raiseException("SOCKET-SEND-ERROR", "Unexpected end of stream");
+                            phase = Phase::Error;
+                            return nullptr;
+                        }
+                        complete(xsink);
+                        return nullptr;
+                    }
+                    clearTimeout();
+                }
+
+                phase = Phase::SendChunk;
+                continue;
+            }
+
+            case Phase::SendChunk: {
+                if (!poll_state) {
+                    poll_state.reset(sock->priv->socket->startSend(xsink,
+                        reinterpret_cast<const char*>(current_chunk->getPtr()), current_chunk->size()));
+                    if (*xsink || !poll_state) {
+                        phase = Phase::Error;
+                        return nullptr;
+                    }
+                }
+
+                SocketSendPollState* send_state = static_cast<SocketSendPollState*>(poll_state.get());
+                if (send_state->getBytesSent()) {
+                    socket_data_sent = true;
+                }
+                size_t sent_before = send_state->getBytesSent();
+                int rc = poll_state->continuePoll(xsink);
+                if (*xsink) {
+                    phase = Phase::Error;
+                    poll_state.reset();
+                    return nullptr;
+                }
+                if (send_state->getBytesSent() > sent_before) {
+                    socket_data_sent = true;
+                    clearTimeout();
+                }
+                if (rc) {
+                    return getPollInfo(xsink, rc);
+                }
+
+                poll_state.reset();
+                bytes_sent += current_chunk->size();
+                if (emit_data_events) {
+                    qore_socket_private::get(*sock->priv->socket)->do_data_event(
+                        QORE_EVENT_SOCKET_DATA_SENT, QORE_SOURCE_SOCKET, **current_chunk);
+                }
+                current_chunk = nullptr;
+                if (++loop >= max_nonblock_ops && (size < 0 || bytes_sent < size)) {
+                    return getPollInfo(xsink, SOCK_POLLOUT);
+                }
+                phase = Phase::ReadChunk;
+                continue;
+            }
+
+            case Phase::Done:
+            case Phase::Error:
+                return nullptr;
+        }
+    }
 }
 
 QoreHashNode* SocketRecvPollOperationBase::continuePoll(ExceptionSink* xsink) {
@@ -10008,9 +10254,10 @@ QoreHashNode* SocketHttp2SendStreamingResponsePollOperation::continuePoll(Except
                         return nullptr;
                     }
                     if (poll_rv == 0) {
-                        // Stream not ready — yield to event loop for socket I/O
-                        // and retry reading on next continuePoll() call
-                        return getSocketPollInfoHash(xsink, SOCK_POLLIN);
+                        // Stream not ready: register fd with event loop and
+                        // retry reading on next continuePoll() call.
+                        std::vector<std::pair<int, int>> extra_fds{{stream_fd, SOCK_POLLIN}};
+                        return getSocketPollInfoHash(xsink, SOCK_POLLIN, extra_fds);
                     }
 
                     // Stream FD is readable — do non-blocking read

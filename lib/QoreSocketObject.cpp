@@ -42,6 +42,7 @@
 #include "qore/intern/QC_SSLPrivateKey.h"
 #include "qore/intern/Http2Session.h"
 #include "qore/intern/SocketSyncPoll.h"
+#include "qore/intern/FileInputStream.h"
 
 #include <limits>
 
@@ -476,6 +477,67 @@ static int qore_socket_object_exec_send_bytes(QoreSocketObject* s, const void* d
     SimpleRefHolder<BinaryNode> bin(new BinaryNode());
     bin->append(data, size);
     return qore_socket_object_exec_send_binary(s, bin.release(), timeout_ms, xsink);
+}
+
+struct SocketObjectInputStreamRefGuard {
+    SocketObjectInputStreamRefGuard(InputStream* is, ExceptionSink* xsink, bool active)
+            : is(active ? is : nullptr), xsink(xsink) {
+        if (this->is) {
+            this->is->ref();
+        }
+    }
+
+    ~SocketObjectInputStreamRefGuard() {
+        if (is) {
+            is->deref(xsink);
+        }
+    }
+
+private:
+    InputStream* is;
+    ExceptionSink* xsink;
+};
+
+static int qore_socket_object_exec_send_input_stream_poll(QoreSocketObject* s, InputStream* is,
+        QoreObject* is_obj, int64 size, int timeout_ms, ExceptionSink* xsink, bool reassign_after) {
+    if (!size) {
+        return 0;
+    }
+    if (!is->isIoThreadSafe()) {
+        xsink->raiseException("SOCKET-SEND-ERROR", "InputStream is not I/O thread safe");
+        return -1;
+    }
+
+    SocketObjectInputStreamRefGuard caller_ref(is, xsink, reassign_after);
+    s->ref();
+    is->ref();
+    if (is_obj) {
+        is_obj->ref();
+    }
+    ReferenceHolder<SocketPollOperationBase> poller(
+        new SocketSendInputStreamPollOperation(xsink, s, is, is_obj, size, timeout_ms), xsink);
+    if (*xsink) {
+        return -1;
+    }
+
+    is->unassignThread(xsink);
+    if (*xsink) {
+        return -1;
+    }
+
+    int rc = qore_socket_object_exec_send_poll(s, poller.release(), -1, xsink);
+    if (reassign_after) {
+        if (!*xsink) {
+            is->reassignThread(xsink);
+        } else {
+            ExceptionSink reassign_xsink;
+            is->reassignThread(&reassign_xsink);
+            if (reassign_xsink) {
+                reassign_xsink.clear();
+            }
+        }
+    }
+    return rc;
 }
 
 static int qore_socket_object_exec_send_string(QoreSocketObject* s, const QoreStringNode& data,
@@ -1456,58 +1518,6 @@ static int qore_socket_object_exec_send_http_response_input_stream(QoreSocketObj
         trailer_callback, timeout_ms, xsink);
 }
 
-static int qore_socket_object_exec_send_fd(QoreSocketObject* s, int fd, int size) {
-    if (!size) {
-        return 0;
-    }
-
-    ExceptionSink xsink;
-    SocketSyncPoll::assertNotOnIoThread("Socket", "send", &xsink);
-    if (xsink) {
-        xsink.clear();
-        return -1;
-    }
-
-    my_socket_priv* priv = my_socket_priv::getPriv(*s);
-    QoreSocketObjectAsyncIoGuard async_guard(*priv, &xsink, NB_SEND);
-    if (!async_guard) {
-        xsink.clear();
-        return -1;
-    }
-
-    char buf[DEFAULT_SOCKET_BUFSIZE];
-    int sent = 0;
-    unsigned cancel_check = 0;
-    while (size < 0 || sent < size) {
-        if (!(cancel_check++ % 100) && qore_check_cancel(&xsink, "socket object file descriptor send")) {
-            xsink.clear();
-            return -1;
-        }
-        int to_read = size < 0 ? DEFAULT_SOCKET_BUFSIZE : QORE_MIN(size - sent, DEFAULT_SOCKET_BUFSIZE);
-        ssize_t rc = 0;
-        while (true) {
-            rc = ::read(fd, buf, to_read);
-            if (rc >= 0 || errno != EINTR) {
-                break;
-            }
-        }
-        if (!rc) {
-            return 0;
-        }
-        if (rc < 0) {
-            return -1;
-        }
-
-        if (qore_socket_object_exec_send_bytes(s, buf, rc, -1, &xsink)) {
-            xsink.clear();
-            return -1;
-        }
-        sent += rc;
-    }
-
-    return 0;
-}
-
 static int qore_socket_object_exec_recv_fd(QoreSocketObject* s, int fd, int size, int timeout_ms) {
     if (!size) {
         return 0;
@@ -1967,6 +1977,12 @@ void QoreSocketObject::sendFromInputStream(InputStream *is, int64 size, int64 ti
         return;
     }
 
+    if (is->isIoThreadSafe()) {
+        qore_socket_object_exec_send_input_stream_poll(this, is, nullptr, size, static_cast<int>(timeout_ms), xsink,
+            true);
+        return;
+    }
+
     my_socket_priv* priv = my_socket_priv::getPriv(*this);
     QoreSocketObjectAsyncIoGuard async_guard(*priv, xsink, NB_SEND);
     if (!async_guard) {
@@ -1976,7 +1992,11 @@ void QoreSocketObject::sendFromInputStream(InputStream *is, int64 size, int64 ti
     char buf[DEFAULT_SOCKET_BUFSIZE];
     int64 sent = 0;
     int timeout = static_cast<int>(timeout_ms);
+    unsigned cancel_check = 0;
     while (size < 0 || sent < size) {
+        if (!(cancel_check++ % 100) && qore_check_cancel(xsink, "socket object input stream send")) {
+            return;
+        }
         int64 to_read = size < 0 ? DEFAULT_SOCKET_BUFSIZE : QORE_MIN(size - sent, (int64)DEFAULT_SOCKET_BUFSIZE);
         int64 read = is->read(buf, to_read, xsink);
         if (*xsink) {
@@ -2000,7 +2020,14 @@ void QoreSocketObject::sendFromInputStream(InputStream *is, int64 size, int64 ti
 
 // send from a file descriptor
 int QoreSocketObject::send(int fd, int size) {
-    return qore_socket_object_exec_send_fd(this, fd, size);
+    ExceptionSink xsink;
+    SimpleRefHolder<FileInputStream> is(new FileInputStream(fd));
+    int rc = qore_socket_object_exec_send_input_stream_poll(this, *is, nullptr, size, -1, &xsink, false);
+    if (xsink) {
+        xsink.clear();
+        return -1;
+    }
+    return rc;
 }
 
 // send bytes and convert to network order

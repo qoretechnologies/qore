@@ -782,6 +782,91 @@ private:
     }
 };
 
+//! Poll operation to send InputStream data over a socket
+/** State machine: reading-chunk -> sending-chunk -> done
+
+    @since %Qore 2.3
+*/
+class SocketSendInputStreamPollOperation : public SocketPollSocketOperationBase {
+public:
+    DLLLOCAL SocketSendInputStreamPollOperation(ExceptionSink* xsink, QoreSocketObject* sock,
+        InputStream* input_stream, QoreObject* input_stream_obj, int64 size, int timeout_ms,
+        bool emit_data_events = true);
+
+    DLLLOCAL void deref(ExceptionSink* xsink) {
+        if (ROdereference()) {
+            if (set_non_block) {
+                sock->clearNonBlock(NB_SEND);
+            }
+            if (input_stream && !need_reassign) {
+                input_stream->unassignThread(xsink);
+            }
+            if (input_stream_obj) {
+                input_stream_obj->deref(xsink);
+                input_stream_obj = nullptr;
+            }
+            sock->deref(xsink);
+            delete this;
+        }
+    }
+
+    DLLLOCAL virtual bool goalReached() const override {
+        return phase == Phase::Done;
+    }
+
+    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override;
+
+    DLLLOCAL virtual const char* getStateImpl() const override {
+        switch (phase) {
+            case Phase::ReadChunk: return "reading-chunk";
+            case Phase::SendChunk: return "sending-chunk";
+            case Phase::Done: return "done";
+            case Phase::Error: return "error";
+            default: return "unknown";
+        }
+    }
+
+    DLLLOCAL virtual void abort(ExceptionSink* xsink) override {
+        if (input_stream && !need_reassign) {
+            input_stream->unassignThread(xsink);
+        }
+        input_stream = nullptr;
+        if (input_stream_obj) {
+            input_stream_obj->deref(xsink);
+            input_stream_obj = nullptr;
+        }
+        current_chunk = nullptr;
+        SocketPollSocketOperationBase::abort(xsink);
+    }
+
+private:
+    enum class Phase { ReadChunk, SendChunk, Done, Error };
+
+    DLLLOCAL QoreHashNode* getPollInfo(ExceptionSink* xsink, int events);
+    DLLLOCAL int64 getNextChunkSize() const;
+    DLLLOCAL void complete(ExceptionSink* xsink);
+    DLLLOCAL bool checkTimeout(ExceptionSink* xsink);
+    DLLLOCAL void clearTimeout();
+
+    Phase phase = Phase::ReadChunk;
+    SimpleRefHolder<InputStream> input_stream;
+    QoreObject* input_stream_obj = nullptr;
+    int64 size = -1;
+    int64 bytes_sent = 0;
+    int timeout_ms = -1;
+    int64 wait_deadline_ms = 0;
+    int stream_fd = -1;
+    bool is_pollable = true;
+    bool need_reassign = true;
+    bool emit_data_events = true;
+    bool socket_data_sent = false;
+    SimpleRefHolder<BinaryNode> current_chunk;
+
+    DLLLOCAL virtual bool abortNeedsClose() const override {
+        return socket_data_sent || bytes_sent > 0;
+    }
+};
+
 //! Poll operation to send HTTP response headers + stream InputStream body + optionally idle+read next header
 /** State machine:
     SendHeaders -> StreamBody -> [Idle -> ReadingHeader -> Complete | Timeout]  (fused=true)

@@ -2629,8 +2629,10 @@ QoreHashNode* SocketQuicSendStreamingResponsePollOperation::continuePoll(Excepti
                         return nullptr;
                     }
                     if (poll_rv == 0) {
-                        // Stream not ready — yield to event loop for socket I/O
-                        QoreHashNode* poll_info = getSocketPollInfoHash(xsink, SOCK_POLLIN);
+                        // Stream not ready: register fd with event loop and
+                        // retry reading on next continuePoll() call.
+                        std::vector<std::pair<int, int>> extra_fds{{stream_fd, SOCK_POLLIN}};
+                        QoreHashNode* poll_info = getSocketPollInfoHash(xsink, SOCK_POLLIN, extra_fds);
                         if (poll_info) {
                             setPollTimeoutFromExpiry(poll_info, quic_session->getExpiry(), xsink);
                         }

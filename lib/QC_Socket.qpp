@@ -803,38 +803,8 @@ private:
 
 static void socket_exec_send_input_stream(QoreObject* self, QoreSocketObject* s, InputStream* input_stream,
         int64 size, int timeout_ms, ExceptionSink* xsink) {
-    SocketSyncPoll::assertNotOnIoThread("Socket", "sendFromInputStream", xsink);
-    if (*xsink) {
-        return;
-    }
-
-    my_socket_priv* priv = my_socket_priv::getPriv(*s);
-    SocketExecAsyncIoGuard async_guard(*priv, xsink, NB_SEND);
-    if (!async_guard) {
-        return;
-    }
-
-    char buf[DEFAULT_SOCKET_BUFSIZE];
-    int64 sent = 0;
-    while (size < 0 || sent < size) {
-        int64 to_read = size < 0 ? DEFAULT_SOCKET_BUFSIZE : QORE_MIN(size - sent, (int64)DEFAULT_SOCKET_BUFSIZE);
-        int64 read = input_stream->read(buf, to_read, xsink);
-        if (*xsink) {
-            return;
-        }
-        if (read <= 0) {
-            if (size >= 0) {
-                xsink->raiseException("SOCKET-SEND-ERROR", "Unexpected end of stream");
-            }
-            return;
-        }
-
-        socket_exec_send_bytes(self, s, buf, read, timeout_ms, xsink);
-        if (*xsink) {
-            return;
-        }
-        sent += read;
-    }
+    (void)self;
+    s->sendFromInputStream(input_stream, size, timeout_ms, xsink);
 }
 
 static void socket_exec_recv_to_output_stream(QoreObject* self, QoreSocketObject* s, OutputStream* os,
