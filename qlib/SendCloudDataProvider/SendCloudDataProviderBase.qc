@@ -50,10 +50,29 @@ public class SendCloudDataProviderBase inherits DataProvider::AbstractDataProvid
         };
     }
 
+    public {
+        #! v3 API base URL (used for shipments, returns, parcel-documents, etc.)
+        const V3BaseUrl = "https://" + SendCloudRestClient::SendCloudRestClientBase::DefaultHost + "/api/v3";
+    }
+
     private {
         #! The REST client object for API calls (async-capable). May be NOTHING for
         #! introspection-only constructions (e.g., fetching example event data).
         *RestClientIo::RestClientIo rest;
+
+        #! Cached SendCloud credentials (\c {public_key, secret_key}) used to lazily
+        #! build separate synchronous clients for cross-host or cross-prefix endpoints
+        #! (service points, v3).  NOTHING when constructed from a raw RestClientIo
+        #! without access to the original options.
+        *hash<auto> sc_creds;
+
+        #! Lazy synchronous REST clients keyed by base URL (origin or origin+prefix).
+        #! Used for cross-host endpoints (servicepoints subdomain) and v3 prefix calls.
+        hash<string, RestClient::RestClient> sync_clients;
+
+        #! Cached shipping-method-id → shipping-option-code translations from the v3
+        #! compatibility endpoint (process-local; safe to cache as IDs are stable).
+        hash<string, *string> shipping_option_code_cache;
     }
 
     #! Creates the object with no arguments for child classes
@@ -68,6 +87,11 @@ public class SendCloudDataProviderBase inherits DataProvider::AbstractDataProvid
     #! Creates the object from a connection
     constructor(SendCloudRestClient::SendCloudRestConnection conn) {
         rest = conn.getAsync();
+        # Pull credentials from the connection so cross-host endpoints can authenticate
+        *hash<auto> copts = conn.getOptions();
+        if (copts.public_key && copts.secret_key) {
+            sc_creds = {"public_key": copts.public_key, "secret_key": copts.secret_key};
+        }
     }
 
     #! Creates the object from constructor options
@@ -79,12 +103,30 @@ public class SendCloudDataProviderBase inherits DataProvider::AbstractDataProvid
         if (!rest) {
             hash<auto> opts = copts.restclient_options ?? {};
             rest = new SendCloudRestClient::SendCloudRestClientIo(opts);
+            if (opts.public_key && opts.secret_key) {
+                sc_creds = {"public_key": opts.public_key, "secret_key": opts.secret_key};
+            }
         }
     }
 
     #! Returns the REST client object
     *RestClientIo::RestClientIo getRestClient() {
         return rest;
+    }
+
+    #! Returns the cached SendCloud credentials (or NOTHING if unknown)
+    *hash<auto> getSendCloudCredentials() {
+        return sc_creds;
+    }
+
+    #! Stores SendCloud credentials so cross-host endpoints (service points) can authenticate
+    /** This is called by the parent provider when constructing children so each child can
+        lazily build its own service-points REST client.  Does nothing if \a creds is NOTHING.
+    */
+    setSendCloudCredentials(*hash<auto> creds) {
+        if (creds.public_key && creds.secret_key) {
+            sc_creds = creds;
+        }
     }
 
     #! Accepts a LoggerInterface object for logging (or clears it)
@@ -168,22 +210,125 @@ public class SendCloudDataProviderBase inherits DataProvider::AbstractDataProvid
     }
 
     #! Makes an absolute-URL GET request (used for cross-host endpoints like Service Points)
-    /** @param absolute_url the full https://... URL
+    /** @param absolute_url the full https://... URL (host + path; query string built from \c params)
         @param params optional query parameters
 
         @return the parsed response body (may be a list for endpoints that return bare arrays)
+
+        @throw SENDCLOUD-ERROR no credentials are available for the cross-host call (this can
+        happen only when the data provider was constructed from a raw RestClientIo without
+        connection or option-level credentials)
     */
     auto doAbsoluteGet(string absolute_url, *hash<auto> params) {
-        string url = absolute_url;
+        # The async RestClientIo passed in `rest` is bound to panel.sendcloud.sc/api/v2;
+        # cross-host endpoints (servicepoints.sendcloud.sc) and cross-prefix endpoints
+        # (panel.sendcloud.sc/api/v3) need separate sync clients built with the same
+        # credentials.  Split the absolute URL into origin (scheme://host) and path, then
+        # call the path on a cached client bound to that origin.
+        hash<UrlInfo> ui = parse_url(absolute_url);
+        string origin = sprintf("%s://%s", ui.protocol ?? "https", ui.host);
+        string path = ui.path ?? "/";
         if (params) {
-            url += "?" + buildQueryString(params);
+            path += "?" + buildQueryString(params);
         }
+        RestClient::RestClient client = getSyncClient(origin);
         try {
-            hash<auto> response = rest.restGet(url);
+            hash<auto> response = client.restGet(path);
             return response.body;
         } catch (hash<ExceptionInfo> ex) {
             rethrow ex.err, getApiErrorDesc(ex), ex.arg;
         }
+    }
+
+    #! Makes a v3 GET request against \c https://panel.sendcloud.sc/api/v3
+    /** @param path the v3 path (no leading slash; e.g. \c "shipments")
+        @param params optional query parameters
+
+        @return the parsed response body
+    */
+    auto doV3Get(string path, *hash<auto> params) {
+        string url = "/" + path;
+        if (params) {
+            url += "?" + buildQueryString(params);
+        }
+        RestClient::RestClient client = getSyncClient(V3BaseUrl);
+        try {
+            hash<auto> response = client.restGet(url);
+            return response.body;
+        } catch (hash<ExceptionInfo> ex) {
+            rethrow ex.err, getApiErrorDesc(ex), ex.arg;
+        }
+    }
+
+    #! Makes a v3 POST request against \c https://panel.sendcloud.sc/api/v3
+    /** @param path the v3 path (no leading slash; e.g. \c "shipments/announce")
+        @param body the request body (will be JSON-encoded)
+
+        @return the parsed response body
+    */
+    auto doV3Post(string path, hash<auto> body) {
+        string url = "/" + path;
+        RestClient::RestClient client = getSyncClient(V3BaseUrl);
+        try {
+            hash<auto> response = client.restPost(url, body);
+            return response.body;
+        } catch (hash<ExceptionInfo> ex) {
+            rethrow ex.err, getApiErrorDesc(ex), ex.arg;
+        }
+    }
+
+    #! Translates a v2 shipping-method integer ID into a v3 shipping_option_code (cached)
+    /** Calls SendCloud's v3 compatibility endpoint
+        \c POST /api/v3/compat/shipping-options once per unseen ID and caches the result.
+        Returns NOTHING if SendCloud could not map the ID (the compat endpoint returns
+        \c null for unmappable IDs).
+
+        @param shipping_method_id the v2 integer shipping method ID (e.g., \c 8)
+
+        @return the corresponding v3 shipping option code (e.g., \c "sendcloud:letter") or
+        NOTHING if no mapping exists
+
+        @throw SENDCLOUD-ERROR if the compatibility endpoint cannot be reached
+    */
+    *string translateShippingMethodId(softint shipping_method_id) {
+        string key = sprintf("%d", shipping_method_id);
+        if (shipping_option_code_cache.hasKey(key)) {
+            return shipping_option_code_cache{key};
+        }
+        hash<auto> resp = cast<hash<auto>>(doV3Post("compat/shipping-options",
+            {"shipping_method_ids": (shipping_method_id,)}));
+        # Response shape: {"data": {"<id>": "<code>" | null}}
+        *string code;
+        if (resp.data.typeCode() == NT_HASH) {
+            auto v = resp.data{key};
+            if (v.typeCode() == NT_STRING) {
+                code = v;
+            }
+        }
+        shipping_option_code_cache{key} = code;
+        return code;
+    }
+
+    #! Returns a cached synchronous RestClient bound to the given base URL
+    /** @param base_url the URL the client should treat as its base (origin or origin+prefix)
+    */
+    private RestClient::RestClient getSyncClient(string base_url) {
+        if (sync_clients{base_url}) {
+            return sync_clients{base_url};
+        }
+        if (!sc_creds) {
+            throw "SENDCLOUD-ERROR",
+                "cannot build a synchronous SendCloud client: no credentials are available "
+                "(the data provider was constructed without access to the SendCloud public_key/secret_key)";
+        }
+        RestClient::RestClient c = new RestClient::RestClient({
+            "url": base_url,
+            "username": sc_creds.public_key,
+            "password": sc_creds.secret_key,
+            "data": "json",
+        });
+        sync_clients{base_url} = c;
+        return c;
     }
 
     #! Fetches raw bytes from an endpoint (for PDF/binary downloads)

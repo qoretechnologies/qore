@@ -79,13 +79,15 @@ public class SendCloudDataProviderTest inherits QUnit::Test {
         addTestCase("actions registered", \testActionsRegistered());
         addTestCase("event example data", \testEventExampleData());
         addTestCase("create-parcel shipment object", \testCreateParcelShipmentObject());
+        addTestCase("create-return v3 request type", \testCreateReturnV3RequestType());
 
         # Integration tests (require -c <connection>)
         addTestCase("integration: ping", \testPing());
         addTestCase("integration: get-user", \testGetUser());
         addTestCase("integration: list-shipping-methods", \testListShippingMethods());
         addTestCase("integration: list-sender-addresses", \testListSenderAddresses());
-        addTestCase("integration: parcel round-trip", \testParcelRoundTrip());
+        addTestCase("integration: parcel round-trip (v3)", \testParcelRoundTrip());
+        addTestCase("integration: return round-trip (v3)", \testReturnRoundTrip());
         addTestCase("integration: service point search", \testServicePointSearch());
 
         set_return_value(main());
@@ -222,6 +224,25 @@ public class SendCloudDataProviderTest inherits QUnit::Test {
         }
     }
 
+    #! Verify create-return request type carries the v3-required fields after the
+    #! v2-write→v3-write migration: \c shipping_option_code (returns shipping option, e.g.
+    #! \c "dpd:return/return") and the optional \c weight override.  These are the new
+    #! fields the v3 \c POST /api/v3/returns/announce-synchronously endpoint relies on.
+    testCreateReturnV3RequestType() {
+        checkJson();
+        AbstractDataProviderType req_type = new SendCloudReturnCreateRequestDataType();
+        hash<string, AbstractDataField> fields = req_type.getFields();
+
+        assertTrue(fields.hasKey("outgoing_parcel"),
+            "outgoing_parcel field should be present (used to derive v3 from/to addresses)");
+        assertTrue(fields.hasKey("shipping_option_code"),
+            "shipping_option_code field should be present (required for v3)");
+        assertTrue(fields.hasKey("weight"),
+            "weight field should be present (optional v3 override)");
+        assertTrue(fields.hasKey("products"),
+            "products field should still be present (translated to v3 parcel_items)");
+    }
+
     #! Verify create-parcel request type accepts a nested shipment object
     testCreateParcelShipmentObject() {
         checkJson();
@@ -356,9 +377,15 @@ public class SendCloudDataProviderTest inherits QUnit::Test {
             rethrow;
         }
 
-        # doPostWrapped unwraps the response under the same "parcel" key, so created is the
-        # parcel record itself
-        assertTrue(exists created.id, "created parcel should have an id");
+        # The v3 create-parcel implementation flattens the v3 shipment response back to a
+        # v2-shaped parcel hash; the integer parcel id (same ID space as v2) is on `id`,
+        # and the v3-only shipment UUID is surfaced under `shipment_uuid` for callers that
+        # need it.  The presence of `shipment_uuid` is the marker that confirms the v3
+        # endpoint was actually used (rather than a silent fallback to v2).
+        assertTrue(exists created.id, "created parcel should have an integer id");
+        assertTrue(exists created.shipment_uuid,
+            "created result should include `shipment_uuid` (the v3 shipment id), proving the "
+            "v3 /shipments/announce endpoint was used");
         testParcelId = created.id;
 
         on_exit {
@@ -385,6 +412,114 @@ public class SendCloudDataProviderTest inherits QUnit::Test {
         } catch (hash<ExceptionInfo> ex) {
             if (isScopeOr404(ex)) {
                 testSkip(sprintf("get-parcel unavailable: %s", ex.desc));
+            }
+            rethrow;
+        }
+    }
+
+    #! End-to-end return round-trip exercising the v3 \c create-return path:
+    #!   create parcel  →  create return on it  →  fetch the return back  →  cancel the return.
+    #!
+    #! The return uses the same shipping method as the outgoing parcel (id 8 = "Unstamped
+    #! letter") translated via the SendCloud compatibility endpoint into a v3
+    #! shipping_option_code.  This exercises the full v3 flow:
+    #!   - outgoing parcel lookup (deriving v3 from_address + to_address)
+    #!   - sender_address resolution into a v3 to_address
+    #!   - shipping_option_code translation via /api/v3/compat/shipping-options
+    #!   - POST /api/v3/returns/announce-synchronously
+    #!
+    #! The test gracefully skips on accounts where the carrier behind shipping method 8
+    #! does not expose a return-capable option (the compat endpoint returns null in that
+    #! case and our data provider raises SENDCLOUD-ERROR with a clear message).
+    testReturnRoundTrip() {
+        checkJson();
+        DataProvider::AbstractDataProvider r = requireConnection();
+
+        # First, create an outgoing parcel to anchor the return on.
+        hash<auto> created;
+        try {
+            created = r.doAppAction("create-parcel", {
+                "name": "Qore Test Recipient",
+                "company_name": "Qore Technologies",
+                "address": "Test Street 1",
+                "house_number": "1",
+                "city": "Amsterdam",
+                "postal_code": "1012AB",
+                "country": "NL",
+                "telephone": "0000000000",
+                "request_label": False,
+                "email": "test@example.com",
+                "weight": "1.000",
+                "order_number": sprintf("qore-test-ret-%d", now_us().format("YYYYMMDDHHmmSSxx")),
+                "shipment": {"id": TestShippingMethodId},
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            if (isScopeOr404(ex)) {
+                testSkip(sprintf("create-parcel unavailable: %s", ex.desc));
+            }
+            rethrow;
+        }
+        int parcel_id = created.id;
+        on_exit {
+            try {
+                r.doAppAction("cancel-parcel", {"id": parcel_id});
+            } catch () {
+                # best-effort cleanup
+            }
+        }
+
+        # Create a return for the outgoing parcel.  The shipping_option_code is omitted so
+        # the data provider falls back to translating the outgoing parcel's shipping method
+        # via the v3 compat endpoint.  If that translation produces no return-capable code,
+        # the data provider raises SENDCLOUD-ERROR and we skip — that's an account-level
+        # limit, not a test failure.
+        hash<auto> created_return;
+        try {
+            created_return = r.doAppAction("create-return", {
+                "outgoing_parcel": parcel_id,
+                "products": (
+                    {"description": "Test item", "quantity": 1, "value": "9.99"},
+                ),
+                "reason": "no_longer_needed",
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "SENDCLOUD-ERROR" && ex.desc =~ /shipping_option_code/) {
+                testSkip(sprintf(
+                    "no return-capable shipping option for shipping method %d on this account",
+                    TestShippingMethodId));
+            }
+            if (isScopeOr404(ex)) {
+                testSkip(sprintf("create-return unavailable: %s", ex.desc));
+            }
+            rethrow;
+        }
+
+        # The v3 sync response is {return_id, parcel_id, multi_collo_ids}; flattenV3ReturnResponse()
+        # exposes return_id under `id` and parcel_id under `parcel_id` for backward compat.
+        assertTrue(exists created_return.id, "created return should have an integer id");
+        assertTrue(exists created_return.parcel_id,
+            "created return should expose `parcel_id` (the v3 incoming parcel id)");
+        int return_id = created_return.id;
+
+        on_exit {
+            try {
+                r.doAppAction("cancel-return", {"id": return_id});
+            } catch () {
+                # best-effort cleanup
+            }
+        }
+
+        # Fetch the return back to verify persistence.  get-return is still wired to v2
+        # (the v3 parcel/return id space is shared with v2 reads, so v2 GET /returns/{id}
+        # works for v3-created returns); skip if this account has migrated returns reads
+        # to v3-only.
+        try {
+            hash<auto> fetched = r.doAppAction("get-return", {"id": return_id});
+            assertEq(return_id, int(fetched.id),
+                "fetched return id should match created id (data persistence check)");
+        } catch (hash<ExceptionInfo> ex) {
+            if (isScopeOr404(ex)) {
+                testSkip(sprintf("get-return unavailable: %s", ex.desc));
             }
             rethrow;
         }

@@ -201,10 +201,32 @@ public class SendCloudReturnCreateRequestDataType inherits HashDataType {
                 "type": SoftIntType,
                 "display_name": "Outgoing Parcel",
                 "short_desc": "The parcel being returned",
-                "desc": "ID of the original outgoing parcel being returned",
+                "desc": "ID of the original outgoing parcel being returned.  Used to derive "
+                    "the customer pickup address (`from_address` on the v3 return) and the "
+                    "merchant return destination (`to_address`) automatically.",
                 "required": True,
                 "ref_data": "parcels",
                 "example_value": 12345,
+            },
+            "shipping_option_code": {
+                "type": SoftStringOrNothingType,
+                "display_name": "Return Shipping Option Code",
+                "short_desc": "v3 shipping_option_code for the return shipment",
+                "desc": "v3 shipping option code to use for the return (e.g. `dpd:return/return`).  "
+                    "Required for v3-cohort accounts; if omitted, the data provider attempts to "
+                    "translate the outgoing parcel's shipping method via the SendCloud "
+                    "compatibility endpoint, but this is not guaranteed to produce a "
+                    "return-capable option.  Use a return-specific code when in doubt.",
+                "example_value": "dpd:return/return",
+            },
+            "weight": {
+                "type": SoftStringOrNothingType,
+                "display_name": "Weight",
+                "short_desc": "Total weight of the return parcel",
+                "desc": "Total weight of the return parcel (string-encoded decimal in kg).  "
+                    "Defaults to the outgoing parcel's weight when not provided; falls back "
+                    "to `1.000` when the outgoing parcel has no weight set.",
+                "example_value": "1.000",
             },
             "refund": {
                 "type": new SendCloudReturnRefundRequestDataType(AutoHashOrNothingType),

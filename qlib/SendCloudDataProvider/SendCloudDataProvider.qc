@@ -112,7 +112,13 @@ public class SendCloudDataProvider inherits SendCloudDataProviderBase {
     private *AbstractDataProvider getChildProviderImpl(string name) {
         *Class cls = ChildMap{name};
         if (cls) {
-            return cls.newObject(rest);
+            object child = cls.newObject(rest);
+            # Propagate SendCloud credentials so children that talk to cross-host endpoints
+            # (e.g. servicepoints.sendcloud.sc) can build their own authenticated client.
+            if (sc_creds && child instanceof SendCloudDataProviderBase) {
+                cast<SendCloudDataProviderBase>(child).setSendCloudCredentials(sc_creds);
+            }
+            return cast<AbstractDataProvider>(child);
         }
     }
 
