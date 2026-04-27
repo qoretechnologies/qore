@@ -401,5 +401,5 @@ const QoreAOTExprSlotKindInfo AOT_EXPR_SLOT_KIND_REGISTRY[256] = {
     {"EXPR_TREE", 254, true, write_slot_EXPR_TREE, "Recursive expression tree"},
 
     // 255: GENERIC_EVAL
-    {"GENERIC_EVAL", 255, true, write_slot_GENERIC_EVAL, "Unsupported expression (needs source fallback)"}
+    {"GENERIC_EVAL", 255, true, write_slot_GENERIC_EVAL, "Unsupported expression (AOT compile error)"}
 };

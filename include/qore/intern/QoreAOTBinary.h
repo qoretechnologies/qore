@@ -781,11 +781,11 @@ bool readBuildInfo(const uint8_t* data, uint32_t size,
         std::vector<std::pair<std::string, std::string>>& info,
         std::string& error);
 
-/** Read fallback source from a v2 AOT binary metadata blob without full deserialization.
+/** Read embedded source from a v2 AOT binary metadata blob without full deserialization.
     @param data pointer to the metadata blob
     @param size size of the metadata blob
-    @param source receives the fallback source text (empty if not present)
-    @param source_len receives the fallback source length
+    @param source receives the embedded source text (empty if not present)
+    @param source_len receives the embedded source length
     @param error receives error message on failure
     @return true on success, false on failure
 */
@@ -836,7 +836,7 @@ enum class AOTExprKind : uint8_t {
     SELF_METHOD_REF    = 39,  //!< Self method reference (\self.method): ref1=method_name
     OBJ_METHOD_REF_EXPR = 40, //!< Object method reference (\obj.method): ref1=method_name + inline child expr
     EXPR_TREE          = 0xFE, //!< Recursive expression tree: binary blob (inline bytes)
-    GENERIC_EVAL       = 0xFF //!< Unsupported expression — function needs source fallback
+    GENERIC_EVAL       = 0xFF //!< Unsupported expression marker; rejected for new AOT objects
 };
 
 //! Node kinds for recursive expression tree serialization (EXPR_TREE blobs)
@@ -1147,14 +1147,14 @@ struct AOTCompiledInitFunc {
 bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompiledFuncWithSlots>& funcs,
     const AOTConstantReverseMap* const_reverse_map, std::string& error);
 
-//! Serialize per-function source fallback into the FUNC_SOURCES binary section
-/** Functions with unsupported expression types need the full source text
-    for fallback context building at runtime (re-parse + IR re-lowering).
-    If no functions need fallback, this section is omitted entirely.
+//! Serialize embedded source into the FUNC_SOURCES binary section
+/** Current AOT compilation rejects functions that would require source fallback.
+    The section is written only for explicit source embedding, and the legacy
+    fallback function-name list must remain empty for newly generated objects.
 
     @param writer the binary writer to write to
     @param funcs vector of compiled function descriptors with slot identities
-    @param source_text the full source text for fallback re-parsing
+    @param source_text the full source text to embed
     @param source_len the length of the source text
 */
 void serializeFallbackSources(QoreAOTBinaryWriter& writer,
@@ -1216,10 +1216,10 @@ class QoreAOTBinaryDeserializer {
     std::vector<qore_ns_private*> ns_list;
     std::vector<QoreClass*> class_list;
 
-    // Source fallback data (from FUNC_SOURCES section)
-    const char* fallback_source = nullptr;       //!< full source text for fallback parsing
-    size_t fallback_source_len = 0;              //!< length of fallback source text
-    std::vector<std::string> fallback_func_names; //!< names of functions needing source fallback
+    // Embedded source data (from FUNC_SOURCES section)
+    const char* fallback_source = nullptr;       //!< embedded source text
+    size_t fallback_source_len = 0;              //!< length of embedded source text
+    std::vector<std::string> fallback_func_names; //!< legacy names of functions needing source fallback
 
     // Classes that already existed in the program (from module loading)
     // — skip methods/members for these since they're already committed
@@ -1635,19 +1635,19 @@ public:
     //! ~3 M cold parser round-trips in qwf-scale batches.
     QoreAOTTypeResolver* getTypeResolver() const { return type_resolver; }
 
-    //! Check if any functions need source fallback
-    bool hasFallbackSource() const { return fallback_source != nullptr; }
+    //! Check if any functions require disabled source fallback.
+    bool hasFallbackSource() const { return fallback_source != nullptr && !fallback_func_names.empty(); }
 
-    //! Get the fallback source text (for re-parsing fallback functions)
+    //! Get the embedded source text.
     const char* getFallbackSource() const { return fallback_source; }
 
-    //! Get the fallback source text length
+    //! Get the embedded source text length.
     size_t getFallbackSourceLen() const { return fallback_source_len; }
 
-    //! Get the list of function names that need source fallback
+    //! Get the legacy list of function names that need source fallback.
     const std::vector<std::string>& getFallbackFuncNames() const { return fallback_func_names; }
 
-    //! Check if a specific function needs source fallback
+    //! Check if a specific function needs disabled source fallback.
     bool needsFallback(const char* func_name) const {
         for (auto& name : fallback_func_names) {
             if (name == func_name) {

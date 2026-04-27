@@ -428,7 +428,7 @@ static bool write_slot_EXPR_TREE(AOTExprSlotWriteCtx& ctx) {
     return true;
 }
 
-//! GENERIC_EVAL: no additional data — function needs source fallback
+//! GENERIC_EVAL: no additional data — unsupported marker rejected by AOT compilation
 static bool write_slot_GENERIC_EVAL(AOTExprSlotWriteCtx& ctx) {
     (void)ctx;  // Unused
     return true;

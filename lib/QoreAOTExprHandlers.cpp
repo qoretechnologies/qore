@@ -826,7 +826,7 @@ static bool write_expr_call_ref(AOTExprWriteCtx& ctx) {
 }
 
 static QoreValue read_expr_call_ref(AOTExprReadCtx& ctx) {
-    // Requires source fallback
+    // Unsupported in AOT metadata.
     return QoreValue();
 }
 
@@ -840,7 +840,7 @@ static bool write_expr_obj_method_ref(AOTExprWriteCtx& ctx) {
 }
 
 static QoreValue read_expr_obj_method_ref(AOTExprReadCtx& ctx) {
-    // Requires source fallback
+    // Unsupported in AOT metadata.
     return QoreValue();
 }
 
@@ -1808,7 +1808,7 @@ static bool write_expr_generic_eval(AOTExprWriteCtx& ctx) {
 
 static QoreValue read_expr_generic_eval(AOTExprReadCtx& ctx) {
     // Signal that this expression cannot be deserialized — the calling code
-    // must set has_unsupported to trigger source fallback for the function.
+    // must set has_unsupported so the function is rejected.
     // Without this error, GENERIC_EVAL in nested expressions (e.g., constructor args)
     // silently becomes NOTHING, corrupting argument lists at runtime.
     ctx.error = "unsupported nested expression (GENERIC_EVAL)";

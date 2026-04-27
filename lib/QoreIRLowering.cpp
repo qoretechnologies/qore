@@ -2928,8 +2928,7 @@ bool QoreIRLowering::lowerHandlersAtExit(bool is_error, std::string& error, size
     // Debug-only sanity assert: a correct fix puts natural depth well
     // under this.  Real-world deeply-nested handlers in the qwf corpus
     // stay under 8 once the HandlerBarrier mechanism prevents the
-    // re-entry cycle; tripping it signals a regression, not a runaway
-    // that should be silently absorbed into source fallback.
+    // re-entry cycle; tripping it signals a regression that must be fixed.
     static thread_local int handler_depth = 0;
     struct DepthGuard {
         int& d;

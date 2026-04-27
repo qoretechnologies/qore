@@ -336,6 +336,20 @@ static bool aot_is_encoded_constant_path(const char* path) {
     return path && !strncmp(path, AOT_CONST_PATH_PREFIX, strlen(AOT_CONST_PATH_PREFIX));
 }
 
+static bool aot_constant_reverse_path_is_better(const std::string& current,
+        const std::string& candidate) {
+    bool current_encoded = aot_is_encoded_constant_path(current.c_str());
+    bool candidate_encoded = aot_is_encoded_constant_path(candidate.c_str());
+
+    if (current_encoded != candidate_encoded) {
+        return !candidate_encoded;
+    }
+    if (candidate.size() != current.size()) {
+        return candidate.size() < current.size();
+    }
+    return candidate < current;
+}
+
 static std::string aot_encode_constant_path_root(const std::string& base) {
     return std::string(AOT_CONST_PATH_PREFIX) + std::to_string(base.size()) + ":" + base;
 }
@@ -389,13 +403,9 @@ static void aot_add_constant_value_reverse_mappings_impl(AOTConstantReverseMap& 
         return;
     }
 
-    if (root_value) {
-        auto it = crm.find(node);
-        if (it == crm.end() || aot_is_encoded_constant_path(it->second.c_str())) {
-            crm[node] = path;
-        }
-    } else {
-        crm.emplace(node, path);
+    auto it = crm.find(node);
+    if (it == crm.end() || aot_constant_reverse_path_is_better(it->second, path)) {
+        crm[node] = path;
     }
 
     if (v.getType() == NT_HASH) {
@@ -4385,16 +4395,14 @@ bool readInitFuncs(const uint8_t* data, uint32_t size,
     return true;
 }
 
-// ---- Per-Function Source Fallback (Phase 6) ----
+// ---- Embedded Source Section (legacy source fallback metadata) ----
 
 void serializeFallbackSources(QoreAOTBinaryWriter& writer,
         const std::vector<AOTCompiledFuncWithSlots>& funcs,
         const char* source_text, int source_len) {
-    // Collect functions that need source fallback:
-    // - functions with unsupported expressions (GENERIC_EVAL)
-    // - functions with stmt_slots that lack handler IR (need AST execution)
-    // - constructor/destructor/copy methods (need BCAList from source parsing)
-    // Note: CLOSURE_CREATE no longer triggers fallback — closures are fully serialized
+    // Collect legacy function names that would need source fallback. Current
+    // compiler call sites reject such functions before this writer is called,
+    // so this list should be empty for newly generated AOT objects.
     std::vector<const AOTCompiledFuncWithSlots*> fallback_funcs;
     for (auto& func : funcs) {
         if (func.slot_ids.has_unsupported_exprs) {
@@ -4414,14 +4422,15 @@ void serializeFallbackSources(QoreAOTBinaryWriter& writer,
         // fallback — BCA data is serialized in the METHODS section (v2 format)
     }
 
-    // Always write the FUNC_SOURCES section when called (caller controls whether
-    // to include source via --include-source flag)
+    // Always write the FUNC_SOURCES section when called; current compiler
+    // call sites only do this for explicit --include-source.
     uint32_t sec_idx = writer.beginSection(QoreAOTSectionType::FUNC_SOURCES);
 
-    // Store the full source text for re-parsing fallback functions
+    // Store the full source text for explicit metadata embedding.
     writer.writeStringRef(source_text, static_cast<size_t>(source_len));
 
-    // Write list of function names that need source fallback
+    // Write the legacy fallback function list. Deserialization rejects
+    // non-empty lists because source fallback is no longer supported.
     writer.writeU32(static_cast<uint32_t>(fallback_funcs.size()));
     for (auto* func : fallback_funcs) {
         writer.writeStringRef(func->name.c_str());
@@ -5141,9 +5150,8 @@ bool QoreAOTBinaryDeserializer::finalizePostIndex(std::string& error) {
         return false;
     }
 
-    printd(2, "AOT: deserialized namespace tree: %d namespaces, %d classes%s\n",
-        static_cast<int>(ns_list.size()), static_cast<int>(class_list.size()),
-        hasFallbackSource() ? " (with source fallback)" : "");
+    printd(2, "AOT: deserialized namespace tree: %d namespaces, %d classes\n",
+        static_cast<int>(ns_list.size()), static_cast<int>(class_list.size()));
 
     return true;
 }
@@ -7853,7 +7861,7 @@ bool QoreAOTBinaryDeserializer::resolveBCAExpressions(std::string& error) {
 bool QoreAOTBinaryDeserializer::deserializeFallbackSources(std::string& error) {
     const QoreAOTSectionHeader* sec = reader.findSection(QoreAOTSectionType::FUNC_SOURCES);
     if (!sec) {
-        return true;  // no fallback sources needed — all functions fully serialized
+        return true;
     }
     const uint8_t* ptr = reader.getSectionData(*sec);
     if (!ptr) {
@@ -7873,14 +7881,42 @@ bool QoreAOTBinaryDeserializer::deserializeFallbackSources(std::string& error) {
     uint32_t count = QoreAOTBinaryReader::readU32(ptr);
     fallback_func_names.reserve(count);
     for (uint32_t i = 0; i < count; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT fallback metadata deserialization")) {
+            error = "AOT fallback metadata deserialization cancelled";
+            return false;
+        }
         const char* name = reader.readStringRef(ptr);
         if (name) {
             fallback_func_names.emplace_back(name);
         }
     }
 
-    printd(2, "AOT: loaded fallback source (%d bytes) for %d function(s)\n",
-        static_cast<int>(fallback_source_len), static_cast<int>(fallback_func_names.size()));
+    if (count > 0) {
+        error = "AOT source fallback is disabled; object contains ";
+        error += std::to_string(count);
+        error += count == 1 ? " fallback function" : " fallback functions";
+        error += ": ";
+        size_t printed = std::min<size_t>(fallback_func_names.size(), 8);
+        for (size_t i = 0; i < printed; ++i) {
+            if (i) {
+                error += ", ";
+            }
+            error += fallback_func_names[i];
+        }
+        if (printed < std::min<uint32_t>(count, 8)) {
+            if (printed) {
+                error += ", ";
+            }
+            error += "<invalid>";
+        }
+        if (count > 8) {
+            error += ", ...";
+        }
+        return false;
+    }
+
+    printd(2, "AOT: loaded embedded source (%d bytes, no fallback functions)\n",
+        static_cast<int>(fallback_source_len));
 
     return true;
 }
@@ -8295,7 +8331,7 @@ bool readFallbackSource(const uint8_t* data, uint32_t size, const char*& source,
 
     const QoreAOTSectionHeader* sec = reader.findSection(QoreAOTSectionType::FUNC_SOURCES);
     if (!sec) {
-        // No fallback sources section - this is OK
+        // No embedded source section - this is OK
         return true;
     }
 

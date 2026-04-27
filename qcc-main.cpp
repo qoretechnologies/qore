@@ -423,7 +423,7 @@ static void print_usage(const char* prog) {
     printf("  -S, --static           Link statically against libqore\n");
     printf("  -t, --target=TRIPLE    Target triple for cross-compilation\n");
     printf("      --show-targets     Show supported target architectures and quit\n");
-    printf("      --include-source   Include source text for runtime fallback\n");
+    printf("      --include-source   Embed source text in AOT metadata\n");
     printf("      --strip-source     Strip source text (default)\n");
     printf("      --strip-debug-info Strip DWARF debug info (faster compile, no debugger)\n");
     printf("  -g                     Emit DWARF debug info (default)\n");

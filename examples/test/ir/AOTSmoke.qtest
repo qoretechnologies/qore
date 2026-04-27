@@ -261,7 +261,7 @@ class AOTSmokeTest inherits QUnit::Test {
             unlink(paths.out);
         }
 
-        # Compile with --include-source for full source fallback (set QORE_LIBDIR so the AOT
+        # Compile with --include-source to embed source text (set QORE_LIBDIR so the AOT
         # linker finds the correct libqore)
         string compile_cmd = sprintf("QORE_LIBDIR=%s %s -b --compile --include-source %s --output %s 2>&1",
             libqore_dir, qore_bin, paths.src, paths.out);
@@ -291,7 +291,7 @@ class AOTSmokeTest inherits QUnit::Test {
             unlink(paths.out);
         }
 
-        # Compile with --include-source for full source fallback
+        # Compile with --include-source to embed source text
         string compile_cmd = sprintf("QORE_LIBDIR=%s %s -b --compile --include-source %s --output %s 2>&1",
             libqore_dir, qore_bin, paths.src, paths.out);
         string compile_out = backquote(compile_cmd);

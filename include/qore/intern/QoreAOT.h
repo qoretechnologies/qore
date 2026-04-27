@@ -310,7 +310,7 @@ extern "C" int qore_aot_run(
 //! C ABI entry point called by source-stripped AOT binaries from their generated main()
 /** Deserializes binary metadata to reconstruct the namespace tree (instead of re-parsing
     source), builds AOT contexts from slot maps, and runs the program.
-    Functions with unsupported expression types use the embedded fallback source.
+    Functions with unsupported expression types are rejected during AOT compilation.
 
     @param argc command-line argument count
     @param argv command-line argument vector
@@ -464,9 +464,9 @@ DLLLOCAL void qore_aot_clear_all_module_namespace_data(ExceptionSink& xsink);
 class QoreAOT {
 public:
     //! Compile a parsed program to a standalone executable
-    /** The binary uses serialized metadata (no embedded source).
+    /** The binary uses serialized metadata.
         @param pgm parsed QoreProgram (must have been parsed successfully)
-        @param source_text original source text (used for fallback source serialization)
+        @param source_text original source text
         @param source_len length of source text
         @param label source label (filename)
         @param output_path path for the output executable
@@ -475,7 +475,7 @@ public:
         @param opt_level LLVM optimization level 0-3 (default: 2)
         @param target_triple target triple for cross-compilation (nullptr = native)
         @param static_link statically link libqore (requires libqore_static.a)
-        @param include_source embed source text for runtime fallback
+        @param include_source embed source text in metadata
         @return true on success, false on failure
     */
     static bool compile(QoreProgram* pgm,
@@ -490,8 +490,8 @@ public:
                        bool include_source = false);
 
     //! Compile a .qm user module to a .qmod binary module
-    /** The binary uses serialized metadata (no embedded source).
-        @param source_text original module source text (used for fallback source serialization)
+    /** The binary uses serialized metadata.
+        @param source_text original module source text
         @param source_len length of source text
         @param label source label (filename)
         @param output_path path for the output .qmod binary module
@@ -499,7 +499,7 @@ public:
         @param error error message on failure
         @param opt_level LLVM optimization level 0-3 (default: 2)
         @param target_triple target triple for cross-compilation (nullptr = native)
-        @param include_source embed source text for runtime fallback
+        @param include_source embed source text in metadata
         @return true on success, false on failure
     */
     static bool compileModule(const char* source_text, int source_len,
@@ -541,7 +541,7 @@ public:
         @param error error message on failure
         @param opt_level LLVM optimization level 0-3 (default: 2)
         @param target_triple target triple for cross-compilation (nullptr = native)
-        @param include_source embed source text for runtime fallback
+        @param include_source embed source text in metadata
         @return true on success, false on failure
     */
     static bool compileSeparatedModule(const char* dir_path,
@@ -590,7 +590,7 @@ public:
         @param opt_level LLVM optimization level 0-3 (default: 2)
         @param target_triple target triple for cross-compilation
                         (nullptr = native)
-        @param include_source embed source text for runtime fallback
+        @param include_source embed source text in metadata
         @return true on success, false on failure
     */
     static bool compileModuleFromObjects(const char* dir_path,
@@ -631,7 +631,7 @@ public:
         @param opt_level LLVM optimization level 0-3 (default: 2)
         @param target_triple target triple for cross-compilation
                 (nullptr = native)
-        @param include_source embed source text for runtime fallback
+        @param include_source embed source text in metadata
         @param require_modules modules to require while parsing the batch
         @param stub_files source files that provide declarations only
         @param parse_defines parse-time defines to apply to every target
@@ -687,7 +687,7 @@ public:
         @param opt_level LLVM optimization level 0-3 (default: 2)
         @param target_triple target triple for cross-compilation
                         (nullptr = native)
-        @param include_source embed source text for runtime fallback
+        @param include_source embed source text in metadata
         @param require_modules modules to require before parsing
         @param stub_files source files that provide declarations only
         @return true on success, false on failure
@@ -739,7 +739,7 @@ public:
         @param opt_level LLVM optimization level 0-3 (default: 2)
         @param target_triple target triple for cross-compilation
                         (nullptr = native)
-        @param include_source embed source text for runtime fallback
+        @param include_source embed source text in metadata
         @return true on success, false on failure
     */
     static bool archiveModuleFromObjects(const char* dir_path,
@@ -777,7 +777,7 @@ public:
         @param error error message on failure
         @param opt_level LLVM optimization level 0-3 (default: 2)
         @param target_triple target triple for cross-compilation (nullptr = native)
-        @param include_source embed source text for runtime fallback
+        @param include_source embed source text in metadata
         @return true on success, false on failure
     */
     static bool compileSeparatedModuleFile(const char* dir_path,

@@ -4968,6 +4968,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             // fail because the variable was never instantiated on the cvstack).
             if (linst->local && pre_instantiated_locals
                     && !pre_instantiated_locals->count(key)
+                    && !entry_locals_set.count(key)
                     && !block_scoped_locals.count(key)
                     && !(aot_mode && linst->is_closure)) {
                 // Box the value for the runtime assign helper
@@ -5423,8 +5424,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 }
             }
             // Sync to Qore thread-local variable stack so AST callbacks can resolve this local.
-            // Skip sync for IR-only locals — they are never accessed by AST callbacks.
-            if (linst->local && !is_ir_only) {
+            // Skip sync for IR-only locals unless this is a weak assignment: weak loads
+            // deliberately go through LocalVar::eval() on every read to observe deleted targets.
+            if (linst->local && (!is_ir_only || linst->weak)) {
                 // For closure-captured pre-instantiated block-scoped locals (loop-body vars):
                 // the CVV may have been popped by a previous UninstantiateLocal.  Re-instantiate
                 // (push fresh CVV) before assigning so qore_rt_assign_local finds it on the stack.

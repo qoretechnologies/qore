@@ -592,13 +592,14 @@ static void reportAOTCompileStats(const char* label, int compiled_count, int tot
     for (auto& cf : compiled_funcs) {
         bool has_unsup = cf.slot_ids.has_unsupported_exprs;
         // Check handler IRs for statement slots
-        bool has_handler_issue = false;
+        int non_null_handlers = 0;
         for (auto& hir : cf.handler_irs) {
-            if (!hir) {
-                has_handler_issue = true;
-                break;
+            if (hir) {
+                ++non_null_handlers;
             }
         }
+        bool has_handler_issue = cf.num_stmts > 0
+            && ((int)cf.handler_irs.size() != cf.num_stmts || non_null_handlers != cf.num_stmts);
         if (has_unsup) {
             ++unsupported_count;
         }
@@ -606,7 +607,7 @@ static void reportAOTCompileStats(const char* label, int compiled_count, int tot
             ++handler_fallback_count;
         }
         if ((has_unsup || has_handler_issue) && getenv("QORE_AOT_DEBUG")) {
-            fprintf(stderr, "AOT: function '%s' needs source fallback (%s%s)\n",
+            fprintf(stderr, "AOT: function '%s' is not fully serializable (%s%s)\n",
                 cf.name.c_str(),
                 has_unsup ? "unsupported exprs" : "",
                 has_handler_issue ? (has_unsup ? " + missing handler IRs" : "missing handler IRs") : "");
@@ -617,7 +618,7 @@ static void reportAOTCompileStats(const char* label, int compiled_count, int tot
         total_funcs - compiled_count - failed_count);
     int total_fallback = unsupported_count + handler_fallback_count;
     if (total_fallback > 0) {
-        printf("AOT: %d/%d functions fully serialized, %d need source fallback",
+        printf("AOT: %d/%d functions fully serialized, %d not fully serializable",
             compiled_count - total_fallback, compiled_count, total_fallback);
         if (unsupported_count > 0 && handler_fallback_count > 0) {
             printf(" (%d unsupported exprs, %d missing handlers)",
@@ -627,46 +628,82 @@ static void reportAOTCompileStats(const char* label, int compiled_count, int tot
         }
         printf("\n");
     } else {
-        printf("AOT: all %d functions fully serialized (no source fallback needed)\n",
+        printf("AOT: all %d functions fully serialized\n",
             compiled_count);
     }
 }
 
-//! Check if a compiled function needs source fallback at runtime
-/** A function needs source fallback if it has:
-    - unsupported expressions that can't be reconstructed from binary
-    - statement slots (on_exit/on_success/on_error) without serialized handler IR
-    Note: closures are fully serialized and no longer trigger fallback.
-    Note: constructor/destructor/copy methods no longer need blanket source fallback
-    since BCA data is serialized in the METHODS section (v2 format).
-*/
-static bool funcNeedsFallback(const AOTCompiledFuncWithSlots& f) {
+//! Build a diagnostic for functions that cannot be reconstructed from binary metadata.
+static bool getFallbackRequirementReason(const AOTCompiledFuncWithSlots& f, std::string& reason) {
+    bool needs_fallback = false;
     if (f.slot_ids.has_unsupported_exprs) {
-        if (getenv("QORE_AOT_DEBUG")) {
-            fprintf(stderr, "AOT: function '%s' needs source fallback (unsupported exprs)\n",
-                f.name.c_str());
+        reason += reason.empty() ? "" : "; ";
+        reason += "unsupported expression serialization";
+        needs_fallback = true;
+    }
+
+    if (f.num_stmts > 0) {
+        int non_null_handlers = 0;
+        for (auto* hir : f.handler_irs) {
+            if (hir) {
+                ++non_null_handlers;
+            }
         }
+
+        if ((int)f.handler_irs.size() != f.num_stmts || non_null_handlers != f.num_stmts) {
+            reason += reason.empty() ? "" : "; ";
+            reason += "missing statement handler IRs (have ";
+            reason += std::to_string(non_null_handlers);
+            reason += "/";
+            reason += std::to_string(f.num_stmts);
+            reason += ")";
+            needs_fallback = true;
+        }
+    }
+
+    return needs_fallback;
+}
+
+//! Reject source fallback requirements; all AOT objects must be fully serialized.
+static bool rejectSourceFallbackRequirements(const std::vector<AOTCompiledFuncWithSlots>& funcs,
+        std::string& error) {
+    std::vector<std::string> failures;
+    int fallback_count = 0;
+
+    for (size_t i = 0; i < funcs.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT source fallback validation")) {
+            error = "AOT source fallback validation cancelled";
+            return false;
+        }
+        auto& f = funcs[i];
+        std::string reason;
+        if (getFallbackRequirementReason(f, reason)) {
+            ++fallback_count;
+            if (failures.size() < 8) {
+                failures.push_back("'" + f.name + "': " + reason);
+            }
+        }
+    }
+
+    if (!fallback_count) {
         return true;
     }
-    // Check if any stmt slots lack handler IR (need AST fallback)
-    if (f.num_stmts > 0) {
-        bool all_have_ir = static_cast<int>(f.handler_irs.size()) == f.num_stmts
-            && std::all_of(f.handler_irs.begin(), f.handler_irs.end(),
-                [](const QoreIRFunction* hir) { return hir != nullptr; });
-        if (!all_have_ir) {
-            if (getenv("QORE_AOT_DEBUG")) {
-                fprintf(stderr, "AOT: function '%s' needs source fallback (missing handler IRs: "
-                    "have %d/%d)\n", f.name.c_str(),
-                    (int)f.handler_irs.size(), f.num_stmts);
-                for (int i = 0; i < (int)f.handler_irs.size(); ++i) {
-                    if (!f.handler_irs[i]) {
-                        fprintf(stderr, "AOT:   stmt handler %d is null\n", i);
-                    }
-                }
-            }
-            return true;
+
+    error = "AOT source fallback is disabled; ";
+    error += std::to_string(fallback_count);
+    error += fallback_count == 1 ? " function is not fully serializable" :
+        " functions are not fully serializable";
+    error += ": ";
+    for (size_t i = 0; i < failures.size(); ++i) {
+        if (i) {
+            error += "; ";
         }
+        error += failures[i];
     }
+    if (fallback_count > (int)failures.size()) {
+        error += "; ...";
+    }
+
     return false;
 }
 
@@ -3268,13 +3305,13 @@ bool QoreAOT::compile(QoreProgram* pgm,
             serializeInitFuncs(writer, compiled_init_funcs);
         }
 
-        // Serialize fallback sources when needed: either explicitly requested via
-        // --include-source, or when any functions require AST fallback (unsupported
-        // expressions or statement slots lacking handler IR).
+        // Serialize source only when explicitly requested. Functions that would
+        // require source fallback are rejected before writing metadata.
         {
-            bool has_fallback_funcs = std::any_of(func_slots.begin(), func_slots.end(),
-                funcNeedsFallback);
-            if (has_fallback_funcs || include_source) {
+            if (!rejectSourceFallbackRequirements(func_slots, error)) {
+                return false;
+            }
+            if (include_source) {
                 serializeFallbackSources(writer, func_slots, source_text, source_len);
             }
         }
@@ -4892,9 +4929,10 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
             serializeInitFuncs(writer, compiled_init_funcs);
         }
         {
-            bool has_fallback_funcs = std::any_of(func_slots.begin(), func_slots.end(),
-                funcNeedsFallback);
-            if (has_fallback_funcs || include_source) {
+            if (!rejectSourceFallbackRequirements(func_slots, error)) {
+                return false;
+            }
+            if (include_source) {
                 serializeFallbackSources(writer, func_slots, source_text, source_len);
             }
         }
@@ -5334,9 +5372,10 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
                 serializeInitFuncs(writer, compiled_init_funcs);
             }
             {
-                bool has_fallback_funcs = std::any_of(func_slots.begin(), func_slots.end(),
-                    funcNeedsFallback);
-                if (has_fallback_funcs || include_source) {
+                if (!rejectSourceFallbackRequirements(func_slots, error)) {
+                    return false;
+                }
+                if (include_source) {
                     serializeFallbackSources(writer, func_slots, combined_source.c_str(), (int)combined_source.size());
                 }
             }
@@ -5688,9 +5727,10 @@ static bool emitScriptQoFromParsedProgram(QoreProgram* qpgm,
             serializeInitFuncs(writer, compiled_init_funcs);
         }
         {
-            bool has_fallback_funcs = std::any_of(func_slots.begin(),
-                func_slots.end(), funcNeedsFallback);
-            if (has_fallback_funcs || include_source) {
+            if (!rejectSourceFallbackRequirements(func_slots, error)) {
+                return false;
+            }
+            if (include_source) {
                 serializeFallbackSources(writer, func_slots,
                     source_text_for_fallback.c_str(),
                     (int)source_text_for_fallback.size());
@@ -6318,9 +6358,10 @@ bool QoreAOT::compileScriptFile(const char* target_file,
             serializeInitFuncs(writer, compiled_init_funcs);
         }
         {
-            bool has_fallback_funcs = std::any_of(func_slots.begin(),
-                func_slots.end(), funcNeedsFallback);
-            if (has_fallback_funcs || include_source) {
+            if (!rejectSourceFallbackRequirements(func_slots, error)) {
+                return false;
+            }
+            if (include_source) {
                 serializeFallbackSources(writer, func_slots,
                     source_text.c_str(), (int)source_text.size());
             }
@@ -6791,9 +6832,10 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
                 serializeInitFuncs(writer, compiled_init_funcs);
             }
             {
-                bool has_fallback_funcs = std::any_of(func_slots.begin(), func_slots.end(),
-                    funcNeedsFallback);
-                if (has_fallback_funcs || include_source) {
+                if (!rejectSourceFallbackRequirements(func_slots, error)) {
+                    return false;
+                }
+                if (include_source) {
                     serializeFallbackSources(writer, func_slots, combined_source.c_str(),
                         (int)combined_source.size());
                 }
@@ -7194,9 +7236,10 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
                 serializeInitFuncs(writer, compiled_init_funcs);
             }
             {
-                bool has_fallback_funcs = std::any_of(func_slots.begin(),
-                    func_slots.end(), funcNeedsFallback);
-                if (has_fallback_funcs || include_source) {
+                if (!rejectSourceFallbackRequirements(func_slots, error)) {
+                    return false;
+                }
+                if (include_source) {
                     serializeFallbackSources(writer, func_slots,
                         combined_source.c_str(), (int)combined_source.size());
                 }
@@ -7647,9 +7690,10 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
                 serializeInitFuncs(writer, compiled_init_funcs);
             }
             {
-                bool has_fallback_funcs = std::any_of(func_slots.begin(),
-                    func_slots.end(), funcNeedsFallback);
-                if (has_fallback_funcs || include_source) {
+                if (!rejectSourceFallbackRequirements(func_slots, error)) {
+                    return false;
+                }
+                if (include_source) {
                     serializeFallbackSources(writer, func_slots,
                         combined_source.c_str(), (int)combined_source.size());
                 }
@@ -10337,7 +10381,8 @@ bool serializeExprTreeToBlob(QoreValue v, const AOTSlotMap& slots, std::vector<u
 
 //! Classify an expression QoreValue for slot map serialization
 /** Checks the AST node type and extracts identity info for supported types.
-    Returns AOTExprKind::GENERIC_EVAL for unsupported types (function needs source fallback).
+    Returns AOTExprKind::GENERIC_EVAL for unsupported types; this makes the
+    function non-serializable and therefore a compile error.
 */
 static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
         const AOTConstantReverseMap* const_reverse_map) {
@@ -10790,7 +10835,7 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
         }
     }
 
-    // Try recursive expression tree serialization before falling back to GENERIC_EVAL
+    // Try recursive expression tree serialization before marking the expression unsupported.
     {
         ExprTreeSerializer serializer(slots, const_reverse_map);
         if (serializer.serialize(v)) {
@@ -10804,7 +10849,7 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
         }
     }
 
-    // Unsupported expression type — function needs source fallback
+    // Unsupported expression type; reject the function instead of falling back to source.
     id.kind = AOTExprKind::GENERIC_EVAL;
     printd(3, "AOT: unsupported expression type '%s' for slot serialization\n", node->getTypeName());
     if (getenv("QORE_AOT_DEBUG")) {

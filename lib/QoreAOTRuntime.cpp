@@ -577,8 +577,8 @@ static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* 
 
         case AOTExprKind::CALL_REF:
         case AOTExprKind::OBJ_METHOD_REF:
-            // These need the full AST context for proper resolution
-            printd(1, "AOT v2: expression kind %d requires source fallback\n", (int)kind);
+            // These need dedicated binary metadata for proper resolution.
+            printd(1, "AOT v2: expression kind %d is not supported in serialized metadata\n", (int)kind);
             return 0;
 
         case AOTExprKind::EXPR_TREE:
@@ -628,7 +628,7 @@ static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* 
 
         case AOTExprKind::GENERIC_EVAL:
         default:
-            // Unsupported — function needs source fallback
+            // Unsupported expression metadata.
             return 0;
     }
 }
@@ -2102,7 +2102,7 @@ static QoreAOTContext* buildContextFromSlotMap(
                 // Read closure body IR
                 uint8_t has_ir = QoreAOTBinaryReader::readU8(ptr);
                 if (!has_ir) {
-                    // No IR — need source fallback
+                    // No IR: invalid for source-fallback-free AOT.
                     closure_ir_missing = true;
                     continue;
                 }
@@ -6559,13 +6559,12 @@ extern "C" DLLEXPORT int qore_aot_run_v2(
 
             printd(2, "AOT v2: registered %d/%d pre-compiled functions\n", registered, num_functions);
 
-            // Safety check: if functions weren't registered and no fallback source is available,
+            // Safety check: if functions weren't registered, fail visibly before
             // they will exist as empty shells that crash when called. Warn early.
             if (registered < num_functions && !deserializer.hasFallbackSource() && !fallback_pgm) {
                 int unregistered = num_functions - registered;
-                printd(0, "AOT ERROR: %d/%d functions could not be registered and no fallback "
-                    "source is available.\nRecompile with --include-source or update the AOT compiler "
-                    "to embed fallback sources automatically.\n", unregistered, num_functions);
+                printd(0, "AOT ERROR: %d/%d functions could not be registered; "
+                    "source fallback is disabled.\n", unregistered, num_functions);
             }
         }
 
@@ -7325,13 +7324,12 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
 
             printd(2, "AOT v3: registered %d/%d pre-compiled functions\n", registered, num_functions);
 
-            // Safety check: if functions weren't registered and no fallback source is available,
+            // Safety check: if functions weren't registered, fail visibly before
             // they will exist as empty shells that crash when called. Warn early.
             if (registered < num_functions && !deserializer.hasFallbackSource() && !fallback_pgm) {
                 int unregistered = num_functions - registered;
-                printd(0, "AOT ERROR: %d/%d functions could not be registered and no fallback "
-                    "source is available.\nRecompile with --include-source or update the AOT compiler "
-                    "to embed fallback sources automatically.\n", unregistered, num_functions);
+                printd(0, "AOT ERROR: %d/%d functions could not be registered; "
+                    "source fallback is disabled.\n", unregistered, num_functions);
             }
         }
 
@@ -8741,7 +8739,7 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
             }
         } else if (registered < num_functions) {
             printd(0, "AOT module '%s': WARNING - %d/%d functions failed registration "
-                "with no source fallback available\n",
+                "with source fallback disabled\n",
                 mod_name, num_functions - registered, num_functions);
         }
     }
