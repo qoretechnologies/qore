@@ -2278,6 +2278,39 @@ public:
     DLLLOCAL int setNoDelay(int nodelay);
     DLLLOCAL int getNoDelay() const;
 
+    //! Set the TCP_USER_TIMEOUT socket option (Linux/Solaris) in milliseconds.
+    /** Kernel-level safety net for TCP-layer death.  Bounds how long
+        unacknowledged data on a TCP connection may sit before the kernel
+        reports the connection dead with ETIMEDOUT on the next read/write.
+        Catches peer reboots, NIC failures, network partitions, and NAT
+        rebinds that would otherwise hang send()/recv() for the kernel's
+        full TCP retransmit budget (~15 minutes default on Linux).
+
+        @note This is NOT a half-open HTTP detector.  If the peer's TCP
+        stack ack's bytes but the application stops generating responses,
+        TCP_USER_TIMEOUT never fires (nothing is unack'd).  Use an
+        application-level deadline (e.g. the connection manager's
+        @c request_timeout) for that case.
+
+        The value is also stored on the socket object and re-applied after
+        every successful connect, so callers may set it before connecting.
+        Passing 0 disables the option (kernel default).
+
+        On platforms without TCP_USER_TIMEOUT (BSD/macOS/Windows) the value
+        is stored but no kernel option is set; the call returns 0.
+
+        @param ms timeout in milliseconds; 0 disables
+        @return 0 on success, non-zero on setsockopt failure (errno set)
+    */
+    DLLLOCAL int setUserTimeout(int ms);
+    //! Returns the TCP_USER_TIMEOUT value in milliseconds.
+    /** When the socket is an open TCP socket and the platform supports
+        @c TCP_USER_TIMEOUT, returns the kernel's current value via getsockopt.
+        Otherwise returns the configured value stored on the socket (0 if
+        unset).
+    */
+    DLLLOCAL int getUserTimeout() const;
+
     //! sets backwards-compatible members on accept in a new object - will be removed in a future version of qore
     DLLLOCAL void setAccept(QoreObject* o);
 

@@ -194,6 +194,30 @@ public namespace HttpClientIo {
     #! Default maximum request retries for retryable connection and capacity errors
     public const DefaultMaxRequestRetries = 3;
 
+    #! Default born-at TTL (\c max_age) for pooled connections — \c 0s = disabled
+    /** When set on @ref HttpClientConnectionManagerOptions::max_age, a pooled connection
+        whose age (now − \c created_us) exceeds this value is evicted at the next
+        pool checkout instead of being reused.  Catches the "long-running daemon
+        held a connection across server-side firewall idle-timeout / NAT rebind"
+        class of bug.
+
+        Default \c 0s = disabled (existing behaviour: pooled connections live until
+        \c idle_timeout or close).
+    */
+    public const DefaultMaxConnectionAge = 0s;
+
+    #! Default \c TCP_USER_TIMEOUT applied to manager-created TCP sockets (30 seconds)
+    /** Kernel-level safety net for TCP-layer death.  Bounds how long unacknowledged
+        TCP data may sit before the kernel reports the connection dead with
+        \c ETIMEDOUT, instead of hanging in the kernel's full TCP retransmit window
+        (~15 minutes default on Linux).
+
+        NOT a half-open HTTP detector — see @ref HttpClientConnectionManagerOptions::tcp_user_timeout
+        for details.  Set to \c 0s in @ref HttpClientConnectionManagerOptions to disable.
+        No effect on platforms without \c TCP_USER_TIMEOUT (BSD/macOS/Windows).
+    */
+    public const DefaultTcpUserTimeout = 30s;
+
     #! Maximum pending stream reservations on a Connecting connection
     /** Limits the blast radius when a QUIC handshake fails — once this many
         threads are waiting on one connection's handshake, additional threads
@@ -424,6 +448,43 @@ public namespace HttpClientIo {
 
         #! Connection idle timeout
         timeout idle_timeout = DefaultConnectionIdleTimeout;
+
+        #! Born-at TTL for pooled connections — evict on next checkout when exceeded
+        /** Curl analog: \c CURLOPT_MAXAGE_CONN.  Bounds the wall-clock age of a
+            pooled connection.  When set, a connection whose age (now − creation
+            time) reaches this value is treated as ineligible for reuse and is
+            evicted at the next pool checkout.
+
+            Useful when the path between client and server has middleboxes
+            (load balancers, NAT, stateful firewalls) that silently expire
+            long-lived TCP sessions — without \c max_age, the next request on
+            that session fails and forces a retry; with \c max_age set below
+            the middlebox idle window, the manager refreshes the connection
+            proactively.
+
+            Default \c 0s = disabled.  Skipped for connections with active
+            streams (an in-flight request is not a candidate for max-age
+            eviction).
+        */
+        timeout max_age = DefaultMaxConnectionAge;
+
+        #! \c TCP_USER_TIMEOUT for manager-created TCP sockets
+        /** Kernel-level safety net for TCP-layer death.  Bounds how long
+            unacknowledged TCP data may sit before the kernel reports the
+            connection dead with \c ETIMEDOUT, instead of hanging in the
+            kernel's full TCP retransmit window (~15 minutes default on Linux).
+            Catches peer reboots, NIC failures, network partitions, and NAT
+            rebinds.
+
+            \b NOT a half-open HTTP detector — if the peer's TCP stack ack's
+            bytes but the HTTP server stops generating responses,
+            \c TCP_USER_TIMEOUT never fires (nothing is unack'd).
+            \c request_timeout is the application-level backstop for that case.
+
+            No effect on platforms without \c TCP_USER_TIMEOUT (BSD/macOS/Windows)
+            or on UDP/UNIX sockets.  Set to \c 0s to disable (kernel default).
+        */
+        timeout tcp_user_timeout = DefaultTcpUserTimeout;
 
         #! Connect timeout (also used as stale detection timeout for reused pooled connections)
         /** For fresh connections, this is the TCP/TLS establishment timeout.  For reused

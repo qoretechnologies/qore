@@ -158,21 +158,23 @@ echo "=== Running Tests ==="
 cd "${QORE_SRC_DIR}"
 
 # Set module path to include built modules and pre-installed binary modules.
-# The built qore defaults to /usr/local prefix, but binary modules (json, yaml,
-# uuid, etc.) are installed under the package manager's prefix on the runner.
+# Binary modules (json, yaml, uuid, etc.) may live under the package manager's
+# prefix or under /usr/local — qore-test-base installs them to /usr/local
+# (INSTALL_PREFIX=/usr/local in prep-macos.sh).  Probe both.
 EXTRA_MODULE_DIRS=""
 case "$PM" in
     macports) PM_PREFIX="/opt/local" ;;
     homebrew) PM_PREFIX="${HB:-/opt/homebrew}" ;;
     *)        PM_PREFIX="" ;;
 esac
-if [ -n "${PM_PREFIX}" ]; then
-    QORE_API_VER=$(build/qore --module-api 2>/dev/null || true)
-    [ -d "${PM_PREFIX}/lib/qore-modules/${QORE_API_VER}" ] && EXTRA_MODULE_DIRS="${PM_PREFIX}/lib/qore-modules/${QORE_API_VER}:${EXTRA_MODULE_DIRS}"
-    [ -d "${PM_PREFIX}/lib/qore-modules" ] && EXTRA_MODULE_DIRS="${PM_PREFIX}/lib/qore-modules:${EXTRA_MODULE_DIRS}"
-    [ -d "${PM_PREFIX}/share/qore-modules/${QORE_API_VER}" ] && EXTRA_MODULE_DIRS="${PM_PREFIX}/share/qore-modules/${QORE_API_VER}:${EXTRA_MODULE_DIRS}"
-    [ -d "${PM_PREFIX}/share/qore-modules" ] && EXTRA_MODULE_DIRS="${PM_PREFIX}/share/qore-modules:${EXTRA_MODULE_DIRS}"
-fi
+QORE_API_VER=$(build/qore --module-api 2>/dev/null || true)
+for p in "${PM_PREFIX}" /usr/local; do
+    [ -z "$p" ] && continue
+    [ -d "$p/lib/qore-modules/${QORE_API_VER}" ] && EXTRA_MODULE_DIRS="$p/lib/qore-modules/${QORE_API_VER}:${EXTRA_MODULE_DIRS}"
+    [ -d "$p/lib/qore-modules" ] && EXTRA_MODULE_DIRS="$p/lib/qore-modules:${EXTRA_MODULE_DIRS}"
+    [ -d "$p/share/qore-modules/${QORE_API_VER}" ] && EXTRA_MODULE_DIRS="$p/share/qore-modules/${QORE_API_VER}:${EXTRA_MODULE_DIRS}"
+    [ -d "$p/share/qore-modules" ] && EXTRA_MODULE_DIRS="$p/share/qore-modules:${EXTRA_MODULE_DIRS}"
+done
 export QORE_MODULE_DIR="${QORE_SRC_DIR}/qlib:${EXTRA_MODULE_DIRS}${QORE_MODULE_DIR:-}"
 
 # Run tests using the built qore binary

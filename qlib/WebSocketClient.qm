@@ -2128,6 +2128,10 @@ ws.setEventQueue();
             async_wake_socket = conn.getPollOperation().getSocket();
             # Mark as started — enables on_poll_complete delivery from notifyIo.
             # Then drain any data already in the Channel and trigger delivery.
+            poll_op.setHeartbeat(async_heartbeat_ms);
+            if (async_idle_timeout_ms > 0) {
+                poll_op.setIdleTimeout(async_idle_timeout_ms);
+            }
             poll_op.start();
             poll_op.initialDrain();
             scheduleDelivery();
@@ -2148,14 +2152,12 @@ ws.setEventQueue();
             poll_op.clearCallbacks();
             # Capture the close cause before releasing poll_op so closingConnection()
             # can surface it to observers on EVENT_WS_CLOSED.
-            if (poll_op instanceof Qore::WebSocketClientPollOperationBase) {
-                try {
-                    string cause = cast<Qore::WebSocketClientPollOperationBase>(poll_op).getCloseCause();
-                    if (cause.val()) {
-                        async_close_cause = cause;
-                    }
-                } catch () {}
-            }
+            try {
+                string cause = call_object_method(poll_op, "getCloseCause");
+                if (cause.val()) {
+                    async_close_cause = cause;
+                }
+            } catch () {}
         }
         if (async_owner) {
             try {
@@ -3154,8 +3156,13 @@ ws.setEventQueue();
 
         string path = getUrlPath();
 
-        # Start streaming on the already-acquired stream
-        stream.startStreaming("GET", path, hdr, True);
+        # Start streaming on the already-acquired stream.  body_streaming=False:
+        # the HTTP/1.1 WebSocket Upgrade handshake has NO request body — WS
+        # frames flow over the raw socket after 101 Switching Protocols,
+        # not as a chunked HTTP request body.  Passing True here would add
+        # "Transfer-Encoding: chunked" to the upgrade request and the server
+        # would reject the handshake.
+        stream.startStreaming("GET", path, hdr, False);
         hcio_stream = stream;
 
         # Read the 101 response
@@ -3400,10 +3407,15 @@ ws.setEventQueue();
 
         string path = getUrlPath();
 
-        # Use streaming mode so the 101 response headers are delivered via
-        # Channel, and the PROTOCOL_SWITCHED state enables raw bidirectional I/O
+        # Streaming mode so the 101 response headers are delivered via
+        # Channel, and the PROTOCOL_SWITCHED state enables raw bidirectional
+        # I/O.  body_streaming=False: the H1 WebSocket Upgrade handshake has
+        # NO request body — WS frames flow over the raw socket after 101
+        # Switching Protocols, not as a chunked HTTP request body.  Passing
+        # True here would add "Transfer-Encoding: chunked" to the upgrade
+        # request and the server would reject the handshake.
         hcio_stream = hcio_mgr.acquireAndStartStreaming(http_opts.url, "GET", path, hdr,
-            True);
+            False);
 
         # Read the 101 response headers from the Channel
         auto rh = hcio_stream.readData(timeout_ms);
@@ -5380,6 +5392,30 @@ public class WebSocketClientHcioPollOp {
 
         #! True if extensions are active
         bool has_extensions = False;
+
+        #! Mutex protecting heartbeat/idle timer state
+        Mutex heartbeat_mutex();
+
+        #! Heartbeat interval in milliseconds; 0 disables heartbeat PINGs
+        int heartbeat_ms = 0;
+
+        #! Idle timeout in milliseconds; 0 disables idle close
+        int idle_timeout_ms = 0;
+
+        #! Async I/O controller timer ID for heartbeat/idle checks
+        *int heartbeat_timer_id;
+
+        #! Timer generation used to ignore stale callbacks after reschedule/cancel
+        int heartbeat_generation = 0;
+
+        #! Last inbound WebSocket frame activity timestamp in milliseconds
+        int last_recv_activity_ms;
+
+        #! Last automatic heartbeat PING timestamp in milliseconds
+        int last_ping_sent_ms = 0;
+
+        #! Client-initiated close cause tag surfaced to observers
+        string close_cause = "";
     }
 
     #! Creates the adapter and registers for async stream data delivery
@@ -5400,6 +5436,7 @@ public class WebSocketClientHcioPollOp {
         self.raw_callback = raw_callback;
         self.on_poll_complete = on_poll_complete;
         self.has_extensions = active_extensions ? True : False;
+        last_recv_activity_ms = clock_getmillis();
 
         # Get connection and stream ID (protocol-agnostic)
         conn = stream.getConnection();
@@ -5437,7 +5474,7 @@ public class WebSocketClientHcioPollOp {
     */
     notifyIo() {
         AutoLock al(process_mutex);
-        if (closed) {
+        if (isClosed()) {
             return;
         }
 
@@ -5455,6 +5492,7 @@ public class WebSocketClientHcioPollOp {
     #! Marks the adapter as started — enables on_poll_complete delivery
     start() {
         started = True;
+        rescheduleHeartbeatTimer();
     }
 
     #! Drains any frames already dispatched before the adapter was fully wired up
@@ -5483,16 +5521,9 @@ public class WebSocketClientHcioPollOp {
             auto entry = wrap.value;
             if (!exists entry) {
                 # NOTHING sentinel from FrameStateAction::complete/executeError
-                if (!closed) {
-                    closed = True;
-                    int close_c = close_code ? close_code : WSCC_AbnormalClosure;
-                    string close_r = close_reason != "" ? close_reason : "stream ended";
-                    recv_channel.send({
-                        "type": "closed",
-                        "code": close_c,
-                        "reason": close_r,
-                    });
-                }
+                int close_c = close_code ? close_code : WSCC_AbnormalClosure;
+                string close_r = close_reason != "" ? close_reason : "stream ended";
+                markClosedAndEnqueue(close_c, close_r);
                 processed = True;
                 break;
             }
@@ -5510,6 +5541,7 @@ public class WebSocketClientHcioPollOp {
         rsv1?: bool, rsv2?: bool, rsv3?: bool, code?: int, reason?: string}
     */
     private processFrameHash(hash<auto> h) {
+        noteRecvActivity();
         string t = h.type ?? "";
 
         if (t == "close") {
@@ -5525,47 +5557,42 @@ public class WebSocketClientHcioPollOp {
                     logError("close response send error: %s: %s", ex.err, ex.desc);
                 }
             }
-            closed = True;
-            recv_channel.send({"type": "closed", "code": close_code, "reason": close_reason});
+            markClosedAndEnqueue(close_code, close_reason);
             return;
         }
 
         if (t == "error") {
-            if (!closed) {
-                closed = True;
-                recv_channel.send({"type": "error", "error":
-                    {"code": h.code ?? WSCC_ProtocolError, "reason": h.reason ?? ""}});
-            }
+            markClosedAndEnqueue(h.code ?? WSCC_ProtocolError, h.reason ?? "", NOTHING, "error");
             return;
         }
 
         if (t == "ping") {
             # Auto-pong is already sent by the C++ frame state; just deliver
             # the ping event to the consumer and optional raw_callback.
-            recv_channel.send({"type": "ping", "data": h.data});
+            hash<WsMsgInfo> evt = <WsMsgInfo>{
+                "op": WSOP_Ping,
+                "fin": True,
+                "masked": False,
+                "close": 0,
+                "msg": h.data,
+            };
+            recv_channel.send({"type": "ping", "msg": evt, "data": h.data});
             if (raw_callback) {
-                hash<WsMsgInfo> evt = <WsMsgInfo>{
-                    "op": WSOP_Ping,
-                    "fin": True,
-                    "masked": False,
-                    "close": 0,
-                    "msg": h.data,
-                };
                 raw_callback(evt);
             }
             return;
         }
 
         if (t == "pong") {
-            recv_channel.send({"type": "pong", "data": h.data});
+            hash<WsMsgInfo> evt = <WsMsgInfo>{
+                "op": WSOP_Pong,
+                "fin": True,
+                "masked": False,
+                "close": 0,
+                "msg": h.data,
+            };
+            recv_channel.send({"type": "pong", "msg": evt, "data": h.data});
             if (raw_callback) {
-                hash<WsMsgInfo> evt = <WsMsgInfo>{
-                    "op": WSOP_Pong,
-                    "fin": True,
-                    "masked": False,
-                    "close": 0,
-                    "msg": h.data,
-                };
                 raw_callback(evt);
             }
             return;
@@ -5703,24 +5730,25 @@ public class WebSocketClientHcioPollOp {
     }
 
     #! Sends a ping frame (non-blocking)
-    sendPing(data msg) {
+    sendPing(*data msg) {
         try {
-            stream.sendData( ws_encode_message(msg, WSOP_Ping, True));
+            stream.sendData(ws_encode_message(msg ?? binary(), WSOP_Ping, True));
         } catch (hash<ExceptionInfo> ex) {
             logError("ping send error: %s: %s", ex.err, ex.desc);
         }
     }
 
     #! Sends a pong frame (non-blocking)
-    sendPong(data msg) {
+    sendPong(*data msg) {
         try {
-            stream.sendData( ws_encode_message(msg, WSOP_Pong, True));
+            stream.sendData(ws_encode_message(msg ?? binary(), WSOP_Pong, True));
         } catch (hash<ExceptionInfo> ex) {
             logError("pong send error: %s: %s", ex.err, ex.desc);
         }
     }
 
     bool isClosed() {
+        AutoLock al(heartbeat_mutex);
         return closed;
     }
 
@@ -5740,7 +5768,33 @@ public class WebSocketClientHcioPollOp {
         return NOTHING;
     }
 
+    #! Enables or disables automatic heartbeat PINGs
+    /** @param interval_ms heartbeat interval in milliseconds; 0 disables heartbeat
+    */
+    setHeartbeat(int interval_ms) {
+        AutoLock al(heartbeat_mutex);
+        heartbeat_ms = interval_ms;
+        rescheduleHeartbeatTimerLocked();
+    }
+
+    #! Enables or disables idle-timeout connection close
+    /** @param interval_ms idle timeout in milliseconds; 0 disables idle close
+    */
+    setIdleTimeout(int interval_ms) {
+        AutoLock al(heartbeat_mutex);
+        idle_timeout_ms = interval_ms;
+        rescheduleHeartbeatTimerLocked();
+    }
+
+    #! Returns a client-initiated close cause tag such as \c "idle-timeout"
+    string getCloseCause() {
+        AutoLock al(heartbeat_mutex);
+        return close_cause;
+    }
+
     clearCallbacks() {
+        AutoLock al(heartbeat_mutex);
+        cancelHeartbeatTimerLocked();
         on_poll_complete = NOTHING;
     }
 
@@ -5767,13 +5821,10 @@ public class WebSocketClientHcioPollOp {
             stream.sendData(ws_encode_message(msg, op, True, fin, rsv_bits));
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err == "HTTPCLIENT-STREAM-CLOSED"
+                    || ex.err == "HTTPCLIENT-STATE-ERROR"
                     || ex.err == "HTTP2-STATE-ERROR"
                     || ex.err == "HTTP3-STATE-ERROR") {
-                if (!closed) {
-                    closed = True;
-                    recv_channel.send({"type": "closed", "code": WSCC_AbnormalClosure,
-                        "reason": "connection lost: " + ex.desc});
-                }
+                markClosedAndEnqueue(WSCC_AbnormalClosure, "connection lost: " + ex.desc);
                 logError("send failed: %s: %s", ex.err, ex.desc);
                 throw "WEBSOCKET-ERROR",
                     sprintf("WebSocket connection lost: %s: %s", ex.err, ex.desc);
@@ -5785,6 +5836,152 @@ public class WebSocketClientHcioPollOp {
     private logError(string fmt, ...) {
         if (logger) {
             logger.log(LoggerLevel::ERROR, "WebSocketClientHcioPollOp: " + vsprintf(fmt, argv));
+        }
+    }
+
+    private noteRecvActivity() {
+        AutoLock al(heartbeat_mutex);
+        last_recv_activity_ms = clock_getmillis();
+        rescheduleHeartbeatTimerLocked();
+    }
+
+    private rescheduleHeartbeatTimer() {
+        AutoLock al(heartbeat_mutex);
+        rescheduleHeartbeatTimerLocked();
+    }
+
+    private rescheduleHeartbeatTimerLocked() {
+        cancelHeartbeatTimerLocked();
+        if (closed || !started || (heartbeat_ms <= 0 && idle_timeout_ms <= 0)) {
+            return;
+        }
+
+        int now = clock_getmillis();
+        *int next_delay_ms;
+
+        if (heartbeat_ms > 0) {
+            int heartbeat_base_ms = last_recv_activity_ms > last_ping_sent_ms
+                ? last_recv_activity_ms : last_ping_sent_ms;
+            int heartbeat_delay_ms = heartbeat_ms - (now - heartbeat_base_ms);
+            if (heartbeat_delay_ms < 1) {
+                heartbeat_delay_ms = 1;
+            }
+            next_delay_ms = heartbeat_delay_ms;
+        }
+
+        if (idle_timeout_ms > 0) {
+            int idle_delay_ms = idle_timeout_ms - (now - last_recv_activity_ms);
+            if (idle_delay_ms < 1) {
+                idle_delay_ms = 1;
+            }
+            if (!exists next_delay_ms || idle_delay_ms < next_delay_ms) {
+                next_delay_ms = idle_delay_ms;
+            }
+        }
+
+        if (!exists next_delay_ms) {
+            return;
+        }
+
+        int generation = heartbeat_generation;
+        AsyncSocketIo::AsyncSocketIoController controller =
+            AsyncSocketIo::getGlobalAsyncIoController();
+        heartbeat_timer_id = controller.addTimer(now_us() + milliseconds(next_delay_ms),
+            sub () { self.handleHeartbeatTimer(generation); });
+    }
+
+    private cancelHeartbeatTimerLocked() {
+        ++heartbeat_generation;
+        if (heartbeat_timer_id) {
+            try {
+                AsyncSocketIo::AsyncSocketIoController controller =
+                    AsyncSocketIo::getGlobalAsyncIoController();
+                controller.cancelTimer(heartbeat_timer_id);
+            } catch (hash<ExceptionInfo> ex) {
+            }
+            remove heartbeat_timer_id;
+        }
+    }
+
+    private handleHeartbeatTimer(int generation) {
+        bool send_ping = False;
+        bool close_idle = False;
+
+        {
+            AutoLock al(heartbeat_mutex);
+            if (generation != heartbeat_generation || closed || !started) {
+                return;
+            }
+            remove heartbeat_timer_id;
+
+            int now = clock_getmillis();
+            int recv_idle_ms = now - last_recv_activity_ms;
+            if (idle_timeout_ms > 0 && recv_idle_ms >= idle_timeout_ms) {
+                close_idle = True;
+                closed = True;
+                close_code = WSCC_GoingAway;
+                close_reason = "idle timeout";
+                close_cause = "idle-timeout";
+                ++heartbeat_generation;
+            } else if (heartbeat_ms > 0 && recv_idle_ms >= heartbeat_ms
+                    && (!last_ping_sent_ms || (now - last_ping_sent_ms) >= heartbeat_ms)) {
+                last_ping_sent_ms = now;
+                send_ping = True;
+            }
+        }
+
+        if (close_idle) {
+            try {
+                stream.sendData(ws_encode_message(WSCC_GoingAway.encodeMsb(2) + "idle timeout".toBinary(),
+                    WSOP_Close, True));
+            } catch (hash<ExceptionInfo> ex) {
+                logError("idle-timeout close send error: %s: %s", ex.err, ex.desc);
+            }
+            recv_channel.send({"type": "closed", "code": WSCC_GoingAway, "reason": "idle timeout"});
+            notifyDelivery();
+            return;
+        }
+
+        if (send_ping) {
+            try {
+                stream.sendData(ws_encode_message(binary(), WSOP_Ping, True));
+            } catch (hash<ExceptionInfo> ex) {
+                markClosedAndEnqueue(WSCC_AbnormalClosure, "connection lost: " + ex.desc);
+                logError("heartbeat ping send error: %s: %s", ex.err, ex.desc);
+                notifyDelivery();
+                return;
+            }
+        }
+
+        rescheduleHeartbeatTimer();
+    }
+
+    private bool markClosedAndEnqueue(int code, string reason, *string cause, string event_type = "closed") {
+        {
+            AutoLock al(heartbeat_mutex);
+            if (closed) {
+                return False;
+            }
+            closed = True;
+            close_code = code;
+            close_reason = reason;
+            if (cause) {
+                close_cause = cause;
+            }
+            cancelHeartbeatTimerLocked();
+        }
+
+        if (event_type == "error") {
+            recv_channel.send({"type": "error", "error": {"code": code, "reason": reason}});
+        } else {
+            recv_channel.send({"type": "closed", "code": code, "reason": reason});
+        }
+        return True;
+    }
+
+    private notifyDelivery() {
+        if (started && on_poll_complete) {
+            on_poll_complete();
         }
     }
 }

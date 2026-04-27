@@ -1,0 +1,181 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Socket::setUserTimeout / Socket::getUserTimeout (TCP_USER_TIMEOUT) regression
+# test.  On Linux, getUserTimeout queries the kernel via getsockopt, so any
+# value we read back after connect is direct proof the kernel option was
+# applied.  On platforms without TCP_USER_TIMEOUT, the cached value is
+# returned and the kernel-readback assertions are skipped.
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%requires ../../../../../qlib/Util.qm
+%requires ../../../../../qlib/QUnit.qm
+
+%exec-class UserTimeoutTest
+
+# Distinctive values — proves a kernel readback returns what we set, not
+# something the cache happened to hold.
+const TIMEOUT_BEFORE_CONNECT_MS = 12345;
+const TIMEOUT_ON_CONNECTED_MS = 7777;
+const TIMEOUT_OTHER_MS = 4321;
+const TIMEOUT_DISABLE_MS = 9999;
+const TIMEOUT_RECONNECT_MS = 6543;
+
+class UserTimeoutTest inherits QUnit::Test {
+    public {
+        const PlatformHasTcpUserTimeout = PlatformOS == "Linux";
+    }
+
+    constructor() : Test("UserTimeoutTest", "1.0") {
+        addTestCase("api basics on unconnected socket", \apiBasicsTest());
+        addTestCase("set before connect, value applied at connect",
+            \setBeforeConnectTest());
+        addTestCase("set on connected socket, value applied immediately",
+            \setOnConnectedTest());
+        addTestCase("disable (set 0) clears the value", \disableTest());
+        addTestCase("survives disconnect + reconnect cycle",
+            \surviveReconnectTest());
+        set_return_value(main());
+    }
+
+    apiBasicsTest() {
+        Socket s();
+        # initial value is unset (0)
+        assertEq(0, s.getUserTimeout());
+        # set on unconnected socket: stored, returns 0 (no kernel call yet)
+        assertEq(0, s.setUserTimeout(5000));
+        assertEq(5000, s.getUserTimeout());
+        # zero disables
+        assertEq(0, s.setUserTimeout(0));
+        assertEq(0, s.getUserTimeout());
+        # negative is clamped to 0
+        s.setUserTimeout(-100);
+        assertEq(0, s.getUserTimeout());
+    }
+
+    private hash<auto> startEchoServer() {
+        Socket listener();
+        listener.bind("localhost:0", True);
+        listener.listen();
+        int port = listener.getSocketInfo().port;
+        # accepted: signals the client may proceed once the server has
+        # accepted the connection.  done: signals the background thread
+        # has exited so the test can join before returning (otherwise
+        # valgrind flags the pthread TLS as possibly-leaked).
+        Counter accepted(1);
+        Counter done(1);
+        background sub () {
+            on_exit done.dec();
+            try {
+                Socket peer = listener.accept(10s);
+                accepted.dec();
+                # Hold the peer until the client closes — recv returns
+                # the empty string on EOF, throws SOCKET-CLOSED on hard
+                # close, or throws SOCKET-TIMEOUT on the 100ms tick.
+                while (peer.isOpen()) {
+                    try {
+                        *string s = peer.recv(1, 100ms);
+                        if (!s) {
+                            break;  # EOF
+                        }
+                    } catch (hash<ExceptionInfo> ex) {
+                        if (ex.err == "SOCKET-TIMEOUT") {
+                            continue;
+                        }
+                        break;  # SOCKET-CLOSED, etc
+                    }
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                # ignore — listener may be closed before accept returns
+                accepted.dec();
+            }
+        }();
+        return {"listener": listener, "port": port, "accepted": accepted,
+            "done": done};
+    }
+
+    #! Tear down: close client, listener, then wait for background to join
+    private stopEchoServer(hash<auto> srv, Socket client) {
+        client.close();
+        srv.listener.close();
+        srv.done.waitForZero(5s);
+    }
+
+    setBeforeConnectTest() {
+        hash<auto> srv = startEchoServer();
+        Socket c();
+        on_exit stopEchoServer(srv, c);
+
+        # Use a distinctive value so a kernel-readback proves the option
+        # really landed (vs. our cache happening to hold the same number).
+        c.setUserTimeout(TIMEOUT_BEFORE_CONNECT_MS);
+        c.connect("localhost:" + srv.port, 5s);
+        srv.accepted.waitForZero(5s);
+
+        # On Linux, getUserTimeout reads via getsockopt — the returned
+        # value is the kernel's value, so this is direct proof that
+        # confirmConnected applied the option to the new fd.
+        assertEq(TIMEOUT_BEFORE_CONNECT_MS, c.getUserTimeout(),
+            "stored TCP_USER_TIMEOUT must be applied at connect"
+            + (PlatformHasTcpUserTimeout
+                ? " (kernel readback)"
+                : " (cached fallback — no TCP_USER_TIMEOUT on this platform)"));
+    }
+
+    setOnConnectedTest() {
+        hash<auto> srv = startEchoServer();
+        Socket c();
+        on_exit stopEchoServer(srv, c);
+
+        c.connect("localhost:" + srv.port, 5s);
+        srv.accepted.waitForZero(5s);
+
+        # set on a connected socket: applies immediately via setsockopt
+        assertEq(0, c.setUserTimeout(TIMEOUT_ON_CONNECTED_MS),
+            "setsockopt should succeed on a connected TCP socket");
+        assertEq(TIMEOUT_ON_CONNECTED_MS, c.getUserTimeout());
+
+        # change to a different distinctive value
+        assertEq(0, c.setUserTimeout(TIMEOUT_OTHER_MS));
+        assertEq(TIMEOUT_OTHER_MS, c.getUserTimeout());
+    }
+
+    disableTest() {
+        hash<auto> srv = startEchoServer();
+        Socket c();
+        on_exit stopEchoServer(srv, c);
+
+        c.setUserTimeout(TIMEOUT_DISABLE_MS);
+        c.connect("localhost:" + srv.port, 5s);
+        srv.accepted.waitForZero(5s);
+
+        assertEq(TIMEOUT_DISABLE_MS, c.getUserTimeout());
+        # disable
+        assertEq(0, c.setUserTimeout(0));
+        assertEq(0, c.getUserTimeout(),
+            "TCP_USER_TIMEOUT must read back as 0 after disable");
+    }
+
+    surviveReconnectTest() {
+        # First connect cycle
+        hash<auto> srv1 = startEchoServer();
+        Socket c();
+        c.setUserTimeout(TIMEOUT_RECONNECT_MS);
+        c.connect("localhost:" + srv1.port, 5s);
+        srv1.accepted.waitForZero(5s);
+        assertEq(TIMEOUT_RECONNECT_MS, c.getUserTimeout());
+        stopEchoServer(srv1, c);
+
+        # Reconnect on the same Socket object — confirmConnected must
+        # re-apply the cached value to the new fd.
+        hash<auto> srv2 = startEchoServer();
+        on_exit stopEchoServer(srv2, c);
+        c.connect("localhost:" + srv2.port, 5s);
+        srv2.accepted.waitForZero(5s);
+        assertEq(TIMEOUT_RECONNECT_MS, c.getUserTimeout(),
+            "configured TCP_USER_TIMEOUT must survive disconnect + reconnect");
+    }
+}

@@ -69,6 +69,13 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
         #! Last activity timestamp
         date last_activity;
 
+        #! Connection creation timestamp (used by max_age eviction)
+        /** Set once in the subclass constructor; never updated.  Used by
+            @ref HttpClientConnectionManager to enforce
+            @ref HttpClientConnectionManagerOptions::max_age at pool checkout.
+        */
+        date created_us;
+
         #! Reference to AsyncSocketIoController for wake notifications
         *object controller_ref;
 
@@ -112,6 +119,41 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
 
     #! Closes the connection (protocol-specific)
     abstract closeImpl(*timeout close_timeout);
+
+    #! Common initialisation for every HttpClientConnection subclass.
+    /** Centralises the bookkeeping every connection needs (URL, timeouts,
+        logger, proxy, stream cap, activity / creation timestamps,
+        connection ID) so subclasses can't drift.  Invoked from each
+        subclass constructor via the parent-constructor syntax:
+        @code
+        constructor(...) : HttpClientConnection(url_info, connect_timeout,
+                                                logger, max_streams, proxy_info) {
+            # ... protocol-specific setup
+        }
+        @endcode
+
+        Validation that must happen before this runs (e.g.\ H1's
+        single-stream cap) belongs in a static helper called inside the
+        parent-constructor argument list.
+
+        @param url_info parsed URL info hash (host, port, scheme)
+        @param connect_timeout TCP/TLS connect timeout
+        @param logger optional logger
+        @param max_streams maximum concurrent streams (H1 must pass 1)
+        @param proxy_info parsed HTTP-proxy info (\c NOTHING for H3)
+    */
+    constructor(hash<auto> url_info, timeout connect_timeout,
+            *LoggerInterface logger, int max_streams,
+            *hash<auto> proxy_info) {
+        self.url_info = url_info;
+        self.connect_timeout = connect_timeout;
+        self.logger = logger;
+        self.proxy_info = proxy_info;
+        self.max_concurrent_streams = max_streams;
+        self.last_activity = now_us();
+        self.created_us = self.last_activity;
+        connection_id = allocateConnectionId();
+    }
 
     #! Sets the connection manager context for completion dispatch
     /** @param mgr the connection manager that owns this connection
@@ -219,6 +261,11 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
     date getLastActivity() {
         AutoLock al(lock);
         return last_activity;
+    }
+
+    #! Returns the connection creation timestamp (born-at, never updated)
+    date getCreationTime() {
+        return created_us;
     }
 
     #! Sets the controller reference for wake notifications

@@ -585,6 +585,65 @@ stay in the Qore layer.  The C++ manager does NOT touch cookies, Alt-Svc,
 or retry — those features are layered on top by the Qore subclass in
 Phase P6 onward.
 
+### 7.8 Curl-aligned reuse safety (TCP_USER_TIMEOUT, idle/max_age, no in-band timer)
+
+The C++ manager's reuse-safety contract mirrors curl's (`Curl_conn_seems_dead`
++ `Curl_retry_request` + `TCP_USER_TIMEOUT` + `CURLOPT_MAXAGE_CONN`)
+without violating Qore's async-I/O ownership model — no user-thread
+`poll`/`recv` on fds owned by the I/O thread.  The full layered model
+is documented in `design/async-socket-io.md` § "HTTP Client Connection
+Reuse Safety (curl-aligned model)".  Pieces specific to the C++ manager:
+
+- **`Options::tcp_user_timeout_ms`** (default 30000, opt-out via 0).
+  Applied to TCP sockets created by the manager via `Socket::setUserTimeout`
+  (Linux/Solaris kernel option; no-op elsewhere).  Re-applied at every
+  successful TCP connect by `qore_socket_private::confirmConnected` so
+  the value survives disconnect/reconnect.  Bounds how long unacknowledged
+  TCP data may sit before the kernel reports the connection dead with
+  `ETIMEDOUT`.  **Not** a half-open HTTP detector; `request_timeout` covers
+  that case.
+
+- **`Options::idle_timeout_ms`** (default 60000).  Wired through to
+  `Http{1,2}ClientPollOperationPriv::setIdleTimeout` in `createConnection`
+  via the virtual `HttpClientConnectionBase::setIdleTimeoutHook(int64_t
+  timeout_us)`.  Each protocol overrides; `Http3ClientConnection` keeps
+  the base no-op (ngtcp2 has its own keepalive).  Activates the nginx-style
+  proactive idle-close path on the I/O thread.
+
+- **`Options::max_age_ms`** (default 0 = off).  Born-at TTL.  Stored on
+  `HttpClientConnectionBase::created_us_` (set in the protected ctor via
+  `q_epoch_us`).  Enforced at pool checkout in `evictDeadLocked`: when
+  `out_to_close` is non-null AND `max_age_ms > 0` AND
+  `getActiveStreamCount() == 0`, expired connections are pushed into
+  the out-vector instead of being kept in the pool.
+
+- **`closeAndDerefAfterLockDrop` + RAII `MaxAgeDrainGuard`**.
+  `closeConnection` reaches into the I/O thread and is unsafe under
+  `pool_lock_` (same constraint as the existing shutdown branch in
+  `acquireConnectionImpl` line ~360).  The drain guard captures the
+  `max_age_evicted` vector and runs `setManager(nullptr) + closeConnection
+  + deref` for each entry on every exit path of step 3 (shutdown,
+  live-found, capacity-error, fall-through).
+
+- **No in-band stale-detect timer** in `Http1ClientPollOperationPriv`.
+  An earlier design had a 500ms (later 5s) `STALE_DETECT_TIMEOUT_MS` in
+  `handleRecvHeader` that fired when no response data arrived within the
+  window.  Removed because it was an application-layer latency check
+  masquerading as a connection liveness check — a legitimately slow
+  response could exceed the window and be falsely declared dead.  Curl
+  made the same call: no in-band timer, `Curl_retry_request` covers the
+  race window.
+
+  The pre-RECV_HEADER `MSG_PEEK` in `handleSending` (around line 728)
+  stays — narrow-window safety net for "FIN arrived during the request
+  write itself".
+
+- **Retry transparency**.  `HttpClientConnectionManager.qc:isConnectionErrorStatic`
+  recognises `HTTPCLIENT-TIMEOUT`, `HTTP1-IDLE-TIMEOUT`, and
+  `HTTP2-IDLE-TIMEOUT` as retryable connection errors so user-thread
+  requests racing the proactive idle close get transparently replayed on
+  a fresh connection.  This is the curl `Curl_retry_request` analog.
+
 ---
 
 ## 8. Risks
