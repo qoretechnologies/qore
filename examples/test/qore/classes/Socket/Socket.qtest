@@ -1768,6 +1768,26 @@ class SocketTest inherits QUnit::Test {
         peer.send("OK");
         c.waitForZero();
 
+        string recv_file_path = tmp_location() + DirSep + "qore-socket-recv-stream-" + get_random_string(12);
+        on_exit unlink(recv_file_path);
+
+        c.inc();
+        background sub () {
+            on_exit c.dec();
+            Socket client();
+            client.connectINET("127.0.0.1", port, 10s);
+            client.send(payload);
+            assertEq("OK", client.recv(2, 10s));
+        }();
+
+        peer = server.accept(10s);
+        FileOutputStream recv_file_output_stream(recv_file_path);
+        peer.recvToOutputStream(recv_file_output_stream, payload.size(), 10s);
+        recv_file_output_stream.close();
+        assertEq(payload, ReadOnlyFile::readTextFile(recv_file_path));
+        peer.send("OK");
+        c.waitForZero();
+
         c.inc();
         background sub () {
             on_exit c.dec();

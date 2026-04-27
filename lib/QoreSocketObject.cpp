@@ -43,6 +43,7 @@
 #include "qore/intern/Http2Session.h"
 #include "qore/intern/SocketSyncPoll.h"
 #include "qore/intern/FileInputStream.h"
+#include "qore/intern/FileOutputStream.h"
 
 #include <limits>
 
@@ -498,6 +499,25 @@ private:
     ExceptionSink* xsink;
 };
 
+struct SocketObjectOutputStreamRefGuard {
+    SocketObjectOutputStreamRefGuard(OutputStream* os, ExceptionSink* xsink, bool active)
+            : os(active ? os : nullptr), xsink(xsink) {
+        if (this->os) {
+            this->os->ref();
+        }
+    }
+
+    ~SocketObjectOutputStreamRefGuard() {
+        if (os) {
+            os->deref(xsink);
+        }
+    }
+
+private:
+    OutputStream* os;
+    ExceptionSink* xsink;
+};
+
 static int qore_socket_object_exec_send_input_stream_poll(QoreSocketObject* s, InputStream* is,
         QoreObject* is_obj, int64 size, int timeout_ms, ExceptionSink* xsink, bool reassign_after) {
     if (!size) {
@@ -538,6 +558,57 @@ static int qore_socket_object_exec_send_input_stream_poll(QoreSocketObject* s, I
         }
     }
     return rc;
+}
+
+static int qore_socket_object_exec_recv_output_stream_poll(QoreSocketObject* s, OutputStream* os,
+        QoreObject* os_obj, int64 size, int timeout_ms, ExceptionSink* xsink, bool reassign_after,
+        bool emit_data_events) {
+    if (!size) {
+        return 0;
+    }
+    if (!os->isIoThreadSafe()) {
+        xsink->raiseException("SOCKET-RECV-ERROR", "OutputStream is not I/O thread safe");
+        return -1;
+    }
+
+    SocketObjectOutputStreamRefGuard caller_ref(os, xsink, reassign_after);
+    s->ref();
+    os->ref();
+    if (os_obj) {
+        os_obj->ref();
+    }
+    ReferenceHolder<SocketPollOperationBase> poller(
+        new SocketRecvOutputStreamPollOperation(xsink, s, os, os_obj, size, timeout_ms, emit_data_events), xsink);
+    if (*xsink) {
+        return -1;
+    }
+
+    ReferenceHolder<QoreObject> sock_obj(qore_socket_object_make_pollable_wrapper(s), xsink);
+    ReferenceHolder<QoreObject> op_obj(
+        qore_socket_object_make_poll_op(*sock_obj, poller.release(), "received", xsink), xsink);
+    if (*xsink) {
+        return -1;
+    }
+
+    os->unassignThread(xsink);
+    if (*xsink) {
+        return -1;
+    }
+
+    ReferenceHolder<QoreHashNode> result(
+        qore_socket_object_exec_poll_operation(s, *sock_obj, *op_obj, -1, "recvToOutputStream", xsink), xsink);
+    if (reassign_after) {
+        if (!*xsink) {
+            os->reassignThread(xsink);
+        } else {
+            ExceptionSink reassign_xsink;
+            os->reassignThread(&reassign_xsink);
+            if (reassign_xsink) {
+                reassign_xsink.clear();
+            }
+        }
+    }
+    return *xsink ? -1 : 0;
 }
 
 static int qore_socket_object_exec_send_string(QoreSocketObject* s, const QoreStringNode& data,
@@ -1524,61 +1595,13 @@ static int qore_socket_object_exec_recv_fd(QoreSocketObject* s, int fd, int size
     }
 
     ExceptionSink xsink;
-    SocketSyncPoll::assertNotOnIoThread("Socket", "recv", &xsink);
+    SimpleRefHolder<FileOutputStream> os(new FileOutputStream(fd));
+    int rc = qore_socket_object_exec_recv_output_stream_poll(s, *os, nullptr, size, timeout_ms, &xsink, false, false);
     if (xsink) {
         xsink.clear();
         return -1;
     }
-
-    my_socket_priv* priv = my_socket_priv::getPriv(*s);
-    QoreSocketObjectAsyncIoGuard async_guard(*priv, &xsink, NB_RECV);
-    if (!async_guard) {
-        xsink.clear();
-        return -1;
-    }
-
-    int received = 0;
-    unsigned cancel_check = 0;
-    while (size < 0 || received < size) {
-        if (!(cancel_check++ % 100) && qore_check_cancel(&xsink, "socket object file descriptor receive")) {
-            xsink.clear();
-            return -1;
-        }
-        size_t to_read = size < 0
-            ? DEFAULT_SOCKET_BUFSIZE
-            : static_cast<size_t>(QORE_MIN(size - received, DEFAULT_SOCKET_BUFSIZE));
-        SimpleRefHolder<BinaryNode> bin(qore_socket_object_exec_recv_some_binary(s, to_read, timeout_ms, &xsink,
-            "recv"));
-        if (xsink) {
-            xsink.clear();
-            return -1;
-        }
-        if (!bin->size()) {
-            return 0;
-        }
-
-        const char* ptr = reinterpret_cast<const char*>(bin->getPtr());
-        size_t remaining = bin->size();
-        while (remaining) {
-            if (!(cancel_check++ % 100) && qore_check_cancel(&xsink, "socket object file descriptor receive")) {
-                xsink.clear();
-                return -1;
-            }
-            ssize_t rc = ::write(fd, ptr, remaining);
-            if (rc > 0) {
-                ptr += rc;
-                remaining -= rc;
-                continue;
-            }
-            if (rc < 0 && errno == EINTR) {
-                continue;
-            }
-            return -1;
-        }
-        received += bin->size();
-    }
-
-    return 0;
+    return rc;
 }
 
 static bool qore_socket_object_exec_wait_readiness(QoreSocketObject* s, int timeout_ms, unsigned direction,
@@ -2111,6 +2134,12 @@ void QoreSocketObject::recvToOutputStream(OutputStream *os, int64 size, int64 ti
         return;
     }
 
+    if (os->isIoThreadSafe()) {
+        qore_socket_object_exec_recv_output_stream_poll(this, os, nullptr, size, static_cast<int>(timeout_ms), xsink,
+            true, true);
+        return;
+    }
+
     my_socket_priv* priv = my_socket_priv::getPriv(*this);
     QoreSocketObjectAsyncIoGuard async_guard(*priv, xsink, NB_RECV);
     if (!async_guard) {
@@ -2119,7 +2148,11 @@ void QoreSocketObject::recvToOutputStream(OutputStream *os, int64 size, int64 ti
 
     int64 received = 0;
     int timeout = static_cast<int>(timeout_ms);
+    unsigned cancel_check = 0;
     while (size < 0 || received < size) {
+        if (!(cancel_check++ % 100) && qore_check_cancel(xsink, "socket object output stream receive")) {
+            return;
+        }
         if (size < 0 && received > 0 && !isOpen()) {
             return;
         }

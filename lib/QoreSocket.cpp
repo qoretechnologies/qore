@@ -8329,6 +8329,245 @@ QoreHashNode* SocketSendInputStreamPollOperation::continuePoll(ExceptionSink* xs
     }
 }
 
+SocketRecvOutputStreamPollOperation::SocketRecvOutputStreamPollOperation(ExceptionSink* xsink, QoreSocketObject* sock,
+        OutputStream* output_stream, QoreObject* output_stream_obj, int64 size, int timeout_ms,
+        bool emit_data_events)
+        : SocketPollSocketOperationBase(sock, NB_RECV), output_stream(output_stream),
+          output_stream_obj(output_stream_obj), size(size), timeout_ms(timeout_ms),
+          emit_data_events(emit_data_events) {
+    if (!output_stream->isIoThreadSafe()) {
+        xsink->raiseException("SOCKET-RECV-ERROR", "OutputStream is not I/O thread safe");
+        return;
+    }
+
+    is_pollable = output_stream->supportsNonBlockingIo();
+    if (is_pollable) {
+        output_fd = output_stream->getPollableDescriptor();
+        if (output_fd < 0) {
+            is_pollable = false;
+        }
+    }
+
+    AutoLocker al(sock->priv->m);
+    if (sock->priv->checkOpen(xsink)) {
+        return;
+    }
+
+    if (!sock->priv->setNonBlock(xsink, NB_RECV)) {
+        set_non_block = true;
+    }
+}
+
+QoreHashNode* SocketRecvOutputStreamPollOperation::getPollInfo(ExceptionSink* xsink, int events, bool output_wait) {
+    int64 poll_timeout_ms = -1;
+    if (timeout_ms >= 0) {
+        int us;
+        int64 now_s = q_epoch_us(us);
+        int64 now_ms = now_s * 1000 + us / 1000;
+        if (!wait_deadline_ms) {
+            wait_deadline_ms = now_ms + timeout_ms;
+        }
+        poll_timeout_ms = wait_deadline_ms - now_ms;
+        if (poll_timeout_ms < 0) {
+            poll_timeout_ms = 0;
+        }
+    }
+
+    QoreHashNode* raw_info = nullptr;
+    if (output_wait && is_pollable && output_fd >= 0) {
+        std::vector<std::pair<int, int>> extra_fds{{output_fd, SOCK_POLLOUT}};
+        raw_info = getSocketPollInfoHash(xsink, events, extra_fds);
+    } else {
+        raw_info = getSocketPollInfoHash(xsink, events);
+    }
+    if (!raw_info) {
+        return nullptr;
+    }
+    ReferenceHolder<QoreHashNode> info(raw_info, xsink);
+    if (poll_timeout_ms >= 0) {
+        info->setKeyValue("poll_timeout_ms", poll_timeout_ms, xsink);
+    }
+    return info.release();
+}
+
+int64 SocketRecvOutputStreamPollOperation::getNextChunkSize() const {
+    if (size < 0) {
+        return DEFAULT_SOCKET_BUFSIZE;
+    }
+    return QORE_MIN(size - bytes_received, (int64)DEFAULT_SOCKET_BUFSIZE);
+}
+
+void SocketRecvOutputStreamPollOperation::complete(ExceptionSink* xsink) {
+    if (output_stream && !need_reassign) {
+        output_stream->unassignThread(xsink);
+        if (*xsink) {
+            phase = Phase::Error;
+            return;
+        }
+    }
+    output_stream = nullptr;
+    phase = Phase::Done;
+    if (set_non_block) {
+        sock->priv->clearNonBlock(NB_RECV);
+        set_non_block = false;
+    }
+}
+
+bool SocketRecvOutputStreamPollOperation::checkTimeout(ExceptionSink* xsink) {
+    if (wait_deadline_ms <= 0) {
+        return false;
+    }
+    int us;
+    int64 now_s = q_epoch_us(us);
+    int64 now_ms = now_s * 1000 + us / 1000;
+    if (now_ms < wait_deadline_ms) {
+        return false;
+    }
+    xsink->raiseException("SOCKET-TIMEOUT", "socket operation timed out");
+    phase = Phase::Error;
+    return true;
+}
+
+void SocketRecvOutputStreamPollOperation::clearTimeout() {
+    wait_deadline_ms = 0;
+}
+
+QoreHashNode* SocketRecvOutputStreamPollOperation::continuePoll(ExceptionSink* xsink) {
+    if (need_reassign) {
+        need_reassign = false;
+        if (output_stream) {
+            output_stream->reassignThread(xsink);
+            if (*xsink) {
+                phase = Phase::Error;
+                return nullptr;
+            }
+        }
+    }
+
+    AutoLocker al(sock->priv->m);
+    if (phase == Phase::RecvChunk && size < 0 && bytes_received > 0 && !sock->priv->socket->isOpen()) {
+        complete(xsink);
+        return nullptr;
+    }
+    if (sock->priv->checkOpen(xsink)) {
+        phase = Phase::Error;
+        return nullptr;
+    }
+    if (checkTimeout(xsink)) {
+        return nullptr;
+    }
+
+    unsigned loop = 0;
+    while (true) {
+        switch (phase) {
+            case Phase::RecvChunk: {
+                if (size >= 0 && bytes_received >= size) {
+                    complete(xsink);
+                    return nullptr;
+                }
+
+                int64 chunk_size = getNextChunkSize();
+                if (chunk_size <= 0) {
+                    complete(xsink);
+                    return nullptr;
+                }
+
+                if (!poll_state) {
+                    poll_state.reset(sock->priv->socket->startRecvSome(xsink, static_cast<size_t>(chunk_size)));
+                    if (*xsink || !poll_state) {
+                        phase = Phase::Error;
+                        return nullptr;
+                    }
+                }
+
+                int rc = poll_state->continuePoll(xsink);
+                if (*xsink) {
+                    phase = Phase::Error;
+                    poll_state.reset();
+                    return nullptr;
+                }
+                if (rc) {
+                    return getPollInfo(xsink, rc);
+                }
+
+                SimpleRefHolder<BinaryNode> chunk(poll_state->takeOutput().get<BinaryNode>());
+                poll_state.reset();
+                if (!chunk || !chunk->size()) {
+                    if (size >= 0) {
+                        xsink->raiseException("SOCKET-RECV-ERROR", "Unexpected end of stream");
+                        phase = Phase::Error;
+                        return nullptr;
+                    }
+                    complete(xsink);
+                    return nullptr;
+                }
+
+                bytes_received += chunk->size();
+                if (emit_data_events) {
+                    qore_socket_private::get(*sock->priv->socket)->do_data_event(
+                        QORE_EVENT_SOCKET_DATA_READ, QORE_SOURCE_SOCKET, **chunk);
+                }
+                current_chunk = chunk.release();
+                write_offset = 0;
+                clearTimeout();
+                phase = Phase::WriteChunk;
+                continue;
+            }
+
+            case Phase::WriteChunk: {
+                while (write_offset < current_chunk->size()) {
+                    if (is_pollable) {
+                        assert(output_fd >= 0);
+                        struct pollfd pfd;
+                        pfd.fd = output_fd;
+                        pfd.events = POLLOUT;
+                        pfd.revents = 0;
+                        int poll_rv = ::poll(&pfd, 1, 0);
+                        if (poll_rv < 0) {
+                            xsink->raiseException("SOCKET-RECV-ERROR", "poll() on output stream fd failed: %s",
+                                strerror(errno));
+                            phase = Phase::Error;
+                            return nullptr;
+                        }
+                        if (poll_rv == 0) {
+                            return getPollInfo(xsink, SOCK_POLLIN, true);
+                        }
+                    }
+
+                    const char* ptr = reinterpret_cast<const char*>(current_chunk->getPtr()) + write_offset;
+                    size_t remaining = current_chunk->size() - write_offset;
+                    int64 written = output_stream->writeNonBlock(ptr, remaining, xsink);
+                    if (*xsink || written < 0) {
+                        phase = Phase::Error;
+                        return nullptr;
+                    }
+                    if (!written) {
+                        return getPollInfo(xsink, SOCK_POLLIN, true);
+                    }
+
+                    write_offset += static_cast<size_t>(written);
+                    clearTimeout();
+                    if (++loop >= max_nonblock_ops && write_offset < current_chunk->size()) {
+                        return getPollInfo(xsink, SOCK_POLLIN, true);
+                    }
+                }
+
+                current_chunk = nullptr;
+                write_offset = 0;
+                if (++loop >= max_nonblock_ops && (size < 0 || bytes_received < size)) {
+                    return getPollInfo(xsink, SOCK_POLLIN);
+                }
+                phase = Phase::RecvChunk;
+                continue;
+            }
+
+            case Phase::Done:
+            case Phase::Error:
+                return nullptr;
+        }
+    }
+}
+
 QoreHashNode* SocketRecvPollOperationBase::continuePoll(ExceptionSink* xsink) {
     AutoLocker al(sock->priv->m);
 

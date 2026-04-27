@@ -40,6 +40,7 @@
 #include "qore/intern/qore_socket_private.h"
 #include "qore/intern/QC_Socket.h"
 #include "qore/InputStream.h"
+#include "qore/OutputStream.h"
 #include "qore/intern/QuicSession.h"
 
 class QoreEventNotifier;
@@ -864,6 +865,91 @@ private:
 
     DLLLOCAL virtual bool abortNeedsClose() const override {
         return socket_data_sent || bytes_sent > 0;
+    }
+};
+
+//! Poll operation to receive socket data and write it to an OutputStream
+/** State machine: receiving-chunk -> writing-chunk -> done
+
+    @since %Qore 2.3
+*/
+class SocketRecvOutputStreamPollOperation : public SocketPollSocketOperationBase {
+public:
+    DLLLOCAL SocketRecvOutputStreamPollOperation(ExceptionSink* xsink, QoreSocketObject* sock,
+        OutputStream* output_stream, QoreObject* output_stream_obj, int64 size, int timeout_ms,
+        bool emit_data_events = true);
+
+    DLLLOCAL void deref(ExceptionSink* xsink) {
+        if (ROdereference()) {
+            if (set_non_block) {
+                sock->clearNonBlock(NB_RECV);
+            }
+            if (output_stream && !need_reassign) {
+                output_stream->unassignThread(xsink);
+            }
+            if (output_stream_obj) {
+                output_stream_obj->deref(xsink);
+                output_stream_obj = nullptr;
+            }
+            sock->deref(xsink);
+            delete this;
+        }
+    }
+
+    DLLLOCAL virtual bool goalReached() const override {
+        return phase == Phase::Done;
+    }
+
+    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override;
+
+    DLLLOCAL virtual const char* getStateImpl() const override {
+        switch (phase) {
+            case Phase::RecvChunk: return "receiving-chunk";
+            case Phase::WriteChunk: return "writing-chunk";
+            case Phase::Done: return "done";
+            case Phase::Error: return "error";
+            default: return "unknown";
+        }
+    }
+
+    DLLLOCAL virtual void abort(ExceptionSink* xsink) override {
+        if (output_stream && !need_reassign) {
+            output_stream->unassignThread(xsink);
+        }
+        output_stream = nullptr;
+        if (output_stream_obj) {
+            output_stream_obj->deref(xsink);
+            output_stream_obj = nullptr;
+        }
+        current_chunk = nullptr;
+        SocketPollSocketOperationBase::abort(xsink);
+    }
+
+private:
+    enum class Phase { RecvChunk, WriteChunk, Done, Error };
+
+    DLLLOCAL QoreHashNode* getPollInfo(ExceptionSink* xsink, int events, bool output_wait = false);
+    DLLLOCAL int64 getNextChunkSize() const;
+    DLLLOCAL void complete(ExceptionSink* xsink);
+    DLLLOCAL bool checkTimeout(ExceptionSink* xsink);
+    DLLLOCAL void clearTimeout();
+
+    Phase phase = Phase::RecvChunk;
+    SimpleRefHolder<OutputStream> output_stream;
+    QoreObject* output_stream_obj = nullptr;
+    int64 size = -1;
+    int64 bytes_received = 0;
+    int timeout_ms = -1;
+    int64 wait_deadline_ms = 0;
+    int output_fd = -1;
+    bool is_pollable = true;
+    bool need_reassign = true;
+    bool emit_data_events = true;
+    SimpleRefHolder<BinaryNode> current_chunk;
+    size_t write_offset = 0;
+
+    DLLLOCAL virtual bool abortNeedsClose() const override {
+        return bytes_received > 0 || current_chunk;
     }
 };
 
