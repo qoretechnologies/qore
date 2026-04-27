@@ -156,9 +156,10 @@ public class Http1ClientConnection inherits HttpClientConnection {
         @see submitRequestImpl()
     */
     int submitRequestStreaming(string method, string path, *hash<auto> headers,
-            *data body, Channel channel, bool streaming = True) {
+            *data body, Channel channel, bool streaming = True,
+            bool body_streaming = False) {
         int sid = poll_op.submitRequestStreaming(method, path, headers, body, channel,
-            max_concurrent_streams, streaming);
+            max_concurrent_streams, streaming, body_streaming);
         # Wake the I/O controller so it processes the queued request
         *object ctl;
         {
@@ -169,6 +170,68 @@ public class Http1ClientConnection inherits HttpClientConnection {
             ctl.wakeSocket(getSocket());
         }
         return sid;
+    }
+
+    #! Sends a request-body chunk on a streaming-send H1 request
+    /** Used by @ref Http1ClientStreamHandle::sendData() to feed the
+        chunked request body of a stream submitted with
+        \c body_streaming = \c True.
+
+        HTTP/1.1 chunked transfer is sequential at the wire — the request
+        body must be fully sent before the response body starts.  But
+        callers can interleave \c sendData() / \c readData() at the
+        application layer; the request-body chunks queue until the I/O
+        thread sends them, and the response chunks queue in the data
+        channel until the caller reads them.
+
+        @param stream_id the stream ID returned by \c submitRequestStreaming
+            (kept for API parity with H2/H3 — H1 is single-stream and the
+            value is currently advisory)
+        @param data the chunk (string or binary)
+        @param end_stream if \c True, signal end-of-request-body — the
+            poll op writes the final \c "0\\r\\n" terminator and any
+            trailers, then transitions to response reading
+
+        @throw HTTP1-STATE-ERROR if the connection is not READY
+
+        @since %Qore 2.3
+    */
+    sendStreamData(int stream_id, data data, bool end_stream = False) {
+        if (!self.isReady()) {
+            throw "HTTP1-STATE-ERROR",
+                sprintf("cannot send data in state: %y", self.getConnectionState());
+        }
+        *object ctl;
+        {
+            AutoLock al(lock);
+            last_activity = now_us();
+            ctl = controller_ref;
+        }
+        log(LoggerLevel::DEBUG,
+            "sending data on H1 stream %d (end_stream=%y)", stream_id, end_stream);
+        if (data.size() > 0) {
+            poll_op.pushSendData(data);
+        }
+        if (end_stream) {
+            poll_op.pushSendData();  # NOTHING = EOF sentinel
+        }
+        if (ctl) {
+            ctl.wakeSocket(getSocket());
+        }
+    }
+
+    #! Sets HTTP/1.1 chunked-transfer trailers on a streaming-send request
+    /** Trailers are emitted after the final \c "0\\r\\n" terminator when
+        @ref sendStreamData is called with \c end_stream = \c True.  Each
+        call replaces any previously-set trailers.
+
+        @param trailers map of trailer header name to value; pass \c NOTHING
+            to clear
+
+        @since %Qore 2.3
+    */
+    setTrailers(*hash<string, string> trailers) {
+        poll_op.setTrailers(trailers);
     }
 
     #! Submits an SSE request with Queue-based parsed event delivery

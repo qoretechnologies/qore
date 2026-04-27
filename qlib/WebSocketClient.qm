@@ -3098,8 +3098,13 @@ ws.setEventQueue();
 
         string path = getUrlPath();
 
-        # Start streaming on the already-acquired stream
-        stream.startStreaming("GET", path, hdr, True);
+        # Start streaming on the already-acquired stream.  body_streaming=False:
+        # the HTTP/1.1 WebSocket Upgrade handshake has NO request body — WS
+        # frames flow over the raw socket after 101 Switching Protocols,
+        # not as a chunked HTTP request body.  Passing True here would add
+        # "Transfer-Encoding: chunked" to the upgrade request and the server
+        # would reject the handshake.
+        stream.startStreaming("GET", path, hdr, False);
         hcio_stream = stream;
 
         # Read the 101 response
@@ -3344,10 +3349,15 @@ ws.setEventQueue();
 
         string path = getUrlPath();
 
-        # Use streaming mode so the 101 response headers are delivered via
-        # Channel, and the PROTOCOL_SWITCHED state enables raw bidirectional I/O
+        # Streaming mode so the 101 response headers are delivered via
+        # Channel, and the PROTOCOL_SWITCHED state enables raw bidirectional
+        # I/O.  body_streaming=False: the H1 WebSocket Upgrade handshake has
+        # NO request body — WS frames flow over the raw socket after 101
+        # Switching Protocols, not as a chunked HTTP request body.  Passing
+        # True here would add "Transfer-Encoding: chunked" to the upgrade
+        # request and the server would reject the handshake.
         hcio_stream = hcio_mgr.acquireAndStartStreaming(http_opts.url, "GET", path, hdr,
-            True);
+            False);
 
         # Read the 101 response headers from the Channel
         auto rh = hcio_stream.readData(timeout_ms);
