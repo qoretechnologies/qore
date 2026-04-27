@@ -824,9 +824,11 @@ Publish is atomic with respect to all concurrent registrants and all hot-path
 readers. There is no observer-visible state where a module's descriptors are
 partially published: the registry write lock covers construction of the next
 immutable descriptor/helper snapshot and the release-store that makes it the
-committed snapshot. Hot-path readers acquire-load the snapshot pointer/generation
-and read only immutable committed tables; they never read the mutable pending
-table and never depend on the registry lock.
+committed snapshot. Hot-path readers acquire-load the snapshot pointer and read
+only immutable committed tables; they never read the mutable pending table and
+never depend on the registry lock. List-building reflection APIs that need a
+consistent multi-descriptor view additionally read and re-check the generation
+as described below.
 
 The generation counter accompanies the pointer so list-returning reflection
 APIs that snapshot the registry state for consistent multi-descriptor
@@ -834,7 +836,7 @@ queries can detect a superseded snapshot mid-iteration. Hot-path dispatch
 and single-descriptor lookups (`PluginRegistry::resolveOperation`,
 cross-type lookup) read the pointer alone and ignore the generation; only
 list-returning reflection APIs (`getTypes`, `getOperations`,
-`getRegisteredModules`, `getProcessModules`, `getActiveModules`) compare
+`getProcessModules`, `getActiveModules`) compare
 generations across reads to confirm a stable snapshot for the duration of
 a list build. The pair is conceptual; the implementation is free to pack
 them into a single 128-bit DWCAS, into two separate atomics with a
@@ -1592,13 +1594,14 @@ diagnostic message MUST include: offending module name, offending type/operation
 name when known, the field that violated the rule for field-level checks,
 expected vs. actual values when a comparison exists, and the section number of
 this design that defines the rule. When the structured payload populates any
-`related_*` field, the diagnostic message MUST include the verbatim string
-from that field — paraphrased references like "the previously-registered
-module" do not satisfy the contract. The verbatim name appears in the
-message exactly as it appears in the structured field so test harnesses can
-match either surface and get the same answer; the message is the
-human-readable surface and the structured fields are the test-harness
-surface, but both must carry the same critical comparison data.
+`related_*` field, the diagnostic message MUST include that name rather than a
+paraphrase such as "the previously-registered module". Printable names appear
+byte-for-byte in the message. Names containing control characters, ambiguous
+whitespace, backslash, quote, or invalid UTF-8 are rendered with the protocol's
+diagnostic escaping (`\xHH` per byte); this escaping is bijective, so a test can
+recover the exact structured-field bytes from the message. The message is the
+human-readable surface and the structured fields are the test-harness surface,
+but both must carry the same critical comparison data.
 
 | Error code | Raised by | Section |
 |---|---|---|
@@ -1618,7 +1621,7 @@ surface, but both must carry the same critical comparison data.
 | `PLUGIN-HELPER-RESULT-TYPE-MISMATCH` | runtime verifier | §3.4 |
 | `PLUGIN-HELPER-ALIAS-CONTRACT-VIOLATED` | runtime verifier | §3.3 (`ReturnsLhs`/`ReturnsRhs`) |
 | `PLUGIN-HELPER-ABI-MISMATCH` | runtime verifier | §3.5 |
-| `QORD-PLUGIN-IMPORT-MISSING` | QORD loader; subreason `module_not_loaded` when no module by that name is loaded in the process, `module_pending` when the named import matches a still-pending module-init transaction. Both cases are positive subreasons so harnesses match on the subreason rather than its absence | §3.9 |
+| `QORD-PLUGIN-IMPORT-MISSING` | QORD loader; subreason `module_not_loaded` when no module by that name is loaded in the process, when its load already failed, or when its module-init transaction rolled back; `module_pending` when the named import matches a still-pending module-init transaction. Both cases are positive subreasons so harnesses match on the subreason rather than its absence | §3.9 |
 | `QORD-PLUGIN-HELPER-REF-INVALID` | QORD loader (`slot_idx`, `import_idx`, or `op_local_id` invalid) | §3.9 |
 | `QORD-PLUGIN-SIGNATURE-HASH-MISMATCH` | QORD loader | §3.9 |
 | `QORD-PLUGIN-SIGNATURE-VERSION-UNSUPPORTED` | QORD loader (unrecognised `canonical_signature_version` byte; subreason `unsupported_canonical_version`) | §3.9 |
@@ -1771,9 +1774,10 @@ The core-subreason naming convention is:
   empty-but-non-null string is a separate failure if the field would
   accept "exists but invalid" semantics.
 - `<field>_missing` is intentionally broader, covering both null and
-  empty as a single subreason. Use it when the distinction between
-  null and empty adds no diagnostic value for the field. Currently
-  only `module_path_missing` follows this form.
+  empty string values, or a required non-string field that is absent as a
+  single subreason. Use it when finer distinctions add no diagnostic value
+  for the field. Currently `module_path_missing` and `module_handle_missing`
+  follow this form.
 
 The v1 protocol defines these values; future revisions append without
 renaming or removing:
@@ -1801,13 +1805,13 @@ renaming or removing:
 | `under_consumed` | `QORD-PLUGIN-PAYLOAD-LENGTH-MISMATCH` |
 | `unsupported_canonical_version` | `QORD-PLUGIN-SIGNATURE-VERSION-UNSUPPORTED` |
 | `helper_symbol_not_found` | `PLUGIN-REGISTRATION-HELPER-SYMBOL-MISSING` |
-| `module_handle_missing` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` |
+| `module_handle_missing` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` (required module handle pointer is null; intentionally broader than `null_<field>` because no valid empty-handle state exists) |
 | `module_handle_stale` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` |
 | `registration_already_pending` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` (second `qore_register_plugin_types_v1` call within one module-init transaction) |
 | `wait_cycle` | `PLUGIN-REGISTRATION-WAIT-CYCLE`; `related_module_name` is the byte-exact module name of the other transaction completing the wait-for cycle |
 | `pending_conflict` | `PLUGIN-CROSS-TYPE-CONFLICT` from `qore_validate_plugin_types_v1` when a conflict is detected against a still-pending registration; `related_module_name` is the byte-exact name of the pending module |
 | `module_pending` | `QORD-PLUGIN-IMPORT-MISSING` when `PLUGIN_IMPORTS` references a still-pending module-init transaction; `related_module_name` is the byte-exact name of the pending module |
-| `module_not_loaded` | `QORD-PLUGIN-IMPORT-MISSING` when `PLUGIN_IMPORTS` references a module name that is not loaded in the process and is not pending; `related_module_name` is the byte-exact name of the missing module |
+| `module_not_loaded` | `QORD-PLUGIN-IMPORT-MISSING` when `PLUGIN_IMPORTS` references a module name that is not loaded in the process and is not pending, or whose previous load failed or rolled back; `related_module_name` is the byte-exact name of the missing module |
 | `extension:<extension_id>:<reason>` | `PLUGIN-EXTENSION-VALIDATION-FAILED`. Format uses colon separators (not dots) because canonical extension ids contain dots — `qore.plugin.llvm.codegen` → `extension:qore.plugin.llvm.codegen:unsupported_target`. Parsers split on the first and last `:`; `extension_id` is byte-exact equal to the registered `QorePluginExtension::extension_id` and therefore cannot itself contain `:`; `reason` is ASCII snake_case owned by the extension ABI. The literal `extension` prefix is reserved and never used as a core subreason. |
 
 Implementations MUST NOT emit subreason strings outside this table for
