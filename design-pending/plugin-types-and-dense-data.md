@@ -826,9 +826,9 @@ partially published: the registry write lock covers construction of the next
 immutable descriptor/helper snapshot and the release-store that makes it the
 committed snapshot. Hot-path readers acquire-load the snapshot pointer and read
 only immutable committed tables; they never read the mutable pending table and
-never depend on the registry lock. List-building reflection APIs that need a
-consistent multi-descriptor view additionally read and re-check the generation
-as described below.
+never depend on the registry lock. List-building reflection APIs additionally
+read and re-check the generation counter to confirm a consistent
+multi-descriptor view, as detailed in the next paragraph.
 
 The generation counter accompanies the pointer so list-returning reflection
 APIs that snapshot the registry state for consistent multi-descriptor
@@ -1595,13 +1595,54 @@ name when known, the field that violated the rule for field-level checks,
 expected vs. actual values when a comparison exists, and the section number of
 this design that defines the rule. When the structured payload populates any
 `related_*` field, the diagnostic message MUST include that name rather than a
-paraphrase such as "the previously-registered module". Printable names appear
-byte-for-byte in the message. Names containing control characters, ambiguous
-whitespace, backslash, quote, or invalid UTF-8 are rendered with the protocol's
-diagnostic escaping (`\xHH` per byte); this escaping is bijective, so a test can
-recover the exact structured-field bytes from the message. The message is the
+paraphrase such as "the previously-registered module". The message is the
 human-readable surface and the structured fields are the test-harness surface,
 but both must carry the same critical comparison data.
+
+**Diagnostic name escaping.** Names rendered into messages are emitted
+byte-for-byte except for the following byte-set, which is rendered as
+`\xHH` (two uppercase hex digits per byte):
+
+- `0x00`–`0x1F` (C0 controls, including `TAB`, `LF`, `CR`)
+- `0x7F` (DEL)
+- `0x80`–`0x9F` (C1 controls, when the byte is the first byte of a valid
+  UTF-8 sequence whose code point falls in this range)
+- `0x22` (`"`), `0x27` (`'`), `0x5C` (`\`)
+- any byte that does not start a valid UTF-8 sequence
+
+All other bytes appear verbatim. This byte-set is normative: implementations
+MUST escape exactly this set. Adding bytes to the escape set is a future
+revision to this design; subtracting bytes never happens.
+
+**UTF-8 scanner discipline.** The scanner is byte-oriented. At each
+position, if the next byte starts a complete and valid UTF-8 sequence
+(1, 2, 3, or 4 bytes per RFC 3629), the entire code point is consumed and
+emitted either verbatim or escaped according to the byte-set rule above
+(the escape decision uses the first byte of the sequence). If the next
+byte does not start a valid sequence — including stray continuation
+bytes, truncated sequences, overlong encodings, and surrogate-range code
+points — that single byte is emitted as `\xHH` and the scanner advances
+by one byte. Bytes after an invalid byte are re-evaluated from scratch.
+
+**Bijection.** The escaping is bijective: a parser scanning the rendered
+output recovers the exact structured-field bytes. The bijection holds
+because `\` is unconditionally in the escape set, so a literal
+backslash in the input never collides with the rendered escape sequence.
+Worked example: input bytes `5C 78 34 44` (the four literal characters
+`\x4D`) are rendered as `\x5Cx4D` — the `\` is escaped to `\x5C`, then
+`x4D` appears verbatim. A bijective parser scanning `\x5Cx4D` consumes
+`\x5C` as one escape (decoding to `0x5C`), then reads `x`, `4`, `D` as
+three verbatim bytes (`0x78`, `0x34`, `0x44`). The original input bytes
+are recovered exactly.
+
+**Length.** Messages have no protocol-imposed length cap; the
+verbatim-plus-escape encoding can inflate output up to 4× input bytes for
+fully invalid input. Module/type/operation names are short enough in
+practice that this is not a concern. Implementations rendering messages
+to fixed-width displays may truncate, but truncated output breaks the
+bijective recovery guarantee — tools that need exact byte recovery
+should read the structured `related_*` fields rather than parsing
+truncated messages.
 
 | Error code | Raised by | Section |
 |---|---|---|
@@ -1805,7 +1846,7 @@ renaming or removing:
 | `under_consumed` | `QORD-PLUGIN-PAYLOAD-LENGTH-MISMATCH` |
 | `unsupported_canonical_version` | `QORD-PLUGIN-SIGNATURE-VERSION-UNSUPPORTED` |
 | `helper_symbol_not_found` | `PLUGIN-REGISTRATION-HELPER-SYMBOL-MISSING` |
-| `module_handle_missing` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` (required module handle pointer is null; intentionally broader than `null_<field>` because no valid empty-handle state exists) |
+| `module_handle_missing` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` (null module handle pointer; uses the `<field>_missing` convention from the preamble) |
 | `module_handle_stale` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` |
 | `registration_already_pending` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` (second `qore_register_plugin_types_v1` call within one module-init transaction) |
 | `wait_cycle` | `PLUGIN-REGISTRATION-WAIT-CYCLE`; `related_module_name` is the byte-exact module name of the other transaction completing the wait-for cycle |
