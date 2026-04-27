@@ -170,6 +170,16 @@ These options are automatically inherited by RestConnection, SoapConnection,
 and any other connection type that composes
 `HttpConnection::ConnectionScheme.options`.
 
+`HttpConnection` advertises these options for connection-schema inheritance,
+but the raw `HTTPClient` object returned by `HttpConnection` does not perform
+the SPNEGO exchange itself. When `negotiate_auth` is enabled, raw
+`HttpConnection` paths that return or drive `HTTPClient` must raise a clear
+`HTTP-NEGOTIATE-AUTH-ERROR` and direct callers to `RestConnection`,
+`RestClient`, or `RestClientIo`. Adding native support to raw `HTTPClient`
+would require moving the Negotiate retry state machine into the low-level
+HTTP client across its synchronous, polling, callback, and streaming APIs,
+which is intentionally out of scope for this phase.
+
 Because `krb5` is required for Qore builds, `RestClientIo` and connection
 option handling do not need optional-module branches.
 

@@ -40,7 +40,7 @@ public namespace ConnectionProvider {
       \c "auto"); HTTP/2 (\c "2.0" or \c "auto") requires TLS and is negotiated via ALPN; HTTP/3 (\c "3.0")
       requires TLS and uses QUIC as the transport protocol
     - \c "max_redirects": maximum redirects to support
-    - \c "negotiate_auth": enables Kerberos/SPNEGO HTTP Negotiate authentication for clients that support it
+    - \c "negotiate_auth": enables Kerberos/SPNEGO HTTP Negotiate authentication for REST clients that support it
     - \c "negotiate_credential_cache": credential cache to use for Kerberos/SPNEGO HTTP Negotiate authentication
     - \c "negotiate_delegation_mode": delegation mode for Kerberos/SPNEGO HTTP Negotiate authentication
     - \c "negotiate_keytab": client keytab to use for Kerberos/SPNEGO HTTP Negotiate authentication
@@ -65,6 +65,11 @@ public namespace ConnectionProvider {
 
     @see @ref Qore::HTTPClient::constructor(hash<auto>) "HTTPClient::constructor(hash<auto> opts)" for more
     information on the above options
+
+    @note The raw @ref Qore::HTTPClient "HTTPClient" object returned by this connection does not implement the
+    SPNEGO retry exchange. If \c negotiate_auth is enabled, raw \c HttpConnection paths such as \c get(),
+    \c startPollConnect(), and \c startPollRequest() raise \c HTTP-NEGOTIATE-AUTH-ERROR. Use
+    \c RestConnection, \c RestClient, or \c RestClientIo for Kerberos/SPNEGO HTTP Negotiate authentication.
 */
 public class HttpConnection inherits AbstractConnectionWithInfo {
     public {
@@ -100,7 +105,8 @@ public class HttpConnection inherits AbstractConnectionWithInfo {
                 "display_name": "Kerberos Negotiate Auth?",
                 "short_desc": "Enables Kerberos/SPNEGO HTTP Negotiate authentication",
                 "type": "bool",
-                "desc": "Enables Kerberos/SPNEGO HTTP Negotiate authentication for clients that support it",
+                "desc": "Enables Kerberos/SPNEGO HTTP Negotiate authentication for REST clients that support it; "
+                    "raw HTTPClient paths reject this option with HTTP-NEGOTIATE-AUTH-ERROR",
                 "default_value": False,
             },
             "negotiate_service_principal": <ConnectionOptionInfo>{
