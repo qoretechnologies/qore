@@ -568,6 +568,35 @@ void qore_aot_add_constant_value_reverse_mappings(AOTConstantReverseMap& crm,
     aot_add_constant_value_reverse_mappings_impl(crm, v, path, seen, true);
 }
 
+static bool aot_constant_path_belongs_to_fqns(const std::string& path,
+        const std::unordered_set<std::string>& excluded_fqns,
+        const std::string& excluded_direct_fqn) {
+    if (!aot_is_encoded_constant_path(path.c_str())) {
+        return !excluded_direct_fqn.empty() && path == excluded_direct_fqn;
+    }
+
+    size_t pos = strlen(AOT_CONST_PATH_PREFIX);
+    size_t base_len = 0;
+    if (!aot_parse_size_component(path, pos, base_len) || pos + base_len > path.size()) {
+        return false;
+    }
+    return excluded_fqns.find(path.substr(pos, base_len)) != excluded_fqns.end();
+}
+
+static AOTConstantReverseMap aot_filter_constant_reverse_map(
+        const AOTConstantReverseMap& crm, const std::vector<std::string>& excluded_fqns,
+        const std::string& excluded_direct_fqn) {
+    std::unordered_set<std::string> excluded_set(excluded_fqns.begin(), excluded_fqns.end());
+    AOTConstantReverseMap rv;
+    rv.reserve(crm.size());
+    for (const auto& it : crm) {
+        if (!aot_constant_path_belongs_to_fqns(it.second, excluded_set, excluded_direct_fqn)) {
+            rv.emplace(it.first, it.second);
+        }
+    }
+    return rv;
+}
+
 // Resolve a constant FQN (e.g. "Reflection::AutoHashType" or
 // "Some::Class::MEMBER") to its ConstantEntry via the given program, falling
 // back to a class-constant lookup when the name isn't a namespace constant.
@@ -4175,6 +4204,15 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
     writer.writeU32(static_cast<uint32_t>(funcs.size()));
 
     for (auto& func : funcs) {
+        AOTConstantReverseMap filtered_crm;
+        const AOTConstantReverseMap* func_const_reverse_map = const_reverse_map;
+        if (const_reverse_map && (!func.const_reverse_map_exclude_fqns.empty()
+                || !func.const_reverse_map_exclude_direct_fqn.empty())) {
+            filtered_crm = aot_filter_constant_reverse_map(*const_reverse_map,
+                func.const_reverse_map_exclude_fqns, func.const_reverse_map_exclude_direct_fqn);
+            func_const_reverse_map = &filtered_crm;
+        }
+
         // Save entry start position and write size placeholder
         uint32_t entry_size_pos = writer.position();
         writer.writeU32(0);  // placeholder for entry size (patched below)
@@ -4215,7 +4253,8 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
                 error = "unsupported expression slot kind " + std::to_string(static_cast<uint8_t>(expr.kind));
                 return false;
             }
-            AOTExprSlotWriteCtx wctx{writer, expr, func.slot_ids.locals, func.slot_ids.globals, const_reverse_map};
+            AOTExprSlotWriteCtx wctx{writer, expr, func.slot_ids.locals, func.slot_ids.globals,
+                func_const_reverse_map};
             if (!kinfo->write_fn(wctx)) {
                 if (error.empty()) {
                     error = "failed to serialize expression slot kind "
@@ -4257,7 +4296,7 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
             writer.writeU8(lvid.delete_lvalue_expr.hasNode() ? 1 : 0);
             if (lvid.delete_lvalue_expr.hasNode()) {
                 if (!classifyAndWriteExpr(writer, lvid.delete_lvalue_expr,
-                        func.slot_ids.locals, func.slot_ids.globals, const_reverse_map)) {
+                        func.slot_ids.locals, func.slot_ids.globals, func_const_reverse_map)) {
                     error = "failed to serialize LValuePath delete expression in function '"
                         + func.name + "'";
                     return false;
@@ -4307,10 +4346,10 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
                 // using the parent function's slot info for variable resolution
                 const auto& parent_locals = func.slot_ids.locals;
                 const auto& parent_globals = func.slot_ids.globals;
-                auto writeExpr = [&parent_locals, &parent_globals, const_reverse_map](
+                auto writeExpr = [&parent_locals, &parent_globals, func_const_reverse_map](
                         QoreAOTBinaryWriter& w, const QoreValue& expr) -> bool {
                     return classifyAndWriteExpr(w, expr, parent_locals, parent_globals,
-                        const_reverse_map);
+                        func_const_reverse_map);
                 };
                 if (!serializeIRFunction(writer, *handler_ir, writeExpr)) {
                     // Handler IR serialization failed — mark as unavailable

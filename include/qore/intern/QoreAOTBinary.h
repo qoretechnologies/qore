@@ -1093,6 +1093,10 @@ struct AOTCompiledFuncWithSlots {
     int num_regex_cases = 0;         //!< number of regex case slots (SwitchRegexMatch)
     int num_lv_path_insts = 0;       //!< number of LValuePath instruction slots
     AOTSlotIdentities slot_ids;      //!< extracted slot identities
+    //! Direct constant FQN that must be ignored while serializing this function's slot payloads.
+    std::string const_reverse_map_exclude_direct_fqn;
+    //! Constant FQNs whose nested reverse-map paths must be ignored while serializing this function's slot payloads.
+    std::vector<std::string> const_reverse_map_exclude_fqns;
     //! Handler IR functions for each statement slot (indexed by stmt slot index).
     //! Non-null entries have serializable handler IR; null entries need AST fallback.
     std::vector<const QoreIRFunction*> handler_irs;
@@ -1117,6 +1121,10 @@ struct AOTCompiledInitFunc {
     int num_regex_cases = 0;
     int num_lv_path_insts = 0;
     AOTSlotIdentities slot_ids;
+    //! Direct constant FQN that must be ignored while serializing this init function's slot payloads.
+    std::string const_reverse_map_exclude_direct_fqn;
+    //! Constant FQNs whose nested reverse-map paths must be ignored while serializing this init function's slot payloads.
+    std::vector<std::string> const_reverse_map_exclude_fqns;
     uint64_t feature_flags = 0;
 
     //! Target type for the init function result

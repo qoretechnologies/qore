@@ -1576,25 +1576,222 @@ static AOTConstantReverseMap buildConstantReverseMap(qore_ns_private* root_ns) {
     return crm;
 }
 
-static bool aotCrmPathBelongsToConstant(const std::string& path, const std::string& fqn) {
-    if (path == fqn) {
+static std::string makeAOTConstantFQN(const std::string& container_path, const std::string& item_name) {
+    return container_path.empty() ? item_name : container_path + "::" + item_name;
+}
+
+static bool isAOTEncodedConstantPath(const std::string& path) {
+    static constexpr const char prefix[] = "@qore-aot-const-path:";
+    static constexpr size_t prefix_len = sizeof(prefix) - 1;
+    return path.compare(0, prefix_len, prefix) == 0;
+}
+
+static bool getAOTConstantPathBase(const std::string& path, std::string& base) {
+    static constexpr const char prefix[] = "@qore-aot-const-path:";
+    static constexpr size_t prefix_len = sizeof(prefix) - 1;
+
+    if (!isAOTEncodedConstantPath(path)) {
+        base = path;
         return true;
     }
 
-    std::string encoded_prefix = "@qore-aot-const-path:" + std::to_string(fqn.size()) + ":" + fqn;
-    return path.compare(0, encoded_prefix.size(), encoded_prefix) == 0;
+    size_t pos = prefix_len;
+    if (pos >= path.size() || path[pos] < '0' || path[pos] > '9') {
+        return false;
+    }
+    size_t len = 0;
+    while (pos < path.size() && path[pos] >= '0' && path[pos] <= '9') {
+        len = (len * 10) + static_cast<size_t>(path[pos] - '0');
+        ++pos;
+    }
+    if (pos >= path.size() || path[pos] != ':') {
+        return false;
+    }
+    ++pos;
+    if (pos + len > path.size()) {
+        return false;
+    }
+    base.assign(path, pos, len);
+    return true;
 }
 
-static AOTConstantReverseMap filterSelfConstantReverseMap(
-        const AOTConstantReverseMap& crm, const std::string& fqn) {
+static AOTConstantReverseMap filterPendingInitConstantReverseMap(
+        const AOTConstantReverseMap& crm, const std::unordered_set<std::string>& pending_fqns,
+        const std::string& direct_exclude_fqn) {
     AOTConstantReverseMap rv;
     rv.reserve(crm.size());
     for (const auto& it : crm) {
-        if (!aotCrmPathBelongsToConstant(it.second, fqn)) {
-            rv.emplace(it.first, it.second);
+        if (!direct_exclude_fqn.empty() && it.second == direct_exclude_fqn) {
+            continue;
         }
+        if (isAOTEncodedConstantPath(it.second)) {
+            std::string base;
+            if (getAOTConstantPathBase(it.second, base) && pending_fqns.find(base) != pending_fqns.end()) {
+                continue;
+            }
+        }
+        rv.emplace(it.first, it.second);
     }
     return rv;
+}
+
+static void addConstantRootReverseMapping(AOTConstantReverseMap& crm,
+        const QoreValue& v, const std::string& fqn) {
+    if (!v.hasNode()) {
+        return;
+    }
+    const AbstractQoreNode* node = v.getInternalNode();
+    if (node && crm.find(node) == crm.end()) {
+        crm.emplace(node, fqn);
+    }
+}
+
+static void buildPendingSafeConstantReverseMapImpl(qore_ns_private* ns,
+        AOTConstantReverseMap& crm, const std::unordered_set<std::string>& pending_fqns) {
+    if (!ns) {
+        return;
+    }
+
+    std::string ns_path;
+    ns->getPath(ns_path, false, true);
+
+    for (auto& kv : ns->constant.cnemap) {
+        ConstantEntry* ce = kv.second;
+        if (!ce) {
+            continue;
+        }
+        std::string fqn = ns_path + ce->name;
+        QoreValue v = ce->getReferencedValue();
+        if (v.hasNode()) {
+            // Init contexts are deserialized before init functions execute. A direct
+            // pending-constant ref is safe after dependency ordering; nested paths
+            // into pending constants can embed stale/self-referential data.
+            if (pending_fqns.find(fqn) != pending_fqns.end()) {
+                addConstantRootReverseMapping(crm, v, fqn);
+            } else {
+                qore_aot_add_constant_value_reverse_mappings(crm, v, fqn);
+            }
+        }
+        v.discard(nullptr);
+    }
+
+    ClassListIterator cli(ns->classList);
+    while (cli.next()) {
+        QoreClass* qc = cli.get();
+        if (!qc) {
+            continue;
+        }
+        std::string class_prefix = std::string(qc->getPath() + 2) + "::";
+        ConstConstantListIterator cci(qore_class_private::get(*qc)->constlist);
+        while (cci.next()) {
+            std::string fqn = class_prefix + cci.getName();
+            QoreValue v = cci.getValue();
+            if (!v.hasNode()) {
+                continue;
+            }
+            // See namespace-constant handling above for the direct-only pending rule.
+            if (pending_fqns.find(fqn) != pending_fqns.end()) {
+                addConstantRootReverseMapping(crm, v, fqn);
+            } else {
+                qore_aot_add_constant_value_reverse_mappings(crm, v, fqn);
+            }
+        }
+    }
+
+    for (auto& ni : ns->nsl.nsmap) {
+        if (ni.second) {
+            buildPendingSafeConstantReverseMapImpl(qore_ns_private::get(*ni.second), crm, pending_fqns);
+        }
+    }
+}
+
+static AOTConstantReverseMap buildPendingSafeConstantReverseMap(qore_ns_private* root_ns,
+        const std::unordered_set<std::string>& pending_fqns) {
+    AOTConstantReverseMap crm;
+    buildPendingSafeConstantReverseMapImpl(root_ns, crm, pending_fqns);
+    return crm;
+}
+
+static void collectPendingInitConstantFQNs(qore_ns_private* ns,
+        std::unordered_set<std::string>& pending_fqns,
+        const char* compile_module, const char* compile_file) {
+    if (!ns) {
+        return;
+    }
+
+    std::string ns_path;
+    ns->getPath(ns_path, false);
+
+    ConstConstantListIterator ci(ns->constant);
+    while (ci.next()) {
+        const ConstantEntry* ce = ci.getEntry();
+        if (!ce || !ce->isUser() || !ce->hasInitExpr()) {
+            continue;
+        }
+        if (shouldSkipModuleItem(ce->getModuleName(), compile_module)) {
+            continue;
+        }
+        if (compile_file && ce->loc && shouldSkipByFile(ce->loc->getFile(), compile_file)) {
+            continue;
+        }
+        if (!ce->getInitExpr().isNothing()) {
+            pending_fqns.insert(makeAOTConstantFQN(ns_path, ce->getName()));
+        }
+    }
+
+    ClassListIterator cli(ns->classList);
+    while (cli.next()) {
+        QoreClass* qc = cli.get();
+        if (!qc) {
+            continue;
+        }
+        qore_class_private* qcp = qore_class_private::get(*qc);
+        if (shouldSkipModuleItem(qcp->getModuleName(), compile_module)) {
+            continue;
+        }
+        if (compile_file && qcp->loc && shouldSkipByFile(qcp->loc->getFile(), compile_file)) {
+            continue;
+        }
+
+        const char* class_path = qc->getPath();
+        if (class_path[0] == ':' && class_path[1] == ':') {
+            class_path += 2;
+        }
+
+        ConstConstantListIterator cci(qcp->constlist);
+        while (cci.next()) {
+            const ConstantEntry* ce = cci.getEntry();
+            if (!ce || !ce->isUser() || !ce->hasInitExpr()) {
+                continue;
+            }
+            if (!ce->getInitExpr().isNothing()) {
+                pending_fqns.insert(makeAOTConstantFQN(class_path, ce->getName()));
+            }
+        }
+    }
+
+    for (auto& ni : ns->nsl.nsmap) {
+        if (ni.second) {
+            collectPendingInitConstantFQNs(qore_ns_private::get(*ni.second), pending_fqns,
+                compile_module, compile_file);
+        }
+    }
+}
+
+static void setAOTInitFuncConstantExclusions(AOTCompiledFuncWithSlots& fws,
+        const AOTCompiledInitFunc& cif) {
+    fws.const_reverse_map_exclude_direct_fqn = cif.const_reverse_map_exclude_direct_fqn;
+    fws.const_reverse_map_exclude_fqns = cif.const_reverse_map_exclude_fqns;
+}
+
+static const ConstantEntry* getAOTLoadConstantEntry(const RuntimeConstantRefNode* node,
+        const QoreValue& expr) {
+    if (node) {
+        return node->getConstantEntry();
+    }
+    auto* expr_node = expr.getInternalNode();
+    auto* rcr = dynamic_cast<const RuntimeConstantRefNode*>(expr_node);
+    return rcr ? rcr->getConstantEntry() : nullptr;
 }
 
 static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
@@ -1608,12 +1805,39 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
         std::set<std::string>* compiled_keys = nullptr,
         const char* compile_module = nullptr,
         const char* compile_file = nullptr,
-        bool metadata_only = false) {
+        bool metadata_only = false,
+        const std::unordered_set<std::string>* pending_init_constant_fqns = nullptr,
+        const AOTConstantReverseMap* init_base_const_reverse_map = nullptr) {
     // Track compiled variant keys to skip duplicates from iterator yielding
     // the same variant twice (committed + pending)
     std::set<std::string> local_keys;
     if (!compiled_keys) {
         compiled_keys = &local_keys;
+    }
+
+    std::unordered_set<std::string> local_pending_init_constant_fqns;
+    if (!pending_init_constant_fqns) {
+        collectPendingInitConstantFQNs(ns, local_pending_init_constant_fqns,
+            compile_module, compile_file);
+        pending_init_constant_fqns = &local_pending_init_constant_fqns;
+    }
+
+    std::vector<std::string> pending_init_constant_fqn_list;
+    if (pending_init_constant_fqns && !pending_init_constant_fqns->empty()) {
+        pending_init_constant_fqn_list.assign(pending_init_constant_fqns->begin(),
+            pending_init_constant_fqns->end());
+        std::sort(pending_init_constant_fqn_list.begin(), pending_init_constant_fqn_list.end());
+    }
+
+    std::unique_ptr<AOTConstantReverseMap> local_init_base_crm;
+    if (!init_base_const_reverse_map) {
+        if (const_reverse_map && pending_init_constant_fqns && !pending_init_constant_fqns->empty()) {
+            local_init_base_crm.reset(new AOTConstantReverseMap(
+                buildPendingSafeConstantReverseMap(ns, *pending_init_constant_fqns)));
+            init_base_const_reverse_map = local_init_base_crm.get();
+        } else {
+            init_base_const_reverse_map = const_reverse_map;
+        }
     }
 
     // Cross-module namespaces (e.g. `::OMQ`, `::Qore`, `::Priv`) carry the
@@ -2161,6 +2385,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
 
     // Map from ConstantEntry* to init function name for dependency tracking
     std::unordered_map<const ConstantEntry*, std::string> const_entry_to_init_name;
+    std::unordered_map<std::string, std::string> const_fqn_to_init_name;
 
     // Helper lambda to compile an init expression to LLVM and record it
     auto compileInitExpr = [&](const QoreValue& init_expr, const std::string& init_name,
@@ -2246,14 +2471,18 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
         }
 
         if (init_ok) {
+            std::string direct_exclude_fqn;
+            if (target_type == AOTCompiledInitFunc::NS_CONSTANT
+                    || target_type == AOTCompiledInitFunc::CLASS_CONSTANT) {
+                direct_exclude_fqn = makeAOTConstantFQN(container_path, item_name);
+            }
+
             std::unique_ptr<AOTConstantReverseMap> filtered_crm;
-            const AOTConstantReverseMap* init_const_reverse_map = const_reverse_map;
-            if (const_reverse_map
-                    && (target_type == AOTCompiledInitFunc::NS_CONSTANT
-                        || target_type == AOTCompiledInitFunc::CLASS_CONSTANT)) {
-                std::string current_fqn = container_path + "::" + item_name;
-                filtered_crm.reset(new AOTConstantReverseMap(
-                    filterSelfConstantReverseMap(*const_reverse_map, current_fqn)));
+            const AOTConstantReverseMap* init_const_reverse_map = init_base_const_reverse_map;
+            if (init_base_const_reverse_map && (pending_init_constant_fqns && !pending_init_constant_fqns->empty()
+                    || !direct_exclude_fqn.empty())) {
+                filtered_crm.reset(new AOTConstantReverseMap(filterPendingInitConstantReverseMap(
+                    *init_base_const_reverse_map, *pending_init_constant_fqns, direct_exclude_fqn)));
                 init_const_reverse_map = filtered_crm.get();
             }
 
@@ -2272,6 +2501,8 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
             cif.num_stmts = static_cast<int>(slots.stmt_slots.size());
             cif.num_regex_cases = static_cast<int>(slots.regex_case_slots.size());
             cif.num_lv_path_insts = static_cast<int>(slots.lv_path_slots.size());
+            cif.const_reverse_map_exclude_direct_fqn = direct_exclude_fqn;
+            cif.const_reverse_map_exclude_fqns = pending_init_constant_fqn_list;
             // Slot-identity extraction: combine identities from outer +
             // helpers so the serialized metadata carries every slot the
             // shared ctx needs to populate at load time.
@@ -2294,18 +2525,53 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
             // Dep scan: every LoadConstant in outer OR helpers contributes
             // to the outer's deps (helpers execute during the outer's
             // run, so their deps are effectively the outer's).
+            std::unordered_set<std::string> dep_names;
+            auto add_dep_name = [&](const std::string& dep_name) {
+                if (dep_name != init_name && dep_names.insert(dep_name).second) {
+                    cif.deps.push_back(dep_name);
+                }
+            };
+            auto add_dep_from_expr = [&](const QoreValue& expr) {
+                const ConstantEntry* dep_ce = getAOTLoadConstantEntry(nullptr, expr);
+                auto dep_it = const_entry_to_init_name.find(dep_ce);
+                if (dep_it != const_entry_to_init_name.end()) {
+                    add_dep_name(dep_it->second);
+                    return;
+                }
+                if (!const_reverse_map || !expr.hasNode()) {
+                    return;
+                }
+                auto crm_it = const_reverse_map->find(expr.getInternalNode());
+                if (crm_it == const_reverse_map->end()) {
+                    return;
+                }
+                std::string base_fqn;
+                if (!getAOTConstantPathBase(crm_it->second, base_fqn)) {
+                    return;
+                }
+                auto fqn_it = const_fqn_to_init_name.find(base_fqn);
+                if (fqn_it != const_fqn_to_init_name.end()) {
+                    add_dep_name(fqn_it->second);
+                }
+            };
             auto scan_deps = [&](const QoreIRFunction* fn) {
                 for (auto& bp : fn->blocks) {
                     for (auto& inst : bp->instructions) {
+                        const ConstantEntry* dep_ce = nullptr;
                         if (inst->opcode == QoreIROpcode::LoadConstant) {
                             auto* lci = static_cast<QoreIRLoadConstantInstruction*>(inst.get());
-                            if (lci->node) {
-                                const ConstantEntry* dep_ce = lci->node->getConstantEntry();
-                                auto dep_it = const_entry_to_init_name.find(dep_ce);
-                                if (dep_it != const_entry_to_init_name.end()) {
-                                    cif.deps.push_back(dep_it->second);
-                                }
+                            dep_ce = getAOTLoadConstantEntry(lci->node, lci->expr);
+                            add_dep_from_expr(lci->expr);
+                        } else if (inst->opcode == QoreIROpcode::Invoke) {
+                            auto* inv = static_cast<QoreIRInvokeInstruction*>(inst.get());
+                            if (inv->invoke_opcode == QoreIROpcode::LoadConstant) {
+                                dep_ce = getAOTLoadConstantEntry(nullptr, inv->expr);
+                                add_dep_from_expr(inv->expr);
                             }
+                        }
+                        auto dep_it = const_entry_to_init_name.find(dep_ce);
+                        if (dep_it != const_entry_to_init_name.end()) {
+                            add_dep_name(dep_it->second);
                         }
                     }
                 }
@@ -2350,6 +2616,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
             }
             std::string init_name = "__const_init::" + ns_path + "::" + ce->getName();
             const_entry_to_init_name[ce] = init_name;
+            const_fqn_to_init_name[makeAOTConstantFQN(ns_path, ce->getName())] = init_name;
         }
 
         ClassListIterator cli_reg(ns->classList);
@@ -2383,6 +2650,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                 std::string init_name = std::string("__const_init::") + class_path
                     + "::" + ce->getName();
                 const_entry_to_init_name[ce] = init_name;
+                const_fqn_to_init_name[makeAOTConstantFQN(class_path, ce->getName())] = init_name;
             }
         }
     }
@@ -2478,7 +2746,8 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                 di_builder, di_cu,
                 compiled_funcs, compiled_init_funcs, total_funcs, compiled_count,
                 failed_count, total_ir_insts_all, const_reverse_map, compiled_keys,
-                compile_module, compile_file, metadata_only);
+                compile_module, compile_file, metadata_only, pending_init_constant_fqns,
+                init_base_const_reverse_map);
         }
     }
 }
@@ -3294,6 +3563,7 @@ bool QoreAOT::compile(QoreProgram* pgm,
             fws.num_regex_cases = cif.num_regex_cases;
             fws.num_lv_path_insts = cif.num_lv_path_insts;
             fws.slot_ids = cif.slot_ids;
+            setAOTInitFuncConstantExclusions(fws, cif);
             func_slots.push_back(std::move(fws));
         }
         if (!serializeSlotMaps(writer, func_slots, &const_reverse_map, error)) {
@@ -4920,6 +5190,7 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
             fws.num_regex_cases = cif.num_regex_cases;
             fws.num_lv_path_insts = cif.num_lv_path_insts;
             fws.slot_ids = cif.slot_ids;
+            setAOTInitFuncConstantExclusions(fws, cif);
             func_slots.push_back(std::move(fws));
         }
         if (!serializeSlotMaps(writer, func_slots, &const_reverse_map, error)) {
@@ -5363,6 +5634,7 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
                 fws.num_regex_cases = cif.num_regex_cases;
                 fws.num_lv_path_insts = cif.num_lv_path_insts;
                 fws.slot_ids = cif.slot_ids;
+                setAOTInitFuncConstantExclusions(fws, cif);
                 func_slots.push_back(std::move(fws));
             }
             if (!serializeSlotMaps(writer, func_slots, &const_reverse_map, error)) {
@@ -5718,6 +5990,7 @@ static bool emitScriptQoFromParsedProgram(QoreProgram* qpgm,
             fws.num_regex_cases = cif.num_regex_cases;
             fws.num_lv_path_insts = cif.num_lv_path_insts;
             fws.slot_ids = cif.slot_ids;
+            setAOTInitFuncConstantExclusions(fws, cif);
             func_slots.push_back(std::move(fws));
         }
         if (!serializeSlotMaps(writer, func_slots, &const_reverse_map, error)) {
@@ -6349,6 +6622,7 @@ bool QoreAOT::compileScriptFile(const char* target_file,
             fws.num_regex_cases = cif.num_regex_cases;
             fws.num_lv_path_insts = cif.num_lv_path_insts;
             fws.slot_ids = cif.slot_ids;
+            setAOTInitFuncConstantExclusions(fws, cif);
             func_slots.push_back(std::move(fws));
         }
         if (!serializeSlotMaps(writer, func_slots, &const_reverse_map, error)) {
@@ -6823,6 +7097,7 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
                 fws.num_regex_cases = cif.num_regex_cases;
                 fws.num_lv_path_insts = cif.num_lv_path_insts;
                 fws.slot_ids = cif.slot_ids;
+                setAOTInitFuncConstantExclusions(fws, cif);
                 func_slots.push_back(std::move(fws));
             }
             if (!serializeSlotMaps(writer, func_slots, &const_reverse_map, error)) {
@@ -7227,6 +7502,7 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
                 fws.num_regex_cases = cif.num_regex_cases;
                 fws.num_lv_path_insts = cif.num_lv_path_insts;
                 fws.slot_ids = cif.slot_ids;
+                setAOTInitFuncConstantExclusions(fws, cif);
                 func_slots.push_back(std::move(fws));
             }
             if (!serializeSlotMaps(writer, func_slots, &const_reverse_map, error)) {
@@ -7681,6 +7957,7 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
                 fws.num_regex_cases = cif.num_regex_cases;
                 fws.num_lv_path_insts = cif.num_lv_path_insts;
                 fws.slot_ids = cif.slot_ids;
+                setAOTInitFuncConstantExclusions(fws, cif);
                 func_slots.push_back(std::move(fws));
             }
             if (!serializeSlotMaps(writer, func_slots, &const_reverse_map, error)) {
