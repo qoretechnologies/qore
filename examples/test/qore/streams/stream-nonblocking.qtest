@@ -123,6 +123,11 @@ public class StreamNonBlockingTest inherits QUnit::Test {
         assertFalse(sos.supportsNonBlockingIo(), "StringOutputStream not pollable");
         assertTrue(sos.isIoThreadSafe(), "StringOutputStream is I/O-thread-safe");
         assertEq(-1, sos.getPollableDescriptor(), "StringOutputStream descriptor is -1");
+
+        BinaryOutputStream bos();
+        assertFalse(bos.supportsNonBlockingIo(), "BinaryOutputStream not pollable");
+        assertTrue(bos.isIoThreadSafe(), "BinaryOutputStream is I/O-thread-safe");
+        assertEq(-1, bos.getPollableDescriptor(), "BinaryOutputStream descriptor is -1");
     }
 
     testThreadAffinityNonBlocking() {

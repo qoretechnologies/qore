@@ -48,6 +48,9 @@ public:
       return "BinaryOutputStream";
    }
 
+   //! BinaryOutputStream is memory-backed and write() never blocks; safe for I/O-thread-driven streaming
+   DLLLOCAL bool isIoThreadSafe() const override { return true; }
+
    DLLLOCAL bool isClosed() override {
       return !buf;
    }
