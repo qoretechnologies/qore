@@ -828,6 +828,18 @@ committed snapshot. Hot-path readers acquire-load the snapshot pointer/generatio
 and read only immutable committed tables; they never read the mutable pending
 table and never depend on the registry lock.
 
+The generation counter accompanies the pointer so reflection APIs that
+snapshot the registry state for consistent multi-descriptor queries can
+detect a superseded snapshot mid-iteration. Hot-path dispatch
+(single-descriptor lookup) reads the pointer alone and ignores the
+generation; only multi-descriptor walks (`PluginRegistry::resolveOperation`,
+cross-type lookup, batch reflection) compare generations across reads to
+confirm a stable snapshot. The pair is conceptual; the implementation is
+free to pack them into a single 128-bit DWCAS, into two separate atomics
+with a re-check pattern, or into a hazard-pointer scheme — the design
+contract is the release/acquire ordering and the generation invariant, not
+the storage layout.
+
 A module-init transaction supports at most one successful
 `qore_register_plugin_types_v1` call. A second call after a successful first
 within the same transaction fails with
@@ -876,12 +888,15 @@ Constraints:
   metadata. QORD `PLUGIN_IMPORTS` references are resolved only through the
   committed table at load time. If a QORD load races a module's pending
   `qore_module_init` and the QORD's `PLUGIN_IMPORTS` reference the
-  still-pending module, QORD load fails with `QORD-PLUGIN-IMPORT-MISSING`.
-  The diagnostic uses subreason `module_pending` and names the pending module in
-  `related_module_name`, so callers can distinguish a retryable pending import
-  from a genuinely missing module. The QORD loader does not wait on pending
-  module-init transactions because QORD load and module-init can themselves form
-  wait cycles; callers retry the QORD load after the module's init completes.
+  still-pending module, QORD load fails with `QORD-PLUGIN-IMPORT-MISSING` and
+  subreason `module_pending`, with the pending module in `related_module_name`;
+  if the import names a module that is not loaded at all, the same error code
+  is raised with subreason `module_not_loaded`. Both subreasons are positive
+  signals: callers distinguish a retryable pending import from a genuinely
+  missing module by matching on the subreason rather than its absence. The
+  QORD loader does not wait on pending module-init transactions because QORD
+  load and module-init can themselves form wait cycles; callers retry the QORD
+  load after the module's init completes.
 - The first implementation lowers plugin operations to built-in
   descriptor-carrying opcodes, one per `QorePluginHelperAbi`:
   `PluginUnary`, `PluginBinary`, `PluginCall`, `PluginSubscript`,
@@ -1460,12 +1475,16 @@ user writes `tensor + buffer`, who registers `add.tensor_buffer`?
    depend on serialization order.
 
    A registrant that conflicts with multiple pending registrations waits on
-   them in registration-order. Each wakeup re-checks the full set of
+   them in registration-order — meaning the order in which the conflicting
+   pending transactions acquired the registry write lock, observable via the
+   registry's pending-transaction list. Each wakeup re-checks the full set of
    conflicts before either succeeding, failing with a committed-conflict
    diagnostic, or waiting on the next pending registrant. There is no bound
-   on how many sequential waits a registrant may incur; waits that would create
-   a registration wait-for cycle fail immediately with
-   `PLUGIN-REGISTRATION-WAIT-CYCLE` per §3.3 rather than blocking.
+   on how many sequential waits a registrant may incur; waits that would
+   create a registration-internal wait-for cycle fail immediately with
+   `PLUGIN-REGISTRATION-WAIT-CYCLE` per §3.3 rather than blocking. The
+   lock-acquisition ordering is canonical and stable, so the wait sequence
+   is deterministic given a set of concurrent module-inits.
 3. **Commutative auto-symmetry.** If a registration for
    `(A, B, op)` declares `is_commutative = true`, the runtime synthesises
    the `(B, A, op)` site automatically — registering both halves
@@ -1559,7 +1578,11 @@ when applicable instead of encoding those names into `subreason`. Each
 diagnostic message MUST include: offending module name, offending type/operation
 name when known, the field that violated the rule for field-level checks,
 expected vs. actual values when a comparison exists, and the section number of
-this design that defines the rule.
+this design that defines the rule. When the structured payload populates any
+`related_*` field, the diagnostic message MUST also reference the related
+entity by name — the message is the human-readable surface and the structured
+fields are the test-harness surface; both must surface critical comparison
+data, neither alone is sufficient.
 
 | Error code | Raised by | Section |
 |---|---|---|
@@ -1579,7 +1602,7 @@ this design that defines the rule.
 | `PLUGIN-HELPER-RESULT-TYPE-MISMATCH` | runtime verifier | §3.4 |
 | `PLUGIN-HELPER-ALIAS-CONTRACT-VIOLATED` | runtime verifier | §3.3 (`ReturnsLhs`/`ReturnsRhs`) |
 | `PLUGIN-HELPER-ABI-MISMATCH` | runtime verifier | §3.5 |
-| `QORD-PLUGIN-IMPORT-MISSING` | QORD loader; subreason `module_pending` when the named import matches a still-pending module-init transaction | §3.9 |
+| `QORD-PLUGIN-IMPORT-MISSING` | QORD loader; subreason `module_not_loaded` when no module by that name is loaded in the process, `module_pending` when the named import matches a still-pending module-init transaction. Both cases are positive subreasons so harnesses match on the subreason rather than its absence | §3.9 |
 | `QORD-PLUGIN-HELPER-REF-INVALID` | QORD loader (`slot_idx`, `import_idx`, or `op_local_id` invalid) | §3.9 |
 | `QORD-PLUGIN-SIGNATURE-HASH-MISMATCH` | QORD loader | §3.9 |
 | `QORD-PLUGIN-SIGNATURE-VERSION-UNSUPPORTED` | QORD loader (unrecognised `canonical_signature_version` byte; subreason `unsupported_canonical_version`) | §3.9 |
@@ -1714,12 +1737,18 @@ load uses the fail-fast equivalent (`collect_all == false`) which returns the
 first violation only.
 
 **Reserved subreasons.** `subreason` is a stable identifier, not a free-form
-message. Core subreasons are snake_case ASCII with no version suffix; extension
-validation subreasons use the colon-separated `extension:<id>:<reason>`
-pattern in the table below (colons rather than dots so the format remains
-parseable when extension ids themselves contain dots but never colons). The v1
-protocol defines these values; future revisions append without renaming or
-removing:
+message. Core libqore-defined subreasons are snake_case ASCII with no version
+suffix and never embed runtime data; comparison entities (other module/type/
+operation names) live in `related_*` structured fields, not in the subreason
+string. Extension validation subreasons use the colon-separated
+`extension:<id>:<reason>` namespace because they are owned by the extension
+ABI rather than libqore, and the extension is responsible for keeping its own
+`<reason>` portion stable. The dual pattern is intentional: test harnesses
+match core subreasons by exact equality and extension subreasons by parsing
+the colon-separated form. Colons separate the namespace fields rather than
+dots so the format remains parseable when extension ids themselves contain
+dots but never colons. The v1 protocol defines these values; future revisions
+append without renaming or removing:
 
 | Subreason | Used by |
 |---|---|
@@ -1728,7 +1757,7 @@ removing:
 | `null_registration_context` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` |
 | `registration_context_too_small` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` |
 | `registration_context_size_mismatch` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` |
-| `module_path_missing` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` |
+| `module_path_missing` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` (covers both null pointer and empty string; intentionally broader than the `null_<field>` family so a single subreason matches both invalid forms of `module_path`) |
 | `non_contiguous_local_id` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` |
 | `invalid_count` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` |
 | `null_registration_descriptor` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` (`reg == nullptr`; distinct from `null_registration_context` which is `ctx == nullptr`) |
@@ -1750,6 +1779,7 @@ removing:
 | `wait_cycle` | `PLUGIN-REGISTRATION-WAIT-CYCLE`; `related_module_name` is the byte-exact module name of the other transaction completing the wait-for cycle |
 | `pending_conflict` | `PLUGIN-CROSS-TYPE-CONFLICT` from `qore_validate_plugin_types_v1` when a conflict is detected against a still-pending registration; `related_module_name` is the byte-exact name of the pending module |
 | `module_pending` | `QORD-PLUGIN-IMPORT-MISSING` when `PLUGIN_IMPORTS` references a still-pending module-init transaction; `related_module_name` is the byte-exact name of the pending module |
+| `module_not_loaded` | `QORD-PLUGIN-IMPORT-MISSING` when `PLUGIN_IMPORTS` references a module name that is not loaded in the process and is not pending; `related_module_name` is the byte-exact name of the missing module |
 | `extension:<extension_id>:<reason>` | `PLUGIN-EXTENSION-VALIDATION-FAILED`. Format uses colon separators (not dots) because canonical extension ids contain dots — `qore.plugin.llvm.codegen` → `extension:qore.plugin.llvm.codegen:unsupported_target`. Parsers split on the first and last `:`; `extension_id` is byte-exact equal to the registered `QorePluginExtension::extension_id` and therefore cannot itself contain `:`; `reason` is ASCII snake_case owned by the extension ABI. The literal `extension` prefix is reserved and never used as a core subreason. |
 
 Implementations MUST NOT emit subreason strings outside this table for
