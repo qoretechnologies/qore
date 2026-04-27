@@ -1,0 +1,402 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    QC_Krb5Context.qpp
+
+    Qore Kerberos Module
+
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+#include "krb5-module.h"
+
+//! Options for initial credential acquisition
+/** These options map to MIT Kerberos initial-credential options and are
+    intended for noninteractive service and Active Directory authentication.
+*/
+hashdecl Qore::Krb5::Krb5InitialCredentialsOptions {
+    //! Service principal for the ticket request; omit for the default TGT service
+    *string service;
+
+    //! Requested ticket start time as seconds since the Unix epoch; 0 means now
+    *int start_time;
+
+    //! Requested ticket lifetime in seconds
+    *int ticket_lifetime;
+
+    //! Requested renewable lifetime in seconds
+    *int renew_lifetime;
+
+    //! Request a forwardable ticket
+    *bool forwardable;
+
+    //! Request a proxiable ticket
+    *bool proxiable;
+
+    //! Request KDC-side canonicalization; recommended for Active Directory UPN logins
+    *bool canonicalize;
+
+    //! Request anonymous initial credentials
+    *bool anonymous;
+
+    //! Request a Windows PAC in the ticket
+    *bool pac_request;
+
+    //! Allow password-change prompts; disabled by default for noninteractive use
+    *bool change_password_prompt;
+
+    //! Require FAST when a FAST armor ccache is provided
+    *bool fast_required;
+
+    //! FAST armor credential-cache specifier, for example \c "FILE:/tmp/krb5cc_armor"
+    *string fast_ccache_name;
+
+    //! Input credential-cache specifier used by the initial-credential exchange
+    *string in_ccache_name;
+
+    //! Output credential-cache specifier used by the initial-credential exchange
+    *string out_ccache_name;
+
+    //! Ordered list of requested Kerberos enctype identifiers
+    *list<int> enctypes;
+}
+
+//! Metadata for a credential cache discovered by collection enumeration
+/**
+*/
+hashdecl Qore::Krb5::Krb5CredentialCacheInfo {
+    //! Cache residual name, for example \c "default" or \c "krb5cc_1000"
+    string name;
+
+    //! Cache backend type, for example \c "FILE", \c "MEMORY", or \c "KCM"
+    string type;
+
+    //! Full cache specification including type, for example \c "FILE:/tmp/krb5cc_1000"
+    string full_name;
+
+    //! True if the cache was accessible under the active filesystem sandbox
+    bool accessible;
+
+    //! True if the cache has an initialized primary principal
+    bool has_principal;
+
+    //! Primary principal string if available, or \c NOTHING
+    *string principal;
+}
+
+//! Kerberos runtime context helper
+/** This class exposes default realm and credential-cache helpers that are
+    useful for service configuration, diagnostics, and test setup.
+*/
+qclass Krb5Context [arg=QoreKrb5Context* ctx; ns=Qore::Krb5; dom=FILESYSTEM; flags=final];
+
+//! Creates a Kerberos runtime context
+/** @throw KRB5-INIT-ERROR if the underlying Kerberos context cannot be initialized
+*/
+Krb5Context::constructor() {
+    SimpleRefHolder<QoreKrb5Context> c(new QoreKrb5Context(xsink));
+    if (*xsink) {
+        return;
+    }
+    self->setPrivate(CID_KRB5CONTEXT, c.release());
+}
+
+//! Returns the default Kerberos realm from the local configuration
+/** @throw KRB5-REALM-ERROR if no default realm is configured on this host
+*/
+string Krb5Context::getDefaultRealm() [flags=CONSTANT] {
+    return ctx->getDefaultRealm(xsink);
+}
+
+//! Returns the configured default credential-cache name
+/** @throw KRB5-CACHE-ERROR if no default credential cache name is available
+*/
+string Krb5Context::getDefaultCredentialCacheName() [flags=CONSTANT] {
+    return ctx->getDefaultCredentialCacheName(xsink);
+}
+
+//! Returns the configured default keytab name
+/** @throw KRB5-KEYTAB-ERROR if no default keytab name is available
+*/
+string Krb5Context::getDefaultKeytabName() [flags=CONSTANT] {
+    return ctx->getDefaultKeytabName(xsink);
+}
+
+//! Opens the default credential cache
+/** @throw KRB5-INIT-ERROR if a new Kerberos context cannot be initialized
+    @throw KRB5-CACHE-ERROR if the default credential cache cannot be opened
+*/
+Krb5CredentialCache Krb5Context::openDefaultCredentialCache() {
+    SimpleRefHolder<QoreKrb5CredentialCache> cache(ctx->openDefaultCredentialCache(xsink));
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    ReferenceHolder<QoreObject> rv(new QoreObject(QC_KRB5CREDENTIALCACHE, getProgram()), xsink);
+    rv->setPrivate(CID_KRB5CREDENTIALCACHE, cache.release());
+    return rv.release();
+}
+
+//! Opens a credential cache by name
+/** @param cache_name a cache spec such as \c "FILE:/tmp/krb5cc_test" or
+    \c "MEMORY:module-krb5"
+
+    @throw KRB5-INIT-ERROR if a new Kerberos context cannot be initialized
+    @throw KRB5-CACHE-ERROR if the cache name is empty or cannot be resolved
+*/
+Krb5CredentialCache Krb5Context::openCredentialCache(string cache_name) {
+    SimpleRefHolder<QoreKrb5CredentialCache> cache(ctx->openCredentialCache(cache_name->c_str(), xsink));
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    ReferenceHolder<QoreObject> rv(new QoreObject(QC_KRB5CREDENTIALCACHE, getProgram()), xsink);
+    rv->setPrivate(CID_KRB5CREDENTIALCACHE, cache.release());
+    return rv.release();
+}
+
+//! Opens the default keytab
+/** @throw KRB5-INIT-ERROR if a new Kerberos context cannot be initialized
+    @throw KRB5-KEYTAB-ERROR if the default keytab cannot be opened
+*/
+Krb5Keytab Krb5Context::openDefaultKeytab() {
+    SimpleRefHolder<QoreKrb5Keytab> keytab(ctx->openDefaultKeytab(xsink));
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    ReferenceHolder<QoreObject> rv(new QoreObject(QC_KRB5KEYTAB, getProgram()), xsink);
+    rv->setPrivate(CID_KRB5KEYTAB, keytab.release());
+    return rv.release();
+}
+
+//! Opens a keytab by name
+/** @param keytab_name a keytab spec such as \c "FILE:/etc/krb5.keytab" or
+    \c "MEMORY:module-krb5"
+
+    @throw KRB5-INIT-ERROR if a new Kerberos context cannot be initialized
+    @throw KRB5-KEYTAB-ERROR if the keytab name is empty or cannot be resolved
+*/
+Krb5Keytab Krb5Context::openKeytab(string keytab_name) {
+    SimpleRefHolder<QoreKrb5Keytab> keytab(ctx->openKeytab(keytab_name->c_str(), xsink));
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    ReferenceHolder<QoreObject> rv(new QoreObject(QC_KRB5KEYTAB, getProgram()), xsink);
+    rv->setPrivate(CID_KRB5KEYTAB, keytab.release());
+    return rv.release();
+}
+
+//! Creates and initializes an in-memory credential cache with the given principal
+/** The MIT Kerberos \c MEMORY cache backend is process-wide: reusing the same
+    \a cache_name returns the same underlying cache, so callers that need
+    isolation should use distinct cache names.
+
+    @param principal the primary principal to associate with the cache
+    @param cache_name the in-memory cache identifier without the \c MEMORY:
+    prefix
+
+    @throw KRB5-INIT-ERROR if a new Kerberos context cannot be initialized
+    @throw KRB5-CACHE-ERROR if \a cache_name is empty or the cache cannot be
+    initialized with the supplied principal
+*/
+Krb5CredentialCache Krb5Context::createMemoryCredentialCache(Krb5Principal[QoreKrb5Principal] principal,
+        string cache_name) {
+    SimpleRefHolder<QoreKrb5CredentialCache> cache(ctx->createMemoryCredentialCache(**principal, cache_name->c_str(), xsink));
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    ReferenceHolder<QoreObject> rv(new QoreObject(QC_KRB5CREDENTIALCACHE, getProgram()), xsink);
+    rv->setPrivate(CID_KRB5CREDENTIALCACHE, cache.release());
+    return rv.release();
+}
+
+//! Acquires initial credentials using a password
+/** This method is noninteractive and does not log or expose the password.
+    The operation checks cooperative cancellation before contacting the KDC.
+
+    @param principal client principal
+    @param password client password
+    @param opts optional @ref Qore::Krb5::Krb5InitialCredentialsOptions
+
+    @throw KRB5-INIT-CREDS-ERROR if the password is empty, option values
+    are invalid, or the KDC rejects the request
+    @throw KRB5-SANDBOX-ERROR if any FAST, input, or output cache option
+    names a backend that is not allowed by the sandbox, or if the active
+    network sandbox policy cannot be enforced while MIT Kerberos contacts
+    the KDC
+    @throw FILESYSTEM-ACCESS-DENIED if any option-specified cache lies
+    outside the filesystem sandbox
+*/
+Krb5Credentials Krb5Context::acquireCredentialsWithPassword(Krb5Principal[QoreKrb5Principal] principal,
+        string password, *hash<Krb5InitialCredentialsOptions> opts) [dom=NETWORK] {
+    SimpleRefHolder<QoreKrb5Credentials> creds(ctx->acquireCredentialsWithPassword(**principal, password->c_str(),
+        opts, xsink));
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    ReferenceHolder<QoreObject> rv(new QoreObject(QC_KRB5CREDENTIALS, getProgram()), xsink);
+    rv->setPrivate(CID_KRB5CREDENTIALS, creds.release());
+    return rv.release();
+}
+
+//! Acquires initial credentials using a keytab
+/** This method reads keys from the provided keytab and returns the
+    acquired credentials without automatically writing them to the default
+    cache. The operation checks cooperative cancellation before contacting
+    the KDC.
+
+    @param principal client principal
+    @param keytab keytab containing a matching client key
+    @param opts optional @ref Qore::Krb5::Krb5InitialCredentialsOptions
+
+    @throw KRB5-INIT-CREDS-ERROR if option values are invalid, the keytab
+    has no matching entry, or the KDC rejects the request
+    @throw KRB5-SANDBOX-ERROR if the keytab backend or any option-specified
+    cache is not allowed by the sandbox, or if the active network sandbox
+    policy cannot be enforced while MIT Kerberos contacts the KDC
+    @throw FILESYSTEM-ACCESS-DENIED if the keytab or any option-specified
+    cache lies outside the filesystem sandbox
+*/
+Krb5Credentials Krb5Context::acquireCredentialsWithKeytab(Krb5Principal[QoreKrb5Principal] principal,
+        Krb5Keytab[QoreKrb5Keytab] keytab, *hash<Krb5InitialCredentialsOptions> opts) [dom=NETWORK] {
+    SimpleRefHolder<QoreKrb5Credentials> creds(ctx->acquireCredentialsWithKeytab(**principal, **keytab, opts, xsink));
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    ReferenceHolder<QoreObject> rv(new QoreObject(QC_KRB5CREDENTIALS, getProgram()), xsink);
+    rv->setPrivate(CID_KRB5CREDENTIALS, creds.release());
+    return rv.release();
+}
+
+//! Renews credentials from a credential cache
+/** The cache must contain a TGT with the renewable flag set. This
+    operation contacts the KDC to obtain fresh credentials.
+    Cooperative cancellation is checked before contacting the KDC.
+
+    @param cache credential cache containing a renewable TGT
+    @param client client principal that owns the TGT
+
+    @return renewed @ref Qore::Krb5::Krb5Credentials
+
+    @throw KRB5-RENEW-ERROR if the credentials cannot be renewed
+    @throw KRB5-SANDBOX-ERROR if the cache backend is not allowed by the sandbox,
+    or if the active network sandbox policy cannot be enforced while MIT
+    Kerberos contacts the KDC
+    @throw FILESYSTEM-ACCESS-DENIED if a file-backed cache is outside the filesystem sandbox
+*/
+Krb5Credentials Krb5Context::renewCredentials(Krb5CredentialCache[QoreKrb5CredentialCache] cache,
+        Krb5Principal[QoreKrb5Principal] client) [dom=NETWORK] {
+    SimpleRefHolder<QoreKrb5Credentials> creds(ctx->renewCredentials(**cache, **client, xsink));
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    ReferenceHolder<QoreObject> rv(new QoreObject(QC_KRB5CREDENTIALS, getProgram()), xsink);
+    rv->setPrivate(CID_KRB5CREDENTIALS, creds.release());
+    return rv.release();
+}
+
+//! Acquires service credentials via a TGS exchange
+/** Uses a TGT from the provided credential cache to request a service
+    ticket for the given service principal.
+    Cooperative cancellation is checked before contacting the KDC.
+
+    @param cache credential cache containing a valid TGT
+    @param service service principal for the ticket request
+
+    @return @ref Qore::Krb5::Krb5Credentials for the service
+
+    @throw KRB5-SERVICE-CREDS-ERROR if the service ticket cannot be acquired
+    @throw KRB5-SANDBOX-ERROR if the cache backend is not allowed by the sandbox,
+    or if the active network sandbox policy cannot be enforced while MIT
+    Kerberos contacts the KDC
+    @throw FILESYSTEM-ACCESS-DENIED if a file-backed cache is outside the filesystem sandbox
+*/
+Krb5Credentials Krb5Context::acquireServiceCredentials(Krb5CredentialCache[QoreKrb5CredentialCache] cache,
+        Krb5Principal[QoreKrb5Principal] service) [dom=NETWORK] {
+    SimpleRefHolder<QoreKrb5Credentials> creds(ctx->acquireServiceCredentials(**cache, **service, xsink));
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    ReferenceHolder<QoreObject> rv(new QoreObject(QC_KRB5CREDENTIALS, getProgram()), xsink);
+    rv->setPrivate(CID_KRB5CREDENTIALS, creds.release());
+    return rv.release();
+}
+
+//! Lists all credential caches known to the Kerberos credential cache collection
+/** Enumerates credential caches using the MIT krb5 credential cache
+    collection API. This discovers caches across all configured backends
+    (FILE, MEMORY, KCM, KEYRING, etc.).
+
+    Caches whose principal cannot be read are included with
+    \c has_principal set to \c False and \c principal set to \c NOTHING.
+
+    @return a list of @ref Qore::Krb5::Krb5CredentialCacheInfo entries
+
+    @throw KRB5-CACHE-ERROR if the collection cursor cannot be opened
+    or enumeration fails
+*/
+list<hash<Krb5CredentialCacheInfo>> Krb5Context::listCredentialCaches() {
+    return ctx->listCredentialCaches(xsink);
+}
+
+//! Acquires credentials for a target service via S4U2Proxy constrained delegation
+/** Uses a caller-supplied Kerberos evidence ticket and a TGT from the
+    provided cache to request a service ticket for the target service
+    principal on behalf of the user identified by the evidence ticket. This
+    low-level API expects evidence as @ref Qore::Krb5::Krb5Credentials; the
+    GSS-level @ref Qore::Krb5::GssCredential::impersonateName() result is a
+    different type and is used by \c Krb5Util::createImpersonatedClientContext().
+
+    Requires MIT krb5 1.8 or later and KDC configuration that allows the
+    service principal to perform constrained delegation to the target.
+
+    @param cache credential cache containing a valid TGT for the service
+    @param evidence_ticket evidence ticket from S4U2Self
+    @param target_service target service principal
+
+    @return @ref Qore::Krb5::Krb5Credentials for the target service
+
+    @throw KRB5-S4U-PROXY-ERROR if the S4U2Proxy ticket cannot be acquired
+    @throw KRB5-NOT-SUPPORTED if the platform lacks S4U2Proxy support
+    @throw KRB5-SANDBOX-ERROR if the cache backend is not allowed by the sandbox,
+    or if the active network sandbox policy cannot be enforced while MIT
+    Kerberos contacts the KDC
+    @throw FILESYSTEM-ACCESS-DENIED if a file-backed cache is outside the filesystem sandbox
+*/
+Krb5Credentials Krb5Context::acquireS4U2ProxyCredentials(Krb5CredentialCache[QoreKrb5CredentialCache] cache,
+        Krb5Credentials[QoreKrb5Credentials] evidence_ticket,
+        Krb5Principal[QoreKrb5Principal] target_service) [dom=NETWORK] {
+    SimpleRefHolder<QoreKrb5Credentials> creds(
+        ctx->acquireS4U2ProxyCredentials(**cache, **evidence_ticket, **target_service, xsink));
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    ReferenceHolder<QoreObject> rv(new QoreObject(QC_KRB5CREDENTIALS, getProgram()), xsink);
+    rv->setPrivate(CID_KRB5CREDENTIALS, creds.release());
+    return rv.release();
+}

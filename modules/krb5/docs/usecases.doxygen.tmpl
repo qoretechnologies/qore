@@ -1,0 +1,210 @@
+/* Copyright (C) 2026 Qore Technologies, s.r.o. */
+
+/** @page krb5usecases Use Cases in the %Qore and Qorus Ecosystem
+
+    @tableofcontents
+
+    The \c krb5 module is not only for
+    <a href="https://learn.microsoft.com/en-us/windows-server/identity/ad-ds/get-started/virtual-dc/active-directory-domain-services-overview">Active
+    Directory</a>. Its classes are general
+    <a href="https://web.mit.edu/kerberos/">Kerberos 5</a> and
+    <a href="https://datatracker.ietf.org/doc/html/rfc2743">GSSAPI</a>
+    primitives, and they apply everywhere enterprise services speak
+    Kerberos — which is most of the Unix and Windows server ecosystem.
+
+    This page describes the categories of integration the module enables.
+    For runnable code, see @ref krb5examples.
+
+    @section krb5uc_sso Client SSO to Enterprise Services
+
+    The same initiator loop built around
+    @ref Qore::Krb5::GssClientContext::step() "GssClientContext::step()"
+    works for any SASL/GSSAPI or SPNEGO peer. The module carries the tokens;
+    the calling code carries them across whichever transport the peer uses.
+
+    Typical targets:
+
+    - **<a href="https://datatracker.ietf.org/doc/html/rfc4511">LDAP</a>
+      with <a href="https://datatracker.ietf.org/doc/html/rfc4752">SASL
+      GSSAPI</a>** — Active Directory, Red Hat Identity Management,
+      <a href="https://www.openldap.org/">OpenLDAP</a>, and 389 Directory
+      Server. The channel-binding options enable
+      <a href="https://datatracker.ietf.org/doc/html/rfc5929">RFC 5929</a>
+      \c tls-server-end-point binding for LDAP over TLS, which defeats
+      TLS-proxy relay attacks.
+    - **<a href="https://datatracker.ietf.org/doc/html/rfc4559">HTTP SPNEGO
+      / Negotiate</a>** — corporate REST APIs behind
+      <a href="https://github.com/gssapi/mod_auth_gssapi">mod_auth_gssapi</a>,
+      nginx-krb5, and similar gateways. Hex-encoded GSSAPI tokens are
+      transformed to base64 and placed in \c "Authorization: Negotiate …"
+      headers by the caller.
+    - **Databases** —
+      <a href="https://www.postgresql.org/docs/current/gssapi-auth.html">PostgreSQL</a>,
+      Oracle,
+      <a href="https://learn.microsoft.com/en-us/sql/relational-databases/native-client/features/using-integrated-authentication">Microsoft
+      SQL Server</a>,
+      <a href="https://www.ibm.com/docs/en/db2">IBM Db2</a>, and Sybase
+      all support GSSAPI authentication. A
+      @ref Qore::Krb5::GssCredential imported from a service keytab lets
+      datasources connect with no stored password.
+    - **<a href="https://kafka.apache.org/documentation/#security_sasl_kerberos">Kafka</a>**
+      with \c SASL_GSSAPI.
+    - **<a href="https://www.ibm.com/docs/en/ibm-mq">IBM MQ</a> / JMS**,
+      **ActiveMQ**, and
+      **<a href="https://www.rabbitmq.com/auth-mechanism-gssapi.html">RabbitMQ</a>**
+      with the krb5 plugin.
+    - **<a href="https://datatracker.ietf.org/doc/html/rfc4752">IMAP /
+      POP3 / SMTP</a>** with SASL GSSAPI for mail-polling interfaces.
+    - **<a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/">SMB
+      / CIFS</a>** corporate file shares (through a native file-share
+      library layered on top of the module's GSSAPI primitives).
+
+    From the module's perspective these integrations all look the same:
+    acquire a credential (from cache or keytab), construct a
+    @ref Qore::Krb5::GssClientContext bound to the target service principal,
+    and drive the step loop exchanging hex-encoded tokens with the peer.
+    The default target-name type is a Kerberos principal such as
+    \c "HTTP/qorus.example.com@EXAMPLE.COM"; set
+    @ref Qore::Krb5::GssClientContextOptions::name_type to
+    \c "hostbased-service" when a peer API expects the portable GSSAPI
+    host-based form such as \c "HTTP@qorus.example.com".
+
+    @section krb5uc_identity Passwordless Service Identity
+
+    @ref Qore::Krb5::Krb5Context::acquireCredentialsWithKeytab() combined with
+    @ref Qore::Krb5::GssCredential::fromKeytab() gives a %Qore or Qorus
+    service a durable passwordless identity. Every outbound Kerberized
+    connector — LDAP, database, HTTP, Kafka, MQ — can share the same
+    credential instead of each subsystem carrying its own stored password.
+
+    This is a significant operational improvement: credential rotation is
+    driven by keytab rollover rather than by reconfiguring every integration
+    interface.
+
+    @section krb5uc_channel_binding Channel-Bound Hardening
+
+    The channel-binding options in
+    @ref Qore::Krb5::GssClientContextOptions — in particular
+    \c channel_binding_application_data_hex carrying the
+    <a href="https://datatracker.ietf.org/doc/html/rfc5929">RFC 5929</a>
+    \c tls-server-end-point value — let applications cryptographically bind
+    their authentication to the TLS endpoint they are actually talking to.
+    This defeats credential relay attacks through hostile TLS terminators
+    and is a direct compliance improvement for deployments behind strict
+    enterprise security policies.
+
+    @section krb5uc_message_protection Message-Level Integrity and Confidentiality
+
+    @ref Qore::Krb5::GssClientContext::wrap() and
+    @ref Qore::Krb5::GssClientContext::unwrap() expose negotiated SASL
+    security layers at the application level. This enables per-message
+    integrity or confidentiality independent of TLS — useful where messages
+    traverse intermediaries that must see headers but must not see payload,
+    where audit trails must be cryptographically sealed, or where replay
+    protection is required at the application boundary.
+
+    @section krb5uc_connections Qorus Connection Abstraction
+
+    The module is a natural fit for a Qorus \c Connection subclass that
+    lazily acquires a ticket from a configured keytab and hands the
+    resulting @ref Qore::Krb5::GssCredential to any dependent connection
+    (LDAP, database, HTTP, Kafka, and so on). This collapses "Kerberos for
+    X, Kerberos for Y, Kerberos for Z" into a single identity-configuration
+    primitive managed in one place.
+
+    @section krb5uc_audit Audit and Identity Normalization
+
+    @ref Qore::Krb5::Krb5Principal parsing — including the enterprise
+    (<a href="https://learn.microsoft.com/en-us/windows/win32/ad/naming-properties">UPN</a>)
+    form used by Active Directory logins — gives Qorus a canonical,
+    transport-independent way to record \e who performed an action. The
+    same principal representation works whether the operation arrived over
+    HTTP SPNEGO, LDAP, a database connection, or a message bus, so audit
+    records stay consistent across integrations.
+
+    @section krb5uc_tests Deterministic Kerberos Tests
+
+    The in-memory credential-cache and keytab backends, together with the
+    @ref Qore::Krb5::Krb5Credentials constructor that synthesises credentials
+    from explicit hex values, make it possible to write integration tests
+    for any of the above targets without depending on a live KDC. This is a
+    quiet but significant ergonomics advantage over equivalent Python and
+    Java stacks, where Kerberos tests typically require a containerized KDC.
+
+    @section krb5uc_delegation Credential Delegation
+
+    @ref Qore::Krb5::GssAcceptorContext::getDelegatedCredential()
+    "GssAcceptorContext::getDelegatedCredential()" lets a service endpoint
+    extract the delegated @ref Qore::Krb5::GssCredential after a GSSAPI
+    exchange where the initiator set \c GSS_DELEG_FLAG. The extracted
+    credential can then be used to initiate Kerberized connections to
+    further backends on behalf of the original caller.
+
+    This is a building block for multi-hop authentication scenarios: a Qorus
+    workflow step can accept a user's Kerberos identity, extract the
+    delegated credential, and use it to connect to an LDAP directory or
+    database as that user rather than as the service account. Because
+    delegation passes real Kerberos credentials, audit trails on the
+    downstream service record the original user, not the intermediary.
+
+    @note Delegation should only be enabled when the trust relationship
+    between initiator and acceptor is well understood. See
+    @ref krb5sec_delegation for the security implications.
+
+    @section krb5uc_key_rotation Keytab Key Rotation
+
+    @ref Qore::Krb5::Krb5Keytab::removeEntry() "Krb5Keytab::removeEntry()"
+    enables controlled key rotation workflows. The recommended pattern is:
+
+    -# Add the new key version to the keytab with
+       @ref Qore::Krb5::Krb5Keytab::addEntry() "addEntry()".
+    -# Validate that the new key works for authentication.
+    -# Remove the old key version with \c removeEntry().
+
+    This overlapping-key window ensures that in-flight requests
+    authenticated with the old key still succeed during the transition. See
+    @ref krb5examples_keytab_rotation for a runnable example.
+
+    @section krb5uc_http_spnego HTTP SPNEGO Authentication
+
+    The \c Krb5Util helper module provides
+    \c Krb5Util::negotiateSpnegoToken() and
+    \c Krb5Util::parseSpnegoResponse() for constructing and parsing
+    <a href="https://datatracker.ietf.org/doc/html/rfc4178">RFC 4178</a>
+    SPNEGO envelopes. Combined with the
+    @ref Qore::Krb5::GssClientContext token loop and the
+    @ref Qore::Krb5::GssAcceptorContext acceptor, %Qore applications can
+    implement both sides of
+    <a href="https://datatracker.ietf.org/doc/html/rfc4559">HTTP Negotiate</a>
+    authentication natively:
+
+    - **Client-side**: the initiator calls
+      @ref Qore::Krb5::GssClientContext::step() "step()", wraps the
+      resulting GSSAPI token in SPNEGO with \c negotiateSpnegoToken(), and
+      sends it as an \c "Authorization: Negotiate" header.
+    - **Server-side**: the acceptor unwraps the SPNEGO envelope, feeds the
+      inner GSSAPI token to
+      @ref Qore::Krb5::GssAcceptorContext::step() "step()", wraps the
+      response in SPNEGO, and sends it back as a
+      \c "WWW-Authenticate: Negotiate" header.
+
+    See @ref krb5examples_spnego_negotiate for a runnable example.
+
+    @section krb5uc_extensions Natural Extensions
+
+    These workflows fit naturally on top of the existing primitives:
+
+    - **Constrained delegation
+      (<a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-sfu/3bff5864-8135-400e-bdd9-33b552051d94">S4U2Self
+      / S4U2Proxy</a>)** — Qorus can use GSS-level S4U2Self helpers to act
+      as an identity-forwarding service that authenticates to downstream
+      Kerberized resources on behalf of the end user. The low-level
+      Kerberos S4U2Proxy binding is available when the caller already has a
+      Kerberos evidence credential.
+    - **Credential maintenance** — long-running services can renew TGTs and
+      prefetch service tickets through
+      \c Krb5Util::maintainCredentialCache().
+    - **Cross-realm trust** — already reachable today through KDC
+      canonicalization and explicit realm handling on principals; useful
+      for multi-tenant and post-merger deployments.
+*/

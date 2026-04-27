@@ -1,0 +1,1176 @@
+#!/usr/bin/env qore
+%modern
+
+/* Copyright (C) 2026 Qore Technologies, s.r.o. */
+
+%requires ../../../qlib/QUnit.qm
+%requires krb5
+%requires ../../../qlib/Krb5Util/Krb5Util.qm
+%requires ../../../qlib/HttpServer.qm
+%requires ../../../qlib/ConnectionProvider
+%requires ../../../qlib/RestSchemaValidator.qm
+%requires ../../../qlib/Swagger.qm
+%requires ../../../qlib/OpenApi3.qm
+%requires ../../../qlib/RestClient.qm
+%requires ../../../qlib/DataProvider
+%requires ../../../qlib/HttpClientIo
+%requires ../../../qlib/HttpClientStreamingIo
+%requires ../../../qlib/RestClientIo.qm
+
+%exec-class Krb5GssKdcIntegrationTest
+
+class Krb5HttpNegotiateAuthenticator inherits AbstractAuthenticator {
+    private {
+        Qore::Krb5::GssCredential acceptor_cred;
+        hash<Qore::Krb5::GssAcceptorContextOptions> acceptor_opts;
+        int challenge_count = 0;
+        int negotiate_count = 0;
+    }
+
+    constructor(Qore::Krb5::GssCredential cred, hash<Qore::Krb5::GssAcceptorContextOptions> opts) {
+        acceptor_cred = cred;
+        acceptor_opts = opts;
+    }
+
+    bool requiresAuthentication() {
+        return True;
+    }
+
+    private *string getNegotiateAuthHeader(hash<auto> cx) {
+        ++challenge_count;
+        return "Negotiate";
+    }
+
+    private *hash<HttpResponseInfo> processNegotiateAuthorizationHeader(HttpListenerInterface listener,
+            hash<auto> hdr, reference<hash<auto>> cx, reference<bool> authenticated) {
+        try {
+            ++negotiate_count;
+            Qore::Krb5::GssAcceptorContext acceptor(acceptor_cred, acceptor_opts);
+            hash<Krb5Util::NegotiateServerStepInfo> step =
+                Krb5Util::acceptNegotiateAuthorizationHeader(acceptor, hdr.authorization);
+
+            if (!step.complete) {
+                return <HttpResponseInfo>{
+                    "code": 401,
+                    "body": "Negotiate authentication continues",
+                    "hdr": {
+                        "WWW-Authenticate": step.www_authenticate_header,
+                    },
+                };
+            }
+
+            cx.user = step.initiator_name;
+            cx."negotiate-final-header" = step.www_authenticate_header;
+            authenticated = True;
+        } catch (hash<ExceptionInfo> ex) {
+            throw "AUTHENTICATION-ERROR", sprintf("Negotiate authentication failed: %s", ex.err);
+        }
+    }
+
+    authenticateByIP(reference<hash<auto>> cx, string ip, reference<bool> authenticated) {
+        throw "AUTHENTICATION-ERROR", "IP authentication is disabled for Negotiate tests";
+    }
+
+    int getChallengeCount() {
+        return challenge_count;
+    }
+
+    int getNegotiateCount() {
+        return negotiate_count;
+    }
+}
+
+class Krb5HttpNegotiateHandler inherits AbstractHttpRequestHandler {
+    constructor(AbstractAuthenticator auth) : AbstractHttpRequestHandler(auth) {
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        hash<auto> response_headers = {
+            "Content-Type": MimeTypeText,
+        };
+        if (exists cx."negotiate-final-header") {
+            response_headers."WWW-Authenticate" = cx."negotiate-final-header";
+        }
+        return makeResponse(200, cx.user, response_headers);
+    }
+}
+
+class Krb5HttpNegotiateSseHandler inherits AbstractHttpRequestHandler {
+    constructor(AbstractAuthenticator auth) : AbstractHttpRequestHandler(auth) {
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        hash<auto> response_headers = {
+            "Content-Type": "text/event-stream",
+        };
+        if (exists cx."negotiate-final-header") {
+            response_headers."WWW-Authenticate" = cx."negotiate-final-header";
+        }
+        return makeResponse(200, sprintf("event: principal\ndata: %s\n\n",
+            cx.user), response_headers);
+    }
+}
+
+class Krb5SseObserver inherits DataProvider::Observer {
+    public {
+        list<hash<auto>> events = ();
+        Mutex m();
+        Condition cond();
+        int expected_count;
+    }
+
+    constructor(int expected_count) {
+        self.expected_count = expected_count;
+    }
+
+    update(string event_id, hash<auto> data) {
+        AutoLock al(m);
+        push events, {
+            "event_id": event_id,
+            "data": data,
+        };
+        cond.broadcast();
+    }
+
+    bool waitForEvents(timeout t = 30s) {
+        AutoLock al(m);
+        date end_time = now_us() + t;
+        while (events.size() < expected_count) {
+            date remaining = end_time - now_us();
+            if (remaining <= 0us) {
+                return False;
+            }
+            cond.wait(m, remaining);
+        }
+        return True;
+    }
+}
+
+public class Krb5GssKdcIntegrationTest inherits QUnit::Test {
+    constructor() : Test("Krb5GssKdcIntegrationTest", "1.0") {
+        addTestCase("full gss initiator acceptor exchange", \testFullGssExchange());
+        addTestCase("http negotiate helper exchange", \testHttpNegotiateHelperExchange());
+        addTestCase("HttpServerUtil RestClientIo negotiate exchange",
+            \testHttpServerUtilRestClientIoNegotiate());
+        addTestCase("HttpServerUtil RestClientIo SSE negotiate exchange",
+            \testHttpServerUtilRestClientIoSseNegotiate());
+        addTestCase("HttpServerUtil RestClientIo SSE observable negotiate exchange",
+            \testHttpServerUtilRestClientIoSseObservableNegotiate());
+        addTestCase("HttpServerUtil poll RestClient negotiate exchange",
+            \testHttpServerUtilPollRestClientNegotiate());
+        addTestCase("HttpServerUtil async RestClientIo negotiate exchange",
+            \testHttpServerUtilAsyncRestClientIoNegotiate());
+        addTestCase("HttpServerUtil notifier RestClientIo negotiate exchange",
+            \testHttpServerUtilNotifierRestClientIoNegotiate());
+        addTestCase("HttpServerUtil cancellable RestClientIo negotiate exchange",
+            \testHttpServerUtilCancellableRestClientIoNegotiate());
+        addTestCase("HttpServerUtil signed async RestClientIo negotiate exchange",
+            \testHttpServerUtilSignedAsyncRestClientIoNegotiate());
+        addTestCase("HttpServerUtil preemptive RestClientIo negotiate exchange",
+            \testHttpServerUtilPreemptiveRestClientIoNegotiate());
+        addTestCase("HttpServerUtil RestConnection ping negotiate exchange",
+            \testHttpServerUtilPingNegotiate());
+        addTestCase("initial credentials reject wrong password", \testInitialCredentialsRejectWrongPassword());
+        addTestCase("initial credentials boolean options accepted",
+            \testInitialCredentialsBooleanOptionsAccepted());
+        addTestCase("gss channel binding mismatch rejected", \testGssChannelBindingMismatchRejected());
+        addTestCase("keytab credential acquisition with kdc", \testKeytabCredentialAcquisition());
+        addTestCase("gss context reset and renegotiate", \testGssContextResetAndRenegotiate());
+        addTestCase("gss integrity only wrap unwrap", \testGssIntegrityOnlyWrapUnwrap());
+        addTestCase("gss wrap empty message", \testGssWrapEmptyMessage());
+        addTestCase("gss wrap large message", \testGssWrapLargeMessage());
+        addTestCase("credential renewal with kdc", \testCredentialRenewal());
+        addTestCase("tgs service ticket request", \testTgsServiceTicketRequest());
+        addTestCase("delegation round trip", \testDelegationRoundTrip());
+        addTestCase("delegation not requested", \testDelegationNotRequested());
+        addTestCase("delegation credential extracted only once", \testDelegationExtractedOnlyOnce());
+        addTestCase("s4u impersonated client helper exchange",
+            \testS4uImpersonatedClientHelperExchange());
+        addTestCase("gss mic round trip", \testGssMicRoundTrip());
+        addTestCase("gss mic tamper detection", \testGssMicTamperDetection());
+        addTestCase("renew and store with kdc", \testRenewAndStoreWithKdc());
+        addTestCase("credential cache maintenance service ticket prefetch",
+            \testCredentialCacheMaintenanceServiceTicketPrefetch());
+        addTestCase("environment validation service keytab success",
+            \testEnvironmentValidationServiceKeytabSuccess());
+        addTestCase("environment validation service keytab missing principal",
+            \testEnvironmentValidationServiceKeytabMissingPrincipal());
+
+        set_return_value(main());
+    }
+
+    private string requireEnv(string name) {
+        *string value = getenv(name);
+        if (!value || value == "") {
+            testSkip(sprintf("environment variable %s is not set", name));
+        }
+        return value;
+    }
+
+    private hash<Qore::Krb5::Krb5InitialCredentialsOptions> getInitOptions() {
+        hash<Qore::Krb5::Krb5InitialCredentialsOptions> initOpts();
+        initOpts.canonicalize = True;
+        initOpts.enctypes = (
+            Qore::Krb5::ENCTYPE_AES256_CTS_HMAC_SHA1_96,
+            Qore::Krb5::ENCTYPE_AES128_CTS_HMAC_SHA1_96,
+        );
+        return initOpts;
+    }
+
+    private hash<Qore::Krb5::GssClientContextOptions> getClientOptions(string channelBindingHex) {
+        hash<Qore::Krb5::GssClientContextOptions> opts();
+        opts.flags = Qore::Krb5::GSS_DEFAULT_FLAGS | Qore::Krb5::GSS_CONF_FLAG
+            | Qore::Krb5::GSS_CHANNEL_BOUND_FLAG;
+        opts.mechanism = "kerberos";
+        opts.name_type = "krb5-principal";
+        opts.channel_binding_application_data_hex = channelBindingHex;
+        return opts;
+    }
+
+    private hash<Qore::Krb5::GssAcceptorContextOptions> getAcceptorOptions(string channelBindingHex) {
+        hash<Qore::Krb5::GssAcceptorContextOptions> opts();
+        opts.channel_binding_application_data_hex = channelBindingHex;
+        return opts;
+    }
+
+    #! Acquires client credentials and stores them in a memory cache, returns (ctx, cache, initiatorCred, acceptorCred)
+    private hash<auto> setupGssCredentials(string suffix) {
+        string realm = requireEnv("MODULE_KRB5_TEST_REALM");
+        string clientPrincipal = requireEnv("MODULE_KRB5_TEST_CLIENT_PRINCIPAL");
+        string clientPassword = requireEnv("MODULE_KRB5_TEST_CLIENT_PASSWORD");
+        string servicePrincipal = requireEnv("MODULE_KRB5_TEST_SERVICE_PRINCIPAL");
+        string serviceKeytab = requireEnv("MODULE_KRB5_TEST_SERVICE_KEYTAB");
+
+        Qore::Krb5::Krb5Context ctx();
+        Qore::Krb5::Krb5Principal clientPrincipalObj(clientPrincipal);
+        Qore::Krb5::Krb5Principal servicePrincipalObj(servicePrincipal);
+
+        Qore::Krb5::Krb5Credentials creds = ctx.acquireCredentialsWithPassword(
+            clientPrincipalObj, clientPassword, getInitOptions());
+        auto cc = ctx.createMemoryCredentialCache(clientPrincipalObj,
+            sprintf("module-krb5-gss-kdc-%s-%s", suffix, realm));
+        cc.initialize(clientPrincipalObj);
+        cc.storeCredentials(creds);
+
+        Qore::Krb5::GssCredential initiatorCred = Qore::Krb5::GssCredential::fromCredentialCache(cc);
+        Qore::Krb5::Krb5Keytab kt = ctx.openKeytab("FILE:" + serviceKeytab);
+        Qore::Krb5::GssCredential acceptorCred = Qore::Krb5::GssCredential::fromKeytab(kt, servicePrincipalObj);
+
+        return {
+            "ctx": ctx,
+            "cache": cc,
+            "clientPrincipal": clientPrincipal,
+            "servicePrincipal": servicePrincipal,
+            "cacheName": cc.getFullName(),
+            "initiatorCred": initiatorCred,
+            "acceptorCred": acceptorCred,
+        };
+    }
+
+    #! Runs a complete GSS exchange; returns (initiator, acceptor)
+    private hash<auto> performGssExchange(Qore::Krb5::GssClientContext initiator,
+            Qore::Krb5::GssAcceptorContext acceptor) {
+        *string initiatorToken;
+        *string acceptorToken;
+        int rounds = 0;
+        while ((!initiator.isComplete() || !acceptor.isComplete()) && rounds < 10) {
+            ++rounds;
+            if (!initiator.isComplete()) {
+                hash<Qore::Krb5::GssStepInfo> info = acceptorToken
+                    ? initiator.step(acceptorToken)
+                    : initiator.step();
+                initiatorToken = info.token;
+            }
+            if (!acceptor.isComplete()) {
+                assertTrue(initiatorToken != NOTHING);
+                hash<Qore::Krb5::GssStepInfo> info = acceptor.step(initiatorToken);
+                acceptorToken = info.token;
+            }
+        }
+        assertTrue(rounds < 10, "negotiation must finish within bounded loop");
+        assertTrue(initiator.isComplete());
+        assertTrue(acceptor.isComplete());
+        return {"initiator": initiator, "acceptor": acceptor};
+    }
+
+    private testFullGssExchange() {
+        string realm = requireEnv("MODULE_KRB5_TEST_REALM");
+        string clientPrincipal = requireEnv("MODULE_KRB5_TEST_CLIENT_PRINCIPAL");
+        string clientPassword = requireEnv("MODULE_KRB5_TEST_CLIENT_PASSWORD");
+        string servicePrincipal = requireEnv("MODULE_KRB5_TEST_SERVICE_PRINCIPAL");
+        string serviceKeytab = requireEnv("MODULE_KRB5_TEST_SERVICE_KEYTAB");
+
+        Qore::Krb5::Krb5Context ctx();
+        Qore::Krb5::Krb5Principal clientPrincipalObj(clientPrincipal);
+        Qore::Krb5::Krb5Principal servicePrincipalObj(servicePrincipal);
+
+        Qore::Krb5::Krb5Credentials creds = ctx.acquireCredentialsWithPassword(
+            clientPrincipalObj, clientPassword, getInitOptions());
+        auto cc = ctx.createMemoryCredentialCache(clientPrincipalObj,
+            sprintf("module-krb5-gss-kdc-%s", realm));
+        cc.initialize(clientPrincipalObj);
+        cc.storeCredentials(creds);
+
+        Qore::Krb5::GssCredential initiatorCred = Qore::Krb5::GssCredential::fromCredentialCache(cc);
+        Qore::Krb5::Krb5Keytab kt = ctx.openKeytab("FILE:" + serviceKeytab);
+        Qore::Krb5::GssCredential acceptorCred = Qore::Krb5::GssCredential::fromKeytab(kt, servicePrincipalObj);
+
+        string channelBindingHex = "746573742d746c732d7365727665722d656e642d62696e64696e67";
+
+        Qore::Krb5::GssClientContext initiator(servicePrincipal, initiatorCred,
+            getClientOptions(channelBindingHex));
+        Qore::Krb5::GssAcceptorContext acceptor(acceptorCred, getAcceptorOptions(channelBindingHex));
+
+        *string initiatorToken;
+        *string acceptorToken;
+        int rounds = 0;
+        while ((!initiator.isComplete() || !acceptor.isComplete()) && rounds < 10) {
+            ++rounds;
+            if (!initiator.isComplete()) {
+                hash<Qore::Krb5::GssStepInfo> initiatorInfo = acceptorToken
+                    ? initiator.step(acceptorToken)
+                    : initiator.step();
+                initiatorToken = initiatorInfo.token;
+            }
+            if (!acceptor.isComplete()) {
+                assertTrue(initiatorToken != NOTHING, "initiator must produce a token before acceptor completion");
+                hash<Qore::Krb5::GssStepInfo> acceptorInfo = acceptor.step(initiatorToken);
+                acceptorToken = acceptorInfo.token;
+            }
+        }
+
+        assertTrue(rounds < 10, "GSSAPI negotiation must finish within the bounded token loop");
+        assertTrue(initiator.isComplete());
+        assertTrue(acceptor.isComplete());
+        assertEq(clientPrincipal, acceptor.getInitiatorName());
+
+        hash<Qore::Krb5::GssWrapInfo> wrapped = initiator.wrap("68656c6c6f", True);
+        hash<Qore::Krb5::GssUnwrapInfo> plain = acceptor.unwrap(wrapped.token);
+        assertEq("68656c6c6f", plain.message);
+
+        hash<Qore::Krb5::GssWrapInfo> response = acceptor.wrap("776f726c64", True);
+        hash<Qore::Krb5::GssUnwrapInfo> responsePlain = initiator.unwrap(response.token);
+        assertEq("776f726c64", responsePlain.message);
+
+        assertTrue(initiator.getWrapSizeLimit(16384, True) > 0);
+        assertTrue(acceptor.getWrapSizeLimit(16384, True) > 0);
+    }
+
+    private testHttpNegotiateHelperExchange() {
+        string servicePrincipal = requireEnv("MODULE_KRB5_TEST_SERVICE_PRINCIPAL");
+        string clientPrincipal = requireEnv("MODULE_KRB5_TEST_CLIENT_PRINCIPAL");
+        hash<auto> setup = setupGssCredentials("http-negotiate");
+        string channelBindingHex = "746573742d687474702d6e65676f74696174652d68656c706572";
+
+        Qore::Krb5::GssClientContext initiator(servicePrincipal, setup.initiatorCred,
+            getClientOptions(channelBindingHex));
+        Qore::Krb5::GssAcceptorContext acceptor(setup.acceptorCred, getAcceptorOptions(channelBindingHex));
+
+        *string serverHeader;
+        int rounds = 0;
+        while ((!initiator.isComplete() || !acceptor.isComplete()) && rounds < 10) {
+            ++rounds;
+            hash<Krb5Util::NegotiateClientStepInfo> clientStep = serverHeader
+                ? Krb5Util::buildNegotiateClientStep(initiator, serverHeader)
+                : Krb5Util::buildNegotiateClientStep(initiator);
+            serverHeader = NOTHING;
+            if (exists clientStep.authorization_header) {
+                assertTrue(clientStep.authorization_header =~ /^Negotiate /);
+                hash<Krb5Util::NegotiateServerStepInfo> serverStep =
+                    Krb5Util::acceptNegotiateAuthorizationHeader(acceptor, clientStep.authorization_header);
+                assertTrue(serverStep.www_authenticate_header =~ /^Negotiate /);
+                serverHeader = serverStep.www_authenticate_header;
+            } else {
+                assertTrue(clientStep.complete);
+            }
+        }
+
+        assertTrue(rounds < 10, "HTTP Negotiate helper loop must finish within the bounded token loop");
+        assertTrue(initiator.isComplete());
+        assertTrue(acceptor.isComplete());
+        assertEq(clientPrincipal, acceptor.getInitiatorName());
+
+        hash<Qore::Krb5::GssWrapInfo> wrapped = initiator.wrap("68656c6c6f", True);
+        hash<Qore::Krb5::GssUnwrapInfo> plain = acceptor.unwrap(wrapped.token);
+        assertEq("68656c6c6f", plain.message);
+    }
+
+    private hash<auto> createHttpNegotiateServer(Qore::Krb5::GssCredential acceptorCred) {
+        hash<Qore::Krb5::GssAcceptorContextOptions> acceptorOpts();
+        Krb5HttpNegotiateAuthenticator auth(acceptorCred, acceptorOpts);
+        Krb5HttpNegotiateHandler handler(auth);
+
+        HttpServer server();
+        server.setHandler("krb5-http-negotiate", "", MimeTypeText, handler);
+        server.setDefaultHandler("krb5-http-negotiate", handler);
+        hash<auto> info = server.addListener(<HttpListenerOptionInfo>{"service": 0});
+        server.waitForAsyncIo();
+
+        return {
+            "auth": auth,
+            "server": server,
+            "url": "http://localhost:" + info.port,
+        };
+    }
+
+    private hash<auto> createHttpNegotiateSseServer(Qore::Krb5::GssCredential acceptorCred) {
+        hash<Qore::Krb5::GssAcceptorContextOptions> acceptorOpts();
+        Krb5HttpNegotiateAuthenticator auth(acceptorCred, acceptorOpts);
+        Krb5HttpNegotiateSseHandler handler(auth);
+
+        HttpServer server();
+        server.setHandler("krb5-http-negotiate-sse", "", "text/event-stream",
+            handler);
+        server.setDefaultHandler("krb5-http-negotiate-sse", handler);
+        hash<auto> info = server.addListener(<HttpListenerOptionInfo>{"service": 0});
+        server.waitForAsyncIo();
+
+        return {
+            "auth": auth,
+            "server": server,
+            "url": "http://localhost:" + info.port,
+        };
+    }
+
+    private hash<auto> getHttpNegotiateClientOptions(hash<auto> setup, string url) {
+        return {
+            "url": url,
+            "data": "text",
+            "negotiate_auth": True,
+            "negotiate_service_principal": setup.servicePrincipal,
+            "negotiate_credential_cache": setup.cacheName,
+        };
+    }
+
+    private static *hash<ExceptionInfo> drivePingOp(Qore::AbstractPollOperation op) {
+        try {
+            while (!op.goalReached()) {
+                *hash<SocketPollInfo> info = op.continuePoll();
+                if (!info) {
+                    break;
+                }
+                Socket::poll((info,), 10s);
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            return ex;
+        }
+        return NOTHING;
+    }
+
+    private testHttpServerUtilRestClientIoNegotiate() {
+        hash<auto> setup = setupGssCredentials("httpserverutil-restclientio");
+        hash<auto> serverSetup = createHttpNegotiateServer(setup.acceptorCred);
+        HttpServer server = serverSetup.server;
+        on_exit delete server;
+
+        RestClientIo::RestClientIo rest(getHttpNegotiateClientOptions(setup, serverSetup.url));
+        on_exit rest.close();
+
+        hash<RestClient::RestResponseInfo> response = rest.restGet("/protected");
+        assertEq(200, response.status_code);
+        assertEq(setup.clientPrincipal, response.body);
+
+        Krb5HttpNegotiateAuthenticator auth = serverSetup.auth;
+        assertEq(1, auth.getChallengeCount(), "challenge-driven Negotiate should send one 401 challenge");
+        assertEq(1, auth.getNegotiateCount(), "challenge-driven Negotiate should process one token");
+    }
+
+    private testHttpServerUtilRestClientIoSseNegotiate() {
+        hash<auto> setup = setupGssCredentials("httpserverutil-restclientio-sse");
+        hash<auto> serverSetup = createHttpNegotiateSseServer(setup.acceptorCred);
+        HttpServer server = serverSetup.server;
+        on_exit delete server;
+
+        RestClientIo::RestClientIo rest(getHttpNegotiateClientOptions(setup, serverSetup.url));
+        on_exit rest.close();
+
+        SseStreamReader reader = rest.restSseReader("GET", "/sse-protected",
+            NOTHING, NOTHING);
+        on_exit reader.cancel();
+
+        *hash<SseMessageInfo> evt = reader.readEvent(30s);
+        assertTrue(exists evt, "RestClientIo SSE Negotiate should return an SSE event");
+        assertEq("principal", evt.event);
+        assertEq(setup.clientPrincipal, evt.data);
+
+        Krb5HttpNegotiateAuthenticator auth = serverSetup.auth;
+        assertEq(1, auth.getChallengeCount(), "SSE Negotiate should send one 401 challenge");
+        assertEq(1, auth.getNegotiateCount(), "SSE Negotiate should process one token");
+    }
+
+    private testHttpServerUtilRestClientIoSseObservableNegotiate() {
+        hash<auto> setup = setupGssCredentials("httpserverutil-restclientio-sse-observable");
+        hash<auto> serverSetup = createHttpNegotiateSseServer(setup.acceptorCred);
+        HttpServer server = serverSetup.server;
+        on_exit delete server;
+
+        RestClientIo::RestClientIo rest(getHttpNegotiateClientOptions(setup, serverSetup.url));
+        on_exit rest.close();
+
+        HttpClientStreamingIo::SseObservable obs = rest.restObserveSse("GET",
+            "/sse-protected", NOTHING, NOTHING, {"serialization": "none"});
+        Krb5SseObserver observer(2);
+        obs.registerObserver(observer);
+        obs.observersReady();
+        on_exit obs.stopEvents();
+
+        assertTrue(observer.waitForEvents(30s),
+            "RestClientIo SSE observable Negotiate should receive an event");
+        assertEq(HttpClientStreamingIo::EVENT_SSE_CONNECTED, observer.events[0].event_id);
+        assertEq(HttpClientStreamingIo::EVENT_SSE_DATA, observer.events[1].event_id);
+        assertEq("principal", observer.events[1].data.event);
+        assertEq(setup.clientPrincipal, observer.events[1].data.data);
+
+        Krb5HttpNegotiateAuthenticator auth = serverSetup.auth;
+        assertEq(1, auth.getChallengeCount(),
+            "SSE observable Negotiate should send one 401 challenge");
+        assertEq(1, auth.getNegotiateCount(),
+            "SSE observable Negotiate should process one token");
+    }
+
+    private testHttpServerUtilPollRestClientNegotiate() {
+        hash<auto> setup = setupGssCredentials("httpserverutil-poll-restclient");
+        hash<auto> serverSetup = createHttpNegotiateServer(setup.acceptorCred);
+        HttpServer server = serverSetup.server;
+        on_exit delete server;
+
+        RestClient rest(getHttpNegotiateClientOptions(setup, serverSetup.url));
+        Qore::AbstractPollOperation op = rest.startPollGet("/poll-protected");
+        *hash<ExceptionInfo> ex = drivePingOp(op);
+        on_error printf("poll RestClient Negotiate error: %y\n", ex);
+        assertFalse(exists ex, "poll RestClient Negotiate should authenticate against HttpServerUtil");
+        assertTrue(op.goalReached());
+
+        hash<auto> response = op.getOutput();
+        assertEq(200, response.status_code);
+        assertEq(setup.clientPrincipal, response.body);
+
+        Krb5HttpNegotiateAuthenticator auth = serverSetup.auth;
+        assertEq(1, auth.getChallengeCount(), "poll RestClient Negotiate should send one 401 challenge");
+        assertEq(1, auth.getNegotiateCount(), "poll RestClient Negotiate should process one token");
+    }
+
+    private testHttpServerUtilAsyncRestClientIoNegotiate() {
+        hash<auto> setup = setupGssCredentials("httpserverutil-async-restclientio");
+        hash<auto> serverSetup = createHttpNegotiateServer(setup.acceptorCred);
+        HttpServer server = serverSetup.server;
+        on_exit delete server;
+
+        RestClientIo::RestClientIo rest(getHttpNegotiateClientOptions(setup, serverSetup.url));
+        on_exit rest.close();
+
+        RestClientIo::RestFuture f = rest.restGetAsync("/async-protected");
+        hash<RestClient::RestResponseInfo> response = f.get(30s);
+        assertEq(200, response.status_code);
+        assertEq(setup.clientPrincipal, response.body);
+
+        Krb5HttpNegotiateAuthenticator auth = serverSetup.auth;
+        assertEq(1, auth.getChallengeCount(), "async Negotiate should send one 401 challenge");
+        assertEq(1, auth.getNegotiateCount(), "async Negotiate should process one token");
+    }
+
+    private testHttpServerUtilNotifierRestClientIoNegotiate() {
+        hash<auto> setup = setupGssCredentials("httpserverutil-notifier-restclientio");
+        hash<auto> serverSetup = createHttpNegotiateServer(setup.acceptorCred);
+        HttpServer server = serverSetup.server;
+        on_exit delete server;
+
+        RestClientIo::RestClientIo rest(getHttpNegotiateClientOptions(setup, serverSetup.url));
+        on_exit rest.close();
+
+        EventNotifier notifier();
+        hash<auto> result = rest.restDoRequestAsyncWithNotifier("GET", "/async-notifier",
+            NOTHING, NOTHING, notifier);
+        assertTrue(rest.getConnectionManager().getController().waitForNotifier(notifier, 30s),
+            "notifier async Negotiate should signal completion");
+        notifier.acknowledge();
+        hash<auto> response = result.future.get();
+        assertEq(200, response.status_code);
+        assertEq(setup.clientPrincipal, response.body.toString());
+
+        Krb5HttpNegotiateAuthenticator auth = serverSetup.auth;
+        assertEq(1, auth.getChallengeCount(), "notifier async Negotiate should send one 401 challenge");
+        assertEq(1, auth.getNegotiateCount(), "notifier async Negotiate should process one token");
+    }
+
+    private testHttpServerUtilCancellableRestClientIoNegotiate() {
+        hash<auto> setup = setupGssCredentials("httpserverutil-cancellable-restclientio");
+        hash<auto> serverSetup = createHttpNegotiateServer(setup.acceptorCred);
+        HttpServer server = serverSetup.server;
+        on_exit delete server;
+
+        RestClientIo::RestClientIo rest(getHttpNegotiateClientOptions(setup, serverSetup.url));
+        on_exit rest.close();
+
+        HttpClientIo::HttpCancellableFuture f = rest.restDoRequestCancellableAsync("GET",
+            "/async-cancellable", NOTHING, NOTHING);
+        hash<auto> response = f.get(30s);
+        assertEq(200, response.status_code);
+        assertEq(setup.clientPrincipal, response.body.toString());
+
+        Krb5HttpNegotiateAuthenticator auth = serverSetup.auth;
+        assertEq(1, auth.getChallengeCount(), "cancellable async Negotiate should send one 401 challenge");
+        assertEq(1, auth.getNegotiateCount(), "cancellable async Negotiate should process one token");
+    }
+
+    private testHttpServerUtilSignedAsyncRestClientIoNegotiate() {
+        hash<auto> setup = setupGssCredentials("httpserverutil-signed-async-restclientio");
+        hash<auto> serverSetup = createHttpNegotiateServer(setup.acceptorCred);
+        HttpServer server = serverSetup.server;
+        on_exit delete server;
+
+        RestClientIo::RestClientIo rest(getHttpNegotiateClientOptions(setup, serverSetup.url));
+        on_exit rest.close();
+
+        code signer = auto sub (hash<auto> info) {
+            return "krb5-test-signature:" + info.path;
+        };
+        RestClientIo::RestFuture f = rest.doSignedRequestAsync("x-test-signature", signer,
+            "GET", "/async-signed", NOTHING);
+        hash<RestClient::RestResponseInfo> response = f.get(30s);
+        assertEq(200, response.status_code);
+        assertEq(setup.clientPrincipal, response.body);
+
+        Krb5HttpNegotiateAuthenticator auth = serverSetup.auth;
+        assertEq(1, auth.getChallengeCount(), "signed async Negotiate should send one 401 challenge");
+        assertEq(1, auth.getNegotiateCount(), "signed async Negotiate should process one token");
+    }
+
+    private testHttpServerUtilPreemptiveRestClientIoNegotiate() {
+        hash<auto> setup = setupGssCredentials("httpserverutil-preemptive-restclientio");
+        hash<auto> serverSetup = createHttpNegotiateServer(setup.acceptorCred);
+        HttpServer server = serverSetup.server;
+        on_exit delete server;
+
+        RestClientIo::RestClientIo rest(getHttpNegotiateClientOptions(setup, serverSetup.url) + {
+            "negotiate_preemptive": True,
+        });
+        on_exit rest.close();
+
+        hash<RestClient::RestResponseInfo> response = rest.restGet("/preemptive");
+        assertEq(200, response.status_code);
+        assertEq(setup.clientPrincipal, response.body);
+
+        Krb5HttpNegotiateAuthenticator auth = serverSetup.auth;
+        assertEq(0, auth.getChallengeCount(), "preemptive Negotiate should avoid the initial 401 challenge");
+        assertEq(1, auth.getNegotiateCount(), "preemptive Negotiate should process one token");
+    }
+
+    private testHttpServerUtilPingNegotiate() {
+        hash<auto> setup = setupGssCredentials("httpserverutil-ping");
+        hash<auto> serverSetup = createHttpNegotiateServer(setup.acceptorCred);
+        HttpServer server = serverSetup.server;
+        on_exit delete server;
+
+        hash<auto> opts = getHttpNegotiateClientOptions(setup, serverSetup.url) - "url" + {
+            "ping_method": "GET",
+            "ping_path": "/ping",
+        };
+        RestClient::RestConnection rc("krb5-httpserverutil-ping", "krb5-httpserverutil-ping",
+            serverSetup.url, {}, opts);
+        Qore::AbstractPollOperation op = rc.startPollConnect();
+        assertEq("ping", op.getGoal());
+
+        *hash<ExceptionInfo> ex = drivePingOp(op);
+        on_error printf("HttpServerUtil Negotiate ping error: %y\n", ex);
+        assertFalse(exists ex, "Negotiate-enabled ping should authenticate against HttpServerUtil");
+        assertTrue(op.goalReached());
+
+        Krb5HttpNegotiateAuthenticator auth = serverSetup.auth;
+        assertEq(1, auth.getChallengeCount(), "Negotiate ping should send one 401 challenge");
+        assertEq(1, auth.getNegotiateCount(), "Negotiate ping should process one token");
+    }
+
+    private testInitialCredentialsRejectWrongPassword() {
+        string clientPrincipal = requireEnv("MODULE_KRB5_TEST_CLIENT_PRINCIPAL");
+
+        Qore::Krb5::Krb5Context ctx();
+        Qore::Krb5::Krb5Principal clientPrincipalObj(clientPrincipal);
+
+        assertThrows("KRB5-INIT-CREDS-ERROR", sub() {
+            ctx.acquireCredentialsWithPassword(clientPrincipalObj, "wrong-password", getInitOptions());
+        });
+    }
+
+    private testGssChannelBindingMismatchRejected() {
+        string realm = requireEnv("MODULE_KRB5_TEST_REALM");
+        string clientPrincipal = requireEnv("MODULE_KRB5_TEST_CLIENT_PRINCIPAL");
+        string clientPassword = requireEnv("MODULE_KRB5_TEST_CLIENT_PASSWORD");
+        string servicePrincipal = requireEnv("MODULE_KRB5_TEST_SERVICE_PRINCIPAL");
+        string serviceKeytab = requireEnv("MODULE_KRB5_TEST_SERVICE_KEYTAB");
+
+        Qore::Krb5::Krb5Context ctx();
+        Qore::Krb5::Krb5Principal clientPrincipalObj(clientPrincipal);
+        Qore::Krb5::Krb5Principal servicePrincipalObj(servicePrincipal);
+
+        Qore::Krb5::Krb5Credentials creds = ctx.acquireCredentialsWithPassword(
+            clientPrincipalObj, clientPassword, getInitOptions());
+        auto cc = ctx.createMemoryCredentialCache(clientPrincipalObj,
+            sprintf("module-krb5-gss-kdc-cb-mismatch-%s", realm));
+        cc.initialize(clientPrincipalObj);
+        cc.storeCredentials(creds);
+
+        Qore::Krb5::GssCredential initiatorCred = Qore::Krb5::GssCredential::fromCredentialCache(cc);
+        Qore::Krb5::Krb5Keytab kt = ctx.openKeytab("FILE:" + serviceKeytab);
+        Qore::Krb5::GssCredential acceptorCred = Qore::Krb5::GssCredential::fromKeytab(kt, servicePrincipalObj);
+
+        Qore::Krb5::GssClientContext initiator(servicePrincipal, initiatorCred,
+            getClientOptions("746573742d6368616e6e656c2d62696e64696e672d676f6f64"));
+        Qore::Krb5::GssAcceptorContext acceptor(acceptorCred,
+            getAcceptorOptions("746573742d6368616e6e656c2d62696e64696e672d626164"));
+
+        hash<Qore::Krb5::GssStepInfo> initiatorInfo = initiator.step();
+        assertTrue(initiatorInfo.token != NOTHING);
+        assertThrows("KRB5-GSS-ERROR", sub() {
+            acceptor.step(initiatorInfo.token);
+        });
+        assertFalse(acceptor.isComplete());
+    }
+
+    private testKeytabCredentialAcquisition() {
+        string servicePrincipal = requireEnv("MODULE_KRB5_TEST_SERVICE_PRINCIPAL");
+        string serviceKeytab = requireEnv("MODULE_KRB5_TEST_SERVICE_KEYTAB");
+
+        Qore::Krb5::Krb5Context ctx();
+        Qore::Krb5::Krb5Principal servicePrincipalObj(servicePrincipal);
+        Qore::Krb5::Krb5Keytab kt = ctx.openKeytab("FILE:" + serviceKeytab);
+
+        Qore::Krb5::Krb5Credentials creds = ctx.acquireCredentialsWithKeytab(
+            servicePrincipalObj, kt, getInitOptions());
+        hash<Qore::Krb5::Krb5CredentialsInfo> info = creds.getInfo();
+        assertEq(servicePrincipal, info.client);
+        assertTrue(info.end_time > info.start_time);
+    }
+
+    private testInitialCredentialsBooleanOptionsAccepted() {
+        string clientPrincipal = requireEnv("MODULE_KRB5_TEST_CLIENT_PRINCIPAL");
+        string clientPassword = requireEnv("MODULE_KRB5_TEST_CLIENT_PASSWORD");
+
+        Qore::Krb5::Krb5Context ctx();
+        Qore::Krb5::Krb5Principal p(clientPrincipal);
+
+        list<string> boolOpts = ("forwardable", "proxiable", "canonicalize", "anonymous", "pac_request",
+            "change_password_prompt");
+        list<bool> values = (True, True, True, False, True, False);
+        for (int i = 0; i < boolOpts.size(); i++) {
+            hash<Qore::Krb5::Krb5InitialCredentialsOptions> opts = getInitOptions();
+            opts{boolOpts[i]} = values[i];
+            Qore::Krb5::Krb5Credentials creds = ctx.acquireCredentialsWithPassword(p, clientPassword, opts);
+            hash<Qore::Krb5::Krb5CredentialsInfo> info = creds.getInfo();
+            assertEq(clientPrincipal, info.client);
+        }
+    }
+
+    private testGssContextResetAndRenegotiate() {
+        hash<auto> setup = setupGssCredentials("reset-renego");
+        string channelBindingHex = "746573742d726573657420";
+
+        Qore::Krb5::GssClientContext initiator(setup.servicePrincipal, setup.initiatorCred,
+            getClientOptions(channelBindingHex));
+        Qore::Krb5::GssAcceptorContext acceptor(setup.acceptorCred, getAcceptorOptions(channelBindingHex));
+
+        # First exchange
+        performGssExchange(initiator, acceptor);
+        assertEq(setup.clientPrincipal, acceptor.getInitiatorName());
+
+        # Reset initiator and do a second exchange
+        initiator.reset();
+        assertFalse(initiator.isComplete());
+
+        # Need a fresh acceptor too since the old context is consumed
+        Qore::Krb5::GssAcceptorContext acceptor2(setup.acceptorCred, getAcceptorOptions(channelBindingHex));
+        performGssExchange(initiator, acceptor2);
+        assertEq(setup.clientPrincipal, acceptor2.getInitiatorName());
+    }
+
+    private testGssIntegrityOnlyWrapUnwrap() {
+        hash<auto> setup = setupGssCredentials("integ-only");
+        string channelBindingHex = "746573742d696e74656772697479";
+
+        Qore::Krb5::GssClientContext initiator(setup.servicePrincipal, setup.initiatorCred,
+            getClientOptions(channelBindingHex));
+        Qore::Krb5::GssAcceptorContext acceptor(setup.acceptorCred, getAcceptorOptions(channelBindingHex));
+        performGssExchange(initiator, acceptor);
+
+        # Wrap with confidential=False (integrity only, no encryption)
+        hash<Qore::Krb5::GssWrapInfo> wrapped = initiator.wrap("cafebabe", False);
+        assertFalse(wrapped.confidential);
+
+        hash<Qore::Krb5::GssUnwrapInfo> unwrapped = acceptor.unwrap(wrapped.token);
+        assertEq("cafebabe", unwrapped.message);
+        assertFalse(unwrapped.confidential);
+
+        # And in the other direction
+        hash<Qore::Krb5::GssWrapInfo> response = acceptor.wrap("deadbeef", False);
+        assertFalse(response.confidential);
+        hash<Qore::Krb5::GssUnwrapInfo> responsePlain = initiator.unwrap(response.token);
+        assertEq("deadbeef", responsePlain.message);
+        assertFalse(responsePlain.confidential);
+    }
+
+    private testGssWrapEmptyMessage() {
+        hash<auto> setup = setupGssCredentials("wrap-empty");
+        string channelBindingHex = "746573742d656d707479";
+
+        Qore::Krb5::GssClientContext initiator(setup.servicePrincipal, setup.initiatorCred,
+            getClientOptions(channelBindingHex));
+        Qore::Krb5::GssAcceptorContext acceptor(setup.acceptorCred, getAcceptorOptions(channelBindingHex));
+        performGssExchange(initiator, acceptor);
+
+        # Wrap an empty message
+        hash<Qore::Krb5::GssWrapInfo> wrapped = initiator.wrap("", True);
+        hash<Qore::Krb5::GssUnwrapInfo> unwrapped = acceptor.unwrap(wrapped.token);
+        assertEq("", unwrapped.message);
+    }
+
+    private testGssWrapLargeMessage() {
+        hash<auto> setup = setupGssCredentials("wrap-large");
+        string channelBindingHex = "746573742d6c61726765";
+
+        Qore::Krb5::GssClientContext initiator(setup.servicePrincipal, setup.initiatorCred,
+            getClientOptions(channelBindingHex));
+        Qore::Krb5::GssAcceptorContext acceptor(setup.acceptorCred, getAcceptorOptions(channelBindingHex));
+        performGssExchange(initiator, acceptor);
+
+        # Build a 128KB hex message (64KB of actual data)
+        string largeHex = strmul("ab", 65536);
+        hash<Qore::Krb5::GssWrapInfo> wrapped = initiator.wrap(largeHex, True);
+        hash<Qore::Krb5::GssUnwrapInfo> unwrapped = acceptor.unwrap(wrapped.token);
+        assertEq(largeHex, unwrapped.message);
+    }
+
+    private testCredentialRenewal() {
+        string realm = requireEnv("MODULE_KRB5_TEST_REALM");
+        string clientPrincipal = requireEnv("MODULE_KRB5_TEST_CLIENT_PRINCIPAL");
+        string clientPassword = requireEnv("MODULE_KRB5_TEST_CLIENT_PASSWORD");
+
+        Qore::Krb5::Krb5Context ctx();
+        Qore::Krb5::Krb5Principal clientPrincipalObj(clientPrincipal);
+
+        # Acquire initial creds with renewable lifetime
+        hash<Qore::Krb5::Krb5InitialCredentialsOptions> initOpts = getInitOptions();
+        initOpts.renew_lifetime = 3600;
+        Qore::Krb5::Krb5Credentials creds = ctx.acquireCredentialsWithPassword(
+            clientPrincipalObj, clientPassword, initOpts);
+        hash<Qore::Krb5::Krb5CredentialsInfo> origInfo = creds.getInfo();
+
+        # Store in memory cache
+        auto cc = ctx.createMemoryCredentialCache(clientPrincipalObj,
+            sprintf("module-krb5-renew-%s", realm));
+        cc.initialize(clientPrincipalObj);
+        cc.storeCredentials(creds);
+
+        # Renew
+        Qore::Krb5::Krb5Credentials renewed = ctx.renewCredentials(cc, clientPrincipalObj);
+        hash<Qore::Krb5::Krb5CredentialsInfo> renewedInfo = renewed.getInfo();
+        assertTrue(renewedInfo.end_time >= origInfo.end_time);
+        assertEq(clientPrincipal, renewedInfo.client);
+    }
+
+    private testTgsServiceTicketRequest() {
+        string realm = requireEnv("MODULE_KRB5_TEST_REALM");
+        string clientPrincipal = requireEnv("MODULE_KRB5_TEST_CLIENT_PRINCIPAL");
+        string clientPassword = requireEnv("MODULE_KRB5_TEST_CLIENT_PASSWORD");
+        string servicePrincipal = requireEnv("MODULE_KRB5_TEST_SERVICE_PRINCIPAL");
+
+        Qore::Krb5::Krb5Context ctx();
+        Qore::Krb5::Krb5Principal clientPrincipalObj(clientPrincipal);
+        Qore::Krb5::Krb5Principal servicePrincipalObj(servicePrincipal);
+
+        # Acquire TGT and store in memory cache
+        Qore::Krb5::Krb5Credentials creds = ctx.acquireCredentialsWithPassword(
+            clientPrincipalObj, clientPassword, getInitOptions());
+        auto cc = ctx.createMemoryCredentialCache(clientPrincipalObj,
+            sprintf("module-krb5-tgs-%s", realm));
+        cc.initialize(clientPrincipalObj);
+        cc.storeCredentials(creds);
+
+        # Request service ticket via TGS
+        Qore::Krb5::Krb5Credentials svcCreds = ctx.acquireServiceCredentials(cc, servicePrincipalObj);
+        hash<Qore::Krb5::Krb5CredentialsInfo> svcInfo = svcCreds.getInfo();
+        assertEq(servicePrincipal, svcInfo.server);
+        assertEq(clientPrincipal, svcInfo.client);
+        assertTrue(svcInfo.end_time > svcInfo.start_time);
+    }
+
+    private testDelegationRoundTrip() {
+        string realm = requireEnv("MODULE_KRB5_TEST_REALM");
+        string clientPrincipal = requireEnv("MODULE_KRB5_TEST_CLIENT_PRINCIPAL");
+        string clientPassword = requireEnv("MODULE_KRB5_TEST_CLIENT_PASSWORD");
+        string servicePrincipal = requireEnv("MODULE_KRB5_TEST_SERVICE_PRINCIPAL");
+        string serviceKeytab = requireEnv("MODULE_KRB5_TEST_SERVICE_KEYTAB");
+
+        Qore::Krb5::Krb5Context ctx();
+        Qore::Krb5::Krb5Principal clientPrincipalObj(clientPrincipal);
+        Qore::Krb5::Krb5Principal servicePrincipalObj(servicePrincipal);
+
+        # Acquire forwardable credentials
+        hash<Qore::Krb5::Krb5InitialCredentialsOptions> initOpts = getInitOptions();
+        initOpts.forwardable = True;
+        Qore::Krb5::Krb5Credentials creds = ctx.acquireCredentialsWithPassword(
+            clientPrincipalObj, clientPassword, initOpts);
+        auto cc = ctx.createMemoryCredentialCache(clientPrincipalObj,
+            sprintf("module-krb5-deleg-%s", realm));
+        cc.initialize(clientPrincipalObj);
+        cc.storeCredentials(creds);
+
+        Qore::Krb5::GssCredential initiatorCred = Qore::Krb5::GssCredential::fromCredentialCache(cc);
+        Qore::Krb5::Krb5Keytab kt = ctx.openKeytab("FILE:" + serviceKeytab);
+        Qore::Krb5::GssCredential acceptorCred = Qore::Krb5::GssCredential::fromKeytab(kt, servicePrincipalObj);
+
+        # Initiate with delegation flag
+        hash<Qore::Krb5::GssClientContextOptions> clientOpts();
+        clientOpts.flags = Qore::Krb5::GSS_DEFAULT_FLAGS | Qore::Krb5::GSS_CONF_FLAG
+            | Qore::Krb5::GSS_DELEG_FLAG;
+        clientOpts.mechanism = "kerberos";
+        clientOpts.name_type = "krb5-principal";
+
+        Qore::Krb5::GssClientContext initiator(servicePrincipal, initiatorCred, clientOpts);
+        Qore::Krb5::GssAcceptorContext acceptor(acceptorCred);
+        performGssExchange(initiator, acceptor);
+
+        # Extract the delegated credential
+        Qore::Krb5::GssCredential delegated = acceptor.getDelegatedCredential();
+        assertTrue(delegated instanceof Qore::Krb5::GssCredential);
+
+        # Use the delegated credential to initiate a new exchange
+        Qore::Krb5::GssClientContext initiator2(servicePrincipal, delegated, clientOpts);
+        Qore::Krb5::GssAcceptorContext acceptor2(acceptorCred);
+        performGssExchange(initiator2, acceptor2);
+        assertEq(clientPrincipal, acceptor2.getInitiatorName());
+    }
+
+    private testDelegationNotRequested() {
+        hash<auto> setup = setupGssCredentials("no-deleg");
+
+        hash<Qore::Krb5::GssClientContextOptions> clientOpts();
+        clientOpts.flags = Qore::Krb5::GSS_DEFAULT_FLAGS | Qore::Krb5::GSS_CONF_FLAG;
+        clientOpts.mechanism = "kerberos";
+        clientOpts.name_type = "krb5-principal";
+
+        Qore::Krb5::GssClientContext initiator(setup.servicePrincipal, setup.initiatorCred, clientOpts);
+        Qore::Krb5::GssAcceptorContext acceptor(setup.acceptorCred);
+        performGssExchange(initiator, acceptor);
+
+        assertThrows("KRB5-GSS-DELEGATION-ERROR", sub() {
+            acceptor.getDelegatedCredential();
+        });
+    }
+
+    private testDelegationExtractedOnlyOnce() {
+        string realm = requireEnv("MODULE_KRB5_TEST_REALM");
+        string clientPrincipal = requireEnv("MODULE_KRB5_TEST_CLIENT_PRINCIPAL");
+        string clientPassword = requireEnv("MODULE_KRB5_TEST_CLIENT_PASSWORD");
+        string servicePrincipal = requireEnv("MODULE_KRB5_TEST_SERVICE_PRINCIPAL");
+        string serviceKeytab = requireEnv("MODULE_KRB5_TEST_SERVICE_KEYTAB");
+
+        Qore::Krb5::Krb5Context ctx();
+        Qore::Krb5::Krb5Principal clientPrincipalObj(clientPrincipal);
+        Qore::Krb5::Krb5Principal servicePrincipalObj(servicePrincipal);
+
+        hash<Qore::Krb5::Krb5InitialCredentialsOptions> initOpts = getInitOptions();
+        initOpts.forwardable = True;
+        Qore::Krb5::Krb5Credentials creds = ctx.acquireCredentialsWithPassword(
+            clientPrincipalObj, clientPassword, initOpts);
+        auto cc = ctx.createMemoryCredentialCache(clientPrincipalObj,
+            sprintf("module-krb5-deleg-once-%s", realm));
+        cc.initialize(clientPrincipalObj);
+        cc.storeCredentials(creds);
+
+        Qore::Krb5::GssCredential initiatorCred = Qore::Krb5::GssCredential::fromCredentialCache(cc);
+        Qore::Krb5::Krb5Keytab kt = ctx.openKeytab("FILE:" + serviceKeytab);
+        Qore::Krb5::GssCredential acceptorCred = Qore::Krb5::GssCredential::fromKeytab(kt, servicePrincipalObj);
+
+        hash<Qore::Krb5::GssClientContextOptions> clientOpts();
+        clientOpts.flags = Qore::Krb5::GSS_DEFAULT_FLAGS | Qore::Krb5::GSS_CONF_FLAG
+            | Qore::Krb5::GSS_DELEG_FLAG;
+        clientOpts.mechanism = "kerberos";
+        clientOpts.name_type = "krb5-principal";
+
+        Qore::Krb5::GssClientContext initiator(servicePrincipal, initiatorCred, clientOpts);
+        Qore::Krb5::GssAcceptorContext acceptor(acceptorCred);
+        performGssExchange(initiator, acceptor);
+
+        # First extraction succeeds
+        Qore::Krb5::GssCredential delegated = acceptor.getDelegatedCredential();
+        assertTrue(delegated instanceof Qore::Krb5::GssCredential);
+
+        # Second extraction fails — ownership was transferred
+        assertThrows("KRB5-GSS-DELEGATION-ERROR", sub() {
+            acceptor.getDelegatedCredential();
+        });
+    }
+
+    private testS4uImpersonatedClientHelperExchange() {
+        string clientPrincipal = requireEnv("MODULE_KRB5_TEST_CLIENT_PRINCIPAL");
+        string servicePrincipal = requireEnv("MODULE_KRB5_TEST_SERVICE_PRINCIPAL");
+        string serviceKeytab = requireEnv("MODULE_KRB5_TEST_SERVICE_KEYTAB");
+
+        Qore::Krb5::Krb5Context ctx();
+        Qore::Krb5::Krb5Principal userPrincipal(clientPrincipal);
+        Qore::Krb5::Krb5Principal servicePrincipalObj(servicePrincipal);
+
+        Qore::Krb5::Krb5Keytab kt = ctx.openKeytab("FILE:" + serviceKeytab);
+        Qore::Krb5::Krb5Credentials serviceCreds =
+            ctx.acquireCredentialsWithKeytab(servicePrincipalObj, kt, getInitOptions());
+        auto serviceCache = ctx.createMemoryCredentialCache(servicePrincipalObj, "module-krb5-s4u-service-cache");
+        serviceCache.initialize(servicePrincipalObj);
+        serviceCache.storeCredentials(serviceCreds);
+        Qore::Krb5::GssCredential serviceCred = Qore::Krb5::GssCredential::fromCredentialCache(serviceCache);
+        Qore::Krb5::GssCredential acceptorCred = Qore::Krb5::GssCredential::fromKeytab(kt, servicePrincipalObj);
+
+        string channelBindingHex = "7334752d696d706572736f6e617465642d68656c706572";
+        Qore::Krb5::GssClientContext initiator = Krb5Util::createImpersonatedClientContext(
+            servicePrincipal, serviceCred, userPrincipal, getClientOptions(channelBindingHex));
+        Qore::Krb5::GssAcceptorContext acceptor(acceptorCred, getAcceptorOptions(channelBindingHex));
+
+        performGssExchange(initiator, acceptor);
+        assertEq(clientPrincipal, acceptor.getInitiatorName());
+    }
+
+    private testGssMicRoundTrip() {
+        hash<auto> setup = setupGssCredentials("mic-roundtrip");
+        string channelBindingHex = "746573742d6d69632d726f756e6474726970";
+
+        Qore::Krb5::GssClientContext initiator(setup.servicePrincipal, setup.initiatorCred,
+            getClientOptions(channelBindingHex));
+        Qore::Krb5::GssAcceptorContext acceptor(setup.acceptorCred, getAcceptorOptions(channelBindingHex));
+        performGssExchange(initiator, acceptor);
+
+        string messageHex = "68656c6c6f";
+
+        # Client getMic → acceptor verifyMic
+        hash<Qore::Krb5::GssMicInfo> clientMic = initiator.getMic(messageHex);
+        assertTrue(clientMic.token.val());
+        hash<Qore::Krb5::GssMicVerifyInfo> acceptorVerify = acceptor.verifyMic(messageHex, clientMic.token);
+        assertEq(0, acceptorVerify.qop);
+
+        # Acceptor getMic → client verifyMic
+        hash<Qore::Krb5::GssMicInfo> acceptorMic = acceptor.getMic(messageHex);
+        assertTrue(acceptorMic.token.val());
+        hash<Qore::Krb5::GssMicVerifyInfo> clientVerify = initiator.verifyMic(messageHex, acceptorMic.token);
+        assertEq(0, clientVerify.qop);
+
+        # Empty message MIC also works
+        hash<Qore::Krb5::GssMicInfo> emptyMic = initiator.getMic("");
+        assertTrue(emptyMic.token.val());
+        acceptor.verifyMic("", emptyMic.token);
+    }
+
+    private testGssMicTamperDetection() {
+        hash<auto> setup = setupGssCredentials("mic-tamper");
+        string channelBindingHex = "746573742d6d69632d74616d706572";
+
+        Qore::Krb5::GssClientContext initiator(setup.servicePrincipal, setup.initiatorCred,
+            getClientOptions(channelBindingHex));
+        Qore::Krb5::GssAcceptorContext acceptor(setup.acceptorCred, getAcceptorOptions(channelBindingHex));
+        performGssExchange(initiator, acceptor);
+
+        string messageHex = "68656c6c6f";
+        hash<Qore::Krb5::GssMicInfo> mic = initiator.getMic(messageHex);
+
+        # Verify with a different message — should fail
+        assertThrows("KRB5-GSS-ERROR", sub() {
+            acceptor.verifyMic("776f726c64", mic.token);
+        });
+    }
+
+    private testRenewAndStoreWithKdc() {
+        string realm = requireEnv("MODULE_KRB5_TEST_REALM");
+        string clientPrincipal = requireEnv("MODULE_KRB5_TEST_CLIENT_PRINCIPAL");
+        string clientPassword = requireEnv("MODULE_KRB5_TEST_CLIENT_PASSWORD");
+
+        Qore::Krb5::Krb5Context ctx();
+        Qore::Krb5::Krb5Principal principalObj(clientPrincipal);
+
+        hash<Qore::Krb5::Krb5InitialCredentialsOptions> opts = getInitOptions();
+        opts.renew_lifetime = 3600;
+        Qore::Krb5::Krb5Credentials creds = ctx.acquireCredentialsWithPassword(principalObj, clientPassword, opts);
+        auto cache = ctx.createMemoryCredentialCache(principalObj,
+            sprintf("module-krb5-renew-store-%s", realm));
+        cache.initialize(principalObj);
+        cache.storeCredentials(creds);
+
+        # Use a very large threshold so the credential is always within it
+        hash<Krb5Util::RenewAndStoreResult> result = Krb5Util::renewAndStoreIfNeeded(ctx, cache, 99999);
+        assertTrue(result.renewed);
+        assertFalse(result.was_expired);
+        assertTrue(exists result.lifecycle);
+        assertFalse(exists result.error);
+    }
+
+    private testCredentialCacheMaintenanceServiceTicketPrefetch() {
+        string realm = requireEnv("MODULE_KRB5_TEST_REALM");
+        string clientPrincipal = requireEnv("MODULE_KRB5_TEST_CLIENT_PRINCIPAL");
+        string clientPassword = requireEnv("MODULE_KRB5_TEST_CLIENT_PASSWORD");
+        string servicePrincipal = requireEnv("MODULE_KRB5_TEST_SERVICE_PRINCIPAL");
+
+        Qore::Krb5::Krb5Context ctx();
+        Qore::Krb5::Krb5Principal clientPrincipalObj(clientPrincipal);
+
+        Qore::Krb5::Krb5Credentials creds = ctx.acquireCredentialsWithPassword(
+            clientPrincipalObj, clientPassword, getInitOptions());
+        auto cache = ctx.createMemoryCredentialCache(clientPrincipalObj,
+            sprintf("module-krb5-maint-prefetch-%s", realm));
+        cache.initialize(clientPrincipalObj);
+        cache.storeCredentials(creds);
+
+        hash<Krb5Util::CredentialCacheMaintenanceOptions> opts();
+        opts.service_principals = (servicePrincipal,);
+        hash<Krb5Util::CredentialCacheMaintenanceResult> result =
+            Krb5Util::maintainCredentialCache(ctx, cache, opts);
+        assertTrue(result.healthy);
+        assertFalse(result.dry_run);
+        assertEq(1, result.service_tickets.size());
+        assertTrue(result.service_tickets[0].acquired);
+        assertEq(servicePrincipal, result.service_tickets[0].service_principal);
+        assertTrue(exists result.service_tickets[0].credentials);
+    }
+
+    private testEnvironmentValidationServiceKeytabSuccess() {
+        string servicePrincipal = requireEnv("MODULE_KRB5_TEST_SERVICE_PRINCIPAL");
+
+        hash<Krb5Util::KerberosEnvironmentValidationOptions> opts();
+        opts.require_cache = False;
+        opts.require_keytab = True;
+        opts.require_service_principal = True;
+
+        hash<Krb5Util::KerberosEnvironmentInfo> env =
+            Krb5Util::validateKerberosEnvironment(servicePrincipal, NOTHING, opts);
+        assertTrue(env.healthy);
+        assertTrue(env.keytab_accessible);
+        assertTrue(env.service_principal_in_keytab);
+        assertTrue(exists env.service_principal_kvno);
+        assertTrue(hasEnvironmentCheck(env, "default-keytab-service-principal", True, "info"));
+    }
+
+    private testEnvironmentValidationServiceKeytabMissingPrincipal() {
+        string realm = requireEnv("MODULE_KRB5_TEST_REALM");
+        string missingPrincipal = "HTTP/missing@" + realm;
+
+        hash<Krb5Util::KerberosEnvironmentValidationOptions> opts();
+        opts.require_cache = False;
+        opts.require_keytab = True;
+        opts.require_service_principal = True;
+
+        hash<Krb5Util::KerberosEnvironmentInfo> env =
+            Krb5Util::validateKerberosEnvironment(missingPrincipal, NOTHING, opts);
+        assertFalse(env.healthy);
+        assertTrue(env.keytab_accessible);
+        assertFalse(env.service_principal_in_keytab);
+        assertTrue(env.errors.size() > 0);
+        assertTrue(hasEnvironmentCheck(env, "default-keytab-service-principal", False, "error"));
+    }
+
+    private bool hasEnvironmentCheck(hash<Krb5Util::KerberosEnvironmentInfo> env, string checkId,
+            *bool expectedOk = NOTHING, *string expectedSeverity = NOTHING) {
+        foreach hash<Krb5Util::KerberosEnvironmentCheckInfo> check in (env.checks) {
+            if (check.check_id == checkId
+                    && (!exists expectedOk || check.ok == expectedOk)
+                    && (!exists expectedSeverity || check.severity == expectedSeverity)) {
+                return True;
+            }
+        }
+        return False;
+    }
+}

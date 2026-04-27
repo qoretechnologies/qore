@@ -216,6 +216,18 @@ public class Http3ClientConnection inherits HttpClientConnection {
         poll_op.installFrameState(stream_id, msg_queue);
     }
 
+    #! Installs an SSE parser on an existing streaming request
+    /** @param stream_id the QUIC stream ID
+        @param queue Queue to receive parsed SSE events
+        @param notifier optional EventNotifier signaled after queue updates
+        @param initial_body optional body bytes already consumed before
+        installing the parser
+    */
+    installSseState(int stream_id, Queue queue, *EventNotifier notifier,
+            *data initial_body) {
+        poll_op.installSseState(stream_id, queue, notifier, initial_body);
+    }
+
     #! Sends data on a streaming HTTP/3 request
     /** @param stream_id the stream ID to send data on
         @param data the data to send (can be NOTHING to send END_STREAM only)
@@ -298,10 +310,12 @@ public class Http3ClientConnection inherits HttpClientConnection {
         @param body request body (optional)
         @param channel Channel to push response chunks to
         @param streaming if True, enable bidirectional streaming mode
+        @param notifier optional EventNotifier signaled after channel updates
         @return the stream ID
     */
     int submitRequestStreamingWithChannel(string method, string path, *hash<auto> headers,
-            *data body, Channel channel, bool streaming = False) {
+            *data body, Channel channel, bool streaming = False,
+            *EventNotifier notifier, bool sse_install_eligible = False) {
         if (!self.isReady()) {
             throw "HTTPCLIENT-STATE-ERROR",
                 sprintf("connection not ready: state=%y", self.getConnectionState());
@@ -315,7 +329,8 @@ public class Http3ClientConnection inherits HttpClientConnection {
 
         log(LoggerLevel::DEBUG, "submitting streaming request: %s %s (streaming=%y)", method, path, streaming);
         int stream_id = poll_op.submitRequestWithChannel(method, path, headers, body,
-            channel, max_concurrent_streams, streaming);
+            channel, max_concurrent_streams, streaming, notifier,
+            sse_install_eligible);
 
         if (ctl) {
             ctl.wakeSocket(getSocket());
@@ -333,6 +348,7 @@ public class Http3ClientConnection inherits HttpClientConnection {
         @param headers request headers (optional)
         @param body request body (optional)
         @param queue Queue for parsed SSE event delivery
+        @param notifier optional EventNotifier signaled after queue updates
 
         @return the stream ID
     */

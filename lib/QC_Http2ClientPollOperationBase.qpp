@@ -162,6 +162,12 @@ void Http2ClientPollOperationPriv::cleanup(ExceptionSink* xsink) {
             }
         }
         stream_actions.clear();
+        for (auto& [sid, action] : completed_channel_actions) {
+            if (action) {
+                action->deref(xsink);
+            }
+        }
+        completed_channel_actions.clear();
         active_stream_count = 0;
     }
 
@@ -556,7 +562,16 @@ QoreHashNode* Http2ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
                 // Remove stream BEFORE dispatching so active_stream_count is
                 // decremented by the time the action resolves the caller's Future
                 if (is_end) {
-                    it->second->deref(xsink);
+                    ChannelAction* ch_action = dynamic_cast<ChannelAction*>(it->second);
+                    if (ch_action && ch_action->isSseInstallEligible()) {
+                        auto completed_it = completed_channel_actions.find(sid);
+                        if (completed_it != completed_channel_actions.end()) {
+                            completed_it->second->deref(xsink);
+                        }
+                        completed_channel_actions[sid] = ch_action;
+                    } else {
+                        it->second->deref(xsink);
+                    }
                     stream_actions.erase(it);
                     --active_stream_count;
                 }
@@ -792,6 +807,12 @@ void Http2ClientPollOperationPriv::notifyPendingStreams(const char* err, const c
         AutoLocker al(stream_lock);
         actions_copy = std::move(stream_actions);
         stream_actions.clear();
+        for (auto& [sid, action] : completed_channel_actions) {
+            if (action) {
+                action->deref(xsink);
+            }
+        }
+        completed_channel_actions.clear();
         active_stream_count = 0;
     }
 
@@ -1112,6 +1133,11 @@ bool Http2ClientPollOperationPriv::cancelStream(int64_t stream_id, ExceptionSink
     AutoLocker al(stream_lock);
     auto it = stream_actions.find(sid);
     if (it == stream_actions.end()) {
+        auto completed_it = completed_channel_actions.find(sid);
+        if (completed_it != completed_channel_actions.end()) {
+            completed_it->second->deref(xsink);
+            completed_channel_actions.erase(completed_it);
+        }
         return false;  // already completed
     }
 
@@ -1193,6 +1219,51 @@ void Http2ClientPollOperationPriv::installFrameState(int32_t stream_id, Queue* m
 
     ch_action->installFrameState(std::move(frame_state), xsink);
     ch_action->deref(xsink);
+}
+
+void Http2ClientPollOperationPriv::installSseState(int32_t stream_id, Queue* queue,
+        QoreEventNotifier* notifier, QoreObject* notifier_obj, QoreValue initial,
+        ExceptionSink* xsink) {
+    ChannelAction* ch_action = nullptr;
+    std::string sid = std::to_string(stream_id);
+    bool completed_action = false;
+    bool found_action = false;
+    {
+        AutoLocker al(stream_lock);
+        auto it = stream_actions.find(sid);
+        if (it != stream_actions.end()) {
+            found_action = true;
+            ch_action = dynamic_cast<ChannelAction*>(it->second);
+        } else {
+            auto completed_it = completed_channel_actions.find(sid);
+            if (completed_it != completed_channel_actions.end()) {
+                found_action = true;
+                ch_action = completed_it->second;
+                completed_channel_actions.erase(completed_it);
+                completed_action = true;
+            }
+        }
+        if (!ch_action) {
+            initial.discard(xsink);
+            if (found_action) {
+                xsink->raiseException("HTTPCLIENT-STATE-ERROR",
+                    "cannot install SSE state: stream %d action is not a ChannelAction",
+                    (int)stream_id);
+            } else {
+                xsink->raiseException("HTTPCLIENT-STREAM-CLOSED",
+                    "cannot install SSE state: stream %d not found or already complete",
+                    (int)stream_id);
+            }
+            return;
+        }
+        ch_action->ref();
+    }
+
+    ch_action->installSseState(queue, notifier, notifier_obj, initial, xsink);
+    ch_action->deref(xsink);
+    if (completed_action) {
+        ch_action->deref(xsink);
+    }
 }
 
 /** @endcond */
@@ -1510,11 +1581,17 @@ int Http2ClientPollOperationBase::submitRequestWithNotifier(string method, strin
     @param channel Channel for incremental response delivery
     @param max_streams maximum concurrent streams (0 = unlimited)
     @param streaming if True, keep the request body stream open (bidirectional)
+    @param notifier optional EventNotifier signaled after channel updates
+    @param sse_install_eligible if \c True, the response \c ChannelAction is retained after
+    \c end_stream so a later @ref installSseState() call can drain buffered body bytes;
+    callers that do not intend to install SSE state must leave this \c False to avoid
+    holding the action for the lifetime of the connection
     @return the stream ID assigned to this request
 */
 int Http2ClientPollOperationBase::submitRequestStreaming(string method, string path,
         *hash<auto> headers, *data body, object channel, int max_streams,
-        bool streaming = False) {
+        bool streaming = False, *EventNotifier[QoreEventNotifier] notifier,
+        bool sse_install_eligible = False) {
     // Extract QoreChannel private data from the Channel object
     QoreChannel* ch = static_cast<QoreChannel*>(
         const_cast<QoreObject*>(channel)->getReferencedPrivateData(CID_CHANNEL, xsink));
@@ -1550,8 +1627,21 @@ int Http2ClientPollOperationBase::submitRequestStreaming(string method, string p
         }
     }
 
+    QoreEventNotifier* notifier_ptr = nullptr;
+    QoreObject* notifier_obj_ptr = nullptr;
+    if (notifier) {
+        notifier_ptr = notifier.release();
+        notifier_obj_ptr = const_cast<QoreObject*>(obj_notifier);
+    }
+
     // Create ChannelAction — priv takes ownership
-    ChannelAction* action = new ChannelAction(ch);
+    ChannelAction* action = new ChannelAction(ch, notifier_ptr, notifier_obj_ptr);
+    if (sse_install_eligible) {
+        action->setSseInstallEligible();
+    }
+    if (notifier_ptr) {
+        notifier_ptr->deref(xsink);
+    }
     return (int)priv->submitRequest(method->c_str(), path->c_str(), headers,
         body_ptr, body_len, streaming, action, (int)max_streams, xsink);
 }
@@ -1716,6 +1806,46 @@ nothing Http2ClientPollOperationBase::installFrameState(int stream_id,
     // Transfer the Queue ref from the ReferenceHolder to the C++ priv
     Queue* queue_ptr = msg_queue.release();
     priv->installFrameState(static_cast<int32_t>(stream_id), queue_ptr, xsink);
+}
+
+//! Installs an SSE parser on an active ChannelAction stream
+/** @param stream_id the H2 stream ID returned by submitRequestStreaming()
+    @param queue Queue for parsed SSE event delivery
+    @param notifier optional EventNotifier signaled after queue updates
+    @param initial_body optional body bytes already received before installing
+        the SSE parser
+
+    @since %Qore 2.3
+*/
+nothing Http2ClientPollOperationBase::installSseState(int stream_id,
+        Queue[Queue] queue, *EventNotifier[QoreEventNotifier] notifier,
+        *data initial_body) {
+    QoreEventNotifier* notifier_ptr = nullptr;
+    QoreObject* notifier_obj_ptr = nullptr;
+    if (notifier) {
+        notifier_ptr = notifier.release();
+        notifier_obj_ptr = const_cast<QoreObject*>(obj_notifier);
+    }
+    Queue* queue_ptr = queue.release();
+    QoreValue initial;
+    if (initial_body) {
+        ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
+        h->setKeyValue("body", initial_body->refSelf(), xsink);
+        if (*xsink) {
+            queue_ptr->deref(xsink);
+            if (notifier_ptr) {
+                notifier_ptr->deref(xsink);
+            }
+            return QoreValue();
+        }
+        initial = h.release();
+    }
+    priv->installSseState(static_cast<int32_t>(stream_id), queue_ptr,
+        notifier_ptr, notifier_obj_ptr, initial, xsink);
+    queue_ptr->deref(xsink);
+    if (notifier_ptr) {
+        notifier_ptr->deref(xsink);
+    }
 }
 
 //! Returns the socket object

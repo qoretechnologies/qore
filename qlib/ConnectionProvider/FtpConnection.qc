@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # Qore FtpConnection class definition
 
-/*  FtpConnection.qc Copyright 2016 - 2024 Qore Technologies, s.r.o.
+/*  FtpConnection.qc Copyright 2016 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -44,7 +44,7 @@ public class FtpConnection inherits AbstractConnectionWithInfo {
                 "ftps": True,
                 "ftp": True,
             },
-            "options": HttpConnection::ConnectionScheme.options + {
+            "options": (HttpConnection::ConnectionScheme.options - HttpConnection::NegotiateOptionNames) + {
                 "password": <ConnectionOptionInfo>{
                     "display_name": "Password",
                     "short_desc": "Sets the password for authentication",

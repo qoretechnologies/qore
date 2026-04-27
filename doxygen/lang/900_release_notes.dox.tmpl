@@ -121,8 +121,8 @@
     - Unicode-aware case conversion (1-to-many uppercase mappings, fixed UTF-8 corruption bug)
 
     <i>Modules and integrations:</i>
-    - new builtin modules: @ref dataframeintro "dataframe", @ref linenoiseintro "linenoise",
-      @ref mlintro "ml", @ref mongodbintro "mongodb", @ref ocrintro "ocr",
+    - new builtin modules: @ref dataframeintro "dataframe", @ref krb5intro "krb5",
+      @ref linenoiseintro "linenoise", @ref mlintro "ml", @ref mongodbintro "mongodb", @ref ocrintro "ocr",
       @ref protobufintro "protobuf", @ref tokenizerintro "tokenizer"
     - new HTTP / async I/O modules: @ref httpclientiointro "HttpClientIo",
       @ref ftpclientiointro "FtpClientIo", @ref httputilintro "HttpUtil"
@@ -399,7 +399,7 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
     @endparblock
 
     @subsection qore_2_3_0_new_features New Features in Qore
-    @par New Required Libraries: nghttp2, ngtcp2, nghttp3, Brotli, Zstd, LZ4, Eigen3, and libprotobuf
+    @par New Required Libraries: nghttp2, ngtcp2, nghttp3, Brotli, Zstd, LZ4, Eigen3, libprotobuf, and Kerberos 5
     @parblock
     The following libraries are now required build dependencies for %Qore and cannot be disabled at build time:
     - <b>nghttp2:</b> HTTP/2 support is always available
@@ -414,18 +414,21 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
       finding Eigen3 and other dependencies.
     - <b><a href="https://protobuf.dev/">libprotobuf</a></b>: provides the \c protobuf
       built-in module for dynamic Protocol Buffer schema loading, encoding, and decoding
+    - <b>Kerberos 5 / GSSAPI</b>: provides the @ref krb5intro "krb5" built-in module
+      for Kerberos credential, keytab, GSSAPI, SPNEGO, and HTTP Negotiate primitives
 
     Systems that previously built %Qore without these libraries will need to install the development packages:
     - <b>Debian/Ubuntu:</b> \c libnghttp2-dev, \c libngtcp2-dev, \c libngtcp2-crypto-ossl-dev,
       \c libnghttp3-dev, \c libbrotli-dev, \c libzstd-dev, \c liblz4-dev, \c libeigen3-dev,
-      \c libprotobuf-dev
+      \c libprotobuf-dev, \c libkrb5-dev
     - <b>RHEL/Fedora:</b> \c nghttp2-devel, \c ngtcp2-devel, \c ngtcp2-crypto-ossl-devel,
       \c nghttp3-devel, \c brotli-devel, \c libzstd-devel, \c lz4-devel, \c eigen3-devel,
-      \c protobuf-devel
+      \c protobuf-devel, \c krb5-devel
     - <b>Alpine:</b> \c nghttp2-dev, \c ngtcp2-dev, \c ngtcp2-crypto-ossl-dev,
-      \c nghttp3-dev, \c brotli-dev, \c zstd-dev, \c lz4-dev, \c eigen-dev, \c protobuf-dev
-    - <b>macOS (Homebrew):</b> \c eigen, \c protobuf
-    - <b>macOS (MacPorts):</b> \c eigen3, \c protobuf3-cpp
+      \c nghttp3-dev, \c brotli-dev, \c zstd-dev, \c lz4-dev, \c eigen-dev, \c protobuf-dev,
+      \c krb5-dev
+    - <b>macOS (Homebrew):</b> \c eigen, \c protobuf, \c krb5
+    - <b>macOS (MacPorts):</b> \c eigen3, \c protobuf3-cpp, \c kerberos5
 
     The following @ref Qore::Option "Option" namespace constants are now always \c True:
     - @ref Qore::Option::HAVE_BROTLI "Option::HAVE_BROTLI"
@@ -1018,6 +1021,9 @@ cargo install tree-sitter-cli@0.26.5
     - @ref restclientintro "RestClient" module
       - fixed non-blocking polling with connections that use basic auth
         (<a href="https://github.com/qoretechnologies/qore/issues/5001">issue 5001</a>)
+      - added Kerberos/SPNEGO HTTP Negotiate connection options for synchronous and polling \c RestClient
+        requests, \c RestClientIo request APIs, SSE reader/stream/observable APIs, and polling pings, with
+        explicit errors for raw \c HTTPClient paths
       - added OAuth2 implicit grant flow support for providers that return access tokens directly in URL fragments
         - new @ref RestClient::RestConnection::RCF_OAUTH2_IMPLICIT "RCF_OAUTH2_IMPLICIT" connection feature constant
           for implicit grant connections
@@ -1401,6 +1407,17 @@ cargo install tree-sitter-cli@0.26.5
       - Eigen3-backed float64 columns for SIMD-friendly numeric operations
       - thread-safe with \c std::mutex, cooperative cancellation via \c qore_check_cancel()
       - \c dom=FILESYSTEM on CSV/Parquet I/O, \c dom=DATABASE on database I/O
+    - @ref krb5intro "krb5" module
+      - new builtin module providing Kerberos 5 and GSSAPI primitives for credential caches,
+        keytabs, principals, service tickets, GSSAPI initiator and acceptor contexts,
+        delegated credentials, S4U impersonation where supported by the platform, and
+        SPNEGO/HTTP Negotiate token workflows
+      - includes filesystem sandbox enforcement and cooperative cancellation on credential
+        acquisition and GSSAPI operations that can perform I/O
+      - companion @ref krb5utilintro "Krb5Util" module provides Qore-language helpers for
+        host-based service principals, SPNEGO header construction and parsing, credential
+        lifecycle checks, cache maintenance, keytab rotation helpers, and Kerberos
+        environment validation
     - @ref linenoiseintro "linenoise" module
       - integrated into the %Qore build tree (previously a separate external module)
       - provides readline-like line editing under a permissive (BSD) license
@@ -1502,6 +1519,18 @@ cargo install tree-sitter-cli@0.26.5
       - provides AftershipRestConnection for connection management with \c aftership:// URL scheme
     - @ref anthropicdataproviderintro "AnthropicDataProvider" module
       - new module providing a data provider API for <a href="https://www.anthropic.com/">Anthropic</a> Claude AI services
+    - @ref baselinkerrestclientintro "BaseLinkerRestClient" module
+      - new module providing a REST client for <a href="https://baselinker.com/">BaseLinker</a>'s multichannel e-commerce API
+      - supports API token authentication via \c X-BLToken header
+      - wraps BaseLinker's single-endpoint RPC-over-HTTP protocol (form-encoded POST to \c /connector.php)
+      - provides BaseLinkerRestConnection for connection management with \c baselinkerrest:// URL scheme
+    - @ref baselinkerdataproviderintro "BaseLinkerDataProvider" module
+      - new module providing a data provider API for <a href="https://baselinker.com/">BaseLinker</a> multichannel e-commerce integration
+      - order management (create, update, status/payment updates, delete, order line items)
+      - order returns management (create, update, status, refund)
+      - inventory management (catalogs, products with upsert, bulk stock and price updates)
+      - shipping (courier packages, labels, courier and service metadata)
+      - polling-based event triggers for 22 journal event types (order created, paid, packaged, etc.)
     - @ref anthropicrestclientintro "AnthropicRestClient" module
       - new module providing a REST client for <a href="https://www.anthropic.com/">Anthropic</a>'s Claude AI API
       - supports API key authentication via x-api-key header
@@ -2068,6 +2097,11 @@ cargo install tree-sitter-cli@0.26.5
         bridging @ref QoreHistory::History "History" to
         @ref Qore::Linenoise::AbstractHistoryProvider "Linenoise::AbstractHistoryProvider"
       - used by @ref qorereplintro "QoreRepl" and \c qdp for history persistence
+    - @ref krb5utilintro "Krb5Util" module
+      - new module providing Qore-language helpers for the @ref krb5intro "krb5" binary module
+      - builds host-based service principals, SPNEGO Negotiate headers, credential lifecycle
+        reports, keytab rotation decisions, and deployment health checks without exposing
+        token or credential material in diagnostics
     - @ref qorellmutilsintro "QoreLlmUtils" module
       - new module providing a pluggable LLM backend abstraction for chat completions
       - supports HTTP/OpenAI-compatible, Anthropic Messages API, and custom callback modes
@@ -3154,6 +3188,8 @@ hash<ExtendedInfo> ext = <ExtendedInfo>{"name": "test", "id": 1, "created": now(
     - <a href="../../modules/Swagger/html/index.html#swaggerintro">Swagger</a> module
       - parse and report path arguments when processing REST requests on the server side
         (<a href="https://github.com/qoretechnologies/qore/issues/4661">issue 4661</a>)
+    - <a href="../../modules/HttpServerUtil/html/index.html#httpserverutilintro">HttpServerUtil</a> module
+      - added extension points for server-side HTTP Negotiate authentication dispatch and challenges
     - <a href="../../modules/Util/html/index.html#utilintro">Util</a> module
       - added a \c path_params element to the \c UriQueryInfo typed hash to allow for reporting path arguments in
         calls supported by REST schemas

@@ -54,6 +54,12 @@ fi
 
 cd ${QORE_SRC_DIR}
 
+if ! command -v pkg-config > /dev/null 2>&1 || ! pkg-config --exists krb5 krb5-gssapi; then
+    echo && echo "-- installing Kerberos 5 development headers --"
+    apt-get update -qq && apt-get install -y -qq libkrb5-dev
+fi
+
+# build or install Qore
 if [ -d "${QORE_SRC_DIR}/build" ] && [ -f "${QORE_SRC_DIR}/build/CMakeCache.txt" ]; then
     # Pre-built debug artifact from build stage — install it, then build release in parallel
     echo && echo "-- installing pre-built Qore (debug) and building release --"

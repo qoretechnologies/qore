@@ -1,0 +1,2400 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file Krb5Util.qm Kerberos utility module
+
+/*  Krb5Util.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+module Krb5Util {
+    version = "1.0.0";
+    desc = "Kerberos 5 and GSSAPI utility module";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+%requires krb5
+%requires Logger
+
+/** @mainpage Krb5Util Module
+
+    @tableofcontents
+
+    @section krb5utilintro Krb5Util Module Introduction
+
+    The \c Krb5Util module provides small %Qore-language helpers on top of
+    the binary \c krb5 module:
+
+    - @ref Krb5Util::getHostBasedServicePrincipal() builds a host-based
+      Kerberos 5 service principal string
+    - @ref Krb5Util::parseHostBasedServicePrincipal() splits a host-based
+      service principal into its components
+    - @ref Krb5Util::buildTlsServerEndPointChannelBindingHex() builds the
+      <a href="https://datatracker.ietf.org/doc/html/rfc5929">RFC 5929</a>
+      \c tls-server-end-point GSSAPI channel-binding application data from
+      a TLS server certificate hash, ready to pass to
+      @ref Qore::Krb5::GssClientContextOptions::channel_binding_application_data_hex
+    - @ref Krb5Util::buildNegotiateAuthorizationHeader() and
+      @ref Krb5Util::buildNegotiateWwwAuthenticateHeader() build HTTP
+      Negotiate header values for SPNEGO token exchanges
+    - @ref Krb5Util::parseNegotiateResponseHeader() parses SPNEGO
+      NegTokenResp data including \c negState and optional response tokens
+    - @ref Krb5Util::getCredentialLifecycleInfo() evaluates credential
+      validity, expiry, and renewal windows from credential metadata
+    - @ref Krb5Util::removeOldKeytabEntries() helps remove old service-key
+      material after key rotation
+    - @ref Krb5Util::renewAndStoreIfNeeded() checks whether credentials
+      in a cache are near expiry and, if so, renews and stores them back
+    - @ref Krb5Util::maintainCredentialCache() renews cache credentials
+      and optionally prefetches service tickets for long-running services
+    - @ref Krb5Util::validateKerberosEnvironment() composes queries to
+      the default realm, credential cache, and keytab into a structured
+      health report for deployment diagnostics
+    - @ref Krb5Util::createImpersonatedClientContext() creates a GSSAPI
+      initiator context using a service credential and S4U2Self impersonation
+
+    Binary classes and constants remain in the \c Qore::Krb5 namespace;
+    helper functions are exported from the \c Krb5Util namespace.
+    Helper functions that perform SPNEGO header work accept an optional
+    \c Qore::Logger::LoggerInterface object for safe diagnostics. Raw GSS
+    tokens and credential material are never logged.
+
+    @section krb5utilexample Example
+
+    @code{.py}
+%requires Krb5Util
+
+# "ldap/ad.example.com@EXAMPLE.COM"
+string service = Krb5Util::getHostBasedServicePrincipal(
+    "ldap", "ad.example.com", "EXAMPLE.COM");
+
+hash<Krb5Util::Krb5HostBasedServicePrincipalInfo> parts =
+    Krb5Util::parseHostBasedServicePrincipal(service);
+# parts.service == "ldap"
+# parts.host    == "ad.example.com"
+# parts.realm   == "EXAMPLE.COM"
+    @endcode
+*/
+
+#! The public \c Krb5Util namespace
+public namespace Krb5Util {
+    #! Parsed components of a host-based Kerberos service principal
+    public hashdecl Krb5HostBasedServicePrincipalInfo {
+        #! The service component, for example \c "HTTP" or \c "ldap"
+        string service;
+
+        #! The host component, for example \c "qorus.example.com"
+        string host;
+
+        #! The realm component, for example \c "EXAMPLE.COM"
+        string realm;
+    }
+
+    #! Parsed data from an SPNEGO NegTokenResp token
+    public hashdecl SpnegoResponseInfo {
+        #! The response token as hex, if a responseToken field is present
+        *string token;
+
+        #! The numeric negState value, if present
+        *int neg_state;
+
+        #! The symbolic negState name, if recognized
+        *string neg_state_name;
+
+        #! The supported mechanism OID DER value as hex, if present
+        *string supported_mech_oid_hex;
+
+        #! The mechListMIC value as hex, if present
+        *string mech_list_mic;
+    }
+
+    #! HTTP Negotiate client step result
+    public hashdecl NegotiateClientStepInfo {
+        #! True if the initiator context is complete after this step
+        bool complete;
+
+        #! Negotiated GSS flags when a GSS step was performed
+        *int flags;
+
+        #! Reported security-context lifetime when a GSS step was performed
+        *int lifetime;
+
+        #! Hex-encoded GSS output token, if one was produced
+        *string token;
+
+        #! HTTP Authorization header value to send, if one was produced
+        *string authorization_header;
+    }
+
+    #! Parsed HTTP Negotiate authentication header information
+    public hashdecl NegotiateHeaderInfo {
+        #! Header value beginning with \c "Negotiate"
+        string header;
+
+        #! True if the header includes a token
+        bool has_token;
+    }
+
+    #! HTTP Negotiate server step result
+    public hashdecl NegotiateServerStepInfo {
+        #! True if the acceptor context is complete after this step
+        bool complete;
+
+        #! Negotiated GSS flags
+        int flags;
+
+        #! Reported security-context lifetime
+        int lifetime;
+
+        #! Hex-encoded GSS output token, if one was produced
+        *string token;
+
+        #! HTTP WWW-Authenticate header value to send
+        string www_authenticate_header;
+
+        #! Authenticated initiator principal, if known
+        *string initiator_name;
+    }
+
+    #! Credential validity and renewal status computed from credential metadata
+    public hashdecl CredentialLifecycleInfo {
+        #! Evaluation time as seconds since the Unix epoch
+        int now_epoch_seconds;
+
+        #! Credential start time as seconds since the Unix epoch
+        int start_time;
+
+        #! Credential end time as seconds since the Unix epoch
+        int end_time;
+
+        #! Credential renew-until time as seconds since the Unix epoch, or 0 if not renewable
+        int renew_until;
+
+        #! Seconds from the evaluation time until the credential starts; negative when already started
+        int seconds_until_start;
+
+        #! Seconds from the evaluation time until credential expiry; negative when expired
+        int remaining_seconds;
+
+        #! Seconds from the evaluation time until the renewable lifetime ends; 0 when not renewable
+        int renewable_seconds;
+
+        #! True when the evaluation time is at or after the credential start time
+        bool started;
+
+        #! True when the evaluation time is at or after the credential end time
+        bool expired;
+
+        #! True when the credential has started and is not expired
+        bool valid;
+
+        #! True when the credential has a renewable lifetime that has not elapsed
+        bool renewable;
+
+        #! True when a valid credential is within the configured renewal threshold
+        bool within_renewal_threshold;
+
+        #! True when the credential is valid, renewable, and within the renewal threshold
+        bool should_renew;
+    }
+
+    #! Result of a conditional credential renewal attempt
+    public hashdecl RenewAndStoreResult {
+        #! True if credentials were renewed and stored back to the cache
+        bool renewed;
+
+        #! True if the TGT was already expired at evaluation time
+        bool was_expired;
+
+        #! Credential lifecycle information at evaluation time, or \c NOTHING if
+        #! no TGT was found in the cache
+        *hash<CredentialLifecycleInfo> lifecycle;
+
+        #! Error description if renewal was attempted but failed, or \c NOTHING
+        #! on success or when renewal was not needed
+        *string error;
+    }
+
+    #! Options for credential-cache maintenance helpers
+    public hashdecl CredentialCacheMaintenanceOptions {
+        #! Renewal threshold in seconds
+        *int renew_threshold_seconds;
+
+        #! If True, evaluate actions without storing renewed credentials or service tickets
+        *bool dry_run;
+
+        #! If True, throw on the first failed action instead of collecting errors
+        *bool fail_fast;
+
+        #! If True, missing or expired TGT conditions make the result unhealthy
+        *bool missing_tgt_is_error;
+
+        #! Service principals to prefetch through TGS requests
+        *list<string> service_principals;
+    }
+
+    #! Result of one service-ticket maintenance action
+    public hashdecl ServiceTicketMaintenanceResult {
+        #! Requested service principal
+        string service_principal;
+
+        #! True if credentials were acquired
+        bool acquired;
+
+        #! True if the operation was skipped due to dry-run mode
+        bool dry_run;
+
+        #! Credential metadata when a ticket was acquired
+        *hash<Qore::Krb5::Krb5CredentialsInfo> credentials;
+
+        #! Error captured when acquisition failed
+        *string error;
+    }
+
+    #! Result of credential-cache maintenance
+    public hashdecl CredentialCacheMaintenanceResult {
+        #! Cache full name if available
+        *string cache_name;
+
+        #! Primary principal in the cache, if available
+        *string principal;
+
+        #! True if dry-run mode was enabled
+        bool dry_run;
+
+        #! True if the TGT was renewed and stored
+        bool renewed;
+
+        #! True if the TGT was expired at evaluation time
+        bool was_expired;
+
+        #! TGT lifecycle information, if a TGT was found
+        *hash<CredentialLifecycleInfo> tgt_lifecycle;
+
+        #! Service-ticket prefetch results
+        list<hash<ServiceTicketMaintenanceResult>> service_tickets;
+
+        #! Warnings collected during maintenance
+        list<string> warnings;
+
+        #! Errors collected during maintenance
+        list<string> errors;
+
+        #! True if the errors list is empty
+        bool healthy;
+    }
+
+    #! Options for @ref Krb5Util::validateKerberosEnvironment()
+    public hashdecl KerberosEnvironmentValidationOptions {
+        #! Treat an inaccessible default credential cache as an error
+        *bool require_cache;
+
+        #! Treat a missing, expired, or too-short-lived TGT as an error
+        *bool require_tgt;
+
+        #! Treat an inaccessible or empty default keytab as an error
+        *bool require_keytab;
+
+        #! Treat a missing service principal in the default keytab as an error
+        *bool require_service_principal;
+
+        #! Renewal threshold used when evaluating cached TGT lifecycle
+        *int renew_threshold_seconds;
+
+        #! Minimum acceptable remaining TGT lifetime in seconds
+        *int min_tgt_lifetime_seconds;
+    }
+
+    #! Single structured Kerberos environment validation check
+    public hashdecl KerberosEnvironmentCheckInfo {
+        #! Stable machine-readable check ID
+        string check_id;
+
+        #! Check severity: "info", "warning", or "error"
+        string severity;
+
+        #! True if the check passed
+        bool ok;
+
+        #! Human-readable safe diagnostic message
+        string message;
+
+        #! Optional remediation hint
+        *string remediation;
+    }
+
+    #! Kerberos environment health report
+    public hashdecl KerberosEnvironmentInfo {
+        #! Default realm from the Kerberos configuration
+        *string default_realm;
+
+        #! Default credential cache name
+        *string default_cache_name;
+
+        #! Default keytab name
+        *string default_keytab_name;
+
+        #! True if the default credential cache could be opened and enumerated
+        bool cache_accessible;
+
+        #! Error string if the credential cache could not be accessed
+        *string cache_error;
+
+        #! Primary principal in the credential cache, if available
+        *string cache_principal;
+
+        #! Number of credentials in the cache
+        *int cache_credential_count;
+
+        #! TGT lifecycle information, if a TGT was found
+        *hash<CredentialLifecycleInfo> tgt_lifecycle;
+
+        #! True if the default keytab could be opened and enumerated
+        bool keytab_accessible;
+
+        #! Error string if the keytab could not be accessed
+        *string keytab_error;
+
+        #! Number of entries in the keytab
+        *int keytab_entry_count;
+
+        #! Unique principal names found in the keytab
+        *list<string> keytab_principals;
+
+        #! True if the optional service principal was found in the keytab
+        *bool service_principal_in_keytab;
+
+        #! Highest kvno for the service principal in the keytab
+        *int service_principal_kvno;
+
+        #! Warnings about the environment (non-fatal conditions)
+        list<string> warnings;
+
+        #! Errors about the environment (conditions that prevent authentication)
+        list<string> errors;
+
+        #! Structured validation checks
+        list<hash<KerberosEnvironmentCheckInfo>> checks;
+
+        #! True if the errors list is empty
+        bool healthy;
+    }
+
+    #! Lists keytab entries matching a principal and optional kvno/enctype filters
+    /** @param keytab keytab to inspect
+        @param principal principal to match
+        @param kvno optional key version number to match
+        @param enctype optional enctype to match
+        @param logger optional logger for safe diagnostics; key material is
+        not logged
+
+        @return matching keytab entry metadata
+
+        @throw KRB5-KEYTAB-ROTATION-ERROR if filter values are invalid
+        @throw KRB5-KEYTAB-ERROR if the keytab cannot be enumerated
+    */
+    public list<hash<Qore::Krb5::Krb5KeytabEntryInfo>> sub listKeytabEntries(
+            Qore::Krb5::Krb5Keytab keytab, Qore::Krb5::Krb5Principal principal,
+            *int kvno = NOTHING, *int enctype = NOTHING,
+            *Qore::Logger::LoggerInterface logger = NOTHING) {
+        validateKeytabRotationFilter(kvno, enctype);
+
+        string principalString = principal.toString();
+        list<hash<Qore::Krb5::Krb5KeytabEntryInfo>> rv = ();
+        foreach hash<Qore::Krb5::Krb5KeytabEntryInfo> entry in (keytab.listEntries()) {
+            if (entry.principal != principalString) {
+                continue;
+            }
+            if (exists kvno && entry.kvno != kvno) {
+                continue;
+            }
+            if (exists enctype && entry.enctype != enctype) {
+                continue;
+            }
+            push rv, entry;
+        }
+
+        logKeytabRotation(logger, sprintf("listed keytab entries principal=%y kvno=%y enctype=%y count=%d",
+            principalString, exists kvno ? kvno : NOTHING, exists enctype ? enctype : NOTHING, rv.size()));
+        return rv;
+    }
+
+    #! Returns the highest key version number for a principal in a keytab
+    /** @param keytab keytab to inspect
+        @param principal principal to match
+        @param logger optional logger for safe diagnostics; key material is
+        not logged
+
+        @return highest key version number for \a principal
+
+        @throw KRB5-KEYTAB-ROTATION-ERROR if no matching keytab entry exists
+        @throw KRB5-KEYTAB-ERROR if the keytab cannot be enumerated
+    */
+    public int sub getKeytabHighestKvno(Qore::Krb5::Krb5Keytab keytab,
+            Qore::Krb5::Krb5Principal principal, *Qore::Logger::LoggerInterface logger = NOTHING) {
+        list<hash<Qore::Krb5::Krb5KeytabEntryInfo>> entries = listKeytabEntries(keytab, principal);
+        if (!entries.size()) {
+            throw "KRB5-KEYTAB-ROTATION-ERROR",
+                sprintf("keytab does not contain principal %y", principal.toString());
+        }
+
+        int highest = entries[0].kvno;
+        foreach hash<Qore::Krb5::Krb5KeytabEntryInfo> entry in (entries) {
+            if (entry.kvno > highest) {
+                highest = entry.kvno;
+            }
+        }
+
+        logKeytabRotation(logger, sprintf("highest keytab kvno principal=%y kvno=%d", principal.toString(), highest));
+        return highest;
+    }
+
+    #! Returns True if a keytab contains an entry matching the given filters
+    /** @param keytab keytab to inspect
+        @param principal principal to match
+        @param kvno optional key version number to match
+        @param enctype optional enctype to match
+        @param logger optional logger for safe diagnostics; key material is
+        not logged
+
+        @return True if a matching entry exists
+
+        @throw KRB5-KEYTAB-ROTATION-ERROR if filter values are invalid
+        @throw KRB5-KEYTAB-ERROR if the keytab cannot be enumerated
+    */
+    public bool sub keytabHasEntry(Qore::Krb5::Krb5Keytab keytab, Qore::Krb5::Krb5Principal principal,
+            *int kvno = NOTHING, *int enctype = NOTHING,
+            *Qore::Logger::LoggerInterface logger = NOTHING) {
+        bool rv = listKeytabEntries(keytab, principal, kvno, enctype).size() > 0;
+        logKeytabRotation(logger, sprintf("checked keytab entry principal=%y kvno=%y enctype=%y found=%y",
+            principal.toString(), exists kvno ? kvno : NOTHING, exists enctype ? enctype : NOTHING, rv));
+        return rv;
+    }
+
+    #! Removes all keytab entries matching a principal and optional kvno/enctype filters
+    /** Matching entries are listed before any removal is attempted, so callers
+        can remove all entries for a principal, a specific kvno, or a specific
+        enctype without relying on repeated highest-kvno lookups.
+
+        @param keytab keytab to modify
+        @param principal principal to match
+        @param kvno optional key version number to match
+        @param enctype optional enctype to match
+        @param logger optional logger for safe diagnostics; key material is
+        not logged
+
+        @return number of entries removed
+
+        @throw KRB5-KEYTAB-ROTATION-ERROR if filter values are invalid
+        @throw KRB5-KEYTAB-ERROR if the keytab cannot be enumerated or a
+        matching entry cannot be removed
+    */
+    public int sub removeKeytabEntries(Qore::Krb5::Krb5Keytab keytab, Qore::Krb5::Krb5Principal principal,
+            *int kvno = NOTHING, *int enctype = NOTHING,
+            *Qore::Logger::LoggerInterface logger = NOTHING) {
+        list<hash<Qore::Krb5::Krb5KeytabEntryInfo>> entries = listKeytabEntries(keytab, principal, kvno, enctype);
+        foreach hash<Qore::Krb5::Krb5KeytabEntryInfo> entry in (entries) {
+            keytab.removeEntry(principal, entry.kvno, entry.enctype);
+        }
+
+        logKeytabRotation(logger, sprintf("removed keytab entries principal=%y kvno=%y enctype=%y count=%d",
+            principal.toString(), exists kvno ? kvno : NOTHING, exists enctype ? enctype : NOTHING, entries.size()));
+        return entries.size();
+    }
+
+    #! Removes keytab entries for a principal older than the kept key version number
+    /** If \a keep_kvno is 0, the current highest kvno for \a principal is kept.
+        The kept kvno must exist before older entries are removed.
+
+        @param keytab keytab to modify
+        @param principal principal to match
+        @param keep_kvno key version number to keep, or 0 to keep the highest
+        available kvno
+        @param logger optional logger for safe diagnostics; key material is
+        not logged
+
+        @return number of old entries removed
+
+        @throw KRB5-KEYTAB-ROTATION-ERROR if \a keep_kvno is invalid, if the
+        principal has no entries, or if the requested kept kvno is not present
+        @throw KRB5-KEYTAB-ERROR if the keytab cannot be enumerated or a
+        matching old entry cannot be removed
+    */
+    public int sub removeOldKeytabEntries(Qore::Krb5::Krb5Keytab keytab,
+            Qore::Krb5::Krb5Principal principal, int keep_kvno = 0,
+            *Qore::Logger::LoggerInterface logger = NOTHING) {
+        if (keep_kvno < 0) {
+            throw "KRB5-KEYTAB-ROTATION-ERROR", "kept key version number cannot be negative";
+        }
+
+        int effectiveKeepKvno = keep_kvno ? keep_kvno : getKeytabHighestKvno(keytab, principal, logger);
+        if (!keytabHasEntry(keytab, principal, effectiveKeepKvno)) {
+            throw "KRB5-KEYTAB-ROTATION-ERROR",
+                sprintf("keytab does not contain principal %y with kvno %d", principal.toString(), effectiveKeepKvno);
+        }
+
+        list<hash<Qore::Krb5::Krb5KeytabEntryInfo>> entries = listKeytabEntries(keytab, principal);
+        int removed = 0;
+        foreach hash<Qore::Krb5::Krb5KeytabEntryInfo> entry in (entries) {
+            if (entry.kvno < effectiveKeepKvno) {
+                keytab.removeEntry(principal, entry.kvno, entry.enctype);
+                ++removed;
+            }
+        }
+
+        logKeytabRotation(logger, sprintf("removed old keytab entries principal=%y keep_kvno=%d count=%d",
+            principal.toString(), effectiveKeepKvno, removed));
+        return removed;
+    }
+
+    #! Builds a host-based Kerberos 5 service principal string of the form \c "service/host@REALM"
+    /** @par Example:
+        @code{.py}
+string sp = Krb5Util::getHostBasedServicePrincipal(
+    "ldap", "ad.example.com", "EXAMPLE.COM");
+# -> "ldap/ad.example.com@EXAMPLE.COM"
+        @endcode
+
+        @param service the service component, such as \c "HTTP", \c "ldap",
+        or \c "host"
+        @param host the fully-qualified DNS name of the host running the
+        service
+        @param realm the Kerberos realm
+
+        @return a host-based service principal string in the form
+        \c "service/host@REALM"
+    */
+    public string sub getHostBasedServicePrincipal(string service, string host, string realm) {
+        return sprintf("%s/%s@%s", service, host, realm);
+    }
+
+    #! Splits a host-based Kerberos 5 service principal of the form \c "service/host@REALM" into its components
+    /** @par Example:
+        @code{.py}
+hash<Krb5Util::Krb5HostBasedServicePrincipalInfo> info =
+    Krb5Util::parseHostBasedServicePrincipal("HTTP/qorus.example.com@EXAMPLE.COM");
+# info.service == "HTTP"
+# info.host    == "qorus.example.com"
+# info.realm   == "EXAMPLE.COM"
+        @endcode
+
+        @param principal_string a host-based service principal string
+
+        @return a @ref Krb5HostBasedServicePrincipalInfo hash with the
+        parsed \c service, \c host, and \c realm components
+
+        @throw KRB5-PRINCIPAL-ERROR if \a principal_string cannot be parsed
+        or is not a host-based service principal
+    */
+    public hash<Krb5HostBasedServicePrincipalInfo> sub parseHostBasedServicePrincipal(string principal_string) {
+        Qore::Krb5::Krb5Principal p(principal_string);
+        if (p.getComponentCount() != 2) {
+            throw "KRB5-PRINCIPAL-ERROR",
+                sprintf("principal %y is not a host-based service principal "
+                    "(expected 2 components, got %d)", principal_string, p.getComponentCount());
+        }
+        return <Krb5HostBasedServicePrincipalInfo>{
+            "service": p.getComponent(0),
+            "host": p.getComponent(1),
+            "realm": p.getRealm(),
+        };
+    }
+
+    #! Builds the RFC 5929 \c tls-server-end-point GSSAPI channel-binding application data as a hex-encoded string
+    /** The returned string is ready to assign to
+        @ref Qore::Krb5::GssClientContextOptions::channel_binding_application_data_hex.
+        Per
+        <a href="https://datatracker.ietf.org/doc/html/rfc5929#section-4">RFC
+        5929 §4</a>, the value is the ASCII constant
+        \c "tls-server-end-point:" followed by the hash of the server
+        certificate computed with the hash algorithm used in the certificate
+        signature (or SHA-256 when the signature uses MD5 or SHA-1), both
+        concatenated as a byte string. This function takes that hash as a
+        hex string and returns the full hex-encoded binding data.
+
+        @par Example:
+        @code{.py}
+# server_cert_hash_hex is the hex of the TLS server certificate hash
+# computed per RFC 5929 §4.1.
+string cb = Krb5Util::buildTlsServerEndPointChannelBindingHex(server_cert_hash_hex);
+
+hash<Qore::Krb5::GssClientContextOptions> opts();
+opts.channel_binding_application_data_hex = cb;
+Qore::Krb5::GssClientContext ctx("LDAP/ad.example.com@EXAMPLE.COM", opts);
+        @endcode
+
+        @param server_cert_hash_hex the TLS server certificate hash as a
+        hex string, computed per
+        <a href="https://datatracker.ietf.org/doc/html/rfc5929#section-4.1">RFC
+        5929 §4.1</a>
+
+        @return a hex-encoded string that is the concatenation of the ASCII
+        prefix \c "tls-server-end-point:" and \a server_cert_hash_hex
+
+        @throw KRB5-CHANNEL-BINDING-ERROR if \a server_cert_hash_hex is
+        empty or is not valid hexadecimal
+    */
+    public string sub buildTlsServerEndPointChannelBindingHex(string server_cert_hash_hex) {
+        if (!server_cert_hash_hex) {
+            throw "KRB5-CHANNEL-BINDING-ERROR", "certificate hash hex cannot be empty";
+        }
+        if (server_cert_hash_hex.size() % 2) {
+            throw "KRB5-CHANNEL-BINDING-ERROR", "certificate hash hex must have even length";
+        }
+        if (server_cert_hash_hex !~ /^[[:xdigit:]]+$/) {
+            throw "KRB5-CHANNEL-BINDING-ERROR", "certificate hash contains non-hexadecimal characters";
+        }
+
+        # "tls-server-end-point:" in hex
+        return "746c732d7365727665722d656e642d706f696e743a" + server_cert_hash_hex;
+    }
+
+    #! Evaluates credential validity and renewal status from credential metadata
+    /** This helper operates on the metadata returned by
+        Qore::Krb5::Krb5Credentials::getInfo() or
+        Qore::Krb5::Krb5CredentialCache::listCredentials(). It does not read
+        key or ticket bytes.
+
+        @param creds credential metadata
+        @param renew_threshold_seconds renewal threshold in seconds. A valid
+        renewable credential is considered due for renewal when its remaining
+        lifetime is less than or equal to this value
+        @param now_epoch_seconds optional deterministic evaluation time as
+        seconds since the Unix epoch; defaults to the current time
+        @param logger optional logger for safe diagnostics; raw credential
+        material is not logged
+
+        @return credential lifecycle information
+
+        @throw KRB5-CREDENTIAL-LIFECYCLE-ERROR if timestamps or threshold
+        values are invalid
+    */
+    public hash<CredentialLifecycleInfo> sub getCredentialLifecycleInfo(
+            hash<Qore::Krb5::Krb5CredentialsInfo> creds, int renew_threshold_seconds = 300,
+            *int now_epoch_seconds = NOTHING, *Qore::Logger::LoggerInterface logger = NOTHING) {
+        validateCredentialLifecycleInputs(creds, renew_threshold_seconds, now_epoch_seconds);
+
+        int evalTime = exists now_epoch_seconds ? now_epoch_seconds : now().getEpochSeconds();
+        int remaining = creds.end_time - evalTime;
+        int renewableRemaining = creds.renew_until ? creds.renew_until - evalTime : 0;
+        bool started = evalTime >= creds.start_time;
+        bool expired = evalTime >= creds.end_time;
+        bool renewable = creds.renew_until > 0 && evalTime < creds.renew_until;
+        bool withinRenewalThreshold = started && !expired && remaining <= renew_threshold_seconds;
+        bool shouldRenew = withinRenewalThreshold && renewable;
+
+        hash<CredentialLifecycleInfo> rv = <CredentialLifecycleInfo>{
+            "now_epoch_seconds": evalTime,
+            "start_time": creds.start_time,
+            "end_time": creds.end_time,
+            "renew_until": creds.renew_until,
+            "seconds_until_start": creds.start_time - evalTime,
+            "remaining_seconds": remaining,
+            "renewable_seconds": renewableRemaining,
+            "started": started,
+            "expired": expired,
+            "valid": started && !expired,
+            "renewable": renewable,
+            "within_renewal_threshold": withinRenewalThreshold,
+            "should_renew": shouldRenew,
+        };
+
+        logCredentialLifecycle(logger, sprintf("client=%y server=%y remaining_seconds=%d renewable_seconds=%d "
+            "valid=%y expired=%y should_renew=%y", creds.client, creds.server, rv.remaining_seconds,
+            rv.renewable_seconds, rv.valid, rv.expired, rv.should_renew));
+        return rv;
+    }
+
+    #! Returns True if credential metadata is expired at the evaluation time
+    /** @param creds credential metadata
+        @param now_epoch_seconds optional deterministic evaluation time as
+        seconds since the Unix epoch; defaults to the current time
+        @param logger optional logger for safe diagnostics
+
+        @return True if the credential is expired
+
+        @throw KRB5-CREDENTIAL-LIFECYCLE-ERROR if timestamps are invalid
+    */
+    public bool sub isCredentialExpired(hash<Qore::Krb5::Krb5CredentialsInfo> creds,
+            *int now_epoch_seconds = NOTHING, *Qore::Logger::LoggerInterface logger = NOTHING) {
+        return getCredentialLifecycleInfo(creds, 0, now_epoch_seconds, logger).expired;
+    }
+
+    #! Returns True if credential metadata is valid, renewable, and within the renewal threshold
+    /** @param creds credential metadata
+        @param renew_threshold_seconds renewal threshold in seconds
+        @param now_epoch_seconds optional deterministic evaluation time as
+        seconds since the Unix epoch; defaults to the current time
+        @param logger optional logger for safe diagnostics
+
+        @return True if the credential should be renewed now
+
+        @throw KRB5-CREDENTIAL-LIFECYCLE-ERROR if timestamps or threshold
+        values are invalid
+    */
+    public bool sub shouldRenewCredential(hash<Qore::Krb5::Krb5CredentialsInfo> creds,
+            int renew_threshold_seconds = 300, *int now_epoch_seconds = NOTHING,
+            *Qore::Logger::LoggerInterface logger = NOTHING) {
+        return getCredentialLifecycleInfo(creds, renew_threshold_seconds, now_epoch_seconds, logger).should_renew;
+    }
+
+    #! Checks whether the TGT in a credential cache needs renewal and, if so, renews and stores it
+    /** This is the primary workflow helper for long-running services that need
+        to keep their Kerberos credentials fresh. It finds the TGT
+        (for example, \c "krbtgt/EXAMPLE.COM\@EXAMPLE.COM") in the cache,
+        evaluates its lifecycle, and
+        renews only when the credential is valid, renewable, and within the
+        renewal threshold.
+
+        Renewal failures are captured in
+        @ref RenewAndStoreResult::error rather than thrown, so callers can
+        log and retry without exception handling in the main loop.
+
+        @par Example:
+        @code{.py}
+%requires Krb5Util
+%requires krb5
+
+Qore::Krb5::Krb5Context ctx();
+auto cache = ctx.openDefaultCredentialCache();
+hash<Krb5Util::RenewAndStoreResult> result =
+    Krb5Util::renewAndStoreIfNeeded(ctx, cache, 300, logger);
+if (result.renewed) {
+    logger.info("TGT renewed successfully");
+} else if (result.error) {
+    logger.error("TGT renewal failed: %s", result.error);
+}
+        @endcode
+
+        @param ctx Kerberos context for the renewal RPC
+        @param cache credential cache containing the TGT to evaluate
+        @param renew_threshold_seconds renewal threshold in seconds; a valid
+        renewable TGT is renewed when its remaining lifetime is at or below
+        this value
+        @param logger optional logger for safe diagnostics; raw credential
+        material is not logged
+
+        @return renewal result including lifecycle evaluation and any error
+
+        @throw KRB5-RENEW-STORE-ERROR if the threshold is negative
+        @throw KRB5-CACHE-ERROR if the cache has no primary principal or
+        cannot be enumerated
+    */
+    public hash<RenewAndStoreResult> sub renewAndStoreIfNeeded(
+            Qore::Krb5::Krb5Context ctx,
+            Qore::Krb5::Krb5CredentialCache cache,
+            int renew_threshold_seconds = 300,
+            *Qore::Logger::LoggerInterface logger = NOTHING) {
+        validateRenewAndStoreInputs(renew_threshold_seconds);
+
+        Qore::Krb5::Krb5Principal principal = cache.getPrimaryPrincipal();
+        string realm = principal.getRealm();
+        string principalString = principal.toString();
+        string tgtServer = sprintf("krbtgt/%s@%s", realm, realm);
+
+        logRenewAndStore(logger, sprintf("evaluating cache principal=%y tgt_server=%y threshold=%d",
+            principalString, tgtServer, renew_threshold_seconds));
+
+        list<hash<Qore::Krb5::Krb5CredentialsInfo>> allCreds = cache.listCredentials();
+        *hash<Qore::Krb5::Krb5CredentialsInfo> tgt;
+        foreach hash<Qore::Krb5::Krb5CredentialsInfo> entry in (allCreds) {
+            if (entry.server == tgtServer) {
+                tgt = entry;
+                break;
+            }
+        }
+
+        if (!exists tgt) {
+            logRenewAndStore(logger, sprintf("no TGT found for %y in cache with %d credentials",
+                tgtServer, allCreds.size()));
+            return <RenewAndStoreResult>{
+                "renewed": False,
+                "was_expired": False,
+            };
+        }
+
+        hash<CredentialLifecycleInfo> lifecycle =
+            getCredentialLifecycleInfo(tgt, renew_threshold_seconds, NOTHING, logger);
+
+        logRenewAndStore(logger, sprintf("TGT lifecycle valid=%y expired=%y should_renew=%y "
+            "remaining_seconds=%d renewable_seconds=%d",
+            lifecycle.valid, lifecycle.expired, lifecycle.should_renew,
+            lifecycle.remaining_seconds, lifecycle.renewable_seconds));
+
+        if (lifecycle.expired) {
+            logRenewAndStore(logger, "TGT is expired; renewal not possible");
+            return <RenewAndStoreResult>{
+                "renewed": False,
+                "was_expired": True,
+                "lifecycle": lifecycle,
+            };
+        }
+
+        if (!lifecycle.should_renew) {
+            logRenewAndStore(logger, sprintf("TGT not within renewal threshold; remaining_seconds=%d",
+                lifecycle.remaining_seconds));
+            return <RenewAndStoreResult>{
+                "renewed": False,
+                "was_expired": False,
+                "lifecycle": lifecycle,
+            };
+        }
+
+        try {
+            Qore::Krb5::Krb5Credentials newCreds = ctx.renewCredentials(cache, principal);
+            cache.storeCredentials(newCreds);
+            logRenewAndStore(logger, sprintf("TGT renewed and stored for principal=%y", principalString));
+            return <RenewAndStoreResult>{
+                "renewed": True,
+                "was_expired": False,
+                "lifecycle": lifecycle,
+            };
+        } catch (hash<ExceptionInfo> ex) {
+            string errorMsg = sprintf("%s: %s", ex.err, ex.desc);
+            logRenewAndStore(logger, sprintf("TGT renewal failed principal=%y error=%y",
+                principalString, errorMsg));
+            return <RenewAndStoreResult>{
+                "renewed": False,
+                "was_expired": False,
+                "lifecycle": lifecycle,
+                "error": errorMsg,
+            };
+        }
+    }
+
+    #! Maintains one credential cache by renewing its TGT and optionally prefetching service tickets
+    /** @param ctx Kerberos context for renewal and TGS RPCs
+        @param cache credential cache to maintain
+        @param opts optional maintenance controls
+        @param logger optional logger for safe diagnostics; credential material
+        is not logged
+
+        @return structured maintenance result
+
+        @throw KRB5-CACHE-MAINTENANCE-ERROR if options are invalid, or if
+        \a opts.fail_fast is True and an action fails
+    */
+    public hash<CredentialCacheMaintenanceResult> sub maintainCredentialCache(
+            Qore::Krb5::Krb5Context ctx,
+            Qore::Krb5::Krb5CredentialCache cache,
+            *hash<CredentialCacheMaintenanceOptions> opts = NOTHING,
+            *Qore::Logger::LoggerInterface logger = NOTHING) {
+        validateCredentialCacheMaintenanceOptions(opts);
+
+        int renewThreshold = exists opts && exists opts.renew_threshold_seconds ? opts.renew_threshold_seconds : 300;
+        bool dryRun = exists opts && exists opts.dry_run ? opts.dry_run : False;
+        bool failFast = exists opts && exists opts.fail_fast ? opts.fail_fast : False;
+        bool missingTgtIsError = exists opts && exists opts.missing_tgt_is_error ? opts.missing_tgt_is_error : False;
+        list<string> servicePrincipals = exists opts && exists opts.service_principals ? opts.service_principals : ();
+
+        list<string> warnings = ();
+        list<string> errors = ();
+        list<hash<ServiceTicketMaintenanceResult>> serviceResults = ();
+        *hash<CredentialLifecycleInfo> tgtLifecycle;
+        bool renewed = False;
+        bool wasExpired = False;
+        *string cacheName;
+        *string principalString;
+
+        try {
+            cacheName = cache.getFullName();
+        } catch (hash<ExceptionInfo> ex) {
+            push warnings, sprintf("credential cache full name not available: %s", ex.desc);
+        }
+
+        logCredentialMaintenance(logger, sprintf("maintaining cache=%y dry_run=%y services=%d threshold=%d",
+            exists cacheName ? cacheName : NOTHING, dryRun, servicePrincipals.size(), renewThreshold));
+
+        Qore::Krb5::Krb5Principal principal;
+        try {
+            principal = cache.getPrimaryPrincipal();
+            principalString = principal.toString();
+        } catch (hash<ExceptionInfo> ex) {
+            string err = sprintf("%s: %s", ex.err, ex.desc);
+            addMaintenanceError(\errors, failFast, "credential cache primary principal not available: " + err);
+            return makeCredentialCacheMaintenanceResult(cacheName, principalString, dryRun, renewed, wasExpired,
+                tgtLifecycle, serviceResults, warnings, errors);
+        }
+
+        list<hash<Qore::Krb5::Krb5CredentialsInfo>> allCreds;
+        try {
+            allCreds = cache.listCredentials();
+        } catch (hash<ExceptionInfo> ex) {
+            string err = sprintf("%s: %s", ex.err, ex.desc);
+            addMaintenanceError(\errors, failFast, "credential cache cannot be enumerated: " + err);
+            return makeCredentialCacheMaintenanceResult(cacheName, principalString, dryRun, renewed, wasExpired,
+                tgtLifecycle, serviceResults, warnings, errors);
+        }
+
+        string realm = principal.getRealm();
+        string tgtServer = sprintf("krbtgt/%s@%s", realm, realm);
+        *hash<Qore::Krb5::Krb5CredentialsInfo> tgt;
+        foreach hash<Qore::Krb5::Krb5CredentialsInfo> entry in (allCreds) {
+            if (entry.server == tgtServer) {
+                tgt = entry;
+                break;
+            }
+        }
+
+        if (!exists tgt) {
+            string msg = sprintf("no TGT %y found in credential cache", tgtServer);
+            if (missingTgtIsError) {
+                addMaintenanceError(\errors, failFast, msg);
+            } else {
+                push warnings, msg;
+            }
+        } else {
+            tgtLifecycle = getCredentialLifecycleInfo(tgt, renewThreshold, NOTHING, logger);
+            wasExpired = tgtLifecycle.expired;
+            if (tgtLifecycle.expired) {
+                string msg = sprintf("TGT is expired (expired %d seconds ago)", -tgtLifecycle.remaining_seconds);
+                if (missingTgtIsError) {
+                    addMaintenanceError(\errors, failFast, msg);
+                } else {
+                    push warnings, msg;
+                }
+            } else if (tgtLifecycle.should_renew) {
+                if (dryRun) {
+                    push warnings, sprintf("TGT would be renewed; remaining_seconds=%d",
+                        tgtLifecycle.remaining_seconds);
+                } else {
+                    hash<RenewAndStoreResult> renewal =
+                        renewAndStoreIfNeeded(ctx, cache, renewThreshold, logger);
+                    renewed = renewal.renewed;
+                    if (exists renewal.error) {
+                        addMaintenanceError(\errors, failFast, "TGT renewal failed: " + renewal.error);
+                    }
+                }
+            }
+        }
+
+        foreach string servicePrincipal in (servicePrincipals) {
+            Qore::Krb5::Krb5Principal service(servicePrincipal);
+            if (dryRun) {
+                push serviceResults, <ServiceTicketMaintenanceResult>{
+                    "service_principal": service.toString(),
+                    "acquired": False,
+                    "dry_run": True,
+                };
+                continue;
+            }
+
+            try {
+                Qore::Krb5::Krb5Credentials serviceCreds = ctx.acquireServiceCredentials(cache, service);
+                cache.storeCredentials(serviceCreds);
+                push serviceResults, <ServiceTicketMaintenanceResult>{
+                    "service_principal": service.toString(),
+                    "acquired": True,
+                    "dry_run": False,
+                    "credentials": serviceCreds.getInfo(),
+                };
+                logCredentialMaintenance(logger, sprintf("service ticket acquired for %y", service.toString()));
+            } catch (hash<ExceptionInfo> ex) {
+                string err = sprintf("%s: %s", ex.err, ex.desc);
+                push serviceResults, <ServiceTicketMaintenanceResult>{
+                    "service_principal": service.toString(),
+                    "acquired": False,
+                    "dry_run": False,
+                    "error": err,
+                };
+                addMaintenanceError(\errors, failFast,
+                    sprintf("service ticket acquisition failed for %y: %s", service.toString(), err));
+            }
+        }
+
+        return makeCredentialCacheMaintenanceResult(cacheName, principalString, dryRun, renewed, wasExpired,
+            tgtLifecycle, serviceResults, warnings, errors);
+    }
+
+    #! Maintains all credential caches in the configured cache collection
+    /** @param ctx Kerberos context used to enumerate and open caches
+        @param opts optional maintenance controls
+        @param logger optional logger for safe diagnostics
+
+        @return one maintenance result per cache discovered or opened
+
+        @throw KRB5-CACHE-MAINTENANCE-ERROR if \a opts.fail_fast is True and
+        any cache cannot be maintained
+    */
+    public list<hash<CredentialCacheMaintenanceResult>> sub maintainCredentialCaches(
+            Qore::Krb5::Krb5Context ctx,
+            *hash<CredentialCacheMaintenanceOptions> opts = NOTHING,
+            *Qore::Logger::LoggerInterface logger = NOTHING) {
+        validateCredentialCacheMaintenanceOptions(opts);
+        bool failFast = exists opts && exists opts.fail_fast ? opts.fail_fast : False;
+        list<hash<CredentialCacheMaintenanceResult>> rv = ();
+
+        foreach hash<Qore::Krb5::Krb5CredentialCacheInfo> info in (ctx.listCredentialCaches()) {
+            try {
+                auto cache = ctx.openCredentialCache(info.full_name);
+                push rv, maintainCredentialCache(ctx, cache, opts, logger);
+            } catch (hash<ExceptionInfo> ex) {
+                string err = sprintf("%s: %s", ex.err, ex.desc);
+                if (failFast) {
+                    throw "KRB5-CACHE-MAINTENANCE-ERROR", err;
+                }
+                push rv, <CredentialCacheMaintenanceResult>{
+                    "cache_name": info.full_name,
+                    "dry_run": exists opts && exists opts.dry_run ? opts.dry_run : False,
+                    "renewed": False,
+                    "was_expired": False,
+                    "service_tickets": (),
+                    "warnings": (),
+                    "errors": (err,),
+                    "healthy": False,
+                };
+            }
+        }
+        return rv;
+    }
+
+    #! Validates the Kerberos environment and returns a structured health report
+    /** Each subsystem (realm, cache, keytab) is probed independently and
+        failures are captured in @ref KerberosEnvironmentInfo::warnings and
+        @ref KerberosEnvironmentInfo::errors rather than thrown. The function
+        never throws for environmental conditions; only programming errors
+        propagate as exceptions.
+
+        @par Example:
+        @code{.py}
+%requires Krb5Util
+
+hash<Krb5Util::KerberosEnvironmentInfo> env =
+    Krb5Util::validateKerberosEnvironment("HTTP/web.example.com@EXAMPLE.COM", logger);
+if (!env.healthy) {
+    for (string err in env.errors) {
+        logger.error("Kerberos: %s", err);
+    }
+}
+        @endcode
+
+        @param service_principal optional service principal to look for in
+        the keytab; when provided, the report includes
+        @ref KerberosEnvironmentInfo::service_principal_in_keytab and
+        @ref KerberosEnvironmentInfo::service_principal_kvno
+        @param logger optional logger for safe diagnostics; raw credential
+        material is not logged
+        @param opts optional validation behavior controls; when omitted, cache
+        errors are fatal, keytab errors are warnings unless a service principal
+        is supplied, and TGT lifecycle issues are warnings
+
+        @return Kerberos environment health report
+
+        @throw KRB5-ENVIRONMENT-ERROR if numeric options are invalid
+    */
+    public hash<KerberosEnvironmentInfo> sub validateKerberosEnvironment(
+            *string service_principal = NOTHING,
+            *Qore::Logger::LoggerInterface logger = NOTHING,
+            *hash<KerberosEnvironmentValidationOptions> opts = NOTHING) {
+        list<string> warnings = ();
+        list<string> errors = ();
+        list<hash<KerberosEnvironmentCheckInfo>> checks = ();
+
+        bool requireCache = exists opts && exists opts.require_cache ? opts.require_cache : True;
+        bool requireTgt = exists opts && exists opts.require_tgt ? opts.require_tgt : False;
+        bool requireKeytab = exists opts && exists opts.require_keytab ? opts.require_keytab : exists service_principal;
+        bool requireServicePrincipal = exists opts && exists opts.require_service_principal
+            ? opts.require_service_principal : exists service_principal;
+        int renewThreshold = exists opts && exists opts.renew_threshold_seconds ? opts.renew_threshold_seconds : 300;
+        *int minTgtLifetime = exists opts && exists opts.min_tgt_lifetime_seconds
+            ? opts.min_tgt_lifetime_seconds : NOTHING;
+
+        if (renewThreshold < 0) {
+            throw "KRB5-ENVIRONMENT-ERROR", "renewal threshold cannot be negative";
+        }
+        if (exists minTgtLifetime && minTgtLifetime < 0) {
+            throw "KRB5-ENVIRONMENT-ERROR", "minimum TGT lifetime cannot be negative";
+        }
+
+        Qore::Krb5::Krb5Context ctx();
+
+        *string servicePrincipalString;
+        if (exists service_principal) {
+            Qore::Krb5::Krb5Principal servicePrincipalObj(service_principal);
+            servicePrincipalString = servicePrincipalObj.toString();
+        }
+
+        *string defaultRealm;
+        try {
+            defaultRealm = ctx.getDefaultRealm();
+            addEnvironmentCheck(\checks, \warnings, \errors, "default-realm", True,
+                sprintf("default realm is %y", defaultRealm), "info");
+        } catch (hash<ExceptionInfo> ex) {
+            addEnvironmentCheck(\checks, \warnings, \errors, "default-realm", False,
+                sprintf("default realm not available: %s", ex.desc), "error",
+                "configure a default realm in krb5.conf or pass explicit principals with realms");
+        }
+
+        *string defaultCacheName;
+        try {
+            defaultCacheName = ctx.getDefaultCredentialCacheName();
+            addEnvironmentCheck(\checks, \warnings, \errors, "default-cache-name", True,
+                sprintf("default credential cache name is %y", defaultCacheName), "info");
+        } catch (hash<ExceptionInfo> ex) {
+            addEnvironmentCheck(\checks, \warnings, \errors, "default-cache-name", False,
+                sprintf("default credential cache name not available: %s", ex.desc),
+                requireCache ? "error" : "warning",
+                "configure a default credential cache or pass an explicit cache");
+        }
+
+        *string defaultKeytabName;
+        try {
+            defaultKeytabName = ctx.getDefaultKeytabName();
+            addEnvironmentCheck(\checks, \warnings, \errors, "default-keytab-name", True,
+                sprintf("default keytab name is %y", defaultKeytabName), "info");
+        } catch (hash<ExceptionInfo> ex) {
+            addEnvironmentCheck(\checks, \warnings, \errors, "default-keytab-name", False,
+                sprintf("default keytab name not available: %s", ex.desc),
+                requireKeytab ? "error" : "warning",
+                "configure a default keytab with KRB5_KTNAME or the krb5 configuration");
+        }
+
+        logEnvironmentValidation(logger, sprintf("defaults realm=%y cache=%y keytab=%y",
+            exists defaultRealm ? defaultRealm : NOTHING,
+            exists defaultCacheName ? defaultCacheName : NOTHING,
+            exists defaultKeytabName ? defaultKeytabName : NOTHING));
+
+        bool cacheAccessible = False;
+        *string cacheError;
+        *string cachePrincipal;
+        *int cacheCredentialCount;
+        *hash<CredentialLifecycleInfo> tgtLifecycle;
+        bool tgtFound = False;
+
+        try {
+            auto cc = ctx.openDefaultCredentialCache();
+            cacheAccessible = True;
+            addEnvironmentCheck(\checks, \warnings, \errors, "default-cache-accessible", True,
+                "default credential cache is accessible", "info");
+
+            if (cc.hasPrimaryPrincipal()) {
+                Qore::Krb5::Krb5Principal principal = cc.getPrimaryPrincipal();
+                cachePrincipal = principal.toString();
+                string realm = principal.getRealm();
+                addEnvironmentCheck(\checks, \warnings, \errors, "default-cache-principal", True,
+                    sprintf("credential cache primary principal is %y", cachePrincipal), "info");
+
+                list<hash<Qore::Krb5::Krb5CredentialsInfo>> credsList = cc.listCredentials();
+                cacheCredentialCount = credsList.size();
+
+                if (cacheCredentialCount == 0) {
+                    addEnvironmentCheck(\checks, \warnings, \errors, "default-cache-credentials", False,
+                        "credential cache has a primary principal but no credentials",
+                        requireTgt ? "error" : "warning",
+                        "acquire fresh credentials before starting Kerberos-authenticated work");
+                } else {
+                    addEnvironmentCheck(\checks, \warnings, \errors, "default-cache-credentials", True,
+                        sprintf("credential cache contains %d credential(s)", cacheCredentialCount), "info");
+                }
+
+                string tgtServer = sprintf("krbtgt/%s@%s", realm, realm);
+                foreach hash<Qore::Krb5::Krb5CredentialsInfo> entry in (credsList) {
+                    if (entry.server == tgtServer) {
+                        tgtFound = True;
+                        tgtLifecycle = getCredentialLifecycleInfo(entry, renewThreshold, NOTHING, logger);
+                        if (tgtLifecycle.expired) {
+                            addEnvironmentCheck(\checks, \warnings, \errors, "default-cache-tgt-valid", False,
+                                sprintf("TGT is expired (expired %d seconds ago)", -tgtLifecycle.remaining_seconds),
+                                requireTgt ? "error" : "warning",
+                                "acquire fresh initial credentials");
+                        } else if (tgtLifecycle.within_renewal_threshold) {
+                            addEnvironmentCheck(\checks, \warnings, \errors, "default-cache-tgt-renewal-threshold",
+                                False, sprintf("TGT expires in %d seconds (within renewal threshold)",
+                                tgtLifecycle.remaining_seconds), "warning",
+                                "renew credentials before expiry");
+                        } else {
+                            addEnvironmentCheck(\checks, \warnings, \errors, "default-cache-tgt-valid", True,
+                                sprintf("TGT is valid for %d more seconds", tgtLifecycle.remaining_seconds), "info");
+                        }
+                        if (exists minTgtLifetime && !tgtLifecycle.expired
+                                && tgtLifecycle.remaining_seconds < minTgtLifetime) {
+                            addEnvironmentCheck(\checks, \warnings, \errors, "default-cache-tgt-min-lifetime", False,
+                                sprintf("TGT remaining lifetime %d seconds is below required minimum %d seconds",
+                                    tgtLifecycle.remaining_seconds, minTgtLifetime), "error",
+                                "renew credentials or acquire fresh initial credentials");
+                        } else if (exists minTgtLifetime && !tgtLifecycle.expired) {
+                            addEnvironmentCheck(\checks, \warnings, \errors, "default-cache-tgt-min-lifetime", True,
+                                sprintf("TGT remaining lifetime %d seconds satisfies minimum %d seconds",
+                                    tgtLifecycle.remaining_seconds, minTgtLifetime), "info");
+                        }
+                        if (!tgtLifecycle.renewable && !tgtLifecycle.expired) {
+                            addEnvironmentCheck(\checks, \warnings, \errors, "default-cache-tgt-renewable", False,
+                                "TGT is not renewable", "warning",
+                                "request renewable initial credentials if long-running renewal is required");
+                        } else if (tgtLifecycle.renewable) {
+                            addEnvironmentCheck(\checks, \warnings, \errors, "default-cache-tgt-renewable", True,
+                                sprintf("TGT is renewable for %d more seconds", tgtLifecycle.renewable_seconds),
+                                "info");
+                        }
+                        break;
+                    }
+                }
+
+                if (!tgtFound && cacheCredentialCount > 0) {
+                    addEnvironmentCheck(\checks, \warnings, \errors, "default-cache-tgt-present", False,
+                        sprintf("no TGT (krbtgt/%s@%s) found among %d cached credentials",
+                            realm, realm, cacheCredentialCount),
+                        requireTgt ? "error" : "warning",
+                        "acquire initial credentials so service-ticket requests can be made");
+                } else if (tgtFound) {
+                    addEnvironmentCheck(\checks, \warnings, \errors, "default-cache-tgt-present", True,
+                        sprintf("TGT %y found in default credential cache", tgtServer), "info");
+                }
+            } else {
+                addEnvironmentCheck(\checks, \warnings, \errors, "default-cache-principal", False,
+                    "credential cache has no primary principal",
+                    requireCache || requireTgt ? "error" : "warning",
+                    "initialize the cache with initial credentials");
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            cacheError = sprintf("%s: %s", ex.err, ex.desc);
+            addEnvironmentCheck(\checks, \warnings, \errors, "default-cache-accessible", False,
+                sprintf("default credential cache not accessible: %s", cacheError),
+                requireCache || requireTgt ? "error" : "warning",
+                "acquire initial credentials or set KRB5CCNAME to an accessible cache");
+        }
+
+        logEnvironmentValidation(logger, sprintf("cache accessible=%y principal=%y creds=%y tgt_found=%y",
+            cacheAccessible, exists cachePrincipal ? cachePrincipal : NOTHING,
+            exists cacheCredentialCount ? cacheCredentialCount : NOTHING,
+            tgtFound));
+
+        bool keytabAccessible = False;
+        *string keytabError;
+        *int keytabEntryCount;
+        *list<string> keytabPrincipals;
+        *bool servicePrincipalInKeytab;
+        *int servicePrincipalKvno;
+
+        try {
+            auto kt = ctx.openDefaultKeytab();
+            keytabAccessible = True;
+            addEnvironmentCheck(\checks, \warnings, \errors, "default-keytab-accessible", True,
+                "default keytab is accessible", "info");
+
+            if (kt.hasContent()) {
+                list<hash<Qore::Krb5::Krb5KeytabEntryInfo>> ktEntries = kt.listEntries();
+                keytabEntryCount = ktEntries.size();
+                addEnvironmentCheck(\checks, \warnings, \errors, "default-keytab-entries", True,
+                    sprintf("default keytab contains %d entr%s", keytabEntryCount,
+                        keytabEntryCount == 1 ? "y" : "ies"), "info");
+
+                hash<string, bool> seen();
+                foreach hash<Qore::Krb5::Krb5KeytabEntryInfo> entry in (ktEntries) {
+                    seen{entry.principal} = True;
+                }
+                keytabPrincipals = keys seen;
+
+                if (exists servicePrincipalString) {
+                    int highestKvno = 0;
+                    bool found = False;
+                    foreach hash<Qore::Krb5::Krb5KeytabEntryInfo> entry in (ktEntries) {
+                        if (entry.principal == servicePrincipalString) {
+                            found = True;
+                            if (entry.kvno > highestKvno) {
+                                highestKvno = entry.kvno;
+                            }
+                        }
+                    }
+                    servicePrincipalInKeytab = found;
+                    if (found) {
+                        servicePrincipalKvno = highestKvno;
+                        addEnvironmentCheck(\checks, \warnings, \errors, "default-keytab-service-principal", True,
+                            sprintf("service principal %y found in default keytab with highest kvno %d",
+                                servicePrincipalString, highestKvno), "info");
+                    } else {
+                        addEnvironmentCheck(\checks, \warnings, \errors, "default-keytab-service-principal", False,
+                            sprintf("service principal %y not found in default keytab", servicePrincipalString),
+                            requireServicePrincipal ? "error" : "warning",
+                            "install the service principal in the default keytab or use the correct keytab");
+                    }
+                }
+            } else {
+                keytabEntryCount = 0;
+                addEnvironmentCheck(\checks, \warnings, \errors, "default-keytab-entries", False,
+                    "default keytab is empty",
+                    requireKeytab || requireServicePrincipal ? "error" : "warning",
+                    "install service keys into the default keytab");
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            keytabError = sprintf("%s: %s", ex.err, ex.desc);
+            addEnvironmentCheck(\checks, \warnings, \errors, "default-keytab-accessible", False,
+                sprintf("default keytab not accessible: %s", keytabError),
+                requireKeytab || requireServicePrincipal ? "error" : "warning",
+                "set KRB5_KTNAME or configure an accessible default keytab");
+        }
+
+        logEnvironmentValidation(logger, sprintf("keytab accessible=%y entries=%y principals=%d svc_found=%y",
+            keytabAccessible, exists keytabEntryCount ? keytabEntryCount : NOTHING,
+            exists keytabPrincipals ? keytabPrincipals.size() : 0,
+            exists servicePrincipalInKeytab ? servicePrincipalInKeytab : NOTHING));
+
+        bool healthy = errors.size() == 0;
+
+        hash<KerberosEnvironmentInfo> rv = <KerberosEnvironmentInfo>{
+            "default_realm": defaultRealm,
+            "default_cache_name": defaultCacheName,
+            "default_keytab_name": defaultKeytabName,
+            "cache_accessible": cacheAccessible,
+            "cache_error": cacheError,
+            "cache_principal": cachePrincipal,
+            "cache_credential_count": cacheCredentialCount,
+            "tgt_lifecycle": tgtLifecycle,
+            "keytab_accessible": keytabAccessible,
+            "keytab_error": keytabError,
+            "keytab_entry_count": keytabEntryCount,
+            "keytab_principals": keytabPrincipals,
+            "service_principal_in_keytab": servicePrincipalInKeytab,
+            "service_principal_kvno": servicePrincipalKvno,
+            "warnings": warnings,
+            "errors": errors,
+            "checks": checks,
+            "healthy": healthy,
+        };
+
+        logEnvironmentValidation(logger, sprintf("result healthy=%y warnings=%d errors=%d",
+            healthy, warnings.size(), errors.size()));
+        return rv;
+    }
+
+    #! Creates a GSSAPI initiator context using S4U2Self impersonation
+    /** This helper wraps the supported GSS-level constrained delegation flow:
+        a service credential is used to obtain an impersonated initiator
+        credential for \a user_principal, then a client context is created for
+        \a target_service with that credential.
+
+        @param target_service target service principal or host-based service
+        name, depending on \a opts.name_type
+        @param service_cred service credential allowed by the KDC to
+        impersonate users
+        @param user_principal user principal to impersonate
+        @param opts optional @ref Qore::Krb5::GssClientContextOptions
+        @param logger optional logger for safe diagnostics; raw GSS tokens and
+        credential material are not logged
+
+        @return initiator context bound to the impersonated credential
+
+        @throw KRB5-GSS-ARG-ERROR if arguments are invalid
+        @throw KRB5-GSS-ERROR if S4U2Self or target-name import fails
+        @throw KRB5-NOT-SUPPORTED if the platform lacks S4U2Self support
+    */
+    public auto sub createImpersonatedClientContext(
+            string target_service,
+            Qore::Krb5::GssCredential service_cred,
+            Qore::Krb5::Krb5Principal user_principal,
+            *hash<Qore::Krb5::GssClientContextOptions> opts = NOTHING,
+            *Qore::Logger::LoggerInterface logger = NOTHING) {
+        if (!target_service) {
+            throw "KRB5-GSS-ARG-ERROR", "target service principal cannot be empty";
+        }
+
+        logS4u(logger, sprintf("creating impersonated GSS client context target=%y user=%y",
+            target_service, user_principal.toString()));
+
+        Qore::Krb5::GssCredential impersonated =
+            Qore::Krb5::GssCredential::impersonateName(service_cred, user_principal);
+
+        if (exists opts) {
+            Qore::Krb5::GssClientContext rv(target_service, impersonated, opts);
+            return rv;
+        }
+        Qore::Krb5::GssClientContext rv(target_service, impersonated);
+        return rv;
+    }
+
+    #! Encodes an ASN.1 DER length
+    binary sub derLength(int len) {
+        if (len < 0x80) {
+            return binary(chr(len));
+        }
+        if (len <= 0xff) {
+            return <81> + binary(chr(len));
+        }
+        if (len <= 0xffff) {
+            return <82> + binary(chr(len >> 8)) + binary(chr(len & 0xff));
+        }
+        return <83> + binary(chr(len >> 16)) + binary(chr((len >> 8) & 0xff)) + binary(chr(len & 0xff));
+    }
+
+    #! Wraps data in an ASN.1 DER TLV (tag-length-value)
+    binary sub derWrap(int tag, binary value) {
+        return binary(chr(tag)) + derLength(value.size()) + value;
+    }
+
+    #! Wraps a hex-encoded GSSAPI token in an RFC 4178 SPNEGO NegTokenInit envelope and returns it as base64
+    /** This builds an SPNEGO initial context token (RFC 2743 Section 3.1 /
+        RFC 4178 Section 4.2.1) containing the Kerberos 5 mechanism OID
+        and the provided GSS token as the mechToken field. The result is
+        base64-encoded, ready for use in an HTTP
+        \c "Authorization: Negotiate <base64>" header.
+
+        @par Example:
+        @code{.py}
+%requires Krb5Util
+%requires krb5
+
+Qore::Krb5::GssClientContext initiator("HTTP/web.example.com@EXAMPLE.COM");
+hash<Qore::Krb5::GssStepInfo> step = initiator.step();
+string authHeader = "Negotiate " + Krb5Util::negotiateSpnegoToken(step.token);
+        @endcode
+
+        @param gss_token_hex hex-encoded GSSAPI token from GssClientContext::step()
+        @param logger optional logger for safe diagnostics; only sizes and
+        operation names are logged
+
+        @return base64-encoded SPNEGO NegTokenInit envelope
+
+        @throw KRB5-SPNEGO-ERROR if the input token is empty or invalid hex
+    */
+    public string sub negotiateSpnegoToken(string gss_token_hex,
+            *Qore::Logger::LoggerInterface logger = NOTHING) {
+        if (!gss_token_hex.val()) {
+            throw "KRB5-SPNEGO-ERROR", "GSS token cannot be empty";
+        }
+        if (gss_token_hex.size() % 2) {
+            throw "KRB5-SPNEGO-ERROR", "GSS token hex must have even length";
+        }
+        if (gss_token_hex !~ /^[[:xdigit:]]+$/) {
+            throw "KRB5-SPNEGO-ERROR", "GSS token contains non-hexadecimal characters";
+        }
+
+        binary mechToken = parse_hex_string(gss_token_hex);
+
+        # SPNEGO OID 1.3.6.1.5.5.2 in DER: 06 06 2b 06 01 05 05 02
+        binary spnegoOid = parse_hex_string("06062b0601050502");
+        # Kerberos 5 OID 1.2.840.113554.1.2.2 in DER: 06 09 2a 86 48 86 f7 12 01 02 02
+        binary krb5Oid = parse_hex_string("06092a864886f712010202");
+
+        # Build NegTokenInit SEQUENCE:
+        #   [0] SEQUENCE { OID krb5 }        -- mechTypes
+        #   [2] OCTET STRING { mechToken }   -- mechToken
+        binary mechTypes = derWrap(0xa0, derWrap(0x30, krb5Oid));
+        binary mechTokenField = derWrap(0xa2, derWrap(0x04, mechToken));
+        binary negTokenInit = derWrap(0x30, mechTypes + mechTokenField);
+
+        # Wrap in context [0] for NegotiationToken choice
+        binary negToken = derWrap(0xa0, negTokenInit);
+
+        # Build RFC 2743 Section 3.1 initial context token:
+        #   APPLICATION[0] { OID spnego, NegotiationToken }
+        binary innerToken = spnegoOid + negToken;
+        binary applicationToken = derWrap(0x60, innerToken);
+
+        logSpnego(logger, sprintf("built NegTokenInit token_bytes=%d spnego_bytes=%d",
+            mechToken.size(), applicationToken.size()));
+        return make_base64_string(applicationToken);
+    }
+
+    #! Builds an HTTP \c Authorization header with an SPNEGO NegTokenInit token
+    /** The returned string has the form \c "Negotiate <base64-token>" and
+        is ready to use as an HTTP \c Authorization header value.
+
+        @param gss_token_hex hex-encoded GSSAPI token from GssClientContext::step()
+        @param logger optional logger for safe diagnostics; raw token data is
+        not logged
+
+        @return HTTP Negotiate authorization header value
+
+        @throw KRB5-SPNEGO-ERROR if the input token is empty or invalid hex
+    */
+    public string sub buildNegotiateAuthorizationHeader(string gss_token_hex,
+            *Qore::Logger::LoggerInterface logger = NOTHING) {
+        string token = negotiateSpnegoToken(gss_token_hex, logger);
+        logSpnego(logger, sprintf("built Authorization Negotiate header token_b64_bytes=%d", token.size()));
+        return "Negotiate " + token;
+    }
+
+    #! Parses a base64-encoded SPNEGO NegTokenInit and extracts the contained GSS mechToken as hex
+    /** @param base64_token base64-encoded SPNEGO NegTokenInit token from
+        an HTTP \c "Authorization: Negotiate <base64>" header
+        @param logger optional logger for safe diagnostics; raw token data is
+        not logged
+
+        @return hex-encoded GSS token extracted from the mechToken field
+
+        @throw KRB5-SPNEGO-ERROR if the token cannot be parsed or does not
+        contain a mechToken
+    */
+    public string sub parseSpnegoInitialToken(string base64_token,
+            *Qore::Logger::LoggerInterface logger = NOTHING) {
+        if (!base64_token.val()) {
+            throw "KRB5-SPNEGO-ERROR", "SPNEGO initial token cannot be empty";
+        }
+
+        binary data;
+        try {
+            data = parse_base64_string(base64_token);
+        } catch (hash<ExceptionInfo> ex) {
+            throw "KRB5-SPNEGO-ERROR", sprintf("invalid base64: %s", ex.desc);
+        }
+
+        int pos = 0;
+        if (data.size() < 2 || data[pos] != 0x60) {
+            throw "KRB5-SPNEGO-ERROR", sprintf("expected initial context token (tag 0x60), got 0x%02x",
+                data.size() ? data[pos] : -1);
+        }
+        ++pos;
+        int outerLen;
+        (outerLen, pos) = parseDerLength(data, pos);
+        checkDerBounds(data, pos, outerLen, "initial context token");
+        int outerEnd = pos + outerLen;
+
+        int oidStart = pos;
+        if (pos >= outerEnd || data[pos] != 0x06) {
+            throw "KRB5-SPNEGO-ERROR", "initial context token does not contain a mechanism OID";
+        }
+        ++pos;
+        int oidLen;
+        (oidLen, pos) = parseDerLength(data, pos);
+        checkDerBounds(data, pos, oidLen, "SPNEGO OID");
+        if (pos + oidLen > outerEnd) {
+            throw "KRB5-SPNEGO-ERROR", "SPNEGO OID exceeds initial context token";
+        }
+        if (make_hex_string(data.substr(oidStart, pos + oidLen - oidStart)) != "06062b0601050502") {
+            throw "KRB5-SPNEGO-ERROR", "initial context token does not use the SPNEGO mechanism OID";
+        }
+        pos += oidLen;
+
+        if (pos >= outerEnd || data[pos] != 0xa0) {
+            throw "KRB5-SPNEGO-ERROR", "initial context token does not contain a NegTokenInit choice";
+        }
+        ++pos;
+        int choiceLen;
+        (choiceLen, pos) = parseDerLength(data, pos);
+        checkDerBounds(data, pos, choiceLen, "NegTokenInit choice");
+        int choiceEnd = pos + choiceLen;
+        if (choiceEnd != outerEnd) {
+            throw "KRB5-SPNEGO-ERROR", "NegTokenInit choice length does not match initial context token";
+        }
+
+        if (pos >= choiceEnd || data[pos] != 0x30) {
+            throw "KRB5-SPNEGO-ERROR", "NegTokenInit choice does not contain a SEQUENCE";
+        }
+        ++pos;
+        int seqLen;
+        (seqLen, pos) = parseDerLength(data, pos);
+        checkDerBounds(data, pos, seqLen, "NegTokenInit SEQUENCE");
+        int seqEnd = pos + seqLen;
+        if (seqEnd != choiceEnd) {
+            throw "KRB5-SPNEGO-ERROR", "NegTokenInit SEQUENCE length does not match choice length";
+        }
+
+        while (pos < seqEnd) {
+            int tag = data[pos];
+            ++pos;
+            int fieldLen;
+            (fieldLen, pos) = parseDerLength(data, pos);
+            checkDerBounds(data, pos, fieldLen, "NegTokenInit field");
+            int fieldEnd = pos + fieldLen;
+            if (fieldEnd > seqEnd) {
+                throw "KRB5-SPNEGO-ERROR", "NegTokenInit field length exceeds SEQUENCE length";
+            }
+
+            if (tag == 0xa2) {
+                if (pos >= fieldEnd || data[pos] != 0x04) {
+                    throw "KRB5-SPNEGO-ERROR", "mechToken field does not contain OCTET STRING";
+                }
+                ++pos;
+                int tokenLen;
+                (tokenLen, pos) = parseDerLength(data, pos);
+                checkDerBounds(data, pos, tokenLen, "mechToken OCTET STRING");
+                if (pos + tokenLen != fieldEnd) {
+                    throw "KRB5-SPNEGO-ERROR", "mechToken OCTET STRING length does not match field length";
+                }
+                string token = make_hex_string(data.substr(pos, tokenLen));
+                logSpnego(logger, sprintf("parsed NegTokenInit token_bytes=%d", token.size() / 2));
+                return token;
+            }
+            pos = fieldEnd;
+        }
+
+        throw "KRB5-SPNEGO-ERROR", "SPNEGO initial token does not contain a mechToken field";
+    }
+
+    #! Parses an HTTP Negotiate authorization header and extracts the contained GSS token as hex
+    /** Accepts either a bare \c "Negotiate <base64-token>" value or a full
+        \c "Authorization: Negotiate <base64-token>" header line. The SPNEGO
+        NegTokenInit envelope is unwrapped and the mechToken is returned.
+
+        @param header HTTP Negotiate authorization header value or full header line
+        @param logger optional logger for safe diagnostics; raw token data is
+        not logged
+
+        @return hex-encoded GSS token extracted from the mechToken field
+
+        @throw KRB5-SPNEGO-ERROR if the header is not a Negotiate value, does
+        not contain a token, or the SPNEGO envelope cannot be parsed
+    */
+    public string sub parseNegotiateAuthorizationHeader(string header,
+            *Qore::Logger::LoggerInterface logger = NOTHING) {
+        return parseSpnegoInitialToken(extractNegotiateHeaderToken(header, logger), logger);
+    }
+
+    #! Advances a GSS initiator context and returns an HTTP Negotiate Authorization header when needed
+    /** @param ctx initiator-side GSS context
+        @param www_authenticate_header optional HTTP Negotiate server response
+        from a previous round
+        @param logger optional logger for safe diagnostics; raw token data is
+        not logged
+
+        @return client-side HTTP Negotiate step information
+
+        @throw KRB5-NEGOTIATE-ERROR if a server response without a token is
+        received before the initiator context is complete
+        @throw KRB5-SPNEGO-ERROR if the response header is invalid
+        @throw KRB5-GSS-ERROR if the GSSAPI step fails
+    */
+    public hash<NegotiateClientStepInfo> sub buildNegotiateClientStep(Qore::Krb5::GssClientContext ctx,
+            *string www_authenticate_header = NOTHING, *Qore::Logger::LoggerInterface logger = NOTHING) {
+        *string inputToken;
+        bool performedStep = False;
+
+        if (exists www_authenticate_header) {
+            hash<SpnegoResponseInfo> response = parseNegotiateResponseHeader(www_authenticate_header, logger);
+            if (exists response.token) {
+                inputToken = response.token;
+            } else {
+                bool complete = ctx.isComplete();
+                if (!complete) {
+                    throw "KRB5-NEGOTIATE-ERROR",
+                        "server Negotiate response did not include a token before initiator completion";
+                }
+                logSpnego(logger, sprintf("client accepted final Negotiate response neg_state=%y",
+                    exists response.neg_state ? response.neg_state : NOTHING));
+                return <NegotiateClientStepInfo>{
+                    "complete": complete,
+                };
+            }
+        }
+
+        hash<Qore::Krb5::GssStepInfo> step = exists inputToken ? ctx.step(inputToken) : ctx.step();
+        performedStep = True;
+        hash<NegotiateClientStepInfo> rv = <NegotiateClientStepInfo>{
+            "complete": step.complete,
+            "flags": step.flags,
+            "lifetime": step.lifetime,
+        };
+        if (exists step.token) {
+            rv.token = step.token;
+            rv.authorization_header = buildNegotiateAuthorizationHeader(step.token, logger);
+        }
+
+        logSpnego(logger, sprintf("client Negotiate step complete=%y token_bytes=%d performed_step=%y",
+            rv.complete, exists rv.token ? rv.token.size() / 2 : 0, performedStep));
+        return rv;
+    }
+
+    #! Creates an initiator context for HTTP Negotiate client authentication
+    /** @param service_principal Kerberos service principal, or a host-based
+        service name when \a gss_opts.name_type is \c "hostbased-service"
+        @param credential_cache optional credential cache name
+        @param keytab optional client keytab name; ignored when
+        \a credential_cache is set
+        @param gss_opts optional @ref Qore::Krb5::GssClientContextOptions
+        @param logger optional logger for diagnostics; secrets and tokens are
+        not logged
+
+        @return a GSS initiator context
+
+        @throw KRB5-GSS-ERROR if credentials or the target name cannot be
+        imported
+        @throw KRB5-CACHE-ERROR if \a credential_cache cannot be opened
+        @throw KRB5-KEYTAB-ERROR if \a keytab cannot be opened
+    */
+    public auto sub createHttpNegotiateClientContext(
+            string service_principal, *string credential_cache = NOTHING,
+            *string keytab = NOTHING,
+            *hash<Qore::Krb5::GssClientContextOptions> gss_opts = NOTHING,
+            *Qore::Logger::LoggerInterface logger = NOTHING) {
+        *Qore::Krb5::GssCredential cred;
+        if (credential_cache.val() || keytab.val()) {
+            Qore::Krb5::Krb5Context kctx();
+            if (credential_cache.val()) {
+                cred = Qore::Krb5::GssCredential::fromCredentialCache(
+                    kctx.openCredentialCache(credential_cache));
+                logSpnego(logger, "created HTTP Negotiate client credential from credential cache");
+            } else {
+                cred = Qore::Krb5::GssCredential::fromKeytab(kctx.openKeytab(keytab));
+                logSpnego(logger, "created HTTP Negotiate client credential from keytab");
+            }
+        }
+
+        if (cred) {
+            if (gss_opts) {
+                Qore::Krb5::GssClientContext rv(service_principal, cred, gss_opts);
+                return rv;
+            }
+            Qore::Krb5::GssClientContext rv(service_principal, cred);
+            return rv;
+        }
+
+        if (gss_opts) {
+            Qore::Krb5::GssClientContext rv(service_principal, gss_opts);
+            return rv;
+        }
+        Qore::Krb5::GssClientContext rv(service_principal);
+        return rv;
+    }
+
+    #! Builds an HTTP Negotiate Authorization header, creating a context when needed
+    /** @param service_principal Kerberos service principal, or a host-based
+        service name when \a gss_opts.name_type is \c "hostbased-service"
+        @param www_authenticate_header optional \c WWW-Authenticate:
+        \c Negotiate header value containing a server token
+        @param ctx optional existing initiator context
+        @param credential_cache optional credential cache name
+        @param keytab optional client keytab name
+        @param gss_opts optional @ref Qore::Krb5::GssClientContextOptions
+        @param logger optional logger for diagnostics; secrets and tokens are
+        not logged
+
+        @return a hash containing the \c context and the fields returned by
+        @ref buildNegotiateClientStep()
+    */
+    public hash<auto> sub buildHttpNegotiateClientAuthorization(
+            string service_principal, *string www_authenticate_header = NOTHING,
+            *Qore::Krb5::GssClientContext ctx = NOTHING,
+            *string credential_cache = NOTHING, *string keytab = NOTHING,
+            *hash<Qore::Krb5::GssClientContextOptions> gss_opts = NOTHING,
+            *Qore::Logger::LoggerInterface logger = NOTHING) {
+        if (!ctx) {
+            ctx = createHttpNegotiateClientContext(service_principal, credential_cache,
+                keytab, gss_opts, logger);
+        }
+
+        hash<NegotiateClientStepInfo> step = exists www_authenticate_header
+            ? buildNegotiateClientStep(ctx, www_authenticate_header, logger)
+            : buildNegotiateClientStep(ctx, NOTHING, logger);
+        return step + {"context": ctx};
+    }
+
+    #! Processes an HTTP Negotiate Authorization header with an acceptor context
+    /** @param ctx acceptor-side GSS context
+        @param authorization_header HTTP Negotiate Authorization header value
+        or full header line
+        @param logger optional logger for safe diagnostics; raw token data is
+        not logged
+
+        @return server-side HTTP Negotiate step information, including the
+        \c WWW-Authenticate header value to send
+
+        @throw KRB5-SPNEGO-ERROR if the authorization header is invalid
+        @throw KRB5-GSS-ERROR if the GSSAPI step fails
+    */
+    public hash<NegotiateServerStepInfo> sub acceptNegotiateAuthorizationHeader(
+            Qore::Krb5::GssAcceptorContext ctx, string authorization_header,
+            *Qore::Logger::LoggerInterface logger = NOTHING) {
+        string inputToken = parseNegotiateAuthorizationHeader(authorization_header, logger);
+        hash<Qore::Krb5::GssStepInfo> step = ctx.step(inputToken);
+        int negState = step.complete ? 0 : 1;
+
+        hash<NegotiateServerStepInfo> rv = <NegotiateServerStepInfo>{
+            "complete": step.complete,
+            "flags": step.flags,
+            "lifetime": step.lifetime,
+            "www_authenticate_header": exists step.token
+                ? buildNegotiateWwwAuthenticateHeader(step.token, negState, logger)
+                : buildNegotiateWwwAuthenticateHeader(NOTHING, negState, logger),
+        };
+        if (exists step.token) {
+            rv.token = step.token;
+        }
+
+        *string initiatorName = ctx.getInitiatorName();
+        if (initiatorName) {
+            rv.initiator_name = initiatorName;
+        }
+
+        logSpnego(logger, sprintf("server Negotiate step complete=%y token_bytes=%d neg_state=%d initiator=%y",
+            rv.complete, exists rv.token ? rv.token.size() / 2 : 0, negState,
+            exists rv.initiator_name ? rv.initiator_name : NOTHING));
+        return rv;
+    }
+
+    #! Builds a base64-encoded SPNEGO NegTokenResp token
+    /** Builds an RFC 4178 \c NegTokenResp token for HTTP Negotiate
+        server-side responses. A response can contain a GSS response token,
+        a \c negState value, or both.
+
+        @param gss_token_hex optional hex-encoded GSSAPI response token
+        @param neg_state optional RFC 4178 \c negState value:
+        0 = \c accept-completed, 1 = \c accept-incomplete, 2 = \c reject,
+        3 = \c request-mic
+        @param logger optional logger for safe diagnostics; raw token data is
+        not logged
+
+        @return base64-encoded SPNEGO NegTokenResp token
+
+        @throw KRB5-SPNEGO-ERROR if neither \a gss_token_hex nor
+        \a neg_state is provided, if \a neg_state is outside 0..3, or if the
+        GSS token is empty or invalid hex
+    */
+    public string sub negotiateSpnegoResponseToken(*string gss_token_hex = NOTHING, *int neg_state = NOTHING,
+            *Qore::Logger::LoggerInterface logger = NOTHING) {
+        bool hasToken = exists gss_token_hex;
+        bool hasState = exists neg_state;
+        if (!hasToken && !hasState) {
+            throw "KRB5-SPNEGO-ERROR", "NegTokenResp requires a response token or negState";
+        }
+
+        binary content;
+        if (hasState) {
+            if (neg_state < 0 || neg_state > 3) {
+                throw "KRB5-SPNEGO-ERROR", "negState must be between 0 and 3";
+            }
+            content += derWrap(0xa0, derWrap(0x0a, binary(chr(neg_state))));
+        }
+
+        int tokenBytes = 0;
+        if (hasToken) {
+            if (!gss_token_hex.val()) {
+                throw "KRB5-SPNEGO-ERROR", "GSS token cannot be empty";
+            }
+            if (gss_token_hex.size() % 2) {
+                throw "KRB5-SPNEGO-ERROR", "GSS token hex must have even length";
+            }
+            if (gss_token_hex !~ /^[[:xdigit:]]+$/) {
+                throw "KRB5-SPNEGO-ERROR", "GSS token contains non-hexadecimal characters";
+            }
+            binary token = parse_hex_string(gss_token_hex);
+            tokenBytes = token.size();
+            content += derWrap(0xa2, derWrap(0x04, token));
+        }
+
+        binary response = derWrap(0xa1, derWrap(0x30, content));
+        logSpnego(logger, sprintf("built NegTokenResp token_bytes=%d spnego_bytes=%d neg_state=%y",
+            tokenBytes, response.size(), hasState ? neg_state : NOTHING));
+        return make_base64_string(response);
+    }
+
+    #! Builds an HTTP \c WWW-Authenticate header with an optional SPNEGO NegTokenResp token
+    /** With no arguments this returns \c "Negotiate", which is the initial
+        HTTP challenge. With a token or \c negState it returns
+        \c "Negotiate <base64-token>".
+
+        @param gss_token_hex optional hex-encoded GSSAPI response token
+        @param neg_state optional RFC 4178 \c negState value
+        @param logger optional logger for safe diagnostics; raw token data is
+        not logged
+
+        @return HTTP Negotiate \c WWW-Authenticate header value
+
+        @throw KRB5-SPNEGO-ERROR if supplied token or \c negState values are invalid
+    */
+    public string sub buildNegotiateWwwAuthenticateHeader(*string gss_token_hex = NOTHING,
+            *int neg_state = NOTHING, *Qore::Logger::LoggerInterface logger = NOTHING) {
+        if (!exists gss_token_hex && !exists neg_state) {
+            logSpnego(logger, "built empty WWW-Authenticate Negotiate challenge");
+            return "Negotiate";
+        }
+
+        string token = negotiateSpnegoResponseToken(gss_token_hex, neg_state, logger);
+        logSpnego(logger, sprintf("built WWW-Authenticate Negotiate header token_b64_bytes=%d", token.size()));
+        return "Negotiate " + token;
+    }
+
+    #! Extracts the base64 token from an HTTP Negotiate header value
+    /** Accepts either a bare \c "Negotiate <base64-token>" value or a full
+        header line such as \c "Authorization: Negotiate <base64-token>".
+
+        @param header HTTP Negotiate header value or full header line
+        @param logger optional logger for safe diagnostics; raw token data is
+        not logged
+
+        @return base64 token string
+
+        @throw KRB5-SPNEGO-ERROR if \a header is not a Negotiate value, does
+        not contain a token, or contains invalid base64 data
+    */
+    public string sub extractNegotiateHeaderToken(string header,
+            *Qore::Logger::LoggerInterface logger = NOTHING) {
+        string value = trim(header);
+        int colon = value.find(":");
+        if (colon >= 0) {
+            value = trim(value.substr(colon + 1));
+        }
+
+        if (value !~ /^Negotiate([[:space:]]|$)/i) {
+            throw "KRB5-SPNEGO-ERROR", "HTTP header does not use the Negotiate authentication scheme";
+        }
+
+        string token = trim(value.substr(9));
+        if (!token.val()) {
+            throw "KRB5-SPNEGO-ERROR", "Negotiate header does not contain a token";
+        }
+
+        try {
+            # Validate the base64 encoding before returning
+            binary decoded = parse_base64_string(token);
+            if (!decoded.size()) {
+                throw "KRB5-SPNEGO-ERROR", "Negotiate token base64 decodes to empty data";
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "KRB5-SPNEGO-ERROR") {
+                rethrow;
+            }
+            throw "KRB5-SPNEGO-ERROR", sprintf("invalid Negotiate token base64: %s", ex.desc);
+        }
+
+        logSpnego(logger, sprintf("extracted Negotiate header token_b64_bytes=%d", token.size()));
+        return token;
+    }
+
+    #! Finds a Negotiate authentication value in HTTP headers
+    /** @param headers a response headers hash, a single header value, or a
+        list of header values
+        @param header_name header name to search for when \a headers is a hash
+        @param logger optional logger for diagnostics; token data is not logged
+
+        @return parsed Negotiate header info, or \c NOTHING if no Negotiate
+        header is present
+    */
+    public *hash<NegotiateHeaderInfo> sub findNegotiateHeader(auto headers,
+            string header_name = "www-authenticate",
+            *Qore::Logger::LoggerInterface logger = NOTHING) {
+        if (!exists headers) {
+            return NOTHING;
+        }
+
+        if (headers.typeCode() == NT_HASH) {
+            string search = header_name.lwr();
+            foreach hash<auto> pair in (headers.pairIterator()) {
+                if (pair.key.lwr() == search) {
+                    if (*hash<NegotiateHeaderInfo> rv = findNegotiateHeaderValue(pair.value, logger)) {
+                        return rv;
+                    }
+                }
+            }
+            return NOTHING;
+        }
+
+        return findNegotiateHeaderValue(headers, logger);
+    }
+
+    #! Finds a Negotiate value in a single HTTP header value or list of values
+    *hash<NegotiateHeaderInfo> sub findNegotiateHeaderValue(auto value,
+            *Qore::Logger::LoggerInterface logger = NOTHING) {
+        if (!exists value) {
+            return NOTHING;
+        }
+
+        if (value.typeCode() == NT_LIST) {
+            foreach auto v in (value) {
+                if (*hash<NegotiateHeaderInfo> rv = findNegotiateHeaderValue(v, logger)) {
+                    return rv;
+                }
+            }
+            return NOTHING;
+        }
+
+        string header = string(value);
+        int colon = header.find(":");
+        if (colon >= 0) {
+            header = trim(header.substr(colon + 1));
+        }
+
+        *list<string> m = header =~ x/(?:^|,)[[:space:]]*(Negotiate(?:[[:space:]]+[^,[:space:]]+)?)/i;
+        if (!m) {
+            return NOTHING;
+        }
+
+        string negotiate = trim(m[0]);
+        bool hasToken = trim(negotiate.substr(9)).val();
+        logSpnego(logger, sprintf("found HTTP Negotiate header has_token=%y", hasToken));
+        return <NegotiateHeaderInfo>{
+            "header": negotiate,
+            "has_token": hasToken,
+        };
+    }
+
+    #! Parses a base64-encoded SPNEGO NegTokenResp and extracts the contained GSS response token as hex
+    /** @par Example:
+        @code{.py}
+string gssHex = Krb5Util::parseSpnegoResponse(base64ResponseFromServer);
+hash<Qore::Krb5::GssStepInfo> step = initiator.step(gssHex);
+        @endcode
+
+        @param base64_token base64-encoded SPNEGO response from HTTP
+        \c "WWW-Authenticate: Negotiate <base64>"
+        @param logger optional logger for safe diagnostics; raw token data is
+        not logged
+
+        @return hex-encoded GSS token extracted from the responseToken field
+
+        @throw KRB5-SPNEGO-ERROR if the token cannot be parsed or does not
+        contain a responseToken
+    */
+    public string sub parseSpnegoResponse(string base64_token,
+            *Qore::Logger::LoggerInterface logger = NOTHING) {
+        hash<SpnegoResponseInfo> info = parseSpnegoResponseInfo(base64_token, logger);
+        if (!exists info.token) {
+            throw "KRB5-SPNEGO-ERROR", "SPNEGO response does not contain a responseToken field";
+        }
+        return info.token;
+    }
+
+    #! Parses a base64-encoded SPNEGO NegTokenResp and returns structured response information
+    /** This is useful for server responses that carry \c negState without a
+        response token, such as \c accept-completed.
+
+        @param base64_token base64-encoded SPNEGO NegTokenResp token
+        @param logger optional logger for safe diagnostics; raw token data is
+        not logged
+
+        @return parsed SPNEGO response information
+
+        @throw KRB5-SPNEGO-ERROR if the token is empty, invalid base64, or
+        not a supported DER-encoded SPNEGO NegTokenResp
+    */
+    public hash<SpnegoResponseInfo> sub parseSpnegoResponseInfo(string base64_token,
+            *Qore::Logger::LoggerInterface logger = NOTHING) {
+        if (!base64_token.val()) {
+            throw "KRB5-SPNEGO-ERROR", "SPNEGO response cannot be empty";
+        }
+
+        binary data;
+        try {
+            data = parse_base64_string(base64_token);
+        } catch (hash<ExceptionInfo> ex) {
+            throw "KRB5-SPNEGO-ERROR", sprintf("invalid base64: %s", ex.desc);
+        }
+
+        if (data.size() < 2) {
+            throw "KRB5-SPNEGO-ERROR", "SPNEGO response too short";
+        }
+
+        # Expect NegotiationToken ::= CHOICE { negTokenResp [1] NegTokenResp }
+        # NegTokenResp ::= SEQUENCE { ... [2] OCTET STRING responseToken ... }
+        # We walk the DER structure to find the [2] context tag containing the token
+
+        # The outer wrapper should be context [1] (NegTokenResp choice)
+        int pos = 0;
+        if (data[pos] != 0xa1) {
+            throw "KRB5-SPNEGO-ERROR", sprintf("expected NegTokenResp (tag 0xa1), got 0x%02x",
+                data[pos]);
+        }
+        ++pos;
+        int seqLen;
+        (seqLen, pos) = parseDerLength(data, pos);
+        checkDerBounds(data, pos, seqLen, "NegTokenResp");
+        int outerEnd = pos + seqLen;
+
+        # Inside is a SEQUENCE
+        if (pos >= outerEnd || data[pos] != 0x30) {
+            throw "KRB5-SPNEGO-ERROR", sprintf("expected SEQUENCE (tag 0x30), got 0x%02x",
+                pos < data.size() ? data[pos] : -1);
+        }
+        ++pos;
+        int innerLen;
+        (innerLen, pos) = parseDerLength(data, pos);
+        checkDerBounds(data, pos, innerLen, "NegTokenResp SEQUENCE");
+        int endPos = pos + innerLen;
+        if (endPos != outerEnd) {
+            throw "KRB5-SPNEGO-ERROR", "NegTokenResp SEQUENCE length does not match outer length";
+        }
+
+        hash<SpnegoResponseInfo> rv();
+        # Walk the SEQUENCE fields looking for known NegTokenResp fields
+        while (pos < endPos) {
+            if (pos >= data.size()) {
+                throw "KRB5-SPNEGO-ERROR", "unexpected end of DER data while parsing field tag";
+            }
+            int tag = data[pos];
+            ++pos;
+            int fieldLen;
+            (fieldLen, pos) = parseDerLength(data, pos);
+            checkDerBounds(data, pos, fieldLen, "NegTokenResp field");
+            if (pos + fieldLen > endPos) {
+                throw "KRB5-SPNEGO-ERROR", "NegTokenResp field length exceeds SEQUENCE length";
+            }
+
+            int fieldEnd = pos + fieldLen;
+            if (tag == 0xa0) {
+                if (pos >= fieldEnd || data[pos] != 0x0a) {
+                    throw "KRB5-SPNEGO-ERROR", "negState field does not contain ENUMERATED";
+                }
+                ++pos;
+                int stateLen;
+                (stateLen, pos) = parseDerLength(data, pos);
+                checkDerBounds(data, pos, stateLen, "negState ENUMERATED");
+                if (stateLen != 1 || pos + stateLen != fieldEnd) {
+                    throw "KRB5-SPNEGO-ERROR", "negState ENUMERATED must be exactly one byte";
+                }
+                rv.neg_state = data[pos];
+                rv.neg_state_name = getNegStateName(rv.neg_state);
+            } else if (tag == 0xa1) {
+                if (pos >= fieldEnd || data[pos] != 0x06) {
+                    throw "KRB5-SPNEGO-ERROR", "supportedMech field does not contain OBJECT IDENTIFIER";
+                }
+                rv.supported_mech_oid_hex = make_hex_string(data.substr(pos, fieldLen));
+            } else if (tag == 0xa2) {
+                # Found responseToken; contains an OCTET STRING.
+                if (pos >= fieldEnd || data[pos] != 0x04) {
+                    throw "KRB5-SPNEGO-ERROR", "responseToken field does not contain OCTET STRING";
+                }
+                ++pos;
+                int tokenLen;
+                (tokenLen, pos) = parseDerLength(data, pos);
+                checkDerBounds(data, pos, tokenLen, "responseToken OCTET STRING");
+                if (pos + tokenLen != fieldEnd) {
+                    throw "KRB5-SPNEGO-ERROR", "responseToken OCTET STRING length does not match field length";
+                }
+                binary token = data.substr(pos, tokenLen);
+                rv.token = make_hex_string(token);
+            } else if (tag == 0xa3) {
+                if (pos >= fieldEnd || data[pos] != 0x04) {
+                    throw "KRB5-SPNEGO-ERROR", "mechListMIC field does not contain OCTET STRING";
+                }
+                ++pos;
+                int micLen;
+                (micLen, pos) = parseDerLength(data, pos);
+                checkDerBounds(data, pos, micLen, "mechListMIC OCTET STRING");
+                if (pos + micLen != fieldEnd) {
+                    throw "KRB5-SPNEGO-ERROR", "mechListMIC OCTET STRING length does not match field length";
+                }
+                rv.mech_list_mic = make_hex_string(data.substr(pos, micLen));
+            }
+            pos = fieldEnd;
+        }
+
+        logSpnego(logger, sprintf("parsed NegTokenResp token_bytes=%d neg_state=%y",
+            exists rv.token ? rv.token.size() / 2 : 0, exists rv.neg_state ? rv.neg_state : NOTHING));
+        return rv;
+    }
+
+    #! Parses an HTTP Negotiate response header and returns structured SPNEGO response information
+    /** Accepts either a bare \c "Negotiate <base64-token>" value or a full
+        \c "WWW-Authenticate: Negotiate <base64-token>" header line.
+
+        @param header HTTP Negotiate response header value or full header line
+        @param logger optional logger for safe diagnostics; raw token data is
+        not logged
+
+        @return parsed SPNEGO response information
+
+        @throw KRB5-SPNEGO-ERROR if the header or token is invalid
+    */
+    public hash<SpnegoResponseInfo> sub parseNegotiateResponseHeader(string header,
+            *Qore::Logger::LoggerInterface logger = NOTHING) {
+        return parseSpnegoResponseInfo(extractNegotiateHeaderToken(header, logger), logger);
+    }
+
+    #! Parses a DER length field and returns (length, newPosition)
+    list<int> sub parseDerLength(binary data, int pos) {
+        if (pos >= data.size()) {
+            throw "KRB5-SPNEGO-ERROR", "unexpected end of DER data while parsing length";
+        }
+        int first = data[pos];
+        ++pos;
+        if (first < 0x80) {
+            return (first, pos);
+        }
+        int numBytes = first & 0x7f;
+        if (numBytes == 0 || numBytes > 3) {
+            throw "KRB5-SPNEGO-ERROR", sprintf("unsupported DER length encoding (%d bytes)", numBytes);
+        }
+        int len = 0;
+        for (int i = 0; i < numBytes; i++) {
+            if (pos >= data.size()) {
+                throw "KRB5-SPNEGO-ERROR", "unexpected end of DER data while parsing multi-byte length";
+            }
+            len = (len << 8) | data[pos];
+            ++pos;
+        }
+        return (len, pos);
+    }
+
+    #! Verifies that a DER value with the given start and length fits in the input
+    sub checkDerBounds(binary data, int pos, int len, string context_name) {
+        if (len < 0 || pos < 0 || pos > data.size() || len > data.size() - pos) {
+            throw "KRB5-SPNEGO-ERROR", sprintf("%s length exceeds available DER data", context_name);
+        }
+    }
+
+    #! Validates credential lifecycle helper inputs
+    sub validateCredentialLifecycleInputs(hash<Qore::Krb5::Krb5CredentialsInfo> creds,
+            int renew_threshold_seconds, *int now_epoch_seconds) {
+        if (renew_threshold_seconds < 0) {
+            throw "KRB5-CREDENTIAL-LIFECYCLE-ERROR", "renewal threshold cannot be negative";
+        }
+        if (exists now_epoch_seconds && now_epoch_seconds < 0) {
+            throw "KRB5-CREDENTIAL-LIFECYCLE-ERROR", "evaluation time cannot be negative";
+        }
+        if (creds.start_time < 0) {
+            throw "KRB5-CREDENTIAL-LIFECYCLE-ERROR", "credential start time cannot be negative";
+        }
+        if (creds.end_time < 0) {
+            throw "KRB5-CREDENTIAL-LIFECYCLE-ERROR", "credential end time cannot be negative";
+        }
+        if (creds.renew_until < 0) {
+            throw "KRB5-CREDENTIAL-LIFECYCLE-ERROR", "credential renew-until time cannot be negative";
+        }
+        if (creds.end_time < creds.start_time) {
+            throw "KRB5-CREDENTIAL-LIFECYCLE-ERROR", "credential end time is before start time";
+        }
+    }
+
+    #! Validates renewAndStoreIfNeeded inputs
+    sub validateRenewAndStoreInputs(int renew_threshold_seconds) {
+        if (renew_threshold_seconds < 0) {
+            throw "KRB5-RENEW-STORE-ERROR", "renewal threshold cannot be negative";
+        }
+    }
+
+    #! Validates credential maintenance options
+    sub validateCredentialCacheMaintenanceOptions(*hash<CredentialCacheMaintenanceOptions> opts) {
+        if (exists opts && exists opts.renew_threshold_seconds && opts.renew_threshold_seconds < 0) {
+            throw "KRB5-CACHE-MAINTENANCE-ERROR", "renewal threshold cannot be negative";
+        }
+        if (exists opts && exists opts.service_principals) {
+            foreach string servicePrincipal in (opts.service_principals) {
+                if (!servicePrincipal) {
+                    throw "KRB5-CACHE-MAINTENANCE-ERROR", "service principal cannot be empty";
+                }
+                Qore::Krb5::Krb5Principal p(servicePrincipal);
+            }
+        }
+    }
+
+    #! Adds or throws a cache maintenance error
+    sub addMaintenanceError(reference<list<string>> errors, bool fail_fast, string message) {
+        if (fail_fast) {
+            throw "KRB5-CACHE-MAINTENANCE-ERROR", message;
+        }
+        push errors, message;
+    }
+
+    #! Builds a typed credential-cache maintenance result
+    hash<CredentialCacheMaintenanceResult> sub makeCredentialCacheMaintenanceResult(*string cache_name,
+            *string principal, bool dry_run, bool renewed, bool was_expired,
+            *hash<CredentialLifecycleInfo> tgt_lifecycle,
+            list<hash<ServiceTicketMaintenanceResult>> service_tickets,
+            list<string> warnings, list<string> errors) {
+        return <CredentialCacheMaintenanceResult>{
+            "cache_name": cache_name,
+            "principal": principal,
+            "dry_run": dry_run,
+            "renewed": renewed,
+            "was_expired": was_expired,
+            "tgt_lifecycle": tgt_lifecycle,
+            "service_tickets": service_tickets,
+            "warnings": warnings,
+            "errors": errors,
+            "healthy": errors.size() == 0,
+        };
+    }
+
+    #! Validates keytab rotation filters
+    sub validateKeytabRotationFilter(*int kvno, *int enctype) {
+        if (exists kvno && kvno < 0) {
+            throw "KRB5-KEYTAB-ROTATION-ERROR", "key version number cannot be negative";
+        }
+        if (exists enctype && enctype < 0) {
+            throw "KRB5-KEYTAB-ROTATION-ERROR", "enctype cannot be negative";
+        }
+    }
+
+    #! Adds a structured environment validation check and mirrors failures to legacy lists
+    sub addEnvironmentCheck(reference<list<hash<KerberosEnvironmentCheckInfo>>> checks, reference<list<string>> warnings,
+            reference<list<string>> errors, string check_id, bool ok, string message, string severity,
+            *string remediation = NOTHING) {
+        hash<KerberosEnvironmentCheckInfo> check = <KerberosEnvironmentCheckInfo>{
+            "check_id": check_id,
+            "severity": severity,
+            "ok": ok,
+            "message": message,
+            "remediation": remediation,
+        };
+        push checks, check;
+
+        if (!ok) {
+            if (severity == "error") {
+                push errors, message;
+            } else if (severity == "warning") {
+                push warnings, message;
+            }
+        }
+    }
+
+    #! Returns a symbolic name for an RFC 4178 negState value
+    *string sub getNegStateName(int neg_state) {
+        switch (neg_state) {
+            case 0:
+                return "accept-completed";
+            case 1:
+                return "accept-incomplete";
+            case 2:
+                return "reject";
+            case 3:
+                return "request-mic";
+        }
+    }
+
+    #! Logs safe SPNEGO diagnostics without raw tokens or credential material
+    sub logSpnego(*Qore::Logger::LoggerInterface logger, string message) {
+        if (logger) {
+            logger.debug("Krb5Util SPNEGO: %s", message);
+        }
+    }
+
+    #! Logs safe credential lifecycle diagnostics without raw credential material
+    sub logCredentialLifecycle(*Qore::Logger::LoggerInterface logger, string message) {
+        if (logger) {
+            logger.debug("Krb5Util credential lifecycle: %s", message);
+        }
+    }
+
+    #! Logs safe keytab rotation diagnostics without raw key material
+    sub logKeytabRotation(*Qore::Logger::LoggerInterface logger, string message) {
+        if (logger) {
+            logger.debug("Krb5Util keytab rotation: %s", message);
+        }
+    }
+
+    #! Logs safe renewal workflow diagnostics without raw credential material
+    sub logRenewAndStore(*Qore::Logger::LoggerInterface logger, string message) {
+        if (logger) {
+            logger.debug("Krb5Util renew-and-store: %s", message);
+        }
+    }
+
+    #! Logs safe credential-cache maintenance diagnostics
+    sub logCredentialMaintenance(*Qore::Logger::LoggerInterface logger, string message) {
+        if (logger) {
+            logger.debug("Krb5Util credential maintenance: %s", message);
+        }
+    }
+
+    #! Logs safe environment validation diagnostics
+    sub logEnvironmentValidation(*Qore::Logger::LoggerInterface logger, string message) {
+        if (logger) {
+            logger.debug("Krb5Util environment: %s", message);
+        }
+    }
+
+    #! Logs safe S4U diagnostics without raw credential material
+    sub logS4u(*Qore::Logger::LoggerInterface logger, string message) {
+        if (logger) {
+            logger.debug("Krb5Util S4U: %s", message);
+        }
+    }
+}

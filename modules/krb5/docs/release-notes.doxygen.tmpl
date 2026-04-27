@@ -1,0 +1,25 @@
+/* Copyright (C) 2026 Qore Technologies, s.r.o. */
+
+/** @page krb5releasenotes Release Notes
+
+    @section krb5releasenotes_unreleased Unreleased
+
+    - Added structured Kerberos environment checks with strict readiness
+      options for service keytabs, TGTs, and default credential caches.
+    - Added credential cache maintenance helpers for TGT renewal evaluation,
+      optional renewal, and service-ticket prefetch workflows.
+    - Added a GSS-level S4U helper that creates an impersonated client context
+      from a service credential and user principal.
+    - Added sandbox-aware credential cache collection redaction with
+      \c accessible metadata for denied cache entries.
+    - Added fail-closed handling for KDC-contacting operations when MIT
+      Kerberos/GSSAPI network I/O cannot enforce an active fine-grained
+      network sandbox policy.
+    - Clarified cooperative cancellation semantics for MIT Kerberos/GSSAPI
+      calls.
+    - Clarified that @ref Qore::Krb5::GssCredential::impersonateName()
+      returns a GSS credential, not a @ref Qore::Krb5::Krb5Credentials
+      evidence ticket for the low-level S4U2Proxy API.
+    - Expanded unit and KDC integration coverage for diagnostics, sandboxing,
+      cancellation, S4U helper behavior, and credential cache maintenance.
+*/

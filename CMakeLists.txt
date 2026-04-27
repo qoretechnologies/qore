@@ -508,6 +508,98 @@ message(STATUS "LLVM library directory: ${LLVM_LIBRARY_DIR}")
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(PCRE2 REQUIRED libpcre2-8)
 
+# Kerberos 5 / GSSAPI support is required.  Prefer pkg-config where it is
+# available, then fall back to krb5-config and finally direct header/library
+# lookup for platforms without pkg-config metadata.
+set(QORE_KRB5_FOUND FALSE)
+pkg_check_modules(KRB5 QUIET krb5)
+pkg_check_modules(GSSAPI QUIET krb5-gssapi)
+if (KRB5_FOUND AND GSSAPI_FOUND)
+    set(QORE_KRB5_FOUND TRUE)
+    set(QORE_KRB5_INCLUDE_DIRS ${KRB5_INCLUDE_DIRS} ${GSSAPI_INCLUDE_DIRS})
+    set(QORE_KRB5_LIBRARY_DIRS ${KRB5_LIBRARY_DIRS} ${GSSAPI_LIBRARY_DIRS})
+    set(QORE_KRB5_LINK_LIBRARIES ${GSSAPI_LDFLAGS} ${KRB5_LDFLAGS})
+    set(QORE_KRB5_VERSION "${KRB5_VERSION}")
+else()
+    find_program(KRB5_CONFIG_EXECUTABLE NAMES krb5-config)
+    if (KRB5_CONFIG_EXECUTABLE)
+        execute_process(
+            COMMAND ${KRB5_CONFIG_EXECUTABLE} --cflags
+            OUTPUT_VARIABLE _krb5_config_cflags
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+            ERROR_QUIET
+            RESULT_VARIABLE _krb5_config_cflags_result
+        )
+        execute_process(
+            COMMAND ${KRB5_CONFIG_EXECUTABLE} --libs gssapi
+            OUTPUT_VARIABLE _krb5_config_libs
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+            ERROR_QUIET
+            RESULT_VARIABLE _krb5_config_libs_result
+        )
+        if (_krb5_config_cflags_result EQUAL 0 AND _krb5_config_libs_result EQUAL 0)
+            separate_arguments(_krb5_config_cflags_list UNIX_COMMAND "${_krb5_config_cflags}")
+            separate_arguments(_krb5_config_libs_list UNIX_COMMAND "${_krb5_config_libs}")
+            foreach(_krb5_config_flag ${_krb5_config_cflags_list})
+                if (_krb5_config_flag MATCHES "^-I(.+)")
+                    list(APPEND QORE_KRB5_INCLUDE_DIRS "${CMAKE_MATCH_1}")
+                else()
+                    list(APPEND QORE_KRB5_CFLAGS "${_krb5_config_flag}")
+                endif()
+            endforeach()
+            set(QORE_KRB5_LINK_LIBRARIES ${_krb5_config_libs_list})
+            set(QORE_KRB5_FOUND TRUE)
+        endif()
+    endif()
+endif()
+if (NOT QORE_KRB5_FOUND)
+    find_path(QORE_KRB5_INCLUDE_DIR krb5.h)
+    find_path(QORE_GSSAPI_INCLUDE_DIR gssapi/gssapi.h)
+    find_library(QORE_KRB5_LIBRARY NAMES krb5 Kerberos)
+    find_library(QORE_GSSAPI_LIBRARY NAMES gssapi_krb5 gssapi GSS)
+    if (QORE_KRB5_INCLUDE_DIR AND QORE_GSSAPI_INCLUDE_DIR
+            AND QORE_KRB5_LIBRARY AND QORE_GSSAPI_LIBRARY)
+        set(QORE_KRB5_INCLUDE_DIRS ${QORE_KRB5_INCLUDE_DIR} ${QORE_GSSAPI_INCLUDE_DIR})
+        set(QORE_KRB5_LINK_LIBRARIES ${QORE_GSSAPI_LIBRARY} ${QORE_KRB5_LIBRARY})
+        set(QORE_KRB5_FOUND TRUE)
+    endif()
+endif()
+if (QORE_KRB5_INCLUDE_DIRS)
+    list(REMOVE_DUPLICATES QORE_KRB5_INCLUDE_DIRS)
+endif()
+if (QORE_KRB5_LIBRARY_DIRS)
+    list(REMOVE_DUPLICATES QORE_KRB5_LIBRARY_DIRS)
+endif()
+if (QORE_KRB5_LINK_LIBRARIES)
+    list(REMOVE_DUPLICATES QORE_KRB5_LINK_LIBRARIES)
+endif()
+if (NOT QORE_KRB5_FOUND)
+    message(FATAL_ERROR
+        "Kerberos 5 / GSSAPI development files are required to build Qore. "
+        "Install krb5-devel (RHEL/Fedora), libkrb5-dev (Debian/Ubuntu), "
+        "krb5-dev (Alpine), or krb5 from MacPorts/Homebrew on macOS.")
+endif()
+
+set(CMAKE_REQUIRED_INCLUDES ${QORE_KRB5_INCLUDE_DIRS})
+string(REPLACE ";" " " QORE_KRB5_CFLAGS_STRING "${QORE_KRB5_CFLAGS}")
+set(CMAKE_REQUIRED_FLAGS ${QORE_KRB5_CFLAGS_STRING})
+include(CheckIncludeFile)
+check_include_file(krb5.h QORE_HAVE_KRB5_H)
+check_include_file(gssapi/gssapi.h QORE_HAVE_GSSAPI_H)
+check_include_file(gssapi/gssapi_ext.h QORE_HAVE_GSSAPI_EXT_H)
+check_include_file(gssapi/gssapi_krb5.h QORE_HAVE_GSSAPI_KRB5_H)
+unset(CMAKE_REQUIRED_INCLUDES)
+unset(CMAKE_REQUIRED_FLAGS)
+if (NOT QORE_HAVE_KRB5_H OR NOT QORE_HAVE_GSSAPI_H
+        OR NOT QORE_HAVE_GSSAPI_EXT_H OR NOT QORE_HAVE_GSSAPI_KRB5_H)
+    message(FATAL_ERROR
+        "Kerberos 5 / GSSAPI headers are incomplete; krb5.h, "
+        "gssapi/gssapi.h, gssapi/gssapi_ext.h, and "
+        "gssapi/gssapi_krb5.h are required")
+endif()
+
+message(STATUS "Found Kerberos 5 / GSSAPI: ${QORE_KRB5_LINK_LIBRARIES}")
+
 # Required compression libraries
 # Brotli (required)
 pkg_check_modules(BROTLI_ENC QUIET libbrotlienc)
@@ -2063,6 +2155,8 @@ add_subdirectory(modules/reflection)
 add_subdirectory(modules/logger_bin)
 # linenoise module
 add_subdirectory(modules/linenoise)
+# krb5 module
+add_subdirectory(modules/krb5)
 # mongodb module (optional, requires libmongoc)
 # Try pkg-config first (more reliable, avoids broken cmake configs on some distros)
 # mongo-c-driver 2.x renamed pkg-config files: libmongoc-1.0 -> mongoc2
@@ -2133,9 +2227,9 @@ set(QORE_USER_MODULES_DIR ${USER_MODULE_VER_DIR})
 set(QORE_QM_METADATA_EXECUTABLE ${CMAKE_SOURCE_DIR}/bin/qore-extract-qm-metadata)
 set(QORE_QM_METADATA_SUBDIR core-qlib)
 set(QORE_QM_METADATA_ENV
-    "QORE_MODULE_DIR=${CMAKE_BINARY_DIR}/modules/astparser:${CMAKE_BINARY_DIR}/modules/reflection:${CMAKE_SOURCE_DIR}/qlib:/usr/local/share/qore-modules:/usr/local/lib/x86_64-linux-gnu/qore-modules:/usr/share/qore-modules:/usr/lib/x86_64-linux-gnu/qore-modules"
+    "QORE_MODULE_DIR=${CMAKE_BINARY_DIR}/modules/astparser:${CMAKE_BINARY_DIR}/modules/reflection:${CMAKE_BINARY_DIR}/modules/logger_bin:${CMAKE_BINARY_DIR}/modules/krb5:${CMAKE_SOURCE_DIR}/qlib:/usr/local/share/qore-modules:/usr/local/lib/x86_64-linux-gnu/qore-modules:/usr/share/qore-modules:/usr/lib/x86_64-linux-gnu/qore-modules"
     "LD_LIBRARY_PATH=${CMAKE_BINARY_DIR}")
-set(QORE_QM_METADATA_DEPENDS qore astparser reflection)
+set(QORE_QM_METADATA_DEPENDS qore astparser reflection logger_bin krb5)
 find_program(_qore_exe NAMES qore HINTS ${CMAKE_INSTALL_FULL_BINDIR})
 if(_qore_exe)
     execute_process(
@@ -2179,6 +2273,7 @@ qore_user_module("qlib/FileLocationHandler" "Util")
 qore_user_module("qlib/Diff.qm" "Util")
 qore_user_module("qlib/Logger.qm" "Util;modules/logger_bin/logger_bin")
 qore_user_module("qlib/ProviderIndexUtil" "Logger;Util;reflection")
+qore_user_module("qlib/Krb5Util" "Logger;modules/krb5/krb5")
 qore_user_module("qlib/Mime.qm" "Util")
 qore_user_module("qlib/QUnit.qm" "Util")
 qore_user_module("qlib/TextWrap.qm" "Util")
@@ -2304,6 +2399,7 @@ qore_user_module("qlib/MailgunRestClient.qm" "ConnectionProvider;Mime;RestClient
 qore_user_module("qlib/MewsRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/NetSuiteRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/AftershipRestClient.qm" "ConnectionProvider;Mime;RestClient;RestClientIo")
+qore_user_module("qlib/BaseLinkerRestClient.qm" "ConnectionProvider;Mime;RestClient;RestClientIo")
 qore_user_module("qlib/AnthropicRestClient.qm" "ConnectionProvider;Mime;RestClient;RestClientIo;HttpClientStreamingIo")
 qore_user_module("qlib/VoyageRestClient.qm" "ConnectionProvider;Mime;RestClient;RestClientIo")
 qore_user_module("qlib/SGLangRestClient.qm" "ConnectionProvider;Mime;RestClient;RestClientIo")
@@ -2377,6 +2473,7 @@ qore_user_module("qlib/JotformDataProvider" "JotformRestClient;RestClient;DataPr
 qore_user_module("qlib/MailgunDataProvider" "MailgunRestClient;RestClient;DataProvider" "mailgun-logo.svg")
 qore_user_module("qlib/MewsRestDataProvider" "MewsRestClient;RestClient;DataProvider;SwaggerDataProvider" "mews-logo-white.svg")
 qore_user_module("qlib/AftershipDataProvider" "AftershipRestClient;ConnectionProvider;Mime;RestClient;RestClientIo;DataProvider" "aftership-logo.svg")
+qore_user_module("qlib/BaseLinkerDataProvider" "BaseLinkerRestClient;ConnectionProvider;Mime;RestClient;RestClientIo;DataProvider" "baselinker-logo.svg")
 qore_user_module("qlib/AnthropicDataProvider" "AnthropicRestClient;ConnectionProvider;Mime;RestClient;RestClientIo;DataProvider" "anthropic-logo.svg")
 qore_user_module("qlib/VoyageDataProvider" "VoyageRestClient;ConnectionProvider;Mime;RestClient;RestClientIo;DataProvider" "voyage-logo.svg")
 qore_user_module("qlib/SGLangDataProvider" "SGLangRestClient;ConnectionProvider;Mime;RestClient;RestClientIo;DataProvider" "sglang-logo.svg")
@@ -2430,6 +2527,7 @@ qore_user_module("qlib/UnleashedDataProvider" "UnleashedRestClient;RestClient;Da
     set(QORE_LANG_DOC_TAGFILES "${QORE_LANG_DOC_TAGFILES} \"${CMAKE_BINARY_DIR}/modules/reflection/reflection.tag=../../modules/reflection/html\"")
     set(QORE_LANG_DOC_TAGFILES "${QORE_LANG_DOC_TAGFILES} \"${CMAKE_BINARY_DIR}/modules/logger_bin/logger_bin.tag=../../modules/logger_bin/html\"")
     set(QORE_LANG_DOC_TAGFILES "${QORE_LANG_DOC_TAGFILES} \"${CMAKE_BINARY_DIR}/modules/linenoise/linenoise.tag=../../modules/linenoise/html\"")
+    set(QORE_LANG_DOC_TAGFILES "${QORE_LANG_DOC_TAGFILES} \"${CMAKE_BINARY_DIR}/modules/krb5/krb5.tag=../../modules/krb5/html\"")
     set(QORE_LANG_DOC_TAGFILES "${QORE_LANG_DOC_TAGFILES} \"${CMAKE_BINARY_DIR}/modules/ml/ml.tag=../../modules/ml/html\"")
     if (MONGOC_FOUND)
         set(QORE_LANG_DOC_TAGFILES "${QORE_LANG_DOC_TAGFILES} \"${CMAKE_BINARY_DIR}/modules/mongodb/mongodb.tag=../../modules/mongodb/html\"")
@@ -2466,7 +2564,7 @@ qore_user_module("qlib/UnleashedDataProvider" "UnleashedRestClient;RestClient;Da
         add_dependencies(docs-lang-final docs-${mod})
     endforeach()
     # Binary module doc dependencies
-    add_dependencies(docs-lang-final docs-astparser docs-reflection docs-logger_bin docs-linenoise docs-ml)
+    add_dependencies(docs-lang-final docs-astparser docs-reflection docs-logger_bin docs-linenoise docs-krb5 docs-ml)
     if (MONGOC_FOUND)
         add_dependencies(docs-lang-final docs-mongodb)
     endif()

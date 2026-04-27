@@ -80,6 +80,8 @@ public class ConnectionSchemeCache {
 
             "awsrests": "AwsRestClient",
 
+            "baselinkerrest": "BaseLinkerRestClient",
+
             "huggingface": "HuggingFaceRestClient",
 
             "bigcommerceres": "BigCommerceRestClient",

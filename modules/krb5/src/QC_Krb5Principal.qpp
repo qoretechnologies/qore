@@ -1,0 +1,140 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    QC_Krb5Principal.qpp
+
+    Qore Kerberos Module
+
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+#include "krb5-module.h"
+
+//! Kerberos principal parser and inspector
+/**
+*/
+qclass Krb5Principal [arg=QoreKrb5Principal* principal; ns=Qore::Krb5; flags=final];
+
+//! Parses a Kerberos principal string
+/** @param principal_string a principal such as \c "HTTP/qorus.example.com@EXAMPLE.COM"
+    @throw KRB5-PRINCIPAL-ERROR if the principal cannot be parsed
+*/
+Krb5Principal::constructor(string principal_string) {
+    SimpleRefHolder<QoreKrb5Principal> p(new QoreKrb5Principal(principal_string->c_str(), xsink));
+    if (*xsink) {
+        return;
+    }
+    self->setPrivate(CID_KRB5PRINCIPAL, p.release());
+}
+
+//! Parses an enterprise principal string
+/** Enterprise principals are used by Active Directory UPN logins; the input
+    name is parsed with \c KRB5_PRINCIPAL_PARSE_ENTERPRISE.
+
+    @param principal_string an enterprise principal such as
+    \c "alice@example.com@EXAMPLE.COM"
+    @throw KRB5-PRINCIPAL-ERROR if the principal cannot be parsed
+*/
+static Krb5Principal Krb5Principal::parseEnterprise(string principal_string) {
+    SimpleRefHolder<QoreKrb5Principal> p(new QoreKrb5Principal(principal_string->c_str(),
+        KRB5_PRINCIPAL_PARSE_ENTERPRISE, xsink));
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    ReferenceHolder<QoreObject> rv(new QoreObject(QC_KRB5PRINCIPAL, getProgram()), xsink);
+    rv->setPrivate(CID_KRB5PRINCIPAL, p.release());
+    return rv.release();
+}
+
+//! Creates an exact copy of the object
+/** @throw KRB5-INIT-ERROR if a new Kerberos context cannot be initialized
+    @throw KRB5-PRINCIPAL-ERROR if the principal cannot be copied
+*/
+Krb5Principal::copy() {
+    SimpleRefHolder<QoreKrb5Principal> p(new QoreKrb5Principal(*principal, xsink));
+    if (*xsink) {
+        return;
+    }
+    self->setPrivate(CID_KRB5PRINCIPAL, p.release());
+}
+
+//! Returns the canonical principal string
+/** @throw KRB5-PRINCIPAL-ERROR if the principal cannot be unparsed
+*/
+string Krb5Principal::toString() [flags=CONSTANT] {
+    return principal->toString(xsink);
+}
+
+//! Returns the realm portion of the principal
+/** @throw KRB5-REALM-ERROR if the principal does not carry a realm
+*/
+string Krb5Principal::getRealm() [flags=CONSTANT] {
+    return principal->getRealm(xsink);
+}
+
+//! Returns the number of principal components before the realm
+/**
+*/
+int Krb5Principal::getComponentCount() [flags=CONSTANT] {
+    return principal->getComponentCount();
+}
+
+//! Returns the principal component at the given index
+/** @param idx zero-based component index
+
+    @throw KRB5-PRINCIPAL-ERROR if \a idx is out of range
+*/
+string Krb5Principal::getComponent(int idx) [flags=CONSTANT] {
+    return principal->getComponent(idx, xsink);
+}
+
+//! Returns True if the other principal is equal to the current principal
+/**
+*/
+bool Krb5Principal::equals(Krb5Principal[QoreKrb5Principal] other) [flags=CONSTANT] {
+    return principal->equals(**other);
+}
+
+//! Returns the default realm from the local Kerberos configuration
+/** @throw KRB5-INIT-ERROR if a new Kerberos context cannot be initialized
+    @throw KRB5-REALM-ERROR if no default realm is configured on this host
+*/
+static string Krb5Principal::getDefaultRealm() [flags=CONSTANT] {
+    krb5_context ctx = nullptr;
+    krb5_error_code rc = krb5_init_context(&ctx);
+    if (rc) {
+        krb5_raise_exception(xsink, nullptr, rc, "KRB5-INIT-ERROR", "initializing kerberos context");
+        return QoreValue();
+    }
+
+    char* realm = nullptr;
+    rc = krb5_get_default_realm(ctx, &realm);
+    if (rc) {
+        krb5_raise_exception(xsink, ctx, rc, "KRB5-REALM-ERROR", "getting default kerberos realm");
+        krb5_free_context(ctx);
+        return QoreValue();
+    }
+
+    QoreStringNode* rv = new QoreStringNode(realm);
+    krb5_free_default_realm(ctx, realm);
+    krb5_free_context(ctx);
+    return rv;
+}

@@ -1,5 +1,6 @@
 usr/bin/qdp
 usr/bin/qget
+usr/bin/qklist
 usr/bin/rest
 usr/bin/sfrest
 usr/bin/saprest

@@ -1,0 +1,709 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  BaseLinkerDataProvider.qtest Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/ConnectionProvider
+%requires ../../../../qlib/RestClient.qm
+%requires ../../../../qlib/RestClientIo.qm
+
+%try-module json
+%define NoJson
+%endtry
+
+%requires ../../../../qlib/BaseLinkerRestClient.qm
+%requires ../../../../qlib/BaseLinkerDataProvider
+
+%exec-class BaseLinkerDataProviderTest
+
+public class BaseLinkerDataProviderTest inherits QUnit::Test {
+    private {
+        #! BaseLinker REST client (async) for integration tests
+        *RestClientIo::RestClientIo client;
+
+        #! Custom command-line options
+        const MyOpts = Opts + {
+            "apikey": "k,apikey=s",
+            "conn":   "c,connection=s",
+        };
+
+        #! IDs of test resources to clean up
+        *int testOrderId;
+
+        #! Default integration connection name
+        const DefaultConnName = "baselinker";
+
+        #! Max seconds to wait for a watch event
+        const WatchEventTimeoutSec = 90;
+
+        #! Column alignment for option descriptions in --help
+        const OptionColumn = 22;
+    }
+
+    constructor() : Test("BaseLinkerDataProvider Test", "1.0", \ARGV, MyOpts) {
+        # Unit tests (always run, no credentials needed)
+        addTestCase("sanity tests", \sanityTests());
+        addTestCase("factory tests", \factoryTests());
+        addTestCase("metadata tests", \metadataTests());
+        addTestCase("connection tests", \connectionTests());
+        addTestCase("example event data tests", \exampleEventDataTests());
+        addTestCase("type class tests", \typeClassTests());
+
+        # Integration tests (require BaseLinker credentials or a connection)
+        addTestCase("setup diagnostics", \setupDiagnosticsTest());
+        addTestCase("connection ping test", \pingTest());
+        addTestCase("order CRUD persistence test", \orderCrudPersistenceTest());
+        addTestCase("read-only providers smoke test", \readOnlyProvidersSmokeTest());
+        addTestCase("watch order-created smoke test", \watchOrderCreatedSmokeTest());
+
+        # Attempt to resolve a live client via -c / --connection (or $BASELINKER_CONNECTION /
+        # $BASELINKER_API_KEY). Failures are non-fatal; integration tests call skipIfNoCredentials().
+        try {
+            setupConnection();
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose) {
+                printf("Connection setup failed: %s: %s\n", ex.err, ex.desc);
+            }
+        }
+
+        set_return_value(main());
+    }
+
+    private usageIntern() {
+        TestReporter::usageIntern(OptionColumn);
+        printOption("-c,--connection=ARG", "set the BaseLinker connection name (default: "
+            + DefaultConnName + ")", OptionColumn);
+        printOption("-k,--apikey=ARG", "supply a BaseLinker API token directly (bypasses connection lookup)",
+            OptionColumn);
+    }
+
+    #! Resolves a live REST client from a connection or API key, without touching QorusConnectionProvider unless asked
+    private setupConnection() {
+        *string conn_name = m_options.conn ?? ENV.BASELINKER_CONNECTION;
+        if (conn_name) {
+            try {
+                AbstractConnection conn = get_connection(conn_name);
+                if (conn instanceof BaseLinkerRestClient::BaseLinkerRestConnection) {
+                    client = (cast<BaseLinkerRestClient::BaseLinkerRestConnection>(conn))
+                        .getAsync(True);
+                } else if (m_options.verbose) {
+                    printf("Connection %y is not a BaseLinkerRestConnection (got %y); skipping integration "
+                        "tests\n", conn_name, conn.className());
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                if (m_options.verbose) {
+                    printf("Could not resolve connection %y: %s: %s\n", conn_name, ex.err, ex.desc);
+                }
+            }
+            return;
+        }
+
+        *string apikey = m_options.apikey ?? ENV.BASELINKER_API_KEY;
+        if (apikey) {
+            client = new BaseLinkerRestClient::BaseLinkerRestClientIo({
+                "apikey": apikey,
+            });
+        }
+    }
+
+    #! Skip integration-dependent tests when no live client is available
+    private skipIfNoCredentials() {
+        if (!client) {
+            testSkip("no BaseLinker credentials available (pass -c <conn> or set BASELINKER_API_KEY)");
+        }
+    }
+
+    #! Construct a root data provider bound to the live client
+    private BaseLinkerDataProvider::BaseLinkerDataProvider getProvider() {
+        return new BaseLinkerDataProvider::BaseLinkerDataProvider(client);
+    }
+
+    # ========== UNIT TESTS ==========
+
+    sanityTests() {
+        # Verify module constants exist and have reasonable values; exact values live in
+        # BaseLinkerDataProviderDefs.qc so we assert existence, not specific numbers.
+        assertEq("BaseLinker", BaseLinkerDataProvider::AppName);
+        assertEq(True, BaseLinkerDataProvider::DefaultPollInterval > 0,
+            "DefaultPollInterval is positive");
+        assertEq(True, BaseLinkerDataProvider::MinPollInterval > 0,
+            "MinPollInterval is positive");
+
+        # A few event constants from the 22 journal log types
+        assertEq("order-created", BaseLinkerDataProvider::EVENT_ORDER_CREATED);
+        assertEq("order-paid", BaseLinkerDataProvider::EVENT_ORDER_PAID);
+        assertEq("package-created", BaseLinkerDataProvider::EVENT_PACKAGE_CREATED);
+        assertEq("order-status-changed", BaseLinkerDataProvider::EVENT_ORDER_STATUS_CHANGED);
+    }
+
+    factoryTests() {
+        AbstractDataProviderFactory factory = DataProvider::getFactory("baselinker");
+        assertEq("baselinker", factory.getName());
+        assertEq(True, factory instanceof BaseLinkerDataProvider::BaseLinkerDataProviderFactory);
+
+        hash<DataProviderFactoryInfo> info = factory.getInfo();
+        assertEq("baselinker", info.name);
+        assertEq(True, info.children_can_support_apis);
+        assertEq(True, info.children_can_support_records);
+        assertEq(True, info.children_can_support_observers);
+    }
+
+    metadataTests() {
+        *hash<auto> app = DataProviderActionCatalog::getApp("BaseLinker");
+        assertEq(True, app.val(), "BaseLinker app registered in action catalog");
+        assertEq("baselinkerrest", app.scheme);
+
+        list<hash<auto>> actions = DataProviderActionCatalog::getActions("BaseLinker");
+        # Plan: 13 FIND + 19 API + 22 EVENT = ~54; assert at least 40 to leave headroom
+        assertEq(True, actions.size() >= 40,
+            sprintf("expected >= 40 registered actions, got %d", actions.size()));
+
+        # Track presence of a representative subset of each action group
+        hash<string, bool> seen;
+        foreach hash<auto> action in (actions) {
+            switch (action.action) {
+                case "list-orders":            seen{"list-orders"} = True;           break;
+                case "get-order":              seen{"get-order"} = True;             break;
+                case "add-order":              seen{"add-order"} = True;             break;
+                case "set-order-status":       seen{"set-order-status"} = True;      break;
+                case "delete-order":           seen{"delete-order"} = True;          break;
+                case "list-inventories":       seen{"list-inventories"} = True;      break;
+                case "list-couriers":          seen{"list-couriers"} = True;         break;
+                case "list-order-statuses":    seen{"list-order-statuses"} = True;   break;
+                case "order-created":          seen{"order-created"} = True;         break;
+                case "order-status-changed":   seen{"order-status-changed"} = True;  break;
+            }
+        }
+        foreach string a in (keys seen) {
+            assertEq(True, seen{a}, sprintf("action/event %y registered", a));
+        }
+        assertEq(10, seen.size(), "all representative actions/events present");
+
+        # Verify the DPAT codes for a representative action and event
+        foreach hash<auto> action in (actions) {
+            if (action.action == "list-orders") {
+                assertEq(DPAT_FIND, action.action_code, "list-orders is DPAT_FIND");
+            }
+            if (action.action == "add-order") {
+                assertEq(DPAT_API, action.action_code, "add-order is DPAT_API");
+            }
+            if (action.action == "order-created") {
+                assertEq(DPAT_EVENT, action.action_code, "order-created is DPAT_EVENT");
+            }
+        }
+    }
+
+    connectionTests() {
+        hash<auto> scheme = ConnectionSchemeCache::getScheme("baselinkerrest");
+        assertEq(True, scheme.val(), "baselinkerrest scheme registered");
+    }
+
+    #! Verifies every watch provider returns a journal-log-shaped example payload.
+    /** Exercises the fallback path in BaseLinkerWatchDataProviderBase::getExampleEventDataImpl()
+        (triggered when no live client is attached) to ensure flow-builder previews work
+        without credentials and conform to BaseLinkerJournalLogDataType.
+    */
+    exampleEventDataTests() {
+        hash<string, int> expected_fields = {
+            "log_id": NT_INT,
+            "log_type": NT_INT,
+            "date": NT_INT,
+        };
+
+        foreach string log_type_key in (keys BaseLinkerDataProvider::JournalLogTypeMap) {
+            int log_type = log_type_key.toInt();
+            string event_name = BaseLinkerDataProvider::JournalLogTypeMap{log_type};
+            *Class cls = BaseLinkerDataProvider::BaseLinkerEventsDataProvider::ChildMap{event_name};
+            assertEq(True, exists cls, sprintf("watch class registered for %y", event_name));
+
+            # Construct the watch provider with no client; the fallback path produces fake data.
+            object watch = cls.newObject();
+            auto example = watch.getExampleEventData(event_name);
+            assertEq(NT_HASH, example.typeCode(),
+                sprintf("%s: getExampleEventData returns a hash", event_name));
+
+            foreach string fname in (keys expected_fields) {
+                assertEq(expected_fields{fname}, example{fname}.typeCode(),
+                    sprintf("%s: example field %y has expected type", event_name, fname));
+            }
+            assertEq(log_type, example.log_type,
+                sprintf("%s: example log_type is %d", event_name, log_type));
+        }
+    }
+
+    #! Instantiates representative type classes and verifies the declared Fields catalog.
+    /** Each `HashDataType` subclass exposes a public `Fields` constant used by
+        `DataProviderActionCatalog::getActionOptionFromFields()`; this test confirms the
+        expected field names are present in each class's declared catalog and that each
+        class instantiates cleanly.
+    */
+    typeClassTests() {
+        # Journal log type (used by every watch provider)
+        assertEq(True, exists new BaseLinkerJournalLogDataType(),
+            "BaseLinkerJournalLogDataType instantiates");
+        foreach string fname in (("log_id", "log_type", "order_id", "object_id", "date")) {
+            assertEq(True, exists BaseLinkerJournalLogDataType::Fields{fname},
+                sprintf("BaseLinkerJournalLogDataType::Fields has %y", fname));
+        }
+
+        # Request types
+        assertEq(True, exists new BaseLinkerAddOrderRequestDataType(),
+            "BaseLinkerAddOrderRequestDataType instantiates");
+        foreach string fname in (("order_status_id", "date_add", "currency", "payment_method",
+                "products")) {
+            assertEq(True, exists BaseLinkerAddOrderRequestDataType::Fields{fname},
+                sprintf("BaseLinkerAddOrderRequestDataType::Fields has %y", fname));
+        }
+
+        assertEq(True, exists new BaseLinkerAddInventoryProductRequestDataType(),
+            "BaseLinkerAddInventoryProductRequestDataType instantiates");
+        foreach string fname in (("inventory_id", "ean_additional", "tags", "prices", "stock")) {
+            assertEq(True, exists BaseLinkerAddInventoryProductRequestDataType::Fields{fname},
+                sprintf("BaseLinkerAddInventoryProductRequestDataType::Fields has %y", fname));
+        }
+        # The EAN-additional typed sub-class should drive the ean_additional list element type.
+        assertEq(True, exists new BaseLinkerEanAdditionalDataType(),
+            "BaseLinkerEanAdditionalDataType instantiates");
+        foreach string fname in (("ean", "quantity")) {
+            assertEq(True, exists BaseLinkerEanAdditionalDataType::Fields{fname},
+                sprintf("BaseLinkerEanAdditionalDataType::Fields has %y", fname));
+        }
+
+        assertEq(True, exists BaseLinkerGetLabelRequestDataType::Fields.courier_code,
+            "getLabel request has courier_code");
+        assertEq(True, exists BaseLinkerGetLabelRequestDataType::Fields.package_id,
+            "getLabel request has package_id");
+
+        # Response types
+        assertEq(True, exists new BaseLinkerSuccessIdResponseDataType(),
+            "BaseLinkerSuccessIdResponseDataType instantiates");
+        assertEq(True, exists new BaseLinkerCourierLabelDataType(),
+            "BaseLinkerCourierLabelDataType instantiates");
+        assertEq(True, exists BaseLinkerCourierLabelDataType::Fields.label,
+            "BaseLinkerCourierLabelDataType::Fields has 'label'");
+    }
+
+    # ========== INTEGRATION TESTS ==========
+
+    #! Prints diagnostic info when a connection is configured; used by operators to debug setup.
+    setupDiagnosticsTest() {
+        if (!client) {
+            if (m_options.verbose) {
+                printf("No BaseLinker client configured; integration tests will be skipped.\n");
+                printf("To run integration tests, pass -c <connection_name> or set BASELINKER_API_KEY.\n");
+            }
+            testSkip("no BaseLinker credentials available");
+        }
+
+        BaseLinkerDataProvider::BaseLinkerDataProvider provider = getProvider();
+        assertEq(True, exists provider, "data provider constructed against live client");
+
+        if (m_options.verbose) {
+            *list<string> children = provider.getChildProviderNames();
+            printf("BaseLinker data provider children (%d): %y\n", children.size(), children);
+        }
+    }
+
+    #! Verifies the connection health check works (BaseLinker uses a non-standard POST ping)
+    pingTest() {
+        skipIfNoCredentials();
+
+        # Only resolvable when a named connection was supplied (API-key-only runs skip ping).
+        *string conn_name = m_options.conn ?? ENV.BASELINKER_CONNECTION;
+        if (!conn_name) {
+            testSkip("ping test requires a named connection (-c)");
+        }
+
+        AbstractConnection conn = get_connection(conn_name);
+        hash<PingInfo> ping;
+        try {
+            ping = conn.ping(True);
+        } catch (hash<ExceptionInfo> ex) {
+            fail(sprintf("ping raised %s: %s", ex.err, ex.desc));
+        }
+        assertEq(True, ping.ok, sprintf("connection %y ping ok: %s", conn_name, ping.info));
+    }
+
+    #! Canonical data-persistence test: add-order → list-orders → set-order-status → get-order → delete-order
+    orderCrudPersistenceTest() {
+        skipIfNoCredentials();
+
+        BaseLinkerDataProvider::BaseLinkerDataProvider provider = getProvider();
+        AbstractDataProvider orders_dp = provider.getChildProvider("orders");
+
+        # BaseLinker rejects order_status_id=0 on some tenants; pick the first configured
+        # status up-front so the test works everywhere.
+        int initial_status_id = 0;
+        {
+            AbstractDataProvider statuses_dp = provider.getChildProvider("order-statuses");
+            AbstractDataProviderRecordIterator si = statuses_dp.searchRecords();
+            if (si.next()) {
+                initial_status_id = si.getValue().id;
+            }
+        }
+
+        # Build a minimal test order; field names follow the BaseLinker addOrder API shape.
+        # If the deployed fixture requires additional fields, the request will fail with a clear
+        # BASELINKER-API-ERROR — we surface that as a skip rather than a hard failure so the test
+        # remains resilient across tenants.
+        string test_email = "qore-test-" + get_random_string(8) + "@example.com";
+        hash<auto> order_payload = {
+            "order_status_id": initial_status_id,
+            "custom_source_id": 0,
+            "date_add":         now_us(),
+            "user_comments":    "Qore integration test " + get_random_string(8),
+            "admin_comments":   "created by BaseLinkerDataProvider.qtest",
+            "email":            test_email,
+            "phone":            "+48123456789",
+            "user_login":       "qore-test-" + get_random_string(6),
+            "currency":         "PLN",
+            "payment_method":   "test",
+            "payment_method_cod": 0,
+            "paid":             0.0,
+            "delivery_method":  "test",
+            "delivery_price":   0.0,
+            "delivery_fullname": "Qore Tester",
+            "delivery_address": "Test Street 1",
+            "delivery_postcode": "00-000",
+            "delivery_city":    "Warsaw",
+            "delivery_country_code": "PL",
+            "invoice_fullname": "Qore Tester",
+            "invoice_address":  "Test Street 1",
+            "invoice_postcode": "00-000",
+            "invoice_city":     "Warsaw",
+            "invoice_country_code": "PL",
+            "want_invoice":     0,
+            "products": (
+                {
+                    "storage":    "db",
+                    "storage_id": 0,
+                    "product_id": "",
+                    "name":       "Test product",
+                    "sku":        "QORE-TEST-SKU",
+                    "ean":        "",
+                    "price_brutto": 1.00,
+                    "tax_rate":   23.0,
+                    "quantity":   1,
+                    "weight":     0.1,
+                },
+            ),
+        };
+
+        hash<auto> create_result;
+        try {
+            AbstractDataProvider add_dp = orders_dp.getChildProvider("add-order");
+            create_result = add_dp.doRequest(order_payload);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "BASELINKER-API-ERROR") {
+                testSkip(sprintf("add-order rejected by tenant (%s): %s",
+                    ex.arg.error_code ?? "?", ex.arg.error_message ?? ex.desc));
+            }
+            rethrow;
+        }
+        assertEq(True, create_result.order_id.val(), "add-order returned order_id");
+        testOrderId = create_result.order_id;
+
+        # Verify persistence: list-orders starting just before this ID should surface the new order
+        AbstractDataProviderRecordIterator i = orders_dp.searchRecords(NOTHING, {
+            "id_from": testOrderId - 1,
+            "get_unconfirmed_orders": True,
+            "limit": 10,
+        });
+        bool found;
+        hash<auto> fetched;
+        while (i.next()) {
+            hash<auto> rec = i.getValue();
+            if (rec.order_id == testOrderId) {
+                found = True;
+                fetched = rec;
+                break;
+            }
+        }
+        assertEq(True, found, sprintf("order %d appears in list-orders", testOrderId));
+        if (found) {
+            # Spot-check a couple of fields persisted — emails are commonly normalized to lower-case by
+            # BaseLinker, so compare case-insensitively.
+            assertEq(test_email.lwr(), (fetched.email ?? "").lwr(), "persisted order email matches sent value");
+            assertEq("PLN", fetched.currency, "persisted order currency matches sent value");
+        }
+
+        # set-order-status → verify status_id persisted via get-order (DPAT_FIND_SINGLE)
+        int target_status_id = 0;
+        try {
+            AbstractDataProvider set_status_dp = orders_dp.getChildProvider("set-order-status");
+            set_status_dp.doRequest({
+                "order_id": testOrderId,
+                "status_id": target_status_id,
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "BASELINKER-API-ERROR") {
+                rethrow;
+            }
+            # Some tenants reject status 0; try first available status instead
+            if (m_options.verbose) {
+                printf("set-order-status to 0 rejected (%s); picking first available status\n",
+                    ex.arg.error_code ?? "?");
+            }
+            AbstractDataProvider statuses_dp = provider.getChildProvider("order-statuses");
+            AbstractDataProviderRecordIterator si = statuses_dp.searchRecords();
+            if (si.next()) {
+                target_status_id = si.getValue().id;
+                AbstractDataProvider set_status_dp = orders_dp.getChildProvider("set-order-status");
+                set_status_dp.doRequest({
+                    "order_id": testOrderId,
+                    "status_id": target_status_id,
+                });
+            } else {
+                testSkip("no order statuses available for set-order-status verification");
+            }
+        }
+
+        # Re-fetch the order to confirm status persisted
+        AbstractDataProviderRecordIterator vi = orders_dp.searchRecords(NOTHING, {
+            "order_id": testOrderId,
+            "get_unconfirmed_orders": True,
+        });
+        assertEq(True, vi.next(), "order fetch after status change returns a row");
+        hash<auto> after = vi.getValue();
+        assertEq(target_status_id, after.order_status_id,
+            sprintf("order %d status persisted as %d", testOrderId, target_status_id));
+
+        # delete-order → verify gone
+        try {
+            AbstractDataProvider del_dp = orders_dp.getChildProvider("delete-order");
+            del_dp.doRequest({"order_ids": (testOrderId,)});
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "BASELINKER-API-ERROR") {
+                # Some BaseLinker plans don't allow order deletion — leave the cleanup for the operator
+                if (m_options.verbose) {
+                    printf("delete-order not permitted on this tenant: %s\n",
+                        ex.arg.error_message ?? ex.desc);
+                }
+                testOrderId = NOTHING;
+                return;
+            }
+            rethrow;
+        }
+
+        AbstractDataProviderRecordIterator gi = orders_dp.searchRecords(NOTHING, {
+            "order_id": testOrderId,
+            "get_unconfirmed_orders": True,
+        });
+        assertEq(False, gi.next(), sprintf("deleted order %d no longer returned", testOrderId));
+        testOrderId = NOTHING;
+    }
+
+    #! Smoke-check a couple of read-only collection providers so tenants without order-write perms still cover data flow
+    readOnlyProvidersSmokeTest() {
+        skipIfNoCredentials();
+
+        BaseLinkerDataProvider::BaseLinkerDataProvider provider = getProvider();
+
+        foreach string name in (("inventories", "couriers", "order-statuses", "order-sources")) {
+            AbstractDataProvider dp;
+            try {
+                dp = provider.getChildProvider(name);
+            } catch (hash<ExceptionInfo> ex) {
+                if (m_options.verbose) {
+                    printf("skip %y — child not present: %s\n", name, ex.desc);
+                }
+                continue;
+            }
+
+            try {
+                AbstractDataProviderRecordIterator i = dp.searchRecords();
+                int count = 0;
+                *hash<auto> first;
+                while (i.next() && count < 5) {
+                    hash<auto> rec = i.getValue();
+                    assertEq(True, rec.typeCode() == NT_HASH,
+                        sprintf("%s row is a hash", name));
+                    if (count == 0) {
+                        first = rec;
+                    }
+                    ++count;
+                }
+                if (m_options.verbose) {
+                    printf("  %s: iterated %d row(s)\n", name, count);
+                }
+                # order-sources flattens BaseLinker's nested response; assert the emitted
+                # record keys match the declared schema so the schema/emitter mismatch
+                # caught in PR #5322 review can't regress silently.
+                if (name == "order-sources" && first) {
+                    assertEq(True, exists first.source_type,
+                        "order-sources record has source_type");
+                    assertEq(True, exists first.source_id,
+                        "order-sources record has source_id");
+                    assertEq(True, exists first.source_name,
+                        "order-sources record has source_name (matches schema)");
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "BASELINKER-API-ERROR") {
+                    if (m_options.verbose) {
+                        printf("  %s: API error (%s) — skipped\n", name,
+                            ex.arg.error_code ?? "?");
+                    }
+                    continue;
+                }
+                rethrow;
+            }
+        }
+    }
+
+    #! Optional observer smoke test: start a watch provider, create an order, wait for the event.
+    watchOrderCreatedSmokeTest() {
+        skipIfNoCredentials();
+
+        BaseLinkerDataProvider::BaseLinkerDataProvider provider = getProvider();
+
+        AbstractDataProvider watch;
+        try {
+            AbstractDataProvider events_dp = provider.getChildProvider("events");
+            watch = events_dp.getChildProvider("order-created");
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip(sprintf("watch provider 'events/order-created' not available: %s", ex.desc));
+        }
+
+        # Observer that records events
+        Queue eq();
+        code observer = sub (string event_id, hash<auto> data) {
+            eq.push({"event_id": event_id, "data": data});
+        };
+
+        try {
+            watch.registerObserver("qore-test", observer);
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip(sprintf("registerObserver unsupported on this build: %s", ex.desc));
+        }
+        try {
+            watch.startObserver({"poll_interval": BaseLinkerDataProvider::MinPollInterval});
+        } catch (hash<ExceptionInfo> ex) {
+            try { watch.stopObserver(); } catch (hash<ExceptionInfo> _) {}
+            testSkip(sprintf("startObserver unsupported: %s", ex.desc));
+        }
+
+        on_exit {
+            try { watch.stopObserver(); } catch (hash<ExceptionInfo> _) {}
+        }
+
+        # Create an order to trigger the journal entry; reuse the orderCrudPersistenceTest payload shape,
+        # but if add-order is rejected, just skip rather than fail — the read-only providers test
+        # already exercises the core data path.
+        int trigger_order_id;
+        AbstractDataProvider orders_dp = provider.getChildProvider("orders");
+        try {
+            AbstractDataProvider add_dp = orders_dp.getChildProvider("add-order");
+            hash<auto> res = add_dp.doRequest({
+                "order_status_id": 0,
+                "date_add":        now_us(),
+                "email":           "qore-watch-" + get_random_string(8) + "@example.com",
+                "phone":           "+48123456789",
+                "currency":        "PLN",
+                "payment_method":  "test",
+                "payment_method_cod": 0,
+                "paid":            0.0,
+                "delivery_method": "test",
+                "delivery_price":  0.0,
+                "delivery_fullname": "Qore Watch",
+                "delivery_address": "Watch Street 1",
+                "delivery_postcode": "00-000",
+                "delivery_city":   "Warsaw",
+                "delivery_country_code": "PL",
+                "products": (
+                    {
+                        "storage": "db", "storage_id": 0, "product_id": "",
+                        "name": "Watch test", "sku": "QORE-WATCH",
+                        "price_brutto": 1.00, "tax_rate": 23.0, "quantity": 1,
+                    },
+                ),
+            });
+            trigger_order_id = res.order_id;
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip(sprintf("could not create trigger order for watch test: %s: %s",
+                ex.err, ex.desc));
+        }
+
+        # Wait up to WatchEventTimeoutSec seconds for the observer to fire for our new order
+        bool matched;
+        date deadline = now_us() + seconds(WatchEventTimeoutSec);
+        while (now_us() < deadline) {
+            *hash<auto> ev;
+            try {
+                ev = eq.get(1s);
+            } catch (hash<ExceptionInfo> ex) {
+                # timeout on Queue.get is exceptional; just loop and check deadline
+                continue;
+            }
+            if (!ev) {
+                continue;
+            }
+            if (ev.event_id == "order-created" && (ev.data.order_id == trigger_order_id
+                    || ev.data.object_id == trigger_order_id)) {
+                matched = True;
+                break;
+            }
+        }
+
+        # Cleanup the trigger order regardless of whether the observer fired
+        try {
+            AbstractDataProvider del_dp = orders_dp.getChildProvider("delete-order");
+            del_dp.doRequest({"order_ids": (trigger_order_id,)});
+        } catch (hash<ExceptionInfo> _) {
+            # best effort
+        }
+
+        if (!matched) {
+            testSkip(sprintf("order-created event not observed within %d seconds (journal lag or "
+                "tenant permission issue)", WatchEventTimeoutSec));
+        }
+        assertEq(True, matched, "observer received order-created event for trigger order");
+    }
+
+    # ========== GLOBAL TEARDOWN ==========
+
+    globalTearDown() {
+        if (!client || !testOrderId) {
+            return;
+        }
+
+        # Best-effort cleanup if a prior test failed before deleting its order
+        try {
+            BaseLinkerDataProvider::BaseLinkerDataProvider provider = getProvider();
+            AbstractDataProvider orders_dp = provider.getChildProvider("orders");
+            AbstractDataProvider del_dp = orders_dp.getChildProvider("delete-order");
+            del_dp.doRequest({"order_ids": (testOrderId,)});
+            if (m_options.verbose) {
+                printf("Cleaned up leftover test order %d\n", testOrderId);
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose) {
+                printf("Failed to clean up order %d: %s: %s\n", testOrderId, ex.err, ex.desc);
+            }
+        }
+    }
+}

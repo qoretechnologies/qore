@@ -148,6 +148,8 @@ resp = rc.restGet("/api/data");
     @section restclientio_relnotes Release Notes
 
     @subsection restclientio_v1_2 Version 1.2
+    - Added Kerberos/SPNEGO HTTP Negotiate support for async request/response APIs,
+      SSE reader/stream/observable APIs, and polling pings
     - Added \c getLogger() to expose the client's logger
     - Added \c setAllowAnyResponse() / \c getAllowAnyResponse() for controlling deserialization
       error handling
@@ -162,8 +164,6 @@ resp = rc.restGet("/api/data");
       HttpClientConnectionManager)
     - Constructor now accepts \c validator option for custom REST schema validators
     - Constructor now accepts \c allow_any_response, \c content_encoding, \c default_path options
-
-    @subsection restclientio_v1_2 Version 1.2
     - added \c RestClientIoPingPollOperation class for async REST connection pings via startPollConnect()
 
     @subsection restclientio_v1_1 Version 1.1
@@ -208,7 +208,10 @@ hash<RestResponseInfo> resp = f.get(30s);
             Future raw_future;
 
             #! Stream handle reference (kept alive to retain the internal Promise)
-            HttpClientIo::HttpClientStreamHandle stream;
+            *HttpClientIo::HttpClientStreamHandle stream;
+
+            #! Optional cancel closure for multi-attempt async operations
+            *code<bool()> cancel_func;
 
             #! Closure that deserializes raw HTTP response to RestResponseInfo
             code<hash<RestClient::RestResponseInfo>(hash<auto>)> response_builder;
@@ -223,6 +226,18 @@ hash<RestResponseInfo> resp = f.get(30s);
                 code<hash<RestClient::RestResponseInfo>(hash<auto>)> response_builder) {
             self.raw_future = raw_future;
             self.stream = stream;
+            self.response_builder = response_builder;
+        }
+
+        #! Creates a new RestFuture with a custom cancellation handler
+        /** @param raw_future the raw HTTP response Future
+            @param cancel_func closure that cancels the in-flight operation
+            @param response_builder closure that deserializes the raw response
+        */
+        constructor(Future raw_future, code<bool()> cancel_func,
+                code<hash<RestClient::RestResponseInfo>(hash<auto>)> response_builder) {
+            self.raw_future = raw_future;
+            self.cancel_func = cancel_func;
             self.response_builder = response_builder;
         }
 
@@ -263,8 +278,14 @@ hash<RestResponseInfo> resp = f.get(30s);
             if (raw_future.isDone()) {
                 return False;
             }
-            stream.cancel();
-            return True;
+            if (cancel_func) {
+                return cancel_func();
+            }
+            if (stream) {
+                stream.cancel();
+                return True;
+            }
+            return False;
         }
     }
 
@@ -326,6 +347,15 @@ hash<RestResponseInfo> resp = f.get(30s);
         - \c oauth2_token_expiry_hint: hint for token expiry in seconds
         - \c oauth2_token_expiry: known expiry timestamp for an initial token; enables proactive pre-expiry refresh
         - \c oauth2_refresh_token: initial refresh token
+        - \c negotiate_auth: enables Kerberos/SPNEGO HTTP Negotiate authentication for request/response APIs,
+          SSE reader/stream APIs, and polling pings
+        - \c negotiate_credential_cache: optional credential cache name for Kerberos/SPNEGO HTTP Negotiate
+          authentication
+        - \c negotiate_delegation_mode: Kerberos delegation mode; currently only \c "none" is supported
+        - \c negotiate_keytab: optional client keytab name for Kerberos/SPNEGO HTTP Negotiate authentication
+        - \c negotiate_preemptive: if \c True, send the initial Negotiate token before receiving a 401 challenge
+        - \c negotiate_service_principal: optional Kerberos service principal; if omitted, a host-based
+          \c HTTP service name is derived from the connection URL
         - \c username: username for \c password grant type
         - \c password: password for \c password grant type
 
@@ -408,7 +438,7 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             *LoggerInterface logger;
 
             #! Per-instance request-timeout override in milliseconds (protected by config_lock)
-            /** When set to a positive value, applied to every @ref mgr.request() call made
+            /** When set to a positive value, applied to every \c mgr.request() call made
                 by this instance, taking precedence over the manager's default.  0 or unset
                 means "no override" — the manager default is used.
             */
@@ -527,6 +557,21 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             *string custom_token_method;
             #! Custom token refresh: URI path relative to the client URL
             *string custom_token_path;
+
+            # --- Kerberos/SPNEGO HTTP Negotiate config (protected by config_lock) ---
+
+            #! True when Kerberos/SPNEGO HTTP Negotiate auth is enabled
+            bool negotiate_auth = False;
+            #! Explicit Kerberos service principal for HTTP Negotiate auth
+            *string negotiate_service_principal;
+            #! Client keytab for HTTP Negotiate auth
+            *string negotiate_keytab;
+            #! Credential cache for HTTP Negotiate auth
+            *string negotiate_credential_cache;
+            #! True to send the first Negotiate token before a 401 challenge
+            bool negotiate_preemptive = False;
+            #! Delegation mode for HTTP Negotiate auth
+            string negotiate_delegation_mode = "none";
         }
 
         public {
@@ -606,8 +651,7 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
                 silently ignores — Phase 2 (TLS client certs) and Phase 3 (OAuth2 PKCE, custom
                 token refresh, etc.) will wire them up.
 
-                Subclasses that add their own options (e.g.,
-                @ref AwsRestClient::AwsRestClientIo "AwsRestClientIo") must strip those keys
+                Subclasses that add their own options (e.g. \c AwsRestClientIo) must strip those keys
                 before calling the base constructor.
             */
             const KnownOptions = {
@@ -661,6 +705,13 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
                 "token_type": True,
                 "token_api_key_header": True,
                 "rest_body_auth_error_check": True,
+                # Kerberos/SPNEGO HTTP Negotiate
+                "negotiate_auth": True,
+                "negotiate_service_principal": True,
+                "negotiate_keytab": True,
+                "negotiate_credential_cache": True,
+                "negotiate_preemptive": True,
+                "negotiate_delegation_mode": True,
                 # OAuth2 (core honored)
                 "oauth2_grant_type": True,
                 "oauth2_client_id": True,
@@ -813,6 +864,8 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             if (opts.rest_body_auth_error_check) {
                 rest_body_auth_error_check = opts.rest_body_auth_error_check;
             }
+
+            setupNegotiateAuth(opts);
 
             if (opts.token) {
                 string tt = opts.token_type ?? "Bearer";
@@ -1079,7 +1132,7 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
 
         #! Returns the per-instance request-timeout override, or NOTHING if unset
         /** Subclasses that bypass @ref restDoRequestIntern() and call
-            @c mgr.request() directly (e.g. @ref DataStreamClient::DataStreamClientIo)
+            @c mgr.request() directly (e.g. \c DataStreamClientIo)
             should pass this value to honor @ref setTimeout().
 
             @since RestClientIo 1.1
@@ -1261,7 +1314,7 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
         #! Opens an SSE stream and returns an event reader for iteration
         /** Establishes an HTTP streaming connection to the given path with
             \c Accept: \c text/event-stream and returns an
-            @ref HttpClientStreamingIo::SseStreamReader that the caller can
+            \c HttpClientStreamingIo::SseStreamReader that the caller can
             loop over with \c readEvent().
 
             @par Example
@@ -1278,8 +1331,8 @@ while (*hash<SseMessageInfo> evt = reader.readEvent(30s)) {
             @param hdr additional HTTP headers (\c Accept is set automatically)
             @param body optional request body (for \c POST-based SSE endpoints)
 
-            @return an @ref HttpClientStreamingIo::SseStreamReader ready for
-            @ref HttpClientStreamingIo::SseStreamReader::readEvent() "readEvent()" calls
+            @return a \c HttpClientStreamingIo::SseStreamReader ready for
+            \c readEvent() calls
 
             @throw HTTPCLIENT-CONNECT-ERROR if the connection cannot be established
             @throw REST-RESPONSE-ERROR if an HTTP error response is received
@@ -1297,31 +1350,46 @@ while (*hash<SseMessageInfo> evt = reader.readEvent(30s)) {
             if (!hdr.accept && !hdr.Accept) {
                 hdr.accept = "text/event-stream";
             }
-            # Merge auth/default headers, then normalize all keys to
-            # lowercase — HTTP/2 and HTTP/3 require lowercase header
-            # names on the wire (RFC 9113 §8.2).  This path bypasses
-            # prepareRequest() so normalization must happen here.
-            {
-                AutoReadLock al(config_lock);
-                hdr = {} + headers + hdr;
+
+            *auto negotiate_context;
+            bool negotiate_retried = False;
+            while (True) {
+                hash<auto> prepared = prepareRawRequest(method, \path, body, \hdr);
+                if (exists prepared.negotiate_context) {
+                    negotiate_context = prepared.negotiate_context;
+                }
+
+                HttpClientIo::HttpClientStreamHandle stream =
+                    mgr.acquireAndStartStreaming(url, method, path, hdr, False,
+                        prepared.serialized_body);
+                try {
+                    hash<auto> response_start = readSseResponseStart(stream, method,
+                        path);
+                    *hash<auto> response = response_start.response;
+                    if (!negotiate_retried && response && response.status_code == 401
+                            && tryNegotiateAuthRetry(response.headers ?? {}, \hdr,
+                                \negotiate_context)) {
+                        negotiate_retried = True;
+                        stream.cancel();
+                        continue;
+                    }
+
+                    if (response && response.headers) {
+                        processFinalNegotiateResponse(response.headers,
+                            negotiate_context);
+                    }
+
+                    list<auto> initial_data = validateSseResponseStart(stream,
+                        method, path, hdr, prepared.serialized_body,
+                        response_start.first_data, response,
+                        response_start.response_timeout);
+                    return new HttpClientStreamingIo::SseStreamReader(stream,
+                        NOTHING, initial_data);
+                } catch (hash<ExceptionInfo> ex) {
+                    stream.cancel();
+                    rethrow;
+                }
             }
-            # Lowercase all header keys for H2/H3 wire compliance
-            hash<auto> lc_hdr;
-            HashIterator hi(hdr);
-            while (hi.next()) {
-                lc_hdr{hi.getKey().lwr()} = hi.getValue();
-            }
-            hdr = lc_hdr;
-            HttpClientIo::HttpClientStreamHandle stream =
-                mgr.acquireAndStartStreaming(url, method, path, hdr, False, body);
-            list<auto> initial_data;
-            try {
-                initial_data = validateSseResponse(stream, method, path, hdr, body);
-            } catch (hash<ExceptionInfo> ex) {
-                stream.cancel();
-                rethrow;
-            }
-            return new HttpClientStreamingIo::SseStreamReader(stream, NOTHING, initial_data);
         }
 
         #! Opens an SSE stream and calls a callback for each event
@@ -1391,13 +1459,14 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
         */
         HttpClientIo::HttpCancellableFuture restDoRequestCancellableAsync(string method,
                 string path, auto body, *hash<auto> hdr) {
-            ensureToken();
-
-            hash<auto> prepared = prepareRequest(method, \path, body, \hdr);
-
             log(LoggerLevel::DEBUG, "restDoRequestCancellableAsync() %s %s%s", method, url, path);
 
-            return mgr.requestAsync(url, method, path, hdr, prepared.serialized_body);
+            hash<auto> async_info = startAsyncRequestOperation(method, path, body, hdr,
+                False, False, NOTHING, NOTHING, NOTHING);
+            RestClientIoAsyncRequestOperation op = async_info.operation;
+            return new HttpClientIo::HttpCancellableFuture(async_info.future, bool sub () {
+                return op.cancel();
+            });
         }
 
         #! Sends a generic REST request and returns a @ref RestClient::RestResponseInfo hash
@@ -1413,7 +1482,7 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
             still runs response-side validation via the configured validator.
 
             Use this when integrating with a higher-level request builder — for
-            example @ref RestSchemaDataProvider::RestSchemaRequestDataProvider which
+            example \c RestSchemaRequestDataProvider which
             validates and serializes against its own @c AbstractRestSchemaOperation
             and doesn't want the client-side validator to repeat the work.
 
@@ -1438,6 +1507,8 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
             hash<auto> prepared = raw
                 ? prepareRawRequest(method, \path, body, \hdr)
                 : prepareRequest(method, \path, body, \hdr);
+            *auto negotiate_context = prepared.negotiate_context;
+            bool negotiate_retry = True;
 
             log(LoggerLevel::DEBUG, "%s() %s %s%s", raw ? "restDoRawRequest" : "restDoRequest",
                 method, url, path);
@@ -1456,7 +1527,18 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
             hash<auto> raw_resp = mgr.request(url, method, path, hdr,
                 prepared.serialized_body, req_to);
 
-            # 3. If 401 and OAuth2 configured, try to refresh token and retry once
+            # 3. If 401 and Negotiate is configured, run one SPNEGO challenge retry
+            if (raw_resp.status_code == 401 && negotiate_retry
+                    && tryNegotiateAuthRetry(raw_resp.headers, \hdr, \negotiate_context)) {
+                negotiate_retry = False;
+                prepared = raw
+                    ? prepareRawRequest(method, \path, body, \hdr)
+                    : prepareRequest(method, \path, body, \hdr);
+                raw_resp = mgr.request(url, method, path, hdr,
+                    prepared.serialized_body, req_to);
+            }
+
+            # 4. If 401 and OAuth2 configured, try to refresh token and retry once
             if (raw_resp.status_code == 401 && canRetryAuth()) {
                 try {
                     getNewTokenIntern();
@@ -1478,12 +1560,14 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
                     prepared.serialized_body, req_to);
             }
 
-            # 4. Deserialize
+            processFinalNegotiateResponse(raw_resp.headers, negotiate_context);
+
+            # 5. Deserialize
             hash<RestClient::RestResponseInfo> resp = buildResponse(raw_resp, prepared.error_passthru,
                 prepared.allow_any_response, method, path, hdr,
                 prepared.serialized_body);
 
-            # 5. Body-level auth error check on 200 OK: some servers return success with an error
+            # 6. Body-level auth error check on 200 OK: some servers return success with an error
             # payload when the token has expired; refresh and retry once
             if (isBodyAuthError(resp) && canRetryAuth()) {
                 try {
@@ -1527,6 +1611,264 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
             return resp.body{keys pattern} == pattern;
         }
 
+        #! Validates and stores Kerberos/SPNEGO HTTP Negotiate options
+        private setupNegotiateAuth(hash<auto> opts) {
+            if (!opts.negotiate_auth) {
+                return;
+            }
+
+            bool enabled = parse_boolean(opts.negotiate_auth);
+            if (!enabled) {
+                return;
+            }
+
+            hash<auto> allowed_modes = map {$1.value: True},
+                ConnectionProvider::HttpConnection::NegotiateDelegationModeAllowedValues;
+            string delegation_mode = opts.negotiate_delegation_mode ?? "none";
+            if (!allowed_modes{delegation_mode}) {
+                throw "NEGOTIATE-AUTH-ERROR",
+                    sprintf("invalid negotiate_delegation_mode %y; valid values: %y",
+                        delegation_mode,
+                        map $1.value, ConnectionProvider::HttpConnection::NegotiateDelegationModeAllowedValues);
+            }
+            if (delegation_mode != "none") {
+                throw "NEGOTIATE-AUTH-ERROR",
+                    "negotiate_delegation_mode values other than 'none' require inbound delegated credentials "
+                    "and are not supported by RestClientIo yet";
+            }
+
+            if (opts.token.val() || opts.token_api_key_header.val()) {
+                throw "NEGOTIATE-AUTH-ERROR", "negotiate_auth cannot be used with token authentication";
+            }
+            if (opts.oauth2_grant_type && opts.oauth2_grant_type != "none") {
+                throw "NEGOTIATE-AUTH-ERROR", "negotiate_auth cannot be used with OAuth2 authentication";
+            }
+            if ((*hash<auto> custom_token_opts = opts{keys CustomTokenOptions})) {
+                throw "NEGOTIATE-AUTH-ERROR",
+                    sprintf("negotiate_auth cannot be used with custom token authentication options: %y",
+                        keys custom_token_opts);
+            }
+            if (opts.username.val() || opts.password.val()) {
+                throw "NEGOTIATE-AUTH-ERROR", "negotiate_auth cannot be used with HTTP basic authentication";
+            }
+            if (hasAuthorizationHeader(opts.headers)) {
+                throw "NEGOTIATE-AUTH-ERROR",
+                    "negotiate_auth cannot be used when a default Authorization header is configured";
+            }
+
+            AutoWriteLock al(config_lock);
+            negotiate_auth = True;
+            negotiate_service_principal = opts.negotiate_service_principal;
+            negotiate_keytab = opts.negotiate_keytab;
+            negotiate_credential_cache = opts.negotiate_credential_cache;
+            negotiate_preemptive = opts.negotiate_preemptive ? parse_boolean(opts.negotiate_preemptive) : False;
+            negotiate_delegation_mode = delegation_mode;
+        }
+
+        #! Returns True if a headers hash contains an Authorization header
+        private bool hasAuthorizationHeader(*hash<auto> hdr) {
+            return hdr && (exists hdr.Authorization || exists hdr.authorization);
+        }
+
+        #! Removes Authorization headers using common casings
+        private removeAuthorizationHeader(reference<hash<auto>> hdr) {
+            hdr -= ("Authorization", "authorization");
+        }
+
+        #! Returns True if Kerberos/SPNEGO HTTP Negotiate auth is enabled
+        private bool usingNegotiateAuth() {
+            AutoReadLock al(config_lock);
+            return negotiate_auth;
+        }
+
+        #! Returns the target service name and optional GSS options for Negotiate auth
+        private hash<auto> getNegotiateTargetInfo() {
+            *string service;
+            {
+                AutoReadLock al(config_lock);
+                service = negotiate_service_principal;
+            }
+            if (service.val()) {
+                return {"service": service};
+            }
+
+            hash<UrlInfo> u = parse_url(url);
+            if (!u.host.val()) {
+                throw "NEGOTIATE-AUTH-ERROR",
+                    sprintf("cannot derive Kerberos HTTP service name from URL %y", getSafeUrl());
+            }
+            return {
+                "service": "HTTP@" + u.host,
+                "opts": {"name_type": "hostbased-service"},
+            };
+        }
+
+        #! Loads Krb5Util and builds the next Negotiate client Authorization value
+        private hash<auto> buildNegotiateClientAuthorization(*string www_authenticate_header,
+                *auto gss_context) {
+            *string cache;
+            *string keytab;
+            *LoggerInterface req_logger;
+            {
+                AutoReadLock al(config_lock);
+                cache = negotiate_credential_cache;
+                keytab = negotiate_keytab;
+                req_logger = logger;
+            }
+            load_module("Krb5Util");
+            hash<auto> target = getNegotiateTargetInfo();
+            return call_function_args("Krb5Util::buildHttpNegotiateClientAuthorization",
+                (target.service, www_authenticate_header, gss_context, cache, keytab,
+                    target.opts, req_logger));
+        }
+
+        #! Finds a Negotiate challenge in response headers
+        private *hash<auto> findNegotiateChallenge(hash<auto> response_headers) {
+            *LoggerInterface req_logger;
+            {
+                AutoReadLock al(config_lock);
+                req_logger = logger;
+            }
+            load_module("Krb5Util");
+            return call_function_args("Krb5Util::findNegotiateHeader",
+                (response_headers, "www-authenticate", req_logger));
+        }
+
+        #! Adds the initial preemptive Negotiate Authorization header when configured
+        private maybeAddPreemptiveNegotiateHeader(reference<hash<auto>> hdr,
+                reference<*auto> gss_context) {
+            bool preemptive;
+            {
+                AutoReadLock al(config_lock);
+                if (!negotiate_auth || !negotiate_preemptive || gss_context) {
+                    return;
+                }
+                preemptive = negotiate_preemptive;
+            }
+            if (!preemptive) {
+                return;
+            }
+            if (hasAuthorizationHeader(hdr)) {
+                *string auth = hdr.authorization ?? hdr.Authorization;
+                if (auth =~ /^Negotiate([[:space:]]|$)/i) {
+                    return;
+                }
+                throw "NEGOTIATE-AUTH-ERROR",
+                    "negotiate_auth cannot be used when a request Authorization header is supplied";
+            }
+            hash<auto> step = buildNegotiateClientAuthorization(NOTHING, gss_context);
+            gss_context = step.context;
+            if (!step.authorization_header.val()) {
+                throw "NEGOTIATE-AUTH-ERROR",
+                    "Kerberos/SPNEGO did not produce an initial Authorization header";
+            }
+            hdr.authorization = step.authorization_header;
+        }
+
+        #! Starts or continues a challenge-driven Negotiate exchange
+        private bool tryNegotiateAuthRetry(hash<auto> response_headers, reference<hash<auto>> hdr,
+                reference<*auto> gss_context) {
+            if (!usingNegotiateAuth()) {
+                return False;
+            }
+
+            *hash<auto> challenge = findNegotiateChallenge(response_headers);
+            if (!challenge) {
+                return False;
+            }
+
+            removeAuthorizationHeader(\hdr);
+            hash<auto> step = buildNegotiateClientAuthorization(
+                challenge.has_token ? challenge.header : NOTHING, gss_context);
+            gss_context = step.context;
+            if (!step.authorization_header.val()) {
+                throw "NEGOTIATE-AUTH-ERROR",
+                    "Kerberos/SPNEGO server challenge did not produce an Authorization header";
+            }
+            hdr.authorization = step.authorization_header;
+            return True;
+        }
+
+        #! Processes a final Negotiate response token for mutual authentication
+        private processFinalNegotiateResponse(hash<auto> response_headers, *auto gss_context) {
+            if (!usingNegotiateAuth() || !gss_context) {
+                return;
+            }
+
+            *hash<auto> final_header = findNegotiateChallenge(response_headers);
+            if (final_header && final_header.has_token) {
+                buildNegotiateClientAuthorization(final_header.header, gss_context);
+            }
+        }
+
+        #! Starts an async raw HTTP request operation with event-driven Negotiate retry support
+        private hash<auto> startAsyncRequestOperation(string method, string path, auto body,
+                *hash<auto> hdr, bool raw, *bool skip_ensure_token,
+                *EventNotifier completion_notifier, *string shdr, *code signer) {
+            if (!skip_ensure_token) {
+                ensureToken();
+            }
+
+            Promise p();
+            Future f = p.getFuture();
+            RestClientIoAsyncRequestOperation op(self, p, method, path, body, hdr,
+                raw, completion_notifier, shdr, signer);
+            op.start();
+            return {
+                "future": f,
+                "operation": op,
+            };
+        }
+
+        #! Prepares one async request attempt for RestClientIoAsyncRequestOperation
+        hash<auto> prepareAsyncRequestAttempt(string method, reference<string> path,
+                auto body, reference<*hash<auto>> hdr, bool raw,
+                reference<*auto> negotiate_context, *string shdr, *code signer) {
+            hash<auto> prepared = raw
+                ? prepareRawRequest(method, \path, body, \hdr)
+                : prepareRequest(method, \path, body, \hdr);
+            if (exists prepared.negotiate_context) {
+                negotiate_context = prepared.negotiate_context;
+            }
+
+            if (shdr.val() && signer) {
+                hdr{shdr} = signer({
+                    "path": path,
+                    "body": prepared.serialized_body,
+                    "hdr": hdr - shdr,
+                });
+            }
+
+            return prepared + {
+                "request_headers": hdr,
+            };
+        }
+
+        #! Submits a prepared async request attempt for RestClientIoAsyncRequestOperation
+        hash<auto> submitPreparedAsyncRequestAttemptWithNotifier(string method, string path,
+                *hash<auto> hdr, hash<auto> prepared, EventNotifier notifier) {
+            log(LoggerLevel::DEBUG, "submitAsyncRequestAttemptWithNotifier() %s %s%s",
+                method, url, path);
+
+            HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(url);
+            hash<auto> result = stream.submitAsyncWithNotifier(method, path, hdr,
+                prepared.serialized_body, notifier);
+            return result + {
+                "stream": stream,
+                "request_headers": hdr,
+                "request_body": prepared.serialized_body,
+                "error_passthru": prepared.error_passthru,
+                "allow_any_response": prepared.allow_any_response,
+            };
+        }
+
+        #! Builds a REST response from a completed async request operation
+        hash<RestClient::RestResponseInfo> buildAsyncOperationResponse(hash<auto> raw,
+                RestClientIoAsyncRequestOperation op) {
+            return buildResponse(raw, op.getErrorPassthru(), op.getAllowAnyResponse(),
+                op.getMethod(), op.getPath(), op.getRequestHeaders(), op.getRequestBody());
+        }
+
         #! Sends an async generic REST request and returns a RestFuture
         /** The returned @ref RestFuture wraps a raw HTTP response Future and
             deserializes the response when \c get() is called.
@@ -1539,31 +1881,19 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
             @return a RestFuture that resolves to a @ref RestClient::RestResponseInfo hash
         */
         RestFuture restDoRequestAsync(string method, string path, auto body, *hash<auto> hdr) {
-            ensureToken();
-
-            # 1. Snapshot config state and serialize body
-            hash<auto> prepared = prepareRequest(method, \path, body, \hdr);
-            bool req_error_passthru = prepared.error_passthru;
-            bool req_allow_any_response = prepared.allow_any_response;
-
             log(LoggerLevel::DEBUG, "restDoRequestAsync() %s %s%s", method, url, path);
 
-            # 2. Submit async request — returns a Future for the raw HTTP response
-            #    The stream handle keeps the Promise alive internally via request_promise
-            HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(url);
-            Future raw_future = stream.requestAsync(method, path, hdr, prepared.serialized_body);
-
-            # 3. Wrap in RestFuture with a closure that deserializes on get()
-            #    Capture request context for info fields
-            *hash<auto> req_hdr = hdr;
-            *data req_body = prepared.serialized_body;
+            hash<auto> async_info = startAsyncRequestOperation(method, path, body, hdr,
+                False, False, NOTHING, NOTHING, NOTHING);
+            RestClientIoAsyncRequestOperation op = async_info.operation;
             code<hash<RestClient::RestResponseInfo>(hash<auto>)> builder =
                 hash<RestClient::RestResponseInfo> sub (hash<auto> raw) {
-                    return buildResponse(raw, req_error_passthru, req_allow_any_response,
-                        method, path, req_hdr, req_body);
+                    return buildAsyncOperationResponse(raw, op);
                 };
 
-            return new RestFuture(raw_future, stream, builder);
+            return new RestFuture(async_info.future, bool sub () {
+                return op.cancel();
+            }, builder);
         }
 
         #! Submits a non-blocking REST request and returns a Future
@@ -1585,18 +1915,10 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
         */
         Future restDoRequestAsync(string method, string path, auto body, *hash<auto> hdr,
                 *bool skip_ensure_token) {
-            if (!skip_ensure_token) {
-                ensureToken();
-            }
-
-            hash<auto> prepared = prepareRequest(method, \path, body, \hdr);
-
             log(LoggerLevel::DEBUG, "restDoRequestAsync() %s %s%s", method, url, path);
 
-            HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(url);
-            hash<auto> result = stream.submitAsync(method, path, hdr,
-                prepared.serialized_body);
-            return result.future;
+            return startAsyncRequestOperation(method, path, body, hdr, False,
+                skip_ensure_token, NOTHING, NOTHING, NOTHING).future;
         }
 
         #! Submits an async REST request and signals an EventNotifier on completion
@@ -1619,13 +1941,10 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
         */
         hash<auto> restDoRequestAsyncWithNotifier(string method, string path, auto body,
                 *hash<auto> hdr, EventNotifier notifier) {
-            hash<auto> prepared = prepareRequest(method, \path, body, \hdr);
-
             log(LoggerLevel::DEBUG, "restDoRequestAsyncWithNotifier() %s %s%s", method, url, path);
 
-            HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(url);
-            return stream.submitAsyncWithNotifier(method, path, hdr,
-                prepared.serialized_body, notifier);
+            return startAsyncRequestOperation(method, path, body, hdr, False,
+                False, notifier, NOTHING, NOTHING);
         }
 
         #! Submits a raw async request with a pre-serialized body and signals an EventNotifier
@@ -1645,8 +1964,68 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
         */
         hash<auto> doRequestRawAsyncWithNotifier(string method, string path, *hash<auto> hdr,
                 *data body, EventNotifier notifier) {
+            return startAsyncRequestOperation(method, path, body, hdr, True,
+                True, notifier, NOTHING, NOTHING);
+        }
+
+        #! Submits an async ping request with EventNotifier signaling
+        /** This is used by @ref RestClientIoPingPollOperation so polling pings can
+            reuse the normal request preparation path, including preemptive
+            Kerberos/SPNEGO HTTP Negotiate headers.
+
+            @param method HTTP method
+            @param path request path
+            @param body request body (optional)
+            @param hdr base request headers; only updated by Negotiate challenge retries
+            @param notifier EventNotifier to signal on response completion
+            @param gss_context Negotiate context to keep across ping retries
+
+            @return hash with "future" (Future) and "stream_id" (int)
+        */
+        hash<auto> submitPingRequestWithNotifier(string method, reference<string> path,
+                auto body, reference<*hash<auto>> hdr, EventNotifier notifier,
+                reference<*auto> gss_context) {
+            *hash<auto> request_headers = hdr;
+            hash<auto> prepared = prepareRequest(method, \path, body,
+                \request_headers);
+            if (exists prepared.negotiate_context) {
+                gss_context = prepared.negotiate_context;
+            }
+
+            log(LoggerLevel::DEBUG, "submitPingRequestWithNotifier() %s %s%s",
+                method, url, path);
+
             HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(url);
-            return stream.submitAsyncWithNotifier(method, path, hdr, body, notifier);
+            return stream.submitAsyncWithNotifier(method, path, request_headers,
+                prepared.serialized_body, notifier);
+        }
+
+        #! Starts or continues a Negotiate exchange for a polling ping
+        /** @param response_headers response headers from the previous ping request
+            @param hdr ping request headers; updated with the Negotiate Authorization header
+            @param gss_context Negotiate context to keep across ping retries
+
+            @return True if a Negotiate retry request should be submitted
+        */
+        bool tryPingNegotiateAuthRetry(hash<auto> response_headers,
+                reference<*hash<auto>> hdr, reference<*auto> gss_context) {
+            if (!usingNegotiateAuth()) {
+                return False;
+            }
+            if (!hdr) {
+                hdr = {};
+            }
+
+            hash<auto> request_headers = hdr;
+            bool rv = tryNegotiateAuthRetry(response_headers, \request_headers,
+                \gss_context);
+            hdr = request_headers;
+            return rv;
+        }
+
+        #! Processes a final Negotiate response token for a polling ping
+        processPingFinalNegotiateResponse(hash<auto> response_headers, *auto gss_context) {
+            processFinalNegotiateResponse(response_headers, gss_context);
         }
 
         #! Returns True if the current OAuth2 token needs to be refreshed
@@ -1788,6 +2167,8 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
 
             # 1. Snapshot config state and serialize body
             hash<auto> prepared = prepareRequest(method, \path, body, \hdr);
+            *auto negotiate_context = prepared.negotiate_context;
+            bool negotiate_retry = True;
 
             # 2. Call signer with request context
             auto sig = signer({"path": path, "body": prepared.serialized_body,
@@ -1799,7 +2180,18 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
             # 3. Make HTTP request
             hash<auto> raw = mgr.request(url, method, path, hdr, prepared.serialized_body);
 
-            # 4. If 401 and OAuth2 configured, try to refresh token and retry once
+            # 4. If 401 and Negotiate is configured, run one SPNEGO challenge retry
+            if (raw.status_code == 401 && negotiate_retry
+                    && tryNegotiateAuthRetry(raw.headers, \hdr, \negotiate_context)) {
+                negotiate_retry = False;
+                prepared = prepareRequest(method, \path, body, \hdr);
+                sig = signer({"path": path, "body": prepared.serialized_body,
+                    "hdr": hdr - shdr});
+                hdr{shdr} = sig;
+                raw = mgr.request(url, method, path, hdr, prepared.serialized_body);
+            }
+
+            # 5. If 401 and OAuth2 configured, try to refresh token and retry once
             if (raw.status_code == 401 && canRetryAuth()) {
                 try {
                     getNewTokenIntern();
@@ -1818,12 +2210,14 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
                 raw = mgr.request(url, method, path, hdr, prepared.serialized_body);
             }
 
-            # 5. Deserialize
+            processFinalNegotiateResponse(raw.headers, negotiate_context);
+
+            # 6. Deserialize
             hash<RestClient::RestResponseInfo> resp = buildResponse(raw, prepared.error_passthru,
                 prepared.allow_any_response, method, path, hdr,
                 prepared.serialized_body);
 
-            # 6. Body-level auth error retry (see restDoRequest)
+            # 7. Body-level auth error retry (see restDoRequest)
             if (isBodyAuthError(resp) && canRetryAuth()) {
                 try {
                     getNewTokenIntern();
@@ -1860,35 +2254,19 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
         */
         RestFuture doSignedRequestAsync(string shdr, code signer, string method,
                 string path, auto body, *hash<auto> hdr) {
-            ensureToken();
-
-            # 1. Snapshot config state and serialize body
-            hash<auto> prepared = prepareRequest(method, \path, body, \hdr);
-            bool req_error_passthru = prepared.error_passthru;
-            bool req_allow_any_response = prepared.allow_any_response;
-
-            # 2. Call signer with request context
-            auto sig = signer({"path": path, "body": prepared.serialized_body,
-                "hdr": hdr - shdr});
-            hdr{shdr} = sig;
-
             log(LoggerLevel::DEBUG, "doSignedRequestAsync() %s %s%s", method, url, path);
 
-            # 3. Submit async request
-            HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(url);
-            Future raw_future = stream.requestAsync(method, path, hdr,
-                prepared.serialized_body);
-
-            # 4. Wrap in RestFuture
-            *hash<auto> req_hdr = hdr;
-            *data req_body = prepared.serialized_body;
+            hash<auto> async_info = startAsyncRequestOperation(method, path, body, hdr,
+                False, False, NOTHING, shdr, signer);
+            RestClientIoAsyncRequestOperation op = async_info.operation;
             code<hash<RestClient::RestResponseInfo>(hash<auto>)> builder =
                 hash<RestClient::RestResponseInfo> sub (hash<auto> raw) {
-                    return buildResponse(raw, req_error_passthru, req_allow_any_response,
-                        method, path, req_hdr, req_body);
+                    return buildAsyncOperationResponse(raw, op);
                 };
 
-            return new RestFuture(raw_future, stream, builder);
+            return new RestFuture(async_info.future, bool sub () {
+                return op.cancel();
+            }, builder);
         }
 
         #! Sends an async HTTP \c GET request and returns a RestFuture
@@ -2009,6 +2387,9 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
             # Normalize header keys to lowercase for HTTP/2 and HTTP/3 compatibility
             hdr = map {$1.key.lwr(): $1.value}, hdr.pairIterator();
 
+            *auto negotiate_context;
+            maybeAddPreemptiveNegotiateHeader(\hdr, \negotiate_context);
+
             *data serialized_body;
             if (exists body) {
                 if (raw) {
@@ -2037,18 +2418,26 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
                 }
             }
 
-            return {
+            hash<auto> rv = {
                 "serialized_body": serialized_body,
                 "error_passthru": req_error_passthru,
                 "allow_any_response": req_allow_any_response,
             };
+            if (negotiate_context) {
+                rv.negotiate_context = negotiate_context;
+            }
+            return rv;
         }
 
         #! Internal: deserializes a raw HTTP response into a RestResponseInfo hash
         /** @param raw the raw HTTP response hash (status_code, headers, body)
             @param req_error_passthru if False, throw on HTTP error responses
+            @param req_allow_any_response if True, allow response deserialization
+                errors to pass through in the returned response hash
             @param method HTTP method (for validator)
             @param path request path (for validator)
+            @param request_headers request headers to include in error response metadata
+            @param request_body request body to include in error response metadata
 
             @return the deserialized RestResponseInfo hash
 
@@ -2146,6 +2535,19 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
         */
         private list<auto> validateSseResponse(HttpClientIo::HttpClientStreamHandle stream,
                 string method, string path, hash<auto> request_headers, *data request_body) {
+            hash<auto> response_start = readSseResponseStart(stream, method, path);
+            return validateSseResponseStart(stream, method, path, request_headers,
+                request_body, response_start.first_data, response_start.response,
+                response_start.response_timeout);
+        }
+
+        #! Reads the initial SSE response headers or first data item.
+        /** @return a hash with \c first_data, \c response, and \c response_timeout
+            keys. The response can be used to decide if the caller should cancel
+            the stream and retry before handing it to the SSE reader.
+        */
+        private hash<auto> readSseResponseStart(HttpClientIo::HttpClientStreamHandle stream,
+                string method, string path) {
             timeout response_timeout = milliseconds(getTimeout());
             auto first_data = stream.readData(response_timeout);
             if (!exists first_data) {
@@ -2164,6 +2566,18 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
                 }
             }
 
+            return {
+                "first_data": first_data,
+                "response": response,
+                "response_timeout": response_timeout,
+            };
+        }
+
+        #! Validates an SSE response start already consumed by readSseResponseStart().
+        private list<auto> validateSseResponseStart(HttpClientIo::HttpClientStreamHandle stream,
+                string method, string path, hash<auto> request_headers,
+                *data request_body, auto first_data, *hash<auto> response,
+                timeout response_timeout) {
             if (response && response.status_code) {
                 hash<auto> raw_response;
                 raw_response += response;
@@ -3207,8 +3621,10 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
 
         #! Creates an SSE Observable for the given REST endpoint
         /** Serializes the body, adds auth headers, prepends the connection path,
-            and returns an @ref HttpClientStreamingIo::SseObservable that delivers
-            parsed SSE events via the Observer pattern.
+            and returns a \c HttpClientStreamingIo::SseObservable that delivers
+            parsed SSE events via the Observer pattern.  Kerberos/SPNEGO HTTP
+            Negotiate authentication is handled by an event-driven startup
+            operation before SSE parsing begins.
 
             @param method HTTP method (e.g., "GET", "POST")
             @param path request path
@@ -3239,22 +3655,48 @@ obs.observersReady();
         */
         HttpClientStreamingIo::SseObservable restObserveSse(string method, string path,
                 auto body, *hash<auto> hdr, *hash<auto> opts) {
-            # Prepare the request (serializes body, adds auth headers, prepends connection_path)
-            hash<auto> prepared = prepareRequest(method, \path, body, \hdr);
-
             # Ensure Accept: text/event-stream header
-            if (!hdr."accept") {
+            hdr = hdr ?? {};
+            if (!hdr."accept" && !hdr."Accept") {
                 hdr."accept" = "text/event-stream";
             }
 
             # Merge serialization from opts or default to "none"
-            hash<auto> obs_opts = opts ?? {};
+            hash<auto> obs_opts = {};
+            if (opts) {
+                obs_opts += opts;
+            }
             if (!obs_opts.serialization) {
                 obs_opts.serialization = "none";
             }
+            obs_opts.startup_callback =
+                auto sub (HttpClientStreamingIo::SseObservable obs) {
+                    return startSseObservableOperation(obs, method, path, body, hdr);
+                };
 
             return new HttpClientStreamingIo::SseObservable(mgr, url, method, path, hdr,
-                prepared.serialized_body, obs_opts);
+                NOTHING, obs_opts);
+        }
+
+        #! Starts an event-driven RestClientIo SSE observable connection
+        private *code<bool()> startSseObservableOperation(
+                HttpClientStreamingIo::SseObservable obs, string method, string path,
+                auto body, *hash<auto> hdr) {
+            ensureToken();
+            RestClientIoSseObservableStartOperation op(self, obs, method, path,
+                body, hdr);
+            op.start();
+            return bool sub () {
+                return op.cancel();
+            };
+        }
+
+        #! Raises the REST response error used by event-driven SSE observable startup
+        raiseSseObservableResponseError(hash<auto> raw, string method, string path,
+                *hash<auto> request_headers, *data request_body,
+                bool req_allow_any_response) {
+            buildResponse(raw, False, req_allow_any_response, method, path,
+                request_headers, request_body);
         }
     }
 
@@ -3365,6 +3807,759 @@ hash<RestResponseInfo> resp = pool.restGet("/api/data");
     }
 }
 
+#! Event-driven RestClientIo async request operation with Negotiate retry support
+/** Drives connection readiness, one or two raw HTTP request attempts, and final
+    Future resolution without running retry logic from Future::get().
+
+    The operation resolves the caller-facing Future with the final raw HTTP
+    response hash.  Higher layers can then deserialize the response using the
+    final request context exposed by the getter methods below.
+*/
+public class RestClientIoAsyncRequestOperation inherits Qore::AbstractPollOperation {
+    public {
+        #! Waiting for the underlying connection to become ready
+        const SPS_CONNECTING = "connecting";
+        #! Waiting for an HTTP response
+        const SPS_IO_WAITING = "io-waiting";
+        #! Complete
+        const SPS_COMPLETE = "complete";
+    }
+
+    private {
+        #! RestClientIo instance kept alive for the operation lifetime
+        RestClientIo rcio;
+
+        #! Promise resolved with the final raw response
+        Promise promise;
+
+        #! Optional caller notifier signaled when the final Future is resolved
+        *EventNotifier completion_notifier;
+
+        #! Internal notifier signaled by each raw HTTP attempt
+        EventNotifier io_notifier();
+
+        #! Current connection-readiness notifier
+        *EventNotifier connection_ready_notifier;
+
+        #! True after the first continuePoll() call in SPS_CONNECTING
+        bool waiting_for_connection = False;
+
+        #! HTTP method
+        string method;
+
+        #! Request path; updated by request preparation
+        string path;
+
+        #! Request body
+        auto body;
+
+        #! Request headers; updated by request preparation and Negotiate retries
+        *hash<auto> hdr;
+
+        #! True if the request body is already serialized
+        bool raw;
+
+        #! Optional request signing header name
+        *string signer_header;
+
+        #! Optional request signing callback
+        *code signer;
+
+        #! Current raw response Future
+        *Future pending_future;
+
+        #! Current stream handle for cancellation
+        *HttpClientIo::HttpClientStreamHandle pending_stream;
+
+        #! GSS context for the Negotiate exchange
+        *auto negotiate_context;
+
+        #! Whether Negotiate challenge retry was already attempted
+        bool negotiate_retried = False;
+
+        #! Current operation state
+        string state;
+
+        #! Goal reached flag
+        bool goal_reached = False;
+
+        #! Final request body after preparation
+        *data request_body;
+
+        #! Final request error_passthru option
+        bool request_error_passthru;
+
+        #! Final request allow_any_response option
+        bool request_allow_any_response;
+
+        #! Prepared request attempt waiting for connection submission
+        *hash<auto> prepared_attempt;
+
+        #! Promise completion guard
+        bool promise_done = False;
+
+        #! Lock for completion and cancellation
+        Mutex m();
+    }
+
+    #! Creates a new async request operation
+    constructor(RestClientIo rcio, Promise promise, string method, string path, auto body,
+            *hash<auto> hdr, bool raw, *EventNotifier completion_notifier,
+            *string signer_header, *code signer) {
+        self.rcio = rcio;
+        self.promise = promise;
+        self.method = method;
+        self.path = path;
+        self.body = body;
+        self.hdr = hdr;
+        self.raw = raw;
+        self.completion_notifier = completion_notifier;
+        self.signer_header = signer_header;
+        self.signer = signer;
+        state = SPS_CONNECTING;
+    }
+
+    #! Starts the operation on the global async-I/O controller
+    start() {
+        # Let synchronous preparation errors, such as signer failures, propagate
+        # from the public async call before a Future is returned.
+        prepareAttempt();
+        *hash<SocketPollInfo> poll_info = continuePollIntern();
+        if (!poll_info) {
+            return;
+        }
+
+        auto controller = rcio.getConnectionManager().getController();
+        controller.submit(<SocketPollOperationInfo>{
+            "sock": poll_info.socket,
+            "spop": self,
+            "to": milliseconds(rcio.getTimeout()),
+            "owner": "restclientio-async:" + self.uniqueHash(),
+            "has_on_complete": True,
+        });
+    }
+
+    string getGoal() {
+        return sprintf("REST %s %s", method, path);
+    }
+
+    string getState() {
+        return state;
+    }
+
+    bool goalReached() {
+        return goal_reached;
+    }
+
+    *hash<SocketPollInfo> continuePoll() {
+        try {
+            return continuePollIntern();
+        } catch (hash<ExceptionInfo> ex) {
+            reject(ex);
+            state = SPS_COMPLETE;
+            return NOTHING;
+        }
+    }
+
+    #! Called by the controller on completion, timeout, or cancellation
+    nothing onComplete(hash<SocketPollResultInfo> result) {
+        if (result.canceled) {
+            cancelPendingStream();
+            reject(<ExceptionInfo>{
+                "err": "HTTPCLIENT-CANCELLED",
+                "desc": "async request was canceled",
+            });
+        } else if (result.ex) {
+            cancelPendingStream();
+            reject(result.ex);
+        } else if (!goal_reached) {
+            cancelPendingStream();
+            reject(<ExceptionInfo>{
+                "err": "RESTCLIENTIO-ASYNC-ERROR",
+                "desc": sprintf("async request ended in state %y without a response", state),
+            });
+        }
+    }
+
+    #! Aborts the current request attempt and rejects the final Future
+    abort() {
+        cancel();
+    }
+
+    #! Cancels the current request attempt and rejects the final Future
+    bool cancel() {
+        AutoLock al(m);
+        if (promise_done) {
+            return False;
+        }
+        promise_done = True;
+        if (pending_stream) {
+            cancelPendingStream();
+        }
+        promise.setError("HTTPCLIENT-CANCELLED", "async request was canceled", NOTHING);
+        if (completion_notifier) {
+            completion_notifier.notify();
+        }
+        return True;
+    }
+
+    string getMethod() {
+        return method;
+    }
+
+    string getPath() {
+        return path;
+    }
+
+    *hash<auto> getRequestHeaders() {
+        return hdr;
+    }
+
+    *data getRequestBody() {
+        return request_body;
+    }
+
+    bool getErrorPassthru() {
+        return request_error_passthru;
+    }
+
+    bool getAllowAnyResponse() {
+        return request_allow_any_response;
+    }
+
+    private *hash<SocketPollInfo> continuePollIntern() {
+        while (True) {
+            if (state == SPS_CONNECTING) {
+                if (!waiting_for_connection) {
+                    doStartConnecting();
+                    if (state != SPS_CONNECTING) {
+                        continue;
+                    }
+                    waiting_for_connection = True;
+                    return <SocketPollInfo>{
+                        "events": SOCK_POLLIN,
+                        "socket": connection_ready_notifier,
+                    };
+                }
+
+                connection_ready_notifier.acknowledge();
+                delete connection_ready_notifier;
+                waiting_for_connection = False;
+                doStartConnecting();
+                continue;
+            }
+
+            if (state == SPS_IO_WAITING) {
+                if (!pending_future.isDone()) {
+                    return <SocketPollInfo>{
+                        "events": SOCK_POLLIN,
+                        "socket": io_notifier,
+                    };
+                }
+
+                io_notifier.acknowledge();
+                hash<auto> resp = pending_future.get();
+                delete pending_future;
+                delete pending_stream;
+
+                if (resp.status_code == 401 && !negotiate_retried
+                        && rcio.tryPingNegotiateAuthRetry(resp.headers, \hdr,
+                            \negotiate_context)) {
+                    negotiate_retried = True;
+                    doSubmitRequest();
+                    continue;
+                }
+
+                rcio.processPingFinalNegotiateResponse(resp.headers, negotiate_context);
+                goal_reached = True;
+                state = SPS_COMPLETE;
+                resolve(resp);
+                return NOTHING;
+            }
+
+            return NOTHING;
+        }
+    }
+
+    private doStartConnecting() {
+        connection_ready_notifier = rcio.startConnectionAsync();
+        if (connection_ready_notifier) {
+            state = SPS_CONNECTING;
+            return;
+        }
+
+        try {
+            doSubmitRequest();
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "HTTPCLIENT-NOT-READY") {
+                connection_ready_notifier = new EventNotifier();
+                connection_ready_notifier.notify();
+                state = SPS_CONNECTING;
+                waiting_for_connection = False;
+                return;
+            }
+            rethrow;
+        }
+    }
+
+    private doSubmitRequest() {
+        state = SPS_IO_WAITING;
+        if (!prepared_attempt) {
+            prepareAttempt();
+        }
+        hash<auto> result = rcio.submitPreparedAsyncRequestAttemptWithNotifier(method, path,
+            hdr, prepared_attempt, io_notifier);
+        delete prepared_attempt;
+        pending_future = result.future;
+        pending_stream = result.stream;
+        request_body = result.request_body;
+        request_error_passthru = result.error_passthru;
+        request_allow_any_response = result.allow_any_response;
+    }
+
+    private prepareAttempt() {
+        prepared_attempt = rcio.prepareAsyncRequestAttempt(method, \path, body, \hdr,
+            raw, \negotiate_context, signer_header, signer);
+        request_body = prepared_attempt.serialized_body;
+        request_error_passthru = prepared_attempt.error_passthru;
+        request_allow_any_response = prepared_attempt.allow_any_response;
+    }
+
+    private resolve(hash<auto> resp) {
+        AutoLock al(m);
+        if (promise_done) {
+            return;
+        }
+        promise_done = True;
+        promise.set(resp);
+        if (completion_notifier) {
+            completion_notifier.notify();
+        }
+    }
+
+    private reject(hash<ExceptionInfo> ex) {
+        AutoLock al(m);
+        if (promise_done) {
+            return;
+        }
+        promise_done = True;
+        promise.setError(ex.err, ex.desc, ex.arg);
+        if (completion_notifier) {
+            completion_notifier.notify();
+        }
+    }
+
+    private cancelPendingStream() {
+        if (pending_stream) {
+            try {
+                pending_stream.cancel();
+            } catch () {
+            }
+        }
+    }
+}
+
+#! Event-driven RestClientIo SSE observable startup with Negotiate retry support
+/** Opens a raw streaming response, waits for response headers via an
+    EventNotifier, performs at most one Kerberos/SPNEGO Negotiate retry on
+    401, then installs the C++ SSE parser on the surviving stream.
+*/
+public class RestClientIoSseObservableStartOperation inherits Qore::AbstractPollOperation {
+    public {
+        const SPS_CONNECTING = "connecting";
+        const SPS_STREAM_WAITING = "stream-waiting";
+        const SPS_ERROR_DRAIN = "error-drain";
+        const SPS_COMPLETE = "complete";
+    }
+
+    private {
+        RestClientIo rcio;
+        HttpClientStreamingIo::SseObservable observable;
+        string method;
+        string path;
+        auto body;
+        *hash<auto> hdr;
+
+        EventNotifier stream_notifier();
+        Queue sse_queue();
+        *EventNotifier connection_ready_notifier;
+        bool waiting_for_connection = False;
+        bool waiting_for_stream = False;
+
+        *HttpClientIo::HttpClientStreamHandle pending_stream;
+        *auto negotiate_context;
+        bool negotiate_retried = False;
+
+        *hash<auto> prepared_attempt;
+        *data request_body;
+        bool request_allow_any_response;
+
+        *hash<auto> response;
+        string error_body = "";
+        bool got_error_body = False;
+
+        string state = SPS_CONNECTING;
+        bool goal_reached = False;
+        bool done = False;
+        Mutex m();
+    }
+
+    constructor(RestClientIo rcio, HttpClientStreamingIo::SseObservable observable,
+            string method, string path, auto body, *hash<auto> hdr) {
+        self.rcio = rcio;
+        self.observable = observable;
+        self.method = method;
+        self.path = path;
+        self.body = body;
+        self.hdr = hdr;
+    }
+
+    start() {
+        try {
+            prepareAttempt();
+            *hash<SocketPollInfo> poll_info = continuePollIntern();
+            if (!poll_info) {
+                return;
+            }
+
+            auto controller = rcio.getConnectionManager().getController();
+            controller.submit(<SocketPollOperationInfo>{
+                "sock": poll_info.socket,
+                "spop": self,
+                "to": milliseconds(rcio.getTimeout()),
+                "owner": "restclientio-sse-observable:" + self.uniqueHash(),
+                "has_on_complete": True,
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            cancelPendingStream();
+            fail(ex);
+            rethrow;
+        }
+    }
+
+    string getGoal() {
+        return sprintf("REST SSE %s %s", method, path);
+    }
+
+    string getState() {
+        return state;
+    }
+
+    bool goalReached() {
+        return goal_reached;
+    }
+
+    *hash<SocketPollInfo> continuePoll() {
+        try {
+            return continuePollIntern();
+        } catch (hash<ExceptionInfo> ex) {
+            cancelPendingStream();
+            fail(ex);
+            state = SPS_COMPLETE;
+            return NOTHING;
+        }
+    }
+
+    nothing onComplete(hash<SocketPollResultInfo> result) {
+        if (result.canceled) {
+            cancelPendingStream();
+            fail(<ExceptionInfo>{
+                "err": "HTTPCLIENT-CANCELLED",
+                "desc": "SSE observable startup was canceled",
+            });
+        } else if (result.ex) {
+            cancelPendingStream();
+            fail(result.ex);
+        } else if (!goal_reached) {
+            cancelPendingStream();
+            fail(<ExceptionInfo>{
+                "err": "RESTCLIENTIO-SSE-STARTUP-ERROR",
+                "desc": sprintf("SSE observable startup ended in state %y", state),
+            });
+        }
+    }
+
+    abort() {
+        cancel();
+    }
+
+    bool cancel() {
+        bool canceled;
+        {
+            AutoLock al(m);
+            canceled = !done;
+            done = True;
+            state = SPS_COMPLETE;
+        }
+        cancelPendingStream();
+        return canceled;
+    }
+
+    private *hash<SocketPollInfo> continuePollIntern() {
+        while (True) {
+            if (observable.isStopped()) {
+                cancel();
+                goal_reached = True;
+                state = SPS_COMPLETE;
+                return NOTHING;
+            }
+
+            if (state == SPS_CONNECTING) {
+                if (!waiting_for_connection) {
+                    doStartConnecting();
+                    if (state != SPS_CONNECTING) {
+                        continue;
+                    }
+                    waiting_for_connection = True;
+                    return <SocketPollInfo>{
+                        "events": SOCK_POLLIN,
+                        "socket": connection_ready_notifier,
+                    };
+                }
+
+                connection_ready_notifier.acknowledge();
+                delete connection_ready_notifier;
+                waiting_for_connection = False;
+                doStartConnecting();
+                continue;
+            }
+
+            if (state == SPS_STREAM_WAITING || state == SPS_ERROR_DRAIN) {
+                if (!waiting_for_stream) {
+                    return pollStream();
+                }
+                stream_notifier.acknowledge();
+                waiting_for_stream = False;
+                if (state == SPS_STREAM_WAITING) {
+                    processStreamItems();
+                } else {
+                    processErrorDrainItems();
+                }
+                continue;
+            }
+
+            return NOTHING;
+        }
+    }
+
+    private doStartConnecting() {
+        connection_ready_notifier = rcio.startConnectionAsync();
+        if (connection_ready_notifier) {
+            state = SPS_CONNECTING;
+            return;
+        }
+
+        try {
+            doSubmitStreaming();
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "HTTPCLIENT-NOT-READY") {
+                connection_ready_notifier = new EventNotifier();
+                connection_ready_notifier.notify();
+                state = SPS_CONNECTING;
+                waiting_for_connection = False;
+                return;
+            }
+            rethrow;
+        }
+    }
+
+    private doSubmitStreaming() {
+        if (!prepared_attempt) {
+            prepareAttempt();
+        }
+        pending_stream = rcio.getConnectionManager().acquireStream(rcio.getUrl());
+        # sse_install_eligible=True: this flow always completes with installSseState()
+        # after the response start is validated, so the underlying ChannelAction must be
+        # retained past end_stream to drain buffered body bytes into the SSE parser.
+        pending_stream.startStreaming(method, path, hdr, False,
+            prepared_attempt.serialized_body, stream_notifier, True);
+        request_body = prepared_attempt.serialized_body;
+        request_allow_any_response = prepared_attempt.allow_any_response;
+        delete prepared_attempt;
+        state = SPS_STREAM_WAITING;
+        waiting_for_stream = False;
+    }
+
+    private prepareAttempt() {
+        prepared_attempt = rcio.prepareAsyncRequestAttempt(method, \path, body,
+            \hdr, False, \negotiate_context, NOTHING, NOTHING);
+        request_body = prepared_attempt.serialized_body;
+        request_allow_any_response = prepared_attempt.allow_any_response;
+    }
+
+    private hash<SocketPollInfo> pollStream() {
+        waiting_for_stream = True;
+        return <SocketPollInfo>{
+            "events": SOCK_POLLIN,
+            "socket": stream_notifier,
+        };
+    }
+
+    private processStreamItems() {
+        while (True) {
+            auto item = readAvailableStreamItem();
+            if (!exists item) {
+                return;
+            }
+
+            if (item.typeCode() == NT_HASH && item.error) {
+                throw "SSE-STREAM-ERROR", sprintf("stream error: %y", item.error);
+            }
+
+            *hash<auto> start_response = getResponseFromItem(item);
+            if (!start_response) {
+                continue;
+            }
+            handleResponseStart(item, start_response);
+            return;
+        }
+    }
+
+    private processErrorDrainItems() {
+        while (True) {
+            auto item = readAvailableStreamItem();
+            if (!exists item) {
+                return;
+            }
+            if (captureErrorBody(item)) {
+                raiseResponseError();
+            }
+        }
+    }
+
+    private auto readAvailableStreamItem() {
+        try {
+            return pending_stream.readData(0);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "HTTPCLIENT-STREAM-CLOSED") {
+                if (state == SPS_ERROR_DRAIN) {
+                    raiseResponseError();
+                }
+            }
+            rethrow;
+        }
+    }
+
+    private *hash<auto> getResponseFromItem(auto item) {
+        if (item.typeCode() == NT_HASH && (item.status_code || item.headers)) {
+            return item;
+        }
+        return pending_stream.getResponse();
+    }
+
+    private handleResponseStart(auto item, hash<auto> start_response) {
+        response = start_response;
+        hash<auto> response_headers = response.headers ?? {};
+        int status_code = response.status_code.toInt();
+
+        if (status_code == 401 && !negotiate_retried
+                && rcio.tryPingNegotiateAuthRetry(response_headers, \hdr,
+                    \negotiate_context)) {
+            negotiate_retried = True;
+            cancelPendingStream();
+            remove pending_stream;
+            doStartConnecting();
+            return;
+        }
+
+        if (status_code >= 300) {
+            if (captureErrorBody(item)) {
+                raiseResponseError();
+            }
+            state = SPS_ERROR_DRAIN;
+            waiting_for_stream = False;
+            return;
+        }
+
+        rcio.processPingFinalNegotiateResponse(response_headers,
+            negotiate_context);
+        *data initial_body = getInitialBody(item);
+        pending_stream.installSseState(sse_queue, stream_notifier,
+            initial_body);
+        HttpClientIo::HttpClientStreamHandle started_stream = pending_stream;
+        remove pending_stream;
+        goal_reached = True;
+        state = SPS_COMPLETE;
+        observable.activateStartedStream(started_stream, sse_queue,
+            stream_notifier);
+    }
+
+    private *data getInitialBody(auto item) {
+        if (item.typeCode() == NT_HASH) {
+            if (exists item.body) {
+                return item.body;
+            }
+            return NOTHING;
+        }
+        if (item.typeCode() == NT_BINARY || item.typeCode() == NT_STRING) {
+            return item;
+        }
+        return NOTHING;
+    }
+
+    private bool captureErrorBody(auto item) {
+        if (item.typeCode() == NT_HASH) {
+            if (item.error) {
+                throw "SSE-STREAM-ERROR", sprintf("stream error: %y", item.error);
+            }
+            if (exists item.body) {
+                appendErrorBody(item.body);
+            }
+            return item.end_stream ? True : error_body.size() >= RestClientIo::MaxSseErrorBodyBytes;
+        }
+        appendErrorBody(item);
+        return error_body.size() >= RestClientIo::MaxSseErrorBodyBytes;
+    }
+
+    private appendErrorBody(auto chunk) {
+        if (!exists chunk) {
+            return;
+        }
+        string chunk_str = chunk.typeCode() == NT_BINARY ? chunk.toString() : string(chunk);
+        int remaining = RestClientIo::MaxSseErrorBodyBytes - error_body.size();
+        if (remaining <= 0) {
+            return;
+        }
+        got_error_body = True;
+        error_body += chunk_str.size() > remaining
+            ? chunk_str.substr(0, remaining)
+            : chunk_str;
+    }
+
+    private raiseResponseError() {
+        hash<auto> raw;
+        raw += response;
+        if (!raw.headers) {
+            raw.headers = {};
+        }
+        if (got_error_body) {
+            raw.body = error_body;
+        }
+        rcio.raiseSseObservableResponseError(raw, method, path, hdr,
+            request_body, request_allow_any_response);
+        throw "REST-RESPONSE-ERROR",
+            sprintf("HTTP %d response received", raw.status_code), raw;
+    }
+
+    private fail(hash<ExceptionInfo> ex) {
+        AutoLock al(m);
+        if (done) {
+            return;
+        }
+        done = True;
+        observable.startupFailed(ex);
+    }
+
+    private cancelPendingStream() {
+        if (pending_stream) {
+            try {
+                pending_stream.cancel();
+            } catch () {
+            }
+        }
+    }
+}
+
 #! REST ping poll operation using RestClientIo as the underlying async transport
 /** Pure async state machine — no background threads.  Uses CompositeAction
     (PromiseAction + EventNotifierAction) so the C++ I/O thread signals the
@@ -3448,6 +4643,12 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation 
 
         #! Whether we have already attempted an OAuth2 refresh + retry after a 401
         bool auth_retried = False;
+
+        #! Whether we have already attempted a Negotiate challenge retry after a 401
+        bool negotiate_retried = False;
+
+        #! GSS context for the current Negotiate ping exchange
+        *auto negotiate_context;
 
         #! EventNotifier for connection-readiness polling in SPS_CONNECTING state
         *EventNotifier connection_ready_notifier;
@@ -3613,6 +4814,8 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation 
 
                 int status_code = resp.status_code.toInt();
                 if ((status_code / 100) == 2) {
+                    rcio.processPingFinalNegotiateResponse(resp.headers, negotiate_context);
+
                     # Run schema validation if configured (mirrors buildResponse() logic)
                     if (schema_validator) {
                         auto resp_body = resp.body;
@@ -3636,6 +4839,15 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation 
                     state = SPS_COMPLETE;
                     conn.authSuccess();
                     return;
+                }
+
+                # 401: attempt Kerberos/SPNEGO Negotiate challenge retry once
+                if (status_code == 401 && !negotiate_retried
+                        && rcio.tryPingNegotiateAuthRetry(resp.headers, \ping_headers,
+                            \negotiate_context)) {
+                    negotiate_retried = True;
+                    doSubmitPing();
+                    continue;
                 }
 
                 # 401: attempt OAuth2 token refresh + retry once
@@ -3771,8 +4983,9 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation 
     */
     private doSubmitPing() {
         state = SPS_IO_WAITING;
-        hash<auto> result = rcio.restDoRequestAsyncWithNotifier(
-            ping_method, ping_path, ping_body, ping_headers, notifier);
+        hash<auto> result = rcio.submitPingRequestWithNotifier(
+            ping_method, \ping_path, ping_body, \ping_headers, notifier,
+            \negotiate_context);
         pending_future = result.future;
     }
 }

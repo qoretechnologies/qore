@@ -507,6 +507,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
 
         # RestClientIoPingPollOperation tests
         addTestCase("ping poll basic", \testPingPollBasic());
+        addTestCase("ping poll negotiate auth", \testPingPollNegotiateAuth());
         addTestCase("ping poll via monitor", \testPingPollViaMonitor());
         addTestCase("ping poll oauth2 pre-refresh", \testPingPollOAuth2PreRefresh());
         addTestCase("ping poll 401 retry", \testPingPoll401Retry());
@@ -534,6 +535,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             \testOptionPhase3OAuth2Accepted());
         addTestCase("option oauth2_pkce invalid value", \testOptionPkceInvalid());
         addTestCase("option oauth2_pkce legacy boolean normalization", \testOptionPkceLegacyBool());
+        addTestCase("option negotiate auth", \testOptionNegotiateAuth());
 
         # Phase 3: custom_token_* refresh pipeline
         addTestCase("custom_token: all-or-nothing validation", \testCustomTokenAllOrNothing());
@@ -2707,6 +2709,25 @@ Do+Sl1gfqlpgpszQaOMjR4M=
 %endif
     }
 
+    testPingPollNegotiateAuth() {
+%ifndef NoJson
+        # A server that does not challenge should still accept a Negotiate-enabled
+        # polling ping. This verifies that async pings carry the option instead of
+        # rejecting it at construction time.
+        RestConnection rc = createPingConnection("ping-negotiate-auth", {
+            "negotiate_auth": True,
+            "negotiate_service_principal": "HTTP/test@EXAMPLE.COM",
+        });
+        AbstractPollOperation op = rc.startPollConnect();
+        assertEq("ping", op.getGoal());
+
+        *hash<ExceptionInfo> ex = drivePingOp(op);
+        on_error printf("negotiate ping error: %y\n", ex);
+        assertFalse(exists ex, "Negotiate-enabled ping should succeed without a challenge");
+        assertTrue(op.goalReached());
+%endif
+    }
+
     testPingPollViaMonitor() {
 %ifndef NoJson
         # Drive via TestPollingConnectionMonitor (exercises the full PollingConnectionMonitor path)
@@ -3084,6 +3105,51 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         RestClientIo::RestClientIo f = createClient({"oauth2_pkce": False});
         on_exit f.close();
         assertEq("none", f.getOAuth2Options().oauth2_pkce);
+    }
+
+    testOptionNegotiateAuth() {
+%ifndef NoJson
+        RestClientIo::RestClientIo rest = createClient({
+            "negotiate_auth": True,
+            "negotiate_service_principal": "HTTP/test@EXAMPLE.COM",
+        });
+        on_exit rest.close();
+
+        hash<RestClient::RestResponseInfo> resp = rest.restGet("/echo");
+        assertEq(200, resp.status_code);
+        assertFalse(resp.body.request_headers.authorization.val());
+
+        RestClientIo::RestFuture f = rest.restGetAsync("/echo");
+        resp = f.get(30s);
+        assertEq(200, resp.status_code);
+        assertFalse(resp.body.request_headers.authorization.val());
+
+        assertThrows("NEGOTIATE-AUTH-ERROR", sub () {
+            createClient({
+                "negotiate_auth": True,
+                "token": "token",
+            });
+        });
+        assertThrows("NEGOTIATE-AUTH-ERROR", sub () {
+            createClient({
+                "negotiate_auth": True,
+                "username": "user",
+                "password": "pass",
+            });
+        });
+        assertThrows("NEGOTIATE-AUTH-ERROR", sub () {
+            createClient({
+                "negotiate_auth": True,
+                "headers": {"Authorization": "Bearer token"},
+            });
+        });
+        assertThrows("NEGOTIATE-AUTH-ERROR", sub () {
+            createClient({
+                "negotiate_auth": True,
+                "negotiate_delegation_mode": "s4u",
+            });
+        });
+%endif
     }
 
     testOptionPhase3OAuth2Accepted() {
@@ -3493,7 +3559,11 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         # close (seen on Ubuntu amd64 and Alpine arm64) — or
         # HTTPCLIENT-CONNECT-ERROR when waitForReady() observes the
         # closed connection before submitRequest (wraps the underlying
-        # HTTP1-CONNECTION-CLOSED in its desc).
+        # HTTP1-CONNECTION-CLOSED in its desc) — or SOCKET-SSL-ERROR when
+        # checkIdleData()'s SSL_peek() surfaces the TLS-1.3
+        # "certificate_required" alert before the request is sent (the H1
+        # poll op intentionally preserves the SSL error class instead of
+        # collapsing it to HTTP1-CONNECTION-CLOSED).
         try {
             rest.restGet("/api/test");
             assertEq(True, False, "expected exception from mTLS rejection");
@@ -3504,7 +3574,8 @@ Do+Sl1gfqlpgpszQaOMjR4M=
                 || ex.err == "HTTP1-UNEXPECTED-DATA"
                 || ex.err == "HTTP1-STATE-ERROR"
                 || ex.err == "HTTPCLIENT-STATE-ERROR"
-                || ex.err == "HTTP1-ABORT",
+                || ex.err == "HTTP1-ABORT"
+                || ex.err == "SOCKET-SSL-ERROR",
                 sprintf("expected mTLS rejection error, got: %s: %s", ex.err, ex.desc));
         }
 %endif

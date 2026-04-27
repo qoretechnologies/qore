@@ -1,0 +1,2693 @@
+#!/usr/bin/env qore
+%modern
+
+/* Copyright (C) 2026 Qore Technologies, s.r.o. */
+
+%requires ../../../qlib/QUnit.qm
+%requires krb5
+%requires ../../../qlib/Krb5Util/Krb5Util.qm
+%requires ../../../qlib/Logger.qm
+
+%exec-class Krb5ModuleTest
+
+class CaptureLogAppender inherits Qore::Logger::LoggerAppender {
+    private {
+        list<string> messages = ();
+    }
+
+    constructor() : LoggerAppender("capture") {
+    }
+
+    list<string> getMessages() {
+        return messages;
+    }
+
+    private auto serializeImpl(Qore::Logger::LoggerEvent event) {
+        return event.getMessage();
+    }
+
+    public processEventImpl(int type, auto params) {
+        if (type == Qore::Logger::LoggerAppender::EVENT_LOG) {
+            push messages, string(params);
+        }
+    }
+}
+
+public class Krb5ModuleTest inherits QUnit::Test {
+    constructor() : Test("Krb5ModuleTest", "1.0") {
+        addTestCase("utility module helpers", \testUtilityModuleHelpers());
+        addTestCase("utility find HTTP Negotiate header",
+            \testUtilityFindNegotiateHeader());
+        addTestCase("utility parse host-based service principal",
+            \testUtilityParseHostBasedServicePrincipal());
+        addTestCase("utility parse rejects single-component principal",
+            \testUtilityParseHostBasedServicePrincipalRejectsSingleComponent());
+        addTestCase("utility parse rejects malformed principal",
+            \testUtilityParseHostBasedServicePrincipalRejectsMalformed());
+        addTestCase("utility tls-server-end-point channel binding builder",
+            \testUtilityBuildTlsServerEndPointChannelBindingHex());
+        addTestCase("utility tls-server-end-point channel binding validation",
+            \testUtilityBuildTlsServerEndPointChannelBindingHexValidation());
+        addTestCase("utility credential lifecycle helpers",
+            \testUtilityCredentialLifecycleHelpers());
+        addTestCase("utility credential lifecycle validation",
+            \testUtilityCredentialLifecycleValidation());
+        addTestCase("utility credential lifecycle logger diagnostics safe",
+            \testUtilityCredentialLifecycleLoggerDiagnosticsSafe());
+        addTestCase("renew and store no tgt", \testRenewAndStoreNoTgt());
+        addTestCase("renew and store expired", \testRenewAndStoreExpired());
+        addTestCase("renew and store validation", \testRenewAndStoreValidation());
+        addTestCase("renew and store logger diagnostics safe",
+            \testRenewAndStoreLoggerDiagnosticsSafe());
+        addTestCase("credential cache maintenance no tgt",
+            \testCredentialCacheMaintenanceNoTgt());
+        addTestCase("credential cache maintenance missing tgt error",
+            \testCredentialCacheMaintenanceMissingTgtError());
+        addTestCase("credential cache maintenance expired tgt",
+            \testCredentialCacheMaintenanceExpiredTgt());
+        addTestCase("credential cache maintenance dry run renewal",
+            \testCredentialCacheMaintenanceDryRunRenewal());
+        addTestCase("credential cache maintenance service ticket failure",
+            \testCredentialCacheMaintenanceServiceTicketFailure());
+        addTestCase("credential cache maintenance validation",
+            \testCredentialCacheMaintenanceValidation());
+        addTestCase("credential cache maintenance logger diagnostics safe",
+            \testCredentialCacheMaintenanceLoggerDiagnosticsSafe());
+        addTestCase("credential cache collection maintenance returns list",
+            \testCredentialCacheCollectionMaintenanceReturnsList());
+        addTestCase("validate kerberos environment basic",
+            \testValidateKerberosEnvironmentBasic());
+        addTestCase("validate kerberos environment service principal",
+            \testValidateKerberosEnvironmentServicePrincipal());
+        addTestCase("validate kerberos environment malformed service principal",
+            \testValidateKerberosEnvironmentMalformedServicePrincipal());
+        addTestCase("validate kerberos environment invalid options",
+            \testValidateKerberosEnvironmentInvalidOptions());
+        addTestCase("validate kerberos environment logger diagnostics safe",
+            \testValidateKerberosEnvironmentLoggerSafe());
+        addTestCase("s4u impersonate requires network domain",
+            \testS4uImpersonateRequiresNetworkDomain());
+        addTestCase("s4u impersonated client helper requires network domain",
+            \testS4uImpersonatedClientHelperRequiresNetworkDomain());
+        addTestCase("s4u impersonated client helper rejects empty target",
+            \testS4uImpersonatedClientHelperRejectsEmptyTarget());
+        addTestCase("s4u proxy empty cache rejected",
+            \testS4uProxyEmptyCacheRejected());
+        addTestCase("s4u proxy sandbox deny",
+            \testS4uProxySandboxDeny());
+        addTestCase("context defaults", \testContextDefaults());
+        addTestCase("default credential cache metadata", \testDefaultCredentialCacheMetadata());
+        addTestCase("default keytab metadata", \testDefaultKeytabMetadata());
+        addTestCase("credentials metadata", \testCredentialsMetadata());
+        addTestCase("credentials default optional fields", \testCredentialsDefaultOptionalFields());
+        addTestCase("credentials invalid key hex rejected", \testCredentialsInvalidKeyHexRejected());
+        addTestCase("credentials empty key rejected", \testCredentialsEmptyKeyRejected());
+        addTestCase("credentials invalid ticket hex rejected", \testCredentialsInvalidTicketHexRejected());
+        addTestCase("credential cache store and list", \testCredentialCacheStoreAndList());
+        addTestCase("memory credential cache roundtrip", \testMemoryCredentialCacheRoundtrip());
+        addTestCase("empty credential cache reports no principal", \testEmptyCredentialCache());
+        addTestCase("empty cache name rejected", \testEmptyCacheNameRejected());
+        addTestCase("file cache sandbox deny", \testFileCacheSandboxDeny());
+        addTestCase("file cache sandbox allow", \testFileCacheSandboxAllow());
+        addTestCase("memory keytab roundtrip", \testMemoryKeytabRoundtrip());
+        addTestCase("memory keytab highest kvno", \testMemoryKeytabHighestKvno());
+        addTestCase("invalid keytab hex rejected", \testInvalidKeytabHexRejected());
+        addTestCase("file keytab sandbox deny", \testFileKeytabSandboxDeny());
+        addTestCase("file keytab sandbox allow", \testFileKeytabSandboxAllow());
+        addTestCase("principal parsing", \testPrincipalParsing());
+        addTestCase("enterprise principal parsing", \testEnterprisePrincipalParsing());
+        addTestCase("principal copy and equality", \testPrincipalCopy());
+        addTestCase("principal component bounds", \testPrincipalBounds());
+        addTestCase("initial credentials empty password rejected", \testInitialCredentialsEmptyPasswordRejected());
+        addTestCase("initial credentials empty enctype list rejected", \testInitialCredentialsEmptyEnctypeListRejected());
+        addTestCase("initial credentials bad keytab rejected", \testInitialCredentialsBadKeytabRejected());
+        addTestCase("initial credentials keytab sandbox deny", \testInitialCredentialsKeytabSandboxDeny());
+        addTestCase("initial credentials FAST cache sandbox deny", \testInitialCredentialsFastCacheSandboxDeny());
+        addTestCase("gss target setup", \testGssTargetSetup());
+        addTestCase("gss context options", \testGssContextOptions());
+        addTestCase("gss context name type options", \testGssContextNameTypeOptions());
+        addTestCase("gss context channel binding options", \testGssContextChannelBindingOptions());
+        addTestCase("gss context invalid options", \testGssContextInvalidOptions());
+        addTestCase("gss acceptor setup", \testGssAcceptorSetup());
+        addTestCase("gss acceptor channel binding options", \testGssAcceptorChannelBindingOptions());
+        addTestCase("gss acceptor invalid options", \testGssAcceptorInvalidOptions());
+        addTestCase("gss acceptor credential from keytab", \testGssAcceptorCredentialFromKeytab());
+        addTestCase("gss acceptor invalid token hex", \testGssAcceptorInvalidHex());
+        addTestCase("gss acceptor empty token rejected", \testGssAcceptorEmptyTokenRejected());
+        addTestCase("gss acceptor wrap incomplete context", \testGssAcceptorWrapIncompleteContext());
+        addTestCase("gss credential from keytab", \testGssCredentialFromKeytab());
+        addTestCase("gss credential empty cache rejected", \testGssCredentialEmptyCacheRejected());
+        addTestCase("gss credential empty keytab rejected", \testGssCredentialEmptyKeytabRejected());
+        addTestCase("gss credential cache sandbox deny", \testGssCredentialCacheSandboxDeny());
+        addTestCase("gss credential keytab sandbox deny", \testGssCredentialKeytabSandboxDeny());
+        addTestCase("gss wrap invalid hex", \testGssWrapInvalidHex());
+        addTestCase("gss unwrap invalid hex", \testGssUnwrapInvalidHex());
+        addTestCase("gss wrap incomplete context", \testGssWrapIncompleteContext());
+        addTestCase("gss unwrap empty token rejected", \testGssUnwrapEmptyTokenRejected());
+        addTestCase("gss wrap size invalid arguments", \testGssWrapSizeInvalidArguments());
+        addTestCase("gss wrap size incomplete context", \testGssWrapSizeIncompleteContext());
+        addTestCase("gss mic invalid hex", \testGssMicInvalidHex());
+        addTestCase("gss mic incomplete context", \testGssMicIncompleteContext());
+        addTestCase("gss mic negative qop rejected", \testGssMicNegativeQopRejected());
+        addTestCase("gss verify mic invalid hex", \testGssVerifyMicInvalidHex());
+        addTestCase("gss verify mic empty mic rejected", \testGssVerifyMicEmptyMicRejected());
+        addTestCase("gss verify mic incomplete context", \testGssVerifyMicIncompleteContext());
+        addTestCase("gss acceptor mic incomplete context", \testGssAcceptorMicIncompleteContext());
+        addTestCase("gss acceptor verify mic incomplete context",
+            \testGssAcceptorVerifyMicIncompleteContext());
+        addTestCase("list credential caches returns list", \testListCredentialCachesReturnsList());
+        addTestCase("list credential caches contains memory cache",
+            \testListCredentialCachesContainsMemoryCache());
+        addTestCase("list credential caches redacts sandbox denied cache",
+            \testListCredentialCachesSandboxRedaction());
+        addTestCase("gss invalid token hex", \testGssInvalidHex());
+        addTestCase("gss empty target rejected", \testGssEmptyTarget());
+        addTestCase("credential acquisition requires NETWORK domain",
+            \testAcquireCredentialsRequiresNetworkDomain());
+        addTestCase("credential acquisition denies unmanaged network sandbox",
+            \testAcquireCredentialsNetworkSandboxDeny());
+        addTestCase("credential acquisition honors pre-call cancellation",
+            \testAcquireCredentialsPreCancelled());
+        addTestCase("keytab credential acquisition requires NETWORK domain",
+            \testAcquireCredentialsWithKeytabRequiresNetworkDomain());
+        addTestCase("gss client context requires NETWORK domain",
+            \testGssClientContextRequiresNetworkDomain());
+        addTestCase("gss client context denies unmanaged network sandbox",
+            \testGssClientContextNetworkSandboxDeny());
+        addTestCase("gss client context honors pre-call cancellation",
+            \testGssClientContextPreCancelled());
+        addTestCase("gss acceptor context requires NETWORK domain",
+            \testGssAcceptorContextRequiresNetworkDomain());
+        addTestCase("gss credential import requires FILESYSTEM domain",
+            \testGssCredentialRequiresFilesystemDomain());
+        addTestCase("krb5 credentials class carries no default domain",
+            \testKrb5CredentialsHasNoDomain());
+        addTestCase("principal copy uses source context",
+            \testPrincipalCopyAcrossContexts());
+        addTestCase("memory cache store/list after explicit acquisition",
+            \testStoreAndListAcrossContexts());
+        addTestCase("enctype name fallback for unknown enctype",
+            \testEnctypeNameFallback());
+        addTestCase("credential cache store rejected under filesystem sandbox",
+            \testCacheStoreSandboxDeny());
+        addTestCase("gss client context reset state", \testGssClientContextResetState());
+        addTestCase("gss acceptor context reset state", \testGssAcceptorContextResetState());
+        addTestCase("gss wrap confidential false incomplete context",
+            \testGssWrapConfidentialFalseIncompleteContext());
+        addTestCase("gss wrap size limit boundary values", \testGssWrapSizeLimitBoundaryValues());
+        addTestCase("initial credentials negative start time rejected",
+            \testInitialCredentialsNegativeStartTimeRejected());
+        addTestCase("initial credentials start time overflow rejected",
+            \testInitialCredentialsStartTimeOverflowRejected());
+        addTestCase("initial credentials negative ticket lifetime rejected",
+            \testInitialCredentialsNegativeTicketLifetimeRejected());
+        addTestCase("initial credentials negative renew lifetime rejected",
+            \testInitialCredentialsNegativeRenewLifetimeRejected());
+        addTestCase("initial credentials negative enctype rejected",
+            \testInitialCredentialsNegativeEnctypeRejected());
+        addTestCase("initial credentials enctype overflow rejected",
+            \testInitialCredentialsEnctypeOverflowRejected());
+        addTestCase("initial credentials in cache sandbox deny",
+            \testInitialCredentialsInCacheSandboxDeny());
+        addTestCase("initial credentials out cache sandbox deny",
+            \testInitialCredentialsOutCacheSandboxDeny());
+        addTestCase("principal three components", \testPrincipalThreeComponents());
+        addTestCase("principal very long name", \testPrincipalVeryLongName());
+        addTestCase("principal empty rejected", \testPrincipalEmptyRejected());
+        addTestCase("principal negative component index", \testPrincipalNegativeComponentIndex());
+        addTestCase("keytab has content fresh memory", \testKeytabHasContentFreshMemory());
+        addTestCase("keytab has content after add", \testKeytabHasContentAfterAdd());
+        addTestCase("keytab get entry specific kvno", \testKeytabGetEntrySpecificKvno());
+        addTestCase("keytab get entry specific enctype", \testKeytabGetEntrySpecificEnctype());
+        addTestCase("keytab multiple entries same principal",
+            \testKeytabMultipleEntriesSamePrincipal());
+        addTestCase("utility keytab rotation helpers",
+            \testUtilityKeytabRotationHelpers());
+        addTestCase("utility keytab rotation validation",
+            \testUtilityKeytabRotationValidation());
+        addTestCase("utility keytab rotation logger diagnostics safe",
+            \testUtilityKeytabRotationLoggerDiagnosticsSafe());
+        addTestCase("credential cache multiple credentials",
+            \testCredentialCacheMultipleCredentials());
+        addTestCase("credential cache get principal on empty cache",
+            \testCredentialCacheGetPrincipalOnEmptyCache());
+        addTestCase("gss acceptor delegated credential incomplete context",
+            \testGssAcceptorDelegatedCredentialIncompleteContext());
+        addTestCase("spnego negotiate token build", \testSpnegoNegotiateTokenBuild());
+        addTestCase("spnego negotiate token empty rejected", \testSpnegoNegotiateTokenEmptyRejected());
+        addTestCase("spnego negotiate token odd length rejected",
+            \testSpnegoNegotiateTokenOddLengthRejected());
+        addTestCase("spnego negotiate token invalid hex rejected",
+            \testSpnegoNegotiateTokenInvalidHexRejected());
+        addTestCase("spnego negotiate authorization header",
+            \testSpnegoNegotiateAuthorizationHeader());
+        addTestCase("spnego parse initial token",
+            \testSpnegoParseInitialToken());
+        addTestCase("spnego client step rejects premature final response",
+            \testSpnegoClientStepRejectsPrematureFinalResponse());
+        addTestCase("spnego negotiate header invalid rejected",
+            \testSpnegoNegotiateHeaderInvalidRejected());
+        addTestCase("spnego response info and headers",
+            \testSpnegoResponseInfoAndHeaders());
+        addTestCase("spnego response token validation",
+            \testSpnegoResponseTokenValidation());
+        addTestCase("spnego logger diagnostics safe",
+            \testSpnegoLoggerDiagnosticsSafe());
+        addTestCase("spnego parse response empty rejected", \testSpnegoParseResponseEmptyRejected());
+        addTestCase("spnego parse response invalid data rejected",
+            \testSpnegoParseResponseInvalidDataRejected());
+        addTestCase("spnego parse response length bounds rejected",
+            \testSpnegoParseResponseLengthBoundsRejected());
+        addTestCase("spnego round trip", \testSpnegoRoundTrip());
+        addTestCase("renew credentials empty cache", \testRenewCredentialsEmptyCache());
+        addTestCase("renew credentials sandbox deny", \testRenewCredentialsSandboxDeny());
+        addTestCase("renew credentials requires network domain",
+            \testRenewCredentialsRequiresNetworkDomain());
+        addTestCase("acquire service credentials empty cache",
+            \testAcquireServiceCredentialsEmptyCache());
+        addTestCase("acquire service credentials sandbox deny",
+            \testAcquireServiceCredentialsSandboxDeny());
+        addTestCase("acquire service credentials requires network domain",
+            \testAcquireServiceCredentialsRequiresNetworkDomain());
+        addTestCase("keytab remove entry", \testKeytabRemoveEntry());
+        addTestCase("keytab remove entry non existent", \testKeytabRemoveEntryNonExistent());
+        addTestCase("keytab remove entry sandbox deny", \testKeytabRemoveEntrySandboxDeny());
+        addTestCase("keytab remove then has content", \testKeytabRemoveThenHasContent());
+
+        set_return_value(main());
+    }
+
+    private string getSandboxCachePath(string suffix) {
+        return sprintf("/tmp/module-krb5-%s.ccache", suffix);
+    }
+
+    private string getSandboxKeytabPath(string suffix) {
+        return sprintf("/tmp/module-krb5-%s.keytab", suffix);
+    }
+
+    private cleanupSandboxCache(string path) {
+        try {
+            unlink(path);
+        } catch (hash<ExceptionInfo> ex) {
+        }
+    }
+
+    private cleanupSandboxKeytab(string path) {
+        try {
+            unlink(path);
+        } catch (hash<ExceptionInfo> ex) {
+        }
+    }
+
+    private string getTestKeyHex1() {
+        return "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff";
+    }
+
+    private string getTestKeyHex2() {
+        return "ffeeddccbbaa99887766554433221100ffeeddccbbaa99887766554433221100";
+    }
+
+    private testUtilityModuleHelpers() {
+        assertEq("ldap/ad.example.com@EXAMPLE.COM",
+            Krb5Util::getHostBasedServicePrincipal("ldap", "ad.example.com", "EXAMPLE.COM"));
+    }
+
+    private testUtilityFindNegotiateHeader() {
+        hash<Krb5Util::NegotiateHeaderInfo> info = Krb5Util::findNegotiateHeader({
+            "WWW-Authenticate": "Basic realm=\"a,b\", Negotiate abc==",
+        });
+        assertEq("Negotiate abc==", info.header);
+        assertTrue(info.has_token);
+
+        info = Krb5Util::findNegotiateHeader({
+            "www-authenticate": ("Digest realm=\"test\"", "negotiate"),
+        });
+        assertEq("negotiate", info.header);
+        assertFalse(info.has_token);
+
+        assertNothing(Krb5Util::findNegotiateHeader({
+            "www-authenticate": "Basic realm=\"test\"",
+        }));
+    }
+
+    private testUtilityParseHostBasedServicePrincipal() {
+        hash<Krb5Util::Krb5HostBasedServicePrincipalInfo> info =
+            Krb5Util::parseHostBasedServicePrincipal("HTTP/qorus.example.com@EXAMPLE.COM");
+        assertEq("HTTP", info.service);
+        assertEq("qorus.example.com", info.host);
+        assertEq("EXAMPLE.COM", info.realm);
+    }
+
+    private testUtilityParseHostBasedServicePrincipalRejectsSingleComponent() {
+        # Not a host-based service principal — only one component before the realm.
+        assertThrows("KRB5-PRINCIPAL-ERROR", "host-based", sub() {
+            Krb5Util::parseHostBasedServicePrincipal("alice@EXAMPLE.COM");
+        });
+    }
+
+    private testUtilityParseHostBasedServicePrincipalRejectsMalformed() {
+        assertThrows("KRB5-PRINCIPAL-ERROR", sub() {
+            Krb5Util::parseHostBasedServicePrincipal("not-a-principal");
+        });
+    }
+
+    private testUtilityBuildTlsServerEndPointChannelBindingHex() {
+        # The hex-encoded ASCII prefix "tls-server-end-point:" is 21 bytes / 42 hex chars.
+        string prefix_hex = "746c732d7365727665722d656e642d706f696e743a";
+        string cert_hash_hex = "00112233445566778899aabbccddeeff";
+        string cb = Krb5Util::buildTlsServerEndPointChannelBindingHex(cert_hash_hex);
+        assertEq(prefix_hex + cert_hash_hex, cb);
+
+        # The produced value must be acceptable as a GssClientContextOptions
+        # channel_binding_application_data_hex value (accepted without error).
+        hash<Qore::Krb5::GssClientContextOptions> opts();
+        opts.channel_binding_application_data_hex = cb;
+        Qore::Krb5::GssClientContext ctx("HTTP/qorus.example.com@EXAMPLE.COM", opts);
+        assertEq("HTTP/qorus.example.com@EXAMPLE.COM", ctx.getTargetName());
+    }
+
+    private testUtilityBuildTlsServerEndPointChannelBindingHexValidation() {
+        assertThrows("KRB5-CHANNEL-BINDING-ERROR", sub() {
+            Krb5Util::buildTlsServerEndPointChannelBindingHex("");
+        });
+        assertThrows("KRB5-CHANNEL-BINDING-ERROR", sub() {
+            Krb5Util::buildTlsServerEndPointChannelBindingHex("abc");
+        });
+        assertThrows("KRB5-CHANNEL-BINDING-ERROR", sub() {
+            Krb5Util::buildTlsServerEndPointChannelBindingHex("zz");
+        });
+    }
+
+    private testUtilityCredentialLifecycleHelpers() {
+        hash<Qore::Krb5::Krb5CredentialsInfo> info = createTestCredentials().getInfo();
+
+        hash<Krb5Util::CredentialLifecycleInfo> nearExpiry =
+            Krb5Util::getCredentialLifecycleInfo(info, 120, 1900);
+        assertEq(1900, nearExpiry.now_epoch_seconds);
+        assertEq(1000, nearExpiry.start_time);
+        assertEq(2000, nearExpiry.end_time);
+        assertEq(3000, nearExpiry.renew_until);
+        assertEq(-900, nearExpiry.seconds_until_start);
+        assertEq(100, nearExpiry.remaining_seconds);
+        assertEq(1100, nearExpiry.renewable_seconds);
+        assertTrue(nearExpiry.started);
+        assertFalse(nearExpiry.expired);
+        assertTrue(nearExpiry.valid);
+        assertTrue(nearExpiry.renewable);
+        assertTrue(nearExpiry.within_renewal_threshold);
+        assertTrue(nearExpiry.should_renew);
+
+        assertFalse(Krb5Util::isCredentialExpired(info, 1999));
+        assertTrue(Krb5Util::isCredentialExpired(info, 2000));
+        assertTrue(Krb5Util::shouldRenewCredential(info, 100, 1900));
+        assertFalse(Krb5Util::shouldRenewCredential(info, 50, 1900));
+
+        hash<Krb5Util::CredentialLifecycleInfo> beforeStart =
+            Krb5Util::getCredentialLifecycleInfo(info, 120, 900);
+        assertFalse(beforeStart.started);
+        assertFalse(beforeStart.expired);
+        assertFalse(beforeStart.valid);
+        assertEq(100, beforeStart.seconds_until_start);
+        assertEq(1100, beforeStart.remaining_seconds);
+        assertFalse(beforeStart.within_renewal_threshold);
+        assertFalse(beforeStart.should_renew);
+
+        hash<Qore::Krb5::Krb5CredentialsInfo> nonRenewable = info;
+        nonRenewable.renew_until = 0;
+        hash<Krb5Util::CredentialLifecycleInfo> nonRenewableStatus =
+            Krb5Util::getCredentialLifecycleInfo(nonRenewable, 120, 1900);
+        assertFalse(nonRenewableStatus.renewable);
+        assertEq(0, nonRenewableStatus.renewable_seconds);
+        assertTrue(nonRenewableStatus.within_renewal_threshold);
+        assertFalse(nonRenewableStatus.should_renew);
+    }
+
+    private testUtilityCredentialLifecycleValidation() {
+        hash<Qore::Krb5::Krb5CredentialsInfo> info = createTestCredentials().getInfo();
+
+        assertThrows("KRB5-CREDENTIAL-LIFECYCLE-ERROR", sub() {
+            Krb5Util::getCredentialLifecycleInfo(info, -1, 1900);
+        });
+        assertThrows("KRB5-CREDENTIAL-LIFECYCLE-ERROR", sub() {
+            Krb5Util::getCredentialLifecycleInfo(info, 120, -1);
+        });
+
+        hash<Qore::Krb5::Krb5CredentialsInfo> bad = info;
+        bad.end_time = 999;
+        assertThrows("KRB5-CREDENTIAL-LIFECYCLE-ERROR", sub() {
+            Krb5Util::getCredentialLifecycleInfo(bad, 120, 1900);
+        });
+
+        bad = info;
+        bad.renew_until = -1;
+        assertThrows("KRB5-CREDENTIAL-LIFECYCLE-ERROR", sub() {
+            Krb5Util::getCredentialLifecycleInfo(bad, 120, 1900);
+        });
+    }
+
+    private testUtilityCredentialLifecycleLoggerDiagnosticsSafe() {
+        Qore::Logger::Logger logger("krb5-lifecycle-test", "DEBUG");
+        CaptureLogAppender appender();
+        logger.addAppender(appender);
+        appender.open();
+
+        hash<Qore::Krb5::Krb5CredentialsInfo> info = createTestCredentials().getInfo();
+        Krb5Util::getCredentialLifecycleInfo(info, 120, 1900, logger);
+
+        list<string> messages = appender.getMessages();
+        assertTrue(messages.size() >= 1);
+        string combined = foldl $1 + "\n" + $2, messages;
+        assertTrue(combined.find("Krb5Util credential lifecycle") >= 0);
+        assertTrue(combined.find("remaining_seconds") >= 0);
+        assertEq(-1, combined.find(getTestKeyHex1()));
+        assertEq(-1, combined.find("abcd"));
+    }
+
+    private testValidateKerberosEnvironmentBasic() {
+        hash<Krb5Util::KerberosEnvironmentInfo> env = Krb5Util::validateKerberosEnvironment();
+        assertTrue(env.warnings instanceof list);
+        assertTrue(env.errors instanceof list);
+        assertTrue(env.checks instanceof list);
+        assertTrue(env.checks.size() > 0);
+        assertTrue(hasEnvironmentCheck(env, "default-realm"));
+        assertTrue(env.healthy instanceof bool);
+        assertEq(env.errors.size() == 0, env.healthy);
+        assertTrue(env.cache_accessible instanceof bool);
+        assertTrue(env.keytab_accessible instanceof bool);
+    }
+
+    private testValidateKerberosEnvironmentServicePrincipal() {
+        hash<Krb5Util::KerberosEnvironmentInfo> env =
+            Krb5Util::validateKerberosEnvironment("HTTP/nonexistent.example.com@EXAMPLE.COM");
+        assertTrue(env instanceof hash);
+        if (env.keytab_accessible && exists env.keytab_entry_count && env.keytab_entry_count > 0) {
+            assertTrue(env.service_principal_in_keytab instanceof bool);
+            if (env.service_principal_in_keytab == False) {
+                assertFalse(env.healthy);
+                assertTrue(hasEnvironmentCheck(env, "default-keytab-service-principal", False, "error"));
+            }
+        }
+        # Always verify the function completes without throwing
+        assertTrue(env.healthy instanceof bool);
+    }
+
+    private testValidateKerberosEnvironmentMalformedServicePrincipal() {
+        assertThrows("KRB5-PRINCIPAL-ERROR", sub() {
+            Krb5Util::validateKerberosEnvironment("");
+        });
+    }
+
+    private testValidateKerberosEnvironmentInvalidOptions() {
+        hash<Krb5Util::KerberosEnvironmentValidationOptions> opts();
+        opts.renew_threshold_seconds = -1;
+        assertThrows("KRB5-ENVIRONMENT-ERROR", sub() {
+            Krb5Util::validateKerberosEnvironment(NOTHING, NOTHING, opts);
+        });
+
+        hash<Krb5Util::KerberosEnvironmentValidationOptions> opts2();
+        opts2.min_tgt_lifetime_seconds = -1;
+        assertThrows("KRB5-ENVIRONMENT-ERROR", sub() {
+            Krb5Util::validateKerberosEnvironment(NOTHING, NOTHING, opts2);
+        });
+    }
+
+    private testValidateKerberosEnvironmentLoggerSafe() {
+        Qore::Logger::Logger logger("krb5-env-test", "DEBUG");
+        CaptureLogAppender appender();
+        logger.addAppender(appender);
+        appender.open();
+
+        Krb5Util::validateKerberosEnvironment(NOTHING, logger);
+
+        list<string> messages = appender.getMessages();
+        assertTrue(messages.size() >= 2);
+        string combined = foldl $1 + "\n" + $2, messages;
+        assertTrue(combined.find("Krb5Util environment") >= 0);
+    }
+
+    private bool hasEnvironmentCheck(hash<Krb5Util::KerberosEnvironmentInfo> env, string checkId,
+            *bool expectedOk = NOTHING, *string expectedSeverity = NOTHING) {
+        foreach hash<Krb5Util::KerberosEnvironmentCheckInfo> check in (env.checks) {
+            if (check.check_id == checkId
+                    && (!exists expectedOk || check.ok == expectedOk)
+                    && (!exists expectedSeverity || check.severity == expectedSeverity)) {
+                return True;
+            }
+        }
+        return False;
+    }
+
+    private testS4uImpersonateRequiresNetworkDomain() {
+        Program p(PO_NO_NETWORK);
+        assertThrows("PARSE-EXCEPTION", sub() {
+            p.parse("
+%modern
+%requires krb5
+Qore::Krb5::GssCredential cred;
+Qore::Krb5::Krb5Principal p(\"alice@EXAMPLE.COM\");
+Qore::Krb5::GssCredential::impersonateName(cred, p);
+", "s4u-domain-test");
+        });
+    }
+
+    private testS4uImpersonatedClientHelperRequiresNetworkDomain() {
+        Program p(PO_NO_NETWORK);
+        assertThrows("PARSE-EXCEPTION", sub() {
+            p.parse("
+%modern
+%requires krb5
+%requires Krb5Util
+Qore::Krb5::GssCredential cred;
+Qore::Krb5::Krb5Principal p(\"alice@EXAMPLE.COM\");
+Krb5Util::createImpersonatedClientContext(\"HTTP/backend.example.com@EXAMPLE.COM\", cred, p);
+", "s4u-helper-domain-test");
+        });
+    }
+
+    private testS4uImpersonatedClientHelperRejectsEmptyTarget() {
+        Qore::Krb5::Krb5Context ctx();
+        auto kt = ctx.openKeytab("MEMORY:module-krb5-s4u-helper-empty-target");
+        Qore::Krb5::Krb5Principal service("HTTP/qorus.example.com@EXAMPLE.COM");
+        kt.addEntry(service, getTestKeyHex1(), Qore::Krb5::ENCTYPE_AES256_CTS_HMAC_SHA1_96, 1);
+        Qore::Krb5::GssCredential cred = Qore::Krb5::GssCredential::fromKeytab(kt, service);
+        Qore::Krb5::Krb5Principal user("alice@EXAMPLE.COM");
+
+        assertThrows("KRB5-GSS-ARG-ERROR", sub() {
+            Krb5Util::createImpersonatedClientContext("", cred, user);
+        });
+    }
+
+    private testS4uProxyEmptyCacheRejected() {
+        Qore::Krb5::Krb5Context ctx();
+        Qore::Krb5::Krb5Principal client("alice@EXAMPLE.COM");
+        auto cache = ctx.createMemoryCredentialCache(client, "module-krb5-s4u-proxy-empty");
+        cache.initialize(client);
+
+        Qore::Krb5::Krb5Credentials evidence = createTestCredentials();
+        Qore::Krb5::Krb5Principal target("HTTP/target.example.com@EXAMPLE.COM");
+
+        assertThrows("KRB5-S4U-PROXY-ERROR", sub() {
+            ctx.acquireS4U2ProxyCredentials(cache, evidence, target);
+        });
+    }
+
+    private testS4uProxySandboxDeny() {
+        string cachePath = getSandboxCachePath("s4u-proxy-sandbox");
+        cleanupSandboxCache(cachePath);
+
+        Program p(PO_MODERN);
+        p.loadModule("krb5");
+        p.parse(sprintf("
+            nothing sub test_denied_s4u_proxy() {
+                Qore::Krb5::Krb5Context ctx();
+                Qore::Krb5::Krb5Principal client(\"alice@EXAMPLE.COM\");
+                Qore::Krb5::Krb5Principal server(\"HTTP/qorus.example.com@EXAMPLE.COM\");
+                Qore::Krb5::Krb5Credentials evidence(client, server,
+                    \"00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff\",
+                    Qore::Krb5::ENCTYPE_AES256_CTS_HMAC_SHA1_96, 1000, 2000, 3000, 0x40, \"abcd\");
+                Qore::Krb5::Krb5Principal target(\"HTTP/target.example.com@EXAMPLE.COM\");
+                auto cc = ctx.openCredentialCache(\"FILE:%s\");
+                ctx.acquireS4U2ProxyCredentials(cc, evidence, target);
+            }
+        ", cachePath), "sandbox_denied_s4u_proxy");
+
+        SandboxManager sm();
+        sm.setFilesystemSandboxRoot("/var");
+        p.setSandboxManager(sm);
+
+        assertThrows("FILESYSTEM-ACCESS-DENIED", sub() {
+            p.callFunction("test_denied_s4u_proxy");
+        });
+        cleanupSandboxCache(cachePath);
+    }
+
+    private Qore::Krb5::Krb5Credentials createTestTgt() {
+        return createTestTgtWithTimes(1000, 2000, 3000);
+    }
+
+    private Qore::Krb5::Krb5Credentials createTestTgtWithTimes(int startTime, int endTime, int renewUntil) {
+        Qore::Krb5::Krb5Principal client("alice@EXAMPLE.COM");
+        Qore::Krb5::Krb5Principal server("krbtgt/EXAMPLE.COM@EXAMPLE.COM");
+        Qore::Krb5::Krb5Credentials creds(client, server, getTestKeyHex1(),
+            Qore::Krb5::ENCTYPE_AES256_CTS_HMAC_SHA1_96, startTime, endTime, renewUntil, 0x40, "abcd");
+        return creds;
+    }
+
+    private testRenewAndStoreNoTgt() {
+        Qore::Krb5::Krb5Context ctx();
+        Qore::Krb5::Krb5Principal client("alice@EXAMPLE.COM");
+        auto cache = ctx.createMemoryCredentialCache(client, "module-krb5-renew-no-tgt");
+        cache.initialize(client);
+        cache.storeCredentials(createTestCredentials());
+
+        hash<Krb5Util::RenewAndStoreResult> result = Krb5Util::renewAndStoreIfNeeded(ctx, cache, 300);
+        assertFalse(result.renewed);
+        assertFalse(result.was_expired);
+        assertFalse(exists result.lifecycle);
+        assertFalse(exists result.error);
+    }
+
+    private testRenewAndStoreExpired() {
+        Qore::Krb5::Krb5Context ctx();
+        Qore::Krb5::Krb5Principal client("alice@EXAMPLE.COM");
+        auto cache = ctx.createMemoryCredentialCache(client, "module-krb5-renew-expired");
+        cache.initialize(client);
+        cache.storeCredentials(createTestTgt());
+
+        # TGT has end_time=2000, which is in the past — should be expired
+        hash<Krb5Util::RenewAndStoreResult> result = Krb5Util::renewAndStoreIfNeeded(ctx, cache, 300);
+        assertFalse(result.renewed);
+        assertTrue(result.was_expired);
+        assertTrue(exists result.lifecycle);
+        assertTrue(result.lifecycle.expired);
+    }
+
+    private testRenewAndStoreValidation() {
+        Qore::Krb5::Krb5Context ctx();
+        Qore::Krb5::Krb5Principal client("alice@EXAMPLE.COM");
+        auto cache = ctx.createMemoryCredentialCache(client, "module-krb5-renew-validation");
+        cache.initialize(client);
+
+        assertThrows("KRB5-RENEW-STORE-ERROR", sub() {
+            Krb5Util::renewAndStoreIfNeeded(ctx, cache, -1);
+        });
+    }
+
+    private testRenewAndStoreLoggerDiagnosticsSafe() {
+        Qore::Logger::Logger logger("krb5-renew-store-test", "DEBUG");
+        CaptureLogAppender appender();
+        logger.addAppender(appender);
+        appender.open();
+
+        Qore::Krb5::Krb5Context ctx();
+        Qore::Krb5::Krb5Principal client("alice@EXAMPLE.COM");
+        auto cache = ctx.createMemoryCredentialCache(client, "module-krb5-renew-logger");
+        cache.initialize(client);
+        cache.storeCredentials(createTestTgt());
+
+        Krb5Util::renewAndStoreIfNeeded(ctx, cache, 300, logger);
+
+        list<string> messages = appender.getMessages();
+        assertTrue(messages.size() >= 2);
+        string combined = foldl $1 + "\n" + $2, messages;
+        assertTrue(combined.find("Krb5Util renew-and-store") >= 0);
+        assertEq(-1, combined.find(getTestKeyHex1()));
+        assertEq(-1, combined.find("abcd"));
+    }
+
+    private testCredentialCacheMaintenanceNoTgt() {
+        Qore::Krb5::Krb5Context ctx();
+        Qore::Krb5::Krb5Principal client("alice@EXAMPLE.COM");
+        auto cache = ctx.createMemoryCredentialCache(client, "module-krb5-maint-no-tgt");
+        cache.initialize(client);
+        cache.storeCredentials(createTestCredentials());
+
+        hash<Krb5Util::CredentialCacheMaintenanceResult> result =
+            Krb5Util::maintainCredentialCache(ctx, cache);
+        assertTrue(result.healthy);
+        assertFalse(result.renewed);
+        assertFalse(result.was_expired);
+        assertFalse(exists result.tgt_lifecycle);
+        assertTrue(result.warnings.size() > 0);
+    }
+
+    private testCredentialCacheMaintenanceMissingTgtError() {
+        Qore::Krb5::Krb5Context ctx();
+        Qore::Krb5::Krb5Principal client("alice@EXAMPLE.COM");
+        auto cache = ctx.createMemoryCredentialCache(client, "module-krb5-maint-missing-tgt-error");
+        cache.initialize(client);
+
+        hash<Krb5Util::CredentialCacheMaintenanceOptions> opts();
+        opts.missing_tgt_is_error = True;
+        hash<Krb5Util::CredentialCacheMaintenanceResult> result =
+            Krb5Util::maintainCredentialCache(ctx, cache, opts);
+        assertFalse(result.healthy);
+        assertTrue(result.errors.size() > 0);
+
+        opts.fail_fast = True;
+        assertThrows("KRB5-CACHE-MAINTENANCE-ERROR", sub() {
+            Krb5Util::maintainCredentialCache(ctx, cache, opts);
+        });
+    }
+
+    private testCredentialCacheMaintenanceExpiredTgt() {
+        Qore::Krb5::Krb5Context ctx();
+        Qore::Krb5::Krb5Principal client("alice@EXAMPLE.COM");
+        auto cache = ctx.createMemoryCredentialCache(client, "module-krb5-maint-expired-tgt");
+        cache.initialize(client);
+        cache.storeCredentials(createTestTgt());
+
+        hash<Krb5Util::CredentialCacheMaintenanceResult> result =
+            Krb5Util::maintainCredentialCache(ctx, cache);
+        assertTrue(result.healthy);
+        assertTrue(result.was_expired);
+        assertFalse(result.renewed);
+        assertTrue(exists result.tgt_lifecycle);
+        assertTrue(result.tgt_lifecycle.expired);
+    }
+
+    private testCredentialCacheMaintenanceDryRunRenewal() {
+        int t = now().getEpochSeconds();
+        Qore::Krb5::Krb5Context ctx();
+        Qore::Krb5::Krb5Principal client("alice@EXAMPLE.COM");
+        auto cache = ctx.createMemoryCredentialCache(client, "module-krb5-maint-dry-run-renewal");
+        cache.initialize(client);
+        cache.storeCredentials(createTestTgtWithTimes(t - 10, t + 100, t + 3600));
+
+        hash<Krb5Util::CredentialCacheMaintenanceOptions> opts();
+        opts.renew_threshold_seconds = 300;
+        opts.dry_run = True;
+        opts.service_principals = ("HTTP/target.example.com@EXAMPLE.COM",);
+
+        hash<Krb5Util::CredentialCacheMaintenanceResult> result =
+            Krb5Util::maintainCredentialCache(ctx, cache, opts);
+        assertTrue(result.healthy);
+        assertTrue(result.dry_run);
+        assertFalse(result.renewed);
+        assertTrue(result.tgt_lifecycle.should_renew);
+        assertEq(1, result.service_tickets.size());
+        assertTrue(result.service_tickets[0].dry_run);
+        assertFalse(result.service_tickets[0].acquired);
+    }
+
+    private testCredentialCacheMaintenanceServiceTicketFailure() {
+        Qore::Krb5::Krb5Context ctx();
+        Qore::Krb5::Krb5Principal client("alice@EXAMPLE.COM");
+        auto cache = ctx.createMemoryCredentialCache(client, "module-krb5-maint-service-failure");
+        cache.initialize(client);
+
+        hash<Krb5Util::CredentialCacheMaintenanceOptions> opts();
+        opts.service_principals = ("HTTP/target.example.com@EXAMPLE.COM",);
+        hash<Krb5Util::CredentialCacheMaintenanceResult> result =
+            Krb5Util::maintainCredentialCache(ctx, cache, opts);
+        assertFalse(result.healthy);
+        assertEq(1, result.service_tickets.size());
+        assertFalse(result.service_tickets[0].acquired);
+        assertTrue(exists result.service_tickets[0].error);
+
+        opts.fail_fast = True;
+        assertThrows("KRB5-CACHE-MAINTENANCE-ERROR", sub() {
+            Krb5Util::maintainCredentialCache(ctx, cache, opts);
+        });
+    }
+
+    private testCredentialCacheMaintenanceValidation() {
+        Qore::Krb5::Krb5Context ctx();
+        Qore::Krb5::Krb5Principal client("alice@EXAMPLE.COM");
+        auto cache = ctx.createMemoryCredentialCache(client, "module-krb5-maint-validation");
+        cache.initialize(client);
+
+        hash<Krb5Util::CredentialCacheMaintenanceOptions> opts();
+        opts.renew_threshold_seconds = -1;
+        assertThrows("KRB5-CACHE-MAINTENANCE-ERROR", sub() {
+            Krb5Util::maintainCredentialCache(ctx, cache, opts);
+        });
+
+        hash<Krb5Util::CredentialCacheMaintenanceOptions> opts2();
+        opts2.service_principals = ("",);
+        assertThrows("KRB5-CACHE-MAINTENANCE-ERROR", sub() {
+            Krb5Util::maintainCredentialCache(ctx, cache, opts2);
+        });
+    }
+
+    private testCredentialCacheMaintenanceLoggerDiagnosticsSafe() {
+        Qore::Logger::Logger logger("krb5-maint-test", "DEBUG");
+        CaptureLogAppender appender();
+        logger.addAppender(appender);
+        appender.open();
+
+        Qore::Krb5::Krb5Context ctx();
+        Qore::Krb5::Krb5Principal client("alice@EXAMPLE.COM");
+        auto cache = ctx.createMemoryCredentialCache(client, "module-krb5-maint-logger");
+        cache.initialize(client);
+        cache.storeCredentials(createTestTgt());
+
+        Krb5Util::maintainCredentialCache(ctx, cache, NOTHING, logger);
+
+        list<string> messages = appender.getMessages();
+        assertTrue(messages.size() >= 1);
+        string combined = foldl $1 + "\n" + $2, messages;
+        assertTrue(combined.find("Krb5Util credential maintenance") >= 0);
+        assertEq(-1, combined.find(getTestKeyHex1()));
+        assertEq(-1, combined.find("abcd"));
+    }
+
+    private testCredentialCacheCollectionMaintenanceReturnsList() {
+        Qore::Krb5::Krb5Context ctx();
+        hash<Krb5Util::CredentialCacheMaintenanceOptions> opts();
+        opts.dry_run = True;
+        list<hash<Krb5Util::CredentialCacheMaintenanceResult>> results =
+            Krb5Util::maintainCredentialCaches(ctx, opts);
+        assertTrue(results instanceof list);
+    }
+
+    private testContextDefaults() {
+        Qore::Krb5::Krb5Context ctx();
+        string realm;
+        try {
+            realm = ctx.getDefaultRealm();
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "KRB5-REALM-ERROR") {
+                testSkip("no default Kerberos realm configured on this host");
+            }
+            rethrow;
+        }
+        assertFalse(realm == "");
+        assertFalse(ctx.getDefaultCredentialCacheName() == "");
+    }
+
+    private testDefaultCredentialCacheMetadata() {
+        Qore::Krb5::Krb5Context ctx();
+        auto cc = ctx.openDefaultCredentialCache();
+        assertFalse(cc.getType() == "");
+        assertFalse(cc.getName() == "");
+        assertFalse(cc.getFullName() == "");
+    }
+
+    private testDefaultKeytabMetadata() {
+        Qore::Krb5::Krb5Context ctx();
+        assertFalse(ctx.getDefaultKeytabName() == "");
+        auto kt = ctx.openDefaultKeytab();
+        assertFalse(kt.getType() == "");
+        assertFalse(kt.getName() == "");
+    }
+
+    private Qore::Krb5::Krb5Credentials createTestCredentials(int kvno = 1) {
+        Qore::Krb5::Krb5Principal client("alice@EXAMPLE.COM");
+        Qore::Krb5::Krb5Principal server("HTTP/qorus.example.com@EXAMPLE.COM");
+        Qore::Krb5::Krb5Credentials creds(client, server, kvno == 1 ? getTestKeyHex1() : getTestKeyHex2(),
+            Qore::Krb5::ENCTYPE_AES256_CTS_HMAC_SHA1_96, 1000, 2000, 3000, 0x40, "abcd");
+        return creds;
+    }
+
+    private testCredentialsMetadata() {
+        Qore::Krb5::Krb5Credentials creds = createTestCredentials();
+        hash<Qore::Krb5::Krb5CredentialsInfo> info = creds.getInfo();
+        assertEq("alice@EXAMPLE.COM", info.client);
+        assertEq("HTTP/qorus.example.com@EXAMPLE.COM", info.server);
+        assertEq(Qore::Krb5::ENCTYPE_AES256_CTS_HMAC_SHA1_96, info.enctype);
+        assertFalse(info.enctype_name == "");
+        assertEq(1000, info.start_time);
+        assertEq(2000, info.end_time);
+        assertEq(3000, info.renew_until);
+        assertEq(0x40, info.ticket_flags);
+        assertEq(2, info.ticket_size);
+        assertEq("alice@EXAMPLE.COM", creds.getClientPrincipal().toString());
+        assertEq("HTTP/qorus.example.com@EXAMPLE.COM", creds.getServerPrincipal().toString());
+    }
+
+    private testCredentialsInvalidKeyHexRejected() {
+        Qore::Krb5::Krb5Principal client("alice@EXAMPLE.COM");
+        Qore::Krb5::Krb5Principal server("HTTP/qorus.example.com@EXAMPLE.COM");
+        assertThrows("KRB5-CREDENTIALS-ERROR", sub() {
+            Qore::Krb5::Krb5Credentials bad(client, server, "xyz",
+                Qore::Krb5::ENCTYPE_AES256_CTS_HMAC_SHA1_96, 1000, 2000, 0, 0, "00");
+        });
+    }
+
+    private testCredentialsDefaultOptionalFields() {
+        Qore::Krb5::Krb5Principal client("alice@EXAMPLE.COM");
+        Qore::Krb5::Krb5Principal server("HTTP/qorus.example.com@EXAMPLE.COM");
+        Qore::Krb5::Krb5Credentials creds(client, server, getTestKeyHex1(),
+            Qore::Krb5::ENCTYPE_AES256_CTS_HMAC_SHA1_96, 1000, 2000);
+        hash<Qore::Krb5::Krb5CredentialsInfo> info = creds.getInfo();
+        assertEq(0, info.renew_until);
+        assertEq(0, info.ticket_flags);
+        assertEq(1, info.ticket_size);
+    }
+
+    private testCredentialsEmptyKeyRejected() {
+        Qore::Krb5::Krb5Principal client("alice@EXAMPLE.COM");
+        Qore::Krb5::Krb5Principal server("HTTP/qorus.example.com@EXAMPLE.COM");
+        assertThrows("KRB5-CREDENTIALS-ERROR", sub() {
+            Qore::Krb5::Krb5Credentials bad(client, server, "",
+                Qore::Krb5::ENCTYPE_AES256_CTS_HMAC_SHA1_96, 1000, 2000);
+        });
+    }
+
+    private testCredentialsInvalidTicketHexRejected() {
+        Qore::Krb5::Krb5Principal client("alice@EXAMPLE.COM");
+        Qore::Krb5::Krb5Principal server("HTTP/qorus.example.com@EXAMPLE.COM");
+        assertThrows("KRB5-CREDENTIALS-ERROR", sub() {
+            Qore::Krb5::Krb5Credentials bad(client, server, getTestKeyHex1(),
+                Qore::Krb5::ENCTYPE_AES256_CTS_HMAC_SHA1_96, 1000, 2000, 0, 0, "abc");
+        });
+    }
+
+    private testCredentialCacheStoreAndList() {
+        Qore::Krb5::Krb5Principal client("alice@EXAMPLE.COM");
+        Qore::Krb5::Krb5Context ctx();
+        auto cc = ctx.createMemoryCredentialCache(client, "module-krb5-credential-list");
+        assertEq(0, cc.listCredentials().size());
+
+        Qore::Krb5::Krb5Credentials creds = createTestCredentials();
+        cc.storeCredentials(creds);
+
+        list<hash<Qore::Krb5::Krb5CredentialsInfo>> entries = cc.listCredentials();
+        assertEq(1, entries.size());
+        assertEq("alice@EXAMPLE.COM", entries[0].client);
+        assertEq("HTTP/qorus.example.com@EXAMPLE.COM", entries[0].server);
+        assertEq(Qore::Krb5::ENCTYPE_AES256_CTS_HMAC_SHA1_96, entries[0].enctype);
+        assertEq(2000, entries[0].end_time);
+    }
+
+    private testMemoryCredentialCacheRoundtrip() {
+        Qore::Krb5::Krb5Context ctx();
+        Qore::Krb5::Krb5Principal p("service/qorus.example.com@EXAMPLE.COM");
+        auto cc = ctx.createMemoryCredentialCache(p, "module-krb5-roundtrip");
+        assertEq("MEMORY", cc.getType());
+        assertEq("module-krb5-roundtrip", cc.getName());
+        assertEq("MEMORY:module-krb5-roundtrip", cc.getFullName());
+        assertTrue(cc.hasPrimaryPrincipal());
+
+        auto cp = cc.getPrimaryPrincipal();
+        assertEq("service/qorus.example.com@EXAMPLE.COM", cp.toString());
+        assertTrue(p.equals(cp));
+    }
+
+    private testEmptyCredentialCache() {
+        Qore::Krb5::Krb5Context ctx();
+        auto cc = ctx.openCredentialCache("MEMORY:module-krb5-empty");
+        assertFalse(cc.hasPrimaryPrincipal());
+        assertThrows("KRB5-CACHE-ERROR", sub() {
+            cc.getPrimaryPrincipal();
+        });
+    }
+
+    private testEmptyCacheNameRejected() {
+        Qore::Krb5::Krb5Context ctx();
+        assertThrows("KRB5-CACHE-ERROR", sub() {
+            ctx.openCredentialCache("");
+        });
+        Qore::Krb5::Krb5Principal p("service/qorus.example.com@EXAMPLE.COM");
+        assertThrows("KRB5-CACHE-ERROR", sub() {
+            ctx.createMemoryCredentialCache(p, "");
+        });
+    }
+
+    private testFileCacheSandboxDeny() {
+        string cachePath = getSandboxCachePath("sandbox-deny");
+        cleanupSandboxCache(cachePath);
+
+        Program p(PO_MODERN);
+        p.loadModule("krb5");
+        p.parse(sprintf("
+            string sub test_denied_cache() {
+                Qore::Krb5::Krb5Context ctx();
+                Qore::Krb5::Krb5Principal principal(\"service/qorus.example.com@EXAMPLE.COM\");
+                auto cc = ctx.openCredentialCache(\"FILE:%s\");
+                cc.initialize(principal);
+                return cc.getPrimaryPrincipal().toString();
+            }
+        ", cachePath), "sandbox_denied_cache");
+
+        SandboxManager sm();
+        sm.setFilesystemSandboxRoot("/var");
+        p.setSandboxManager(sm);
+
+        bool caught = False;
+        try {
+            p.callFunction("test_denied_cache");
+        } catch (hash<ExceptionInfo> ex) {
+            caught = True;
+            assertEq("FILESYSTEM-ACCESS-DENIED", ex.err);
+        }
+        assertTrue(caught);
+        cleanupSandboxCache(cachePath);
+    }
+
+    private testFileCacheSandboxAllow() {
+        string cachePath = getSandboxCachePath("sandbox-allow");
+        cleanupSandboxCache(cachePath);
+
+        Program p(PO_MODERN);
+        p.loadModule("krb5");
+        p.parse(sprintf("
+            string sub test_allowed_cache() {
+                Qore::Krb5::Krb5Context ctx();
+                Qore::Krb5::Krb5Principal principal(\"service/qorus.example.com@EXAMPLE.COM\");
+                auto cc = ctx.openCredentialCache(\"FILE:%s\");
+                cc.initialize(principal);
+                return cc.getPrimaryPrincipal().toString();
+            }
+        ", cachePath), "sandbox_allowed_cache");
+
+        SandboxManager sm();
+        sm.setFilesystemSandboxRoot("/tmp");
+        p.setSandboxManager(sm);
+
+        string principal = p.callFunction("test_allowed_cache");
+        assertEq("service/qorus.example.com@EXAMPLE.COM", principal);
+        cleanupSandboxCache(cachePath);
+    }
+
+    private testMemoryKeytabRoundtrip() {
+        Qore::Krb5::Krb5Context ctx();
+        auto kt = ctx.openKeytab("MEMORY:module-krb5-keytab-roundtrip");
+        assertFalse(kt.hasContent());
+
+        Qore::Krb5::Krb5Principal p("HTTP/qorus.example.com@EXAMPLE.COM");
+        kt.addEntry(p, getTestKeyHex1(), Qore::Krb5::ENCTYPE_AES256_CTS_HMAC_SHA1_96, 3);
+        assertTrue(kt.hasContent());
+
+        hash<Qore::Krb5::Krb5KeytabEntryInfo> entry = kt.getEntry(p);
+        assertEq("HTTP/qorus.example.com@EXAMPLE.COM", entry.principal);
+        assertEq(3, entry.kvno);
+        assertEq(Qore::Krb5::ENCTYPE_AES256_CTS_HMAC_SHA1_96, entry.enctype);
+        assertEq(32, entry.key_size);
+        assertFalse(entry.enctype_name == "");
+
+        list<hash<Qore::Krb5::Krb5KeytabEntryInfo>> entries = kt.listEntries();
+        assertEq(1, entries.size());
+        assertEq(3, entries[0].kvno);
+    }
+
+    private testMemoryKeytabHighestKvno() {
+        Qore::Krb5::Krb5Context ctx();
+        auto kt = ctx.openKeytab("MEMORY:module-krb5-keytab-highest-kvno");
+        Qore::Krb5::Krb5Principal p("HTTP/qorus.example.com@EXAMPLE.COM");
+        kt.addEntry(p, getTestKeyHex1(), Qore::Krb5::ENCTYPE_AES256_CTS_HMAC_SHA1_96, 1);
+        kt.addEntry(p, getTestKeyHex2(), Qore::Krb5::ENCTYPE_AES256_CTS_HMAC_SHA1_96, 5);
+
+        hash<Qore::Krb5::Krb5KeytabEntryInfo> entry = kt.getEntry(p);
+        assertEq(5, entry.kvno);
+        assertEq(32, entry.key_size);
+    }
+
+    private testInvalidKeytabHexRejected() {
+        Qore::Krb5::Krb5Context ctx();
+        auto kt = ctx.openKeytab("MEMORY:module-krb5-keytab-invalid-hex");
+        Qore::Krb5::Krb5Principal p("HTTP/qorus.example.com@EXAMPLE.COM");
+        assertThrows("KRB5-KEYTAB-ERROR", sub() {
+            kt.addEntry(p, "xyz", Qore::Krb5::ENCTYPE_AES256_CTS_HMAC_SHA1_96, 1);
+        });
+    }
+
+    private testFileKeytabSandboxDeny() {
+        string keytabPath = getSandboxKeytabPath("sandbox-deny");
+        cleanupSandboxKeytab(keytabPath);
+
+        Program p(PO_MODERN);
+        p.loadModule("krb5");
+        p.parse(sprintf("
+            string sub test_denied_keytab() {
+                Qore::Krb5::Krb5Context ctx();
+                Qore::Krb5::Krb5Principal principal(\"HTTP/qorus.example.com@EXAMPLE.COM\");
+                auto kt = ctx.openKeytab(\"FILE:%s\");
+                kt.addEntry(principal,
+                    \"00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff\",
+                    Qore::Krb5::ENCTYPE_AES256_CTS_HMAC_SHA1_96, 1);
+                return kt.getEntry(principal).principal;
+            }
+        ", keytabPath), "sandbox_denied_keytab");
+
+        SandboxManager sm();
+        sm.setFilesystemSandboxRoot("/var");
+        p.setSandboxManager(sm);
+
+        bool caught = False;
+        try {
+            p.callFunction("test_denied_keytab");
+        } catch (hash<ExceptionInfo> ex) {
+            caught = True;
+            assertEq("FILESYSTEM-ACCESS-DENIED", ex.err);
+        }
+        assertTrue(caught);
+        cleanupSandboxKeytab(keytabPath);
+    }
+
+    private testFileKeytabSandboxAllow() {
+        string keytabPath = getSandboxKeytabPath("sandbox-allow");
+        cleanupSandboxKeytab(keytabPath);
+
+        Program p(PO_MODERN);
+        p.loadModule("krb5");
+        p.parse(sprintf("
+            string sub test_allowed_keytab() {
+                Qore::Krb5::Krb5Context ctx();
+                Qore::Krb5::Krb5Principal principal(\"HTTP/qorus.example.com@EXAMPLE.COM\");
+                auto kt = ctx.openKeytab(\"FILE:%s\");
+                kt.addEntry(principal,
+                    \"00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff\",
+                    Qore::Krb5::ENCTYPE_AES256_CTS_HMAC_SHA1_96, 2);
+                return kt.getEntry(principal).principal;
+            }
+        ", keytabPath), "sandbox_allowed_keytab");
+
+        SandboxManager sm();
+        sm.setFilesystemSandboxRoot("/tmp");
+        p.setSandboxManager(sm);
+
+        string principal = p.callFunction("test_allowed_keytab");
+        assertEq("HTTP/qorus.example.com@EXAMPLE.COM", principal);
+        cleanupSandboxKeytab(keytabPath);
+    }
+
+    private testPrincipalParsing() {
+        Qore::Krb5::Krb5Principal p("HTTP/qorus.example.com@EXAMPLE.COM");
+        assertEq("HTTP/qorus.example.com@EXAMPLE.COM", p.toString());
+        assertEq("EXAMPLE.COM", p.getRealm());
+        assertEq(2, p.getComponentCount());
+        assertEq("HTTP", p.getComponent(0));
+        assertEq("qorus.example.com", p.getComponent(1));
+    }
+
+    private testEnterprisePrincipalParsing() {
+        Qore::Krb5::Krb5Principal p = Qore::Krb5::Krb5Principal::parseEnterprise(
+            "alice@example.com@EXAMPLE.COM");
+        assertEq("EXAMPLE.COM", p.getRealm());
+        assertEq(1, p.getComponentCount());
+        assertEq("alice@example.com", p.getComponent(0));
+        assertEq("alice\\@example.com@EXAMPLE.COM", p.toString());
+    }
+
+    private testPrincipalCopy() {
+        Qore::Krb5::Krb5Principal p("HTTP/qorus.example.com@EXAMPLE.COM");
+        Qore::Krb5::Krb5Principal p2 = p.copy();
+        assertTrue(p.equals(p2));
+    }
+
+    private testPrincipalBounds() {
+        Qore::Krb5::Krb5Principal p("HTTP/qorus.example.com@EXAMPLE.COM");
+        assertThrows("KRB5-PRINCIPAL-ERROR", sub() {
+            p.getComponent(2);
+        });
+    }
+
+    private testInitialCredentialsEmptyPasswordRejected() {
+        Qore::Krb5::Krb5Context ctx();
+        Qore::Krb5::Krb5Principal p("alice@EXAMPLE.COM");
+        assertThrows("KRB5-INIT-CREDS-ERROR", sub() {
+            hash<Qore::Krb5::Krb5InitialCredentialsOptions> opts();
+            opts.canonicalize = True;
+            opts.pac_request = True;
+            ctx.acquireCredentialsWithPassword(p, "", opts);
+        });
+    }
+
+    private testInitialCredentialsEmptyEnctypeListRejected() {
+        Qore::Krb5::Krb5Context ctx();
+        Qore::Krb5::Krb5Principal p("alice@EXAMPLE.COM");
+        assertThrows("KRB5-INIT-CREDS-ERROR", sub() {
+            hash<Qore::Krb5::Krb5InitialCredentialsOptions> opts();
+            opts.enctypes = ();
+            ctx.acquireCredentialsWithPassword(p, "secret", opts);
+        });
+    }
+
+    private testInitialCredentialsBadKeytabRejected() {
+        Qore::Krb5::Krb5Context ctx();
+        Qore::Krb5::Krb5Principal p("alice@EXAMPLE.COM");
+        auto kt = ctx.openKeytab("MEMORY:module-krb5-empty-init-creds");
+        assertThrows("KRB5-INIT-CREDS-ERROR", sub() {
+            hash<Qore::Krb5::Krb5InitialCredentialsOptions> opts();
+            opts.canonicalize = True;
+            opts.pac_request = True;
+            ctx.acquireCredentialsWithKeytab(p, kt, opts);
+        });
+    }
+
+    private testInitialCredentialsKeytabSandboxDeny() {
+        string keytabPath = getSandboxKeytabPath("init-creds-deny");
+        cleanupSandboxKeytab(keytabPath);
+
+        Program p(PO_MODERN);
+        p.loadModule("krb5");
+        p.parse(sprintf("
+            nothing sub test_denied_init_creds_keytab() {
+                Qore::Krb5::Krb5Context ctx();
+                Qore::Krb5::Krb5Principal principal(\"alice@EXAMPLE.COM\");
+                auto kt = ctx.openKeytab(\"FILE:%s\");
+                ctx.acquireCredentialsWithKeytab(principal, kt);
+            }
+        ", keytabPath), "sandbox_denied_init_creds_keytab");
+
+        SandboxManager sm();
+        sm.setFilesystemSandboxRoot("/var");
+        p.setSandboxManager(sm);
+
+        bool caught = False;
+        try {
+            p.callFunction("test_denied_init_creds_keytab");
+        } catch (hash<ExceptionInfo> ex) {
+            caught = True;
+            assertEq("FILESYSTEM-ACCESS-DENIED", ex.err);
+        }
+        assertTrue(caught);
+        cleanupSandboxKeytab(keytabPath);
+    }
+
+    private testInitialCredentialsFastCacheSandboxDeny() {
+        string cachePath = getSandboxCachePath("fast-deny");
+        cleanupSandboxCache(cachePath);
+
+        Program p(PO_MODERN);
+        p.loadModule("krb5");
+        p.parse(sprintf("
+            nothing sub test_denied_init_creds_fast_cache() {
+                Qore::Krb5::Krb5Context ctx();
+                Qore::Krb5::Krb5Principal principal(\"alice@EXAMPLE.COM\");
+                hash<Qore::Krb5::Krb5InitialCredentialsOptions> opts();
+                opts.fast_ccache_name = \"FILE:%s\";
+                opts.fast_required = True;
+                opts.canonicalize = True;
+                ctx.acquireCredentialsWithPassword(principal, \"secret\", opts);
+            }
+        ", cachePath), "sandbox_denied_init_creds_fast_cache");
+
+        SandboxManager sm();
+        sm.setFilesystemSandboxRoot("/var");
+        p.setSandboxManager(sm);
+
+        bool caught = False;
+        try {
+            p.callFunction("test_denied_init_creds_fast_cache");
+        } catch (hash<ExceptionInfo> ex) {
+            caught = True;
+            assertEq("FILESYSTEM-ACCESS-DENIED", ex.err);
+        }
+        assertTrue(caught);
+        cleanupSandboxCache(cachePath);
+    }
+
+    private testGssTargetSetup() {
+        Qore::Krb5::GssClientContext ctx("HTTP/qorus.example.com@EXAMPLE.COM");
+        assertEq("HTTP/qorus.example.com@EXAMPLE.COM", ctx.getTargetName());
+        assertFalse(ctx.isComplete());
+    }
+
+    private testGssContextOptions() {
+        hash<Qore::Krb5::GssClientContextOptions> opts();
+        opts.flags = Qore::Krb5::GSS_MUTUAL_FLAG | Qore::Krb5::GSS_SEQUENCE_FLAG | Qore::Krb5::GSS_INTEG_FLAG;
+        opts.lifetime = 600;
+        opts.mechanism = "kerberos";
+
+        Qore::Krb5::GssClientContext ctx("HTTP/qorus.example.com@EXAMPLE.COM", opts);
+        assertEq("HTTP/qorus.example.com@EXAMPLE.COM", ctx.getTargetName());
+        assertFalse(ctx.isComplete());
+
+        opts.mechanism = "default";
+        Qore::Krb5::GssClientContext ctx2("HTTP/qorus.example.com@EXAMPLE.COM", opts);
+        assertEq("HTTP/qorus.example.com@EXAMPLE.COM", ctx2.getTargetName());
+    }
+
+    private testGssContextNameTypeOptions() {
+        hash<Qore::Krb5::GssClientContextOptions> opts();
+        opts.name_type = "krb5-principal";
+        Qore::Krb5::GssClientContext ctx("HTTP/qorus.example.com@EXAMPLE.COM", opts);
+        assertEq("HTTP/qorus.example.com@EXAMPLE.COM", ctx.getTargetName());
+
+        opts.name_type = "hostbased-service";
+        Qore::Krb5::GssClientContext hostbased("HTTP@qorus.example.com", opts);
+        assertEq("HTTP@qorus.example.com", hostbased.getTargetName());
+
+        opts.name_type = "default";
+        Qore::Krb5::GssClientContext default_name("HTTP/qorus.example.com@EXAMPLE.COM", opts);
+        assertEq("HTTP/qorus.example.com@EXAMPLE.COM", default_name.getTargetName());
+    }
+
+    private testGssContextChannelBindingOptions() {
+        hash<Qore::Krb5::GssClientContextOptions> opts();
+        opts.flags = Qore::Krb5::GSS_DEFAULT_FLAGS | Qore::Krb5::GSS_CHANNEL_BOUND_FLAG;
+        opts.mechanism = "kerberos";
+        opts.channel_binding_initiator_addrtype = Qore::Krb5::GSS_AF_NULLADDR;
+        opts.channel_binding_acceptor_addrtype = Qore::Krb5::GSS_AF_INET;
+        opts.channel_binding_acceptor_address_hex = "7f000001";
+        opts.channel_binding_application_data_hex = "746c732d7365727665722d656e642d706f696e743a00112233";
+
+        Qore::Krb5::GssClientContext ctx("HTTP/qorus.example.com@EXAMPLE.COM", opts);
+        assertEq("HTTP/qorus.example.com@EXAMPLE.COM", ctx.getTargetName());
+        assertFalse(ctx.isComplete());
+    }
+
+    private testGssContextInvalidOptions() {
+        assertThrows("KRB5-GSS-ARG-ERROR", sub() {
+            hash<Qore::Krb5::GssClientContextOptions> opts();
+            opts.mechanism = "";
+            Qore::Krb5::GssClientContext bad("HTTP/qorus.example.com@EXAMPLE.COM", opts);
+        });
+        assertThrows("KRB5-GSS-ARG-ERROR", sub() {
+            hash<Qore::Krb5::GssClientContextOptions> opts();
+            opts.mechanism = "ntlm";
+            Qore::Krb5::GssClientContext bad("HTTP/qorus.example.com@EXAMPLE.COM", opts);
+        });
+        assertThrows("KRB5-GSS-ARG-ERROR", sub() {
+            hash<Qore::Krb5::GssClientContextOptions> opts();
+            opts.name_type = "";
+            Qore::Krb5::GssClientContext bad("HTTP/qorus.example.com@EXAMPLE.COM", opts);
+        });
+        assertThrows("KRB5-GSS-ARG-ERROR", sub() {
+            hash<Qore::Krb5::GssClientContextOptions> opts();
+            opts.name_type = "spnego";
+            Qore::Krb5::GssClientContext bad("HTTP/qorus.example.com@EXAMPLE.COM", opts);
+        });
+        assertThrows("KRB5-GSS-ARG-ERROR", sub() {
+            hash<Qore::Krb5::GssClientContextOptions> opts();
+            opts.lifetime = -1;
+            Qore::Krb5::GssClientContext bad("HTTP/qorus.example.com@EXAMPLE.COM", opts);
+        });
+        assertThrows("KRB5-GSS-ARG-ERROR", sub() {
+            hash<Qore::Krb5::GssClientContextOptions> opts();
+            opts.channel_binding_application_data_hex = "abc";
+            Qore::Krb5::GssClientContext bad("HTTP/qorus.example.com@EXAMPLE.COM", opts);
+        });
+        assertThrows("KRB5-GSS-ARG-ERROR", sub() {
+            hash<Qore::Krb5::GssClientContextOptions> opts();
+            opts.channel_binding_application_data_hex = "";
+            Qore::Krb5::GssClientContext bad("HTTP/qorus.example.com@EXAMPLE.COM", opts);
+        });
+        assertThrows("KRB5-GSS-ARG-ERROR", sub() {
+            hash<Qore::Krb5::GssClientContextOptions> opts();
+            opts.channel_binding_acceptor_addrtype = Qore::Krb5::GSS_AF_INET;
+            Qore::Krb5::GssClientContext bad("HTTP/qorus.example.com@EXAMPLE.COM", opts);
+        });
+        assertThrows("KRB5-GSS-ARG-ERROR", sub() {
+            hash<Qore::Krb5::GssClientContextOptions> opts();
+            opts.channel_binding_acceptor_address_hex = "7f000001";
+            Qore::Krb5::GssClientContext bad("HTTP/qorus.example.com@EXAMPLE.COM", opts);
+        });
+    }
+
+    private testGssAcceptorSetup() {
+        Qore::Krb5::GssAcceptorContext ctx();
+        assertFalse(ctx.isComplete());
+        assertEq(NOTHING, ctx.getInitiatorName());
+    }
+
+    private testGssAcceptorChannelBindingOptions() {
+        hash<Qore::Krb5::GssAcceptorContextOptions> opts();
+        opts.channel_binding_initiator_addrtype = Qore::Krb5::GSS_AF_NULLADDR;
+        opts.channel_binding_acceptor_addrtype = Qore::Krb5::GSS_AF_INET;
+        opts.channel_binding_acceptor_address_hex = "7f000001";
+        opts.channel_binding_application_data_hex = "746c732d7365727665722d656e642d706f696e743a00112233";
+
+        Qore::Krb5::GssAcceptorContext ctx(opts);
+        assertFalse(ctx.isComplete());
+        assertEq(NOTHING, ctx.getInitiatorName());
+    }
+
+    private testGssAcceptorInvalidOptions() {
+        assertThrows("KRB5-GSS-ARG-ERROR", sub() {
+            hash<Qore::Krb5::GssAcceptorContextOptions> opts();
+            opts.channel_binding_application_data_hex = "abc";
+            Qore::Krb5::GssAcceptorContext bad(opts);
+        });
+        assertThrows("KRB5-GSS-ARG-ERROR", sub() {
+            hash<Qore::Krb5::GssAcceptorContextOptions> opts();
+            opts.channel_binding_application_data_hex = "";
+            Qore::Krb5::GssAcceptorContext bad(opts);
+        });
+        assertThrows("KRB5-GSS-ARG-ERROR", sub() {
+            hash<Qore::Krb5::GssAcceptorContextOptions> opts();
+            opts.channel_binding_acceptor_addrtype = Qore::Krb5::GSS_AF_INET;
+            Qore::Krb5::GssAcceptorContext bad(opts);
+        });
+        assertThrows("KRB5-GSS-ARG-ERROR", sub() {
+            hash<Qore::Krb5::GssAcceptorContextOptions> opts();
+            opts.channel_binding_acceptor_address_hex = "7f000001";
+            Qore::Krb5::GssAcceptorContext bad(opts);
+        });
+    }
+
+    private testGssAcceptorCredentialFromKeytab() {
+        Qore::Krb5::Krb5Context ctx();
+        auto kt = ctx.openKeytab("MEMORY:module-krb5-gss-acceptor-keytab");
+        Qore::Krb5::Krb5Principal p("HTTP/qorus.example.com@EXAMPLE.COM");
+        kt.addEntry(p, getTestKeyHex1(), Qore::Krb5::ENCTYPE_AES256_CTS_HMAC_SHA1_96, 1);
+
+        auto cred = Qore::Krb5::GssCredential::fromKeytab(kt, p);
+        Qore::Krb5::GssAcceptorContext acceptor(cred);
+        assertFalse(acceptor.isComplete());
+        assertEq(NOTHING, acceptor.getInitiatorName());
+    }
+
+    private testGssAcceptorInvalidHex() {
+        Qore::Krb5::GssAcceptorContext ctx();
+        assertThrows("KRB5-TOKEN-ERROR", sub() {
+            ctx.step("xyz");
+        });
+    }
+
+    private testGssAcceptorEmptyTokenRejected() {
+        Qore::Krb5::GssAcceptorContext ctx();
+        assertThrows("KRB5-TOKEN-ERROR", sub() {
+            ctx.step("");
+        });
+    }
+
+    private testGssAcceptorWrapIncompleteContext() {
+        Qore::Krb5::GssAcceptorContext ctx();
+        assertThrows("KRB5-GSS-STATE-ERROR", sub() {
+            ctx.wrap("00");
+        });
+        assertThrows("KRB5-GSS-STATE-ERROR", sub() {
+            ctx.getWrapSizeLimit(128);
+        });
+        assertThrows("KRB5-TOKEN-ERROR", sub() {
+            ctx.unwrap("");
+        });
+    }
+
+    private testGssCredentialFromKeytab() {
+        Qore::Krb5::Krb5Context ctx();
+        auto kt = ctx.openKeytab("MEMORY:module-krb5-gss-keytab");
+        Qore::Krb5::Krb5Principal p("HTTP/qorus.example.com@EXAMPLE.COM");
+        kt.addEntry(p, getTestKeyHex1(), Qore::Krb5::ENCTYPE_AES256_CTS_HMAC_SHA1_96, 1);
+
+        auto cred = Qore::Krb5::GssCredential::fromKeytab(kt, p);
+        hash<Qore::Krb5::GssClientContextOptions> opts();
+        opts.mechanism = "kerberos";
+        Qore::Krb5::GssClientContext gss("HTTP/qorus.example.com@EXAMPLE.COM", cred, opts);
+        assertEq("HTTP/qorus.example.com@EXAMPLE.COM", gss.getTargetName());
+        assertFalse(gss.isComplete());
+    }
+
+    private testGssCredentialEmptyCacheRejected() {
+        Qore::Krb5::Krb5Context ctx();
+        Qore::Krb5::Krb5Principal p("alice@EXAMPLE.COM");
+        auto cc = ctx.createMemoryCredentialCache(p, "module-krb5-empty-gss-cache");
+        assertThrows("KRB5-GSS-ERROR", sub() {
+            Qore::Krb5::GssCredential::fromCredentialCache(cc);
+        });
+    }
+
+    private testGssCredentialEmptyKeytabRejected() {
+        Qore::Krb5::Krb5Context ctx();
+        auto kt = ctx.openKeytab("MEMORY:module-krb5-empty-gss-keytab");
+        assertThrows("KRB5-GSS-ERROR", sub() {
+            Qore::Krb5::GssCredential::fromKeytab(kt);
+        });
+    }
+
+    private testGssCredentialCacheSandboxDeny() {
+        string cachePath = getSandboxCachePath("gss-cache-deny");
+        cleanupSandboxCache(cachePath);
+
+        Program p(PO_MODERN);
+        p.loadModule("krb5");
+        p.parse(sprintf("
+            nothing sub test_denied_gss_cache() {
+                Qore::Krb5::Krb5Context ctx();
+                Qore::Krb5::Krb5Principal principal(\"alice@EXAMPLE.COM\");
+                auto cc = ctx.openCredentialCache(\"FILE:%s\");
+                Qore::Krb5::GssCredential::fromCredentialCache(cc);
+            }
+        ", cachePath), "sandbox_denied_gss_cache");
+
+        SandboxManager sm();
+        sm.setFilesystemSandboxRoot("/var");
+        p.setSandboxManager(sm);
+
+        bool caught = False;
+        try {
+            p.callFunction("test_denied_gss_cache");
+        } catch (hash<ExceptionInfo> ex) {
+            caught = True;
+            assertEq("FILESYSTEM-ACCESS-DENIED", ex.err);
+        }
+        assertTrue(caught);
+        cleanupSandboxCache(cachePath);
+    }
+
+    private testGssCredentialKeytabSandboxDeny() {
+        string keytabPath = getSandboxKeytabPath("gss-keytab-deny");
+        cleanupSandboxKeytab(keytabPath);
+
+        Program p(PO_MODERN);
+        p.loadModule("krb5");
+        p.parse(sprintf("
+            nothing sub test_denied_gss_keytab() {
+                Qore::Krb5::Krb5Context ctx();
+                auto kt = ctx.openKeytab(\"FILE:%s\");
+                Qore::Krb5::GssCredential::fromKeytab(kt);
+            }
+        ", keytabPath), "sandbox_denied_gss_keytab");
+
+        SandboxManager sm();
+        sm.setFilesystemSandboxRoot("/var");
+        p.setSandboxManager(sm);
+
+        bool caught = False;
+        try {
+            p.callFunction("test_denied_gss_keytab");
+        } catch (hash<ExceptionInfo> ex) {
+            caught = True;
+            assertEq("FILESYSTEM-ACCESS-DENIED", ex.err);
+        }
+        assertTrue(caught);
+        cleanupSandboxKeytab(keytabPath);
+    }
+
+    private testGssWrapInvalidHex() {
+        Qore::Krb5::GssClientContext ctx("HTTP/qorus.example.com@EXAMPLE.COM");
+        assertThrows("KRB5-TOKEN-ERROR", sub() {
+            ctx.wrap("xyz");
+        });
+    }
+
+    private testGssUnwrapInvalidHex() {
+        Qore::Krb5::GssClientContext ctx("HTTP/qorus.example.com@EXAMPLE.COM");
+        assertThrows("KRB5-TOKEN-ERROR", sub() {
+            ctx.unwrap("xyz");
+        });
+    }
+
+    private testGssWrapIncompleteContext() {
+        Qore::Krb5::GssClientContext ctx("HTTP/qorus.example.com@EXAMPLE.COM");
+        assertThrows("KRB5-GSS-STATE-ERROR", sub() {
+            ctx.wrap("00");
+        });
+    }
+
+    private testGssUnwrapEmptyTokenRejected() {
+        Qore::Krb5::GssClientContext ctx("HTTP/qorus.example.com@EXAMPLE.COM");
+        assertThrows("KRB5-TOKEN-ERROR", sub() {
+            ctx.unwrap("");
+        });
+    }
+
+    private testGssWrapSizeInvalidArguments() {
+        Qore::Krb5::GssClientContext ctx("HTTP/qorus.example.com@EXAMPLE.COM");
+        assertThrows("KRB5-GSS-ARG-ERROR", sub() {
+            ctx.getWrapSizeLimit(-1);
+        });
+        assertThrows("KRB5-GSS-ARG-ERROR", sub() {
+            ctx.getWrapSizeLimit(128, True, -1);
+        });
+    }
+
+    private testGssWrapSizeIncompleteContext() {
+        Qore::Krb5::GssClientContext ctx("HTTP/qorus.example.com@EXAMPLE.COM");
+        assertThrows("KRB5-GSS-STATE-ERROR", sub() {
+            ctx.getWrapSizeLimit(128);
+        });
+    }
+
+    private testGssInvalidHex() {
+        Qore::Krb5::GssClientContext ctx("HTTP/qorus.example.com@EXAMPLE.COM");
+        assertThrows("KRB5-TOKEN-ERROR", sub() {
+            ctx.step("xyz");
+        });
+    }
+
+    private testGssEmptyTarget() {
+        assertThrows("KRB5-GSS-ARG-ERROR", sub() {
+            Qore::Krb5::GssClientContext bad("");
+        });
+    }
+
+    private testAcquireCredentialsRequiresNetworkDomain() {
+        Program p(PO_MODERN | PO_NO_NETWORK);
+        p.loadModule("krb5");
+        assertThrows("PARSE-EXCEPTION", "acquireCredentialsWithPassword", sub() {
+            p.parse("
+                nothing sub test_network_blocked() {
+                    Qore::Krb5::Krb5Context ctx();
+                    Qore::Krb5::Krb5Principal principal(\"alice@EXAMPLE.COM\");
+                    ctx.acquireCredentialsWithPassword(principal, \"secret\");
+                }
+            ", "no_network_acquire_password");
+        });
+    }
+
+    private testAcquireCredentialsNetworkSandboxDeny() {
+        Program p(PO_MODERN);
+        p.loadModule("krb5");
+        p.parse("
+            nothing sub test_network_sandbox_denied() {
+                Qore::Krb5::Krb5Context ctx();
+                Qore::Krb5::Krb5Principal principal(\"alice@EXAMPLE.COM\");
+                ctx.acquireCredentialsWithPassword(principal, \"secret\");
+            }
+        ", "network_sandbox_acquire_password");
+
+        SandboxManager sm();
+        p.setSandboxManager(sm);
+
+        assertThrows("KRB5-SANDBOX-ERROR", "fine-grained network sandbox", sub() {
+            p.callFunction("test_network_sandbox_denied");
+        });
+    }
+
+    private testAcquireCredentialsPreCancelled() {
+        Program p(PO_MODERN);
+        p.loadModule("krb5");
+        p.parse("
+            nothing sub test_pre_cancelled_acquire() {
+                Qore::Krb5::Krb5Context ctx();
+                Qore::Krb5::Krb5Principal principal(\"alice@EXAMPLE.COM\");
+                ctx.acquireCredentialsWithPassword(principal, \"secret\");
+            }
+        ", "pre_cancelled_acquire_password");
+
+        SandboxManager sm();
+        sm.requestInterrupt();
+        p.setSandboxManager(sm);
+
+        assertThrows("PROGRAM-INTERRUPTED", sub() {
+            p.callFunction("test_pre_cancelled_acquire");
+        });
+    }
+
+    private testAcquireCredentialsWithKeytabRequiresNetworkDomain() {
+        Program p(PO_MODERN | PO_NO_NETWORK);
+        p.loadModule("krb5");
+        assertThrows("PARSE-EXCEPTION", "acquireCredentialsWithKeytab", sub() {
+            p.parse("
+                nothing sub test_network_blocked_kt() {
+                    Qore::Krb5::Krb5Context ctx();
+                    Qore::Krb5::Krb5Principal principal(\"alice@EXAMPLE.COM\");
+                    auto kt = ctx.openKeytab(\"MEMORY:nd-kt\");
+                    ctx.acquireCredentialsWithKeytab(principal, kt);
+                }
+            ", "no_network_acquire_keytab");
+        });
+    }
+
+    private testGssClientContextRequiresNetworkDomain() {
+        Program p(PO_MODERN | PO_NO_NETWORK);
+        p.loadModule("krb5");
+        assertThrows("ILLEGAL-CLASS-INSTANTIATION", sub() {
+            p.parse("
+                nothing sub test_gss_network_blocked() {
+                    Qore::Krb5::GssClientContext ctx(\"HTTP/qorus.example.com@EXAMPLE.COM\");
+                    ctx.step();
+                }
+            ", "no_network_gss_step");
+        });
+    }
+
+    private testGssClientContextNetworkSandboxDeny() {
+        Program p(PO_MODERN);
+        p.loadModule("krb5");
+        p.parse("
+            nothing sub test_gss_network_sandbox_denied() {
+                Qore::Krb5::GssClientContext ctx(\"HTTP/qorus.example.com@EXAMPLE.COM\");
+                ctx.step();
+            }
+        ", "network_sandbox_gss_step");
+
+        SandboxManager sm();
+        p.setSandboxManager(sm);
+
+        assertThrows("KRB5-SANDBOX-ERROR", "fine-grained network sandbox", sub() {
+            p.callFunction("test_gss_network_sandbox_denied");
+        });
+    }
+
+    private testGssClientContextPreCancelled() {
+        Program p(PO_MODERN);
+        p.loadModule("krb5");
+        p.parse("
+            nothing sub test_pre_cancelled_gss_step() {
+                Qore::Krb5::GssClientContext ctx(\"HTTP/qorus.example.com@EXAMPLE.COM\");
+                ctx.step();
+            }
+        ", "pre_cancelled_gss_step");
+
+        SandboxManager sm();
+        sm.requestInterrupt();
+        p.setSandboxManager(sm);
+
+        assertThrows("PROGRAM-INTERRUPTED", sub() {
+            p.callFunction("test_pre_cancelled_gss_step");
+        });
+    }
+
+    private testGssAcceptorContextRequiresNetworkDomain() {
+        Program p(PO_MODERN | PO_NO_NETWORK);
+        p.loadModule("krb5");
+        assertThrows("ILLEGAL-CLASS-INSTANTIATION", sub() {
+            p.parse("
+                nothing sub test_gss_acceptor_network_blocked() {
+                    Qore::Krb5::GssAcceptorContext ctx();
+                    ctx.step(\"00\");
+                }
+            ", "no_network_gss_acceptor_step");
+        });
+    }
+
+    private testGssCredentialRequiresFilesystemDomain() {
+        # When filesystem access is denied, the GssCredential class itself is
+        # inaccessible because it carries dom=FILESYSTEM.
+        Program p(PO_MODERN | PO_NO_FILESYSTEM);
+        p.loadModule("krb5");
+        assertThrows("INVALID-METHOD", sub() {
+            p.parse("
+                nothing sub test_gss_cred_blocked() {
+                    Qore::Krb5::GssCredential::fromCredentialCache(NOTHING);
+                }
+            ", "no_fs_gss_cred");
+        });
+    }
+
+    private testKrb5CredentialsHasNoDomain() {
+        # Krb5Credentials must construct from hex without requiring any domain.
+        Program p(PO_MODERN | PO_NO_NETWORK | PO_NO_FILESYSTEM);
+        p.loadModule("krb5");
+        p.parse("
+            string sub build_creds() {
+                Qore::Krb5::Krb5Principal client(\"alice@EXAMPLE.COM\");
+                Qore::Krb5::Krb5Principal server(\"HTTP/qorus.example.com@EXAMPLE.COM\");
+                Qore::Krb5::Krb5Credentials creds(client, server,
+                    \"00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff\",
+                    Qore::Krb5::ENCTYPE_AES256_CTS_HMAC_SHA1_96, 1000, 2000);
+                return creds.getInfo().client;
+            }
+        ", "sandboxed_creds_build");
+        assertEq("alice@EXAMPLE.COM", p.callFunction("build_creds"));
+    }
+
+    private testPrincipalCopyAcrossContexts() {
+        Qore::Krb5::Krb5Principal a("alice@EXAMPLE.COM");
+        Qore::Krb5::Krb5Principal b = a.copy();
+        assertEq("alice@EXAMPLE.COM", b.toString());
+        assertEq("EXAMPLE.COM", b.getRealm());
+        assertTrue(a.equals(b));
+        # copy must be independent: source destruction must not touch dest.
+        delete a;
+        assertEq("alice@EXAMPLE.COM", b.toString());
+    }
+
+    private testStoreAndListAcrossContexts() {
+        # store a Krb5Credentials built via a different krb5_context than the cache;
+        # verifies that QoreKrb5CredentialCache::storeCredentials copies across contexts.
+        Qore::Krb5::Krb5Context cache_ctx();
+        Qore::Krb5::Krb5Principal client("alice@EXAMPLE.COM");
+        auto cc = cache_ctx.createMemoryCredentialCache(client, "module-krb5-cross-context");
+
+        Qore::Krb5::Krb5Credentials creds = createTestCredentials();
+        cc.storeCredentials(creds);
+
+        list<hash<Qore::Krb5::Krb5CredentialsInfo>> entries = cc.listCredentials();
+        assertEq(1, entries.size());
+        assertEq("alice@EXAMPLE.COM", entries[0].client);
+    }
+
+    private testEnctypeNameFallback() {
+        Qore::Krb5::Krb5Principal client("alice@EXAMPLE.COM");
+        Qore::Krb5::Krb5Principal server("HTTP/qorus.example.com@EXAMPLE.COM");
+        Qore::Krb5::Krb5Credentials creds(client, server, getTestKeyHex1(),
+            0x7fff, 1000, 2000);
+        hash<Qore::Krb5::Krb5CredentialsInfo> info = creds.getInfo();
+        assertEq(0x7fff, info.enctype);
+        # Exact fallback format may vary across MIT krb5 versions but must be non-empty.
+        assertFalse(info.enctype_name == "");
+    }
+
+    private testCacheStoreSandboxDeny() {
+        string cachePath = getSandboxCachePath("store-deny");
+        cleanupSandboxCache(cachePath);
+
+        Program p(PO_MODERN);
+        p.loadModule("krb5");
+        p.parse(sprintf("
+            nothing sub test_denied_cache_store() {
+                Qore::Krb5::Krb5Context ctx();
+                Qore::Krb5::Krb5Principal client(\"alice@EXAMPLE.COM\");
+                Qore::Krb5::Krb5Principal server(\"HTTP/qorus.example.com@EXAMPLE.COM\");
+                Qore::Krb5::Krb5Credentials creds(client, server,
+                    \"00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff\",
+                    Qore::Krb5::ENCTYPE_AES256_CTS_HMAC_SHA1_96, 1000, 2000, 3000, 0x40, \"abcd\");
+                auto cc = ctx.openCredentialCache(\"FILE:%s\");
+                cc.initialize(client);
+                cc.storeCredentials(creds);
+            }
+        ", cachePath), "sandbox_denied_cache_store");
+
+        SandboxManager sm();
+        sm.setFilesystemSandboxRoot("/var");
+        p.setSandboxManager(sm);
+
+        assertThrows("FILESYSTEM-ACCESS-DENIED", sub() {
+            p.callFunction("test_denied_cache_store");
+        });
+        cleanupSandboxCache(cachePath);
+    }
+
+    private testGssClientContextResetState() {
+        Qore::Krb5::GssClientContext ctx("HTTP/qorus.example.com@EXAMPLE.COM");
+        assertFalse(ctx.isComplete());
+        ctx.reset();
+        assertFalse(ctx.isComplete());
+        assertEq("HTTP/qorus.example.com@EXAMPLE.COM", ctx.getTargetName());
+    }
+
+    private testGssAcceptorContextResetState() {
+        Qore::Krb5::GssAcceptorContext ctx();
+        assertFalse(ctx.isComplete());
+        assertEq(NOTHING, ctx.getInitiatorName());
+        ctx.reset();
+        assertFalse(ctx.isComplete());
+        assertEq(NOTHING, ctx.getInitiatorName());
+    }
+
+    private testGssWrapConfidentialFalseIncompleteContext() {
+        Qore::Krb5::GssClientContext ctx("HTTP/qorus.example.com@EXAMPLE.COM");
+        assertThrows("KRB5-GSS-STATE-ERROR", sub() {
+            ctx.wrap("deadbeef", False);
+        });
+    }
+
+    private testGssWrapSizeLimitBoundaryValues() {
+        Qore::Krb5::GssClientContext ctx("HTTP/qorus.example.com@EXAMPLE.COM");
+        # Both should fail with state error (incomplete), not argument error
+        assertThrows("KRB5-GSS-STATE-ERROR", sub() {
+            ctx.getWrapSizeLimit(0);
+        });
+        assertThrows("KRB5-GSS-STATE-ERROR", sub() {
+            ctx.getWrapSizeLimit(2147483647);
+        });
+    }
+
+    private testGssMicInvalidHex() {
+        Qore::Krb5::GssClientContext ctx("HTTP/qorus.example.com@EXAMPLE.COM");
+        assertThrows("KRB5-TOKEN-ERROR", sub() {
+            ctx.getMic("xyz");
+        });
+    }
+
+    private testGssMicIncompleteContext() {
+        Qore::Krb5::GssClientContext ctx("HTTP/qorus.example.com@EXAMPLE.COM");
+        assertThrows("KRB5-GSS-STATE-ERROR", sub() {
+            ctx.getMic("00");
+        });
+    }
+
+    private testGssMicNegativeQopRejected() {
+        Qore::Krb5::GssClientContext ctx("HTTP/qorus.example.com@EXAMPLE.COM");
+        assertThrows("KRB5-GSS-ARG-ERROR", sub() {
+            ctx.getMic("00", -1);
+        });
+    }
+
+    private testGssVerifyMicInvalidHex() {
+        Qore::Krb5::GssClientContext ctx("HTTP/qorus.example.com@EXAMPLE.COM");
+        assertThrows("KRB5-TOKEN-ERROR", sub() {
+            ctx.verifyMic("xyz", "00");
+        });
+    }
+
+    private testGssVerifyMicEmptyMicRejected() {
+        Qore::Krb5::GssClientContext ctx("HTTP/qorus.example.com@EXAMPLE.COM");
+        assertThrows("KRB5-TOKEN-ERROR", sub() {
+            ctx.verifyMic("00", "");
+        });
+    }
+
+    private testGssVerifyMicIncompleteContext() {
+        Qore::Krb5::GssClientContext ctx("HTTP/qorus.example.com@EXAMPLE.COM");
+        assertThrows("KRB5-GSS-STATE-ERROR", sub() {
+            ctx.verifyMic("00", "00");
+        });
+    }
+
+    private testGssAcceptorMicIncompleteContext() {
+        Qore::Krb5::GssAcceptorContext ctx();
+        assertThrows("KRB5-GSS-STATE-ERROR", sub() {
+            ctx.getMic("00");
+        });
+    }
+
+    private testGssAcceptorVerifyMicIncompleteContext() {
+        Qore::Krb5::GssAcceptorContext ctx();
+        assertThrows("KRB5-GSS-STATE-ERROR", sub() {
+            ctx.verifyMic("00", "00");
+        });
+    }
+
+    private testListCredentialCachesReturnsList() {
+        Qore::Krb5::Krb5Context ctx();
+        list<hash<Qore::Krb5::Krb5CredentialCacheInfo>> caches = ctx.listCredentialCaches();
+        assertTrue(caches instanceof list);
+        foreach hash<Qore::Krb5::Krb5CredentialCacheInfo> entry in (caches) {
+            assertTrue(entry.name instanceof string);
+            assertTrue(entry.type instanceof string);
+            assertTrue(entry.full_name instanceof string);
+            assertTrue(entry.accessible instanceof bool);
+            assertTrue(entry.has_principal instanceof bool);
+        }
+    }
+
+    private testListCredentialCachesContainsMemoryCache() {
+        # MEMORY caches created in-process are not part of the system credential
+        # cache collection. Verify the method returns consistent types and that
+        # any listed caches have valid field types.
+        Qore::Krb5::Krb5Context ctx();
+        list<hash<Qore::Krb5::Krb5CredentialCacheInfo>> caches = ctx.listCredentialCaches();
+        assertTrue(caches instanceof list);
+        foreach hash<Qore::Krb5::Krb5CredentialCacheInfo> entry in (caches) {
+            assertTrue(entry.type.val());
+            if (entry.accessible) {
+                assertTrue(entry.full_name.val());
+            } else {
+                assertEq("", entry.name);
+                assertEq("", entry.full_name);
+            }
+            if (entry.has_principal) {
+                assertTrue(entry.principal.val());
+            }
+        }
+        # Call again to verify cursor cleanup and reuse works
+        list<hash<Qore::Krb5::Krb5CredentialCacheInfo>> caches2 = ctx.listCredentialCaches();
+        assertEq(caches.size(), caches2.size());
+    }
+
+    private testListCredentialCachesSandboxRedaction() {
+        string cachePath = getSandboxCachePath("collection-redaction");
+        cleanupSandboxCache(cachePath);
+
+        Qore::Krb5::Krb5Context ctx();
+        Qore::Krb5::Krb5Principal principal("service/qorus.example.com@EXAMPLE.COM");
+        auto cc = ctx.openCredentialCache("FILE:" + cachePath);
+        cc.initialize(principal);
+
+        *string oldCacheName = getenv("KRB5CCNAME");
+        setenv("KRB5CCNAME", "FILE:" + cachePath);
+        on_error {
+            if (exists oldCacheName) {
+                setenv("KRB5CCNAME", oldCacheName);
+            } else {
+                unsetenv("KRB5CCNAME");
+            }
+            cleanupSandboxCache(cachePath);
+        }
+
+        Program p(PO_MODERN);
+        p.loadModule("krb5");
+        p.parse("
+            list<hash<Qore::Krb5::Krb5CredentialCacheInfo>> sub test_collection_redaction() {
+                Qore::Krb5::Krb5Context ctx();
+                return ctx.listCredentialCaches();
+            }
+        ", "sandbox_denied_collection");
+
+        SandboxManager sm();
+        sm.setFilesystemSandboxRoot("/var");
+        p.setSandboxManager(sm);
+
+        list<hash<Qore::Krb5::Krb5CredentialCacheInfo>> caches = p.callFunction("test_collection_redaction");
+        if (exists oldCacheName) {
+            setenv("KRB5CCNAME", oldCacheName);
+        } else {
+            unsetenv("KRB5CCNAME");
+        }
+
+        bool foundRedacted = False;
+        foreach hash<Qore::Krb5::Krb5CredentialCacheInfo> entry in (caches) {
+            if (entry.type == "FILE" && !entry.accessible) {
+                foundRedacted = True;
+                assertEq("", entry.name);
+                assertEq("", entry.full_name);
+                assertFalse(entry.has_principal);
+                assertFalse(exists entry.principal);
+            }
+        }
+        assertTrue(foundRedacted);
+
+        cleanupSandboxCache(cachePath);
+    }
+
+    private testInitialCredentialsBooleanOptionsAccepted() {
+        Qore::Krb5::Krb5Context ctx();
+        Qore::Krb5::Krb5Principal p("alice@EXAMPLE.COM");
+
+        # Each boolean option should be accepted at the option-parsing level.
+        # The error should come from KDC contact, not option validation.
+        list<string> boolOpts = ("forwardable", "proxiable", "anonymous", "pac_request",
+            "change_password_prompt");
+        for (int i = 0; i < boolOpts.size(); i++) {
+            hash<Qore::Krb5::Krb5InitialCredentialsOptions> opts();
+            opts{boolOpts[i]} = True;
+            assertThrows("KRB5-INIT-CREDS-ERROR", sub() {
+                ctx.acquireCredentialsWithPassword(p, "test", opts);
+            });
+        }
+    }
+
+    private testInitialCredentialsNegativeStartTimeRejected() {
+        Qore::Krb5::Krb5Context ctx();
+        Qore::Krb5::Krb5Principal p("alice@EXAMPLE.COM");
+        hash<Qore::Krb5::Krb5InitialCredentialsOptions> opts();
+        opts.start_time = -1;
+        assertThrows("KRB5-INIT-CREDS-ERROR", "start_time", sub() {
+            ctx.acquireCredentialsWithPassword(p, "test", opts);
+        });
+    }
+
+    private testInitialCredentialsStartTimeOverflowRejected() {
+        Qore::Krb5::Krb5Context ctx();
+        Qore::Krb5::Krb5Principal p("alice@EXAMPLE.COM");
+        hash<Qore::Krb5::Krb5InitialCredentialsOptions> opts();
+        opts.start_time = 2147483648;
+        assertThrows("KRB5-INIT-CREDS-ERROR", "start_time", sub() {
+            ctx.acquireCredentialsWithPassword(p, "test", opts);
+        });
+    }
+
+    private testInitialCredentialsNegativeTicketLifetimeRejected() {
+        Qore::Krb5::Krb5Context ctx();
+        Qore::Krb5::Krb5Principal p("alice@EXAMPLE.COM");
+        hash<Qore::Krb5::Krb5InitialCredentialsOptions> opts();
+        opts.ticket_lifetime = -1;
+        assertThrows("KRB5-INIT-CREDS-ERROR", "ticket_lifetime", sub() {
+            ctx.acquireCredentialsWithPassword(p, "test", opts);
+        });
+    }
+
+    private testInitialCredentialsNegativeRenewLifetimeRejected() {
+        Qore::Krb5::Krb5Context ctx();
+        Qore::Krb5::Krb5Principal p("alice@EXAMPLE.COM");
+        hash<Qore::Krb5::Krb5InitialCredentialsOptions> opts();
+        opts.renew_lifetime = -1;
+        assertThrows("KRB5-INIT-CREDS-ERROR", "renew_lifetime", sub() {
+            ctx.acquireCredentialsWithPassword(p, "test", opts);
+        });
+    }
+
+    private testInitialCredentialsNegativeEnctypeRejected() {
+        Qore::Krb5::Krb5Context ctx();
+        Qore::Krb5::Krb5Principal p("alice@EXAMPLE.COM");
+        hash<Qore::Krb5::Krb5InitialCredentialsOptions> opts();
+        opts.enctypes = (-1,);
+        assertThrows("KRB5-INIT-CREDS-ERROR", "enctypes", sub() {
+            ctx.acquireCredentialsWithPassword(p, "test", opts);
+        });
+    }
+
+    private testInitialCredentialsEnctypeOverflowRejected() {
+        Qore::Krb5::Krb5Context ctx();
+        Qore::Krb5::Krb5Principal p("alice@EXAMPLE.COM");
+        hash<Qore::Krb5::Krb5InitialCredentialsOptions> opts();
+        opts.enctypes = (2147483648,);
+        assertThrows("KRB5-INIT-CREDS-ERROR", "enctypes", sub() {
+            ctx.acquireCredentialsWithPassword(p, "test", opts);
+        });
+    }
+
+    private testInitialCredentialsInCacheSandboxDeny() {
+        string cachePath = getSandboxCachePath("in-cache-deny");
+        cleanupSandboxCache(cachePath);
+
+        Program p(PO_MODERN);
+        p.loadModule("krb5");
+        p.parse(sprintf("
+            nothing sub test_denied_in_cache() {
+                Qore::Krb5::Krb5Context ctx();
+                Qore::Krb5::Krb5Principal principal(\"alice@EXAMPLE.COM\");
+                hash<Qore::Krb5::Krb5InitialCredentialsOptions> opts();
+                opts.in_ccache_name = \"FILE:%s\";
+                ctx.acquireCredentialsWithPassword(principal, \"secret\", opts);
+            }
+        ", cachePath), "sandbox_denied_in_cache");
+
+        SandboxManager sm();
+        sm.setFilesystemSandboxRoot("/var");
+        p.setSandboxManager(sm);
+
+        assertThrows("FILESYSTEM-ACCESS-DENIED", sub() {
+            p.callFunction("test_denied_in_cache");
+        });
+        cleanupSandboxCache(cachePath);
+    }
+
+    private testInitialCredentialsOutCacheSandboxDeny() {
+        string cachePath = getSandboxCachePath("out-cache-deny");
+        cleanupSandboxCache(cachePath);
+
+        Program p(PO_MODERN);
+        p.loadModule("krb5");
+        p.parse(sprintf("
+            nothing sub test_denied_out_cache() {
+                Qore::Krb5::Krb5Context ctx();
+                Qore::Krb5::Krb5Principal principal(\"alice@EXAMPLE.COM\");
+                hash<Qore::Krb5::Krb5InitialCredentialsOptions> opts();
+                opts.out_ccache_name = \"FILE:%s\";
+                ctx.acquireCredentialsWithPassword(principal, \"secret\", opts);
+            }
+        ", cachePath), "sandbox_denied_out_cache");
+
+        SandboxManager sm();
+        sm.setFilesystemSandboxRoot("/var");
+        p.setSandboxManager(sm);
+
+        assertThrows("FILESYSTEM-ACCESS-DENIED", sub() {
+            p.callFunction("test_denied_out_cache");
+        });
+        cleanupSandboxCache(cachePath);
+    }
+
+    private testPrincipalThreeComponents() {
+        Qore::Krb5::Krb5Principal p("HTTP/host.example.com/extra@REALM");
+        assertEq(3, p.getComponentCount());
+        assertEq("HTTP", p.getComponent(0));
+        assertEq("host.example.com", p.getComponent(1));
+        assertEq("extra", p.getComponent(2));
+        assertEq("REALM", p.getRealm());
+    }
+
+    private testPrincipalVeryLongName() {
+        string longComponent = strmul("a", 1000);
+        string longPrincipal = longComponent + "@EXAMPLE.COM";
+        Qore::Krb5::Krb5Principal p(longPrincipal);
+        assertEq(longPrincipal, p.toString());
+        assertEq(longComponent, p.getComponent(0));
+    }
+
+    private testPrincipalEmptyRejected() {
+        assertThrows("KRB5-PRINCIPAL-ERROR", sub() {
+            Qore::Krb5::Krb5Principal p("");
+        });
+    }
+
+    private testPrincipalNegativeComponentIndex() {
+        Qore::Krb5::Krb5Principal p("alice@EXAMPLE.COM");
+        assertThrows("KRB5-PRINCIPAL-ERROR", sub() {
+            p.getComponent(-1);
+        });
+    }
+
+    private testKeytabHasContentFreshMemory() {
+        Qore::Krb5::Krb5Context ctx();
+        auto kt = ctx.openKeytab("MEMORY:fresh-has-content-test");
+        assertFalse(kt.hasContent());
+    }
+
+    private testKeytabHasContentAfterAdd() {
+        Qore::Krb5::Krb5Context ctx();
+        auto kt = ctx.openKeytab("MEMORY:add-has-content-test");
+        Qore::Krb5::Krb5Principal p("HTTP/host.example.com@EXAMPLE.COM");
+        kt.addEntry(p, getTestKeyHex1(), Qore::Krb5::ENCTYPE_AES256_CTS_HMAC_SHA1_96, 1);
+        assertTrue(kt.hasContent());
+    }
+
+    private testKeytabGetEntrySpecificKvno() {
+        Qore::Krb5::Krb5Context ctx();
+        auto kt = ctx.openKeytab("MEMORY:kvno-select-test");
+        Qore::Krb5::Krb5Principal p("HTTP/host.example.com@EXAMPLE.COM");
+        kt.addEntry(p, getTestKeyHex1(), Qore::Krb5::ENCTYPE_AES256_CTS_HMAC_SHA1_96, 1);
+        kt.addEntry(p, getTestKeyHex2(), Qore::Krb5::ENCTYPE_AES256_CTS_HMAC_SHA1_96, 3);
+
+        hash<Qore::Krb5::Krb5KeytabEntryInfo> entry = kt.getEntry(p, 1);
+        assertEq(1, entry.kvno);
+
+        entry = kt.getEntry(p, 3);
+        assertEq(3, entry.kvno);
+    }
+
+    private testKeytabGetEntrySpecificEnctype() {
+        Qore::Krb5::Krb5Context ctx();
+        auto kt = ctx.openKeytab("MEMORY:enctype-select-test");
+        Qore::Krb5::Krb5Principal p("HTTP/host.example.com@EXAMPLE.COM");
+        string keyHex128 = "00112233445566778899aabbccddeeff";
+        kt.addEntry(p, keyHex128, Qore::Krb5::ENCTYPE_AES128_CTS_HMAC_SHA1_96, 1);
+        kt.addEntry(p, getTestKeyHex1(), Qore::Krb5::ENCTYPE_AES256_CTS_HMAC_SHA1_96, 1);
+
+        hash<Qore::Krb5::Krb5KeytabEntryInfo> entry = kt.getEntry(p, 0,
+            Qore::Krb5::ENCTYPE_AES128_CTS_HMAC_SHA1_96);
+        assertEq(Qore::Krb5::ENCTYPE_AES128_CTS_HMAC_SHA1_96, entry.enctype);
+    }
+
+    private testKeytabMultipleEntriesSamePrincipal() {
+        Qore::Krb5::Krb5Context ctx();
+        auto kt = ctx.openKeytab("MEMORY:multi-entry-test");
+        Qore::Krb5::Krb5Principal p("HTTP/host.example.com@EXAMPLE.COM");
+        string keyHex128 = "00112233445566778899aabbccddeeff";
+        kt.addEntry(p, getTestKeyHex1(), Qore::Krb5::ENCTYPE_AES256_CTS_HMAC_SHA1_96, 1);
+        kt.addEntry(p, keyHex128, Qore::Krb5::ENCTYPE_AES128_CTS_HMAC_SHA1_96, 1);
+        kt.addEntry(p, getTestKeyHex2(), Qore::Krb5::ENCTYPE_AES256_CTS_HMAC_SHA1_96, 2);
+        assertEq(3, kt.listEntries().size());
+    }
+
+    private testUtilityKeytabRotationHelpers() {
+        Qore::Krb5::Krb5Context ctx();
+        auto kt = ctx.openKeytab("MEMORY:module-krb5-keytab-rotation");
+        Qore::Krb5::Krb5Principal p("HTTP/rotate.example.com@EXAMPLE.COM");
+        Qore::Krb5::Krb5Principal other("HTTP/other.example.com@EXAMPLE.COM");
+
+        kt.addEntry(p, getTestKeyHex1(), Qore::Krb5::ENCTYPE_AES256_CTS_HMAC_SHA1_96, 1);
+        kt.addEntry(p, getTestKeyHex2(), Qore::Krb5::ENCTYPE_AES256_CTS_HMAC_SHA1_96, 2);
+        kt.addEntry(p, getTestKeyHex2(), Qore::Krb5::ENCTYPE_AES128_CTS_HMAC_SHA1_96, 2);
+        kt.addEntry(other, getTestKeyHex1(), Qore::Krb5::ENCTYPE_AES256_CTS_HMAC_SHA1_96, 9);
+
+        assertEq(2, Krb5Util::getKeytabHighestKvno(kt, p));
+        assertTrue(Krb5Util::keytabHasEntry(kt, p, 2, Qore::Krb5::ENCTYPE_AES128_CTS_HMAC_SHA1_96));
+        assertFalse(Krb5Util::keytabHasEntry(kt, p, 3));
+
+        list<hash<Qore::Krb5::Krb5KeytabEntryInfo>> principalEntries = Krb5Util::listKeytabEntries(kt, p);
+        assertEq(3, principalEntries.size());
+
+        list<hash<Qore::Krb5::Krb5KeytabEntryInfo>> kvnoTwoEntries = Krb5Util::listKeytabEntries(kt, p, 2);
+        assertEq(2, kvnoTwoEntries.size());
+
+        assertEq(1, Krb5Util::removeOldKeytabEntries(kt, p, 2));
+        principalEntries = Krb5Util::listKeytabEntries(kt, p);
+        assertEq(2, principalEntries.size());
+        foreach hash<Qore::Krb5::Krb5KeytabEntryInfo> entry in (principalEntries) {
+            assertEq(2, entry.kvno);
+        }
+        assertTrue(Krb5Util::keytabHasEntry(kt, other, 9));
+
+        assertEq(2, Krb5Util::removeKeytabEntries(kt, p));
+        assertFalse(Krb5Util::keytabHasEntry(kt, p));
+        assertTrue(Krb5Util::keytabHasEntry(kt, other, 9));
+    }
+
+    private testUtilityKeytabRotationValidation() {
+        Qore::Krb5::Krb5Context ctx();
+        auto kt = ctx.openKeytab("MEMORY:module-krb5-keytab-rotation-validation");
+        Qore::Krb5::Krb5Principal p("HTTP/rotate-validation.example.com@EXAMPLE.COM");
+
+        assertThrows("KRB5-KEYTAB-ROTATION-ERROR", sub() {
+            Krb5Util::getKeytabHighestKvno(kt, p);
+        });
+        assertThrows("KRB5-KEYTAB-ROTATION-ERROR", sub() {
+            Krb5Util::listKeytabEntries(kt, p, -1);
+        });
+        assertThrows("KRB5-KEYTAB-ROTATION-ERROR", sub() {
+            Krb5Util::listKeytabEntries(kt, p, NOTHING, -1);
+        });
+        assertThrows("KRB5-KEYTAB-ROTATION-ERROR", sub() {
+            Krb5Util::removeOldKeytabEntries(kt, p, -1);
+        });
+
+        kt.addEntry(p, getTestKeyHex1(), Qore::Krb5::ENCTYPE_AES256_CTS_HMAC_SHA1_96, 1);
+        assertThrows("KRB5-KEYTAB-ROTATION-ERROR", sub() {
+            Krb5Util::removeOldKeytabEntries(kt, p, 2);
+        });
+    }
+
+    private testUtilityKeytabRotationLoggerDiagnosticsSafe() {
+        Qore::Logger::Logger logger("krb5-keytab-rotation-test", "DEBUG");
+        CaptureLogAppender appender();
+        logger.addAppender(appender);
+        appender.open();
+
+        Qore::Krb5::Krb5Context ctx();
+        auto kt = ctx.openKeytab("MEMORY:module-krb5-keytab-rotation-logger");
+        Qore::Krb5::Krb5Principal p("HTTP/rotate-logger.example.com@EXAMPLE.COM");
+        kt.addEntry(p, getTestKeyHex1(), Qore::Krb5::ENCTYPE_AES256_CTS_HMAC_SHA1_96, 1);
+        kt.addEntry(p, getTestKeyHex2(), Qore::Krb5::ENCTYPE_AES256_CTS_HMAC_SHA1_96, 2);
+
+        assertEq(1, Krb5Util::removeOldKeytabEntries(kt, p, 0, logger));
+
+        list<string> messages = appender.getMessages();
+        assertTrue(messages.size() >= 2);
+        string combined = foldl $1 + "\n" + $2, messages;
+        assertTrue(combined.find("Krb5Util keytab rotation") >= 0);
+        assertTrue(combined.find("keep_kvno=2") >= 0);
+        assertEq(-1, combined.find(getTestKeyHex1()));
+        assertEq(-1, combined.find(getTestKeyHex2()));
+    }
+
+    private testCredentialCacheMultipleCredentials() {
+        Qore::Krb5::Krb5Context ctx();
+        Qore::Krb5::Krb5Principal client("alice@EXAMPLE.COM");
+        Qore::Krb5::Krb5Principal server1("HTTP/host1.example.com@EXAMPLE.COM");
+        Qore::Krb5::Krb5Principal server2("HTTP/host2.example.com@EXAMPLE.COM");
+        Qore::Krb5::Krb5Credentials creds1(client, server1, getTestKeyHex1(),
+            Qore::Krb5::ENCTYPE_AES256_CTS_HMAC_SHA1_96, 1000, 2000);
+        Qore::Krb5::Krb5Credentials creds2(client, server2, getTestKeyHex2(),
+            Qore::Krb5::ENCTYPE_AES256_CTS_HMAC_SHA1_96, 1000, 2000);
+        auto cc = ctx.createMemoryCredentialCache(client, "multi-creds-test");
+        cc.initialize(client);
+        cc.storeCredentials(creds1);
+        cc.storeCredentials(creds2);
+        assertEq(2, cc.listCredentials().size());
+    }
+
+    private testCredentialCacheGetPrincipalOnEmptyCache() {
+        # Use openCredentialCache to get an uninitialized MEMORY cache
+        Qore::Krb5::Krb5Context ctx();
+        auto cc = ctx.openCredentialCache("MEMORY:empty-get-principal-test");
+        assertFalse(cc.hasPrimaryPrincipal());
+        assertThrows("KRB5-CACHE-ERROR", sub() {
+            cc.getPrimaryPrincipal();
+        });
+    }
+
+    private testGssAcceptorDelegatedCredentialIncompleteContext() {
+        Qore::Krb5::GssAcceptorContext ctx();
+        assertThrows("KRB5-GSS-STATE-ERROR", sub() {
+            ctx.getDelegatedCredential();
+        });
+    }
+
+    private testSpnegoNegotiateTokenBuild() {
+        # Build an SPNEGO token from a known GSS token hex
+        string gssHex = "deadbeefcafebabe";
+        string b64 = Krb5Util::negotiateSpnegoToken(gssHex);
+        assertTrue(b64.val());
+
+        # Decode and verify the exact DER structure.
+        binary decoded = parse_base64_string(b64);
+        assertEq("602706062b0601050502a01d301ba00d300b06092a864886f712010202a20a0408" + gssHex,
+            make_hex_string(decoded));
+    }
+
+    private testSpnegoNegotiateTokenEmptyRejected() {
+        assertThrows("KRB5-SPNEGO-ERROR", sub() {
+            Krb5Util::negotiateSpnegoToken("");
+        });
+    }
+
+    private testSpnegoNegotiateTokenOddLengthRejected() {
+        assertThrows("KRB5-SPNEGO-ERROR", sub() {
+            Krb5Util::negotiateSpnegoToken("abc");
+        });
+    }
+
+    private testSpnegoNegotiateTokenInvalidHexRejected() {
+        assertThrows("KRB5-SPNEGO-ERROR", sub() {
+            Krb5Util::negotiateSpnegoToken("xyz0");
+        });
+    }
+
+    private testSpnegoNegotiateAuthorizationHeader() {
+        string gssHex = "deadbeefcafebabe";
+        string header = Krb5Util::buildNegotiateAuthorizationHeader(gssHex);
+        assertTrue(header =~ /^Negotiate /);
+
+        string token = Krb5Util::extractNegotiateHeaderToken("Authorization: " + header);
+        assertEq(header.substr(10), token);
+
+        binary decoded = parse_base64_string(token);
+        assertEq("602706062b0601050502a01d301ba00d300b06092a864886f712010202a20a0408" + gssHex,
+            make_hex_string(decoded));
+    }
+
+    private testSpnegoParseInitialToken() {
+        string gssHex = "deadbeefcafebabe";
+        string header = Krb5Util::buildNegotiateAuthorizationHeader(gssHex);
+        assertEq(gssHex, Krb5Util::parseNegotiateAuthorizationHeader("Authorization: " + header));
+        assertEq(gssHex, Krb5Util::parseSpnegoInitialToken(Krb5Util::extractNegotiateHeaderToken(header)));
+
+        assertThrows("KRB5-SPNEGO-ERROR", sub() {
+            Krb5Util::parseSpnegoInitialToken("");
+        });
+        assertThrows("KRB5-SPNEGO-ERROR", sub() {
+            Krb5Util::parseSpnegoInitialToken(make_base64_string(<6005>));
+        });
+        assertThrows("KRB5-SPNEGO-ERROR", sub() {
+            Krb5Util::parseSpnegoInitialToken(Krb5Util::negotiateSpnegoResponseToken("cafebabe", 1));
+        });
+    }
+
+    private testSpnegoClientStepRejectsPrematureFinalResponse() {
+        Qore::Krb5::GssClientContext initiator("HTTP/qorus.example.com@EXAMPLE.COM");
+        string finalHeader = Krb5Util::buildNegotiateWwwAuthenticateHeader(NOTHING, 0);
+        assertThrows("KRB5-NEGOTIATE-ERROR", sub() {
+            Krb5Util::buildNegotiateClientStep(initiator, finalHeader);
+        });
+    }
+
+    private testSpnegoNegotiateHeaderInvalidRejected() {
+        assertThrows("KRB5-SPNEGO-ERROR", sub() {
+            Krb5Util::extractNegotiateHeaderToken("Basic abc");
+        });
+        assertThrows("KRB5-SPNEGO-ERROR", sub() {
+            Krb5Util::extractNegotiateHeaderToken("Negotiate");
+        });
+        assertThrows("KRB5-SPNEGO-ERROR", sub() {
+            Krb5Util::extractNegotiateHeaderToken("WWW-Authenticate: Negotiate !!!");
+        });
+    }
+
+    private testSpnegoResponseInfoAndHeaders() {
+        string tokenHex = "cafebabe12345678";
+        string header = Krb5Util::buildNegotiateWwwAuthenticateHeader(tokenHex, 1);
+        assertTrue(header =~ /^Negotiate /);
+
+        hash<Krb5Util::SpnegoResponseInfo> info = Krb5Util::parseNegotiateResponseHeader(
+            "WWW-Authenticate: " + header);
+        assertEq(tokenHex, info.token);
+        assertEq(1, info.neg_state);
+        assertEq("accept-incomplete", info.neg_state_name);
+        assertEq(tokenHex, Krb5Util::parseSpnegoResponse(Krb5Util::extractNegotiateHeaderToken(header)));
+
+        string finalHeader = Krb5Util::buildNegotiateWwwAuthenticateHeader(NOTHING, 0);
+        hash<Krb5Util::SpnegoResponseInfo> finalInfo = Krb5Util::parseNegotiateResponseHeader(finalHeader);
+        assertEq(0, finalInfo.neg_state);
+        assertEq("accept-completed", finalInfo.neg_state_name);
+        assertFalse(exists finalInfo.token);
+        assertThrows("KRB5-SPNEGO-ERROR", sub() {
+            Krb5Util::parseSpnegoResponse(Krb5Util::extractNegotiateHeaderToken(finalHeader));
+        });
+
+        assertEq("Negotiate", Krb5Util::buildNegotiateWwwAuthenticateHeader());
+    }
+
+    private testSpnegoResponseTokenValidation() {
+        string tokenHex = "cafebabe12345678";
+        hash<Krb5Util::SpnegoResponseInfo> tokenOnly =
+            Krb5Util::parseSpnegoResponseInfo(Krb5Util::negotiateSpnegoResponseToken(tokenHex));
+        assertEq(tokenHex, tokenOnly.token);
+        assertFalse(exists tokenOnly.neg_state);
+
+        assertThrows("KRB5-SPNEGO-ERROR", sub() {
+            Krb5Util::negotiateSpnegoResponseToken();
+        });
+        assertThrows("KRB5-SPNEGO-ERROR", sub() {
+            Krb5Util::negotiateSpnegoResponseToken("");
+        });
+        assertThrows("KRB5-SPNEGO-ERROR", sub() {
+            Krb5Util::negotiateSpnegoResponseToken("abc");
+        });
+        assertThrows("KRB5-SPNEGO-ERROR", sub() {
+            Krb5Util::negotiateSpnegoResponseToken("xyz0");
+        });
+        assertThrows("KRB5-SPNEGO-ERROR", sub() {
+            Krb5Util::negotiateSpnegoResponseToken(NOTHING, -1);
+        });
+        assertThrows("KRB5-SPNEGO-ERROR", sub() {
+            Krb5Util::negotiateSpnegoResponseToken(NOTHING, 4);
+        });
+    }
+
+    private testSpnegoLoggerDiagnosticsSafe() {
+        Qore::Logger::Logger logger("krb5-spnego-test", "DEBUG");
+        CaptureLogAppender appender();
+        logger.addAppender(appender);
+        appender.open();
+
+        string secretLikeToken = "deadbeefcafebabe";
+        string header = Krb5Util::buildNegotiateAuthorizationHeader(secretLikeToken, logger);
+        string b64 = Krb5Util::extractNegotiateHeaderToken(header, logger);
+        Krb5Util::parseSpnegoResponseInfo(Krb5Util::negotiateSpnegoResponseToken("cafebabe", 1, logger), logger);
+
+        list<string> messages = appender.getMessages();
+        assertTrue(messages.size() >= 4);
+        string combined = foldl $1 + "\n" + $2, messages;
+        assertTrue(combined.find("Krb5Util SPNEGO") >= 0);
+        assertTrue(combined.find("token_bytes") >= 0);
+        assertEq(-1, combined.find(secretLikeToken));
+        assertEq(-1, combined.find(b64));
+    }
+
+    private testSpnegoParseResponseEmptyRejected() {
+        assertThrows("KRB5-SPNEGO-ERROR", sub() {
+            Krb5Util::parseSpnegoResponse("");
+        });
+    }
+
+    private testSpnegoParseResponseInvalidDataRejected() {
+        # Valid base64 but not a valid SPNEGO NegTokenResp
+        assertThrows("KRB5-SPNEGO-ERROR", sub() {
+            Krb5Util::parseSpnegoResponse(make_base64_string(<deadbeef>));
+        });
+    }
+
+    private testSpnegoParseResponseLengthBoundsRejected() {
+        # Outer NegTokenResp length exceeds available data.
+        assertThrows("KRB5-SPNEGO-ERROR", sub() {
+            Krb5Util::parseSpnegoResponse(make_base64_string(<a1053000>));
+        });
+
+        # responseToken OCTET STRING length exceeds the containing field.
+        assertThrows("KRB5-SPNEGO-ERROR", sub() {
+            Krb5Util::parseSpnegoResponse(make_base64_string(<a1083006a2040408cafe>));
+        });
+    }
+
+    private testSpnegoRoundTrip() {
+        # Build a NegTokenResp manually with a known responseToken
+        string knownTokenHex = "cafebabe12345678";
+        binary knownToken = parse_hex_string(knownTokenHex);
+
+        # NegTokenResp ::= SEQUENCE {
+        #   [0] ENUMERATED { accept-incomplete(1) }   -- negState
+        #   [2] OCTET STRING { responseToken }
+        # }
+        # negState: a0 03 0a 01 01  (ENUMERATED 1 = accept-incomplete)
+        binary negState = parse_hex_string("a003" + "0a0101");
+        # responseToken: a2 LEN 04 LEN <token>
+        binary octetString = <04> + binary(chr(knownToken.size())) + knownToken;
+        binary responseTokenField = <a2> + binary(chr(octetString.size())) + octetString;
+        binary seqContent = negState + responseTokenField;
+        binary seq = <30> + binary(chr(seqContent.size())) + seqContent;
+        binary negTokenResp = <a1> + binary(chr(seq.size())) + seq;
+
+        string b64 = make_base64_string(negTokenResp);
+        string extracted = Krb5Util::parseSpnegoResponse(b64);
+        assertEq(knownTokenHex, extracted);
+    }
+
+    private testRenewCredentialsEmptyCache() {
+        Qore::Krb5::Krb5Context ctx();
+        Qore::Krb5::Krb5Principal p("alice@EXAMPLE.COM");
+        auto cc = ctx.openCredentialCache("MEMORY:renew-empty-test");
+        assertThrows("KRB5-RENEW-ERROR", sub() {
+            ctx.renewCredentials(cc, p);
+        });
+    }
+
+    private testRenewCredentialsSandboxDeny() {
+        string cachePath = getSandboxCachePath("renew-deny");
+        cleanupSandboxCache(cachePath);
+
+        Program p(PO_MODERN);
+        p.loadModule("krb5");
+        p.parse(sprintf("
+            nothing sub test_denied_renew() {
+                Qore::Krb5::Krb5Context ctx();
+                Qore::Krb5::Krb5Principal principal(\"alice@EXAMPLE.COM\");
+                auto cc = ctx.openCredentialCache(\"FILE:%s\");
+                ctx.renewCredentials(cc, principal);
+            }
+        ", cachePath), "sandbox_denied_renew");
+
+        SandboxManager sm();
+        sm.setFilesystemSandboxRoot("/var");
+        p.setSandboxManager(sm);
+
+        assertThrows("FILESYSTEM-ACCESS-DENIED", sub() {
+            p.callFunction("test_denied_renew");
+        });
+        cleanupSandboxCache(cachePath);
+    }
+
+    private testRenewCredentialsRequiresNetworkDomain() {
+        Program p(PO_MODERN | PO_NO_NETWORK);
+        p.loadModule("krb5");
+        assertThrows("PARSE-EXCEPTION", "renewCredentials", sub() {
+            p.parse("
+                nothing sub test_network_blocked_renew() {
+                    Qore::Krb5::Krb5Context ctx();
+                    Qore::Krb5::Krb5Principal principal(\"alice@EXAMPLE.COM\");
+                    auto cc = ctx.openCredentialCache(\"MEMORY:nd-renew\");
+                    ctx.renewCredentials(cc, principal);
+                }
+            ", "no_network_renew");
+        });
+    }
+
+    private testAcquireServiceCredentialsEmptyCache() {
+        Qore::Krb5::Krb5Context ctx();
+        Qore::Krb5::Krb5Principal service("HTTP/host.example.com@EXAMPLE.COM");
+        auto cc = ctx.openCredentialCache("MEMORY:svc-empty-test");
+        assertThrows("KRB5-SERVICE-CREDS-ERROR", sub() {
+            ctx.acquireServiceCredentials(cc, service);
+        });
+    }
+
+    private testAcquireServiceCredentialsSandboxDeny() {
+        string cachePath = getSandboxCachePath("svc-deny");
+        cleanupSandboxCache(cachePath);
+
+        Program p(PO_MODERN);
+        p.loadModule("krb5");
+        p.parse(sprintf("
+            nothing sub test_denied_svc_creds() {
+                Qore::Krb5::Krb5Context ctx();
+                Qore::Krb5::Krb5Principal service(\"HTTP/host.example.com@EXAMPLE.COM\");
+                auto cc = ctx.openCredentialCache(\"FILE:%s\");
+                ctx.acquireServiceCredentials(cc, service);
+            }
+        ", cachePath), "sandbox_denied_svc_creds");
+
+        SandboxManager sm();
+        sm.setFilesystemSandboxRoot("/var");
+        p.setSandboxManager(sm);
+
+        assertThrows("FILESYSTEM-ACCESS-DENIED", sub() {
+            p.callFunction("test_denied_svc_creds");
+        });
+        cleanupSandboxCache(cachePath);
+    }
+
+    private testAcquireServiceCredentialsRequiresNetworkDomain() {
+        Program p(PO_MODERN | PO_NO_NETWORK);
+        p.loadModule("krb5");
+        assertThrows("PARSE-EXCEPTION", "acquireServiceCredentials", sub() {
+            p.parse("
+                nothing sub test_network_blocked_svc() {
+                    Qore::Krb5::Krb5Context ctx();
+                    Qore::Krb5::Krb5Principal service(\"HTTP/host.example.com@EXAMPLE.COM\");
+                    auto cc = ctx.openCredentialCache(\"MEMORY:nd-svc\");
+                    ctx.acquireServiceCredentials(cc, service);
+                }
+            ", "no_network_svc_creds");
+        });
+    }
+
+    private testKeytabRemoveEntry() {
+        Qore::Krb5::Krb5Context ctx();
+        auto kt = ctx.openKeytab("MEMORY:remove-entry-test");
+        Qore::Krb5::Krb5Principal p("HTTP/host.example.com@EXAMPLE.COM");
+        kt.addEntry(p, getTestKeyHex1(), Qore::Krb5::ENCTYPE_AES256_CTS_HMAC_SHA1_96, 1);
+        kt.addEntry(p, getTestKeyHex2(), Qore::Krb5::ENCTYPE_AES256_CTS_HMAC_SHA1_96, 2);
+        assertEq(2, kt.listEntries().size());
+
+        kt.removeEntry(p, 1, Qore::Krb5::ENCTYPE_AES256_CTS_HMAC_SHA1_96);
+        list<hash<Qore::Krb5::Krb5KeytabEntryInfo>> remaining = kt.listEntries();
+        assertEq(1, remaining.size());
+        assertEq(2, remaining[0].kvno);
+    }
+
+    private testKeytabRemoveEntryNonExistent() {
+        Qore::Krb5::Krb5Context ctx();
+        auto kt = ctx.openKeytab("MEMORY:remove-nonexist-test");
+        Qore::Krb5::Krb5Principal p("HTTP/host.example.com@EXAMPLE.COM");
+        kt.addEntry(p, getTestKeyHex1(), Qore::Krb5::ENCTYPE_AES256_CTS_HMAC_SHA1_96, 1);
+
+        Qore::Krb5::Krb5Principal other("HTTP/other.example.com@EXAMPLE.COM");
+        assertThrows("KRB5-KEYTAB-ERROR", sub() {
+            kt.removeEntry(other, 1, Qore::Krb5::ENCTYPE_AES256_CTS_HMAC_SHA1_96);
+        });
+    }
+
+    private testKeytabRemoveEntrySandboxDeny() {
+        string keytabPath = getSandboxKeytabPath("remove-deny");
+        cleanupSandboxKeytab(keytabPath);
+
+        Program p(PO_MODERN);
+        p.loadModule("krb5");
+        p.parse(sprintf("
+            nothing sub test_denied_kt_remove() {
+                Qore::Krb5::Krb5Context ctx();
+                auto kt = ctx.openKeytab(\"FILE:%s\");
+                Qore::Krb5::Krb5Principal principal(\"HTTP/host.example.com@EXAMPLE.COM\");
+                kt.removeEntry(principal, 1, Qore::Krb5::ENCTYPE_AES256_CTS_HMAC_SHA1_96);
+            }
+        ", keytabPath), "sandbox_denied_kt_remove");
+
+        SandboxManager sm();
+        sm.setFilesystemSandboxRoot("/var");
+        p.setSandboxManager(sm);
+
+        assertThrows("FILESYSTEM-ACCESS-DENIED", sub() {
+            p.callFunction("test_denied_kt_remove");
+        });
+        cleanupSandboxKeytab(keytabPath);
+    }
+
+    private testKeytabRemoveThenHasContent() {
+        Qore::Krb5::Krb5Context ctx();
+        auto kt = ctx.openKeytab("MEMORY:remove-hascontent-test");
+        Qore::Krb5::Krb5Principal p("HTTP/host.example.com@EXAMPLE.COM");
+        kt.addEntry(p, getTestKeyHex1(), Qore::Krb5::ENCTYPE_AES256_CTS_HMAC_SHA1_96, 1);
+        assertTrue(kt.hasContent());
+        kt.removeEntry(p, 1, Qore::Krb5::ENCTYPE_AES256_CTS_HMAC_SHA1_96);
+        assertFalse(kt.hasContent());
+    }
+}

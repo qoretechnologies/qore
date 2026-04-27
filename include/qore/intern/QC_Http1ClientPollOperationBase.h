@@ -183,6 +183,11 @@ public:
     //! Cancel a stream
     DLLLOCAL bool cancelStream(int64_t stream_id, ExceptionSink* xsink);
 
+    //! Installs an SSE parser on an active ChannelAction stream
+    DLLLOCAL void installSseState(int64_t stream_id, Queue* queue,
+        QoreEventNotifier* notifier, QoreObject* notifier_obj, QoreValue initial,
+        ExceptionSink* xsink);
+
     // --- Accessors ---
 
     DLLLOCAL bool isClosed() const {
@@ -355,6 +360,12 @@ private:
 
     //! Stream ID of the active action
     int active_sid = 0;
+
+    //! Completed raw streaming action kept briefly for post-header parser install
+    ChannelAction* completed_channel_action = nullptr;
+
+    //! Stream ID of the completed raw streaming action
+    int completed_sid = 0;
 
     //! Active request method (for HEAD / 1xx / 204 / 304 handling)
     std::string active_method;

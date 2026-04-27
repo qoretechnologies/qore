@@ -499,6 +499,10 @@ protected:
         created_us_ = q_epoch_us(us) * 1000000LL + us;
     }
 
+    //! Raises the stored protocol error for a closed connection, if available
+    DLLEXPORT void raiseClosedSubmitError(const char* fallback_desc,
+        ExceptionSink* xsink);
+
     std::string target_host;
     int target_port;
     bool ssl_required;

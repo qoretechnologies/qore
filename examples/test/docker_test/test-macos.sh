@@ -47,7 +47,7 @@ elif [ "$PM" = "homebrew" ]; then
     # build aborts at find_package(Eigen3 REQUIRED) if it isn't
     # present.  brew install is idempotent (no-op if already installed)
     # so this is safe to run on a fresh image too.
-    REQUIRED_BREW_PKGS=(eigen)
+    REQUIRED_BREW_PKGS=(eigen krb5)
     for pkg in "${REQUIRED_BREW_PKGS[@]}"; do
         if ! brew list "$pkg" >/dev/null 2>&1; then
             echo "=== Installing missing Homebrew package: $pkg ==="

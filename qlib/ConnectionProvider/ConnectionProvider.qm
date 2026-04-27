@@ -121,6 +121,8 @@ $env:QORE_CONNECTION_PROVIDERS="MyConnectionProvider;OtherConnectionProvider"
       "AbstractConnection::startPollRequest()" for async HTTP request support
     - added @ref ConnectionProvider::HttpRequestPollOperation "HttpRequestPollOperation" for async HTTP
       requests via non-blocking I/O
+    - documented that raw @ref ConnectionProvider::HttpConnection "HttpConnection" / \c HTTPClient paths reject
+      \c negotiate_auth; REST connection types consume the Kerberos/SPNEGO HTTP Negotiate options
     - refactored @ref ConnectionProvider::PollingConnectionMonitor "PollingConnectionMonitor" to use
       per-connection timers via the \c AsyncIoController timer API instead of a dedicated timer thread;
       ping operations are dispatched to the thread pool via \c submitTask() to keep the I/O thread responsive

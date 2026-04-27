@@ -53,6 +53,13 @@ Required for LZ4 compression support. Install liblz4-dev (Debian/Ubuntu), lz4-de
 	https://nghttp2.org/
 Required for HTTP/2 support. Install libnghttp2-dev (Debian/Ubuntu), nghttp2-devel (RHEL/Fedora), or nghttp2-dev (Alpine).
 
+*) Kerberos 5 / GSSAPI
+	https://web.mit.edu/kerberos/
+Required for the builtin krb5 module and HTTP Negotiate/SPNEGO integration support.
+Install libkrb5-dev (Debian/Ubuntu), krb5-devel (RHEL/Fedora), or krb5-dev (Alpine).
+On macOS, install kerberos5 with MacPorts or krb5 with Homebrew when the system
+Kerberos headers are not sufficient for building the GSSAPI extension support.
+
 *) ngtcp2 + ngtcp2_crypto_ossl + nghttp3
 	https://github.com/ngtcp2/ngtcp2
 	https://github.com/ngtcp2/nghttp3

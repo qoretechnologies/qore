@@ -463,8 +463,8 @@ QoreHashNode* Http1ClientConnection::submitRequest(const char* method, const cha
         return nullptr;
     }
     if (!poll_op_priv || isClosed()) {
-        xsink->raiseException("HTTPCLIENT-STATE-ERROR",
-            "cannot submit request: connection is closed");
+        raiseClosedSubmitError("cannot submit request: connection is closed",
+            xsink);
         return nullptr;
     }
     if (!isReady()) {
@@ -554,8 +554,8 @@ int64_t Http1ClientConnection::submitRequestStreaming(const char* method, const 
         return -1;
     }
     if (!poll_op_priv || isClosed()) {
-        xsink->raiseException("HTTPCLIENT-STATE-ERROR",
-            "cannot submit streaming request: connection is closed");
+        raiseClosedSubmitError(
+            "cannot submit streaming request: connection is closed", xsink);
         return -1;
     }
     if (!isReady()) {
@@ -616,8 +616,9 @@ QoreHashNode* Http1ClientConnection::submitRequestStreamingSend(const char* meth
         return nullptr;
     }
     if (!poll_op_priv || isClosed()) {
-        xsink->raiseException("HTTPCLIENT-STATE-ERROR",
-            "cannot submit streaming send request: connection is closed");
+        raiseClosedSubmitError(
+            "cannot submit streaming send request: connection is closed",
+            xsink);
         return nullptr;
     }
     if (!isReady()) {
@@ -769,8 +770,8 @@ int64_t Http1ClientConnection::submitRequestWithAction(const char* method, const
     }
     if (!poll_op_priv || isClosed()) {
         action->deref(xsink);
-        xsink->raiseException("HTTPCLIENT-STATE-ERROR",
-            "cannot submit request: connection is closed");
+        raiseClosedSubmitError("cannot submit request: connection is closed",
+            xsink);
         return -1;
     }
     if (!isReady()) {

@@ -1,0 +1,253 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    QC_GssAcceptorContext.qpp
+
+    Qore Kerberos Module
+
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+#include "krb5-module.h"
+
+//! Acceptor-side GSSAPI security context
+/** This class accepts initiator tokens, exposes the authenticated initiator
+    principal when available, and provides message wrap/unwrap helpers for
+    negotiated SASL/GSSAPI integrity and confidentiality layers.
+*/
+qclass GssAcceptorContext [arg=QoreGssAcceptorContext* ctx; ns=Qore::Krb5; dom=NETWORK; flags=final];
+
+//! Options for GSSAPI acceptor contexts
+/**
+*/
+hashdecl Qore::Krb5::GssAcceptorContextOptions {
+    //! Optional channel-binding initiator address type; defaults to \c GSS_AF_NULLADDR
+    *int channel_binding_initiator_addrtype;
+
+    //! Optional channel-binding initiator address encoded as hexadecimal
+    *string channel_binding_initiator_address_hex;
+
+    //! Optional channel-binding acceptor address type; defaults to \c GSS_AF_NULLADDR
+    *int channel_binding_acceptor_addrtype;
+
+    //! Optional channel-binding acceptor address encoded as hexadecimal
+    *string channel_binding_acceptor_address_hex;
+
+    //! Optional channel-binding application data encoded as hexadecimal
+    *string channel_binding_application_data_hex;
+}
+
+//! Creates an acceptor-side GSSAPI context using the process-default acceptor credential
+/** @throw KRB5-GSS-ARG-ERROR if an option value is invalid or inconsistent
+    @throw KRB5-TOKEN-ERROR if any channel-binding hex value is malformed
+*/
+GssAcceptorContext::constructor() {
+    SimpleRefHolder<QoreGssAcceptorContext> c(new QoreGssAcceptorContext(nullptr, xsink));
+    if (*xsink) {
+        return;
+    }
+    self->setPrivate(CID_GSSACCEPTORCONTEXT, c.release());
+}
+
+//! Creates an acceptor-side GSSAPI context using the process-default acceptor credential and explicit options
+/** @param opts acceptor options (channel bindings)
+
+    @throw KRB5-GSS-ARG-ERROR if an option value is invalid or inconsistent
+    @throw KRB5-TOKEN-ERROR if any channel-binding hex value is malformed
+*/
+GssAcceptorContext::constructor(hash<GssAcceptorContextOptions> opts) {
+    SimpleRefHolder<QoreGssAcceptorContext> c(new QoreGssAcceptorContext(opts, xsink));
+    if (*xsink) {
+        return;
+    }
+    self->setPrivate(CID_GSSACCEPTORCONTEXT, c.release());
+}
+
+//! Creates an acceptor-side GSSAPI context bound to an explicit acceptor credential
+/** @param cred explicit GSSAPI acceptor credential, normally imported from a service keytab
+*/
+GssAcceptorContext::constructor(GssCredential[QoreGssCredential] cred) {
+    SimpleRefHolder<QoreGssAcceptorContext> c(new QoreGssAcceptorContext(*cred, nullptr, xsink));
+    if (*xsink) {
+        return;
+    }
+    self->setPrivate(CID_GSSACCEPTORCONTEXT, c.release());
+}
+
+//! Creates an acceptor-side GSSAPI context bound to an explicit acceptor credential and options
+/** @param cred explicit GSSAPI acceptor credential, normally imported from a service keytab
+    @param opts acceptor options (channel bindings)
+
+    @throw KRB5-GSS-ARG-ERROR if an option value is invalid or inconsistent
+    @throw KRB5-TOKEN-ERROR if any channel-binding hex value is malformed
+*/
+GssAcceptorContext::constructor(GssCredential[QoreGssCredential] cred, hash<GssAcceptorContextOptions> opts) {
+    SimpleRefHolder<QoreGssAcceptorContext> c(new QoreGssAcceptorContext(*cred, opts, xsink));
+    if (*xsink) {
+        return;
+    }
+    self->setPrivate(CID_GSSACCEPTORCONTEXT, c.release());
+}
+
+//! Returns the authenticated initiator principal, or \c NOTHING before the initiator name is known
+/**
+*/
+*string GssAcceptorContext::getInitiatorName() [flags=CONSTANT] {
+    return ctx->getInitiatorName();
+}
+
+//! Returns True if the context negotiation is complete
+/**
+*/
+bool GssAcceptorContext::isComplete() [flags=CONSTANT] {
+    return ctx->isComplete();
+}
+
+//! Resets the security context state
+/**
+*/
+nothing GssAcceptorContext::reset() {
+    ctx->reset();
+}
+
+//! Advances the acceptor security context with a hex-encoded initiator token
+/** This method should be called in a loop until @ref Qore::Krb5::GssStepInfo::complete is
+    \c True, exchanging hex-encoded tokens with the initiator each round.
+    Cooperative cancellation is checked before each GSSAPI call.
+
+    @param token_hex hex-encoded initiator token to process
+
+    @return a @ref Qore::Krb5::GssStepInfo describing the step result
+
+    @throw KRB5-TOKEN-ERROR if \a token_hex is empty or is not valid hexadecimal
+    @throw KRB5-GSS-ERROR if the GSSAPI negotiation fails
+*/
+hash<GssStepInfo> GssAcceptorContext::step(string token_hex) {
+    return ctx->step(token_hex->c_str(), xsink);
+}
+
+//! Wraps a hex-encoded message with GSSAPI integrity or confidentiality protection
+/** The context must be complete before this method can be called.
+
+    @param message_hex message bytes encoded as hexadecimal
+    @param confidential request confidentiality in addition to integrity; defaults to True
+    @param qop requested GSSAPI quality-of-protection value; defaults to 0
+
+    @return a @ref Qore::Krb5::GssWrapInfo describing the wrapped token
+
+    @throw KRB5-TOKEN-ERROR if \a message_hex is not valid hexadecimal
+    @throw KRB5-GSS-ARG-ERROR if \a qop is negative
+    @throw KRB5-GSS-STATE-ERROR if the context is not complete
+    @throw KRB5-GSS-ERROR if GSSAPI wrapping fails
+*/
+hash<GssWrapInfo> GssAcceptorContext::wrap(string message_hex, bool confidential = True, int qop = 0) {
+    return ctx->wrap(message_hex->c_str(), confidential, static_cast<int>(qop), xsink);
+}
+
+//! Unwraps a hex-encoded GSSAPI protected token
+/** The context must be complete before this method can be called.
+
+    @param token_hex wrapped token bytes encoded as hexadecimal
+
+    @return a @ref Qore::Krb5::GssUnwrapInfo describing the unwrapped message
+
+    @throw KRB5-TOKEN-ERROR if \a token_hex is not valid hexadecimal or is empty
+    @throw KRB5-GSS-STATE-ERROR if the context is not complete
+    @throw KRB5-GSS-ERROR if GSSAPI unwrapping fails
+*/
+hash<GssUnwrapInfo> GssAcceptorContext::unwrap(string token_hex) {
+    return ctx->unwrap(token_hex->c_str(), xsink);
+}
+
+//! Returns the maximum plaintext size for a wrapped token size
+/** The context must be complete before this method can be called.
+
+    @param output_size requested maximum wrapped-token size in bytes
+    @param confidential request confidentiality in addition to integrity; defaults to True
+    @param qop requested GSSAPI quality-of-protection value; defaults to 0
+
+    @throw KRB5-GSS-ARG-ERROR if \c output_size or \c qop is invalid
+    @throw KRB5-GSS-STATE-ERROR if the context is not complete
+    @throw KRB5-GSS-ERROR if the GSSAPI library cannot compute the size limit
+*/
+int GssAcceptorContext::getWrapSizeLimit(int output_size, bool confidential = True, int qop = 0) {
+    return ctx->getWrapSizeLimit(output_size, confidential, static_cast<int>(qop), xsink);
+}
+
+//! Computes a GSSAPI MIC (Message Integrity Code) over a hex-encoded message
+/** The context must be complete before this method can be called.
+
+    @param message_hex message bytes encoded as hexadecimal
+    @param qop requested GSSAPI quality-of-protection value; defaults to 0
+
+    @return a @ref Qore::Krb5::GssMicInfo with the hex-encoded MIC token
+
+    @throw KRB5-TOKEN-ERROR if \a message_hex is not valid hexadecimal
+    @throw KRB5-GSS-ARG-ERROR if \a qop is negative
+    @throw KRB5-GSS-STATE-ERROR if the context is not complete
+    @throw KRB5-GSS-ERROR if GSSAPI MIC computation fails
+*/
+hash<GssMicInfo> GssAcceptorContext::getMic(string message_hex, int qop = 0) {
+    return ctx->getMic(message_hex->c_str(), static_cast<int>(qop), xsink);
+}
+
+//! Verifies a GSSAPI MIC over a hex-encoded message
+/** The context must be complete before this method can be called.
+
+    @param message_hex message bytes encoded as hexadecimal
+    @param mic_hex MIC token bytes encoded as hexadecimal
+
+    @return a @ref Qore::Krb5::GssMicVerifyInfo with the reported QOP value
+
+    @throw KRB5-TOKEN-ERROR if \a message_hex or \a mic_hex is not valid
+    hexadecimal, or if \a mic_hex is empty
+    @throw KRB5-GSS-STATE-ERROR if the context is not complete
+    @throw KRB5-GSS-ERROR if GSSAPI MIC verification fails
+*/
+hash<GssMicVerifyInfo> GssAcceptorContext::verifyMic(string message_hex, string mic_hex) {
+    return ctx->verifyMic(message_hex->c_str(), mic_hex->c_str(), xsink);
+}
+
+//! Returns the delegated credential from a completed context
+/** When the initiator requests credential delegation
+    (\c Qore::Krb5::GSS_DELEG_FLAG) and the acceptor context completes
+    successfully, this method extracts the delegated credential handle.
+    The credential can then be used to initiate new GSSAPI contexts on
+    behalf of the original initiator.
+
+    Ownership of the delegated credential is transferred to the returned
+    @ref Qore::Krb5::GssCredential; calling this method a second time
+    will raise an error.
+
+    @return the delegated @ref Qore::Krb5::GssCredential
+
+    @throw KRB5-GSS-STATE-ERROR if the context is not complete
+    @throw KRB5-GSS-DELEGATION-ERROR if no delegated credential is available
+*/
+GssCredential GssAcceptorContext::getDelegatedCredential() {
+    SimpleRefHolder<QoreGssCredential> cred(ctx->getDelegatedCredential(xsink));
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    ReferenceHolder<QoreObject> rv(new QoreObject(QC_GSSCREDENTIAL, getProgram()), xsink);
+    rv->setPrivate(CID_GSSCREDENTIAL, cred.release());
+    return rv.release();
+}

@@ -84,10 +84,10 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
         #! True when the request write side remains open after startStreaming()
         bool request_body_streaming = False;
 
-        #! Per-stream @ref Queue "Queue" for async QUIC datagram delivery (RFC 9221/9297)
+        #! Per-stream \c Queue for async QUIC datagram delivery (RFC 9221/9297)
         /** Lazily created on the first @ref readDatagram() call and registered with
             the QUIC session via @ref Qore::Socket::registerQuicDatagramQueue().  The
-            I/O thread pushes incoming datagrams (as @ref binary) to this Queue; this
+            I/O thread pushes incoming datagrams (as \c binary) to this Queue; this
             class consumes via @c Queue::get(timeout).  A @c NOTHING sentinel pushed by
             the session on close signals end-of-stream.
         */
@@ -177,6 +177,13 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
         return result;
     }
 
+    #! Returns True because HTTP/3 supports streaming requests
+    /** @return True
+    */
+    bool supportsStreaming() {
+        return True;
+    }
+
     #! Starts a streaming request (for bidirectional streaming over HTTP/3)
     /** @param method HTTP method (typically POST for bidi streaming)
         @param path request path
@@ -186,18 +193,18 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
         send data via sendData() and close the stream explicitly.  If False (default),
         the request is submitted with END_STREAM on the HEADERS frame, which is
         appropriate for response-only streaming (e.g., SSE).
+        @param body one-shot request body (optional)
+        @param notifier optional EventNotifier signaled when raw response
+        items are available to @ref readData()
 
         @return the stream ID
 
         @throw HTTPCLIENT-STATE-ERROR if the stream is already in use
         @throw HTTPCLIENT-TIMEOUT if connection establishment timed out
     */
-    bool supportsStreaming() {
-        return True;
-    }
-
     int startStreaming(string method, string path, *hash<auto> headers,
-            bool body_streaming = False, *data body) {
+            bool body_streaming = False, *data body, *EventNotifier notifier,
+            bool sse_install_eligible = False) {
         {
             AutoLock al(lock);
             if (state != HttpClientStreamState::Pending) {
@@ -212,6 +219,18 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
 
         # Wait for connection to become ready if not already
         if (!conn.isReady()) {
+            if (notifier) {
+                {
+                    AutoLock al(lock);
+                    state = HttpClientStreamState::Pending;
+                    streaming = False;
+                    request_body_streaming = False;
+                    delete data_channel;
+                }
+                releaseReservationIfHeld();
+                throw "HTTPCLIENT-NOT-READY",
+                    "connection is not ready for async streaming request";
+            }
             if (!conn.waitForReady(request_timeout)) {
                 {
                     AutoLock al(lock);
@@ -245,7 +264,7 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
             # completion action so each response chunk is pushed to it via
             # ChannelAction::trySend (pure C++ on I/O thread)
             stream_id = h3conn.submitRequestStreamingWithChannel(method, path, headers,
-                body, data_channel, body_streaming);
+                body, data_channel, body_streaming, notifier, sse_install_eligible);
             @assert(stream_id >= 0);
             # Reservation converted to active stream; release connection reservation
             releaseReservationIfHeld();
@@ -539,10 +558,10 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
     }
 
     #! Read the next incoming QUIC datagram on this stream's channel (RFC 9221/9297)
-    /** Blocks up to @a timeout_ms for a datagram on a per-stream @ref Queue "Queue"
+    /** Blocks up to @a timeout_ms for a datagram on a per-stream \c Queue
         populated by the I/O thread.  No handler-thread socket I/O, no C++-level
         condition-variable wait across the Qore/C++ boundary — matches the
-        @ref Channel "Channel"-based pattern used for HTTP/3 stream body data.
+        \c Channel-based pattern used for HTTP/3 stream body data.
 
         The Queue is created and registered on the first call; it stays registered
         for the lifetime of this stream handle and is unregistered by the destructor.
@@ -634,6 +653,25 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
         }
 
         h3conn.installFrameState(sid, msg_queue);
+    }
+
+    #! Installs an SSE parser on an existing streaming request
+    /** @see HttpClientStreamHandle::installSseState() for full documentation
+    */
+    installSseState(Queue queue, *EventNotifier notifier, *data initial_body) {
+        int sid;
+        {
+            AutoLock al(lock);
+            if (!streaming) {
+                throw "HTTPCLIENT-STATE-ERROR", "not in streaming mode";
+            }
+            if (!exists stream_id) {
+                throw "HTTPCLIENT-STATE-ERROR", "stream not yet established";
+            }
+            sid = stream_id;
+        }
+
+        h3conn.installSseState(sid, queue, notifier, initial_body);
     }
 }
 
