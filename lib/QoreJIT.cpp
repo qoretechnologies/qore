@@ -344,6 +344,12 @@ bool QoreJIT::registerRuntimeSymbols(std::string& error) {
 
     // AOT context-based helpers (Phase 7b)
     addSymbol("qore_rt_load_local_aot", reinterpret_cast<void*>(&qore_rt_load_local_aot));
+    addSymbol("qore_rt_cleanup_run_allocas",
+        reinterpret_cast<void*>(&qore_rt_cleanup_run_allocas));
+    addSymbol("qore_rt_reload_local_if_stale",
+        reinterpret_cast<void*>(&qore_rt_reload_local_if_stale));
+    addSymbol("qore_rt_reload_local_if_stale_aot",
+        reinterpret_cast<void*>(&qore_rt_reload_local_if_stale_aot));
     addSymbol("qore_rt_assign_local_aot", reinterpret_cast<void*>(&qore_rt_assign_local_aot));
     addSymbol("qore_rt_assign_local_no_coerce_aot", reinterpret_cast<void*>(&qore_rt_assign_local_no_coerce_aot));
     addSymbol("qore_rt_assign_local_aot_throwing", reinterpret_cast<void*>(&qore_rt_assign_local_aot_throwing));

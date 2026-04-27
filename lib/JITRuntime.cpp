@@ -441,7 +441,9 @@ extern "C" DLLEXPORT void qore_rt_cleanup_push(uint64_t** stack, int32_t* count,
 */
 extern "C" DLLEXPORT void qore_rt_cleanup_run_allocas(uint64_t** alloca_ptrs, int32_t count, ExceptionSink* xsink) {
     for (int32_t i = 0; i < count; ++i) {
-        QoreValue v = fromBits(*alloca_ptrs[i]);
+        uint64_t* slot = alloca_ptrs[i];
+        QoreValue v = fromBits(*slot);
+        *slot = 0;
         v.discard(xsink);
     }
 }
@@ -959,6 +961,25 @@ extern "C" DLLEXPORT uint64_t qore_rt_load_local(LocalVar* var, ExceptionSink* x
         result = result.refSelf();
     }
     return toBits(result);
+}
+
+extern "C" DLLEXPORT void qore_rt_reload_local_if_stale(LocalVar* var, uint64_t* cache,
+        uint64_t* tracker, uint64_t* deferred, uint64_t* valid_epoch, uint64_t epoch,
+        ExceptionSink* xsink) {
+    assert(cache && tracker && deferred && valid_epoch);
+    if (*valid_epoch == epoch) {
+        return;
+    }
+
+    uint64_t old_tracker = *tracker;
+    uint64_t old_deferred = *deferred;
+    uint64_t reloaded = qore_rt_load_local(var, xsink);
+
+    *cache = reloaded;
+    *tracker = reloaded;
+    *deferred = old_tracker;
+    qore_rt_decref(old_deferred, xsink);
+    *valid_epoch = epoch;
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_deref_if_reference(uint64_t val, ExceptionSink* xsink) {
@@ -4487,11 +4508,15 @@ static void execJITWithDeopt(const UserVariantBase* uvb, const std::string& call
     // Get AST-visible body locals: for AOT use all_body_locals (separate optimization),
     // for IR use filtered ast_visible_body_locals (excludes IR-only locals that
     // are never accessed by AST callbacks).
-    bool skip_body_locals = uvb->areAllBodyLocalsIROnly();
+    bool has_aot = uvb->hasCachedAOT();
+    // AOT lowering syncs non-closure body locals through the runtime local
+    // stack for ownership, so the stack slots must exist even when the IR
+    // classifier marks every body local IR-only.  The skip optimization only
+    // applies to in-process JIT/IR functions whose body locals stay alloca-only.
+    bool skip_body_locals = !has_aot && uvb->areAllBodyLocalsIROnly();
     const std::vector<LocalVar*>& body_locals = uvb->hasCachedAOT()
         ? uvb->getBodyLocals()  // AOT: use all_body_locals via getBodyLocals()
         : uvb->getASTVisibleBodyLocals();  // IR: use filtered ast_visible_body_locals
-    bool has_aot = uvb->hasCachedAOT();
     if (!skip_body_locals) {
         const QoreParseOptions& po = uvb->pgm->getParseOptions();
         for (LocalVar* lv : body_locals) {
@@ -5745,6 +5770,14 @@ extern "C" DLLEXPORT CaseNodeRegex* qore_rt_get_regex_case_aot(QoreAOTContext* c
 extern "C" DLLEXPORT uint64_t qore_rt_load_local_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink) {
     assert(ctx && idx >= 0 && idx < ctx->num_locals);
     return qore_rt_load_local(ctx->locals[idx], xsink);
+}
+
+extern "C" DLLEXPORT void qore_rt_reload_local_if_stale_aot(QoreAOTContext* ctx, int32_t idx,
+        uint64_t* cache, uint64_t* tracker, uint64_t* deferred, uint64_t* valid_epoch,
+        uint64_t epoch, ExceptionSink* xsink) {
+    assert(ctx && idx >= 0 && idx < ctx->num_locals);
+    qore_rt_reload_local_if_stale(ctx->locals[idx], cache, tracker, deferred,
+            valid_epoch, epoch, xsink);
 }
 
 extern "C" DLLEXPORT void qore_rt_assign_local_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink) {
@@ -7689,10 +7722,11 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_self_recursive_aot(AotFunctionPtr sel
         sig->argvid->instantiate(argv ? argv->refSelf() : nullptr);
     }
 
-    // Body locals — use getBodyLocals() for AOT (same as execJITWithDeopt)
-    // Skip closure-use vars: the LLVM code handles their instantiation/uninstantiation
-    // at block scope boundaries via qore_rt_instantiate_local_aot / qore_rt_pop_closure_var_aot.
-    bool skip_body_locals = uvb->areAllBodyLocalsIROnly();
+    // Body locals — use getBodyLocals() for AOT (same as execJITWithDeopt).
+    // AOT StoreLocal syncs non-closure body locals through the runtime stack
+    // for ownership, so the stack slots must exist even when the IR classifier
+    // marks every body local IR-only.
+    bool skip_body_locals = false;
     const std::vector<LocalVar*>& body_locals = uvb->getBodyLocals();
     if (!skip_body_locals) {
         const QoreParseOptions& po = uvb->pgm->getParseOptions();

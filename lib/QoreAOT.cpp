@@ -39,8 +39,12 @@
 
 #include <sys/stat.h>
 #include <algorithm>
+#include <cerrno>
+#include <cstdio>
+#include <cstring>
 #include <set>
 #include <unordered_set>
+#include <unistd.h>
 
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/QoreNamespaceIntern.h"
@@ -4945,7 +4949,10 @@ static bool linkSharedLib(const std::string& obj_path, const std::string& so_pat
     // Determine library directory (auto-detect from loaded libqore.so)
     std::string libqore_dir = getLibqoreDir();
 
-    std::string cmd = config.cxx + " -shared -o " + so_path + " " + obj_path
+    // Keep source-tree qlib symlinks pointing at a complete old or new
+    // qmod; parallel qcc jobs may load dependencies while this link runs.
+    std::string tmp_so_path = so_path + ".tmp." + std::to_string(getpid());
+    std::string cmd = config.cxx + " -shared -o " + tmp_so_path + " " + obj_path
         + " -L" + libqore_dir + " -lqore"
         + " -Wl,-rpath," + libqore_dir;
     if (!config.dynamic_libs.empty()) {
@@ -4956,6 +4963,13 @@ static bool linkSharedLib(const std::string& obj_path, const std::string& so_pat
     int rc = system(cmd.c_str());
     if (rc != 0) {
         error = "linker command failed with exit code " + std::to_string(rc);
+        remove(tmp_so_path.c_str());
+        return false;
+    }
+    if (rename(tmp_so_path.c_str(), so_path.c_str()) != 0) {
+        error = "failed to replace output module '" + so_path + "' with temporary module '"
+            + tmp_so_path + "': " + strerror(errno);
+        remove(tmp_so_path.c_str());
         return false;
     }
     return true;
@@ -7200,7 +7214,10 @@ static bool linkSharedLibMulti(const std::vector<std::string>& obj_paths,
     AOTLinkConfig config = loadAOTLinkConfig();
     std::string libqore_dir = getLibqoreDir();
 
-    std::string cmd = config.cxx + " -shared -o " + so_path;
+    // Keep source-tree qlib symlinks pointing at a complete old or new
+    // qmod; parallel qcc jobs may load dependencies while this link runs.
+    std::string tmp_so_path = so_path + ".tmp." + std::to_string(getpid());
+    std::string cmd = config.cxx + " -shared -o " + tmp_so_path;
     for (const std::string& p : obj_paths) {
         cmd += " " + p;
     }
@@ -7214,6 +7231,13 @@ static bool linkSharedLibMulti(const std::vector<std::string>& obj_paths,
     int rc = system(cmd.c_str());
     if (rc != 0) {
         error = "linker command failed with exit code " + std::to_string(rc);
+        remove(tmp_so_path.c_str());
+        return false;
+    }
+    if (rename(tmp_so_path.c_str(), so_path.c_str()) != 0) {
+        error = "failed to replace output module '" + so_path + "' with temporary module '"
+            + tmp_so_path + "': " + strerror(errno);
+        remove(tmp_so_path.c_str());
         return false;
     }
     return true;

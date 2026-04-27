@@ -259,14 +259,20 @@ private:
     // compilation); skip qore_rt_instantiate_local / qore_rt_uninstantiate_local for these.
     const std::unordered_set<const void*>* pre_instantiated_locals = nullptr;
 
-    // Set of LocalVar* (as void*) that are only accessed by LoadLocal/StoreLocal in
-    // fully-lowered IR code.  For these locals, skip qore_rt_assign_local (runtime sync)
-    // and reloadLocalFromRuntime (reload after calls).
+    // Set of LocalVar* (as void*) that are only accessed by LoadLocal/StoreLocal
+    // in fully-lowered IR code.  For these locals, skip qore_rt_assign_local
+    // and related runtime-stack synchronization when ownership permits.
     const std::unordered_set<const void*>* ir_only_locals_set = nullptr;
 
-    // Phase 4: True when ALL locals in the function are IR-only, meaning
-    // reloadAllLocalsFromRuntime() can be skipped entirely after calls.
-    bool all_locals_ir_only = false;
+    // Original IR-only set used only for reload decisions. AOT may remove body
+    // locals from ir_only_locals_set so StoreLocal still syncs with the runtime
+    // stack for ownership, but those locals are still invisible to AST callbacks.
+    const std::unordered_set<const void*>* reload_exempt_locals_set = nullptr;
+
+    // Phase 4: True when ALL locals in the function are invisible to AST
+    // callbacks, meaning reloadAllLocalsFromRuntime() can be skipped entirely
+    // after calls.
+    bool all_locals_reload_exempt = false;
 
     // Sets of IR-only locals that use native (unboxed) allocas for typed int/float.
     // LoadLocal from these returns native i64/double (NOT nanboxed).
@@ -279,10 +285,22 @@ private:
     // call path skips their instantiation when all body locals are IR-only).
     std::unordered_set<const void*> ir_only_body_locals;
 
+    // AOT body locals are pre-instantiated by the runtime frame wrapper with
+    // an initial NOTHING value. LLVM allocas can therefore start as NOTHING
+    // without an entry qore_rt_load_local_aot(); StoreLocal/lvalue mutation
+    // paths force a reload after publishing a real value to the runtime stack.
+    std::unordered_set<const void*> aot_body_locals;
+
     // AOT-adjusted IR-only set: removes pre-instantiated body locals from the
     // IR-only set so that StoreLocal syncs them to the runtime stack (fixing
     // double-free when body locals are pre-instantiated by evalTiered).
     std::unordered_set<const void*> aot_adjusted_ir_only;
+
+    // Lazy local-cache invalidation. Calls that can execute AST/Qore code bump
+    // the function epoch; LoadLocal reloads only the specific stale local it
+    // reads. This keeps LLVM IR size O(calls + local reads), not O(calls * locals).
+    llvm::AllocaInst* local_reload_epoch = nullptr;
+    std::unordered_map<const void*, llvm::AllocaInst*> local_valid_epochs;
 
     // Saved on_block_exit handler count at function entry (for LIFO cleanup)
     llvm::Value* obe_saved_count = nullptr;
@@ -318,6 +336,14 @@ private:
     // qore_rt_invoke_expr returns +1 ref; these allocas track the results so they
     // can be decref'd at exit (matching the IR interpreter's cleanup vector).
     std::vector<llvm::Value*> invoke_result_allocas;
+
+    // Entry-block array of pointers to invoke_result_allocas slots.  Large
+    // functions use qore_rt_cleanup_run_allocas() to avoid emitting thousands
+    // of load/decref/store triples at every cleanup exit.
+    llvm::AllocaInst* invoke_cleanup_array = nullptr;
+    unsigned invoke_cleanup_array_capacity = 0;
+    unsigned invoke_cleanup_array_count = 0;
+    bool invoke_cleanup_array_overflow = false;
     // Map from value ID to invoke-result alloca (for clearing at Return)
     std::unordered_map<uint32_t, llvm::Value*> invoke_alloca_map;
     // Map from local key (LocalVar* as void*) to invoke-result cleanup allocas
@@ -603,6 +629,16 @@ private:
     // Emit qore_rt_decref calls for tracked runtime call results
     void emitInvokeCleanup(llvm::Module& module);
 
+    // Register an alloca-backed cleanup slot and, for large functions, add its
+    // address to the entry-block cleanup pointer array used by
+    // qore_rt_cleanup_run_allocas().
+    void registerInvokeCleanupAlloca(llvm::Value* alloca_ptr);
+
+    // Conservative upper bound for the cleanup pointer array.  Overflow falls
+    // back to the expanded cleanup path, so the estimate only affects whether
+    // the compact helper path is available.
+    unsigned estimateInvokeCleanupArrayCapacity(const QoreIRFunction& func) const;
+
     // Emit qore_rt_iterator_cleanup calls for active iterators
     void emitIteratorCleanup(llvm::Module& module);
 
@@ -782,7 +818,13 @@ private:
     // Reload a specific local variable's alloca from the Qore runtime stack.
     // Called after lvalue operations (PostInc, StoreLvalue, etc.) that modify the
     // runtime stack without updating the LLVM alloca cache.
-    void reloadLocalFromRuntime(const void* key, llvm::Module& module, llvm::Function* llvm_func);
+    void reloadLocalFromRuntime(const void* key, llvm::Module& module, llvm::Function* llvm_func,
+            bool honor_reload_exempt = true);
+
+    // Retain a just-assigned value directly in the local alloca cache without
+    // loading it back from the runtime stack.
+    void retainLocalCacheValue(const void* key, llvm::Value* value, llvm::Module& module,
+            llvm::Function* llvm_func, bool honor_reload_exempt = true);
 
     // Clear the reload tracker for a specific local, releasing the +1 reference
     // held from a previous reloadLocalFromRuntime() call.  Called before lvalue
@@ -842,8 +884,19 @@ private:
     llvm::Value* buildArgCleanupArray(const QoreIRInstruction* inst, int arg_start,
             llvm::Function* llvm_func, int nargs, bool& has_cleanup);
 
-    // Reload all local variable allocas from the Qore runtime stack.
-    // Called after Invoke instructions (which can modify any local via AST evaluation).
+    // Returns true if a local can be lazily reloaded from the runtime stack.
+    bool canReloadLocalFromRuntime(const void* key, bool honor_reload_exempt = true) const;
+
+    // Per-function epoch helpers for lazy local-cache invalidation.
+    llvm::AllocaInst* getOrCreateLocalReloadEpoch(llvm::Function* llvm_func);
+    llvm::AllocaInst* getOrCreateLocalValidEpoch(const void* key,
+            llvm::Function* llvm_func);
+    void markLocalCacheFresh(const void* key, llvm::Function* llvm_func);
+    void ensureLocalCacheFresh(const void* key, llvm::Module& module,
+            llvm::Function* llvm_func);
+
+    // Invalidate all reloadable local variable allocas. Called after calls that
+    // can modify locals through the Qore runtime stack; actual reloads are lazy.
     void reloadAllLocalsFromRuntime(llvm::Module& module, llvm::Function* llvm_func);
 
     // Phase 5b: Emit inline LLVM fast-path for .any comparisons (EqAny/NeAny/etc).

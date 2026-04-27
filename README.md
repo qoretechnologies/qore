@@ -66,6 +66,15 @@ refer to the following files/locations for specific information:
  * XML support has been removed as of Qore 0.8.1+; use the "xml" module
    instead
 
+## Test Environment Notes
+
+When running tests or tools that load the `jni` module in the same process as
+other native runtimes that use synchronous signals, such as V8 or Python, set up
+the JVM signal-chaining library in the environment before starting `qore`. On
+Linux JVMs that provide `libjsig.so`, this normally means exporting
+`LD_PRELOAD=/path/to/libjvm/server/libjsig.so${LD_PRELOAD:+:$LD_PRELOAD}` from
+the host or CI environment.
+
 ## IR Smoke + Valgrind
 
 Run the IR smoke test under Valgrind with signal handling disabled:

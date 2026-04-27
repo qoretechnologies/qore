@@ -229,6 +229,14 @@ uint64_t qore_rt_make_weak_value(uint64_t value, ExceptionSink* xsink);
 //! variable stack.
 uint64_t qore_rt_load_local(LocalVar* var, ExceptionSink* xsink);
 
+//! Run all cleanup actions from an array of pointers to NaN-boxed cleanup slots.
+void qore_rt_cleanup_run_allocas(uint64_t** alloca_ptrs, int32_t count, ExceptionSink* xsink);
+
+//! Refresh a compiled local cache from the Qore runtime stack if its valid
+//! epoch is stale.  Used by LLVM lowering to keep cache invalidation compact.
+void qore_rt_reload_local_if_stale(LocalVar* var, uint64_t* cache, uint64_t* tracker,
+        uint64_t* deferred, uint64_t* valid_epoch, uint64_t epoch, ExceptionSink* xsink);
+
 //! Clear a local variable's value on the Qore thread-local variable stack
 //! without popping the stack entry.  This triggers destructors (via decref)
 //! at block scope exit for pre-instantiated locals whose stack entry must
@@ -559,6 +567,11 @@ struct QoreAOTContext;
 
 //! Load from a local variable via AOT context slot
 uint64_t qore_rt_load_local_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink);
+
+//! AOT variant of qore_rt_reload_local_if_stale().
+void qore_rt_reload_local_if_stale_aot(QoreAOTContext* ctx, int32_t idx, uint64_t* cache,
+        uint64_t* tracker, uint64_t* deferred, uint64_t* valid_epoch, uint64_t epoch,
+        ExceptionSink* xsink);
 
 //! Assign to a local variable via AOT context slot
 void qore_rt_assign_local_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink);
