@@ -298,8 +298,10 @@ to make the existing built-in machinery explicitly extensible:
   and operation ids; every plugin import is a hard requirement (soft
   fallback is reserved for core QORD format-feature bits, not plugins).
   Do not spend one global feature bit per plugin.
-- Add an explicit module-registration hook through `QoreModuleInitContext`
-  with deterministic ordering and a runtime-owned plugin module handle.
+- Add an explicit module-registration hook populated from
+  `QoreModuleInitContext`, with deterministic ordering, a runtime-owned plugin
+  module handle, and a public registration context that stays out of the C++
+  module-loader ABI.
 - Add a JIT helper symbol resolver and interpreter helper table for registered
   plugin operations.
 - Audit `QoreValue` tag classification before assigning any plugin immediate
@@ -361,13 +363,15 @@ assumptions must be lifted or intentionally bypassed.
 
 ### 3.3 Plugin-type registration ABI
 
-A C++ module wanting to register one or more plugin types supplies descriptors
-through the existing module ABI. Phase 3 extends `QoreModuleInitContext` with
-an opaque, runtime-owned `plugin_module_handle`, and registration receives the
-calling module's init context explicitly. This keeps the entry point part of the
-normal module initialization path so load ordering, dependency resolution,
+A module wanting to register one or more plugin types supplies descriptors
+during the existing module-init path. Phase 3 extends `QoreModuleInitContext`
+with an opaque, runtime-owned `plugin_module_handle`; module-init code copies
+the relevant fields into a size-prefixed `QorePluginRegistrationContextV1` and
+passes that C ABI context to registration. This keeps plugin registration part
+of normal module initialization so load ordering, dependency resolution,
 parse-time visibility, helper-symbol lookup, and error reporting are
-deterministic.
+deterministic, while the public plugin protocol does not expose
+`QoreModuleInitContext` directly.
 
 The `plugin_module_handle` is valid only for the calling thread's current
 `qore_module_init` invocation. Modules MUST NOT cache it, compare it, serialize
@@ -392,23 +396,23 @@ struct QoreModuleInitContext {
     std::string path;
 
     //! Runtime-owned opaque handle, valid only during this thread's
-    //! current qore_module_init invocation. Passed to
-    //! qore_register_plugin_types_v1 / qore_validate_plugin_types_v1 to
+    //! current qore_module_init invocation. Copied into
+    //! QorePluginRegistrationContextV1 / QorePluginValidationContext to
     //! authorize helper-symbol lookup against the module's own binary.
     //! Added in Phase 3.
     const QorePluginModuleHandle* plugin_module_handle;
 };
 ```
 
-**C++ ABI vs. C ABI boundary.** Everything in `QorePluginType.h` is C-ABI by
-design — function-pointer typedefs, plain structs, fixed-width integers — so
-plugin authors writing in pure C or against an alternate C++ standard library
-can use the plugin protocol without crossing libqore's libstdc++ ABI.
-`QoreModuleInitContext` is the one place where the registration entry point
-crosses into libqore's C++ ABI: it contains `std::string path`, which couples
-the struct to libqore's compiled-in libc++/libstdc++ version. Plugin authors
-working in pure C must accept this coupling at the entry point or use a
-future C-ABI module-info fallback (TBD; not part of v1).
+**C++ module ABI vs. plugin C ABI boundary.** `ModuleManager.h` remains the
+existing C++ module-loader ABI: `QoreModuleInitContext` contains
+`std::string path` and is coupled to libqore's compiled-in C++ standard library.
+`QorePluginType.h` does not include or expose that type. The stable plugin
+protocol receives only a C-compatible registration context, fixed-width fields,
+plain structs, opaque handles, and function pointers. A module can still use the
+existing C++ `qore_module_init` callback as a thin shim that fills
+`QorePluginRegistrationContextV1` from `QoreModuleInitContext`; v1 does not
+define a separate pure-C module-init ABI.
 
 ```cpp
 // header: include/qore/QorePluginType.h (new)
@@ -417,7 +421,6 @@ future C-ABI module-info fallback (TBD; not part of v1).
 // Optional LLVM lowering lives in include/qore/QorePluginLLVM.h so modules that
 // only use runtime-helper dispatch are not tied to libqore's LLVM version.
 
-struct QoreModuleInitContext;    // from ModuleManager.h
 struct QorePluginModuleHandle;   // opaque, runtime-owned
 
 enum class QorePluginHelperAbi : uint8_t {
@@ -543,6 +546,10 @@ typedef uint64_t (*PluginDeserializeCallback)(
 //! Opaque optional-extension payload. The stable v1 ABI defines extension ids
 //! but not their contents. For example, the LLVM codegen extension id points to
 //! a QorePluginLLVMExtension object declared in QorePluginLLVM.h.
+//! extension_id is a non-empty dot-separated ASCII identifier. Each label
+//! matches [A-Za-z0-9_]+; ':' and whitespace are invalid, and canonical ids
+//! should use lowercase labels. The same grammar is used when extension ids
+//! appear in diagnostic subreasons.
 struct QorePluginExtension {
     const char* extension_id;
     const void* extension_data;
@@ -644,6 +651,28 @@ struct QorePluginDependency {
     const char* min_operation_set_version;
 };
 
+struct QorePluginRegistrationContextV1 {
+    //! Size of this struct as known to the caller. MUST be set to
+    //! sizeof(QorePluginRegistrationContextV1). Registration requires all v1
+    //! fields to be present. Future fields may be appended; older runtimes
+    //! ignore trailing bytes and future runtimes default missing appended
+    //! fields only where their documentation says so.
+    uint32_t struct_size;
+
+    //! Reserved for future registration-context flags. MUST be zero in v1.
+    uint32_t reserved;
+
+    //! Borrowed absolute module path for diagnostics and trace output. MUST be
+    //! non-null and non-empty. The runtime copies this string if it needs to
+    //! retain it after registration.
+    const char* module_path;
+
+    //! Runtime-owned opaque handle copied from
+    //! QoreModuleInitContext::plugin_module_handle during the current
+    //! qore_module_init invocation. Required for helper-symbol lookup.
+    const QorePluginModuleHandle* module_handle;
+};
+
 struct QorePluginTypeRegistration {
     const char* module_name;            //!< matches the .qmod feature name
     const char* plugin_abi_version;     //!< protocol ABI version
@@ -659,8 +688,9 @@ struct QorePluginTypeRegistration {
     int num_dependencies;
 };
 
-//! Runtime-side registration hook, called from qore_module_init through
-//! the current QoreModuleInitContext. The _v1 suffix is mandatory: every
+//! Runtime-side registration hook, called from qore_module_init with a
+//! QorePluginRegistrationContextV1 populated from the current
+//! QoreModuleInitContext. The _v1 suffix is mandatory: every
 //! breaking change to the registration ABI ships as a new symbol
 //! (qore_register_plugin_types_v2, ...) and old binaries keep resolving the
 //! symbol they linked against. See §8.1.
@@ -669,21 +699,48 @@ struct QorePluginTypeRegistration {
 //! is all-or-nothing: if any type, operation, dependency, or extension fails
 //! validation, no part of `reg` is registered and the function returns -1.
 //! Callers must propagate the failure rather than continuing module init. A
-//! null init_ctx, an init context not owned by the current module init call, or
-//! an init context without a live plugin_module_handle is rejected before
-//! descriptor validation.
+//! null context, too-small context, nonzero reserved field, missing module_path,
+//! context not owned by the current module-init call, or context without a live
+//! module_handle is rejected before descriptor validation.
 //!
-//! `init_ctx` is consumed during the call only; libqore does not retain the
-//! pointer past return. The caller's storage may be released or reused after
-//! qore_register_plugin_types_v1 returns. The same lifetime rule applies to
-//! `reg`: pointers inside the registration table (helper pointers, type info,
-//! extension data) are interned by libqore during the call and the descriptor
-//! itself does not need to outlive registration.
+//! `ctx` and `reg` are consumed during the call only; libqore does not retain
+//! either top-level pointer past return. The caller's descriptor arrays may be
+//! released or reused after qore_register_plugin_types_v1 returns, because
+//! libqore copies the descriptor metadata it owns (names, counts, dependency
+//! records, extension records) before returning. Function pointers and
+//! QoreTypeInfo pointers are stored as stable external identities and must stay
+//! valid for the lifetime of the registering module. Extension payload lifetime
+//! is defined by the extension ABI: v1 generic registration never deep-copies
+//! arbitrary extension_data bytes. An extension that needs retained owned state
+//! must define copy/free callbacks in its extension-specific ABI; otherwise its
+//! extension_data pointer must remain valid for the module lifetime.
 int qore_register_plugin_types_v1(
-    const QoreModuleInitContext* init_ctx,
+    const QorePluginRegistrationContextV1* ctx,
     const QorePluginTypeRegistration* reg,
     ExceptionSink* xsink);
 ```
+
+Typical C++ module-init code, assuming the init callback parameter is named
+`module_ctx`, creates the registration context on the stack and passes it
+immediately:
+
+```cpp
+QorePluginRegistrationContextV1 plugin_ctx = {
+    sizeof(plugin_ctx),
+    0,
+    module_ctx.path.c_str(),
+    module_ctx.plugin_module_handle,
+};
+qore_register_plugin_types_v1(&plugin_ctx, &plugin_registration, &xsink);
+```
+
+Registration-context validation is ordered before descriptor validation:
+`ctx == nullptr` yields subreason `null_registration_context`;
+`ctx->struct_size < sizeof(QorePluginRegistrationContextV1)` yields
+`registration_context_too_small`; nonzero `reserved` yields
+`reserved_field_nonzero`; null or empty `module_path` yields
+`module_path_missing`; null `module_handle` yields `module_handle_missing`;
+stale or cross-module handles yield `module_handle_stale` when detected.
 
 Constraints:
 - `local_id` must be contiguous starting from 0 and is meaningful only inside
@@ -720,6 +777,9 @@ Constraints:
   and stores the resolved pointer in the helper table. JIT/AOT/interpreter
   execution never performs late `dlsym` lookup from hot paths.
 - Extensions are ignored unless the runtime recognizes their `extension_id`.
+  Registration rejects a null `extension_id`, an empty id, empty labels,
+  whitespace, non-ASCII bytes, or `:` because extension ids also appear in the
+  colon-separated diagnostic namespace (§3.12).
   If `required == false`, a recognized but invalid extension is dropped with a
   warning and the rest of registration continues. If `required == true`, the
   same validation failure rejects the whole registration. The first planned
@@ -1155,18 +1215,19 @@ appends. Trailing-field appends are explicitly not version-stable: the
 writer always emits the wire-field version that matches its layout and uses the
 same byte as the first byte of the hash preimage.
 
-The version byte appears twice — once in the `PLUGIN_HELPER_REFS` entry
-header, once as the first byte of the hash preimage. The two MUST agree (the
-writer emits them from the same value); the duplication exists so loaders
-can fast-reject unsupported versions in O(1) before paying for canonical-form
-serialisation and hashing of the live signature. A loader that sees an
-unrecognised `canonical_signature_version` in a `PLUGIN_HELPER_REFS` entry
-rejects that entry with `QORD-PLUGIN-SIGNATURE-VERSION-UNSUPPORTED`
+The version byte is stored in the `PLUGIN_HELPER_REFS` entry header and is also
+the first byte of the canonical-form hash preimage. The writer uses the same
+value for both roles; the preimage copy is not serialized independently. This
+lets loaders fast-reject unsupported versions in O(1) before paying for
+canonical-form serialisation and hashing of the live signature. A loader that
+sees an unrecognised `canonical_signature_version` in a `PLUGIN_HELPER_REFS`
+entry rejects that entry with `QORD-PLUGIN-SIGNATURE-VERSION-UNSUPPORTED`
 (subreason `unsupported_canonical_version`, see §3.12 error-code table) before
-comparing hashes. This is a reproducible, named failure that is loudly distinct
-from a real ABI break. The discipline is intentional: silent
-quiet-different-hash drift on libqore upgrade would be a hard-to-diagnose
-miscompile; a version bump is loud and immediate.
+comparing hashes. For a supported header version, the loader recomputes the
+canonical hash using that header byte as the preimage version; any writer bug
+that hashed a different version byte is reported as
+`QORD-PLUGIN-SIGNATURE-HASH-MISMATCH`. This keeps version skew loud without
+inventing a second serialized version field.
 
 Pointer-valued fields such as `QoreTypeInfo*` are therefore normalized to
 stable identities before hashing. The hash excludes process-local addresses,
@@ -1393,8 +1454,9 @@ struct QorePluginValidationContext {
     //! Optional runtime-owned module handle used to validate
     //! runtime_helper_symbol lookup against the registering binary. The only
     //! valid non-null value is the opaque handle supplied by
-    //! QoreModuleInitContext::plugin_module_handle for the module currently
-    //! being initialized.
+    //! QoreModuleInitContext::plugin_module_handle, and copied into
+    //! QorePluginRegistrationContextV1::module_handle, for the module
+    //! currently being initialized.
     //! The handle is valid ONLY during the calling thread's qore_module_init
     //! invocation that received it; using a cached handle outside that scope
     //! is undefined behaviour, and the runtime is permitted (but not
@@ -1427,11 +1489,12 @@ int qore_validate_plugin_types_v1(
 ```
 
 The `module_handle` field of `QorePluginValidationContext` accepts the same
-opaque handle that `QoreModuleInitContext::plugin_module_handle` carries
-during the calling thread's `qore_module_init` invocation. The validator
-and registration share a single handle type — a plugin author writing a
-self-test inside `qore_module_init` reads the handle once from the init
-context and passes it to either entry point.
+opaque handle that `QorePluginRegistrationContextV1::module_handle` uses,
+ultimately copied from `QoreModuleInitContext::plugin_module_handle` during the
+calling thread's `qore_module_init` invocation. The validator and registration
+share a single handle type: a plugin author writing a self-test inside
+`qore_module_init` reads the handle once from the init context and passes it to
+either entry point through the relevant C ABI context.
 
 A non-null `ctx` with `struct_size < offsetof(QorePluginValidationContext,
 module_handle)` is rejected as `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` with
@@ -1467,13 +1530,17 @@ first violation only.
 message. Core subreasons are snake_case ASCII with no version suffix; extension
 validation subreasons use the colon-separated `extension:<id>:<reason>`
 pattern in the table below (colons rather than dots so the format remains
-parseable when extension ids themselves contain dots). The v1 protocol defines
-these values; future revisions append without renaming or removing:
+parseable when extension ids themselves contain dots but never colons). The v1
+protocol defines these values; future revisions append without renaming or
+removing:
 
 | Subreason | Used by |
 |---|---|
 | `unknown_validation_context_flag` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` |
 | `validation_context_too_small` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` |
+| `null_registration_context` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` |
+| `registration_context_too_small` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` |
+| `module_path_missing` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` |
 | `non_contiguous_local_id` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` |
 | `invalid_count` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` |
 | `null_registration` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` |
@@ -1491,7 +1558,7 @@ these values; future revisions append without renaming or removing:
 | `helper_symbol_not_found` | `PLUGIN-REGISTRATION-HELPER-SYMBOL-MISSING` |
 | `module_handle_missing` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` |
 | `module_handle_stale` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` |
-| `extension:<extension_id>:<reason>` | `PLUGIN-EXTENSION-VALIDATION-FAILED`. Format uses colon separators (not dots) because canonical extension ids contain dots — `qore.plugin.llvm.codegen` → `extension:qore.plugin.llvm.codegen:unsupported_target`. Parsers split on the first and last `:`; `extension_id` is byte-exact equal to the registered `QorePluginExtension::extension_id`; `reason` is ASCII snake_case owned by the extension ABI. The literal `extension` prefix is reserved and never used as a core subreason. |
+| `extension:<extension_id>:<reason>` | `PLUGIN-EXTENSION-VALIDATION-FAILED`. Format uses colon separators (not dots) because canonical extension ids contain dots — `qore.plugin.llvm.codegen` → `extension:qore.plugin.llvm.codegen:unsupported_target`. Parsers split on the first and last `:`; `extension_id` is byte-exact equal to the registered `QorePluginExtension::extension_id` and therefore cannot itself contain `:`; `reason` is ASCII snake_case owned by the extension ABI. The literal `extension` prefix is reserved and never used as a core subreason. |
 
 Implementations MUST NOT emit subreason strings outside this table for
 the corresponding error codes, except for the explicitly patterned extension
@@ -1506,15 +1573,17 @@ checks need live runtime state: resolving `runtime_helper_symbol` from a module
 handle, validating Program activation/import visibility, and checking
 cross-module conflicts against already registered modules. A non-null
 `module_handle` is trusted only if it is a `QorePluginModuleHandle` issued by
-the runtime for the current `QoreModuleInitContext::plugin_module_handle`;
-arbitrary pointers are invalid and fail contextual validation. A dry-run with
+the runtime for the current `QoreModuleInitContext::plugin_module_handle` and
+passed through `QorePluginRegistrationContextV1` or
+`QorePluginValidationContext`; arbitrary pointers are invalid and fail
+contextual validation. A dry-run with
 `ctx == nullptr` cannot promise those contextual checks will pass; collect-all
 mode reports them as deferred checks instead of pretending the descriptor is
 fully registrable.
 
 `qore_register_plugin_types_v1` itself runs in fail-fast mode and never
 collects — registration is a single transactional commit, not a diagnostic
-walk. It derives the real module context from the supplied `init_ctx` and the
+walk. It validates the supplied `QorePluginRegistrationContextV1` against the
 runtime's current module-init state, and therefore performs all contextual
 checks before committing global ids.
 
@@ -2084,7 +2153,7 @@ tests and conservative defaults.
   `qore_type_get_path()` / `QoreTypeInfo::getPath()`). This mirrors the
   existing `Class::getPathName()` — same semantics for class types
   (returns `Foo::MyClass`), extends naturally to non-class types
-  (`buffer<int64>`, `hash<string,int>`, etc.), and is the canonical
+  (`buffer<int64>`, `hash<string, int>`, etc.), and is the canonical
   identity used by QORD and plugin signature hashing. `Type::getName()`
   remains the display/simple name and is never used for QORD identity or
   plugin signature hashing. The exact reflection-API name can change at
@@ -2109,8 +2178,9 @@ exposure — reuses Phase 1's `buffer<T>`.
 ### Phase 3 — plugin-type registration C ABI (L)
 
 - Public `QorePluginTypeRegistration` ABI.
-- Registration through explicit `qore_register_plugin_types_v1(init_ctx, reg,
-  xsink)` calls from `qore_module_init`, with a runtime-owned
+- Registration through explicit `qore_register_plugin_types_v1(ctx, reg,
+  xsink)` calls from `qore_module_init`, where `ctx` is a
+  `QorePluginRegistrationContextV1` populated from the runtime-owned
   `QoreModuleInitContext::plugin_module_handle`.
 - Built-in plugin-dispatch opcodes carrying operation descriptors.
 - IR-interpreter dispatch table for module-registered helpers.
@@ -2119,8 +2189,10 @@ exposure — reuses Phase 1's `buffer<T>`.
 - **Validation and developer experience (§3.12)**, all on the public ABI
   ship boundary:
   - `QoreModuleInitContext` extended with the runtime-owned opaque
-    `plugin_module_handle`, and `qore_register_plugin_types_v1` rejecting null,
-    stale, or cross-module init contexts before descriptor validation.
+    `plugin_module_handle`, `QorePluginRegistrationContextV1` carrying that
+    handle across the public plugin ABI, and `qore_register_plugin_types_v1`
+    rejecting null, too-small, stale, or cross-module registration contexts
+    before descriptor validation.
   - `qore_validate_plugin_types_v1` dry-run validation entry point with
     `QorePluginValidationContext` (size-prefixed for forward-compatible
     field growth, fixed-width flags, and a runtime-owned opaque module
