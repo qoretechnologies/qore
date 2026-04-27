@@ -482,7 +482,7 @@ layout invariant silently while still making I/O paths ergonomic.
 **Implicit conversion is one-way.** `bindecl → binary` is implicit in
 the contexts above; `binary → bindecl` is *never* implicit. A `binary`
 value reaching a `bindecl`-typed sink (parameter, return, lvalue) is a
-parse error; the call site must use `Name::cast(b)` /
+parse-time type error; the call site must use `Name::cast(b)` /
 `Name::castExact(b)` explicitly. This keeps layout-fingerprint and
 size validation visible at every binary-to-decl boundary.
 
@@ -805,8 +805,7 @@ and document `bindecl` declarations.
   Inherits from `ASTDeclaration`.
 - `ASTBindeclMemberDeclaration.h` — mirror of
   `ASTHashMemberDeclaration.h`. Holds member name, type, optional
-  bitfield width, optional per-field attribute list, optional default
-  value, doc comment.
+  bitfield width, optional per-field attribute list, and doc comment.
 - `ASTDeclarationKind.h` — new enum value `ADK_Bindecl`.
 - `ASTNodeType.h` — new enum value `ANT_BindeclDeclaration` (and
   `ANT_BindeclMemberDeclaration` if separate visitor support is
@@ -866,6 +865,7 @@ representation used by `Serializable::serializeToData()`):
             "_decl":   "Net::Icmp::IcmpEchoHeader",   # full namespace path
             "_module": "icmp",                         # module supplying the decl
             "_data":   <binary, 8 bytes>,              # the logical record span
+            "_layout_hash": 0x4f1a9b32,                 # low 32 bits carry the fingerprint
         },
     },
     "_data": "0",
@@ -909,10 +909,13 @@ declared in `lib/QC_Serializable.qpp` and used by
 
 **Binary stream form** (`Serializable::serialize(OutputStream)` /
 `deserialize(InputStream)`): the bindecl is serialized as a tagged
-record `(NT_BINDECL_INSTANCE, decl_path_str, layout_hash, byte_count,
-bytes)`. The format is the same shape the existing serializer uses for
-hashdecl instances, with the on-the-wire `bytes` being the bindecl
-buffer verbatim — no per-field re-encoding.
+record `(NT_BINDECL_INSTANCE, decl_path_str, module_name, layout_hash,
+byte_count, bytes)`. `module_name` uses the same semantics as `_module`
+in the data form: `NOTHING` / empty marker for in-program declarations,
+otherwise the supplying module is loaded before decl lookup. The format
+is the same shape the existing serializer uses for hashdecl instances,
+with the on-the-wire `bytes` being the bindecl buffer verbatim — no
+per-field re-encoding.
 
 **Compact-binary form** (new): for cases where the consumer already
 knows the decl, implicit assignment to `binary` produces exactly the
@@ -923,10 +926,10 @@ type-aware.
 
 **Layout fingerprint.** A 32-bit hash over `(decl_name, record_endian,
 align, bitorder, total_size, ordered list of (member_name, type_code,
-offset, width, endian, array_count, encoding, nested_decl_path,
-nested_decl_fingerprint, bitfield_params))` catches accidental decl drift
-between serializer
-and deserializer. The record-level `endian` and `bitorder` axes are
+offset, width, endian, element_count_or_byte_len, encoding,
+nested_decl_path, nested_decl_fingerprint, bitfield_params))` catches
+accidental decl drift between serializer and deserializer. The
+record-level `endian` and `bitorder` axes are
 included independently of per-field overrides because changing the
 record-level default flips the bytes-on-disk meaning for any
 non-overridden field.
@@ -996,9 +999,14 @@ member[member_count]:
     u8   endian                             # 0 = big, 1 = little, 2 = native, 3 = inherit-from-record
     str  encoding                           # for string/zstring members; "" otherwise
     u32  nested_decl_ref                    # decl_id of nested bindecl, or 0xFFFFFFFF
-    u32  array_count                        # 0 for scalar, >0 for fixed array
+    u32  element_count_or_byte_len           # 0 for scalar; byte/string length or fixed array count
     u8   reserved_member_flags              # 0 in v1
 ```
+
+`element_count_or_byte_len` is interpreted by `type_code`: it is zero for
+scalar primitive and single nested-record members, the byte length for
+`byte[N]` / `string[N]` / `zstring[N]`, and the element count for fixed
+scalar arrays and fixed nested-record arrays.
 
 **Forward-compatibility discipline for `layout_kind`.** v1 readers
 reject any blob whose `layout_kind` is non-zero. Any v2 expansion
@@ -1133,15 +1141,21 @@ member of `ASTDeclarationKind` and `ASTNodeType` respectively.
 
 ### 6.4 Cross-format consistency invariant
 
-The decl identity used across all three serialization axes (data,
-AOT, AST) is **the fully-qualified namespace path** plus the
-**layout fingerprint**. A bindecl referenced from any of the three
-formats resolves to the same `BindeclDecl*` at runtime, and a layout
-mismatch on any axis raises a uniformly-named exception
-(`BINDECL-LAYOUT-MISMATCH`) with format-specific context attached.
+The runtime decl identity used by data serialization and AOT is **the
+fully-qualified namespace path** plus the **layout fingerprint**. A
+bindecl referenced from either runtime-carrying format resolves to the
+same `BindeclDecl*`, and a layout mismatch raises a uniformly-named
+exception (`BINDECL-LAYOUT-MISMATCH`) with format-specific context
+attached.
 
-This is the same identity model `TypedHashDecl` already uses; no new
-abstraction.
+The astparser axis does not persist runtime decl identity: it prints
+source, re-parses source, and can validate the resulting declaration
+against the same namespace path plus layout fingerprint after parse-time
+layout resolution. This keeps AST tooling consistent with runtime formats
+without inventing an on-disk AST identity table.
+
+This follows the same identity model `TypedHashDecl` already uses where
+runtime values are involved; no new abstraction.
 
 ---
 
@@ -1460,7 +1474,7 @@ The v1 implementation is not complete without targeted qtests covering:
   the parent's own fields are untouched), missing/`NOTHING`
   `_layout_hash` rejection unless `SF_ACCEPT_UNFINGERPRINTED_BINDECL`
   is set, missing decl/module resolution, one-way conversion
-  enforcement (`binary → bindecl` parameters parse-error without
+  enforcement (`binary → bindecl` parameters parse-time type error without
   explicit `cast`), and `PO_NO_BINDECL` rejection.
 - AOT: QORD decl emission/load, feature-flag rejection on old runtimes,
   unknown member-type-code rejection during decl-section loading,
