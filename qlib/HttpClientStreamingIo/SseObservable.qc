@@ -295,12 +295,19 @@ public class SseObservable inherits DataProvider::DelayedObservable {
             try {
                 *code<bool()> cancel_cb = startup_callback(self);
                 bool cancel_now;
+                bool already_handled;
                 {
                     AutoLock al(m);
-                    cancel_now = stop || !startup_active;
-                    if (!cancel_now) {
+                    # If !startup_active, activateStartedStream() or
+                    # startupFailed() already ran synchronously inside
+                    # startup_callback() and either published the stream or
+                    # already called notifyClosed(); do not double-cancel
+                    # or double-notify here.
+                    already_handled = !startup_active;
+                    cancel_now = !already_handled && stop;
+                    if (!cancel_now && !already_handled) {
                         startup_cancel = cancel_cb;
-                    } else {
+                    } else if (cancel_now) {
                         startup_active = False;
                     }
                 }
