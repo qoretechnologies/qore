@@ -94,6 +94,14 @@ public class Krb5GssKdcIntegrationTest inherits QUnit::Test {
         addTestCase("http negotiate helper exchange", \testHttpNegotiateHelperExchange());
         addTestCase("HttpServerUtil RestClientIo negotiate exchange",
             \testHttpServerUtilRestClientIoNegotiate());
+        addTestCase("HttpServerUtil async RestClientIo negotiate exchange",
+            \testHttpServerUtilAsyncRestClientIoNegotiate());
+        addTestCase("HttpServerUtil notifier RestClientIo negotiate exchange",
+            \testHttpServerUtilNotifierRestClientIoNegotiate());
+        addTestCase("HttpServerUtil cancellable RestClientIo negotiate exchange",
+            \testHttpServerUtilCancellableRestClientIoNegotiate());
+        addTestCase("HttpServerUtil signed async RestClientIo negotiate exchange",
+            \testHttpServerUtilSignedAsyncRestClientIoNegotiate());
         addTestCase("HttpServerUtil preemptive RestClientIo negotiate exchange",
             \testHttpServerUtilPreemptiveRestClientIoNegotiate());
         addTestCase("HttpServerUtil RestConnection ping negotiate exchange",
@@ -382,6 +390,92 @@ public class Krb5GssKdcIntegrationTest inherits QUnit::Test {
         Krb5HttpNegotiateAuthenticator auth = serverSetup.auth;
         assertEq(1, auth.getChallengeCount(), "challenge-driven Negotiate should send one 401 challenge");
         assertEq(1, auth.getNegotiateCount(), "challenge-driven Negotiate should process one token");
+    }
+
+    private testHttpServerUtilAsyncRestClientIoNegotiate() {
+        hash<auto> setup = setupGssCredentials("httpserverutil-async-restclientio");
+        hash<auto> serverSetup = createHttpNegotiateServer(setup.acceptorCred);
+        HttpServer server = serverSetup.server;
+        on_exit delete server;
+
+        RestClientIo::RestClientIo rest(getHttpNegotiateClientOptions(setup, serverSetup.url));
+        on_exit rest.close();
+
+        RestClientIo::RestFuture f = rest.restGetAsync("/async-protected");
+        hash<RestClient::RestResponseInfo> response = f.get(30s);
+        assertEq(200, response.status_code);
+        assertEq(setup.clientPrincipal, response.body);
+
+        Krb5HttpNegotiateAuthenticator auth = serverSetup.auth;
+        assertEq(1, auth.getChallengeCount(), "async Negotiate should send one 401 challenge");
+        assertEq(1, auth.getNegotiateCount(), "async Negotiate should process one token");
+    }
+
+    private testHttpServerUtilNotifierRestClientIoNegotiate() {
+        hash<auto> setup = setupGssCredentials("httpserverutil-notifier-restclientio");
+        hash<auto> serverSetup = createHttpNegotiateServer(setup.acceptorCred);
+        HttpServer server = serverSetup.server;
+        on_exit delete server;
+
+        RestClientIo::RestClientIo rest(getHttpNegotiateClientOptions(setup, serverSetup.url));
+        on_exit rest.close();
+
+        EventNotifier notifier();
+        hash<auto> result = rest.restDoRequestAsyncWithNotifier("GET", "/async-notifier",
+            NOTHING, NOTHING, notifier);
+        assertTrue(rest.getConnectionManager().getController().waitForNotifier(notifier, 30s),
+            "notifier async Negotiate should signal completion");
+        notifier.acknowledge();
+        hash<auto> response = result.future.get();
+        assertEq(200, response.status_code);
+        assertEq(setup.clientPrincipal, response.body.toString());
+
+        Krb5HttpNegotiateAuthenticator auth = serverSetup.auth;
+        assertEq(1, auth.getChallengeCount(), "notifier async Negotiate should send one 401 challenge");
+        assertEq(1, auth.getNegotiateCount(), "notifier async Negotiate should process one token");
+    }
+
+    private testHttpServerUtilCancellableRestClientIoNegotiate() {
+        hash<auto> setup = setupGssCredentials("httpserverutil-cancellable-restclientio");
+        hash<auto> serverSetup = createHttpNegotiateServer(setup.acceptorCred);
+        HttpServer server = serverSetup.server;
+        on_exit delete server;
+
+        RestClientIo::RestClientIo rest(getHttpNegotiateClientOptions(setup, serverSetup.url));
+        on_exit rest.close();
+
+        HttpClientIo::HttpCancellableFuture f = rest.restDoRequestCancellableAsync("GET",
+            "/async-cancellable", NOTHING, NOTHING);
+        hash<auto> response = f.get(30s);
+        assertEq(200, response.status_code);
+        assertEq(setup.clientPrincipal, response.body.toString());
+
+        Krb5HttpNegotiateAuthenticator auth = serverSetup.auth;
+        assertEq(1, auth.getChallengeCount(), "cancellable async Negotiate should send one 401 challenge");
+        assertEq(1, auth.getNegotiateCount(), "cancellable async Negotiate should process one token");
+    }
+
+    private testHttpServerUtilSignedAsyncRestClientIoNegotiate() {
+        hash<auto> setup = setupGssCredentials("httpserverutil-signed-async-restclientio");
+        hash<auto> serverSetup = createHttpNegotiateServer(setup.acceptorCred);
+        HttpServer server = serverSetup.server;
+        on_exit delete server;
+
+        RestClientIo::RestClientIo rest(getHttpNegotiateClientOptions(setup, serverSetup.url));
+        on_exit rest.close();
+
+        code signer = auto sub (hash<auto> info) {
+            return "krb5-test-signature:" + info.path;
+        };
+        RestClientIo::RestFuture f = rest.doSignedRequestAsync("x-test-signature", signer,
+            "GET", "/async-signed", NOTHING);
+        hash<RestClient::RestResponseInfo> response = f.get(30s);
+        assertEq(200, response.status_code);
+        assertEq(setup.clientPrincipal, response.body);
+
+        Krb5HttpNegotiateAuthenticator auth = serverSetup.auth;
+        assertEq(1, auth.getChallengeCount(), "signed async Negotiate should send one 401 challenge");
+        assertEq(1, auth.getNegotiateCount(), "signed async Negotiate should process one token");
     }
 
     private testHttpServerUtilPreemptiveRestClientIoNegotiate() {

@@ -31,6 +31,14 @@ public class RestClientIoKrb5AuthProxyIntegrationTest inherits QUnit::Test {
             \testSyncRestClientNegotiate());
         addTestCase("sync RestClientIo negotiate through external auth proxy",
             \testSyncRestClientIoNegotiate());
+        addTestCase("async RestClientIo negotiate through external auth proxy",
+            \testAsyncRestClientIoNegotiate());
+        addTestCase("notifier async RestClientIo negotiate through external auth proxy",
+            \testNotifierAsyncRestClientIoNegotiate());
+        addTestCase("cancellable async RestClientIo negotiate through external auth proxy",
+            \testCancellableAsyncRestClientIoNegotiate());
+        addTestCase("signed async RestClientIo negotiate through external auth proxy",
+            \testSignedAsyncRestClientIoNegotiate());
         addTestCase("RestClientIo ping negotiate through external auth proxy",
             \testPingNegotiate());
 
@@ -131,6 +139,60 @@ public class RestClientIoKrb5AuthProxyIntegrationTest inherits QUnit::Test {
         hash<RestClient::RestResponseInfo> response = rest.restGet("/api/restclientio");
         assertEq(200, response.status_code);
         assertAuthenticatedBody(response.body, "/api/restclientio");
+%endif
+    }
+
+    testAsyncRestClientIoNegotiate() {
+%ifndef NoJson
+        RestClientIo::RestClientIo rest(getClientOptions());
+        on_exit rest.close();
+        RestClientIo::RestFuture f = rest.restGetAsync("/api/restclientio-async");
+        hash<RestClient::RestResponseInfo> response = f.get(30s);
+        assertEq(200, response.status_code);
+        assertAuthenticatedBody(response.body, "/api/restclientio-async");
+%endif
+    }
+
+    testNotifierAsyncRestClientIoNegotiate() {
+%ifndef NoJson
+        RestClientIo::RestClientIo rest(getClientOptions());
+        on_exit rest.close();
+        EventNotifier notifier();
+        hash<auto> result = rest.restDoRequestAsyncWithNotifier("GET",
+            "/api/restclientio-notifier", NOTHING, NOTHING, notifier);
+        assertTrue(rest.getConnectionManager().getController().waitForNotifier(notifier, 30s),
+            "notifier async RestClientIo Negotiate should signal completion");
+        notifier.acknowledge();
+        hash<auto> response = result.future.get();
+        assertEq(200, response.status_code);
+        assertAuthenticatedBody(parse_json(response.body.toString()), "/api/restclientio-notifier");
+%endif
+    }
+
+    testCancellableAsyncRestClientIoNegotiate() {
+%ifndef NoJson
+        RestClientIo::RestClientIo rest(getClientOptions());
+        on_exit rest.close();
+        HttpClientIo::HttpCancellableFuture f = rest.restDoRequestCancellableAsync("GET",
+            "/api/restclientio-cancellable", NOTHING, NOTHING);
+        hash<auto> response = f.get(30s);
+        assertEq(200, response.status_code);
+        assertAuthenticatedBody(parse_json(response.body.toString()), "/api/restclientio-cancellable");
+%endif
+    }
+
+    testSignedAsyncRestClientIoNegotiate() {
+%ifndef NoJson
+        RestClientIo::RestClientIo rest(getClientOptions());
+        on_exit rest.close();
+        code signer = auto sub (hash<auto> info) {
+            return "krb5-auth-proxy-signature:" + info.path;
+        };
+        RestClientIo::RestFuture f = rest.doSignedRequestAsync("x-test-signature",
+            signer, "GET", "/api/restclientio-signed", NOTHING);
+        hash<RestClient::RestResponseInfo> response = f.get(30s);
+        assertEq(200, response.status_code);
+        assertAuthenticatedBody(response.body, "/api/restclientio-signed");
 %endif
     }
 

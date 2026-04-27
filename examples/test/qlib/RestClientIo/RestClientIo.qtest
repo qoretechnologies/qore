@@ -3118,9 +3118,10 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         assertEq(200, resp.status_code);
         assertFalse(resp.body.request_headers.authorization.val());
 
-        assertThrows("NEGOTIATE-AUTH-ERROR", sub () {
-            rest.restGetAsync("/api/test");
-        });
+        RestClientIo::RestFuture f = rest.restGetAsync("/echo");
+        resp = f.get(30s);
+        assertEq(200, resp.status_code);
+        assertFalse(resp.body.request_headers.authorization.val());
 
         assertThrows("NEGOTIATE-AUTH-ERROR", sub () {
             createClient({

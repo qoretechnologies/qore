@@ -148,6 +148,8 @@ resp = rc.restGet("/api/data");
     @section restclientio_relnotes Release Notes
 
     @subsection restclientio_v1_2 Version 1.2
+    - Added Kerberos/SPNEGO HTTP Negotiate support for async request/response APIs
+      and polling pings
     - Added \c getLogger() to expose the client's logger
     - Added \c setAllowAnyResponse() / \c getAllowAnyResponse() for controlling deserialization
       error handling
@@ -208,7 +210,10 @@ hash<RestResponseInfo> resp = f.get(30s);
             Future raw_future;
 
             #! Stream handle reference (kept alive to retain the internal Promise)
-            HttpClientIo::HttpClientStreamHandle stream;
+            *HttpClientIo::HttpClientStreamHandle stream;
+
+            #! Optional cancel closure for multi-attempt async operations
+            *code<bool()> cancel_func;
 
             #! Closure that deserializes raw HTTP response to RestResponseInfo
             code<hash<RestClient::RestResponseInfo>(hash<auto>)> response_builder;
@@ -223,6 +228,18 @@ hash<RestResponseInfo> resp = f.get(30s);
                 code<hash<RestClient::RestResponseInfo>(hash<auto>)> response_builder) {
             self.raw_future = raw_future;
             self.stream = stream;
+            self.response_builder = response_builder;
+        }
+
+        #! Creates a new RestFuture with a custom cancellation handler
+        /** @param raw_future the raw HTTP response Future
+            @param cancel_func closure that cancels the in-flight operation
+            @param response_builder closure that deserializes the raw response
+        */
+        constructor(Future raw_future, code<bool()> cancel_func,
+                code<hash<RestClient::RestResponseInfo>(hash<auto>)> response_builder) {
+            self.raw_future = raw_future;
+            self.cancel_func = cancel_func;
             self.response_builder = response_builder;
         }
 
@@ -263,8 +280,14 @@ hash<RestResponseInfo> resp = f.get(30s);
             if (raw_future.isDone()) {
                 return False;
             }
-            stream.cancel();
-            return True;
+            if (cancel_func) {
+                return cancel_func();
+            }
+            if (stream) {
+                stream.cancel();
+                return True;
+            }
+            return False;
         }
     }
 
@@ -326,8 +349,8 @@ hash<RestResponseInfo> resp = f.get(30s);
         - \c oauth2_token_expiry_hint: hint for token expiry in seconds
         - \c oauth2_token_expiry: known expiry timestamp for an initial token; enables proactive pre-expiry refresh
         - \c oauth2_refresh_token: initial refresh token
-        - \c negotiate_auth: enables Kerberos/SPNEGO HTTP Negotiate authentication for synchronous requests
-          and polling pings
+        - \c negotiate_auth: enables Kerberos/SPNEGO HTTP Negotiate authentication for synchronous requests,
+          async request/response APIs, and polling pings
         - \c negotiate_credential_cache: optional credential cache name for Kerberos/SPNEGO HTTP Negotiate
           authentication
         - \c negotiate_delegation_mode: Kerberos delegation mode; currently only \c "none" is supported
@@ -1425,14 +1448,14 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
         */
         HttpClientIo::HttpCancellableFuture restDoRequestCancellableAsync(string method,
                 string path, auto body, *hash<auto> hdr) {
-            checkNegotiateUnsupported("RestClientIo cancellable async requests");
-            ensureToken();
-
-            hash<auto> prepared = prepareRequest(method, \path, body, \hdr);
-
             log(LoggerLevel::DEBUG, "restDoRequestCancellableAsync() %s %s%s", method, url, path);
 
-            return mgr.requestAsync(url, method, path, hdr, prepared.serialized_body);
+            hash<auto> async_info = startAsyncRequestOperation(method, path, body, hdr,
+                False, False, NOTHING, NOTHING, NOTHING);
+            RestClientIoAsyncRequestOperation op = async_info.operation;
+            return new HttpClientIo::HttpCancellableFuture(async_info.future, bool sub () {
+                return op.cancel();
+            });
         }
 
         #! Sends a generic REST request and returns a @ref RestClient::RestResponseInfo hash
@@ -1776,6 +1799,74 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
             }
         }
 
+        #! Starts an async raw HTTP request operation with event-driven Negotiate retry support
+        private hash<auto> startAsyncRequestOperation(string method, string path, auto body,
+                *hash<auto> hdr, bool raw, *bool skip_ensure_token,
+                *EventNotifier completion_notifier, *string shdr, *code signer) {
+            if (!skip_ensure_token) {
+                ensureToken();
+            }
+
+            Promise p();
+            Future f = p.getFuture();
+            RestClientIoAsyncRequestOperation op(self, p, method, path, body, hdr,
+                raw, completion_notifier, shdr, signer);
+            op.start();
+            return {
+                "future": f,
+                "operation": op,
+            };
+        }
+
+        #! Prepares one async request attempt for RestClientIoAsyncRequestOperation
+        hash<auto> prepareAsyncRequestAttempt(string method, reference<string> path,
+                auto body, reference<*hash<auto>> hdr, bool raw,
+                reference<*auto> negotiate_context, *string shdr, *code signer) {
+            hash<auto> prepared = raw
+                ? prepareRawRequest(method, \path, body, \hdr)
+                : prepareRequest(method, \path, body, \hdr);
+            if (exists prepared.negotiate_context) {
+                negotiate_context = prepared.negotiate_context;
+            }
+
+            if (shdr.val() && signer) {
+                hdr{shdr} = signer({
+                    "path": path,
+                    "body": prepared.serialized_body,
+                    "hdr": hdr - shdr,
+                });
+            }
+
+            return prepared + {
+                "request_headers": hdr,
+            };
+        }
+
+        #! Submits a prepared async request attempt for RestClientIoAsyncRequestOperation
+        hash<auto> submitPreparedAsyncRequestAttemptWithNotifier(string method, string path,
+                *hash<auto> hdr, hash<auto> prepared, EventNotifier notifier) {
+            log(LoggerLevel::DEBUG, "submitAsyncRequestAttemptWithNotifier() %s %s%s",
+                method, url, path);
+
+            HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(url);
+            hash<auto> result = stream.submitAsyncWithNotifier(method, path, hdr,
+                prepared.serialized_body, notifier);
+            return result + {
+                "stream": stream,
+                "request_headers": hdr,
+                "request_body": prepared.serialized_body,
+                "error_passthru": prepared.error_passthru,
+                "allow_any_response": prepared.allow_any_response,
+            };
+        }
+
+        #! Builds a REST response from a completed async request operation
+        hash<RestClient::RestResponseInfo> buildAsyncOperationResponse(hash<auto> raw,
+                RestClientIoAsyncRequestOperation op) {
+            return buildResponse(raw, op.getErrorPassthru(), op.getAllowAnyResponse(),
+                op.getMethod(), op.getPath(), op.getRequestHeaders(), op.getRequestBody());
+        }
+
         #! Sends an async generic REST request and returns a RestFuture
         /** The returned @ref RestFuture wraps a raw HTTP response Future and
             deserializes the response when \c get() is called.
@@ -1788,32 +1879,19 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
             @return a RestFuture that resolves to a @ref RestClient::RestResponseInfo hash
         */
         RestFuture restDoRequestAsync(string method, string path, auto body, *hash<auto> hdr) {
-            checkNegotiateUnsupported("RestClientIo async requests");
-            ensureToken();
-
-            # 1. Snapshot config state and serialize body
-            hash<auto> prepared = prepareRequest(method, \path, body, \hdr);
-            bool req_error_passthru = prepared.error_passthru;
-            bool req_allow_any_response = prepared.allow_any_response;
-
             log(LoggerLevel::DEBUG, "restDoRequestAsync() %s %s%s", method, url, path);
 
-            # 2. Submit async request — returns a Future for the raw HTTP response
-            #    The stream handle keeps the Promise alive internally via request_promise
-            HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(url);
-            Future raw_future = stream.requestAsync(method, path, hdr, prepared.serialized_body);
-
-            # 3. Wrap in RestFuture with a closure that deserializes on get()
-            #    Capture request context for info fields
-            *hash<auto> req_hdr = hdr;
-            *data req_body = prepared.serialized_body;
+            hash<auto> async_info = startAsyncRequestOperation(method, path, body, hdr,
+                False, False, NOTHING, NOTHING, NOTHING);
+            RestClientIoAsyncRequestOperation op = async_info.operation;
             code<hash<RestClient::RestResponseInfo>(hash<auto>)> builder =
                 hash<RestClient::RestResponseInfo> sub (hash<auto> raw) {
-                    return buildResponse(raw, req_error_passthru, req_allow_any_response,
-                        method, path, req_hdr, req_body);
+                    return buildAsyncOperationResponse(raw, op);
                 };
 
-            return new RestFuture(raw_future, stream, builder);
+            return new RestFuture(async_info.future, bool sub () {
+                return op.cancel();
+            }, builder);
         }
 
         #! Submits a non-blocking REST request and returns a Future
@@ -1835,19 +1913,10 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
         */
         Future restDoRequestAsync(string method, string path, auto body, *hash<auto> hdr,
                 *bool skip_ensure_token) {
-            checkNegotiateUnsupported("RestClientIo async requests");
-            if (!skip_ensure_token) {
-                ensureToken();
-            }
-
-            hash<auto> prepared = prepareRequest(method, \path, body, \hdr);
-
             log(LoggerLevel::DEBUG, "restDoRequestAsync() %s %s%s", method, url, path);
 
-            HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(url);
-            hash<auto> result = stream.submitAsync(method, path, hdr,
-                prepared.serialized_body);
-            return result.future;
+            return startAsyncRequestOperation(method, path, body, hdr, False,
+                skip_ensure_token, NOTHING, NOTHING, NOTHING).future;
         }
 
         #! Submits an async REST request and signals an EventNotifier on completion
@@ -1870,14 +1939,10 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
         */
         hash<auto> restDoRequestAsyncWithNotifier(string method, string path, auto body,
                 *hash<auto> hdr, EventNotifier notifier) {
-            checkNegotiateUnsupported("RestClientIo notifier async requests");
-            hash<auto> prepared = prepareRequest(method, \path, body, \hdr);
-
             log(LoggerLevel::DEBUG, "restDoRequestAsyncWithNotifier() %s %s%s", method, url, path);
 
-            HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(url);
-            return stream.submitAsyncWithNotifier(method, path, hdr,
-                prepared.serialized_body, notifier);
+            return startAsyncRequestOperation(method, path, body, hdr, False,
+                False, notifier, NOTHING, NOTHING);
         }
 
         #! Submits a raw async request with a pre-serialized body and signals an EventNotifier
@@ -1897,9 +1962,8 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
         */
         hash<auto> doRequestRawAsyncWithNotifier(string method, string path, *hash<auto> hdr,
                 *data body, EventNotifier notifier) {
-            checkNegotiateUnsupported("RestClientIo raw notifier async requests");
-            HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(url);
-            return stream.submitAsyncWithNotifier(method, path, hdr, body, notifier);
+            return startAsyncRequestOperation(method, path, body, hdr, True,
+                True, notifier, NOTHING, NOTHING);
         }
 
         #! Submits an async ping request with EventNotifier signaling
@@ -2188,36 +2252,19 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
         */
         RestFuture doSignedRequestAsync(string shdr, code signer, string method,
                 string path, auto body, *hash<auto> hdr) {
-            checkNegotiateUnsupported("RestClientIo signed async requests");
-            ensureToken();
-
-            # 1. Snapshot config state and serialize body
-            hash<auto> prepared = prepareRequest(method, \path, body, \hdr);
-            bool req_error_passthru = prepared.error_passthru;
-            bool req_allow_any_response = prepared.allow_any_response;
-
-            # 2. Call signer with request context
-            auto sig = signer({"path": path, "body": prepared.serialized_body,
-                "hdr": hdr - shdr});
-            hdr{shdr} = sig;
-
             log(LoggerLevel::DEBUG, "doSignedRequestAsync() %s %s%s", method, url, path);
 
-            # 3. Submit async request
-            HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(url);
-            Future raw_future = stream.requestAsync(method, path, hdr,
-                prepared.serialized_body);
-
-            # 4. Wrap in RestFuture
-            *hash<auto> req_hdr = hdr;
-            *data req_body = prepared.serialized_body;
+            hash<auto> async_info = startAsyncRequestOperation(method, path, body, hdr,
+                False, False, NOTHING, shdr, signer);
+            RestClientIoAsyncRequestOperation op = async_info.operation;
             code<hash<RestClient::RestResponseInfo>(hash<auto>)> builder =
                 hash<RestClient::RestResponseInfo> sub (hash<auto> raw) {
-                    return buildResponse(raw, req_error_passthru, req_allow_any_response,
-                        method, path, req_hdr, req_body);
+                    return buildAsyncOperationResponse(raw, op);
                 };
 
-            return new RestFuture(raw_future, stream, builder);
+            return new RestFuture(async_info.future, bool sub () {
+                return op.cancel();
+            }, builder);
         }
 
         #! Sends an async HTTP \c GET request and returns a RestFuture
@@ -3698,6 +3745,358 @@ hash<RestResponseInfo> resp = pool.restGet("/api/data");
 
         #! No-op — the connection manager handles per-request connection allocation
         nothing release() {
+        }
+    }
+}
+
+#! Event-driven RestClientIo async request operation with Negotiate retry support
+/** Drives connection readiness, one or two raw HTTP request attempts, and final
+    Future resolution without running retry logic from Future::get().
+
+    The operation resolves the caller-facing Future with the final raw HTTP
+    response hash.  Higher layers can then deserialize the response using the
+    final request context exposed by the getter methods below.
+*/
+public class RestClientIoAsyncRequestOperation inherits Qore::AbstractPollOperation {
+    public {
+        #! Waiting for the underlying connection to become ready
+        const SPS_CONNECTING = "connecting";
+        #! Waiting for an HTTP response
+        const SPS_IO_WAITING = "io-waiting";
+        #! Complete
+        const SPS_COMPLETE = "complete";
+    }
+
+    private {
+        #! RestClientIo instance kept alive for the operation lifetime
+        RestClientIo rcio;
+
+        #! Promise resolved with the final raw response
+        Promise promise;
+
+        #! Optional caller notifier signaled when the final Future is resolved
+        *EventNotifier completion_notifier;
+
+        #! Internal notifier signaled by each raw HTTP attempt
+        EventNotifier io_notifier();
+
+        #! Current connection-readiness notifier
+        *EventNotifier connection_ready_notifier;
+
+        #! True after the first continuePoll() call in SPS_CONNECTING
+        bool waiting_for_connection = False;
+
+        #! HTTP method
+        string method;
+
+        #! Request path; updated by request preparation
+        string path;
+
+        #! Request body
+        auto body;
+
+        #! Request headers; updated by request preparation and Negotiate retries
+        *hash<auto> hdr;
+
+        #! True if the request body is already serialized
+        bool raw;
+
+        #! Optional request signing header name
+        *string signer_header;
+
+        #! Optional request signing callback
+        *code signer;
+
+        #! Current raw response Future
+        *Future pending_future;
+
+        #! Current stream handle for cancellation
+        *HttpClientIo::HttpClientStreamHandle pending_stream;
+
+        #! GSS context for the Negotiate exchange
+        *auto negotiate_context;
+
+        #! Whether Negotiate challenge retry was already attempted
+        bool negotiate_retried = False;
+
+        #! Current operation state
+        string state;
+
+        #! Goal reached flag
+        bool goal_reached = False;
+
+        #! Final request body after preparation
+        *data request_body;
+
+        #! Final request error_passthru option
+        bool request_error_passthru;
+
+        #! Final request allow_any_response option
+        bool request_allow_any_response;
+
+        #! Prepared request attempt waiting for connection submission
+        *hash<auto> prepared_attempt;
+
+        #! Promise completion guard
+        bool promise_done = False;
+
+        #! Lock for completion and cancellation
+        Mutex m();
+    }
+
+    #! Creates a new async request operation
+    constructor(RestClientIo rcio, Promise promise, string method, string path, auto body,
+            *hash<auto> hdr, bool raw, *EventNotifier completion_notifier,
+            *string signer_header, *code signer) {
+        self.rcio = rcio;
+        self.promise = promise;
+        self.method = method;
+        self.path = path;
+        self.body = body;
+        self.hdr = hdr;
+        self.raw = raw;
+        self.completion_notifier = completion_notifier;
+        self.signer_header = signer_header;
+        self.signer = signer;
+        state = SPS_CONNECTING;
+    }
+
+    #! Starts the operation on the global async-I/O controller
+    start() {
+        # Let synchronous preparation errors, such as signer failures, propagate
+        # from the public async call before a Future is returned.
+        prepareAttempt();
+        *hash<SocketPollInfo> poll_info = continuePollIntern();
+        if (!poll_info) {
+            return;
+        }
+
+        auto controller = rcio.getConnectionManager().getController();
+        controller.submit(<SocketPollOperationInfo>{
+            "sock": poll_info.socket,
+            "spop": self,
+            "to": milliseconds(rcio.getTimeout()),
+            "owner": "restclientio-async:" + self.uniqueHash(),
+            "has_on_complete": True,
+        });
+    }
+
+    string getGoal() {
+        return sprintf("REST %s %s", method, path);
+    }
+
+    string getState() {
+        return state;
+    }
+
+    bool goalReached() {
+        return goal_reached;
+    }
+
+    *hash<SocketPollInfo> continuePoll() {
+        try {
+            return continuePollIntern();
+        } catch (hash<ExceptionInfo> ex) {
+            reject(ex);
+            state = SPS_COMPLETE;
+            return NOTHING;
+        }
+    }
+
+    #! Called by the controller on completion, timeout, or cancellation
+    nothing onComplete(hash<SocketPollResultInfo> result) {
+        if (result.canceled) {
+            cancelPendingStream();
+            reject(<ExceptionInfo>{
+                "err": "HTTPCLIENT-CANCELLED",
+                "desc": "async request was canceled",
+            });
+        } else if (result.ex) {
+            cancelPendingStream();
+            reject(result.ex);
+        } else if (!goal_reached) {
+            cancelPendingStream();
+            reject(<ExceptionInfo>{
+                "err": "RESTCLIENTIO-ASYNC-ERROR",
+                "desc": sprintf("async request ended in state %y without a response", state),
+            });
+        }
+    }
+
+    #! Aborts the current request attempt and rejects the final Future
+    abort() {
+        cancel();
+    }
+
+    #! Cancels the current request attempt and rejects the final Future
+    bool cancel() {
+        AutoLock al(m);
+        if (promise_done) {
+            return False;
+        }
+        promise_done = True;
+        if (pending_stream) {
+            cancelPendingStream();
+        }
+        promise.setError("HTTPCLIENT-CANCELLED", "async request was canceled", NOTHING);
+        if (completion_notifier) {
+            completion_notifier.notify();
+        }
+        return True;
+    }
+
+    string getMethod() {
+        return method;
+    }
+
+    string getPath() {
+        return path;
+    }
+
+    *hash<auto> getRequestHeaders() {
+        return hdr;
+    }
+
+    *data getRequestBody() {
+        return request_body;
+    }
+
+    bool getErrorPassthru() {
+        return request_error_passthru;
+    }
+
+    bool getAllowAnyResponse() {
+        return request_allow_any_response;
+    }
+
+    private *hash<SocketPollInfo> continuePollIntern() {
+        while (True) {
+            if (state == SPS_CONNECTING) {
+                if (!waiting_for_connection) {
+                    doStartConnecting();
+                    if (state != SPS_CONNECTING) {
+                        continue;
+                    }
+                    waiting_for_connection = True;
+                    return <SocketPollInfo>{
+                        "events": SOCK_POLLIN,
+                        "socket": connection_ready_notifier,
+                    };
+                }
+
+                connection_ready_notifier.acknowledge();
+                delete connection_ready_notifier;
+                waiting_for_connection = False;
+                doStartConnecting();
+                continue;
+            }
+
+            if (state == SPS_IO_WAITING) {
+                if (!pending_future.isDone()) {
+                    return <SocketPollInfo>{
+                        "events": SOCK_POLLIN,
+                        "socket": io_notifier,
+                    };
+                }
+
+                io_notifier.acknowledge();
+                hash<auto> resp = pending_future.get();
+                delete pending_future;
+                delete pending_stream;
+
+                if (resp.status_code == 401 && !negotiate_retried
+                        && rcio.tryPingNegotiateAuthRetry(resp.headers, \hdr,
+                            \negotiate_context)) {
+                    negotiate_retried = True;
+                    doSubmitRequest();
+                    continue;
+                }
+
+                rcio.processPingFinalNegotiateResponse(resp.headers, negotiate_context);
+                goal_reached = True;
+                state = SPS_COMPLETE;
+                resolve(resp);
+                return NOTHING;
+            }
+
+            return NOTHING;
+        }
+    }
+
+    private doStartConnecting() {
+        connection_ready_notifier = rcio.startConnectionAsync();
+        if (connection_ready_notifier) {
+            state = SPS_CONNECTING;
+            return;
+        }
+
+        try {
+            doSubmitRequest();
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "HTTPCLIENT-NOT-READY") {
+                connection_ready_notifier = new EventNotifier();
+                connection_ready_notifier.notify();
+                state = SPS_CONNECTING;
+                waiting_for_connection = False;
+                return;
+            }
+            rethrow;
+        }
+    }
+
+    private doSubmitRequest() {
+        state = SPS_IO_WAITING;
+        if (!prepared_attempt) {
+            prepareAttempt();
+        }
+        hash<auto> result = rcio.submitPreparedAsyncRequestAttemptWithNotifier(method, path,
+            hdr, prepared_attempt, io_notifier);
+        delete prepared_attempt;
+        pending_future = result.future;
+        pending_stream = result.stream;
+        request_body = result.request_body;
+        request_error_passthru = result.error_passthru;
+        request_allow_any_response = result.allow_any_response;
+    }
+
+    private prepareAttempt() {
+        prepared_attempt = rcio.prepareAsyncRequestAttempt(method, \path, body, \hdr,
+            raw, \negotiate_context, signer_header, signer);
+        request_body = prepared_attempt.serialized_body;
+        request_error_passthru = prepared_attempt.error_passthru;
+        request_allow_any_response = prepared_attempt.allow_any_response;
+    }
+
+    private resolve(hash<auto> resp) {
+        AutoLock al(m);
+        if (promise_done) {
+            return;
+        }
+        promise_done = True;
+        promise.set(resp);
+        if (completion_notifier) {
+            completion_notifier.notify();
+        }
+    }
+
+    private reject(hash<ExceptionInfo> ex) {
+        AutoLock al(m);
+        if (promise_done) {
+            return;
+        }
+        promise_done = True;
+        promise.setError(ex.err, ex.desc, ex.arg);
+        if (completion_notifier) {
+            completion_notifier.notify();
+        }
+    }
+
+    private cancelPendingStream() {
+        if (pending_stream) {
+            try {
+                pending_stream.cancel();
+            } catch () {
+            }
         }
     }
 }

@@ -990,7 +990,10 @@ public class HttpCancellableFuture inherits Future {
         Future real_future;
 
         #! The stream handle for I/O-level cancellation
-        HttpClientStreamHandle stream_handle;
+        *HttpClientStreamHandle stream_handle;
+
+        #! Optional cancellation closure for composite async operations
+        *code<bool()> cancel_func;
     }
 
     #! Creates a new HttpCancellableFuture
@@ -1000,6 +1003,15 @@ public class HttpCancellableFuture inherits Future {
     constructor(Future real_future, HttpClientStreamHandle stream_handle) {
         self.real_future = real_future;
         self.stream_handle = stream_handle;
+    }
+
+    #! Creates a new HttpCancellableFuture with a custom cancellation handler
+    /** @param real_future the raw protocol Future
+        @param cancel_func closure that cancels the in-flight operation
+    */
+    constructor(Future real_future, code<bool()> cancel_func) {
+        self.real_future = real_future;
+        self.cancel_func = cancel_func;
     }
 
     #! Blocks the calling thread until the result is available or an error occurs
@@ -1031,8 +1043,14 @@ public class HttpCancellableFuture inherits Future {
         if (real_future.isDone()) {
             return False;
         }
-        stream_handle.cancel();
-        return True;
+        if (cancel_func) {
+            return cancel_func();
+        }
+        if (stream_handle) {
+            stream_handle.cancel();
+            return True;
+        }
+        return False;
     }
 }
 
