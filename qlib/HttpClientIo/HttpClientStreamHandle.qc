@@ -753,6 +753,12 @@ public class HttpClientStreamHandle {
         END_STREAM and the server streams back data. For bidirectional streaming (e.g., gRPC,
         WebSocket), set \c body_streaming to \c True.
 
+        If \c notifier is provided, protocol implementations must not block waiting for connection
+        readiness. In this mode implementations throw \c HTTPCLIENT-NOT-READY when the connection
+        cannot submit the request immediately; callers can retry after the notifier-driven async
+        state machine reports readiness. If \c notifier is omitted, implementations use the normal
+        blocking readiness behavior.
+
         @param method HTTP method (e.g., "GET", "POST", "CONNECT")
         @param path request path
         @param headers request headers (optional)
@@ -768,6 +774,8 @@ public class HttpClientStreamHandle {
         @throw HTTPCLIENT-STREAMING-NOT-SUPPORTED if the protocol does not support streaming
         @throw HTTPCLIENT-STATE-ERROR if the stream is already in use
         @throw HTTPCLIENT-TIMEOUT if connection establishment times out
+        @throw HTTPCLIENT-NOT-READY if \c notifier is provided and the connection is not ready for
+        request submission
 
 
         @see readData(), sendData(), writesDone()
