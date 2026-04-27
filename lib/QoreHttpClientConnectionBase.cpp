@@ -200,6 +200,30 @@ bool HttpClientConnectionBase::waitForReadyOrError(int64_t timeout_ms, Exception
     return false;
 }
 
+void HttpClientConnectionBase::raiseClosedSubmitError(const char* fallback_desc,
+        ExceptionSink* xsink) {
+    ReferenceHolder<QoreHashNode> err(getReferencedErrorInfo(), xsink);
+    if (*xsink) {
+        return;
+    }
+    if (err) {
+        const char* err_str = "HTTPCLIENT-CONNECT-ERROR";
+        const char* desc_str = fallback_desc;
+
+        QoreValue err_v = err->getKeyValue("err");
+        if (err_v.getType() == NT_STRING) {
+            err_str = err_v.get<const QoreStringNode>()->c_str();
+        }
+        QoreValue desc_v = err->getKeyValue("desc");
+        if (desc_v.getType() == NT_STRING) {
+            desc_str = desc_v.get<const QoreStringNode>()->c_str();
+        }
+        xsink->raiseException(err_str, "%s", desc_str);
+        return;
+    }
+    xsink->raiseException("HTTPCLIENT-STATE-ERROR", "%s", fallback_desc);
+}
+
 // -----------------------------------------------------------------------
 // MethodGuard — see HttpClientConnection.h for the design rationale.
 //
