@@ -1080,12 +1080,27 @@ payload
 ```
 
 `kind == 0` means null and has no payload. `kind == 1` means a Qore
-non-plugin type and the payload is the canonical QORD type path as a
-`uint32 byte_count` plus UTF-8 bytes, using the same type path spelling the
-QORD type resolver writes for builtins, classes, hashdecls, code types, and
-complex types. `kind == 2` means a plugin type and the payload is canonical
-`module_name` plus `uint16 type_local_id`. Other `kind` values are reserved
-and invalid in canonical signature version 1.
+non-plugin type and the payload is `Qore::Reflection::Type::getName()`'s
+output for that type, encoded as a `uint32 byte_count` plus UTF-8 bytes
+without any Unicode normalisation. `Type::getName()` is the canonical name
+spelling for signature hashing — its stability is part of the
+plugin-protocol contract, and any change to its output must bump
+`canonical_signature_version`. `kind == 2` means a plugin type and the
+payload is canonical `module_name` (per the rules below) plus
+`uint16 type_local_id`. Other `kind` values are reserved and invalid in
+canonical signature version 1.
+
+**Canonical signature version policy.** `canonical_signature_version` bumps
+on **any** byte-layout change to the canonical form, including field
+appends. Trailing-field appends are explicitly not version-stable: the
+writer always emits the version that matches its layout. A loader that
+sees an unrecognised `canonical_signature_version` rejects the entry with
+`QORD-PLUGIN-SIGNATURE-VERSION-UNSUPPORTED` (subreason
+`unsupported_canonical_version`, see §3.12 error-code table) — a
+reproducible, named failure that is loudly distinct from a real ABI
+break. The discipline is intentional: silent quiet-different-hash drift
+on libqore upgrade would be a hard-to-diagnose miscompile; a version
+bump is loud and immediate.
 
 Pointer-valued fields such as `QoreTypeInfo*` are therefore normalized to
 stable identities before hashing. The hash excludes process-local addresses,
@@ -1274,10 +1289,12 @@ vs. actual values, and the section number of this design that defines the rule.
 | `QORD-PLUGIN-IMPORT-MISSING` | QORD loader | §3.9 |
 | `QORD-PLUGIN-HELPER-REF-INVALID` | QORD loader (`slot_idx`, `import_idx`, or `op_local_id` invalid) | §3.9 |
 | `QORD-PLUGIN-SIGNATURE-HASH-MISMATCH` | QORD loader | §3.9 |
+| `QORD-PLUGIN-SIGNATURE-VERSION-UNSUPPORTED` | QORD loader (unrecognised `canonical_signature_version` byte; subreason `unsupported_canonical_version`) | §3.9 |
 | `QORD-PLUGIN-SERIALIZER-VERSION-UNSUPPORTED` | QORD loader | §3.9 |
 | `QORD-PLUGIN-RESERVED-NONZERO` | QORD loader | §3.9 |
 | `QORD-PLUGIN-PAYLOAD-LENGTH-MISMATCH` | QORD loader (deserializer consumption out of bounds; subreason is `over_read` for callback boundary failure or `under_consumed` for fewer-than-payload-len bytes consumed) | §3.3 / §3.9 |
 | `PLUGIN-REGISTRY-PROGRAM-NOT-AVAILABLE` | `Qore::Reflection::PluginRegistry` (Program-bound method called on the process-global view) | §3.12 |
+| `PLUGIN-REGISTRY-MODULE-NOT-LOADED` | `Qore::Reflection::PluginRegistry` `getTypes` / `getOperations` called with a module name that is not loaded in the process | §3.12 |
 
 **Dry-run validation entry point.** Authors testing a descriptor before
 wiring it into module init use:
@@ -1287,6 +1304,16 @@ struct QorePluginModuleHandle;  // opaque, runtime-owned
 
 enum QorePluginValidationContextFlags : uint32_t {
     QORE_PLUGIN_VALIDATE_NO_FLAGS = 0,
+
+    // Reserved for future versions (none active in v1; listing the names
+    // commits the bit positions so independent additions don't collide):
+    // QORE_PLUGIN_VALIDATE_STRICT_SUBREASON_NAMES = 1u << 0,
+    //   //!< Treat unknown subreason strings as PLUGIN-REGISTRATION-INVALID-
+    //   //!< DESCRIPTOR; useful for catching typos in plugin self-tests.
+    // QORE_PLUGIN_VALIDATE_FAIL_DEFERRED       = 1u << 1,
+    //   //!< Treat deferred-contextual checks as failures rather than
+    //   //!< deferring them; for plugin authors who want every check to
+    //   //!< complete during the dry-run.
 };
 
 struct QorePluginValidationContext {
@@ -1310,6 +1337,13 @@ struct QorePluginValidationContext {
     //! runtime_helper_symbol lookup against the registering binary. The only
     //! valid non-null value is the opaque handle supplied by
     //! QoreModuleInitContext for the module currently being initialized.
+    //! The handle is valid ONLY during the calling thread's qore_module_init
+    //! invocation that received it; using a cached handle outside that scope
+    //! is undefined behaviour, and the runtime is permitted (but not
+    //! required) to detect and reject reuse. Validation results are not
+    //! cacheable across init invocations: a successful validation does not
+    //! guarantee the same descriptor will register cleanly in a later
+    //! qore_module_init pass for a different module.
     //! Unit tests and tools outside module init pass nullptr; symbol resolution
     //! is then reported as a deferred check in collect-all mode and is
     //! performed by registration.
@@ -1349,6 +1383,30 @@ plugin author CI scripts and IDE integrations should use; production module
 load uses the fail-fast equivalent (`collect_all == false`) which returns the
 first violation only.
 
+**Reserved subreasons.** `subreason` is a stable identifier (snake_case
+ASCII, no version suffix, append-only namespace), not a free-form
+message. The v1 protocol defines these values; future revisions append
+without renaming or removing:
+
+| Subreason | Used by |
+|---|---|
+| `unknown_validation_context_flag` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` |
+| `validation_context_too_small` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` |
+| `non_contiguous_local_id` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` |
+| `null_type_name` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` |
+| `null_type_info` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` |
+| `reserved_field_nonzero` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` |
+| `over_read` | `QORD-PLUGIN-PAYLOAD-LENGTH-MISMATCH` |
+| `under_consumed` | `QORD-PLUGIN-PAYLOAD-LENGTH-MISMATCH` |
+| `unsupported_canonical_version` | `QORD-PLUGIN-SIGNATURE-VERSION-UNSUPPORTED` |
+| `helper_symbol_not_found` | `PLUGIN-REGISTRATION-HELPER-SYMBOL-MISSING` |
+
+Implementations MUST NOT emit subreason strings outside this table for
+the corresponding error codes. New rejection causes either reuse an
+existing subreason (when semantically equivalent) or are added to the
+table in a follow-up to this document; the discipline mirrors IETF
+"assigned numbers" registries.
+
 Validation is split into **descriptor-local** and **contextual** checks.
 Descriptor-local checks (ids, null pointers, signatures, extension payload
 shape, codec presence, declared QDOM domains) run without `ctx`. Contextual
@@ -1379,7 +1437,7 @@ against the same binary their users run.
 | `QORE_PLUGIN_VERIFY_TRACE` | Logs every runtime verifier check that is enabled by a debug build or `QORE_PLUGIN_VERIFY`, including the ones that pass. |
 | `QORE_PLUGIN_CROSS_TYPE_TRACE` | Logs cross-module operator resolution decisions per §3.10 (which precedence rule fired, what was synthesised, what was rejected). |
 | `QORE_PLUGIN_QORD_TRACE` | Logs QORD `PLUGIN_IMPORTS` / `PLUGIN_HELPER_REFS` resolution: per-import resolution outcome, signature-hash compare, slot-table population. |
-| `QORE_PLUGIN_FALLBACK_BUFFER` | Capacity of each Program's rolling plugin-fallback-site buffer. Unset = 1024, `0` disables recording, invalid values fall back to 1024 with a register-trace warning, and values above 65536 are capped to bound per-Program memory. |
+| `QORE_PLUGIN_FALLBACK_BUFFER` | Capacity of each Program's rolling plugin-fallback-site buffer. Unset = 1024, `0` disables recording (in which case `getRecentFallbackSites()` returns an empty list and `clearFallbackSites()` is a no-op), invalid values fall back to 1024 with a register-trace warning, and values above 65536 are capped. The 65536 cap is chosen so even verbose entries (source-location string + reason + operand type names ≈ 500 bytes/entry) keep the fallback list under ~32 MiB per Program. |
 
 **Runtime verifier inventory.** A single, normative list of checks that debug
 builds always perform and release builds perform only when
@@ -1443,9 +1501,13 @@ class PluginRegistry {
     # PLUGIN-REGISTRY-PROGRAM-NOT-AVAILABLE on the process-global view.
     list<string> getActiveModules();
 
-    # Process-global view: descriptors for the named loaded module.
-    # Program-bound view: descriptors for the named module only if active
-    # in this Program; inactive modules return an empty list.
+    # Both views: raise PLUGIN-REGISTRY-MODULE-NOT-LOADED when module_name
+    # is not loaded in the process. Process-global view: descriptors for
+    # the named loaded module regardless of activation. Program-bound view:
+    # descriptors for the named loaded module only if active in this
+    # Program; loaded-but-inactive modules return an empty list (distinct
+    # from the missing-module case so a typo'd name fails loudly while
+    # an inactive-but-loaded name reports the unambiguous empty result).
     list<hash<PluginTypeInfo>> getTypes(string module_name);
     list<hash<PluginOperationInfo>> getOperations(string module_name);
 
@@ -1476,12 +1538,15 @@ sees every loaded plugin module's *descriptors*; `getTypes()` and
 module regardless of Program activation. The Program-bound view (`get`) sees
 the *activations* visible to a specific Program plus parse-time diagnostics;
 `getTypes()` and `getOperations()` on that view filter to active modules and
-return an empty list for a loaded-but-inactive module. Calling a Program-bound
-method on a process-global view raises `PLUGIN-REGISTRY-PROGRAM-NOT-AVAILABLE`
-with a diagnostic naming the method and pointing the caller at `get()` /
-`get(pgm)`. The registry is not a substitute for the env-var trace family —
-the registry is a snapshot of the steady-state, the traces are a record of
-decisions. Both are necessary.
+return an empty list for a loaded-but-inactive module. Both views raise
+`PLUGIN-REGISTRY-MODULE-NOT-LOADED` when a module name is not loaded in the
+process at all, so a typo or stale module reference is a loud failure
+distinct from the deliberate "loaded but not active here" empty result.
+Calling a Program-bound method on a process-global view raises
+`PLUGIN-REGISTRY-PROGRAM-NOT-AVAILABLE` with a diagnostic naming the method
+and pointing the caller at `get()` / `get(pgm)`. The registry is not a
+substitute for the env-var trace family — the registry is a snapshot of
+the steady-state, the traces are a record of decisions. Both are necessary.
 
 **Reference module + lint.** Phase 3 ships:
 
@@ -1954,8 +2019,12 @@ exposure — reuses Phase 1's `buffer<T>`.
     handle), fail-fast mode, and collect-all-errors mode.
   - The structured error-code set listed in §3.12 — every rejection rule
     in §3.3 / §3.7 / §3.9 / §3.10 / §3.12 wired to its assigned code,
-    including `PLUGIN-EXTENSION-VALIDATION-FAILED` and
-    `PLUGIN-REGISTRY-PROGRAM-NOT-AVAILABLE`.
+    including `PLUGIN-EXTENSION-VALIDATION-FAILED`,
+    `PLUGIN-REGISTRY-PROGRAM-NOT-AVAILABLE`,
+    `PLUGIN-REGISTRY-MODULE-NOT-LOADED`, and
+    `QORD-PLUGIN-SIGNATURE-VERSION-UNSUPPORTED`. Subreason strings are drawn
+    from the §3.12 reserved-subreasons table only; emitting an unlisted
+    subreason for a listed error code is a libqore bug.
   - The `QORE_PLUGIN_*_TRACE` env-var family (`REGISTER`, `DISPATCH`,
     `VERIFY_TRACE`, `CROSS_TYPE`, `QORD`) plus `QORE_PLUGIN_VERIFY`
     for release-build runtime verifier opt-in and
