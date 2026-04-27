@@ -138,7 +138,7 @@ class QJar {
                 try {
                     p.issueModuleCmd("jni", "define-class " + java_class_path_name + " " + b.toBase64());
                 } catch (hash<ExceptionInfo> ex) {
-                    if (ex.err != "JNI-ERROR" || ex.desc !~ /duplicate class definition/) {
+                    if (ex.err != "JNI-ERROR" || ex.desc !~ /duplicate .*class definition/) {
                         rethrow;
                     }
                 }

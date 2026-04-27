@@ -217,6 +217,11 @@ public:
     DLLLOCAL void installFrameState(int32_t stream_id, Queue* msg_queue,
         ExceptionSink* xsink);
 
+    //! Installs an SSE parser on an active ChannelAction stream
+    DLLLOCAL void installSseState(int32_t stream_id, Queue* queue,
+        QoreEventNotifier* notifier, QoreObject* notifier_obj, QoreValue initial,
+        ExceptionSink* xsink);
+
     // --- Accessors ---
 
     DLLLOCAL bool isClosed() const {
@@ -399,6 +404,10 @@ private:
         are called directly on the I/O thread without execValue().
     */
     std::unordered_map<std::string, AbstractAsyncAction*> stream_actions;
+
+    //! Completed raw streaming actions kept briefly for post-header parser install
+    std::unordered_map<std::string, ChannelAction*> completed_channel_actions;
+
     int active_stream_count = 0;
 
     //! Error info (ref'd or nullptr)

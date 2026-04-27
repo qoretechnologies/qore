@@ -27,6 +27,13 @@
 %requires ../../../../qlib/HttpServer.qm
 %requires ../../../../qlib/HttpServerAsyncIo
 %requires ../../../../qlib/ServerSentEventHandler
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/ConnectionProvider
+%requires ../../../../qlib/RestSchemaValidator.qm
+%requires ../../../../qlib/Swagger.qm
+%requires ../../../../qlib/OpenApi3.qm
+%requires ../../../../qlib/RestClient.qm
+%requires ../../../../qlib/HttpClientIo
 %requires ../../../../qlib/HttpClientStreamingIo
 %requires ../../../../qlib/RestClientIo.qm
 %requires ../../../../qlib/Mime.qm
@@ -70,6 +77,41 @@ class TestSseErrorHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+class TestObserver inherits DataProvider::Observer {
+    public {
+        list<hash<auto>> events = ();
+        Mutex m();
+        Condition cond();
+        int expected_count;
+    }
+
+    constructor(int expected_count) {
+        self.expected_count = expected_count;
+    }
+
+    update(string event_id, hash<auto> data) {
+        AutoLock al(m);
+        push events, {
+            "event_id": event_id,
+            "data": data,
+        };
+        cond.broadcast();
+    }
+
+    bool waitForEvents(timeout t = 10s) {
+        AutoLock al(m);
+        date end_time = now_us() + t;
+        while (events.size() < expected_count) {
+            date remaining = end_time - now_us();
+            if (remaining <= 0us) {
+                return False;
+            }
+            cond.wait(m, remaining);
+        }
+        return True;
+    }
+}
+
 class SseRestClientIoTest inherits Test {
     private {
         HttpServer server;
@@ -89,6 +131,7 @@ class SseRestClientIoTest inherits Test {
             \testRestSseReaderCloseDelimitedEof());
         addTestCase("restSseReader throws HTTP response errors",
             \testRestSseReaderThrowsResponseError());
+        addTestCase("restObserveSse receives events", \testRestObserveSse());
         addTestCase("HttpSseStreamPollOperation heartbeat defaults on",
             \testPollOperationHeartbeatDefault());
         set_return_value(main());
@@ -285,6 +328,27 @@ class SseRestClientIoTest inherits Test {
                     "raw error body is preserved");
             }
         }
+    }
+
+    testRestObserveSse() {
+        RestClientIo rest({
+            "url": sprintf("http://localhost:%d", port),
+            "data": "json",
+        });
+        on_exit rest.close();
+
+        HttpClientStreamingIo::SseObservable obs = rest.restObserveSse("GET",
+            "/sse", NOTHING, NOTHING, {"serialization": "none"});
+        TestObserver observer(2);
+        obs.registerObserver(observer);
+        obs.observersReady();
+        on_exit obs.stopEvents();
+
+        assertTrue(observer.waitForEvents(10s), "RestClientIo observable received events");
+        assertEq(HttpClientStreamingIo::EVENT_SSE_CONNECTED, observer.events[0].event_id);
+        assertEq(HttpClientStreamingIo::EVENT_SSE_DATA, observer.events[1].event_id);
+        assertEq("hello", observer.events[1].data.event);
+        assertEq("\"world\"", observer.events[1].data.data);
     }
 
     testPollOperationHeartbeatDefault() {

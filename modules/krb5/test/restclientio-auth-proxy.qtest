@@ -11,6 +11,13 @@
 %modern
 
 %requires ../../../qlib/QUnit.qm
+%requires ../../../qlib/DataProvider
+%requires ../../../qlib/ConnectionProvider
+%requires ../../../qlib/RestSchemaValidator.qm
+%requires ../../../qlib/Swagger.qm
+%requires ../../../qlib/OpenApi3.qm
+%requires ../../../qlib/HttpClientIo
+%requires ../../../qlib/HttpClientStreamingIo
 %requires ../../../qlib/RestClient.qm
 %requires ../../../qlib/RestClientIo.qm
 %requires krb5
@@ -20,6 +27,41 @@
 %endtry
 
 %exec-class RestClientIoKrb5AuthProxyIntegrationTest
+
+class AuthProxySseObserver inherits DataProvider::Observer {
+    public {
+        list<hash<auto>> events = ();
+        Mutex m();
+        Condition cond();
+        int expected_count;
+    }
+
+    constructor(int expected_count) {
+        self.expected_count = expected_count;
+    }
+
+    update(string event_id, hash<auto> data) {
+        AutoLock al(m);
+        push events, {
+            "event_id": event_id,
+            "data": data,
+        };
+        cond.broadcast();
+    }
+
+    bool waitForEvents(timeout t = 30s) {
+        AutoLock al(m);
+        date end_time = now_us() + t;
+        while (events.size() < expected_count) {
+            date remaining = end_time - now_us();
+            if (remaining <= 0us) {
+                return False;
+            }
+            cond.wait(m, remaining);
+        }
+        return True;
+    }
+}
 
 public class RestClientIoKrb5AuthProxyIntegrationTest inherits QUnit::Test {
     private {
@@ -37,6 +79,8 @@ public class RestClientIoKrb5AuthProxyIntegrationTest inherits QUnit::Test {
             \testAsyncRestClientIoNegotiate());
         addTestCase("SSE RestClientIo negotiate through external auth proxy",
             \testSseRestClientIoNegotiate());
+        addTestCase("SSE observable RestClientIo negotiate through external auth proxy",
+            \testSseObservableRestClientIoNegotiate());
         addTestCase("notifier async RestClientIo negotiate through external auth proxy",
             \testNotifierAsyncRestClientIoNegotiate());
         addTestCase("cancellable async RestClientIo negotiate through external auth proxy",
@@ -61,11 +105,19 @@ public class RestClientIoKrb5AuthProxyIntegrationTest inherits QUnit::Test {
         return requireEnv("QORE_KRB5_AUTH_PROXY_CLIENT_PRINCIPAL");
     }
 
+    private timeout testTimeout() {
+        *string value = getenv("QORE_KRB5_AUTH_PROXY_TEST_TIMEOUT");
+        return value && value != "" ? seconds(value.toInt()) : 30s;
+    }
+
     private hash<auto> getClientOptions() {
         setupCredentialCache();
+        timeout to = testTimeout();
         return {
             "url": requireEnv("QORE_KRB5_AUTH_PROXY_URL"),
             "data": "json",
+            "connect_timeout": to,
+            "timeout": to,
             "negotiate_auth": True,
             "negotiate_service_principal": requireEnv("QORE_KRB5_AUTH_PROXY_SERVICE_PRINCIPAL"),
             "negotiate_credential_cache": requireEnv("QORE_KRB5_AUTH_PROXY_CREDENTIAL_CACHE"),
@@ -165,7 +217,7 @@ public class RestClientIoKrb5AuthProxyIntegrationTest inherits QUnit::Test {
         RestClientIo::RestClientIo rest(getClientOptions());
         on_exit rest.close();
         RestClientIo::RestFuture f = rest.restGetAsync("/api/restclientio-async");
-        hash<RestClient::RestResponseInfo> response = f.get(30s);
+        hash<RestClient::RestResponseInfo> response = f.get(testTimeout());
         assertEq(200, response.status_code);
         assertAuthenticatedBody(response.body, "/api/restclientio-async");
 %endif
@@ -179,10 +231,36 @@ public class RestClientIoKrb5AuthProxyIntegrationTest inherits QUnit::Test {
             "/api/restclientio-sse", NOTHING, NOTHING);
         on_exit reader.cancel();
 
-        *hash<SseMessageInfo> evt = reader.readEvent(30s);
+        *hash<SseMessageInfo> evt = reader.readEvent(testTimeout());
         assertTrue(exists evt, "Negotiate-enabled RestClientIo SSE reader should receive an event");
         assertEq("auth", evt.event);
         assertAuthenticatedBody(parse_json(evt.data), "/api/restclientio-sse");
+%endif
+    }
+
+    testSseObservableRestClientIoNegotiate() {
+%ifndef NoJson
+        RestClientIo::RestClientIo rest(getClientOptions());
+        on_exit rest.close();
+        HttpClientStreamingIo::SseObservable obs = rest.restObserveSse("GET",
+            "/api/restclientio-sse", NOTHING, NOTHING, {"serialization": "none"});
+        AuthProxySseObserver observer(2);
+        obs.registerObserver(observer);
+        obs.observersReady();
+        on_exit obs.stopEvents();
+
+        bool got_events = observer.waitForEvents(testTimeout());
+        if (!got_events) {
+            printf("SSE observable events before timeout: %y\n", observer.events);
+        }
+        assertTrue(got_events,
+            sprintf("Negotiate-enabled RestClientIo SSE observable should receive an event; events=%y",
+                observer.events));
+        assertEq(HttpClientStreamingIo::EVENT_SSE_CONNECTED, observer.events[0].event_id);
+        assertEq(HttpClientStreamingIo::EVENT_SSE_DATA, observer.events[1].event_id);
+        assertEq("auth", observer.events[1].data.event);
+        assertAuthenticatedBody(parse_json(observer.events[1].data.data),
+            "/api/restclientio-sse");
 %endif
     }
 
@@ -193,7 +271,7 @@ public class RestClientIoKrb5AuthProxyIntegrationTest inherits QUnit::Test {
         EventNotifier notifier();
         hash<auto> result = rest.restDoRequestAsyncWithNotifier("GET",
             "/api/restclientio-notifier", NOTHING, NOTHING, notifier);
-        assertTrue(rest.getConnectionManager().getController().waitForNotifier(notifier, 30s),
+        assertTrue(rest.getConnectionManager().getController().waitForNotifier(notifier, testTimeout()),
             "notifier async RestClientIo Negotiate should signal completion");
         notifier.acknowledge();
         hash<auto> response = result.future.get();
@@ -208,7 +286,7 @@ public class RestClientIoKrb5AuthProxyIntegrationTest inherits QUnit::Test {
         on_exit rest.close();
         HttpClientIo::HttpCancellableFuture f = rest.restDoRequestCancellableAsync("GET",
             "/api/restclientio-cancellable", NOTHING, NOTHING);
-        hash<auto> response = f.get(30s);
+        hash<auto> response = f.get(testTimeout());
         assertEq(200, response.status_code);
         assertAuthenticatedBody(parse_json(response.body.toString()), "/api/restclientio-cancellable");
 %endif
@@ -223,7 +301,7 @@ public class RestClientIoKrb5AuthProxyIntegrationTest inherits QUnit::Test {
         };
         RestClientIo::RestFuture f = rest.doSignedRequestAsync("x-test-signature",
             signer, "GET", "/api/restclientio-signed", NOTHING);
-        hash<RestClient::RestResponseInfo> response = f.get(30s);
+        hash<RestClient::RestResponseInfo> response = f.get(testTimeout());
         assertEq(200, response.status_code);
         assertAuthenticatedBody(response.body, "/api/restclientio-signed");
 %endif

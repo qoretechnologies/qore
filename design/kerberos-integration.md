@@ -194,18 +194,18 @@ Negotiate support must cover every public `RestClientIo` request path:
 - synchronous `restDoRequest()` and `restDoRawRequest()`
 - async / notifier / poll request APIs
 - cancellable async requests
-- SSE reader/stream setup
+- SSE reader/stream/observable setup
 - ping/status paths that use `RestClientIo`
 
 If any path cannot support Negotiate in the first implementation phase, the
 implementation must explicitly reject `negotiate_auth` on that path with a
 documented exception. It must not silently send unauthenticated requests.
 
-The `restSseReader()` / `restSseStream()` path is able to support Negotiate
-because response headers are consumed and validated before the reader is
-returned. `restObserveSse()` remains an explicit unsupported path in this
-phase because it starts low-level I/O-thread SSE parsing before the initial
-401 response headers are exposed to Qore-level retry logic.
+The `restSseReader()` / `restSseStream()` path supports Negotiate because
+response headers are consumed and validated before the reader is returned.
+`restObserveSse()` uses an event-driven startup operation that waits for the
+initial response headers, performs the Negotiate retry if required, and only
+then installs the low-level I/O-thread SSE parser on the authenticated stream.
 
 ### Constructor
 

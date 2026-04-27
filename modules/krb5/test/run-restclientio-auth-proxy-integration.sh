@@ -192,4 +192,37 @@ export QORE_KRB5_AUTH_PROXY_CLIENT_PASSWORD="password"
 export QORE_KRB5_AUTH_PROXY_CREDENTIAL_CACHE="FILE:$tmpdir/client.ccache"
 export QORE_KRB5_AUTH_PROXY_BACKEND_LOG="$backend_log"
 
-"$qore_bin" --enable-debug "$script_dir/restclientio-auth-proxy.qtest" -v
+qore_cmd=("$qore_bin")
+valgrind_log="${QORE_VALGRIND_LOG:-$tmpdir/valgrind.log}"
+if [[ "${QORE_VALGRIND:-}" == 1 || "${QORE_VALGRIND:-}" == true ]]; then
+    if ! command -v valgrind >/dev/null 2>&1; then
+        echo "skipping auth-proxy valgrind integration test: valgrind not available"
+        exit 0
+    fi
+    qore_cmd=(valgrind
+        --tool=memcheck
+        --leak-check=full
+        --show-leak-kinds=definite,possible
+        --errors-for-leak-kinds=definite
+        --error-exitcode=99
+        --log-file="$valgrind_log"
+        "$qore_bin" -b)
+    export QORE_KRB5_AUTH_PROXY_TEST_TIMEOUT="${QORE_KRB5_AUTH_PROXY_TEST_TIMEOUT:-180}"
+elif [[ -n "${QORE_EXTRA_ARGS:-}" ]]; then
+    read -r -a qore_extra_args <<<"$QORE_EXTRA_ARGS"
+    qore_cmd+=("${qore_extra_args[@]}")
+fi
+
+set +e
+"${qore_cmd[@]}" --enable-debug "$script_dir/restclientio-auth-proxy.qtest" -v
+rc=$?
+set -e
+if (( rc != 0 )); then
+    if [[ -s "$valgrind_log" ]]; then
+        cat "$valgrind_log" >&2
+    fi
+    exit "$rc"
+fi
+if [[ "${QORE_VALGRIND:-}" == 1 || "${QORE_VALGRIND:-}" == true ]]; then
+    cat "$valgrind_log"
+fi

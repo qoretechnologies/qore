@@ -77,6 +77,7 @@ public class Http3ClientPollOperation inherits Http3ClientPollOperationBase, Htt
         @param accept_all_certs if True, accept all server certificates
         @param client_cert optional client certificate for mutual TLS (mTLS)
         @param client_pk optional client private key for mutual TLS (mTLS)
+        @param connection owning HTTP client connection
     */
     constructor(hash<auto> url_info, timeout connect_timeout = DefaultConnectTimeout, *LoggerInterface logger,
             *int ssl_verify_mode, bool accept_all_certs = False,
@@ -421,10 +422,12 @@ public class Http3ClientPollOperation inherits Http3ClientPollOperationBase, Htt
         @param channel Channel for response chunks
         @param max_streams maximum concurrent streams
         @param streaming if True, bidirectional streaming mode
+        @param notifier optional EventNotifier signaled after channel updates
         @return the stream ID
     */
     int submitRequestWithChannel(string method, string path, *hash<auto> headers, *data body,
-            Channel channel, int max_streams, bool streaming = False) {
+            Channel channel, int max_streams, bool streaming = False,
+            *EventNotifier notifier) {
         if (!self.isReady()) {
             throw "HTTP3-STATE-ERROR", sprintf("cannot submit request in state: %y", self.getState());
         }
@@ -471,7 +474,7 @@ public class Http3ClientPollOperation inherits Http3ClientPollOperationBase, Htt
         self.endSubmitOk(stream_id);
 
         # Register Channel as the completion action
-        *hash<auto> reg_result = self.registerStreamWithChannel(stream_id, channel);
+        *hash<auto> reg_result = self.registerStreamWithChannel(stream_id, channel, notifier);
         if (reg_result.need_cancel) {
             try {
                 int sid = self.getSessionId();
@@ -505,6 +508,7 @@ public class Http3ClientPollOperation inherits Http3ClientPollOperationBase, Htt
         @param body request body (optional)
         @param queue Queue for parsed SSE event delivery
         @param max_streams maximum concurrent streams
+        @param notifier optional EventNotifier signaled after queue updates
 
         @return the stream ID
     */

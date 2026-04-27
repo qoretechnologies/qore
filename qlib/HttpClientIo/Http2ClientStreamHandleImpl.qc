@@ -107,6 +107,8 @@ public class Http2ClientStreamHandle inherits HttpClientStreamHandle {
         appropriate for response-only streaming (e.g., SSE).
         @param body one-shot request body (optional); sent with the request before
         streaming begins
+        @param notifier optional EventNotifier signaled when raw response
+        items are available to @ref readData()
 
         @return the stream ID
 
@@ -114,7 +116,7 @@ public class Http2ClientStreamHandle inherits HttpClientStreamHandle {
         @throw HTTPCLIENT-TIMEOUT if connection establishment times out
     */
     int startStreaming(string method, string path, *hash<auto> headers,
-            bool body_streaming = False, *data body) {
+            bool body_streaming = False, *data body, *EventNotifier notifier) {
         {
             AutoLock al(lock);
             if (state != HttpClientStreamState::Pending) {
@@ -129,6 +131,18 @@ public class Http2ClientStreamHandle inherits HttpClientStreamHandle {
 
         # Wait for connection to become ready if not already
         if (!conn.isReady()) {
+            if (notifier) {
+                {
+                    AutoLock al(lock);
+                    state = HttpClientStreamState::Pending;
+                    streaming = False;
+                    request_body_streaming = False;
+                    delete data_channel;
+                }
+                releaseReservationIfHeld();
+                throw "HTTPCLIENT-NOT-READY",
+                    "connection is not ready for async streaming request";
+            }
             if (!conn.waitForReady(request_timeout)) {
                 {
                     AutoLock al(lock);
@@ -145,7 +159,7 @@ public class Http2ClientStreamHandle inherits HttpClientStreamHandle {
 
         try {
             stream_id = h2conn.submitRequestStreaming(method, path, headers, body,
-                data_channel, body_streaming);
+                data_channel, body_streaming, notifier);
             @assert(stream_id >= 0);
         } catch (hash<ExceptionInfo> ex) {
             {
@@ -434,6 +448,25 @@ public class Http2ClientStreamHandle inherits HttpClientStreamHandle {
         }
 
         h2conn.installFrameState(sid, msg_queue);
+    }
+
+    #! Installs an SSE parser on an existing streaming request
+    /** @see HttpClientStreamHandle::installSseState() for full documentation
+    */
+    installSseState(Queue queue, *EventNotifier notifier, *data initial_body) {
+        int sid;
+        {
+            AutoLock al(lock);
+            if (!streaming) {
+                throw "HTTPCLIENT-STATE-ERROR", "not in streaming mode";
+            }
+            if (!exists stream_id) {
+                throw "HTTPCLIENT-STATE-ERROR", "stream not yet established";
+            }
+            sid = stream_id;
+        }
+
+        h2conn.installSseState(sid, queue, notifier, initial_body);
     }
 
 }

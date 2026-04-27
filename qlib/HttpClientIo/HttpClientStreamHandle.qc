@@ -760,6 +760,8 @@ public class HttpClientStreamHandle {
         communication; if \c False (default), submit with END_STREAM for response-only streaming
         @param body one-shot request body (optional); sent with the request before streaming
         begins — use for patterns like POST with JSON body + streaming SSE response
+        @param notifier optional EventNotifier signaled when raw response
+        items are available to @ref readData()
 
         @return the stream ID
 
@@ -771,7 +773,7 @@ public class HttpClientStreamHandle {
         @see readData(), sendData(), writesDone()
     */
     int startStreaming(string method, string path, *hash<auto> headers,
-            bool body_streaming = False, *data body) {
+            bool body_streaming = False, *data body, *EventNotifier notifier) {
         throw "HTTPCLIENT-STREAMING-NOT-SUPPORTED",
             "streaming is not supported by " + conn.getProtocol();
     }
@@ -868,6 +870,27 @@ public class HttpClientStreamHandle {
     installFrameState(Queue msg_queue) {
         throw "HTTPCLIENT-STREAMING-NOT-SUPPORTED",
             "frame-state streaming is not supported by " + conn.getProtocol();
+    }
+
+    #! Installs an SSE event parser for this streaming response
+    /** Swaps a stream started with @ref startStreaming() from raw response
+        delivery through @ref readData() to I/O-thread SSE parsing.  Concrete
+        implementations drain any residual body bytes already queued for
+        @ref readData() and feed them into the parser before returning.
+
+        @param queue Queue that will receive parsed SSE event hashes
+        @param notifier optional EventNotifier signaled after queue updates
+        @param initial_body optional body bytes already consumed before
+        installing the parser
+
+        @throw HTTPCLIENT-STREAMING-NOT-SUPPORTED if the protocol does not
+               support SSE parser installation
+
+        @since %HttpClientIo 1.5
+    */
+    installSseState(Queue queue, *EventNotifier notifier, *data initial_body) {
+        throw "HTTPCLIENT-STREAMING-NOT-SUPPORTED",
+            "SSE parser installation is not supported by " + conn.getProtocol();
     }
 
     #! Starts an SSE streaming request with I/O-thread event parsing

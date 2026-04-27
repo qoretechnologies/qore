@@ -7,7 +7,14 @@
 %requires krb5
 %requires ../../../qlib/Krb5Util/Krb5Util.qm
 %requires ../../../qlib/HttpServer.qm
+%requires ../../../qlib/ConnectionProvider
+%requires ../../../qlib/RestSchemaValidator.qm
+%requires ../../../qlib/Swagger.qm
+%requires ../../../qlib/OpenApi3.qm
 %requires ../../../qlib/RestClient.qm
+%requires ../../../qlib/DataProvider
+%requires ../../../qlib/HttpClientIo
+%requires ../../../qlib/HttpClientStreamingIo
 %requires ../../../qlib/RestClientIo.qm
 
 %exec-class Krb5GssKdcIntegrationTest
@@ -104,6 +111,41 @@ class Krb5HttpNegotiateSseHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+class Krb5SseObserver inherits DataProvider::Observer {
+    public {
+        list<hash<auto>> events = ();
+        Mutex m();
+        Condition cond();
+        int expected_count;
+    }
+
+    constructor(int expected_count) {
+        self.expected_count = expected_count;
+    }
+
+    update(string event_id, hash<auto> data) {
+        AutoLock al(m);
+        push events, {
+            "event_id": event_id,
+            "data": data,
+        };
+        cond.broadcast();
+    }
+
+    bool waitForEvents(timeout t = 30s) {
+        AutoLock al(m);
+        date end_time = now_us() + t;
+        while (events.size() < expected_count) {
+            date remaining = end_time - now_us();
+            if (remaining <= 0us) {
+                return False;
+            }
+            cond.wait(m, remaining);
+        }
+        return True;
+    }
+}
+
 public class Krb5GssKdcIntegrationTest inherits QUnit::Test {
     constructor() : Test("Krb5GssKdcIntegrationTest", "1.0") {
         addTestCase("full gss initiator acceptor exchange", \testFullGssExchange());
@@ -112,6 +154,8 @@ public class Krb5GssKdcIntegrationTest inherits QUnit::Test {
             \testHttpServerUtilRestClientIoNegotiate());
         addTestCase("HttpServerUtil RestClientIo SSE negotiate exchange",
             \testHttpServerUtilRestClientIoSseNegotiate());
+        addTestCase("HttpServerUtil RestClientIo SSE observable negotiate exchange",
+            \testHttpServerUtilRestClientIoSseObservableNegotiate());
         addTestCase("HttpServerUtil poll RestClient negotiate exchange",
             \testHttpServerUtilPollRestClientNegotiate());
         addTestCase("HttpServerUtil async RestClientIo negotiate exchange",
@@ -452,6 +496,36 @@ public class Krb5GssKdcIntegrationTest inherits QUnit::Test {
         Krb5HttpNegotiateAuthenticator auth = serverSetup.auth;
         assertEq(1, auth.getChallengeCount(), "SSE Negotiate should send one 401 challenge");
         assertEq(1, auth.getNegotiateCount(), "SSE Negotiate should process one token");
+    }
+
+    private testHttpServerUtilRestClientIoSseObservableNegotiate() {
+        hash<auto> setup = setupGssCredentials("httpserverutil-restclientio-sse-observable");
+        hash<auto> serverSetup = createHttpNegotiateSseServer(setup.acceptorCred);
+        HttpServer server = serverSetup.server;
+        on_exit delete server;
+
+        RestClientIo::RestClientIo rest(getHttpNegotiateClientOptions(setup, serverSetup.url));
+        on_exit rest.close();
+
+        HttpClientStreamingIo::SseObservable obs = rest.restObserveSse("GET",
+            "/sse-protected", NOTHING, NOTHING, {"serialization": "none"});
+        Krb5SseObserver observer(2);
+        obs.registerObserver(observer);
+        obs.observersReady();
+        on_exit obs.stopEvents();
+
+        assertTrue(observer.waitForEvents(30s),
+            "RestClientIo SSE observable Negotiate should receive an event");
+        assertEq(HttpClientStreamingIo::EVENT_SSE_CONNECTED, observer.events[0].event_id);
+        assertEq(HttpClientStreamingIo::EVENT_SSE_DATA, observer.events[1].event_id);
+        assertEq("principal", observer.events[1].data.event);
+        assertEq(setup.clientPrincipal, observer.events[1].data.data);
+
+        Krb5HttpNegotiateAuthenticator auth = serverSetup.auth;
+        assertEq(1, auth.getChallengeCount(),
+            "SSE observable Negotiate should send one 401 challenge");
+        assertEq(1, auth.getNegotiateCount(),
+            "SSE observable Negotiate should process one token");
     }
 
     private testHttpServerUtilPollRestClientNegotiate() {

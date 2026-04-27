@@ -149,7 +149,7 @@ resp = rc.restGet("/api/data");
 
     @subsection restclientio_v1_2 Version 1.2
     - Added Kerberos/SPNEGO HTTP Negotiate support for async request/response APIs,
-      SSE reader/stream APIs, and polling pings
+      SSE reader/stream/observable APIs, and polling pings
     - Added \c getLogger() to expose the client's logger
     - Added \c setAllowAnyResponse() / \c getAllowAnyResponse() for controlling deserialization
       error handling
@@ -1798,15 +1798,6 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
             *hash<auto> final_header = findNegotiateChallenge(response_headers);
             if (final_header && final_header.has_token) {
                 buildNegotiateClientAuthorization(final_header.header, gss_context);
-            }
-        }
-
-        #! Rejects Negotiate auth on paths that cannot complete the SPNEGO exchange
-        private checkNegotiateUnsupported(string path_name) {
-            if (usingNegotiateAuth()) {
-                throw "NEGOTIATE-AUTH-ERROR",
-                    sprintf("%s does not support Kerberos/SPNEGO HTTP Negotiate authentication yet",
-                        path_name);
             }
         }
 
@@ -3631,7 +3622,9 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
         #! Creates an SSE Observable for the given REST endpoint
         /** Serializes the body, adds auth headers, prepends the connection path,
             and returns a \c HttpClientStreamingIo::SseObservable that delivers
-            parsed SSE events via the Observer pattern.
+            parsed SSE events via the Observer pattern.  Kerberos/SPNEGO HTTP
+            Negotiate authentication is handled by an event-driven startup
+            operation before SSE parsing begins.
 
             @param method HTTP method (e.g., "GET", "POST")
             @param path request path
@@ -3662,23 +3655,48 @@ obs.observersReady();
         */
         HttpClientStreamingIo::SseObservable restObserveSse(string method, string path,
                 auto body, *hash<auto> hdr, *hash<auto> opts) {
-            checkNegotiateUnsupported("RestClientIo SSE observables");
-            # Prepare the request (serializes body, adds auth headers, prepends connection_path)
-            hash<auto> prepared = prepareRequest(method, \path, body, \hdr);
-
             # Ensure Accept: text/event-stream header
-            if (!hdr."accept") {
+            hdr = hdr ?? {};
+            if (!hdr."accept" && !hdr."Accept") {
                 hdr."accept" = "text/event-stream";
             }
 
             # Merge serialization from opts or default to "none"
-            hash<auto> obs_opts = opts ?? {};
+            hash<auto> obs_opts = {};
+            if (opts) {
+                obs_opts += opts;
+            }
             if (!obs_opts.serialization) {
                 obs_opts.serialization = "none";
             }
+            obs_opts.startup_callback =
+                auto sub (HttpClientStreamingIo::SseObservable obs) {
+                    return startSseObservableOperation(obs, method, path, body, hdr);
+                };
 
             return new HttpClientStreamingIo::SseObservable(mgr, url, method, path, hdr,
-                prepared.serialized_body, obs_opts);
+                NOTHING, obs_opts);
+        }
+
+        #! Starts an event-driven RestClientIo SSE observable connection
+        private *code<bool()> startSseObservableOperation(
+                HttpClientStreamingIo::SseObservable obs, string method, string path,
+                auto body, *hash<auto> hdr) {
+            ensureToken();
+            RestClientIoSseObservableStartOperation op(self, obs, method, path,
+                body, hdr);
+            op.start();
+            return bool sub () {
+                return op.cancel();
+            };
+        }
+
+        #! Raises the REST response error used by event-driven SSE observable startup
+        raiseSseObservableResponseError(hash<auto> raw, string method, string path,
+                *hash<auto> request_headers, *data request_body,
+                bool req_allow_any_response) {
+            buildResponse(raw, False, req_allow_any_response, method, path,
+                request_headers, request_body);
         }
     }
 
@@ -4129,6 +4147,404 @@ public class RestClientIoAsyncRequestOperation inherits Qore::AbstractPollOperat
         if (completion_notifier) {
             completion_notifier.notify();
         }
+    }
+
+    private cancelPendingStream() {
+        if (pending_stream) {
+            try {
+                pending_stream.cancel();
+            } catch () {
+            }
+        }
+    }
+}
+
+#! Event-driven RestClientIo SSE observable startup with Negotiate retry support
+/** Opens a raw streaming response, waits for response headers via an
+    EventNotifier, performs at most one Kerberos/SPNEGO Negotiate retry on
+    401, then installs the C++ SSE parser on the surviving stream.
+*/
+public class RestClientIoSseObservableStartOperation inherits Qore::AbstractPollOperation {
+    public {
+        const SPS_CONNECTING = "connecting";
+        const SPS_STREAM_WAITING = "stream-waiting";
+        const SPS_ERROR_DRAIN = "error-drain";
+        const SPS_COMPLETE = "complete";
+    }
+
+    private {
+        RestClientIo rcio;
+        HttpClientStreamingIo::SseObservable observable;
+        string method;
+        string path;
+        auto body;
+        *hash<auto> hdr;
+
+        EventNotifier stream_notifier();
+        Queue sse_queue();
+        *EventNotifier connection_ready_notifier;
+        bool waiting_for_connection = False;
+        bool waiting_for_stream = False;
+
+        *HttpClientIo::HttpClientStreamHandle pending_stream;
+        *auto negotiate_context;
+        bool negotiate_retried = False;
+
+        *hash<auto> prepared_attempt;
+        *data request_body;
+        bool request_allow_any_response;
+
+        *hash<auto> response;
+        string error_body = "";
+        bool got_error_body = False;
+
+        string state = SPS_CONNECTING;
+        bool goal_reached = False;
+        bool done = False;
+        Mutex m();
+    }
+
+    constructor(RestClientIo rcio, HttpClientStreamingIo::SseObservable observable,
+            string method, string path, auto body, *hash<auto> hdr) {
+        self.rcio = rcio;
+        self.observable = observable;
+        self.method = method;
+        self.path = path;
+        self.body = body;
+        self.hdr = hdr;
+    }
+
+    start() {
+        try {
+            prepareAttempt();
+            *hash<SocketPollInfo> poll_info = continuePollIntern();
+            if (!poll_info) {
+                return;
+            }
+
+            auto controller = rcio.getConnectionManager().getController();
+            controller.submit(<SocketPollOperationInfo>{
+                "sock": poll_info.socket,
+                "spop": self,
+                "to": milliseconds(rcio.getTimeout()),
+                "owner": "restclientio-sse-observable:" + self.uniqueHash(),
+                "has_on_complete": True,
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            cancelPendingStream();
+            fail(ex);
+            rethrow;
+        }
+    }
+
+    string getGoal() {
+        return sprintf("REST SSE %s %s", method, path);
+    }
+
+    string getState() {
+        return state;
+    }
+
+    bool goalReached() {
+        return goal_reached;
+    }
+
+    *hash<SocketPollInfo> continuePoll() {
+        try {
+            return continuePollIntern();
+        } catch (hash<ExceptionInfo> ex) {
+            cancelPendingStream();
+            fail(ex);
+            state = SPS_COMPLETE;
+            return NOTHING;
+        }
+    }
+
+    nothing onComplete(hash<SocketPollResultInfo> result) {
+        if (result.canceled) {
+            cancelPendingStream();
+            fail(<ExceptionInfo>{
+                "err": "HTTPCLIENT-CANCELLED",
+                "desc": "SSE observable startup was canceled",
+            });
+        } else if (result.ex) {
+            cancelPendingStream();
+            fail(result.ex);
+        } else if (!goal_reached) {
+            cancelPendingStream();
+            fail(<ExceptionInfo>{
+                "err": "RESTCLIENTIO-SSE-STARTUP-ERROR",
+                "desc": sprintf("SSE observable startup ended in state %y", state),
+            });
+        }
+    }
+
+    abort() {
+        cancel();
+    }
+
+    bool cancel() {
+        bool canceled;
+        {
+            AutoLock al(m);
+            canceled = !done;
+            done = True;
+            state = SPS_COMPLETE;
+        }
+        cancelPendingStream();
+        return canceled;
+    }
+
+    private *hash<SocketPollInfo> continuePollIntern() {
+        while (True) {
+            if (observable.isStopped()) {
+                cancel();
+                goal_reached = True;
+                state = SPS_COMPLETE;
+                return NOTHING;
+            }
+
+            if (state == SPS_CONNECTING) {
+                if (!waiting_for_connection) {
+                    doStartConnecting();
+                    if (state != SPS_CONNECTING) {
+                        continue;
+                    }
+                    waiting_for_connection = True;
+                    return <SocketPollInfo>{
+                        "events": SOCK_POLLIN,
+                        "socket": connection_ready_notifier,
+                    };
+                }
+
+                connection_ready_notifier.acknowledge();
+                delete connection_ready_notifier;
+                waiting_for_connection = False;
+                doStartConnecting();
+                continue;
+            }
+
+            if (state == SPS_STREAM_WAITING || state == SPS_ERROR_DRAIN) {
+                if (!waiting_for_stream) {
+                    return pollStream();
+                }
+                stream_notifier.acknowledge();
+                waiting_for_stream = False;
+                if (state == SPS_STREAM_WAITING) {
+                    processStreamItems();
+                } else {
+                    processErrorDrainItems();
+                }
+                continue;
+            }
+
+            return NOTHING;
+        }
+    }
+
+    private doStartConnecting() {
+        connection_ready_notifier = rcio.startConnectionAsync();
+        if (connection_ready_notifier) {
+            state = SPS_CONNECTING;
+            return;
+        }
+
+        try {
+            doSubmitStreaming();
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "HTTPCLIENT-NOT-READY") {
+                connection_ready_notifier = new EventNotifier();
+                connection_ready_notifier.notify();
+                state = SPS_CONNECTING;
+                waiting_for_connection = False;
+                return;
+            }
+            rethrow;
+        }
+    }
+
+    private doSubmitStreaming() {
+        if (!prepared_attempt) {
+            prepareAttempt();
+        }
+        pending_stream = rcio.getConnectionManager().acquireStream(rcio.getUrl());
+        pending_stream.startStreaming(method, path, hdr, False,
+            prepared_attempt.serialized_body, stream_notifier);
+        request_body = prepared_attempt.serialized_body;
+        request_allow_any_response = prepared_attempt.allow_any_response;
+        delete prepared_attempt;
+        state = SPS_STREAM_WAITING;
+        waiting_for_stream = False;
+    }
+
+    private prepareAttempt() {
+        prepared_attempt = rcio.prepareAsyncRequestAttempt(method, \path, body,
+            \hdr, False, \negotiate_context, NOTHING, NOTHING);
+        request_body = prepared_attempt.serialized_body;
+        request_allow_any_response = prepared_attempt.allow_any_response;
+    }
+
+    private hash<SocketPollInfo> pollStream() {
+        waiting_for_stream = True;
+        return <SocketPollInfo>{
+            "events": SOCK_POLLIN,
+            "socket": stream_notifier,
+        };
+    }
+
+    private processStreamItems() {
+        while (True) {
+            auto item = readAvailableStreamItem();
+            if (!exists item) {
+                return;
+            }
+
+            if (item.typeCode() == NT_HASH && item.error) {
+                throw "SSE-STREAM-ERROR", sprintf("stream error: %y", item.error);
+            }
+
+            *hash<auto> start_response = getResponseFromItem(item);
+            if (!start_response) {
+                continue;
+            }
+            handleResponseStart(item, start_response);
+            return;
+        }
+    }
+
+    private processErrorDrainItems() {
+        while (True) {
+            auto item = readAvailableStreamItem();
+            if (!exists item) {
+                return;
+            }
+            if (captureErrorBody(item)) {
+                raiseResponseError();
+            }
+        }
+    }
+
+    private auto readAvailableStreamItem() {
+        try {
+            return pending_stream.readData(0);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "HTTPCLIENT-STREAM-CLOSED") {
+                if (state == SPS_ERROR_DRAIN) {
+                    raiseResponseError();
+                }
+            }
+            rethrow;
+        }
+    }
+
+    private *hash<auto> getResponseFromItem(auto item) {
+        if (item.typeCode() == NT_HASH && (item.status_code || item.headers)) {
+            return item;
+        }
+        return pending_stream.getResponse();
+    }
+
+    private handleResponseStart(auto item, hash<auto> start_response) {
+        response = start_response;
+        hash<auto> response_headers = response.headers ?? {};
+        int status_code = response.status_code.toInt();
+
+        if (status_code == 401 && !negotiate_retried
+                && rcio.tryPingNegotiateAuthRetry(response_headers, \hdr,
+                    \negotiate_context)) {
+            negotiate_retried = True;
+            cancelPendingStream();
+            remove pending_stream;
+            doStartConnecting();
+            return;
+        }
+
+        if (status_code >= 300) {
+            if (captureErrorBody(item)) {
+                raiseResponseError();
+            }
+            state = SPS_ERROR_DRAIN;
+            waiting_for_stream = False;
+            return;
+        }
+
+        rcio.processPingFinalNegotiateResponse(response_headers,
+            negotiate_context);
+        *data initial_body = getInitialBody(item);
+        pending_stream.installSseState(sse_queue, stream_notifier,
+            initial_body);
+        HttpClientIo::HttpClientStreamHandle started_stream = pending_stream;
+        remove pending_stream;
+        goal_reached = True;
+        state = SPS_COMPLETE;
+        observable.activateStartedStream(started_stream, sse_queue,
+            stream_notifier);
+    }
+
+    private *data getInitialBody(auto item) {
+        if (item.typeCode() == NT_HASH) {
+            if (exists item.body) {
+                return item.body;
+            }
+            return NOTHING;
+        }
+        if (item.typeCode() == NT_BINARY || item.typeCode() == NT_STRING) {
+            return item;
+        }
+        return NOTHING;
+    }
+
+    private bool captureErrorBody(auto item) {
+        if (item.typeCode() == NT_HASH) {
+            if (item.error) {
+                throw "SSE-STREAM-ERROR", sprintf("stream error: %y", item.error);
+            }
+            if (exists item.body) {
+                appendErrorBody(item.body);
+            }
+            return item.end_stream ? True : error_body.size() >= RestClientIo::MaxSseErrorBodyBytes;
+        }
+        appendErrorBody(item);
+        return error_body.size() >= RestClientIo::MaxSseErrorBodyBytes;
+    }
+
+    private appendErrorBody(auto chunk) {
+        if (!exists chunk) {
+            return;
+        }
+        string chunk_str = chunk.typeCode() == NT_BINARY ? chunk.toString() : string(chunk);
+        int remaining = RestClientIo::MaxSseErrorBodyBytes - error_body.size();
+        if (remaining <= 0) {
+            return;
+        }
+        got_error_body = True;
+        error_body += chunk_str.size() > remaining
+            ? chunk_str.substr(0, remaining)
+            : chunk_str;
+    }
+
+    private raiseResponseError() {
+        hash<auto> raw;
+        raw += response;
+        if (!raw.headers) {
+            raw.headers = {};
+        }
+        if (got_error_body) {
+            raw.body = error_body;
+        }
+        rcio.raiseSseObservableResponseError(raw, method, path, hdr,
+            request_body, request_allow_any_response);
+        throw "REST-RESPONSE-ERROR",
+            sprintf("HTTP %d response received", raw.status_code), raw;
+    }
+
+    private fail(hash<ExceptionInfo> ex) {
+        AutoLock al(m);
+        if (done) {
+            return;
+        }
+        done = True;
+        observable.startupFailed(ex);
     }
 
     private cancelPendingStream() {

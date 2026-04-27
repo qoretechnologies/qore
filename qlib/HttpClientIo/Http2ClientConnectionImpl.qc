@@ -174,6 +174,18 @@ public class Http2ClientConnection inherits HttpClientConnection {
         poll_op.installFrameState(stream_id, msg_queue);
     }
 
+    #! Installs an SSE parser on an existing streaming request
+    /** @param stream_id the HTTP/2 stream ID
+        @param queue Queue to receive parsed SSE events
+        @param notifier optional EventNotifier signaled after queue updates
+        @param initial_body optional body bytes already consumed before
+        installing the parser
+    */
+    installSseState(int stream_id, Queue queue, *EventNotifier notifier,
+            *data initial_body) {
+        poll_op.installSseState(stream_id, queue, notifier, initial_body);
+    }
+
     #! Submits a request with streaming support (HTTP/2-specific)
     /** @param method HTTP method
         @param path request path
@@ -181,6 +193,7 @@ public class Http2ClientConnection inherits HttpClientConnection {
         @param body request body (optional)
         @param channel Channel for incremental response delivery
         @param streaming if True, enable streaming mode
+        @param notifier optional EventNotifier signaled after channel updates
 
         @return the stream ID
 
@@ -188,7 +201,7 @@ public class Http2ClientConnection inherits HttpClientConnection {
         poll_op.submitRequestStreaming() under stream_lock, so there is no TOCTOU gap.
     */
     int submitRequestStreaming(string method, string path, *hash<auto> headers, *data body,
-            Channel channel, bool streaming = False) {
+            Channel channel, bool streaming = False, *EventNotifier notifier) {
         if (!self.isReady()) {
             throw "HTTPCLIENT-STATE-ERROR",
                 sprintf("connection not ready: state=%y", self.getConnectionState());
@@ -202,7 +215,7 @@ public class Http2ClientConnection inherits HttpClientConnection {
 
         log(LoggerLevel::DEBUG, "submitting request: %s %s (streaming=%y)", method, path, streaming);
         int stream_id = poll_op.submitRequestStreaming(method, path, headers, body, channel,
-            max_concurrent_streams, streaming);
+            max_concurrent_streams, streaming, notifier);
 
         if (ctl) {
             ctl.wakeSocket(getSocket());
@@ -220,6 +233,7 @@ public class Http2ClientConnection inherits HttpClientConnection {
         @param headers request headers (optional)
         @param body request body (optional)
         @param queue Queue for parsed SSE event delivery
+        @param notifier optional EventNotifier signaled after queue updates
 
         @return the stream ID
     */
