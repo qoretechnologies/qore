@@ -558,7 +558,7 @@ code for pre-compiled functions and JIT-compile the rest on demand.
 
 **Pipeline**:
 ```
-qore --compile script.q --output script
+qore --compile script.qr --output script
   |
   v
 1. Parse source -> QoreProgram (normal parse pipeline)

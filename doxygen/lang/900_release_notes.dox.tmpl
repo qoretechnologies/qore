@@ -23,6 +23,8 @@
     - LLVM-backed @ref execution_modes "execution modes" add an IR interpreter,
       tiered JIT native code for hot paths, and AOT output for standalone executables
       and binary modules
+    - standard user modules are now built and installed as AOT-compiled \c .qmod
+      artifacts by default for better startup and runtime performance
     - native fast-path dispatch for the iterator pseudo-method family
       (@ref <list>::map() "<list>::map()", @ref <list>::select() "<list>::select()",
       @ref <list>::foldl() "<list>::foldl()", and the hash/object analogues) bypasses
@@ -445,202 +447,62 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
     - <b>macOS (Homebrew):</b> \c onnxruntime
     @endparblock
 
-    @par New Required Library: LLVM (JIT Compilation)
+    @par LLVM-backed Execution and AOT Compilation
     @parblock
-    %Qore now requires LLVM 16 or later for JIT (Just-In-Time) compilation support.  The
-    \c --exec-mode=jit command-line option compiles hot paths to native code via LLVM's ORC JIT,
-    with automatic fallback to the IR interpreter for unsupported operations.
+    %Qore now uses a shared IR pipeline for the IR interpreter, LLVM JIT,
+    tiered execution, and AOT compilation.  The default execution mode is
+    @ref exec_mode_tiered "tiered", which starts quickly and promotes hot
+    functions through IR and JIT tiers.
 
-    Install the LLVM development packages:
-    - <b>Debian/Ubuntu:</b> \c llvm-dev (or version-specific, e.g. \c llvm-20-dev)
-    - <b>RHEL/Fedora:</b> \c llvm-devel
-    - <b>Alpine:</b> \c llvm-dev
+    The new @ref qcc_tool "qcc" compiler provides the full AOT workflow:
+    script executables, binary user modules (\c .qmod), relocatable Qore
+    objects (\c .qo), static archives (\c .qoa), generated link-mode
+    executables, dependency files, and artifact inspection with
+    \c --dump-info.
 
-    Four execution modes are available via \c --exec-mode:
-    - \c ast: traditional AST interpreter
-    - \c ir: IR-based interpreter
-    - \c jit: LLVM JIT with automatic fallback to IR
-    - \c tiered (default): automatic per-function tier promotion (AST → IR → JIT)
-
-    In \c tiered mode, functions start on the AST interpreter and are automatically promoted to
-    IR after a configurable number of calls (default: 100), then to native JIT after a higher
-    threshold (default: 1000).  Promotion thresholds are configurable via \c --jit-ir-threshold=N
-    and \c --jit-jit-threshold=N.  Failed IR lowering or JIT compilation is permanent per function:
-    the function stays at its current tier.  Non-@ref modern "%modern" code is never promoted.
-
-    JIT compilation is transparent and preserves %Qore semantics including exception handling,
-    NaN-boxed values, and reference counting.  Non-@ref modern "%modern" code automatically
-    falls back to the AST interpreter.
-
-    All IR opcodes have LLVM lowering support, ensuring universal JIT coverage for any function
-    that can be lowered to IR.  Operations not yet natively implemented in LLVM IR use generic
-    runtime helpers that delegate to the IR interpreter, providing functional correctness while
-    allowing future native optimizations.  This includes object member access, closures, method
-    calls, dynamic type operations, compound assignments, regex operations, higher-order
-    functions (map, select, fold), and all statement types (foreach, on_block_exit, context,
-    etc.).
-
-    Several common operations now have specialized native implementations that bypass the
-    generic runtime dispatch path:
-    - <b>Hash key access</b>: \c h.key and \c h{"key"} are lowered to direct hash node lookups
-      when the key is a compile-time constant string, avoiding AST node creation and dispatch
-    - <b>List index access</b>: \c l[i] is lowered to direct array access with bounds checking,
-      bypassing the full expression evaluation path
-    - <b>String concatenation</b>: string \c + string is handled by a specialized helper that
-      avoids the generic operator dispatch for the common case of two string operands
-    - <b>Inline arithmetic fast-paths</b>: dynamic-typed (\c auto) addition, subtraction, and
-      multiplication emit inline LLVM IR that checks for int+int and float+float at the
-      machine-code level, executing native CPU instructions for the common cases and falling
-      back to runtime helpers only for mixed-type or complex-type operands
-    - <b>Inline comparison fast-paths</b>: dynamic-typed equality, inequality, less-than,
-      less-or-equal, greater-than, and greater-or-equal comparisons emit inline type checks
-      for int-vs-int and float-vs-float, using native CPU comparison instructions for the
-      common cases
-
-    JIT-compiled code supports debugger integration via the GDB JIT interface, allowing
-    debuggers like GDB (7.0+) and LLDB to see symbols and source locations in JIT-compiled
-    %Qore functions.  See @ref jit_debugging "Debugging JIT-Compiled Code" for details.
-
-    <b>Performance Impact of JIT/Tiered Compilation:</b>
-
-    Benchmark results on representative workloads show significant performance improvements:
-
-    |!Execution Mode|!Average Speedup vs AST|!Best Case|!Use Case
-    |IR interpreter|2.20x|—|General scripting with fast startup
-    |Tiered (default)|2.44x|4.59x|Mixed workloads with automatic optimization
-    |JIT compilation|2.46x|4.69x|Long-running CPU-intensive applications
-    |AOT compiled|30.60x|130.30x|Pre-compiled deployments for maximum performance
-
-    Real-world benchmark examples (execution time only, excluding compilation):
-    - Simple arithmetic loop: <b>4.69x faster</b> with JIT, <b>130x faster</b> with AOT
-    - Recursive algorithm (Fibonacci): <b>2.15x faster</b> with JIT, <b>16.1x faster</b> with AOT
-    - Method call intensive: <b>1.55x faster</b> with JIT, <b>2.04x faster</b> with AOT
-    - List transformation (map): <b>2.20x faster</b> with JIT, <b>2.67x faster</b> with AOT
-
-    These improvements are achieved through:
-    1. <b>Elimination of AST interpretation overhead</b> - Direct bytecode/native execution
-    2. <b>Native code generation</b> - LLVM produces optimized CPU machine code
-    3. <b>Specialized inline fast-paths</b> - Common operations execute without dispatching
-    4. <b>Function inlining and loop optimization</b> - LLVM applies standard compiler optimizations
-
-    The default @ref exec_mode_tiered "tiered mode" provides 2.44x speedup with fast startup by
-    automatically promoting hot code paths to higher execution tiers. For deployment scenarios,
-    @ref exec_mode_aot "AOT compilation" eliminates parse-time overhead and provides 30.6x average
-    speedup for maximum performance.
-
-    See @ref execution_modes "Execution Modes" for detailed performance analysis and guidance
-    on selecting the right mode for your use case.
+    LLVM 16 or later is required for JIT and AOT support.  See
+    @ref execution_modes "Execution Modes" for execution-mode semantics,
+    qcc options, artifact types, source-stripping behavior, and debugging
+    notes.
     @endparblock
 
-    @par AOT (Ahead-of-Time) Compilation
+    @par AOT-compiled User Modules by Default
     @parblock
-    %Qore now supports AOT compilation, which compiles %Qore scripts and modules to standalone
-    native executables or binary modules that can run without the original source code.  This
-    provides faster startup times (no parse phase), intellectual property protection, and
-    simplified deployment.
+    The standard CMake build now compiles user modules to \c .qmod artifacts
+    with \c qcc and installs those compiled artifacts beside their source
+    \c .qm modules.  \c QORE_BUILD_AOT_MODULES defaults to \c ON.
 
-    <b>Compiling Scripts to Standalone Executables:</b>
+    Module lookup prefers a \c .qmod over a \c .qm in the same module
+    location, so installed user modules use the AOT-compiled version for
+    better startup and runtime performance by default.  Source modules remain
+    installed for documentation, development, and fallback workflows.
 
-    The \c --compile option compiles a %Qore script to a standalone ELF executable:
-    @code{.sh}
-qore --compile myscript.qr --output myscript
-./myscript [args...]
-    @endcode
-
-    The resulting executable:
-    - Links against \c libqore.so at runtime (no static linking)
-    - Contains compiled native code for all functions
-    - Includes embedded source code by default for error messages and debugging
-    - Supports all command-line arguments the original script accepted
-
-    <b>Compiling Modules to Binary Modules:</b>
-
-    The \c --compile-module option compiles a %Qore module (\c .qm) to a binary module (\c .qmod):
-    @code{.sh}
-qore --compile-module MyModule.qm
-# Creates MyModule.qmod in the same directory
-    @endcode
-
-    Binary modules:
-    - Load faster than source modules (no parse phase)
-    - Are searched before source modules with the same base name
-    - Support all module features including classes, functions, and constants
-
-    <b>Source Stripping for IP Protection:</b>
-
-    The \c --strip-source option removes source code from compiled binaries:
-    @code{.sh}
-qore --compile myscript.qr --strip-source --output myscript
-qore --compile-module MyModule.qm --strip-source
-    @endcode
-
-    Source-stripped binaries:
-    - Contain no readable source code (only binary metadata and native code)
-    - Use the QORD binary format (magic: \c 0x514F5244) for metadata serialization
-    - Provide full functionality including exception handling and \c on_block_exit
-    - Show \c "[AOT-compiled]" in stack traces instead of source lines
-    - Cannot be decompiled back to source code
-
-    <b>Requirements and Limitations:</b>
-    - AOT compilation requires @ref modern "%modern" code (non-modern code is rejected)
-    - Source stripping is one-way: stripped binaries cannot recover source code
-    - Compiled executables require the same major version of \c libqore.so at runtime
-    - Debug information (line numbers, variable names) is preserved for diagnostics
+    Disable this behavior with \c -DQORE_BUILD_AOT_MODULES=OFF.  See
+    @ref qore_modules "Qore Modules" and @ref exec_mode_aot "AOT
+    Compilation" for details.
     @endparblock
 
-    @par New %prepend-module-path / %append-module-path Directives
+    @par Program-owned Module Path Directives
     @parblock
-    Two new parse directives let programs extend their own @ref qore_modules "module"
-    search path declaratively, replacing the previous C++ \c MM.addModuleDir() hack
-    and the \c QORE_MODULE_DIR env-var launcher indirection.  The declared paths are
-    persisted into @ref exec_mode_aot "AOT-compiled binaries" and re-applied by the AOT
-    loader before dependency modules load, making AOT-compiled scripts self-contained
-    with respect to their module search surface.
+    @ref prepend-module-path "%prepend-module-path" and the new quoted form of
+    @ref append-module-path "%append-module-path" let programs declare their
+    own module search paths.  The expanded per-program path lists are persisted
+    in AOT artifacts and restored before dependency modules load.
 
-    - @ref prepend-module-path "%prepend-module-path" — new directive (single
-      quoted path; per-@ref Qore::Program "Program" list; consulted before
-      \c QORE_MODULE_DIR and the built-in defaults).
-    - @ref append-module-path "%append-module-path" — existing directive gains a
-      new quoted form that writes to a per-\c Program appended list; the legacy
-      unquoted colon-separated form continues to target the process-global path
-      for backward compatibility.
-
-    Both new-form directives support \c ${NAME} expansion against a table of
-    predefined macros (\c SCRIPT_DIR, \c SCRIPT_NAME, \c SCRIPT_PATH, \c PROGRAM_DIR,
-    \c QORE_VERSION, \c QORE_PREFIX, \c QORE_MODULE_VERSION) with fallback to the
-    process environment.  Unknown names / unset env vars raise a parse error —
-    no silent empty-string substitution.  \c \\$ escapes a literal \c $.
-
-    The new @ref no-module-path-directives "%no-module-path-directives" option
-    (@ref Qore::QoreParseOptions::NO_MODULE_PATH_DIRECTIVES) rejects both
-    directives when a sandboxing embedder wants to prevent a program from
-    extending its own search path.
-
-    <b>AOT wire format change:</b> A new feature bit \c QORE_AOT_FEAT_MODULE_PATH_LISTS
-    (bit 14) and two new sections \c MODULE_PATH_PREPEND / \c MODULE_PATH_APPEND
-    carry the expanded lists into the \c .qo / \c .qmod blob. Older readers see empty
-    lists, so backward compatibility is preserved.
+    See @ref prepend-module-path "%prepend-module-path",
+    @ref append-module-path "%append-module-path", and
+    @ref no-module-path-directives "%no-module-path-directives".
     @endparblock
 
     @par Native IR Lowering for context Statement
     @parblock
-    The @ref context "context" statement is now lowered to a native IR loop
-    instead of delegating back to AST execution via a runtime trampoline.
-    Under the IR interpreter and JIT/AOT backends, the loop header, body
-    block, break/continue/return handling, and exception unwind paths all
-    run as pure IR; only the opaque \c Context frame creation (which
-    evaluates the data hash plus any \c where / \c sortBy / \c sortDescendingBy
-    filters per row) remains in a runtime helper.
+    The @ref context "context" statement, including contextual column
+    references and the \c %% row reference, now runs through the shared IR,
+    JIT, and AOT pipeline instead of falling back to AST execution.
 
-    <b>User-visible effects:</b>
-    - No functional change — semantics are identical to AST mode
-    - %Qore modules using \c context can now be fully AOT-compiled to
-      \c .qmod (previously such modules required the AST fallback path)
-    - JIT-mode execution of \c context loops no longer bails through
-      \c qore_rt_exec_statement
-    - AOT binary format gains feature flag \c QORE_AOT_FEAT_CONTEXT_IR;
-      older readers will reject \c .qmod files emitted by this compiler
-      if they contain \c context statements
+    This is a semantic-preserving change that allows modules using
+    \c context loops to be AOT-compiled to \c .qmod.  See @ref context
+    and @ref execution_modes "Execution Modes" for details.
     @endparblock
 
     @par Programmatic Execution Mode Control

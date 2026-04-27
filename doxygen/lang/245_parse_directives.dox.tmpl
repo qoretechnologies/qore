@@ -1424,7 +1424,7 @@ sub validate_input(int value, int max_value) {
     @par File Extension:
     Starting with %Qore 2.4, files with any extension except \c .q automatically enable \c %%modern mode without requiring any parse directive. This includes conventional extensions such as \c .qr, \c .qc, \c .qm, \c .qtest, \c .qsd, \c .qfd, \c .qrd, \c .qore, as well as files with no extension at all. Only files whose filename ends in exactly \c .q stay in legacy mode by default, preserving backward compatibility for existing scripts.
 
-    @code{.qore}
+    @code{.py}
     # hello.qr - no parse directives needed!
     string sub greet(string name) {
         return "Hello, " + name + "!";

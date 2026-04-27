@@ -10,7 +10,7 @@ logging, and verification.
 - [x] LLVM is a required build dependency (like nghttp2, Brotli, Zstd, LZ4).
       The `WITH_JIT` CMake option and `QORE_JIT_ENABLED` preprocessor guards have been removed.
 - [x] Document the build/test steps.
-      Build: `cmake ..`; Run: `qore --exec-mode=jit script.q`
+      Build: `cmake ..`; Run: `qore --exec-mode=jit script.qr`
 
 ## JIT runtime
 - [x] `QoreJIT` singleton in `include/qore/intern/QoreJIT.h` / `lib/QoreJIT.cpp` manages

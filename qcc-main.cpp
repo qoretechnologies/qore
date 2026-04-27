@@ -104,7 +104,7 @@ static bool has_qo_extension(const char* path) {
     return n > 3 && std::strcmp(path + n - 3, ".qo") == 0;
 }
 
-// Phase 4 slice 10h: write a Make-format dependency file at `path`.
+// Write a Make-format dependency file at `path`.
 // Target (LHS) is `output`; deps are `source` plus, when `context` is
 // non-null, every `.qm`/`.qc`/`.ql` under it — the set the parser actually
 // opens in `--context=DIR` mode per `compileSeparatedModuleFile`.
@@ -198,29 +198,28 @@ static int opt_level = 3;
 static const char* target_triple = nullptr;
 static bool static_link = false;
 static bool module_mode = false;
-// Phase 4: compile-only mode — emit .qo (ELF relocatable) instead of
-// .qmod. Can be linked into a C++ binary (qcc -a) or back into a
-// .qmod (qcc -m --from-objects). Unimplemented beyond flag plumbing;
-// see design/aot-phase4-qo-object-files.md.
+// Compile-only mode emits a .qo relocatable object instead of a .qmod.
+// Objects can be linked into a generated executable, archived for a C/C++
+// host, or aggregated back into a .qmod with qcc -m --from-objects.
 static bool compile_only = false;
-// Phase 4 slice 4: --context=DIR passes the owning module directory
+// --context=DIR passes the owning module directory
 // when compiling a single file (`.qm`, `.qc`, or `.ql`) from a split
 // module so the parser has the full directory as context while the
 // AOT writer emits only the target file's contributions.
 static const char* context_dir = nullptr;
-// Phase 4 slice 10i: --output-dir=<dir> for batch-mode script compile.
+// --output-dir=DIR selects the output directory for batch-mode script compile.
 // When the user passes multiple positional sources in `-c` script
 // mode, qcc parses them all into one QoreProgram (one parse cycle,
-// no per-file sibling preload) and emits <basename>.qo into this dir.
+// no per-file sibling preload) and emits BASENAME.qo into this dir.
 static const char* batch_output_dir = nullptr;
-// Phase 4 slice 10c: -L<dir> directories for sibling `.qo` preload
+// -L<dir> directories for sibling `.qo` preload
 // when compiling a single-file script with `-c` + script context (no
 // module wrapper).  Each directory is scanned for `*.qo`; their
 // fragment metadata is preloaded into the compile program so the
 // target source's cross-file references resolve at parse time.
 // Semantically analogous to C's `-L<dir>` for linker library search.
 static std::vector<std::string> script_lib_dirs;
-// Phase 4 slice 11a: -l/--load=<mod> modules preloaded into the
+// -l/--load=<mod> modules preloaded into the
 // compile program before parsing.  Mirrors the runtime-load pattern
 // used by Qorus binaries (e.g. qctl_main.cpp req_modules[]) and
 // matches `qore -l <mod>` CLI convention.  Types from these modules
@@ -228,7 +227,7 @@ static std::vector<std::string> script_lib_dirs;
 // without %requires directives compile cleanly.  Repeatable;
 // loaded in declaration order via MM.parseLoadModule.
 static std::vector<std::string> load_modules;
-// Phase 4 slice 11b: --stub=<file> declarative-only sources parsed
+// --stub=<file> declarative-only sources parsed
 // into the compile program before target sources.  The host
 // synthesizes namespaces, functions, or constants in C++ at runtime
 // (e.g. `QoreNamespace* QNS = new QoreNamespace("Qorus")` +
@@ -239,7 +238,7 @@ static std::vector<std::string> load_modules;
 // each target's canonical path, not the stub's path.  Repeatable;
 // parsed in declaration order before targets.
 static std::vector<std::string> stub_files;
-// Phase 4 slice 11e: --define=NAME[=VALUE] preparser defines applied
+// --define=NAME[=VALUE] preparser defines applied
 // via `qpgm->parseDefine()` before any source is parsed.  Mirrors the
 // runtime `qpgm->parseDefine(...)` calls emitted by Qorus main.cpp
 // files (e.g. `qpgm->parseDefine("NO_ORACLE", true)` in
@@ -247,7 +246,7 @@ static std::vector<std::string> stub_files;
 // AOT-compiled sources honor the same `%ifdef` / `%ifndef` surface
 // the runtime sees.  Repeatable; applied in declaration order.
 static std::vector<std::string> parse_defines;
-// Phase 4 slice 11f: --parse-option=NAME OR's a `PO_*` flag into the
+// --parse-option=NAME OR's a `PO_*` flag into the
 // compile program's parse options.  Mirrors the runtime
 // `qpgm->parseSetParseOptions(QORUS_PARSE_OPTIONS)` pattern Qorus
 // main.cpp files use to extend the initial `new QoreProgram(po)` set
@@ -256,13 +255,13 @@ static std::vector<std::string> parse_defines;
 // `[dom=...]` mask names PO_ALLOW_* report "parse options do not
 // allow access" during AOT compile.  Repeatable.
 static std::vector<std::string> parse_option_flags;
-// Phase 4 slice 6: --from-objects signals aggregator mode — the
+// --from-objects signals aggregator mode: the
 // positional inputs are per-file `.qo` objects (produced by
 // `qcc -c --context=DIR <file>`) that get linked together plus a
 // freshly-computed metadata glue into the output `.qmod`.  See
-// design/aot-phase4-qo-object-files.md.
+// design/aot-object-files-and-module-artifacts.md.
 static bool from_objects = false;
-// Phase 4 slice 7: -a / --archive mode.  Combined with --context=DIR
+// -a / --archive mode.  Combined with --context=DIR
 // + positional .qo inputs, produces a `.qoa` static archive (ar rcs)
 // exposing `qore_qoa_register_all(QoreProgram*)`.  Target use case:
 // static linkage into a C++ host (e.g. qorus-core).
@@ -341,7 +340,7 @@ static int big_fn_threshold = 200;
 // distinguish "user passed --big-fn-threshold=200" from "unset, using
 // default 200", so a separate bool carries that intent.
 static bool big_fn_threshold_cli_explicit = false;
-// Phase 4 slice 10h: --depfile=FILE emits a Make-format dependency
+// --depfile=FILE emits a Make-format dependency
 // file after a successful compile, listing every source file the
 // target output (re)builds against.  cmake wires it via
 // add_custom_command(... DEPFILE ${out}.d) so a touch on any sibling
@@ -358,13 +357,13 @@ static const char* entry_fn = "main";
 
 static void print_usage(const char* prog) {
     printf("Qore Code Compiler (qcc) v%s\n", QCC_VERSION);
-    printf("Compiles Qore scripts and modules to native executables\n\n");
-    printf("Usage: %s [options] <source-file>\n\n", prog);
+    printf("Compiles Qore scripts, modules, objects, and archives\n\n");
+    printf("Usage: %s [options] <source-file|object...>\n\n", prog);
     printf("Options:\n");
     printf("  -o, --output=FILE      Output file path (default: input name without extension)\n");
     printf("  -O, --opt-level=N      Optimization level 0-3 (default: 3)\n");
     printf("  -m, --module           Compile as module (.qm -> .qmod)\n");
-    printf("  -c, --compile-only     Compile to .qo relocatable object (Phase 4, WIP)\n");
+    printf("  -c, --compile-only     Compile to .qo relocatable object\n");
     printf("      --context=DIR      Directory context for per-file .qo compilation\n"
            "                         (parses the full split-module dir but emits only\n"
            "                          the input file's contributions; requires -c)\n");
@@ -447,12 +446,12 @@ static void print_usage(const char* prog) {
     printf("      --dump-sections    Include object and AOT section tables\n");
     printf("\n");
     printf("Examples:\n");
-    printf("  %s script.q                    # Compile to 'script' executable\n", prog);
-    printf("  %s -o myapp script.q           # Compile to 'myapp' executable\n", prog);
+    printf("  %s script.qr                   # Compile to 'script' executable\n", prog);
+    printf("  %s -o myapp script.qr          # Compile to 'myapp' executable\n", prog);
     printf("  %s -o myapp main.qo lib.qo     # Link-mode: .qo's -> 'myapp' binary\n", prog);
     printf("  %s -m MyModule.qm              # Compile single-file module to 'MyModule.qmod'\n", prog);
     printf("  %s -m qlib/DataProvider        # Compile split module directory\n", prog);
-    printf("  %s -S -o myapp script.q        # Static link (no libqore.so dependency)\n", prog);
+    printf("  %s -S -o myapp script.qr       # Static link (no libqore.so dependency)\n", prog);
     printf("\n");
     printf("Notes:\n");
     printf("  - Source files must use %%modern or have .qr extension\n");
@@ -1318,7 +1317,7 @@ static std::string get_default_output(const char* input_path, bool is_module,
         output = output.substr(0, dot);
     }
 
-    // Phase 4: -c emits a relocatable .qo regardless of source kind
+    // -c emits a relocatable .qo regardless of source kind
     if (compile_only_mode) {
         output += ".qo";
     } else if (is_module) {
@@ -1530,7 +1529,7 @@ int main(int argc, char** argv) {
         return 0;
     }
 
-    // Phase 4 slice 7: -a / --archive mode.  Same input shape as
+    // -a / --archive mode.  Same input shape as
     // --from-objects but produces a `.qoa` static archive instead of a
     // `.qmod`.  Must be checked before the --from-objects branch so
     // `-a -m` doesn't fall through to the .qmod aggregator.
@@ -1600,7 +1599,7 @@ int main(int argc, char** argv) {
         return 0;
     }
 
-    // Phase 4 slice 6: --from-objects aggregator mode.  Takes a list of
+    // --from-objects aggregator mode.  Takes a list of
     // per-file `.qo` inputs + --context=DIR (source dir) and produces a
     // `.qmod`.  All positional args are `.qo` files; validation happens
     // before we touch the standard single-file dispatch path.
@@ -1667,7 +1666,7 @@ int main(int argc, char** argv) {
             output.c_str(), object_paths.size(),
             object_paths.size() == 1 ? "" : "s", opt_level,
             include_source ? "" : ", source-stripped");
-        // slice 10h: aggregator re-parses every source in --context for
+        // Aggregator mode re-parses every source in --context for
         // metadata extraction.  Per-.qo depfiles (emitted by the per-file
         // rule) cover the common case, but a new file added to the dir
         // without a matching `qcc -c` rule would be invisible without
@@ -1688,7 +1687,7 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    // Phase 4 slice 10i: batch-compile mode.  When `-c` is used with
+    // Batch-compile mode.  When `-c` is used with
     // multiple positional source files (and no module-ish flag), parse
     // them into one QoreProgram (one parse cycle) and emit one `.qo`
     // per source into --output-dir.  This avoids compileScriptFile's
@@ -1760,7 +1759,7 @@ int main(int argc, char** argv) {
     // Check if input is a directory (split module)
     bool is_split_module = is_directory(source_file);
 
-    // Phase 4 slice 10c: script-context mode.  When `-c` is used and
+    // Script-context mode.  When `-c` is used and
     // the input is neither a `.qm` nor a directory AND no
     // `--context=DIR` is supplied, compile as a plain script file.
     // Optional `-L <dir>` inputs preload sibling `.qo` decls so
@@ -1778,7 +1777,7 @@ int main(int argc, char** argv) {
         }
     }
 
-    // Phase 4 slice 4: --context=DIR opts the caller into per-file .qo
+    // --context=DIR opts the caller into per-file .qo
     // compilation. The input must be a single file in that directory
     // (either the module's `.qm` or one of its `.qc`/`.ql` components);
     // the directory is the parse context, not the input.
@@ -1826,8 +1825,8 @@ int main(int argc, char** argv) {
         fprintf(stderr, "warning: --static is ignored when compiling modules\n");
     }
 
-    // Phase 4: -c (compile-only) applies to module inputs (.qm / split
-    // dir / per-file fragment thereof) and, as of slice 10c, also to
+    // -c (compile-only) applies to module inputs (.qm / split
+    // dir / per-file fragment thereof) and also to
     // plain script files (arbitrary .q/.qc/.ql sources).  Only reject
     // the combination if we're in neither mode.
     if (compile_only && !module_mode && !script_mode) {
@@ -1845,7 +1844,7 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    // Phase 4 slice 10j: reject `-o` mixed with `--output-dir` for
+    // Reject `-o` mixed with `--output-dir` for
     // single-file compile (same rule as batch mode above).  They are
     // mutually exclusive output-naming strategies.
     if (output_path && batch_output_dir) {
@@ -1873,7 +1872,7 @@ int main(int argc, char** argv) {
                 : dir_str;
             output = basename + (compile_only ? ".qo" : ".qmod");
         } else if (per_file_mode) {
-            // Per-file split-module compile (slice 4, `--context=DIR`).
+            // Per-file split-module compile (`--context=DIR`).
             // Preserve the source extension in the output name so primary
             // (`.qm`) and secondary (`.qc` / `.ql`) files that share a
             // basename don't collide — e.g. `DataProvider.qm → DataProvider.qm.qo`
@@ -1893,7 +1892,7 @@ int main(int argc, char** argv) {
             // primary/secondary split so there's no collision risk.
             output = get_default_output(source_file, module_mode, compile_only);
         }
-        // Phase 4 slice 10j: honor `--output-dir=DIR` for single-file
+        // Honor `--output-dir=DIR` for single-file
         // compile too (previously only applied to batch mode on ≥2
         // positional sources, making single-file builds silently write
         // `.qo`s to the current directory).  CMake build systems need
@@ -1951,7 +1950,7 @@ int main(int argc, char** argv) {
     }
 
     if (script_mode) {
-        // Phase 4 slice 10c: compile a single script-style source with
+        // Compile a single script-style source with
         // optional sibling-.qo decl preload.
         if (!QoreAOT::compileScriptFile(
                 source_file,
@@ -1971,7 +1970,7 @@ int main(int argc, char** argv) {
                 output.c_str(), opt_level, script_lib_dirs.size(),
                 script_lib_dirs.size() == 1 ? "" : "s",
                 include_source ? "" : ", source-stripped");
-            // slice 10h: deps = target source only (script mode has no
+            // deps = target source only (script mode has no
             // --context dir; -L preload is a linker-style decl path,
             // not a parser-opened source set).  Not yet wired in cmake.
             if (depfile_path && !write_depfile(depfile_path, output, source_file, nullptr)) {
@@ -1979,7 +1978,7 @@ int main(int argc, char** argv) {
             }
         }
     } else if (per_file_mode) {
-        // Phase 4 slice 4: compile a single file from a split module
+        // Compile a single file from a split module
         // directory.  The directory is the parse context; the file is the
         // sole source of emitted metadata and native functions.
         if (!QoreAOT::compileSeparatedModuleFile(
@@ -1996,7 +1995,7 @@ int main(int argc, char** argv) {
         } else {
             printf("%s: compiled per-file .qo (O%d%s)\n", output.c_str(), opt_level,
                 include_source ? "" : ", source-stripped");
-            // slice 10h: deps = target source + every sibling .qm/.qc/.ql
+            // deps = target source + every sibling .qm/.qc/.ql
             // in --context=DIR (matches compileSeparatedModuleFile's dir scan).
             if (depfile_path
                     && !write_depfile(depfile_path, output, source_file, context_dir)) {
@@ -2020,7 +2019,7 @@ int main(int argc, char** argv) {
             printf("%s: compiled split module (O%d%s%s)\n", output.c_str(), opt_level,
                 compile_only ? ", relocatable .qo" : "",
                 include_source ? "" : ", source-stripped");
-            // slice 10h: source_file is the split-module directory itself;
+            // source_file is the split-module directory itself;
             // pass it as `context` so every .qm/.qc/.ql inside counts as a dep.
             // Leave `source` empty so the target dir is not double-listed.
             if (depfile_path
@@ -2046,7 +2045,7 @@ int main(int argc, char** argv) {
             printf("%s: compiled module (O%d%s%s)\n", output.c_str(), opt_level,
                 compile_only ? ", relocatable .qo" : "",
                 include_source ? "" : ", source-stripped");
-            // slice 10h: deps = just the .qm file
+            // deps = just the .qm file
             if (depfile_path && !write_depfile(depfile_path, output, source_file, nullptr)) {
                 rc = 1;
             }

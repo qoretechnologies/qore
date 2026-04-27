@@ -65,9 +65,11 @@
     |<tt>--jit-ir-threshold=</tt><em>N</em>|n/a|In @ref exec_mode_tiered "tiered" mode, number of calls before promoting a function to IR (default: 100)
     |<tt>--jit-jit-threshold=</tt><em>N</em>|n/a|In @ref exec_mode_tiered "tiered" mode, number of calls before promoting a function to JIT (default: 1000)
 
-    <b>AOT Compilation Command-Line Parameters</b>
+    <b>AOT Compilation Command-Line Parameters for \c qore</b>
 
-    These options enable @ref exec_mode_aot "ahead-of-time compilation" of scripts and modules.
+    These options enable basic @ref exec_mode_aot "ahead-of-time compilation" from
+    the \c qore executable.  The dedicated @ref qcc_tool "qcc" compiler provides
+    the full AOT object, module, archive, link, and inspection workflow.
 
     |!Long Param|!Short|!Description
     |<tt>--compile</tt>|n/a|Compile the script to a standalone native executable
@@ -77,6 +79,39 @@
     |<tt>--opt-level=</tt><em>N</em>|n/a|LLVM optimization level 0-3 (default: 2)
     |<tt>--static</tt>|n/a|Static link against \c libqore_static.a (requires static library build)
     |<tt>--target=</tt><em>triple</em>|n/a|Cross-compilation target triple (e.g., \c x86_64-linux-gnu)
+
+    <b>\c qcc AOT Compiler Parameters</b>
+
+    \c qcc is the preferred compiler for AOT build integration and diagnostics.
+    It supports all \c qore AOT use cases plus \c .qo object files, \c .qoa
+    archives, generated link-mode executables, dependency files, source stubs,
+    parser defines, and metadata inspection.
+
+    |!Param|!Description
+    |<tt>-o</tt>, <tt>--output=</tt><em>file</em>|Output path
+    |<tt>-O</tt>, <tt>--opt-level=</tt><em>N</em>|LLVM optimization level 0-3, default 3
+    |<tt>-m</tt>, <tt>--module</tt>|Compile a user module to \c .qmod
+    |<tt>-c</tt>, <tt>--compile-only</tt>|Compile to a \c .qo relocatable object
+    |<tt>--context=</tt><em>dir</em>|Context directory for per-file or split-module compilation
+    |<tt>-L</tt> <em>dir</em>|Preload sibling \c .qo declarations from a directory
+    |<tt>--output-dir=</tt><em>dir</em>|Output directory for batch \c -c builds
+    |<tt>-l</tt>, <tt>--load=</tt><em>module</em>|Load a module before parsing sources
+    |<tt>--stub=</tt><em>file</em>|Preload declaration-only source supplied by a host
+    |<tt>--define=</tt><em>name</em><tt>[=</tt><em>value</em><tt>]</tt>|Set parser defines before parsing
+    |<tt>--parse-option=</tt><em>name</em>|Set a parse option before parsing
+    |<tt>--depfile=</tt><em>file</em>|Emit a Make-format dependency file
+    |<tt>--from-objects</tt>|Aggregate \c .qo inputs into a \c .qmod with \c -m
+    |<tt>-a</tt>, <tt>--archive</tt>|Create a \c .qoa archive from \c .qo inputs
+    |<tt>--include-source</tt>|Embed source text in the artifact
+    |<tt>--strip-source</tt>|Omit source text; this is the \c qcc default
+    |<tt>--strip-debug-info</tt>|Omit DWARF debug information
+    |<tt>-g</tt>|Emit DWARF debug information
+    |<tt>--time-trace[=</tt><em>path</em><tt>]</tt>|Emit Chrome-format LLVM timing trace
+    |<tt>--big-fn-threshold=</tt><em>N</em>|Compile very large functions with \c OptimizeNone, default 200
+    |<tt>-e</tt>, <tt>--entry=</tt><em>fn</em>|Entry function for generated link-mode \c main()
+    |<tt>--dump-info</tt>|Inspect embedded AOT metadata without executing the artifact
+    |<tt>--dump-symbols</tt>|Include an nm-like symbol table in dump output
+    |<tt>--dump-sections</tt>|Include object and AOT section tables in dump output
 
     There are two additional options available with debugging versions of %Qore as follows:
 

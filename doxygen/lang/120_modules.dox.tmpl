@@ -988,6 +988,23 @@ ModuleName/
 
     User modules are written in %Qore and delivered in source form. They must have the extension \c "*.qm".
 
+    Starting with %Qore 2.3, the standard build also compiles user modules to AOT
+    binary module artifacts (\c "*.qmod") when \c QORE_BUILD_AOT_MODULES is enabled.
+    This CMake option defaults to \c ON.  The compiled module is installed beside
+    the source module, and module lookup prefers the \c .qmod file over the \c .qm
+    file in the same module location.  This makes installed user modules use the
+    faster AOT path by default while preserving source modules for documentation,
+    development, and fallback workflows.
+
+    To disable AOT user-module artifacts in a source build:
+
+    @code{.sh}
+cmake -S . -B build -DQORE_BUILD_AOT_MODULES=OFF
+    @endcode
+
+    See @ref exec_mode_aot "AOT Compilation" and @ref qcc_tool "qcc" for
+    details on compiled module artifacts.
+
     User modules will have their own dedicated @ref Qore::Program "Program" object; the @ref Qore::Program "Program"
     object is created automatically when the module is loaded and initialized.  The module's
     @ref Qore::Program "Program" object is created with locked parse options as follows:

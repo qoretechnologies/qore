@@ -381,8 +381,8 @@ Phases 1 and 5a shipped. Pick one of:
 
 ## References
 
-- `design/aot-phase2b-step3-dominator-tree.md` — SSA-direct re-enable
+- `design/aot-eh-cleanup-dominance.md` — SSA-direct re-enable
   (LOW priority per codegen-dominated profile).
-- `design/aot-phase2b-step5-exception-check-catalog.md` — Step 5
+- `docs/plans/aot-phase2b-step5-exception-check-catalog.md` — Step 5
   catalog.
 - Memory: `session_2026_04_18_p70_aot_step5_phase_a_iterator_pilot.md`.

@@ -4210,7 +4210,7 @@ static void emitScriptRegisterSymbols(llvm::LLVMContext& ctx,
     the final `.qmod`.
 
     The fragment blob uses the **same binary format** as a full
-    module's metadata (per design/aot-phase4-qo-object-files.md
+    module's metadata (per design/aot-object-files-and-module-artifacts.md
     §Link-time aggregation) — just with narrower content.  Keeping
     it uncompressed means slice 6's aggregator doesn't have to
     decompress every fragment before merging.
@@ -6796,9 +6796,9 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
             is_primary ? "primary" : "secondary",
             (int)uncompressed_metadata.size(), fragment_order);
 
-        // Phase 4 slice 5: emit the exported fragment symbols
+        // Emit exported fragment symbols
         // (`qore_<sanmod>_<sanfile>_fragment_data` +
-        // `..._fragment_order`) so slice 6's link-time aggregator can
+        // `..._fragment_order`) so the link-time aggregator can
         // extract and merge fragments across a module's `.qo`s.
         //
         // Use the EXTENSION-INCLUSIVE basename here — see
@@ -6806,8 +6806,8 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
         // its same-named secondary `.qc` (e.g.
         // `qlib/DataProvider/DataProvider.{qm,qc}`) don't collide on
         // identical symbol names.  After sanitization the pair emit as
-        // `qore_DataProvider_DataProvider_qm_…` and
-        // `…_qc_…`.  The aggregator (slice 6) reads fragment symbols
+        // `qore_DataProvider_DataProvider_qm_...` and
+        // `..._qc_...`.  The aggregator reads fragment symbols
         // by enumerating `qore_aot_<sanmod>_<sanfile>_fragment_blob`
         // exports so it picks up both automatically.
         const std::string file_basename_san = sanitizeCIdentifier(
@@ -6815,12 +6815,11 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
         emitFragmentSymbols(ctx, *module, mod_info.name, file_basename_san,
             uncompressed_metadata, fragment_order);
 
-        // Phase 4 slice 6: per-file `.qo`s are intermediate artifacts
-        // (per design/aot-phase4-qo-object-files.md §Granularity) —
-        // primary and secondary are treated uniformly. Neither emits
+        // Per-file `.qo`s are intermediate module artifacts; primary
+        // and secondary files are treated uniformly. Neither emits
         // a self-register path (the module-info globals, the desc fn,
-        // or `qore_<mod>_register`); slice 6's
-        // `qcc -m --from-objects` aggregator synthesizes those in a
+        // or `qore_<mod>_register`); `qcc -m --from-objects`
+        // synthesizes those in a
         // single glue TU, avoiding duplicate-symbol collisions when
         // primary + secondaries are relocated together into a `.qmod`.
         //

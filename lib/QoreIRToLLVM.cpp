@@ -1551,7 +1551,7 @@ bool QoreIRToLLVM::canUseSsaCleanup(llvm::BasicBlock* current_bb) {
     // Re-enabling SSA-direct requires scope-boundary handling: pending
     // entries must be promoted/decref'd when leaving the scope they were
     // pushed in (try body, catch arm, etc.), not lazily at the next
-    // CondBr. See design/aot-phase2b-step3-dominator-tree.md for the
+    // CondBr. See design/aot-eh-cleanup-dominance.md for the
     // detailed analysis. Until that work lands, the conservative path is
     // correct.
     (void)current_bb;

@@ -427,7 +427,7 @@ extern "C" void qore_aot_fill_module_desc(QoreModuleInfo* mod_info,
 extern "C" void qore_aot_raise_init_error(ExceptionSink* xsink, QoreStringNode* err);
 
 //! C ABI bridge for `.qo`-linked statically-compiled AOT modules.
-/** Invoked by the per-module `qore_<mod>_register(QoreProgram*)` entry point that
+/** Invoked by the per-module `qore_MOD_register(QoreProgram*)` entry point that
     `qcc -c` emits into each `.qo`.  Internally delegates to
     `ModuleManager::registerAOTStaticModule`; any exception raised by the underlying
     load is reported to stderr via `xsink.handleExceptions()` — there is no return
@@ -475,6 +475,7 @@ public:
         @param opt_level LLVM optimization level 0-3 (default: 2)
         @param target_triple target triple for cross-compilation (nullptr = native)
         @param static_link statically link libqore (requires libqore_static.a)
+        @param include_source embed source text for runtime fallback
         @return true on success, false on failure
     */
     static bool compile(QoreProgram* pgm,
@@ -488,16 +489,17 @@ public:
                        bool static_link = false,
                        bool include_source = false);
 
-    //! Compile a .qm user module to a native shared library (.so) binary module
+    //! Compile a .qm user module to a .qmod binary module
     /** The binary uses serialized metadata (no embedded source).
         @param source_text original module source text (used for fallback source serialization)
         @param source_len length of source text
         @param label source label (filename)
-        @param output_path path for the output shared library
+        @param output_path path for the output .qmod binary module
         @param parse_options parse options to embed
         @param error error message on failure
         @param opt_level LLVM optimization level 0-3 (default: 2)
         @param target_triple target triple for cross-compilation (nullptr = native)
+        @param include_source embed source text for runtime fallback
         @return true on success, false on failure
     */
     static bool compileModule(const char* source_text, int source_len,
@@ -509,7 +511,7 @@ public:
                               const char* target_triple = nullptr,
                               bool include_source = false);
 
-    //! Phase 4: same as compileModule but with the `compile_only` knob to
+    //! Same as compileModule but with the `compile_only` knob to
     //! emit a `.qo` (ELF relocatable) instead of a `.qmod` shared object.
     /** Distinct overload (not a default arg) so the original mangled symbol
         stays intact for ABI compatibility with already-installed binaries
@@ -526,7 +528,7 @@ public:
                               bool include_source,
                               bool compile_only);
 
-    //! Compile a split (separated) .qm user module directory to a native shared library
+    //! Compile a split (separated) .qm user module directory to a .qmod binary module
     /** Supports modules where code is spread across multiple files:
         - A main .qm file: {dir}/{basename}.qm
         - Multiple .qc and .ql component files (auto-discovered)
@@ -534,11 +536,12 @@ public:
         The binary uses serialized metadata (no embedded source).
 
         @param dir_path path to the module directory
-        @param output_path path for the output shared library
+        @param output_path path for the output .qmod binary module
         @param parse_options parse options to embed
         @param error error message on failure
         @param opt_level LLVM optimization level 0-3 (default: 2)
         @param target_triple target triple for cross-compilation (nullptr = native)
+        @param include_source embed source text for runtime fallback
         @return true on success, false on failure
     */
     static bool compileSeparatedModule(const char* dir_path,
@@ -549,7 +552,7 @@ public:
                                        const char* target_triple = nullptr,
                                        bool include_source = false);
 
-    //! Phase 4: same as compileSeparatedModule with the `compile_only` knob.
+    //! Same as compileSeparatedModule with the `compile_only` knob.
     //! See the compileModule overload for ABI-compat rationale.
     static bool compileSeparatedModule(const char* dir_path,
                                        const std::string& output_path,
@@ -560,7 +563,7 @@ public:
                                        bool include_source,
                                        bool compile_only);
 
-    //! Phase 4 slice 6: aggregate a set of per-file `.qo` files into a
+    //! Aggregate a set of per-file `.qo` files into a
     //! single `.qmod` without re-running LLVM codegen on already-compiled
     //! function bodies.
     /**
@@ -569,17 +572,17 @@ public:
         emits a "glue" translation unit whose compiled-function entries
         are bare external declarations.  Those declarations resolve at
         link time against the actual bodies defined in the input `.qo`
-        files (each previously built by `qcc -c --context=DIR <file>`).
+        files (each previously built by `qcc -c --context=DIR FILE`).
 
         The result is the same functional `.qmod` that
-        `qcc -m <dir>` would produce, but the expensive LLVM emission
+        `qcc -m DIR` would produce, but the expensive LLVM emission
         happens once per per-file `.qo` (parallelizable via `make -j`)
         rather than once in a single serial `qcc -m` run.
 
         @param dir_path source directory for the split module (same
                         convention as `compileSeparatedModule`)
         @param object_paths list of `.qo` files produced by
-                        `qcc -c --context=<dir_path>` covering the
+                        `qcc -c --context=DIR` covering the
                         module's `.qm` + each `.qc`/`.ql`
         @param output_path path for the output `.qmod`
         @param parse_options parse options to seed the compile program
@@ -599,7 +602,7 @@ public:
                                          const char* target_triple = nullptr,
                                          bool include_source = false);
 
-    //! Phase 4 slice 10i: batch-compile a list of Qore application
+    //! Batch-compile a list of Qore application
     //! sources into one `.qo` per file, sharing a single parse cycle.
     /**
         Eliminates the O(N²) sibling-preload overhead of calling
@@ -611,9 +614,8 @@ public:
            `parseCommit`).  Cross-file references resolve through
            the standard parser name-walk — no `.qo` preload needed.
         2. For each source: compile its contributions with the
-           per-file filter (slice 4's `compile_file`), emit fragment
-           + register symbols (slice 5 / 10d), write
-           `<output_dir>/<basename>.qo`.
+           per-file filter (`compile_file`), emit fragment
+           + register symbols, write `OUTPUT_DIR/BASENAME.qo`.
 
         Functional output is identical to N separate
         `compileScriptFile` calls, just much faster at scale.  A
@@ -623,13 +625,17 @@ public:
         @param target_files absolute or relative paths of source
                 files to compile together
         @param output_dir directory for output `.qo` files
-                (created if missing; `<basename>.qo` per target)
+                (created if missing; `BASENAME.qo` per target)
         @param parse_options parse options to seed the compile program
         @param error error message on failure
         @param opt_level LLVM optimization level 0-3 (default: 2)
         @param target_triple target triple for cross-compilation
                 (nullptr = native)
         @param include_source embed source text for runtime fallback
+        @param require_modules modules to require while parsing the batch
+        @param stub_files source files that provide declarations only
+        @param parse_defines parse-time defines to apply to every target
+        @param parse_option_flags parse-option flag names to apply to every target
         @return true on success, false on failure
     */
     static bool compileScriptFilesBatch(
@@ -645,14 +651,14 @@ public:
             const std::vector<std::string>& parse_defines = {},
             const std::vector<std::string>& parse_option_flags = {});
 
-    //! Phase 4 slice 10: compile one file of a Qore application to a
+    //! Compile one file of a Qore application to a
     //! `.qo` in script-context mode (no module wrapper, no `.qm`).
     /**
         Enables a C/C++-style build model for multi-file Qore
         applications (e.g. Qorus's qctl):
 
         ```
-        qcc -c -L<build-dir> -o foo.qo foo.qc
+        qcc -c -LBUILD_DIR -o foo.qo foo.qc
         ```
 
         Sibling `.qo` files discovered under each `-L` directory are
@@ -665,9 +671,9 @@ public:
         The output `.qo` carries:
         - compiled LLVM native code for items declared in @p target_file;
         - a fragment metadata blob describing just those items
-          (slice 5 format, ExternalLinkage so slice-10c preload in
+          (object-file format, ExternalLinkage so script-object preload in
           downstream compiles can read it from the ELF symbol table);
-        - fragment accessor symbols (slice 5).
+        - fragment accessor symbols.
 
         @param target_file absolute path of the source file to compile
         @param library_paths directories scanned for sibling `.qo`s
@@ -682,6 +688,8 @@ public:
         @param target_triple target triple for cross-compilation
                         (nullptr = native)
         @param include_source embed source text for runtime fallback
+        @param require_modules modules to require before parsing
+        @param stub_files source files that provide declarations only
         @return true on success, false on failure
     */
     static bool compileScriptFile(const char* target_file,
@@ -695,7 +703,7 @@ public:
                                   const std::vector<std::string>& require_modules = {},
                                   const std::vector<std::string>& stub_files = {});
 
-    //! Phase 4 slice 7: package a set of per-file `.qo` files into a
+    //! Package a set of per-file `.qo` files into a
     //! `.qoa` static archive with a single `qore_qoa_register_all()`
     //! entry point, suitable for static linkage into a C++ host
     //! (e.g. qorus-core).
@@ -703,8 +711,8 @@ public:
         Runs the same metadata-only aggregation as
         `compileModuleFromObjects` but emits the glue `.o` with
         `generateModuleABIV2(compile_only=true)` — prefixed
-        module-info globals, the module descriptor, and (from slice 3)
-        `qore_<mod>_register` — AND additionally exports a
+        module-info globals, the module descriptor, and
+        `qore_MOD_register` — AND additionally exports a
         `qore_qoa_register_all(QoreProgram*)` symbol that delegates to
         `qore_aot_register_into_program`.
 
@@ -716,10 +724,10 @@ public:
 
         The prefixed globals keep multiple independent `.qo` files
         within the archive from colliding on module-info symbols
-        (slice 2 convention).  Linking multiple `.qoa` archives into
-        one host would collide on the single
-        `qore_qoa_register_all` name — a known limitation for the
-        slice 7 MVP; multi-archive integration is deferred.
+        (archive-registration convention).  The archive ABI exposes a
+        single `qore_qoa_register_all` symbol; hosts that link multiple
+        archives need unique wrapper symbols at the host integration
+        layer.
 
         @param dir_path source directory for the split module (same
                         convention as `compileModuleFromObjects`)
@@ -743,26 +751,24 @@ public:
                                          const char* target_triple = nullptr,
                                          bool include_source = false);
 
-    //! Phase 4 slice 4: compile ONE file of a split module to a `.qo`.
+    //! Compile one file of a split module to a `.qo`.
     /** The full split-module directory @a dir_path is parsed so
         cross-file type references resolve, but only items whose AST
         declaration location matches @a target_file are lowered to
         native code and emitted in the resulting object.
 
         @a target_file is classified as either primary (its basename
-        equals `<mod>.qm`, where `<mod>` is the directory basename) or
+        equals `MOD.qm`, where `MOD` is the directory basename) or
         secondary (any `.qc`/`.ql`/`.q` sibling).  The primary `.qo`
         carries module-info globals, the module descriptor and the
-        public `qore_<mod>_register` entry point; secondary `.qo`s
+        public `qore_MOD_register` entry point; secondary `.qo`s
         carry just the compiled code (no metadata blob, no module-info
         globals, no register function) so that multiple per-file
         objects can be relocated together into one binary without
         symbol collisions.
 
-        Per-file metadata fragments, link-time aggregation into a
-        `.qmod` or `.qoa`, and runtime composition across secondary
-        `.qo`s are deferred to subsequent slices — see
-        `design/aot-phase4-qo-object-files.md`.
+        Per-file metadata fragments support link-time aggregation into a
+        `.qmod` or `.qoa` and runtime composition across secondary `.qo`s.
 
         @param dir_path path to the owning module directory
         @param target_file absolute path of the single file to compile

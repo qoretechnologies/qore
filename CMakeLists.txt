@@ -56,7 +56,7 @@ option(QORE_OPTIMIZE_DEBUG_BUILDS
        ON)
 
 option(QORE_BUILD_AOT_MODULES
-       "Build AOT-compiled .qmod artifacts alongside each user module via qcc (Phase 4)"
+       "Build AOT-compiled .qmod artifacts alongside each user module via qcc"
        ON)
 
 STRING(LENGTH ${VERSION_MINOR} MINOR_LEN)

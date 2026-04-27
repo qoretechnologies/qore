@@ -1,7 +1,7 @@
 # AOT Phase 2B Step 5 — Exception-check Call-site Catalog
 
 **Status:** Phase A complete 2026-04-18.
-**Generator:** `/tmp/catalog_step5.py` (checked into PR branch during Step 5 work).
+**Generator:** `tools/aot-phase2b-step5-catalog-gen.py`.
 **Source:** scan of `lib/QoreIRToLLVM.cpp` at commit `9fafccd34`.
 **Goal:** migrate every xsink-setting helper to throw (C++ EH) instead of setting
 xsink and returning, so every `CreateCall + emitExceptionCheck` call site

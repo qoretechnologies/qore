@@ -38,8 +38,8 @@
 
 /** @file QoreAOT.h
     Public C ABI for integrating AOT-compiled Qore modules into a
-    C or C++ host.  Together with `qcc -a` (Phase 4 slice 7), this
-    gives a host a minimal recipe:
+    C or C++ host.  Together with <tt>qcc -a</tt>, this gives a host
+    a minimal recipe:
 
         // 1. Initialize libqore once at startup.
         qore_init(QL_GPL, "UTF-8", true);
@@ -63,7 +63,7 @@
     the contract stable across Qore minor versions that may otherwise
     rearrange the C++ `QoreProgram` class internals.
 
-    Phase 4 slice 8.
+    AOT artifact registration.
 */
 
 #include <stdint.h>
@@ -116,14 +116,14 @@ DLLEXPORT void qore_destroy_program(QoreProgram* pgm);
 struct QoreAOTFunc;
 
 //! Register a script-context `.qo`'s contents into a QoreProgram.
-/** Called by the glue object that `qcc -o <binary>` emits for a
-    script-style application (Phase 4 slice 10).  Deserializes the
+/** Called by the glue object that `qcc -o OUTPUT` emits for a
+    script-style application.  Deserializes the
     given metadata blob into the target program's namespace tree
     (classes, typedefs, hashdecls, enums, constants, globals,
     functions, methods — public AND non-public), then wires
     pre-compiled function pointers via the supplied descriptor array.
 
-    Unlike `qore_qoa_register_all` (slice 7, module archive), this is
+    Unlike `qore_qoa_register_all` (module archive), this is
     NOT a module registration: no entry is added to the module map,
     no shadow program is created, no `%requires` bookkeeping runs.
     The contents land directly on @p tpgm as if they had been parsed
@@ -155,8 +155,8 @@ DLLEXPORT int qore_aot_script_register(QoreProgram* tpgm,
         const char* label,
         const struct QoreAOTFunc* functions, int num_functions);
 
-//! Begin a batch of deferred script registrations on @p tpgm
-//! (Phase 4 slice 10g).
+//! Begin a batch of deferred script registrations on @p tpgm for
+//! order-independent artifact registration.
 /**
     Between `qore_aot_script_begin_batch(pgm)` and
     `qore_aot_script_end_batch(pgm)`, every call to

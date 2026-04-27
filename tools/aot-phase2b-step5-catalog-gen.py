@@ -12,8 +12,9 @@ import re
 import sys
 from pathlib import Path
 
-SRC = Path("/home/david/src/qore/git/qore/lib/QoreIRToLLVM.cpp")
-JIT = Path("/home/david/src/qore/git/qore/lib/JITRuntime.cpp")
+ROOT = Path(__file__).resolve().parents[1]
+SRC = ROOT / "lib/QoreIRToLLVM.cpp"
+JIT = ROOT / "lib/JITRuntime.cpp"
 
 # Existing throwing wrappers.
 throwing = set()

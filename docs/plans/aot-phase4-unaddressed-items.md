@@ -128,7 +128,7 @@ needs one extra branch.  **This is the design we ship.**
    yields correct value, (c) negative — parse error if runtime-eval'd
    const referenced where a parse-time constant is required
    (e.g., `%ifdef` or `case` label).
-5. **Docs**: update `design/aot-phase4-slice10-script-context.md` to
+5. **Docs**: update `design/aot-script-context.md` to
    remove the "known limitation" paragraph + note the fix.
 
 ### Risk
