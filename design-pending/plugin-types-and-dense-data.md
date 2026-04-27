@@ -718,7 +718,9 @@ struct QorePluginTypeRegistration {
 //! is all-or-nothing: if any type, operation, dependency, or extension fails
 //! validation, no part of `reg` is registered and the function returns -1.
 //! Callers must propagate the failure rather than continuing module init. A
-//! null context, wrong-size context, nonzero flags field, missing module_path,
+//! null context, wrong-size context (subreason registration_context_too_small
+//! for struct_size < sizeof(V1), registration_context_size_mismatch for
+//! struct_size > sizeof(V1)), nonzero flags field, missing module_path,
 //! context not owned by the current module-init call, or context without a live
 //! module_handle is rejected before descriptor validation. Registration does
 //! not accept an explicit Program parameter and does not activate the module in
@@ -746,10 +748,17 @@ int qore_register_plugin_types_v1(
 Typical C++ module-init code, assuming the init callback parameter is named
 `module_ctx`, creates the registration context on the stack with designated
 initializers and passes it immediately. Designated initializers keep the call
-site readable and make field names visible; the released V1 field order is ABI
-and must not change.
+site readable, make field names visible, and surface field-name typos at
+compile time (a stray `.module_handle = some_path_string` fails the type
+check rather than miscompiling silently). The released V1 field order is
+ABI and must not change.
 
 ```cpp
+// qore_module_init returns QoreStringNode* per ModuleManager.h: NULL on
+// success, an error string adopted by libqore on failure. Adjust the
+// failure-propagation path to your module's actual qore_module_init
+// signature; the return shape is part of the existing module ABI, not the
+// plugin protocol.
 QorePluginRegistrationContextV1 plugin_ctx{
     .struct_size   = sizeof(plugin_ctx),
     .flags         = 0,
@@ -757,7 +766,11 @@ QorePluginRegistrationContextV1 plugin_ctx{
     .module_handle = module_ctx.plugin_module_handle,
 };
 if (qore_register_plugin_types_v1(&plugin_ctx, &plugin_registration, &xsink)) {
-    return;
+    // xsink carries the diagnostic; surface it through whatever the
+    // existing qore_module_init ABI expects (e.g., a QoreStringNode*
+    // return adopted from xsink, or a void return that leaves xsink for
+    // the loader to inspect).
+    return convertXsinkToInitError(&xsink);
 }
 ```
 
@@ -770,6 +783,15 @@ yields `registration_context_size_mismatch`; nonzero `flags` yields
 `module_path_missing`; null `module_handle` yields `module_handle_missing`;
 stale or cross-module handles yield `module_handle_stale` when detected by the
 current-module TLS comparison.
+
+Registration is serialized by the module loader: concurrent calls to
+`qore_register_plugin_types_v1` from different module-init threads are not
+supported and produce undefined behaviour. The loader calls `qore_module_init`
+(and therefore `qore_register_plugin_types_v1` indirectly) under its own
+load-time lock, so the conflict-detection rules in §3.10 see a stable
+process-global descriptor table without TOCTOU windows. Plugins must not
+spawn threads that re-enter registration while their own `qore_module_init`
+is still running.
 
 **Two evolution disciplines, intentionally.** The plugin protocol uses two
 distinct forward-compatibility patterns:
@@ -1399,7 +1421,7 @@ Registration has two levels:
   `dataframe` in one Program does not silently expose DataFrame syntax or types
   in unrelated Programs.
 
-Activation is separate from registration. `qore_register_plugin_types_v1` runs
+**Activation vs. registration.** Activation is separate from registration. `qore_register_plugin_types_v1` runs
 when the binary module's `qore_module_init` runs and installs process-global
 descriptor/helper entries. If that already-loaded module is later added to a
 different `QoreProgram`, module load/add-to-Program logic marks the existing
@@ -1554,6 +1576,21 @@ share a single handle type: a plugin author writing a self-test inside
 `qore_module_init` reads the handle once from the init context and passes it to
 either entry point through the relevant C ABI context.
 
+Validator behaviour by `module_handle` value:
+
+- **Non-null and matches the live TLS handle for this thread's
+  `qore_module_init`** — full contextual validation runs, including
+  `runtime_helper_symbol` lookup against the module's binary.
+- **Non-null but does NOT match the live TLS handle (or no
+  `qore_module_init` is in progress on this thread)** — the validator
+  returns `-1` with `module_handle_stale`. This is the behaviour
+  test harnesses use to assert "stale handle ⇒ rejection": pass any
+  non-null but non-current handle and observe the named diagnostic.
+- **`nullptr`** — descriptor-only validation; helper-symbol lookup is
+  reported as a deferred check in collect-all mode and is not performed.
+  This is the dry-run mode for unit tests and tools that run outside any
+  `qore_module_init` invocation.
+
 A non-null `ctx` with `struct_size < offsetof(QorePluginValidationContext,
 module_handle)` is rejected as `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` with
 subreason `"validation_context_too_small"` because the runtime cannot read the
@@ -1602,7 +1639,7 @@ removing:
 | `module_path_missing` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` |
 | `non_contiguous_local_id` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` |
 | `invalid_count` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` |
-| `null_registration` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` |
+| `null_registration_descriptor` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` (`reg == nullptr`; distinct from `null_registration_context` which is `ctx == nullptr`) |
 | `null_type_name` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` |
 | `null_operation_name` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` |
 | `null_type_info` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` |
