@@ -209,7 +209,7 @@ on the host that creates or loads the record.
 | `byte[N]`                  | N raw bytes, no encoding                                     |
 | `string[N, encoding=...]`  | N-byte fixed buffer; trailing zero-bytes trimmed on read     |
 | `zstring[N]`               | N-byte buffer, NUL-terminated, max N-1 chars                 |
-| `bindecl-name`             | Nested record (recursive, contiguous, parent inherits attrs) |
+| `bindecl-name`             | Nested record (recursive, contiguous, uses nested decl's own resolved layout) |
 | `bindecl-name[N]`          | Fixed array of nested records                                |
 | `<scalar-type>[N]`         | Fixed array of integer, float, or bool scalars               |
 | `<int-type> : N`           | Bitfield — N bits within the parent integer (see §2.4)       |
@@ -220,6 +220,14 @@ members are deferred to v2** to keep v1 records statically sized:
 constant. v1 protocol code parses a static header and slices the
 remaining bytes manually. A roadmap sketch for the v2 length-driven
 form is in §12.9.
+
+Nested records are layout-stable by declaration, not by use site. A
+member of type `OtherDecl` embeds the bytes described by `OtherDecl`'s
+own resolved layout and layout fingerprint. The parent declaration only
+chooses where that contiguous byte span is placed; parent `endian`,
+`bitorder`, and member-level overrides do not reinterpret the nested
+decl's fields. Reusing the same nested declaration in two parents
+therefore always means the same on-wire/on-disk layout.
 
 ### 2.3 Declaration attributes
 
@@ -277,6 +285,27 @@ bindecl IpV4Header [endian=big, bitorder=msb-first] {
 The compiler errors if a bitfield run does not exactly fill its parent
 integer. Padding can be expressed as a named field `uint8 _pad : 3` or
 via a `_:` anonymous syntax (`uint8 _ : 3`).
+
+Bitfield run rules:
+
+- A run is one or more consecutive bitfield members with the same parent
+  integer type. Mixing `uint8 : N` and `uint16 : N` in the same run is a
+  parse error; start a new run by ending the previous parent integer
+  exactly and declaring the next bitfield after it.
+- `offset=` is allowed only on the first member of a bitfield run and
+  pins the byte offset of the parent integer. Applying `offset=` to a
+  later member in the same run is a parse error.
+- The sum of bit widths in a run must equal the parent integer width.
+  Gaps are represented explicitly with named or anonymous padding
+  bitfields.
+- `endian` applies to the parent integer's byte order for parent widths
+  greater than one byte. `bitorder` then defines how bit numbers are
+  assigned within the endian-decoded parent integer: `msb-first` consumes
+  bits from most-significant to least-significant; `lsb-first` consumes
+  bits from least-significant to most-significant.
+- Bitfield signedness follows the declared parent integer type. Signed
+  bitfield reads sign-extend from the declared bit width; unsigned reads
+  zero-extend.
 
 ### 2.5 Lifecycle
 
@@ -408,12 +437,24 @@ in some respects but mean different things. v1 does not add a
 future extension and should be spelled through an explicit binary
 conversion and a second `OtherDecl::cast(...)` in v1 code.
 
-`bindecl` types **are** assignment-compatible with `binary` for write
-contexts (a `bindecl` can be passed where a `binary` is expected, with
-zero-copy span semantics) and factory-compatible from `binary` via
-`Name::cast(...)` / `Name::castExact(...)`. They are **not**
-implicit-readable as `binary` for arbitrary contexts, to avoid losing
-the layout invariant silently.
+`bindecl` types **are** assignment-compatible with `binary` in these
+specific write contexts, all with zero-copy span semantics:
+
+- assigning to a statically `binary`-typed local/global/member variable;
+- returning from a function whose declared return type is `binary`;
+- passing an argument to a parameter whose selected variant requires
+  `binary`;
+- calling binary-consuming stream APIs such as
+  `BinaryOutputStream::write(...)`;
+- explicit `binary` cast/conversion syntax, if the implementation
+  exposes one consistently with existing cast rules.
+
+They are **not** implicit-readable as `binary` for arbitrary expression
+contexts. Overload resolution prefers an exact `bindecl` match over the
+`binary` conversion; the conversion is not considered for untyped
+arithmetic, concatenation, equality, or generic `auto` contexts unless an
+explicit cast or binary-typed target is present. This avoids losing the
+layout invariant silently while still making I/O paths ergonomic.
 
 ### 2.7 Field read/write semantics
 
@@ -490,9 +531,17 @@ thin specialization.
 
 **What `bindecl` must give the FFI layer:**
 
-- A stable C-pointer view into a record's backing buffer, exposed via
-  a `BindeclInstance` API the FFI layer can call to get a `void*` plus
-  byte length plus refcount-keepalive.
+- A stable C-pointer view into a record's backing buffer, exposed via a
+  `BindeclInstance` API the FFI layer can call. The API must be split
+  by mutability:
+  - read-only access returns `const void*`, byte length, and a
+    refcount-keepalive without forcing COW;
+  - mutable access first materializes a unique span buffer if the backing
+    `binary` is shared, then returns `void*`, byte length, and a
+    keepalive for the unique buffer.
+  The returned pointer is scoped to the FFI call or an explicit pinned
+  lifetime object; C code must not retain it after the keepalive is
+  released.
 - A way to construct a fresh zero-initialized instance for "out"
   arguments (covered by the no-arg constructor in §2.5).
 - Stable `byte_offset` semantics so the FFI layer can pass either a
@@ -800,7 +849,7 @@ declared in `lib/QC_Serializable.qpp` and used by
 | `_decl`      | `string` | Fully-qualified namespace path of the `BindeclDecl`    |
 | `_module`    | `*string` | Module that supplied the decl (NOTHING for in-program decls) |
 | `_data`      | `binary` | Logical record-span bytes (exactly `<bindecl>::size()` bytes) |
-| `_layout_hash` | `*int` | Optional 64-bit layout fingerprint for drift detection (low 32 bits = computed hash, high 32 bits = 0; NOTHING means "not computed"; `0` is a legal hash value) |
+| `_layout_hash` | `*int` | 64-bit layout fingerprint for drift detection (low 32 bits = computed hash, high 32 bits = 0; `0` is a legal hash value; `NOTHING` is allowed only when an explicit serializer/deserializer compatibility flag opts out) |
 
 `QoreSerializable::serializeValue` gains a new dispatch arm for
 `NT_BINDECL_INSTANCE` that calls a new
@@ -814,9 +863,10 @@ declared in `lib/QC_Serializable.qpp` and used by
    module first (same fallback the hashdecl deserializer already
    uses).
 3. Verifies `_data.size() == decl->size()`.
-4. If `_layout_hash` is present, verifies it matches the decl's
-   computed layout fingerprint; otherwise raises
-   `BINDECL-LAYOUT-MISMATCH`.
+4. Verifies `_layout_hash` matches the decl's computed layout
+   fingerprint. If `_layout_hash` is `NOTHING` or absent, raises
+   `BINDECL-LAYOUT-MISMATCH` unless the caller passed the explicit
+   compatibility flag that accepts unfingerprinted bindecl payloads.
 5. Constructs the instance via the same `castExact(binary)` zero-copy
    path used at runtime.
 
@@ -845,13 +895,15 @@ non-overridden field.
 
 Stored as a 64-bit signed Qore `int` whose low 32 bits hold the
 computed hash; the high 32 bits are zero in v1, reserved for a future
-widening to 64-bit. `NOTHING` means "fingerprint not computed";
-numeric `0` is a legal hash value.
+widening to 64-bit. Numeric `0` is a legal hash value. `NOTHING` means
+"fingerprint intentionally omitted" and is accepted only under an
+explicit compatibility flag for trusted legacy/unfingerprinted payloads;
+normal serialization always emits `_layout_hash`.
 
 Computed once
 at decl finalization, stored on `BindeclDecl`, included in `_layout_hash`
-by default. Disabling it (`Serializable` flag bit) is allowed for
-performance but discouraged.
+by default. Disabling it requires an explicit `Serializable` flag and
+should be reserved for trusted compatibility paths, not normal use.
 
 ### 6.2 AOT serialization — QORD format extensions
 
@@ -904,19 +956,20 @@ flag-mask check before they attempt per-section validation. This
 guarantees that a v2 producer cannot feed garbage to a v1 reader by
 exploiting the reserved field.
 
-**Member-type code table.** Stable numeric IDs assigned at language
-spec time; never reordered. `0x01..0x10` cover scalar primitives
+**Member-type code table.** Stable numeric IDs assigned at language spec
+time; never reordered. `0x01..0x10` cover scalar primitives
 (`uint8`/`int8`/.../`float64`/`bool8`); `0x20..0x2F` cover composite
 forms (`byte[N]`, `string[N,enc]`, `zstring[N]`, scalar arrays,
-nested-decl, nested-decl-array). The table itself is part of the
-language spec, not the QORD format. A new member-type code is
-**safely-ignorable** if its on-disk shape (the size of the per-member
-tuple above) is unchanged, in which case it can be added under the
-existing `QORE_AOT_FEAT_BINDECL` flag — older readers parse the
-member record correctly even though they don't understand the new
-type code, fail clean at type-system time, and emit a clear "unknown
-member type code N" diagnostic. Any change that alters the per-member
-tuple shape **must** claim a new feature flag bit.
+nested-decl, nested-decl-array). The table itself is part of the language
+spec, not the QORD format.
+
+A future member-type code whose on-disk member tuple shape is unchanged
+can remain under `QORE_AOT_FEAT_BINDECL`, but older readers must reject
+the declaration during `BINDECL_DECL` section loading before registering
+the decl in any namespace or exposing it to the type system. The diagnostic
+should be a clean "unknown bindecl member type code N" load error. Any
+change that alters the per-member tuple shape, member-count semantics, or
+section payload framing **must** claim a new feature flag bit.
 
 **Decl ID stability across blobs.** `decl_id_in_blob` is per-blob and
 is resolved at load time to a `const BindeclDecl*` via the same
@@ -1001,7 +1054,9 @@ classes round-trip through the printer and re-parse cleanly":
   different bytes; the reformatter should normalise to attribute
   alphabetical order.
 
-No new file format, no new ID assignment.
+No new persistent AST file format and no serialized AST ID assignment.
+The in-memory astparser enums still gain ordinary source-level values
+such as `ADK_Bindecl` and `ANT_BindeclDeclaration` per §5.7.
 
 ### 6.4 Cross-format consistency invariant
 
@@ -1302,22 +1357,31 @@ guideline. Variable-length tails are a follow-up effort estimated at
 The v1 implementation is not complete without targeted qtests covering:
 
 - Static layout: computed offsets, `offset=` / `size=` assertions,
-  namespace lookup, nested records, and fixed scalar/nested arrays.
+  namespace lookup, nested records whose own attributes are not inherited
+  from the parent, and fixed scalar/nested arrays.
 - Cast spans: `cast(binary)`, `cast(binary, offset)`, `castExact(...)`,
   undersized input, oversized input, negative/out-of-range offsets, and
   implicit binary conversion returning only the logical span.
 - Mutation and COW: writes through a unique span, writes through a shared
-  source binary, `clone()`, and `isShared()`.
+  source binary, mutable FFI-pointer preparation materializing a unique
+  span before exposing `void*`, read-only pointer access avoiding COW,
+  `clone()`, and `isShared()`.
 - Endian and bitfields: explicit endian enforcement, `native` round-trip,
-  MSB/LSB bitfield reads, signed bitfield sign-extension, and bitfield
-  read-modify-write ordering.
+  MSB/LSB bitfield reads, mixed-width bitfield run rejection,
+  mid-run `offset=` rejection, signed bitfield sign-extension, and
+  bitfield read-modify-write ordering.
 - Field writes: integer range failures, bool normalization, exact
   `byte[N]` length, string encoding/truncation errors, `zstring[N]`
   termination, and fixed-array whole-field/per-element writes.
+- Conversion and I/O contexts: assignment/return/argument conversion to
+  `binary`, exact bindecl overload preference, and no implicit conversion
+  in generic `auto`, concatenation, arithmetic, or equality contexts.
 - Serialization: `Serializable::serializeToData()`, binary stream
-  serialization, layout fingerprint mismatch, missing decl/module
-  resolution, and `PO_NO_BINDECL` rejection.
+  serialization, layout fingerprint mismatch, missing/`NOTHING`
+  `_layout_hash` rejection unless the explicit compatibility flag is set,
+  missing decl/module resolution, and `PO_NO_BINDECL` rejection.
 - AOT: QORD decl emission/load, feature-flag rejection on old runtimes,
+  unknown member-type-code rejection during decl-section loading,
   constants of bindecl type, nested-decl dependency order, and IR
   Load/Store opcode verification.
 - Tooling: astparser parse tree, printer round-trip, search/hover for
