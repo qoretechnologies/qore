@@ -910,12 +910,26 @@ declared in `lib/QC_Serializable.qpp` and used by
 **Binary stream form** (`Serializable::serialize(OutputStream)` /
 `deserialize(InputStream)`): the bindecl is serialized as a tagged
 record `(NT_BINDECL_INSTANCE, decl_path_str, module_name, layout_hash,
-byte_count, bytes)`. `module_name` uses the same semantics as `_module`
-in the data form: `NOTHING` / empty marker for in-program declarations,
-otherwise the supplying module is loaded before decl lookup. The format
-is the same shape the existing serializer uses for hashdecl instances,
-with the on-the-wire `bytes` being the bindecl buffer verbatim — no
-per-field re-encoding.
+byte_count, bytes)`. `module_name` is written as a `StringRef` using
+the same convention the existing tagged-record writer uses for
+optional string fields in `lib/QoreSerializable.cpp` — the empty
+string `""` is the in-program marker (the binary stream layout does
+not carry NOTHING for string fields; defer to the existing
+implementation pattern at integration time and document the chosen
+convention in the release notes). Otherwise the supplying module is
+loaded before decl lookup, following the same module-load fallback
+as the data form (step 2 above): if the decl is not found in the
+program's namespace and `module_name` is non-empty, the named module
+is loaded and lookup is retried before raising
+`DESERIALIZATION-ERROR`. The format is the same shape the existing
+serializer uses for hashdecl instances, with the on-the-wire `bytes`
+being the bindecl buffer verbatim — no per-field re-encoding.
+
+**Wire-format finality.** The v1 binary stream layout is final from
+the first shipped release. Subsequent additive changes follow
+`Serializable`'s existing version-marker discipline; field reordering
+or removal is a breaking change that requires a new tagged-record
+type id, not an in-place edit.
 
 **Compact-binary form** (new): for cases where the consumer already
 knows the decl, implicit assignment to `binary` produces exactly the
@@ -1003,10 +1017,28 @@ member[member_count]:
     u8   reserved_member_flags              # 0 in v1
 ```
 
-`element_count_or_byte_len` is interpreted by `type_code`: it is zero for
-scalar primitive and single nested-record members, the byte length for
-`byte[N]` / `string[N]` / `zstring[N]`, and the element count for fixed
-scalar arrays and fixed nested-record arrays.
+`element_count_or_byte_len` is interpreted by `type_code`. The full
+`type_code` → field-population mapping (concrete numeric ranges
+claimed at implementation time; the *mapping rule* is part of the
+spec):
+
+| Member shape                              | `type_code` range | `nested_decl_ref` | `element_count_or_byte_len` |
+|---|---|---|---|
+| Scalar primitive (`uint8`/.../`float64`/`bool8`) | `0x01..0x10` | `0xFFFFFFFF`      | `0` (unused)                 |
+| `byte[N]`                                 | `0x20`            | `0xFFFFFFFF`      | byte length `N`              |
+| `string[N, encoding=...]`                 | `0x21`            | `0xFFFFFFFF`      | byte length `N`              |
+| `zstring[N]`                              | `0x22`            | `0xFFFFFFFF`      | byte length `N`              |
+| Fixed scalar array `<T>[N]`               | `0x23..0x24`      | `0xFFFFFFFF`      | element count `N`            |
+| Single nested-decl                        | `0x25`            | nested decl id    | `0` (unused)                 |
+| Fixed nested-decl array `D[N]`            | `0x26`            | nested decl id    | element count `N`            |
+
+**Sentinel discipline.** `0` in `element_count_or_byte_len` always
+means "unused for this `type_code`", never "zero elements / zero
+bytes". v1 disallows zero-length fixed arrays and zero-byte fixed
+buffers (they contribute nothing to the layout and are almost
+certainly a typo). A future v2 that admits them must claim a new
+feature flag bit and use a distinct encoding — `0` is permanently
+the unused-marker for v1-compatible readers.
 
 **Forward-compatibility discipline for `layout_kind`.** v1 readers
 reject any blob whose `layout_kind` is non-zero. Any v2 expansion
@@ -1138,6 +1170,17 @@ serialized values keep their meaning. Same discipline as
 [`design/qore-ir-spec.md`](../design/qore-ir-spec.md). `ADK_Bindecl`
 and `ANT_BindeclDeclaration` therefore append after the current last
 member of `ASTDeclarationKind` and `ASTNodeType` respectively.
+
+**Cross-file resolution model.** QLS and similar tooling resolve a
+`bindecl` reference across files via in-memory AST node identity
+within a single QLS session: when one file's source references
+`OtherDecl` declared in another file, the search/hover infrastructure
+walks the in-memory AST forest the session built during
+parse/incremental-update. There is no on-disk identity table: a fresh
+QLS session re-parses every relevant source file and rebuilds the
+forest before serving requests. This matches how `hashdecl` and
+`class` cross-file references resolve today; bindecl adds no new
+machinery on the AST persistence axis.
 
 ### 6.4 Cross-format consistency invariant
 
