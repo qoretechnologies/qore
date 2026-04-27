@@ -366,7 +366,7 @@ assumptions must be lifted or intentionally bypassed.
 A module wanting to register one or more plugin types supplies descriptors
 during the existing module-init path. Phase 3 extends `QoreModuleInitContext`
 with an opaque, runtime-owned `plugin_module_handle`; module-init code copies
-the relevant fields into a size-prefixed `QorePluginRegistrationContextV1` and
+the relevant fields into an exact-size `QorePluginRegistrationContextV1` and
 passes that C ABI context to registration. This keeps plugin registration part
 of normal module initialization so load ordering, dependency resolution,
 parse-time visibility, helper-symbol lookup, and error reporting are
@@ -375,14 +375,15 @@ deterministic, while the public plugin protocol does not expose
 
 The `plugin_module_handle` is valid only for the calling thread's current
 `qore_module_init` invocation. Modules MUST NOT cache it, compare it, serialize
-it, or pass a handle issued for another module. The runtime detects stale
-handles on a best-effort basis using a private representation (e.g.,
-generation cookies); when detected, the diagnostic is
-`PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` with subreason `module_handle_stale`.
-Plugin authors must NOT rely on detection — a cached handle is undefined
-behaviour, and detection is a debugging aid rather than a soundness contract.
-Tests asserting "stale handle ⇒ rejection" are non-portable and should not
-be written.
+it, or pass a handle issued for another module. Registration and validation
+MUST reject a non-null handle that does not match the live current-thread TLS
+handle with `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` and subreason
+`module_handle_stale`. Detecting other stale-handle bugs — for example a cached
+handle whose private representation is accidentally still recognizable — is
+best-effort using private representation details such as generation cookies.
+Tests may assert the mandatory TLS-mismatch rejection, but tests asserting
+"any cached stale handle is rejected" are non-portable and should not be
+written.
 
 The corresponding `ModuleManager.h` ABI addition is intentionally narrow:
 
@@ -754,11 +755,8 @@ check rather than miscompiling silently). The released V1 field order is
 ABI and must not change.
 
 ```cpp
-// qore_module_init returns QoreStringNode* per ModuleManager.h: NULL on
-// success, an error string adopted by libqore on failure. Adjust the
-// failure-propagation path to your module's actual qore_module_init
-// signature; the return shape is part of the existing module ABI, not the
-// plugin protocol.
+// qore_module_init has the current ModuleManager.h signature:
+// void qore_module_init(QoreModuleInitContext& module_ctx, ExceptionSink& xsink).
 QorePluginRegistrationContextV1 plugin_ctx{
     .struct_size   = sizeof(plugin_ctx),
     .flags         = 0,
@@ -766,11 +764,8 @@ QorePluginRegistrationContextV1 plugin_ctx{
     .module_handle = module_ctx.plugin_module_handle,
 };
 if (qore_register_plugin_types_v1(&plugin_ctx, &plugin_registration, &xsink)) {
-    // xsink carries the diagnostic; surface it through whatever the
-    // existing qore_module_init ABI expects (e.g., a QoreStringNode*
-    // return adopted from xsink, or a void return that leaves xsink for
-    // the loader to inspect).
-    return convertXsinkToInitError(&xsink);
+    // xsink carries the diagnostic; module init must stop immediately.
+    return;
 }
 ```
 
@@ -784,14 +779,15 @@ yields `registration_context_size_mismatch`; nonzero `flags` yields
 stale or cross-module handles yield `module_handle_stale` when detected by the
 current-module TLS comparison.
 
-Registration is serialized by the module loader: concurrent calls to
-`qore_register_plugin_types_v1` from different module-init threads are not
-supported and produce undefined behaviour. The loader calls `qore_module_init`
-(and therefore `qore_register_plugin_types_v1` indirectly) under its own
-load-time lock, so the conflict-detection rules in §3.10 see a stable
-process-global descriptor table without TOCTOU windows. Plugins must not
-spawn threads that re-enter registration while their own `qore_module_init`
-is still running.
+Registration is serialized by the plugin registry, not by the module loader.
+The current module loader may run `qore_module_init` while its global module
+mutex is released, so `qore_register_plugin_types_v1` MUST be thread-safe for
+concurrent module-init threads. It takes the registry write lock before
+checking process-global descriptor conflicts and committing ids, and the
+all-or-nothing commit keeps §3.10 conflict detection free of TOCTOU windows.
+Plugins must not spawn background threads that re-enter registration: those
+threads do not own the current module-init TLS handle and fail with
+`module_handle_stale`.
 
 **Two evolution disciplines, intentionally.** The plugin protocol uses two
 distinct forward-compatibility patterns:
@@ -1583,9 +1579,11 @@ Validator behaviour by `module_handle` value:
   `runtime_helper_symbol` lookup against the module's binary.
 - **Non-null but does NOT match the live TLS handle (or no
   `qore_module_init` is in progress on this thread)** — the validator
-  returns `-1` with `module_handle_stale`. This is the behaviour
-  test harnesses use to assert "stale handle ⇒ rejection": pass any
-  non-null but non-current handle and observe the named diagnostic.
+  returns `-1` with `module_handle_stale` before dereferencing the pointer.
+  Test harnesses may assert this mandatory TLS-mismatch case. They should not
+  assert that an arbitrary cached handle from an earlier init invocation is
+  always detected after the runtime has left module init; that broader stale
+  detection remains best-effort per §3.3.
 - **`nullptr`** — descriptor-only validation; helper-symbol lookup is
   reported as a deferred check in collect-all mode and is not performed.
   This is the dry-run mode for unit tests and tools that run outside any
