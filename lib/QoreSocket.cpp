@@ -47,6 +47,8 @@
 #include "qore/intern/QC_Socket.h"
 #include "qore/intern/QC_SocketPollOperation.h"
 #include "qore/intern/AsyncIoControllerPriv.h"
+#include "qore/intern/FileInputStream.h"
+#include "qore/intern/FileOutputStream.h"
 #include "qore/intern/QC_Queue.h"
 #include "qore/intern/QoreAsyncIoLogger.h"
 #include "qore/intern/qore_socket_private.h"
@@ -649,6 +651,581 @@ private:
     SimpleRefHolder<SimpleValueQoreNode> data;
 };
 
+class QoreSocketControllerSendInputStreamPollOperation : public SocketPollOperationBase {
+public:
+    DLLLOCAL QoreSocketControllerSendInputStreamPollOperation(ExceptionSink* xsink, QoreSocket* sock,
+            InputStream* input_stream, int64 size, int timeout_ms)
+            : sock(sock), input_stream(input_stream), size(size), timeout_ms(timeout_ms) {
+        if (!input_stream->isIoThreadSafe()) {
+            xsink->raiseException("SOCKET-SEND-ERROR", "InputStream is not I/O thread safe");
+            return;
+        }
+
+        is_pollable = input_stream->supportsNonBlockingIo();
+        if (is_pollable) {
+            stream_fd = input_stream->getPollableDescriptor();
+            if (stream_fd < 0) {
+                is_pollable = false;
+            }
+        }
+
+        if (!qore_socket_private::get(*sock)->isOpen()) {
+            se_not_open("Socket", "send", xsink);
+        }
+    }
+
+    DLLLOCAL void deref(ExceptionSink* xsink) override {
+        if (ROdereference()) {
+            if (input_stream && !need_reassign) {
+                input_stream->unassignThread(xsink);
+            }
+            input_stream = nullptr;
+            delete this;
+        }
+    }
+
+    DLLLOCAL virtual bool goalReached() const override {
+        return phase == Phase::Done;
+    }
+
+    DLLLOCAL virtual void abort(ExceptionSink* xsink) override {
+        if (input_stream && !need_reassign) {
+            input_stream->unassignThread(xsink);
+        }
+        input_stream = nullptr;
+        current_chunk = nullptr;
+        poll_state.reset();
+        if (socket_data_sent || bytes_sent > 0) {
+            qore_socket_private::get(*sock)->close();
+        }
+        phase = Phase::Error;
+    }
+
+    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override {
+        if (need_reassign) {
+            need_reassign = false;
+            if (input_stream) {
+                input_stream->reassignThread(xsink);
+                if (*xsink) {
+                    phase = Phase::Error;
+                    return nullptr;
+                }
+            }
+        }
+
+        qore_socket_private* priv = qore_socket_private::get(*sock);
+        if (!priv->isOpen()) {
+            se_not_open("Socket", "send", xsink);
+            phase = Phase::Error;
+            return nullptr;
+        }
+        if (checkTimeout(xsink)) {
+            return nullptr;
+        }
+
+        unsigned loop = 0;
+        while (true) {
+            switch (phase) {
+                case Phase::ReadChunk: {
+                    if (size >= 0 && bytes_sent >= size) {
+                        complete(xsink);
+                        return nullptr;
+                    }
+
+                    int64 chunk_size = getNextChunkSize();
+                    if (chunk_size <= 0) {
+                        complete(xsink);
+                        return nullptr;
+                    }
+
+                    if (is_pollable) {
+                        assert(stream_fd >= 0);
+                        struct pollfd pfd;
+                        pfd.fd = stream_fd;
+                        pfd.events = POLLIN;
+                        pfd.revents = 0;
+                        int poll_rv = ::poll(&pfd, 1, 0);
+                        if (poll_rv < 0) {
+                            xsink->raiseException("SOCKET-SEND-ERROR", "poll() on stream fd failed: %s",
+                                strerror(errno));
+                            phase = Phase::Error;
+                            return nullptr;
+                        }
+                        if (!poll_rv) {
+                            return getPollInfo(xsink, SOCK_POLLIN);
+                        }
+
+                        SimpleRefHolder<BinaryNode> chunk(new BinaryNode);
+                        chunk->preallocate(chunk_size);
+                        int64 count = input_stream->readNonBlock(
+                            const_cast<void*>(chunk->getPtr()), chunk_size, xsink);
+                        if (*xsink) {
+                            phase = Phase::Error;
+                            return nullptr;
+                        }
+                        if (count <= 0) {
+                            if (size >= 0) {
+                                xsink->raiseException("SOCKET-SEND-ERROR", "Unexpected end of stream");
+                                phase = Phase::Error;
+                                return nullptr;
+                            }
+                            complete(xsink);
+                            return nullptr;
+                        }
+                        chunk->setSize(count);
+                        current_chunk = chunk.release();
+                        clearTimeout();
+                    } else {
+                        current_chunk = input_stream->readHelper(chunk_size, xsink);
+                        if (*xsink) {
+                            phase = Phase::Error;
+                            return nullptr;
+                        }
+                        if (!current_chunk) {
+                            if (size >= 0) {
+                                xsink->raiseException("SOCKET-SEND-ERROR", "Unexpected end of stream");
+                                phase = Phase::Error;
+                                return nullptr;
+                            }
+                            complete(xsink);
+                            return nullptr;
+                        }
+                        clearTimeout();
+                    }
+
+                    phase = Phase::SendChunk;
+                    continue;
+                }
+
+                case Phase::SendChunk: {
+                    if (!poll_state) {
+                        poll_state.reset(sock->startSend(xsink,
+                            reinterpret_cast<const char*>(current_chunk->getPtr()), current_chunk->size()));
+                        if (*xsink || !poll_state) {
+                            phase = Phase::Error;
+                            return nullptr;
+                        }
+                    }
+
+                    SocketSendPollState* send_state = static_cast<SocketSendPollState*>(poll_state.get());
+                    if (send_state->getBytesSent()) {
+                        socket_data_sent = true;
+                    }
+                    size_t sent_before = send_state->getBytesSent();
+                    int rc = poll_state->continuePoll(xsink);
+                    if (*xsink) {
+                        phase = Phase::Error;
+                        poll_state.reset();
+                        return nullptr;
+                    }
+                    if (send_state->getBytesSent() > sent_before) {
+                        socket_data_sent = true;
+                        clearTimeout();
+                    }
+                    if (rc) {
+                        return getPollInfo(xsink, rc);
+                    }
+
+                    poll_state.reset();
+                    bytes_sent += current_chunk->size();
+                    qore_socket_private::get(*sock)->do_data_event(
+                        QORE_EVENT_SOCKET_DATA_SENT, QORE_SOURCE_SOCKET, **current_chunk);
+                    current_chunk = nullptr;
+                    if (++loop >= max_nonblock_ops && (size < 0 || bytes_sent < size)) {
+                        return getPollInfo(xsink, SOCK_POLLOUT);
+                    }
+                    phase = Phase::ReadChunk;
+                    continue;
+                }
+
+                case Phase::Done:
+                case Phase::Error:
+                    return nullptr;
+            }
+        }
+    }
+
+    DLLLOCAL virtual const char* getStateImpl() const override {
+        switch (phase) {
+            case Phase::ReadChunk: return "reading-chunk";
+            case Phase::SendChunk: return "sending-chunk";
+            case Phase::Done: return "done";
+            case Phase::Error: return "error";
+            default: return "unknown";
+        }
+    }
+
+private:
+    enum class Phase { ReadChunk, SendChunk, Done, Error };
+
+    DLLLOCAL QoreHashNode* getPollInfo(ExceptionSink* xsink, int events) {
+        int64 poll_timeout_ms = -1;
+        if (timeout_ms >= 0) {
+            int us;
+            int64 now_s = q_epoch_us(us);
+            int64 now_ms = now_s * 1000 + us / 1000;
+            if (!wait_deadline_ms) {
+                wait_deadline_ms = now_ms + timeout_ms;
+            }
+            poll_timeout_ms = wait_deadline_ms - now_ms;
+            if (poll_timeout_ms < 0) {
+                poll_timeout_ms = 0;
+            }
+        }
+
+        QoreHashNode* raw_info = nullptr;
+        if (is_pollable && stream_fd >= 0) {
+            std::vector<std::pair<int, int>> extra_fds{{stream_fd, SOCK_POLLIN}};
+            raw_info = getSocketPollInfoHash(xsink, events, extra_fds);
+        } else {
+            raw_info = getSocketPollInfoHash(xsink, events);
+        }
+        if (!raw_info) {
+            return nullptr;
+        }
+        ReferenceHolder<QoreHashNode> info(raw_info, xsink);
+        if (poll_timeout_ms >= 0) {
+            info->setKeyValue("poll_timeout_ms", poll_timeout_ms, xsink);
+        }
+        return info.release();
+    }
+
+    DLLLOCAL int64 getNextChunkSize() const {
+        if (size < 0) {
+            return DEFAULT_SOCKET_BUFSIZE;
+        }
+        return QORE_MIN(size - bytes_sent, (int64)DEFAULT_SOCKET_BUFSIZE);
+    }
+
+    DLLLOCAL void complete(ExceptionSink* xsink) {
+        if (input_stream && !need_reassign) {
+            input_stream->unassignThread(xsink);
+            if (*xsink) {
+                phase = Phase::Error;
+                return;
+            }
+        }
+        input_stream = nullptr;
+        phase = Phase::Done;
+    }
+
+    DLLLOCAL bool checkTimeout(ExceptionSink* xsink) {
+        if (wait_deadline_ms <= 0) {
+            return false;
+        }
+        int us;
+        int64 now_s = q_epoch_us(us);
+        int64 now_ms = now_s * 1000 + us / 1000;
+        if (now_ms < wait_deadline_ms) {
+            return false;
+        }
+        xsink->raiseException("SOCKET-TIMEOUT", "socket operation timed out");
+        phase = Phase::Error;
+        return true;
+    }
+
+    DLLLOCAL void clearTimeout() {
+        wait_deadline_ms = 0;
+    }
+
+    QoreSocket* sock;
+    std::unique_ptr<AbstractPollState> poll_state;
+    SimpleRefHolder<InputStream> input_stream;
+    int64 size = -1;
+    int64 bytes_sent = 0;
+    int timeout_ms = -1;
+    int64 wait_deadline_ms = 0;
+    int stream_fd = -1;
+    bool is_pollable = true;
+    bool need_reassign = true;
+    bool socket_data_sent = false;
+    Phase phase = Phase::ReadChunk;
+    SimpleRefHolder<BinaryNode> current_chunk;
+};
+
+class QoreSocketControllerRecvOutputStreamPollOperation : public SocketPollOperationBase {
+public:
+    DLLLOCAL QoreSocketControllerRecvOutputStreamPollOperation(ExceptionSink* xsink, QoreSocket* sock,
+            OutputStream* output_stream, int64 size, int timeout_ms)
+            : sock(sock), output_stream(output_stream), size(size), timeout_ms(timeout_ms) {
+        if (!output_stream->isIoThreadSafe()) {
+            xsink->raiseException("SOCKET-RECV-ERROR", "OutputStream is not I/O thread safe");
+            return;
+        }
+
+        is_pollable = output_stream->supportsNonBlockingIo();
+        if (is_pollable) {
+            output_fd = output_stream->getPollableDescriptor();
+            if (output_fd < 0) {
+                is_pollable = false;
+            }
+        }
+
+        if (!qore_socket_private::get(*sock)->isOpen()) {
+            se_not_open("Socket", "recv", xsink);
+        }
+    }
+
+    DLLLOCAL void deref(ExceptionSink* xsink) override {
+        if (ROdereference()) {
+            if (output_stream && !need_reassign) {
+                output_stream->unassignThread(xsink);
+            }
+            output_stream = nullptr;
+            delete this;
+        }
+    }
+
+    DLLLOCAL virtual bool goalReached() const override {
+        return phase == Phase::Done;
+    }
+
+    DLLLOCAL virtual void abort(ExceptionSink* xsink) override {
+        if (output_stream && !need_reassign) {
+            output_stream->unassignThread(xsink);
+        }
+        output_stream = nullptr;
+        current_chunk = nullptr;
+        poll_state.reset();
+        if (bytes_received > 0 || current_chunk) {
+            qore_socket_private::get(*sock)->close();
+        }
+        phase = Phase::Error;
+    }
+
+    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override {
+        if (need_reassign) {
+            need_reassign = false;
+            if (output_stream) {
+                output_stream->reassignThread(xsink);
+                if (*xsink) {
+                    phase = Phase::Error;
+                    return nullptr;
+                }
+            }
+        }
+
+        qore_socket_private* priv = qore_socket_private::get(*sock);
+        if (phase == Phase::RecvChunk && size < 0 && bytes_received > 0 && !priv->isOpen()) {
+            complete(xsink);
+            return nullptr;
+        }
+        if (!priv->isOpen()) {
+            se_not_open("Socket", "recv", xsink);
+            phase = Phase::Error;
+            return nullptr;
+        }
+        if (checkTimeout(xsink)) {
+            return nullptr;
+        }
+
+        unsigned loop = 0;
+        while (true) {
+            switch (phase) {
+                case Phase::RecvChunk: {
+                    if (size >= 0 && bytes_received >= size) {
+                        complete(xsink);
+                        return nullptr;
+                    }
+
+                    int64 chunk_size = getNextChunkSize();
+                    if (chunk_size <= 0) {
+                        complete(xsink);
+                        return nullptr;
+                    }
+
+                    if (!poll_state) {
+                        poll_state.reset(sock->startRecvSome(xsink, static_cast<size_t>(chunk_size)));
+                        if (*xsink || !poll_state) {
+                            phase = Phase::Error;
+                            return nullptr;
+                        }
+                    }
+
+                    int rc = poll_state->continuePoll(xsink);
+                    if (*xsink) {
+                        phase = Phase::Error;
+                        poll_state.reset();
+                        return nullptr;
+                    }
+                    if (rc) {
+                        return getPollInfo(xsink, rc);
+                    }
+
+                    SimpleRefHolder<BinaryNode> chunk(poll_state->takeOutput().get<BinaryNode>());
+                    poll_state.reset();
+                    if (!chunk || !chunk->size()) {
+                        if (size >= 0) {
+                            xsink->raiseException("SOCKET-RECV-ERROR", "Unexpected end of stream");
+                            phase = Phase::Error;
+                            return nullptr;
+                        }
+                        complete(xsink);
+                        return nullptr;
+                    }
+
+                    bytes_received += chunk->size();
+                    qore_socket_private::get(*sock)->do_data_event(
+                        QORE_EVENT_SOCKET_DATA_READ, QORE_SOURCE_SOCKET, **chunk);
+                    current_chunk = chunk.release();
+                    write_offset = 0;
+                    clearTimeout();
+                    phase = Phase::WriteChunk;
+                    continue;
+                }
+
+                case Phase::WriteChunk: {
+                    while (write_offset < current_chunk->size()) {
+                        if (is_pollable) {
+                            assert(output_fd >= 0);
+                            struct pollfd pfd;
+                            pfd.fd = output_fd;
+                            pfd.events = POLLOUT;
+                            pfd.revents = 0;
+                            int poll_rv = ::poll(&pfd, 1, 0);
+                            if (poll_rv < 0) {
+                                xsink->raiseException("SOCKET-RECV-ERROR", "poll() on output stream fd failed: %s",
+                                    strerror(errno));
+                                phase = Phase::Error;
+                                return nullptr;
+                            }
+                            if (!poll_rv) {
+                                return getPollInfo(xsink, SOCK_POLLIN, true);
+                            }
+                        }
+
+                        const char* ptr = reinterpret_cast<const char*>(current_chunk->getPtr()) + write_offset;
+                        size_t remaining = current_chunk->size() - write_offset;
+                        int64 written = output_stream->writeNonBlock(ptr, remaining, xsink);
+                        if (*xsink || written < 0) {
+                            phase = Phase::Error;
+                            return nullptr;
+                        }
+                        if (!written) {
+                            return getPollInfo(xsink, SOCK_POLLIN, true);
+                        }
+
+                        write_offset += static_cast<size_t>(written);
+                        clearTimeout();
+                        if (++loop >= max_nonblock_ops && write_offset < current_chunk->size()) {
+                            return getPollInfo(xsink, SOCK_POLLIN, true);
+                        }
+                    }
+
+                    current_chunk = nullptr;
+                    write_offset = 0;
+                    if (++loop >= max_nonblock_ops && (size < 0 || bytes_received < size)) {
+                        return getPollInfo(xsink, SOCK_POLLIN);
+                    }
+                    phase = Phase::RecvChunk;
+                    continue;
+                }
+
+                case Phase::Done:
+                case Phase::Error:
+                    return nullptr;
+            }
+        }
+    }
+
+    DLLLOCAL virtual const char* getStateImpl() const override {
+        switch (phase) {
+            case Phase::RecvChunk: return "receiving-chunk";
+            case Phase::WriteChunk: return "writing-chunk";
+            case Phase::Done: return "done";
+            case Phase::Error: return "error";
+            default: return "unknown";
+        }
+    }
+
+private:
+    enum class Phase { RecvChunk, WriteChunk, Done, Error };
+
+    DLLLOCAL QoreHashNode* getPollInfo(ExceptionSink* xsink, int events, bool output_wait = false) {
+        int64 poll_timeout_ms = -1;
+        if (timeout_ms >= 0) {
+            int us;
+            int64 now_s = q_epoch_us(us);
+            int64 now_ms = now_s * 1000 + us / 1000;
+            if (!wait_deadline_ms) {
+                wait_deadline_ms = now_ms + timeout_ms;
+            }
+            poll_timeout_ms = wait_deadline_ms - now_ms;
+            if (poll_timeout_ms < 0) {
+                poll_timeout_ms = 0;
+            }
+        }
+
+        QoreHashNode* raw_info = nullptr;
+        if (output_wait && is_pollable && output_fd >= 0) {
+            std::vector<std::pair<int, int>> extra_fds{{output_fd, SOCK_POLLOUT}};
+            raw_info = getSocketPollInfoHash(xsink, events, extra_fds);
+        } else {
+            raw_info = getSocketPollInfoHash(xsink, events);
+        }
+        if (!raw_info) {
+            return nullptr;
+        }
+        ReferenceHolder<QoreHashNode> info(raw_info, xsink);
+        if (poll_timeout_ms >= 0) {
+            info->setKeyValue("poll_timeout_ms", poll_timeout_ms, xsink);
+        }
+        return info.release();
+    }
+
+    DLLLOCAL int64 getNextChunkSize() const {
+        if (size < 0) {
+            return DEFAULT_SOCKET_BUFSIZE;
+        }
+        return QORE_MIN(size - bytes_received, (int64)DEFAULT_SOCKET_BUFSIZE);
+    }
+
+    DLLLOCAL void complete(ExceptionSink* xsink) {
+        if (output_stream && !need_reassign) {
+            output_stream->unassignThread(xsink);
+            if (*xsink) {
+                phase = Phase::Error;
+                return;
+            }
+        }
+        output_stream = nullptr;
+        phase = Phase::Done;
+    }
+
+    DLLLOCAL bool checkTimeout(ExceptionSink* xsink) {
+        if (wait_deadline_ms <= 0) {
+            return false;
+        }
+        int us;
+        int64 now_s = q_epoch_us(us);
+        int64 now_ms = now_s * 1000 + us / 1000;
+        if (now_ms < wait_deadline_ms) {
+            return false;
+        }
+        xsink->raiseException("SOCKET-TIMEOUT", "socket operation timed out");
+        phase = Phase::Error;
+        return true;
+    }
+
+    DLLLOCAL void clearTimeout() {
+        wait_deadline_ms = 0;
+    }
+
+    QoreSocket* sock;
+    std::unique_ptr<AbstractPollState> poll_state;
+    SimpleRefHolder<OutputStream> output_stream;
+    int64 size = -1;
+    int64 bytes_received = 0;
+    int timeout_ms = -1;
+    int64 wait_deadline_ms = 0;
+    int output_fd = -1;
+    bool is_pollable = true;
+    bool need_reassign = true;
+    Phase phase = Phase::RecvChunk;
+    SimpleRefHolder<BinaryNode> current_chunk;
+    size_t write_offset = 0;
+};
+
 class QoreSocketControllerAcceptPollOperation : public SocketPollOperationBase {
 public:
     DLLLOCAL QoreSocketControllerAcceptPollOperation(AbstractPollState* poll_state) : poll_state(poll_state) {
@@ -1102,6 +1679,58 @@ static BinaryNode* qore_socket_exec_recv_some_binary(QoreSocket* s, size_t size,
         qore_socket_private::get(*s)->do_data_event(QORE_EVENT_SOCKET_DATA_READ, source, *bin);
     }
     return bin;
+}
+
+static int qore_socket_exec_send_input_stream_poll(QoreSocket* s, InputStream* is, int64 size, int timeout_ms,
+        ExceptionSink* xsink) {
+    if (!size) {
+        return 0;
+    }
+    if (!is->isIoThreadSafe()) {
+        xsink->raiseException("SOCKET-SEND-ERROR", "InputStream is not I/O thread safe");
+        return -1;
+    }
+
+    is->ref();
+    ReferenceHolder<SocketPollOperationBase> poller(
+        new QoreSocketControllerSendInputStreamPollOperation(xsink, s, is, size, timeout_ms), xsink);
+    if (*xsink) {
+        return -1;
+    }
+
+    is->unassignThread(xsink);
+    if (*xsink) {
+        return -1;
+    }
+
+    ValueHolder result(qore_socket_exec_poll(s, poller.release(), -1, "send", "send", xsink), xsink);
+    return *xsink ? -1 : 0;
+}
+
+static int qore_socket_exec_recv_output_stream_poll(QoreSocket* s, OutputStream* os, int64 size, int timeout_ms,
+        ExceptionSink* xsink) {
+    if (!size) {
+        return 0;
+    }
+    if (!os->isIoThreadSafe()) {
+        xsink->raiseException("SOCKET-RECV-ERROR", "OutputStream is not I/O thread safe");
+        return -1;
+    }
+
+    os->ref();
+    ReferenceHolder<SocketPollOperationBase> poller(
+        new QoreSocketControllerRecvOutputStreamPollOperation(xsink, s, os, size, timeout_ms), xsink);
+    if (*xsink) {
+        return -1;
+    }
+
+    os->unassignThread(xsink);
+    if (*xsink) {
+        return -1;
+    }
+
+    ValueHolder result(qore_socket_exec_poll(s, poller.release(), -1, "recv", "received", xsink), xsink);
+    return *xsink ? -1 : 0;
 }
 
 static QoreStringNode* qore_socket_exec_recv_string(QoreSocket* s, qore_offset_t size, int timeout_ms,
@@ -5905,61 +6534,13 @@ int QoreSocket::send(int fd, qore_offset_t size) {
         return -1;
     }
 
-    char* buf = (char*)malloc(sizeof(char) * DEFAULT_SOCKET_BUFSIZE);
-    ON_BLOCK_EXIT(free, buf);
-
     ExceptionSink xsink;
-    SocketSyncPoll::assertNotOnIoThread("Socket", "send", &xsink);
+    SimpleRefHolder<FileInputStream> is(new FileInputStream(fd));
+    int rc = qore_socket_exec_send_input_stream_poll(this, *is, size, -1, &xsink);
     if (xsink) {
         xsink.clear();
         return -1;
     }
-
-    qore_offset_t rc = 0;
-    size_t bs = 0;
-    unsigned cancel_check = 0;
-    while (true) {
-        if (!(cancel_check++ % 100) && qore_check_cancel(&xsink, "socket file descriptor send")) {
-            rc = -1;
-            break;
-        }
-        // calculate bytes needed
-        size_t bn;
-        if (size < 0) {
-            bn = DEFAULT_SOCKET_BUFSIZE;
-        } else {
-            bn = size - bs;
-            if (bn > DEFAULT_SOCKET_BUFSIZE)
-                bn = DEFAULT_SOCKET_BUFSIZE;
-        }
-        do {
-            rc = read(fd, buf, bn);
-        } while (rc < 0 && errno == EINTR);
-        if (!rc)
-            break;
-        if (rc < 0) {
-            printd(5, "QoreSocket::send() read error: %s\n", strerror(errno));
-            break;
-        }
-
-        // send buffer
-        int src = qore_socket_exec_send_bytes(this, buf, rc, -1, &xsink);
-        if (src < 0) {
-            printd(5, "QoreSocket::send() send error: %s\n", strerror(errno));
-            rc = -1;
-            break;
-        }
-        bs += rc;
-        if (size > 0 && bs >= (size_t)size) {
-            rc = 0;
-            break;
-        }
-    }
-
-    // ignore exception; we just use a return code
-    if (xsink)
-        xsink.clear();
-
     return rc;
 }
 
@@ -5973,66 +6554,9 @@ int QoreSocket::send(int fd, qore_offset_t size, int timeout_ms, ExceptionSink* 
         se_not_open("Socket", "send", xsink);
         return -1;
     }
-    SocketSyncPoll::assertNotOnIoThread("Socket", "send", xsink);
-    if (*xsink) {
-        return -1;
-    }
 
-    char* buf = (char*)malloc(sizeof(char) * DEFAULT_SOCKET_BUFSIZE);
-    ON_BLOCK_EXIT(free, buf);
-
-    qore_offset_t rc = 0;
-    size_t bs = 0;
-    unsigned cancel_check = 0;
-    while (true) {
-        if (!(cancel_check++ % 100) && qore_check_cancel(xsink, "socket file descriptor send")) {
-            return -1;
-        }
-        size_t bn;
-        if (size < 0) {
-            bn = DEFAULT_SOCKET_BUFSIZE;
-        } else {
-            bn = size - bs;
-            if (bn > DEFAULT_SOCKET_BUFSIZE) {
-                bn = DEFAULT_SOCKET_BUFSIZE;
-            }
-        }
-        while (true) {
-            rc = ::read(fd, buf, bn);
-            if (rc >= 0) {
-                break;
-            }
-            if (errno != EINTR) {
-                xsink->raiseErrnoException("FILE-READ-ERROR", errno, "error reading file after " QSD " bytes read in "
-                    "Socket::send()", bs);
-                break;
-            }
-        }
-        if (!rc) {
-            if (size < 0) {
-                break;
-            }
-            xsink->raiseErrnoException("FILE-READ-ERROR", errno,
-                "premature EOF reading file; " QSD " bytes requested; " QSD " bytes read in Socket::send()",
-                size, bs);
-        }
-        if (rc < 0 || *xsink) {
-            return -1;
-        }
-
-        int src = qore_socket_exec_send_bytes(this, buf, rc, timeout_ms, xsink);
-        if (src < 0) {
-            printd(5, "QoreSocket::send() send error: %s\n", strerror(errno));
-            rc = -1;
-            break;
-        }
-        bs += rc;
-        if (size > 0 && bs >= (size_t)size) {
-            rc = 0;
-            break;
-        }
-    }
-    return rc;
+    SimpleRefHolder<FileInputStream> is(new FileInputStream(fd));
+    return qore_socket_exec_send_input_stream_poll(this, *is, size, timeout_ms, xsink);
 }
 
 BinaryNode* QoreSocket::recvBinary(qore_offset_t bufsize, int timeout, int* rc) {
@@ -6117,71 +6641,9 @@ int QoreSocket::recv(int fd, qore_offset_t size, int timeout_ms, ExceptionSink* 
         se_not_open("Socket", "recv", xsink);
         return -1;
     }
-    SocketSyncPoll::assertNotOnIoThread("Socket", "recv", xsink);
-    if (*xsink) {
-        return -1;
-    }
 
-    qore_offset_t br = 0;
-    int rc = 0;
-    unsigned cancel_check = 0;
-    while (true) {
-        if (!(cancel_check++ % 100) && qore_check_cancel(xsink, "socket file descriptor receive")) {
-            return -1;
-        }
-        size_t bn;
-        if (size < 0) {
-            bn = DEFAULT_SOCKET_BUFSIZE;
-        } else {
-            qore_offset_t remaining = size - br;
-            bn = remaining > DEFAULT_SOCKET_BUFSIZE ? DEFAULT_SOCKET_BUFSIZE : remaining;
-        }
-
-        SimpleRefHolder<BinaryNode> bin(
-            qore_socket_exec_recv_some_binary(this, bn, timeout_ms, "recv", xsink));
-        if (*xsink) {
-            return -1;
-        }
-        if (!bin->size()) {
-            if (size >= 0) {
-                xsink->raiseException("SOCKET-RECV-ERROR", "Unexpected end of stream");
-                return -1;
-            }
-            return 0;
-        }
-
-        br += bin->size();
-        const char* tbuf = static_cast<const char*>(bin->getPtr());
-        size_t remaining = bin->size();
-        while (remaining) {
-            if (!(cancel_check++ % 100) && qore_check_cancel(xsink, "socket file descriptor receive")) {
-                return -1;
-            }
-            ssize_t op_rc = ::write(fd, tbuf, remaining);
-            if (op_rc > 0) {
-                tbuf += op_rc;
-                remaining -= op_rc;
-                continue;
-            }
-            if (op_rc < 0 && errno == EINTR) {
-                continue;
-            }
-            if (op_rc < 0) {
-                xsink->raiseErrnoException("FILE-WRITE-ERROR", errno, "error writing file after " QSD
-                    " bytes read in Socket::recv()", br);
-            } else {
-                xsink->raiseException("FILE-WRITE-ERROR", "short write after " QSD
-                    " bytes read in Socket::recv()", br);
-            }
-            return -1;
-        }
-
-        if (size > 0 && br >= size) {
-            rc = 0;
-            break;
-        }
-    }
-    return rc;
+    SimpleRefHolder<FileOutputStream> os(new FileOutputStream(fd));
+    return qore_socket_exec_recv_output_stream_poll(this, *os, size, timeout_ms, xsink);
 }
 
 // receive data and write to file descriptor
@@ -6190,75 +6652,13 @@ int QoreSocket::recv(int fd, qore_offset_t size, int timeout) {
         return -1;
 
     ExceptionSink xsink;
-    SocketSyncPoll::assertNotOnIoThread("Socket", "recv", &xsink);
+    SimpleRefHolder<FileOutputStream> os(new FileOutputStream(fd));
+    int rc = qore_socket_exec_recv_output_stream_poll(this, *os, size, timeout, &xsink);
     if (xsink) {
         xsink.clear();
         return -1;
     }
-
-    qore_offset_t br = 0;
-    qore_offset_t rc;
-    unsigned cancel_check = 0;
-    while (true) {
-        if (!(cancel_check++ % 100) && qore_check_cancel(&xsink, "socket file descriptor receive")) {
-            rc = -1;
-            break;
-        }
-        // calculate bytes needed
-        int bn;
-        if (size == -1) {
-            bn = DEFAULT_SOCKET_BUFSIZE;
-        } else {
-            bn = size - br;
-            if (bn > DEFAULT_SOCKET_BUFSIZE)
-                bn = DEFAULT_SOCKET_BUFSIZE;
-        }
-
-        SimpleRefHolder<BinaryNode> bin(qore_socket_exec_recv_some_binary(this, bn, timeout, "recv", &xsink));
-        if (xsink) {
-            rc = -1;
-            break;
-        }
-        rc = bin->size();
-        if (rc <= 0)
-            break;
-        br += rc;
-
-        // write buffer to file descriptor
-        const char* ptr = static_cast<const char*>(bin->getPtr());
-        size_t remaining = rc;
-        while (remaining) {
-            if (!(cancel_check++ % 100) && qore_check_cancel(&xsink, "socket file descriptor receive")) {
-                rc = -1;
-                break;
-            }
-            ssize_t op_rc = ::write(fd, ptr, remaining);
-            if (op_rc > 0) {
-                ptr += op_rc;
-                remaining -= op_rc;
-                continue;
-            }
-            if (op_rc < 0 && errno == EINTR) {
-                continue;
-            }
-            rc = -1;
-            break;
-        }
-        if (rc < 0) {
-            break;
-        }
-
-        if (size > 0 && br >= size) {
-            rc = 0;
-            break;
-        }
-    }
-
-    // ignore exceptions; we use only a return code
-    if (xsink)
-        xsink.clear();
-
-    return (int)rc;
+    return rc;
 }
 
 // returns 0 for success

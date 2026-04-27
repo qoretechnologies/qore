@@ -2416,6 +2416,197 @@ static void ut_socket_async_owner_no_xsink_sync_wrappers(UnitTestCounters& c) {
     xsink.clear();
 }
 
+static bool ut_write_all(int fd, const char* data, size_t size) {
+    size_t offset = 0;
+    while (offset < size) {
+        ssize_t rc = ::write(fd, data + offset, size - offset);
+        if (rc > 0) {
+            offset += static_cast<size_t>(rc);
+            continue;
+        }
+        if (rc < 0 && errno == EINTR) {
+            continue;
+        }
+        return false;
+    }
+    return true;
+}
+
+static bool ut_send_all(int fd, const char* data, size_t size) {
+    size_t offset = 0;
+    while (offset < size) {
+        ssize_t rc = ::send(fd, data + offset, size - offset, 0);
+        if (rc > 0) {
+            offset += static_cast<size_t>(rc);
+            continue;
+        }
+        if (rc < 0 && errno == EINTR) {
+            continue;
+        }
+        return false;
+    }
+    return true;
+}
+
+static bool ut_recv_exact(int fd, std::string& data, size_t size) {
+    data.clear();
+    while (data.size() < size) {
+        char buf[128];
+        size_t remaining = size - data.size();
+        ssize_t rc = ::recv(fd, buf, QORE_MIN(remaining, sizeof(buf)), 0);
+        if (rc > 0) {
+            data.append(buf, static_cast<size_t>(rc));
+            continue;
+        }
+        if (rc < 0 && errno == EINTR) {
+            continue;
+        }
+        return false;
+    }
+    return true;
+}
+
+static bool ut_read_all(int fd, std::string& data, size_t size) {
+    data.clear();
+    while (data.size() < size) {
+        char buf[128];
+        size_t remaining = size - data.size();
+        ssize_t rc = ::read(fd, buf, QORE_MIN(remaining, sizeof(buf)));
+        if (rc > 0) {
+            data.append(buf, static_cast<size_t>(rc));
+            continue;
+        }
+        if (rc < 0 && errno == EINTR) {
+            continue;
+        }
+        return false;
+    }
+    return true;
+}
+
+static void ut_connect_loopback_and_close(int port) {
+    int fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (fd < 0) {
+        return;
+    }
+
+    sockaddr_in addr{};
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    addr.sin_port = htons(port);
+    ::connect(fd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
+    ::close(fd);
+}
+
+static void ut_qoresocket_fd_transfer_uses_async_controller(UnitTestCounters& c) {
+    ExceptionSink xsink;
+
+    const char send_payload[] = "qoresocket-send-fd-through-controller";
+    const size_t send_payload_size = sizeof(send_payload) - 1;
+
+    int send_pipe[2] = {-1, -1};
+    bool send_pipe_ok = pipe(send_pipe) == 0;
+    UT_ASSERT(c, send_pipe_ok, "QoreSocket fd-send source pipe opens");
+    if (!send_pipe_ok) {
+        xsink.clear();
+        return;
+    }
+    UT_ASSERT(c, ut_write_all(send_pipe[1], send_payload, send_payload_size),
+        "QoreSocket fd-send source pipe receives payload");
+    ::close(send_pipe[1]);
+
+    UtH1Server send_server;
+    bool send_server_started = send_server.start() == 0;
+    UT_ASSERT(c, send_server_started, "QoreSocket fd-send test server starts");
+    if (!send_server_started) {
+        ::close(send_pipe[0]);
+        xsink.clear();
+        return;
+    }
+    std::atomic<bool> send_server_ok{false};
+    send_server.serveOnce([&](int cfd) {
+        std::string received;
+        send_server_ok.store(
+            ut_recv_exact(cfd, received, send_payload_size) && received == send_payload,
+            std::memory_order_release);
+    });
+
+    QoreSocket send_sock;
+    int rc = send_sock.connectINET("127.0.0.1", send_server.port, 5000, &xsink);
+    UT_ASSERT(c, rc == 0 && !xsink, "QoreSocket fd-send connect succeeds");
+    if (rc || xsink) {
+        ut_connect_loopback_and_close(send_server.port);
+        ::close(send_pipe[0]);
+        if (send_server.thr.joinable()) {
+            send_server.thr.join();
+        }
+        xsink.clear();
+        return;
+    }
+    rc = send_sock.send(send_pipe[0], send_payload_size, 5000, &xsink);
+    UT_ASSERT(c, rc == 0 && !xsink, "QoreSocket::send(fd) succeeds through async controller");
+    ::close(send_pipe[0]);
+    send_sock.close();
+    if (send_server.thr.joinable()) {
+        send_server.thr.join();
+    }
+
+    const char recv_payload[] = "qoresocket-recv-fd-through-controller";
+    const size_t recv_payload_size = sizeof(recv_payload) - 1;
+
+    int recv_pipe[2] = {-1, -1};
+    bool recv_pipe_ok = pipe(recv_pipe) == 0;
+    UT_ASSERT(c, recv_pipe_ok, "QoreSocket fd-recv output pipe opens");
+    if (!recv_pipe_ok) {
+        xsink.clear();
+        return;
+    }
+
+    UtH1Server recv_server;
+    bool recv_server_started = recv_server.start() == 0;
+    UT_ASSERT(c, recv_server_started, "QoreSocket fd-recv test server starts");
+    if (!recv_server_started) {
+        ::close(recv_pipe[0]);
+        ::close(recv_pipe[1]);
+        xsink.clear();
+        return;
+    }
+    std::atomic<bool> recv_server_ok{false};
+    recv_server.serveOnce([&](int cfd) {
+        recv_server_ok.store(ut_send_all(cfd, recv_payload, recv_payload_size), std::memory_order_release);
+    });
+
+    QoreSocket recv_sock;
+    rc = recv_sock.connectINET("127.0.0.1", recv_server.port, 5000, &xsink);
+    UT_ASSERT(c, rc == 0 && !xsink, "QoreSocket fd-recv connect succeeds");
+    if (rc || xsink) {
+        ut_connect_loopback_and_close(recv_server.port);
+        ::close(recv_pipe[0]);
+        ::close(recv_pipe[1]);
+        if (recv_server.thr.joinable()) {
+            recv_server.thr.join();
+        }
+        xsink.clear();
+        return;
+    }
+    rc = recv_sock.recv(recv_pipe[1], recv_payload_size, 5000, &xsink);
+    UT_ASSERT(c, rc == 0 && !xsink, "QoreSocket::recv(fd) succeeds through async controller");
+    ::close(recv_pipe[1]);
+
+    std::string received;
+    UT_ASSERT(c, ut_read_all(recv_pipe[0], received, recv_payload_size) && received == recv_payload,
+        "QoreSocket::recv(fd) writes expected payload");
+    ::close(recv_pipe[0]);
+    recv_sock.close();
+    if (recv_server.thr.joinable()) {
+        recv_server.thr.join();
+    }
+
+    xsink.clear();
+    UT_ASSERT(c, send_server_ok.load(std::memory_order_acquire), "QoreSocket fd-send server received payload");
+    UT_ASSERT(c, recv_server_ok.load(std::memory_order_acquire), "QoreSocket fd-recv server sent payload");
+}
+
 #ifdef DEBUG
 //! Debug-only: arm a one-shot fd-swap simulation on the next controller wait of @a sock.
 /** Tests use this to exercise the fd_generation re-verification path in
@@ -2494,6 +2685,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_socket_async_owner_lifecycle(c);
     ut_socket_async_sequence_lifecycle(c);
     ut_socket_async_owner_no_xsink_sync_wrappers(c);
+    ut_qoresocket_fd_transfer_uses_async_controller(c);
     ut_manager_proxy_h1_connect(c);
     ut_manager_proxy_h3_rejected(c);
 
