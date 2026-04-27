@@ -217,29 +217,71 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::findReusableLocked(
     return nullptr;
 }
 
-void HttpClientConnectionManagerBase::evictDeadLocked(const std::string& key) {
+void HttpClientConnectionManagerBase::evictDeadLocked(const std::string& key,
+        std::vector<HttpClientConnectionBase*>* out_to_close) {
     auto it = pool_.find(key);
     if (it == pool_.end()) {
         return;
     }
     auto& conns = it->second;
+
+    // Compute the max-age cutoff once.  Skipped entirely if max_age_ms == 0
+    // (default) or if the caller passed nullptr for out_to_close (existing
+    // call sites that only want closed-conn eviction).
+    int64_t max_age_us = (out_to_close && opts_.max_age_ms > 0)
+        ? (int64_t)opts_.max_age_ms * 1000LL : -1;
+    int64_t now_us = 0;
+    if (max_age_us > 0) {
+        int us = 0;
+        now_us = q_epoch_us(us) * 1000000LL + us;
+    }
+
     auto write_it = conns.begin();
     for (auto read_it = conns.begin(); read_it != conns.end(); ++read_it) {
-        if (!(*read_it)->isClosed()) {
-            *write_it++ = *read_it;
-        } else {
+        HttpClientConnectionBase* conn = *read_it;
+        if (conn->isClosed()) {
             // Closed connection — drop our pool ref.  setManager(nullptr)
             // is called separately by closeAndEvict / onConnectionClosed
             // / closeAll, so we don't need to do that here.
             ExceptionSink xs;
-            (*read_it)->deref(&xs);
+            conn->deref(&xs);
             xs.clear();
+            continue;
         }
+        // Born-at TTL (max_age) check.  Gated on getActiveStreamCount() == 0
+        // — never evict a connection currently serving requests; the next
+        // checkout after the streams complete will catch it.  The conn
+        // is not yet closed; transfer our pool ref to out_to_close so the
+        // caller can close+deref after pool_lock_ drops (closeConnection
+        // is unsafe under pool_lock_, see acquireConnectionImpl shutdown
+        // branch ~line 360 for the established pattern).
+        if (max_age_us > 0
+                && conn->getActiveStreamCount() == 0
+                && (now_us - conn->getCreatedUs()) >= max_age_us) {
+            out_to_close->push_back(conn);
+            continue;
+        }
+        *write_it++ = conn;
     }
     conns.erase(write_it, conns.end());
     if (conns.empty()) {
         pool_.erase(it);
     }
+}
+
+void HttpClientConnectionManagerBase::closeAndDerefAfterLockDrop(
+        HttpClientConnectionBase* conn) {
+    if (!conn) {
+        return;
+    }
+    // Mirror the shutdown branch's close+deref pattern (~line 360).
+    // setManager(nullptr) prevents onClosedHook from re-entering this
+    // manager's pool during the close.
+    conn->setManager(nullptr);
+    ExceptionSink xs;
+    conn->closeConnection(&xs);
+    conn->deref(&xs);
+    xs.clear();
 }
 
 HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnection(
@@ -315,30 +357,49 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnectionImpl
         // 3. Recheck pool under write lock + capacity check.  Another
         // thread may have added a usable connection between our scan
         // (step 1) and acquiring `creating_` (step 2).
+        //
+        // Max-age-expired connections collected by evictDeadLocked must be
+        // closed AFTER pool_lock_ drops (closeConnection reaches into the
+        // I/O thread and is unsafe under pool_lock_).  RAII guard drains
+        // them on every exit path.
+        std::vector<HttpClientConnectionBase*> max_age_evicted;
+        struct MaxAgeDrainGuard {
+            HttpClientConnectionManagerBase* mgr;
+            std::vector<HttpClientConnectionBase*>* v;
+            ~MaxAgeDrainGuard() {
+                for (auto* c : *v) {
+                    mgr->closeAndDerefAfterLockDrop(c);
+                }
+            }
+        } drain_guard{this, &max_age_evicted};
+
+        HttpClientConnectionBase* live_to_return = nullptr;
         {
             std::unique_lock<std::shared_mutex> wl(pool_lock_);
             if (shutdown_) {
                 xsink->raiseException("HTTPCLIENT-SHUTDOWN",
                     "connection manager is shutting down");
-                return nullptr;
+                return nullptr;  // drain_guard fires
             }
-            evictDeadLocked(key);
-            HttpClientConnectionBase* live = findReusableLocked(key);
-            if (live) {
-                return live;
-            }
+            // Pass the out-vector so max-age-expired conns are collected
+            // for close-after-lock-drop instead of being kept in the pool.
+            evictDeadLocked(key, &max_age_evicted);
+            live_to_return = findReusableLocked(key);
 
             // Capacity check
-            if (opts_.max_connections_per_host) {
+            if (!live_to_return && opts_.max_connections_per_host) {
                 auto it = pool_.find(key);
                 int count = (it == pool_.end()) ? 0 : (int)it->second.size();
                 if (count >= opts_.max_connections_per_host) {
                     xsink->raiseException("HTTPCLIENT-CAPACITY-ERROR",
                         "all %d connections to %s have reached the "
                         "concurrent stream limit", count, key.c_str());
-                    return nullptr;
+                    return nullptr;  // drain_guard fires
                 }
             }
+        }
+        if (live_to_return) {
+            return live_to_return;  // drain_guard fires
         }
 
         // 4. Create the connection OUTSIDE the pool lock.  Constructor
@@ -643,6 +704,17 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::createConnection(
             dx.clear();
             return nullptr;
         }
+    }
+
+    // Push the configured idle timeout into the protocol's poll-op
+    // proactive-close machinery.  Mirrors the Qore-side wiring at
+    // qlib/HttpClientIo/HttpClientConnectionManager.qc:1684-1689.
+    // H1/H2 override setIdleTimeoutHook to call their setIdleTimeout;
+    // H3 uses ngtcp2's own idle/keepalive timers and inherits the
+    // base no-op.  Safe to call before or after wait_for_ready — the
+    // hook is idempotent and a no-op while the poll op is unbuilt.
+    if (opts_.idle_timeout_ms > 0) {
+        conn->setIdleTimeoutHook((int64_t)opts_.idle_timeout_ms * 1000LL);
     }
 
     return conn;

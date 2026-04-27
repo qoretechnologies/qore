@@ -66,20 +66,10 @@ public class Http1ClientConnection inherits HttpClientConnection {
             *LoggerInterface logger, int max_streams = 1,
             *int ssl_verify_mode, bool accept_all_certs = False,
             *hash<auto> proxy_info,
-            *SSLCertificate client_cert, *SSLPrivateKey client_pk) {
-        self.url_info = url_info;
-        self.connect_timeout = connect_timeout;
-        self.logger = logger;
-        self.proxy_info = proxy_info;
-        # HTTP/1.1 is serial — only 1 concurrent stream is supported
-        if (max_streams > 1) {
-            throw "HTTP1-OPTION-ERROR",
-                sprintf("HTTP/1.1 connections support only 1 concurrent stream, got %d", max_streams);
-        }
-        self.max_concurrent_streams = 1;
-        self.last_activity = now_us();
-        connection_id = allocateConnectionId();
-
+            *SSLCertificate client_cert, *SSLPrivateKey client_pk)
+            : HttpClientConnection(url_info, connect_timeout, logger,
+                    Http1ClientConnection::validateMaxStreams(max_streams),
+                    proxy_info) {
         log(LoggerLevel::DEBUG, "creating HTTP/1.1 connection to %s:%d (ssl=%y proxy=%y mtls=%y)",
             url_info.host, url_info.port, url_info.protocol == "https",
             proxy_info ? sprintf("%s:%d", proxy_info.host, proxy_info.port) : NOTHING,
@@ -87,6 +77,20 @@ public class Http1ClientConnection inherits HttpClientConnection {
 
         poll_op = new Http1ClientPollOperation(url_info, connect_timeout, logger,
             ssl_verify_mode, accept_all_certs, proxy_info, self, client_cert, client_pk);
+    }
+
+    #! Enforces the HTTP/1.1 single-stream cap before the parent constructor runs.
+    /** Returns 1 unconditionally; throws if the caller asked for more than 1
+        concurrent stream (HTTP/1.1 is serial — pipelining is not supported).
+        Used inline in the parent-constructor argument list so the validation
+        runs before any Qore-side state is touched.
+    */
+    static int validateMaxStreams(int max_streams) {
+        if (max_streams > 1) {
+            throw "HTTP1-OPTION-ERROR",
+                sprintf("HTTP/1.1 connections support only 1 concurrent stream, got %d", max_streams);
+        }
+        return 1;
     }
 
     #! Returns the protocol identifier
@@ -152,9 +156,10 @@ public class Http1ClientConnection inherits HttpClientConnection {
         @see submitRequestImpl()
     */
     int submitRequestStreaming(string method, string path, *hash<auto> headers,
-            *data body, Channel channel, bool streaming = True) {
+            *data body, Channel channel, bool streaming = True,
+            bool body_streaming = False) {
         int sid = poll_op.submitRequestStreaming(method, path, headers, body, channel,
-            max_concurrent_streams, streaming);
+            max_concurrent_streams, streaming, body_streaming);
         # Wake the I/O controller so it processes the queued request
         *object ctl;
         {
@@ -165,6 +170,68 @@ public class Http1ClientConnection inherits HttpClientConnection {
             ctl.wakeSocket(getSocket());
         }
         return sid;
+    }
+
+    #! Sends a request-body chunk on a streaming-send H1 request
+    /** Used by @ref Http1ClientStreamHandle::sendData() to feed the
+        chunked request body of a stream submitted with
+        \c body_streaming = \c True.
+
+        HTTP/1.1 chunked transfer is sequential at the wire — the request
+        body must be fully sent before the response body starts.  But
+        callers can interleave \c sendData() / \c readData() at the
+        application layer; the request-body chunks queue until the I/O
+        thread sends them, and the response chunks queue in the data
+        channel until the caller reads them.
+
+        @param stream_id the stream ID returned by \c submitRequestStreaming
+            (kept for API parity with H2/H3 — H1 is single-stream and the
+            value is currently advisory)
+        @param data the chunk (string or binary)
+        @param end_stream if \c True, signal end-of-request-body — the
+            poll op writes the final \c "0\\r\\n" terminator and any
+            trailers, then transitions to response reading
+
+        @throw HTTP1-STATE-ERROR if the connection is not READY
+
+        @since %Qore 2.3
+    */
+    sendStreamData(int stream_id, data data, bool end_stream = False) {
+        if (!self.isReady()) {
+            throw "HTTP1-STATE-ERROR",
+                sprintf("cannot send data in state: %y", self.getConnectionState());
+        }
+        *object ctl;
+        {
+            AutoLock al(lock);
+            last_activity = now_us();
+            ctl = controller_ref;
+        }
+        log(LoggerLevel::DEBUG,
+            "sending data on H1 stream %d (end_stream=%y)", stream_id, end_stream);
+        if (data.size() > 0) {
+            poll_op.pushSendData(data);
+        }
+        if (end_stream) {
+            poll_op.pushSendData();  # NOTHING = EOF sentinel
+        }
+        if (ctl) {
+            ctl.wakeSocket(getSocket());
+        }
+    }
+
+    #! Sets HTTP/1.1 chunked-transfer trailers on a streaming-send request
+    /** Trailers are emitted after the final \c "0\\r\\n" terminator when
+        @ref sendStreamData is called with \c end_stream = \c True.  Each
+        call replaces any previously-set trailers.
+
+        @param trailers map of trailer header name to value; pass \c NOTHING
+            to clear
+
+        @since %Qore 2.3
+    */
+    setTrailers(*hash<string, string> trailers) {
+        poll_op.setTrailers(trailers);
     }
 
     #! Submits an SSE request with Queue-based parsed event delivery

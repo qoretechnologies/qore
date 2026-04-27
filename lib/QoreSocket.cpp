@@ -4024,6 +4024,41 @@ int QoreSocket::getNoDelay() const {
     return rc;
 }
 
+int QoreSocket::setUserTimeout(int ms) {
+    if (ms < 0) {
+        ms = 0;
+    }
+    priv->tcp_user_timeout_ms = ms;
+#ifdef TCP_USER_TIMEOUT
+    if (priv->sock != QORE_INVALID_SOCKET
+            && (priv->sfamily == AF_INET || priv->sfamily == AF_INET6)
+            && priv->stype == SOCK_STREAM) {
+        unsigned int v = (unsigned int)ms;
+        return setsockopt(priv->sock, IPPROTO_TCP, TCP_USER_TIMEOUT,
+            (SETSOCKOPT_ARG_4)&v, sizeof(v));
+    }
+#endif
+    return 0;
+}
+
+int QoreSocket::getUserTimeout() const {
+#ifdef TCP_USER_TIMEOUT
+    if (priv->sock != QORE_INVALID_SOCKET
+            && (priv->sfamily == AF_INET || priv->sfamily == AF_INET6)
+            && priv->stype == SOCK_STREAM) {
+        unsigned int v = 0;
+        socklen_t optlen = sizeof(v);
+        int sorc = getsockopt(priv->sock, IPPROTO_TCP, TCP_USER_TIMEOUT,
+            (GETSOCKOPT_ARG_4)&v, &optlen);
+        if (sorc == 0) {
+            return (int)v;
+        }
+        // getsockopt failed (e.g., kernel rejected) — fall back to cached
+    }
+#endif
+    return priv->tcp_user_timeout_ms;
+}
+
 int QoreSocket::close() {
     return priv->close();
 }

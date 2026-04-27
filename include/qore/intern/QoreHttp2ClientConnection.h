@@ -206,6 +206,17 @@ public:
 
     DLLEXPORT void closeConnection(ExceptionSink* xsink) override;
 
+    //! Returns the raw poll-op priv pointer (for setIdleTimeout from the
+    //! connection manager, etc.).  Null until @ref buildAndSubmit completes.
+    DLLLOCAL Http2ClientPollOperationPriv* getPollOpPriv() const {
+        return poll_op_priv;
+    }
+
+    //! Pushes the configured idle timeout down to the H2 poll op priv,
+    //! enabling its applyIdleTimeout proactive close path when no streams
+    //! are active.  No-op if @ref buildAndSubmit hasn't completed yet.
+    DLLEXPORT void setIdleTimeoutHook(int64_t timeout_us) override;
+
 protected:
     DLLLOCAL QoreHashNode* getReferencedErrorInfo() override;
 

@@ -98,6 +98,18 @@ public:
         return 0;
     }
 
+    //! Hook for the connection manager to push the configured idle timeout
+    //! down to the protocol's poll-op proactive-close machinery.
+    /** Default no-op.  H1 / H2 subclasses override to call
+        @c setIdleTimeout on their poll-op priv.  H3 (QUIC) skips —
+        ngtcp2's own idle / keepalive timers cover liveness.
+
+        @param timeout_us idle timeout in microseconds; <=0 disables
+    */
+    DLLEXPORT virtual void setIdleTimeoutHook(int64_t timeout_us) {
+        (void)timeout_us;
+    }
+
     //! Returns the maximum concurrent streams this connection can host.
     /** Default 1 (HTTP/1.1 semantics).  H2 connections override to return
         their negotiated MAX_CONCURRENT_STREAMS setting (or the cap from
@@ -467,17 +479,32 @@ public:
     */
     DLLEXPORT void drainInFlight();
 
+    //! Returns the connection creation timestamp (epoch microseconds).
+    /** Set once in the protected constructor; never updated.  Used by
+        @ref HttpClientConnectionManagerBase to enforce
+        @ref Options::max_age_ms at pool checkout.  Pure stored-state
+        read — no syscall, no I/O thread coupling.
+    */
+    DLLEXPORT int64_t getCreatedUs() const {
+        return created_us_;
+    }
+
 protected:
     DLLLOCAL HttpClientConnectionBase(std::string target_host, int target_port,
             bool ssl_required)
         : target_host(std::move(target_host)),
           target_port(target_port),
           ssl_required(ssl_required) {
+        int us = 0;
+        created_us_ = q_epoch_us(us) * 1000000LL + us;
     }
 
     std::string target_host;
     int target_port;
     bool ssl_required;
+
+    //! Connection creation timestamp (epoch microseconds), born-at TTL.
+    int64_t created_us_ = 0;
 
     //! Lock protecting @ref pending_stream_count.
     /** This is a leaf lock — it does not nest with other connection

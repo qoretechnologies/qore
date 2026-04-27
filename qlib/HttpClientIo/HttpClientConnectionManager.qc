@@ -1381,9 +1381,11 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         if (protocol == "h1") {
             log(LoggerLevel::DEBUG, "creating new HTTP/1.1 connection to %s%s", key,
                 proxy_info ? sprintf(" via proxy %s:%d", proxy_info.host, proxy_info.port) : "");
-            return new Http1ClientConnection(url_info, opts.connect_timeout, logger,
+            HttpClientConnection conn = new Http1ClientConnection(url_info, opts.connect_timeout, logger,
                 1, opts.ssl_verify_mode, opts.accept_all_certs, proxy_info,
                 opts.client_cert, opts.client_pk);
+            applyTcpUserTimeout(conn);
+            return conn;
         }
 
         if (protocol == "h3") {
@@ -1406,6 +1408,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
                 Http3ClientConnection conn(h3_url_info, opts.connect_timeout, logger,
                     opts.max_streams_per_connection, opts.ssl_verify_mode, opts.accept_all_certs,
                     opts.client_cert, opts.client_pk);
+                # H3 uses UDP/QUIC — TCP_USER_TIMEOUT does not apply.
                 cacheProtocol(key, "h3");
                 return conn;
             } catch (hash<ExceptionInfo> ex) {
@@ -1423,9 +1426,30 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         # Create H2 connection
         log(LoggerLevel::DEBUG, "creating new HTTP/2 connection to %s%s", key,
             proxy_info ? sprintf(" via proxy %s:%d", proxy_info.host, proxy_info.port) : "");
-        return new Http2ClientConnection(url_info, opts.connect_timeout, logger,
+        HttpClientConnection h2 = new Http2ClientConnection(url_info, opts.connect_timeout, logger,
             opts.max_streams_per_connection, opts.ssl_verify_mode, opts.accept_all_certs,
             proxy_info, opts.client_cert, opts.client_pk);
+        applyTcpUserTimeout(h2);
+        return h2;
+    }
+
+    #! Internal: apply the configured TCP_USER_TIMEOUT to a connection's socket
+    /** Called immediately after construction so the value is in place before
+        the I/O thread fires confirmConnected.  No effect on UDP (H3) or
+        platforms without \c TCP_USER_TIMEOUT.
+    */
+    private applyTcpUserTimeout(HttpClientConnection conn) {
+        # Qore's timeout type is an int representing milliseconds; pass it
+        # directly to setUserTimeout(int).
+        if (opts.tcp_user_timeout > 0) {
+            try {
+                conn.getSocket().setUserTimeout(opts.tcp_user_timeout);
+            } catch (hash<ExceptionInfo> ex) {
+                log(LoggerLevel::DEBUG,
+                    "TCP_USER_TIMEOUT could not be applied: %s: %s",
+                    ex.err, ex.desc);
+            }
+        }
     }
 
     #! Internal: happy eyeballs parallel H3 + H2 connection race
@@ -1506,6 +1530,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         Http2ClientConnection h2conn(url_info, opts.connect_timeout, logger,
             opts.max_streams_per_connection, opts.ssl_verify_mode, opts.accept_all_certs,
             proxy_info, opts.client_cert, opts.client_pk);
+        applyTcpUserTimeout(h2conn);
         h2conn.setControllerRef(controller);
         h2conn.setManagerContext(self, key);
         submitConnectionToController(key, h2conn);
@@ -1843,11 +1868,13 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
             || err == "HTTP2-ERROR"
             || err == "HTTP1-CONNECT-ERROR"
             || err == "HTTP1-CONNECTION-CLOSED"
+            || err == "HTTP1-IDLE-TIMEOUT"
             || err == "HTTP1-STATE-ERROR"
             || err == "HTTP1-SSL-ERROR"
             || err == "HTTP1-ABORT"
             || err == "HTTP1-SEND-ERROR"
             || err == "HTTP1-RECV-ERROR"
+            || err == "HTTP2-IDLE-TIMEOUT"
             || err == "HTTPCLIENT-STATE-ERROR"
             || err == "HTTPCLIENT-CONNECT-ERROR"
             || err == "SOCKET-SEND-ERROR"
@@ -2071,12 +2098,19 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
     }
 
     #! Internal: checks if a connection is alive at the transport level
-    /** Verifies that the underlying socket is open and the poll operation hasn't
-        detected any errors.  The async I/O thread continuously monitors idle
-        connections via epoll/kqueue; when a server sends FIN/RST, the I/O thread
-        detects it via \c recv(MSG_PEEK) in \c handleIdle() and marks the poll
-        operation as closed/errored.  This check reads that state, providing
-        instant dead-connection detection for the pool scan.
+    /** Verifies that the underlying socket is open, the poll operation hasn't
+        detected any errors, and the idle window has not expired.
+
+        Liveness detection is owned by the async I/O thread.  When a server
+        sends FIN/RST, the I/O thread sees the POLLIN/POLLHUP via its
+        epoll/kqueue loop and the H1 poll op's \c handleIdle issues a
+        \c recv(MSG_PEEK) to confirm; on EOF, the op is marked closed and
+        \c op.isClosed() returns True here.  This method does NOT do its own
+        \c poll(0) on the fd: that would reach past the async I/O ownership
+        model and race the I/O thread for the same kernel state without
+        material benefit (the I/O thread learns of the same event microseconds
+        later, and the conn-mgr's first-byte retry covers the race window —
+        the same trade-off curl makes via \c Curl_retry_request).
 
         @note Called under pool_lock read lock — must not block or acquire pool_lock
     */
@@ -2092,6 +2126,59 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
                 conn.getConnectionId());
             return False;
         }
+
+        # Stream-state-sensitive eviction checks (idle-age + max-age).
+        # Both gated on getActiveStreamCount() == 0:
+        #  - last_activity is not updated continuously mid-stream, so a
+        #    long-running stream can have a stale last_activity and would
+        #    be falsely judged idle.
+        #  - max-age eviction would interrupt in-flight streams; never
+        #    evict a connection that's actively serving requests — the
+        #    next checkout after the stream completes will catch it.
+        # Pure stored-state reads — no syscall, no I/O thread coupling.
+        # Use the same cutoff pattern as @ref cleanupIdleConnections (compare
+        # two dates) — `(now_us() - timestamp) >= opts.timeout` does not
+        # behave reliably because the LHS is a date duration and the RHS
+        # is a millisecond int.
+        if (conn.getActiveStreamCount() == 0) {
+            date now = now_us();
+            # Strict idle-age check.  maybeCleanupIdle() runs only every
+            # idle_timeout/3 (clamped), so a connection slightly past
+            # idle_timeout can slip through.  Reject it here at checkout
+            # so reuse decisions are race-free against the cleanup tick.
+            if (opts.idle_timeout > 0) {
+                date idle_cutoff = now - opts.idle_timeout;
+                if (conn.getLastActivity() < idle_cutoff) {
+                    # WARN: pool churn driven by idle-age — operationally
+                    # relevant signal for "why is the manager opening so
+                    # many fresh connections?"  Tune idle_timeout up if
+                    # this fires more often than expected.
+                    log(LoggerLevel::WARN,
+                        "evicting connection %d at checkout: exceeded "
+                        "idle_timeout (%y since last activity)",
+                        conn.getConnectionId(),
+                        now - conn.getLastActivity());
+                    return False;
+                }
+            }
+            # Born-at TTL (curl CURLOPT_MAXAGE_CONN).  Bounds the
+            # wall-clock age of a pooled connection so middlebox-expired
+            # sessions are refreshed proactively.
+            if (opts.max_age > 0) {
+                date age_cutoff = now - opts.max_age;
+                if (conn.getCreationTime() < age_cutoff) {
+                    # WARN: pool churn driven by max_age (born-at TTL).
+                    # See above — operationally relevant signal.
+                    log(LoggerLevel::WARN,
+                        "evicting connection %d at checkout: exceeded "
+                        "max_age (%y since creation)",
+                        conn.getConnectionId(),
+                        now - conn.getCreationTime());
+                    return False;
+                }
+            }
+        }
+
         return True;
     }
 

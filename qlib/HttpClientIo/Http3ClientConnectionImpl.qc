@@ -56,13 +56,8 @@ public class Http3ClientConnection inherits HttpClientConnection {
     constructor(hash<auto> url_info, timeout connect_timeout = DefaultConnectTimeout,
             *LoggerInterface logger, int max_streams = DefaultMaxStreamsPerConnection,
             *int ssl_verify_mode, bool accept_all_certs = False,
-            *SSLCertificate client_cert, *SSLPrivateKey client_pk) {
-        self.url_info = url_info;
-        self.connect_timeout = connect_timeout;
-        self.logger = logger;
-        self.max_concurrent_streams = max_streams;
-        self.last_activity = now_us();
-        connection_id = allocateConnectionId();
+            *SSLCertificate client_cert, *SSLPrivateKey client_pk)
+            : HttpClientConnection(url_info, connect_timeout, logger, max_streams) {
 
         log(LoggerLevel::DEBUG, "creating QUIC connection to %s:%d (max_streams=%d)",
             url_info.host, url_info.port, max_streams);

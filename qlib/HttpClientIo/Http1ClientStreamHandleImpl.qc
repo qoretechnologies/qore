@@ -65,6 +65,9 @@ public class Http1ClientStreamHandle inherits HttpClientStreamHandle {
 
         #! Whether this stream is in streaming mode
         bool streaming = False;
+
+        #! Whether this stream uses chunked request-body streaming (sendData allowed)
+        bool request_body_streaming = False;
     }
 
     #! Creates a new stream handle
@@ -90,17 +93,38 @@ public class Http1ClientStreamHandle inherits HttpClientStreamHandle {
         @param method HTTP method (e.g., "GET", "POST")
         @param path request path
         @param headers request headers (optional)
-        @param body_streaming if \c True, enables bidirectional mode; for HTTP/1.1 this
-            is used for 101 Switching Protocols (WebSocket upgrade) where the socket
-            transitions to raw bidirectional I/O after the handshake
+        @param body_streaming if \c True, the request body is sent using
+            \c "Transfer-Encoding: chunked" and chunks are pushed
+            incrementally via @ref sendData() / @ref writesDone().
+            Use this for protocols like DataStream that send a chunked
+            request body.  When \c True, @a body should be empty.
+
+            HTTP/1.1 chunked transfer is sequential on the wire — the
+            request body must be fully sent before the response body
+            starts arriving.  At the application layer, callers may
+            interleave @ref sendData() and @ref readData() freely; the
+            poll op buffers as needed.  For true wire-level concurrent
+            bidirectional streaming, use HTTP/2 or HTTP/3.
+        @param body request body (only used when \c body_streaming = \c False)
 
         @return the stream ID
 
-        @throw HTTPCLIENT-STATE-ERROR if the stream is already in use
+        @throw HTTPCLIENT-STATE-ERROR if the stream is already in use, or
+            if both \c body_streaming = \c True and a non-empty @a body
+            were supplied
         @throw HTTPCLIENT-TIMEOUT if connection establishment times out
+
+        @since %Qore 2.3 (the \c body_streaming = \c True path was added in
+            this release; previously the method threw \c HTTP1-STREAMING-ERROR
+            on \c sendData())
     */
     int startStreaming(string method, string path, *hash<auto> headers,
             bool body_streaming = False, *data body) {
+        if (body_streaming && body && body.size() > 0) {
+            throw "HTTPCLIENT-STATE-ERROR",
+                "body_streaming=True is incompatible with a non-empty body; "
+                "send body bytes via sendData() instead";
+        }
         {
             AutoLock al(lock);
             if (state != HttpClientStreamState::Pending) {
@@ -113,6 +137,7 @@ public class Http1ClientStreamHandle inherits HttpClientStreamHandle {
         # Create unbounded channel for data delivery
         data_channel = new Channel(-1);
         streaming = True;
+        request_body_streaming = body_streaming;
 
         # Wait for connection to become ready
         if (!conn.isReady()) {
@@ -123,6 +148,7 @@ public class Http1ClientStreamHandle inherits HttpClientStreamHandle {
                 }
                 releaseReservationIfHeld();
                 streaming = False;
+                request_body_streaming = False;
                 remove data_channel;
                 throw "HTTPCLIENT-TIMEOUT", "connection establishment timed out";
             }
@@ -134,16 +160,18 @@ public class Http1ClientStreamHandle inherits HttpClientStreamHandle {
             if (state != HttpClientStreamState::Open) {
                 releaseReservationIfHeld();
                 streaming = False;
+                request_body_streaming = False;
                 remove data_channel;
                 throw "HTTPCLIENT-CANCELLED", "stream was cancelled during connection setup";
             }
         }
 
-        log(LoggerLevel::DEBUG, "starting streaming request: %s %s", method, path);
+        log(LoggerLevel::DEBUG, "starting streaming request: %s %s (body_streaming=%y)",
+            method, path, body_streaming);
 
         try {
             stream_id = h1conn.submitRequestStreaming(method, path, headers, body,
-                data_channel);
+                data_channel, True, body_streaming);
             @assert(stream_id >= 0);
             reservation_held = False;
         } catch (hash<ExceptionInfo> ex) {
@@ -155,6 +183,7 @@ public class Http1ClientStreamHandle inherits HttpClientStreamHandle {
             }
             releaseReservationIfHeld();
             streaming = False;
+            request_body_streaming = False;
             remove data_channel;
             rethrow;
         }
@@ -321,18 +350,104 @@ public class Http1ClientStreamHandle inherits HttpClientStreamHandle {
         }
     }
 
-    #! Not supported for HTTP/1.1 streaming
-    /** After 101 Switching Protocols, the socket is extracted from the H1
-        connection and used directly with WebSocketClientPollOperationBase.
-        This method is not called in that flow.
+    #! Sends a request-body chunk on a streaming HTTP/1.1 request
+    /** Requires the stream to have been started with
+        @ref startStreaming() and \c body_streaming = \c True (which sends
+        the request headers with \c "Transfer-Encoding: chunked" and
+        leaves the request body open).  Each call appends one chunk;
+        passing \c end_stream = \c True writes the final \c "0\\r\\n"
+        terminator (and any trailers set via @ref setTrailers via the
+        connection) and transitions the connection to response reading.
 
-        @throw HTTP1-STREAMING-ERROR always thrown
+        Half-close (\c end_stream = \c True with empty data) on an
+        already-closed stream is a no-op.
+
+        @param data the chunk to send (string or binary)
+        @param end_stream if \c True, signal end-of-request-body
+
+        @throw HTTPCLIENT-STATE-ERROR if not in streaming mode, the
+            stream is not in a valid send state, the stream wasn't
+            started with \c body_streaming = \c True, or the stream has
+            no assigned ID yet
+        @throw HTTPCLIENT-STREAM-CLOSED if the underlying H1 connection
+            has been closed
+
+        @since %Qore 2.3
     */
     sendData(data data, bool end_stream = False) {
-        throw "HTTP1-STREAMING-ERROR",
-            "bidirectional body streaming is not supported over HTTP/1.1; "
-            "after 101 Upgrade, use the extracted socket with "
-            "WebSocketClientPollOperationBase";
+        int sid;
+        {
+            AutoLock al(lock);
+            if (!streaming) {
+                throw "HTTPCLIENT-STATE-ERROR", "not in streaming mode";
+            }
+            if (state != HttpClientStreamState::Open
+                    && state != HttpClientStreamState::HeadersReceived
+                    && state != HttpClientStreamState::ReceivingBody) {
+                if (end_stream && data.empty()) {
+                    # half-close on already-closed stream is a no-op
+                    return;
+                }
+                throw "HTTPCLIENT-STATE-ERROR",
+                    sprintf("cannot send data in state: %y", state);
+            }
+            if (!stream_id) {
+                throw "HTTPCLIENT-STATE-ERROR", "stream not yet established";
+            }
+            if (!request_body_streaming) {
+                if (end_stream && data.empty()) {
+                    return;
+                }
+                throw "HTTPCLIENT-STATE-ERROR",
+                    "cannot send data: stream was not started with "
+                    "body_streaming=True";
+            }
+            sid = stream_id;
+        }
+
+        # Check connection state AFTER stream-level checks — the H1
+        # connection may have been closed (TCP reset, FIN) while the
+        # stream handle's state is still Open.  Catching it here gives
+        # a clean HTTPCLIENT-STREAM-CLOSED instead of an opaque
+        # HTTP1-STATE-ERROR from sendStreamData().
+        if (!h1conn.isReady()) {
+            if (end_stream && data.empty()) {
+                return;
+            }
+            throw "HTTPCLIENT-STREAM-CLOSED",
+                sprintf("cannot send data: H1 connection closed (state: %y)",
+                    h1conn.getConnectionState());
+        }
+
+        log(LoggerLevel::DEBUG, "sending data on H1 stream %d (end_stream=%y)",
+            sid, end_stream);
+        h1conn.sendStreamData(sid, data, end_stream);
+    }
+
+    #! Sets HTTP/1.1 chunked-transfer trailers for a streaming-send request
+    /** Trailers are emitted after the final \c "0\\r\\n" terminator when
+        @ref sendData() is called with \c end_stream = \c True.  Each call
+        replaces any previously-set trailers.
+
+        @param trailers map of trailer header name to value; pass \c NOTHING
+            to clear
+
+        @throw HTTPCLIENT-STATE-ERROR if not in streaming mode
+
+        @since %Qore 2.3
+    */
+    setTrailers(*hash<string, string> trailers) {
+        {
+            AutoLock al(lock);
+            if (!streaming) {
+                throw "HTTPCLIENT-STATE-ERROR", "not in streaming mode";
+            }
+            if (!request_body_streaming) {
+                throw "HTTPCLIENT-STATE-ERROR",
+                    "trailers require body_streaming=True";
+            }
+        }
+        h1conn.setTrailers(trailers);
     }
 
     #! Protocol-specific async request submission — returns {stream_id, future}

@@ -121,6 +121,16 @@ int Http2ClientConnection::buildAndSubmit(ExceptionSink* xsink) {
     ReferenceHolder<QoreObject> sock_obj_holder(
         new QoreObject(QC_SOCKET, pgm, sock_priv_holder.release()), xsink);
 
+    // Apply TCP_USER_TIMEOUT if the manager configured it.  The value is
+    // stored on the socket and re-applied by qore_socket_private at the
+    // post-connect hook (confirmConnected).
+    if (manager_) {
+        int ut_ms = manager_->getOptions().tcp_user_timeout_ms;
+        if (ut_ms > 0) {
+            sock_priv_raw->setUserTimeout(ut_ms);
+        }
+    }
+
     // 2. Build the TCP connect target string "host:port".
     char target_str[256];
     int n = snprintf(target_str, sizeof(target_str), "%s:%d", target_host.c_str(), target_port);
@@ -202,6 +212,16 @@ int Http2ClientConnection::buildAndSubmitAdopted(QoreObject* adopted_sock_obj,
     // the H2 multiplex op's first continuePoll runs.
     ReferenceHolder<QoreObject> sock_obj_holder(adopted_sock_obj, xsink);
     QoreSocketObject* sock_priv_raw = adopted_sock_priv;
+
+    // Apply TCP_USER_TIMEOUT to the adopted (already-connected) socket if
+    // the manager configured it; setUserTimeout applies immediately when
+    // the fd is open.
+    if (manager_) {
+        int ut_ms = manager_->getOptions().tcp_user_timeout_ms;
+        if (ut_ms > 0) {
+            sock_priv_raw->setUserTimeout(ut_ms);
+        }
+    }
 
     // Create the adopt-socket H2 poll op priv.  ssl_required is
     // implicitly true for the adopt path (see design doc §5.1).
@@ -748,4 +768,12 @@ QoreHashNode* Http2ClientConnection::getReferencedErrorInfo() {
         return nullptr;
     }
     return poll_op_priv->getErrorInfo();
+}
+
+void Http2ClientConnection::setIdleTimeoutHook(int64_t timeout_us) {
+    MethodGuard g(this);
+    if (!g.acquired() || !poll_op_priv) {
+        return;
+    }
+    poll_op_priv->setIdleTimeout(timeout_us);
 }

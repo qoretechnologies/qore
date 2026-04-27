@@ -7,6 +7,18 @@
 
 %requires QUnit
 
+%try-module yaml
+%define NoYaml
+%endtry
+
+%try-module json
+%define NoJson
+%endtry
+
+%try-module xml
+%define NoXml
+%endtry
+
 %exec-class DataProviderExpressionsTest
 
 #! Evaluates a DPQL expression with an optional record hash
@@ -310,23 +322,40 @@ class DataProviderExpressionsTest inherits QUnit::Test {
     }
 
     serializationTests() {
-        # YAML
-        string yaml = eval_expr("make_yaml", ({"key": "value"}));
-        assertTrue(yaml.val());
-        hash<auto> parsed = eval_expr("parse_yaml", (yaml));
-        assertEq("value", parsed.key);
+%ifndef NoYaml
+        {
+            string yaml = eval_expr("make_yaml", ({"key": "value"}));
+            assertTrue(yaml.val());
+            hash<auto> parsed = eval_expr("parse_yaml", (yaml));
+            assertEq("value", parsed.key);
+        }
+%endif
 
-        # JSON
-        string json = eval_expr("make_json", ({"key": "value"}));
-        assertTrue(json.val());
-        parsed = eval_expr("parse_json", (json));
-        assertEq("value", parsed.key);
+%ifndef NoJson
+        {
+            string json = eval_expr("make_json", ({"key": "value"}));
+            assertTrue(json.val());
+            hash<auto> parsed = eval_expr("parse_json", (json));
+            assertEq("value", parsed.key);
+        }
+%endif
 
-        # XML
-        string xml = eval_expr("make_xml", ({"root": {"key": "value"}}));
-        assertTrue(xml.val());
-        hash<auto> xml_parsed = eval_expr("parse_xml", (xml));
-        assertEq("value", xml_parsed.root.key);
+%ifndef NoXml
+        {
+            string xml = eval_expr("make_xml", ({"root": {"key": "value"}}));
+            assertTrue(xml.val());
+            hash<auto> xml_parsed = eval_expr("parse_xml", (xml));
+            assertEq("value", xml_parsed.root.key);
+        }
+%endif
+
+%ifdef NoYaml
+%ifdef NoJson
+%ifdef NoXml
+        testSkip("no yaml, json, or xml module available for serialization tests");
+%endif
+%endif
+%endif
     }
 
     fieldReferenceTests() {

@@ -754,8 +754,6 @@ QoreHashNode* Http1ClientPollOperationPriv::handleSending(ExceptionSink* xsink) 
         }
         current_op->setSelf(*self);
         req_state = ReqState::RECV_HEADER;
-        // Start the stale-detect clock on reused connections
-        stale_detect_start_us = (next_stream_id > 1) ? h1_epoch_us() : 0;
         return handleRecvHeader(xsink);
     }
 
@@ -894,42 +892,17 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvHeader(ExceptionSink* xsin
         return nullptr;
     }
 
-    // Stale keep-alive detection (curl Curl_retry_request pattern):
-    // On a reused connection, check for EOF or stale state.
-    // - recv peek returns 0: FIN arrived → connection closed (immediate)
-    // - recv peek returns EAGAIN after STALE_DETECT_TIMEOUT_MS elapsed:
-    //   no FIN and no response data → assume stale (server silently closed)
-    // Curl checks "reused connection + zero bytes received" on error.
-    // We can't rely on the OS to report the error in time (no FIN case),
-    // so we use a time-based fallback.
-    if (stale_detect_start_us > 0 && sock_obj) {
-        int fd = sock_obj->getSocket();
-        if (fd >= 0) {
-            char peek_buf;
-            ssize_t rc = ::recv(fd, &peek_buf, 1, MSG_PEEK | MSG_DONTWAIT);
-            if (rc == 0) {
-                ASYNC_IO_TRACE("H1 handleRecvHeader: stale connection (EOF) fd=%d\n", fd);
-                setError("HTTP1-CONNECTION-CLOSED",
-                    "server closed the keep-alive connection", xsink);
-                return nullptr;
-            }
-            if (rc < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
-                int64 elapsed_us = h1_epoch_us() - stale_detect_start_us;
-                if (elapsed_us >= STALE_DETECT_TIMEOUT_MS * 1000) {
-                    // Stale timer expired and still no data — assume dead
-                    // connection.  Fail fast so the connection manager can
-                    // retry on a fresh connection.
-                    ASYNC_IO_TRACE("H1 handleRecvHeader: stale timeout "
-                        "(%lldms) + no data, assuming dead fd=%d\n",
-                        (long long)(elapsed_us / 1000), fd);
-                    setError("HTTP1-CONNECTION-CLOSED",
-                        "no response on reused connection (stale detect timeout)",
-                        xsink);
-                    return nullptr;
-                }
-            }
-        }
-    }
+    // Stale keep-alive detection on reused connections is performed once
+    // at the SEND→RECV_HEADER transition in handleSending() via MSG_PEEK
+    // for FIN.  Once we are in RECV_HEADER, any later remote close arrives
+    // as an EOF on the underlying recv path
+    // (SocketReadHttpHeaderPollOperation), so an additional time-based
+    // fallback here would only mistake slow-server response latency for a
+    // dead connection — the application's request_timeout covers the
+    // half-open ("server alive at TCP, silent at HTTP") case, and the
+    // conn-mgr's HTTPCLIENT-TIMEOUT retry rule
+    // (HttpClientConnectionManager.qc isConnectionErrorStatic) is the
+    // curl Curl_retry_request analog that picks up the recovery.
 
     ExceptionSink poll_xsink;
     QoreHashNode* poll_info = current_op->continuePoll(&poll_xsink);
@@ -959,25 +932,6 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvHeader(ExceptionSink* xsin
     }
 
     if (poll_info) {
-        // On a reused connection, add a stale-detect timeout so the controller
-        // wakes us after STALE_DETECT_TIMEOUT_MS even if no socket event
-        // arrives.  This gives us another chance to recv-peek for EOF from a
-        // delayed server close.
-        if (stale_detect_start_us > 0) {
-            ExceptionSink hash_xsink;
-            QoreValue ptv = poll_info->getKeyValue("poll_timeout_ms");
-            if (ptv.isNullOrNothing()) {
-                // Compute remaining time until stale deadline
-                int64 elapsed_us = h1_epoch_us() - stale_detect_start_us;
-                int64 remaining_ms = STALE_DETECT_TIMEOUT_MS
-                    - elapsed_us / 1000;
-                if (remaining_ms <= 0) {
-                    remaining_ms = 1;  // force immediate re-poll
-                }
-                poll_info->setKeyValue("poll_timeout_ms",
-                    remaining_ms, &hash_xsink);
-            }
-        }
         return poll_info;
     }
 
@@ -2517,12 +2471,21 @@ int Http1ClientPollOperationBase::submitRequestWithNotifier(string method, strin
     @param body optional request body
     @param channel Channel for incremental response delivery
     @param max_streams maximum concurrent streams
-    @param streaming if True, keep the request body stream open (bidirectional)
+    @param streaming if True, keep the response stream open for incremental
+        body delivery via @a channel (response-side streaming)
+    @param body_streaming if True, the request body uses
+        \c Transfer-Encoding: \c chunked and chunks are pushed
+        incrementally via @ref pushSendData() (request-side streaming).
+        When \c True, @a body should be empty — body bytes come from
+        subsequent \c pushSendData() calls, terminated by
+        \c pushSendData(NOTHING).
     @return the stream ID assigned to this request
+
+    @since %Qore 2.3
 */
 int Http1ClientPollOperationBase::submitRequestStreaming(string method, string path,
         *hash<auto> headers, *data body, object channel, int max_streams,
-        bool streaming = False) {
+        bool streaming = False, bool body_streaming = False) {
     // Extract QoreChannel private data from the Channel object
     QoreChannel* ch = static_cast<QoreChannel*>(
         const_cast<QoreObject*>(channel)->getReferencedPrivateData(CID_CHANNEL, xsink));
@@ -2561,7 +2524,56 @@ int Http1ClientPollOperationBase::submitRequestStreaming(string method, string p
     // Create ChannelAction — priv takes ownership
     ChannelAction* action = new ChannelAction(ch);
     return (int)priv->submitRequest(method->c_str(), path->c_str(), headers,
-        body_ptr, body_len, streaming, action, (int)max_streams, false, xsink);
+        body_ptr, body_len, streaming, action, (int)max_streams,
+        body_streaming, xsink);
+}
+
+//! Pushes a request-body chunk on a streaming-send request
+/** Used after @ref submitRequestStreaming() with \c body_streaming = \c True
+    to feed the chunked request body incrementally.  Each call appends one
+    chunk; pass \c NOTHING (or no argument) to signal end-of-stream — the
+    poll op writes the final \c "0\\r\\n" terminator (plus any trailers
+    set via @ref setTrailers) and transitions to the response-receiving
+    phase.
+
+    Thread-safe — may be called from any thread.
+
+    @param data the chunk to send (string or binary); pass \c NOTHING to
+        signal end-of-stream
+
+    @since %Qore 2.3
+*/
+nothing Http1ClientPollOperationBase::pushSendData(*data data) {
+    if (!data) {
+        // EOF sentinel
+        priv->pushSendData(nullptr, xsink);
+        return QoreValue();
+    }
+    if (data->getType() == NT_STRING) {
+        priv->pushSendData(static_cast<const QoreStringNode*>(data), xsink);
+        return QoreValue();
+    }
+    // NT_BINARY: wrap raw bytes in a QoreStringNode (no transcoding —
+    // the priv only emits bytes, doesn't reinterpret encoding).
+    const BinaryNode* b = static_cast<const BinaryNode*>(data);
+    SimpleRefHolder<QoreStringNode> str(
+        new QoreStringNode(static_cast<const char*>(b->getPtr()),
+            b->size(), QCS_DEFAULT));
+    priv->pushSendData(*str, xsink);
+}
+
+//! Sets HTTP/1.1 chunked-transfer trailers for a streaming-send request
+/** Trailers are emitted after the final \c "0\\r\\n" chunk terminator
+    when @ref pushSendData() receives the \c NOTHING end-of-stream
+    sentinel.  Each call replaces any previously-set trailers.
+
+    @param trailers map of trailer header name to value; pass \c NOTHING
+        to clear
+
+    @since %Qore 2.3
+*/
+nothing Http1ClientPollOperationBase::setTrailers(*hash<string, string> trailers) {
+    priv->setTrailers(trailers, xsink);
 }
 
 //! Submits an HTTP/1.1 SSE request with Queue-based parsed event delivery

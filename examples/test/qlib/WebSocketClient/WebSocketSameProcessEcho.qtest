@@ -103,6 +103,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
     constructor() : Test("WebSocketSameProcessEchoTest", "1.0") {
         addTestCase("same-process echo (observer)", \testSameProcessEchoObserver());
         addTestCase("same-process echo (callback)", \testSameProcessEchoCallback());
+        addTestCase("same-process HTTP/3 heartbeat", \testSameProcessHttp3Heartbeat());
         set_return_value(main());
     }
 
@@ -213,6 +214,45 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         int rc = c.waitForZero(5s);
         assertEq(0, rc, "observer echo must not time out");
         assertTrue(response.val(), "observer should receive response");
+    }
+
+    testSameProcessHttp3Heartbeat() {
+        hash<auto> ctx = createServer();
+        on_exit {
+            HttpServer srv = ctx.server;
+            srv.stop();
+            AsyncSocketIo::AsyncSocketIoController ctrl = AsyncSocketIo::getGlobalAsyncIoController();
+            ctrl.stopClear();
+        }
+
+        Counter got_pong(1);
+        Mutex pong_mutex();
+        bool seen_pong = False;
+        WebSocketClient wsc(sub (*data msg) {}, {
+            "url": sprintf("wss://localhost:%d", ctx.linfo.port),
+            "logger": ctx.logger,
+            "http_version": "auto",
+            "ssl_verify_cert": False,
+            "heartbeat": 200ms,
+            "pong_callback": sub (*data msg) {
+                AutoLock al(pong_mutex);
+                if (!seen_pong) {
+                    seen_pong = True;
+                    got_pong.dec();
+                }
+            },
+        });
+        on_exit {
+            try { wsc.disconnect(); } catch () {}
+            delete wsc;
+        }
+        wsc.connect();
+        if (!wsc.isHttp3()) {
+            testSkip("H3 not negotiated");
+        }
+
+        int rc = got_pong.waitForZero(5s);
+        assertEq(0, rc, "HTTP/3 automatic heartbeat should receive a PONG");
     }
 }
 

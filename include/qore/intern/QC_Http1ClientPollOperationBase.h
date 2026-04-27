@@ -327,10 +327,6 @@ private:
     //! True after a 101 Switching Protocols response has been received
     bool protocol_switched = false;
 
-    //! Timestamp (epoch microseconds) when recv-header started on a reused
-    //! connection, or 0 if stale detection is inactive.
-    int64_t stale_detect_start_us = 0;
-
     //! Remaining bytes for streaming body with Content-Length
     int64_t streaming_body_remaining = 0;
 
@@ -396,13 +392,6 @@ private:
 
     static constexpr int MAX_EMPTY_READS = 100;
     static constexpr size_t STREAMING_CHUNK_SIZE = 16384;
-
-    //! Stale keep-alive detection timeout (milliseconds).
-    /** On a reused connection, the controller wakes continuePoll after this
-        interval even without socket events, giving us a chance to recv-peek
-        for a delayed server close (TCP FIN race).
-    */
-    static constexpr int64 STALE_DETECT_TIMEOUT_MS = 500;
 
     // --- Internal methods (I/O thread only) ---
 

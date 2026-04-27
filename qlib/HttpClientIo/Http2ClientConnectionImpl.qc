@@ -62,14 +62,9 @@ public class Http2ClientConnection inherits HttpClientConnection {
             *LoggerInterface logger, int max_streams = DefaultMaxStreamsPerConnection,
             *int ssl_verify_mode, bool accept_all_certs = False,
             *hash<auto> proxy_info,
-            *SSLCertificate client_cert, *SSLPrivateKey client_pk) {
-        self.url_info = url_info;
-        self.connect_timeout = connect_timeout;
-        self.logger = logger;
-        self.proxy_info = proxy_info;
-        self.max_concurrent_streams = max_streams;
-        self.last_activity = now_us();
-        connection_id = allocateConnectionId();
+            *SSLCertificate client_cert, *SSLPrivateKey client_pk)
+            : HttpClientConnection(url_info, connect_timeout, logger,
+                    max_streams, proxy_info) {
 
         log(LoggerLevel::DEBUG, "creating connection to %s:%d (ssl=%y max_streams=%d proxy=%y mtls=%y)",
             url_info.host, url_info.port, url_info.protocol == "https", max_streams,

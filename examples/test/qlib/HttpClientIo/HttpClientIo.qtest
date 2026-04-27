@@ -341,6 +341,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             \testH1ConnectionCloseRemovesFromPool());
         addTestCase("H1 proactive idle timeout", \testH1ProactiveIdleTimeout());
         addTestCase("H2 proactive idle timeout", \testH2ProactiveIdleTimeout());
+        addTestCase("max_age eviction at checkout", \testMaxAgeEvictionAtCheckout());
+        addTestCase("max_age disabled reuses connection",
+            \testMaxAgeDisabledReusesConnection());
 
         # Additional coverage tests
         addTestCase("invalid protocol option", \testInvalidProtocolOption());
@@ -375,6 +378,13 @@ Do+Sl1gfqlpgpszQaOMjR4M=
 
         # Bidi streaming: echo test with BidiEchoHandler
         addTestCase("H2 bidi echo streaming", \testH2BidiEchoStreaming());
+
+        # H1 bidirectional streaming (chunked request body via sendData)
+        addTestCase("H1 bidi streaming chunked echo", \testH1BidiStreamingChunkedEcho());
+        addTestCase("H1 bidi streaming sendData without body_streaming",
+            \testH1BidiSendDataWithoutBodyStreaming());
+        addTestCase("H1 bidi streaming body+body_streaming rejected",
+            \testH1BidiStreamingBodyConflictRejected());
 
         # HTTP/3 streaming tests
         addTestCase("H3 streaming basic", \testH3StreamingBasic());
@@ -1683,6 +1693,71 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             "H2 request after idle-timeout eviction should create a new connection");
     }
 
+    #! Verifies max_age (born-at TTL) eviction at pool checkout.
+    /** Sets idle_timeout long (so the proactive idle close does NOT fire
+        during the test) and max_age short.  After sleeping past max_age,
+        the second acquireStream must NOT reuse the now-too-old connection
+        — it gets a different connection ID.
+
+        The Qore conn-mgr's reuse loop evicts connections that fail
+        isConnectionAlive() in the same pass (via evictConnections), so
+        total_connections stays at 1: the old too-old connection is
+        replaced, not added to.  The proof is the connection ID change.
+    */
+    testMaxAgeEvictionAtCheckout() {
+        HttpClientIo::HttpClientConnectionManager mgr(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+            "protocol": "h1",
+            # Long idle_timeout so neither the proactive idle close nor
+            # maybeCleanupIdle fires during the test window.
+            "idle_timeout": 60s,
+            "max_age": 500ms,
+            "logger": mLogger,
+        });
+        on_exit mgr.closeAll();
+
+        HttpClientIo::HttpClientStreamHandle s1 = mgr.acquireStream(mHttpUrl);
+        hash<auto> r1 = s1.request("GET", "/simple");
+        assertEq(200, r1.status_code);
+        int id1 = s1.getConnection().getConnectionId();
+
+        # Sleep past max_age but well within idle_timeout
+        usleep(700ms);
+
+        HttpClientIo::HttpClientStreamHandle s2 = mgr.acquireStream(mHttpUrl);
+        hash<auto> r2 = s2.request("GET", "/simple");
+        assertEq(200, r2.status_code);
+        int id2 = s2.getConnection().getConnectionId();
+
+        assertNeq(id1, id2,
+            "after sleeping past max_age, the next request must run on a "
+            "different connection (max-age-expired connection evicted "
+            "from reuse)");
+    }
+
+    #! Verifies max_age=0 (default) does not change reuse behaviour.
+    testMaxAgeDisabledReusesConnection() {
+        HttpClientIo::HttpClientConnectionManager mgr(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+            "protocol": "h1",
+            "idle_timeout": 60s,
+            # max_age omitted → defaults to 0s (disabled)
+            "logger": mLogger,
+        });
+        on_exit mgr.closeAll();
+
+        HttpClientIo::HttpClientStreamHandle s1 = mgr.acquireStream(mHttpUrl);
+        s1.request("GET", "/simple");
+        int id1 = s1.getConnection().getConnectionId();
+        usleep(700ms);
+        HttpClientIo::HttpClientStreamHandle s2 = mgr.acquireStream(mHttpUrl);
+        s2.request("GET", "/simple");
+        int id2 = s2.getConnection().getConnectionId();
+        assertEq(id1, id2,
+            "with max_age disabled, the second request must reuse the "
+            "first connection");
+    }
+
     # ---- Additional Coverage Tests ----
 
     testInvalidProtocolOption() {
@@ -2210,6 +2285,129 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         binary all_sent = binary();
         map all_sent += $1, sent_chunks;
         assertEq(all_sent, all_received, "echoed data should match sent data");
+    }
+
+    #! Verifies HTTP/1.1 chunked-transfer request-body streaming.
+    /** The H1 conn-mgr forces protocol "h1".  startStreaming is called
+        with body_streaming=True; the request goes out with
+        Transfer-Encoding: chunked and the body is fed via sendData()
+        in chunks.  The server's EchoHandler reads the full chunked
+        body and echoes it back; the client reads the response via
+        readData() until end_stream.
+
+        Proves that the previously-stubbed sendData() path (which
+        threw HTTP1-STREAMING-ERROR before this fix) now works for
+        DataStream-style chunked-body protocols.
+
+        @since %Qore 2.3
+    */
+    testH1BidiStreamingChunkedEcho() {
+        HttpClientIo::HttpClientConnectionManager mgr(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+            "protocol": "h1",
+            "logger": mLogger,
+        });
+        on_exit mgr.closeAll();
+
+        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(mHttpUrl);
+        HttpClientIo::Http1ClientStreamHandle h1stream =
+            cast<HttpClientIo::Http1ClientStreamHandle>(stream);
+
+        # Start chunked-body streaming POST to the EchoHandler
+        h1stream.startStreaming("POST", "/echo",
+            {"content-type": "application/octet-stream"},
+            True);  # body_streaming=True
+
+        # Send 3 distinct chunks
+        list<binary> sent_chunks = (binary("alpha-"), binary("beta--"), binary("gamma!"));
+        binary expected_payload = binary();
+        foreach binary chunk in (sent_chunks) {
+            h1stream.sendData(chunk);
+            expected_payload += chunk;
+        }
+        # Half-close the request body
+        h1stream.sendData(binary(), True);
+
+        # Drain the response
+        binary received_body = binary();
+        bool got_end_stream = False;
+        date deadline = now_us() + 10s;
+        while (now_us() < deadline) {
+            auto rdata = h1stream.readData(2s);
+            if (!exists rdata) {
+                continue;
+            }
+            if (rdata.typeCode() == NT_HASH) {
+                if (rdata.error) {
+                    fail(sprintf("unexpected error frame: %y", rdata));
+                    break;
+                }
+                if (rdata.end_stream) {
+                    got_end_stream = True;
+                    break;
+                }
+            } else if (rdata.typeCode() == NT_BINARY) {
+                received_body += rdata;
+            } else if (rdata.typeCode() == NT_STRING) {
+                received_body += binary(rdata);
+            }
+        }
+        assertTrue(got_end_stream, "must receive end_stream from server");
+
+        # EchoHandler echoes "method=POST path=<...>echo body_size=N body=<payload>".
+        # The exact prefix shape is owned by EchoHandler — assert that the
+        # full chunked payload (18 bytes from the three sent chunks) made it
+        # server-side intact and was echoed back unchanged.
+        string body_text = received_body.toString();
+        assertEq(True, body_text =~ /method=POST/,
+            sprintf("response method mismatch: %y", body_text));
+        assertEq(True, body_text =~ /body_size=18/,
+            sprintf("server saw wrong body size: %y", body_text));
+        assertEq(True, body_text =~ /body=alpha-beta--gamma!$/,
+            sprintf("echoed payload mismatch: %y", body_text));
+    }
+
+    #! Calling sendData() on a stream that wasn't started with body_streaming=True
+    #! must raise HTTPCLIENT-STATE-ERROR.
+    testH1BidiSendDataWithoutBodyStreaming() {
+        HttpClientIo::HttpClientConnectionManager mgr(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+            "protocol": "h1",
+            "logger": mLogger,
+        });
+        on_exit mgr.closeAll();
+
+        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(mHttpUrl);
+        HttpClientIo::Http1ClientStreamHandle h1stream =
+            cast<HttpClientIo::Http1ClientStreamHandle>(stream);
+
+        # Response-only streaming (default body_streaming=False)
+        h1stream.startStreaming("GET", "/streaming");
+        assertThrows("HTTPCLIENT-STATE-ERROR", "body_streaming",
+            sub () { h1stream.sendData(binary("X")); });
+
+        # half-close on non-body-streaming is a no-op (idempotent)
+        h1stream.sendData(binary(), True);
+    }
+
+    #! Calling startStreaming(body_streaming=True) with a non-empty body
+    #! must raise HTTPCLIENT-STATE-ERROR (body bytes must come from sendData).
+    testH1BidiStreamingBodyConflictRejected() {
+        HttpClientIo::HttpClientConnectionManager mgr(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+            "protocol": "h1",
+            "logger": mLogger,
+        });
+        on_exit mgr.closeAll();
+
+        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(mHttpUrl);
+        HttpClientIo::Http1ClientStreamHandle h1stream =
+            cast<HttpClientIo::Http1ClientStreamHandle>(stream);
+
+        assertThrows("HTTPCLIENT-STATE-ERROR", "body_streaming=True is incompatible",
+            sub () {
+                h1stream.startStreaming("POST", "/echo", NOTHING, True, "non-empty");
+            });
     }
 
     testH3StreamingBasic() {
