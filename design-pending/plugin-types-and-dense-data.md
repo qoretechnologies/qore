@@ -1053,21 +1053,51 @@ naming both the recorded and live signature hashes.
 
 `signature_hash` is a canonical wire hash, not a hash of the in-memory
 `QorePluginOperationSignature` bytes. The 64 bits in the wire format are
-xxHash64 over the canonical-form bytes in little-endian order — same hash
-primitive as `QoreAOTBinaryHeader::source_hash` so QORD readers and
-writers reuse a single implementation. Pointer-valued fields such as
-`QoreTypeInfo*` are normalized to stable identities before hashing: builtin
-type code or `(module_name, type_local_id)` for plugin types, plus nullability,
-arity, return type, `helper_abi`, `access`, and `result_alias`. The hash excludes
-process-local addresses, helper pointers, extension pointers, and padding so the
-same artifact can load in processes with different address layouts.
+xxHash64 with seed 0 over the canonical-form bytes in the order below — same
+hash primitive and seed as `QoreAOTBinaryHeader::source_hash` so QORD readers
+and writers reuse a single implementation. All integers are little-endian and
+all enums are encoded as their assigned `uint8_t` ABI values:
+
+```text
+uint8   canonical_signature_version = 1
+uint8   arity
+uint8   helper_abi
+uint8   access
+uint8   result_alias
+uint8   primary_nullable            // 0 or 1
+uint8   secondary_nullable          // 0 or 1
+uint8   return_nullable             // 0 or 1
+type_ref primary_type
+type_ref secondary_type             // kind Null when arity != 2
+type_ref return_type
+```
+
+`type_ref` is itself canonical:
+
+```text
+uint8   kind
+payload
+```
+
+`kind == 0` means null and has no payload. `kind == 1` means a Qore
+non-plugin type and the payload is the canonical QORD type path as a
+`uint32 byte_count` plus UTF-8 bytes, using the same type path spelling the
+QORD type resolver writes for builtins, classes, hashdecls, code types, and
+complex types. `kind == 2` means a plugin type and the payload is canonical
+`module_name` plus `uint16 type_local_id`. Other `kind` values are reserved
+and invalid in canonical signature version 1.
+
+Pointer-valued fields such as `QoreTypeInfo*` are therefore normalized to
+stable identities before hashing. The hash excludes process-local addresses,
+helper pointers, extension pointers, and padding so the same artifact can load
+in processes with different address layouts.
 
 `module_name` is canonicalised as: UTF-8 byte sequence with no Unicode
 normalization and no case folding, length-prefixed by `uint32 byte_count`
-in little-endian, byte-exact comparison. This mirrors the `STRINGS`
-section convention in the rest of QORD; implementations MUST NOT trim
-whitespace, fold case, or NFC-normalise the name before hashing or
-comparing.
+in little-endian for the canonical hash, byte-exact comparison. QORD may store
+the same bytes through the normal `STRINGS` pool, but hashing never depends on
+string-pool offsets or host `char*` addresses. Implementations MUST NOT trim
+whitespace, fold case, or NFC-normalise the name before hashing or comparing.
 
 `qore_aot_module_init_v4` performs this resolution after `PLUGIN_IMPORTS`
 has been resolved against loaded modules. The wire format intentionally
@@ -1253,6 +1283,12 @@ vs. actual values, and the section number of this design that defines the rule.
 wiring it into module init use:
 
 ```cpp
+struct QorePluginModuleHandle;  // opaque, runtime-owned
+
+enum QorePluginValidationContextFlags : uint32_t {
+    QORE_PLUGIN_VALIDATE_NO_FLAGS = 0,
+};
+
 struct QorePluginValidationContext {
     //! Size of this struct as known to the caller. MUST be set to
     //! sizeof(QorePluginValidationContext) by callers compiled against a
@@ -1261,13 +1297,23 @@ struct QorePluginValidationContext {
     //! values. Adding a field bumps the canonical sizeof; never removes,
     //! never reorders. This avoids needing _v2 / _v3 of the validator
     //! entry point as the context grows.
-    size_t struct_size;
+    uint32_t struct_size;
 
-    //! Optional opaque module-manager handle used to validate
-    //! runtime_helper_symbol lookup against the registering binary. nullptr
-    //! means descriptor-only validation; symbol resolution is reported as a
-    //! deferred check in collect-all mode and is performed by registration.
-    const void* module_handle;
+    //! Validation flags. v1 defines no nonzero flags; any unknown nonzero
+    //! bit is rejected as PLUGIN-REGISTRATION-INVALID-DESCRIPTOR with
+    //! subreason "unknown_validation_context_flag". Future versions may
+    //! define optional flags, but required semantics still need a new
+    //! validator symbol.
+    uint32_t flags;
+
+    //! Optional runtime-owned module handle used to validate
+    //! runtime_helper_symbol lookup against the registering binary. The only
+    //! valid non-null value is the opaque handle supplied by
+    //! QoreModuleInitContext for the module currently being initialized.
+    //! Unit tests and tools outside module init pass nullptr; symbol resolution
+    //! is then reported as a deferred check in collect-all mode and is
+    //! performed by registration.
+    const QorePluginModuleHandle* module_handle;
 
     //! Optional Program used to validate per-Program activation/import rules.
     //! nullptr means process-global descriptor validation only.
@@ -1288,6 +1334,12 @@ int qore_validate_plugin_types_v1(
     ExceptionSink* xsink);
 ```
 
+A non-null `ctx` with `struct_size < offsetof(QorePluginValidationContext,
+module_handle)` is rejected as `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` with
+subreason `"validation_context_too_small"` because the runtime cannot read the
+v1 flag word safely. Missing trailing fields at larger but older `struct_size`
+values use their documented default values.
+
 When `collect_all` is true, the validator walks the entire descriptor
 and reports every violation it finds as a single chained exception
 whose `arg` is a `list<hash<PluginValidationViolation>>` listing each
@@ -1302,10 +1354,12 @@ Descriptor-local checks (ids, null pointers, signatures, extension payload
 shape, codec presence, declared QDOM domains) run without `ctx`. Contextual
 checks need live runtime state: resolving `runtime_helper_symbol` from a module
 handle, validating Program activation/import visibility, and checking
-cross-module conflicts against already registered modules. A dry-run with
-`ctx == nullptr` cannot promise those contextual checks will pass; collect-all
-mode reports them as deferred checks instead of pretending the descriptor is
-fully registrable.
+cross-module conflicts against already registered modules. A non-null
+`module_handle` is trusted only if it is a `QorePluginModuleHandle` issued by
+the runtime for the current `QoreModuleInitContext`; arbitrary pointers are
+invalid and fail contextual validation. A dry-run with `ctx == nullptr` cannot
+promise those contextual checks will pass; collect-all mode reports them as
+deferred checks instead of pretending the descriptor is fully registrable.
 
 `qore_register_plugin_types_v1` itself runs in fail-fast mode and never
 collects — registration is a single transactional commit, not a diagnostic
@@ -1325,6 +1379,7 @@ against the same binary their users run.
 | `QORE_PLUGIN_VERIFY_TRACE` | Logs every runtime verifier check that is enabled by a debug build or `QORE_PLUGIN_VERIFY`, including the ones that pass. |
 | `QORE_PLUGIN_CROSS_TYPE_TRACE` | Logs cross-module operator resolution decisions per §3.10 (which precedence rule fired, what was synthesised, what was rejected). |
 | `QORE_PLUGIN_QORD_TRACE` | Logs QORD `PLUGIN_IMPORTS` / `PLUGIN_HELPER_REFS` resolution: per-import resolution outcome, signature-hash compare, slot-table population. |
+| `QORE_PLUGIN_FALLBACK_BUFFER` | Capacity of each Program's rolling plugin-fallback-site buffer. Unset = 1024, `0` disables recording, invalid values fall back to 1024 with a register-trace warning, and values above 65536 are capped to bound per-Program memory. |
 
 **Runtime verifier inventory.** A single, normative list of checks that debug
 builds always perform and release builds perform only when
@@ -1345,13 +1400,13 @@ builds always perform and release builds perform only when
   are non-null, but the runtime cannot recover if C++ code throws through one:
   normal C++ `noexcept` rules apply (`std::terminate`), and the protocol treats
   this as a plugin bug rather than a recoverable Qore exception. Debug builds
-  and `QORE_PLUGIN_VERIFY=1` runs wrap each call in an assertion macro that
-  logs the offending plugin module name and operation before `std::terminate`
-  fires, so plugin authors get an actionable diagnostic during development;
-  release builds without `QORE_PLUGIN_VERIFY` inherit raw C++ `noexcept`
-  semantics with no Qore-side log. The op cannot be made recoverable —
-  the function-pointer's `noexcept` type prevents stack unwinding by
-  design.
+  and `QORE_PLUGIN_VERIFY=1` runs set a thread-local "current plugin lifecycle
+  call" record before invoking each hook; libqore's terminate handler uses that
+  record to log the offending plugin module, type, hook name, and operation
+  context when termination is caused by an exception escaping a `noexcept`
+  hook. This is diagnostic context, not recovery. Release builds without
+  `QORE_PLUGIN_VERIFY` may omit the thread-local record and inherit raw C++
+  `noexcept` semantics with no Qore-side log.
 - Every `make_identity` callback is invoked at most once per
   `(operation, result_type)` pair; debug builds assert the cache
   invariant on every fold attempt (§3.4).
@@ -1388,6 +1443,9 @@ class PluginRegistry {
     # PLUGIN-REGISTRY-PROGRAM-NOT-AVAILABLE on the process-global view.
     list<string> getActiveModules();
 
+    # Process-global view: descriptors for the named loaded module.
+    # Program-bound view: descriptors for the named module only if active
+    # in this Program; inactive modules return an empty list.
     list<hash<PluginTypeInfo>> getTypes(string module_name);
     list<hash<PluginOperationInfo>> getOperations(string module_name);
 
@@ -1413,13 +1471,17 @@ class PluginRegistry {
 
 `PluginRegistry` is the protocol's answer to the "type registered, but
 where is it?" debugging question. The process-global view (`getProcessRegistry`)
-sees every loaded plugin module's *descriptors*; the Program-bound view
-(`get`) sees the *activations* visible to a specific Program plus parse-time
-diagnostics. Calling a Program-bound method on a process-global view raises
-`PLUGIN-REGISTRY-PROGRAM-NOT-AVAILABLE` with a diagnostic naming the method
-and pointing the caller at `get()` / `get(pgm)`. The registry is not a
-substitute for the env-var trace family — the registry is a snapshot of
-the steady-state, the traces are a record of decisions. Both are necessary.
+sees every loaded plugin module's *descriptors*; `getTypes()` and
+`getOperations()` on that view return all descriptors for the named loaded
+module regardless of Program activation. The Program-bound view (`get`) sees
+the *activations* visible to a specific Program plus parse-time diagnostics;
+`getTypes()` and `getOperations()` on that view filter to active modules and
+return an empty list for a loaded-but-inactive module. Calling a Program-bound
+method on a process-global view raises `PLUGIN-REGISTRY-PROGRAM-NOT-AVAILABLE`
+with a diagnostic naming the method and pointing the caller at `get()` /
+`get(pgm)`. The registry is not a substitute for the env-var trace family —
+the registry is a snapshot of the steady-state, the traces are a record of
+decisions. Both are necessary.
 
 **Reference module + lint.** Phase 3 ships:
 
@@ -1436,15 +1498,19 @@ the steady-state, the traces are a record of decisions. Both are necessary.
   The lint is advisory; it never blocks a build but is the recommended
   pre-commit check for plugin modules.
 
-**Error-message quality contract.** Every rejection raised by registration
-or load MUST include, at minimum:
+**Error-message quality contract.** Every diagnostic raised by registration,
+validation, QORD load, parse-time lowering, the runtime verifier, or
+`PluginRegistry` MUST include, at minimum:
 
 1. The error code from the table above.
-2. The offending module name.
+2. The offending module name when one is available, or the reflection method /
+   runtime context when no module is involved.
 3. The offending type and/or operation name (when the violation is
-   localised to one).
-4. The descriptor field that violated the rule.
-5. Expected value vs. actual value.
+   localised to one), or the source location / API method for parse-time and
+   reflection diagnostics.
+4. The descriptor field, wire-format field, API method, or verifier check that
+   violated the rule.
+5. Expected value vs. actual value when the failure is a comparison.
 6. The structured `subreason` when the error code covers multiple field-level
    causes.
 7. A reference to the section of this document defining the rule
@@ -1884,25 +1950,29 @@ exposure — reuses Phase 1's `buffer<T>`.
   ship boundary:
   - `qore_validate_plugin_types_v1` dry-run validation entry point with
     `QorePluginValidationContext` (size-prefixed for forward-compatible
-    field growth), fail-fast mode, and collect-all-errors mode.
+    field growth, fixed-width flags, and a runtime-owned opaque module
+    handle), fail-fast mode, and collect-all-errors mode.
   - The structured error-code set listed in §3.12 — every rejection rule
     in §3.3 / §3.7 / §3.9 / §3.10 / §3.12 wired to its assigned code,
     including `PLUGIN-EXTENSION-VALIDATION-FAILED` and
     `PLUGIN-REGISTRY-PROGRAM-NOT-AVAILABLE`.
   - The `QORE_PLUGIN_*_TRACE` env-var family (`REGISTER`, `DISPATCH`,
     `VERIFY_TRACE`, `CROSS_TYPE`, `QORD`) plus `QORE_PLUGIN_VERIFY`
-    for release-build runtime verifier opt-in, matching the existing
-    `QORE_AOT_*_TRACE` logging discipline without making trace flags change
-    semantics.
+    for release-build runtime verifier opt-in and
+    `QORE_PLUGIN_FALLBACK_BUFFER` for Program-local fallback diagnostics,
+    matching the existing `QORE_AOT_*_TRACE` logging discipline without
+    making trace flags change semantics.
   - Runtime verifier checks per the §3.12 inventory (helper return-tag,
     helper-ABI, alias contract, `noexcept` lifecycle discipline with the
-    debug/`QORE_PLUGIN_VERIFY` assertion wrapper, `make_identity` cache).
+    debug/`QORE_PLUGIN_VERIFY` terminate-context record, `make_identity`
+    cache).
   - `Qore::Reflection::PluginRegistry` for Qore-side introspection of
     registered modules / types / operations and "why didn't this
     lower?" diagnostics, with split process-global / Program-bound views
     and `clearFallbackSites` for bisecting.
-  - Error-message quality contract: every rejection includes module +
-    type/op name + field + expected/actual + subreason + section reference.
+  - Error-message quality contract: every diagnostic includes module/context +
+    type/op/source/method + field/check + expected/actual + subreason +
+    section reference where applicable.
 - `examples/plugins/sample-buffer/` reference module + `qore-plugin-lint`
   advisory linter.
 - Documentation.
