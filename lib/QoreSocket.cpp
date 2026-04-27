@@ -5962,10 +5962,11 @@ QoreStringNode* QoreSocket::recv(qore_offset_t bufsize, int timeout, int* rc) {
     assert(rc);
     ExceptionSink xsink;
     QoreStringNode* str = qore_socket_exec_recv_string(this, bufsize, timeout, &xsink);
-    // ignore exceptions; we use only a return code
-    if (xsink)
-        xsink.clear();
     *rc = xsink ? -1 : str ? 0 : -1;
+    // ignore exceptions; we use only a return code
+    if (xsink) {
+        xsink.clear();
+    }
     return str;
 }
 
@@ -5973,10 +5974,11 @@ QoreStringNode* QoreSocket::recv(int timeout, int* rc) {
     assert(rc);
     ExceptionSink xsink;
     QoreStringNode* str = qore_socket_exec_recv_string(this, 0, timeout, &xsink);
-    // ignore exceptions; we use only a return code
-    if (xsink)
-        xsink.clear();
     *rc = xsink ? -1 : str ? 0 : -1;
+    // ignore exceptions; we use only a return code
+    if (xsink) {
+        xsink.clear();
+    }
     return str;
 }
 
