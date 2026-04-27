@@ -977,8 +977,10 @@ and returns one of:
 `NotApplicable` returned for an AST node kind *inside* the matcher's
 declared `lowering_claimed_node_kinds` bitmap is treated as a parse-time
 error in `%modern`: a plugin matcher that claims to handle a node kind is
-required to either lower it or report `Erroneous`. This closes the silent
-miscompile gap that a bare `false` return would leave open.
+required to either lower it or report `Erroneous`. The diagnostic is
+`PLUGIN-LOWERING-CLAIM-VIOLATED` (see §3.12 error-code table). This
+closes the silent miscompile gap that a bare `false` return would leave
+open.
 
 ### 3.8 Tag allocation in NaN-boxed `QoreValue`
 
@@ -1037,7 +1039,7 @@ uint16  slot_idx       // index into ctx->plugin_helpers[]
 uint16  import_idx     // index into PLUGIN_IMPORTS
 uint16  op_local_id    // matches QorePluginOperation.local_id in that import
 uint16  reserved       // must be 0; future flags
-uint64  signature_hash // canonical hash of QorePluginOperationSignature
+uint64  signature_hash // xxHash64 of canonical signature form (see below)
 ```
 
 Total entry size 16 bytes. Loader behaviour: resolve `(import_idx,
@@ -1050,12 +1052,22 @@ incompatible module build; mismatch rejects the artifact with a diagnostic
 naming both the recorded and live signature hashes.
 
 `signature_hash` is a canonical wire hash, not a hash of the in-memory
-`QorePluginOperationSignature` bytes. Pointer-valued fields such as
+`QorePluginOperationSignature` bytes. The 64 bits in the wire format are
+xxHash64 over the canonical-form bytes in little-endian order — same hash
+primitive as `QoreAOTBinaryHeader::source_hash` so QORD readers and
+writers reuse a single implementation. Pointer-valued fields such as
 `QoreTypeInfo*` are normalized to stable identities before hashing: builtin
 type code or `(module_name, type_local_id)` for plugin types, plus nullability,
 arity, return type, `helper_abi`, `access`, and `result_alias`. The hash excludes
 process-local addresses, helper pointers, extension pointers, and padding so the
 same artifact can load in processes with different address layouts.
+
+`module_name` is canonicalised as: UTF-8 byte sequence with no Unicode
+normalization and no case folding, length-prefixed by `uint32 byte_count`
+in little-endian, byte-exact comparison. This mirrors the `STRINGS`
+section convention in the rest of QORD; implementations MUST NOT trim
+whitespace, fold case, or NFC-normalise the name before hashing or
+comparing.
 
 `qore_aot_module_init_v4` performs this resolution after `PLUGIN_IMPORTS`
 has been resolved against loaded modules. The wire format intentionally
@@ -1221,8 +1233,9 @@ vs. actual values, and the section number of this design that defines the rule.
 | `PLUGIN-REGISTRATION-SIGNATURE-CONFLICT` | registration / validation | §3.3 |
 | `PLUGIN-REGISTRATION-HELPER-SYMBOL-MISSING` | registration / contextual validation | §3.3 / §3.5 |
 | `PLUGIN-REGISTRATION-OPERATION-SET-VERSION-INCOMPATIBLE` | registration / contextual validation | §3.3 |
-| `PLUGIN-EXTENSION-ABI-MISMATCH` | registration / validation (LLVM extension) | §3.3 / §3.6 |
+| `PLUGIN-EXTENSION-ABI-MISMATCH` | registration / validation (LLVM extension version mismatch) | §3.3 / §3.6 |
 | `PLUGIN-EXTENSION-UNRECOGNIZED-REQUIRED` | registration / validation | §3.3 |
+| `PLUGIN-EXTENSION-VALIDATION-FAILED` | registration / validation (recognized extension whose payload fails its own validation, non-version causes; subreason carries per-extension specifics) | §3.3 |
 | `PLUGIN-CROSS-TYPE-CONFLICT` | registration / contextual validation (cross-module) | §3.10 |
 | `PLUGIN-LOWERING-CLAIM-VIOLATED` | parse-time lowering | §3.7 |
 | `PLUGIN-HELPER-RESULT-TYPE-MISMATCH` | runtime verifier | §3.4 |
@@ -1233,13 +1246,23 @@ vs. actual values, and the section number of this design that defines the rule.
 | `QORD-PLUGIN-SIGNATURE-HASH-MISMATCH` | QORD loader | §3.9 |
 | `QORD-PLUGIN-SERIALIZER-VERSION-UNSUPPORTED` | QORD loader | §3.9 |
 | `QORD-PLUGIN-RESERVED-NONZERO` | QORD loader | §3.9 |
-| `QORD-PLUGIN-PAYLOAD-LENGTH-MISMATCH` | QORD loader (deserializer over-read or under-consumption) | §3.3 / §3.9 |
+| `QORD-PLUGIN-PAYLOAD-LENGTH-MISMATCH` | QORD loader (deserializer consumption out of bounds; subreason is `over_read` for callback boundary failure or `under_consumed` for fewer-than-payload-len bytes consumed) | §3.3 / §3.9 |
+| `PLUGIN-REGISTRY-PROGRAM-NOT-AVAILABLE` | `Qore::Reflection::PluginRegistry` (Program-bound method called on the process-global view) | §3.12 |
 
 **Dry-run validation entry point.** Authors testing a descriptor before
 wiring it into module init use:
 
 ```cpp
 struct QorePluginValidationContext {
+    //! Size of this struct as known to the caller. MUST be set to
+    //! sizeof(QorePluginValidationContext) by callers compiled against a
+    //! given header revision. The runtime reads only up to min(struct_size,
+    //! its-own-sizeof) bytes; missing trailing fields take their default
+    //! values. Adding a field bumps the canonical sizeof; never removes,
+    //! never reorders. This avoids needing _v2 / _v3 of the validator
+    //! entry point as the context grows.
+    size_t struct_size;
+
     //! Optional opaque module-manager handle used to validate
     //! runtime_helper_symbol lookup against the registering binary. nullptr
     //! means descriptor-only validation; symbol resolution is reported as a
@@ -1321,7 +1344,14 @@ builds always perform and release builds perform only when
   `noexcept` function-pointer types. Registration validates that the pointers
   are non-null, but the runtime cannot recover if C++ code throws through one:
   normal C++ `noexcept` rules apply (`std::terminate`), and the protocol treats
-  this as a plugin bug rather than a recoverable Qore exception.
+  this as a plugin bug rather than a recoverable Qore exception. Debug builds
+  and `QORE_PLUGIN_VERIFY=1` runs wrap each call in an assertion macro that
+  logs the offending plugin module name and operation before `std::terminate`
+  fires, so plugin authors get an actionable diagnostic during development;
+  release builds without `QORE_PLUGIN_VERIFY` inherit raw C++ `noexcept`
+  semantics with no Qore-side log. The op cannot be made recoverable —
+  the function-pointer's `noexcept` type prevents stack unwinding by
+  design.
 - Every `make_identity` callback is invoked at most once per
   `(operation, result_type)` pair; debug builds assert the cache
   invariant on every fold attempt (§3.4).
@@ -1342,36 +1372,54 @@ class PluginRegistry {
     static PluginRegistry get();
 
     # Program-bound view for an explicit Program.
-    static PluginRegistry get(Program[QoreProgram] pgm);
+    static PluginRegistry get(Qore::Program pgm);
 
     # Process-global descriptor registry; methods that depend on Program
-    # activation or parse diagnostics are unavailable on this view.
+    # activation or parse diagnostics raise PLUGIN-REGISTRY-PROGRAM-NOT-AVAILABLE
+    # on this view (see error-code table).
     static PluginRegistry getProcessRegistry();
 
-    list<string> getRegisteredModules();
+    # Process-global: every module whose binary is loaded and whose
+    # registration has run — regardless of which Programs activate it.
+    list<string> getProcessModules();
+
+    # Program-bound: every module activated in this view's Program.
+    # Always a subset of getProcessModules(). Raises
+    # PLUGIN-REGISTRY-PROGRAM-NOT-AVAILABLE on the process-global view.
     list<string> getActiveModules();
+
     list<hash<PluginTypeInfo>> getTypes(string module_name);
     list<hash<PluginOperationInfo>> getOperations(string module_name);
 
     # Answers "why didn't my expression lower to my fast path?". Returns
     # the operation that would be selected for (lhs, rhs, op) at this
-    # call site, or NOTHING if it would fall back to .any.
+    # call site, or NOTHING if it would fall back to .any. Program-bound;
+    # raises on the process-global view.
     *hash<PluginOperationInfo> resolveOperation(
         Type lhs, Type rhs, string operation_name);
 
-    # Lists the call sites in the current Program that fell back to .any
-    # for plugin-type operations during the most recent parse pass —
-    # surface for "what's not vectorising?" investigations.
+    # Plugin-type call sites that fell back to .any in this Program. The
+    # buffer is rolling, sized by QORE_PLUGIN_FALLBACK_BUFFER (default
+    # 1024); oldest entries are dropped on overflow. Each entry records
+    # source location + reason. Program-bound; raises on process-global.
     list<hash<PluginFallbackSite>> getRecentFallbackSites();
+
+    # Reset the rolling fallback buffer for this Program. Useful for
+    # bisecting which file/parse step introduced a regression. Program-
+    # bound; raises on process-global.
+    nothing clearFallbackSites();
 }
 ```
 
 `PluginRegistry` is the protocol's answer to the "type registered, but
-where is it?" debugging question. `getRegisteredModules()` reports the
-process-global descriptor set; `getActiveModules()`, `resolveOperation()`, and
-`getRecentFallbackSites()` are Program-bound. It is not a substitute for the
-env-var trace family — the registry is a snapshot of the steady-state, the
-traces are a record of decisions. Both are necessary.
+where is it?" debugging question. The process-global view (`getProcessRegistry`)
+sees every loaded plugin module's *descriptors*; the Program-bound view
+(`get`) sees the *activations* visible to a specific Program plus parse-time
+diagnostics. Calling a Program-bound method on a process-global view raises
+`PLUGIN-REGISTRY-PROGRAM-NOT-AVAILABLE` with a diagnostic naming the method
+and pointing the caller at `get()` / `get(pgm)`. The registry is not a
+substitute for the env-var trace family — the registry is a snapshot of
+the steady-state, the traces are a record of decisions. Both are necessary.
 
 **Reference module + lint.** Phase 3 ships:
 
@@ -1835,20 +1883,24 @@ exposure — reuses Phase 1's `buffer<T>`.
 - **Validation and developer experience (§3.12)**, all on the public ABI
   ship boundary:
   - `qore_validate_plugin_types_v1` dry-run validation entry point with
-    optional validation context, fail-fast mode, and collect-all-errors mode.
+    `QorePluginValidationContext` (size-prefixed for forward-compatible
+    field growth), fail-fast mode, and collect-all-errors mode.
   - The structured error-code set listed in §3.12 — every rejection rule
-    in §3.3 / §3.7 / §3.9 / §3.10 wired to its assigned code.
+    in §3.3 / §3.7 / §3.9 / §3.10 / §3.12 wired to its assigned code,
+    including `PLUGIN-EXTENSION-VALIDATION-FAILED` and
+    `PLUGIN-REGISTRY-PROGRAM-NOT-AVAILABLE`.
   - The `QORE_PLUGIN_*_TRACE` env-var family (`REGISTER`, `DISPATCH`,
     `VERIFY_TRACE`, `CROSS_TYPE`, `QORD`) plus `QORE_PLUGIN_VERIFY`
     for release-build runtime verifier opt-in, matching the existing
     `QORE_AOT_*_TRACE` logging discipline without making trace flags change
     semantics.
   - Runtime verifier checks per the §3.12 inventory (helper return-tag,
-    helper-ABI, alias contract, lifecycle `noexcept` discipline,
-    `make_identity` cache).
+    helper-ABI, alias contract, `noexcept` lifecycle discipline with the
+    debug/`QORE_PLUGIN_VERIFY` assertion wrapper, `make_identity` cache).
   - `Qore::Reflection::PluginRegistry` for Qore-side introspection of
     registered modules / types / operations and "why didn't this
-    lower?" diagnostics.
+    lower?" diagnostics, with split process-global / Program-bound views
+    and `clearFallbackSites` for bisecting.
   - Error-message quality contract: every rejection includes module +
     type/op name + field + expected/actual + subreason + section reference.
 - `examples/plugins/sample-buffer/` reference module + `qore-plugin-lint`
