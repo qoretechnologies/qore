@@ -15,6 +15,7 @@
 %requires ../../../../qlib/RestClientIo.qm
 %requires ../../../../qlib/SGLangRestClient.qm
 %requires ../../../../qlib/QoreRagUtils
+%requires json
 %requires QUnit
 
 %exec-class SGLangEmbedderTest
