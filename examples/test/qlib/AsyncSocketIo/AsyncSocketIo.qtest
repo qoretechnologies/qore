@@ -69,6 +69,7 @@ public class AsyncSocketIoTest inherits QUnit::Test {
         addTestCase("concurrent submit", \concurrentSubmitTest());
         addTestCase("submit racing stop", \submitRacingStopTest());
         addTestCase("cancel by key", \cancelByKeyTest());
+        addTestCase("cancel and close by socket", \cancelAndCloseBySocketTest());
         addTestCase("concurrent cancel by key UAF", \concurrentCancelByKeyUafTest());
         addTestCase("callback mode concurrent", \callbackConcurrentTest());
         addTestCase("shared socket custom keys", \sharedSocketCustomKeysTest());
@@ -695,6 +696,44 @@ public class AsyncSocketIoTest inherits QUnit::Test {
 
         spop.abort();
         SimpleStringHandler::interruptSleep(False);
+    }
+
+    #! Tests socket-scoped cancelAndClose for custom-keyed operations
+    cancelAndCloseBySocketTest() {
+        AsyncSocketIoController io_controller(logger);
+        on_exit delete io_controller;
+
+        Socket listener();
+        listener.bind("127.0.0.1:0");
+        listener.listen();
+        on_exit listener.close();
+
+        Socket client();
+        client.connect("127.0.0.1:" + listener.getSocketInfo().port, 2s);
+        on_exit client.close();
+
+        Socket accepted = listener.accept(2s);
+        on_exit {
+            try { accepted.close(); } catch () {}
+        }
+
+        AbstractPollOperation op = accepted.startPollRecvData();
+        Queue q = io_controller.submit(<SocketPollOperationInfo>{
+            "sock": accepted,
+            "spop": op,
+            "key": "cancel-and-close-custom-key",
+            "owner": "cancel-and-close-owner",
+            "to": 30s,
+        });
+
+        assertTrue(io_controller.waitForProcessing(2s),
+            "receive operation should be registered before cancelAndClose");
+        assertTrue(io_controller.cancelAndClose(accepted),
+            "cancelAndClose(sock) should find a custom-keyed operation");
+
+        hash<SocketPollResultInfo> info = q.get(2s);
+        assertTrue(info.canceled, "operation should be canceled by cancelAndClose(sock)");
+        assertFalse(accepted.isOpen(), "socket should be closed by the controller");
     }
 
     #! Stresses concurrent cancelByKey on the same key interleaved with submits.
