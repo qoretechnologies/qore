@@ -15,8 +15,11 @@
 %requires ../../../../qlib/RestClientIo.qm
 %requires ../../../../qlib/SGLangRestClient.qm
 %requires ../../../../qlib/QoreRagUtils
-%requires json
 %requires QUnit
+
+%try-module json
+%define NoJson
+%endtry
 
 %exec-class SGLangEmbedderTest
 
@@ -94,6 +97,12 @@ class SGLangEmbedderTest inherits QUnit::Test {
         delete http;
     }
 
+    private checkModule() {
+%ifdef NoJson
+        testSkip("no json module");
+%endif
+    }
+
     private installHandler(hash<string, hash<auto>> responses) {
         if (handler) {
             http.removeHandler("emb");
@@ -115,6 +124,7 @@ class SGLangEmbedderTest inherits QUnit::Test {
     }
 
     testOpenAiPinning() {
+        checkModule();
         installHandler({
             "/v1/embeddings": {
                 "code": 200,
@@ -140,6 +150,7 @@ class SGLangEmbedderTest inherits QUnit::Test {
     }
 
     testNativeFallback() {
+        checkModule();
         installHandler({
             "/embed": {
                 "code": 200,
@@ -166,6 +177,7 @@ class SGLangEmbedderTest inherits QUnit::Test {
     }
 
     testPinnedStyleSkipsProbe() {
+        checkModule();
         installHandler({
             "/embed": {
                 "code": 200,
@@ -184,6 +196,7 @@ class SGLangEmbedderTest inherits QUnit::Test {
     }
 
     testNativeEmbeddingsShape() {
+        checkModule();
         installHandler({
             "/embed": {
                 "code": 200,
@@ -202,6 +215,7 @@ class SGLangEmbedderTest inherits QUnit::Test {
     }
 
     testNon404Propagates() {
+        checkModule();
         installHandler({
             "/v1/embeddings": {
                 "code": 400,
@@ -225,6 +239,7 @@ class SGLangEmbedderTest inherits QUnit::Test {
     }
 
     testNativeShapeMismatch() {
+        checkModule();
         installHandler({
             "/embed": {
                 "code": 200,
@@ -242,6 +257,7 @@ class SGLangEmbedderTest inherits QUnit::Test {
     }
 
     testApiKeyForwarded() {
+        checkModule();
         installHandler({
             "/v1/embeddings": {
                 "code": 200,
