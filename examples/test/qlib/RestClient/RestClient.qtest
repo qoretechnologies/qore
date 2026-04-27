@@ -153,6 +153,7 @@ public class Main inherits QUnit::Test {
         addTestCase("poll test", \pollTest());
         addTestCase("issue 3472", \issue3472());
         addTestCase("connection tests", \connectionTests());
+        addTestCase("negotiate auth options", \negotiateAuthOptionsTest());
         addTestCase("OPTIONS tests", \methodOptionsTest());
         addTestCase("DELETE tests", \methodDeleteTest());
         addTestCase("GET tests", \methodGetTest());
@@ -639,6 +640,56 @@ public class Main inherits QUnit::Test {
             assertTrue(cinfo.features{AbstractConnection::CF_UPDATE_OPTIONS});
             assertTrue(cinfo.features{RestConnection::RCF_OAUTH2_AUTH_CODE});
         }
+    }
+
+    negotiateAuthOptionsTest() {
+        string url = "http://127.0.0.1:" + port;
+
+        assertTrue(ConnectionProvider::HttpConnection::ConnectionScheme.options.negotiate_auth.type == "bool");
+        assertTrue(RestConnection::ConnectionScheme.options.negotiate_auth.type == "bool");
+        assertFalse(exists ConnectionProvider::FtpConnection::ConnectionScheme.options.negotiate_auth);
+
+        RestConnection conn("krb", "krb", url, {"monitor": False}, {
+            "negotiate_auth": True,
+            "negotiate_service_principal": "HTTP/test@EXAMPLE.COM",
+        });
+        RestClient client = conn.get(False);
+        assertEq(url, client.getURL());
+
+        assertThrows("NEGOTIATE-AUTH-ERROR", sub () {
+            new RestClient({
+                "url": url,
+                "negotiate_auth": True,
+                "token": "token",
+            }, True);
+        });
+        assertThrows("NEGOTIATE-AUTH-ERROR", sub () {
+            new RestClient({
+                "url": url,
+                "negotiate_auth": True,
+                "username": "user",
+                "password": "pass",
+            }, True);
+        });
+        assertThrows("NEGOTIATE-AUTH-ERROR", sub () {
+            new RestClient({
+                "url": url,
+                "negotiate_auth": True,
+                "headers": {"Authorization": "Bearer token"},
+            }, True);
+        });
+        assertThrows("NEGOTIATE-AUTH-ERROR", sub () {
+            new RestClient({
+                "url": url,
+                "negotiate_auth": True,
+                "negotiate_delegation_mode": "direct",
+            }, True);
+        });
+
+        HttpConnection hc("http-krb", "http-krb", url, {"monitor": False}, {
+            "negotiate_auth": True,
+        });
+        assertThrows("HTTP-NEGOTIATE-AUTH-ERROR", \hc.get(), (False,));
     }
 
     static *string getSwaggerSchema() {

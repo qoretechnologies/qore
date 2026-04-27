@@ -326,6 +326,14 @@ hash<RestResponseInfo> resp = f.get(30s);
         - \c oauth2_token_expiry_hint: hint for token expiry in seconds
         - \c oauth2_token_expiry: known expiry timestamp for an initial token; enables proactive pre-expiry refresh
         - \c oauth2_refresh_token: initial refresh token
+        - \c negotiate_auth: enables Kerberos/SPNEGO HTTP Negotiate authentication for synchronous requests
+        - \c negotiate_credential_cache: optional credential cache name for Kerberos/SPNEGO HTTP Negotiate
+          authentication
+        - \c negotiate_delegation_mode: Kerberos delegation mode; currently only \c "none" is supported
+        - \c negotiate_keytab: optional client keytab name for Kerberos/SPNEGO HTTP Negotiate authentication
+        - \c negotiate_preemptive: if \c True, send the initial Negotiate token before receiving a 401 challenge
+        - \c negotiate_service_principal: optional Kerberos service principal; if omitted, a host-based
+          \c HTTP service name is derived from the connection URL
         - \c username: username for \c password grant type
         - \c password: password for \c password grant type
 
@@ -527,6 +535,21 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             *string custom_token_method;
             #! Custom token refresh: URI path relative to the client URL
             *string custom_token_path;
+
+            # --- Kerberos/SPNEGO HTTP Negotiate config (protected by config_lock) ---
+
+            #! True when Kerberos/SPNEGO HTTP Negotiate auth is enabled
+            bool negotiate_auth = False;
+            #! Explicit Kerberos service principal for HTTP Negotiate auth
+            *string negotiate_service_principal;
+            #! Client keytab for HTTP Negotiate auth
+            *string negotiate_keytab;
+            #! Credential cache for HTTP Negotiate auth
+            *string negotiate_credential_cache;
+            #! True to send the first Negotiate token before a 401 challenge
+            bool negotiate_preemptive = False;
+            #! Delegation mode for HTTP Negotiate auth
+            string negotiate_delegation_mode = "none";
         }
 
         public {
@@ -661,6 +684,13 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
                 "token_type": True,
                 "token_api_key_header": True,
                 "rest_body_auth_error_check": True,
+                # Kerberos/SPNEGO HTTP Negotiate
+                "negotiate_auth": True,
+                "negotiate_service_principal": True,
+                "negotiate_keytab": True,
+                "negotiate_credential_cache": True,
+                "negotiate_preemptive": True,
+                "negotiate_delegation_mode": True,
                 # OAuth2 (core honored)
                 "oauth2_grant_type": True,
                 "oauth2_client_id": True,
@@ -813,6 +843,8 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             if (opts.rest_body_auth_error_check) {
                 rest_body_auth_error_check = opts.rest_body_auth_error_check;
             }
+
+            setupNegotiateAuth(opts);
 
             if (opts.token) {
                 string tt = opts.token_type ?? "Bearer";
@@ -1292,6 +1324,7 @@ while (*hash<SseMessageInfo> evt = reader.readEvent(30s)) {
         */
         HttpClientStreamingIo::SseStreamReader restSseReader(string method, string path,
                 *hash<auto> hdr, *data body) {
+            checkNegotiateUnsupported("RestClientIo SSE streams");
             ensureToken();
             hdr = hdr ?? {};
             if (!hdr.accept && !hdr.Accept) {
@@ -1391,6 +1424,7 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
         */
         HttpClientIo::HttpCancellableFuture restDoRequestCancellableAsync(string method,
                 string path, auto body, *hash<auto> hdr) {
+            checkNegotiateUnsupported("RestClientIo cancellable async requests");
             ensureToken();
 
             hash<auto> prepared = prepareRequest(method, \path, body, \hdr);
@@ -1438,6 +1472,8 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
             hash<auto> prepared = raw
                 ? prepareRawRequest(method, \path, body, \hdr)
                 : prepareRequest(method, \path, body, \hdr);
+            *auto negotiate_context = prepared.negotiate_context;
+            bool negotiate_retry = True;
 
             log(LoggerLevel::DEBUG, "%s() %s %s%s", raw ? "restDoRawRequest" : "restDoRequest",
                 method, url, path);
@@ -1456,7 +1492,18 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
             hash<auto> raw_resp = mgr.request(url, method, path, hdr,
                 prepared.serialized_body, req_to);
 
-            # 3. If 401 and OAuth2 configured, try to refresh token and retry once
+            # 3. If 401 and Negotiate is configured, run one SPNEGO challenge retry
+            if (raw_resp.status_code == 401 && negotiate_retry
+                    && tryNegotiateAuthRetry(raw_resp.headers, \hdr, \negotiate_context)) {
+                negotiate_retry = False;
+                prepared = raw
+                    ? prepareRawRequest(method, \path, body, \hdr)
+                    : prepareRequest(method, \path, body, \hdr);
+                raw_resp = mgr.request(url, method, path, hdr,
+                    prepared.serialized_body, req_to);
+            }
+
+            # 4. If 401 and OAuth2 configured, try to refresh token and retry once
             if (raw_resp.status_code == 401 && canRetryAuth()) {
                 try {
                     getNewTokenIntern();
@@ -1478,12 +1525,14 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
                     prepared.serialized_body, req_to);
             }
 
-            # 4. Deserialize
+            processFinalNegotiateResponse(raw_resp.headers, negotiate_context);
+
+            # 5. Deserialize
             hash<RestClient::RestResponseInfo> resp = buildResponse(raw_resp, prepared.error_passthru,
                 prepared.allow_any_response, method, path, hdr,
                 prepared.serialized_body);
 
-            # 5. Body-level auth error check on 200 OK: some servers return success with an error
+            # 6. Body-level auth error check on 200 OK: some servers return success with an error
             # payload when the token has expired; refresh and retry once
             if (isBodyAuthError(resp) && canRetryAuth()) {
                 try {
@@ -1527,6 +1576,205 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
             return resp.body{keys pattern} == pattern;
         }
 
+        #! Validates and stores Kerberos/SPNEGO HTTP Negotiate options
+        private setupNegotiateAuth(hash<auto> opts) {
+            if (!opts.negotiate_auth) {
+                return;
+            }
+
+            bool enabled = parse_boolean(opts.negotiate_auth);
+            if (!enabled) {
+                return;
+            }
+
+            hash<auto> allowed_modes = map {$1.value: True},
+                ConnectionProvider::HttpConnection::NegotiateDelegationModeAllowedValues;
+            string delegation_mode = opts.negotiate_delegation_mode ?? "none";
+            if (!allowed_modes{delegation_mode}) {
+                throw "NEGOTIATE-AUTH-ERROR",
+                    sprintf("invalid negotiate_delegation_mode %y; valid values: %y",
+                        delegation_mode,
+                        map $1.value, ConnectionProvider::HttpConnection::NegotiateDelegationModeAllowedValues);
+            }
+            if (delegation_mode != "none") {
+                throw "NEGOTIATE-AUTH-ERROR",
+                    "negotiate_delegation_mode values other than 'none' require inbound delegated credentials "
+                    "and are not supported by RestClientIo yet";
+            }
+
+            if (opts.token.val() || opts.token_api_key_header.val()) {
+                throw "NEGOTIATE-AUTH-ERROR", "negotiate_auth cannot be used with token authentication";
+            }
+            if (opts.oauth2_grant_type && opts.oauth2_grant_type != "none") {
+                throw "NEGOTIATE-AUTH-ERROR", "negotiate_auth cannot be used with OAuth2 authentication";
+            }
+            if ((*hash<auto> custom_token_opts = opts{keys CustomTokenOptions})) {
+                throw "NEGOTIATE-AUTH-ERROR",
+                    sprintf("negotiate_auth cannot be used with custom token authentication options: %y",
+                        keys custom_token_opts);
+            }
+            if (opts.username.val() || opts.password.val()) {
+                throw "NEGOTIATE-AUTH-ERROR", "negotiate_auth cannot be used with HTTP basic authentication";
+            }
+            if (hasAuthorizationHeader(opts.headers)) {
+                throw "NEGOTIATE-AUTH-ERROR",
+                    "negotiate_auth cannot be used when a default Authorization header is configured";
+            }
+
+            AutoWriteLock al(config_lock);
+            negotiate_auth = True;
+            negotiate_service_principal = opts.negotiate_service_principal;
+            negotiate_keytab = opts.negotiate_keytab;
+            negotiate_credential_cache = opts.negotiate_credential_cache;
+            negotiate_preemptive = opts.negotiate_preemptive ? parse_boolean(opts.negotiate_preemptive) : False;
+            negotiate_delegation_mode = delegation_mode;
+        }
+
+        #! Returns True if a headers hash contains an Authorization header
+        private bool hasAuthorizationHeader(*hash<auto> hdr) {
+            return hdr && (exists hdr.Authorization || exists hdr.authorization);
+        }
+
+        #! Removes Authorization headers using common casings
+        private removeAuthorizationHeader(reference<hash<auto>> hdr) {
+            hdr -= ("Authorization", "authorization");
+        }
+
+        #! Returns True if Kerberos/SPNEGO HTTP Negotiate auth is enabled
+        private bool usingNegotiateAuth() {
+            AutoReadLock al(config_lock);
+            return negotiate_auth;
+        }
+
+        #! Returns the target service name and optional GSS options for Negotiate auth
+        private hash<auto> getNegotiateTargetInfo() {
+            *string service;
+            {
+                AutoReadLock al(config_lock);
+                service = negotiate_service_principal;
+            }
+            if (service.val()) {
+                return {"service": service};
+            }
+
+            hash<UrlInfo> u = parse_url(url);
+            if (!u.host.val()) {
+                throw "NEGOTIATE-AUTH-ERROR",
+                    sprintf("cannot derive Kerberos HTTP service name from URL %y", getSafeUrl());
+            }
+            return {
+                "service": "HTTP@" + u.host,
+                "opts": {"name_type": "hostbased-service"},
+            };
+        }
+
+        #! Loads Krb5Util and builds the next Negotiate client Authorization value
+        private hash<auto> buildNegotiateClientAuthorization(*string www_authenticate_header,
+                *auto gss_context) {
+            *string cache;
+            *string keytab;
+            *LoggerInterface req_logger;
+            {
+                AutoReadLock al(config_lock);
+                cache = negotiate_credential_cache;
+                keytab = negotiate_keytab;
+                req_logger = logger;
+            }
+            load_module("Krb5Util");
+            hash<auto> target = getNegotiateTargetInfo();
+            return call_function_args("Krb5Util::buildHttpNegotiateClientAuthorization",
+                (target.service, www_authenticate_header, gss_context, cache, keytab,
+                    target.opts, req_logger));
+        }
+
+        #! Finds a Negotiate challenge in response headers
+        private *hash<auto> findNegotiateChallenge(hash<auto> response_headers) {
+            *LoggerInterface req_logger;
+            {
+                AutoReadLock al(config_lock);
+                req_logger = logger;
+            }
+            load_module("Krb5Util");
+            return call_function_args("Krb5Util::findNegotiateHeader",
+                (response_headers, "www-authenticate", req_logger));
+        }
+
+        #! Adds the initial preemptive Negotiate Authorization header when configured
+        private maybeAddPreemptiveNegotiateHeader(reference<hash<auto>> hdr,
+                reference<*auto> gss_context) {
+            bool preemptive;
+            {
+                AutoReadLock al(config_lock);
+                if (!negotiate_auth || !negotiate_preemptive || gss_context) {
+                    return;
+                }
+                preemptive = negotiate_preemptive;
+            }
+            if (!preemptive) {
+                return;
+            }
+            if (hasAuthorizationHeader(hdr)) {
+                *string auth = hdr.authorization ?? hdr.Authorization;
+                if (auth =~ /^Negotiate([[:space:]]|$)/i) {
+                    return;
+                }
+                throw "NEGOTIATE-AUTH-ERROR",
+                    "negotiate_auth cannot be used when a request Authorization header is supplied";
+            }
+            hash<auto> step = buildNegotiateClientAuthorization(NOTHING, gss_context);
+            gss_context = step.context;
+            if (!step.authorization_header.val()) {
+                throw "NEGOTIATE-AUTH-ERROR",
+                    "Kerberos/SPNEGO did not produce an initial Authorization header";
+            }
+            hdr.authorization = step.authorization_header;
+        }
+
+        #! Starts or continues a challenge-driven Negotiate exchange
+        private bool tryNegotiateAuthRetry(hash<auto> response_headers, reference<hash<auto>> hdr,
+                reference<*auto> gss_context) {
+            if (!usingNegotiateAuth()) {
+                return False;
+            }
+
+            *hash<auto> challenge = findNegotiateChallenge(response_headers);
+            if (!challenge) {
+                return False;
+            }
+
+            removeAuthorizationHeader(\hdr);
+            hash<auto> step = buildNegotiateClientAuthorization(
+                challenge.has_token ? challenge.header : NOTHING, gss_context);
+            gss_context = step.context;
+            if (!step.authorization_header.val()) {
+                throw "NEGOTIATE-AUTH-ERROR",
+                    "Kerberos/SPNEGO server challenge did not produce an Authorization header";
+            }
+            hdr.authorization = step.authorization_header;
+            return True;
+        }
+
+        #! Processes a final Negotiate response token for mutual authentication
+        private processFinalNegotiateResponse(hash<auto> response_headers, *auto gss_context) {
+            if (!usingNegotiateAuth() || !gss_context) {
+                return;
+            }
+
+            *hash<auto> final_header = findNegotiateChallenge(response_headers);
+            if (final_header && final_header.has_token) {
+                buildNegotiateClientAuthorization(final_header.header, gss_context);
+            }
+        }
+
+        #! Rejects Negotiate auth on paths that cannot complete the SPNEGO exchange
+        private checkNegotiateUnsupported(string path_name) {
+            if (usingNegotiateAuth()) {
+                throw "NEGOTIATE-AUTH-ERROR",
+                    sprintf("%s does not support Kerberos/SPNEGO HTTP Negotiate authentication yet",
+                        path_name);
+            }
+        }
+
         #! Sends an async generic REST request and returns a RestFuture
         /** The returned @ref RestFuture wraps a raw HTTP response Future and
             deserializes the response when \c get() is called.
@@ -1539,6 +1787,7 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
             @return a RestFuture that resolves to a @ref RestClient::RestResponseInfo hash
         */
         RestFuture restDoRequestAsync(string method, string path, auto body, *hash<auto> hdr) {
+            checkNegotiateUnsupported("RestClientIo async requests");
             ensureToken();
 
             # 1. Snapshot config state and serialize body
@@ -1585,6 +1834,7 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
         */
         Future restDoRequestAsync(string method, string path, auto body, *hash<auto> hdr,
                 *bool skip_ensure_token) {
+            checkNegotiateUnsupported("RestClientIo async requests");
             if (!skip_ensure_token) {
                 ensureToken();
             }
@@ -1619,6 +1869,7 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
         */
         hash<auto> restDoRequestAsyncWithNotifier(string method, string path, auto body,
                 *hash<auto> hdr, EventNotifier notifier) {
+            checkNegotiateUnsupported("RestClientIo notifier async requests");
             hash<auto> prepared = prepareRequest(method, \path, body, \hdr);
 
             log(LoggerLevel::DEBUG, "restDoRequestAsyncWithNotifier() %s %s%s", method, url, path);
@@ -1645,6 +1896,7 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
         */
         hash<auto> doRequestRawAsyncWithNotifier(string method, string path, *hash<auto> hdr,
                 *data body, EventNotifier notifier) {
+            checkNegotiateUnsupported("RestClientIo raw notifier async requests");
             HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(url);
             return stream.submitAsyncWithNotifier(method, path, hdr, body, notifier);
         }
@@ -1788,6 +2040,8 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
 
             # 1. Snapshot config state and serialize body
             hash<auto> prepared = prepareRequest(method, \path, body, \hdr);
+            *auto negotiate_context = prepared.negotiate_context;
+            bool negotiate_retry = True;
 
             # 2. Call signer with request context
             auto sig = signer({"path": path, "body": prepared.serialized_body,
@@ -1799,7 +2053,18 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
             # 3. Make HTTP request
             hash<auto> raw = mgr.request(url, method, path, hdr, prepared.serialized_body);
 
-            # 4. If 401 and OAuth2 configured, try to refresh token and retry once
+            # 4. If 401 and Negotiate is configured, run one SPNEGO challenge retry
+            if (raw.status_code == 401 && negotiate_retry
+                    && tryNegotiateAuthRetry(raw.headers, \hdr, \negotiate_context)) {
+                negotiate_retry = False;
+                prepared = prepareRequest(method, \path, body, \hdr);
+                sig = signer({"path": path, "body": prepared.serialized_body,
+                    "hdr": hdr - shdr});
+                hdr{shdr} = sig;
+                raw = mgr.request(url, method, path, hdr, prepared.serialized_body);
+            }
+
+            # 5. If 401 and OAuth2 configured, try to refresh token and retry once
             if (raw.status_code == 401 && canRetryAuth()) {
                 try {
                     getNewTokenIntern();
@@ -1818,12 +2083,14 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
                 raw = mgr.request(url, method, path, hdr, prepared.serialized_body);
             }
 
-            # 5. Deserialize
+            processFinalNegotiateResponse(raw.headers, negotiate_context);
+
+            # 6. Deserialize
             hash<RestClient::RestResponseInfo> resp = buildResponse(raw, prepared.error_passthru,
                 prepared.allow_any_response, method, path, hdr,
                 prepared.serialized_body);
 
-            # 6. Body-level auth error retry (see restDoRequest)
+            # 7. Body-level auth error retry (see restDoRequest)
             if (isBodyAuthError(resp) && canRetryAuth()) {
                 try {
                     getNewTokenIntern();
@@ -1860,6 +2127,7 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
         */
         RestFuture doSignedRequestAsync(string shdr, code signer, string method,
                 string path, auto body, *hash<auto> hdr) {
+            checkNegotiateUnsupported("RestClientIo signed async requests");
             ensureToken();
 
             # 1. Snapshot config state and serialize body
@@ -2009,6 +2277,9 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
             # Normalize header keys to lowercase for HTTP/2 and HTTP/3 compatibility
             hdr = map {$1.key.lwr(): $1.value}, hdr.pairIterator();
 
+            *auto negotiate_context;
+            maybeAddPreemptiveNegotiateHeader(\hdr, \negotiate_context);
+
             *data serialized_body;
             if (exists body) {
                 if (raw) {
@@ -2037,11 +2308,15 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
                 }
             }
 
-            return {
+            hash<auto> rv = {
                 "serialized_body": serialized_body,
                 "error_passthru": req_error_passthru,
                 "allow_any_response": req_allow_any_response,
             };
+            if (negotiate_context) {
+                rv.negotiate_context = negotiate_context;
+            }
+            return rv;
         }
 
         #! Internal: deserializes a raw HTTP response into a RestResponseInfo hash
@@ -3239,6 +3514,7 @@ obs.observersReady();
         */
         HttpClientStreamingIo::SseObservable restObserveSse(string method, string path,
                 auto body, *hash<auto> hdr, *hash<auto> opts) {
+            checkNegotiateUnsupported("RestClientIo SSE observables");
             # Prepare the request (serializes body, adds auth headers, prepends connection_path)
             hash<auto> prepared = prepareRequest(method, \path, body, \hdr);
 
@@ -3475,6 +3751,10 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation 
         @param logger optional logger
     */
     constructor(RestClient::RestConnection conn, hash<auto> ping_opts, *Logger::LoggerInterface logger) {
+        if (ping_opts.negotiate_auth) {
+            throw "NEGOTIATE-AUTH-ERROR",
+                "RestClientIo polling pings do not support Kerberos/SPNEGO HTTP Negotiate authentication yet";
+        }
         self.conn := conn;
         self.ping_opts = ping_opts;
         self.logger = logger;

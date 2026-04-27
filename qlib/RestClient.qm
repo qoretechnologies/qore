@@ -567,6 +567,11 @@ public class AbstractRestClient inherits Serializable, Qore::Thread::AbstractPoo
     }
 }
 
+#! Strips RestClient-level options before invoking the HTTPClient base constructor
+hash<auto> sub getRestClientHttpClientConstructorOptions(*hash<auto> opts) {
+    return (opts ?? {}) - ConnectionProvider::HttpConnection::NegotiateOptionNames;
+}
+
 #! this class provides the REST client API
 public class RestClient inherits Qore::HTTPClient, Logger::LoggerWrapper, ConnectionProvider::UpdateOptionsInterface,
         ConnectionProvider::OptionHelper, AbstractRestClient {
@@ -879,6 +884,19 @@ public class RestClient inherits Qore::HTTPClient, Logger::LoggerWrapper, Connec
         #! REST custom refresh URI path
         string custom_token_path;
 
+        #! True when Kerberos/SPNEGO HTTP Negotiate auth is enabled
+        bool negotiate_auth = False;
+        #! Explicit Kerberos service principal for HTTP Negotiate auth
+        *string negotiate_service_principal;
+        #! Client keytab for HTTP Negotiate auth
+        *string negotiate_keytab;
+        #! Credential cache for HTTP Negotiate auth
+        *string negotiate_credential_cache;
+        #! True to send the first Negotiate token before a 401 challenge
+        bool negotiate_preemptive = False;
+        #! Delegation mode for HTTP Negotiate auth
+        string negotiate_delegation_mode = "none";
+
         #! To use to sign requests to the any alt token URL
         transient *code alt_token_signer;
         #! The header for the alt token signer
@@ -921,6 +939,14 @@ RestClient rest({"url": "http://localhost:8001/rest"});
           unavailable)
         - \c logger: any logger to use for the object
         - \c max_redirects: The maximum number of redirects before throwing an exception (the default is 5)
+        - \c negotiate_auth: Enables Kerberos/SPNEGO HTTP Negotiate authentication for synchronous requests
+        - \c negotiate_credential_cache: Optional credential cache name for Kerberos/SPNEGO HTTP Negotiate
+          authentication
+        - \c negotiate_delegation_mode: Kerberos delegation mode; currently only \c "none" is supported
+        - \c negotiate_keytab: Optional client keytab name for Kerberos/SPNEGO HTTP Negotiate authentication
+        - \c negotiate_preemptive: If \c True, send the initial Negotiate token before receiving a 401 challenge
+        - \c negotiate_service_principal: Optional Kerberos service principal; if omitted, a host-based
+          \c HTTP service name is derived from the connection URL
         - \c oauth2_alt_url_subst: URL substitution info for \c oauth2_alt_token_url
         - \c oauth2_alt_token_url: Alternate token URL; if this is set then the token request is made to this URL
           with the \c oauth2_token_url value as an argument in the request
@@ -1003,7 +1029,8 @@ RestClient rest({"url": "http://localhost:8001/rest"});
         - %RestClient 1.4 the \a validator and \a swagger options were added
     */
     constructor(*hash<auto> opts, *softbool do_not_connect)
-            : HTTPClient(opts + ((opts.url || !opts.validator) ? NOTHING : {"url": opts.validator.getTargetUrl()})) {
+            : HTTPClient(getRestClientHttpClientConstructorOptions(opts)
+                + ((opts.url || !opts.validator) ? NOTHING : {"url": opts.validator.getTargetUrl()})) {
         # capture caller options verbatim for copyWithUrl() sibling construction
         saved_opts = opts ?? {};
         # set logger, if any
@@ -1127,6 +1154,10 @@ RestClient rest({"url": "http://localhost:8001/rest"});
         # setup headers before setupAuth()
         headers += DefaultHeaders + opts.headers;
         noCharset = opts.no_charset;
+
+        # setup Kerberos/SPNEGO Negotiate auth before other auth paths so
+        # conflicts are caught before any default Authorization header is added
+        setupNegotiateAuth(opts);
 
         # setup authentication
         setupAuth(opts, do_not_connect);
@@ -2477,6 +2508,178 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
         }
     }
 
+    #! Validates and stores Kerberos/SPNEGO HTTP Negotiate options
+    private setupNegotiateAuth(hash<auto> opts) {
+        if (!opts.negotiate_auth) {
+            return;
+        }
+
+        negotiate_auth = parse_boolean(opts.negotiate_auth);
+        if (!negotiate_auth) {
+            return;
+        }
+
+        if (opts.negotiate_service_principal) {
+            negotiate_service_principal = opts.negotiate_service_principal;
+        }
+        if (opts.negotiate_keytab) {
+            negotiate_keytab = opts.negotiate_keytab;
+        }
+        if (opts.negotiate_credential_cache) {
+            negotiate_credential_cache = opts.negotiate_credential_cache;
+        }
+        if (opts.negotiate_preemptive) {
+            negotiate_preemptive = parse_boolean(opts.negotiate_preemptive);
+        }
+        if (opts.negotiate_delegation_mode) {
+            hash<auto> allowed_modes = map {$1.value: True},
+                ConnectionProvider::HttpConnection::NegotiateDelegationModeAllowedValues;
+            if (!allowed_modes{opts.negotiate_delegation_mode}) {
+                throw "NEGOTIATE-AUTH-ERROR",
+                    sprintf("invalid negotiate_delegation_mode %y; valid values: %y",
+                        opts.negotiate_delegation_mode,
+                        map $1.value, ConnectionProvider::HttpConnection::NegotiateDelegationModeAllowedValues);
+            }
+            negotiate_delegation_mode = opts.negotiate_delegation_mode;
+        }
+        if (negotiate_delegation_mode != "none") {
+            throw "NEGOTIATE-AUTH-ERROR",
+                "negotiate_delegation_mode values other than 'none' require inbound delegated credentials "
+                "and are not supported by RestClient yet";
+        }
+
+        if (opts.token.val() || opts.token_api_key_header.val()) {
+            throw "NEGOTIATE-AUTH-ERROR", "negotiate_auth cannot be used with token authentication";
+        }
+        if (opts.oauth2_grant_type && opts.oauth2_grant_type != "none") {
+            throw "NEGOTIATE-AUTH-ERROR", "negotiate_auth cannot be used with OAuth2 authentication";
+        }
+        if ((*hash<auto> custom_token_opts = opts{keys CustomTokenOptions})) {
+            throw "NEGOTIATE-AUTH-ERROR",
+                sprintf("negotiate_auth cannot be used with custom token authentication options: %y",
+                    keys custom_token_opts);
+        }
+        if (opts.username.val() || opts.password.val() || getUsername().val() || getPassword().val()) {
+            throw "NEGOTIATE-AUTH-ERROR", "negotiate_auth cannot be used with HTTP basic authentication";
+        }
+        if (hasAuthorizationHeader(opts.headers)) {
+            throw "NEGOTIATE-AUTH-ERROR",
+                "negotiate_auth cannot be used when a default Authorization header is configured";
+        }
+    }
+
+    #! Returns True if a headers hash contains an Authorization header
+    private bool hasAuthorizationHeader(*hash<auto> hdr) {
+        return hdr && (exists hdr.Authorization || exists hdr.authorization);
+    }
+
+    #! Removes Authorization headers using common casings
+    private removeAuthorizationHeader(reference<hash<auto>> hdr) {
+        hdr -= ("Authorization", "authorization");
+    }
+
+    #! Returns the target service name and optional GSS options for Negotiate auth
+    private hash<auto> getNegotiateTargetInfo() {
+        if (negotiate_service_principal.val()) {
+            return {"service": negotiate_service_principal};
+        }
+
+        hash<UrlInfo> u = parse_url(getURL());
+        if (!u.host.val()) {
+            throw "NEGOTIATE-AUTH-ERROR",
+                sprintf("cannot derive Kerberos HTTP service name from URL %y", getSafeURL());
+        }
+        return {
+            "service": "HTTP@" + u.host,
+            "opts": {"name_type": "hostbased-service"},
+        };
+    }
+
+    #! Loads Krb5Util and builds the next Negotiate client Authorization value
+    private hash<auto> buildNegotiateClientAuthorization(*string www_authenticate_header,
+            *auto gss_context) {
+        load_module("Krb5Util");
+        hash<auto> target = getNegotiateTargetInfo();
+        return call_function_args("Krb5Util::buildHttpNegotiateClientAuthorization",
+            (target.service, www_authenticate_header, gss_context, negotiate_credential_cache,
+                negotiate_keytab, target.opts, logger));
+    }
+
+    #! Finds a Negotiate challenge in response headers
+    private *hash<auto> findNegotiateChallenge(hash<auto> response_headers) {
+        load_module("Krb5Util");
+        return call_function_args("Krb5Util::findNegotiateHeader",
+            (response_headers, "www-authenticate", logger));
+    }
+
+    #! Adds the initial preemptive Negotiate Authorization header when configured
+    private maybeAddPreemptiveNegotiateHeader(reference<hash<auto>> hdr,
+            reference<*auto> gss_context) {
+        if (!negotiate_auth || !negotiate_preemptive || gss_context) {
+            return;
+        }
+        if (hasAuthorizationHeader(hdr)) {
+            *string auth = hdr.Authorization ?? hdr.authorization;
+            if (auth =~ /^Negotiate([[:space:]]|$)/i) {
+                return;
+            }
+            throw "NEGOTIATE-AUTH-ERROR",
+                "negotiate_auth cannot be used when a request Authorization header is supplied";
+        }
+        hash<auto> step = buildNegotiateClientAuthorization(NOTHING, gss_context);
+        gss_context = step.context;
+        if (!step.authorization_header.val()) {
+            throw "NEGOTIATE-AUTH-ERROR",
+                "Kerberos/SPNEGO did not produce an initial Authorization header";
+        }
+        hdr.Authorization = step.authorization_header;
+    }
+
+    #! Starts or continues a challenge-driven Negotiate exchange
+    private bool tryNegotiateAuthRetry(hash<auto> response_headers, reference<hash<auto>> hdr,
+            reference<*auto> gss_context) {
+        if (!negotiate_auth) {
+            return False;
+        }
+
+        *hash<auto> challenge = findNegotiateChallenge(response_headers);
+        if (!challenge) {
+            return False;
+        }
+
+        removeAuthorizationHeader(\hdr);
+        hash<auto> step = buildNegotiateClientAuthorization(
+            challenge.has_token ? challenge.header : NOTHING, gss_context);
+        gss_context = step.context;
+        if (!step.authorization_header.val()) {
+            throw "NEGOTIATE-AUTH-ERROR",
+                "Kerberos/SPNEGO server challenge did not produce an Authorization header";
+        }
+        hdr.Authorization = step.authorization_header;
+        return True;
+    }
+
+    #! Processes a final Negotiate response token for mutual authentication
+    private processFinalNegotiateResponse(hash<auto> response_headers, *auto gss_context) {
+        if (!negotiate_auth || !gss_context) {
+            return;
+        }
+
+        *hash<auto> final_header = findNegotiateChallenge(response_headers);
+        if (final_header && final_header.has_token) {
+            buildNegotiateClientAuthorization(final_header.header, gss_context);
+        }
+    }
+
+    #! Rejects Negotiate auth on paths that cannot complete the SPNEGO exchange
+    private checkNegotiateUnsupported(string path_name) {
+        if (negotiate_auth) {
+            throw "NEGOTIATE-AUTH-ERROR",
+                sprintf("%s does not support Kerberos/SPNEGO HTTP Negotiate authentication yet",
+                    path_name);
+        }
+    }
+
     #! Validates and sets any OAuth2 options
     /** @since %RestClient 2.0
     */
@@ -2820,6 +3023,8 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
         hash<auto> h;
 
         bool retry = !no_auth_retry;
+        bool negotiate_retry = !no_auth_retry;
+        *auto negotiate_context;
         hash<auto> rv;
         while (True) {
             # if we are in the token expiry window; get a new token first
@@ -2833,6 +3038,7 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
                 continue;
             }
             try {
+                maybeAddPreemptiveNegotiateHeader(\hdr, \negotiate_context);
                 if (signer && shdr.val()) {
                     hdr{shdr} = signer({
                         "path": path ?* getConnectionPath() ?* getDefaultPath() ?* "/",
@@ -2854,10 +3060,22 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
                     h."content-type" = assume_content_type;
                 }
                 info."response-body-raw" = h.body;
+                if (negotiate_retry && h.status_code == 401
+                        && tryNegotiateAuthRetry(info."response-headers", \hdr, \negotiate_context)) {
+                    negotiate_retry = False;
+                    debug("RestClient retrying with Kerberos/SPNEGO Negotiate Authorization header");
+                    continue;
+                }
             } catch (hash<ExceptionInfo> ex) {
                 error("RestClient sent: %y received: %y err: %s: %s", info."request-uri", info."response-uri", ex.err,
                     ex.desc);
                 info."response-code" = info."response-headers".status_code;
+                if (negotiate_retry && info."response-code" == 401
+                        && tryNegotiateAuthRetry(info."response-headers", \hdr, \negotiate_context)) {
+                    negotiate_retry = False;
+                    debug("RestClient retrying with Kerberos/SPNEGO Negotiate Authorization header");
+                    continue;
+                }
                 if (retry && needsRefresh(ex, info)) {
                     on_error rethrow;
                     detail("RestClient: authorization error; trying to acquire a new token");
@@ -2883,6 +3101,7 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
                 }
             }
 
+            processFinalNegotiateResponse(info."response-headers", negotiate_context);
             rv = processRestResponse(h, m, path, \info);
             if (rest_body_auth_error_check && retry && needsRefresh(NOTHING, info, True, rv.body)) {
                 on_error rethrow;
@@ -2919,6 +3138,7 @@ hash<auto> result = f.get();
     */
     RestRequestPollOperation startPollDoRequest(string m, string path, auto body,
             softbool decode_errors = True, *hash<auto> hdr) {
+        checkNegotiateUnsupported("RestClient polling requests");
         hash<auto> info = {};
         checkLogin(\info);
         # Phase 1: Prepare (synchronous — runs all subclass hooks)
@@ -4039,6 +4259,10 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
         *string ping_path;
         if (!real_opts.ping_method || !exists (ping_path = getPingPath())) {
             return HttpBasedConnection::startPollConnect(logger);
+        }
+        if (real_opts.negotiate_auth) {
+            throw "NEGOTIATE-AUTH-ERROR",
+                "RestConnection polling pings do not support Kerberos/SPNEGO HTTP Negotiate authentication yet";
         }
         auto ping_body = getPingBody();
 

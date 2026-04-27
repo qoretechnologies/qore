@@ -533,6 +533,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             \testOptionPhase3OAuth2Accepted());
         addTestCase("option oauth2_pkce invalid value", \testOptionPkceInvalid());
         addTestCase("option oauth2_pkce legacy boolean normalization", \testOptionPkceLegacyBool());
+        addTestCase("option negotiate auth", \testOptionNegotiateAuth());
 
         # Phase 3: custom_token_* refresh pipeline
         addTestCase("custom_token: all-or-nothing validation", \testCustomTokenAllOrNothing());
@@ -3083,6 +3084,50 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         RestClientIo::RestClientIo f = createClient({"oauth2_pkce": False});
         on_exit f.close();
         assertEq("none", f.getOAuth2Options().oauth2_pkce);
+    }
+
+    testOptionNegotiateAuth() {
+%ifndef NoJson
+        RestClientIo::RestClientIo rest = createClient({
+            "negotiate_auth": True,
+            "negotiate_service_principal": "HTTP/test@EXAMPLE.COM",
+        });
+        on_exit rest.close();
+
+        hash<RestClient::RestResponseInfo> resp = rest.restGet("/echo");
+        assertEq(200, resp.status_code);
+        assertFalse(resp.body.request_headers.authorization.val());
+
+        assertThrows("NEGOTIATE-AUTH-ERROR", sub () {
+            rest.restGetAsync("/api/test");
+        });
+
+        assertThrows("NEGOTIATE-AUTH-ERROR", sub () {
+            createClient({
+                "negotiate_auth": True,
+                "token": "token",
+            });
+        });
+        assertThrows("NEGOTIATE-AUTH-ERROR", sub () {
+            createClient({
+                "negotiate_auth": True,
+                "username": "user",
+                "password": "pass",
+            });
+        });
+        assertThrows("NEGOTIATE-AUTH-ERROR", sub () {
+            createClient({
+                "negotiate_auth": True,
+                "headers": {"Authorization": "Bearer token"},
+            });
+        });
+        assertThrows("NEGOTIATE-AUTH-ERROR", sub () {
+            createClient({
+                "negotiate_auth": True,
+                "negotiate_delegation_mode": "s4u",
+            });
+        });
+%endif
     }
 
     testOptionPhase3OAuth2Accepted() {

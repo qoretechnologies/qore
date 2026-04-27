@@ -36,6 +36,8 @@ class CaptureLogAppender inherits Qore::Logger::LoggerAppender {
 public class Krb5ModuleTest inherits QUnit::Test {
     constructor() : Test("Krb5ModuleTest", "1.0") {
         addTestCase("utility module helpers", \testUtilityModuleHelpers());
+        addTestCase("utility find HTTP Negotiate header",
+            \testUtilityFindNegotiateHeader());
         addTestCase("utility parse host-based service principal",
             \testUtilityParseHostBasedServicePrincipal());
         addTestCase("utility parse rejects single-component principal",
@@ -308,6 +310,24 @@ public class Krb5ModuleTest inherits QUnit::Test {
     private testUtilityModuleHelpers() {
         assertEq("ldap/ad.example.com@EXAMPLE.COM",
             Krb5Util::getHostBasedServicePrincipal("ldap", "ad.example.com", "EXAMPLE.COM"));
+    }
+
+    private testUtilityFindNegotiateHeader() {
+        hash<Krb5Util::NegotiateHeaderInfo> info = Krb5Util::findNegotiateHeader({
+            "WWW-Authenticate": "Basic realm=\"a,b\", Negotiate abc==",
+        });
+        assertEq("Negotiate abc==", info.header);
+        assertTrue(info.has_token);
+
+        info = Krb5Util::findNegotiateHeader({
+            "www-authenticate": ("Digest realm=\"test\"", "negotiate"),
+        });
+        assertEq("negotiate", info.header);
+        assertFalse(info.has_token);
+
+        assertNothing(Krb5Util::findNegotiateHeader({
+            "www-authenticate": "Basic realm=\"test\"",
+        }));
     }
 
     private testUtilityParseHostBasedServicePrincipal() {

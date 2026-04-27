@@ -145,6 +145,15 @@ public namespace Krb5Util {
         *string authorization_header;
     }
 
+    #! Parsed HTTP Negotiate authentication header information
+    public hashdecl NegotiateHeaderInfo {
+        #! Header value beginning with \c "Negotiate"
+        string header;
+
+        #! True if the header includes a token
+        bool has_token;
+    }
+
     #! HTTP Negotiate server step result
     public hashdecl NegotiateServerStepInfo {
         #! True if the acceptor context is complete after this step
@@ -1694,6 +1703,90 @@ string authHeader = "Negotiate " + Krb5Util::negotiateSpnegoToken(step.token);
         return rv;
     }
 
+    #! Creates an initiator context for HTTP Negotiate client authentication
+    /** @param service_principal Kerberos service principal, or a host-based
+        service name when \a gss_opts.name_type is \c "hostbased-service"
+        @param credential_cache optional credential cache name
+        @param keytab optional client keytab name; ignored when
+        \a credential_cache is set
+        @param gss_opts optional @ref Qore::Krb5::GssClientContextOptions
+        @param logger optional logger for diagnostics; secrets and tokens are
+        not logged
+
+        @return a GSS initiator context
+
+        @throw KRB5-GSS-ERROR if credentials or the target name cannot be
+        imported
+        @throw KRB5-CACHE-ERROR if \a credential_cache cannot be opened
+        @throw KRB5-KEYTAB-ERROR if \a keytab cannot be opened
+    */
+    public auto sub createHttpNegotiateClientContext(
+            string service_principal, *string credential_cache = NOTHING,
+            *string keytab = NOTHING,
+            *hash<Qore::Krb5::GssClientContextOptions> gss_opts = NOTHING,
+            *Qore::Logger::LoggerInterface logger = NOTHING) {
+        *Qore::Krb5::GssCredential cred;
+        if (credential_cache.val() || keytab.val()) {
+            Qore::Krb5::Krb5Context kctx();
+            if (credential_cache.val()) {
+                cred = Qore::Krb5::GssCredential::fromCredentialCache(
+                    kctx.openCredentialCache(credential_cache));
+                logSpnego(logger, "created HTTP Negotiate client credential from credential cache");
+            } else {
+                cred = Qore::Krb5::GssCredential::fromKeytab(kctx.openKeytab(keytab));
+                logSpnego(logger, "created HTTP Negotiate client credential from keytab");
+            }
+        }
+
+        if (cred) {
+            if (gss_opts) {
+                Qore::Krb5::GssClientContext rv(service_principal, cred, gss_opts);
+                return rv;
+            }
+            Qore::Krb5::GssClientContext rv(service_principal, cred);
+            return rv;
+        }
+
+        if (gss_opts) {
+            Qore::Krb5::GssClientContext rv(service_principal, gss_opts);
+            return rv;
+        }
+        Qore::Krb5::GssClientContext rv(service_principal);
+        return rv;
+    }
+
+    #! Builds an HTTP Negotiate Authorization header, creating a context when needed
+    /** @param service_principal Kerberos service principal, or a host-based
+        service name when \a gss_opts.name_type is \c "hostbased-service"
+        @param www_authenticate_header optional \c WWW-Authenticate:
+        \c Negotiate header value containing a server token
+        @param ctx optional existing initiator context
+        @param credential_cache optional credential cache name
+        @param keytab optional client keytab name
+        @param gss_opts optional @ref Qore::Krb5::GssClientContextOptions
+        @param logger optional logger for diagnostics; secrets and tokens are
+        not logged
+
+        @return a hash containing the \c context and the fields returned by
+        @ref buildNegotiateClientStep()
+    */
+    public hash<auto> sub buildHttpNegotiateClientAuthorization(
+            string service_principal, *string www_authenticate_header = NOTHING,
+            *Qore::Krb5::GssClientContext ctx = NOTHING,
+            *string credential_cache = NOTHING, *string keytab = NOTHING,
+            *hash<Qore::Krb5::GssClientContextOptions> gss_opts = NOTHING,
+            *Qore::Logger::LoggerInterface logger = NOTHING) {
+        if (!ctx) {
+            ctx = createHttpNegotiateClientContext(service_principal, credential_cache,
+                keytab, gss_opts, logger);
+        }
+
+        hash<NegotiateClientStepInfo> step = exists www_authenticate_header
+            ? buildNegotiateClientStep(ctx, www_authenticate_header, logger)
+            : buildNegotiateClientStep(ctx, NOTHING, logger);
+        return step + {"context": ctx};
+    }
+
     #! Processes an HTTP Negotiate Authorization header with an acceptor context
     /** @param ctx acceptor-side GSS context
         @param authorization_header HTTP Negotiate Authorization header value
@@ -1864,6 +1957,73 @@ string authHeader = "Negotiate " + Krb5Util::negotiateSpnegoToken(step.token);
 
         logSpnego(logger, sprintf("extracted Negotiate header token_b64_bytes=%d", token.size()));
         return token;
+    }
+
+    #! Finds a Negotiate authentication value in HTTP headers
+    /** @param headers a response headers hash, a single header value, or a
+        list of header values
+        @param header_name header name to search for when \a headers is a hash
+        @param logger optional logger for diagnostics; token data is not logged
+
+        @return parsed Negotiate header info, or \c NOTHING if no Negotiate
+        header is present
+    */
+    public *hash<NegotiateHeaderInfo> sub findNegotiateHeader(auto headers,
+            string header_name = "www-authenticate",
+            *Qore::Logger::LoggerInterface logger = NOTHING) {
+        if (!exists headers) {
+            return NOTHING;
+        }
+
+        if (headers.typeCode() == NT_HASH) {
+            string search = header_name.lwr();
+            foreach hash<auto> pair in (headers.pairIterator()) {
+                if (pair.key.lwr() == search) {
+                    if (*hash<NegotiateHeaderInfo> rv = findNegotiateHeaderValue(pair.value, logger)) {
+                        return rv;
+                    }
+                }
+            }
+            return NOTHING;
+        }
+
+        return findNegotiateHeaderValue(headers, logger);
+    }
+
+    #! Finds a Negotiate value in a single HTTP header value or list of values
+    *hash<NegotiateHeaderInfo> sub findNegotiateHeaderValue(auto value,
+            *Qore::Logger::LoggerInterface logger = NOTHING) {
+        if (!exists value) {
+            return NOTHING;
+        }
+
+        if (value.typeCode() == NT_LIST) {
+            foreach auto v in (value) {
+                if (*hash<NegotiateHeaderInfo> rv = findNegotiateHeaderValue(v, logger)) {
+                    return rv;
+                }
+            }
+            return NOTHING;
+        }
+
+        string header = string(value);
+        int colon = header.find(":");
+        if (colon >= 0) {
+            header = trim(header.substr(colon + 1));
+        }
+
+        *list<string> m = header =~ x/(?:^|,)[[:space:]]*(Negotiate(?:[[:space:]]+[^,[:space:]]+)?)/i;
+        if (!m) {
+            return NOTHING;
+        }
+
+        string negotiate = trim(m[0]);
+        bool hasToken = trim(negotiate.substr(9)).val();
+        logSpnego(logger, sprintf("found HTTP Negotiate header has_token=%y", hasToken));
+        return <NegotiateHeaderInfo>{
+            "header": negotiate,
+            "has_token": hasToken,
+        };
     }
 
     #! Parses a base64-encoded SPNEGO NegTokenResp and extracts the contained GSS response token as hex
