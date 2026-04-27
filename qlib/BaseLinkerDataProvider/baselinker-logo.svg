@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <g fill="rgb(68,136,243)">
+    <!-- Connector: small circle to big circle -->
+    <!-- small center (157,58) r=32, big center (337,216) r=130 -->
+    <!-- unit vector from small to big: dx=180, dy=158, len=239.5 -->
+    <!-- ux=0.7515, uy=0.6597, perp: (-0.6597, 0.7515) -->
+    <!-- connector half-width = 14 -->
+    <polygon points="166.76,36.94 147.23,59.18 327.76,241.93 347.29,219.70" />
+
+    <!-- Connector: big circle to bottom circle -->
+    <!-- big (337,216) r=130, bottom (141,413) r=98 -->
+    <!-- dx=-196, dy=197, len=277.9 -->
+    <!-- ux=-0.7053, uy=0.7088, perp:(-0.7088,-0.7053) -->
+    <!-- half-width = 14 -->
+    <polygon points="327.08,198.47 347.08,218.35 148.08,420.22 128.08,400.34" />
+
+    <circle cx="157" cy="58" r="50" />
+    <circle cx="337" cy="216" r="130" />
+    <circle cx="141" cy="413" r="98" />
+  </g>
+</svg>
