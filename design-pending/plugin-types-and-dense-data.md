@@ -828,17 +828,19 @@ committed snapshot. Hot-path readers acquire-load the snapshot pointer/generatio
 and read only immutable committed tables; they never read the mutable pending
 table and never depend on the registry lock.
 
-The generation counter accompanies the pointer so reflection APIs that
-snapshot the registry state for consistent multi-descriptor queries can
-detect a superseded snapshot mid-iteration. Hot-path dispatch
-(single-descriptor lookup) reads the pointer alone and ignores the
-generation; only multi-descriptor walks (`PluginRegistry::resolveOperation`,
-cross-type lookup, batch reflection) compare generations across reads to
-confirm a stable snapshot. The pair is conceptual; the implementation is
-free to pack them into a single 128-bit DWCAS, into two separate atomics
-with a re-check pattern, or into a hazard-pointer scheme — the design
-contract is the release/acquire ordering and the generation invariant, not
-the storage layout.
+The generation counter accompanies the pointer so list-returning reflection
+APIs that snapshot the registry state for consistent multi-descriptor
+queries can detect a superseded snapshot mid-iteration. Hot-path dispatch
+and single-descriptor lookups (`PluginRegistry::resolveOperation`,
+cross-type lookup) read the pointer alone and ignore the generation; only
+list-returning reflection APIs (`getTypes`, `getOperations`,
+`getRegisteredModules`, `getProcessModules`, `getActiveModules`) compare
+generations across reads to confirm a stable snapshot for the duration of
+a list build. The pair is conceptual; the implementation is free to pack
+them into a single 128-bit DWCAS, into two separate atomics with a
+re-check pattern, or into a hazard-pointer scheme — the design contract
+is the release/acquire ordering and the generation invariant, not the
+storage layout.
 
 A module-init transaction supports at most one successful
 `qore_register_plugin_types_v1` call. A second call after a successful first
@@ -894,9 +896,14 @@ Constraints:
   is raised with subreason `module_not_loaded`. Both subreasons are positive
   signals: callers distinguish a retryable pending import from a genuinely
   missing module by matching on the subreason rather than its absence. The
-  QORD loader does not wait on pending module-init transactions because QORD
-  load and module-init can themselves form wait cycles; callers retry the QORD
-  load after the module's init completes.
+  QORD loader does not auto-load missing modules and does not distinguish
+  between never-loaded, failed-to-load, and rolled-back-after-init-failure
+  cases — all three surface as `module_not_loaded`. The caller is responsible
+  for triggering module load through the existing module-loader path before
+  retrying the QORD. The QORD loader also does not wait on pending
+  module-init transactions because QORD load and module-init can themselves
+  form wait cycles; callers retry the QORD load after the module's init
+  completes.
 - The first implementation lowers plugin operations to built-in
   descriptor-carrying opcodes, one per `QorePluginHelperAbi`:
   `PluginUnary`, `PluginBinary`, `PluginCall`, `PluginSubscript`,
@@ -1476,15 +1483,21 @@ user writes `tensor + buffer`, who registers `add.tensor_buffer`?
 
    A registrant that conflicts with multiple pending registrations waits on
    them in registration-order — meaning the order in which the conflicting
-   pending transactions acquired the registry write lock, observable via the
-   registry's pending-transaction list. Each wakeup re-checks the full set of
-   conflicts before either succeeding, failing with a committed-conflict
-   diagnostic, or waiting on the next pending registrant. There is no bound
-   on how many sequential waits a registrant may incur; waits that would
-   create a registration-internal wait-for cycle fail immediately with
-   `PLUGIN-REGISTRATION-WAIT-CYCLE` per §3.3 rather than blocking. The
-   lock-acquisition ordering is canonical and stable, so the wait sequence
-   is deterministic given a set of concurrent module-inits.
+   pending transactions acquired the registry write lock, tracked internally
+   by the registry's pending-transaction list. The ordering is part of the
+   runtime contract; plugin authors don't introspect it directly but rely
+   on its determinism through the wait-cycle and conflict diagnostics. Each
+   wakeup re-checks the full set of conflicts before either succeeding,
+   failing with a committed-conflict diagnostic, or waiting on the next
+   pending registrant. There is no bound on how many sequential waits a
+   registrant may incur; waits that would create a registration-internal
+   wait-for cycle fail immediately with `PLUGIN-REGISTRATION-WAIT-CYCLE`
+   per §3.3 rather than blocking. The wait sequence is deterministic for
+   any given lock-acquisition order — once the registry has observed a
+   fixed sequence of write-lock acquisitions among concurrent module-inits,
+   the resulting wait queue is a pure function of that observed order.
+   The acquisition order itself remains subject to thread scheduling and
+   is not reproducible across runs.
 3. **Commutative auto-symmetry.** If a registration for
    `(A, B, op)` declares `is_commutative = true`, the runtime synthesises
    the `(B, A, op)` site automatically — registering both halves
@@ -1579,10 +1592,13 @@ diagnostic message MUST include: offending module name, offending type/operation
 name when known, the field that violated the rule for field-level checks,
 expected vs. actual values when a comparison exists, and the section number of
 this design that defines the rule. When the structured payload populates any
-`related_*` field, the diagnostic message MUST also reference the related
-entity by name — the message is the human-readable surface and the structured
-fields are the test-harness surface; both must surface critical comparison
-data, neither alone is sufficient.
+`related_*` field, the diagnostic message MUST include the verbatim string
+from that field — paraphrased references like "the previously-registered
+module" do not satisfy the contract. The verbatim name appears in the
+message exactly as it appears in the structured field so test harnesses can
+match either surface and get the same answer; the message is the
+human-readable surface and the structured fields are the test-harness
+surface, but both must carry the same critical comparison data.
 
 | Error code | Raised by | Section |
 |---|---|---|
@@ -1747,8 +1763,20 @@ ABI rather than libqore, and the extension is responsible for keeping its own
 match core subreasons by exact equality and extension subreasons by parsing
 the colon-separated form. Colons separate the namespace fields rather than
 dots so the format remains parseable when extension ids themselves contain
-dots but never colons. The v1 protocol defines these values; future revisions
-append without renaming or removing:
+dots but never colons.
+
+The core-subreason naming convention is:
+
+- `null_<field>` covers only the null-pointer case for that field; an
+  empty-but-non-null string is a separate failure if the field would
+  accept "exists but invalid" semantics.
+- `<field>_missing` is intentionally broader, covering both null and
+  empty as a single subreason. Use it when the distinction between
+  null and empty adds no diagnostic value for the field. Currently
+  only `module_path_missing` follows this form.
+
+The v1 protocol defines these values; future revisions append without
+renaming or removing:
 
 | Subreason | Used by |
 |---|---|
