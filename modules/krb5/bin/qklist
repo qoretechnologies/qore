@@ -1,0 +1,20 @@
+#!/usr/bin/env qore
+%modern
+
+/* Copyright (C) 2026 Qore Technologies, s.r.o. */
+
+%requires krb5
+
+if (argc < 2) {
+    stderr.printf("usage: qklist <principal> [<principal> ...]\n");
+    exit(1);
+}
+
+for (int i = 1; i < argc; i++) {
+    Qore::Krb5::Krb5Principal p(argv[i]);
+    printf("principal: %s\n", p.toString());
+    printf("realm: %s\n", p.getRealm());
+    for (int c = 0, n = p.getComponentCount(); c < n; c++) {
+        printf("component[%d]: %s\n", c, p.getComponent(c));
+    }
+}

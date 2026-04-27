@@ -1,0 +1,80 @@
+/* Copyright (C) 2026 Qore Technologies, s.r.o. */
+
+/** @mainpage %Qore krb5 Module
+
+    @tableofcontents
+
+    @section krb5intro krb5 Module Introduction
+
+    The \c krb5 module provides
+    <a href="https://web.mit.edu/kerberos/">Kerberos 5</a> and
+    <a href="https://datatracker.ietf.org/doc/html/rfc2743">GSSAPI</a>
+    primitives for %Qore. It is the foundation that lets %Qore code and
+    Qorus integration services participate as first-class citizens in
+    enterprise Kerberos-authenticated networks — for authentication against
+    <a href="https://learn.microsoft.com/en-us/windows-server/identity/ad-ds/get-started/virtual-dc/active-directory-domain-services-overview">Active
+    Directory</a>,
+    <a href="https://datatracker.ietf.org/doc/html/rfc4511">LDAP</a>,
+    <a href="https://datatracker.ietf.org/doc/html/rfc4559">HTTP SPNEGO</a>
+    endpoints, databases, message buses, file shares, and any other
+    <a href="https://web.mit.edu/kerberos/krb5-latest/doc/basic/index.html">Kerberized</a>
+    service.
+
+    @code{.py}
+%requires krb5
+%requires Krb5Util
+
+Qore::Krb5::Krb5Context ctx();
+printf("default realm: %s\n", ctx.getDefaultRealm());
+    @endcode
+
+    @section krb5classes Main Classes
+
+    - @ref Qore::Krb5::Krb5Context — Kerberos runtime context, cache and
+      keytab discovery, initial credential acquisition, credential renewal,
+      and TGS service ticket acquisition
+    - @ref Qore::Krb5::Krb5Principal — Kerberos principal parsing,
+      enterprise-principal
+      (<a href="https://learn.microsoft.com/en-us/windows/win32/ad/naming-properties">UPN</a>)
+      parsing, and introspection
+    - @ref Qore::Krb5::Krb5Credentials — Kerberos credential wrapper and
+      metadata
+    - @ref Qore::Krb5::Krb5CredentialCache — credential cache wrapper
+      (file-backed, in-memory, and other backends)
+    - @ref Qore::Krb5::Krb5Keytab — keytab wrapper for service-key lookup,
+      entry management, and entry removal for key rotation
+    - @ref Qore::Krb5::GssCredential — explicit GSSAPI credential imported
+      from a Kerberos credential cache or client keytab
+    - @ref Qore::Krb5::GssClientContext — initiator-side GSSAPI security
+      context, target-name type selection, token stepping,
+      <a href="https://datatracker.ietf.org/doc/html/rfc5929">channel
+      bindings</a>, and message wrap/unwrap
+    - @ref Qore::Krb5::GssAcceptorContext — acceptor-side GSSAPI security
+      context for service endpoints, explicit service credentials,
+      authenticated initiator-name reporting, channel bindings, message
+      wrap/unwrap, and delegated credential extraction
+
+    @section krb5pages Documentation Sections
+
+    - @subpage krb5usecases — how the module fits the %Qore and Qorus ecosystems
+      and what integrations it enables
+    - @subpage krb5security — the module's security model and guarantees
+    - @subpage krb5examples — runnable examples for principal parsing,
+      credential acquisition, GSSAPI context stepping, channel bindings,
+      message protection, keytab setup, and filesystem-sandboxed usage
+    - @subpage krb5releasenotes — release notes and version history
+    - the \c Krb5Util %Qore-language helper module
+      documentation
+
+    @section krb5util Utility Module
+
+    Use \c "%requires Krb5Util" for %Qore-language helper functions such as
+    \c Krb5Util::getHostBasedServicePrincipal(),
+    \c Krb5Util::negotiateSpnegoToken() for building
+    <a href="https://datatracker.ietf.org/doc/html/rfc4178">SPNEGO</a>
+    NegTokenInit envelopes, and
+    \c Krb5Util::parseSpnegoResponse() for extracting GSSAPI tokens from
+    SPNEGO NegTokenResp responses; see the \c Krb5Util module for
+    details. Binary classes and constants remain in the \c Qore::Krb5
+    namespace.
+*/

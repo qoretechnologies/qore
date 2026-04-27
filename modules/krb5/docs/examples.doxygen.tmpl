@@ -1,0 +1,663 @@
+/* Copyright (C) 2026 Qore Technologies, s.r.o. */
+
+/** @page krb5examples Examples
+
+    @tableofcontents
+
+    This page contains runnable examples for the most common uses of the
+    \c krb5 module. Every example assumes \c %modern and the appropriate
+    \c %requires statements. For the broader motivation behind each use
+    case, see @ref krb5usecases; for the security guarantees in play, see
+    @ref krb5security.
+
+    @section krb5examples_discovery Discovering Local Kerberos Configuration
+
+    Reading the default realm, credential-cache name, and keytab name is
+    useful for diagnostics and for service configuration bootstrap.
+
+    @code{.py}
+%modern
+%requires krb5
+
+Qore::Krb5::Krb5Context ctx();
+printf("default realm:  %s\n", ctx.getDefaultRealm());
+printf("default ccache: %s\n", ctx.getDefaultCredentialCacheName());
+printf("default keytab: %s\n", ctx.getDefaultKeytabName());
+    @endcode
+
+    @section krb5examples_util Utility Module Helpers
+
+    See the \c Krb5Util %Qore-language helper module.
+
+    @code{.py}
+%modern
+%requires Krb5Util
+
+string service = Krb5Util::getHostBasedServicePrincipal(
+    "ldap", "ad.example.com", "EXAMPLE.COM");
+# -> "ldap/ad.example.com@EXAMPLE.COM"
+    @endcode
+
+    @section krb5examples_principal Principal Parsing and Introspection
+
+    @ref Qore::Krb5::Krb5Principal parses both ordinary Kerberos principals
+    and enterprise-principal (UPN) strings used by Active Directory logins.
+
+    @code{.py}
+%modern
+%requires krb5
+
+Qore::Krb5::Krb5Principal p("HTTP/qorus.example.com@EXAMPLE.COM");
+printf("%s\n", p.toString());               # HTTP/qorus.example.com@EXAMPLE.COM
+printf("realm:       %s\n", p.getRealm());  # EXAMPLE.COM
+printf("component 0: %s\n", p.getComponent(0));  # HTTP
+printf("component 1: %s\n", p.getComponent(1));  # qorus.example.com
+
+Qore::Krb5::Krb5Principal upn = Qore::Krb5::Krb5Principal::parseEnterprise(
+    "alice@example.com@EXAMPLE.COM");
+printf("enterprise:  %s\n", upn.getComponent(0));  # alice@example.com
+printf("realm:       %s\n", upn.getRealm());       # EXAMPLE.COM
+    @endcode
+
+    @section krb5examples_initial_creds_password Acquiring Credentials with a Password
+
+    Initial credential acquisition with a password is noninteractive by
+    default. Options such as KDC canonicalization and PAC requests are
+    recommended for Active Directory UPN logins.
+
+    @code{.py}
+%modern
+%requires krb5
+
+Qore::Krb5::Krb5Context ctx();
+Qore::Krb5::Krb5Principal user = Qore::Krb5::Krb5Principal::parseEnterprise(
+    "alice@example.com@EXAMPLE.COM");
+
+hash<Qore::Krb5::Krb5InitialCredentialsOptions> opts();
+opts.canonicalize = True;
+opts.pac_request = True;
+opts.forwardable = True;
+opts.enctypes = (Qore::Krb5::ENCTYPE_AES256_CTS_HMAC_SHA1_96,);
+
+Qore::Krb5::Krb5Credentials creds = ctx.acquireCredentialsWithPassword(
+    user, ENV.KRB5_TEST_PASSWORD, opts);
+
+auto cc = ctx.createMemoryCredentialCache(user, "qorus-ad-session");
+cc.storeCredentials(creds);
+    @endcode
+
+    @section krb5examples_initial_creds_fast Acquiring Credentials with FAST Armor
+
+    FAST (Flexible Authentication Secure Tunneling) provides armored
+    pre-authentication using an existing armor credential cache. This is
+    the preferred approach for AS-REQ exchanges that must resist offline
+    dictionary attacks.
+
+    @code{.py}
+%modern
+%requires krb5
+
+Qore::Krb5::Krb5Context ctx();
+Qore::Krb5::Krb5Principal user = Qore::Krb5::Krb5Principal::parseEnterprise(
+    "alice@example.com@EXAMPLE.COM");
+
+hash<Qore::Krb5::Krb5InitialCredentialsOptions> opts();
+opts.canonicalize = True;
+opts.pac_request = True;
+opts.fast_ccache_name = "FILE:/run/qorus/krb5cc_armor";
+opts.fast_required = True;
+
+Qore::Krb5::Krb5Credentials creds = ctx.acquireCredentialsWithPassword(
+    user, ENV.KRB5_TEST_PASSWORD, opts);
+    @endcode
+
+    @section krb5examples_initial_keytab Acquiring Credentials from a Keytab
+
+    Service processes typically authenticate as a service principal using
+    a keytab instead of a password. The acquired credentials are not
+    automatically written to the default cache; callers decide where to
+    store them.
+
+    @code{.py}
+%modern
+%requires krb5
+
+Qore::Krb5::Krb5Context ctx();
+Qore::Krb5::Krb5Principal service("HTTP/qorus.example.com@EXAMPLE.COM");
+Qore::Krb5::Krb5Keytab kt = ctx.openKeytab("FILE:/etc/qorus/qorus.keytab");
+
+hash<Qore::Krb5::Krb5InitialCredentialsOptions> opts();
+opts.canonicalize = True;
+opts.pac_request = True;
+
+Qore::Krb5::Krb5Credentials creds = ctx.acquireCredentialsWithKeytab(
+    service, kt, opts);
+    @endcode
+
+    @section krb5examples_credentials_metadata Credential Metadata and Cache Enumeration
+
+    @ref Qore::Krb5::Krb5Credentials::getInfo() and
+    @ref Qore::Krb5::Krb5CredentialCache::listCredentials() expose principal
+    names, timestamps, and enctypes — not key or ticket bytes — so the
+    result is safe to log for diagnostics.
+
+    @code{.py}
+%modern
+%requires krb5
+
+Qore::Krb5::Krb5Context ctx();
+auto cc = ctx.openDefaultCredentialCache();
+
+if (cc.hasPrimaryPrincipal()) {
+    printf("primary: %s\n", cc.getPrimaryPrincipal().toString());
+}
+
+for (hash<Qore::Krb5::Krb5CredentialsInfo> info in cc.listCredentials()) {
+    printf("%s -> %s  enctype=%s  end_time=%d\n",
+        info.client, info.server, info.enctype_name, info.end_time);
+}
+    @endcode
+
+    @section krb5examples_memory_cache In-Memory Credential Cache
+
+    The in-memory cache backend is process-scoped, isolates tests from the
+    host's default cache, and makes unit tests deterministic. Distinct
+    cache names must be used when tests need isolation from one another.
+
+    @code{.py}
+%modern
+%requires krb5
+
+Qore::Krb5::Krb5Context ctx();
+Qore::Krb5::Krb5Principal client("alice@EXAMPLE.COM");
+
+auto cc = ctx.createMemoryCredentialCache(client, "qorus-test-cache");
+printf("%s\n", cc.getFullName());  # MEMORY:qorus-test-cache
+printf("%y\n", cc.hasPrimaryPrincipal());  # True
+    @endcode
+
+    @section krb5examples_keytab_memory Memory Keytab Setup
+
+    The in-memory keytab backend is the simplest way to inject known key
+    material into a test. Entries are identified by principal, key version
+    number, and enctype.
+
+    @code{.py}
+%modern
+%requires krb5
+
+Qore::Krb5::Krb5Context ctx();
+Qore::Krb5::Krb5Principal principal("HTTP/qorus.example.com@EXAMPLE.COM");
+auto kt = ctx.openKeytab("MEMORY:qorus-test-keytab");
+
+kt.addEntry(principal,
+    "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff",
+    Qore::Krb5::ENCTYPE_AES256_CTS_HMAC_SHA1_96, 1);
+
+for (hash<Qore::Krb5::Krb5KeytabEntryInfo> entry in kt.listEntries()) {
+    printf("%s kvno=%d enctype=%s key_size=%d\n",
+        entry.principal, entry.kvno, entry.enctype_name, entry.key_size);
+}
+    @endcode
+
+    @section krb5examples_gss_client GSSAPI Initiator Context — Step Loop
+
+    GSSAPI initiator setup is iterative. Each call to
+    @ref Qore::Krb5::GssClientContext::step() "step()" consumes the previous
+    acceptor token (if any) and produces the next initiator token. The
+    calling code exchanges tokens with the acceptor until the negotiation
+    completes.
+
+    @code{.py}
+%modern
+%requires krb5
+
+hash<Qore::Krb5::GssClientContextOptions> opts();
+opts.flags = Qore::Krb5::GSS_DEFAULT_FLAGS | Qore::Krb5::GSS_CONF_FLAG;
+opts.mechanism = "kerberos";
+opts.name_type = "krb5-principal";
+
+Qore::Krb5::GssClientContext ctx("HTTP/qorus.example.com@EXAMPLE.COM", opts);
+
+*string acceptor_token;
+while (!ctx.isComplete()) {
+    hash<Qore::Krb5::GssStepInfo> info = acceptor_token
+        ? ctx.step(acceptor_token)
+        : ctx.step();
+    if (info.token) {
+        # send info.token to the acceptor, read its reply, and loop
+        acceptor_token = send_and_receive(info.token);
+    }
+}
+    @endcode
+
+    @section krb5examples_gss_explicit_credential GSSAPI with an Explicit Credential
+
+    Binding a @ref Qore::Krb5::GssClientContext to an explicit
+    @ref Qore::Krb5::GssCredential avoids reliance on the process-default
+    credential and is the recommended pattern in multi-tenant Qorus
+    services that hold several service identities concurrently.
+
+    @code{.py}
+%modern
+%requires krb5
+
+Qore::Krb5::Krb5Context ctx();
+Qore::Krb5::Krb5Principal service("HTTP/qorus.example.com@EXAMPLE.COM");
+Qore::Krb5::Krb5Keytab kt = ctx.openKeytab("FILE:/etc/qorus/qorus.keytab");
+Qore::Krb5::GssCredential cred = Qore::Krb5::GssCredential::fromKeytab(kt, service);
+
+hash<Qore::Krb5::GssClientContextOptions> opts();
+opts.flags = Qore::Krb5::GSS_DEFAULT_FLAGS | Qore::Krb5::GSS_CONF_FLAG;
+opts.mechanism = "kerberos";
+opts.name_type = "krb5-principal";
+
+Qore::Krb5::GssClientContext gss(
+    "LDAP/ad.example.com@EXAMPLE.COM", cred, opts);
+    @endcode
+
+    @section krb5examples_gss_acceptor GSSAPI Acceptor Context — Service Endpoint
+
+    Service endpoints that accept SASL/GSSAPI authentication should bind the
+    acceptor context to an explicit service keytab credential and exchange
+    hex-encoded tokens until negotiation completes. The authenticated
+    initiator principal is available after the GSSAPI mechanism reports it.
+
+    @code{.py}
+%modern
+%requires krb5
+
+Qore::Krb5::Krb5Context ctx();
+Qore::Krb5::Krb5Principal service("HTTP/qorus.example.com@EXAMPLE.COM");
+Qore::Krb5::Krb5Keytab kt = ctx.openKeytab("FILE:/etc/qorus/qorus.keytab");
+Qore::Krb5::GssCredential cred = Qore::Krb5::GssCredential::fromKeytab(kt, service);
+
+hash<Qore::Krb5::GssAcceptorContextOptions> opts();
+opts.channel_binding_application_data_hex = get_tls_server_end_point_binding_hex();
+
+Qore::Krb5::GssAcceptorContext acceptor(cred, opts);
+
+*string initiator_token = read_initial_token();
+while (!acceptor.isComplete()) {
+    hash<Qore::Krb5::GssStepInfo> info = acceptor.step(initiator_token);
+    if (info.token) {
+        send_acceptor_token(info.token);
+    }
+    initiator_token = acceptor.isComplete() ? NOTHING : read_next_token();
+}
+
+printf("authenticated initiator: %s\n", acceptor.getInitiatorName());
+    @endcode
+
+    @section krb5examples_gss_channel_binding GSSAPI Channel Binding (LDAP over TLS)
+
+    For
+    <a href="https://datatracker.ietf.org/doc/html/rfc4511">LDAP</a> over
+    TLS, Active Directory and modern enterprise LDAP servers can be
+    configured to require
+    <a href="https://datatracker.ietf.org/doc/html/rfc5929">RFC 5929</a>
+    \c tls-server-end-point channel binding. The binding data is the
+    constant \c "tls-server-end-point:" followed by the hash of the server
+    certificate, computed according to RFC 5929, and passed to the module
+    as a hex-encoded string.
+
+    @code{.py}
+%modern
+%requires krb5
+
+Qore::Krb5::Krb5Context ctx();
+Qore::Krb5::Krb5Keytab kt = ctx.openKeytab("FILE:/etc/qorus/qorus.keytab");
+Qore::Krb5::GssCredential cred = Qore::Krb5::GssCredential::fromKeytab(kt);
+
+hash<Qore::Krb5::GssClientContextOptions> opts();
+opts.flags = Qore::Krb5::GSS_DEFAULT_FLAGS | Qore::Krb5::GSS_CHANNEL_BOUND_FLAG;
+opts.mechanism = "kerberos";
+opts.name_type = "krb5-principal";
+# "tls-server-end-point:" || <cert-hash-bytes>, hex-encoded
+opts.channel_binding_application_data_hex =
+    "746c732d7365727665722d656e642d706f696e743a" + compute_tls_endpoint_hash_hex();
+
+Qore::Krb5::GssClientContext gss(
+    "LDAP/ad.example.com@EXAMPLE.COM", cred, opts);
+    @endcode
+
+    @section krb5examples_gss_wrap GSSAPI Message Wrap and Unwrap
+
+    Once a context is complete, @ref Qore::Krb5::GssClientContext::wrap()
+    applies integrity and optional confidentiality protection to outbound
+    messages, and @ref Qore::Krb5::GssClientContext::unwrap() removes the
+    protection from inbound tokens. Use
+    @ref Qore::Krb5::GssClientContext::getWrapSizeLimit() "getWrapSizeLimit()"
+    to size outbound buffers before calling \c wrap().
+
+    @code{.py}
+%modern
+%requires krb5
+
+# gss is an already-complete Qore::Krb5::GssClientContext
+int plaintext_room = gss.getWrapSizeLimit(16384, True);
+printf("max plaintext: %d bytes\n", plaintext_room);
+
+hash<Qore::Krb5::GssWrapInfo> wrapped = gss.wrap("68656c6c6f", True);
+printf("wrapped (hex): %s  confidential=%y\n",
+    wrapped.token, wrapped.confidential);
+
+hash<Qore::Krb5::GssUnwrapInfo> plain = gss.unwrap(wrapped.token);
+printf("message (hex): %s  confidential=%y  qop=%d\n",
+    plain.message, plain.confidential, plain.qop);
+    @endcode
+
+    @section krb5examples_sandbox_cache Filesystem-Sandboxed Credential Cache
+
+    A file-backed credential cache passed through a %Qore \c SandboxManager
+    is only usable if the underlying path lies inside the configured
+    filesystem root. Access outside the root raises
+    \c FILESYSTEM-ACCESS-DENIED at runtime.
+
+    @code{.py}
+%modern
+%requires krb5
+
+Program p(PO_MODERN);
+p.loadModule("krb5");
+p.parse("
+    string sub init_cache() {
+        Qore::Krb5::Krb5Context ctx();
+        Qore::Krb5::Krb5Principal principal(\"service/qorus.example.com@EXAMPLE.COM\");
+        auto cc = ctx.openCredentialCache(\"FILE:/tmp/module-krb5-example.ccache\");
+        cc.initialize(principal);
+        return cc.getPrimaryPrincipal().toString();
+    }
+", "krb5_sandbox_example");
+
+SandboxManager sm();
+sm.setFilesystemSandboxRoot("/tmp");
+p.setSandboxManager(sm);
+
+printf("%s\n", p.callFunction("init_cache"));
+    @endcode
+
+    @section krb5examples_sandbox_keytab Filesystem-Sandboxed Keytab
+
+    File-backed keytabs honour the sandbox on every read, write, and entry
+    creation.
+
+    @code{.py}
+%modern
+%requires krb5
+
+Program p(PO_MODERN);
+p.loadModule("krb5");
+p.parse("
+    string sub init_keytab() {
+        Qore::Krb5::Krb5Context ctx();
+        Qore::Krb5::Krb5Principal principal(\"HTTP/qorus.example.com@EXAMPLE.COM\");
+        auto kt = ctx.openKeytab(\"FILE:/tmp/module-krb5-example.keytab\");
+        kt.addEntry(principal,
+            \"00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff\",
+            Qore::Krb5::ENCTYPE_AES256_CTS_HMAC_SHA1_96, 1);
+        return kt.getEntry(principal).principal;
+    }
+", "krb5_keytab_sandbox_example");
+
+SandboxManager sm();
+sm.setFilesystemSandboxRoot("/tmp");
+p.setSandboxManager(sm);
+
+printf("%s\n", p.callFunction("init_keytab"));
+    @endcode
+
+    @section krb5examples_renew_credentials Credential Renewal
+
+    A TGT acquired with a renewable lifetime can be renewed through the KDC
+    without re-authenticating. The workflow is: acquire the initial TGT with
+    a \c renew_lifetime, store it in a credential cache, then call
+    @ref Qore::Krb5::Krb5Context::renewCredentials() "renewCredentials()"
+    before the ticket expires.
+
+    @code{.py}
+%modern
+%requires krb5
+
+Qore::Krb5::Krb5Context ctx();
+Qore::Krb5::Krb5Principal client("alice@EXAMPLE.COM");
+
+# Acquire initial TGT with a renewable lifetime
+hash<Qore::Krb5::Krb5InitialCredentialsOptions> opts();
+opts.renew_lifetime = 7 * 24 * 3600;  # 7 days
+opts.forwardable = True;
+
+Qore::Krb5::Krb5Credentials creds = ctx.acquireCredentialsWithPassword(
+    client, ENV.KRB5_TEST_PASSWORD, opts);
+
+auto cc = ctx.createMemoryCredentialCache(client, "qorus-renew-session");
+cc.storeCredentials(creds);
+
+# Later, before the ticket expires, renew it
+Qore::Krb5::Krb5Credentials renewed = ctx.renewCredentials(cc, client);
+cc.storeCredentials(renewed);
+    @endcode
+
+    @section krb5examples_service_ticket TGS Service Ticket Acquisition
+
+    Once a TGT is in a credential cache, a service ticket for any Kerberized
+    service can be acquired without re-authenticating. This is useful when a
+    single identity needs tickets for multiple backend services.
+
+    @code{.py}
+%modern
+%requires krb5
+
+Qore::Krb5::Krb5Context ctx();
+Qore::Krb5::Krb5Principal client("alice@EXAMPLE.COM");
+
+# Assume a valid TGT is already in the cache
+auto cc = ctx.openDefaultCredentialCache();
+
+# Acquire a service ticket for an LDAP server
+Qore::Krb5::Krb5Credentials ldap_ticket = ctx.acquireServiceCredentials(
+    cc, "ldap/ad.example.com@EXAMPLE.COM");
+
+# Acquire a service ticket for an HTTP server
+Qore::Krb5::Krb5Credentials http_ticket = ctx.acquireServiceCredentials(
+    cc, "HTTP/web.example.com@EXAMPLE.COM");
+    @endcode
+
+    @section krb5examples_keytab_rotation Keytab Entry Removal and Key Rotation
+
+    During key rotation, the new key is added before the old one is removed,
+    ensuring that in-flight requests authenticated with the old key still
+    succeed during the transition window.
+
+    @code{.py}
+%modern
+%requires krb5
+
+Qore::Krb5::Krb5Context ctx();
+Qore::Krb5::Krb5Principal service("HTTP/qorus.example.com@EXAMPLE.COM");
+auto kt = ctx.openKeytab("FILE:/etc/qorus/qorus.keytab");
+
+# Step 1: Add the new key (kvno 3)
+kt.addEntry(service,
+    "aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899",
+    Qore::Krb5::ENCTYPE_AES256_CTS_HMAC_SHA1_96, 3);
+
+# Step 2: Verify the new entry works (application validation here)
+
+# Step 3: Remove the old key (kvno 2)
+kt.removeEntry(service, 2, Qore::Krb5::ENCTYPE_AES256_CTS_HMAC_SHA1_96);
+    @endcode
+
+    @section krb5examples_spnego_negotiate HTTP SPNEGO Negotiate Header
+
+    The \c Krb5Util module provides helpers that wrap raw GSSAPI tokens in
+    <a href="https://datatracker.ietf.org/doc/html/rfc4178">SPNEGO</a>
+    envelopes for HTTP Negotiate authentication. The initiator calls
+    @ref Qore::Krb5::GssClientContext::step() "step()" to obtain the GSSAPI
+    token, wraps it in SPNEGO with
+    \c Krb5Util::negotiateSpnegoToken(), and places the result in an
+    \c Authorization header. Server responses in
+    \c WWW-Authenticate: \c Negotiate headers are unwrapped with
+    \c Krb5Util::parseSpnegoResponse().
+
+    @code{.py}
+%modern
+%requires krb5
+%requires Krb5Util
+
+hash<Qore::Krb5::GssClientContextOptions> opts();
+opts.flags = Qore::Krb5::GSS_DEFAULT_FLAGS | Qore::Krb5::GSS_CONF_FLAG;
+opts.mechanism = "kerberos";
+opts.name_type = "krb5-principal";
+
+Qore::Krb5::GssClientContext initiator("HTTP/web.example.com@EXAMPLE.COM", opts);
+
+# First leg: produce the initial GSSAPI token
+hash<Qore::Krb5::GssStepInfo> step = initiator.step();
+
+# Wrap in SPNEGO and build the HTTP header
+string auth_header = "Negotiate " + Krb5Util::negotiateSpnegoToken(step.token);
+# -> send as "Authorization: Negotiate <base64>"
+
+# If the server responds with "WWW-Authenticate: Negotiate <base64>":
+string server_b64 = get_www_authenticate_token();
+string gss_hex = Krb5Util::parseSpnegoResponse(server_b64);
+step = initiator.step(gss_hex);
+    @endcode
+
+    @section krb5examples_delegation Credential Delegation Round-Trip
+
+    Credential delegation lets a GSSAPI acceptor act as the authenticated
+    initiator toward further Kerberized services. The initiator must
+    explicitly request delegation with \c GSS_DELEG_FLAG, and the acceptor
+    extracts the delegated credential with
+    @ref Qore::Krb5::GssAcceptorContext::getDelegatedCredential()
+    "getDelegatedCredential()".
+
+    @note The delegated credential is transferred out of the GSSAPI layer
+    and can only be extracted once per context. Subsequent calls raise
+    \c KRB5-GSS-DELEGATION-ERROR. Delegation should only be used when the
+    trust relationship between initiator and acceptor is well understood;
+    see @ref krb5sec_delegation.
+
+    @code{.py}
+%modern
+%requires krb5
+
+# --- Initiator side ---
+hash<Qore::Krb5::GssClientContextOptions> init_opts();
+init_opts.flags = Qore::Krb5::GSS_DEFAULT_FLAGS
+    | Qore::Krb5::GSS_CONF_FLAG
+    | Qore::Krb5::GSS_DELEG_FLAG;
+init_opts.mechanism = "kerberos";
+init_opts.name_type = "krb5-principal";
+
+Qore::Krb5::GssClientContext initiator(
+    "HTTP/qorus.example.com@EXAMPLE.COM", init_opts);
+
+# --- Acceptor side ---
+Qore::Krb5::Krb5Context ctx();
+Qore::Krb5::Krb5Principal service("HTTP/qorus.example.com@EXAMPLE.COM");
+Qore::Krb5::Krb5Keytab kt = ctx.openKeytab("FILE:/etc/qorus/qorus.keytab");
+Qore::Krb5::GssCredential svc_cred = Qore::Krb5::GssCredential::fromKeytab(kt, service);
+
+Qore::Krb5::GssAcceptorContext acceptor(svc_cred);
+
+# Exchange tokens until both contexts are complete
+# ... (step loop omitted for brevity) ...
+
+# Extract the delegated credential from the acceptor
+Qore::Krb5::GssCredential delegated = acceptor.getDelegatedCredential();
+# 'delegated' can now be used to initiate connections on behalf of the client
+    @endcode
+
+    @section krb5examples_s4u S4U Impersonated Client Context
+
+    Services configured for protocol transition can create a GSSAPI client
+    context on behalf of a user without receiving the user's password. The
+    service must first acquire its own TGT from a keytab, then import that
+    cache as a GSS credential.
+
+    @code{.py}
+%modern
+%requires krb5
+%requires Krb5Util
+
+Qore::Krb5::Krb5Context ctx();
+Qore::Krb5::Krb5Principal service("HTTP/frontend.example.com@EXAMPLE.COM");
+Qore::Krb5::Krb5Principal user("alice@EXAMPLE.COM");
+Qore::Krb5::Krb5Keytab kt = ctx.openKeytab("FILE:/etc/qorus/frontend.keytab");
+
+Qore::Krb5::Krb5Credentials service_tgt =
+    ctx.acquireCredentialsWithKeytab(service, kt);
+auto service_cache = ctx.createMemoryCredentialCache(service, "frontend-s4u");
+service_cache.initialize(service);
+service_cache.storeCredentials(service_tgt);
+
+Qore::Krb5::GssCredential service_cred =
+    Qore::Krb5::GssCredential::fromCredentialCache(service_cache);
+
+hash<Qore::Krb5::GssClientContextOptions> opts();
+opts.mechanism = "kerberos";
+opts.name_type = "krb5-principal";
+
+Qore::Krb5::GssClientContext downstream =
+    Krb5Util::createImpersonatedClientContext(
+        "HTTP/backend.example.com@EXAMPLE.COM", service_cred, user, opts);
+    @endcode
+
+    @section krb5examples_maintenance Credential Cache Maintenance
+
+    A long-running process can keep a cache ready by renewing TGTs near
+    expiry and prefetching service tickets. Results collect errors by
+    default; set \c fail_fast to throw on the first failed action.
+
+    @code{.py}
+%modern
+%requires krb5
+%requires Krb5Util
+%requires Logger
+
+Qore::Krb5::Krb5Context ctx();
+auto cache = ctx.openDefaultCredentialCache();
+
+hash<Krb5Util::CredentialCacheMaintenanceOptions> opts();
+opts.renew_threshold_seconds = 300;
+opts.service_principals = ("HTTP/backend.example.com@EXAMPLE.COM",);
+
+hash<Krb5Util::CredentialCacheMaintenanceResult> result =
+    Krb5Util::maintainCredentialCache(ctx, cache, opts, logger);
+if (!result.healthy) {
+    foreach string err in (result.errors) {
+        logger.error("Kerberos cache maintenance: %s", err);
+    }
+}
+    @endcode
+
+    @section krb5examples_synthetic_creds Synthetic Credentials for Tests
+
+    The @ref Qore::Krb5::Krb5Credentials constructor accepts explicit
+    principal, key, timestamp, and ticket fields. Combined with an
+    in-memory credential cache, this is the simplest way to exercise
+    cache store, list, and lookup paths in unit tests — no KDC required.
+
+    @code{.py}
+%modern
+%requires krb5
+
+Qore::Krb5::Krb5Principal client("alice@EXAMPLE.COM");
+Qore::Krb5::Krb5Principal server("HTTP/qorus.example.com@EXAMPLE.COM");
+
+Qore::Krb5::Krb5Credentials creds(client, server,
+    "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff",
+    Qore::Krb5::ENCTYPE_AES256_CTS_HMAC_SHA1_96, 1000, 2000, 3000, 0, "abcd");
+
+Qore::Krb5::Krb5Context ctx();
+auto cc = ctx.createMemoryCredentialCache(client, "qorus-test-cache");
+cc.storeCredentials(creds);
+
+for (hash<Qore::Krb5::Krb5CredentialsInfo> info in cc.listCredentials()) {
+    printf("%s -> %s  until=%d\n", info.client, info.server, info.end_time);
+}
+    @endcode
+*/

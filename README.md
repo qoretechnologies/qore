@@ -56,6 +56,8 @@ refer to the following files/locations for specific information:
  * requires openssl headers and libraries
  * requires zlib & bzlib headers and libraries
  * requires mpfr (and gmp) for the arbitrary-precision numeric support
+ * requires Kerberos 5 / GSSAPI development headers and libraries for the
+   builtin krb5 module
  * optionally support for XML, Oracle, MySQL, PostgreSQL, Sybase, MS SQL
    Server, SSH2 and more can be built (see README-MODULES for details)
  * XML support has been removed as of Qore 0.8.1+; use the "xml" module

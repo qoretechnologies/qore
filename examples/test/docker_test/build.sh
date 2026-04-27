@@ -25,6 +25,19 @@ fi
 
 export MAKE_JOBS=${MAKE_JOBS:-6}
 
+if ! command -v pkg-config > /dev/null 2>&1 || ! pkg-config --exists krb5 krb5-gssapi; then
+    echo && echo "-- installing Kerberos 5 development headers --"
+    if command -v apt-get > /dev/null 2>&1; then
+        apt-get update -qq && apt-get install -y -qq libkrb5-dev
+    elif command -v apk > /dev/null 2>&1; then
+        apk add --no-cache krb5-dev
+    elif command -v dnf > /dev/null 2>&1; then
+        dnf install -y krb5-devel
+    elif command -v yum > /dev/null 2>&1; then
+        yum install -y krb5-devel
+    fi
+fi
+
 # install tree-sitter CLI for astparser module build
 if ! command -v tree-sitter > /dev/null 2>&1; then
     echo && echo "-- installing tree-sitter CLI --"
