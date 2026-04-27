@@ -653,20 +653,20 @@ struct QorePluginDependency {
 
 struct QorePluginRegistrationContextV1 {
     //! Size of this struct as known to the caller. MUST be set to
-    //! sizeof(QorePluginRegistrationContextV1). Registration requires all v1
-    //! fields to be present. Future fields may be appended; older runtimes
-    //! ignore trailing bytes and future runtimes default missing appended
-    //! fields only where their documentation says so.
+    //! sizeof(QorePluginRegistrationContextV1). V1 is a fixed-size contract:
+    //! smaller values are rejected as too small and larger values are rejected
+    //! as a version mismatch. Incompatible growth uses
+    //! QorePluginRegistrationContextV2 plus qore_register_plugin_types_v2,
+    //! not trailing-field append on this struct.
     uint32_t struct_size;
 
     //! Registration-context flags. v1 defines no nonzero flag bits; any
     //! bit set in flags is unknown and rejected with subreason
-    //! reserved_field_nonzero. The field is named `flags` rather than
-    //! `reserved` so future versions can carve out flag bits without
-    //! renaming the field, breaking existing readers, or bumping to
-    //! QorePluginRegistrationContextV2 just to add a flag. v1 readers
-    //! reject any nonzero value so a flag introduced in v2 against a v1
-    //! runtime fails loudly with reserved_field_nonzero.
+    //! reserved_field_nonzero. Future registration flags are added only in a
+    //! new QorePluginRegistrationContextV<N> consumed by the matching
+    //! qore_register_plugin_types_v<N> symbol. v1 readers reject any nonzero
+    //! value so a caller accidentally using newer flags against v1 fails
+    //! loudly.
     uint32_t flags;
 
     //! Borrowed absolute module path for diagnostics and trace output. MUST be
@@ -682,11 +682,13 @@ struct QorePluginRegistrationContextV1 {
     //! qore_module_init invocation. Required for helper-symbol lookup.
     //! The runtime maintains thread-local state recording the live
     //! plugin_module_handle for the current qore_module_init call;
-    //! qore_register_plugin_types_v1 and qore_validate_plugin_types_v1
-    //! compare ctx->module_handle against that TLS value and reject
-    //! mismatches with subreason module_handle_stale. Detection is
-    //! best-effort per §3.3 stale-handle rules but the TLS-comparison
-    //! check is mandatory in v1.
+    //! qore_register_plugin_types_v1 requires a non-null module_handle and
+    //! compares it against that TLS value, rejecting mismatches with subreason
+    //! module_handle_stale. qore_validate_plugin_types_v1 performs the same
+    //! comparison only when its optional validation module_handle is non-null;
+    //! nullptr remains the dry-run "defer helper-symbol checks" mode. Detection
+    //! beyond the current TLS equality check is best-effort per §3.3
+    //! stale-handle rules.
     const QorePluginModuleHandle* module_handle;
 };
 
@@ -716,12 +718,13 @@ struct QorePluginTypeRegistration {
 //! is all-or-nothing: if any type, operation, dependency, or extension fails
 //! validation, no part of `reg` is registered and the function returns -1.
 //! Callers must propagate the failure rather than continuing module init. A
-//! null context, too-small context, nonzero flags field, missing module_path,
+//! null context, wrong-size context, nonzero flags field, missing module_path,
 //! context not owned by the current module-init call, or context without a live
 //! module_handle is rejected before descriptor validation. Registration does
-//! not accept an explicit Program parameter — the active Program is derived
-//! from the runtime's current module-init state, and module-init only registers
-//! a module into the Program currently being parsed/loaded.
+//! not accept an explicit Program parameter and does not activate the module in
+//! a Program. It commits process-global descriptor/helper metadata for the
+//! module currently being initialized; per-Program activation is performed by
+//! module load/add-to-Program and QORD import processing.
 //!
 //! `ctx` and `reg` are consumed during the call only; libqore does not retain
 //! either top-level pointer past return. The caller's descriptor arrays may be
@@ -742,10 +745,9 @@ int qore_register_plugin_types_v1(
 
 Typical C++ module-init code, assuming the init callback parameter is named
 `module_ctx`, creates the registration context on the stack with designated
-initializers and passes it immediately. Designated initializers are
-recommended because they fail loudly at compile time if a future header
-reorders fields, rather than silently miscompiling under positional
-aggregate initialization:
+initializers and passes it immediately. Designated initializers keep the call
+site readable and make field names visible; the released V1 field order is ABI
+and must not change.
 
 ```cpp
 QorePluginRegistrationContextV1 plugin_ctx{
@@ -754,17 +756,20 @@ QorePluginRegistrationContextV1 plugin_ctx{
     .module_path   = module_ctx.path.c_str(),
     .module_handle = module_ctx.plugin_module_handle,
 };
-qore_register_plugin_types_v1(&plugin_ctx, &plugin_registration, &xsink);
+if (qore_register_plugin_types_v1(&plugin_ctx, &plugin_registration, &xsink)) {
+    return;
+}
 ```
 
 Registration-context validation is ordered before descriptor validation:
 `ctx == nullptr` yields subreason `null_registration_context`;
 `ctx->struct_size < sizeof(QorePluginRegistrationContextV1)` yields
-`registration_context_too_small`; nonzero `flags` yields
+`registration_context_too_small`; a `struct_size` larger than the v1 sizeof
+yields `registration_context_size_mismatch`; nonzero `flags` yields
 `reserved_field_nonzero`; null or empty `module_path` yields
 `module_path_missing`; null `module_handle` yields `module_handle_missing`;
-stale or cross-module handles yield `module_handle_stale` when detected by
-the TLS-comparison check.
+stale or cross-module handles yield `module_handle_stale` when detected by the
+current-module TLS comparison.
 
 **Two evolution disciplines, intentionally.** The plugin protocol uses two
 distinct forward-compatibility patterns:
@@ -773,7 +778,8 @@ distinct forward-compatibility patterns:
   evolves by type rename (`V2`, `V3`, ...) paired with a new entry-point
   symbol (`qore_register_plugin_types_v2`). This is appropriate because
   the registration context is small, mandatory, and already part of the
-  symbol-versioned `_v1` family on the entry point.
+  symbol-versioned `_v1` family on the entry point. Its `struct_size` field is
+  a sanity check for the exact v1 layout, not a trailing-field growth mechanism.
 - `QorePluginValidationContext` does *not* carry a version in the type
   name and evolves by `struct_size` size-prefix (§3.12). This is
   appropriate because the validation context is size-bounded, optional
@@ -781,8 +787,9 @@ distinct forward-compatibility patterns:
   registration entry point.
 
 Future protocol surfaces should pick one of these two patterns and stay
-consistent within the chosen pattern. Mixing — e.g., adding a
-size-prefix field to a `_V<N>`-suffixed struct — defeats both schemes.
+consistent within the chosen pattern. Mixing — e.g., treating a `_V<N>`
+struct's exact-size sanity check as permission for trailing-field growth —
+defeats both schemes.
 
 Constraints:
 - `local_id` must be contiguous starting from 0 and is meaningful only inside
@@ -1392,6 +1399,15 @@ Registration has two levels:
   `dataframe` in one Program does not silently expose DataFrame syntax or types
   in unrelated Programs.
 
+Activation is separate from registration. `qore_register_plugin_types_v1` runs
+when the binary module's `qore_module_init` runs and installs process-global
+descriptor/helper entries. If that already-loaded module is later added to a
+different `QoreProgram`, module load/add-to-Program logic marks the existing
+global plugin ids active in that Program; it does not rerun registration or
+allocate new global ids. QORD `PLUGIN_IMPORTS` processing performs the same
+Program-local activation for imported plugin modules before resolving baked
+helper refs.
+
 Cross-type registrations are visible only when all participating modules are
 active in the Program being parsed or loaded. Conflicting process-global
 registrations are still rejected at registration time.
@@ -1582,6 +1598,7 @@ removing:
 | `validation_context_too_small` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` |
 | `null_registration_context` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` |
 | `registration_context_too_small` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` |
+| `registration_context_size_mismatch` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` |
 | `module_path_missing` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` |
 | `non_contiguous_local_id` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` |
 | `invalid_count` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` |
@@ -1626,8 +1643,11 @@ fully registrable.
 `qore_register_plugin_types_v1` itself runs in fail-fast mode and never
 collects — registration is a single transactional commit, not a diagnostic
 walk. It validates the supplied `QorePluginRegistrationContextV1` against the
-runtime's current module-init state, and therefore performs all contextual
-checks before committing global ids.
+runtime's current module-init state, resolves helper symbols against the module
+handle, checks process-global descriptor conflicts, and commits global ids. It
+does not perform Program activation; Program-local visibility is updated later
+when the module is added to a Program or when QORD `PLUGIN_IMPORTS` activates
+the module for the loading Program.
 
 **Diagnostic env-var family.** Matches the existing `QORE_AOT_*_TRACE`
 discipline. Trace variables only log; they never enable additional checks or
@@ -2233,7 +2253,7 @@ exposure — reuses Phase 1's `buffer<T>`.
   - `QoreModuleInitContext` extended with the runtime-owned opaque
     `plugin_module_handle`, `QorePluginRegistrationContextV1` carrying that
     handle across the public plugin ABI, and `qore_register_plugin_types_v1`
-    rejecting null, too-small, stale, or cross-module registration contexts
+    rejecting null, wrong-size, stale, or cross-module registration contexts
     before descriptor validation.
   - `qore_validate_plugin_types_v1` dry-run validation entry point with
     `QorePluginValidationContext` (size-prefixed for forward-compatible
@@ -2367,7 +2387,10 @@ contract.
 incompatibly, ABI evolution adds a new struct `QorePluginRegistrationContextV2`
 (or higher) and a new symbol `qore_register_plugin_types_v2`. Old binaries
 continue to resolve `qore_register_plugin_types_v1` against the original
-`QorePluginRegistrationContextV1` struct. A module that wants to support
+fixed-size `QorePluginRegistrationContextV1` struct. The v1 entry point
+requires `ctx->struct_size == sizeof(QorePluginRegistrationContextV1)`; larger
+sizes are rejected instead of being treated as compatible trailing-field
+growth. A module that wants to support
 both vintages dispatches via `dlsym` for the highest version it knows,
 falling back to the v1 path. The `_V<N>` suffix in the struct name
 type-checks the version compatibility at compile time — passing a v2
