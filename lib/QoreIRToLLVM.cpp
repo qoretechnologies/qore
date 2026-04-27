@@ -1345,12 +1345,17 @@ void QoreIRToLLVM::emitOnBlockExitExec(llvm::Module& module) {
     if (!obe_saved_count) {
         return;
     }
+    llvm::Function* llvm_func = builder->GetInsertBlock()->getParent();
     syncLocalsToRuntimeForHandlers(module);
     llvm::Value* native_slot_cache = beginNativeHandlerSlotCache(module);
     auto helper = module.getOrInsertFunction("qore_rt_exec_on_block_exit",
             llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
     builder->CreateCall(helper, {obe_saved_count, xsink_arg});
     endNativeHandlerSlotCache(module, native_slot_cache);
+    // On-block-exit handlers execute user code and can mutate AOT body locals
+    // through the runtime local stack.  Refresh eagerly here: fused local ops
+    // can read allocas directly, so a lazy epoch alone is not sufficient.
+    reloadAllLocalsFromRuntime(module, llvm_func, false, true);
 }
 
 void QoreIRToLLVM::emitPreinstantiatedCleanup(llvm::Module& module) {
@@ -2566,19 +2571,27 @@ llvm::Value* QoreIRToLLVM::buildArgCleanupArray(const QoreIRInstruction* inst,
     return cleanup_array;
 }
 
-void QoreIRToLLVM::reloadAllLocalsFromRuntime(llvm::Module& module, llvm::Function* llvm_func) {
+void QoreIRToLLVM::reloadAllLocalsFromRuntime(llvm::Module& module, llvm::Function* llvm_func,
+        bool honor_reload_exempt, bool eager) {
     // Phase 4: Skip entirely if all locals are invisible to AST callbacks,
     // so the LLVM alloca cache is always current after runtime helper calls.
-    if (all_locals_reload_exempt) {
+    if (honor_reload_exempt && all_locals_reload_exempt) {
         return;
     }
     bool has_reloadable_local = false;
     for (auto& [key, alloca] : local_allocas) {
         (void)alloca;
-        if (canReloadLocalFromRuntime(key)) {
+        if (canReloadLocalFromRuntime(key, honor_reload_exempt)) {
+            if (eager) {
+                reloadLocalFromRuntime(key, module, llvm_func, honor_reload_exempt);
+                continue;
+            }
             has_reloadable_local = true;
             break;
         }
+    }
+    if (eager) {
+        return;
     }
     if (!has_reloadable_local) {
         return;
@@ -6400,6 +6413,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             }
             bool target_native = native_int_locals.count(target_key) > 0;
             bool source_native = native_int_locals.count(source_key) > 0;
+            ensureLocalCacheFresh(target_key, module, llvm_func);
+            ensureLocalCacheFresh(source_key, module, llvm_func);
             // Load and unbox values to native int
             llvm::Value* target_raw = builder->CreateLoad(i64_type, target_it->second, "add.target");
             llvm::Value* source_raw = builder->CreateLoad(i64_type, source_it->second, "add.source");
@@ -6443,6 +6458,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     }
                 }
             }
+            markLocalCacheFresh(target_key, llvm_func);
             if (inst->result.isValid()) {
                 values[inst->result.id] = result;
                 // NOT nanboxed — native int result
@@ -6458,6 +6474,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 return false;
             }
             bool is_native = native_int_locals.count(key) > 0;
+            ensureLocalCacheFresh(key, module, llvm_func);
             llvm::Value* local_raw = builder->CreateLoad(i64_type, it->second, "inc.val");
             llvm::Value* local_int = local_raw;
             if (!is_native) {
@@ -6492,6 +6509,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     }
                 }
             }
+            markLocalCacheFresh(key, llvm_func);
             if (inst->result.isValid()) {
                 values[inst->result.id] = result;
                 // NOT nanboxed — native int result
