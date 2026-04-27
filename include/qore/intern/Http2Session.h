@@ -390,13 +390,6 @@ public:
     */
     DLLLOCAL int sendPendingData(int timeout_ms, ExceptionSink* xsink);
 
-    //! Send all pending data (blocking with timeout to ensure flush)
-    /** @param timeout_ms Timeout in milliseconds
-        @param xsink Exception sink for error reporting
-        @return 0 on success, -1 if still have data to send
-    */
-    DLLLOCAL int sendPendingDataBlocking(int timeout_ms, ExceptionSink* xsink);
-
     //! Receive and process data
     /** @param timeout_ms Timeout in milliseconds (-1 for infinite)
         @param xsink Exception sink for error reporting
@@ -462,9 +455,9 @@ public:
     /** Idempotent, one-shot: flips @ref session_closed_ from false to true.
         Subsequent calls are no-ops.  Called by @c qore_socket_private's
         pre-close interruption path BEFORE any outer mutex is taken, so
-        that a thread currently inside @ref sendPendingDataBlocking or
-        @ref receiveData (holding @ref m) observes the flag on its next
-        check and returns promptly, releasing @ref m.  The thread calling
+        that a thread currently inside @ref receiveData (holding @ref m)
+        observes the flag on its next check and returns promptly,
+        releasing @ref m.  The thread calling
         @c Socket::close() can then acquire @c priv->m and perform the
         actual teardown without waiting on the stuck sync consumer.
 
@@ -854,8 +847,7 @@ private:
     std::atomic<bool> has_active_input_streams_{false};
 
     //! Sticky atomic flag: true once the owning socket begins shutting down.
-    /** Set by @ref markClosed, observed by the blocking H2 loops
-        (@ref sendPendingDataBlocking, @ref receiveData) and by
+    /** Set by @ref markClosed, observed by @ref receiveData and by
         @ref isStreamComplete's lookup so concurrent sync readers on a
         socket whose @c QoreSocketObject::close() is in flight see
         "complete" / "closed" and drop @ref m / @c priv->m promptly —

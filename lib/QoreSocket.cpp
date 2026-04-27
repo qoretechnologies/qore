@@ -9964,7 +9964,7 @@ QoreHashNode* SocketHttp2SendStreamingResponsePollOperation::continuePoll(Except
                         session->submitRstStream(stream_id,
                             NGHTTP2_INTERNAL_ERROR, &rst_xsink);
                         if (!rst_xsink) {
-                            session->sendPendingDataBlocking(100, &rst_xsink);
+                            (void)session->sendPendingData(0, &rst_xsink);
                         }
                         rst_xsink.clear();
                         xsink->raiseException("HTTP-STREAM-ERROR",
@@ -10003,7 +10003,7 @@ QoreHashNode* SocketHttp2SendStreamingResponsePollOperation::continuePoll(Except
                         ExceptionSink rst_xsink;
                         session->submitRstStream(stream_id, NGHTTP2_INTERNAL_ERROR, &rst_xsink);
                         if (!rst_xsink) {
-                            session->sendPendingDataBlocking(100, &rst_xsink);
+                            (void)session->sendPendingData(0, &rst_xsink);
                         }
                         return nullptr;
                     }
@@ -10023,7 +10023,7 @@ QoreHashNode* SocketHttp2SendStreamingResponsePollOperation::continuePoll(Except
                         ExceptionSink rst_xsink;
                         session->submitRstStream(stream_id, NGHTTP2_INTERNAL_ERROR, &rst_xsink);
                         if (!rst_xsink) {
-                            session->sendPendingDataBlocking(100, &rst_xsink);
+                            (void)session->sendPendingData(0, &rst_xsink);
                         }
                         return nullptr;
                     }
@@ -10042,7 +10042,7 @@ QoreHashNode* SocketHttp2SendStreamingResponsePollOperation::continuePoll(Except
                         ExceptionSink rst_xsink;
                         session->submitRstStream(stream_id, NGHTTP2_INTERNAL_ERROR, &rst_xsink);
                         if (!rst_xsink) {
-                            session->sendPendingDataBlocking(100, &rst_xsink);
+                            (void)session->sendPendingData(0, &rst_xsink);
                         }
                         return nullptr;
                     }

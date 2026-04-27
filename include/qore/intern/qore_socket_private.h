@@ -1194,9 +1194,9 @@ struct qore_socket_private {
 
           1. Mark the @ref Http2Session (if any) as closed via
              @ref Http2Session::markClosed.  Loops in
-             @c sendPendingDataBlocking / @c receiveData check
-             @ref Http2Session::isSessionClosed and return promptly on
-             their next iteration — releasing @c Http2Session::m.
+             @c receiveData and stream-completion waits check
+             @ref Http2Session::isSessionClosed and return promptly —
+             releasing @c Http2Session::m.
 
           2. Issue @c ::shutdown(fd, SHUT_RDWR) on the raw fd.  The
              kernel returns any pending blocking @c recv / @c send with
@@ -1222,8 +1222,8 @@ struct qore_socket_private {
                 std::memory_order_acquire)) {
             return;  // another concurrent close already did the interrupt
         }
-        // Wake H2 sync consumers (sendPendingDataBlocking,
-        // receiveData's retry loops, isStreamComplete).
+        // Wake H2 sync consumers (receiveData's retry loops and
+        // isStreamComplete).
         if (h2_session) {
             h2_session->markClosed();
         }
