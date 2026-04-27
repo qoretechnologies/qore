@@ -126,6 +126,8 @@ module HttpServerUtil {
     @section httpserverutil_relnotes HttpServerUtil Module Release Notes
 
     @subsection httputil1_5 HttpServerUtil 1.5
+    - added extension points to @ref HttpServer::AbstractAuthenticator "AbstractAuthenticator" for
+      \c Authorization: \c Negotiate request handling and optional \c WWW-Authenticate: \c Negotiate challenges
     - HTTP/2 server-side body-streaming reads in
       @ref HttpServer::AbstractStreamRequest "AbstractStreamRequest"
       now drive inbound DATA via the
@@ -1245,18 +1247,17 @@ public class AbstractAuthenticator {
     /** @note This version is never called by Qore; it is provided only for backwards compatibility
     */
     hash<auto> getAuthHeader() {
-        return {
-            "WWW-Authenticate": sprintf("Basic realm=%y", getRealm()),
-        };
+        return getAuthHeaderIntern(getNegotiateAuthHeader());
     }
 
     #! returns a hash with one item - \c WWW-Authenticate header set to correct realm
     /** @param cx the call context hash; see @ref httpserverutil_request_context for information about this value
+
+        If a subclass implements getNegotiateAuthHeader(hash<auto> cx), this method returns multiple
+        \c WWW-Authenticate values so the Negotiate challenge is advertised without replacing the Basic fallback.
     */
     hash<auto> getAuthHeader(hash<auto> cx) {
-        return {
-            "WWW-Authenticate": sprintf("Basic realm=%y", getRealm()),
-        };
+        return getAuthHeaderIntern(getNegotiateAuthHeader(cx));
     }
 
     #! returns a 401 response with the given string argument as the message body
@@ -1327,7 +1328,12 @@ public class AbstractAuthenticator {
             reference<hash<auto>> cx, reference<bool> authenticated) {
         if (hdr.authorization) {
             try {
-                if (hdr.authorization =~ /^Basic .+/i) {
+                if (hdr.authorization =~ /^Negotiate .+/i) {
+                    if (*hash<HttpResponseInfo> rv = processNegotiateAuthorizationHeader(listener, hdr, \cx,
+                        \authenticated)) {
+                        return rv;
+                    }
+                } else if (hdr.authorization =~ /^Basic .+/i) {
                     if (*hash<HttpResponseInfo> rv = processBasicAuthorizationHeader(listener, hdr, \cx,
                         \authenticated)) {
                         return rv;
@@ -1412,6 +1418,23 @@ public class AbstractAuthenticator {
         authenticated = True;
     }
 
+    #! processes \c Authorization: \c Negotiate headers
+    /** @param listener an HttpListenerInterface object for the listener serving the request for logging purposes
+        @param hdr a hash of request headers
+        @param cx a reference to the call context hash; set the \c "user" key to the user name if a user was
+        identified and authorized; see @ref httpserverutil_request_context for information about this value
+        @param authenticated set to True if the request was authenticated; this output value is ignored if the method
+        returns a response info hash
+
+        Subclasses implementing HTTP Negotiate authentication must set \a authenticated to @ref True "True" when the
+        request is authenticated and no response hash is returned. Otherwise the base dispatcher continues into
+        cookie/IP fallback and may emit a 401 response.
+    */
+    private *hash<HttpResponseInfo> processNegotiateAuthorizationHeader(HttpListenerInterface listener, hash<auto> hdr,
+            reference<hash<auto>> cx, reference<bool> authenticated) {
+        # intentionally empty
+    }
+
     private *hash<HttpResponseInfo> processDigestAuthorizationHeader(HttpListenerInterface listener, hash<auto> hdr,
             reference<hash<auto>> cx, reference<bool> authenticated) {
         # intentionally empty
@@ -1425,6 +1448,31 @@ public class AbstractAuthenticator {
     private *hash<HttpResponseInfo> processCookieHeader(HttpListenerInterface listener, hash<auto> hdr,
             reference<hash<auto>> cx, reference<bool> authenticated) {
         # intentionally empty
+    }
+
+    #! returns an optional \c WWW-Authenticate: \c Negotiate challenge value
+    /** @return subclasses can return \c "Negotiate" or \c "Negotiate <base64-token>" to advertise HTTP Negotiate
+        authentication in 401 responses
+    */
+    private *string getNegotiateAuthHeader() {
+        # intentionally empty
+    }
+
+    #! returns an optional context-sensitive \c WWW-Authenticate: \c Negotiate challenge value
+    /** @param cx the call context hash; see @ref httpserverutil_request_context for information about this value
+
+        @return subclasses can return \c "Negotiate" or \c "Negotiate <base64-token>" to advertise HTTP Negotiate
+        authentication in 401 responses
+    */
+    private *string getNegotiateAuthHeader(hash<auto> cx) {
+        return getNegotiateAuthHeader();
+    }
+
+    private hash<auto> getAuthHeaderIntern(*string negotiate_header) {
+        string basic_header = sprintf("Basic realm=%y", getRealm());
+        return {
+            "WWW-Authenticate": negotiate_header ? (negotiate_header, basic_header) : basic_header,
+        };
     }
 
     #! Called after a request has been handled to allow the authenticator to remove any thread-local auth information

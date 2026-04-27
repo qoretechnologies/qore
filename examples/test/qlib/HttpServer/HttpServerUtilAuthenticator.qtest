@@ -1,0 +1,189 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/HttpServerUtil.qm
+
+%exec-class HttpServerUtilAuthenticatorTest
+
+class TestListener inherits HttpListenerInterface {
+    private {
+        list<string> errors = ();
+    }
+
+    log(string fmt, ...) {
+    }
+
+    logError(string fmt, ...) {
+        push errors, vsprintf(fmt, argv);
+    }
+
+    addUserThreadContext(hash<auto> uctx) {
+    }
+
+    auto removeUserThreadContext(*string k) {
+    }
+
+    list<string> getErrors() {
+        return errors;
+    }
+}
+
+class NegotiateAuthenticator inherits AbstractAuthenticator {
+    private {
+        int negotiate_count = 0;
+        int cookie_count = 0;
+        int ip_count = 0;
+        *string authorization;
+    }
+
+    bool requiresAuthentication() {
+        return True;
+    }
+
+    private *hash<HttpResponseInfo> processNegotiateAuthorizationHeader(HttpListenerInterface listener,
+            hash<auto> hdr, reference<hash<auto>> cx, reference<bool> authenticated) {
+        ++negotiate_count;
+        authorization = hdr.authorization;
+        cx.user = "negotiate-user";
+        authenticated = True;
+    }
+
+    private *hash<HttpResponseInfo> processCookieHeader(HttpListenerInterface listener, hash<auto> hdr,
+            reference<hash<auto>> cx, reference<bool> authenticated) {
+        ++cookie_count;
+        return <HttpResponseInfo>{
+            "code": 599,
+            "body": "cookie fallback should not run",
+        };
+    }
+
+    authenticateByIP(reference<hash<auto>> cx, string ip, reference<bool> authenticated) {
+        ++ip_count;
+        throw "AUTHENTICATION-ERROR", "IP fallback should not run";
+    }
+
+    int getNegotiateCount() {
+        return negotiate_count;
+    }
+
+    int getCookieCount() {
+        return cookie_count;
+    }
+
+    int getIpCount() {
+        return ip_count;
+    }
+
+    *string getAuthorization() {
+        return authorization;
+    }
+}
+
+class NegotiateResponseAuthenticator inherits AbstractAuthenticator {
+    bool requiresAuthentication() {
+        return True;
+    }
+
+    private *hash<HttpResponseInfo> processNegotiateAuthorizationHeader(HttpListenerInterface listener,
+            hash<auto> hdr, reference<hash<auto>> cx, reference<bool> authenticated) {
+        return <HttpResponseInfo>{
+            "code": 401,
+            "body": "continue",
+            "hdr": {
+                "WWW-Authenticate": "Negotiate response-token",
+            },
+        };
+    }
+
+    authenticateByIP(reference<hash<auto>> cx, string ip, reference<bool> authenticated) {
+        throw "AUTHENTICATION-ERROR", "IP fallback should not run";
+    }
+}
+
+class NegotiateChallengeAuthenticator inherits AbstractAuthenticator {
+    string getRealm() {
+        return "negotiate-test";
+    }
+
+    private *string getNegotiateAuthHeader(hash<auto> cx) {
+        return "Negotiate " + cx.token;
+    }
+}
+
+public class HttpServerUtilAuthenticatorTest inherits QUnit::Test {
+    constructor() : Test("HttpServerUtilAuthenticatorTest", "1.0", \ARGV) {
+        addTestCase("Negotiate authorization dispatch", \testNegotiateDispatch());
+        addTestCase("Negotiate response passthrough", \testNegotiateResponsePassthrough());
+        addTestCase("Negotiate challenge advertised with Basic fallback", \testNegotiateChallengeHeader());
+        addTestCase("Default challenge remains Basic", \testDefaultChallengeHeader());
+        set_return_value(main());
+    }
+
+    private hash<auto> makeContext() {
+        hash<auto> rv;
+        rv."peer-info" = {
+            "address": "127.0.0.1",
+            "address_desc": "127.0.0.1",
+        };
+        return rv;
+    }
+
+    testNegotiateDispatch() {
+        NegotiateAuthenticator auth();
+        TestListener listener();
+        hash<auto> cx = makeContext();
+
+        *hash<HttpResponseInfo> rv = auth.authenticateRequest(listener, {
+            "authorization": "Negotiate request-token",
+            "cookie": "fallback=blocked",
+        }, \cx);
+
+        assertNothing(rv, "successful Negotiate auth returns no response");
+        assertEq(1, auth.getNegotiateCount(), "Negotiate hook was called");
+        assertEq("Negotiate request-token", auth.getAuthorization(), "Negotiate hook received the original header");
+        assertEq("negotiate-user", cx.user, "Negotiate hook can set user context");
+        assertEq(0, auth.getCookieCount(), "cookie fallback was skipped after authenticated=True");
+        assertEq(0, auth.getIpCount(), "IP fallback was skipped after authenticated=True");
+        assertEq((), listener.getErrors(), "Negotiate authorization was not logged as unsupported");
+    }
+
+    testNegotiateResponsePassthrough() {
+        NegotiateResponseAuthenticator auth();
+        TestListener listener();
+        hash<auto> cx = makeContext();
+
+        *hash<HttpResponseInfo> rv = auth.authenticateRequest(listener, {
+            "authorization": "Negotiate request-token",
+        }, \cx);
+
+        assertEq(401, rv.code, "Negotiate hook response code is passed through");
+        assertEq("continue", rv.body, "Negotiate hook response body is passed through");
+        assertEq("Negotiate response-token", rv.hdr."WWW-Authenticate",
+            "Negotiate hook response challenge is passed through");
+        assertEq((), listener.getErrors(), "Negotiate hook response does not log an auth error");
+    }
+
+    testNegotiateChallengeHeader() {
+        NegotiateChallengeAuthenticator auth();
+        hash<auto> cx = {
+            "token": "server-token",
+        };
+
+        hash<auto> hdr = auth.getAuthHeader(cx);
+
+        assertEq(("Negotiate server-token", "Basic realm=\"negotiate-test\""), hdr."WWW-Authenticate",
+            "Negotiate and Basic challenges are both advertised");
+    }
+
+    testDefaultChallengeHeader() {
+        AbstractAuthenticator auth();
+
+        hash<auto> hdr = auth.getAuthHeader();
+
+        assertEq("Basic realm=\"Default Authentication Realm\"", hdr."WWW-Authenticate",
+            "default challenge remains Basic only");
+    }
+}
