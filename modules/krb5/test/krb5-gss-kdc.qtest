@@ -94,6 +94,8 @@ public class Krb5GssKdcIntegrationTest inherits QUnit::Test {
         addTestCase("http negotiate helper exchange", \testHttpNegotiateHelperExchange());
         addTestCase("HttpServerUtil RestClientIo negotiate exchange",
             \testHttpServerUtilRestClientIoNegotiate());
+        addTestCase("HttpServerUtil poll RestClient negotiate exchange",
+            \testHttpServerUtilPollRestClientNegotiate());
         addTestCase("HttpServerUtil async RestClientIo negotiate exchange",
             \testHttpServerUtilAsyncRestClientIoNegotiate());
         addTestCase("HttpServerUtil notifier RestClientIo negotiate exchange",
@@ -390,6 +392,28 @@ public class Krb5GssKdcIntegrationTest inherits QUnit::Test {
         Krb5HttpNegotiateAuthenticator auth = serverSetup.auth;
         assertEq(1, auth.getChallengeCount(), "challenge-driven Negotiate should send one 401 challenge");
         assertEq(1, auth.getNegotiateCount(), "challenge-driven Negotiate should process one token");
+    }
+
+    private testHttpServerUtilPollRestClientNegotiate() {
+        hash<auto> setup = setupGssCredentials("httpserverutil-poll-restclient");
+        hash<auto> serverSetup = createHttpNegotiateServer(setup.acceptorCred);
+        HttpServer server = serverSetup.server;
+        on_exit delete server;
+
+        RestClient rest(getHttpNegotiateClientOptions(setup, serverSetup.url));
+        Qore::AbstractPollOperation op = rest.startPollGet("/poll-protected");
+        *hash<ExceptionInfo> ex = drivePingOp(op);
+        on_error printf("poll RestClient Negotiate error: %y\n", ex);
+        assertFalse(exists ex, "poll RestClient Negotiate should authenticate against HttpServerUtil");
+        assertTrue(op.goalReached());
+
+        hash<auto> response = op.getOutput();
+        assertEq(200, response.status_code);
+        assertEq(setup.clientPrincipal, response.body);
+
+        Krb5HttpNegotiateAuthenticator auth = serverSetup.auth;
+        assertEq(1, auth.getChallengeCount(), "poll RestClient Negotiate should send one 401 challenge");
+        assertEq(1, auth.getNegotiateCount(), "poll RestClient Negotiate should process one token");
     }
 
     private testHttpServerUtilAsyncRestClientIoNegotiate() {

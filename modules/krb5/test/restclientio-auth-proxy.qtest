@@ -29,6 +29,8 @@ public class RestClientIoKrb5AuthProxyIntegrationTest inherits QUnit::Test {
     constructor() : Test("RestClientIoKrb5AuthProxyIntegrationTest", "1.0") {
         addTestCase("sync RestClient negotiate through external auth proxy",
             \testSyncRestClientNegotiate());
+        addTestCase("poll RestClient negotiate through external auth proxy",
+            \testPollRestClientNegotiate());
         addTestCase("sync RestClientIo negotiate through external auth proxy",
             \testSyncRestClientIoNegotiate());
         addTestCase("async RestClientIo negotiate through external auth proxy",
@@ -129,6 +131,20 @@ public class RestClientIoKrb5AuthProxyIntegrationTest inherits QUnit::Test {
         hash<auto> response = rest.get("/api/restclient");
         assertEq(200, response.status_code);
         assertAuthenticatedBody(response.body, "/api/restclient");
+%endif
+    }
+
+    testPollRestClientNegotiate() {
+%ifndef NoJson
+        RestClient rest(getClientOptions());
+        Qore::AbstractPollOperation op = rest.startPollGet("/api/restclient-poll");
+        *hash<ExceptionInfo> ex = drivePingOp(op);
+        on_error printf("krb5 auth proxy poll RestClient error: %y\n", ex);
+        assertFalse(exists ex, "Negotiate-enabled poll RestClient should authenticate through the external auth proxy");
+        assertTrue(op.goalReached());
+        hash<auto> response = op.getOutput();
+        assertEq(200, response.status_code);
+        assertAuthenticatedBody(response.body, "/api/restclient-poll");
 %endif
     }
 

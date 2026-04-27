@@ -939,8 +939,8 @@ RestClient rest({"url": "http://localhost:8001/rest"});
           unavailable)
         - \c logger: any logger to use for the object
         - \c max_redirects: The maximum number of redirects before throwing an exception (the default is 5)
-        - \c negotiate_auth: Enables Kerberos/SPNEGO HTTP Negotiate authentication for synchronous requests
-          and polling pings
+        - \c negotiate_auth: Enables Kerberos/SPNEGO HTTP Negotiate authentication for synchronous and poll
+          requests, and polling pings
         - \c negotiate_credential_cache: Optional credential cache name for Kerberos/SPNEGO HTTP Negotiate
           authentication
         - \c negotiate_delegation_mode: Kerberos delegation mode; currently only \c "none" is supported
@@ -2681,6 +2681,22 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
         }
     }
 
+    #! Adds the initial preemptive Negotiate Authorization header for poll requests
+    addPollPreemptiveNegotiateHeader(reference<hash<auto>> hdr, reference<*auto> gss_context) {
+        maybeAddPreemptiveNegotiateHeader(\hdr, \gss_context);
+    }
+
+    #! Starts or continues a Negotiate exchange for poll requests
+    bool tryPollNegotiateAuthRetry(hash<auto> response_headers, reference<hash<auto>> hdr,
+            reference<*auto> gss_context) {
+        return tryNegotiateAuthRetry(response_headers, \hdr, \gss_context);
+    }
+
+    #! Processes a final Negotiate response token for poll requests
+    processPollFinalNegotiateResponse(hash<auto> response_headers, *auto gss_context) {
+        processFinalNegotiateResponse(response_headers, gss_context);
+    }
+
     #! Validates and sets any OAuth2 options
     /** @since %RestClient 2.0
     */
@@ -3139,7 +3155,6 @@ hash<auto> result = f.get();
     */
     RestRequestPollOperation startPollDoRequest(string m, string path, auto body,
             softbool decode_errors = True, *hash<auto> hdr) {
-        checkNegotiateUnsupported("RestClient polling requests");
         hash<auto> info = {};
         checkLogin(\info);
         # Phase 1: Prepare (synchronous — runs all subclass hooks)
@@ -3154,11 +3169,15 @@ hash<auto> result = f.get();
         # prepare path
         preparePath(\path);
 
+        *auto negotiate_context;
+        addPollPreemptiveNegotiateHeader(\hdr, \negotiate_context);
+
         # allow subclasses to sign / modify the request
         prepareAsyncSend(m, path, body, \hdr);
 
         # Phase 2: Create poll operation
-        return new RestRequestPollOperation(self, m, path, body, hdr, decode_errors, info);
+        return new RestRequestPollOperation(self, m, path, body, hdr, decode_errors,
+            info, negotiate_context);
     }
 
     #! Starts an async GET request
@@ -5275,6 +5294,10 @@ public class RestRequestPollOperation inherits Qore::AbstractPollOperation {
         Mutex m();
         #! Auth refresh already attempted
         bool auth_refreshed = False;
+        #! Negotiate challenge retry already attempted
+        bool negotiate_retried = False;
+        #! GSS context for the Negotiate exchange
+        *auto negotiate_context;
     }
 
     #! Creates a new RestRequestPollOperation
@@ -5287,7 +5310,7 @@ public class RestRequestPollOperation inherits Qore::AbstractPollOperation {
         @param info the info hash from the prepare phase
     */
     constructor(RestClient rc, string method, string path, *data body, hash<auto> hdr,
-            bool decode_errors, hash<auto> info) {
+            bool decode_errors, hash<auto> info, *auto negotiate_context) {
         self.rc = rc;
         self.method = method;
         self.path = path;
@@ -5295,6 +5318,7 @@ public class RestRequestPollOperation inherits Qore::AbstractPollOperation {
         self.hdr = hdr;
         self.decode_errors = decode_errors;
         self.info = info;
+        self.negotiate_context = negotiate_context;
 
         # check if OAuth2 token refresh is needed before sending
         if (rc.requiresRefresh()) {
@@ -5375,6 +5399,17 @@ public class RestRequestPollOperation inherits Qore::AbstractPollOperation {
                     ? resp."response-body".toString(resp.info.charset ?? "ISO-8859-1")
                     : "";
 
+                # check for Negotiate challenge and retry before other auth mechanisms
+                if (!negotiate_retried && resp."code" == 401
+                        && rc.tryPollNegotiateAuthRetry(resp.info."response-headers",
+                            \hdr, \negotiate_context)) {
+                    negotiate_retried = True;
+                    rc.debug("RestRequestPollOperation: retrying with Kerberos/SPNEGO "
+                        "Negotiate Authorization header");
+                    doStartSendRequest();
+                    continue;
+                }
+
                 # check for auth errors and retry if possible
                 if (!auth_refreshed && rc.usingOAuth2() && rc.getToken()
                         && (rc.getOAuth2Options().oauth2_auto_refresh ?? True)
@@ -5395,6 +5430,9 @@ public class RestRequestPollOperation inherits Qore::AbstractPollOperation {
                 info."response-code" = resp."code";
                 info."response-body-raw" = rbody;
                 info += resp.info{"request-uri", "response-uri", "response-headers"};
+
+                rc.processPollFinalNegotiateResponse(resp.info."response-headers",
+                    negotiate_context);
 
                 # handle HTTP error codes when error_passthru is not set
                 if ((resp."code" / 100) != 2 && !rc.getErrorPassthru()) {
