@@ -1336,6 +1336,16 @@ int QoreSocketObject::getNoDelay() {
     return priv->socket->getNoDelay();
 }
 
+int QoreSocketObject::setUserTimeout(int ms) {
+    AutoLocker al(priv->m);
+    return priv->socket->setUserTimeout(ms);
+}
+
+int QoreSocketObject::getUserTimeout() {
+    AutoLocker al(priv->m);
+    return priv->socket->getUserTimeout();
+}
+
 QoreHashNode* QoreSocketObject::getPeerInfo(ExceptionSink* xsink, bool host_lookup) const {
     AutoLocker al(priv->m);
     return priv->socket->getPeerInfo(xsink, host_lookup);

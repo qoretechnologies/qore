@@ -577,6 +577,8 @@ public:
     DLLEXPORT void freeQuicServerSslCtx();
     DLLEXPORT int setNoDelay(int nodelay);
     DLLEXPORT int getNoDelay();
+    DLLEXPORT int setUserTimeout(int ms);
+    DLLEXPORT int getUserTimeout();
     DLLEXPORT void setEventQueue(ExceptionSink* xsink, Queue* q, QoreValue arg, bool with_data);
     DLLEXPORT void setEventQueue(Queue* cbq, ExceptionSink* xsink);
     DLLEXPORT QoreHashNode* getPeerInfo(ExceptionSink* xsink, bool host_lookup = true) const;

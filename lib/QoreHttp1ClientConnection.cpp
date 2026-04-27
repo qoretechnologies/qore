@@ -174,6 +174,16 @@ int Http1ClientConnection::buildAndSubmit(ExceptionSink* xsink) {
     //     by configureSsl() called from the manager after construction.
     sock_priv_raw->setSslVerifyMode(ssl_verify_mode);
     sock_priv_raw->acceptAllCertificates(accept_all_certs);
+
+    // Apply TCP_USER_TIMEOUT if the manager configured it.  The value is
+    // stored on the socket and re-applied by qore_socket_private at the
+    // post-connect hook (confirmConnected).
+    if (manager_) {
+        int ut_ms = manager_->getOptions().tcp_user_timeout_ms;
+        if (ut_ms > 0) {
+            sock_priv_raw->setUserTimeout(ut_ms);
+        }
+    }
     if (client_cert) {
         client_cert->ref();
         sock_priv_raw->setCertificate(client_cert);
@@ -290,6 +300,16 @@ int Http1ClientConnection::buildAndSubmitAdopted(QoreObject* adopted_sock_obj,
     // single-owner invariant intact across the H1/H2 handover.
     ReferenceHolder<QoreObject> sock_obj_holder(adopted_sock_obj, xsink);
     QoreSocketObject* sock_priv_raw = adopted_sock_priv;
+
+    // Apply TCP_USER_TIMEOUT to the adopted (already-connected) socket if
+    // the manager configured it.  setUserTimeout applies immediately when
+    // the fd is open, so this takes effect for the rest of the session.
+    if (manager_) {
+        int ut_ms = manager_->getOptions().tcp_user_timeout_ms;
+        if (ut_ms > 0) {
+            sock_priv_raw->setUserTimeout(ut_ms);
+        }
+    }
 
     // Create the adopt-socket H1 poll op priv.  It owns one ref on
     // sock_priv_raw (we bump the ref here because sock_obj holds the

@@ -66,20 +66,10 @@ public class Http1ClientConnection inherits HttpClientConnection {
             *LoggerInterface logger, int max_streams = 1,
             *int ssl_verify_mode, bool accept_all_certs = False,
             *hash<auto> proxy_info,
-            *SSLCertificate client_cert, *SSLPrivateKey client_pk) {
-        self.url_info = url_info;
-        self.connect_timeout = connect_timeout;
-        self.logger = logger;
-        self.proxy_info = proxy_info;
-        # HTTP/1.1 is serial — only 1 concurrent stream is supported
-        if (max_streams > 1) {
-            throw "HTTP1-OPTION-ERROR",
-                sprintf("HTTP/1.1 connections support only 1 concurrent stream, got %d", max_streams);
-        }
-        self.max_concurrent_streams = 1;
-        self.last_activity = now_us();
-        connection_id = allocateConnectionId();
-
+            *SSLCertificate client_cert, *SSLPrivateKey client_pk)
+            : HttpClientConnection(url_info, connect_timeout, logger,
+                    Http1ClientConnection::validateMaxStreams(max_streams),
+                    proxy_info) {
         log(LoggerLevel::DEBUG, "creating HTTP/1.1 connection to %s:%d (ssl=%y proxy=%y mtls=%y)",
             url_info.host, url_info.port, url_info.protocol == "https",
             proxy_info ? sprintf("%s:%d", proxy_info.host, proxy_info.port) : NOTHING,
@@ -87,6 +77,20 @@ public class Http1ClientConnection inherits HttpClientConnection {
 
         poll_op = new Http1ClientPollOperation(url_info, connect_timeout, logger,
             ssl_verify_mode, accept_all_certs, proxy_info, self, client_cert, client_pk);
+    }
+
+    #! Enforces the HTTP/1.1 single-stream cap before the parent constructor runs.
+    /** Returns 1 unconditionally; throws if the caller asked for more than 1
+        concurrent stream (HTTP/1.1 is serial — pipelining is not supported).
+        Used inline in the parent-constructor argument list so the validation
+        runs before any Qore-side state is touched.
+    */
+    static int validateMaxStreams(int max_streams) {
+        if (max_streams > 1) {
+            throw "HTTP1-OPTION-ERROR",
+                sprintf("HTTP/1.1 connections support only 1 concurrent stream, got %d", max_streams);
+        }
+        return 1;
     }
 
     #! Returns the protocol identifier

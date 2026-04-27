@@ -117,6 +117,33 @@ public:
         //! upstream @c keepalive_timeout default.
         int idle_timeout_ms = 60000;
 
+        // NOTE: max_age_ms (born-at TTL) is intentionally NOT exposed on the
+        // C++ Options yet — enforcing it correctly requires the
+        // close-after-lock-drop machinery that Phase 4 of the curl-aligned
+        // conn-mgr work adds (along with the proactive idle close from the
+        // C++ poll ops).  HttpClientConnectionBase already tracks the
+        // creation timestamp via @ref getCreatedUs() so Phase 4 can read it.
+        // The Qore-side @c HttpClientConnectionManagerOptions::max_age option
+        // is fully functional today.
+
+        //! TCP_USER_TIMEOUT in milliseconds — kernel-level safety net for
+        //! TCP-layer death (peer reboot, NIC failure, network partition,
+        //! NAT rebind), applied via setsockopt on TCP sockets created by
+        //! this manager.  Bounds how long unacknowledged TCP data may sit
+        //! before the kernel reports the connection dead with ETIMEDOUT,
+        //! instead of hanging in the kernel's full TCP retransmit window
+        //! (~15 minutes default on Linux).
+        //!
+        //! NOT a half-open HTTP detector — if the peer's TCP stack ack's
+        //! bytes but the HTTP server stops generating responses, this
+        //! never fires.  @ref request_timeout_ms is the application-level
+        //! backstop for that case.
+        //!
+        //! Default 30000 = 30s.  0 disables (kernel default).  No effect
+        //! on platforms without TCP_USER_TIMEOUT (BSD/macOS/Windows) or
+        //! on UDP/UNIX sockets.
+        int tcp_user_timeout_ms = 30000;
+
         //! Optional proxy URL (e.g., "http://proxy.example.com:8080");
         //! empty string means no proxy.  Parsed in the constructor.
         std::string proxy_url;

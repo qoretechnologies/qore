@@ -4371,6 +4371,71 @@ bool Socket::getNoDelay() [flags=CONSTANT] {
     return s->getNoDelay();
 }
 
+//! Sets the \c TCP_USER_TIMEOUT socket option (in milliseconds) on the socket
+/** Kernel-level safety net for TCP-layer death.  Bounds how long unacknowledged
+    TCP data may sit before the kernel reports the connection dead with
+    \c ETIMEDOUT on the next read or write.  Catches peer reboots, NIC failures,
+    network partitions, and NAT rebinds that would otherwise hang \c send() /
+    \c recv() for the kernel's full TCP retransmit budget (~15 minutes default
+    on Linux).
+
+    @note This is NOT a half-open HTTP detector.  If the peer's TCP stack
+    ack's bytes but the application stops generating responses,
+    \c TCP_USER_TIMEOUT never fires (nothing is unack'd).  Use an
+    application-level deadline for that case
+    (e.g.\ \ref HttpClientIo::HttpClientConnectionManagerOptions::request_timeout
+    "HttpClientConnectionManager request_timeout").
+
+    The configured value is stored on the socket and re-applied on every
+    successful TCP connect, so callers may set it before connecting.  Passing
+    \c 0 disables the option (kernel default).
+
+    The option is meaningful only for TCP connections (no effect on UNIX-domain
+    or UDP sockets).  On platforms without \c TCP_USER_TIMEOUT (BSD, macOS,
+    Windows) the value is stored but no kernel option is set; the call still
+    returns 0.
+
+    @par Example:
+    @code{.py}
+sock.setUserTimeout(30000); # 30s — kernel reports a dead/unreachable peer
+                            # after 30s of unacknowledged TCP data, instead of
+                            # hanging in the kernel's TCP retransmit window
+    @endcode
+
+    @param ms timeout in milliseconds; 0 disables (kernel default)
+
+    @return 0 on success, non-zero on \c setsockopt failure (see errno() and strerror())
+
+    @see Socket::getUserTimeout()
+
+    @since %Qore 2.3
+*/
+int Socket::setUserTimeout(int ms) {
+    return s->setUserTimeout((int)ms);
+}
+
+//! Returns the \c TCP_USER_TIMEOUT value in milliseconds
+/** When the socket is an open TCP socket and the platform supports
+    \c TCP_USER_TIMEOUT, returns the kernel's current value (queried via
+    \c getsockopt).  Otherwise returns the value stored on the socket via
+    @ref Socket::setUserTimeout() (0 if never set).
+
+    @par Example:
+    @code{.py}
+int ms = sock.getUserTimeout();
+    @endcode
+
+    @return the \c TCP_USER_TIMEOUT in milliseconds; 0 means the option has
+    not been set on this socket
+
+    @see Socket::setUserTimeout() for a description of the option
+
+    @since %Qore 2.3
+*/
+int Socket::getUserTimeout() [flags=CONSTANT] {
+    return s->getUserTimeout();
+}
+
 //! Returns a @ref socket_info_hash "hash of information" about the remote end for connected sockets
 /** If the socket is not connected, an exception is thrown
 
@@ -6641,7 +6706,7 @@ nothing Socket::deregisterQuicConnectStreamQueue(int session_id, int stream_id) 
 
     @throw QUIC-ERROR if session_id or stream_id is invalid
 
-    @since %Qore 2.4
+    @since %Qore 2.3
 */
 nothing Socket::registerQuicConnectStreamFrameState(int session_id, int stream_id, Queue[Queue] queue) {
     if (session_id <= 0) {

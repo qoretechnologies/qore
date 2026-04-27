@@ -786,6 +786,15 @@ struct qore_socket_private {
     int in_op = -1,
         ssl_verify_mode = SSL_VERIFY_NONE;
 
+    //! Configured TCP_USER_TIMEOUT (ms); 0 = unset, applied at connect.
+    /** Set via QoreSocket::setUserTimeout.  Re-applied at every successful
+        TCP connect inside confirmConnected() so it survives disconnect/
+        reconnect cycles.  Has no effect on UNIX-domain or UDP sockets.
+        On platforms without TCP_USER_TIMEOUT (BSD/macOS/Windows) the
+        value is stored but no kernel option is set.
+    */
+    int tcp_user_timeout_ms = 0;
+
     //! Back-pointer to the outer my_socket_priv's mutex — used by sync I/O
     //! helpers to release the lock during their poll wait phase.
     /** Wired by my_socket_priv's constructor when this qore_socket_private
@@ -2385,6 +2394,18 @@ struct qore_socket_private {
         if (host) {
             client_target = host;
         }
+
+        // Re-apply configured TCP_USER_TIMEOUT on the new fd if set.  Only
+        // meaningful for TCP (skips UNIX-domain and UDP).
+#ifdef TCP_USER_TIMEOUT
+        if (tcp_user_timeout_ms > 0 && sock != QORE_INVALID_SOCKET
+                && (sfamily == AF_INET || sfamily == AF_INET6)
+                && stype == SOCK_STREAM) {
+            unsigned int v = (unsigned int)tcp_user_timeout_ms;
+            (void)setsockopt(sock, IPPROTO_TCP, TCP_USER_TIMEOUT,
+                (SETSOCKOPT_ARG_4)&v, sizeof(v));
+        }
+#endif
     }
 
     DLLLOCAL int sock_errno_err(const char* err, const char* desc, ExceptionSink* xsink) {

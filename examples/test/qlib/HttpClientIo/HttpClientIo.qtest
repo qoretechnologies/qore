@@ -341,6 +341,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             \testH1ConnectionCloseRemovesFromPool());
         addTestCase("H1 proactive idle timeout", \testH1ProactiveIdleTimeout());
         addTestCase("H2 proactive idle timeout", \testH2ProactiveIdleTimeout());
+        addTestCase("max_age eviction at checkout", \testMaxAgeEvictionAtCheckout());
+        addTestCase("max_age disabled reuses connection",
+            \testMaxAgeDisabledReusesConnection());
 
         # Additional coverage tests
         addTestCase("invalid protocol option", \testInvalidProtocolOption());
@@ -1681,6 +1684,71 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         response = stream.request("GET", "/simple");
         assertEq(200, response.status_code,
             "H2 request after idle-timeout eviction should create a new connection");
+    }
+
+    #! Verifies max_age (born-at TTL) eviction at pool checkout.
+    /** Sets idle_timeout long (so the proactive idle close does NOT fire
+        during the test) and max_age short.  After sleeping past max_age,
+        the second acquireStream must NOT reuse the now-too-old connection
+        — it gets a different connection ID.
+
+        The Qore conn-mgr's reuse loop evicts connections that fail
+        isConnectionAlive() in the same pass (via evictConnections), so
+        total_connections stays at 1: the old too-old connection is
+        replaced, not added to.  The proof is the connection ID change.
+    */
+    testMaxAgeEvictionAtCheckout() {
+        HttpClientIo::HttpClientConnectionManager mgr(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+            "protocol": "h1",
+            # Long idle_timeout so neither the proactive idle close nor
+            # maybeCleanupIdle fires during the test window.
+            "idle_timeout": 60s,
+            "max_age": 500ms,
+            "logger": mLogger,
+        });
+        on_exit mgr.closeAll();
+
+        HttpClientIo::HttpClientStreamHandle s1 = mgr.acquireStream(mHttpUrl);
+        hash<auto> r1 = s1.request("GET", "/simple");
+        assertEq(200, r1.status_code);
+        int id1 = s1.getConnection().getConnectionId();
+
+        # Sleep past max_age but well within idle_timeout
+        usleep(700ms);
+
+        HttpClientIo::HttpClientStreamHandle s2 = mgr.acquireStream(mHttpUrl);
+        hash<auto> r2 = s2.request("GET", "/simple");
+        assertEq(200, r2.status_code);
+        int id2 = s2.getConnection().getConnectionId();
+
+        assertNeq(id1, id2,
+            "after sleeping past max_age, the next request must run on a "
+            "different connection (max-age-expired connection evicted "
+            "from reuse)");
+    }
+
+    #! Verifies max_age=0 (default) does not change reuse behaviour.
+    testMaxAgeDisabledReusesConnection() {
+        HttpClientIo::HttpClientConnectionManager mgr(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+            "protocol": "h1",
+            "idle_timeout": 60s,
+            # max_age omitted → defaults to 0s (disabled)
+            "logger": mLogger,
+        });
+        on_exit mgr.closeAll();
+
+        HttpClientIo::HttpClientStreamHandle s1 = mgr.acquireStream(mHttpUrl);
+        s1.request("GET", "/simple");
+        int id1 = s1.getConnection().getConnectionId();
+        usleep(700ms);
+        HttpClientIo::HttpClientStreamHandle s2 = mgr.acquireStream(mHttpUrl);
+        s2.request("GET", "/simple");
+        int id2 = s2.getConnection().getConnectionId();
+        assertEq(id1, id2,
+            "with max_age disabled, the second request must reuse the "
+            "first connection");
     }
 
     # ---- Additional Coverage Tests ----
