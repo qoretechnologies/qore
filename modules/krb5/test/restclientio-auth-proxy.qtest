@@ -1,0 +1,155 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Integration tests for Kerberos/SPNEGO HTTP Negotiate authentication
+    against an external Apache mod_auth_gssapi implementation.
+*/
+
+%modern
+
+%requires ../../../qlib/QUnit.qm
+%requires ../../../qlib/RestClient.qm
+%requires ../../../qlib/RestClientIo.qm
+%requires krb5
+
+%try-module json >= 1.5
+%define NoJson
+%endtry
+
+%exec-class RestClientIoKrb5AuthProxyIntegrationTest
+
+public class RestClientIoKrb5AuthProxyIntegrationTest inherits QUnit::Test {
+    private {
+        bool cache_ready = False;
+    }
+
+    constructor() : Test("RestClientIoKrb5AuthProxyIntegrationTest", "1.0") {
+        addTestCase("sync RestClient negotiate through external auth proxy",
+            \testSyncRestClientNegotiate());
+        addTestCase("sync RestClientIo negotiate through external auth proxy",
+            \testSyncRestClientIoNegotiate());
+        addTestCase("RestClientIo ping negotiate through external auth proxy",
+            \testPingNegotiate());
+
+        set_return_value(main());
+    }
+
+    private string requireEnv(string name) {
+        *string value = getenv(name);
+        if (!value || value == "") {
+            testSkip(sprintf("environment variable %s is not set", name));
+        }
+        return value;
+    }
+
+    private string clientPrincipal() {
+        return requireEnv("QORE_KRB5_AUTH_PROXY_CLIENT_PRINCIPAL");
+    }
+
+    private hash<auto> getClientOptions() {
+        setupCredentialCache();
+        return {
+            "url": requireEnv("QORE_KRB5_AUTH_PROXY_URL"),
+            "data": "json",
+            "negotiate_auth": True,
+            "negotiate_service_principal": requireEnv("QORE_KRB5_AUTH_PROXY_SERVICE_PRINCIPAL"),
+            "negotiate_credential_cache": requireEnv("QORE_KRB5_AUTH_PROXY_CREDENTIAL_CACHE"),
+        };
+    }
+
+    private setupCredentialCache() {
+        if (cache_ready) {
+            return;
+        }
+
+        Qore::Krb5::Krb5Context ctx();
+        Qore::Krb5::Krb5Principal principal(clientPrincipal());
+        hash<Qore::Krb5::Krb5InitialCredentialsOptions> opts();
+        opts.canonicalize = True;
+
+        Qore::Krb5::Krb5Credentials creds = ctx.acquireCredentialsWithPassword(
+            principal, requireEnv("QORE_KRB5_AUTH_PROXY_CLIENT_PASSWORD"), opts);
+
+        auto cc = ctx.openCredentialCache(requireEnv("QORE_KRB5_AUTH_PROXY_CREDENTIAL_CACHE"));
+        cc.initialize(principal);
+        cc.storeCredentials(creds);
+        cache_ready = True;
+    }
+
+    private assertAuthenticatedBody(hash<auto> body, string path) {
+        assertEq(path, body.path);
+        assertEq(clientPrincipal(), body.remote_user);
+    }
+
+    private assertBackendSawAuthenticatedRequest(string path) {
+        string log_path = requireEnv("QORE_KRB5_AUTH_PROXY_BACKEND_LOG");
+        string content = ReadOnlyFile::readTextFile(log_path);
+        foreach string line in (content.split("\n")) {
+            if (!line.val()) {
+                continue;
+            }
+            hash<auto> request = parse_json(line);
+            if (request.path == path && request.remote_user == clientPrincipal()) {
+                return;
+            }
+        }
+        assertTrue(False, sprintf("backend did not see authenticated request %y; log: %s",
+            path, content));
+    }
+
+    private static *hash<ExceptionInfo> drivePingOp(Qore::AbstractPollOperation op) {
+        try {
+            while (!op.goalReached()) {
+                *hash<SocketPollInfo> info = op.continuePoll();
+                if (!info) {
+                    break;
+                }
+                Socket::poll((info,), 10s);
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            return ex;
+        }
+        return NOTHING;
+    }
+
+    testSyncRestClientNegotiate() {
+%ifndef NoJson
+        RestClient rest(getClientOptions());
+        hash<auto> response = rest.get("/api/restclient");
+        assertEq(200, response.status_code);
+        assertAuthenticatedBody(response.body, "/api/restclient");
+%endif
+    }
+
+    testSyncRestClientIoNegotiate() {
+%ifndef NoJson
+        RestClientIo::RestClientIo rest(getClientOptions());
+        on_exit rest.close();
+        hash<RestClient::RestResponseInfo> response = rest.restGet("/api/restclientio");
+        assertEq(200, response.status_code);
+        assertAuthenticatedBody(response.body, "/api/restclientio");
+%endif
+    }
+
+    testPingNegotiate() {
+%ifndef NoJson
+        hash<auto> opts = getClientOptions() - "url" + {
+            "ping_method": "GET",
+            "ping_path": "/api/ping",
+        };
+        RestClient::RestConnection rc("krb5-auth-proxy-ping", "krb5-auth-proxy-ping",
+            requireEnv("QORE_KRB5_AUTH_PROXY_URL"), {}, opts);
+        Qore::AbstractPollOperation op = rc.startPollConnect();
+        assertEq("ping", op.getGoal());
+
+        *hash<ExceptionInfo> ex = drivePingOp(op);
+        on_error printf("krb5 auth proxy ping error: %y\n", ex);
+        assertFalse(exists ex, "Negotiate-enabled ping should authenticate through the external auth proxy");
+        assertTrue(op.goalReached());
+        assertBackendSawAuthenticatedRequest("/api/ping");
+%endif
+    }
+}
