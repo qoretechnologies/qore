@@ -6,9 +6,10 @@
 public namespace BaseLinkerDataProvider {
 
 #! BaseLinker order sources data provider (`getOrderSources`)
-/** BaseLinker returns sources as `{sources: {source_type: {id: name, ...}}}`;
-    this provider flattens each entry into a `{source_type, source_id, source_name}`
-    record.
+/** BaseLinker returns sources as `{sources: {source_type: {id: name, ...}}}`,
+    where `source_type` is `personal`, `shop`, `order_return`, or a per-marketplace
+    code such as `allegro`, `ebay`, `amazon`, `ceneo`, `emag`, etc. This provider
+    flattens each entry into a `{source_type, source_id, source_name}` record.
 */
 public class BaseLinkerOrderSourcesDataProvider inherits BaseLinkerDataProviderBase {
     public {

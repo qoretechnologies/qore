@@ -124,11 +124,6 @@ public class BaseLinkerWatchDataProviderBase inherits BaseLinkerDataProviderBase
                 }
                 notifyObservers(getEventName(), entry);
             }
-            # If we had only a `since` cursor, once we've seen at least one entry,
-            # switch to log_id-based cursoring so we don't re-poll the same window.
-            if (!last_log_id && logs) {
-                last_log_id = int(logs[logs.size() - 1].log_id);
-            }
         } catch (hash<ExceptionInfo> ex) {
             log(LoggerLevel::ERROR, "BaseLinker watch %s: poll failed: %s: %s",
                 getEventName(), ex.err, ex.desc);

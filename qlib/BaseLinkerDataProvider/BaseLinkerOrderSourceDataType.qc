@@ -25,8 +25,8 @@ public class BaseLinkerOrderSourceDataType inherits HashDataType {
                 "type": SoftStringType,
                 "required": True,
             },
-            "name": {
-                "display_name": "Name",
+            "source_name": {
+                "display_name": "Source Name",
                 "short_desc": "Display name of the source",
                 "type": SoftStringOrNothingType,
             },

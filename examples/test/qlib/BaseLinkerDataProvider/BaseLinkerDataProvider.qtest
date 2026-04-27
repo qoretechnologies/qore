@@ -524,7 +524,7 @@ public class BaseLinkerDataProviderTest inherits QUnit::Test {
 
         BaseLinkerDataProvider::BaseLinkerDataProvider provider = getProvider();
 
-        foreach string name in (("inventories", "couriers", "order-statuses")) {
+        foreach string name in (("inventories", "couriers", "order-statuses", "order-sources")) {
             AbstractDataProvider dp;
             try {
                 dp = provider.getChildProvider(name);
@@ -538,14 +538,29 @@ public class BaseLinkerDataProviderTest inherits QUnit::Test {
             try {
                 AbstractDataProviderRecordIterator i = dp.searchRecords();
                 int count = 0;
+                *hash<auto> first;
                 while (i.next() && count < 5) {
                     hash<auto> rec = i.getValue();
                     assertEq(True, rec.typeCode() == NT_HASH,
                         sprintf("%s row is a hash", name));
+                    if (count == 0) {
+                        first = rec;
+                    }
                     ++count;
                 }
                 if (m_options.verbose) {
                     printf("  %s: iterated %d row(s)\n", name, count);
+                }
+                # order-sources flattens BaseLinker's nested response; assert the emitted
+                # record keys match the declared schema so the schema/emitter mismatch
+                # caught in PR #5322 review can't regress silently.
+                if (name == "order-sources" && first) {
+                    assertEq(True, exists first.source_type,
+                        "order-sources record has source_type");
+                    assertEq(True, exists first.source_id,
+                        "order-sources record has source_id");
+                    assertEq(True, exists first.source_name,
+                        "order-sources record has source_name (matches schema)");
                 }
             } catch (hash<ExceptionInfo> ex) {
                 if (ex.err == "BASELINKER-API-ERROR") {
