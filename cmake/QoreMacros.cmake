@@ -574,6 +574,17 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
     # .qm source and resource siblings.  The .qm+resources were already
     # staged there by QORE_USER_MODULE's install(FILES) call.
     if (${_is_dir})
+        # Remove stale flat artifacts from older installs.  The loader checks
+        # <dir>/<name>.qmod before <dir>/<name>/<name>.qmod, so leaving the old
+        # flat file installed shadows the current split-dir artifact.
+        if (IS_ABSOLUTE "${QORE_USER_MODULES_DIR}")
+            set(_qmod_install_flat_path "\$ENV{DESTDIR}${QORE_USER_MODULES_DIR}/${_name}.qmod")
+        else()
+            set(_qmod_install_flat_path
+                "\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${QORE_USER_MODULES_DIR}/${_name}.qmod")
+        endif()
+        install(CODE
+            "file(REMOVE\n  \"${_qmod_install_flat_path}\"\n  \"${_qmod_install_flat_path}.d\")")
         install(FILES ${_qmod_out} DESTINATION ${QORE_USER_MODULES_DIR}/${_name})
     else()
         install(FILES ${_qmod_out} DESTINATION ${QORE_USER_MODULES_DIR})
