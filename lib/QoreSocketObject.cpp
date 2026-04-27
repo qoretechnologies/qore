@@ -814,6 +814,11 @@ static QoreHashNode* qore_socket_object_exec_read_http_chunked_body(QoreSocketOb
     assert(!os || (binary_body && !read_once && !recv_callback));
     assert(!recv_callback || !read_once);
 
+    SocketSyncPoll::assertNotOnIoThread("Socket", owner_name, xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
     my_socket_priv* priv = my_socket_priv::getPriv(*s);
     QoreSocketObjectAsyncIoGuard async_guard(*priv, xsink, NB_RECV);
     if (!async_guard) {
@@ -1184,6 +1189,11 @@ static int qore_socket_object_exec_run_http_trailer_callback(
 static int qore_socket_object_exec_send_http_chunked_body_input_stream(QoreSocketObject* s,
         InputStream* input_stream, size_t max_chunk_size, const ResolvedCallReferenceNode* trailer_callback,
         int timeout_ms, ExceptionSink* xsink) {
+    SocketSyncPoll::assertNotOnIoThread("Socket", "sendHTTPChunkedBodyFromInputStream", xsink);
+    if (*xsink) {
+        return -1;
+    }
+
     my_socket_priv* priv = my_socket_priv::getPriv(*s);
     QoreSocketObjectAsyncIoGuard async_guard(*priv, xsink, NB_SEND);
     if (!async_guard) {
@@ -1452,6 +1462,12 @@ static int qore_socket_object_exec_send_fd(QoreSocketObject* s, int fd, int size
     }
 
     ExceptionSink xsink;
+    SocketSyncPoll::assertNotOnIoThread("Socket", "send", &xsink);
+    if (xsink) {
+        xsink.clear();
+        return -1;
+    }
+
     my_socket_priv* priv = my_socket_priv::getPriv(*s);
     QoreSocketObjectAsyncIoGuard async_guard(*priv, &xsink, NB_SEND);
     if (!async_guard) {
@@ -1498,6 +1514,12 @@ static int qore_socket_object_exec_recv_fd(QoreSocketObject* s, int fd, int size
     }
 
     ExceptionSink xsink;
+    SocketSyncPoll::assertNotOnIoThread("Socket", "recv", &xsink);
+    if (xsink) {
+        xsink.clear();
+        return -1;
+    }
+
     my_socket_priv* priv = my_socket_priv::getPriv(*s);
     QoreSocketObjectAsyncIoGuard async_guard(*priv, &xsink, NB_RECV);
     if (!async_guard) {
@@ -1940,6 +1962,11 @@ int QoreSocketObject::send(const BinaryNode* b) {
 }
 
 void QoreSocketObject::sendFromInputStream(InputStream *is, int64 size, int64 timeout_ms, ExceptionSink *xsink) {
+    SocketSyncPoll::assertNotOnIoThread("Socket", "sendFromInputStream", xsink);
+    if (*xsink) {
+        return;
+    }
+
     my_socket_priv* priv = my_socket_priv::getPriv(*this);
     QoreSocketObjectAsyncIoGuard async_guard(*priv, xsink, NB_SEND);
     if (!async_guard) {
@@ -2052,6 +2079,11 @@ BinaryNode* QoreSocketObject::recvBinary(int bufsize, int timeout_ms, ExceptionS
 }
 
 void QoreSocketObject::recvToOutputStream(OutputStream *os, int64 size, int64 timeout_ms, ExceptionSink *xsink) {
+    SocketSyncPoll::assertNotOnIoThread("Socket", "recvToOutputStream", xsink);
+    if (*xsink) {
+        return;
+    }
+
     my_socket_priv* priv = my_socket_priv::getPriv(*this);
     QoreSocketObjectAsyncIoGuard async_guard(*priv, xsink, NB_RECV);
     if (!async_guard) {

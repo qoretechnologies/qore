@@ -5814,6 +5814,11 @@ int QoreSocket::send(int fd, qore_offset_t size) {
     ON_BLOCK_EXIT(free, buf);
 
     ExceptionSink xsink;
+    SocketSyncPoll::assertNotOnIoThread("Socket", "send", &xsink);
+    if (xsink) {
+        xsink.clear();
+        return -1;
+    }
 
     qore_offset_t rc = 0;
     size_t bs = 0;
@@ -5871,6 +5876,10 @@ int QoreSocket::send(int fd, qore_offset_t size, int timeout_ms, ExceptionSink* 
     if (priv->sock == QORE_INVALID_SOCKET) {
         printd(5, "QoreSocket::send() ERROR: sock: %d size: " QSD "\n", priv->sock, size);
         se_not_open("Socket", "send", xsink);
+        return -1;
+    }
+    SocketSyncPoll::assertNotOnIoThread("Socket", "send", xsink);
+    if (*xsink) {
         return -1;
     }
 
@@ -6013,6 +6022,10 @@ int QoreSocket::recv(int fd, qore_offset_t size, int timeout_ms, ExceptionSink* 
         se_not_open("Socket", "recv", xsink);
         return -1;
     }
+    SocketSyncPoll::assertNotOnIoThread("Socket", "recv", xsink);
+    if (*xsink) {
+        return -1;
+    }
 
     qore_offset_t br = 0;
     int rc = 0;
@@ -6082,6 +6095,11 @@ int QoreSocket::recv(int fd, qore_offset_t size, int timeout) {
         return -1;
 
     ExceptionSink xsink;
+    SocketSyncPoll::assertNotOnIoThread("Socket", "recv", &xsink);
+    if (xsink) {
+        xsink.clear();
+        return -1;
+    }
 
     qore_offset_t br = 0;
     qore_offset_t rc;
