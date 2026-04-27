@@ -1574,8 +1574,8 @@ public:
     bool commitClassesValidate(std::string& error);
 
     //! Phase-split 2d — resolve pending static-method defaults,
-    //! fallback sources, rebuild indexes, and resolve BCA expression
-    //! blobs.  Must run last.
+    //! embedded source metadata, rebuild indexes, and resolve BCA
+    //! expression blobs.  Must run last.
     /** Single-blob callers invoke this directly.  The multi-deserializer
         instead splits it around a single cross-session index rebuild via
         `finalizePreIndex()` / `finalizePostIndex()` to avoid the O(N*T)
@@ -1584,7 +1584,7 @@ public:
     bool finalize(std::string& error);
 
     //! Per-session finalize work that does NOT require rebuilt indexes
-    //! (pending static-method defaults + fallback source deserialization).
+    //! (pending static-method defaults + embedded source metadata).
     //! Used by the multi-deserializer before the single cross-session
     //! index rebuild.
     bool finalizePreIndex(std::string& error);
@@ -1635,14 +1635,17 @@ public:
     //! ~3 M cold parser round-trips in qwf-scale batches.
     QoreAOTTypeResolver* getTypeResolver() const { return type_resolver; }
 
-    //! Check if any functions require disabled source fallback.
-    bool hasFallbackSource() const { return fallback_source != nullptr && !fallback_func_names.empty(); }
+    //! Check if explicit --include-source data is present.
+    bool hasEmbeddedSource() const { return fallback_source != nullptr; }
 
     //! Get the embedded source text.
-    const char* getFallbackSource() const { return fallback_source; }
+    const char* getEmbeddedSource() const { return fallback_source; }
 
     //! Get the embedded source text length.
-    size_t getFallbackSourceLen() const { return fallback_source_len; }
+    size_t getEmbeddedSourceLen() const { return fallback_source_len; }
+
+    //! Check if this legacy object names functions that require disabled source fallback.
+    bool hasLegacyFallbackFunctions() const { return !fallback_func_names.empty(); }
 
     //! Get the legacy list of function names that need source fallback.
     const std::vector<std::string>& getFallbackFuncNames() const { return fallback_func_names; }

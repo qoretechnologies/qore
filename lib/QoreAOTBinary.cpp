@@ -391,6 +391,129 @@ static bool aot_parse_size_component(const std::string& path, size_t& pos, size_
     return true;
 }
 
+static QoreValue aot_resolve_constant_path_tail(QoreValue cur, const std::string& encoded, size_t pos) {
+    while (pos < encoded.size()) {
+        char seg = encoded[pos++];
+        size_t len_or_index = 0;
+        if (!aot_parse_size_component(encoded, pos, len_or_index)) {
+            cur.discard(nullptr);
+            return QoreValue();
+        }
+
+        QoreValue next;
+        if (seg == 'H') {
+            if (pos + len_or_index > encoded.size() || cur.getType() != NT_HASH) {
+                cur.discard(nullptr);
+                return QoreValue();
+            }
+            std::string key = encoded.substr(pos, len_or_index);
+            pos += len_or_index;
+            const QoreHashNode* h = cur.get<const QoreHashNode>();
+            bool exists = false;
+            next = h ? h->getKeyValueExistence(key.c_str(), exists) : QoreValue();
+            if (!exists) {
+                cur.discard(nullptr);
+                return QoreValue();
+            }
+            next = next.refSelf();
+        } else if (seg == 'L') {
+            if (cur.getType() != NT_LIST) {
+                cur.discard(nullptr);
+                return QoreValue();
+            }
+            const QoreListNode* l = cur.get<const QoreListNode>();
+            if (!l || len_or_index >= l->size()) {
+                cur.discard(nullptr);
+                return QoreValue();
+            }
+            QoreValue lv = l->retrieveEntry(len_or_index);
+            next = lv.refSelf();
+        } else {
+            cur.discard(nullptr);
+            return QoreValue();
+        }
+
+        cur.discard(nullptr);
+        cur = next;
+    }
+
+    return cur;
+}
+
+class RuntimeConstantPathRefNode : public RuntimeConstantRefNode {
+private:
+    std::string encoded_path;
+    size_t tail_pos;
+
+    DLLLOCAL QoreValue resolvePath(ExceptionSink* xsink) const {
+        ConstantEntry* ce = getConstantEntry();
+        if (!ce->hasValue()) {
+            if (xsink) {
+                xsink->raiseException("AOT-PENDING-CONSTANT",
+                    "cannot evaluate AOT-deserialized constant path '%s' before base constant '%s' "
+                    "__const_init function has populated the value",
+                    encoded_path.c_str(), ce->getName());
+            }
+            return QoreValue();
+        }
+
+        QoreValue base = ce->getReferencedValue();
+        QoreValue rv = aot_resolve_constant_path_tail(base, encoded_path, tail_pos);
+        if (!rv && xsink) {
+            xsink->raiseException("AOT-CONSTANT-PATH-ERROR",
+                "cannot resolve AOT-deserialized constant path '%s' from base constant '%s'",
+                encoded_path.c_str(), ce->getName());
+        }
+        return rv;
+    }
+
+protected:
+    DLLLOCAL QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const override {
+        needs_deref = true;
+        return resolvePath(xsink);
+    }
+
+    DLLLOCAL int parseInitImpl(QoreValue& val, QoreParseContext& parse_context) override {
+        parse_context.typeInfo = autoTypeInfo;
+        return 0;
+    }
+
+    DLLLOCAL const QoreTypeInfo* getTypeInfo() const override {
+        return autoTypeInfo;
+    }
+
+public:
+    DLLLOCAL RuntimeConstantPathRefNode(const QoreProgramLocation* loc, ConstantEntry* ce,
+            std::string n_encoded_path, size_t n_tail_pos)
+            : RuntimeConstantRefNode(loc, ce, true), encoded_path(std::move(n_encoded_path)), tail_pos(n_tail_pos) {
+    }
+
+    DLLLOCAL int getAsString(QoreString& str, int foff, ExceptionSink* xsink) const override {
+        QoreValue rv = resolvePath(xsink);
+        if (xsink && *xsink) {
+            return -1;
+        }
+        int rc = rv.getAsString(str, foff, xsink);
+        rv.discard(xsink);
+        return rc;
+    }
+
+    DLLLOCAL QoreString* getAsString(bool& del, int foff, ExceptionSink* xsink) const override {
+        QoreValue rv = resolvePath(xsink);
+        if (xsink && *xsink) {
+            del = false;
+            return nullptr;
+        }
+        QoreString* str = rv.getAsString(del, foff, xsink);
+        rv.discard(xsink);
+        return str;
+    }
+
+    DLLLOCAL const char* getTypeName() const override {
+        return "AOT constant path reference";
+    }
+};
+
 static void aot_add_constant_value_reverse_mappings_impl(AOTConstantReverseMap& crm,
         const QoreValue& v, const std::string& path,
         std::unordered_set<const AbstractQoreNode*>& seen, bool root_value) {
@@ -516,59 +639,17 @@ QoreValue qore_aot_resolve_constant_path_value(QoreProgram* pgm, const char* pat
         return QoreValue();
     }
     if (!ce->hasValue()) {
-        if (pos == encoded.size() && defer_if_pending) {
-            return QoreValue(new RuntimeConstantRefNode(&loc_builtin, ce, true));
+        if (defer_if_pending) {
+            if (pos == encoded.size()) {
+                return QoreValue(new RuntimeConstantRefNode(&loc_builtin, ce, true));
+            }
+            return QoreValue(new RuntimeConstantPathRefNode(&loc_builtin, ce, encoded, pos));
         }
         return QoreValue();
     }
 
     QoreValue cur = ce->getReferencedValue();
-    while (pos < encoded.size()) {
-        char seg = encoded[pos++];
-        size_t len_or_index = 0;
-        if (!aot_parse_size_component(encoded, pos, len_or_index)) {
-            cur.discard(nullptr);
-            return QoreValue();
-        }
-
-        QoreValue next;
-        if (seg == 'H') {
-            if (pos + len_or_index > encoded.size() || cur.getType() != NT_HASH) {
-                cur.discard(nullptr);
-                return QoreValue();
-            }
-            std::string key = encoded.substr(pos, len_or_index);
-            pos += len_or_index;
-            const QoreHashNode* h = cur.get<const QoreHashNode>();
-            bool exists = false;
-            next = h ? h->getKeyValueExistence(key.c_str(), exists) : QoreValue();
-            if (!exists) {
-                cur.discard(nullptr);
-                return QoreValue();
-            }
-            next = next.refSelf();
-        } else if (seg == 'L') {
-            if (cur.getType() != NT_LIST) {
-                cur.discard(nullptr);
-                return QoreValue();
-            }
-            const QoreListNode* l = cur.get<const QoreListNode>();
-            if (!l || len_or_index >= l->size()) {
-                cur.discard(nullptr);
-                return QoreValue();
-            }
-            QoreValue lv = l->retrieveEntry(len_or_index);
-            next = lv.refSelf();
-        } else {
-            cur.discard(nullptr);
-            return QoreValue();
-        }
-
-        cur.discard(nullptr);
-        cur = next;
-    }
-
-    return cur;
+    return aot_resolve_constant_path_tail(cur, encoded, pos);
 }
 
 // ---- QoreAOTBinaryWriter ----
@@ -4395,7 +4476,7 @@ bool readInitFuncs(const uint8_t* data, uint32_t size,
     return true;
 }
 
-// ---- Embedded Source Section (legacy source fallback metadata) ----
+// ---- Embedded Source Section (legacy fallback-function metadata) ----
 
 void serializeFallbackSources(QoreAOTBinaryWriter& writer,
         const std::vector<AOTCompiledFuncWithSlots>& funcs,
@@ -4828,7 +4909,7 @@ bool QoreAOTBinaryDeserializer::openAndDeserializeShells(QoreProgram* in_pgm,
 }
 
 // Phase 2: resolution — base classes, member types, constants,
-// globals, functions, methods, class commit, fallback sources,
+// globals, functions, methods, class commit, embedded source metadata,
 // index rebuild, deferred BCA resolution.  Expected to run AFTER
 // openAndDeserializeShells has completed for every blob in the
 // current batch.
@@ -5100,8 +5181,8 @@ bool QoreAOTBinaryDeserializer::commitClasses(std::string& error) {
 }
 
 // Phase-split 2d.  Resolves deferred static-method defaults,
-// fallback sources, rebuilds root-namespace indexes, and resolves
-// the BCA (base-class constructor argument) expression blobs.
+// embedded source metadata, rebuilds root-namespace indexes, and
+// resolves the BCA (base-class constructor argument) expression blobs.
 bool QoreAOTBinaryDeserializer::finalizePreIndex(std::string& error) {
     {
         qore_program_private* pp = qore_program_private::get(*pgm);

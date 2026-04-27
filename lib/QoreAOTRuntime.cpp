@@ -6188,6 +6188,18 @@ static void executeInitFunctions(QoreProgram* pgm,
     QoreProgram* shadow_pgm,
     const char* mod_path);
 
+static std::string makeAOTRegistrationFailureMessage(const char* label,
+        int registered, int num_functions) {
+    int unregistered = num_functions - registered;
+    std::string rv = label ? label : "<aot>";
+    rv += ": ";
+    rv += std::to_string(unregistered);
+    rv += "/";
+    rv += std::to_string(num_functions);
+    rv += " functions could not be registered; source fallback is disabled";
+    return rv;
+}
+
 extern "C" DLLEXPORT int qore_aot_run_v2(
     int argc, char** argv,
     const uint8_t* metadata, int metadata_len,
@@ -6382,11 +6394,10 @@ extern "C" DLLEXPORT int qore_aot_run_v2(
                 }
             }
 
-            // Parse fallback source if available.
-            // Needed for: (1) functions with stmt_slots that couldn't resolve from slot map,
-            // (2) _toplevel fallback if slot map registration failed,
-            // (3) any functions that failed slot map registration.
-            if (deserializer.hasFallbackSource()) {
+            // Legacy objects could name functions needing source fallback. New
+            // objects are rejected at compile time, and deserialization rejects
+            // non-empty legacy fallback lists before this point.
+            if (deserializer.hasLegacyFallbackFunctions()) {
                 ExceptionSink wsink;
                 // Strip PO_NO_TOP_LEVEL_STATEMENTS from fallback parse options because the
                 // full source may have top-level statements before %exec-class directive;
@@ -6395,7 +6406,7 @@ extern "C" DLLEXPORT int qore_aot_run_v2(
                 fallback_pgm = new QoreProgram(parse_options & ~PO_NO_TOP_LEVEL_STATEMENTS);
                 // Set script path so %requires with relative paths resolve correctly
                 fallback_pgm->setScriptPath(label);
-                fallback_pgm->parse(deserializer.getFallbackSource(), label, &xsink, &wsink,
+                fallback_pgm->parse(deserializer.getEmbeddedSource(), label, &xsink, &wsink,
                     QP_WARN_DEFAULT);
                 if (wsink.isException()) {
                     wsink.handleWarnings();
@@ -6559,12 +6570,16 @@ extern "C" DLLEXPORT int qore_aot_run_v2(
 
             printd(2, "AOT v2: registered %d/%d pre-compiled functions\n", registered, num_functions);
 
-            // Safety check: if functions weren't registered, fail visibly before
-            // they will exist as empty shells that crash when called. Warn early.
-            if (registered < num_functions && !deserializer.hasFallbackSource() && !fallback_pgm) {
-                int unregistered = num_functions - registered;
-                printd(0, "AOT ERROR: %d/%d functions could not be registered; "
-                    "source fallback is disabled.\n", unregistered, num_functions);
+            if (registered < num_functions) {
+                if (fallback_pgm) {
+                    fallback_pgm->waitForTerminationAndDeref(nullptr);
+                    fallback_pgm = nullptr;
+                }
+                std::string msg = makeAOTRegistrationFailureMessage(label, registered, num_functions);
+                xsink.raiseException("AOT-ERROR", "%s", msg.c_str());
+                xsink.handleExceptions();
+                rc = 2;
+                break;
             }
         }
 
@@ -7143,11 +7158,10 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
                 }
             }
 
-            // Parse fallback source if available.
-            // Needed for: (1) functions with stmt_slots that couldn't resolve from slot map,
-            // (2) _toplevel fallback if slot map registration failed,
-            // (3) any functions that failed slot map registration.
-            if (deserializer.hasFallbackSource()) {
+            // Legacy objects could name functions needing source fallback. New
+            // objects are rejected at compile time, and deserialization rejects
+            // non-empty legacy fallback lists before this point.
+            if (deserializer.hasLegacyFallbackFunctions()) {
                 ExceptionSink wsink;
                 // Strip PO_NO_TOP_LEVEL_STATEMENTS from fallback parse options because the
                 // full source may have top-level statements before %exec-class directive;
@@ -7156,7 +7170,7 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
                 fallback_pgm = new QoreProgram(parse_options & ~PO_NO_TOP_LEVEL_STATEMENTS);
                 // Set script path so %requires with relative paths resolve correctly
                 fallback_pgm->setScriptPath(label);
-                fallback_pgm->parse(deserializer.getFallbackSource(), label, &xsink, &wsink,
+                fallback_pgm->parse(deserializer.getEmbeddedSource(), label, &xsink, &wsink,
                     QP_WARN_DEFAULT);
                 if (wsink.isException()) {
                     wsink.handleWarnings();
@@ -7324,12 +7338,16 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
 
             printd(2, "AOT v3: registered %d/%d pre-compiled functions\n", registered, num_functions);
 
-            // Safety check: if functions weren't registered, fail visibly before
-            // they will exist as empty shells that crash when called. Warn early.
-            if (registered < num_functions && !deserializer.hasFallbackSource() && !fallback_pgm) {
-                int unregistered = num_functions - registered;
-                printd(0, "AOT ERROR: %d/%d functions could not be registered; "
-                    "source fallback is disabled.\n", unregistered, num_functions);
+            if (registered < num_functions) {
+                if (fallback_pgm) {
+                    fallback_pgm->waitForTerminationAndDeref(nullptr);
+                    fallback_pgm = nullptr;
+                }
+                std::string msg = makeAOTRegistrationFailureMessage(label, registered, num_functions);
+                xsink.raiseException("AOT-ERROR", "%s", msg.c_str());
+                xsink.handleExceptions();
+                rc = 2;
+                break;
             }
         }
 
@@ -7965,6 +7983,11 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v2(
 
         printd(1, "AOT module v2 '%s': registered %d/%d pre-compiled functions\n",
             mod_name, registered, num_functions);
+        if (registered < num_functions) {
+            std::string msg = makeAOTRegistrationFailureMessage(mod_name, registered, num_functions);
+            local_pgm->waitForTerminationAndDeref(nullptr);
+            return new QoreStringNode(msg.c_str());
+        }
     }
 
     // Store per-module state so ns_init can find the correct program.
@@ -8701,8 +8724,10 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
         printd(1, "AOT module v3 '%s': registered %d/%d pre-compiled functions\n",
             mod_name, registered, num_functions);
 
-        // If some functions failed slot map registration, try fallback source if available
-        if (registered < num_functions && deserializer.hasFallbackSource()) {
+        // Legacy objects could name functions needing source fallback. New
+        // objects are rejected at compile time, and deserialization rejects
+        // non-empty legacy fallback lists before this point.
+        if (registered < num_functions && deserializer.hasLegacyFallbackFunctions()) {
             ExceptionSink wsink;
             QoreProgram* fallback_pgm = new QoreProgram(parse_options & ~PO_NO_TOP_LEVEL_STATEMENTS);
             fallback_pgm->setScriptPath(label);
@@ -8716,7 +8741,7 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
             // this helper in loadUserModuleFromPath; init_v3 needs to do
             // the same around its parse-based fallbacks.
             QoreUserModuleDefContextHelper fb_mod_ctx(mod_name, label, fallback_pgm, xsink);
-            fallback_pgm->parse(deserializer.getFallbackSource(), label, &xsink, &wsink,
+            fallback_pgm->parse(deserializer.getEmbeddedSource(), label, &xsink, &wsink,
                 QP_WARN_DEFAULT);
             if (wsink.isException()) {
                 wsink.handleWarnings();
@@ -8737,10 +8762,11 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
                     mod_name, fallback_registered, registered, num_functions);
                 fallback_pgm->waitForTerminationAndDeref(nullptr);
             }
-        } else if (registered < num_functions) {
-            printd(0, "AOT module '%s': WARNING - %d/%d functions failed registration "
-                "with source fallback disabled\n",
-                mod_name, num_functions - registered, num_functions);
+        }
+        if (registered < num_functions) {
+            std::string msg = makeAOTRegistrationFailureMessage(mod_name, registered, num_functions);
+            local_pgm->waitForTerminationAndDeref(nullptr);
+            return new QoreStringNode(msg.c_str());
         }
     }
 
@@ -8764,31 +8790,30 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
         }
     }
 
-    // Parse fallback source if available to recover values that can't be serialized
-    // (e.g., object constants, closure constants, static member initializers).
-    AOT_TRACE("pre fallback-source parse");
-    if (_aot_trace && deserializer.hasFallbackSource()) {
-        fprintf(stderr, "[aot-load] fallback source size = %zu bytes\n",
-            deserializer.getFallbackSourceLen());
+    // Parse embedded source only as an include-source recovery path for metadata
+    // values not represented in the binary sections; it is not function fallback.
+    AOT_TRACE("pre embedded-source parse");
+    if (_aot_trace && deserializer.hasEmbeddedSource()) {
+        fprintf(stderr, "[aot-load] embedded source size = %zu bytes\n",
+            deserializer.getEmbeddedSourceLen());
     }
-    if (deserializer.hasFallbackSource()) {
+    if (deserializer.hasEmbeddedSource()) {
         ExceptionSink wsink;
         QoreProgram* fallback_pgm = new QoreProgram(parse_options & ~PO_NO_TOP_LEVEL_STATEMENTS);
         fallback_pgm->setScriptPath(label);
-        // Push a per-module context helper before the fallback parse; see the
-        // matching guard around the function-registration fallback above for
-        // why.  Without this, `module <name> { }` in the fallback source
+        // Push a per-module context helper before the embedded-source parse.
+        // Without this, `module <name> { }` in the embedded source
         // reuses the outer caller's helper and trips the setNameInit
         // duplicate-name assertion.
         QoreUserModuleDefContextHelper fb_mod_ctx(mod_name, label, fallback_pgm, xsink);
-        fallback_pgm->parse(deserializer.getFallbackSource(), label, &xsink, &wsink,
+        fallback_pgm->parse(deserializer.getEmbeddedSource(), label, &xsink, &wsink,
             QP_WARN_DEFAULT);
-        AOT_TRACE("fallback source parsed");
+        AOT_TRACE("embedded source parsed");
         if (wsink.isException()) {
             wsink.handleWarnings();
         }
         if (xsink.isException()) {
-            printd(0, "AOT v3 '%s': fallback source parse failed\n", mod_name);
+            printd(0, "AOT v3 '%s': embedded source parse failed\n", mod_name);
             xsink.clear();
             fallback_pgm->waitForTerminationAndDeref(nullptr);
         } else {
@@ -9042,6 +9067,11 @@ extern "C" DLLEXPORT int qore_aot_script_register(QoreProgram* tpgm,
                 "pre-compiled functions (%d init funcs)\n",
                 label ? label : "<script>", registered, num_functions,
                 (int)init_func_contexts.size());
+            if (registered < num_functions) {
+                std::string msg = makeAOTRegistrationFailureMessage(label, registered, num_functions);
+                fprintf(stderr, "qore_aot_script_register: %s\n", msg.c_str());
+                return 4;
+            }
         }
 
         // Phase 4 slice 10f: execute init functions (NS_CONSTANT /
@@ -9210,6 +9240,12 @@ extern "C" DLLEXPORT int qore_aot_script_end_batch(QoreProgram* tpgm) {
                 "pre-compiled functions (%d init funcs)\n",
                 d.label.c_str(), registered, d.num_functions,
                 (int)init_func_contexts.size());
+            if (registered < d.num_functions) {
+                std::string msg = makeAOTRegistrationFailureMessage(
+                    d.label.c_str(), registered, d.num_functions);
+                fprintf(stderr, "qore_aot_script_end_batch: %s\n", msg.c_str());
+                return 5;
+            }
 
             if (!init_func_contexts.empty()) {
                 std::vector<AOTInitFuncDescriptor> init_descriptors;
