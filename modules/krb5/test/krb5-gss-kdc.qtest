@@ -16,6 +16,8 @@ class Krb5HttpNegotiateAuthenticator inherits AbstractAuthenticator {
     private {
         Qore::Krb5::GssCredential acceptor_cred;
         hash<Qore::Krb5::GssAcceptorContextOptions> acceptor_opts;
+        int challenge_count = 0;
+        int negotiate_count = 0;
     }
 
     constructor(Qore::Krb5::GssCredential cred, hash<Qore::Krb5::GssAcceptorContextOptions> opts) {
@@ -28,12 +30,14 @@ class Krb5HttpNegotiateAuthenticator inherits AbstractAuthenticator {
     }
 
     private *string getNegotiateAuthHeader(hash<auto> cx) {
+        ++challenge_count;
         return "Negotiate";
     }
 
     private *hash<HttpResponseInfo> processNegotiateAuthorizationHeader(HttpListenerInterface listener,
             hash<auto> hdr, reference<hash<auto>> cx, reference<bool> authenticated) {
         try {
+            ++negotiate_count;
             Qore::Krb5::GssAcceptorContext acceptor(acceptor_cred, acceptor_opts);
             hash<Krb5Util::NegotiateServerStepInfo> step =
                 Krb5Util::acceptNegotiateAuthorizationHeader(acceptor, hdr.authorization);
@@ -59,6 +63,14 @@ class Krb5HttpNegotiateAuthenticator inherits AbstractAuthenticator {
     authenticateByIP(reference<hash<auto>> cx, string ip, reference<bool> authenticated) {
         throw "AUTHENTICATION-ERROR", "IP authentication is disabled for Negotiate tests";
     }
+
+    int getChallengeCount() {
+        return challenge_count;
+    }
+
+    int getNegotiateCount() {
+        return negotiate_count;
+    }
 }
 
 class Krb5HttpNegotiateHandler inherits AbstractHttpRequestHandler {
@@ -82,6 +94,8 @@ public class Krb5GssKdcIntegrationTest inherits QUnit::Test {
         addTestCase("http negotiate helper exchange", \testHttpNegotiateHelperExchange());
         addTestCase("HttpServerUtil RestClientIo negotiate exchange",
             \testHttpServerUtilRestClientIoNegotiate());
+        addTestCase("HttpServerUtil preemptive RestClientIo negotiate exchange",
+            \testHttpServerUtilPreemptiveRestClientIoNegotiate());
         addTestCase("HttpServerUtil RestConnection ping negotiate exchange",
             \testHttpServerUtilPingNegotiate());
         addTestCase("initial credentials reject wrong password", \testInitialCredentialsRejectWrongPassword());
@@ -321,6 +335,7 @@ public class Krb5GssKdcIntegrationTest inherits QUnit::Test {
         server.waitForAsyncIo();
 
         return {
+            "auth": auth,
             "server": server,
             "url": "http://localhost:" + info.port,
         };
@@ -363,6 +378,30 @@ public class Krb5GssKdcIntegrationTest inherits QUnit::Test {
         hash<RestClient::RestResponseInfo> response = rest.restGet("/protected");
         assertEq(200, response.status_code);
         assertEq(setup.clientPrincipal, response.body);
+
+        Krb5HttpNegotiateAuthenticator auth = serverSetup.auth;
+        assertEq(1, auth.getChallengeCount(), "challenge-driven Negotiate should send one 401 challenge");
+        assertEq(1, auth.getNegotiateCount(), "challenge-driven Negotiate should process one token");
+    }
+
+    private testHttpServerUtilPreemptiveRestClientIoNegotiate() {
+        hash<auto> setup = setupGssCredentials("httpserverutil-preemptive-restclientio");
+        hash<auto> serverSetup = createHttpNegotiateServer(setup.acceptorCred);
+        HttpServer server = serverSetup.server;
+        on_exit delete server;
+
+        RestClientIo::RestClientIo rest(getHttpNegotiateClientOptions(setup, serverSetup.url) + {
+            "negotiate_preemptive": True,
+        });
+        on_exit rest.close();
+
+        hash<RestClient::RestResponseInfo> response = rest.restGet("/preemptive");
+        assertEq(200, response.status_code);
+        assertEq(setup.clientPrincipal, response.body);
+
+        Krb5HttpNegotiateAuthenticator auth = serverSetup.auth;
+        assertEq(0, auth.getChallengeCount(), "preemptive Negotiate should avoid the initial 401 challenge");
+        assertEq(1, auth.getNegotiateCount(), "preemptive Negotiate should process one token");
     }
 
     private testHttpServerUtilPingNegotiate() {
@@ -384,6 +423,10 @@ public class Krb5GssKdcIntegrationTest inherits QUnit::Test {
         on_error printf("HttpServerUtil Negotiate ping error: %y\n", ex);
         assertFalse(exists ex, "Negotiate-enabled ping should authenticate against HttpServerUtil");
         assertTrue(op.goalReached());
+
+        Krb5HttpNegotiateAuthenticator auth = serverSetup.auth;
+        assertEq(1, auth.getChallengeCount(), "Negotiate ping should send one 401 challenge");
+        assertEq(1, auth.getNegotiateCount(), "Negotiate ping should process one token");
     }
 
     private testInitialCredentialsRejectWrongPassword() {
