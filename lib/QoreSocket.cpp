@@ -1210,6 +1210,11 @@ static int qore_socket_exec_send_http_response(QoreSocket* s, QoreHashNode* info
         int code, const char* desc, const char* http_version, const QoreHashNode* headers,
         const void* data, size_t size, const QoreStringNode* body_event, int source, int timeout_ms,
         ExceptionSink* xsink) {
+    SocketSyncPoll::assertNotOnIoThread("Socket", "sendHTTPResponse", xsink);
+    if (*xsink) {
+        return -1;
+    }
+
     qore_socket_private* priv = qore_socket_private::get(*s);
     int32_t stream_id = priv->getH2ActiveStreamId();
     if (priv->h2_session && priv->h2_session->isServer() && stream_id > 0) {
