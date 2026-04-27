@@ -214,69 +214,23 @@ on the host that creates or loads the record.
 | `<scalar-type>[N]`         | Fixed array of integer, float, or bool scalars               |
 | `<int-type> : N`           | Bitfield — N bits within the parent integer (see §2.4)       |
 
-**Variable-length tail members are deferred to v2.** Keeping v1 records
-static means `size()`, every field offset, AOT encoding, and IR lowering
-stay constant. The likely future syntax is a member whose length is
-determined by another in-record integer member:
-
-```qore
-bindecl ZipLocalFileHeader [endian=little] {
-    uint32 signature;
-    uint16 version;
-    uint16 flags;
-    uint16 compression;
-    uint16 mod_time;
-    uint16 mod_date;
-    uint32 crc32;
-    uint32 compressed_size;
-    uint32 uncompressed_size;
-    uint16 filename_length;
-    uint16 extra_field_length;
-    byte   [length=filename_length]      filename;
-    byte   [length=extra_field_length]   extra_field;
-}
-```
-
-Constraints proposed for the v2 length-driven form:
-
-- The length-source member must precede the length-driven member in
-  declaration order, and must be of an unsigned integer type.
-- Length-driven members must form a contiguous tail of the record; a
-  fixed-position member after a length-driven one is a parse error.
-- The compiler emits a runtime size formula and runtime offset formulas
-  for any subsequent length-driven members.
-- `<bindecl>::size()` becomes a small calculation rather than a constant;
-  the verifier marks it accordingly so optimisation passes treat it as
-  side-effect-free but not constant.
-- Construction must define whether length-source fields are immutable,
-  whether changing them resizes the underlying buffer, and whether
-  variable-tail records can be default-constructed without explicit
-  tail sizes.
-- `Name::cast(binary, offset)` checks that the logical span covers at
-  least `minSize()` and evaluates the size formulas against the actual
-  bytes; mismatch raises `BINDECL-SIZE-MISMATCH` with the computed
-  expected size.
-
-**Unbounded `zstring`** (a NUL-scanned member with no declared maximum)
-remains deferred with variable tails — it adds a different runtime-size
-dimension (scan-to-NUL) that compounds with length-driven offsets and is
-rarely needed in practice. Static-bound `zstring[N]` is enough for v1.
-
-**`buffer<T>[N]`** as a member type depends on the
-`plugin-types-and-dense-data.md` proposal and is deferred until that
-ships. The `byte[N*sizeof(T)]` workaround plus a future buffer-cast
-covers the use case.
+**Variable-length tail members, unbounded `zstring`, and `buffer<T>[N]`
+members are deferred to v2** to keep v1 records statically sized:
+`size()`, every field offset, AOT encoding, and IR lowering all stay
+constant. v1 protocol code parses a static header and slices the
+remaining bytes manually. A roadmap sketch for the v2 length-driven
+form is in §12.9.
 
 ### 2.3 Declaration attributes
 
 Record-level attributes (`bindecl Name [...] {}`):
 
-| Attribute               | Values             | Default       | Meaning                                      |
+| Attribute               | Values                   | Default       | Meaning                                      |
 |---|---|---|---|
-| `endian`                | `big`/`little`/`native` | none     | Byte order applied to multi-byte members unless overridden per field |
-| `align`                 | `1`/`2`/`4`/`8`/`packed` | `packed` | Alignment policy between members              |
-| `bitorder`              | `msb-first`/`lsb-first` | none unless no bitfields | Bitfield packing direction                    |
-| `size`                  | integer            | (computed)    | Pin total record size — error if computed size differs |
+| `endian`                | `big`/`little`/`native`  | (no default — required when any multi-byte field is declared, see §10.2) | Byte order applied to multi-byte members unless overridden per field |
+| `align`                 | `1`/`2`/`4`/`8`/`packed` | `packed`      | Alignment policy between members              |
+| `bitorder`              | `msb-first`/`lsb-first`  | (no default — required when any bitfield is declared, see §10.3) | Bitfield packing direction                    |
+| `size`                  | integer                  | (computed)    | Pin total record size — error if computed size differs |
 
 Per-field attributes:
 
@@ -326,15 +280,23 @@ via a `_:` anonymous syntax (`uint8 _ : 3`).
 
 ### 2.5 Lifecycle
 
-A `bindecl` instance is constructed in one of two ways:
+A `bindecl` instance is **a typed window into a binary**, not a typed
+copy of one. Concretely, the runtime representation is a logical span
+`{BinaryNode*, byte_offset, byte_length}` plus a `const BindeclDecl*`.
+Member reads and writes resolve as offset-relative reads and writes
+into the backing `BinaryNode`. Implicit conversion to `binary` returns
+exactly the bytes covered by the span, not the whole backing buffer.
+Mutation honours the existing `binary` COW invariant — see §10.4. For
+all v1 records `byte_length == Name::size()`; the v2 variable-tail
+extension is the only place this invariant relaxes.
+
+Construction:
 
 ```qore
-# Fresh, zero-initialized buffer
+# Fresh, zero-initialized buffer (offset 0, length = Name::size())
 IcmpEchoHeader hdr1();
 
 # Zero-copy view over the first record-sized span of an existing binary.
-# Mutation through the instance triggers the underlying binary's COW path,
-# so other holders of the original `binary` are unaffected.
 IcmpEchoHeader hdr2 = IcmpEchoHeader::cast(packet);
 
 # Zero-copy view over a record-sized span starting at byte offset 14.
@@ -346,24 +308,33 @@ analogous to a class-level static method. The two-step
 `IcmpEchoHeader hdr; hdr = IcmpEchoHeader::cast(packet);` is also
 supported.
 
-`Name::cast(binary b, int offset = 0)` accepts `b.size() - offset >=
-Name::size()`. This is the normal protocol-parser path: a header can be
-viewed over a larger packet without copying the packet payload. The
-instance stores a logical span `{BinaryNode*, byte_offset, byte_length}`
-where `byte_length == Name::size()` for all v1 records. `Name::castExact`
-is also provided for file formats or validation code that wants to
-reject trailing bytes; it requires `b.size() - offset == Name::size()`.
+**Factory semantics:**
 
-Conversion back to a `binary` is implicit and zero-copy:
+- `Name::cast(binary b, int offset = 0)` accepts any `b` with
+  `b.size() - offset >= Name::size()` and `offset >= 0`. This is the
+  normal protocol-parser path: a header is viewed over a larger packet
+  without copying the payload. Trailing bytes after the record are
+  permitted and remain in the backing binary but are not part of the
+  span.
+- `Name::castExact(binary b, int offset = 0)` accepts any `b` with
+  `b.size() - offset == Name::size()` and `offset >= 0`. Trailing
+  bytes are rejected. Used by file-format / validation code that wants
+  no slack at the tail.
+- Both factories raise `BINDECL-SIZE-MISMATCH` on size violations and
+  on `offset < 0` or `offset > b.size()`. The same exception class
+  covers all sizing and offset failures from cast.
+
+**Conversion back to `binary` is implicit and zero-copy:**
 
 ```qore
-binary out = hdr1;          # implicit, zero-copy share of the logical record span
+binary out = hdr1;          # zero-copy share of the logical record span
 ```
 
 There is no `.toBinary()` method — the implicit assignment is the
 public surface. If the instance was cast over a larger packet, the
-assigned `binary` contains only the logical record span, not the whole
-source packet. Programmers who want a private copy use `clone()`:
+assigned `binary` contains only the logical record span (`Name::size()`
+bytes starting at `byteOffset()`), not the whole source packet.
+Programmers who want a private copy use `clone()`:
 
 ```qore
 IcmpEchoHeader copy = hdr1.clone();   # private deep-copy of the record span
@@ -383,11 +354,43 @@ BindeclDecl*        <bindecl>::getDecl()         # the decl the instance was con
 string              <bindecl>::toString()        # human-readable form for debug printing (member names + values)
 ```
 
+`byteOffset()` returns the span offset within the *current* backing
+binary. Concrete values:
+
+| Construction                          | `byteOffset()` |
+|---|---|
+| Fresh `Name()`                        | `0` (private buffer)                                    |
+| `Name::cast(b)`                       | `0`                                                     |
+| `Name::cast(b, k)`                    | `k`                                                     |
+| `Name::castExact(b)` / `(b, k)`       | `0` / `k`                                               |
+| `clone()` of any of the above         | `0` (clone always allocates a private buffer of `size()` bytes) |
+| After a mutation that triggered COW   | `0` (COW splits storage and the new buffer covers only the span) |
+
+`toHash()` returns a hash mapping member name to value, with these
+recursion rules:
+
+- Scalar primitives → their natural Qore type (`int`, `float`,
+  `bool`, `binary`, `string`).
+- Bitfields → `int`, sign-extended where the declared type is signed.
+- `string[N, encoding=...]` → `string` decoded in the declared
+  encoding (or default if unspecified).
+- Fixed scalar arrays (`<scalar>[N]`) → `list<...>` of the element
+  type.
+- Nested decl members → recursive `toHash()` of the nested instance.
+- Fixed nested-decl arrays → `list<hash<auto>>`.
+
+`toHash()` is lossy by design (encoding info, bit positions, and
+signed/unsigned attributes are dropped); for round-trip use
+`Serializable::serializeToData()` instead.
+
 The `cast(...)` and `castExact(...)` factories are **not**
-pseudo-methods on `<bindecl>` because there is no instance to dispatch on
-— they are static methods on each individual `bindecl` type, parallel to
-how class static methods work. The implementation registers them once per
-decl at decl-creation time.
+pseudo-methods on `<bindecl>` because there is no instance to dispatch
+on — they are static methods on each individual `bindecl` type,
+parallel to how class static methods work. The implementation
+registers them once per decl at decl-creation time. Reflection over
+the decl exposes them through the `BindeclDecl` reflection surface
+the same way class static methods are exposed via `Class` reflection
+today (see §5.6).
 
 ### 2.6 Type system
 
@@ -465,140 +468,61 @@ the byte ranges cannot overlap.
 
 ---
 
-## 3. The typed FFI module
+## 3. Integration note: typed FFI / syscall gateway
 
-### 3.1 Why this is a separate, layered piece
+The user's original framing paired binary structures with a "syscall
+gateway." The right shape for that capability is a separate
+**libffi-based typed FFI module**, with raw `syscall(2)` as a thin
+specialization on top — not a peer to `bindecl`, but a consumer of it.
+That module is **out of scope for this design** and gets its own
+design-pending document. This section records only the integration
+constraints `bindecl` v1 must satisfy so the FFI follow-up can land
+without a second redesign of `bindecl`.
 
-Section 1 of the conversation that motivated this design considered a
-"syscall gateway" as a peer to binary structures. The right level for
-that capability is *typed FFI* (libffi-based), with raw `syscall(2)` as
-a thin specialization on top, because:
+**Why FFI is the right primitive (not raw syscall).** Direct `syscall(2)`
+is non-portable (numbers differ across kernels and architectures),
+ABI-fragile (libc's argument marshalling is bypassed), and a giant
+sandbox hole. libffi-based FFI is portable, calling-convention-aware,
+and covers the common case (libc functions like `mlock`,
+`posix_madvise`, `setrlimit`) plus the rare case (newer Linux syscalls
+without libc wrappers — `io_uring_*`, `pidfd_*`, `landlock_*`) as a
+thin specialization.
 
-1. **Portability.** Linux syscalls are not portable; libffi-based
-   FFI is. A program that needs `kqueue` on macOS, `epoll` on Linux,
-   and `IOCP` on Windows can express each with the same FFI
-   primitives, while a `syscall(2)` gateway works only on Linux.
-2. **ABI safety.** Direct `syscall(2)` calls bypass libc's argument
-   marshalling, including subtle things like the 6th-argument
-   stack-vs-register conventions on some platforms and the
-   syscall-number variation across architectures.
-3. **Coverage.** Most "I want to call something the standard library
-   doesn't expose" use cases are *libc functions* (`mlock`,
-   `posix_madvise`, `setrlimit`, etc.) rather than raw syscalls.
-4. **Composition with `bindecl`.** Argument and return buffers for
-   `ioctl`, `setsockopt`, `getrusage`, `clock_gettime`, etc. are
-   exactly the kind of fixed-layout record `bindecl` describes. The
-   FFI layer takes a `bindecl` instance and passes its buffer pointer
-   straight through to C — no intermediate marshalling.
+**What `bindecl` must give the FFI layer:**
 
-### 3.2 Illustrative surface
+- A stable C-pointer view into a record's backing buffer, exposed via
+  a `BindeclInstance` API the FFI layer can call to get a `void*` plus
+  byte length plus refcount-keepalive.
+- A way to construct a fresh zero-initialized instance for "out"
+  arguments (covered by the no-arg constructor in §2.5).
+- Stable `byte_offset` semantics so the FFI layer can pass either a
+  whole-binary span or a sub-record without copying.
+- The `endian=native` and `align=` attributes for cases where the
+  programmer asserts host-ABI layout. Note: these alone are not
+  sufficient to *prove* C-struct compatibility; see §10.5.
 
-The follow-up FFI module would expose one C-function-handle class plus
-library loading:
+**What FFI owns, not `bindecl`:**
 
-```qore
-%requires ffi
+- C ABI type aliases (`c_long`, `size_t`, `ssize_t`, `ptrdiff_t`,
+  `time_t`, pointer-sized integer types).
+- Platform-specific layout validation (`sizeof`, `_Alignof`, `offsetof`
+  cross-checks against the target platform).
+- Pointer-bearing C structs (`struct iovec`, `struct sigaction`,
+  callback tables) — `bindecl` describes byte layout, not pointer
+  semantics; the FFI layer represents pointer fields in its own
+  signature/type system and lets them point at `bindecl` spans,
+  `binary` buffers, or callback trampolines with explicit lifetime
+  rules.
+- Calling conventions, varargs, struct-by-value rules, callback
+  trampolines from Qore to C, asynchronous completion integration.
+- Per-import sandboxing — arbitrary user-declared FFI imports run as
+  `QDOM_UNCONTROLLED_API`; trusted wrapper modules with audited fixed
+  imports may declare narrower domains
+  (see [`design/module-sandboxing-audit-guide.md`](../design/module-sandboxing-audit-guide.md)).
 
-# Load a shared library (or use the program's own symbol table)
-FfiLibrary libc = new FfiLibrary("libc.so.6");
-
-# Declare a function signature — types use bindecl/buffer/primitive forms
-FfiFunction getrlimit_fn = libc.declare(
-    "getrlimit",
-    FfiSignature::make(
-        FfiTypes::int,                                      # return type
-        (FfiTypes::int, FfiTypes::pointer<RLimitStruct>)    # argument types
-    )
-);
-
-# bindecl describes the byte layout after ABI validation has confirmed
-# that the host's struct rlimit uses two native-endian 64-bit fields.
-bindecl RLimitStruct [align=8, endian=native] {
-    uint64 rlim_cur;
-    uint64 rlim_max;
-}
-
-# Call
-RLimitStruct lim();
-int rc = getrlimit_fn.call(RLIMIT_NOFILE, lim);
-printf("soft=%d hard=%d\n", lim.rlim_cur, lim.rlim_max);
-```
-
-This example is intentionally simple. `bindecl` itself only describes
-fixed byte layout. The FFI layer must supply C ABI aliases such as
-`c_long`, `size_t`, `ssize_t`, `ptrdiff_t`, `time_t`, pointer-sized
-integer types, and platform calling conventions. It also needs validation
-helpers that compare a Qore declaration against `sizeof`, `_Alignof`, and
-`offsetof` data generated or queried for the target platform. Without
-that validation, `align=8` is only a Qore layout policy, not proof that a
-C compiler will lay out a struct the same way.
-
-Pointer-bearing C structs (`struct iovec`, many `struct sigaction`
-variants, callback tables, etc.) are not pure `bindecl` records in v1.
-The FFI design should represent pointer fields in its own signature/type
-layer and allow them to point at `bindecl` spans, `binary` buffers, or
-managed callback trampolines with explicit lifetime rules.
-
-### 3.3 Sandboxing
-
-FFI is `QDOM_UNCONTROLLED_API` in the strictest sense — code calling
-arbitrary C functions can do anything libc can do. The FFI module
-self-declares this domain, so any program with `%no-uncontrolled-api`
-(or running with that domain stripped) cannot load it.
-
-For finer-grained control, only trusted wrapper modules should be able
-to bind fixed imports to narrower domains. For example, a future
-`posix-fs` module can declare its audited FFI imports under
-`QDOM_FILESYSTEM` so that programs with only that domain permitted can
-use the wrapper without unlocking arbitrary FFI. User-authored dynamic
-FFI declarations remain `QDOM_UNCONTROLLED_API`.
-
-This matches the existing module-domain model — see
-[`design/module-sandboxing-audit-guide.md`](../design/module-sandboxing-audit-guide.md).
-
-### 3.4 The raw syscall path
-
-A small `linux-syscall` submodule sits on top of FFI for the cases
-where libc has no wrapper. It exposes a single `syscall(num, args...)`
-primitive with `bindecl`-aware argument marshalling:
-
-```qore
-%requires linux-syscall
-
-bindecl IoUringParams [align=8, endian=native] {
-    uint32 sq_entries;
-    uint32 cq_entries;
-    uint32 flags;
-    # ...
-}
-
-IoUringParams params();
-int fd = linux_syscall(SYS_io_uring_setup, 256, params);
-```
-
-Syscall numbers come from a per-architecture constants module
-(`linux-syscall-amd64`, `linux-syscall-arm64`, ...) rather than being
-inlined, so cross-architecture programs can choose the right set at
-load time.
-
-This submodule self-declares `QDOM_UNCONTROLLED_API` plus
-`QDOM_PROCESS` (because most syscalls without libc wrappers are
-process- or kernel-state-affecting).
-
-### 3.5 What this proposal does **not** specify
-
-Concrete C type encoding for FFI (varargs, struct-by-value across
-platforms, callback function pointers from Qore back to C, asynchronous
-completion via `libffi` plus Qore's existing scheduling primitives)
-needs its own design pass. This document only specifies that:
-
-- The FFI module is the right layer.
-- Its argument/return marshalling integrates with `bindecl`.
-- Its sandboxing follows the module-domain model.
-
-The full FFI design is deferred to a follow-up doc;
-this section exists so the reviewer can confirm that `bindecl` is
-designed to compose with it cleanly.
+**Effort accounting.** This document estimates only the
+`bindecl`-side work. Effort for the FFI module itself belongs in the
+FFI design and is not counted in §11.
 
 ---
 
@@ -662,14 +586,18 @@ exploit payloads is just a `bindecl` declaration.
 ### 5.1 Lexer (`lib/scanner.lpp`)
 
 - New keyword: `bindecl`.
-- New keywords for primitive layout types: `uint8`/`uint16`/`uint32`/
-  `uint64`/`int8`/`int16`/`int32`/`int64`/`float32`/`float64`/`bool8`,
-  plus `byte`, `string`, and `zstring` in bindecl member-type position.
-  These are *only* recognized inside `bindecl` member declarations to
-  avoid colliding with user identifiers — see §10.6 for the mechanism.
-- No `view` or `reinterpret` keyword is introduced in v1. Zero-copy views
-  are expressed by `Name::cast(binary, offset)`, and type-punning remains
-  a future extension.
+- New context-sensitive keywords for primitive layout types: `uint8`/
+  `uint16`/`uint32`/`uint64`/`int8`/`int16`/`int32`/`int64`/`float32`/
+  `float64`/`bool8`/`byte`/`zstring`. These are *only* recognized
+  inside `bindecl` member declarations to avoid colliding with user
+  identifiers — see §10.6 for the mechanism.
+- The existing global `string` keyword gains a new use inside `bindecl`
+  member position (the `string[N, encoding=...]` form). It is **not**
+  context-sensitive — `string` is already a Qore type keyword
+  everywhere — so the lexer requires no new state for it.
+- No `view` or `reinterpret` keyword is introduced in v1. Zero-copy
+  views are expressed by `Name::cast(binary, offset)`, and type-punning
+  remains a future extension.
 
 ### 5.2 Parser (`lib/parser.ypp`)
 
@@ -746,6 +674,11 @@ The wire-format and on-disk concerns of AOT/IR are split into §6
   reflection. Member iteration is always-available (no domain gate);
   full reflection across the program's decl table goes through the
   `reflection` module under `QDOM_REFLECTION` as today.
+- The `cast(...)` / `castExact(...)` static factories appear in the
+  `BindeclDecl` reflection surface as static methods — `getStaticMethod()`
+  / `getStaticMethods()` analogue — the same way `Class` reflection
+  exposes class static methods today. This lets QLS / qore-doc / hover
+  tooling discover and document them without hard-coding the names.
 
 ### 5.7 AST parser module mirror
 
@@ -760,8 +693,10 @@ and document `bindecl` declarations.
 - Recognise the `bindecl` keyword (mirror of `TOK_BINDECL`).
 - Recognise the context-sensitive primitive type keywords (`uint8`,
   `int8`, `uint16`, `int16`, `uint32`, `int32`, `uint64`, `int64`,
-  `float32`, `float64`, `bool8`, `byte`, `string`, `zstring`) inside
-  `bindecl { ... }` blocks; outside, they remain identifiers.
+  `float32`, `float64`, `bool8`, `byte`, `zstring`) inside
+  `bindecl { ... }` blocks; outside, they remain identifiers. The
+  existing global `string` keyword is reused unchanged inside bindecl
+  member position; no new lexer state is needed for it.
 - Doc-comment claim/attach handling for `bindecl` (mirror of the
   `ATTACH_HASHDECL_DOC_COMMENT` macro at `ast_parser.ypp:204`).
 
@@ -865,7 +800,7 @@ declared in `lib/QC_Serializable.qpp` and used by
 | `_decl`      | `string` | Fully-qualified namespace path of the `BindeclDecl`    |
 | `_module`    | `*string` | Module that supplied the decl (NOTHING for in-program decls) |
 | `_data`      | `binary` | Logical record-span bytes (exactly `<bindecl>::size()` bytes) |
-| `_layout_hash` | `*int` | Optional 32-bit layout fingerprint for drift detection |
+| `_layout_hash` | `*int` | Optional 64-bit layout fingerprint for drift detection (low 32 bits = computed hash, high 32 bits = 0; NOTHING means "not computed"; `0` is a legal hash value) |
 
 `QoreSerializable::serializeValue` gains a new dispatch arm for
 `NT_BINDECL_INSTANCE` that calls a new
@@ -899,10 +834,21 @@ self-description — but it's the form most protocol code wants. The two
 forms coexist; programmers pick based on whether the consumer is
 type-aware.
 
-**Layout fingerprint.** A 32-bit hash over `(decl_name, ordered list
-of (member_name, type_code, offset, width, endian, array_count, encoding,
-nested_decl_path, bitfield_params), total_size, align, bitorder)` catches
-accidental decl drift between serializer and deserializer. Computed once
+**Layout fingerprint.** A 32-bit hash over `(decl_name, record_endian,
+align, bitorder, total_size, ordered list of (member_name, type_code,
+offset, width, endian, array_count, encoding, nested_decl_path,
+bitfield_params))` catches accidental decl drift between serializer
+and deserializer. The record-level `endian` and `bitorder` axes are
+included independently of per-field overrides because changing the
+record-level default flips the bytes-on-disk meaning for any
+non-overridden field.
+
+Stored as a 64-bit signed Qore `int` whose low 32 bits hold the
+computed hash; the high 32 bits are zero in v1, reserved for a future
+widening to 64-bit. `NOTHING` means "fingerprint not computed";
+numeric `0` is a legal hash value.
+
+Computed once
 at decl finalization, stored on `BindeclDecl`, included in `_layout_hash`
 by default. Disabling it (`Serializable` flag bit) is allowed for
 performance but discouraged.
@@ -921,7 +867,8 @@ against `include/qore/intern/QoreAOTBinary.h:90–112`; bits 0–20 taken,
 
 **New QORD section type — `BINDECL_DECL`.** The section id must be
 claimed at implementation time from `QoreAOTSectionType`; in the current
-tree, id 21 is already `BUILD_INFO`, so the next candidate is 22. Section
+tree (`include/qore/intern/QoreAOTBinary.h:115–137`), ids 1–21 are
+taken (21 = `BUILD_INFO`), so the next candidate is **22**. Section
 payload per declaration:
 
 ```
@@ -929,10 +876,10 @@ u32  decl_id_in_blob
 str  fully_qualified_path                   # "Net::Icmp::IcmpEchoHeader"
 str  module_name                            # NOTHING-marker if in-program
 u32  total_size_bytes                       # static size
-u8   layout_kind                            # 0 = static; other values reserved for v2
-u8   bitorder                               # 0 = msb-first, 1 = lsb-first
+u8   layout_kind                            # 0 = static; v1 readers MUST reject any non-zero value
+u8   record_endian                          # 0 = big, 1 = little, 2 = native, 3 = unset
+u8   bitorder                               # 0 = msb-first, 1 = lsb-first, 2 = unset
 u8   align                                  # 0 = packed, log2 byte alignment otherwise
-u8   reserved
 u32  layout_hash                            # 32-bit fingerprint (see §6.1)
 u32  member_count
 member[member_count]:
@@ -942,21 +889,34 @@ member[member_count]:
     u32  byte_offset
     u16  width_bits                         # for bitfields; 0xFFFF for non-bitfield
     u16  bit_offset_in_parent                # for bitfields; 0xFFFF otherwise
-    u8   endian                             # 0 = big, 1 = little, 2 = native
+    u8   endian                             # 0 = big, 1 = little, 2 = native, 3 = inherit-from-record
     str  encoding                           # for string/zstring members; "" otherwise
     u32  nested_decl_ref                    # decl_id of nested bindecl, or 0xFFFFFFFF
     u32  array_count                        # 0 for scalar, >0 for fixed array
     u8   reserved_member_flags              # 0 in v1
 ```
 
+**Forward-compatibility discipline for `layout_kind`.** v1 readers
+reject any blob whose `layout_kind` is non-zero. Any v2 expansion
+(variable-tail records, etc.) **must** be paired with a new feature
+flag bit so v1 readers reject the whole blob via the existing
+flag-mask check before they attempt per-section validation. This
+guarantees that a v2 producer cannot feed garbage to a v1 reader by
+exploiting the reserved field.
+
 **Member-type code table.** Stable numeric IDs assigned at language
 spec time; never reordered. `0x01..0x10` cover scalar primitives
 (`uint8`/`int8`/.../`float64`/`bool8`); `0x20..0x2F` cover composite
 forms (`byte[N]`, `string[N,enc]`, `zstring[N]`, scalar arrays,
-nested-decl, nested-decl-array). The table itself is part of the language
-spec, not the QORD format, and adding a new member-type code is an
-additive change gated by a future feature bit if older bindecl-aware
-runtimes cannot safely ignore it.
+nested-decl, nested-decl-array). The table itself is part of the
+language spec, not the QORD format. A new member-type code is
+**safely-ignorable** if its on-disk shape (the size of the per-member
+tuple above) is unchanged, in which case it can be added under the
+existing `QORE_AOT_FEAT_BINDECL` flag — older readers parse the
+member record correctly even though they don't understand the new
+type code, fail clean at type-system time, and emit a clear "unknown
+member type code N" diagnostic. Any change that alters the per-member
+tuple shape **must** claim a new feature flag bit.
 
 **Decl ID stability across blobs.** `decl_id_in_blob` is per-blob and
 is resolved at load time to a `const BindeclDecl*` via the same
@@ -1117,7 +1077,7 @@ working unchanged. The flag exists for the rare program that uses one
 of the new identifiers as an existing variable or function name.
 
 `%enable-bindecl` is **not** introduced; the feature is on by default
-(the open-question §12.1 deferred this and recommended no gate, and
+(decision #1 in §12 deferred this and recommended no gate, and
 the parse option provides the necessary opt-out for compatibility).
 
 ---
@@ -1135,7 +1095,7 @@ The interesting interactions are:
   source `binary` size, and out-of-range casts fail before member access.
   Layout fingerprint mismatch (per §6.1) catches drift between serializer
   and deserializer at the point of construction.
-- **FFI** is `QDOM_UNCONTROLLED_API` per §3.3 for arbitrary user-declared
+- **FFI** is `QDOM_UNCONTROLLED_API` per §3 for arbitrary user-declared
   imports. Narrower domains are only appropriate for audited wrapper
   modules with fixed imports; the layered syscall/library access is what
   gates dangerous behaviour, not the layout descriptor.
@@ -1167,9 +1127,15 @@ smaller (we save the boxing and the dispatch into the module) but the
 *development cost* is the place this design pays off, not the runtime
 cost.
 
-Memory overhead is small but not literally zero: a `BindeclInstance` is a
-wrapper around a shared `BinaryNode`, a byte offset, a byte length, and a
-decl pointer. The record bytes themselves are not copied.
+Memory overhead per instance is the wrapper only: `BinaryNode*` (8) +
+byte offset (4) + byte length (4) + `const BindeclDecl*` (8) +
+refcount (8) ≈ 32 bytes plus allocator overhead. The record bytes
+themselves are not copied.
+
+For high-frequency parsing (e.g. one cast per packet on a hot
+network connection) the per-cast wrapper allocation is the real
+cost, not the wrapper bytes. A future optimization can pool
+`BindeclInstance` wrappers per-thread; v1 does not need it.
 
 ---
 
@@ -1259,11 +1225,22 @@ code that has identifiers with those names. Two-layer mitigation:
    context-sensitive) opt out of the entire feature. The flag is
    checked at the lexer level so the keyword is never elevated.
 
-The verification step before merging the parser changes: re-run the
-full Qore test suite plus a targeted scan of qlib for any identifier
-matching the new keyword set. Any user-module identifier that
-collides becomes a release-note migration item with the
-`%no-bindecl` workaround.
+The verification step before merging the parser changes:
+
+1. Re-run the full Qore test suite.
+2. Concrete keyword-collision scan:
+
+   ```
+   git grep -nwE 'bindecl|uint8|int8|uint16|int16|uint32|int32|uint64|int64|float32|float64|bool8|byte|zstring' \
+       -- '*.q' '*.qm' '*.qc' '*.qpp' '*.qtest' \
+       | grep -vE '^[^:]+:[0-9]+:\s*#'
+   ```
+
+   The output is finite and reviewable. Any user-module identifier
+   that collides becomes a release-note migration item with the
+   `%no-bindecl` workaround. (`bindecl` itself is not
+   context-sensitive; the primitive type keywords are, so collisions
+   outside `bindecl { ... }` blocks are harmless.)
 
 ### 10.7 AOT decl dependency surface
 
@@ -1297,13 +1274,17 @@ implementation review against the relevant memory entries
 | **Total (sequential)**                                                    | **~12-15 weeks**       |
 | **Total (parallel, 2 developers)**                                        | **~8-10 weeks**        |
 
-The FFI module is a separate effort estimated at **6-10 weeks** on top,
-including libffi integration, ABI aliases and layout validation, calling
-convention testing across x86_64 / aarch64 / arm32, callback support,
-pointer lifetime rules, and sandbox plumbing. The `linux-syscall`
-submodule is **1-2 weeks** on top of FFI.
+The FFI module is a **separate design** with its own effort estimate;
+it is not counted here. The bindecl-side integration shim it consumes
+(stable C-pointer view + keepalive, sub-record span exposure) is
+already within this estimate as part of the runtime line item. The
+full FFI module — libffi integration, ABI aliases and layout
+validation, calling convention testing across x86_64 / aarch64 /
+arm32, callback trampolines, pointer lifetime rules, sandbox
+plumbing — and the `linux-syscall` submodule both belong in their
+own design-pending file.
 
-These are independent of, and complementary to,
+This estimate is independent of, and complementary to,
 [`plugin-types-and-dense-data.md`](plugin-types-and-dense-data.md).
 
 The estimate is lower than the broader draft because v1 now excludes
@@ -1344,48 +1325,89 @@ The v1 implementation is not complete without targeted qtests covering:
 
 ---
 
-## 12. Open questions
+## 12. Decisions log and remaining open questions
 
-1. ~~**Initial gating.**~~ **Decided:** No `%enable-bindecl` gate.
-   Backwards compatibility is provided by `%no-bindecl` /
-   `PO_NO_BINDECL` (§7.1) for programs with identifier collisions.
+### Decisions made during review
 
-2. ~~**Variable-length tail in v1?**~~ **Decided:** defer to v2.
-   `byte[length=member-name]` syntax in §2.2 remains the likely future
-   shape for TLS records, ZIP local headers, MQTT publish, and DNS
-   messages, but v1 keeps `size()` and all member offsets constant.
+The following design questions were posed during review and have been
+decided. They are recorded here as a quick reference; the substantive
+text lives in the indicated sections.
 
-3. ~~**Unbounded `zstring`?**~~ **Decided:** defer with variable tails.
-   A `zstring` member without a declared size scans for a NUL terminator
-   at runtime and adds another runtime-size dimension. Static-bound
-   `zstring[N]` is enough for v1.
+| # | Question                                                           | Decision                                                  | Section |
+|---|---|---|---|
+| 1 | Initial parse-option gate (`%enable-bindecl`)?                     | No gate; `%no-bindecl` provides opt-out                  | §7.1     |
+| 2 | Variable-length tail records in v1?                                | Defer to v2; sketched in §12.9                            | §2.2     |
+| 3 | Unbounded `zstring`?                                               | Defer to v2 with variable tails                           | §2.2     |
+| 4 | `reinterpret<T>` operator between same-size decls?                 | Defer to v2; workaround uses binary→cast                  | §12.7    |
+| 5 | JSON-style debug printing                                          | Include `<bindecl>::toHash()` and `toString()` in v1      | §2.5     |
+| 6 | `Serializable` / `BinaryInputStream` integration                   | Explicit `Serializable` support in v1                     | §6.1     |
+| 7 | Endian-default policy                                              | Explicit-required, no implicit default                    | §10.2    |
 
-4. ~~**`reinterpret<T>(buffer)` between `bindecl` types of identical
-   size.**~~ **Decided:** defer to v2. It is useful for switching
-   between protocol views of the same byte range, but v1 should not add
-   another keyword or conversion rule. v1 code can use explicit binary
-   assignment followed by `OtherDecl::cast(...)`.
+### 12.7 `reinterpret<T>` workaround performance
 
-5. ~~**JSON-style debug printing.**~~ **Decided:** include
-   `<bindecl>::toHash()` and `<bindecl>::toString()` in v1.
-   `toHash()` plus the existing JSON formatter handles ad-hoc debugging;
-   `toString()` should include field names, values, and offsets.
+The v1 workaround for type-punning between same-size decls is a binary
+round-trip:
 
-6. ~~**Integration with `Serializable` / `BinaryInputStream`.**~~
-   **Decided:** include explicit `Serializable` support in v1. A
-   `bindecl` instance is also binary-compatible on the wire, so
-   `BinaryOutputStream::write(bindecl_instance)` should Just Work through
-   the existing implicit `binary` path when the consumer already knows
-   the declaration.
+```qore
+binary tmp = a;                   # zero-copy span share
+B b = B::cast(tmp);               # one new BindeclInstance wrapper
+```
 
-7. ~~**Endian-default policy.**~~ **Decided:** explicit-required in v1.
-   The stricter rule is easy to relax later but impossible to tighten
-   once code depends on an implicit default.
+This costs one extra `BindeclInstance` allocation and one extra span
+resolution per type-pun (the underlying `BinaryNode` is shared
+throughout — no buffer copy). On hot paths a future
+`reinterpret<T>` would replace this with a single in-place
+re-tagging; until then, code that type-puns frequently (e.g.
+multi-version protocol parsers) should hoist the `cast` out of the
+inner loop where possible.
 
-8. **Full FFI ABI type mapping.** Deferred to the FFI design. `bindecl`
-   must stay compatible with native ABI validation, but it should not
-   itself define C typedef aliases, pointer lifetimes, callback
-   trampolines, varargs, or struct-by-value calling rules.
+### 12.8 Open question — full FFI ABI type mapping
+
+Deferred to the FFI design. `bindecl` must stay compatible with native
+ABI validation, but it should not itself define C typedef aliases,
+pointer lifetimes, callback trampolines, varargs, or struct-by-value
+calling rules.
+
+### 12.9 v2 sketch — variable-length tail records
+
+Documented here so the v2 work has a starting point and the v1 design
+constraints (`byte_length == size()` invariant, `layout_kind = 0`,
+forward-compat feature flag) are the right shape to extend.
+
+Likely future syntax — a member whose length is determined by another
+in-record integer member:
+
+```qore
+bindecl ZipLocalFileHeader [endian=little, bitorder=lsb-first] {
+    uint32 signature;
+    # ...
+    uint16 filename_length;
+    uint16 extra_field_length;
+    byte   [length=filename_length]      filename;
+    byte   [length=extra_field_length]   extra_field;
+}
+```
+
+Constraints:
+
+- The length-source member must precede the length-driven member in
+  declaration order, and must be of an unsigned integer type.
+- Length-driven members must form a contiguous tail; a fixed-position
+  member after a length-driven one is a parse error.
+- The compiler emits a runtime size formula and runtime offset
+  formulas for any subsequent length-driven members.
+- `<bindecl>::size()` becomes a small calculation rather than a
+  constant; the verifier marks it side-effect-free but not constant.
+- Construction must define whether length-source fields are immutable,
+  whether changing them resizes the underlying buffer, and whether
+  variable-tail records can be default-constructed without explicit
+  tail sizes.
+- `Name::cast(binary, offset)` evaluates the size formulas against
+  the actual bytes; mismatch raises `BINDECL-SIZE-MISMATCH` with the
+  computed expected size.
+- AOT QORD `layout_kind = 1` plus a new `QORE_AOT_FEAT_BINDECL_VARTAIL`
+  feature flag bit so v1 readers reject v2 blobs cleanly via the
+  flag-mask check (per §6.2).
 
 ---
 
