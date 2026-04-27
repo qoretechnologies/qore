@@ -749,6 +749,105 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             delete wsc;
         }
 
+        # Test 2a: HTTP/2 automatic client heartbeat
+        {
+            Counter got_pong(1);
+            Mutex pong_mutex();
+            bool seen_pong = False;
+            code cb = sub (*data msg) {};
+            code pong_cb = sub (*data msg) {
+                AutoLock al(pong_mutex);
+                if (!seen_pong) {
+                    seen_pong = True;
+                    got_pong.dec();
+                }
+            };
+            hash<auto> opts = {
+                "url": "wss://localhost:" + h2info.port,
+                "logger": logger,
+                "http_version": "2.0",
+                "heartbeat": 200ms,
+                "pong_callback": pong_cb,
+                "ssl_verify_cert": False,
+            };
+            WebSocketClient wsc(cb, opts);
+            try {
+                wsc.connect();
+                assertTrue(wsc.isHttp2(), "WebSocket should connect over HTTP/2");
+                int rc = got_pong.waitForZero(5s);
+                assertEq(0, rc, "HTTP/2 automatic heartbeat should receive a PONG");
+                wsc.disconnect();
+            } catch (hash<ExceptionInfo> ex) {
+                assertTrue(False, sprintf("HTTP/2 automatic heartbeat test failed: %s: %s", ex.err, ex.desc));
+            }
+            delete wsc;
+        }
+
+        # Test 2b: HTTP/2 client idle timeout
+        {
+            Counter closed(1);
+            Mutex close_mutex();
+            bool seen_close = False;
+            code cb = sub (*data msg) {
+                if (!exists msg) {
+                    AutoLock al(close_mutex);
+                    if (!seen_close) {
+                        seen_close = True;
+                        closed.dec();
+                    }
+                }
+            };
+            hash<auto> opts = {
+                "url": "wss://localhost:" + h2info.port,
+                "logger": logger,
+                "http_version": "2.0",
+                "heartbeat": 0,
+                "idle_timeout": 500ms,
+                "ssl_verify_cert": False,
+            };
+            WebSocketClient wsc(cb, opts);
+            try {
+                wsc.connect();
+                assertTrue(wsc.isHttp2(), "WebSocket should connect over HTTP/2");
+                int rc = closed.waitForZero(5s);
+                assertEq(0, rc, "HTTP/2 idle timeout should close the client");
+                assertEq("idle-timeout", wsc.getAsyncCloseCause(),
+                    "HTTP/2 idle timeout should surface the close cause");
+                try { wsc.disconnect(); } catch () {}
+            } catch (hash<ExceptionInfo> ex) {
+                assertTrue(False, sprintf("HTTP/2 idle-timeout test failed: %s: %s", ex.err, ex.desc));
+            }
+            delete wsc;
+        }
+
+        # Test 2c: HTTP/2 automatic server heartbeat
+        {
+            int old_heartbeat = wsHandler.getHeartbeat();
+            wsHandler.setHeartbeat(1);
+            on_exit wsHandler.setHeartbeat(old_heartbeat);
+
+            MyObserver observer();
+            WebSocketClientWithSerialization wsc({
+                "url": "wss://localhost:" + h2info.port,
+                "logger": logger,
+                "http_version": "2.0",
+                "heartbeat": 0,
+                "data": "none",
+                "raise_ping_events": True,
+                "ssl_verify_cert": False,
+            });
+            wsc.registerObserver(observer);
+            wsc.observersReady();
+            try {
+                assertTrue(wsc.isHttp2(), "WebSocket should connect over HTTP/2");
+                observer.wait(EVENT_WS_PING);
+                wsc.disconnect();
+            } catch (hash<ExceptionInfo> ex) {
+                try { wsc.disconnect(); } catch () {}
+                assertTrue(False, sprintf("HTTP/2 server heartbeat test failed: %s: %s", ex.err, ex.desc));
+            }
+        }
+
         # Test 3: Verify isHttp2() method
         {
             code cb = sub (*data msg) {};

@@ -1145,8 +1145,26 @@ class WebSocketStreamProcessor {
         */
         Mutex close_lock();
 
-        #! Timestamp of last recv activity for heartbeat
-        int last_recv_timestamp;
+        #! Timestamp of last inbound frame activity for heartbeat in milliseconds
+        int last_recv_ms;
+
+        #! Timestamp of last heartbeat PING sent in milliseconds
+        int last_ping_ms = 0;
+
+        #! Mutex protecting heartbeat timer state
+        Mutex heartbeat_mutex();
+
+        #! Heartbeat interval in seconds
+        softint heartbeat_s = 0;
+
+        #! Heartbeat PING payload
+        data heartbeat_msg = "";
+
+        #! Async I/O controller timer ID for heartbeat checks
+        *int heartbeat_timer_id;
+
+        #! Timer generation used to ignore stale callbacks after reschedule/cancel
+        int heartbeat_generation = 0;
 
         #! True when the stream has been closed
         /** Protected by @ref close_lock, not @ref process_mutex. */
@@ -1158,7 +1176,7 @@ class WebSocketStreamProcessor {
         self.wsc = wsc;
         self.handler = handler;
         self.done = done;
-        self.last_recv_timestamp = clock_getmillis() / 1000;
+        self.last_recv_ms = clock_getmillis();
     }
 
     #! Atomic check-and-set: marks the stream closed and decrements @ref done exactly once
@@ -1174,6 +1192,7 @@ class WebSocketStreamProcessor {
             }
             closed = True;
         }
+        cancelHeartbeatTimer();
         done.dec();
         return True;
     }
@@ -1221,7 +1240,7 @@ class WebSocketStreamProcessor {
                     }
                     return;
                 }
-                last_recv_timestamp = clock_getmillis() / 1000;
+                noteRecvActivity();
                 string type = frame.type;
                 if (type == "close") {
                     markClosedOnce();
@@ -1288,27 +1307,40 @@ class WebSocketStreamProcessor {
         return isClosed();
     }
 
+    #! Starts timer-driven heartbeat PINGs for H2/H3 WebSocket streams
+    /** Uses AsyncSocketIoController timers and sends a PING only when no
+        inbound WebSocket frame has arrived within the heartbeat interval.
+    */
+    startHeartbeat(softint heartbeat_s, data heartbeat_msg) {
+        AutoLock al(heartbeat_mutex);
+        self.heartbeat_s = heartbeat_s;
+        self.heartbeat_msg = heartbeat_msg;
+        rescheduleHeartbeatTimerLocked();
+    }
+
     #! Sends a heartbeat ping if needed
-    /** Called by a timer callback.
+    /** Sends a PING only when no inbound frame has arrived within the given
+        interval. This method is kept for compatibility; timer-driven H2/H3
+        heartbeat uses the same traffic accounting via handleHeartbeatTimer().
     */
     sendHeartbeat(int heartbeat_s, data heartbeat_msg) {
-        # Check closed state without acquiring process_mutex
-        if (isClosed()) {
-            return;
-        }
-        AutoLock al(process_mutex);
-        if (isClosed()) {
-            return;
-        }
-        int now = clock_getmillis() / 1000;
-        if ((now - last_recv_timestamp) >= heartbeat_s) {
-            *AsyncSocketIo::AbstractStreamContext ctx = wsc.getStreamContext();
-            if (ctx) {
-                try {
-                    ctx.sendData(ws_encode_message(heartbeat_msg, WSOP_Ping));
-                } catch () {}
+        bool send_ping = False;
+        {
+            AutoLock al(heartbeat_mutex);
+            if (closed || heartbeat_s <= 0) {
+                return;
             }
-            last_recv_timestamp = now;
+            int interval_ms = heartbeat_s * 1000;
+            int now = clock_getmillis();
+            if ((now - last_recv_ms) >= interval_ms
+                    && (!last_ping_ms || (now - last_ping_ms) >= interval_ms)) {
+                last_ping_ms = now;
+                send_ping = True;
+            }
+        }
+
+        if (send_ping) {
+            sendHeartbeatFrame(heartbeat_msg);
         }
     }
 
@@ -1332,6 +1364,99 @@ class WebSocketStreamProcessor {
             try {
                 ctx.sendData(ws_encode_message("", WSOP_Close));
             } catch () {}
+        }
+    }
+
+    private noteRecvActivity() {
+        AutoLock al(heartbeat_mutex);
+        last_recv_ms = clock_getmillis();
+        rescheduleHeartbeatTimerLocked();
+    }
+
+    private cancelHeartbeatTimer() {
+        AutoLock al(heartbeat_mutex);
+        cancelHeartbeatTimerLocked();
+    }
+
+    private rescheduleHeartbeatTimerLocked() {
+        cancelHeartbeatTimerLocked();
+        if (closed || heartbeat_s <= 0) {
+            return;
+        }
+
+        int interval_ms = heartbeat_s * 1000;
+        int now = clock_getmillis();
+        int heartbeat_base_ms = last_recv_ms > last_ping_ms ? last_recv_ms : last_ping_ms;
+        int delay_ms = interval_ms - (now - heartbeat_base_ms);
+        if (delay_ms < 1) {
+            delay_ms = 1;
+        }
+
+        int generation = heartbeat_generation;
+        AsyncSocketIo::AsyncSocketIoController controller =
+            AsyncSocketIo::getGlobalAsyncIoController();
+        heartbeat_timer_id = controller.addTimer(now_us() + milliseconds(delay_ms),
+            sub () { self.handleHeartbeatTimer(generation); });
+    }
+
+    private cancelHeartbeatTimerLocked() {
+        ++heartbeat_generation;
+        if (heartbeat_timer_id) {
+            try {
+                AsyncSocketIo::AsyncSocketIoController controller =
+                    AsyncSocketIo::getGlobalAsyncIoController();
+                controller.cancelTimer(heartbeat_timer_id);
+            } catch (hash<ExceptionInfo> ex) {
+            }
+            remove heartbeat_timer_id;
+        }
+    }
+
+    private handleHeartbeatTimer(int generation) {
+        bool send_ping = False;
+        data msg;
+
+        {
+            AutoLock al(heartbeat_mutex);
+            if (generation != heartbeat_generation || closed || heartbeat_s <= 0) {
+                return;
+            }
+            remove heartbeat_timer_id;
+
+            int interval_ms = heartbeat_s * 1000;
+            int now = clock_getmillis();
+            if ((now - last_recv_ms) >= interval_ms
+                    && (!last_ping_ms || (now - last_ping_ms) >= interval_ms)) {
+                last_ping_ms = now;
+                msg = heartbeat_msg;
+                send_ping = True;
+            }
+        }
+
+        if (send_ping) {
+            sendHeartbeatFrame(msg);
+        }
+
+        {
+            AutoLock al(heartbeat_mutex);
+            rescheduleHeartbeatTimerLocked();
+        }
+    }
+
+    private sendHeartbeatFrame(data msg) {
+        AutoLock al(process_mutex);
+        if (isClosed()) {
+            return;
+        }
+        *AsyncSocketIo::AbstractStreamContext ctx = wsc.getStreamContext();
+        if (ctx) {
+            try {
+                ctx.sendData(ws_encode_message(msg, WSOP_Ping));
+            } catch (hash<ExceptionInfo> ex) {
+                handler.logError("H2/H3 WebSocket heartbeat send error: %s: %s",
+                    ex.err, ex.desc);
+                markClosedOnce();
+            }
         }
     }
 }
@@ -1971,9 +2096,10 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
             }
         }
 
-        # Heartbeat is handled inside the stream processor's notifyIo()
-        # via the sendHeartbeat() method, triggered by the I/O controller's
-        # worker pool dispatch (onStreamData)
+        # Heartbeat is handled by AsyncSocketIoController timers in the stream
+        # processor. PINGs are sent only when no inbound WebSocket frame has
+        # arrived within the configured heartbeat interval.
+        stream_proc.startHeartbeat(heartbeat, heartbeat_msg);
 
         # Block until stream closes. The stream_done counter is decremented by
         # WebSocketStreamProcessor::notifyIo() when it detects the close. When
