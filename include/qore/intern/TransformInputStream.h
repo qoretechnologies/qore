@@ -56,6 +56,10 @@ public:
         return "TransformInputStream";
     }
 
+    DLLLOCAL bool isIoThreadSafe() const override {
+        return is->isIoThreadSafe() && !is->supportsNonBlockingIo();
+    }
+
     DLLLOCAL int64 read(void *ptr, int64 limit, ExceptionSink *xsink) override {
         if (outBufCount > 0) {
             return readFromBuffer(ptr, limit);
