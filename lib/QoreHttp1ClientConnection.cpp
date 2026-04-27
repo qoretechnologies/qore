@@ -920,3 +920,11 @@ QoreHashNode* Http1ClientConnection::getReferencedErrorInfo() {
     }
     return poll_op_priv->getErrorInfo();
 }
+
+void Http1ClientConnection::setIdleTimeoutHook(int64_t timeout_us) {
+    MethodGuard g(this);
+    if (!g.acquired() || !poll_op_priv) {
+        return;
+    }
+    poll_op_priv->setIdleTimeout(timeout_us);
+}

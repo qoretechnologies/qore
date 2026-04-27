@@ -98,6 +98,18 @@ public:
         return 0;
     }
 
+    //! Hook for the connection manager to push the configured idle timeout
+    //! down to the protocol's poll-op proactive-close machinery.
+    /** Default no-op.  H1 / H2 subclasses override to call
+        @c setIdleTimeout on their poll-op priv.  H3 (QUIC) skips —
+        ngtcp2's own idle / keepalive timers cover liveness.
+
+        @param timeout_us idle timeout in microseconds; <=0 disables
+    */
+    DLLEXPORT virtual void setIdleTimeoutHook(int64_t timeout_us) {
+        (void)timeout_us;
+    }
+
     //! Returns the maximum concurrent streams this connection can host.
     /** Default 1 (HTTP/1.1 semantics).  H2 connections override to return
         their negotiated MAX_CONCURRENT_STREAMS setting (or the cap from

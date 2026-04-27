@@ -327,10 +327,6 @@ private:
     //! True after a 101 Switching Protocols response has been received
     bool protocol_switched = false;
 
-    //! Timestamp (epoch microseconds) when recv-header started on a reused
-    //! connection, or 0 if stale detection is inactive.
-    int64_t stale_detect_start_us = 0;
-
     //! Remaining bytes for streaming body with Content-Length
     int64_t streaming_body_remaining = 0;
 
@@ -396,22 +392,6 @@ private:
 
     static constexpr int MAX_EMPTY_READS = 100;
     static constexpr size_t STREAMING_CHUNK_SIZE = 16384;
-
-    //! Stale keep-alive detection timeout (milliseconds).
-    /** On a reused connection where the request was sent successfully but the
-        server hasn't started responding, this bounds how long we wait before
-        assuming the connection is half-open (server alive at TCP layer but
-        not generating a response, so no FIN ever arrives) and failing fast
-        so the connection manager can retry on a fresh connection.
-
-        Must be:
-        - Long enough that a healthy server processing a large request
-          (e.g. 1 MB POST + echo on a debug-build CI runner under load) has
-          started writing the response header, or this fires spuriously.
-        - Much shorter than the application-level request_timeout, otherwise
-          this optimization gives up no speedup over the normal timeout path.
-    */
-    static constexpr int64 STALE_DETECT_TIMEOUT_MS = 5000;
 
     // --- Internal methods (I/O thread only) ---
 

@@ -3391,9 +3391,19 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         # --- Scenario 4: server stops responding (no FIN, no RST) ---
         # Simulates the worst case: the server accepts the connection, responds
         # to the first request, then goes silent.  The client sends a second
-        # request but gets no response and no close notification.  The stale
-        # detect timer (2s poll_timeout_ms) should fire and the client should
-        # retry on a new connection within 10s (generous for resource-constrained CI).
+        # request but gets no response and no close notification.
+        #
+        # Recovery model (curl-aligned, post-conn-mgr-hardening): no in-band
+        # stale-detect timer.  The half-open silence is caught by the
+        # application-level request_timeout (15s here), which surfaces as
+        # HTTPCLIENT-TIMEOUT.  isConnectionErrorStatic recognises that error
+        # as retryable, so the conn-mgr replays the request on a fresh
+        # connection (conn 2) which the server handles normally.  Total
+        # elapsed: request_timeout + retry overhead ≈ 16s on a healthy host.
+        #
+        # This is curl's Curl_retry_request model — slower fast-fail than the
+        # old 5s in-band timer but doesn't mistake slow legitimate responses
+        # for dead connections (the bug that motivated this rework).
         {
             bool srv4_stop = False;
             Socket srv4_listener();
@@ -3476,9 +3486,9 @@ OKKqgBjNAlYDdPhOy8O8Agk=
             rc.restGet("/health");
 
             # Second request: server stalls (no response, no close on conn 1).
-            # The stale detect timer should fire within 500ms, the client
-            # detects the dead connection and retries on a fresh connection
-            # (conn 2) which the server handles normally.
+            # request_timeout (15s) fires, HTTPCLIENT-TIMEOUT is treated as
+            # a retryable connection error, the conn-mgr retries on a fresh
+            # connection (conn 2) which the server handles normally.
             date start = now_us();
             bool recovered = False;
             try {
@@ -3491,13 +3501,130 @@ OKKqgBjNAlYDdPhOy8O8Agk=
             }
             date elapsed = now_us() - start;
             assertTrue(recovered, "scenario4: retry on fresh connection must succeed");
-            # Stale detect fires at 500ms + retry on fresh connection; on slow
-            # CI runners the I/O thread may be delayed by CPU starvation, so
-            # allow generous headroom (the assertion guards against the full
-            # request_timeout of 15s being consumed, which would indicate the
-            # stale detect never fired)
-            assertTrue(elapsed < 12s,
-                sprintf("scenario4: took %y, expected < 12s", elapsed));
+            # Bound: request_timeout (15s) + retry overhead (~1s typical,
+            # generous headroom for slow CI).  The assertion guards against
+            # the retry NOT firing (which would manifest as elapsed >= 30s
+            # — two full request_timeout windows — or the test failing on
+            # `recovered` above).
+            assertTrue(elapsed < 18s,
+                sprintf("scenario4: took %y, expected < 18s", elapsed));
+        }
+
+        # --- Scenario 4b: server reads request then closes (FIN delivered) ---
+        # Distinct from scenario4: the server DOES close the connection (sends
+        # FIN), it just doesn't write a response first.  Recovery should be
+        # near-instant — either the pre-RECV_HEADER MSG_PEEK in
+        # Http1ClientPollOperationPriv::handleSending catches the FIN at the
+        # SEND→RECV_HEADER transition, or the SocketReadHttpHeaderPollOperation
+        # sees EOF on the first read.  Either path surfaces a retryable
+        # connection error (HTTP1-CONNECTION-CLOSED / SOCKET-CLOSED) and the
+        # conn-mgr replays the request on a fresh connection.
+        {
+            bool srv4b_stop = False;
+            Socket srv4b_listener();
+            srv4b_listener.bind("localhost:0");
+            srv4b_listener.listen();
+            int srv4b_port = srv4b_listener.getSocketInfo().port;
+
+            Counter srv4bDone(1);
+            background sub () {
+                on_exit srv4bDone.dec();
+                try {
+                    int conn_num = 0;
+                    while (!srv4b_stop) {
+                        *Socket client = srv4b_listener.accept(500ms);
+                        if (!client) {
+                            continue;
+                        }
+                        ++conn_num;
+                        if (conn_num == 1) {
+                            # First connection: respond to first request (so
+                            # the conn-mgr keeps it pooled), then read the
+                            # second request and close (send FIN) without
+                            # responding.
+                            try {
+                                *hash<auto> hdr = client.readHTTPHeader(2s);
+                                if (hdr) {
+                                    string body = "{\"ok\": true}";
+                                    string resp = sprintf(
+                                        "HTTP/1.1 200 OK\r\n"
+                                        "Content-Type: application/json\r\n"
+                                        "Content-Length: %d\r\n"
+                                        "Connection: keep-alive\r\n"
+                                        "\r\n"
+                                        "%s", body.size(), body);
+                                    client.send(resp);
+                                }
+                                # Wait for the second request to arrive,
+                                # drain it, then close (FIN).
+                                hdr = client.readHTTPHeader(2s);
+                            } catch () {}
+                            client.close();
+                        } else {
+                            # Fresh connection: respond normally
+                            while (!srv4b_stop) {
+                                *hash<auto> hdr;
+                                try {
+                                    hdr = client.readHTTPHeader(1s);
+                                } catch () {
+                                    break;
+                                }
+                                if (!hdr) {
+                                    break;
+                                }
+                                string body = "{\"ok\": true}";
+                                string resp = sprintf(
+                                    "HTTP/1.1 200 OK\r\n"
+                                    "Content-Type: application/json\r\n"
+                                    "Content-Length: %d\r\n"
+                                    "Connection: keep-alive\r\n"
+                                    "\r\n"
+                                    "%s", body.size(), body);
+                                client.send(resp);
+                            }
+                            client.close();
+                        }
+                    }
+                } catch () {}
+            }();
+
+            on_exit {
+                srv4b_stop = True;
+                srv4b_listener.close();
+                srv4bDone.waitForZero(5s);
+            }
+
+            RestClientIo rc({
+                "url": "http://localhost:" + srv4b_port,
+                "data": "json",
+                "connect_timeout": 5s,
+                "timeout": 15s,
+            });
+
+            # Prime the pool with conn 1 + one successful exchange
+            rc.restGet("/health");
+
+            # Second request: server reads it then closes (FIN).  Pre-RECV
+            # MSG_PEEK or the read EOF catches it; conn-mgr retries on conn 2.
+            date start = now_us();
+            bool recovered = False;
+            try {
+                rc.restGet("/health");
+                recovered = True;
+            } catch (hash<ExceptionInfo> ex) {
+                if (m_options.verbose > 1) {
+                    printf("scenario4b: %s: %s\n", ex.err, ex.desc);
+                }
+            }
+            date elapsed = now_us() - start;
+            assertTrue(recovered,
+                "scenario4b: retry on fresh connection must succeed");
+            # FIN-driven recovery should be near-instant; bound generously
+            # at 2s to absorb CI scheduling jitter.  If this exceeds the
+            # bound, the FIN is being missed and recovery is falling back
+            # to request_timeout (which scenario4 already covers).
+            assertTrue(elapsed < 2s,
+                sprintf("scenario4b: took %y, expected < 2s", elapsed));
         }
     }
 

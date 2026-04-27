@@ -45,6 +45,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
+#include <vector>
 
 class ExceptionSink;
 class QoreHashNode;
@@ -117,14 +118,22 @@ public:
         //! upstream @c keepalive_timeout default.
         int idle_timeout_ms = 60000;
 
-        // NOTE: max_age_ms (born-at TTL) is intentionally NOT exposed on the
-        // C++ Options yet — enforcing it correctly requires the
-        // close-after-lock-drop machinery that Phase 4 of the curl-aligned
-        // conn-mgr work adds (along with the proactive idle close from the
-        // C++ poll ops).  HttpClientConnectionBase already tracks the
-        // creation timestamp via @ref getCreatedUs() so Phase 4 can read it.
-        // The Qore-side @c HttpClientConnectionManagerOptions::max_age option
-        // is fully functional today.
+        //! Born-at TTL for pooled connections in milliseconds.
+        /** Curl analog: @c CURLOPT_MAXAGE_CONN.  Bounds the wall-clock age
+            of a pooled connection.  When set, a connection whose age (now −
+            @ref HttpClientConnectionBase::getCreatedUs) reaches this value
+            is evicted at the next pool checkout — closed and dropped from
+            the pool via the close-after-lock-drop machinery in
+            @ref evictDeadLocked.
+
+            Skipped for connections with active streams (an in-flight
+            request is not a candidate for max-age eviction; the next
+            checkout after the stream completes will catch it).  Pure
+            stored-state check — no syscall, no I/O thread coupling.
+
+            Default 0 = disabled.
+        */
+        int max_age_ms = 0;
 
         //! TCP_USER_TIMEOUT in milliseconds — kernel-level safety net for
         //! TCP-layer death (peer reboot, NIC failure, network partition,
@@ -475,9 +484,29 @@ private:
     //! @c tryReserveStream — see open question 7.6 in the design doc.
     DLLLOCAL HttpClientConnectionBase* findReusableLocked(const std::string& key);
 
-    //! Internal: removes closed connections from @c pool_[key] (caller
-    //! must hold the unique lock).
-    DLLLOCAL void evictDeadLocked(const std::string& key);
+    //! Internal: removes closed and (optionally) max-age-expired connections
+    //! from @c pool_[key] (caller must hold the unique lock).
+    /** Closed connections are simply deref'd (their I/O thread already
+        closed them).  Max-age-expired connections are not yet closed —
+        they are pushed into @a out_to_close instead, and the caller MUST
+        invoke @ref closeAndDerefAfterLockDrop on each entry after
+        releasing @c pool_lock_ to actually trigger the close (else they
+        linger on the I/O thread's ref).
+
+        @param key the pool key
+        @param out_to_close optional out-vector receiving max-age-expired
+            connections that need close-after-lock-drop; pass @c nullptr
+            to skip max-age handling
+    */
+    DLLLOCAL void evictDeadLocked(const std::string& key,
+        std::vector<HttpClientConnectionBase*>* out_to_close = nullptr);
+
+    //! Closes and derefs a connection that was identified for eviction
+    //! while a pool-lock was held.  Caller must NOT hold @c pool_lock_.
+    /** Mirrors the close+deref pattern used by the shutdown branch of
+        @ref acquireConnectionImpl (line ~360).
+    */
+    DLLLOCAL void closeAndDerefAfterLockDrop(HttpClientConnectionBase* conn);
 };
 
 #endif // _QORE_HTTPCLIENTCONNECTIONMANAGER_H

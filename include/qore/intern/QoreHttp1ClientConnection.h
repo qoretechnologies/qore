@@ -298,6 +298,17 @@ public:
     //! Returns the raw socket priv pointer (for ALPN inspection after READY).
     DLLLOCAL QoreSocketObject* getSocketPriv() const { return sock_priv; }
 
+    //! Returns the raw poll-op priv pointer (for setIdleTimeout from the
+    //! connection manager, etc.).  Null until @ref buildAndSubmit completes.
+    DLLLOCAL Http1ClientPollOperationPriv* getPollOpPriv() const {
+        return poll_op_priv;
+    }
+
+    //! Pushes the configured idle timeout down to the H1 poll op priv,
+    //! enabling its nginx-style proactive idle-close path.  No-op if
+    //! @ref buildAndSubmit hasn't completed yet.
+    DLLEXPORT void setIdleTimeoutHook(int64_t timeout_us) override;
+
 protected:
     DLLLOCAL QoreHashNode* getReferencedErrorInfo() override;
 
