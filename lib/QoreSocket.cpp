@@ -5234,6 +5234,9 @@ bool QoreSocket::isHttp2StreamRemoteClosed(int32_t stream_id) const {
 }
 
 int QoreSocket::waitForHttp2StreamDrain(int32_t stream_id, int timeout_ms) {
+    if (qore_on_async_io_thread()) {
+        return -1;
+    }
     if (!priv->h2_session) {
         return -1;
     }

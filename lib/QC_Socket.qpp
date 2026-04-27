@@ -6653,6 +6653,10 @@ AbstractPollOperation Socket::startPollSendHttp2ConnectResponse(int stream_id, i
     @since %Qore 2.3
 */
 int Socket::waitForHttp2StreamDrain(int stream_id, timeout timeout_ms = 5s) {
+    SocketSyncPoll::assertNotOnIoThread("Socket", "waitForHttp2StreamDrain", xsink);
+    if (*xsink) {
+        return -1;
+    }
     return s->waitForHttp2StreamDrain((int32_t)stream_id, (int)timeout_ms);
 }
 
@@ -7308,6 +7312,10 @@ int Socket::sendQuicClientStreamData(int stream_id, *data body, softbool end_str
     @since %Qore 2.3
 */
 int Socket::waitForQuicClientStreamDrain(int stream_id, timeout timeout_ms = 5s) {
+    SocketSyncPoll::assertNotOnIoThread("Socket", "waitForQuicClientStreamDrain", xsink);
+    if (*xsink) {
+        return -1;
+    }
     if (stream_id < 0) {
         xsink->raiseException("QUIC-ERROR", "invalid stream_id %lld: must be >= 0",
             (long long)stream_id);
@@ -7777,6 +7785,10 @@ int Socket::submitQuicStreamingResponseWithStream(int session_id, int stream_id,
 */
 int Socket::waitForQuicStreamDrain(int session_id, int stream_id,
         timeout timeout_ms = 5s) {
+    SocketSyncPoll::assertNotOnIoThread("Socket", "waitForQuicStreamDrain", xsink);
+    if (*xsink) {
+        return -1;
+    }
     if (session_id <= 0) {
         xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0", (long long)session_id);
         return -1;

@@ -2728,6 +2728,9 @@ bool QoreSocketObject::isHttp2StreamRemoteClosed(int32_t stream_id) const {
 }
 
 int QoreSocketObject::waitForHttp2StreamDrain(int32_t stream_id, int timeout_ms) {
+    if (qore_on_async_io_thread()) {
+        return -1;
+    }
     // Do NOT hold priv->m while waiting — the I/O thread needs priv->m to
     // call sendPendingData().  The CV wait only uses Http2Session's internal
     // drain_mtx_ which is independent of the socket lock.
@@ -3105,6 +3108,10 @@ bool QoreSocketObject::isQuicSessionClosed() const {
 
 int QoreSocketObject::waitForQuicClientStreamDrain(int64_t stream_id, int timeout_ms,
         ExceptionSink* xsink) {
+    SocketSyncPoll::assertNotOnIoThread("Socket", "waitForQuicClientStreamDrain", xsink);
+    if (*xsink) {
+        return -1;
+    }
     // Brief lock for session lookup; release before blocking wait
     std::shared_ptr<QuicSession> session;
     {
@@ -3319,6 +3326,10 @@ void QoreSocketObject::setQuicStreamInputStream(int64_t session_id, int64_t stre
 
 int QoreSocketObject::waitForQuicStreamDrain(int64_t session_id, int64_t stream_id,
         int timeout_ms, ExceptionSink* xsink) {
+    SocketSyncPoll::assertNotOnIoThread("Socket", "waitForQuicStreamDrain", xsink);
+    if (*xsink) {
+        return -1;
+    }
     // Look up the session with a brief lock, then release it before waiting.
     // waitForStreamDrain() only acquires QuicSession::mtx_, not the socket lock,
     // so there is no deadlock risk with I/O threads that hold priv->m.
