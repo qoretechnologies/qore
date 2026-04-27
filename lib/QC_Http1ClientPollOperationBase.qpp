@@ -1740,7 +1740,8 @@ QoreHashNode* Http1ClientPollOperationPriv::dispatchStreamingEnd(ExceptionSink* 
         action = stream_action;
         if (action) {
             action->ref();
-            if (ChannelAction* ch_action = dynamic_cast<ChannelAction*>(action)) {
+            ChannelAction* ch_action = dynamic_cast<ChannelAction*>(action);
+            if (ch_action && ch_action->isSseInstallEligible()) {
                 if (completed_channel_action) {
                     completed_channel_action->deref(xsink);
                 }
@@ -2544,6 +2545,10 @@ int Http1ClientPollOperationBase::submitRequestWithNotifier(string method, strin
         subsequent \c pushSendData() calls, terminated by
         \c pushSendData(NOTHING).
     @param notifier optional EventNotifier signaled after channel updates
+    @param sse_install_eligible if \c True, the response \c ChannelAction is retained after
+    \c end_stream so a later @ref installSseState() call can drain buffered body bytes;
+    callers that do not intend to install SSE state must leave this \c False to avoid
+    holding the action for the lifetime of the connection
     @return the stream ID assigned to this request
 
     @since %Qore 2.3
@@ -2551,7 +2556,8 @@ int Http1ClientPollOperationBase::submitRequestWithNotifier(string method, strin
 int Http1ClientPollOperationBase::submitRequestStreaming(string method, string path,
         *hash<auto> headers, *data body, object channel, int max_streams,
         bool streaming = False, bool body_streaming = False,
-        *EventNotifier[QoreEventNotifier] notifier) {
+        *EventNotifier[QoreEventNotifier] notifier,
+        bool sse_install_eligible = False) {
     // Extract QoreChannel private data from the Channel object
     QoreChannel* ch = static_cast<QoreChannel*>(
         const_cast<QoreObject*>(channel)->getReferencedPrivateData(CID_CHANNEL, xsink));
@@ -2596,6 +2602,9 @@ int Http1ClientPollOperationBase::submitRequestStreaming(string method, string p
 
     // Create ChannelAction — priv takes ownership
     ChannelAction* action = new ChannelAction(ch, notifier_ptr, notifier_obj_ptr);
+    if (sse_install_eligible) {
+        action->setSseInstallEligible();
+    }
     if (notifier_ptr) {
         notifier_ptr->deref(xsink);
     }

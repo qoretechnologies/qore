@@ -345,7 +345,8 @@ QoreHashNode* Http3ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
                 AutoLocker al(stream_lock);
                 auto it = stream_actions.find(sid);
                 if (it != stream_actions.end()) {
-                    if (ChannelAction* ch_action = dynamic_cast<ChannelAction*>(it->second)) {
+                    ChannelAction* ch_action = dynamic_cast<ChannelAction*>(it->second);
+                    if (ch_action && ch_action->isSseInstallEligible()) {
                         auto completed_it = completed_channel_actions.find(sid);
                         if (completed_it != completed_channel_actions.end()) {
                             completed_it->second->deref(xsink);
@@ -1279,11 +1280,16 @@ nothing Http3ClientPollOperationBase::endSubmitFail() {
     @param stream_id the QUIC stream ID
     @param channel the Channel to push response chunks to
     @param notifier optional EventNotifier signaled after channel updates
+    @param sse_install_eligible if \c True, the response \c ChannelAction is retained after
+    \c end_stream so a later @ref installSseState() call can drain buffered body bytes;
+    callers that do not intend to install SSE state must leave this \c False to avoid
+    holding the action for the lifetime of the connection
 
     @return hash with: "need_cancel" (bool), "buffered" (list or NOTHING)
 */
 *hash<auto> Http3ClientPollOperationBase::registerStreamWithChannel(int stream_id, object channel,
-        *EventNotifier[QoreEventNotifier] notifier) {
+        *EventNotifier[QoreEventNotifier] notifier,
+        bool sse_install_eligible = False) {
     // Extract QoreChannel private data from the Channel object
     QoreChannel* ch = static_cast<QoreChannel*>(
         const_cast<QoreObject*>(channel)->getReferencedPrivateData(CID_CHANNEL, xsink));
@@ -1305,6 +1311,9 @@ nothing Http3ClientPollOperationBase::endSubmitFail() {
 
     bool need_cancel = false;
     ReferenceHolder<ChannelAction> action(new ChannelAction(ch, notifier_ptr, notifier_obj_ptr), xsink);
+    if (sse_install_eligible) {
+        action->setSseInstallEligible();
+    }
     // Ownership: priv->registerStream takes the ref on success; see
     // registerStreamWithPromise for the rationale.
     QoreListNode* buffered = priv->registerStream(stream_id, *action, need_cancel, xsink);

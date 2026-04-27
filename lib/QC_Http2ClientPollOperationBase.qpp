@@ -555,7 +555,8 @@ QoreHashNode* Http2ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
                 // Remove stream BEFORE dispatching so active_stream_count is
                 // decremented by the time the action resolves the caller's Future
                 if (is_end) {
-                    if (ChannelAction* ch_action = dynamic_cast<ChannelAction*>(it->second)) {
+                    ChannelAction* ch_action = dynamic_cast<ChannelAction*>(it->second);
+                    if (ch_action && ch_action->isSseInstallEligible()) {
                         auto completed_it = completed_channel_actions.find(sid);
                         if (completed_it != completed_channel_actions.end()) {
                             completed_it->second->deref(xsink);
@@ -1574,11 +1575,16 @@ int Http2ClientPollOperationBase::submitRequestWithNotifier(string method, strin
     @param max_streams maximum concurrent streams (0 = unlimited)
     @param streaming if True, keep the request body stream open (bidirectional)
     @param notifier optional EventNotifier signaled after channel updates
+    @param sse_install_eligible if \c True, the response \c ChannelAction is retained after
+    \c end_stream so a later @ref installSseState() call can drain buffered body bytes;
+    callers that do not intend to install SSE state must leave this \c False to avoid
+    holding the action for the lifetime of the connection
     @return the stream ID assigned to this request
 */
 int Http2ClientPollOperationBase::submitRequestStreaming(string method, string path,
         *hash<auto> headers, *data body, object channel, int max_streams,
-        bool streaming = False, *EventNotifier[QoreEventNotifier] notifier) {
+        bool streaming = False, *EventNotifier[QoreEventNotifier] notifier,
+        bool sse_install_eligible = False) {
     // Extract QoreChannel private data from the Channel object
     QoreChannel* ch = static_cast<QoreChannel*>(
         const_cast<QoreObject*>(channel)->getReferencedPrivateData(CID_CHANNEL, xsink));
@@ -1623,6 +1629,9 @@ int Http2ClientPollOperationBase::submitRequestStreaming(string method, string p
 
     // Create ChannelAction — priv takes ownership
     ChannelAction* action = new ChannelAction(ch, notifier_ptr, notifier_obj_ptr);
+    if (sse_install_eligible) {
+        action->setSseInstallEligible();
+    }
     if (notifier_ptr) {
         notifier_ptr->deref(xsink);
     }

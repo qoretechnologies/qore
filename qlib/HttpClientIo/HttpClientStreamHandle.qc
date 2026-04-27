@@ -768,6 +768,11 @@ public class HttpClientStreamHandle {
         begins — use for patterns like POST with JSON body + streaming SSE response
         @param notifier optional EventNotifier signaled when raw response
         items are available to @ref readData()
+        @param sse_install_eligible if \c True, the protocol implementation retains the underlying
+        completion action across \c end_stream so a later @ref installSseState() call can drain
+        buffered body bytes; opt in only when the caller intends to call @ref installSseState()
+        after the response completes (e.g., the Negotiate SSE observable startup path), since
+        retention costs memory until the action is consumed or the connection closes
 
         @return the stream ID
 
@@ -781,7 +786,8 @@ public class HttpClientStreamHandle {
         @see readData(), sendData(), writesDone()
     */
     int startStreaming(string method, string path, *hash<auto> headers,
-            bool body_streaming = False, *data body, *EventNotifier notifier) {
+            bool body_streaming = False, *data body, *EventNotifier notifier,
+            bool sse_install_eligible = False) {
         throw "HTTPCLIENT-STREAMING-NOT-SUPPORTED",
             "streaming is not supported by " + conn.getProtocol();
     }

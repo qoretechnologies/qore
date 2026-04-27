@@ -427,7 +427,7 @@ public class Http3ClientPollOperation inherits Http3ClientPollOperationBase, Htt
     */
     int submitRequestWithChannel(string method, string path, *hash<auto> headers, *data body,
             Channel channel, int max_streams, bool streaming = False,
-            *EventNotifier notifier) {
+            *EventNotifier notifier, bool sse_install_eligible = False) {
         if (!self.isReady()) {
             throw "HTTP3-STATE-ERROR", sprintf("cannot submit request in state: %y", self.getState());
         }
@@ -474,7 +474,8 @@ public class Http3ClientPollOperation inherits Http3ClientPollOperationBase, Htt
         self.endSubmitOk(stream_id);
 
         # Register Channel as the completion action
-        *hash<auto> reg_result = self.registerStreamWithChannel(stream_id, channel, notifier);
+        *hash<auto> reg_result = self.registerStreamWithChannel(stream_id, channel, notifier,
+            sse_install_eligible);
         if (reg_result.need_cancel) {
             try {
                 int sid = self.getSessionId();

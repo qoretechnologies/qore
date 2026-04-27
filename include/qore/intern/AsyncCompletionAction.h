@@ -224,6 +224,20 @@ public:
     DLLLOCAL void installSseState(Queue* queue, QoreEventNotifier* notifier,
         QoreObject* notifier_obj, QoreValue initial, ExceptionSink* xsink);
 
+    //! Marks this action as eligible for delayed installSseState() after
+    //! end_stream — callers must opt in to retention because every retained
+    //! ChannelAction stays alive for the lifetime of the connection until
+    //! installSseState() / cancelStream() / cleanup() releases it.
+    DLLLOCAL void setSseInstallEligible() {
+        sse_install_eligible = true;
+    }
+
+    //! @return true if this action should be retained after end_stream so
+    //! that a later installSseState() call can drain buffered body bytes
+    DLLLOCAL bool isSseInstallEligible() const {
+        return sse_install_eligible;
+    }
+
 private:
     std::mutex mtx;
     QoreChannel* channel;
@@ -232,6 +246,7 @@ private:
     QoreEventNotifier* notifier = nullptr;
     QoreObject* notifier_obj = nullptr;
     bool completed = false;
+    bool sse_install_eligible = false;
 
     DLLLOCAL void notify() {
         if (notifier) {

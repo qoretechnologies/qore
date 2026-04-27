@@ -201,7 +201,8 @@ public class Http2ClientConnection inherits HttpClientConnection {
         poll_op.submitRequestStreaming() under stream_lock, so there is no TOCTOU gap.
     */
     int submitRequestStreaming(string method, string path, *hash<auto> headers, *data body,
-            Channel channel, bool streaming = False, *EventNotifier notifier) {
+            Channel channel, bool streaming = False, *EventNotifier notifier,
+            bool sse_install_eligible = False) {
         if (!self.isReady()) {
             throw "HTTPCLIENT-STATE-ERROR",
                 sprintf("connection not ready: state=%y", self.getConnectionState());
@@ -215,7 +216,7 @@ public class Http2ClientConnection inherits HttpClientConnection {
 
         log(LoggerLevel::DEBUG, "submitting request: %s %s (streaming=%y)", method, path, streaming);
         int stream_id = poll_op.submitRequestStreaming(method, path, headers, body, channel,
-            max_concurrent_streams, streaming, notifier);
+            max_concurrent_streams, streaming, notifier, sse_install_eligible);
 
         if (ctl) {
             ctl.wakeSocket(getSocket());

@@ -203,7 +203,8 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
         @throw HTTPCLIENT-TIMEOUT if connection establishment timed out
     */
     int startStreaming(string method, string path, *hash<auto> headers,
-            bool body_streaming = False, *data body, *EventNotifier notifier) {
+            bool body_streaming = False, *data body, *EventNotifier notifier,
+            bool sse_install_eligible = False) {
         {
             AutoLock al(lock);
             if (state != HttpClientStreamState::Pending) {
@@ -263,7 +264,7 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
             # completion action so each response chunk is pushed to it via
             # ChannelAction::trySend (pure C++ on I/O thread)
             stream_id = h3conn.submitRequestStreamingWithChannel(method, path, headers,
-                body, data_channel, body_streaming, notifier);
+                body, data_channel, body_streaming, notifier, sse_install_eligible);
             @assert(stream_id >= 0);
             # Reservation converted to active stream; release connection reservation
             releaseReservationIfHeld();

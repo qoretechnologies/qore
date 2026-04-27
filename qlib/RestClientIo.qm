@@ -4368,8 +4368,11 @@ public class RestClientIoSseObservableStartOperation inherits Qore::AbstractPoll
             prepareAttempt();
         }
         pending_stream = rcio.getConnectionManager().acquireStream(rcio.getUrl());
+        # sse_install_eligible=True: this flow always completes with installSseState()
+        # after the response start is validated, so the underlying ChannelAction must be
+        # retained past end_stream to drain buffered body bytes into the SSE parser.
         pending_stream.startStreaming(method, path, hdr, False,
-            prepared_attempt.serialized_body, stream_notifier);
+            prepared_attempt.serialized_body, stream_notifier, True);
         request_body = prepared_attempt.serialized_body;
         request_allow_any_response = prepared_attempt.allow_any_response;
         delete prepared_attempt;

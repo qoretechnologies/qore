@@ -121,7 +121,8 @@ public class Http1ClientStreamHandle inherits HttpClientStreamHandle {
             on \c sendData())
     */
     int startStreaming(string method, string path, *hash<auto> headers,
-            bool body_streaming = False, *data body, *EventNotifier notifier) {
+            bool body_streaming = False, *data body, *EventNotifier notifier,
+            bool sse_install_eligible = False) {
         if (body_streaming && body && body.size() > 0) {
             throw "HTTPCLIENT-STATE-ERROR",
                 "body_streaming=True is incompatible with a non-empty body; "
@@ -185,7 +186,7 @@ public class Http1ClientStreamHandle inherits HttpClientStreamHandle {
 
         try {
             stream_id = h1conn.submitRequestStreaming(method, path, headers, body,
-                data_channel, True, body_streaming, notifier);
+                data_channel, True, body_streaming, notifier, sse_install_eligible);
             @assert(stream_id >= 0);
             reservation_held = False;
         } catch (hash<ExceptionInfo> ex) {

@@ -116,7 +116,8 @@ public class Http2ClientStreamHandle inherits HttpClientStreamHandle {
         @throw HTTPCLIENT-TIMEOUT if connection establishment times out
     */
     int startStreaming(string method, string path, *hash<auto> headers,
-            bool body_streaming = False, *data body, *EventNotifier notifier) {
+            bool body_streaming = False, *data body, *EventNotifier notifier,
+            bool sse_install_eligible = False) {
         {
             AutoLock al(lock);
             if (state != HttpClientStreamState::Pending) {
@@ -159,7 +160,7 @@ public class Http2ClientStreamHandle inherits HttpClientStreamHandle {
 
         try {
             stream_id = h2conn.submitRequestStreaming(method, path, headers, body,
-                data_channel, body_streaming, notifier);
+                data_channel, body_streaming, notifier, sse_install_eligible);
             @assert(stream_id >= 0);
         } catch (hash<ExceptionInfo> ex) {
             {

@@ -159,9 +159,11 @@ public class Http1ClientConnection inherits HttpClientConnection {
     */
     int submitRequestStreaming(string method, string path, *hash<auto> headers,
             *data body, Channel channel, bool streaming = True,
-            bool body_streaming = False, *EventNotifier notifier) {
+            bool body_streaming = False, *EventNotifier notifier,
+            bool sse_install_eligible = False) {
         int sid = poll_op.submitRequestStreaming(method, path, headers, body, channel,
-            max_concurrent_streams, streaming, body_streaming, notifier);
+            max_concurrent_streams, streaming, body_streaming, notifier,
+            sse_install_eligible);
         # Wake the I/O controller so it processes the queued request
         *object ctl;
         {
