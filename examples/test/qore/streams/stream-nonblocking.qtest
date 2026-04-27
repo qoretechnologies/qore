@@ -45,7 +45,7 @@ public class StreamNonBlockingTest inherits QUnit::Test {
     testStringInputStreamDefaults() {
         StringInputStream sis("hello");
         assertFalse(sis.supportsNonBlockingIo(), "StringInputStream not pollable");
-        assertFalse(sis.isIoThreadSafe(), "StringInputStream not I/O-thread-safe");
+        assertTrue(sis.isIoThreadSafe(), "StringInputStream is I/O-thread-safe");
         assertEq(-1, sis.getPollableDescriptor(), "StringInputStream descriptor is -1");
 
         *binary data = sis.readNonBlock(3);

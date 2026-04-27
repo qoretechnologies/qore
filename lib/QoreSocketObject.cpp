@@ -560,6 +560,47 @@ static int qore_socket_object_exec_send_input_stream_poll(QoreSocketObject* s, I
     return rc;
 }
 
+static int qore_socket_object_exec_send_http_chunked_body_input_stream_poll(QoreSocketObject* s,
+        InputStream* is, QoreObject* is_obj, size_t max_chunk_size, int timeout_ms, bool send_terminal_chunk,
+        ExceptionSink* xsink, bool reassign_after) {
+    if (!is->isIoThreadSafe()) {
+        return -2;
+    }
+
+    SocketObjectInputStreamRefGuard caller_ref(is, xsink, reassign_after);
+    s->ref();
+    is->ref();
+    if (is_obj) {
+        is_obj->ref();
+    }
+    ReferenceHolder<SocketPollOperationBase> poller(
+        new SocketSendHttpChunkedInputStreamPollOperation(xsink, s, is, is_obj, max_chunk_size, timeout_ms,
+            send_terminal_chunk),
+        xsink);
+    if (*xsink) {
+        return -1;
+    }
+
+    is->unassignThread(xsink);
+    if (*xsink) {
+        return -1;
+    }
+
+    int rc = qore_socket_object_exec_send_poll(s, poller.release(), -1, xsink);
+    if (reassign_after) {
+        if (!*xsink) {
+            is->reassignThread(xsink);
+        } else {
+            ExceptionSink reassign_xsink;
+            is->reassignThread(&reassign_xsink);
+            if (reassign_xsink) {
+                reassign_xsink.clear();
+            }
+        }
+    }
+    return rc;
+}
+
 static int qore_socket_object_exec_recv_output_stream_poll(QoreSocketObject* s, OutputStream* os,
         QoreObject* os_obj, int64 size, int timeout_ms, ExceptionSink* xsink, bool reassign_after,
         bool emit_data_events) {
@@ -1385,6 +1426,30 @@ static int qore_socket_object_exec_send_http_chunked_body_input_stream(QoreSocke
     QoreSocketObjectAsyncIoGuard async_guard(*priv, xsink, NB_SEND);
     if (!async_guard) {
         return -1;
+    }
+
+    int rc = qore_socket_object_exec_send_http_chunked_body_input_stream_poll(s, input_stream, nullptr,
+        max_chunk_size, timeout_ms, !trailer_callback, xsink, true);
+    if (*xsink) {
+        return -1;
+    }
+    if (rc != -2) {
+        if (rc) {
+            return -1;
+        }
+        if (!trailer_callback) {
+            return 0;
+        }
+
+        ReferenceHolder<QoreHashNode> trailer(xsink);
+        if (qore_socket_object_exec_run_http_trailer_callback(trailer_callback, trailer, xsink)) {
+            return -1;
+        }
+        if (trailer) {
+            return qore_socket_object_exec_send_http_chunked_body_trailer(s, *trailer, QORE_SOURCE_SOCKET,
+                timeout_ms, xsink);
+        }
+        return qore_socket_object_exec_send_bytes(s, "0\r\n\r\n", 5, timeout_ms, xsink);
     }
 
     SimpleRefHolder<BinaryNode> buf(new BinaryNode);

@@ -63,6 +63,7 @@ class QoreSocketObject : public AbstractPollableIoObjectBase {
     friend class SocketAcceptPollOperation;
     friend class SocketSendPollOperation;
     friend class SocketSendInputStreamPollOperation;
+    friend class SocketSendHttpChunkedInputStreamPollOperation;
     friend class SocketRecvOutputStreamPollOperation;
     friend class SocketRecvPollOperationBase;
     friend class SocketRecvPollOperation;
