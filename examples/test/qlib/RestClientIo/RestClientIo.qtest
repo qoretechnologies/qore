@@ -506,6 +506,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
 
         # RestClientIoPingPollOperation tests
         addTestCase("ping poll basic", \testPingPollBasic());
+        addTestCase("ping poll negotiate auth", \testPingPollNegotiateAuth());
         addTestCase("ping poll via monitor", \testPingPollViaMonitor());
         addTestCase("ping poll oauth2 pre-refresh", \testPingPollOAuth2PreRefresh());
         addTestCase("ping poll 401 retry", \testPingPoll401Retry());
@@ -2703,6 +2704,25 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         *hash<ExceptionInfo> ex = drivePingOp(op);
         on_error printf("ping error: %y\n", ex);
         assertFalse(exists ex, "ping should succeed");
+        assertTrue(op.goalReached());
+%endif
+    }
+
+    testPingPollNegotiateAuth() {
+%ifndef NoJson
+        # A server that does not challenge should still accept a Negotiate-enabled
+        # polling ping. This verifies that async pings carry the option instead of
+        # rejecting it at construction time.
+        RestConnection rc = createPingConnection("ping-negotiate-auth", {
+            "negotiate_auth": True,
+            "negotiate_service_principal": "HTTP/test@EXAMPLE.COM",
+        });
+        AbstractPollOperation op = rc.startPollConnect();
+        assertEq("ping", op.getGoal());
+
+        *hash<ExceptionInfo> ex = drivePingOp(op);
+        on_error printf("negotiate ping error: %y\n", ex);
+        assertFalse(exists ex, "Negotiate-enabled ping should succeed without a challenge");
         assertTrue(op.goalReached());
 %endif
     }

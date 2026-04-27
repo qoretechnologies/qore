@@ -327,6 +327,7 @@ hash<RestResponseInfo> resp = f.get(30s);
         - \c oauth2_token_expiry: known expiry timestamp for an initial token; enables proactive pre-expiry refresh
         - \c oauth2_refresh_token: initial refresh token
         - \c negotiate_auth: enables Kerberos/SPNEGO HTTP Negotiate authentication for synchronous requests
+          and polling pings
         - \c negotiate_credential_cache: optional credential cache name for Kerberos/SPNEGO HTTP Negotiate
           authentication
         - \c negotiate_delegation_mode: Kerberos delegation mode; currently only \c "none" is supported
@@ -1899,6 +1900,66 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
             checkNegotiateUnsupported("RestClientIo raw notifier async requests");
             HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(url);
             return stream.submitAsyncWithNotifier(method, path, hdr, body, notifier);
+        }
+
+        #! Submits an async ping request with EventNotifier signaling
+        /** This is used by @ref RestClientIoPingPollOperation so polling pings can
+            reuse the normal request preparation path, including preemptive
+            Kerberos/SPNEGO HTTP Negotiate headers.
+
+            @param method HTTP method
+            @param path request path
+            @param body request body (optional)
+            @param hdr base request headers; only updated by Negotiate challenge retries
+            @param notifier EventNotifier to signal on response completion
+            @param gss_context Negotiate context to keep across ping retries
+
+            @return hash with "future" (Future) and "stream_id" (int)
+        */
+        hash<auto> submitPingRequestWithNotifier(string method, reference<string> path,
+                auto body, reference<*hash<auto>> hdr, EventNotifier notifier,
+                reference<*auto> gss_context) {
+            *hash<auto> request_headers = hdr;
+            hash<auto> prepared = prepareRequest(method, \path, body,
+                \request_headers);
+            if (exists prepared.negotiate_context) {
+                gss_context = prepared.negotiate_context;
+            }
+
+            log(LoggerLevel::DEBUG, "submitPingRequestWithNotifier() %s %s%s",
+                method, url, path);
+
+            HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(url);
+            return stream.submitAsyncWithNotifier(method, path, request_headers,
+                prepared.serialized_body, notifier);
+        }
+
+        #! Starts or continues a Negotiate exchange for a polling ping
+        /** @param response_headers response headers from the previous ping request
+            @param hdr ping request headers; updated with the Negotiate Authorization header
+            @param gss_context Negotiate context to keep across ping retries
+
+            @return True if a Negotiate retry request should be submitted
+        */
+        bool tryPingNegotiateAuthRetry(hash<auto> response_headers,
+                reference<*hash<auto>> hdr, reference<*auto> gss_context) {
+            if (!usingNegotiateAuth()) {
+                return False;
+            }
+            if (!hdr) {
+                hdr = {};
+            }
+
+            hash<auto> request_headers = hdr;
+            bool rv = tryNegotiateAuthRetry(response_headers, \request_headers,
+                \gss_context);
+            hdr = request_headers;
+            return rv;
+        }
+
+        #! Processes a final Negotiate response token for a polling ping
+        processPingFinalNegotiateResponse(hash<auto> response_headers, *auto gss_context) {
+            processFinalNegotiateResponse(response_headers, gss_context);
         }
 
         #! Returns True if the current OAuth2 token needs to be refreshed
@@ -3725,6 +3786,12 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation 
         #! Whether we have already attempted an OAuth2 refresh + retry after a 401
         bool auth_retried = False;
 
+        #! Whether we have already attempted a Negotiate challenge retry after a 401
+        bool negotiate_retried = False;
+
+        #! GSS context for the current Negotiate ping exchange
+        *auto negotiate_context;
+
         #! EventNotifier for connection-readiness polling in SPS_CONNECTING state
         *EventNotifier connection_ready_notifier;
 
@@ -3751,10 +3818,6 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation 
         @param logger optional logger
     */
     constructor(RestClient::RestConnection conn, hash<auto> ping_opts, *Logger::LoggerInterface logger) {
-        if (ping_opts.negotiate_auth) {
-            throw "NEGOTIATE-AUTH-ERROR",
-                "RestClientIo polling pings do not support Kerberos/SPNEGO HTTP Negotiate authentication yet";
-        }
         self.conn := conn;
         self.ping_opts = ping_opts;
         self.logger = logger;
@@ -3893,6 +3956,8 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation 
 
                 int status_code = resp.status_code.toInt();
                 if ((status_code / 100) == 2) {
+                    rcio.processPingFinalNegotiateResponse(resp.headers, negotiate_context);
+
                     # Run schema validation if configured (mirrors buildResponse() logic)
                     if (schema_validator) {
                         auto resp_body = resp.body;
@@ -3916,6 +3981,15 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation 
                     state = SPS_COMPLETE;
                     conn.authSuccess();
                     return;
+                }
+
+                # 401: attempt Kerberos/SPNEGO Negotiate challenge retry once
+                if (status_code == 401 && !negotiate_retried
+                        && rcio.tryPingNegotiateAuthRetry(resp.headers, \ping_headers,
+                            \negotiate_context)) {
+                    negotiate_retried = True;
+                    doSubmitPing();
+                    continue;
                 }
 
                 # 401: attempt OAuth2 token refresh + retry once
@@ -4051,8 +4125,9 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation 
     */
     private doSubmitPing() {
         state = SPS_IO_WAITING;
-        hash<auto> result = rcio.restDoRequestAsyncWithNotifier(
-            ping_method, ping_path, ping_body, ping_headers, notifier);
+        hash<auto> result = rcio.submitPingRequestWithNotifier(
+            ping_method, \ping_path, ping_body, \ping_headers, notifier,
+            \negotiate_context);
         pending_future = result.future;
     }
 }

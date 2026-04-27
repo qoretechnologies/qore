@@ -940,6 +940,7 @@ RestClient rest({"url": "http://localhost:8001/rest"});
         - \c logger: any logger to use for the object
         - \c max_redirects: The maximum number of redirects before throwing an exception (the default is 5)
         - \c negotiate_auth: Enables Kerberos/SPNEGO HTTP Negotiate authentication for synchronous requests
+          and polling pings
         - \c negotiate_credential_cache: Optional credential cache name for Kerberos/SPNEGO HTTP Negotiate
           authentication
         - \c negotiate_delegation_mode: Kerberos delegation mode; currently only \c "none" is supported
@@ -4259,10 +4260,6 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
         *string ping_path;
         if (!real_opts.ping_method || !exists (ping_path = getPingPath())) {
             return HttpBasedConnection::startPollConnect(logger);
-        }
-        if (real_opts.negotiate_auth) {
-            throw "NEGOTIATE-AUTH-ERROR",
-                "RestConnection polling pings do not support Kerberos/SPNEGO HTTP Negotiate authentication yet";
         }
         auto ping_body = getPingBody();
 
