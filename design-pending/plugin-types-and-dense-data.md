@@ -716,8 +716,9 @@ struct QorePluginTypeRegistration {
 //! symbol they linked against. See §8.1.
 //!
 //! Returns 0 on success, -1 on failure with diagnostic in xsink. Registration
-//! is all-or-nothing: if any type, operation, dependency, or extension fails
-//! validation, no part of `reg` is registered and the function returns -1.
+//! staging is all-or-nothing: if any type, operation, dependency, or extension
+//! fails validation, no part of `reg` is staged or published and the function
+//! returns -1.
 //! Callers must propagate the failure rather than continuing module init. A
 //! null context, wrong-size context (subreason registration_context_too_small
 //! for struct_size < sizeof(V1), registration_context_size_mismatch for
@@ -725,9 +726,10 @@ struct QorePluginTypeRegistration {
 //! context not owned by the current module-init call, or context without a live
 //! module_handle is rejected before descriptor validation. Registration does
 //! not accept an explicit Program parameter and does not activate the module in
-//! a Program. It commits process-global descriptor/helper metadata for the
-//! module currently being initialized; per-Program activation is performed by
-//! module load/add-to-Program and QORD import processing.
+//! a Program. It stages process-global descriptor/helper metadata in the current
+//! module-init transaction; final publication happens only after
+//! qore_module_init succeeds. Per-Program activation is performed by module
+//! load/add-to-Program and QORD import processing.
 //!
 //! `ctx` and `reg` are consumed during the call only; libqore does not retain
 //! either top-level pointer past return. The caller's descriptor arrays may be
@@ -757,10 +759,6 @@ ABI and must not change.
 ```cpp
 // qore_module_init has the current ModuleManager.h signature:
 // void qore_module_init(QoreModuleInitContext& module_ctx, ExceptionSink& xsink).
-// The plugin protocol's C ABI takes pointers, so the call site below uses
-// address-of on the C++ references — &module_ctx-style usage is standard
-// C++ but worth noting for plugin authors familiar mostly with C: applying
-// & to a reference yields a pointer to the underlying object.
 QorePluginRegistrationContextV1 plugin_ctx{
     .struct_size   = sizeof(plugin_ctx),
     .flags         = 0,
@@ -786,9 +784,10 @@ current-module TLS comparison.
 Registration is serialized by the plugin registry, not by the module loader.
 The current module loader may run `qore_module_init` while its global module
 mutex is released, so `qore_register_plugin_types_v1` MUST be thread-safe for
-concurrent module-init threads. It takes the registry write lock before
-checking process-global descriptor conflicts and committing ids, and the
-all-or-nothing commit keeps §3.10 conflict detection free of TOCTOU windows.
+concurrent module-init threads. It takes the registry write lock before checking
+committed descriptor conflicts and installing a pending registration record for
+the current module-init transaction. Pending records are not visible to hot-path
+dispatch, reflection, QORD import resolution, or per-Program activation.
 Plugins must not spawn background threads that re-enter registration: those
 threads do not own the current module-init TLS handle and fail with
 `module_handle_stale`.
@@ -796,20 +795,22 @@ threads do not own the current module-init TLS handle and fail with
 Hot-path dispatch (`PluginUnary` / `PluginBinary` / `PluginCall` /
 `PluginSubscript` / etc.) reads the descriptor table lock-free, relying on
 the §3.10 immutability guarantee that committed descriptors never change.
-The registry write lock is held only during the registration commit; after
-all modules have loaded it is uncontested, and steady-state plugin-opcode
-execution incurs no locking overhead from the registry.
+The registry write lock is held only while staging pending registration records
+and publishing successful module-init transactions; after all modules have
+loaded it is uncontested, and steady-state plugin-opcode execution incurs no
+locking overhead from the registry.
 
 If `qore_register_plugin_types_v1` succeeds but the surrounding
 `qore_module_init` then fails (raises an error through `xsink` or returns
-abnormally), libqore rolls back the just-committed registration as part of
-the same module-load failure path: the registry write lock is reacquired,
-the failed module's just-allocated global ids are released, and any
-auto-synthesised cross-type entries are removed. The next attempt to load
-that module starts from a clean process-global state. This guarantee
-applies only to the just-committed registration; descriptors from earlier,
-already-finished module loads are never affected by a later module's
-init-failure rollback.
+abnormally), libqore discards the pending registration as part of the same
+module-load failure path. No descriptor from that failed attempt was ever
+published, no hot-path reader could have observed it, and provisional ids from
+the pending transaction may be reused. If `qore_module_init` succeeds, libqore
+publishes the pending registration under the registry write lock, converts
+provisional local-to-global mappings into committed ids, and wakes any
+concurrent registrants waiting on the module's outcome. Descriptors from
+earlier, already-finished module loads are never affected by a later module's
+init failure.
 
 **Two evolution disciplines, intentionally.** The plugin protocol uses two
 distinct forward-compatibility patterns:
@@ -833,10 +834,11 @@ defeats both schemes.
 
 Constraints:
 - `local_id` must be contiguous starting from 0 and is meaningful only inside
-  the registering module. The loader allocates a process-global runtime id at
-  `qore_register_plugin_types_v1` time and records the local→global mapping in
-  the per-module registration table; QORD `PLUGIN_IMPORTS` references are
-  resolved through that table at load time.
+  the registering module. `qore_register_plugin_types_v1` assigns provisional
+  process-global runtime ids in the pending module-init transaction; when module
+  init succeeds, the registry publishes the local→global mapping as committed
+  metadata. QORD `PLUGIN_IMPORTS` references are resolved only through the
+  committed table at load time.
 - The first implementation lowers plugin operations to built-in
   descriptor-carrying opcodes, one per `QorePluginHelperAbi`:
   `PluginUnary`, `PluginBinary`, `PluginCall`, `PluginSubscript`,
@@ -1403,13 +1405,16 @@ user writes `tensor + buffer`, who registers `add.tensor_buffer`?
    silent overwrite is a footgun. A module that needs to override another
    module's cross-type op must do so explicitly with a versioned operation-
    set number that the other module declares an upper bound on. Under
-   concurrent module-init, ordering is established by registry-write-lock
-   acquisition (per §3.3): whichever registration takes the lock first
-   commits its triple, the second registration sees the prior entry under
-   the same lock and fails with a diagnostic naming both modules. The
-   diagnostic content is independent of acquisition order — both module
-   names appear regardless — so test harnesses do not depend on
-   serialization timing.
+   concurrent module-init, the registry write lock serializes conflict checks
+   against committed descriptors and pending registration records. A registrant
+   that collides with another module's pending triple records the dependency,
+   releases the registry lock, waits for that module's init transaction to
+   finish, then reacquires the lock and retries the conflict check: if the other
+   module committed, this registration fails with a diagnostic naming both
+   modules; if the other module failed and its pending record was discarded,
+   this registration may proceed. The diagnostic content is independent of
+   timing — both module names appear regardless — so test harnesses do not
+   depend on serialization order.
 3. **Commutative auto-symmetry.** If a registration for
    `(A, B, op)` declares `is_commutative = true`, the runtime synthesises
    the `(B, A, op)` site automatically — registering both halves
@@ -1707,13 +1712,15 @@ mode reports them as deferred checks instead of pretending the descriptor is
 fully registrable.
 
 `qore_register_plugin_types_v1` itself runs in fail-fast mode and never
-collects — registration is a single transactional commit, not a diagnostic
+collects — registration is a single module-init transaction, not a diagnostic
 walk. It validates the supplied `QorePluginRegistrationContextV1` against the
 runtime's current module-init state, resolves helper symbols against the module
-handle, checks process-global descriptor conflicts, and commits global ids. It
-does not perform Program activation; Program-local visibility is updated later
-when the module is added to a Program or when QORD `PLUGIN_IMPORTS` activates
-the module for the loading Program.
+handle, waits/retries around conflicting pending registrations as described in
+§3.10, and stages a pending registration record. Global ids become committed
+only when the surrounding module init succeeds. It does not perform Program
+activation; Program-local visibility is updated later when the module is added
+to a Program or when QORD `PLUGIN_IMPORTS` activates the module for the loading
+Program.
 
 **Diagnostic env-var family.** Matches the existing `QORE_AOT_*_TRACE`
 discipline. Trace variables only log; they never enable additional checks or
