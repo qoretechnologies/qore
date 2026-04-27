@@ -371,9 +371,14 @@ deterministic.
 
 The `plugin_module_handle` is valid only for the calling thread's current
 `qore_module_init` invocation. Modules MUST NOT cache it, compare it, serialize
-it, or pass a handle issued for another module. The runtime may use generation
-cookies or another private representation to reject stale handles, but plugins
-must treat reuse outside module init as undefined behaviour.
+it, or pass a handle issued for another module. The runtime detects stale
+handles on a best-effort basis using a private representation (e.g.,
+generation cookies); when detected, the diagnostic is
+`PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` with subreason `module_handle_stale`.
+Plugin authors must NOT rely on detection — a cached handle is undefined
+behaviour, and detection is a debugging aid rather than a soundness contract.
+Tests asserting "stale handle ⇒ rejection" are non-portable and should not
+be written.
 
 The corresponding `ModuleManager.h` ABI addition is intentionally narrow:
 
@@ -381,10 +386,29 @@ The corresponding `ModuleManager.h` ABI addition is intentionally narrow:
 struct QorePluginModuleHandle;  // opaque, runtime-owned
 
 struct QoreModuleInitContext {
+    //! Absolute filesystem path of the loaded .qmod (or .qm source) — the
+    //! same value the existing module loader passes to other module-init
+    //! paths. Predates the plugin protocol and is unchanged.
     std::string path;
+
+    //! Runtime-owned opaque handle, valid only during this thread's
+    //! current qore_module_init invocation. Passed to
+    //! qore_register_plugin_types_v1 / qore_validate_plugin_types_v1 to
+    //! authorize helper-symbol lookup against the module's own binary.
+    //! Added in Phase 3.
     const QorePluginModuleHandle* plugin_module_handle;
 };
 ```
+
+**C++ ABI vs. C ABI boundary.** Everything in `QorePluginType.h` is C-ABI by
+design — function-pointer typedefs, plain structs, fixed-width integers — so
+plugin authors writing in pure C or against an alternate C++ standard library
+can use the plugin protocol without crossing libqore's libstdc++ ABI.
+`QoreModuleInitContext` is the one place where the registration entry point
+crosses into libqore's C++ ABI: it contains `std::string path`, which couples
+the struct to libqore's compiled-in libc++/libstdc++ version. Plugin authors
+working in pure C must accept this coupling at the entry point or use a
+future C-ABI module-info fallback (TBD; not part of v1).
 
 ```cpp
 // header: include/qore/QorePluginType.h (new)
@@ -648,6 +672,13 @@ struct QorePluginTypeRegistration {
 //! null init_ctx, an init context not owned by the current module init call, or
 //! an init context without a live plugin_module_handle is rejected before
 //! descriptor validation.
+//!
+//! `init_ctx` is consumed during the call only; libqore does not retain the
+//! pointer past return. The caller's storage may be released or reused after
+//! qore_register_plugin_types_v1 returns. The same lifetime rule applies to
+//! `reg`: pointers inside the registration table (helper pointers, type info,
+//! extension data) are interned by libqore during the call and the descriptor
+//! itself does not need to outlive registration.
 int qore_register_plugin_types_v1(
     const QoreModuleInitContext* init_ctx,
     const QorePluginTypeRegistration* reg,
@@ -1122,7 +1153,13 @@ reserved and invalid in canonical signature version 1.
 on **any** byte-layout change to the canonical form, including field
 appends. Trailing-field appends are explicitly not version-stable: the
 writer always emits the wire-field version that matches its layout and uses the
-same byte as the first byte of the hash preimage. A loader that sees an
+same byte as the first byte of the hash preimage.
+
+The version byte appears twice — once in the `PLUGIN_HELPER_REFS` entry
+header, once as the first byte of the hash preimage. The two MUST agree (the
+writer emits them from the same value); the duplication exists so loaders
+can fast-reject unsupported versions in O(1) before paying for canonical-form
+serialisation and hashing of the live signature. A loader that sees an
 unrecognised `canonical_signature_version` in a `PLUGIN_HELPER_REFS` entry
 rejects that entry with `QORD-PLUGIN-SIGNATURE-VERSION-UNSUPPORTED`
 (subreason `unsupported_canonical_version`, see §3.12 error-code table) before
@@ -1389,6 +1426,13 @@ int qore_validate_plugin_types_v1(
     ExceptionSink* xsink);
 ```
 
+The `module_handle` field of `QorePluginValidationContext` accepts the same
+opaque handle that `QoreModuleInitContext::plugin_module_handle` carries
+during the calling thread's `qore_module_init` invocation. The validator
+and registration share a single handle type — a plugin author writing a
+self-test inside `qore_module_init` reads the handle once from the init
+context and passes it to either entry point.
+
 A non-null `ctx` with `struct_size < offsetof(QorePluginValidationContext,
 module_handle)` is rejected as `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` with
 subreason `"validation_context_too_small"` because the runtime cannot read the
@@ -1402,6 +1446,14 @@ flags, so any bit set in `ctx->flags` is unknown and rejected with subreason
 "treat deferred contextual checks as failures" are described in prose until
 they become real ABI flags.
 
+The mask is informational only — callers do not mask against it before
+passing flags. The runtime is the sole arbiter of which bits are accepted,
+and rejects unknown bits unilaterally regardless of what the calling
+header's mask declares. The mask documents which bits the published v1
+header treats as unassigned, useful for downstream tooling that wants to
+display "all flag bits unassigned in this libqore version" without
+hardcoding the value.
+
 When `collect_all` is true, the validator walks the entire descriptor
 and reports every violation it finds as a single chained exception
 whose `arg` is a `list<hash<PluginValidationViolation>>` listing each
@@ -1413,9 +1465,10 @@ first violation only.
 
 **Reserved subreasons.** `subreason` is a stable identifier, not a free-form
 message. Core subreasons are snake_case ASCII with no version suffix; extension
-validation subreasons use the explicit namespaced pattern in the table below.
-The v1 protocol defines these values; future revisions append without renaming
-or removing:
+validation subreasons use the colon-separated `extension:<id>:<reason>`
+pattern in the table below (colons rather than dots so the format remains
+parseable when extension ids themselves contain dots). The v1 protocol defines
+these values; future revisions append without renaming or removing:
 
 | Subreason | Used by |
 |---|---|
@@ -1438,7 +1491,7 @@ or removing:
 | `helper_symbol_not_found` | `PLUGIN-REGISTRATION-HELPER-SYMBOL-MISSING` |
 | `module_handle_missing` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` |
 | `module_handle_stale` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` |
-| `extension.<extension_id>.<reason>` | `PLUGIN-EXTENSION-VALIDATION-FAILED`; extension id and reason are ASCII, byte-exact, and owned by the extension ABI |
+| `extension:<extension_id>:<reason>` | `PLUGIN-EXTENSION-VALIDATION-FAILED`. Format uses colon separators (not dots) because canonical extension ids contain dots — `qore.plugin.llvm.codegen` → `extension:qore.plugin.llvm.codegen:unsupported_target`. Parsers split on the first and last `:`; `extension_id` is byte-exact equal to the registered `QorePluginExtension::extension_id`; `reason` is ASCII snake_case owned by the extension ABI. The literal `extension` prefix is reserved and never used as a core subreason. |
 
 Implementations MUST NOT emit subreason strings outside this table for
 the corresponding error codes, except for the explicitly patterned extension
@@ -2028,7 +2081,11 @@ tests and conservative defaults.
   types through `Class::forName`. Phase 1 also adds a Qore-side reflection
   accessor for the canonical type path (working name
   `Qore::Reflection::Type::getPathName()`; implementation maps to
-  `qore_type_get_path()` / `QoreTypeInfo::getPath()`). `Type::getName()`
+  `qore_type_get_path()` / `QoreTypeInfo::getPath()`). This mirrors the
+  existing `Class::getPathName()` — same semantics for class types
+  (returns `Foo::MyClass`), extends naturally to non-class types
+  (`buffer<int64>`, `hash<string,int>`, etc.), and is the canonical
+  identity used by QORD and plugin signature hashing. `Type::getName()`
   remains the display/simple name and is never used for QORD identity or
   plugin signature hashing. The exact reflection-API name can change at
   implementation time, but the requirement is that plugin types not be
