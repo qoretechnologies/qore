@@ -392,6 +392,14 @@ enum class QorePluginValueAccess : uint8_t {
     MutatesBoth    = 3,
 };
 
+enum class QorePluginResultAlias : uint8_t {
+    Unknown            = 0,
+    MayAliasInputs     = 1,
+    FreshNoAliasInputs = 2,
+    ReturnsLhs         = 3,
+    ReturnsRhs         = 4,
+};
+
 //! Per-instance lifecycle operations. Required for every registered plugin
 //! type. NaN-boxed bits in / NaN-boxed bits out; ExceptionSink* receives any
 //! error. Helpers must be exception-safe — partial state on xsink is the
@@ -439,12 +447,33 @@ typedef const QoreTypeInfo* (*PluginTypePromotionCallback)(
     const QoreTypeInfo* lhs,
     const QoreTypeInfo* rhs);
 
+//! Stable byte sink/source for plugin QORD payloads. These intentionally avoid
+//! exposing QoreAOTBinaryWriter / QoreAOTBinaryReader in the public plugin ABI.
+typedef int (*PluginByteWriteCallback)(
+    const void* data,
+    uint32_t len,
+    void* user_data,
+    ExceptionSink* xsink);
+typedef int (*PluginByteReadCallback)(
+    void* data,
+    uint32_t len,
+    void* user_data,
+    ExceptionSink* xsink);
+
 //! QORD wire-format codec for a plugin value. Called during AOT serialization
-//! / deserialization of constants and slot-table entries.
+//! / deserialization of constants and slot-table entries. The serializer writes
+//! only the module-defined payload; the QORD layer writes the common
+//! VT_PLUGIN_INSTANCE header from §3.9.
 typedef int  (*PluginSerializeCallback)(
-    uint64_t value_bits, QoreAOTBinaryWriter* w, ExceptionSink* xsink);
+    uint64_t value_bits,
+    PluginByteWriteCallback write,
+    void* write_user_data,
+    ExceptionSink* xsink);
 typedef uint64_t (*PluginDeserializeCallback)(
-    QoreAOTBinaryReader* r, ExceptionSink* xsink);
+    PluginByteReadCallback read,
+    uint32_t payload_len,
+    void* read_user_data,
+    ExceptionSink* xsink);
 
 //! Opaque optional-extension payload. The stable v1 ABI defines extension ids
 //! but not their contents. For example, the LLVM codegen extension id points to
@@ -452,6 +481,7 @@ typedef uint64_t (*PluginDeserializeCallback)(
 struct QorePluginExtension {
     const char* extension_id;
     const void* extension_data;
+    bool required;
 };
 
 struct QorePluginOperationSignature {
@@ -478,6 +508,7 @@ struct QorePluginOperationSignature {
     //! variants disable that reordering for the named operand. See §3.4
     //! "Optimizer passes use these fields" for the full list of consumers.
     QorePluginValueAccess access;
+    QorePluginResultAlias result_alias;
     QorePluginHelperAbi helper_abi;
 };
 
@@ -513,6 +544,12 @@ struct QorePluginOperation {
     //! violation in %modern (parse-time error).
     uint64_t lowering_claimed_node_kinds;
 
+    //! QDOM domain bits required by this operation; ORed into the sandbox-domain
+    //! mask of every call site using this operation. Keep operation domains
+    //! narrow: in-memory DataFrame filtering should not inherit FILESYSTEM just
+    //! because the same type also has CSV helpers.
+    int64_t qdom_domains;
+
     const QorePluginExtension* extensions;
     int num_extensions;
 };
@@ -529,9 +566,10 @@ struct QorePluginTypeDescriptor {
     //! readers reject payloads whose recorded version is unsupported by
     //! the live deserializer. Default 1 for new types.
     uint16_t serializer_format_version;
-    //! QDOM domain bits this type's operations require; ORed into the
-    //! sandbox-domain mask of every site that constructs or invokes this type.
-    int64_t qdom_domains;
+    //! Optional baseline QDOM domain bits required by all operations on this
+    //! type. Most types should leave this as QDOM_DEFAULT and declare domains
+    //! per operation instead.
+    int64_t baseline_qdom_domains;
 };
 
 struct QorePluginDependency {
@@ -604,14 +642,14 @@ Constraints:
   `runtime_helper_symbol` from the binary module handle at registration time
   and stores the resolved pointer in the helper table. JIT/AOT/interpreter
   execution never performs late `dlsym` lookup from hot paths.
-- Optional extensions are ignored unless the runtime recognizes their
-  `extension_id`. The first planned extension is `"qore.plugin.llvm.codegen"`
-  from `QorePluginLLVM.h`. Recognized extensions are always validated:
-  registration rejects `"qore.plugin.llvm.codegen"` whose
-  `libqore_llvm_major` does not equal libqore's compiled-in
-  `QORE_LLVM_MAJOR`. The diagnostic names both versions and the offending
-  module; the surrounding registration still succeeds without the
-  codegen extension (the module loads in runtime-helper mode).
+- Extensions are ignored unless the runtime recognizes their `extension_id`.
+  If `required == false`, a recognized but invalid extension is dropped with a
+  warning and the rest of registration continues. If `required == true`, the
+  same validation failure rejects the whole registration. The first planned
+  extension is `"qore.plugin.llvm.codegen"` from `QorePluginLLVM.h`:
+  `libqore_llvm_major != QORE_LLVM_MAJOR` drops an optional codegen extension
+  but rejects a required one. The diagnostic names both versions and the
+  offending module.
 - `operation_set_version` and `min_operation_set_version` use semver-major-
   compatible comparison: a dependency is satisfied iff the provided major
   equals the requested major and the (minor, patch) tuple is ≥ the
@@ -619,24 +657,30 @@ Constraints:
   ABI versions never gain backward compatibility, by construction.
 
 **Operation-name table.** When `operation_name` is one of the names below,
-the optimizer reads built-in algebraic priors regardless of what
-`OpcodeInfoExtended` declares — the built-in priors strictly tighten the
-declared metadata, never loosen it (a name declared `is_commutative = false`
-that is in the commutative-by-name table stays non-commutative; the table
-cannot grant unsafe folds). Names outside the table are opaque.
+the runtime recognizes the operation's category and expected signature shape.
+The table does **not** grant algebraic rewrite permissions by itself. Unsafe
+properties such as associativity, idempotence, identity folding, and floating-
+point reassociation must be declared per signature in `OpcodeInfoExtended`.
+Names outside the table are opaque.
 
-| Name | Arity | Built-in priors |
+| Name | Arity | Category / conservative default |
 |---|---|---|
-| `add`, `mul`, `bit_or`, `bit_and`, `bit_xor` | 2 | commutative, associative, has_identity (kind from result type) |
+| `add`, `mul`, `bit_or`, `bit_and`, `bit_xor` | 2 | arithmetic/bitwise; no associativity by name |
 | `sub`, `div`, `mod` | 2 | non-commutative, non-associative |
-| `eq`, `ne` | 2 | commutative, pure_modulo_xsink |
-| `lt`, `le`, `gt`, `ge` | 2 | non-commutative, pure_modulo_xsink |
-| `neg`, `bit_not`, `not` | 1 | involution candidate (`op(op(x)) == x`) |
-| `subscript`, `slice` | 2 | pure_modulo_xsink (read-only by name) |
-| `size`, `count`, `any`, `all` | 1 | pure_modulo_xsink, idempotent |
-| `sum`, `min`, `max` | 1 | reduction; pure_modulo_xsink |
+| `eq`, `ne` | 2 | comparison; commutativity must be declared per signature |
+| `lt`, `le`, `gt`, `ge` | 2 | ordered comparison; non-commutative |
+| `neg`, `bit_not`, `not` | 1 | unary; involution must be declared per signature |
+| `subscript`, `slice` | 2 | read-like access when `signature.access == ReadOnly` |
+| `size`, `count`, `any`, `all` | 1 | query/reduction; not idempotent by name |
+| `sum`, `min`, `max` | 1 | reduction; associativity/reassociation must be declared per signature |
 | `mean` | 1 | reduction; pure_modulo_xsink (FP-non-associative even when sum is) |
-| `clone` | 1 | pure_modulo_xsink (allocation-only side effect) |
+| `clone` | 1 | allocation-producing copy; use `FreshNoAliasInputs`, not purity |
+
+Floating-point `add`, `mul`, `sum`, `mean`, and any operation whose result
+depends on evaluation order may only opt into reassociation/vector-reduction
+rewrites when a future explicit fast-math-style flag is present. Plain
+`is_associative = true` is not sufficient for IEEE-sensitive floating-point
+storage.
 
 Optional LLVM extension header:
 
@@ -697,7 +741,6 @@ struct OpcodeInfoExtended : public OpcodeInfo {
 
     // Effect — contractual.
     bool is_pure_modulo_xsink;     //!< no side effects except via ExceptionSink
-    bool may_alias_inputs;         //!< result may share storage with inputs
     bool can_vectorize;            //!< safe to apply elementwise across a buffer
 
     // Type system — contractual.
@@ -728,6 +771,10 @@ Optimizer passes use these fields the same way they currently use
   `MutatesRhs`, `MutatesBoth` disable that reordering for the named
   operand and force the optimizer to treat the call as a write to that
   operand's storage for purposes of memory-dependency tracking.
+- `signature.result_alias` tells the optimizer whether the return value may
+  alias operand storage. `FreshNoAliasInputs` is required for copy-like
+  allocation operations such as `clone`; those operations are not pure just
+  because allocation is their only side effect.
 - `is_simd_friendly` and `cost_class` are advisory inputs to scheduling,
   outlining, and codegen heuristics; they do not affect correctness.
 
@@ -777,16 +824,18 @@ externally visible (`DLLEXPORT`) when exported by the module, but the runtime
 does not currently perform generic `dlsym` lookup for JIT helpers.
 
 **Resolution mechanism.** Three execution tiers must reach the registered
-helper pointer; the protocol uses a single per-Program plugin-helper table to
-serve all three:
+helper pointer; the protocol uses a process-global immutable helper table plus
+per-Program activation/import state:
 
 1. **IR interpreter.** `qore_register_plugin_types_v1` populates a
-   table indexed by global operation id. Each entry stores
-   `(void* helper, QorePluginHelperAbi helper_abi, signature)`. The interpreter's
+   process-global immutable helper table indexed by global operation id. Each
+   entry stores `(void* helper, QorePluginHelperAbi helper_abi, signature)`.
+   Each Program carries an activation/import bitset that says which global ids
+   it may reference. The interpreter's
    `PluginUnary` / `PluginBinary` / `PluginCall` / `PluginSubscript` handlers
    read the descriptor's global id from the instruction's operand stream,
-   verify the expected helper ABI in debug builds, cast to the declared
-   trampoline type, and call it.
+   verify the Program activation bit and expected helper ABI in debug builds,
+   cast to the declared trampoline type, and call it.
 2. **JIT.** The ORC symbol resolver consults the same table on first
    reference: `qore_rt_<module>_<op>_<typesig>` becomes a generated lookup
    stub that loads from the table at the slot recorded in the IR
@@ -796,7 +845,10 @@ serve all three:
    `plugin_helpers: void*[]` plus parallel helper-ABI/signature metadata
    populated alongside the existing `LocalVar*` / `Var*` / expression arrays.
    AOT-emitted code references plugin helpers by slot index
-   (`ctx->plugin_helpers[N]`), not by symbol. The new
+   (`ctx->plugin_helpers[N]`), not by symbol. QORD serializes the per-function
+   mapping from local slot index to global operation id in `PLUGIN_HELPER_REFS`
+   (§3.9), so an artifact never assumes that two Programs have identical local
+   helper-table layouts. The new
    `qore_aot_module_init_v4` entry point fills `plugin_helpers[]` after the
    `PLUGIN_IMPORTS` section has been resolved against loaded modules — the
    discipline matches `qore_aot_module_init_v3`'s expression-slot
@@ -919,7 +971,7 @@ enum class QoreAOTSectionType : uint16_t {
     // ...existing 1-21...
     PLUGIN_TYPE_REGISTRY = 22,  //!< Per-module plugin-type metadata
     PLUGIN_IMPORTS       = 23,  //!< Required modules + type/op versions
-    PLUGIN_HELPER_REFS   = 24,  //!< Slot-index → (import_idx, op_local_id)
+    PLUGIN_HELPER_REFS   = 24,  //!< Slot-index → operation import reference
 };
 ```
 
@@ -944,11 +996,13 @@ The section records names and versions, not globally assigned feature bits.
 
 `PLUGIN_HELPER_REFS` is the wire-format counterpart of the `plugin_helpers[]`
 slot table on `QoreAOTContext` (§3.5): each entry is
-`(import_idx, op_local_id, signature_hash)` and the loader resolves it against
-`PLUGIN_IMPORTS` + the registered runtime helper table to populate
-`ctx->plugin_helpers[slot]` from `qore_aot_module_init_v4`. The signature hash
-prevents accidentally binding an operation whose local id was reused with a
-different ABI in an incompatible module build.
+`(slot_idx, global_operation_id, signature_hash)` after QORD import resolution.
+The loader first resolves `(import_idx, op_local_id)` from `PLUGIN_IMPORTS`
+into a process-global operation id, then records the local slot mapping used by
+the compiled function. `qore_aot_module_init_v4` uses this section to populate
+`ctx->plugin_helpers[slot_idx]`. The signature hash prevents accidentally
+binding an operation whose local id was reused with a different ABI in an
+incompatible module build.
 
 New value tag (or range):
 
@@ -1152,7 +1206,7 @@ buffer<int64> b2 = buffer<int64>(l);               # explicit unboxing (from-lis
 # Arithmetic (elementwise, SIMD-backed via Eigen or hand-written)
 buffer<float64> c    = a + b;
 buffer<float64> d    = a * 2.0;                    # broadcast scalar
-float64         mean = a.mean();
+float           mean = a.mean();
 buffer<bool>    mask = a > 0.0;                    # predicate → bitmap
 
 # Reductions
@@ -1477,10 +1531,10 @@ tests and conservative defaults.
   `bool`.
 - Arithmetic, reductions, slicing, iteration, conversion to/from `list<T>`.
 - Expose `buffer<T>` and its element-type set through the `reflection`
-  binary module so `Type::forName("buffer<int64>")`, `Class::forName`
-  variants, and the `*Type` family in `Qore::Reflection` see the new
-  type. Without this, plugin types are invisible to Qore-side
-  metaprogramming and QLS.
+  binary module so `Type("buffer<int64>")`, any future explicit
+  `Type::forName` helper, and the `*Type` family in `Qore::Reflection` see
+  the new type. Do not route native non-class types through `Class::forName`.
+  Without this, plugin types are invisible to Qore-side metaprogramming and QLS.
 - ABI not yet exposed externally — plugin-type registration still internal.
 
 Validates the protocol shape end-to-end through IR interpreter, JIT, AOT.
