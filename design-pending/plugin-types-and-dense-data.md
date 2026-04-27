@@ -807,23 +807,26 @@ module-load failure path. No descriptor from that failed attempt was ever
 published, no hot-path reader could have observed it, and provisional ids from
 the pending transaction may be reused. If `qore_module_init` succeeds, libqore
 publishes the pending registration under the registry write lock, converts
-provisional local-to-global mappings into committed ids, and wakes any
-concurrent registrants waiting on the module's outcome. Descriptors from
-earlier, already-finished module loads are never affected by a later module's
-init failure.
+provisional local-to-global mappings into committed ids, builds a new immutable
+committed snapshot, release-stores the committed snapshot pointer/generation,
+and wakes any concurrent registrants waiting on the module's outcome.
+Descriptors from earlier, already-finished module loads are never affected by a
+later module's init failure.
 
 The wakeup primitive is a per-pending-transaction condition variable paired
 with the registry write lock; waiters block on the condvar until the pending
-transaction publishes or discards. There is no polling and no timeout —
-forward progress is guaranteed by deadlock detection (below) rather than by
-bounded waits.
+transaction publishes or discards. There is no polling and no protocol timeout.
+Deadlock detection below guarantees only that registration-internal waits cannot
+form cycles; it does not bound a module-init thread that blocks indefinitely in
+unrelated init work.
 
 Publish is atomic with respect to all concurrent registrants and all hot-path
 readers. There is no observer-visible state where a module's descriptors are
-partially published: the registry write lock covers the entire transition
-from pending to committed, including provisional-id conversion, conflict
-finalisation against other still-pending registrants, and condvar
-notification.
+partially published: the registry write lock covers construction of the next
+immutable descriptor/helper snapshot and the release-store that makes it the
+committed snapshot. Hot-path readers acquire-load the snapshot pointer/generation
+and read only immutable committed tables; they never read the mutable pending
+table and never depend on the registry lock.
 
 A module-init transaction supports at most one successful
 `qore_register_plugin_types_v1` call. A second call after a successful first
@@ -838,13 +841,12 @@ module-init transactions. When a registrant attempts to wait on a pending
 transaction whose owning thread is itself (transitively) waiting on the
 registrant's own transaction, the cycle is detected: the detecting registrant
 fails immediately with `PLUGIN-REGISTRATION-WAIT-CYCLE` (subreason
-`wait_cycle_with_<other_module>`) instead of waiting. This bounds every wait
-by the depth of the wait-for graph and converts what would otherwise be a
-silent hang into a named, recoverable diagnostic. Plugin authors hitting
-this code in production almost always indicate two modules with mutually
-dependent init paths that would race regardless of plugin registration; the
-wait-cycle diagnostic surfaces the load-order bug at the registration
-boundary.
+`wait_cycle`) instead of waiting. The structured diagnostic payload names the
+other transaction that completes the cycle. This converts a registry wait cycle
+into a named, recoverable diagnostic. Plugin authors hitting this code in
+production almost always indicate two modules with mutually dependent init paths
+that would race regardless of plugin registration; the wait-cycle diagnostic
+surfaces the load-order bug at the registration boundary.
 
 **Two evolution disciplines, intentionally.** The plugin protocol uses two
 distinct forward-compatibility patterns:
@@ -875,9 +877,11 @@ Constraints:
   committed table at load time. If a QORD load races a module's pending
   `qore_module_init` and the QORD's `PLUGIN_IMPORTS` reference the
   still-pending module, QORD load fails with `QORD-PLUGIN-IMPORT-MISSING`.
-  The QORD loader does not wait on pending module-init transactions because
-  QORD load and module-init can themselves form wait cycles; callers retry
-  the QORD load after the module's init completes.
+  The diagnostic uses subreason `module_pending` and names the pending module in
+  `related_module_name`, so callers can distinguish a retryable pending import
+  from a genuinely missing module. The QORD loader does not wait on pending
+  module-init transactions because QORD load and module-init can themselves form
+  wait cycles; callers retry the QORD load after the module's init completes.
 - The first implementation lowers plugin operations to built-in
   descriptor-carrying opcodes, one per `QorePluginHelperAbi`:
   `PluginUnary`, `PluginBinary`, `PluginCall`, `PluginSubscript`,
@@ -1459,10 +1463,9 @@ user writes `tensor + buffer`, who registers `add.tensor_buffer`?
    them in registration-order. Each wakeup re-checks the full set of
    conflicts before either succeeding, failing with a committed-conflict
    diagnostic, or waiting on the next pending registrant. There is no bound
-   on how many sequential waits a registrant may incur, but each wait is
-   bounded by the depth of the wait-for graph; waits that would create a
-   cycle fail immediately with `PLUGIN-REGISTRATION-WAIT-CYCLE` per §3.3
-   rather than blocking.
+   on how many sequential waits a registrant may incur; waits that would create
+   a registration wait-for cycle fail immediately with
+   `PLUGIN-REGISTRATION-WAIT-CYCLE` per §3.3 rather than blocking.
 3. **Commutative auto-symmetry.** If a registration for
    `(A, B, op)` declares `is_commutative = true`, the runtime synthesises
    the `(B, A, op)` site automatically — registering both halves
@@ -1550,9 +1553,13 @@ one of the following error codes (matching existing `AOT-PENDING-CONSTANT`
 / `RUNTIME-OVERLOAD`-style convention). Tooling and CI test harnesses
 match against the code, not the message. Codes are stable families; the
 structured violation payload carries the precise `field_name` and `subreason`
-for field-level checks. Each diagnostic message MUST include: offending module
-name, offending type/operation name, the field that violated the rule, expected
-vs. actual values, and the section number of this design that defines the rule.
+for field-level checks. Diagnostics that compare two runtime entities carry
+`related_module_name`, `related_type_name`, and `related_operation_name` fields
+when applicable instead of encoding those names into `subreason`. Each
+diagnostic message MUST include: offending module name, offending type/operation
+name when known, the field that violated the rule for field-level checks,
+expected vs. actual values when a comparison exists, and the section number of
+this design that defines the rule.
 
 | Error code | Raised by | Section |
 |---|---|---|
@@ -1566,13 +1573,13 @@ vs. actual values, and the section number of this design that defines the rule.
 | `PLUGIN-EXTENSION-ABI-MISMATCH` | registration / validation (LLVM extension version mismatch) | §3.3 / §3.6 |
 | `PLUGIN-EXTENSION-UNRECOGNIZED-REQUIRED` | registration / validation | §3.3 |
 | `PLUGIN-EXTENSION-VALIDATION-FAILED` | registration / validation (recognized extension whose payload fails its own validation, non-version causes; subreason carries per-extension specifics) | §3.3 |
-| `PLUGIN-CROSS-TYPE-CONFLICT` | registration / contextual validation (cross-module); subreason `pending_conflict_with_<module>` when the conflict is with a still-pending registration seen during dry-run validation | §3.10 / §3.12 |
-| `PLUGIN-REGISTRATION-WAIT-CYCLE` | registration wait-for-graph cycle detection; subreason `wait_cycle_with_<other_module>` | §3.3 |
+| `PLUGIN-CROSS-TYPE-CONFLICT` | registration / contextual validation (cross-module); subreason `pending_conflict` when the conflict is with a still-pending registration seen during dry-run validation, with the pending module in `related_module_name` | §3.10 / §3.12 |
+| `PLUGIN-REGISTRATION-WAIT-CYCLE` | registration wait-for-graph cycle detection; subreason `wait_cycle`, with the other transaction in `related_module_name` | §3.3 |
 | `PLUGIN-LOWERING-CLAIM-VIOLATED` | parse-time lowering | §3.7 |
 | `PLUGIN-HELPER-RESULT-TYPE-MISMATCH` | runtime verifier | §3.4 |
 | `PLUGIN-HELPER-ALIAS-CONTRACT-VIOLATED` | runtime verifier | §3.3 (`ReturnsLhs`/`ReturnsRhs`) |
 | `PLUGIN-HELPER-ABI-MISMATCH` | runtime verifier | §3.5 |
-| `QORD-PLUGIN-IMPORT-MISSING` | QORD loader | §3.9 |
+| `QORD-PLUGIN-IMPORT-MISSING` | QORD loader; subreason `module_pending` when the named import matches a still-pending module-init transaction | §3.9 |
 | `QORD-PLUGIN-HELPER-REF-INVALID` | QORD loader (`slot_idx`, `import_idx`, or `op_local_id` invalid) | §3.9 |
 | `QORD-PLUGIN-SIGNATURE-HASH-MISMATCH` | QORD loader | §3.9 |
 | `QORD-PLUGIN-SIGNATURE-VERSION-UNSUPPORTED` | QORD loader (unrecognised `canonical_signature_version` byte; subreason `unsupported_canonical_version`) | §3.9 |
@@ -1698,9 +1705,11 @@ hardcoding the value.
 When `collect_all` is true, the validator walks the entire descriptor
 and reports every violation it finds as a single chained exception
 whose `arg` is a `list<hash<PluginValidationViolation>>` listing each
-issue with `(error_code, module_name, type_name, operation_name,
-field_name, expected, actual, section_ref, subreason)`. This is the mode
-plugin author CI scripts and IDE integrations should use; production module
+issue with `(error_code, module_name, related_module_name, type_name,
+related_type_name, operation_name, related_operation_name, field_name, expected,
+actual, section_ref, subreason)`. The related-name fields are `NOTHING` unless a
+diagnostic compares the descriptor to another module/type/operation. This is the
+mode plugin author CI scripts and IDE integrations should use; production module
 load uses the fail-fast equivalent (`collect_all == false`) which returns the
 first violation only.
 
@@ -1738,8 +1747,9 @@ removing:
 | `module_handle_missing` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` |
 | `module_handle_stale` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` |
 | `registration_already_pending` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` (second `qore_register_plugin_types_v1` call within one module-init transaction) |
-| `wait_cycle_with_<module>` | `PLUGIN-REGISTRATION-WAIT-CYCLE`; `<module>` is the byte-exact module name of the other transaction completing the wait-for cycle |
-| `pending_conflict_with_<module>` | `PLUGIN-CROSS-TYPE-CONFLICT` from `qore_validate_plugin_types_v1` when a conflict is detected against a still-pending registration; `<module>` is the byte-exact name of the pending module |
+| `wait_cycle` | `PLUGIN-REGISTRATION-WAIT-CYCLE`; `related_module_name` is the byte-exact module name of the other transaction completing the wait-for cycle |
+| `pending_conflict` | `PLUGIN-CROSS-TYPE-CONFLICT` from `qore_validate_plugin_types_v1` when a conflict is detected against a still-pending registration; `related_module_name` is the byte-exact name of the pending module |
+| `module_pending` | `QORD-PLUGIN-IMPORT-MISSING` when `PLUGIN_IMPORTS` references a still-pending module-init transaction; `related_module_name` is the byte-exact name of the pending module |
 | `extension:<extension_id>:<reason>` | `PLUGIN-EXTENSION-VALIDATION-FAILED`. Format uses colon separators (not dots) because canonical extension ids contain dots — `qore.plugin.llvm.codegen` → `extension:qore.plugin.llvm.codegen:unsupported_target`. Parsers split on the first and last `:`; `extension_id` is byte-exact equal to the registered `QorePluginExtension::extension_id` and therefore cannot itself contain `:`; `reason` is ASCII snake_case owned by the extension ABI. The literal `extension` prefix is reserved and never used as a core subreason. |
 
 Implementations MUST NOT emit subreason strings outside this table for
@@ -1770,11 +1780,11 @@ wait on pending transactions because dry-run validation can be invoked from
 any thread, including ones that would form wait cycles. When a conflict is
 detected against a pending registration, the validator reports
 `PLUGIN-CROSS-TYPE-CONFLICT` with subreason
-`pending_conflict_with_<module>`; against a committed registration the
-subreason is omitted (the diagnostic message names the committed module
-directly). Plugin authors thus see during the dry run whether a conflicting
-pending registration may still resolve in their favour (the other module's
-init might fail) or has already committed and locked them out.
+`pending_conflict` and the pending module in `related_module_name`; against a
+committed registration the subreason is omitted and `related_module_name` names
+the committed module. Plugin authors thus see during the dry run whether a
+conflicting pending registration may still resolve in their favour (the other
+module's init might fail) or has already committed and locked them out.
 
 `qore_register_plugin_types_v1` itself runs in fail-fast mode and never
 collects — registration is a single module-init transaction, not a diagnostic
