@@ -109,7 +109,11 @@ public:
     // deletes everything on the stack
     DLLLOCAL void del(ExceptionSink* xsink) {
         while (curr->prev || curr->pos) {
-            uninstantiate(xsink);
+            uninstantiateIntern();
+            ClosureVarValue* cvv = curr->var[curr->pos].cvv;
+            if (cvv) {
+                cvv->deref(xsink);
+            }
         }
     }
 
@@ -288,8 +292,15 @@ public:
         assert(frame_count >= 0);
         --frame_count;
         //printd(5, "ThreadClosureVariableStack::popFrameBoundary(): fc:%d\n", frame_count);
-        uninstantiateIntern();
-        assert(!curr->var[curr->pos].cvv);
+        while (curr->prev || curr->pos) {
+            uninstantiateIntern();
+            ClosureVarValue* cvv = curr->var[curr->pos].cvv;
+            if (!cvv) {
+                return;
+            }
+            cvv->deref(nullptr);
+        }
+        assert(false);
     }
 
     DLLLOCAL int getFrame(int frame, Block*& w, int& p);

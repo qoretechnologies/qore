@@ -678,6 +678,19 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
             enclosing_locals[captured_names[ci]] = ctx.locals[parent_slot];
         }
     }
+    // 1c. Top-level locals live in the program LVList, not in the enclosing
+    // method/function context.  Add them as a fallback so closures created
+    // inside methods can still capture program-scope locals.
+    if (ctx.pgm) {
+        if (const LVList* top_lvars = qore_program_private::get(*ctx.pgm)->sb.getLVList()) {
+            for (unsigned i = 0; i < top_lvars->size(); ++i) {
+                LocalVar* lv = top_lvars->lv[i];
+                if (lv && lv->getName() && !enclosing_locals.count(lv->getName())) {
+                    enclosing_locals[lv->getName()] = lv;
+                }
+            }
+        }
+    }
     // 2. Closure's own parameter locals from its signature
     for (unsigned p = 0; p < closure_sig->numParams(); ++p) {
         const char* pname = closure_sig->getName(p);

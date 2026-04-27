@@ -2523,6 +2523,25 @@ void collectAllStatementLocals(const StatementBlock* block, std::vector<LocalVar
     }
 }
 
+void removeBlockLocalsFromBodyLocals(const StatementBlock* block, std::vector<LocalVar*>& locals) {
+    if (!block || locals.empty()) {
+        return;
+    }
+    const LVList* lvars = block->getLVList();
+    if (!lvars || !lvars->size()) {
+        return;
+    }
+
+    std::unordered_set<LocalVar*> block_locals;
+    for (unsigned i = 0; i < lvars->size(); ++i) {
+        block_locals.insert(lvars->lv[i]);
+    }
+    locals.erase(std::remove_if(locals.begin(), locals.end(),
+        [&block_locals](LocalVar* lv) {
+            return block_locals.count(lv) > 0;
+        }), locals.end());
+}
+
 // Forward declaration for mutual recursion with collectStmtSlotFromStatement
 void collectStmtSlotStatements(const StatementBlock* block,
         std::vector<const AbstractStatement*>& stmts);

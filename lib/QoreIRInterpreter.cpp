@@ -71,7 +71,7 @@
 // Compile-time guard: forces review of interpreter dispatch when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 363,
+static_assert(QORE_IR_MAX_OPCODE == 365,
     "New IR opcode added — review QoreIRInterpreter.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRToLLVM.cpp.");
 #include <qore/intern/QoreJIT.h>
@@ -92,6 +92,36 @@ static_assert(QORE_IR_MAX_OPCODE == 363,
 #include <qore/intern/QoreBinaryLValueOperatorNode.h>
 #include <qore/intern/QoreRemoveOperatorNode.h>
 #include <qore/intern/QoreDeleteOperatorNode.h>
+
+static QoreHashNode* makeImplicitHashForLValueType(const QoreTypeInfo* typeInfo, ExceptionSink* xsink) {
+    if (!QoreTypeInfo::parseAcceptsReturns(typeInfo, NT_HASH)) {
+        xsink->raiseException("RUNTIME-TYPE-ERROR", "cannot convert lvalue declared as %s to a hash",
+            QoreTypeInfo::getName(typeInfo));
+        return nullptr;
+    }
+
+    if (!typeInfo || typeInfo == anyTypeInfo || typeInfo == hashTypeInfo || typeInfo == hashOrNothingTypeInfo) {
+        return new QoreHashNode;
+    }
+
+    const QoreTypeInfo* sti = typeInfo == autoTypeInfo
+        ? autoTypeInfo
+        : QoreTypeInfo::getReturnComplexHashOrNothing(typeInfo);
+    if (sti) {
+        return new QoreHashNode(sti);
+    }
+
+    const TypedHashDecl* thd = QoreTypeInfo::getUniqueReturnHashDecl(typeInfo);
+    if (thd) {
+        QoreStringNode* desc = new QoreStringNodeMaker("Cannot implicitly create typed hash '%s' "
+            "with an assignment; to address this error, declare the typed hash before the assignment",
+            thd->getName());
+        xsink->raiseException("HASHDECL-IMPLICIT-CONSTRUCTION-ERROR", desc);
+        return nullptr;
+    }
+
+    return new QoreHashNode(QoreTypeInfo::getElementType(QoreTypeInfo::getReturnComplexHashOrNothing(typeInfo)));
+}
 
 //! Extract the base VarRefNode from a (possibly complex) lvalue expression tree.
 /** Walks the tree by following the "left" / "base" operand of operator nodes that
@@ -193,6 +223,7 @@ static bool guardPredicate(QoreIROpcode opcode, const QoreValue& value, const Qo
 #include <qore/intern/QoreUnaryMinusOperatorNode.h>
 #include <qore/intern/QoreUnaryPlusOperatorNode.h>
 #include <qore/intern/QoreCastOperatorNode.h>
+#include <qore/intern/BackquoteNode.h>
 #include <qore/intern/QoreInstanceOfOperatorNode.h>
 #include <qore/intern/ScopedObjectCallNode.h>
 #include <qore/intern/LocalVar.h>
@@ -798,6 +829,32 @@ static std::pair<bool, QoreValue> runDecomposedBackground(
         QoreValue(call_node).discard(xsink);
         return {true, result};
     }
+    return {false, QoreValue()};
+}
+
+static std::pair<bool, QoreValue> runBackgroundMetadata(
+        const QoreIRBackgroundInstruction* bg_inst,
+        const IRValueSlots& values,
+        ExceptionSink* xsink) {
+    if (!bg_inst || bg_inst->operands.empty()) {
+        return {false, QoreValue()};
+    }
+
+    if (bg_inst->kind == QoreIRBackgroundKind::DotEval) {
+        QoreValue recv = getIRValue(values, bg_inst->operands[0]);
+        if (recv.hasNode()) {
+            recv.refSelf();
+        }
+        QoreListNode* arg_list =
+            buildArgListFromIROperands(bg_inst->operands, 1, bg_inst->operands.size(), values);
+        MethodCallNode* new_m = new MethodCallNode(&loc_builtin, strdup(bg_inst->name.c_str()), arg_list);
+        QoreDotEvalOperatorNode* call_node =
+            new QoreDotEvalOperatorNode(&loc_builtin, recv, new_m);
+        QoreValue result = do_op_background(QoreValue(call_node), xsink);
+        QoreValue(call_node).discard(xsink);
+        return {true, result};
+    }
+
     return {false, QoreValue()};
 }
 
@@ -4293,17 +4350,6 @@ load_local_done:
                     // (it's held by TLS and managed separately)
                     values[hks_inst->operands[0].id] = QoreValue();
                 } else if (hash_val.isNothing()) {
-                    // Auto-vivify: create new hash, set key, assign to variable.
-                    // Use *Transfer so typed lvalues (hash<auto!>) take the unique
-                    // in-place branch in LValueHelper::assign — no extra copy.
-                    QoreHashNode* new_h = new QoreHashNode(autoTypeInfo);
-                    new_h->setKeyValue(hks_inst->key_name.c_str(), val.refSelf(), xsink);
-                    if (xsink && *xsink) {
-                        new_h->deref(xsink);
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                        cleanupLocalCaches();
-                        return false;
-                    }
                     LocalVar* lv;
                     bool is_closure;
                     if (hks_inst->container_lv) {
@@ -4313,6 +4359,23 @@ load_local_done:
                         lv = const_cast<LocalVar*>(
                             reinterpret_cast<const LocalVar*>(hks_inst->container->ref.id));
                         is_closure = (hks_inst->container->getType() == VT_CLOSURE);
+                    }
+
+                    // Auto-vivify according to the declared lvalue type, matching
+                    // LValueHelper::doHashLValue() including hashdecl error behavior.
+                    QoreHashNode* new_h = makeImplicitHashForLValueType(lv ? lv->getTypeInfoForLValue() : nullptr,
+                        xsink);
+                    if (!new_h || (xsink && *xsink)) {
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupLocalCaches();
+                        return false;
+                    }
+                    new_h->setKeyValue(hks_inst->key_name.c_str(), val.refSelf(), xsink);
+                    if (xsink && *xsink) {
+                        new_h->deref(xsink);
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupLocalCaches();
+                        return false;
                     }
                     if (is_closure) {
                         assignClosureVarValueTransfer(lv, QoreValue(new_h), xsink);
@@ -4398,16 +4461,6 @@ load_local_done:
                     }
                     values[hksd_inst->operands[0].id] = QoreValue();
                 } else if (hash_val.isNothing()) {
-                    // Auto-vivify: use *Transfer so typed lvalues (hash<auto!>)
-                    // take the unique in-place branch — no extra copy.
-                    QoreHashNode* new_h = new QoreHashNode(autoTypeInfo);
-                    new_h->setKeyValue(key_str->c_str(), val.refSelf(), xsink);
-                    if (xsink && *xsink) {
-                        new_h->deref(xsink);
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                        cleanupLocalCaches();
-                        return false;
-                    }
                     LocalVar* lv;
                     bool is_closure;
                     if (hksd_inst->container_lv) {
@@ -4417,6 +4470,23 @@ load_local_done:
                         lv = const_cast<LocalVar*>(
                             reinterpret_cast<const LocalVar*>(hksd_inst->container->ref.id));
                         is_closure = (hksd_inst->container->getType() == VT_CLOSURE);
+                    }
+
+                    // Auto-vivify according to the declared lvalue type, matching
+                    // LValueHelper::doHashLValue() including hashdecl error behavior.
+                    QoreHashNode* new_h = makeImplicitHashForLValueType(lv ? lv->getTypeInfoForLValue() : nullptr,
+                        xsink);
+                    if (!new_h || (xsink && *xsink)) {
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupLocalCaches();
+                        return false;
+                    }
+                    new_h->setKeyValue(key_str->c_str(), val.refSelf(), xsink);
+                    if (xsink && *xsink) {
+                        new_h->deref(xsink);
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupLocalCaches();
+                        return false;
                     }
                     if (is_closure) {
                         assignClosureVarValueTransfer(lv, QoreValue(new_h), xsink);
@@ -5052,19 +5122,21 @@ load_local_done:
                 auto* lc_inst = static_cast<QoreIRLoadConstantInstruction*>(inst);
                 bool needs_deref = true;
                 QoreValue out;
-                if (lc_inst->node) {
-                    out = const_cast<RuntimeConstantRefNode*>(lc_inst->node)->eval(
+                const RuntimeConstantRefNode* rcr = lc_inst->node
+                    ? lc_inst->node
+                    : dynamic_cast<const RuntimeConstantRefNode*>(lc_inst->expr.getInternalNode());
+                if (rcr) {
+                    out = const_cast<RuntimeConstantRefNode*>(rcr)->eval(
                             needs_deref, xsink);
                     if (!needs_deref && out.hasNode()) {
                         out = out.refSelf();
                     }
                     // Set exception location to the constant location if an exception occurred
-                    if (xsink && *xsink && lc_inst->node && lc_inst->node->loc) {
-                        xsink->setLastLocation(*lc_inst->node->loc);
+                    if (xsink && *xsink && rcr->loc) {
+                        xsink->setLastLocation(*rcr->loc);
                     }
                 } else {
-                    // AOT mode: node is null; expr holds the resolved constant value directly
-                    // (set by readOneExpr via resolveExprSlot for RUNTIME_CONST_REF)
+                    // AOT mode: expr holds the resolved constant value directly.
                     out = lc_inst->expr.refSelf();
                 }
                 if (xsink && *xsink) {
@@ -6213,6 +6285,53 @@ load_local_done:
                 QoreValue state_val = getIRValue(values, inst->operands[0]);
                 qore_rt_context_destroy(
                     static_cast<uint64_t>(state_val.getAsBigInt()), xsink);
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::Backquote: {
+                auto* backquote_inst = static_cast<QoreIRBackquoteInstruction*>(inst);
+                int rc = 0;
+                QoreStringNode* str = backquoteEval(backquote_inst->command.c_str(), rc, xsink);
+                QoreValue result = str ? QoreValue(str) : QoreValue();
+                if (xsink && *xsink) {
+                    if (inst->exception_target) {
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        prev_block = block;
+                        block = inst->exception_target;
+                        ip = 0;
+                        break;
+                    }
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupLocalCaches();
+                    return false;
+                }
+                setValueSlot(values, inst->result.id, result, xsink);
+                if (result.hasNode()) {
+                    cleanup.push_back(inst->result.id);
+                }
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::Find: {
+                auto* find_inst = static_cast<QoreIRFindInstruction*>(inst);
+                QoreValue result = fromBits(qore_rt_find(toBits(find_inst->exp),
+                    toBits(find_inst->find_exp), toBits(find_inst->where), xsink));
+                if (xsink && *xsink) {
+                    if (inst->exception_target) {
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        prev_block = block;
+                        block = inst->exception_target;
+                        ip = 0;
+                        break;
+                    }
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupLocalCaches();
+                    return false;
+                }
+                setValueSlot(values, inst->result.id, result, xsink);
+                if (result.hasNode()) {
+                    cleanup.push_back(inst->result.id);
+                }
                 ++ip;
                 break;
             }
@@ -9493,10 +9612,12 @@ lvalue_path_unary_done:
         case QoreIROpcode::BackgroundInt: {
                 auto* expr_inst = static_cast<QoreIRExprInstruction*>(inst);
                 QoreValue res;
+                auto* bg_inst = dynamic_cast<const QoreIRBackgroundInstruction*>(inst);
                 auto* bg_op = dynamic_cast<const QoreBackgroundOperatorNode*>(
                     expr_inst->expr.getInternalNode());
-                auto [matched, bg_result] = runDecomposedBackground(bg_op,
-                    expr_inst->operands, values, xsink);
+                auto [matched, bg_result] = bg_inst && !bg_op
+                    ? runBackgroundMetadata(bg_inst, values, xsink)
+                    : runDecomposedBackground(bg_op, expr_inst->operands, values, xsink);
                 if (matched) {
                     res = bg_result;
                 } else {

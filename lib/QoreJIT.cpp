@@ -253,6 +253,14 @@ bool QoreJIT::registerRuntimeSymbols(std::string& error) {
     addSymbol("qore_rt_invoke_expr", reinterpret_cast<void*>(&qore_rt_invoke_expr));
     addSymbol("qore_rt_make_string", reinterpret_cast<void*>(&qore_rt_make_string));
     addSymbol("qore_rt_make_string_len", reinterpret_cast<void*>(&qore_rt_make_string_len));
+    addSymbol("qore_rt_backquote", reinterpret_cast<void*>(&qore_rt_backquote));
+    addSymbol("qore_rt_backquote_throwing", reinterpret_cast<void*>(&qore_rt_backquote_throwing));
+    addSymbol("qore_rt_find", reinterpret_cast<void*>(&qore_rt_find));
+    addSymbol("qore_rt_find_throwing", reinterpret_cast<void*>(&qore_rt_find_throwing));
+    addSymbol("qore_rt_background_dot_eval_name_call_aot",
+        reinterpret_cast<void*>(&qore_rt_background_dot_eval_name_call_aot));
+    addSymbol("qore_rt_background_dot_eval_name_call_aot_throwing",
+        reinterpret_cast<void*>(&qore_rt_background_dot_eval_name_call_aot_throwing));
     addSymbol("qore_rt_catch_exception", reinterpret_cast<void*>(&qore_rt_catch_exception));
     addSymbol("qore_rt_catch_end", reinterpret_cast<void*>(&qore_rt_catch_end));
     addSymbol("qore_rt_rethrow", reinterpret_cast<void*>(&qore_rt_rethrow));

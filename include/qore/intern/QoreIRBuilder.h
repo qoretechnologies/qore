@@ -187,6 +187,9 @@ public:
         QoreIRValue second, QoreIRValue third, const QoreProgramLocation* loc = nullptr);
     QoreIRExprInstruction* createExprOp(QoreIROpcode op, const QoreValue& expr,
         const std::vector<QoreIRValue>& operands, const QoreProgramLocation* loc = nullptr);
+    QoreIRBackgroundInstruction* createBackground(QoreIRBackgroundKind kind, const std::string& name,
+        const QoreValue& expr, const std::vector<QoreIRValue>& operands,
+        const QoreProgramLocation* loc = nullptr);
     QoreIRCallDirectInstruction* createCallDirect(const QoreFunction* qf,
         const AbstractQoreFunctionVariant* variant, QoreProgram* pgm, const QoreValue& expr,
         const std::vector<QoreIRValue>& args, const QoreProgramLocation* loc = nullptr);
@@ -297,6 +300,10 @@ public:
         const QoreProgramLocation* loc = nullptr);
     //! Pop + free a Context frame.  Must be emitted on every exit path.
     QoreIRInstruction* createContextDestroy(QoreIRValue state, const QoreProgramLocation* loc = nullptr);
+    QoreIRBackquoteInstruction* createBackquote(const char* command,
+        const QoreProgramLocation* loc = nullptr);
+    QoreIRFindInstruction* createFind(const QoreValue& exp, const QoreValue& find_exp,
+        const QoreValue& where, const QoreProgramLocation* loc = nullptr);
     QoreIRSummarizeInstruction* createSummarize(const SummarizeStatement* stmt,
         const QoreProgramLocation* loc = nullptr);
     QoreIRSwitchRegexMatchInstruction* createSwitchRegexMatch(const CaseNodeRegex* regex_case,

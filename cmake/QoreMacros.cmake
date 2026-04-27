@@ -103,6 +103,7 @@ MACRO (QORE_WRAP_QPP_VALUE _cpp_files)
                            COMMAND ${QORE_QPP_EXECUTABLE}
                            ARGS --javadoc=${CMAKE_CURRENT_BINARY_DIR}/java --output=${_cppfile} --dox-output=${_doxfile} --metadata=${_metafile} ${_stub_arg} ${_infile}
                            MAIN_DEPENDENCY ${_infile}
+                           DEPENDS ${QORE_QPP_EXECUTABLE}
                            WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
                            VERBATIM
                         )

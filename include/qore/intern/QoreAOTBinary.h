@@ -105,8 +105,11 @@ constexpr uint64_t QORE_AOT_FEAT_MODULE_PATH_LISTS = 1ULL << 14; //!< per-Progra
 constexpr uint64_t QORE_AOT_FEAT_LVPATH_DELETE_EXPR = 1ULL << 15; //!< LValuePath records include optional original delete/remove lvalue expression for detach-then-destroy semantics
 constexpr uint64_t QORE_AOT_FEAT_LVPATH_PATTERN = 1ULL << 16; //!< serialized IR LValuePath records include optional regex/transliteration pattern metadata
 constexpr uint64_t QORE_AOT_FEAT_FUNC_CALL_VARIANT = 1ULL << 17; //!< FUNC_CALL expression slots include parse-time variant signature metadata
+constexpr uint64_t QORE_AOT_FEAT_BACKQUOTE = 1ULL << 18; //!< native IR Backquote opcode
+constexpr uint64_t QORE_AOT_FEAT_FIND = 1ULL << 19; //!< native IR Find opcode
+constexpr uint64_t QORE_AOT_FEAT_BACKGROUND_IR = 1ULL << 20; //!< native IR background call metadata
 //! Mask of all currently supported features
-constexpr uint64_t QORE_AOT_SUPPORTED_FEATURES   = 0x3FFFFULL;
+constexpr uint64_t QORE_AOT_SUPPORTED_FEATURES   = 0x1FFFFFULL;
 
 //! Section type IDs
 enum class QoreAOTSectionType : uint16_t {
@@ -2015,6 +2018,10 @@ enum class QoreIRInstGroup : uint8_t {
     LValuePath = 56,        //!< QoreIRLValuePathInstruction
     MakeList = 57,          //!< QoreIRMakeListInstruction
     MakeHash = 58,          //!< QoreIRMakeHashInstruction
+    CallClosureDirect = 59, //!< Native closure/call-reference invocation
+    Backquote = 60,         //!< QoreIRBackquoteInstruction
+    Find = 61,              //!< QoreIRFindInstruction
+    Background = 62,        //!< QoreIRBackgroundInstruction
     Unsupported = 0xFF,     //!< Instruction cannot be serialized
 };
 

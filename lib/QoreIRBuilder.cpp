@@ -707,6 +707,16 @@ QoreIRExprInstruction* QoreIRBuilder::createExprOp(QoreIROpcode op, const QoreVa
     return inst;
 }
 
+QoreIRBackgroundInstruction* QoreIRBuilder::createBackground(QoreIRBackgroundKind kind,
+        const std::string& name, const QoreValue& expr, const std::vector<QoreIRValue>& operands,
+        const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRBackgroundInstruction>(kind, name, expr);
+    inst->loc = loc;
+    inst->result = func->createValue();
+    inst->operands = operands;
+    return inst;
+}
+
 static bool checkRefArgs(const AbstractQoreFunctionVariant* variant) {
     if (!variant) return false;
     // Get the UserVariantBase to access parameter type information
@@ -1147,6 +1157,23 @@ QoreIRInstruction* QoreIRBuilder::createContextDestroy(QoreIRValue state, const 
     auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::ContextDestroy);
     inst->operands.push_back(state);
     inst->loc = loc;
+    return inst;
+}
+
+QoreIRBackquoteInstruction* QoreIRBuilder::createBackquote(const char* command,
+        const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRBackquoteInstruction>(command ? command : "");
+    inst->loc = loc;
+    inst->result = func->createValue();
+    return inst;
+}
+
+QoreIRFindInstruction* QoreIRBuilder::createFind(const QoreValue& exp,
+        const QoreValue& find_exp, const QoreValue& where,
+        const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRFindInstruction>(exp, find_exp, where);
+    inst->loc = loc;
+    inst->result = func->createValue();
     return inst;
 }
 

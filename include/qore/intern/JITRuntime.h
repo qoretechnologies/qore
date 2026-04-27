@@ -131,6 +131,28 @@ uint64_t qore_rt_make_string(const char* str);
 //! Create a QoreStringNode from string bytes and return as NaN-boxed QoreValue.
 uint64_t qore_rt_make_string_len(const char* str, uint64_t len);
 
+//! Execute a backquote command and return stdout as a NaN-boxed string.
+uint64_t qore_rt_backquote(const char* cmd, ExceptionSink* xsink);
+
+//! Throwing wrapper for invoke/EH paths.
+uint64_t qore_rt_backquote_throwing(const char* cmd, ExceptionSink* xsink);
+
+//! Execute a find expression from serialized sub-expression values.
+uint64_t qore_rt_find(uint64_t exp_bits, uint64_t find_exp_bits, uint64_t where_bits,
+    ExceptionSink* xsink);
+
+//! Throwing wrapper for invoke/EH paths.
+uint64_t qore_rt_find_throwing(uint64_t exp_bits, uint64_t find_exp_bits, uint64_t where_bits,
+    ExceptionSink* xsink);
+
+//! Native AOT background obj.method(args) call with pre-evaluated receiver and args.
+uint64_t qore_rt_background_dot_eval_name_call_aot(const char* method_name, uint64_t recv_bits,
+    uint64_t* args, int nargs, ExceptionSink* xsink);
+
+//! Throwing wrapper for EH paths.
+uint64_t qore_rt_background_dot_eval_name_call_aot_throwing(const char* method_name,
+    uint64_t recv_bits, uint64_t* args, int nargs, ExceptionSink* xsink);
+
 //! Get exception info hash from ExceptionSink; returns NaN-boxed QoreValue (hash or NOTHING).
 //! Also clears the exception from the sink and sets td->catchException for rethrow support.
 uint64_t qore_rt_catch_exception(ExceptionSink* xsink);

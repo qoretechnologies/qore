@@ -91,6 +91,7 @@
 #include <qore/intern/QoreAOTBinary.h>
 #include <qore/intern/Context.h>  // Context class (for native `context` IR lowering helpers)
 #include <qore/intern/QoreObjectIntern.h>  // qore_object_private::takeMembers for HashKeySlice over object
+#include <qore/intern/BackquoteNode.h>
 
 // --- Runtime location tracking for LLVM-generated code ---
 // Returns pointer to the thread-local runtime_loc variable for per-line location updates.
@@ -567,6 +568,58 @@ extern "C" DLLEXPORT uint64_t qore_rt_make_string_len(const char* str, uint64_t 
     QoreStringNode* s = new QoreStringNode(str, static_cast<size_t>(len));
     QoreValue v(s);
     return toBits(v);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_backquote(const char* cmd, ExceptionSink* xsink) {
+    int rc = 0;
+    QoreStringNode* s = backquoteEval(cmd ? cmd : "", rc, xsink);
+    return toBits(s ? QoreValue(s) : QoreValue());
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_find(uint64_t exp_bits, uint64_t find_exp_bits,
+        uint64_t where_bits, ExceptionSink* xsink) {
+    QoreValue exp = fromBits(exp_bits);
+    QoreValue find_exp = fromBits(find_exp_bits);
+    QoreValue where = fromBits(where_bits);
+
+    ValueHolder rv(xsink);
+    ReferenceHolder<Context> context(new Context(nullptr, xsink, find_exp), xsink);
+    if (xsink && *xsink) {
+        return toBits(QoreValue());
+    }
+
+    QoreListNode* lrv = nullptr;
+    for (context->pos = 0; context->pos < context->max_pos && !xsink->isEvent(); ++context->pos) {
+        if ((context->pos & 0x3f) == 0 && qore_check_cancel(xsink, "find expression")) {
+            return toBits(QoreValue());
+        }
+        bool b = context->check_condition(where, xsink);
+        if (xsink && *xsink) {
+            return toBits(QoreValue());
+        }
+        if (!b) {
+            continue;
+        }
+
+        ValueEvalOptimizedRefHolder result(exp, xsink);
+        if (xsink && *xsink) {
+            return toBits(QoreValue());
+        }
+        if (!rv->isNothing()) {
+            if (!lrv) {
+                lrv = new QoreListNode(autoTypeInfo);
+                lrv->push(rv.release(), xsink);
+                lrv->push(result.takeReferencedValue(), xsink);
+                rv = lrv;
+            } else {
+                lrv->push(result.takeReferencedValue(), xsink);
+            }
+        } else {
+            rv = result.takeReferencedValue();
+        }
+    }
+
+    return toBits(rv.release());
 }
 
 // Thread-local stack for catch exception context
@@ -2089,6 +2142,25 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_sprintf_throwing
     return result;
 }
 
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_backquote_throwing(
+        const char* cmd, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_backquote(cmd, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_find_throwing(
+        uint64_t exp_bits, uint64_t find_exp_bits, uint64_t where_bits,
+        ExceptionSink* xsink) {
+    uint64_t result = qore_rt_find(exp_bits, find_exp_bits, where_bits, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
 // --- Specialized access helpers (Phase 5b optimizations) ---
 
 extern "C" DLLEXPORT uint64_t qore_rt_hash_key_access(uint64_t hash_val, const char* key, ExceptionSink* xsink) {
@@ -2138,6 +2210,37 @@ extern "C" DLLEXPORT uint64_t qore_rt_hash_key_access_int(uint64_t hash_val, con
     return toBits(QoreValue());
 }
 
+static QoreHashNode* qore_rt_make_implicit_hash_for_lvalue(LocalVar* var, ExceptionSink* xsink) {
+    const QoreTypeInfo* typeInfo = var ? var->getTypeInfoForLValue() : nullptr;
+    if (!QoreTypeInfo::parseAcceptsReturns(typeInfo, NT_HASH)) {
+        xsink->raiseException("RUNTIME-TYPE-ERROR", "cannot convert lvalue declared as %s to a hash",
+            QoreTypeInfo::getName(typeInfo));
+        return nullptr;
+    }
+
+    if (!typeInfo || typeInfo == anyTypeInfo || typeInfo == hashTypeInfo || typeInfo == hashOrNothingTypeInfo) {
+        return new QoreHashNode;
+    }
+
+    const QoreTypeInfo* sti = typeInfo == autoTypeInfo
+        ? autoTypeInfo
+        : QoreTypeInfo::getReturnComplexHashOrNothing(typeInfo);
+    if (sti) {
+        return new QoreHashNode(sti);
+    }
+
+    const TypedHashDecl* thd = QoreTypeInfo::getUniqueReturnHashDecl(typeInfo);
+    if (thd) {
+        QoreStringNode* desc = new QoreStringNodeMaker("Cannot implicitly create typed hash '%s' "
+            "with an assignment; to address this error, declare the typed hash before the assignment",
+            thd->getName());
+        xsink->raiseException("HASHDECL-IMPLICIT-CONSTRUCTION-ERROR", desc);
+        return nullptr;
+    }
+
+    return new QoreHashNode(QoreTypeInfo::getElementType(QoreTypeInfo::getReturnComplexHashOrNothing(typeInfo)));
+}
+
 // JIT path: write hash{key} = value with copy-on-write support.
 // var: container LocalVar* (used to update the local when COW triggers).
 extern "C" DLLEXPORT uint64_t qore_rt_hash_key_store_cow(
@@ -2172,8 +2275,12 @@ extern "C" DLLEXPORT uint64_t qore_rt_hash_key_store_cow(
             h->refSelf();
         }
     } else if (hv.isNothing()) {
-        // Auto-vivify: create new hash from NOTHING, set key, assign to variable
-        QoreHashNode* new_h = new QoreHashNode(autoTypeInfo);
+        // Auto-vivify according to the declared lvalue type, matching
+        // LValueHelper::doHashLValue() including hashdecl error behavior.
+        QoreHashNode* new_h = qore_rt_make_implicit_hash_for_lvalue(var, xsink);
+        if (!new_h) {
+            return toBits(QoreValue());
+        }
         new_h->setKeyValue(key, val.refSelf(), xsink);
         if (!*xsink) {
             qore_rt_assign_local(var, toBits(QoreValue(new_h)), xsink);
@@ -2223,8 +2330,14 @@ extern "C" DLLEXPORT uint64_t qore_rt_hash_key_store_cow_aot(
             h->refSelf();
         }
     } else if (hv.isNothing()) {
-        // Auto-vivify: create new hash from NOTHING, set key, assign to variable
-        QoreHashNode* new_h = new QoreHashNode(autoTypeInfo);
+        // Auto-vivify according to the declared lvalue type, matching
+        // LValueHelper::doHashLValue() including hashdecl error behavior.
+        LocalVar* var = ctx && local_slot < static_cast<uint32_t>(ctx->num_locals)
+            ? ctx->locals[local_slot] : nullptr;
+        QoreHashNode* new_h = qore_rt_make_implicit_hash_for_lvalue(var, xsink);
+        if (!new_h) {
+            return toBits(QoreValue());
+        }
         new_h->setKeyValue(key, val.refSelf(), xsink);
         if (!*xsink) {
             qore_rt_assign_local_aot(ctx, local_slot, toBits(QoreValue(new_h)), xsink);
@@ -9318,6 +9431,23 @@ extern "C" DLLEXPORT uint64_t qore_rt_background_dot_eval_call_aot(
     return toBits(result);
 }
 
+extern "C" DLLEXPORT uint64_t qore_rt_background_dot_eval_name_call_aot(
+        const char* method_name, uint64_t recv_bits,
+        uint64_t* args, int nargs, ExceptionSink* xsink) {
+    assert(method_name);
+    QoreValue recv = fromBits(recv_bits);
+    if (recv.hasNode()) {
+        recv.refSelf();
+    }
+    QoreListNode* arg_list = bgBuildArgList(args, nargs);
+    MethodCallNode* new_m = new MethodCallNode(&loc_builtin, strdup(method_name), arg_list);
+    QoreDotEvalOperatorNode* call_node =
+        new QoreDotEvalOperatorNode(&loc_builtin, recv, new_m);
+    QoreValue result = do_op_background(QoreValue(call_node), xsink);
+    QoreValue(call_node).discard(xsink);
+    return toBits(result);
+}
+
 extern "C" DLLEXPORT uint64_t qore_rt_background_call_ref_call_aot(
         QoreAOTContext* ctx, int32_t slot, uint64_t callee_bits,
         uint64_t* args, int nargs, ExceptionSink* xsink) {
@@ -9540,6 +9670,17 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_background_dot_e
         QoreAOTContext* ctx, int32_t slot, uint64_t recv_bits,
         uint64_t* args, int nargs, ExceptionSink* xsink) {
     uint64_t result = qore_rt_background_dot_eval_call_aot(ctx, slot, recv_bits,
+        args, nargs, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_background_dot_eval_name_call_aot_throwing(
+        const char* method_name, uint64_t recv_bits,
+        uint64_t* args, int nargs, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_background_dot_eval_name_call_aot(method_name, recv_bits,
         args, nargs, xsink);
     if (xsink && *xsink) {
         throw QoreJITException();

@@ -389,6 +389,12 @@ public:
         //    args ? args->size() : -1);
     }
 
+    DLLLOCAL MethodCallNode(const QoreProgramLocation* loc, char* name, QoreListNode* n_args)
+            : AbstractMethodCallNode(loc, NT_METHOD_CALL, nullptr), c_str(name) {
+        args = n_args;
+        tmp_args = true;
+    }
+
     DLLLOCAL MethodCallNode(const MethodCallNode& old, QoreListNode* n_args)
             : AbstractMethodCallNode(old, n_args), c_str(old.c_str ? strdup(old.c_str) : nullptr),
             pseudo(old.pseudo), sourceTypeInfo(old.sourceTypeInfo) {

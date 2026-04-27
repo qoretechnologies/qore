@@ -39,7 +39,7 @@
 // Compile-time guard: forces review of LLVM lowering when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 363,
+static_assert(QORE_IR_MAX_OPCODE == 365,
     "New IR opcode added — review QoreIRToLLVM.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRInterpreter.cpp.");
 #include "qore/intern/QoreLibIntern.h"
@@ -443,6 +443,20 @@ void QoreIRToLLVM::declareRuntimeHelpers(llvm::Module& module) {
     // context_destroy:  (i64, ptr) -> void
     module.getOrInsertFunction("qore_rt_context_destroy",
             llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+
+    // backquote: (ptr cmd, ptr xsink) -> i64 nan-boxed string
+    module.getOrInsertFunction("qore_rt_backquote",
+            llvm::FunctionType::get(i64_type, {ptr_type, ptr_type}, false));
+    module.getOrInsertFunction("qore_rt_backquote_throwing",
+            llvm::FunctionType::get(i64_type, {ptr_type, ptr_type}, false));
+
+    // find: (i64 exp, i64 source, i64 where, ptr xsink) -> i64 nan-boxed result
+    module.getOrInsertFunction("qore_rt_find",
+            llvm::FunctionType::get(i64_type,
+                {i64_type, i64_type, i64_type, ptr_type}, false));
+    module.getOrInsertFunction("qore_rt_find_throwing",
+            llvm::FunctionType::get(i64_type,
+                {i64_type, i64_type, i64_type, ptr_type}, false));
 }
 
 llvm::FunctionCallee QoreIRToLLVM::getHelper(llvm::Module& module, const char* name, llvm::FunctionType* ft) {
@@ -744,6 +758,11 @@ void QoreIRToLLVM::collectLocals(const QoreIRFunction& func) {
     // Block-scoped locals are excluded from entry_locals even if first seen in the entry block,
     // because they need mid-function destruction (not just function-exit cleanup).
     std::unordered_set<const void*> seen;
+    auto is_outer_scope_local = [&](const void* key) -> bool {
+        return pre_instantiated_locals
+            && !pre_instantiated_locals->count(key)
+            && !block_scoped_locals.count(key);
+    };
     bool is_first_block = true;
     for (const auto& block : func.blocks) {
         for (const auto& inst_ptr : block->instructions) {
@@ -761,7 +780,11 @@ void QoreIRToLLVM::collectLocals(const QoreIRFunction& func) {
                     // accessed from a sub).  These are already on the thread-local stack
                     // and must not be instantiated/uninstantiated or cached in allocas —
                     // they'll be accessed via qore_rt_load_local() on each use.
-                    if (pre_instantiated_locals && !pre_instantiated_locals->count(key)) {
+                    // Locals with explicit InstantiateLocal/UninstantiateLocal are
+                    // callee-owned block-scoped locals even if all_body_locals
+                    // collection missed them; they still need an alloca and local
+                    // lifecycle handling.
+                    if (is_outer_scope_local(key)) {
                         continue;
                     }
                     function_locals.push_back(linst->local);
@@ -780,7 +803,7 @@ void QoreIRToLLVM::collectLocals(const QoreIRFunction& func) {
                 for (LocalVar* var : {fused->target, fused->source}) {
                     if (var && seen.insert(var).second) {
                         auto key = reinterpret_cast<const void*>(var);
-                        if (pre_instantiated_locals && !pre_instantiated_locals->count(key)) {
+                        if (is_outer_scope_local(key)) {
                             continue;
                         }
                         function_locals.push_back(var);
@@ -795,7 +818,7 @@ void QoreIRToLLVM::collectLocals(const QoreIRFunction& func) {
                 const auto* fused = static_cast<const QoreIRIncrementLocalIntInstruction*>(inst);
                 if (fused->local && seen.insert(fused->local).second) {
                     auto key = reinterpret_cast<const void*>(fused->local);
-                    if (!pre_instantiated_locals || pre_instantiated_locals->count(key)) {
+                    if (!is_outer_scope_local(key)) {
                         function_locals.push_back(fused->local);
                         if (is_first_block && !block_scoped_locals.count(key)) {
                             entry_locals.push_back(fused->local);
@@ -809,7 +832,7 @@ void QoreIRToLLVM::collectLocals(const QoreIRFunction& func) {
                 for (LocalVar* var : {fused->lhs, fused->rhs}) {
                     if (var && seen.insert(var).second) {
                         auto key = reinterpret_cast<const void*>(var);
-                        if (pre_instantiated_locals && !pre_instantiated_locals->count(key)) {
+                        if (is_outer_scope_local(key)) {
                             continue;
                         }
                         function_locals.push_back(var);
@@ -2821,6 +2844,69 @@ bool QoreIRToLLVM::tryEmitDecomposedBackground(const QoreValue& expr_val,
     return false;
 }
 
+bool QoreIRToLLVM::tryEmitBackgroundMetadata(const QoreIRBackgroundInstruction* bg_inst,
+        llvm::Module& module, llvm::Function* llvm_func,
+        bool throwing_ok,
+        llvm::Value** result_out) {
+    if (!bg_inst || bg_inst->operands.empty()) {
+        return false;
+    }
+
+    std::string error_dummy;
+    auto build_args_array = [&](size_t first, size_t end) -> llvm::Value* {
+        int count = (int)(end - first);
+        if (count <= 0) {
+            return llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(ptr_type));
+        }
+        llvm::Value* arr = builder->CreateAlloca(i64_type,
+            llvm::ConstantInt::get(i32_type, count));
+        for (int i = 0; i < count; ++i) {
+            const QoreIRValue& op = bg_inst->operands[first + i];
+            auto* val = getVal(op.id, error_dummy);
+            if (!val) {
+                return nullptr;
+            }
+            llvm::Value* boxed = boxValue(val, op.id);
+            builder->CreateStore(boxed, builder->CreateGEP(i64_type, arr,
+                llvm::ConstantInt::get(i32_type, i)));
+        }
+        return arr;
+    };
+
+    if (bg_inst->kind == QoreIRBackgroundKind::DotEval) {
+        auto* recv_val = getVal(bg_inst->operands[0].id, error_dummy);
+        if (!recv_val) {
+            return false;
+        }
+        llvm::Value* recv_boxed = boxValue(recv_val, bg_inst->operands[0].id);
+        llvm::Value* args_array = build_args_array(1, bg_inst->operands.size());
+        if (!args_array) {
+            return false;
+        }
+        llvm::Value* name_ptr = builder->CreateGlobalStringPtr(bg_inst->name);
+        int nargs = (int)bg_inst->operands.size() - 1;
+        auto ft = llvm::FunctionType::get(i64_type,
+            {ptr_type, i64_type, ptr_type, i32_type, ptr_type}, false);
+        auto helper = module.getOrInsertFunction(
+            "qore_rt_background_dot_eval_name_call_aot", ft);
+        if (throwing_ok) {
+            auto helper_throwing = module.getOrInsertFunction(
+                "qore_rt_background_dot_eval_name_call_aot_throwing", ft);
+            *result_out = emitMaybeInvoke(helper, helper_throwing,
+                {name_ptr, recv_boxed, args_array,
+                 llvm::ConstantInt::get(i32_type, nargs), xsink_arg},
+                module, llvm_func, bg_inst);
+        } else {
+            *result_out = builder->CreateCall(helper,
+                {name_ptr, recv_boxed, args_array,
+                 llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+        }
+        return true;
+    }
+
+    return false;
+}
+
 void QoreIRToLLVM::finalizeFunctionUnwindLP(llvm::Module& module) {
     if (!function_unwind_lp) {
         return;
@@ -4620,13 +4706,14 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 return true;
             }
 
-            // Outer-scope variables (not in pre_instantiated_locals) must always be
-            // read from the runtime stack, like closure-bound locals.  They're already
-            // on the thread-local variable stack from the calling scope and must not be
-            // cached in allocas (which would be initialized to NOTHING and become stale
-            // after any call that modifies the outer variable).
+            // Outer-scope variables (not in pre_instantiated_locals and not block-scoped)
+            // must always be read from the runtime stack, like closure-bound locals.
+            // They're already on the thread-local variable stack from the calling scope
+            // and must not be cached in allocas (which would be initialized to NOTHING
+            // and become stale after any call that modifies the outer variable).
             if (linst->local && pre_instantiated_locals
-                    && !pre_instantiated_locals->count(key)) {
+                    && !pre_instantiated_locals->count(key)
+                    && !block_scoped_locals.count(key)) {
                 llvm::Value* result;
                 if (aot_mode) {
                     auto load_fn = module.getOrInsertFunction("qore_rt_load_local_aot",
@@ -4873,12 +4960,15 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
 
             // Outer-scope variables: assign directly to the thread-local stack via
             // qore_rt_assign_local() without creating an alloca or lazy instantiation.
+            // Explicit block-scoped locals are callee-owned even if not present in
+            // pre_instantiated_locals, so they must stay on the local-allocation path.
             // In AOT mode, closure-use body locals are excluded from pre_instantiated_locals
             // (to avoid cvstack ordering issues), but they are NOT outer-scope variables —
             // they need lazy instantiation below, not the runtime assign helper (which would
             // fail because the variable was never instantiated on the cvstack).
             if (linst->local && pre_instantiated_locals
                     && !pre_instantiated_locals->count(key)
+                    && !block_scoped_locals.count(key)
                     && !(aot_mode && linst->is_closure)) {
                 // Box the value for the runtime assign helper
                 llvm::Value* boxed;
@@ -12229,7 +12319,12 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         case QoreIROpcode::BackgroundInt: {
             const auto* expr_inst = static_cast<const QoreIRExprInstruction*>(inst);
             llvm::Value* result = nullptr;
-            if (!expr_inst->operands.empty()
+            const auto* bg_inst = dynamic_cast<const QoreIRBackgroundInstruction*>(inst);
+            if (bg_inst && aot_mode
+                    && tryEmitBackgroundMetadata(bg_inst, module, llvm_func,
+                        /*throwing_ok*/true, &result)) {
+                // Native AOT background metadata path; no EXPR_TREE slot needed.
+            } else if (!expr_inst->operands.empty()
                     && tryEmitDecomposedBackground(expr_inst->expr, expr_inst->operands,
                         module, llvm_func, inst, /*throwing_ok*/true, &result)) {
                 // Decomposed path emitted — result is set.
@@ -12635,6 +12730,55 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
             builder->CreateCall(helper, {state_val, xsink_arg});
             // Void result — OPCODE_REGISTRY produces_result=false, no SSA value.
+            return true;
+        }
+        case QoreIROpcode::Backquote: {
+            const auto* binst = static_cast<const QoreIRBackquoteInstruction*>(inst);
+            llvm::Value* cmd_ptr = builder->CreateGlobalStringPtr(binst->command);
+            auto bq_ft = llvm::FunctionType::get(i64_type, {ptr_type, ptr_type}, false);
+            auto helper = module.getOrInsertFunction("qore_rt_backquote", bq_ft);
+            auto helper_throwing = module.getOrInsertFunction("qore_rt_backquote_throwing", bq_ft);
+            llvm::Value* result = emitMaybeInvoke(helper, helper_throwing,
+                    {cmd_ptr, xsink_arg}, module, llvm_func, inst);
+            values[inst->result.id] = result;
+            nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(result, inst->result.id, llvm_func);
+            emitExceptionCheck(module, llvm_func, inst);
+            return true;
+        }
+        case QoreIROpcode::Find: {
+            const auto* finst = static_cast<const QoreIRFindInstruction*>(inst);
+            auto makeExprBits = [&](const QoreValue& v) -> llvm::Value* {
+                uint64_t expr_bits = toBits(v);
+                if (aot_mode && expr_bits != 0) {
+                    int32_t slot = const_cast<AOTSlotMap*>(aot_slots)
+                            ->getExprSlot(expr_bits);
+                    auto h = module.getOrInsertFunction(
+                            "qore_rt_get_expr_bits_aot",
+                            llvm::FunctionType::get(i64_type,
+                                {ptr_type, i32_type}, false));
+                    return builder->CreateCall(h, {aot_ctx_arg,
+                            llvm::ConstantInt::get(i32_type, slot)});
+                }
+                return llvm::ConstantInt::get(i64_type, expr_bits);
+            };
+
+            llvm::Value* exp_bits = makeExprBits(finst->exp);
+            llvm::Value* find_exp_bits = makeExprBits(finst->find_exp);
+            llvm::Value* where_bits = makeExprBits(finst->where);
+            auto find_ft = llvm::FunctionType::get(i64_type,
+                    {i64_type, i64_type, i64_type, ptr_type}, false);
+            auto helper = module.getOrInsertFunction("qore_rt_find", find_ft);
+            auto helper_throwing = module.getOrInsertFunction("qore_rt_find_throwing", find_ft);
+            llvm::Value* result = emitMaybeInvoke(helper, helper_throwing,
+                    {exp_bits, find_exp_bits, where_bits, xsink_arg}, module, llvm_func, inst);
+            values[inst->result.id] = result;
+            nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(result, inst->result.id, llvm_func);
+            // Find evaluates its sub-expressions through the AST path and can
+            // update thread-local locals via context references.
+            reloadAllLocalsFromRuntime(module, llvm_func);
+            emitExceptionCheck(module, llvm_func, inst);
             return true;
         }
         case QoreIROpcode::Summarize: {

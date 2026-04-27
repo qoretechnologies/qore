@@ -33,6 +33,7 @@
 #include <qore/QoreSocketObject.h>
 #include <qore/QoreFuture.h>
 #include <qore/AsyncCompletionAction.h>
+#include <qore/HttpClientConnectionManager.h>
 #include "qore/intern/QoreChannel.h"
 #include "qore/intern/QoreHttp1ClientConnection.h"
 #include "qore/intern/QC_Http1ClientPollOperationBase.h"

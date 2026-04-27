@@ -45,6 +45,7 @@
 #include <qore/intern/SelfVarrefNode.h>
 #include <qore/intern/ObjectMethodReferenceNode.h>
 #include <qore/intern/ParseReferenceNode.h>
+#include <qore/intern/QoreClosureParseNode.h>
 #include <qore/intern/StatementBlock.h>
 #include <qore/intern/IfStatement.h>
 #include <qore/intern/WhileStatement.h>
@@ -465,7 +466,14 @@ bool QoreIRVerifier::verify(const QoreIRFunction& func, std::string& error) {
                     || inst->opcode == QoreIROpcode::DotEvalHash
                     || inst->opcode == QoreIROpcode::DotEvalObject) {
                 auto* expr_inst = dynamic_cast<const QoreIRExprInstruction*>(inst.get());
-                if (!expr_inst || !expr_inst->expr.hasNode()) {
+                auto* bg_inst = dynamic_cast<const QoreIRBackgroundInstruction*>(inst.get());
+                if (bg_inst) {
+                    if (bg_inst->kind != QoreIRBackgroundKind::DotEval || bg_inst->name.empty()
+                            || bg_inst->operands.empty()) {
+                        error = "background instruction missing native metadata";
+                        return false;
+                    }
+                } else if (!expr_inst || !expr_inst->expr.hasNode()) {
                     error = "expr instruction missing expr";
                     return false;
                 }
@@ -735,6 +743,15 @@ static void collectLocalSlotsFromExpr(const QoreValue& expr,
             }
         }
     };
+    auto addLocalVar = [&locals, &seen](const LocalVar* lv) {
+        if (!lv) {
+            return;
+        }
+        const void* key = reinterpret_cast<const void*>(lv);
+        if (seen.insert(key).second) {
+            locals.push_back(lv);
+        }
+    };
 
     qore_type_t ntype = expr.getType();
     if (ntype == NT_VARREF) {
@@ -820,6 +837,14 @@ static void collectLocalSlotsFromExpr(const QoreValue& expr,
             ConstListIterator li(args);
             while (li.next()) {
                 collectLocalSlotsFromExpr(li.getValue(), locals, seen);
+            }
+        }
+        return;
+    }
+    if (auto* closure = dynamic_cast<const QoreClosureParseNode*>(node)) {
+        if (const LVarSet* vlist = closure->getVList()) {
+            for (LocalVar* lv : *vlist) {
+                addLocalVar(lv);
             }
         }
         return;
@@ -1080,6 +1105,9 @@ static const QoreValue* getInstructionExpr(const QoreIRInstruction* inst) {
         case QoreIROpcode::ExistsBool:
         case QoreIROpcode::InstanceOfBool:
         case QoreIROpcode::BackgroundInt:
+            if (dynamic_cast<const QoreIRBackgroundInstruction*>(inst)) {
+                return nullptr;
+            }
             return &static_cast<const QoreIRExprInstruction*>(inst)->expr;
 
         default:

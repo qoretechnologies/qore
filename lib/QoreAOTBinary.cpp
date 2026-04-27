@@ -3991,8 +3991,13 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
         if (mc) {
             writer.writeU8(static_cast<uint8_t>(AOTExprKind::DOT_EVAL_TARGET));
             const QoreClass* qc = mc->getClass();
-            // getNamespacePath(): see QoreAOT.cpp NewObjectCallNode.
-            writer.writeStringRef(qc ? qc->getNamespacePath().c_str() : "");
+            std::string class_path;
+            if (qc) {
+                // Pseudo-classes are not in the namespace tree; getPath() is
+                // the path matched by the AOT pseudo-class resolver.
+                class_path = mc->isPseudo() ? qc->getPath() : qc->getNamespacePath();
+            }
+            writer.writeStringRef(class_path.c_str());
             writer.writeStringRef(mc->getName() ? mc->getName() : "");
             writer.writeU8(mc->isPseudo() ? 1 : 0);
             // Target expression (left-hand side of the dot)
@@ -4599,11 +4604,25 @@ static QoreIRInstGroup classifyInstruction(const QoreIRInstruction* inst) {
     if (dynamic_cast<const QoreIRContextInstruction*>(inst)) {
         return QoreIRInstGroup::Context;
     }
+    if (dynamic_cast<const QoreIRBackquoteInstruction*>(inst)) {
+        return QoreIRInstGroup::Backquote;
+    }
+    if (dynamic_cast<const QoreIRFindInstruction*>(inst)) {
+        return QoreIRInstGroup::Find;
+    }
+    if (dynamic_cast<const QoreIRBackgroundInstruction*>(inst)) {
+        return QoreIRInstGroup::Background;
+    }
     if (dynamic_cast<const QoreIRSummarizeInstruction*>(inst)) {
         return QoreIRInstGroup::Summarize;
     }
     if (dynamic_cast<const QoreIRListIndexAccessInstruction*>(inst)) {
         return QoreIRInstGroup::ListIndexAccess;
+    }
+    if (auto* expr_inst = dynamic_cast<const QoreIRExprInstruction*>(inst)) {
+        if (expr_inst->opcode == QoreIROpcode::CallClosureDirect) {
+            return QoreIRInstGroup::CallClosureDirect;
+        }
     }
     if (dynamic_cast<const QoreIRExprInstruction*>(inst)) {
         return QoreIRInstGroup::Expr;

@@ -57,6 +57,7 @@
 
 // Defined in Function.cpp - collects all local variables from a StatementBlock and nested blocks
 extern void collectAllStatementLocals(const StatementBlock* block, std::vector<LocalVar*>& locals);
+extern void removeBlockLocalsFromBodyLocals(const StatementBlock* block, std::vector<LocalVar*>& locals);
 
 VNode::VNode(LocalVar* lv, const QoreProgramLocation* n_loc, int n_refs, bool n_top_level) :
         lvar(lv), refs(n_refs), loc(n_loc), block_start(false), top_level(n_top_level) {
@@ -772,9 +773,10 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
     // AOT pre-compiled top-level function — execute directly if registered
     if (!((runtime_parse_options & QoreParseOptions(PO_ALLOW_REPARSE)) == QoreParseOptions(PO_ALLOW_REPARSE))) {
         if (cached_toplevel_aot_fn && cached_toplevel_aot_ctx) {
-            // Instantiate nested body locals before AOT execution.
-            // Top-level locals are pre-instantiated by QoreProgram, but nested
-            // locals from for/while/try blocks need to be instantiated here.
+            // Instantiate nested non-closure body locals before AOT execution.
+            // Top-level locals are pre-instantiated by QoreProgram.  Closure-use
+            // nested locals are managed by explicit InstantiateLocal /
+            // UninstantiateLocal IR so loop/block closures get fresh CVVs.
             const LVList* toplevel_lvars = getLVList();
             std::unordered_set<const LocalVar*> toplevel_set;
             if (toplevel_lvars) {
@@ -784,7 +786,7 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
             }
             std::vector<LocalVar*> nested_locals;
             for (LocalVar* lv : cached_toplevel_aot_ctx->all_body_locals) {
-                if (toplevel_set.count(lv) == 0) {
+                if (toplevel_set.count(lv) == 0 && !lv->closureUse()) {
                     lv->instantiate(runtime_parse_options);
                     nested_locals.push_back(lv);
                 }
@@ -844,15 +846,18 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
                         + std::to_string(toplevel_counter.fetch_add(1));
                     QoreIRFunction* func = new QoreIRFunction(unique_name.c_str());
 
-                    // Collect ALL body locals from the statement tree (top-level + nested blocks
-                    // from fully-lowered statements like if/for/while/try/switch).  These are
-                    // marked as pre-instantiated so the JIT skips instantiation/uninstantiation.
-                    // Using collectAllStatementLocals ensures the same LocalVar* pointers are
-                    // captured in all_body_locals and used for pre_instantiated_locals, avoiding
-                    // pointer mismatches at runtime.
+                    // Collect nested body locals from the statement tree.  Root
+                    // top-level locals remain owned by QoreProgram and must not
+                    // be managed as lexical block locals by the compiled body.
                     collectAllStatementLocals(this, func->all_body_locals);
+                    removeBlockLocalsFromBodyLocals(this, func->all_body_locals);
                     for (LocalVar* lv : func->all_body_locals) {
                         func->pre_instantiated_locals.insert(reinterpret_cast<const void*>(lv));
+                    }
+                    if (const LVList* top_lvars = getLVList()) {
+                        for (unsigned i = 0; i < top_lvars->size(); ++i) {
+                            func->pre_instantiated_locals.insert(reinterpret_cast<const void*>(top_lvars->lv[i]));
+                        }
                     }
 
                     QoreIRBuilder builder(func);
@@ -933,10 +938,15 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
                 for (LocalVar* lv : ir_func->all_body_locals) {
                     pre_instantiated.insert(lv);
                 }
+                if (const LVList* top_lvars = getLVList()) {
+                    for (unsigned i = 0; i < top_lvars->size(); ++i) {
+                        pre_instantiated.insert(top_lvars->lv[i]);
+                    }
+                }
 
-                // Instantiate nested body locals before JIT execution.
-                // Top-level locals are pre-instantiated by QoreProgram, but nested
-                // locals from for/while/try blocks need to be instantiated here.
+                // Instantiate nested non-closure body locals before JIT execution.
+                // Closure-use nested locals are scoped by explicit IR
+                // InstantiateLocal / UninstantiateLocal operations.
                 const LVList* toplevel_lvars = getLVList();
                 std::unordered_set<const LocalVar*> toplevel_set;
                 if (toplevel_lvars) {
@@ -946,7 +956,7 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
                 }
                 std::vector<LocalVar*> nested_locals;
                 for (LocalVar* lv : ir_func->all_body_locals) {
-                    if (toplevel_set.count(lv) == 0) {
+                    if (toplevel_set.count(lv) == 0 && !lv->closureUse()) {
                         lv->instantiate(runtime_parse_options);
                         nested_locals.push_back(lv);
                     }

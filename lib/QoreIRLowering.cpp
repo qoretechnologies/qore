@@ -2029,8 +2029,13 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
     size_t block_handler_start = block_handlers.size();
     handler_stack.push(block_handler_start);
 
-    // Get the block's local variables for cleanup
-    const LVList* lvars = block->getLVList();
+    // Top-level locals are owned by QoreProgram and instantiated for each
+    // thread before the top-level block runs.  Treating the root top-level
+    // block as an ordinary lexical scope pops program-scope CVVs too early.
+    const bool root_top_level = dynamic_cast<const TopLevelStatementBlock*>(block) != nullptr;
+
+    // Get the block's local variables for cleanup.
+    const LVList* lvars = root_top_level ? nullptr : block->getLVList();
 
     // Push lvars to cleanup_stack BEFORE scope entry.
     // This ensures correct reverse ordering on cleanup: scope exit fires before
@@ -3747,12 +3752,19 @@ QoreIRValue QoreIRLowering::lowerExpression(const QoreValue& expr, std::string& 
                 expr, static_var->loc)->result;
     }
     if (auto* backquote = dynamic_cast<const BackquoteNode*>(node)) {
-        std::vector<QoreIRValue> operands;
-        return lowerExprOpOrInvoke(QoreIROpcode::Call, expr, operands, backquote->loc, error);
+        auto* inst = builder.createBackquote(backquote->str, backquote->loc);
+        if (!exception_stack.empty()) {
+            inst->exception_target = exception_stack.back();
+        }
+        return inst->result;
     }
     if (auto* find_node = dynamic_cast<const FindNode*>(node)) {
-        std::vector<QoreIRValue> operands;
-        return lowerExprOpOrInvoke(QoreIROpcode::Call, expr, operands, find_node->loc, error);
+        auto* inst = builder.createFind(find_node->exp, find_node->find_exp, find_node->where,
+                find_node->loc);
+        if (!exception_stack.empty()) {
+            inst->exception_target = exception_stack.back();
+        }
+        return inst->result;
     }
     if (auto* rt_const = dynamic_cast<const RuntimeConstantRefNode*>(node)) {
         if (!exception_stack.empty()) {
@@ -8130,8 +8142,13 @@ QoreIRValue QoreIRLowering::lowerBackground(const QoreValue& expr, std::string& 
                     std::vector<QoreIRValue> operands;
                     operands.push_back(receiver_val);
                     if (lowerCallArgs(m->getParseArgs(), m->getArgs(), operands, error)) {
-                        return lowerExprOpOrInvoke(QoreIROpcode::BackgroundInt, expr,
-                            operands, op->loc, error);
+                        auto* inst = builder.createBackground(QoreIRBackgroundKind::DotEval,
+                            m->getName(), expr, operands, op->loc);
+                        if (!exception_stack.empty()) {
+                            inst->exception_target = exception_stack.back();
+                        }
+                        maybeInsertNotNothingGuard(inst->result, &expr, op->loc, nullptr);
+                        return inst->result;
                     }
                     error.clear();
                 } else {

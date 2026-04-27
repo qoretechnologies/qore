@@ -161,6 +161,7 @@
 
 // Defined in Function.cpp - collects all local variables from a StatementBlock and nested blocks
 extern void collectAllStatementLocals(const StatementBlock* block, std::vector<LocalVar*>& locals);
+extern void removeBlockLocalsFromBodyLocals(const StatementBlock* block, std::vector<LocalVar*>& locals);
 extern void removeSignatureLocalsFromBodyLocals(std::vector<LocalVar*>& locals, const UserSignature* sig);
 
 //! AOT compile-time optimization Phase 1: emit_debug_info flag.
@@ -440,6 +441,8 @@ static uint64_t opcodeToFeatureFlag(QoreIROpcode op) {
         case QoreIROpcode::ContextMaxPos:
         case QoreIROpcode::ContextSetPos:
         case QoreIROpcode::ContextDestroy:     return QORE_AOT_FEAT_CONTEXT_IR;
+        case QoreIROpcode::Backquote:          return QORE_AOT_FEAT_BACKQUOTE;
+        case QoreIROpcode::Find:               return QORE_AOT_FEAT_FIND;
         default:                               return 0;
     }
 }
@@ -450,6 +453,9 @@ static uint64_t scanIRFeatureFlags(const QoreIRFunction& f) {
     for (const auto& block : f.blocks) {
         for (const auto& inst : block->instructions) {
             flags |= opcodeToFeatureFlag(inst->opcode);
+            if (dynamic_cast<const QoreIRBackgroundInstruction*>(inst.get())) {
+                flags |= QORE_AOT_FEAT_BACKGROUND_IR;
+            }
             // Per-instruction data may unlock separate feature gates: LVPath
             // instructions carry multi-slice step kinds when a slice lvalue
             // (e.g. `remove h{"a","b"}`) was lowered natively, plus optional
@@ -1638,26 +1644,32 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
 
             ++total_funcs;
             const char* fname = func->getName();
+            std::string function_name;
+            ns->getPath(function_name);
+            if (!function_name.empty()) {
+                function_name += "::";
+            }
+            function_name += fname;
             // Generate unique key including parameter types to distinguish overloads
-            std::string variant_key = getVariantKey(fname, variant);
+            std::string variant_key = getVariantKey(function_name.c_str(), variant);
             // Skip duplicate variant keys (iterator may yield committed + pending)
             if (!compiled_keys->insert(variant_key).second) {
                 continue;
             }
             QoreIRFunction* ir_func = nullptr;
             std::string lower_error;
-            int rc = tryLowerFunction(uvb, fname, pgm, ir_func, lower_error, func);
+            int rc = tryLowerFunction(uvb, function_name.c_str(), pgm, ir_func, lower_error, func);
 
             if (rc == 0 && ir_func) {
                 // LLVM symbol name = `_qaot_<mod>_` + variant_key.  The
                 // per-module prefix keeps the dynamic linker from
                 // interposing same-named symbols across `.qmod`s loaded
                 // with RTLD_GLOBAL (see `aotSymbolPrefix` for the full
-                // failure mode).  The unqualified `variant_key` stays
-                // the AOT function-table entry's `name` field at line
-                // ~1729 below (`cf.name = variant_key;`) so the
+                // failure mode).  The namespace-qualified `variant_key`
+                // stays the AOT function-table entry's `name` field at
+                // line ~1729 below (`cf.name = variant_key;`) so the
                 // runtime's `registerAOTFunctionsFromSlotMaps`
-                // reconstruction via `getVariantKey(plain_name,
+                // reconstruction via `getVariantKey(qualified_name,
                 // variant)` still matches.
                 ir_func->name = aotSymbolPrefix(compile_module) + variant_key;
 
@@ -3047,15 +3059,18 @@ bool QoreAOT::compile(QoreProgram* pgm,
         TopLevelStatementBlock& sb = pp->sb;
         QoreIRFunction* ir_func = new QoreIRFunction("_toplevel");
 
-        // Collect ALL body locals from the statement tree (top-level + nested blocks
-        // from fully-lowered statements like if/for/while/try/switch).  These are
-        // marked as pre-instantiated so the LLVM lowerer doesn't emit
-        // qore_rt_instantiate_local/uninstantiate_local calls.
-        // NOTE: Closure-use locals are included for function membership identification,
-        // but evalTiered skips their actual pre-instantiation in AOT mode.
+        // Collect nested body locals from the statement tree.  Root top-level
+        // locals are program-scope variables owned by QoreProgram; they must be
+        // visible to the compiled body but not instantiated/popped by it.
         collectAllStatementLocals(&sb, ir_func->all_body_locals);
+        removeBlockLocalsFromBodyLocals(&sb, ir_func->all_body_locals);
         for (LocalVar* lv : ir_func->all_body_locals) {
             ir_func->pre_instantiated_locals.insert(reinterpret_cast<const void*>(lv));
+        }
+        if (const LVList* top_lvars = sb.getLVList()) {
+            for (unsigned i = 0; i < top_lvars->size(); ++i) {
+                ir_func->pre_instantiated_locals.insert(reinterpret_cast<const void*>(top_lvars->lv[i]));
+            }
         }
 
         QoreIRBuilder builder(ir_func);
@@ -3981,11 +3996,10 @@ static std::string sanitizeCIdentifier(const std::string& name) {
 
 //! Per-module LLVM symbol name prefix so AOT-compiled same-named
 //! functions in different `.qmod`s don't collide under RTLD_GLOBAL.
-//! Keeps the AOT function-table entry's `name` field (unqualified
-//! `variant_key`) intact so runtime `registerAOTFunctionsFromSlotMaps`
-//! reconstruction via `getVariantKey(plain_name, variant)` still
-//! matches; only the LLVM symbol (`ir_func->name`, `cf.llvm_symbol`)
-//! gets the prefix.
+//! Keeps the AOT function-table entry's `name` field (`variant_key`)
+//! intact so runtime `registerAOTFunctionsFromSlotMaps` reconstruction
+//! via `getVariantKey(qualified_name, variant)` still matches; only the
+//! LLVM symbol (`ir_func->name`, `cf.llvm_symbol`) gets the prefix.
 //!
 //! Without this, two `.qmod`s that each define
 //! `substitute_env_vars(string)` (one in `OMQ`, one in `Util`) emit
@@ -8462,6 +8476,9 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                 case QoreIROpcode::HashMapSelectAny:
                 case QoreIROpcode::InvokeSimError: {
                     auto* ei = static_cast<QoreIRExprInstruction*>(inst.get());
+                    if (dynamic_cast<const QoreIRBackgroundInstruction*>(ei)) {
+                        break;
+                    }
                     uint64_t bits;
                     memcpy(&bits, &ei->expr, sizeof(bits));
                     if (seen_exprs.insert(bits).second) {
@@ -8930,6 +8947,9 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                 case QoreIROpcode::HashMapSelectAny:
                 case QoreIROpcode::InvokeSimError: {
                     auto* ei = static_cast<QoreIRExprInstruction*>(inst.get());
+                    if (dynamic_cast<const QoreIRBackgroundInstruction*>(ei)) {
+                        break;
+                    }
                     uint64_t bits;
                     memcpy(&bits, &ei->expr, sizeof(bits));
                     if (seen_exprs.insert(bits).second) {
@@ -10672,8 +10692,10 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
             MethodCallNode* mc = de->getMethodCall();
             id.kind = AOTExprKind::DOT_EVAL_TARGET;
             const QoreClass* qc = mc->getClass();
-            // See NewObjectCallNode note re: getNamespacePath().
-            id.ref1 = qc ? qc->getNamespacePath() : "";
+            // Pseudo-classes are not attached to the namespace tree, so
+            // getNamespacePath() can be empty. Serialize their constructor
+            // path so the runtime pseudo-class resolver can recover qc/method.
+            id.ref1 = qc ? (mc->isPseudo() ? qc->getPath() : qc->getNamespacePath()) : "";
             const QoreMethod* method = mc->getMethod();
             id.ref2 = method ? method->getName() : (mc->getName() ? mc->getName() : "");
             id.flags = mc->isPseudo() ? 1 : 0;

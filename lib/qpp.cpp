@@ -4378,7 +4378,11 @@ public:
         }
 
         fprintf(fp, "TypedHashDecl* init_hashdecl_%s(QoreNamespace& ns) {\n", name.c_str());
-        fprintf(fp, "    TypedHashDecl* hd = new TypedHashDecl(\"%s\", \"%s\");\n", name.c_str(), ns_path.c_str());
+        fprintf(fp, "    std::string hd_path = ns.getPath(true);\n");
+        fprintf(fp, "    if (hd_path == \"::\") {\n        hd_path.clear();\n    } else if (!hd_path.empty()) {\n        hd_path += \"::\";\n    }\n");
+        fprintf(fp, "    hd_path += \"%s\";\n", name.c_str());
+        fprintf(fp, "    if (hd_path.rfind(\"::\", 0) != 0) {\n        hd_path.insert(0, \"::\");\n    }\n");
+        fprintf(fp, "    TypedHashDecl* hd = new TypedHashDecl(\"%s\", hd_path.c_str());\n", name.c_str());
 
         // Set parent hashdecl if there is inheritance
         if (!parent_name.empty()) {

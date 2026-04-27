@@ -1593,15 +1593,15 @@ public namespace ModB {
         };
         assertTrue(rb.compiled, "ModB compiled: " + rb.compile_out);
 
-        # Symbols must be distinct (prefixed).
+        # Symbols must be distinct (prefixed and namespace-qualified).
         string nm_a = backquote(sprintf("nm -D %s/ModA.qmod 2>/dev/null | "
-            "grep ' T _qaot_ModA_shared_fn' || true", tmp_dir));
+            "grep -F ' T _qaot_ModA_ModA::shared_fn(string)' || true", tmp_dir));
         string nm_b = backquote(sprintf("nm -D %s/ModB.qmod 2>/dev/null | "
-            "grep ' T _qaot_ModB_shared_fn' || true", tmp_dir));
+            "grep -F ' T _qaot_ModB_ModB::shared_fn(string)' || true", tmp_dir));
         assertTrue(nm_a.size() > 0,
-            "ModA.qmod exports _qaot_ModA_shared_fn symbol");
+            "ModA.qmod exports _qaot_ModA_ModA::shared_fn(string) symbol");
         assertTrue(nm_b.size() > 0,
-            "ModB.qmod exports _qaot_ModB_shared_fn symbol");
+            "ModB.qmod exports _qaot_ModB_ModB::shared_fn(string) symbol");
 
         # Run a script that loads both modules and calls each — a correct
         # dispatch yields ModA direct="A:x" and ModB wrapper="A:y:B".

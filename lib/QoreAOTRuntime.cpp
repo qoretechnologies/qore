@@ -185,6 +185,7 @@
 
 // Defined in Function.cpp - collects all local variables from a StatementBlock and nested blocks
 extern void collectAllStatementLocals(const StatementBlock* block, std::vector<LocalVar*>& locals);
+extern void removeBlockLocalsFromBodyLocals(const StatementBlock* block, std::vector<LocalVar*>& locals);
 extern void removeSignatureLocalsFromBodyLocals(std::vector<LocalVar*>& locals, const UserSignature* sig);
 // collectStmtSlotStatements() declared in QoreAOT.h, defined in Function.cpp
 
@@ -211,6 +212,78 @@ static std::string getAOTTypePathForLValue(const QoreTypeInfo* ti) {
         return "*list<auto!>";
     }
     return QoreTypeInfo::getPath(ti);
+}
+
+static std::string normalizeAOTTypePathForMatch(const char* s) {
+    std::string out;
+    if (!s) {
+        return out;
+    }
+    out.reserve(strlen(s));
+    for (size_t k = 0; s[k]; ++k) {
+        if (s[k] == ':' && s[k + 1] == ':') {
+            ++k;
+            continue;
+        }
+        out.push_back(s[k]);
+    }
+    return out;
+}
+
+static bool aotLocalTypeMatches(const LocalVar* lv, const char* type_path,
+        QoreAOTTypeResolver* type_resolver) {
+    if (!lv || !type_path || !*type_path) {
+        return true;
+    }
+    const QoreTypeInfo* local_ti = lv->getTypeInfoForLValue();
+    std::string cand_path = getAOTTypePathForLValue(lv->getTypeInfoForLValue());
+    if (normalizeAOTTypePathForMatch(cand_path.c_str()) == normalizeAOTTypePathForMatch(type_path)) {
+        return true;
+    }
+    if (!type_resolver) {
+        return false;
+    }
+
+    std::string type_error;
+    const QoreTypeInfo* resolved_ti = type_resolver->resolve(type_path, type_error);
+    return resolved_ti && type_error.empty() && QoreTypeInfo::isOutputIdentical(local_ti, resolved_ti);
+}
+
+static LocalVar* popMatchingAOTLocal(std::unordered_map<std::string, std::deque<LocalVar*>>& local_map,
+        const char* name, const char* type_path, QoreAOTTypeResolver* type_resolver) {
+    if (!name || !*name) {
+        return nullptr;
+    }
+    auto it = local_map.find(name);
+    if (it == local_map.end() || it->second.empty()) {
+        return nullptr;
+    }
+
+    auto cit = it->second.end();
+    if (type_path && *type_path) {
+        for (auto qi = it->second.begin(); qi != it->second.end(); ++qi) {
+            if (aotLocalTypeMatches(*qi, type_path, type_resolver)) {
+                cit = qi;
+                break;
+            }
+        }
+    } else {
+        cit = it->second.begin();
+    }
+
+    if (cit == it->second.end()) {
+        // Keep source-order LocalVar identity even when type-path comparison
+        // cannot prove equality.  Reflection/hashdecl-derived paths can
+        // stringify differently or fail resolver equality during source-stripped
+        // AOT context reconstruction.  The producer and collectAllStatementLocals()
+        // both walk locals in source/depth-first order, so consuming the next
+        // same-name candidate is safer than creating a fresh LocalVar that cannot
+        // match evalTiered's lvstack pre-instantiation.
+        cit = it->second.begin();
+    }
+    LocalVar* rv = *cit;
+    it->second.erase(cit);
+    return rv;
 }
 
 // ---- Slot Map Context Builder (V2 — no IR re-lowering) ----
@@ -1119,6 +1192,37 @@ static QoreAOTContext* buildContextFromSlotMap(
     QoreAOTTypeResolver* ctx_type_resolver = shared_type_resolver
         ? shared_type_resolver : &local_type_resolver;
 
+    // Top-level `my` locals have program-wide lexical scope and thread-local
+    // storage.  Methods and functions can reference them even though they do
+    // not appear in that variant's statement-local list.  Reuse the Program
+    // LVList entry instead of creating a fresh LocalVar, because local-stack
+    // lookup uses LocalVar name pointer identity.
+    std::unordered_map<std::string, std::vector<LocalVar*>> top_level_locals;
+    if (const LVList* top_lvars = pp->sb.getLVList()) {
+        for (unsigned i = 0; i < top_lvars->size(); ++i) {
+            LocalVar* tlv = top_lvars->lv[i];
+            if (tlv && tlv->getName()) {
+                top_level_locals[tlv->getName()].push_back(tlv);
+            }
+        }
+    }
+    auto findTopLevelLocal = [&top_level_locals, ctx_type_resolver](
+            const char* lname, const char* ltype) -> LocalVar* {
+        if (!lname || !*lname) {
+            return nullptr;
+        }
+        auto it = top_level_locals.find(lname);
+        if (it == top_level_locals.end()) {
+            return nullptr;
+        }
+        for (LocalVar* tlv : it->second) {
+            if (aotLocalTypeMatches(tlv, ltype, ctx_type_resolver)) {
+                return tlv;
+            }
+        }
+        return nullptr;
+    };
+
     // Read and resolve local slot identities
     for (int i = 0; i < num_locals; ++i) {
         const char* lname = reader.readStringRef(ptr);
@@ -1158,14 +1262,13 @@ static QoreAOTContext* buildContextFromSlotMap(
         } else {
             // Body local — try to find the actual LocalVar* from the function's AST
             // first, then fall back to creating a new one (toplevel case).
-            // Use pop_front() to consume in walk order, handling duplicate names
-            // from nested scopes correctly.
+            // Match on both name and type when available, consuming in walk order
+            // so duplicate names from nested scopes remain distinguishable.
             if (lname && *lname && !stmt_local_deque.empty()) {
-                auto it = stmt_local_deque.find(lname);
-                if (it != stmt_local_deque.end() && !it->second.empty()) {
-                    lv = it->second.front();
-                    it->second.pop_front();
-                }
+                lv = popMatchingAOTLocal(stmt_local_deque, lname, ltype, ctx_type_resolver);
+            }
+            if (!lv) {
+                lv = findTopLevelLocal(lname, ltype);
             }
             if (!lv) {
                 // Toplevel or not found in AST — create a new LocalVar
@@ -2056,6 +2159,16 @@ static QoreAOTContext* buildContextFromSlotMap(
                         enclosing_locals[captured_names[ci]] = ctx->locals[parent_slot];
                     }
                 }
+                // 1c. Top-level locals live in the program LVList, not in the
+                // enclosing method/function context.
+                if (const LVList* top_lvars = qore_program_private::get(*pgm)->sb.getLVList()) {
+                    for (unsigned tl = 0; tl < top_lvars->size(); ++tl) {
+                        LocalVar* lv = top_lvars->lv[tl];
+                        if (lv && lv->getName() && !enclosing_locals.count(lv->getName())) {
+                            enclosing_locals[lv->getName()] = lv;
+                        }
+                    }
+                }
                 // 2. Parent function's parameter locals from the parent variant's
                 // signature — these are NOT in ctx->locals[] when the parameter
                 // is only used inside the closure body (not in the parent's AOT code)
@@ -2417,130 +2530,71 @@ static QoreAOTContext* buildContextFromSlotMap(
         }
     }
 
-    // For user function variants, use the statement locals we already collected from the AST.
-    // These are the same LocalVar* that the compiled code expects, preserving pointer identity.
-    // For toplevel functions (no uvb), create new LocalVars and build a name map for reuse.
-    if (uvb && !stmt_locals.empty()) {
-        // Use the pre-collected statement locals directly as body locals
-        // Skip the serialized body local entries (just advance the pointer)
-        for (int i = 0; i < num_body_locals; ++i) {
-            reader.readStringRef(ptr);  // name
-            reader.readStringRef(ptr);  // type
-            QoreAOTBinaryReader::readU8(ptr);  // closure flag
-        }
-        ctx->all_body_locals = stmt_locals;
-    } else {
-        // Toplevel / source-stripped path — reuse LocalVars from ctx->locals[] where
-        // possible so that all_body_locals (used by evalTiered to pre-instantiate
-        // locals on the lvstack) and ctx->locals[] (used by AOT code to load/store
-        // locals by slot) share pointer identity.
-        //
-        // CRITICAL: params/self/argv must be EXCLUDED from the reuse pool — they
-        // are already instantiated by the caller (setupCall / signature instantiation),
-        // so reusing a param's LocalVar for a body local that happens to share the
-        // same name (e.g. `ex` as both a function param and a catch variable) would
-        // cause evalTiered to double-instantiate the param and the AOT slot for the
-        // body local would dangle off the lvstack (thread_find_lvar walks off the
-        // bottom → SIGSEGV).
-        std::unordered_set<const LocalVar*> sig_like_locals;
-        if (sig) {
-            for (unsigned p = 0; p < sig->lv.size(); ++p) {
-                if (sig->lv[p]) {
-                    sig_like_locals.insert(sig->lv[p]);
-                }
-            }
-            if (sig->selfid) {
-                sig_like_locals.insert(sig->selfid);
-            }
-            if (sig->argvid) {
-                sig_like_locals.insert(sig->argvid);
+    // Reuse LocalVars from ctx->locals[] where possible so all_body_locals
+    // (pre-instantiated by evalTiered) and ctx->locals[] (loaded/stored by AOT
+    // code) share LocalVar/name.c_str() identity.  If a body local has no AOT
+    // local slot, fall back to the matching AST statement local for callbacks.
+    //
+    // CRITICAL: params/self/argv must be EXCLUDED from the reuse pool — they
+    // are already instantiated by the caller (setupCall / signature
+    // instantiation), so reusing a param's LocalVar for a body local that
+    // happens to share the same name would double-instantiate the param and
+    // leave the real body-local slot dangling off the lvstack.
+    std::unordered_set<const LocalVar*> sig_like_locals;
+    if (sig) {
+        for (unsigned p = 0; p < sig->lv.size(); ++p) {
+            if (sig->lv[p]) {
+                sig_like_locals.insert(sig->lv[p]);
             }
         }
-        // Use a deque map because nested scopes can have variables with the same name
-        // (e.g., 'h' in nested foreach loops). Consuming front-to-back gives correct matches.
-        std::unordered_map<std::string, std::deque<LocalVar*>> local_name_map;
-        for (int i = 0; i < num_locals; ++i) {
-            LocalVar* slot_lv = ctx->locals[i];
-            if (!slot_lv || sig_like_locals.count(slot_lv)) {
-                continue;
-            }
-            local_name_map[slot_lv->getName()].push_back(slot_lv);
+        if (sig->selfid) {
+            sig_like_locals.insert(sig->selfid);
         }
+        if (sig->argvid) {
+            sig_like_locals.insert(sig->argvid);
+        }
+    }
 
-        // Read body locals
-        for (int i = 0; i < num_body_locals; ++i) {
-            const char* blname = reader.readStringRef(ptr);
-            const char* bltype = reader.readStringRef(ptr);
-            uint8_t bl_closure = QoreAOTBinaryReader::readU8(ptr);
+    std::unordered_map<std::string, std::deque<LocalVar*>> local_name_map;
+    for (int i = 0; i < num_locals; ++i) {
+        LocalVar* slot_lv = ctx->locals[i];
+        if (!slot_lv || sig_like_locals.count(slot_lv)) {
+            continue;
+        }
+        local_name_map[slot_lv->getName()].push_back(slot_lv);
+    }
 
-            // Reuse LocalVar* from ctx->locals[] if same name AND type match.
-            // A handler-body local that shadows a same-named outer var (e.g.
-            // `Bar al` in outer block, `Foo al` in on_exit) MUST get a fresh
-            // LocalVar of its own type — name-only matching would bind to the
-            // outer Bar and leave the Foo local without a pre-instantiated
-            // TLS entry, so handler IR that references it fails lookups.
-            //
-            // Type paths are compared after stripping namespace-separator `::`
-            // so that serialized paths like `hash<::Util::UriQueryInfo>` match
-            // runtime LocalVar paths like `hash<Util::UriQueryInfo>`.
-            auto strip_ns_sep = [](const char* s) -> std::string {
-                std::string out;
-                if (!s) return out;
-                out.reserve(strlen(s));
-                for (size_t k = 0; s[k]; ++k) {
-                    if (s[k] == ':' && s[k+1] == ':') {
-                        ++k;
-                        continue;
-                    }
-                    out.push_back(s[k]);
-                }
-                return out;
-            };
-            if (blname) {
-                auto it = local_name_map.find(blname);
-                if (it != local_name_map.end() && !it->second.empty()) {
-                    auto cit = it->second.end();
-                    if (bltype && *bltype) {
-                        std::string norm_bltype = strip_ns_sep(bltype);
-                        for (auto qi = it->second.begin(); qi != it->second.end(); ++qi) {
-                            std::string cand_path = getAOTTypePathForLValue(
-                                (*qi)->getTypeInfoForLValue());
-                            std::string norm_cand = strip_ns_sep(cand_path.c_str());
-                            if (norm_cand == norm_bltype) {
-                                cit = qi;
-                                break;
-                            }
-                        }
-                    } else {
-                        cit = it->second.begin();
-                    }
-                    if (cit != it->second.end()) {
-                        ctx->all_body_locals.push_back(*cit);
-                        it->second.erase(cit);
-                        (void)bl_closure;
-                        continue;
-                    }
-                    // No type match: fall through to create a fresh LocalVar
-                    // with the serialized type. Do NOT consume a candidate from
-                    // local_name_map — that would leave the ctx->locals entry
-                    // dangling (other consumers rely on 1-to-1 matching).
-                }
-            }
+    std::unordered_map<std::string, std::deque<LocalVar*>> stmt_body_local_map;
+    for (LocalVar* slv : stmt_locals) {
+        if (slv && slv->getName()) {
+            stmt_body_local_map[slv->getName()].push_back(slv);
+        }
+    }
 
+    for (int i = 0; i < num_body_locals; ++i) {
+        const char* blname = reader.readStringRef(ptr);
+        const char* bltype = reader.readStringRef(ptr);
+        uint8_t bl_closure = QoreAOTBinaryReader::readU8(ptr);
+
+        LocalVar* slot_lv = popMatchingAOTLocal(local_name_map, blname, bltype, ctx_type_resolver);
+        LocalVar* stmt_lv = popMatchingAOTLocal(stmt_body_local_map, blname, bltype, ctx_type_resolver);
+        LocalVar* lv = slot_lv ? slot_lv : stmt_lv;
+        if (!lv) {
             std::string type_error;
-            QoreAOTTypeResolver type_resolver(pgm);
             const QoreTypeInfo* ti = nullptr;
             if (bltype && *bltype) {
-                ti = type_resolver.resolve(bltype, type_error);
+                ti = ctx_type_resolver->resolve(bltype, type_error);
                 if (!type_error.empty()) {
                     type_error.clear();
                 }
             }
 
-            LocalVar* lv = pp->createLocalVar(blname ? blname : "", ti);
-            ctx->all_body_locals.push_back(lv);
-            (void)bl_closure;
+            lv = pp->createLocalVar(blname ? blname : "", ti);
         }
+        if (bl_closure && !lv->closureUse()) {
+            lv->setClosureUse();
+        }
+        ctx->all_body_locals.push_back(lv);
     }
 
     // Deserialize regex cases
@@ -3500,7 +3554,8 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
             if (!error.empty()) {
                 return nullptr;
             }
-            auto* lci = new QoreIRLoadConstantInstruction(nullptr, expr);
+            auto* rcr = dynamic_cast<const RuntimeConstantRefNode*>(expr.getInternalNode());
+            auto* lci = new QoreIRLoadConstantInstruction(rcr, expr);
             lci->opcode = opcode;
             expr.discard(nullptr);
             inst.reset(lci);
@@ -4241,6 +4296,20 @@ static std::string normalizeTypePaths(const std::string& sig) {
     return out;
 }
 
+//! Navigate a namespace path like "Ns1::Ns2" from root to find the target namespace
+static qore_ns_private* findNamespaceByPath(qore_ns_private* root, const std::string& path);
+
+//! Return the namespace-qualified key used for AOT free-function entries.
+static std::string getAOTQualifiedFunctionName(qore_ns_private* ns, const char* fname) {
+    std::string rv;
+    ns->getPath(rv);
+    if (!rv.empty()) {
+        rv += "::";
+    }
+    rv += fname;
+    return rv;
+}
+
 //! Register AOT functions using slot maps from deserialized metadata (V2 — no IR re-lowering)
 /** Walks the SLOT_MAPS section, finds matching functions in the namespace tree,
     and builds context from slot identities.
@@ -4341,6 +4410,7 @@ static void registerAOTFunctionsFromSlotMaps(
         }
 
         size_t sep = fname_str.rfind("::");
+        bool qualified_method_found = false;
 
         if (sep != std::string::npos) {
             // Method: Namespace::ClassName::methodName — use last :: as class/method separator
@@ -4409,6 +4479,7 @@ static void registerAOTFunctionsFromSlotMaps(
                 printd(5, "AOT slot-reg: method lookup '%s' m=%p\n",
                     method_name.c_str(), (void*)m);
                 if (m) {
+                    qualified_method_found = true;
                     // Extract signature from the full func_name to match the correct
                     // overloaded variant.  The func_name format is:
                     //   ClassName::methodName(type1,type2,...)
@@ -4571,7 +4642,9 @@ static void registerAOTFunctionsFromSlotMaps(
                     }
                 }
             }
-        } else if (fname_str != "_toplevel") {
+        }
+
+        if (!uvb && fname_str != "_toplevel" && (sep == std::string::npos || !qualified_method_found)) {
             // Regular function — search the module's own namespace tree (not system
             // builtins) to find the correct UserFunctionVariant.  We must avoid
             // runtimeFindFunction() because it checks Qore:: namespace first and may
@@ -4590,10 +4663,22 @@ static void registerAOTFunctionsFromSlotMaps(
             // local uvb with aot_fn=null and statements=null, producing "block
             // missing return statement" errors.
             const char* current_mod = get_module_context_name();
-            std::function<UserVariantBase*(qore_ns_private*)> findFuncInTree =
-                [&](qore_ns_private* ns) -> UserVariantBase* {
+            std::string search_fname = fname_str;
+            qore_ns_private* search_ns = root_ns;
+            bool qualified_function = false;
+            if (sep != std::string::npos) {
+                std::string ns_path = fname_str.substr(0, sep);
+                search_fname = fname_str.substr(sep + 2);
+                search_ns = findNamespaceByPath(root_ns, ns_path);
+                qualified_function = true;
+            }
+
+            auto findFuncInNamespace = [&](qore_ns_private* ns) -> UserVariantBase* {
+                if (!ns) {
+                    return nullptr;
+                }
                 // Search in this namespace's func_list
-                FunctionEntry* fe = ns->func_list.findNode(fname_str.c_str());
+                FunctionEntry* fe = ns->func_list.findNode(search_fname.c_str());
                 if (fe) {
                     QoreFunction* f = fe->getFunction();
                     if (f && current_mod) {
@@ -4652,6 +4737,14 @@ static void registerAOTFunctionsFromSlotMaps(
                         }
                     }
                 }
+                return nullptr;
+            };
+
+            std::function<UserVariantBase*(qore_ns_private*)> findFuncInTree =
+                [&](qore_ns_private* ns) -> UserVariantBase* {
+                if (UserVariantBase* result = findFuncInNamespace(ns)) {
+                    return result;
+                }
                 // Search child namespaces recursively
                 for (auto ni = ns->nsl.nsmap.begin(), ne = ns->nsl.nsmap.end(); ni != ne; ++ni) {
                     if (ni->second) {
@@ -4664,7 +4757,7 @@ static void registerAOTFunctionsFromSlotMaps(
                 return nullptr;
             };
 
-            uvb = findFuncInTree(root_ns);
+            uvb = qualified_function ? findFuncInNamespace(search_ns) : findFuncInTree(root_ns);
             printd(5, "AOT slot-reg: function '%s' uvb=%p\n", fname_str.c_str(), (void*)uvb);
         }
 
@@ -4764,12 +4857,13 @@ static void registerAOTFunctionsInNamespace(qore_ns_private* ns, QoreProgram* pg
             }
 
             const char* fname = func->getName();
+            std::string function_name = getAOTQualifiedFunctionName(ns, fname);
             // Generate unique key including parameter types to match compiled variant
-            std::string variant_key = getVariantKey(fname, variant);
+            std::string variant_key = getVariantKey(function_name.c_str(), variant);
             auto it = func_map.find(variant_key);
             if (it != func_map.end()) {
                 const QoreAOTFunc* aot_func = it->second;
-                QoreAOTContext* ctx = buildContextForVariant(uvb, fname, pgm, *aot_func);
+                QoreAOTContext* ctx = buildContextForVariant(uvb, function_name.c_str(), pgm, *aot_func);
                 if (ctx) {
                     uvb->registerPrecompiledAOTFunction(aot_func->fn_ptr, ctx);
                     ++registered;
@@ -5656,7 +5750,8 @@ static void registerFallbackFunctionsOnMainVariants(
             }
 
             const char* fname = func->getName();
-            std::string variant_key = getVariantKey(fname, variant);
+            std::string function_name = getAOTQualifiedFunctionName(fallback_ns, fname);
+            std::string variant_key = getVariantKey(function_name.c_str(), variant);
             auto it = func_map.find(variant_key);
             if (it == func_map.end()) {
                 continue;
@@ -5664,7 +5759,7 @@ static void registerFallbackFunctionsOnMainVariants(
 
             const QoreAOTFunc* aot_func = it->second;
             // Build context from fallback variant's AST (gives consistent LocalVar*)
-            QoreAOTContext* ctx = buildContextForVariant(fb_uvb, fname, main_pgm, *aot_func);
+            QoreAOTContext* ctx = buildContextForVariant(fb_uvb, function_name.c_str(), main_pgm, *aot_func);
             if (!ctx) {
                 printd(1, "AOT v2: failed to build fallback context for '%s'\n", variant_key.c_str());
                 continue;
@@ -6001,10 +6096,17 @@ extern "C" DLLEXPORT int qore_aot_run(
                     // Re-lower top-level code to IR to build context
                     QoreIRFunction* ir_func = new QoreIRFunction("_toplevel");
 
-                    // Collect ALL body locals (top-level + nested blocks) as pre-instantiated
+                    // Collect nested body locals as pre-instantiated.  Root
+                    // top-level locals are owned by QoreProgram.
                     collectAllStatementLocals(&sb, ir_func->all_body_locals);
+                    removeBlockLocalsFromBodyLocals(&sb, ir_func->all_body_locals);
                     for (LocalVar* lv : ir_func->all_body_locals) {
                         ir_func->pre_instantiated_locals.insert(reinterpret_cast<const void*>(lv));
+                    }
+                    if (const LVList* top_lvars = sb.getLVList()) {
+                        for (unsigned i = 0; i < top_lvars->size(); ++i) {
+                            ir_func->pre_instantiated_locals.insert(reinterpret_cast<const void*>(top_lvars->lv[i]));
+                        }
                     }
 
                     QoreIRBuilder builder(ir_func);
@@ -6211,6 +6313,46 @@ extern "C" DLLEXPORT int qore_aot_run_v2(
             qore_program_private* pp = qore_program_private::get(**qpgm);
             int registered = 0;
             qore_ns_private* root_ns = qore_ns_private::get(*pp->RootNS);
+            bool toplevel_registered = false;
+
+            // Register _toplevel first so setLVarsFromAOTContext() populates
+            // the program LVList before method/function contexts deserialize
+            // closures that capture top-level locals.
+            if (toplevel_func) {
+                const QoreAOTSectionHeader* sm_sec = deserializer.getReader().findSection(
+                    QoreAOTSectionType::SLOT_MAPS);
+                if (sm_sec) {
+                    const uint8_t* sm_ptr = deserializer.getReader().getSectionData(*sm_sec);
+                    if (sm_ptr) {
+                        const uint8_t* sm_end = sm_ptr + sm_sec->size;
+                        uint32_t sm_count = QoreAOTBinaryReader::readU32(sm_ptr);
+                        for (uint32_t fi = 0; fi < sm_count; ++fi) {
+                            const uint8_t* entry_start = sm_ptr;
+                            uint32_t entry_size = QoreAOTBinaryReader::readU32(sm_ptr);
+                            const char* entry_name = deserializer.getReader().readStringRef(sm_ptr);
+                            const uint8_t* entry_end = entry_start + 4 + entry_size;
+                            sm_ptr = entry_start + 4;
+
+                            if (entry_name && strcmp(entry_name, "_toplevel") == 0) {
+                                QoreAOTContext* ctx = buildContextFromSlotMap(
+                                    deserializer.getReader(), sm_ptr, sm_end,
+                                    nullptr, *qpgm, *toplevel_func, "_toplevel", entry_end);
+                                if (ctx) {
+                                    pp->sb.registerPrecompiledAOTTopLevel(
+                                        toplevel_func->fn_ptr, ctx);
+                                    pp->sb.setLVarsFromAOTContext(ctx);
+                                    ++registered;
+                                    toplevel_registered = true;
+                                    printd(2, "AOT v3: registered _toplevel from slot map\n");
+                                }
+                                break;
+                            }
+                            sm_ptr = entry_start;
+                            skipSlotMapEntry(deserializer.getReader(), sm_ptr, sm_end);
+                        }
+                    }
+                }
+            }
 
             // Use slot maps from the binary metadata to build contexts
             // Collect init functions for execution after slot map registration
@@ -6307,9 +6449,8 @@ extern "C" DLLEXPORT int qore_aot_run_v2(
                 // Find _toplevel in SLOT_MAPS section
                 const QoreAOTSectionHeader* sm_sec = deserializer.getReader().findSection(
                     QoreAOTSectionType::SLOT_MAPS);
-                bool toplevel_registered = false;
 
-                if (sm_sec) {
+                if (!toplevel_registered && sm_sec) {
                     const uint8_t* sm_ptr = deserializer.getReader().getSectionData(*sm_sec);
                     if (sm_ptr) {
                         const uint8_t* sm_end = sm_ptr + sm_sec->size;
@@ -6351,10 +6492,17 @@ extern "C" DLLEXPORT int qore_aot_run_v2(
 
                     QoreIRFunction* ir_func = new QoreIRFunction("_toplevel");
 
-                    // Collect ALL body locals (top-level + nested blocks) as pre-instantiated
+                    // Collect nested body locals as pre-instantiated.  Root
+                    // top-level locals are owned by QoreProgram.
                     collectAllStatementLocals(&fb_sb, ir_func->all_body_locals);
+                    removeBlockLocalsFromBodyLocals(&fb_sb, ir_func->all_body_locals);
                     for (LocalVar* lv : ir_func->all_body_locals) {
                         ir_func->pre_instantiated_locals.insert(reinterpret_cast<const void*>(lv));
+                    }
+                    if (const LVList* top_lvars = fb_sb.getLVList()) {
+                        for (unsigned i = 0; i < top_lvars->size(); ++i) {
+                            ir_func->pre_instantiated_locals.insert(reinterpret_cast<const void*>(top_lvars->lv[i]));
+                        }
                     }
 
                     QoreIRBuilder builder(ir_func);
@@ -6927,6 +7075,46 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
             qore_program_private* pp = qore_program_private::get(**qpgm);
             int registered = 0;
             qore_ns_private* root_ns = qore_ns_private::get(*pp->RootNS);
+            bool toplevel_registered = false;
+
+            // Register _toplevel before other functions so setLVarsFromAOTContext()
+            // populates the program LVList for closure deserialization in methods
+            // that capture top-level locals.
+            if (toplevel_func) {
+                const QoreAOTSectionHeader* sm_sec = deserializer.getReader().findSection(
+                    QoreAOTSectionType::SLOT_MAPS);
+                if (sm_sec) {
+                    const uint8_t* sm_ptr = deserializer.getReader().getSectionData(*sm_sec);
+                    if (sm_ptr) {
+                        const uint8_t* sm_end = sm_ptr + sm_sec->size;
+                        uint32_t sm_count = QoreAOTBinaryReader::readU32(sm_ptr);
+                        for (uint32_t fi = 0; fi < sm_count; ++fi) {
+                            const uint8_t* entry_start = sm_ptr;
+                            uint32_t entry_size = QoreAOTBinaryReader::readU32(sm_ptr);
+                            const char* entry_name = deserializer.getReader().readStringRef(sm_ptr);
+                            const uint8_t* entry_end = entry_start + 4 + entry_size;
+                            sm_ptr = entry_start + 4;
+
+                            if (entry_name && strcmp(entry_name, "_toplevel") == 0) {
+                                QoreAOTContext* ctx = buildContextFromSlotMap(
+                                    deserializer.getReader(), sm_ptr, sm_end,
+                                    nullptr, *qpgm, *toplevel_func, "_toplevel", entry_end);
+                                if (ctx) {
+                                    pp->sb.registerPrecompiledAOTTopLevel(
+                                        toplevel_func->fn_ptr, ctx);
+                                    pp->sb.setLVarsFromAOTContext(ctx);
+                                    ++registered;
+                                    toplevel_registered = true;
+                                    printd(2, "AOT v3: registered _toplevel from slot map\n");
+                                }
+                                break;
+                            }
+                            sm_ptr = entry_start;
+                            skipSlotMapEntry(deserializer.getReader(), sm_ptr, sm_end);
+                        }
+                    }
+                }
+            }
 
             // Use slot maps from the binary metadata to build contexts
             // Collect init functions for execution after slot map registration
@@ -7027,9 +7215,8 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
                 // Find _toplevel in SLOT_MAPS section
                 const QoreAOTSectionHeader* sm_sec = deserializer.getReader().findSection(
                     QoreAOTSectionType::SLOT_MAPS);
-                bool toplevel_registered = false;
 
-                if (sm_sec) {
+                if (!toplevel_registered && sm_sec) {
                     const uint8_t* sm_ptr = deserializer.getReader().getSectionData(*sm_sec);
                     if (sm_ptr) {
                         const uint8_t* sm_end = sm_ptr + sm_sec->size;
@@ -7071,10 +7258,17 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
 
                     QoreIRFunction* ir_func = new QoreIRFunction("_toplevel");
 
-                    // Collect ALL body locals (top-level + nested blocks) as pre-instantiated
+                    // Collect nested body locals as pre-instantiated.  Root
+                    // top-level locals are owned by QoreProgram.
                     collectAllStatementLocals(&fb_sb, ir_func->all_body_locals);
+                    removeBlockLocalsFromBodyLocals(&fb_sb, ir_func->all_body_locals);
                     for (LocalVar* lv : ir_func->all_body_locals) {
                         ir_func->pre_instantiated_locals.insert(reinterpret_cast<const void*>(lv));
+                    }
+                    if (const LVList* top_lvars = fb_sb.getLVList()) {
+                        for (unsigned i = 0; i < top_lvars->size(); ++i) {
+                            ir_func->pre_instantiated_locals.insert(reinterpret_cast<const void*>(top_lvars->lv[i]));
+                        }
                     }
 
                     QoreIRBuilder builder(ir_func);

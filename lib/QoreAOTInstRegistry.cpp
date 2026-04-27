@@ -71,6 +71,17 @@ static const QoreClass* instRegistryFindPseudoClassByPath(const char* path) {
     return nullptr;
 }
 
+//! Return a class path suitable for AOT instruction metadata.
+static std::string instRegistryGetClassPath(const QoreClass* qc, bool pseudo = false) {
+    if (!qc) {
+        return std::string();
+    }
+    // Pseudo-classes are not attached to the namespace tree, so
+    // getNamespacePath() can be empty. getPath() returns the constructor path
+    // used by instRegistryFindPseudoClassByPath() (for example "::Qore::<binary>").
+    return pseudo ? qc->getPath() : qc->getNamespacePath();
+}
+
 // Error propagation convention for instruction read_fn handlers:
 // Every read_fn that calls ctx.readExpr(...) with a LOCAL `std::string error`
 // MUST copy a non-empty inner error into ctx.error before returning nullptr:
@@ -607,6 +618,141 @@ static std::unique_ptr<QoreIRInstruction> readExpr(
 }
 
 // ============================================================================
+// Group 62: Background - native background call metadata
+// ============================================================================
+
+static bool writeBackground(AOTInstWriteCtx& ctx) {
+    auto* bi = static_cast<const QoreIRBackgroundInstruction*>(ctx.inst);
+    ctx.writer.writeU8(static_cast<uint8_t>(bi->kind));
+    ctx.writer.writeStringRef(bi->name.c_str());
+    ctx.writer.writeU8(bi->has_ref_args ? 1 : 0);
+    return true;
+}
+
+static std::unique_ptr<QoreIRInstruction> readBackground(
+        uint16_t opcode_raw, QoreIRBasicBlock* exc_target,
+        const std::vector<QoreIRValue>& operands, uint32_t result_id,
+        AOTInstReadCtx& ctx) {
+    (void)opcode_raw;
+    QoreIRBackgroundKind kind =
+        static_cast<QoreIRBackgroundKind>(QoreAOTBinaryReader::readU8(ctx.ptr));
+    const char* name = ctx.reader.readStringRef(ctx.ptr);
+    bool has_ref_args = QoreAOTBinaryReader::readU8(ctx.ptr) != 0;
+    auto* bi = new QoreIRBackgroundInstruction(kind, name ? name : "", QoreValue());
+    bi->has_ref_args = has_ref_args;
+    bi->result = QoreIRValue(result_id);
+    bi->operands = operands;
+    bi->exception_target = exc_target;
+    return std::unique_ptr<QoreIRInstruction>(bi);
+}
+
+// ============================================================================
+// Group 59: CallClosureDirect - Native closure/call-reference invocation
+// ============================================================================
+
+static bool writeCallClosureDirect(AOTInstWriteCtx& ctx) {
+    // The callee and arguments are already represented by the instruction's
+    // operands; serializing the original CallReferenceCallNode AST would force
+    // an EXPR_TREE fallback.
+    (void)ctx;
+    return true;
+}
+
+static std::unique_ptr<QoreIRInstruction> readCallClosureDirect(
+        uint16_t opcode_raw, QoreIRBasicBlock* exc_target,
+        const std::vector<QoreIRValue>& operands, uint32_t result_id,
+        AOTInstReadCtx& ctx) {
+    (void)ctx;
+    auto* ei = new QoreIRExprInstruction(static_cast<QoreIROpcode>(opcode_raw), QoreValue());
+    ei->result = QoreIRValue(result_id);
+    ei->operands = operands;
+    ei->exception_target = exc_target;
+    return std::unique_ptr<QoreIRInstruction>(ei);
+}
+
+// ============================================================================
+// Group 60: Backquote - Native backquote expression
+// ============================================================================
+
+static bool writeBackquote(AOTInstWriteCtx& ctx) {
+    auto* bi = static_cast<const QoreIRBackquoteInstruction*>(ctx.inst);
+    ctx.writer.writeStringRef(bi->command.c_str());
+    return true;
+}
+
+static std::unique_ptr<QoreIRInstruction> readBackquote(
+        uint16_t opcode_raw, QoreIRBasicBlock* exc_target,
+        const std::vector<QoreIRValue>& operands, uint32_t result_id,
+        AOTInstReadCtx& ctx) {
+    const char* command = ctx.reader.readStringRef(ctx.ptr);
+    auto inst = std::make_unique<QoreIRBackquoteInstruction>(command ? command : "");
+    inst->opcode = static_cast<QoreIROpcode>(opcode_raw);
+    inst->result = QoreIRValue(result_id);
+    inst->operands = operands;
+    inst->exception_target = exc_target;
+    return inst;
+}
+
+// ============================================================================
+// Group 61: Find - Native find expression
+// ============================================================================
+
+static bool writeFind(AOTInstWriteCtx& ctx) {
+    auto* fi = static_cast<const QoreIRFindInstruction*>(ctx.inst);
+    if (!ctx.writeExpr(ctx.writer, fi->exp)) {
+        return false;
+    }
+    if (!ctx.writeExpr(ctx.writer, fi->find_exp)) {
+        return false;
+    }
+    uint8_t has_where = fi->where ? 1 : 0;
+    ctx.writer.writeU8(has_where);
+    if (has_where && !ctx.writeExpr(ctx.writer, fi->where)) {
+        return false;
+    }
+    return true;
+}
+
+static std::unique_ptr<QoreIRInstruction> readFind(
+        uint16_t opcode_raw, QoreIRBasicBlock* exc_target,
+        const std::vector<QoreIRValue>& operands, uint32_t result_id,
+        AOTInstReadCtx& ctx) {
+    std::string error;
+    QoreValue exp = ctx.readExpr(ctx.reader, ctx.ptr, ctx.end, error);
+    if (!error.empty()) {
+        ctx.error = error;
+        return nullptr;
+    }
+    QoreValue find_exp = ctx.readExpr(ctx.reader, ctx.ptr, ctx.end, error);
+    if (!error.empty()) {
+        exp.discard(nullptr);
+        ctx.error = error;
+        return nullptr;
+    }
+    QoreValue where;
+    uint8_t has_where = QoreAOTBinaryReader::readU8(ctx.ptr);
+    if (has_where) {
+        where = ctx.readExpr(ctx.reader, ctx.ptr, ctx.end, error);
+        if (!error.empty()) {
+            exp.discard(nullptr);
+            find_exp.discard(nullptr);
+            ctx.error = error;
+            return nullptr;
+        }
+    }
+
+    auto* fi = new QoreIRFindInstruction(exp, find_exp, where);
+    fi->opcode = static_cast<QoreIROpcode>(opcode_raw);
+    fi->result = QoreIRValue(result_id);
+    fi->operands = operands;
+    fi->exception_target = exc_target;
+    exp.discard(nullptr);
+    find_exp.discard(nullptr);
+    where.discard(nullptr);
+    return std::unique_ptr<QoreIRInstruction>(fi);
+}
+
+// ============================================================================
 // Group 10: CallDirect - Direct function call via expression
 // ============================================================================
 
@@ -833,7 +979,8 @@ static bool writeDotEvalMethodDirect(AOTInstWriteCtx& ctx) {
     if (!ctx.writeExpr(ctx.writer, QoreValue())) {
         return false;
     }
-    ctx.writer.writeStringRef(ci->qc ? ci->qc->getNamespacePath().c_str() : "");
+    std::string class_path = instRegistryGetClassPath(ci->qc, ci->pseudo);
+    ctx.writer.writeStringRef(class_path.c_str());
     // Use resolved method name or fallback_method_name (always set during IR lowering)
     const char* mname = ci->method ? ci->method->getName() : ci->fallback_method_name;
     ctx.writer.writeStringRef(mname ? mname : "");
@@ -896,7 +1043,8 @@ static bool writeInvokeDotEvalMethodDirect(AOTInstWriteCtx& ctx) {
     if (!ctx.writeExpr(ctx.writer, QoreValue())) {
         return false;
     }
-    ctx.writer.writeStringRef(ci->qc ? ci->qc->getNamespacePath().c_str() : "");
+    std::string class_path = instRegistryGetClassPath(ci->qc, ci->pseudo);
+    ctx.writer.writeStringRef(class_path.c_str());
     // Always write method name — extract from AST when method ptr is null
     // Use resolved method name or fallback_method_name (always set during IR lowering)
     const char* mname = ci->method ? ci->method->getName() : ci->fallback_method_name;
@@ -959,8 +1107,14 @@ static std::unique_ptr<QoreIRInstruction> readInvokeDotEvalMethodDirect(
 
 static bool writeInvoke(AOTInstWriteCtx& ctx) {
     auto* ii = static_cast<const QoreIRInvokeInstruction*>(ctx.inst);
-    if (!ctx.writeExpr(ctx.writer, ii->expr)) {
-        return false;
+    if (ii->invoke_opcode == QoreIROpcode::CallClosureDirect) {
+        if (!ctx.writeExpr(ctx.writer, QoreValue())) {
+            return false;
+        }
+    } else {
+        if (!ctx.writeExpr(ctx.writer, ii->expr)) {
+            return false;
+        }
     }
     ctx.writer.writeU16(static_cast<uint16_t>(ii->invoke_opcode));
     ctx.writer.writeStringRef(ii->invoke_key_name.c_str());
@@ -1426,7 +1580,8 @@ static std::unique_ptr<QoreIRInstruction> readLoadConst(
         ctx.error = error;
         return nullptr;
     }
-    auto* lci = new QoreIRLoadConstantInstruction(nullptr, expr);
+    auto* rcr = dynamic_cast<const RuntimeConstantRefNode*>(expr.getInternalNode());
+    auto* lci = new QoreIRLoadConstantInstruction(rcr, expr);
     lci->opcode = static_cast<QoreIROpcode>(opcode_raw);
     expr.discard(nullptr);
     lci->result = QoreIRValue(result_id);
@@ -2722,9 +2877,24 @@ const QoreIRInstGroupInfo AOT_INST_GROUP_REGISTRY[AOT_INST_GROUP_TABLE_SIZE] = {
     // Index 58: MakeHash
     { "MakeHash", 58, true, false, writeMakeHash, readMakeHash, "Hash construction (typed subclass)" },
 
-    // Remaining 59-255: Unsupported/undefined
-    UNUSED_ENTRY(59),
-    UNUSED_ENTRY(60), UNUSED_ENTRY(61), UNUSED_ENTRY(62), UNUSED_ENTRY(63),
+    // Index 59: CallClosureDirect
+    { "CallClosureDirect", 59, true, false, writeCallClosureDirect, readCallClosureDirect,
+      "Native closure/call-reference invocation" },
+
+    // Index 60: Backquote
+    { "Backquote", 60, true, false, writeBackquote, readBackquote,
+      "Native backquote expression" },
+
+    // Index 61: Find
+    { "Find", 61, true, false, writeFind, readFind,
+      "Native find expression" },
+
+    // Index 62: Background
+    { "Background", 62, true, false, writeBackground, readBackground,
+      "Native background call metadata" },
+
+    // Remaining 63-255: Unsupported/undefined
+    UNUSED_ENTRY(63),
     UNUSED_ENTRY(64), UNUSED_ENTRY(65), UNUSED_ENTRY(66), UNUSED_ENTRY(67),
     UNUSED_ENTRY(68), UNUSED_ENTRY(69), UNUSED_ENTRY(70), UNUSED_ENTRY(71),
     UNUSED_ENTRY(72), UNUSED_ENTRY(73), UNUSED_ENTRY(74), UNUSED_ENTRY(75),

@@ -191,6 +191,8 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::ContextMaxPos: return "context.max_pos";
         case QoreIROpcode::ContextSetPos: return "context.set_pos";
         case QoreIROpcode::ContextDestroy: return "context.destroy";
+        case QoreIROpcode::Backquote: return "backquote";
+        case QoreIROpcode::Find: return "find";
         case QoreIROpcode::Summarize: return "summarize";
         case QoreIROpcode::EqInt: return "eq.int";
         case QoreIROpcode::EqFloat: return "eq.float";
@@ -600,6 +602,9 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
                         out << " exception:" << invoke_inst->exception_target->name;
                     }
                 }
+            } else if (auto* bg_inst = dynamic_cast<const QoreIRBackgroundInstruction*>(inst.get())) {
+                out << " " << (bg_inst->kind == QoreIRBackgroundKind::DotEval ? "dot-eval" : "unknown")
+                    << " " << bg_inst->name;
             } else if (inst->opcode == QoreIROpcode::Call
                     || inst->opcode == QoreIROpcode::CallIndirect
                     || inst->opcode == QoreIROpcode::CallMethod
@@ -751,6 +756,17 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
                         out << (ci->sort_type == CM_SORT_DESCENDING
                                 ? " sort_desc=<expr>" : " sort_asc=<expr>");
                     }
+                }
+            } else if (inst->opcode == QoreIROpcode::Backquote) {
+                auto* bi = dynamic_cast<const QoreIRBackquoteInstruction*>(inst.get());
+                if (bi) {
+                    out << " command=\"" << bi->command << "\"";
+                }
+            } else if (inst->opcode == QoreIROpcode::Find) {
+                out << " exp=<expr> in=<expr>";
+                auto* fi = dynamic_cast<const QoreIRFindInstruction*>(inst.get());
+                if (fi && fi->where) {
+                    out << " where=<expr>";
                 }
             } else if (inst->opcode == QoreIROpcode::SwitchInt) {
                 auto* sw = dynamic_cast<const QoreIRSwitchIntInstruction*>(inst.get());

@@ -631,7 +631,16 @@ enum class QoreIROpcode : uint16_t {
     ContextSetPos       = 362,
     ContextDestroy      = 363,
 
-    // NOTE: When adding new opcodes, assign the next sequential ID (360, 361, ...)
+    //! Execute a shell command from a backquote expression and return stdout as a string.
+    //! This replaces the former generic Call/EXPR_TREE path for BackquoteNode.
+    Backquote           = 364,
+
+    //! Execute a `find EXP in SOURCE where COND` expression.
+    //! Carries the three sub-expressions explicitly so the FindNode itself
+    //! never has to be serialized as EXPR_TREE.
+    Find                = 365,
+
+    // NOTE: When adding new opcodes, assign the next sequential ID (366, 367, ...)
     // QORE_IR_MAX_OPCODE is derived automatically from the last enum value below.
 };
 
@@ -639,8 +648,8 @@ enum class QoreIROpcode : uint16_t {
 //! NOTE: Both QoreIRInterpreter.cpp and QoreIRToLLVM.cpp have matching
 //! static_assert guards that will break when this value changes, forcing
 //! review of their dispatch switches.
-constexpr uint16_t QORE_IR_MAX_OPCODE = static_cast<uint16_t>(QoreIROpcode::ContextDestroy);
-static_assert(QORE_IR_MAX_OPCODE == 363, "QORE_IR_MAX_OPCODE changed — update this assertion and "
+constexpr uint16_t QORE_IR_MAX_OPCODE = static_cast<uint16_t>(QoreIROpcode::Find);
+static_assert(QORE_IR_MAX_OPCODE == 365, "QORE_IR_MAX_OPCODE changed — update this assertion and "
     "verify binary format compatibility");
 
 //! Include the central opcode registry (must come after QoreIROpcode enum definition)
@@ -1587,6 +1596,24 @@ public:
     bool has_ref_args = false;  //!< True if any operand is a reference type (may be modified by callee)
 };
 
+enum class QoreIRBackgroundKind : uint8_t {
+    DotEval = 1,  //!< background obj.method(args), receiver in operand 0
+};
+
+//! Native background-call instruction metadata.
+class QoreIRBackgroundInstruction : public QoreIRExprInstruction {
+public:
+    QoreIRBackgroundInstruction(QoreIRBackgroundKind n_kind, std::string n_name,
+            const QoreValue& n_expr = QoreValue())
+            : QoreIRExprInstruction(QoreIROpcode::BackgroundInt, n_expr),
+              kind(n_kind),
+              name(std::move(n_name)) {
+    }
+
+    QoreIRBackgroundKind kind;
+    std::string name;
+};
+
 //! Direct function call instruction - bypasses AST round-trip for resolved function calls
 //! Stores function/variant/program pointers resolved at parse time
 class QoreIRCallDirectInstruction : public QoreIRInstruction {
@@ -1883,6 +1910,42 @@ public:
     QoreValue where_exp;     //!< optional `where` filter expression (empty = no filter)
     QoreValue sort_exp;      //!< optional sort expression (empty = no sort)
     int sort_type = -1;      //!< CM_SORT_ASCENDING, CM_SORT_DESCENDING, or -1 for none
+};
+
+//! Backquote expression instruction — execute command and return stdout as string.
+class QoreIRBackquoteInstruction : public QoreIRInstruction {
+public:
+    explicit QoreIRBackquoteInstruction(std::string n_command)
+            : QoreIRInstruction(QoreIROpcode::Backquote),
+              command(std::move(n_command)) {
+    }
+
+    std::string command;
+};
+
+//! Find expression instruction — wraps find/source/where subexpressions.
+class QoreIRFindInstruction : public QoreIRInstruction {
+public:
+    QoreIRFindInstruction(const QoreValue& n_exp, const QoreValue& n_find_exp,
+            const QoreValue& n_where)
+            : QoreIRInstruction(QoreIROpcode::Find),
+              exp(n_exp),
+              find_exp(n_find_exp),
+              where(n_where) {
+        exp.ref();
+        find_exp.ref();
+        where.ref();
+    }
+
+    ~QoreIRFindInstruction() override {
+        exp.discard(nullptr);
+        find_exp.discard(nullptr);
+        where.discard(nullptr);
+    }
+
+    QoreValue exp;
+    QoreValue find_exp;
+    QoreValue where;
 };
 
 class QoreIRSummarizeInstruction : public QoreIRInstruction {

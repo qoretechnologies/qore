@@ -755,6 +755,11 @@ private:
             bool throwing_ok,
             llvm::Value** result);
 
+    bool tryEmitBackgroundMetadata(const QoreIRBackgroundInstruction* inst,
+            llvm::Module& module, llvm::Function* llvm_func,
+            bool throwing_ok,
+            llvm::Value** result);
+
     // Phase 5b: Try to emit a specialized list index access instead of qore_rt_invoke_expr.
     // Returns true if specialized code was emitted, false to fall through to generic path.
     bool tryEmitListIndexAccess(const QoreIRInstruction* inst, llvm::Module& module,
