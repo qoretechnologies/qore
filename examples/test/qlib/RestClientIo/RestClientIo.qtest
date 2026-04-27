@@ -3558,7 +3558,11 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         # close (seen on Ubuntu amd64 and Alpine arm64) — or
         # HTTPCLIENT-CONNECT-ERROR when waitForReady() observes the
         # closed connection before submitRequest (wraps the underlying
-        # HTTP1-CONNECTION-CLOSED in its desc).
+        # HTTP1-CONNECTION-CLOSED in its desc) — or SOCKET-SSL-ERROR when
+        # checkIdleData()'s SSL_peek() surfaces the TLS-1.3
+        # "certificate_required" alert before the request is sent (the H1
+        # poll op intentionally preserves the SSL error class instead of
+        # collapsing it to HTTP1-CONNECTION-CLOSED).
         try {
             rest.restGet("/api/test");
             assertEq(True, False, "expected exception from mTLS rejection");
@@ -3569,7 +3573,8 @@ Do+Sl1gfqlpgpszQaOMjR4M=
                 || ex.err == "HTTP1-UNEXPECTED-DATA"
                 || ex.err == "HTTP1-STATE-ERROR"
                 || ex.err == "HTTPCLIENT-STATE-ERROR"
-                || ex.err == "HTTP1-ABORT",
+                || ex.err == "HTTP1-ABORT"
+                || ex.err == "SOCKET-SSL-ERROR",
                 sprintf("expected mTLS rejection error, got: %s: %s", ex.err, ex.desc));
         }
 %endif
