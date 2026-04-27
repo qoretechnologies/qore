@@ -535,11 +535,12 @@ struct QorePluginOperation {
     uint16_t local_id;                            //!< 0..N within this module
     //! Operation name. Drawn from the protocol's canonical operation-name table
     //! (see "Operation-name table" below) when one of those names is used; that
-    //! entry then provides the optimizer with built-in algebraic priors (e.g.,
-    //! `sum` is reduce-with-+, `eq` is symmetric). Names outside the table are
-    //! permitted and treated as opaque module-local identifiers — registration
-    //! does not validate signature against an opaque name. Built-in names
-    //! always take precedence over module-local interpretation.
+    //! entry validates only category and signature shape. Algebraic/effect
+    //! permissions still come from OpcodeInfoExtended on this signature. Names
+    //! outside the table are permitted and treated as opaque module-local
+    //! identifiers — registration does not validate signature against an opaque
+    //! name. Built-in names always take precedence over module-local
+    //! interpretation.
     const char* operation_name;
     QorePluginOperationSignature signature;
     OpcodeInfoExtended info;                      //!< full metadata (see 3.4)
@@ -587,7 +588,7 @@ struct QorePluginTypeDescriptor {
     uint16_t serializer_format_version;
     //! Optional baseline QDOM domain bits required by all operations on this
     //! type. Most types should leave this as QDOM_DEFAULT and declare domains
-    //! per operation instead.
+    //! per operation instead; do not use a baseline for optional I/O helpers.
     int64_t baseline_qdom_domains;
 };
 
@@ -675,22 +676,22 @@ Constraints:
   requested one. `plugin_abi_version` is compared with strict equality —
   ABI versions never gain backward compatibility, by construction.
 - The effective sandbox-domain mask at a call site is the bitwise OR of
-  the operation's `qdom_domains` and the receiver type's
-  `baseline_qdom_domains`. Construction sites also OR in the constructed
-  type's `baseline_qdom_domains`. This lets a type declare a baseline
-  ("any DataFrame use needs DATABASE_QUERY") while individual operations
-  declare incremental domains ("CSV reader additionally needs FILESYSTEM")
-  without duplicating bits across operation tables.
+  the operation's `qdom_domains` and every participating type's
+  `baseline_qdom_domains`: unary receiver/primary type, binary primary and
+  secondary types, and the constructed type at construction sites. Baseline
+  domains are only for inherent type capabilities that every operation needs;
+  optional I/O stays on the specific operation. For example, in-memory
+  `DataFrame` filtering should normally keep
+  `baseline_qdom_domains == QDOM_DEFAULT`, while CSV readers declare
+  `QDOM_FILESYSTEM` and typed DBI ingestion declares `QDOM_DATABASE` on those
+  operations.
 
 **Operation-name table.** When `operation_name` is one of the names below,
 the runtime recognizes the operation's category and expected signature shape.
 The table does **not** grant unsafe algebraic rewrite permissions by itself.
 Unsafe properties such as associativity, idempotence, identity folding, and
 floating-point reassociation must be declared per signature in
-`OpcodeInfoExtended`. The table grants two narrow priors that cannot be
-unsafe by definition: structural purity for `size`/`count` (an op that
-reports a dimension cannot mutate observable state) and the no-CSE warning
-for `clone`. Names outside the table are opaque.
+`OpcodeInfoExtended`. Names outside the table are opaque.
 
 | Name | Arity | Category / conservative default |
 |---|---|---|
@@ -700,7 +701,7 @@ for `clone`. Names outside the table are opaque.
 | `lt`, `le`, `gt`, `ge` | 2 | ordered comparison; non-commutative |
 | `neg`, `bit_not`, `not` | 1 | unary; involution must be declared per signature |
 | `subscript`, `slice` | 2 | dual-use: read-like when `signature.access == ReadOnly` (CSE candidate when `is_pure_modulo_xsink` is also declared); assignment-like when `signature.access == MutatesLhs` (no CSE; treated as a write to the receiver). The optimizer's classification follows `signature.access`, not the name. |
-| `size`, `count` | 1 | dimension query; **runtime forces `is_pure_modulo_xsink = true`** — reporting a length cannot have side effects |
+| `size`, `count` | 1 | dimension query; registration requires `signature.access == ReadOnly`, but purity must be declared per signature because lazy / external-backed lengths may load, cache, or throw |
 | `any`, `all` | 1 | predicate reduction; purity must be declared per signature |
 | `sum`, `min`, `max` | 1 | reduction; associativity/reassociation must be declared per signature |
 | `mean` | 1 | reduction; FP-non-associative even when `sum` is — see fast-math note below |
@@ -1047,6 +1048,15 @@ operation id, verify the live registration's signature hash matches
 binding an operation whose local id was reused with a different ABI in an
 incompatible module build; mismatch rejects the artifact with a diagnostic
 naming both the recorded and live signature hashes.
+
+`signature_hash` is a canonical wire hash, not a hash of the in-memory
+`QorePluginOperationSignature` bytes. Pointer-valued fields such as
+`QoreTypeInfo*` are normalized to stable identities before hashing: builtin
+type code or `(module_name, type_local_id)` for plugin types, plus nullability,
+arity, return type, `helper_abi`, `access`, and `result_alias`. The hash excludes
+process-local addresses, helper pointers, extension pointers, and padding so the
+same artifact can load in processes with different address layouts.
+
 `qore_aot_module_init_v4` performs this resolution after `PLUGIN_IMPORTS`
 has been resolved against loaded modules. The wire format intentionally
 records the unresolved `(import_idx, op_local_id)` pair rather than a
@@ -1094,8 +1104,8 @@ Loader behaviour:
 2. Verify each loaded module provides a compatible plugin ABI and
    operation-set version.
 3. Verify every required type id and operation id is present, active in the
-   target Program, and has a compatible signature / serialization format
-   version.
+   target Program, and has a compatible canonical signature hash /
+   serialization format version.
 4. Verify `header.feature_flags & ~runtime_supported == 0` for core QORD
    format features. (Plugin imports are not encoded in `feature_flags` —
    they have their own section. Unsupported core features may still fall
@@ -1196,39 +1206,61 @@ experience surface, all of which is part of the v1 ABI ship in Phase 3.
 **Structured error codes.** Every rejection raises a Qore exception with
 one of the following error codes (matching existing `AOT-PENDING-CONSTANT`
 / `RUNTIME-OVERLOAD`-style convention). Tooling and CI test harnesses
-match against the code, not the message. Each diagnostic message MUST
-include: offending module name, offending type/operation name, the field
-that violated the rule, expected vs. actual values, and the section
-number of this design that defines the rule.
+match against the code, not the message. Codes are stable families; the
+structured violation payload carries the precise `field_name` and `subreason`
+for field-level checks. Each diagnostic message MUST include: offending module
+name, offending type/operation name, the field that violated the rule, expected
+vs. actual values, and the section number of this design that defines the rule.
 
 | Error code | Raised by | Section |
 |---|---|---|
-| `PLUGIN-REGISTRATION-NULL-LIFECYCLE` | `qore_register_plugin_types_v1` | §3.3 |
-| `PLUGIN-REGISTRATION-DUPLICATE-LOCAL-ID` | registration | §3.3 |
-| `PLUGIN-REGISTRATION-SIGNATURE-CONFLICT` | registration | §3.3 |
-| `PLUGIN-REGISTRATION-OPERATION-SET-VERSION-INCOMPATIBLE` | registration | §3.3 |
-| `PLUGIN-EXTENSION-ABI-MISMATCH` | registration (LLVM extension) | §3.3 / §3.6 |
-| `PLUGIN-EXTENSION-UNRECOGNIZED-REQUIRED` | registration | §3.3 |
-| `PLUGIN-CROSS-TYPE-CONFLICT` | registration (cross-module) | §3.10 |
-| `PLUGIN-HELPER-RESULT-TYPE-MISMATCH` | debug-build runtime check | §3.4 |
-| `PLUGIN-HELPER-ALIAS-CONTRACT-VIOLATED` | debug-build runtime check | §3.3 (`ReturnsLhs`/`ReturnsRhs`) |
-| `PLUGIN-HELPER-ABI-MISMATCH` | debug-build runtime check | §3.5 |
+| `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` | registration / validation (bad counts, null names/type info, non-contiguous ids, invalid reserved values) | §3.3 |
+| `PLUGIN-REGISTRATION-NULL-LIFECYCLE` | registration / validation | §3.3 |
+| `PLUGIN-REGISTRATION-NULL-CODEC` | registration / validation (missing serializer/deserializer for a QORD-visible type) | §3.3 / §3.9 |
+| `PLUGIN-REGISTRATION-DUPLICATE-LOCAL-ID` | registration / validation | §3.3 |
+| `PLUGIN-REGISTRATION-SIGNATURE-CONFLICT` | registration / validation | §3.3 |
+| `PLUGIN-REGISTRATION-HELPER-SYMBOL-MISSING` | registration / contextual validation | §3.3 / §3.5 |
+| `PLUGIN-REGISTRATION-OPERATION-SET-VERSION-INCOMPATIBLE` | registration / contextual validation | §3.3 |
+| `PLUGIN-EXTENSION-ABI-MISMATCH` | registration / validation (LLVM extension) | §3.3 / §3.6 |
+| `PLUGIN-EXTENSION-UNRECOGNIZED-REQUIRED` | registration / validation | §3.3 |
+| `PLUGIN-CROSS-TYPE-CONFLICT` | registration / contextual validation (cross-module) | §3.10 |
+| `PLUGIN-LOWERING-CLAIM-VIOLATED` | parse-time lowering | §3.7 |
+| `PLUGIN-HELPER-RESULT-TYPE-MISMATCH` | runtime verifier | §3.4 |
+| `PLUGIN-HELPER-ALIAS-CONTRACT-VIOLATED` | runtime verifier | §3.3 (`ReturnsLhs`/`ReturnsRhs`) |
+| `PLUGIN-HELPER-ABI-MISMATCH` | runtime verifier | §3.5 |
 | `QORD-PLUGIN-IMPORT-MISSING` | QORD loader | §3.9 |
+| `QORD-PLUGIN-HELPER-REF-INVALID` | QORD loader (`slot_idx`, `import_idx`, or `op_local_id` invalid) | §3.9 |
 | `QORD-PLUGIN-SIGNATURE-HASH-MISMATCH` | QORD loader | §3.9 |
 | `QORD-PLUGIN-SERIALIZER-VERSION-UNSUPPORTED` | QORD loader | §3.9 |
+| `QORD-PLUGIN-RESERVED-NONZERO` | QORD loader | §3.9 |
+| `QORD-PLUGIN-PAYLOAD-LENGTH-MISMATCH` | QORD loader (deserializer over-read or under-consumption) | §3.3 / §3.9 |
 
 **Dry-run validation entry point.** Authors testing a descriptor before
 wiring it into module init use:
 
 ```cpp
+struct QorePluginValidationContext {
+    //! Optional opaque module-manager handle used to validate
+    //! runtime_helper_symbol lookup against the registering binary. nullptr
+    //! means descriptor-only validation; symbol resolution is reported as a
+    //! deferred check in collect-all mode and is performed by registration.
+    const void* module_handle;
+
+    //! Optional Program used to validate per-Program activation/import rules.
+    //! nullptr means process-global descriptor validation only.
+    const QoreProgram* program;
+};
+
 //! Validate registration without committing. Returns 0 if reg would
-//! register cleanly, -1 with full diagnostic. Does not register
-//! anything, does not allocate global ids, does not invoke runtime
-//! helpers, and is safe to call from a unit test or a sample-module's
-//! startup self-check. The full validation pass is run regardless of
-//! collect_all — see below.
+//! register cleanly in the supplied context, -1 with diagnostics. Does
+//! not register anything, does not allocate global ids, does not invoke
+//! runtime helpers, and is safe to call from a unit test or a
+//! sample-module's startup self-check. collect_all controls whether the
+//! validator walks all descriptor-local rules or stops at the first
+//! violation.
 int qore_validate_plugin_types_v1(
     const QorePluginTypeRegistration* reg,
+    const QorePluginValidationContext* ctx,
     bool collect_all,            //!< true: report all violations; false: fail-fast
     ExceptionSink* xsink);
 ```
@@ -1237,29 +1269,43 @@ When `collect_all` is true, the validator walks the entire descriptor
 and reports every violation it finds as a single chained exception
 whose `arg` is a `list<hash<PluginValidationViolation>>` listing each
 issue with `(error_code, module_name, type_name, operation_name,
-field_name, expected, actual, section_ref)`. This is the mode plugin
-author CI scripts and IDE integrations should use; production module
-load uses the fail-fast equivalent (`collect_all == false`) which
-returns the first violation only.
+field_name, expected, actual, section_ref, subreason)`. This is the mode
+plugin author CI scripts and IDE integrations should use; production module
+load uses the fail-fast equivalent (`collect_all == false`) which returns the
+first violation only.
+
+Validation is split into **descriptor-local** and **contextual** checks.
+Descriptor-local checks (ids, null pointers, signatures, extension payload
+shape, codec presence, declared QDOM domains) run without `ctx`. Contextual
+checks need live runtime state: resolving `runtime_helper_symbol` from a module
+handle, validating Program activation/import visibility, and checking
+cross-module conflicts against already registered modules. A dry-run with
+`ctx == nullptr` cannot promise those contextual checks will pass; collect-all
+mode reports them as deferred checks instead of pretending the descriptor is
+fully registrable.
 
 `qore_register_plugin_types_v1` itself runs in fail-fast mode and never
-collects — registration is a single transactional commit, not a
-diagnostic walk.
+collects — registration is a single transactional commit, not a diagnostic
+walk. It supplies the real module/Program context internally and therefore
+performs all contextual checks before committing global ids.
 
 **Diagnostic env-var family.** Matches the existing `QORE_AOT_*_TRACE`
-discipline. None gated by build mode; all available in release builds
-because authors debug against the same binary their users run.
+discipline. Trace variables only log; they never enable additional checks or
+alter program semantics. None are gated by build mode, because authors debug
+against the same binary their users run.
 
 | Env var | Effect |
 |---|---|
 | `QORE_PLUGIN_REGISTER_TRACE` | Logs every type/operation/extension as it is accepted or rejected during `qore_register_plugin_types_v1`, with the field-by-field validation outcome. |
 | `QORE_PLUGIN_DISPATCH_TRACE` | Logs every plugin-opcode dispatch (`PluginUnary` / `PluginBinary` / `PluginCall` / etc.) including operand types, resolved global operation id, helper-ABI, and resolved helper pointer. |
-| `QORE_PLUGIN_VERIFY_TRACE` | Logs every debug-build runtime assertion the protocol performs (helper return-tag check, helper-ABI verification, `ReturnsLhs`/`Rhs` identity check) including the ones that pass. |
+| `QORE_PLUGIN_VERIFY` | Enables runtime verifier checks that are normally debug-build-only in a release build; intended for production reproductions and plugin-author CI. |
+| `QORE_PLUGIN_VERIFY_TRACE` | Logs every runtime verifier check that is enabled by a debug build or `QORE_PLUGIN_VERIFY`, including the ones that pass. |
 | `QORE_PLUGIN_CROSS_TYPE_TRACE` | Logs cross-module operator resolution decisions per §3.10 (which precedence rule fired, what was synthesised, what was rejected). |
 | `QORE_PLUGIN_QORD_TRACE` | Logs QORD `PLUGIN_IMPORTS` / `PLUGIN_HELPER_REFS` resolution: per-import resolution outcome, signature-hash compare, slot-table population. |
 
-**Debug-build runtime check inventory.** A single, normative list of
-what debug builds verify:
+**Runtime verifier inventory.** A single, normative list of checks that debug
+builds always perform and release builds perform only when
+`QORE_PLUGIN_VERIFY=1`:
 
 - Every plugin-helper call site asserts the returned NaN-boxed value's
   tag matches the declared `signature.return_type` (§3.4). Mismatch
@@ -1271,27 +1317,39 @@ what debug builds verify:
   `ReturnsRhs` is checked: the returned bits MUST equal the named
   operand's bits exactly. Mismatch raises
   `PLUGIN-HELPER-ALIAS-CONTRACT-VIOLATED` (§3.3).
-- Every `value_ops.incref` / `decref` / `cleanup_slot` invocation that
-  raises an exception triggers a hard assertion — these are `noexcept`
-  by contract (§3.3). Release builds treat the same as undefined
-  behaviour.
+- `value_ops.incref` / `decref` / `cleanup_slot` are called through
+  `noexcept` function-pointer types. Registration validates that the pointers
+  are non-null, but the runtime cannot recover if C++ code throws through one:
+  normal C++ `noexcept` rules apply (`std::terminate`), and the protocol treats
+  this as a plugin bug rather than a recoverable Qore exception.
 - Every `make_identity` callback is invoked at most once per
   `(operation, result_type)` pair; debug builds assert the cache
   invariant on every fold attempt (§3.4).
 
-Release builds elide these checks. Plugin authors who want the checks
-on in production opt in via `QORE_PLUGIN_VERIFY_TRACE`.
+`QORE_PLUGIN_VERIFY_TRACE` only logs verifier decisions. It does not turn a
+release build verifier on; use `QORE_PLUGIN_VERIFY=1` for that.
 
 **Reflection from Qore code.** Phase 3 ships `Qore::Reflection::PluginRegistry`
-(a singleton accessible from any Program that has `reflection` loaded):
+(accessible from any Program that has `reflection` loaded). The API exposes both
+the process-global immutable registry and a Program-bound view, because §3.10
+keeps plugin activation per Program:
 
 ```qore
 namespace Qore::Reflection;
 
 class PluginRegistry {
+    # Program-bound view for the current Program.
     static PluginRegistry get();
 
+    # Program-bound view for an explicit Program.
+    static PluginRegistry get(Program[QoreProgram] pgm);
+
+    # Process-global descriptor registry; methods that depend on Program
+    # activation or parse diagnostics are unavailable on this view.
+    static PluginRegistry getProcessRegistry();
+
     list<string> getRegisteredModules();
+    list<string> getActiveModules();
     list<hash<PluginTypeInfo>> getTypes(string module_name);
     list<hash<PluginOperationInfo>> getOperations(string module_name);
 
@@ -1309,8 +1367,10 @@ class PluginRegistry {
 ```
 
 `PluginRegistry` is the protocol's answer to the "type registered, but
-where is it?" debugging question. It is not a substitute for the env-var
-trace family — the registry is a snapshot of the steady-state, the
+where is it?" debugging question. `getRegisteredModules()` reports the
+process-global descriptor set; `getActiveModules()`, `resolveOperation()`, and
+`getRecentFallbackSites()` are Program-bound. It is not a substitute for the
+env-var trace family — the registry is a snapshot of the steady-state, the
 traces are a record of decisions. Both are necessary.
 
 **Reference module + lint.** Phase 3 ships:
@@ -1320,13 +1380,13 @@ traces are a record of decisions. Both are necessary.
   operation, a serializer, a lowering hook, and the optional LLVM
   extension. Plugin authors copy this and edit.
 - `examples/plugins/qore-plugin-lint` — a script (Qore source) that
-  reads a built `.qmod`'s registration descriptor via the dry-run
-  validator and `PluginRegistry`, then reports violations and warnings
-  about descriptor quality (e.g., declared `is_commutative = true`
+  reads a built `.qmod`'s registration descriptor via the dry-run validator
+  with a validation context and `PluginRegistry`, then reports violations and
+  warnings about descriptor quality (e.g., declared `is_commutative = true`
   with no test coverage flagged in the module's test suite, missing
-  `qdom_domains` on a type that touches the filesystem). The lint is
-  advisory; it never blocks a build but is the recommended pre-commit
-  check for plugin modules.
+  operation-level `qdom_domains` on an operation that touches the filesystem).
+  The lint is advisory; it never blocks a build but is the recommended
+  pre-commit check for plugin modules.
 
 **Error-message quality contract.** Every rejection raised by registration
 or load MUST include, at minimum:
@@ -1337,7 +1397,9 @@ or load MUST include, at minimum:
    localised to one).
 4. The descriptor field that violated the rule.
 5. Expected value vs. actual value.
-6. A reference to the section of this document defining the rule
+6. The structured `subreason` when the error code covers multiple field-level
+   causes.
+7. A reference to the section of this document defining the rule
    (e.g., "see plugin-types-and-dense-data.md §3.3 ‘Operation-name
    table'").
 
@@ -1773,20 +1835,22 @@ exposure — reuses Phase 1's `buffer<T>`.
 - **Validation and developer experience (§3.12)**, all on the public ABI
   ship boundary:
   - `qore_validate_plugin_types_v1` dry-run validation entry point with
-    fail-fast and collect-all-errors modes.
+    optional validation context, fail-fast mode, and collect-all-errors mode.
   - The structured error-code set listed in §3.12 — every rejection rule
-    in §3.3 / §3.9 / §3.10 wired to its assigned code.
+    in §3.3 / §3.7 / §3.9 / §3.10 wired to its assigned code.
   - The `QORE_PLUGIN_*_TRACE` env-var family (`REGISTER`, `DISPATCH`,
-    `VERIFY`, `CROSS_TYPE`, `QORD`) matching the existing
-    `QORE_AOT_*_TRACE` discipline.
-  - Debug-build runtime assertions per the §3.12 inventory (helper
-    return-tag, helper-ABI, alias contract, lifecycle `noexcept`,
+    `VERIFY_TRACE`, `CROSS_TYPE`, `QORD`) plus `QORE_PLUGIN_VERIFY`
+    for release-build runtime verifier opt-in, matching the existing
+    `QORE_AOT_*_TRACE` logging discipline without making trace flags change
+    semantics.
+  - Runtime verifier checks per the §3.12 inventory (helper return-tag,
+    helper-ABI, alias contract, lifecycle `noexcept` discipline,
     `make_identity` cache).
   - `Qore::Reflection::PluginRegistry` for Qore-side introspection of
     registered modules / types / operations and "why didn't this
     lower?" diagnostics.
   - Error-message quality contract: every rejection includes module +
-    type/op name + field + expected/actual + section reference.
+    type/op name + field + expected/actual + subreason + section reference.
 - `examples/plugins/sample-buffer/` reference module + `qore-plugin-lint`
   advisory linter.
 - Documentation.
@@ -2029,6 +2093,10 @@ feature wishlist.
     whether it gates only reductions or also per-element FMA/contract
     rewrites. Recommended starting point: single bit, per-op, defaulting
     off, with `%fp-fast-math` flipping it for ops that don't override.
+
+---
+
+## 10. References
 
 **Existing Qore architecture:**
 - [`design/qore-jit-aot-current-state.md`](../design/qore-jit-aot-current-state.md)
