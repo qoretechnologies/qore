@@ -757,6 +757,10 @@ ABI and must not change.
 ```cpp
 // qore_module_init has the current ModuleManager.h signature:
 // void qore_module_init(QoreModuleInitContext& module_ctx, ExceptionSink& xsink).
+// The plugin protocol's C ABI takes pointers, so the call site below uses
+// address-of on the C++ references — &module_ctx-style usage is standard
+// C++ but worth noting for plugin authors familiar mostly with C: applying
+// & to a reference yields a pointer to the underlying object.
 QorePluginRegistrationContextV1 plugin_ctx{
     .struct_size   = sizeof(plugin_ctx),
     .flags         = 0,
@@ -788,6 +792,24 @@ all-or-nothing commit keeps §3.10 conflict detection free of TOCTOU windows.
 Plugins must not spawn background threads that re-enter registration: those
 threads do not own the current module-init TLS handle and fail with
 `module_handle_stale`.
+
+Hot-path dispatch (`PluginUnary` / `PluginBinary` / `PluginCall` /
+`PluginSubscript` / etc.) reads the descriptor table lock-free, relying on
+the §3.10 immutability guarantee that committed descriptors never change.
+The registry write lock is held only during the registration commit; after
+all modules have loaded it is uncontested, and steady-state plugin-opcode
+execution incurs no locking overhead from the registry.
+
+If `qore_register_plugin_types_v1` succeeds but the surrounding
+`qore_module_init` then fails (raises an error through `xsink` or returns
+abnormally), libqore rolls back the just-committed registration as part of
+the same module-load failure path: the registry write lock is reacquired,
+the failed module's just-allocated global ids are released, and any
+auto-synthesised cross-type entries are removed. The next attempt to load
+that module starts from a clean process-global state. This guarantee
+applies only to the just-committed registration; descriptors from earlier,
+already-finished module loads are never affected by a later module's
+init-failure rollback.
 
 **Two evolution disciplines, intentionally.** The plugin protocol uses two
 distinct forward-compatibility patterns:
@@ -1380,7 +1402,14 @@ user writes `tensor + buffer`, who registers `add.tensor_buffer`?
    to fail with a diagnostic naming both modules. There is no "last wins";
    silent overwrite is a footgun. A module that needs to override another
    module's cross-type op must do so explicitly with a versioned operation-
-   set number that the other module declares an upper bound on.
+   set number that the other module declares an upper bound on. Under
+   concurrent module-init, ordering is established by registry-write-lock
+   acquisition (per §3.3): whichever registration takes the lock first
+   commits its triple, the second registration sees the prior entry under
+   the same lock and fails with a diagnostic naming both modules. The
+   diagnostic content is independent of acquisition order — both module
+   names appear regardless — so test harnesses do not depend on
+   serialization timing.
 3. **Commutative auto-symmetry.** If a registration for
    `(A, B, op)` declares `is_commutative = true`, the runtime synthesises
    the `(B, A, op)` site automatically — registering both halves
@@ -1579,11 +1608,13 @@ Validator behaviour by `module_handle` value:
   `runtime_helper_symbol` lookup against the module's binary.
 - **Non-null but does NOT match the live TLS handle (or no
   `qore_module_init` is in progress on this thread)** — the validator
-  returns `-1` with `module_handle_stale` before dereferencing the pointer.
-  Test harnesses may assert this mandatory TLS-mismatch case. They should not
-  assert that an arbitrary cached handle from an earlier init invocation is
-  always detected after the runtime has left module init; that broader stale
-  detection remains best-effort per §3.3.
+  returns `-1` with `module_handle_stale`. The validator compares pointer
+  values only and never dereferences the supplied handle, so a wild pointer
+  in `ctx->module_handle` is rejected without UB. Test harnesses may assert
+  this mandatory TLS-mismatch case. They should not assert that an arbitrary
+  cached handle from an earlier init invocation is always detected after the
+  runtime has left module init; that broader stale detection remains
+  best-effort per §3.3.
 - **`nullptr`** — descriptor-only validation; helper-symbol lookup is
   reported as a deferred check in collect-all mode and is not performed.
   This is the dry-run mode for unit tests and tools that run outside any
