@@ -776,12 +776,18 @@ upstream `keepalive_timeout` handles this with a per-connection read-event timer
 `src/http/modules/ngx_http_upstream_keepalive_module.c:384`, default 60s) that fires after
 the idle period and does a `recv(MSG_PEEK)` to confirm silence, then closes.  Qore mirrors this:
 
-- **Configuration** — `HttpClientConnectionManager` stores `opts.idle_timeout` (default 60s,
-  matching nginx's upstream default).  Non-default values propagate through to the C++ poll op
-  via `setIdleTimeout(int idle_timeout_ms)` called from
-  `HttpClientConnectionManager::submitConnectionToController()` immediately after connection
-  creation.  `submitIdleTimeout` wiring is H1/H2-only — H3 relies on its ngtcp2 idle timer
-  described in the section above.
+- **Configuration** — `opts.idle_timeout` is honored by both the Qore-side
+  `HttpClientConnectionManager` (`qlib/HttpClientIo/HttpClientConnectionManager.qc`) and the
+  C++-side `HttpClientConnectionManagerBase` (`lib/QoreHttpClientConnectionManagerBase.cpp`).
+  Default 60s, matching nginx's upstream default.  Both managers propagate the value into the
+  H1/H2 poll op via `setIdleTimeout(int idle_timeout_ms)`:
+  - **Qore mgr**: `HttpClientConnectionManager::submitConnectionToController()` immediately
+    after connection creation
+  - **C++ mgr**: `HttpClientConnectionManagerBase::createConnection()` after `waitForReady`,
+    via the virtual `HttpClientConnectionBase::setIdleTimeoutHook(int64_t timeout_us)`
+    overridden by `Http{1,2}ClientConnection` to call the poll-op priv's `setIdleTimeout`
+    directly (and a no-op on `Http3ClientConnection` — H3 relies on its ngtcp2 idle timer
+    described in the section above)
 - **Arming** — `idle_timeout_us` is stored as an I/O-thread-only member on
   `Http{1,2}ClientPollOperationPriv`.  The deadline (`idle_deadline_us`) is armed lazily on
   the first idle entry and reset to 0 whenever the connection leaves idle state.  For H1 that
@@ -807,6 +813,85 @@ The end state: H1/H2 idle connections are closed proactively by the poll op, inv
 callers, with a deterministic upper bound (`idle_timeout`) on how long a stale pooled connection
 can survive.  Misbehaving peers that never close (infinite keepalive) no longer pin pool slots
 indefinitely.  This was commit `fa6f6b40a`.
+
+### HTTP Client Connection Reuse Safety (curl-aligned model)
+
+The H1/H2 client connection manager applies a layered defense against handing
+out a stale or dead pooled connection.  Each layer catches a different failure
+mode; together they mirror curl's reuse-safety contract
+(`Curl_conn_seems_dead` + `Curl_retry_request` + `TCP_USER_TIMEOUT` +
+`CURLOPT_MAXAGE_CONN`) without violating Qore's async-I/O ownership model
+(no user-thread `poll`/`recv` on fds owned by the I/O thread).
+
+Layers, in firing order:
+
+1. **I/O-thread proactive close** (peer-initiated FIN/RST during idle).
+   The I/O thread's `Http1ClientPollOperationPriv::handleIdle` calls
+   `recv(MSG_PEEK)` on a connection that's been idle for a tick; on EOF
+   (rc=0), it transitions the op to `CLOSED`.  `op.isClosed()` becomes the
+   authoritative liveness signal at conn-mgr checkout.  Documented in the
+   "HTTP/1.1 and HTTP/2 Client Idle Close Policy" section above.
+
+2. **Conn-mgr checkout-time stored-state checks** (Qore-side, in
+   `qlib/HttpClientIo/HttpClientConnectionManager.qc:isConnectionAlive`,
+   gated on `getActiveStreamCount() == 0`):
+   - `op.isClosed() / hasError()` — authoritative I/O-thread state
+   - `idle_timeout` cutoff (`now - getLastActivity() >= opts.idle_timeout`) —
+     race-free against the periodic `maybeCleanupIdle` tick
+   - `max_age` cutoff (`now - getCreationTime() >= opts.max_age`) — born-at
+     TTL, curl `CURLOPT_MAXAGE_CONN` analog, defaults to 0 (off)
+
+   All three are pure stored-state reads — no syscall, no I/O thread coupling.
+   The C++ conn-mgr has the analogous checks via `evictDeadLocked` (which
+   collects max-age-expired connections into an out-vector for
+   `closeAndDerefAfterLockDrop` after `pool_lock_` releases — `closeConnection`
+   is unsafe under `pool_lock_`).
+
+3. **TCP_USER_TIMEOUT** (Linux/Solaris kernel-level safety net).  Set on
+   manager-created TCP sockets via `Socket::setUserTimeout(int ms)` and
+   re-applied in `qore_socket_private::confirmConnected` so it survives
+   disconnect/reconnect cycles.  Bounds how long unacknowledged TCP data
+   may sit before the kernel reports the connection dead with `ETIMEDOUT`,
+   instead of hanging in the kernel's full TCP retransmit window
+   (~15 minutes default on Linux).  Catches peer reboot, NIC failure,
+   network partition, NAT rebind.  Default 30s.
+
+   **Not** a half-open HTTP detector: if the peer's TCP stack ack's bytes
+   but the application stops generating responses, `TCP_USER_TIMEOUT` never
+   fires (nothing is unack'd).  Layer 4 covers that.
+
+4. **Pre-RECV_HEADER `MSG_PEEK`** at the SEND→RECV_HEADER transition in
+   `Http1ClientPollOperationPriv::handleSending` (around line 728).  On a
+   reused connection (`next_stream_id > 1`), peeks for FIN immediately after
+   the request body finishes writing.  Catches the narrow window where FIN
+   arrived during the request write itself, surfaces it as
+   `HTTP1-CONNECTION-CLOSED` so the conn-mgr retries on a fresh connection
+   without waiting for the I/O thread to observe the same event.
+
+5. **Application-level `request_timeout` + retry** (curl `Curl_retry_request`
+   analog).  For the genuine half-open case (server's TCP stack alive,
+   application silent — not caught by any of the layers above), the request
+   eventually exceeds `opts.request_timeout` (default 60s).
+   `HTTPCLIENT-TIMEOUT` is treated as a retryable connection error by
+   `HttpClientConnectionManager.qc:isConnectionErrorStatic`, so the conn-mgr
+   transparently replays on a fresh connection.  Slower than an in-band
+   stale-detect timer would be, but correct: it can't mistake a slow
+   legitimate response for a dead connection.
+
+   **Why no in-band timer.**  An earlier design had a 500ms (later 5s)
+   `STALE_DETECT_TIMEOUT_MS` in `handleRecvHeader` that fired when no
+   response data arrived within the window.  This was removed because it
+   is an application-layer latency check masquerading as a connection
+   liveness check — a legitimately slow response (e.g., 1 MB POST + echo
+   on a debug-build CI runner under load) could exceed the window and be
+   falsely declared dead.  Curl made the same call: no in-band timer,
+   `Curl_retry_request` covers the race window via "first read failed
+   with 0 bytes received on a reused connection" → retry.
+
+Telemetry: layer 2's `idle_timeout` and `max_age` evictions log at WARN
+level (`evicting connection N at checkout: ...`) — operationally relevant
+signal for "why is the manager opening so many fresh connections?"  Tune
+the timeout up if it fires more often than expected.
 
 ### HttpClientPollOperation.onComplete MRO Override Requirement
 

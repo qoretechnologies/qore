@@ -2149,9 +2149,14 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
             if (opts.idle_timeout > 0) {
                 date idle_cutoff = now - opts.idle_timeout;
                 if (conn.getLastActivity() < idle_cutoff) {
-                    log(LoggerLevel::DEBUG,
-                        "connection %d exceeded idle_timeout (%y since "
-                        "last activity)", conn.getConnectionId(),
+                    # WARN: pool churn driven by idle-age — operationally
+                    # relevant signal for "why is the manager opening so
+                    # many fresh connections?"  Tune idle_timeout up if
+                    # this fires more often than expected.
+                    log(LoggerLevel::WARN,
+                        "evicting connection %d at checkout: exceeded "
+                        "idle_timeout (%y since last activity)",
+                        conn.getConnectionId(),
                         now - conn.getLastActivity());
                     return False;
                 }
@@ -2162,8 +2167,11 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
             if (opts.max_age > 0) {
                 date age_cutoff = now - opts.max_age;
                 if (conn.getCreationTime() < age_cutoff) {
-                    log(LoggerLevel::DEBUG,
-                        "connection %d exceeded max_age (%y since creation)",
+                    # WARN: pool churn driven by max_age (born-at TTL).
+                    # See above — operationally relevant signal.
+                    log(LoggerLevel::WARN,
+                        "evicting connection %d at checkout: exceeded "
+                        "max_age (%y since creation)",
                         conn.getConnectionId(),
                         now - conn.getCreationTime());
                     return False;
