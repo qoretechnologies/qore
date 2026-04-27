@@ -484,13 +484,6 @@ int Http2Session::sendConnectionPrefaceNonBlocking(ExceptionSink* xsink) {
     return sendPendingData(0, xsink);
 }
 
-int Http2Session::sendConnectionPreface(ExceptionSink* xsink) {
-    if (sendConnectionPrefaceNonBlocking(xsink) < 0 || *xsink) {
-        return -1;
-    }
-    return sendPendingDataBlocking(-1, xsink);
-}
-
 int Http2Session::submitSettings(const Http2Settings& settings, ExceptionSink* xsink) {
     std::lock_guard<std::recursive_mutex> lg(m);
     local_settings = settings;

@@ -196,9 +196,6 @@ public:
     //! Returns the maximum request body size
     DLLLOCAL int64 getMaxRequestBodySize() const { return max_request_body_size; }
 
-    //! Send the connection preface (client) or SETTINGS (server) using blocking I/O
-    DLLLOCAL int sendConnectionPreface(ExceptionSink* xsink);
-
     //! Queue and flush the connection preface using non-blocking I/O
     /** Idempotently queues the initial SETTINGS frame and then flushes pending
         output with @ref sendPendingData().
@@ -380,7 +377,7 @@ public:
     }
 
     //! Sets whether to advertise ENABLE_CONNECT_PROTOCOL in SETTINGS
-    /** Must be called before sendConnectionPreface() to take effect.
+    /** Must be called before sendConnectionPrefaceNonBlocking() to take effect.
     */
     DLLLOCAL void setEnableConnectProtocol(bool enable) {
         local_settings.enable_connect_protocol = enable ? 1 : 0;
