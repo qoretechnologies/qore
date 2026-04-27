@@ -80,6 +80,17 @@ class Handler(BaseHTTPRequestHandler):
             f.write(json.dumps(record, sort_keys=True) + "\n")
             f.flush()
 
+        if self.path == "/api/restclientio-sse":
+            body = ("event: auth\n"
+                    "data: " + json.dumps(record, sort_keys=True) +
+                    "\n\n").encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
         body = json.dumps(record, sort_keys=True).encode("utf-8")
         self.send_response(200)
         self.send_header("Content-Type", "application/json")

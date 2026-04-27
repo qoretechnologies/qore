@@ -148,8 +148,8 @@ resp = rc.restGet("/api/data");
     @section restclientio_relnotes Release Notes
 
     @subsection restclientio_v1_2 Version 1.2
-    - Added Kerberos/SPNEGO HTTP Negotiate support for async request/response APIs
-      and polling pings
+    - Added Kerberos/SPNEGO HTTP Negotiate support for async request/response APIs,
+      SSE reader/stream APIs, and polling pings
     - Added \c getLogger() to expose the client's logger
     - Added \c setAllowAnyResponse() / \c getAllowAnyResponse() for controlling deserialization
       error handling
@@ -164,8 +164,6 @@ resp = rc.restGet("/api/data");
       HttpClientConnectionManager)
     - Constructor now accepts \c validator option for custom REST schema validators
     - Constructor now accepts \c allow_any_response, \c content_encoding, \c default_path options
-
-    @subsection restclientio_v1_2 Version 1.2
     - added \c RestClientIoPingPollOperation class for async REST connection pings via startPollConnect()
 
     @subsection restclientio_v1_1 Version 1.1
@@ -349,8 +347,8 @@ hash<RestResponseInfo> resp = f.get(30s);
         - \c oauth2_token_expiry_hint: hint for token expiry in seconds
         - \c oauth2_token_expiry: known expiry timestamp for an initial token; enables proactive pre-expiry refresh
         - \c oauth2_refresh_token: initial refresh token
-        - \c negotiate_auth: enables Kerberos/SPNEGO HTTP Negotiate authentication for synchronous requests,
-          async request/response APIs, and polling pings
+        - \c negotiate_auth: enables Kerberos/SPNEGO HTTP Negotiate authentication for request/response APIs,
+          SSE reader/stream APIs, and polling pings
         - \c negotiate_credential_cache: optional credential cache name for Kerberos/SPNEGO HTTP Negotiate
           authentication
         - \c negotiate_delegation_mode: Kerberos delegation mode; currently only \c "none" is supported
@@ -440,7 +438,7 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             *LoggerInterface logger;
 
             #! Per-instance request-timeout override in milliseconds (protected by config_lock)
-            /** When set to a positive value, applied to every @ref mgr.request() call made
+            /** When set to a positive value, applied to every \c mgr.request() call made
                 by this instance, taking precedence over the manager's default.  0 or unset
                 means "no override" — the manager default is used.
             */
@@ -653,8 +651,7 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
                 silently ignores — Phase 2 (TLS client certs) and Phase 3 (OAuth2 PKCE, custom
                 token refresh, etc.) will wire them up.
 
-                Subclasses that add their own options (e.g.,
-                @ref AwsRestClient::AwsRestClientIo "AwsRestClientIo") must strip those keys
+                Subclasses that add their own options (e.g. \c AwsRestClientIo) must strip those keys
                 before calling the base constructor.
             */
             const KnownOptions = {
@@ -1135,7 +1132,7 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
 
         #! Returns the per-instance request-timeout override, or NOTHING if unset
         /** Subclasses that bypass @ref restDoRequestIntern() and call
-            @c mgr.request() directly (e.g. @ref DataStreamClient::DataStreamClientIo)
+            @c mgr.request() directly (e.g. \c DataStreamClientIo)
             should pass this value to honor @ref setTimeout().
 
             @since RestClientIo 1.1
@@ -1317,7 +1314,7 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
         #! Opens an SSE stream and returns an event reader for iteration
         /** Establishes an HTTP streaming connection to the given path with
             \c Accept: \c text/event-stream and returns an
-            @ref HttpClientStreamingIo::SseStreamReader that the caller can
+            \c HttpClientStreamingIo::SseStreamReader that the caller can
             loop over with \c readEvent().
 
             @par Example
@@ -1334,8 +1331,8 @@ while (*hash<SseMessageInfo> evt = reader.readEvent(30s)) {
             @param hdr additional HTTP headers (\c Accept is set automatically)
             @param body optional request body (for \c POST-based SSE endpoints)
 
-            @return an @ref HttpClientStreamingIo::SseStreamReader ready for
-            @ref HttpClientStreamingIo::SseStreamReader::readEvent() "readEvent()" calls
+            @return a \c HttpClientStreamingIo::SseStreamReader ready for
+            \c readEvent() calls
 
             @throw HTTPCLIENT-CONNECT-ERROR if the connection cannot be established
             @throw REST-RESPONSE-ERROR if an HTTP error response is received
@@ -1348,37 +1345,51 @@ while (*hash<SseMessageInfo> evt = reader.readEvent(30s)) {
         */
         HttpClientStreamingIo::SseStreamReader restSseReader(string method, string path,
                 *hash<auto> hdr, *data body) {
-            checkNegotiateUnsupported("RestClientIo SSE streams");
             ensureToken();
             hdr = hdr ?? {};
             if (!hdr.accept && !hdr.Accept) {
                 hdr.accept = "text/event-stream";
             }
-            # Merge auth/default headers, then normalize all keys to
-            # lowercase — HTTP/2 and HTTP/3 require lowercase header
-            # names on the wire (RFC 9113 §8.2).  This path bypasses
-            # prepareRequest() so normalization must happen here.
-            {
-                AutoReadLock al(config_lock);
-                hdr = {} + headers + hdr;
+
+            *auto negotiate_context;
+            bool negotiate_retried = False;
+            while (True) {
+                hash<auto> prepared = prepareRawRequest(method, \path, body, \hdr);
+                if (exists prepared.negotiate_context) {
+                    negotiate_context = prepared.negotiate_context;
+                }
+
+                HttpClientIo::HttpClientStreamHandle stream =
+                    mgr.acquireAndStartStreaming(url, method, path, hdr, False,
+                        prepared.serialized_body);
+                try {
+                    hash<auto> response_start = readSseResponseStart(stream, method,
+                        path);
+                    *hash<auto> response = response_start.response;
+                    if (!negotiate_retried && response && response.status_code == 401
+                            && tryNegotiateAuthRetry(response.headers ?? {}, \hdr,
+                                \negotiate_context)) {
+                        negotiate_retried = True;
+                        stream.cancel();
+                        continue;
+                    }
+
+                    if (response && response.headers) {
+                        processFinalNegotiateResponse(response.headers,
+                            negotiate_context);
+                    }
+
+                    list<auto> initial_data = validateSseResponseStart(stream,
+                        method, path, hdr, prepared.serialized_body,
+                        response_start.first_data, response,
+                        response_start.response_timeout);
+                    return new HttpClientStreamingIo::SseStreamReader(stream,
+                        NOTHING, initial_data);
+                } catch (hash<ExceptionInfo> ex) {
+                    stream.cancel();
+                    rethrow;
+                }
             }
-            # Lowercase all header keys for H2/H3 wire compliance
-            hash<auto> lc_hdr;
-            HashIterator hi(hdr);
-            while (hi.next()) {
-                lc_hdr{hi.getKey().lwr()} = hi.getValue();
-            }
-            hdr = lc_hdr;
-            HttpClientIo::HttpClientStreamHandle stream =
-                mgr.acquireAndStartStreaming(url, method, path, hdr, False, body);
-            list<auto> initial_data;
-            try {
-                initial_data = validateSseResponse(stream, method, path, hdr, body);
-            } catch (hash<ExceptionInfo> ex) {
-                stream.cancel();
-                rethrow;
-            }
-            return new HttpClientStreamingIo::SseStreamReader(stream, NOTHING, initial_data);
         }
 
         #! Opens an SSE stream and calls a callback for each event
@@ -1471,7 +1482,7 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
             still runs response-side validation via the configured validator.
 
             Use this when integrating with a higher-level request builder — for
-            example @ref RestSchemaDataProvider::RestSchemaRequestDataProvider which
+            example \c RestSchemaRequestDataProvider which
             validates and serializes against its own @c AbstractRestSchemaOperation
             and doesn't want the client-side validator to repeat the work.
 
@@ -2430,8 +2441,12 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
         #! Internal: deserializes a raw HTTP response into a RestResponseInfo hash
         /** @param raw the raw HTTP response hash (status_code, headers, body)
             @param req_error_passthru if False, throw on HTTP error responses
+            @param req_allow_any_response if True, allow response deserialization
+                errors to pass through in the returned response hash
             @param method HTTP method (for validator)
             @param path request path (for validator)
+            @param request_headers request headers to include in error response metadata
+            @param request_body request body to include in error response metadata
 
             @return the deserialized RestResponseInfo hash
 
@@ -2529,6 +2544,19 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
         */
         private list<auto> validateSseResponse(HttpClientIo::HttpClientStreamHandle stream,
                 string method, string path, hash<auto> request_headers, *data request_body) {
+            hash<auto> response_start = readSseResponseStart(stream, method, path);
+            return validateSseResponseStart(stream, method, path, request_headers,
+                request_body, response_start.first_data, response_start.response,
+                response_start.response_timeout);
+        }
+
+        #! Reads the initial SSE response headers or first data item.
+        /** @return a hash with \c first_data, \c response, and \c response_timeout
+            keys. The response can be used to decide if the caller should cancel
+            the stream and retry before handing it to the SSE reader.
+        */
+        private hash<auto> readSseResponseStart(HttpClientIo::HttpClientStreamHandle stream,
+                string method, string path) {
             timeout response_timeout = milliseconds(getTimeout());
             auto first_data = stream.readData(response_timeout);
             if (!exists first_data) {
@@ -2547,6 +2575,18 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
                 }
             }
 
+            return {
+                "first_data": first_data,
+                "response": response,
+                "response_timeout": response_timeout,
+            };
+        }
+
+        #! Validates an SSE response start already consumed by readSseResponseStart().
+        private list<auto> validateSseResponseStart(HttpClientIo::HttpClientStreamHandle stream,
+                string method, string path, hash<auto> request_headers,
+                *data request_body, auto first_data, *hash<auto> response,
+                timeout response_timeout) {
             if (response && response.status_code) {
                 hash<auto> raw_response;
                 raw_response += response;
@@ -3590,7 +3630,7 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
 
         #! Creates an SSE Observable for the given REST endpoint
         /** Serializes the body, adds auth headers, prepends the connection path,
-            and returns an @ref HttpClientStreamingIo::SseObservable that delivers
+            and returns a \c HttpClientStreamingIo::SseObservable that delivers
             parsed SSE events via the Observer pattern.
 
             @param method HTTP method (e.g., "GET", "POST")

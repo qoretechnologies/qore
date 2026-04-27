@@ -88,12 +88,30 @@ class Krb5HttpNegotiateHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+class Krb5HttpNegotiateSseHandler inherits AbstractHttpRequestHandler {
+    constructor(AbstractAuthenticator auth) : AbstractHttpRequestHandler(auth) {
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        hash<auto> response_headers = {
+            "Content-Type": "text/event-stream",
+        };
+        if (exists cx."negotiate-final-header") {
+            response_headers."WWW-Authenticate" = cx."negotiate-final-header";
+        }
+        return makeResponse(200, sprintf("event: principal\ndata: %s\n\n",
+            cx.user), response_headers);
+    }
+}
+
 public class Krb5GssKdcIntegrationTest inherits QUnit::Test {
     constructor() : Test("Krb5GssKdcIntegrationTest", "1.0") {
         addTestCase("full gss initiator acceptor exchange", \testFullGssExchange());
         addTestCase("http negotiate helper exchange", \testHttpNegotiateHelperExchange());
         addTestCase("HttpServerUtil RestClientIo negotiate exchange",
             \testHttpServerUtilRestClientIoNegotiate());
+        addTestCase("HttpServerUtil RestClientIo SSE negotiate exchange",
+            \testHttpServerUtilRestClientIoSseNegotiate());
         addTestCase("HttpServerUtil poll RestClient negotiate exchange",
             \testHttpServerUtilPollRestClientNegotiate());
         addTestCase("HttpServerUtil async RestClientIo negotiate exchange",
@@ -351,6 +369,25 @@ public class Krb5GssKdcIntegrationTest inherits QUnit::Test {
         };
     }
 
+    private hash<auto> createHttpNegotiateSseServer(Qore::Krb5::GssCredential acceptorCred) {
+        hash<Qore::Krb5::GssAcceptorContextOptions> acceptorOpts();
+        Krb5HttpNegotiateAuthenticator auth(acceptorCred, acceptorOpts);
+        Krb5HttpNegotiateSseHandler handler(auth);
+
+        HttpServer server();
+        server.setHandler("krb5-http-negotiate-sse", "", "text/event-stream",
+            handler);
+        server.setDefaultHandler("krb5-http-negotiate-sse", handler);
+        hash<auto> info = server.addListener(<HttpListenerOptionInfo>{"service": 0});
+        server.waitForAsyncIo();
+
+        return {
+            "auth": auth,
+            "server": server,
+            "url": "http://localhost:" + info.port,
+        };
+    }
+
     private hash<auto> getHttpNegotiateClientOptions(hash<auto> setup, string url) {
         return {
             "url": url,
@@ -392,6 +429,29 @@ public class Krb5GssKdcIntegrationTest inherits QUnit::Test {
         Krb5HttpNegotiateAuthenticator auth = serverSetup.auth;
         assertEq(1, auth.getChallengeCount(), "challenge-driven Negotiate should send one 401 challenge");
         assertEq(1, auth.getNegotiateCount(), "challenge-driven Negotiate should process one token");
+    }
+
+    private testHttpServerUtilRestClientIoSseNegotiate() {
+        hash<auto> setup = setupGssCredentials("httpserverutil-restclientio-sse");
+        hash<auto> serverSetup = createHttpNegotiateSseServer(setup.acceptorCred);
+        HttpServer server = serverSetup.server;
+        on_exit delete server;
+
+        RestClientIo::RestClientIo rest(getHttpNegotiateClientOptions(setup, serverSetup.url));
+        on_exit rest.close();
+
+        SseStreamReader reader = rest.restSseReader("GET", "/sse-protected",
+            NOTHING, NOTHING);
+        on_exit reader.cancel();
+
+        *hash<SseMessageInfo> evt = reader.readEvent(30s);
+        assertTrue(exists evt, "RestClientIo SSE Negotiate should return an SSE event");
+        assertEq("principal", evt.event);
+        assertEq(setup.clientPrincipal, evt.data);
+
+        Krb5HttpNegotiateAuthenticator auth = serverSetup.auth;
+        assertEq(1, auth.getChallengeCount(), "SSE Negotiate should send one 401 challenge");
+        assertEq(1, auth.getNegotiateCount(), "SSE Negotiate should process one token");
     }
 
     private testHttpServerUtilPollRestClientNegotiate() {

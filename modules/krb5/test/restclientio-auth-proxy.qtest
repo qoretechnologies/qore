@@ -35,6 +35,8 @@ public class RestClientIoKrb5AuthProxyIntegrationTest inherits QUnit::Test {
             \testSyncRestClientIoNegotiate());
         addTestCase("async RestClientIo negotiate through external auth proxy",
             \testAsyncRestClientIoNegotiate());
+        addTestCase("SSE RestClientIo negotiate through external auth proxy",
+            \testSseRestClientIoNegotiate());
         addTestCase("notifier async RestClientIo negotiate through external auth proxy",
             \testNotifierAsyncRestClientIoNegotiate());
         addTestCase("cancellable async RestClientIo negotiate through external auth proxy",
@@ -166,6 +168,21 @@ public class RestClientIoKrb5AuthProxyIntegrationTest inherits QUnit::Test {
         hash<RestClient::RestResponseInfo> response = f.get(30s);
         assertEq(200, response.status_code);
         assertAuthenticatedBody(response.body, "/api/restclientio-async");
+%endif
+    }
+
+    testSseRestClientIoNegotiate() {
+%ifndef NoJson
+        RestClientIo::RestClientIo rest(getClientOptions());
+        on_exit rest.close();
+        SseStreamReader reader = rest.restSseReader("GET",
+            "/api/restclientio-sse", NOTHING, NOTHING);
+        on_exit reader.cancel();
+
+        *hash<SseMessageInfo> evt = reader.readEvent(30s);
+        assertTrue(exists evt, "Negotiate-enabled RestClientIo SSE reader should receive an event");
+        assertEq("auth", evt.event);
+        assertAuthenticatedBody(parse_json(evt.data), "/api/restclientio-sse");
 %endif
     }
 

@@ -132,8 +132,19 @@ class QJar {
 
             # generate byte code
             binary b = p.callFunction("byte_code", cls);
+            if (opts."module" != "qore") {
+                string java_class_path_name = "qoremod." + cls.getPathName();
+                java_class_path_name =~ s/::/./g;
+                try {
+                    p.issueModuleCmd("jni", "define-class " + java_class_path_name + " " + b.toBase64());
+                } catch (hash<ExceptionInfo> ex) {
+                    if (ex.err != "JNI-ERROR" || ex.desc !~ /duplicate class definition/) {
+                        rethrow;
+                    }
+                }
+            }
             # get output class file name
-            string ofn = opts.input + DirSep + "qore";
+            string ofn = opts.input + DirSep + (opts."module" == "qore" ? "qore" : "qoremod");
             string path = cls.getPathName();
             path =~ s/::/\//g;
             path += ".class";
