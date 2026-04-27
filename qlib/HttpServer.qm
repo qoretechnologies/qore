@@ -5011,6 +5011,17 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                     sendMultiplexedResponse(s, header_info, async_response);
                 }
             }
+            # Drop response refs so any framework objects captured by send_callback
+            # / input_stream (e.g. RestStreamRequest) can be destroyed and run their
+            # destructors before the persistence re-check below.  RestStreamRequest's
+            # destructor is what clears handler persistence based on the underlying
+            # stream's post-streaming state (e.g. SqlUtilSelectStream::isPersistent()
+            # returns False once send_done is set).  Without this, the send_callback
+            # closure keeps the request alive past the re-check, the destructor's
+            # handler.setPersistent(False) call hasn't fired yet, and the loop entry
+            # below would erroneously dedicate this thread for the full TTL.
+            delete async_response.send_callback;
+            delete async_response.input_stream;
             # Re-check persistence AFTER the response (incl. any inline streaming)
             # has been fully sent: a handler's persistence condition may become
             # false while the response was being produced.  Persistence is a
@@ -5039,6 +5050,12 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             if (async_response.code) {
                 sendResponseSync(s, async_response);
             }
+            # See multiplexed branch above: drop response refs so the underlying
+            # framework objects (e.g. RestStreamRequest) can run their destructors
+            # before the persistent sync loop is entered, releasing handler
+            # persistence whose only condition was the in-flight stream.
+            delete async_response.send_callback;
+            delete async_response.input_stream;
             # Continue handling requests on this thread until persistence ends
             handlePersistentConnectionSync(request_helper, s, \cx, phi, info);
             # Persistent handler managed the socket lifecycle; return empty result
@@ -5885,6 +5902,14 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                         sendMultiplexedResponse(s, conn_info.header_info,
                             async_response);
                     }
+                }
+                # Drop response refs so any framework objects captured by the
+                # send_callback / input_stream (e.g. RestStreamRequest) can run
+                # their destructors before the persistence re-check below.  See
+                # the matching block in the initial-response path for rationale.
+                if (async_response) {
+                    delete async_response.send_callback;
+                    delete async_response.input_stream;
                 }
 
                 # For body_streaming requests where the handler returned early
