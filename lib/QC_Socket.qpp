@@ -879,6 +879,58 @@ static int socket_exec_recv_output_stream_poll(QoreObject* self, QoreSocketObjec
     return *xsink ? -1 : 0;
 }
 
+static int socket_exec_write_output_stream_poll(QoreObject* self, QoreSocketObject* s, OutputStream* os,
+        const BinaryNode& data, int timeout_ms, ExceptionSink* xsink, bool reassign_after) {
+    if (!data.size()) {
+        return 0;
+    }
+    if (!os->isIoThreadSafe()) {
+        return -2;
+    }
+
+    SocketExecOutputStreamRefGuard caller_ref(os, xsink, reassign_after);
+    s->ref();
+    os->ref();
+    ReferenceHolder<SocketPollOperationBase> poller(
+        new SocketWriteOutputStreamPollOperation(xsink, s, os, nullptr,
+            static_cast<BinaryNode*>(data.refSelf()), timeout_ms), xsink);
+    if (*xsink) {
+        return -1;
+    }
+
+    ReferenceHolder<QoreObject> op_obj(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller), xsink);
+    poller->setSelf(*op_obj);
+    poller.release();
+
+    if (!*xsink) {
+        op_obj->setValue("sock", self->objectRefSelf(), xsink);
+        op_obj->setValue("goal", new QoreStringNode("written"), xsink);
+    }
+    if (*xsink) {
+        return -1;
+    }
+
+    os->unassignThread(xsink);
+    if (*xsink) {
+        return -1;
+    }
+
+    ReferenceHolder<QoreHashNode> result(
+        socket_exec_poll_operation(self, *op_obj, -1, "writeOutputStream", xsink), xsink);
+    if (reassign_after) {
+        if (!*xsink) {
+            os->reassignThread(xsink);
+        } else {
+            ExceptionSink reassign_xsink;
+            os->reassignThread(&reassign_xsink);
+            if (reassign_xsink) {
+                reassign_xsink.clear();
+            }
+        }
+    }
+    return *xsink ? -1 : 0;
+}
+
 static void socket_exec_recv_to_output_stream(QoreObject* self, QoreSocketObject* s, OutputStream* os,
         int64 size, int timeout_ms, ExceptionSink* xsink) {
     SocketSyncPoll::assertNotOnIoThread("Socket", "recvToOutputStream", xsink);
@@ -1358,8 +1410,11 @@ static QoreHashNode* socket_exec_read_http_chunked_body(QoreObject* self, QoreSo
 
         priv->doDataEvent(QORE_EVENT_HTTP_CHUNKED_DATA_READ, QORE_SOURCE_SOCKET, chunk->getPtr(), chunk->size());
         if (os) {
-            os->write(chunk->getPtr(), chunk->size(), xsink);
-            if (*xsink) {
+            int write_rc = socket_exec_write_output_stream_poll(self, s, os, **chunk, timeout_ms, xsink, true);
+            if (write_rc == -2) {
+                os->write(chunk->getPtr(), chunk->size(), xsink);
+            }
+            if (write_rc == -1 || *xsink) {
                 return nullptr;
             }
         } else if (!recv_callback && binary_body) {

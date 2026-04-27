@@ -953,6 +953,79 @@ private:
     }
 };
 
+//! Poll operation to write already-received data to an OutputStream
+/** State machine: writing -> done
+
+    @since %Qore 2.3
+*/
+class SocketWriteOutputStreamPollOperation : public SocketPollOperationBase {
+public:
+    DLLLOCAL SocketWriteOutputStreamPollOperation(ExceptionSink* xsink, QoreSocketObject* sock,
+        OutputStream* output_stream, QoreObject* output_stream_obj, BinaryNode* data, int timeout_ms);
+
+    DLLLOCAL void deref(ExceptionSink* xsink) {
+        if (ROdereference()) {
+            if (output_stream && !need_reassign) {
+                output_stream->unassignThread(xsink);
+            }
+            if (output_stream_obj) {
+                output_stream_obj->deref(xsink);
+                output_stream_obj = nullptr;
+            }
+            sock->deref(xsink);
+            delete this;
+        }
+    }
+
+    DLLLOCAL virtual bool goalReached() const override {
+        return phase == Phase::Done;
+    }
+
+    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override;
+
+    DLLLOCAL virtual const char* getStateImpl() const override {
+        switch (phase) {
+            case Phase::Write: return "writing";
+            case Phase::Done: return "done";
+            case Phase::Error: return "error";
+            default: return "unknown";
+        }
+    }
+
+    DLLLOCAL virtual void abort(ExceptionSink* xsink) override {
+        if (output_stream && !need_reassign) {
+            output_stream->unassignThread(xsink);
+        }
+        output_stream = nullptr;
+        bool close_socket = data && data->size();
+        data = nullptr;
+        if (close_socket) {
+            sock->close();
+        }
+        phase = Phase::Error;
+    }
+
+private:
+    enum class Phase { Write, Done, Error };
+
+    DLLLOCAL QoreHashNode* getPollInfo(ExceptionSink* xsink);
+    DLLLOCAL void complete(ExceptionSink* xsink);
+    DLLLOCAL bool checkTimeout(ExceptionSink* xsink);
+    DLLLOCAL void clearTimeout();
+
+    QoreSocketObject* sock = nullptr;
+    SimpleRefHolder<OutputStream> output_stream;
+    QoreObject* output_stream_obj = nullptr;
+    SimpleRefHolder<BinaryNode> data;
+    size_t write_offset = 0;
+    int timeout_ms = -1;
+    int64 wait_deadline_ms = 0;
+    int output_fd = -1;
+    bool is_pollable = true;
+    bool need_reassign = true;
+    Phase phase = Phase::Write;
+};
+
 //! Poll operation to send HTTP response headers + stream InputStream body + optionally idle+read next header
 /** State machine:
     SendHeaders -> StreamBody -> [Idle -> ReadingHeader -> Complete | Timeout]  (fused=true)

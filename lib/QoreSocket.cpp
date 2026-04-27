@@ -8968,6 +8968,147 @@ QoreHashNode* SocketRecvOutputStreamPollOperation::continuePoll(ExceptionSink* x
     }
 }
 
+SocketWriteOutputStreamPollOperation::SocketWriteOutputStreamPollOperation(ExceptionSink* xsink,
+        QoreSocketObject* sock, OutputStream* output_stream, QoreObject* output_stream_obj, BinaryNode* data,
+        int timeout_ms)
+        : sock(sock), output_stream(output_stream), output_stream_obj(output_stream_obj), data(data),
+          timeout_ms(timeout_ms) {
+    if (!output_stream->isIoThreadSafe()) {
+        xsink->raiseException("SOCKET-WRITE-ERROR", "OutputStream is not I/O thread safe");
+        return;
+    }
+
+    is_pollable = output_stream->supportsNonBlockingIo();
+    if (is_pollable) {
+        output_fd = output_stream->getPollableDescriptor();
+        if (output_fd < 0) {
+            is_pollable = false;
+        }
+    }
+}
+
+QoreHashNode* SocketWriteOutputStreamPollOperation::getPollInfo(ExceptionSink* xsink) {
+    int64 poll_timeout_ms = -1;
+    if (timeout_ms >= 0) {
+        int us;
+        int64 now_s = q_epoch_us(us);
+        int64 now_ms = now_s * 1000 + us / 1000;
+        if (!wait_deadline_ms) {
+            wait_deadline_ms = now_ms + timeout_ms;
+        }
+        poll_timeout_ms = wait_deadline_ms - now_ms;
+        if (poll_timeout_ms < 0) {
+            poll_timeout_ms = 0;
+        }
+    }
+
+    QoreHashNode* raw_info = nullptr;
+    if (is_pollable && output_fd >= 0) {
+        std::vector<std::pair<int, int>> extra_fds{{output_fd, SOCK_POLLOUT}};
+        raw_info = getSocketPollInfoHash(xsink, SOCK_POLLIN, extra_fds);
+    } else {
+        raw_info = getSocketPollInfoHash(xsink, SOCK_POLLIN);
+    }
+    if (!raw_info) {
+        return nullptr;
+    }
+    ReferenceHolder<QoreHashNode> info(raw_info, xsink);
+    if (poll_timeout_ms >= 0) {
+        info->setKeyValue("poll_timeout_ms", poll_timeout_ms, xsink);
+    }
+    return info.release();
+}
+
+void SocketWriteOutputStreamPollOperation::complete(ExceptionSink* xsink) {
+    if (output_stream && !need_reassign) {
+        output_stream->unassignThread(xsink);
+        if (*xsink) {
+            phase = Phase::Error;
+            return;
+        }
+    }
+    output_stream = nullptr;
+    data = nullptr;
+    phase = Phase::Done;
+}
+
+bool SocketWriteOutputStreamPollOperation::checkTimeout(ExceptionSink* xsink) {
+    if (wait_deadline_ms <= 0) {
+        return false;
+    }
+    int us;
+    int64 now_s = q_epoch_us(us);
+    int64 now_ms = now_s * 1000 + us / 1000;
+    if (now_ms < wait_deadline_ms) {
+        return false;
+    }
+    xsink->raiseException("SOCKET-TIMEOUT", "socket operation timed out");
+    phase = Phase::Error;
+    return true;
+}
+
+void SocketWriteOutputStreamPollOperation::clearTimeout() {
+    wait_deadline_ms = 0;
+}
+
+QoreHashNode* SocketWriteOutputStreamPollOperation::continuePoll(ExceptionSink* xsink) {
+    if (need_reassign) {
+        need_reassign = false;
+        if (output_stream) {
+            output_stream->reassignThread(xsink);
+            if (*xsink) {
+                phase = Phase::Error;
+                return nullptr;
+            }
+        }
+    }
+
+    if (checkTimeout(xsink)) {
+        return nullptr;
+    }
+
+    unsigned loop = 0;
+    while (phase == Phase::Write && write_offset < data->size()) {
+        if (is_pollable) {
+            assert(output_fd >= 0);
+            struct pollfd pfd;
+            pfd.fd = output_fd;
+            pfd.events = POLLOUT;
+            pfd.revents = 0;
+            int poll_rv = ::poll(&pfd, 1, 0);
+            if (poll_rv < 0) {
+                xsink->raiseException("SOCKET-WRITE-ERROR", "poll() on output stream fd failed: %s",
+                    strerror(errno));
+                phase = Phase::Error;
+                return nullptr;
+            }
+            if (!poll_rv) {
+                return getPollInfo(xsink);
+            }
+        }
+
+        const char* ptr = reinterpret_cast<const char*>(data->getPtr()) + write_offset;
+        size_t remaining = data->size() - write_offset;
+        int64 written = output_stream->writeNonBlock(ptr, remaining, xsink);
+        if (*xsink || written < 0) {
+            phase = Phase::Error;
+            return nullptr;
+        }
+        if (!written) {
+            return getPollInfo(xsink);
+        }
+
+        write_offset += static_cast<size_t>(written);
+        clearTimeout();
+        if (++loop >= max_nonblock_ops && write_offset < data->size()) {
+            return getPollInfo(xsink);
+        }
+    }
+
+    complete(xsink);
+    return nullptr;
+}
+
 QoreHashNode* SocketRecvPollOperationBase::continuePoll(ExceptionSink* xsink) {
     AutoLocker al(sock->priv->m);
 
