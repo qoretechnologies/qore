@@ -34,6 +34,8 @@
 #include <qore/Qore.h>
 
 #include "qore/intern/Http2Session.h"
+#include "qore/intern/AsyncIoControllerPriv.h"
+#include "qore/intern/QC_SocketPollOperation.h"
 #include "qore/intern/QoreAsyncIoLogger.h"
 #include "qore/intern/QoreIoUring.h"
 #include "qore/intern/QuicCommon.h"
@@ -46,6 +48,8 @@
 #include <cstring>
 #include <mutex>
 #include <unordered_set>
+
+extern qore_classid_t CID_ASYNCIOCONTROLLER;
 
 static bool http2DebugEnabled() {
     static std::once_flag flag;
@@ -62,6 +66,288 @@ static bool http2DebugEnabled() {
 #if NGHTTP2_VERSION_NUM >= 0x013c00  // 1.60.0
 #define QORE_USE_NGHTTP2_MEM_SEND2 1
 #endif
+
+static void http2_raise_poll_result_exception(const QoreHashNode* ex, ExceptionSink* xsink) {
+    QoreValue err = ex->getKeyValue("err");
+    QoreValue desc = ex->getKeyValue("desc");
+    QoreValue arg = ex->getKeyValue("arg");
+    xsink->raiseException(
+        err.getType() == NT_STRING
+            ? err.get<const QoreStringNode>()->stringRefSelf()
+            : new QoreStringNode("ASYNC-IO-ERROR"),
+        desc.getType() == NT_STRING
+            ? desc.get<const QoreStringNode>()->stringRefSelf()
+            : new QoreStringNode("async HTTP/2 socket operation failed"),
+        arg.refSelf());
+}
+
+static bool http2_poll_exception_is(const QoreHashNode& ex, const char* err) {
+    QoreValue ex_err = ex.getKeyValue("err");
+    return ex_err.getType() == NT_STRING && !strcmp(ex_err.get<const QoreStringNode>()->c_str(), err);
+}
+
+class Http2SocketControllerPollable : public AbstractPollableIoObjectBase {
+public:
+    DLLLOCAL Http2SocketControllerPollable(qore_socket_private* sock) : sock(sock) {
+    }
+
+    DLLLOCAL virtual int getPollableDescriptor() const override {
+        return sock->sock;
+    }
+
+    DLLLOCAL virtual void closeIo(ExceptionSink*) override {
+        if (sock->isOpen()) {
+            sock->close();
+        }
+    }
+
+#ifdef DARWIN
+    DLLLOCAL virtual void setPollNotifyFd(int fd) override {
+        sock->poll_notify_fd.store(fd, std::memory_order_release);
+    }
+#endif
+
+    DLLLOCAL virtual bool hasPendingData() const override {
+        if (sock->buflen > sock->bufoffset) {
+            return true;
+        }
+        return sock->ssl && sock->ssl->pending() > 0;
+    }
+
+private:
+    qore_socket_private* sock;
+};
+
+class Http2SocketControllerPollOperation : public SocketPollOperationBase {
+public:
+    DLLLOCAL Http2SocketControllerPollOperation(AbstractPollState* poll_state, SocketSendPollState* send_state)
+            : poll_state(poll_state), send_state(send_state) {
+    }
+
+    DLLLOCAL virtual bool goalReached() const override {
+        return done;
+    }
+
+    DLLLOCAL virtual void abort(ExceptionSink*) override {
+        poll_state.reset();
+        done = true;
+    }
+
+    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override {
+        if (!poll_state) {
+            done = true;
+            return nullptr;
+        }
+
+        int rc = poll_state->continuePoll(xsink);
+        if (send_state) {
+            bytes_sent = send_state->getBytesSent();
+        }
+        if (!rc && !send_state) {
+            data = poll_state->takeOutput().get<BinaryNode>();
+        }
+        if (*xsink || rc <= 0) {
+            poll_state.reset();
+            if (!*xsink) {
+                done = true;
+            }
+            return nullptr;
+        }
+        return getSocketPollInfoHash(xsink, rc);
+    }
+
+    DLLLOCAL virtual QoreValue getOutput() const override {
+        if (send_state) {
+            return static_cast<int64>(bytes_sent);
+        }
+        return data ? data->refSelf() : QoreValue();
+    }
+
+    DLLLOCAL virtual const char* getStateImpl() const override {
+        if (done) {
+            return send_state ? "sent" : "received";
+        }
+        return send_state ? "sending" : "receiving";
+    }
+
+    DLLLOCAL size_t getBytesSent() const {
+        return bytes_sent;
+    }
+
+private:
+    std::unique_ptr<AbstractPollState> poll_state;
+    SocketSendPollState* send_state = nullptr;
+    size_t bytes_sent = 0;
+    bool done = false;
+    SimpleRefHolder<BinaryNode> data;
+};
+
+static QoreHashNode* http2_exec_poll_operation(qore_socket_private* sock, QoreObject* sock_obj,
+        Http2SocketControllerPollable* pollable, QoreObject* op_obj, int timeout_ms, const char* owner_name,
+        ExceptionSink* xsink, QoreHashNode** ex_out = nullptr) {
+    ReferenceHolder<QoreObject> ctl_obj(qore_get_async_io_controller_obj(xsink), xsink);
+    if (!ctl_obj) {
+        return nullptr;
+    }
+    ReferenceHolder<AsyncIoControllerPriv> ctrl(
+        static_cast<AsyncIoControllerPriv*>(
+            (*ctl_obj)->getReferencedPrivateData(CID_ASYNCIOCONTROLLER, xsink)), xsink);
+    if (*xsink || !ctrl) {
+        return nullptr;
+    }
+
+    std::string owner("Http2Session::sync:");
+    owner += owner_name;
+    owner += ':';
+    owner += pollable->getUniqueHash();
+
+    std::string key("Http2Session::sync:");
+    key += owner_name;
+    key += ':';
+    key += pollable->getUniqueHash();
+
+    ReferenceHolder<QoreHashNode> info(new QoreHashNode(hashdeclSocketPollOperationInfo, xsink), xsink);
+    info->setKeyValue("sock", sock_obj->objectRefSelf(), xsink);
+    info->setKeyValue("spop", op_obj->objectRefSelf(), xsink);
+    info->setKeyValue("owner", new QoreStringNode(owner), xsink);
+    info->setKeyValue("key", new QoreStringNode(key), xsink);
+    info->setKeyValue("to", timeout_ms, xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
+    ReferenceHolder<QoreHashNode> result(ctrl->exec(*ctl_obj, info.release(), false, xsink), xsink);
+    if (*xsink || !result) {
+        return nullptr;
+    }
+
+    QoreValue ex = result->getKeyValue("ex");
+    if (ex.getType() == NT_HASH) {
+        if (ex_out) {
+            *ex_out = ex.get<const QoreHashNode>()->hashRefSelf();
+            return result.release();
+        }
+        http2_raise_poll_result_exception(ex.get<const QoreHashNode>(), xsink);
+        return nullptr;
+    }
+    return result.release();
+}
+
+static QoreValue http2_exec_poll(qore_socket_private* sock, SocketPollOperationBase* poller, int timeout_ms,
+        const char* owner_name, const char* goal, ExceptionSink* xsink, QoreHashNode** ex_out = nullptr) {
+    ReferenceHolder<SocketPollOperationBase> poller_holder(poller, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    Http2SocketControllerPollable* pollable = new Http2SocketControllerPollable(sock);
+    ReferenceHolder<QoreObject> sock_obj(new QoreObject(QC_ABSTRACTPOLLABLEIOOBJECTBASE, getProgram(), pollable),
+        xsink);
+    ReferenceHolder<QoreObject> op_obj(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller_holder),
+        xsink);
+    poller_holder->setSelf(*op_obj);
+    poller_holder.release();
+
+    if (!*xsink) {
+        op_obj->setValue("sock", (*sock_obj)->objectRefSelf(), xsink);
+        op_obj->setValue("goal", new QoreStringNode(goal), xsink);
+    }
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    ReferenceHolder<QoreHashNode> result(http2_exec_poll_operation(sock, *sock_obj, pollable, *op_obj, timeout_ms,
+        owner_name, xsink, ex_out), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return poller->getOutput();
+}
+
+static int http2_socket_exec_send(qore_socket_private* sock, const char* data, size_t size, int timeout_ms,
+        int64& total_sent, ExceptionSink* xsink) {
+    total_sent = 0;
+    if (!size) {
+        return 0;
+    }
+
+    SocketSendPollState* state = new SocketSendPollState(xsink, sock, data, size);
+    if (*xsink) {
+        delete state;
+        return -1;
+    }
+    Http2SocketControllerPollOperation* op = new Http2SocketControllerPollOperation(state, state);
+    ValueHolder result(http2_exec_poll(sock, op, timeout_ms, "sendPendingDataBlocking", "send", xsink), xsink);
+    if (*xsink) {
+        return -1;
+    }
+    total_sent = result->getAsBigInt();
+    return total_sent == static_cast<int64>(size) ? 0 : -1;
+}
+
+static BinaryNode* http2_socket_exec_recv_some(qore_socket_private* sock, size_t size, int timeout_ms,
+        bool& timed_out, ExceptionSink* xsink) {
+    timed_out = false;
+
+    SocketRecvSomePollState* state = new SocketRecvSomePollState(xsink, sock, size);
+    if (*xsink) {
+        delete state;
+        return nullptr;
+    }
+    QoreHashNode* ex = nullptr;
+    ValueHolder result(http2_exec_poll(sock,
+        new Http2SocketControllerPollOperation(state, nullptr),
+        timeout_ms, "receiveData", "received", xsink, &ex), xsink);
+    ReferenceHolder<QoreHashNode> ex_holder(ex, xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    if (ex_holder) {
+        if (http2_poll_exception_is(**ex_holder, "SOCKET-TIMEOUT")) {
+            timed_out = true;
+            return new BinaryNode;
+        }
+        http2_raise_poll_result_exception(*ex_holder, xsink);
+        return nullptr;
+    }
+    if (result->isNothing()) {
+        return new BinaryNode;
+    }
+    if (result->getType() != NT_BINARY) {
+        xsink->raiseException("HTTP2-ERROR", "expected binary data from async HTTP/2 receive operation, got '%s'",
+            result->getFullTypeName());
+        return nullptr;
+    }
+    return result.release().get<BinaryNode>();
+}
+
+static BinaryNode* http2_socket_recv_some_on_io_thread(qore_socket_private* sock, size_t size, bool& timed_out,
+        ExceptionSink* xsink) {
+    timed_out = false;
+
+    SocketRecvSomePollState state(xsink, sock, size);
+    if (*xsink) {
+        return nullptr;
+    }
+    int rc = state.continuePoll(xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    if (rc > 0) {
+        timed_out = true;
+        return new BinaryNode;
+    }
+    if (rc < 0) {
+        return nullptr;
+    }
+    ValueHolder v(state.takeOutput(), xsink);
+    if (v->getType() != NT_BINARY) {
+        xsink->raiseException("HTTP2-ERROR", "expected binary data from HTTP/2 receive poll state, got '%s'",
+            v->getFullTypeName());
+        return nullptr;
+    }
+    return v.release().get<BinaryNode>();
+}
 
 Http2Session::Http2Session(qore_socket_private* sock, bool is_server, const char* scheme)
     : sock(sock), is_server(is_server), scheme(scheme ? scheme : "https") {
@@ -930,6 +1216,10 @@ int Http2Session::sendPendingDataBlocking(int timeout_ms, ExceptionSink* xsink) 
     if (session_closed_.load(std::memory_order_acquire)) {
         return -1;
     }
+    if (qore_on_async_io_thread()) {
+        int rv = sendPendingData(0, xsink);
+        return rv == 0 ? 0 : -1;
+    }
     std::lock_guard<std::recursive_mutex> lg(m);
     // Re-check under the lock: the flag may have flipped while we
     // waited to acquire m.
@@ -999,11 +1289,11 @@ int Http2Session::sendPendingDataBlocking(int timeout_ms, ExceptionSink* xsink) 
         }
 
         int64 total_sent = 0;
-        ssize_t rc = sock->sendIntern(xsink, "Http2Session", "sendPendingDataBlocking",
+        int rc = http2_socket_exec_send(sock,
             reinterpret_cast<const char*>(send_buffer.data() + send_offset), pending,
-            timeout_ms, total_sent);
+            timeout_ms, total_sent, xsink);
 
-        printd(5, "sendPendingDataBlocking() sendIntern returned rc=%zd total_sent=%" PRId64 "\n", rc, total_sent);
+        printd(5, "sendPendingDataBlocking() async send returned rc=%d total_sent=%" PRId64 "\n", rc, total_sent);
 
         if (total_sent > 0) {
             send_offset += total_sent;
@@ -1036,47 +1326,37 @@ int Http2Session::sendPendingDataBlocking(int timeout_ms, ExceptionSink* xsink) 
 int Http2Session::receiveData(int timeout_ms, ExceptionSink* xsink) {
     // Fast-path bail-out when the owning socket is closing (or has
     // closed).  Without this check a caller racing Socket::close() can
-    // enter brecv and block for the full timeout_ms waiting on an fd
-    // that's about to be shut down, even though the pre-close fd
+    // enter the controller receive path and wait for the full timeout_ms
+    // on an fd that's about to be shut down, even though the pre-close fd
     // shutdown in qore_socket_private::prepareForClose() would make the
-    // wait return errno=EPIPE almost immediately — we just skip the
-    // pointless round-trip.
+    // wait return errno=EPIPE almost immediately; skip the pointless
+    // round-trip.
     if (session_closed_.load(std::memory_order_acquire)) {
         return 1;  // connection closed — matches the EOF return value
     }
 
-    // Do NOT hold Http2Session::m during the blocking brecv call.
+    // Do NOT hold Http2Session::m during the blocking controller receive.
     //
     // Lock-order deadlock rationale (macOS Http2.qtest hang seen on
     // job 170360): two worker-path/IO-path contention points take the
     // two mutexes in opposite orders:
-    //   - IO thread (this function):   Http2Session::m  →  socket->priv->m (via brecv)
+    //   - IO thread (this function):   Http2Session::m  ->  socket->priv->m (via receive)
     //   - worker (submitHttp2Request): socket->priv->m  →  Http2Session::m
-    // With brecv holding session->m across its internal waitReleasingLock
-    // poll wait, a concurrent submitHttp2Request from a worker thread can
-    // hold the socket outer mutex while waiting for session->m, while
-    // the IO thread holds session->m and needs the socket outer mutex to
-    // resume its brecv — classic deadlock.
+    // With socket I/O holding session->m across a readiness wait, a
+    // concurrent submitHttp2Request from a worker thread can hold the
+    // socket outer mutex while waiting for session->m, while the IO thread
+    // holds session->m and needs the socket outer mutex to resume.
     //
-    // brecv does not touch nghttp2_session state; only
+    // Socket receive does not touch nghttp2_session state; only
     // nghttp2_session_mem_recv below does, and we reacquire m for that.
-    char* buf;
     printd(5, "receiveData() ENTRY fd=%d isServer=%d timeout_ms=%d\n", sock->sock, is_server, timeout_ms);
-    // Use suppress_exception=true to avoid exception on timeout
-    ssize_t len = sock->brecv(xsink, "receiveData", buf, 16384, 0, timeout_ms, false, true);
-    printd(5, "receiveData() brecv len=%zd fd=%d isServer=%d xsink=%d\n", len, sock->sock, is_server, (int)*xsink);
-    if (len < 0) {
-        // Check for timeout (QSE_TIMEOUT = -3)
-        if (len == QSE_TIMEOUT) {
-            printd(5, "receiveData() timeout (no data)\n");
-            if (http2DebugEnabled()) {
-                fprintf(stderr, "HTTP2 DEBUG: receiveData() session=%p tid=%d releasing lock (timeout)\n",
-                    this, q_gettid());
-                fflush(stderr);
-            }
-            return 0;  // Not an error, just no data available
-        }
-        printd(5, "receiveData() error len=%zd\n", len);
+
+    bool timed_out = false;
+    SimpleRefHolder<BinaryNode> data(qore_on_async_io_thread()
+        ? http2_socket_recv_some_on_io_thread(sock, 16384, timed_out, xsink)
+        : http2_socket_exec_recv_some(sock, 16384, timeout_ms, timed_out, xsink));
+    if (*xsink) {
+        printd(5, "receiveData() error xsink=%d\n", (int)*xsink);
         if (http2DebugEnabled()) {
             fprintf(stderr, "HTTP2 DEBUG: receiveData() session=%p tid=%d releasing lock (recv error)\n",
                 this, q_gettid());
@@ -1084,6 +1364,18 @@ int Http2Session::receiveData(int timeout_ms, ExceptionSink* xsink) {
         }
         return -1;
     }
+    if (timed_out) {
+        printd(5, "receiveData() timeout (no data)\n");
+        if (http2DebugEnabled()) {
+            fprintf(stderr, "HTTP2 DEBUG: receiveData() session=%p tid=%d releasing lock (timeout)\n",
+                this, q_gettid());
+            fflush(stderr);
+        }
+        return 0;  // Not an error, just no data available
+    }
+
+    ssize_t len = static_cast<ssize_t>(data->size());
+    printd(5, "receiveData() recv len=%zd fd=%d isServer=%d xsink=%d\n", len, sock->sock, is_server, (int)*xsink);
     if (len == 0) {
         // EOF received - connection was closed by peer
         printd(5, "receiveData() len=0 (connection closed by peer)\n");
@@ -1095,7 +1387,7 @@ int Http2Session::receiveData(int timeout_ms, ExceptionSink* xsink) {
         return 1;  // Connection closed - distinct from timeout (0)
     }
     if (len >= 9) {
-        uint8_t* hdr = reinterpret_cast<uint8_t*>(buf);
+        uint8_t* hdr = reinterpret_cast<uint8_t*>(const_cast<void*>(data->getPtr()));
         uint32_t flen = (uint32_t(hdr[0]) << 16) | (uint32_t(hdr[1]) << 8) | uint32_t(hdr[2]);
         uint8_t ftype = hdr[3];
         uint8_t fflags = hdr[4];
@@ -1107,12 +1399,13 @@ int Http2Session::receiveData(int timeout_ms, ExceptionSink* xsink) {
         }
     }
 
-    // Now acquire m for the stateful nghttp2 call; brecv above did I/O
+    // Now acquire m for the stateful nghttp2 call; socket I/O above ran
     // without holding it to avoid the lock-order deadlock with worker-
     // thread submitHttp2Request (see the comment at entry of this
     // function).
     std::lock_guard<std::recursive_mutex> lg(m);
-    ssize_t rv = nghttp2_session_mem_recv(session, reinterpret_cast<uint8_t*>(buf), len);
+    ssize_t rv = nghttp2_session_mem_recv(session,
+        reinterpret_cast<uint8_t*>(const_cast<void*>(data->getPtr())), len);
     printd(5, "receiveData() nghttp2_session_mem_recv rv=%zd (input len=%zd)\n", rv, len);
     if (rv < 0) {
         printd(1, "receiveData() nghttp2_session_mem_recv error: %s (rv=%zd)\n",

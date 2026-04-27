@@ -766,7 +766,7 @@ void Http2ClientPollOperationPriv::setError(const char* err, const char* desc,
     // Close the socket to release the fd and prevent CLOSE-WAIT accumulation.
     // Safe here: setError() is called from continuePoll() on the I/O thread.
     if (sock_obj && sock_obj->getSocket() >= 0) {
-        sock_obj->close();
+        sock_obj->closeIo(xsink);
     }
     notifyPendingStreams(err, desc, xsink);
     {

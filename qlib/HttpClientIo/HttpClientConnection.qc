@@ -233,13 +233,10 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
         }
     }
 
-    #! Synchronously flushes pending protocol writes to the network
-    /** For HTTP/3 (QUIC), this produces any queued QUIC packets and sends
-        them via UDP.  For HTTP/1.1 and HTTP/2 (TCP), this is a no-op since
-        TCP writes are synchronous.
-
-        Use this after submitting async requests to guarantee the request
-        frames are on the wire before closing the connection.
+    #! Wakes the async I/O controller to flush pending protocol writes
+    /** For HTTP/3 (QUIC), pending packets are produced and sent by the
+        controller's I/O thread after a wake.  For HTTP/1.1 and HTTP/2
+        (TCP), this is a no-op since TCP writes are synchronous.
 
         @since %HttpClientIo 1.3
     */

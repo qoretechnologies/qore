@@ -54,20 +54,6 @@ constexpr unsigned NB_CONNECT = (1 << 2);  //!< Connect operation in progress
 constexpr unsigned NB_ALL     = NB_SEND | NB_RECV | NB_CONNECT;  //!< Blocks everything
 ///@}
 
-//! Socket I/O mode — prevents mixing synchronous and asynchronous operations
-/** When a socket is claimed by the async I/O controller (via a poll operation),
-    it is set to @ref SocketIoMode::Async and synchronous operations will raise
-    a @c SOCKET-ASYNC-MODE-ERROR exception.  When a sync caller is using the
-    socket, async operations will raise a @c SOCKET-SYNC-MODE-ERROR exception.
-
-    @since %Qore 2.3
-*/
-enum class SocketIoMode : uint8_t {
-    Unclaimed = 0,  //!< No owner — either sync or async can claim the socket
-    Sync,           //!< Socket is being used by a synchronous caller
-    Async,          //!< Socket is managed by the async I/O controller
-};
-
 class QoreSocketObject : public AbstractPollableIoObjectBase {
     friend class my_socket_priv;
     friend struct qore_httpclient_priv;
@@ -104,7 +90,7 @@ class QoreSocketObject : public AbstractPollableIoObjectBase {
 
 public:
 #ifdef DEBUG
-    //! Debug-only: arm a one-shot fd-swap simulation on the next lock-yielding wait.
+    //! Debug-only: arm a one-shot fd-swap simulation on the next controller wait.
     /** Called via the @c dbg_force_fd_swap_next_wait() debug builtin in
         @ref lib/ql_debug.cpp.  DLLLOCAL so the function never appears
         in the public ABI — debug-only test hook with no release-build
@@ -410,6 +396,15 @@ public:
         @since %Qore 2.3
     */
     DLLEXPORT int checkIdleData(ExceptionSink* xsink);
+
+    //! Internal async-poll helper for idle-data probes already running on the I/O thread.
+    /** This is the nonblocking implementation used by async poll operations.
+        Public synchronous callers must use @ref checkIdleData(), which delegates
+        through the async I/O controller.
+
+        @since %Qore 2.3
+    */
+    DLLLOCAL int checkIdleDataForAsyncPoll(ExceptionSink* xsink);
 
     //! Sets the ALPN protocols to offer during TLS negotiation
     /** @param protocols A list of protocol names in order of preference (e.g., {"h2", "http/1.1"})

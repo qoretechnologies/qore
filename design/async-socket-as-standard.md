@@ -8,10 +8,10 @@
 
 The Qore async I/O subsystem is now the single dispatch path for all socket
 protocols. Synchronous callers (HTTPClient, FtpClient, etc.) block on
-`PromiseAction + q_future_get_blocking()` over the async path rather than
-performing I/O directly. This eliminates the parallel sync/async code paths,
-prevents sync/async mixing corruption via `SocketIoMode` enforcement, and
-extends async coverage to FTP, SMTP, and POP3.
+`PromiseAction + q_future_get_blocking()` or `AsyncIoController::exec()` over
+the async path rather than performing I/O directly. This eliminates the
+parallel sync/async code paths, prevents sync/async mixing corruption via
+async controller ownership, and extends async coverage to FTP, SMTP, and POP3.
 
 **Related docs:**
 - `design/async-socket-io.md` — AsyncIoController internals (thread model, lock hierarchy, event races, platform quirks)
@@ -50,12 +50,19 @@ extends async coverage to FTP, SMTP, and POP3.
 
 ## Key Components
 
-### SocketIoMode Enforcement (Phase 1)
+### Async Ownership Enforcement (Phase 1)
 
-`SocketIoMode` enum on `my_socket_priv`: `Unclaimed`, `Sync`, `Async`.
-`checkSyncAllowed()` / `checkAsyncAllowed()` wired into `checkNonBlock()`
-and `SocketPollSocketOperationBase` constructor. Prevents corruption from
-mixing sync and async I/O on the same socket.
+Async ownership on `my_socket_priv` is derived from active controller and
+non-blocking counters; there is no stored sync/async mode enum. Production
+synchronous socket APIs no longer claim a separate sync mode. Sync callers are
+implemented as controller-backed operations and hold async ownership while they
+execute. Bare `QoreSocket` setup/lifecycle calls (`bind*()`, `listen()`,
+`shutdown()`, and `close()`) also delegate through controller operations; close
+uses a socket-scoped controller cancel barrier before the controller-side close
+command. Direct helpers are used only by controller poll operations and teardown
+after ownership has moved to the I/O thread. `checkSyncAllowed()` remains wired into legacy setup/sync probes so
+overlapping sync entry points fail with `SOCKET-ASYNC-MODE-ERROR` when the
+controller owns the socket.
 
 ### CONNECT Tunnel (Phase 2)
 

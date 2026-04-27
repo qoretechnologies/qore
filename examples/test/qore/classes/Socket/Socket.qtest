@@ -2320,13 +2320,12 @@ class SocketTest inherits QUnit::Test {
         server.close();
     }
 
-    #! Verifies fd_generation re-verification in SocketSyncPoll::waitReleasingLock().
+    #! Verifies fd_generation re-verification in controller-backed sync waits.
     /** This test uses the debug-only @c dbg_force_fd_swap_next_wait() builtin
         to arm a one-shot flag that simulates an fd swap during a sync Socket
-        recv()'s lock-yielding wait phase.  When the helper re-acquires the
-        outer mutex and sees the bumped generation counter, it must abort
-        with a @c SOCKET-CLOSED exception rather than retrying on a
-        potentially stale fd.
+        recv()'s controller wait phase.  When the controller sees the bumped
+        generation counter, it must abort with a @c SOCKET-CLOSED exception
+        rather than retrying on a potentially stale fd.
 
         Without the fd_generation re-verification, a racing close() during
         the wait window would leave the sync helper operating on a
@@ -2353,11 +2352,10 @@ class SocketTest inherits QUnit::Test {
         assertTrue(accepted.isOpen());
 
         # Arm the one-shot hook.  The hook bumps fd_generation inside
-        # the wait window; because no real close() fires, asyncIoWait()
-        # still runs until its natural timeout — so we use a short
-        # (500ms) budget.  When the wait returns and waitReleasingLock
-        # re-acquires the mutex, the generation mismatch is detected
-        # and recv() must throw SOCKET-CLOSED (not SOCKET-TIMEOUT).
+        # the wait window; because no real close() fires, the controller
+        # wait still runs until its natural timeout — so we use a short
+        # (500ms) budget.  When the wait returns, the generation mismatch
+        # is detected and recv() must throw SOCKET-CLOSED (not SOCKET-TIMEOUT).
         try {
             call_function("dbg_force_fd_swap_next_wait", accepted);
         } catch (hash<ExceptionInfo> ex) {

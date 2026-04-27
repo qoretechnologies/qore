@@ -389,6 +389,12 @@ Processing received SETTINGS frames triggers SETTINGS_ACK generation in nghttp2,
 proceed until it receives the ACK. Without `sendPendingDataBlocking()` after receive, the client and server
 can deadlock — each waiting for the other to send data that is queued but unflushed.
 
+HTTP/3 clients do not flush QUIC packets from caller threads.  Request submission, streaming
+send data, and trailers only queue data into the `QuicSession` and wake the async I/O controller;
+the controller's `SocketQuicClientPollOperation::continuePoll()` is the only path that produces
+and sends UDP packets.  This keeps QUIC socket ownership with the I/O thread and avoids races
+between app-thread `sendto()` and controller-driven receive/write processing.
+
 ## HTTP/2 Extended CONNECT Rejection (RFC 8441)
 
 When the server does not advertise `ENABLE_CONNECT_PROTOCOL` in its SETTINGS, extended CONNECT requests (i.e.,
@@ -630,17 +636,67 @@ Sync Socket APIs block — either directly on a syscall or indirectly via
 async I/O controller's own I/O thread would deadlock the controller: the wait primitives
 block the very thread that is supposed to deliver the readiness events.
 
-Every sync Socket entry point in `qore_socket_private` (`recv`, `recvAll`, `recvBinary`,
-`recvBinaryAll`, `recvToOutputStream`, `send`, `sendFromInputStream`,
-`sendHttpChunkedBody{FromInputStream,Trailer}`, `sendHttp{Message,Response}`,
-`readHTTPHeader`, `readHTTPHeaderString`, `readHttpChunkedBody{,Binary}`, `accept_internal`
-— except the special `timeout_ms == 0` single-shot non-blocking path — `connectINET`,
-`connectUNIX`, `upgradeClient/ServerToSSLIntern`) and the higher-level wrappers
-(`QoreHttpClientObject::send_internal`, `QoreHttpClientObject::connect`,
-`qore_ftp_private::checkConnectedUnlocked`, `qore_ftp_private::connect`) calls
-`SocketSyncPoll::assertNotOnIoThread()` before doing any blocking work.  Violation raises
+The sync Socket entry points now delegate socket I/O to the async I/O controller and then
+block the caller on controller completion.  The central primitive is
+`AsyncIoController::exec()` / `AsyncIoControllerPriv::exec()`: sync wrappers build the same
+`SocketPollOperationBase` / `AbstractPollState` operations used by async APIs, submit them
+to the controller, and wait for the operation result on the caller thread.
+
+Representative bridges:
+
+- `QoreSocket` wraps a bare `QoreSocket` in `QoreSocketControllerPollable` and runs
+  `QoreSocketControllerPollOperation` through `qore_socket_exec_poll()`.
+  Immediate setup/lifecycle calls such as `bind*()`, `listen()`, `shutdown()`, and
+  `close()` use controller-backed execution.  Close first runs a socket-scoped
+  controller cancel that waits for any deferred worker `continuePoll()` aborts, then
+  submits a controller-side close command; direct helpers remain direct only after
+  ownership has moved to the I/O thread.
+- `QoreSocketObject` uses `qore_socket_object_exec_poll_operation()` to run existing
+  Socket poll operations through the controller.
+- The QPP `Socket`, `QoreSocketObject`, and raw C++ `QoreSocket` bridge helpers
+  call `SocketSyncPoll::assertNotOnIoThread()` before `AsyncIoController::exec()`,
+  so all sync-over-controller variants fail fast if they are accidentally invoked
+  from the controller I/O thread.
+- `Socket::poll()` maps each list entry to a controller-backed poll operation and waits
+  for controller processing/cancellation instead of running a raw caller-thread `poll()`.
+- Object-backed multi-step sync helpers that submit several controller operations
+  in sequence (`readHTTPChunkedBody*`, SSE reads, HTTP chunked send
+  callbacks/input streams, `sendFromInputStream`, `recvToOutputStream`, and fd
+  forwarding) hold an async ownership guard for the whole logical operation.
+  The guard also reserves the active socket direction (`NB_SEND`, `NB_RECV`, or
+  `NB_ALL`) for the caller thread while allowing the helper's nested controller
+  submissions to claim transient non-blocking ownership.  Individual syscalls
+  still run in controller poll operations; same-direction async operations from
+  other threads are rejected while the sequence is active, while opposite-direction
+  full-duplex operations remain possible.
+- Receive-side controller peeks such as `QoreSocketObject::checkIdleData()` also
+  claim `NB_RECV`, so they cannot bypass a receive sequence reservation.
+- `Socket::poll()` treats closed/deleted entries as `SOCK_POLLERR` both inside
+  the readiness operation and during final result assembly after cancellation,
+  covering the race where a close does not wake the controller operation before
+  the caller's timeout path starts cancellation.
+- `HTTPClient` sync sends/connects use the connection manager path; the connection
+  manager owns controller-backed H1/H2/H3 connection operations, including UNIX sockets
+  and HTTP/2 / HTTP/3 extended CONNECT tunnels.
+  Connection close paths cancel controller-owned sockets via the controller first; the
+  socket-scoped cancel barrier waits until the I/O thread has stopped polling the fd and
+  any worker-side `continuePoll()` has returned before the controller close command
+  releases the fd.
+- `FtpClient` sync commands and data transfers use FTP control/data poll operations and
+  controller `execOnController()` waits.
+
+`SocketSyncPoll` no longer drives sync I/O.  It remains only as a fail-fast guard:
+sync entry points that block on controller completion call
+`SocketSyncPoll::assertNotOnIoThread()` before waiting.  Violation raises
 `SOCKET-SYNC-ON-IO-THREAD-ERROR` in both debug and release builds; debug builds additionally
 `abort()` so the core file points at the offending frame.
+
+The previous direct-sync claim state has been removed from `my_socket_priv`:
+there is no `SocketIoMode`, `sync_io_count`, `startSyncIo()`, `clearSyncIo()`,
+or `SyncIoGuard`. Synchronous socket APIs are represented as async controller
+ownership while they are executing, so the only active ownership state is
+derived from async/non-blocking claims and directional async sequence
+reservations.
 
 In the current architecture this invariant is held **structurally**: Qore poll operations
 are always worker-dispatched, `onComplete` callbacks go to the worker pool, and queue
@@ -648,66 +704,25 @@ pushes are non-blocking.  User Qore code therefore never runs on the I/O thread 
 assertion is defense-in-depth — it catches misuse introduced by future refactors or by
 C++ poll states that accidentally call into a sync Socket path.
 
-The canonical bridge from sync to async is `SocketSyncPoll::run(state, timeout_ms, ...)`
-(`include/qore/intern/SocketSyncPoll.h`), which loops an `AbstractPollState`'s
-`continuePoll()` and waits for `SOCK_POLLIN` / `SOCK_POLLOUT` between iterations.  New sync
-Socket APIs should be implemented as thin wrappers over this helper rather than
-hand-rolled EAGAIN / `WANT_READ` retry loops.
+#### Controller wait fd-generation checks
 
-If a poll-state needs to wake on more than just the Socket's primary fd (e.g. a QUIC
-migration candidate watching a second UDP fd), it can override
-`AbstractPollState::getExtraWaitFds()` to return a vector of `ExtraWaitFd` entries.
-`SocketSyncPoll::run()` notices a non-empty vector and calls the internal `waitMultiFd()`
-helper instead of `asyncIoWait()`, building a combined `pollfd` array (primary fd +
-extras) and calling `::poll()` directly so any fd's readiness wakes the wait.
-
-#### Lock-yielding during sync wait phases
-
-The sync I/O helpers in `qore_socket_private` (`brecv`, `sendIntern`, `accept_intern`,
-`doSSLRW`, `doSSLUpgradeNonBlockingIO`) all need to wait for readiness between retries.
-Historically the **outer Socket mutex** (`my_socket_priv::m`) was held during the wait,
-which blocked concurrent async I/O controller operations on the same Socket — a
-long-running sync wait in a handler thread would stall unrelated async ops until it
-returned.
-
-The fix is **Option B**: release the outer mutex during the wait and re-acquire it before
-retrying the syscall.  To detect a racing close/fd swap during the unlocked window, every
-sync helper uses `SocketSyncPoll::waitReleasingLock(sock, outer_lock, ...)`, which:
-
-1. Snapshots `qore_socket_private::fd_generation` and the primary fd under the lock.
-2. Releases the lock via `AutoUnlocker`.
-3. Calls `asyncIoWait()` to wait for readiness on the primary fd (or hits the timeout).
-4. Re-acquires the lock on scope exit.
-5. Checks the snapshotted generation against `pinfo.fd_generation`.  On mismatch, raises
-   `SOCKET-CLOSED` — the fd the caller was waiting on has been closed or swapped
-   (`close_and_reset`, QUIC migration, etc.) and any retry would operate on stale state.
+The async controller snapshots `qore_socket_private::fd_generation` when a submitted
+sync-backed operation enters a socket wait.  After readiness is delivered, the controller
+verifies the generation before continuing the operation.  If the fd was closed or swapped
+while the operation was waiting, the controller reports `SOCKET-CLOSED` instead of letting
+the poll state retry on stale state.
 
 `fd_generation` is bumped in every code path that closes or swaps the fd:
 
-- `qore_socket_private::close_and_reset()` — on every close
-- `SocketQuicClientPollOperation::migrateConnection()` — after the migration fd swap
+- `qore_socket_private::close_and_reset()` on every close
+- `SocketQuicClientPollOperation::migrateConnection()` after the migration fd swap
 
-The back-pointer from `qore_socket_private::outer_lock` to `my_socket_priv::m` is wired by
-the `my_socket_priv` constructors (out-of-line in `lib/QoreSocket.cpp` because the priv
-struct is only forward-declared in `QC_Socket.h`).  Bare `QoreSocket` instances (those
-not wrapped in a `my_socket_priv`) leave `outer_lock == nullptr`; the sync helpers fall
-back to the original non-yielding wait path in that case, which is safe because there is
-no outer mutex to contend for.
-
-**SSL full-yield safety.**  The OpenSSL API forbids concurrent calls on the same `SSL*`.
-The lock-yielding wait preserves this invariant because direction-level exclusion via
-`NB_SEND`/`NB_RECV` is already enforced at the sync Socket API layer — no other thread
-can start a concurrent same-direction SSL operation on the SSL* while we are mid-retry.
-The `SSL_read`/`SSL_write` calls themselves remain under the outer mutex; only the
-between-retry wait phases yield.
-
-**Debug test hook.**  Debug builds expose a `dbg_force_fd_swap_next_wait(Socket)`
-builtin (in `lib/ql_debug.cpp`) that arms a one-shot flag on the Socket.  The next
-lock-yielding wait on that Socket will bump `fd_generation` inside the wait window, so
-the re-acquire detects the simulated swap and the sync I/O operation aborts with
-`SOCKET-CLOSED`.  See `examples/test/qore/classes/Socket/Socket.qtest`
-`fdGenerationTest` for the end-to-end regression test.  The hook is DEBUG-only — the
-builtin is simply not registered in release builds.
+Debug builds expose a `dbg_force_fd_swap_next_wait(Socket)` builtin (in `lib/ql_debug.cpp`)
+that arms a one-shot flag on the Socket.  The next controller wait on that Socket bumps
+`fd_generation` inside the wait window, so the controller detects the simulated swap and
+the sync I/O operation aborts with `SOCKET-CLOSED`.  See
+`examples/test/qore/classes/Socket/Socket.qtest` `fdGenerationTest` for the regression
+test.  The hook is DEBUG-only; the builtin is not registered in release builds.
 
 ### QUIC Keepalive Policy
 

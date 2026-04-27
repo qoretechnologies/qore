@@ -35,9 +35,9 @@
 
 #include <vector>
 
-//! Descriptor for an extra fd that a poll-state wants the sync wait helper to watch.
+//! Descriptor for an extra fd that a poll-state wants the controller to watch.
 struct ExtraWaitFd {
-    int fd;           //!< fd to include in the sync readiness wait
+    int fd;           //!< fd to include in the readiness wait
     bool want_read;   //!< true = wait for POLLIN
     bool want_write;  //!< true = wait for POLLOUT
 };
@@ -59,10 +59,10 @@ public:
         return QoreValue();
     }
 
-    //! Returns any additional fds the sync wait helper should watch alongside the Socket's primary fd.
-    /** Used by multi-fd poll states (e.g. QUIC) so SocketSyncPoll can include
-        the extra fds in a single combined readiness wait.  The default
-        implementation returns an empty vector.
+    //! Returns any additional fds the async I/O controller should watch alongside the Socket's primary fd.
+    /** Used by multi-fd poll states (e.g. QUIC) so controller-backed waits
+        can include the extra fds in a single combined readiness wait.  The
+        default implementation returns an empty vector.
 
         @return a vector of ExtraWaitFd entries; empty if no extras are needed
      */

@@ -125,7 +125,7 @@ void HttpAcceptPollOperationPriv::abort(ExceptionSink* xsink) {
     }
     if (client_sock_obj) {
         // Close via the QoreSocketObject to ensure proper cleanup
-        client_sock->close();
+        client_sock->closeIo(xsink);
     }
     accept_state = AcceptState::COMPLETE;
 }
@@ -334,7 +334,7 @@ int HttpAcceptPollOperationPriv::checkAlpn(ExceptionSink* xsink) {
     // If HTTP/2 is required but not negotiated, reject the connection
     if ((http_version == "2.0" || http_version == "2") && !is_http2) {
         if (client_sock) {
-            client_sock->close();
+            client_sock->closeIo(xsink);
         }
         xsink->raiseException("HTTP2-REQUIRED-ERROR",
             "HTTP/2 required but client negotiated: %s",

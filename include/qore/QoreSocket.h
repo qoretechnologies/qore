@@ -2360,6 +2360,9 @@ private:
     //! private constructor, not exported in the library's public interface
     DLLLOCAL QoreSocket(int n_sock, int n_sfamily, int n_stype, int s_prot, const QoreEncoding* csid);
 
+    //! Creates a new accepted socket with listener SSL and protocol parameters copied
+    DLLLOCAL QoreSocket* createAcceptedSocket(int descriptor);
+
     DLLLOCAL static void convertHeaderToHash(QoreHashNode* h, char* p);
 
     DLLLOCAL QoreSocket(const QoreSocket&) = delete;

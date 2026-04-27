@@ -37,7 +37,7 @@ HTTP/2 flow control deadlock when body_streaming handler returns early with erro
 
 - [ ] **1.2** Verify HTTP/3 path doesn't need equivalent fix
   - File: `lib/QoreHttpClientObject.cpp` (sendHttp3StreamData)
-  - `driveQuicIo()` is already bidirectional — no fix needed
+  - conn_mgr-backed HTTP/3 stream writes are driven by the async I/O controller
   - Document this architectural difference
 
 - [ ] **1.3** Write throughput benchmark for receiveData(0) overhead
@@ -155,8 +155,8 @@ No test exercises the low-level HTTP/2 extended CONNECT bidi APIs directly:
 
 ### Key Difference from HTTP/2
 
-HTTP/3 uses `driveQuicIo()` which is inherently bidirectional — reads incoming UDP
-packets and writes outgoing ones in a single call. Stream resets use QUIC's
+HTTP/3 tunnel I/O is driven by the async I/O controller through the conn_mgr
+HTTP/3 connection. Stream resets use QUIC's
 `RESET_STREAM` + `STOP_SENDING` instead of HTTP/2's `RST_STREAM`.
 
 ### Tasks

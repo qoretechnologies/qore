@@ -141,6 +141,8 @@ class MockSmtpServer {
 public class SmtpClientSendTest inherits QUnit::Test {
     constructor() : Test("SmtpClientSendTest", "1.0", \ARGV) {
         addTestCase("basic send with auth", \testBasicSendWithAuth());
+        addTestCase("blocking sendMessage with auth", \testBlockingSendMessageWithAuth());
+        addTestCase("blocking connect then sendMessage", \testBlockingConnectThenSendMessage());
         addTestCase("send with multiple recipients", \testMultipleRecipients());
         addTestCase("send poll operation API", \testSendPollOperationApi());
         addTestCase("send with no recipients error", \testNoRecipientsError());
@@ -207,6 +209,62 @@ public class SmtpClientSendTest inherits QUnit::Test {
         assertNothing(server.getServerError(), "no server errors");
     }
 
+    #! Test blocking SmtpClient::sendMessage via AsyncIoController-backed poll operation
+    testBlockingSendMessageWithAuth() {
+        MockSmtpServer server(True);
+        server.start();
+        on_exit server.wait();
+
+        SmtpClient smtp(sprintf("esmtp://testuser:testpass@localhost:%d", server.getPort()));
+
+        MailMessage::Message msg("sender@test.com", "Blocking Test");
+        msg.addTO("recipient@test.com");
+        msg.setBody("Hello from blocking sendMessage");
+
+        hash<auto> reply = smtp.sendMessage(msg);
+        assertEq(250, reply.EHLO.code, "EHLO reply returned");
+        assertEq(250, reply.RCPT{"recipient@test.com"}.code, "RCPT reply returned");
+        assertEq(250, reply.MSGID.code, "message acceptance reply returned");
+        assertEq(221, reply.QUIT.code, "QUIT reply returned");
+
+        list<string> cmds = server.getReceivedCommands();
+        assertTrue(cmds.contains("DATA"), "DATA command sent");
+        assertTrue(cmds.contains("QUIT"), "QUIT command sent");
+        assertNothing(server.getServerError(), "no server errors");
+    }
+
+    #! Test blocking SmtpClient::connect via AsyncIoController-backed ping operation on the client's socket
+    testBlockingConnectThenSendMessage() {
+        MockSmtpServer server(True);
+        server.start();
+        on_exit server.wait();
+
+        SmtpClient smtp(sprintf("esmtp://testuser:testpass@localhost:%d", server.getPort()));
+        smtp.connect();
+        assertTrue(smtp.isConnected(), "client connected");
+
+        MailMessage::Message msg("sender@test.com", "Connected Send");
+        msg.addTO("recipient@test.com");
+        msg.setBody("Hello after explicit connect");
+
+        hash<auto> reply = smtp.sendMessage(msg);
+        assertEq(250, reply.EHLO.code, "EHLO reply preserved after connect");
+        assertEq(250, reply.RCPT{"recipient@test.com"}.code, "RCPT reply returned");
+        assertEq(221, reply.QUIT.code, "QUIT reply returned");
+
+        list<string> cmds = server.getReceivedCommands();
+        int auth_count = 0;
+        foreach string cmd in (cmds) {
+            if (cmd =~ /^AUTH PLAIN/i) {
+                ++auth_count;
+            }
+        }
+        assertEq(1, auth_count, "AUTH sent only during connect");
+        assertTrue(cmds.contains("DATA"), "DATA command sent");
+        assertTrue(cmds.contains("QUIT"), "QUIT command sent");
+        assertNothing(server.getServerError(), "no server errors");
+    }
+
     #! Test SMTP send with multiple To/CC/BCC recipients
     testMultipleRecipients() {
         MockSmtpServer server(True);
@@ -270,7 +328,7 @@ public class SmtpClientSendTest inherits QUnit::Test {
         }, NOTHING, "no recipients throws MESSAGE-ERROR");
     }
 
-    #! Submit a poll operation to the global AsyncIoController and block until done
+    #! Execute a poll operation through the global AsyncIoController and block until done
     private runPollOp(Qore::AbstractPollOperation op, timeout to = 30s) {
         # First continuePoll gives us the socket for the submit info
         *hash<SocketPollInfo> pi = op.continuePoll();
@@ -279,13 +337,12 @@ public class SmtpClientSendTest inherits QUnit::Test {
             return;
         }
 
-        Queue q = AsyncIoController::submit(<SocketPollOperationInfo>{
+        hash<SocketPollResultInfo> result = AsyncIoController::exec(<SocketPollOperationInfo>{
             "sock": pi.socket,
             "spop": op,
             "owner": "smtp-send-test",
             "to": to,
         });
-        hash<auto> result = q.get(to);
         if (result.ex) {
             throw result.ex.err, result.ex.desc;
         }

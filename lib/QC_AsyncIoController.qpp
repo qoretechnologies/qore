@@ -283,10 +283,7 @@ static bool AsyncIoController::cancelAndClose(AbstractPollableIoObjectBase[Abstr
     }
     ReferenceHolder<AsyncIoControllerPriv> ctrl_holder(ctrl, xsink);
     ReferenceHolder<QoreObject> obj_holder(obj, xsink);
-    bool rv = ctrl->cancel(*sock, xsink);
-    // Close the I/O object via the type-safe virtual method
-    sock->closeIo(xsink);
-    return rv;
+    return ctrl->cancelAndClose(*sock, xsink);
 }
 
 //! Cancels an operation by key on the global singleton

@@ -164,6 +164,7 @@ public:
     DLLEXPORT void abort(ExceptionSink* xsink) override;
     DLLEXPORT QoreValue getOutput() const override;
     DLLEXPORT int getAndClearItemsPushed() override;
+    DLLEXPORT QoreHashNode* getResult(ExceptionSink* xsink) const;
 
     // --- Builder methods (app thread, before submit) ---
 
@@ -262,6 +263,15 @@ public:
         @param err_code the exception error code on mismatch
     */
     DLLEXPORT int addValidateResponsePrefix(const char* prefix, const char* err_code);
+
+    //! Builds a POP3 APOP command from the last response line if it contains an APOP challenge
+    /** Extracts a trailing <...> challenge from ctx.last_output and stores
+        APOP <user> md5(challenge + password) in ctx.extra[command_key]. Also
+        stores a bool in ctx.extra[present_key] indicating whether a challenge
+        was present.
+    */
+    DLLEXPORT int addMakePop3ApopCommand(const char* command_key, const char* present_key, const char* user,
+        const char* password);
 
     //! Checks if a context string contains a substring (case-insensitive) and stores bool result
     DLLEXPORT int addCheckContains(const char* source_key, const char* substring, const char* result_key);
@@ -478,7 +488,7 @@ private:
     DLLLOCAL void deliverResult(ExceptionSink* xsink);
 
     //! Build result hash from context
-    DLLLOCAL QoreHashNode* buildResultHash(ExceptionSink* xsink);
+    DLLLOCAL QoreHashNode* buildResultHash(ExceptionSink* xsink) const;
 
     //! Set error state
     DLLLOCAL void setError(const char* err, const char* desc, ExceptionSink* xsink);

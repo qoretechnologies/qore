@@ -681,6 +681,50 @@ int PollPipelinePriv::addValidateResponsePrefix(const char* prefix, const char* 
     });
 }
 
+int PollPipelinePriv::addMakePop3ApopCommand(const char* command_key, const char* present_key, const char* user,
+        const char* password) {
+    std::string cmd_key(command_key);
+    std::string has_key(present_key);
+    std::string u(user);
+    std::string pass(password);
+    return addTransform([cmd_key, has_key, u, pass](Context& ctx, ExceptionSink* xsink) {
+        if (!ctx.extra) {
+            ctx.extra = new QoreHashNode(autoTypeInfo);
+        }
+
+        bool found = false;
+        QoreString command;
+        if (ctx.last_output.getType() == NT_STRING) {
+            const QoreStringNode* str_node = ctx.last_output.get<const QoreStringNode>();
+            std::string line(str_node->c_str(), str_node->size());
+            while (!line.empty() && (line.back() == '\n' || line.back() == '\r' || line.back() == ' ')) {
+                line.pop_back();
+            }
+
+            if (!line.empty() && line.back() == '>') {
+                size_t start = line.rfind('<');
+                if (start != std::string::npos) {
+                    std::string challenge = line.substr(start);
+                    std::string digest_input = challenge + pass;
+                    DigestHelper dh(digest_input.c_str(), digest_input.size());
+                    if (dh.doDigest(MD5_ERR, EVP_md5(), xsink)) {
+                        return;
+                    }
+                    SimpleRefHolder<QoreStringNode> digest(dh.getString());
+                    command.sprintf("APOP %s %s\r\n", u.c_str(), digest->c_str());
+                    found = true;
+                }
+            }
+        }
+
+        ctx.extra->setKeyValue(has_key.c_str(), found, xsink);
+        if (*xsink) {
+            return;
+        }
+        ctx.extra->setKeyValue(cmd_key.c_str(), new QoreStringNode(command), xsink);
+    });
+}
+
 int PollPipelinePriv::addCheckContains(const char* source_key, const char* substring,
         const char* result_key) {
     std::string src(source_key);
@@ -1626,7 +1670,7 @@ void PollPipelinePriv::deliverResult(ExceptionSink* xsink) {
     }
 }
 
-QoreHashNode* PollPipelinePriv::buildResultHash(ExceptionSink* xsink) {
+QoreHashNode* PollPipelinePriv::buildResultHash(ExceptionSink* xsink) const {
     ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
     if (ctx.status_code) {
         h->setKeyValue("status_code", ctx.status_code, xsink);
@@ -1644,6 +1688,10 @@ QoreHashNode* PollPipelinePriv::buildResultHash(ExceptionSink* xsink) {
         h->setKeyValue("extra", ctx.extra->hashRefSelf(), xsink);
     }
     return h.release();
+}
+
+QoreHashNode* PollPipelinePriv::getResult(ExceptionSink* xsink) const {
+    return buildResultHash(xsink);
 }
 
 // --- Abort ---
@@ -2178,6 +2226,23 @@ int PollPipeline::addValidateResponsePrefix(string prefix, string err_code) {
     return priv->addValidateResponsePrefix(prefix->c_str(), err_code->c_str());
 }
 
+//! Adds a POP3 APOP command generation step
+/** Extracts a trailing APOP challenge from the previous response line and
+    stores the generated APOP command in a context key. Also stores a boolean
+    indicating whether the challenge was present.
+
+    @param command_key the context extra key for the generated APOP command
+    @param present_key the context extra key set to True if a challenge was present
+    @param user the POP3 user name
+    @param password the POP3 password
+    @return the step index
+
+    @since %Qore 2.3
+*/
+int PollPipeline::addMakePop3ApopCommand(string command_key, string present_key, string user, string password) {
+    return priv->addMakePop3ApopCommand(command_key->c_str(), present_key->c_str(), user->c_str(), password->c_str());
+}
+
 //! Adds a transform step that sets a boolean value in the context extra hash
 /** @param key the context extra key to set
     @param value the boolean value to store
@@ -2538,6 +2603,18 @@ nothing PollPipeline::abort() {
 */
 auto PollPipeline::getOutput() [flags=RET_VALUE_ONLY] {
     return priv->getOutput();
+}
+
+//! Returns the current pipeline result hash
+/** The result hash contains the same data delivered through result actions:
+    \c status_code, \c hdr, \c body, \c output, and \c extra when available.
+
+    @return the current pipeline result hash
+
+    @since %Qore 2.3
+*/
+hash<auto> PollPipeline::getResult() [flags=RET_VALUE_ONLY] {
+    return priv->getResult(xsink);
 }
 
 //! Returns True if the pipeline is closed (error or abort)

@@ -139,35 +139,10 @@ private:
     SimpleRefHolder<BinaryNode> send_data;
     size_t send_offset = 0;
 
-    // Sync-blocking infrastructure
-    QoreThreadLock sync_lock;
-    QoreCondition sync_cond;
-    bool sync_done = false;
-
 public:
-    //! Signal sync caller that the operation has completed
-    DLLLOCAL void signalCompletion() {
-        AutoLocker al(sync_lock);
-        sync_done = true;
-        sync_cond.signal();
-    }
-
-    //! Block until the operation signals completion or timeout
-    DLLLOCAL int waitForCompletion(int timeout_ms, ExceptionSink* xsink) {
-        AutoLocker al(sync_lock);
-        while (!sync_done) {
-            int rc = sync_cond.wait(sync_lock, timeout_ms);
-            if (rc == ETIMEDOUT) {
-                xsink->raiseException("SOCKET-TIMEOUT", "FTP data operation timed out after %d ms", timeout_ms);
-                return -1;
-            }
-        }
-        sync_done = false;
-        return 0;
-    }
-
     //! Submit this operation to the global async I/O controller
-    DLLLOCAL int submitToController(ExceptionSink* xsink, const char* owner = "ftp-data");
+    DLLLOCAL QoreObject* submitToController(ExceptionSink* xsink, const char* owner = "ftp-data",
+        int timeout_ms = -1, bool replace = false);
 
 private:
     // --- Helper methods ---

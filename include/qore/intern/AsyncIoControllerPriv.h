@@ -328,6 +328,20 @@ public:
     */
     DLLLOCAL bool cancel(AbstractPollableIoObjectBase* sock, ExceptionSink* xsink);
 
+    //! Cancel all operations for a socket and close it on the controller thread
+    /** @param sock the socket to cancel and close
+        @param xsink for exception handling
+        @return true if at least one operation was found and canceled
+    */
+    DLLLOCAL bool cancelAndClose(AbstractPollableIoObjectBase* sock, ExceptionSink* xsink);
+
+    //! Close a socket on the controller thread after canceling controller work for it
+    /** @param sock the socket to close
+        @param xsink for exception handling
+        @return 0 on success, -1 on error
+    */
+    DLLLOCAL int close(AbstractPollableIoObjectBase* sock, ExceptionSink* xsink);
+
     //! Cancel an operation by key
     /** @param key the operation key
         @param xsink for exception handling
@@ -496,6 +510,8 @@ private:
     enum class IoCommand {
         SubmitOp,            //!< Submit a new operation (carries PollInfo data)
         Cancel,
+        CancelSocket,        //!< Cancel all operations associated with a socket hash
+        CloseSocket,         //!< Close an I/O object on an I/O thread
         CancelOwner,
         CancelByProgram,     //!< Cancel all operations belonging to a QoreProgram
         Quit,
@@ -573,7 +589,8 @@ private:
         QoreHashNode* continue_poll_result = nullptr;  //!< For ContinuePollResult: new poll info (or nullptr)
         QoreHashNode* continue_poll_ex = nullptr;      //!< For ContinuePollResult: exception (or nullptr)
         bool continue_poll_completed = false;           //!< For ContinuePollResult: true if completed
-        std::string sock_hash;          //!< For WakeSocket: socket hash to re-poll
+        std::string sock_hash;          //!< For WakeSocket/CancelSocket/CloseSocket: socket hash
+        AbstractPollableIoObjectBase* close_sock = nullptr; //!< For CloseSocket: referenced I/O object
         bool submit_replace = false;    //!< For SubmitOp: replace existing operation with same key
 
         // --- SubmitOp data (ownership transferred to I/O thread) ---
@@ -847,6 +864,22 @@ private:
             cleanup is still pending.
          */
         std::unordered_map<std::string, PollInfo> pending_aborts;
+
+        //! Socket-level cancel completions waiting on deferred aborts
+        /** When @ref IoCommand::CancelSocket removes an operation whose
+            worker-side @c continuePoll() is still in flight, the command's
+            completion cannot be signaled until the worker returns and the
+            deferred abort is delivered.  This map tracks those socket-scoped
+            barriers by socket hash.
+         */
+        struct PendingSocketCancel {
+            int pending_count = 0;
+            std::vector<AsyncOpCompletion*> completions;
+        };
+        std::unordered_map<std::string, PendingSocketCancel> pending_socket_cancels;
+
+        //! Maps pending-abort operation keys back to their socket-cancel barrier
+        std::unordered_map<std::string, std::string> pending_abort_cancel_hash;
     };
 
     //! Get the I/O thread index for a given operation key (hash-based affinity)
@@ -971,6 +1004,25 @@ private:
 
     //! Cancel an operation internally (delivers result, called from I/O thread)
     DLLLOCAL void doCancelIntern(PollInfo& pinfo, ExceptionSink* xsink);
+
+    //! Cancel all operations in one I/O-thread context matching a socket hash
+    DLLLOCAL int cancelSocketInContext(IoThreadContext& t, const std::string& sock_hash,
+        AsyncOpCompletion*& completion, ExceptionSink* xsink);
+
+    //! Complete any socket-level cancel waiting on a deferred abort key
+    DLLLOCAL void completePendingSocketCancel(IoThreadContext& t, const std::string& key,
+        ExceptionSink* xsink);
+
+    //! Cancel all operations associated with a socket hash
+    DLLLOCAL int cancelBySocketHash(const std::string& sock_hash, ExceptionSink* xsink);
+
+    //! Submit a controller-side close command after socket operations are canceled
+    DLLLOCAL int closeSocketOnController(AbstractPollableIoObjectBase* sock,
+        const std::string& sock_hash, ExceptionSink* xsink);
+
+    //! True if a PollInfo belongs to the socket hash currently being targeted
+    DLLLOCAL static bool pollInfoMatchesSocketHash(const PollInfo& pinfo,
+        const std::string& sock_hash);
 
     //! Snapshot the Socket fd generation for the next controller wait
     DLLLOCAL static void snapshotSocketWaitGeneration(PollInfo& pinfo, QoreHashNode* poll_info);

@@ -81,10 +81,6 @@ public:
         ++refs;
     }
 
-    // do blocking or non-blocking SSL I/O and handle SSL_ERROR_WANT_READ and SSL_ERROR_WANT_WRITE properly
-    DLLLOCAL int doSSLRW(ExceptionSink* xsink, const char* mname, void* buf, int num, int timeout_ms,
-            SslAction action, bool do_timeout = true);
-
     // do nonblocking I/O for polling
     /** returns:
         - SOCK_POLLIN = wait for read and call this again
@@ -100,18 +96,9 @@ public:
     DLLLOCAL int setServer(ExceptionSink* xsink, const char* mname, int sd, QoreSSLCertificate* cert = nullptr,
             QoreSSLPrivateKey* pkey = nullptr);
     // returns 0 for success
-    DLLLOCAL int connect(const char* mname, int timeout_ms, ExceptionSink* xsink);
-    // returns 0 for success
-    DLLLOCAL int accept(const char* mname, int timeout_ms, ExceptionSink* xsink);
-    // returns 0 for success
     DLLLOCAL int shutdown();
     // returns 0 for success
     DLLLOCAL int shutdown(ExceptionSink* xsink);
-    // read with optional timeout in milliseconds
-    DLLLOCAL int read(ExceptionSink* xsink, const char* mname, char* buf, int size, int timeout_ms,
-            bool suppress_exception = false);
-    // returns 0 for success
-    DLLLOCAL int write(const char* mname, const void* buf, int size, int timeout_ms, ExceptionSink* xsink);
 
     //! Starts an SSL negotiation for a client in nonblocking mode
     DLLLOCAL int startConnect(ExceptionSink* xsink);
@@ -185,10 +172,6 @@ private:
     //! Static callback for server-side ALPN protocol selection
     static int alpnSelectCallback(SSL* ssl, const unsigned char** out, unsigned char* outlen,
         const unsigned char* in, unsigned int inlen, void* arg);
-
-    // non-blocking I/O helper
-    DLLLOCAL int doSSLUpgradeNonBlockingIO(int rc, const char* mname, int timeout_ms, const char* ssl_func,
-            ExceptionSink* xsink);
 
     DLLLOCAL ~SSLSocketHelper();
 

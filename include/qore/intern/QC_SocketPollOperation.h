@@ -108,6 +108,44 @@ private:
     bool done = false;
 };
 
+class SocketShutdownPollOperation : public SocketPollSocketOperationBase {
+public:
+    DLLLOCAL SocketShutdownPollOperation(QoreSocketObject* sock);
+
+    DLLLOCAL void deref(ExceptionSink* xsink) {
+        if (ROdereference()) {
+            sock->deref(xsink);
+            delete this;
+        }
+    }
+
+    DLLLOCAL virtual bool goalReached() const override {
+        return done;
+    }
+
+    DLLLOCAL virtual void abort(ExceptionSink*) override {
+        done = true;
+    }
+
+    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override;
+
+    DLLLOCAL virtual QoreValue getOutput() const override {
+        return rc;
+    }
+
+    DLLLOCAL virtual const char* getStateImpl() const override {
+        return done ? "done" : "shutting-down";
+    }
+
+    DLLLOCAL int getRc() const {
+        return rc;
+    }
+
+private:
+    int rc = 0;
+    bool done = false;
+};
+
 class SocketSetupPollOperation : public SocketPollSocketOperationBase {
 private:
     enum class Action {
@@ -1138,8 +1176,7 @@ public:
             // the 15s bound.  Best-effort: a send failure is fine because
             // the peer may already be gone; we still do the normal
             // teardown below.  Matches the pattern used on the server
-            // side (SocketQuicServerPollOperation::abort) and the
-            // sync-HTTP-client path (QoreHttpClientObject::disconnectQuic).
+            // side (SocketQuicServerPollOperation::abort).
             if (quic_session) {
                 int fd = sock->priv->socket->getSocket();
                 if (fd >= 0) {
@@ -1188,19 +1225,6 @@ public:
 
     //! Check if connection is still open
     DLLLOCAL bool isOpen() const { return qcs_state != QCS::CLOSED && quic_session && !quic_session->isClosed(); }
-
-    //! Synchronously flush pending QUIC writes to the UDP socket
-    /** Produces any queued QUIC packets (HTTP/3 requests, ACKs, etc.) via
-        ngtcp2 and sends them via sendto()/sendmmsg().  Safe to call from
-        any thread — acquires the QuicSession mutex internally.
-
-        Use this after submitRequest() to guarantee that request frames
-        are on the wire before the connection is closed.
-
-        @param xsink exception sink
-        @return 0 on success, -1 on error
-    */
-    DLLLOCAL int flushPendingWrites(ExceptionSink* xsink);
 
     //! Migrate the QUIC connection to a new socket (client-side active migration)
     /** Creates a new connected UDP socket, calls QuicSession::initiateMigration(),

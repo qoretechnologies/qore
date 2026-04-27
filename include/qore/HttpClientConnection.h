@@ -240,8 +240,8 @@ public:
         the response is ready.
 
         Default implementation raises @c HTTPCLIENT-NOT-IMPLEMENTED;
-        H1/H2 subclasses override to dispatch through their
-        protocol-specific poll operation.  H3 is not yet supported.
+        H1/H2/H3 subclasses override to dispatch through their
+        protocol-specific poll operation.
 
         @param method HTTP method
         @param path request path

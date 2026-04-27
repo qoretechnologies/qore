@@ -268,6 +268,119 @@ hash<RestResponseInfo> resp = f.get(30s);
         }
     }
 
+    #! SSE reader used by RestClientIo to replay response data consumed during validation.
+    class RestClientSseStreamReader inherits HttpClientStreamingIo::SseStreamReader {
+        private {
+            #! The underlying stream handle
+            HttpClientIo::HttpClientStreamHandle rc_stream;
+
+            #! Decompressor for Content-Encoding support
+            HttpClientStreamingIo::StreamDecompressor rc_decompressor;
+
+            #! Accumulated SSE text buffer awaiting event boundary parsing
+            string rc_sse_buffer = "";
+
+            #! Data chunks consumed while validating the response
+            list<auto> rc_pending_data = ();
+
+            #! Current offset in pending_data
+            int rc_pending_data_offset = 0;
+
+            #! True when the stream has ended
+            bool rc_done = False;
+        }
+
+        constructor(HttpClientIo::HttpClientStreamHandle stream, *string content_encoding,
+                *list<auto> initial_data)
+                : HttpClientStreamingIo::SseStreamReader(stream, content_encoding) {
+            rc_stream = stream;
+            rc_decompressor = new HttpClientStreamingIo::StreamDecompressor(content_encoding);
+            if (initial_data) {
+                rc_pending_data = initial_data;
+            }
+        }
+
+        *hash<SseMessageInfo> readEvent(*timeout timeout_ms) {
+            while (!rc_done) {
+                int sep = rc_sse_buffer.find("\n\n");
+                if (sep >= 0) {
+                    string event_text = rc_sse_buffer.substr(0, sep + 2);
+                    rc_sse_buffer = rc_sse_buffer.substr(sep + 2);
+                    *hash<SseMessageInfo> evt = Socket::parseServerSentEvent(event_text);
+                    if (isCommentOnlyEvent(evt)) {
+                        continue;
+                    }
+                    return evt;
+                }
+
+                auto data;
+                if (rc_pending_data_offset < rc_pending_data.size()) {
+                    data = rc_pending_data[rc_pending_data_offset++];
+                    if (rc_pending_data_offset >= rc_pending_data.size()) {
+                        rc_pending_data = ();
+                        rc_pending_data_offset = 0;
+                    }
+                } else {
+                    try {
+                        data = rc_stream.readData(timeout_ms);
+                    } catch (hash<ExceptionInfo> ex) {
+                        if (ex.err == "HTTPCLIENT-STREAM-CLOSED") {
+                            return finishStream();
+                        }
+                        rethrow;
+                    }
+                }
+                if (!exists data) {
+                    return NOTHING;
+                }
+
+                if (data.typeCode() == NT_HASH) {
+                    if (data.end_stream) {
+                        return finishStream();
+                    }
+                    if (data.error) {
+                        rc_done = True;
+                        throw "SSE-STREAM-ERROR", sprintf("stream error: %y", data.error);
+                    }
+                    continue;
+                }
+
+                if (data.typeCode() == NT_BINARY) {
+                    rc_sse_buffer += rc_decompressor.decompressToString(data);
+                } else {
+                    rc_sse_buffer += string(data);
+                }
+            }
+            return NOTHING;
+        }
+
+        bool isDone() {
+            return rc_done;
+        }
+
+        cancel() {
+            rc_stream.cancel();
+            rc_done = True;
+        }
+
+        private *hash<SseMessageInfo> finishStream() {
+            rc_done = True;
+            if (rc_sse_buffer.val()) {
+                *hash<SseMessageInfo> last_evt = Socket::parseServerSentEvent(rc_sse_buffer);
+                rc_sse_buffer = "";
+                if (last_evt && last_evt.data.val()) {
+                    return last_evt;
+                }
+            }
+            return NOTHING;
+        }
+
+        private static bool isCommentOnlyEvent(*hash<SseMessageInfo> evt) {
+            return evt && evt.comment.val() && !evt.data.val()
+                && !evt.event.val() && !evt.id.val() && !evt.retry.val();
+        }
+    }
+
     #! Async REST client supporting HTTP/1.x, HTTP/2, and HTTP/3
     /** This class implements the @ref RestClient::AbstractRestClient "AbstractRestClient" interface
         using @ref HttpClientIo::HttpClientConnectionManager "HttpClientConnectionManager", which
@@ -1321,7 +1434,7 @@ while (*hash<SseMessageInfo> evt = reader.readEvent(30s)) {
                 stream.cancel();
                 rethrow;
             }
-            return new HttpClientStreamingIo::SseStreamReader(stream, NOTHING, initial_data);
+            return new RestClientSseStreamReader(stream, NOTHING, initial_data);
         }
 
         #! Opens an SSE stream and calls a callback for each event

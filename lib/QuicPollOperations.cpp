@@ -626,50 +626,6 @@ int SocketQuicClientPollOperation::sendPendingPackets(
     return 0;
 }
 
-int SocketQuicClientPollOperation::flushPendingWrites(ExceptionSink* xsink) {
-    if (!quic_session || !quic_session->hasPendingWrite()) {
-        ASYNC_IO_TRACE("SocketQuicClientPollOperation::flushPendingWrites NO_PENDING\n");
-        return 0;
-    }
-    // Honor the happy-eyeballs stagger gate; see sendPendingPackets for
-    // rationale.  flushPendingWrites is normally invoked after the
-    // handshake has completed (request submission path), but a caller
-    // that wakes us during the stagger window must not cause packet
-    // emission before the preferred family has had its head start.
-    if (not_before_ns_ && QuicSession::timestamp() < not_before_ns_) {
-        ASYNC_IO_TRACE("SocketQuicClientPollOperation::flushPendingWrites "
-                       "HE_STAGGER_SKIP\n");
-        return 0;
-    }
-    // Use a local batch — NOT the member pkt_batch_ — because this method
-    // can be called from any thread (app thread) while the I/O thread is
-    // concurrently using pkt_batch_ in sendPendingPackets() via continuePoll().
-    // Sharing pkt_batch_ without synchronization causes a data race where
-    // the I/O thread captures batch.size(), then this thread clears/refills
-    // pkt_batch_, and the I/O thread's packetData() hits an out-of-bounds
-    // assert (QuicCommon.h:95).
-    QuicPacketBatch flush_batch;
-    auto result = quic_session->processTimerAndWrite(flush_batch, xsink);
-    if (result.error || flush_batch.empty()) {
-        ASYNC_IO_TRACE("SocketQuicClientPollOperation::flushPendingWrites EMPTY error=%d batch_empty=%d\n",
-            (int)result.error, (int)flush_batch.empty());
-        return 0;
-    }
-    int fd = sock->priv->socket->getSocket();
-    int sent = sendQuicPacketsBatch(fd, flush_batch, nullptr, 0);
-    ASYNC_IO_TRACE("SocketQuicClientPollOperation::flushPendingWrites SENT fd=%d sent=%d/%zu\n",
-        fd, sent, flush_batch.size());
-    if (sent < 0) {
-        if (errno != EAGAIN && errno != EWOULDBLOCK) {
-            xsink->raiseErrnoException("QUIC-SEND-ERROR", errno,
-                "sendto/sendmmsg() failed in flushPendingWrites");
-            return -1;
-        }
-    }
-    // Partial or EAGAIN acceptable — the I/O thread will pick up the remainder
-    return 0;
-}
-
 int SocketQuicClientPollOperation::recvAndProcessPacket(ExceptionSink* xsink) {
     // Thread-local to reduce stack pressure (see QuicCommon.h for rationale)
     static thread_local struct sockaddr_storage src_addr;

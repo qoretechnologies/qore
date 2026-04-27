@@ -678,16 +678,16 @@ public class AsyncSocketIoTest inherits QUnit::Test {
             "owner": "custom-key-owner",
         });
 
-        # cancel(sock) should NOT find it (different key)
+        # cancel(sock) is socket-scoped and should find custom-keyed operations
         bool found = io_controller.cancel(rest);
-        assertFalse(found, "cancel(sock) should not find custom-keyed operation");
+        assertTrue(found, "cancel(sock) should find custom-keyed operation");
 
-        # cancelByKey should find it
+        # cancelByKey should not find it after socket-scoped cancellation
         found = io_controller.cancelByKey(custom_key);
-        assertTrue(found, "cancelByKey should find the operation");
+        assertFalse(found, "cancelByKey should not find the operation after cancel(sock)");
 
         hash<SocketPollResultInfo> info = q.get(2s);
-        assertTrue(info.canceled, "operation should be canceled via cancelByKey");
+        assertTrue(info.canceled, "operation should be canceled via cancel(sock)");
 
         # cancelByKey on non-existent key
         found = io_controller.cancelByKey("non-existent-key");
@@ -837,12 +837,12 @@ public class AsyncSocketIoTest inherits QUnit::Test {
             "to": -1s,
         });
 
-        # cancel(sock) should NOT find either — they have custom keys
-        assertFalse(io_controller.cancel(rest1), "cancel(sock) should miss custom-keyed op");
+        # cancel(sock) is socket-scoped, so it should find the first custom-keyed op
+        assertTrue(io_controller.cancel(rest1), "cancel(sock) should cancel custom-keyed op on rest1");
 
-        # cancelByOwner should cancel both
+        # cancelByOwner should cancel the remaining operation
         int canceled = io_controller.cancelByOwner(owner);
-        assertEq(2, canceled, "cancelByOwner should cancel both custom-keyed ops");
+        assertEq(1, canceled, "cancelByOwner should cancel the remaining custom-keyed op");
 
         hash<SocketPollResultInfo> r1 = q1.get(5s);
         hash<SocketPollResultInfo> r2 = q2.get(5s);

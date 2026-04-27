@@ -43,6 +43,11 @@
 // FtpDataPollOperationPriv implementation
 // ============================================================
 
+static bool ftp_data_exception_is(ExceptionSink& xsink, const char* err) {
+    const QoreStringNode* err_str = xsink.getExceptionErr().get<const QoreStringNode>();
+    return err_str && !strcmp(err_str->c_str(), err);
+}
+
 FtpDataPollOperationPriv::FtpDataPollOperationPriv(QoreObject* self,
         QoreSocketObject* data_sock, SocketPollOperationBase* connect_op,
         bool secure_data)
@@ -174,7 +179,7 @@ void FtpDataPollOperationPriv::abort(ExceptionSink* xsink) {
         current_op = nullptr;
     }
     if (data_sock) {
-        data_sock->close();
+        data_sock->closeIo(xsink);
     }
     data_state = FtpDataState::CLOSED;
 }
@@ -196,6 +201,11 @@ int FtpDataPollOperationPriv::startRecvData(ExceptionSink* xsink) {
     current_op = new SocketRecvDataPollOperation(xsink, data_sock, false);
     if (*xsink) {
         releaseCurrentOp(xsink);
+        if (ftp_data_exception_is(*xsink, "SOCKET-NOT-OPEN")) {
+            xsink->clear();
+            data_state = FtpDataState::DONE;
+            return 0;
+        }
         setClosed();
         return -1;
     }
@@ -208,7 +218,7 @@ int FtpDataPollOperationPriv::startSendData(ExceptionSink* xsink) {
     assert(!current_op);
     if (!*send_data || send_offset >= (*send_data)->size()) {
         // Nothing left to send
-        data_sock->close();
+        data_sock->closeIo(xsink);
         data_state = FtpDataState::DONE;
         return 0;
     }
@@ -286,6 +296,9 @@ QoreHashNode* FtpDataPollOperationPriv::handleConnecting(ExceptionSink* xsink) {
         if (startRecvData(xsink)) {
             return nullptr;
         }
+        if (data_state == FtpDataState::DONE) {
+            return nullptr;
+        }
         return handleReceiving(xsink);
     } else {
         if (startSendData(xsink)) {
@@ -322,6 +335,9 @@ QoreHashNode* FtpDataPollOperationPriv::handleSslUpgrade(ExceptionSink* xsink) {
         if (startRecvData(xsink)) {
             return nullptr;
         }
+        if (data_state == FtpDataState::DONE) {
+            return nullptr;
+        }
         return handleReceiving(xsink);
     } else {
         if (startSendData(xsink)) {
@@ -339,12 +355,17 @@ QoreHashNode* FtpDataPollOperationPriv::handleReceiving(ExceptionSink* xsink) {
     ExceptionSink poll_xsink;
     QoreHashNode* poll_info = current_op->continuePoll(&poll_xsink);
     if (poll_xsink) {
-        // recv error could mean EOF (connection closed by server = normal for FTP data)
-        // Check if we got any data at all
-        poll_xsink.clear();
+        if (ftp_data_exception_is(poll_xsink, "SOCKET-NOT-OPEN")) {
+            poll_xsink.clear();
+            releaseCurrentOp(xsink);
+            data_sock->closeIo(xsink);
+            data_state = FtpDataState::DONE;
+            return nullptr;
+        }
+        xsink->assimilate(poll_xsink);
         releaseCurrentOp(xsink);
-        data_sock->close();
-        data_state = FtpDataState::DONE;
+        data_sock->closeIo(xsink);
+        setClosed();
         return nullptr;
     }
     if (poll_info) {
@@ -362,17 +383,20 @@ QoreHashNode* FtpDataPollOperationPriv::handleReceiving(ExceptionSink* xsink) {
                 if (startRecvData(xsink)) {
                     return nullptr;
                 }
+                if (data_state == FtpDataState::DONE) {
+                    return nullptr;
+                }
                 return handleReceiving(xsink);
             }
         }
         // Empty data = EOF
-        data_sock->close();
+        data_sock->closeIo(xsink);
         data_state = FtpDataState::DONE;
         return nullptr;
     }
     // Goal not reached, no poll info = connection closed (EOF)
     releaseCurrentOp(xsink);
-    data_sock->close();
+    data_sock->closeIo(xsink);
     data_state = FtpDataState::DONE;
     return nullptr;
 }
@@ -396,12 +420,13 @@ QoreHashNode* FtpDataPollOperationPriv::handleSending(ExceptionSink* xsink) {
     }
     releaseCurrentOp(xsink);
     // All data sent — close data socket to signal EOF to server
-    data_sock->close();
+    data_sock->closeIo(xsink);
     data_state = FtpDataState::DONE;
     return nullptr;
 }
 
-int FtpDataPollOperationPriv::submitToController(ExceptionSink* xsink, const char* owner) {
+QoreObject* FtpDataPollOperationPriv::submitToController(ExceptionSink* xsink, const char* owner,
+        int timeout_ms, bool replace) {
     assert(self);
 
     ReferenceHolder<QoreObject> ctl_obj(qore_get_async_io_controller_obj(xsink), xsink);
@@ -409,7 +434,7 @@ int FtpDataPollOperationPriv::submitToController(ExceptionSink* xsink, const cha
         if (!*xsink) {
             xsink->raiseException("FTP-DATA-ERROR", "failed to get AsyncIoController singleton");
         }
-        return -1;
+        return nullptr;
     }
     ReferenceHolder<AsyncIoControllerPriv> ctl_priv(
         static_cast<AsyncIoControllerPriv*>(
@@ -419,28 +444,24 @@ int FtpDataPollOperationPriv::submitToController(ExceptionSink* xsink, const cha
         if (!*xsink) {
             xsink->raiseException("FTP-DATA-ERROR", "failed to get AsyncIoController private data");
         }
-        return -1;
+        return nullptr;
     }
 
     ReferenceHolder<QoreHashNode> info(new QoreHashNode(autoTypeInfo), xsink);
     ValueHolder sock_val((*self)->getReferencedMemberNoMethod("sock", xsink), xsink);
     if (*xsink) {
-        return -1;
+        return nullptr;
     }
     info->setKeyValue("sock", sock_val.release(), xsink);
     (*self)->ref();
     info->setKeyValue("spop", *self, xsink);
     info->setKeyValue("owner", new QoreStringNode(owner), xsink);
-    info->setKeyValue("to", -1, xsink);
+    info->setKeyValue("to", timeout_ms, xsink);
     if (*xsink) {
-        return -1;
+        return nullptr;
     }
 
-    ReferenceHolder<QoreObject> rv(ctl_priv->submit(*ctl_obj, info.release(), false, xsink), xsink);
-    if (*xsink) {
-        return -1;
-    }
-    return 0;
+    return ctl_priv->submit(*ctl_obj, info.release(), replace, xsink);
 }
 
 /** @endcond */
@@ -589,12 +610,4 @@ bool FtpDataPollOperation::isDone() [flags=CONSTANT] {
 */
 *hash<SocketPollInfo> FtpDataPollOperation::continuePoll() {
     return priv->continuePoll(xsink);
-}
-
-//! Called by the async controller when the operation completes
-/** Signals any sync thread blocking in waitForCompletion().
-    @param result the poll result info
-*/
-nothing FtpDataPollOperation::onComplete(hash<SocketPollResultInfo> result) {
-    priv->signalCompletion();
 }

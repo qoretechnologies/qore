@@ -397,11 +397,15 @@ void Http3ClientConnection::clearAttempt(Attempt& a, ExceptionSink* xsink) {
     QoreObject* poll_op_obj_to_deref;
     QoreObject* sock_obj_to_deref;
     Http3ClientPollOperationPriv* poll_op_priv_local;
+    QoreSocketObject* sock_priv_local;
+    bool submitted_local;
     {
         std::lock_guard<std::mutex> lk(attempts_mu_);
         poll_op_obj_to_deref = a.poll_op_obj;   a.poll_op_obj = nullptr;
         sock_obj_to_deref = a.sock_obj;         a.sock_obj = nullptr;
         poll_op_priv_local = a.poll_op_priv;    a.poll_op_priv = nullptr;
+        sock_priv_local = a.sock_priv;
+        submitted_local = a.submitted;
         a.sock_priv = nullptr;
         a.submitted = false;
         a.finished = true;
@@ -415,16 +419,17 @@ void Http3ClientConnection::clearAttempt(Attempt& a, ExceptionSink* xsink) {
         poll_op_priv_local->disarmConnectionPriv();
     }
 
-    // Cancel strategy: call abort() directly instead of the controller's
-    // cancel() path.  cancel() erases the entry from the I/O thread's
-    // cache, which is UNSAFE to do from within continuePoll because the
-    // caller's ops_to_poll batch still holds a raw pointer to the erased
-    // PollInfo's spop_base — the next batch iteration would dereference a
-    // freed pointer and segfault.  abort() instead just transitions the
-    // poll op to CLOSED (h3_state.store + inner_op->abort which closes
-    // the UDP socket); the controller's Phase3 logic picks up the CLOSED
-    // state via needsCloseOnComplete() on the next iteration and cleans
-    // up the cache entry safely after the batch has finished.
+    // Cancel strategy:
+    // - If we're on the I/O thread, call abort() directly.  Calling the
+    //   controller cancel path from continuePoll is unsafe because it erases
+    //   the PollInfo while the current ops_to_poll batch still holds a raw
+    //   pointer to it.
+    // - If an app thread is clearing a submitted attempt, route teardown
+    //   through controller.cancel().  The controller then invokes abort() on
+    //   the I/O thread, so the best-effort QUIC CONNECTION_CLOSE send stays
+    //   with the controller-owned socket path.
+    // - Unsubmitted attempts are not in the controller cache, so direct abort
+    //   is the only cleanup path and cannot race controller polling.
     //
     // Safe from any thread including I/O thread:
     //   - abort() takes loser's own sock_priv->m and stream_lock; these
@@ -433,7 +438,26 @@ void Http3ClientConnection::clearAttempt(Attempt& a, ExceptionSink* xsink) {
     //   - After disarmConnectionPriv, connection_priv and h3_owner_ are
     //     nullptr, so abort's setClosed-path becomes a no-op — no state
     //     transition on the enclosing connection.
-    if (poll_op_priv_local) {
+    bool canceled = false;
+    if (submitted_local && sock_priv_local && !qore_on_async_io_thread()) {
+        ExceptionSink cancel_xsink;
+        ReferenceHolder<QoreObject> ctl_obj_holder(
+            qore_get_async_io_controller_obj(&cancel_xsink), &cancel_xsink);
+        if (ctl_obj_holder) {
+            ReferenceHolder<AsyncIoControllerPriv> ctl_priv_holder(
+                static_cast<AsyncIoControllerPriv*>(
+                    ctl_obj_holder->getReferencedPrivateData(
+                        CID_ASYNCIOCONTROLLER, &cancel_xsink)),
+                &cancel_xsink);
+            if (ctl_priv_holder) {
+                ctl_priv_holder->cancel(sock_priv_local, &cancel_xsink);
+                canceled = !cancel_xsink;
+            }
+        }
+        cancel_xsink.clear();
+    }
+
+    if (!canceled && poll_op_priv_local) {
         poll_op_priv_local->abort(xsink);
     }
 
@@ -778,29 +802,8 @@ QoreHashNode* Http3ClientConnection::submitRequest(const char* method, const cha
 
     releaseStreamReservation();
 
-    // Wake the I/O controller
-    if (sock_obj) {
-        ExceptionSink wake_xsink;
-        ReferenceHolder<QoreObject> ctl_obj_holder(
-            qore_get_async_io_controller_obj(&wake_xsink), &wake_xsink);
-        if (ctl_obj_holder) {
-            ReferenceHolder<AsyncIoControllerPriv> ctl_priv_holder(
-                static_cast<AsyncIoControllerPriv*>(
-                    ctl_obj_holder->getReferencedPrivateData(
-                        CID_ASYNCIOCONTROLLER, &wake_xsink)),
-                &wake_xsink);
-            if (ctl_priv_holder) {
-                ctl_priv_holder->wakeSocketByObject(sock_obj, &wake_xsink);
-            }
-        }
-        wake_xsink.clear();
-    }
-
-    // Flush pending QUIC writes so request frames are on the wire
-    poll_op_priv->flushPendingWrites(xsink);
-    if (*xsink) {
-        return nullptr;
-    }
+    // Wake the I/O controller so QUIC packets are produced and sent on the I/O thread.
+    wakeController();
 
     ReferenceHolder<QoreHashNode> result(new QoreHashNode(autoTypeInfo), xsink);
     result->setKeyValue("stream_id", QoreValue((int64)stream_id), xsink);
@@ -841,26 +844,8 @@ int64_t Http3ClientConnection::submitRequestWithAction(const char* method, const
 
     releaseStreamReservation();
 
-    // Wake the I/O controller
-    if (sock_obj) {
-        ExceptionSink wake_xsink;
-        ReferenceHolder<QoreObject> ctl_obj_holder(
-            qore_get_async_io_controller_obj(&wake_xsink), &wake_xsink);
-        if (ctl_obj_holder) {
-            ReferenceHolder<AsyncIoControllerPriv> ctl_priv_holder(
-                static_cast<AsyncIoControllerPriv*>(
-                    ctl_obj_holder->getReferencedPrivateData(
-                        CID_ASYNCIOCONTROLLER, &wake_xsink)),
-                &wake_xsink);
-            if (ctl_priv_holder) {
-                ctl_priv_holder->wakeSocketByObject(sock_obj, &wake_xsink);
-            }
-        }
-        wake_xsink.clear();
-    }
-
-    // Flush pending QUIC writes
-    poll_op_priv->flushPendingWrites(xsink);
+    // Wake the I/O controller so QUIC packets are produced and sent on the I/O thread.
+    wakeController();
 
     return stream_id;
 }
@@ -905,26 +890,8 @@ int64_t Http3ClientConnection::submitRequestStreaming(const char* method, const 
 
     releaseStreamReservation();
 
-    // Wake the I/O controller
-    if (sock_obj) {
-        ExceptionSink wake_xsink;
-        ReferenceHolder<QoreObject> ctl_obj_holder(
-            qore_get_async_io_controller_obj(&wake_xsink), &wake_xsink);
-        if (ctl_obj_holder) {
-            ReferenceHolder<AsyncIoControllerPriv> ctl_priv_holder(
-                static_cast<AsyncIoControllerPriv*>(
-                    ctl_obj_holder->getReferencedPrivateData(
-                        CID_ASYNCIOCONTROLLER, &wake_xsink)),
-                &wake_xsink);
-            if (ctl_priv_holder) {
-                ctl_priv_holder->wakeSocketByObject(sock_obj, &wake_xsink);
-            }
-        }
-        wake_xsink.clear();
-    }
-
-    // Flush pending QUIC writes
-    poll_op_priv->flushPendingWrites(xsink);
+    // Wake the I/O controller so QUIC packets are produced and sent on the I/O thread.
+    wakeController();
 
     ch->ref();
     channel_out = ch;
@@ -984,26 +951,8 @@ QoreHashNode* Http3ClientConnection::submitRequestStreamingSend(const char* meth
 
     releaseStreamReservation();
 
-    // Wake the I/O controller
-    if (sock_obj) {
-        ExceptionSink wake_xsink;
-        ReferenceHolder<QoreObject> ctl_obj_holder(
-            qore_get_async_io_controller_obj(&wake_xsink), &wake_xsink);
-        if (ctl_obj_holder) {
-            ReferenceHolder<AsyncIoControllerPriv> ctl_priv_holder(
-                static_cast<AsyncIoControllerPriv*>(
-                    ctl_obj_holder->getReferencedPrivateData(
-                        CID_ASYNCIOCONTROLLER, &wake_xsink)),
-                &wake_xsink);
-            if (ctl_priv_holder) {
-                ctl_priv_holder->wakeSocketByObject(sock_obj, &wake_xsink);
-            }
-        }
-        wake_xsink.clear();
-    }
-
-    // Flush pending QUIC writes
-    poll_op_priv->flushPendingWrites(xsink);
+    // Wake the I/O controller so QUIC packets are produced and sent on the I/O thread.
+    wakeController();
 
     // Build result
     ReferenceHolder<QoreHashNode> result(new QoreHashNode(autoTypeInfo), xsink);
@@ -1057,27 +1006,9 @@ void Http3ClientConnection::pushSendData(const void* data, size_t len, Exception
         session->sendStreamData(streaming_send_stream_id, data, len, false, xsink);
     }
 
-    // Flush pending QUIC writes
+    // Wake the I/O controller so QUIC packets are produced and sent on the I/O thread.
     if (!*xsink) {
-        poll_op_priv->flushPendingWrites(xsink);
-    }
-
-    // Wake the I/O controller
-    if (sock_obj && !*xsink) {
-        ExceptionSink wake_xsink;
-        ReferenceHolder<QoreObject> ctl_obj_holder(
-            qore_get_async_io_controller_obj(&wake_xsink), &wake_xsink);
-        if (ctl_obj_holder) {
-            ReferenceHolder<AsyncIoControllerPriv> ctl_priv_holder(
-                static_cast<AsyncIoControllerPriv*>(
-                    ctl_obj_holder->getReferencedPrivateData(
-                        CID_ASYNCIOCONTROLLER, &wake_xsink)),
-                &wake_xsink);
-            if (ctl_priv_holder) {
-                ctl_priv_holder->wakeSocketByObject(sock_obj, &wake_xsink);
-            }
-        }
-        wake_xsink.clear();
+        wakeController();
     }
 }
 
@@ -1120,9 +1051,9 @@ void Http3ClientConnection::setTrailers(const QoreHashNode* trailers, ExceptionS
 
     session->submitTrailers(streaming_send_stream_id, trailer_map, xsink);
 
-    // Flush pending QUIC writes
+    // Wake the I/O controller so QUIC packets are produced and sent on the I/O thread.
     if (!*xsink) {
-        poll_op_priv->flushPendingWrites(xsink);
+        wakeController();
     }
 }
 
@@ -1221,6 +1152,27 @@ void Http3ClientConnection::closeConnection(ExceptionSink* xsink) {
     }
 
     setClosed();
+}
+
+void Http3ClientConnection::wakeController() const {
+    if (!sock_obj) {
+        return;
+    }
+
+    ExceptionSink wake_xsink;
+    ReferenceHolder<QoreObject> ctl_obj_holder(
+        qore_get_async_io_controller_obj(&wake_xsink), &wake_xsink);
+    if (ctl_obj_holder) {
+        ReferenceHolder<AsyncIoControllerPriv> ctl_priv_holder(
+            static_cast<AsyncIoControllerPriv*>(
+                ctl_obj_holder->getReferencedPrivateData(
+                    CID_ASYNCIOCONTROLLER, &wake_xsink)),
+            &wake_xsink);
+        if (ctl_priv_holder) {
+            ctl_priv_holder->wakeSocketByObject(sock_obj, &wake_xsink);
+        }
+    }
+    wake_xsink.clear();
 }
 
 QoreHashNode* Http3ClientConnection::getReferencedErrorInfo() {

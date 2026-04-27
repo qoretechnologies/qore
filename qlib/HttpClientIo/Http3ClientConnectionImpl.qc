@@ -148,14 +148,14 @@ public class Http3ClientConnection inherits HttpClientConnection {
         return True;
     }
 
-    #! Synchronously flushes pending QUIC writes to the network
-    /** Produces any queued QUIC packets and sends them via UDP.
-        Safe to call from any thread.
+    #! Wakes the async I/O controller to flush pending QUIC writes
+    /** Queued QUIC packets are produced and sent by the controller's I/O
+        thread; this method only wakes the controller.
 
         @since %HttpClientIo 1.3
     */
     flushPendingWrites() {
-        poll_op.flushPendingWrites();
+        notifyPendingData();
     }
 
     #! Submits a request on this connection (protocol-specific)
@@ -183,16 +183,21 @@ public class Http3ClientConnection inherits HttpClientConnection {
     #! Closes the connection (protocol-specific)
     closeImpl(*timeout close_timeout) {
         self.setClosed();
-        try {
-            poll_op.abort();
-        } catch () {
-            # Ignore abort errors during close
+        *object ctl;
+        {
+            AutoLock al(lock);
+            ctl = controller_ref;
+        }
+        if (ctl) {
+            try {
+                ctl.cancel(self.getSocket());
+            } catch () {
+                # Ignore cancel errors during close
+            }
         }
         # Close the socket fd immediately to prevent descriptor leaks.
-        # abort() intentionally does NOT close the socket (to avoid use-after-free
-        # if the I/O thread is inside continuePoll). By this point, the connection
-        # has been removed from the pool and cancelled from the controller, so
-        # the I/O thread is no longer polling this fd.
+        # Cancellation runs poll_op.abort() on the I/O thread; close() here
+        # only releases the descriptor after the controller no longer polls it.
         try {
             self.getSocket().close();
         } catch () {

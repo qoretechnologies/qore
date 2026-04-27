@@ -173,6 +173,19 @@ public:
         return 0;
     }
 
+    //! Provides the socket events that caused the controller to continue the operation
+    /** The async I/O controller calls this immediately before continuePoll() when
+        the operation was woken by event-loop readiness.  The event mask uses
+        SOCK_POLLIN, SOCK_POLLOUT, and SOCK_POLLERR bits.  The default
+        implementation ignores the information; operations that need exact
+        revents, such as Socket::poll(), can override it.
+
+        @param events socket poll event mask
+        @since %Qore 2.3
+    */
+    DLLEXPORT virtual void setReadyEvents(int events) {
+    }
+
     //! Returns the fd generation counter
     /** The controller caches this value; when it changes, a full event loop
         registration update is performed (detecting fd changes from e.g. QUIC

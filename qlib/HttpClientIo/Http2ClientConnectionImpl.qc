@@ -115,10 +115,28 @@ public class Http2ClientConnection inherits HttpClientConnection {
     #! Closes the connection (protocol-specific)
     closeImpl(*timeout close_timeout) {
         self.setClosed();
+        *object ctl;
+        {
+            AutoLock al(lock);
+            ctl = controller_ref;
+        }
+        if (ctl) {
+            try {
+                ctl.cancel(self.getSocket());
+            } catch () {
+                # Ignore cancel errors during close
+            }
+        } else {
+            try {
+                poll_op.abort();
+            } catch () {
+                # Ignore abort errors during close
+            }
+        }
         try {
-            poll_op.abort();
+            self.getSocket().close();
         } catch () {
-            # Ignore abort errors during close
+            # Ignore close errors during close
         }
     }
 
