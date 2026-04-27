@@ -1,5 +1,7 @@
 # Kerberos 5 / GSSAPI / SPNEGO Integration
 
+<!-- Copyright (C) 2026 Qore Technologies, s.r.o. -->
+
 ## Purpose
 
 Integrate Kerberos authentication into the Qore platform so that

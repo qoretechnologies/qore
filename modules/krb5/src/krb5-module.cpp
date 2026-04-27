@@ -151,6 +151,10 @@ DLLLOCAL bool decode_hex(const char* str, std::vector<unsigned char>& out, Excep
 
     out.reserve(len / 2);
     for (size_t i = 0; i < len; i += 2) {
+        if (i && !(i % 200) && qore_check_cancel(xsink, context)) {
+            return false;
+        }
+
         int hi = from_hex(str[i]);
         int lo = from_hex(str[i + 1]);
         if (hi < 0 || lo < 0) {
@@ -167,11 +171,16 @@ DLLLOCAL bool decode_hex(const char* str, std::vector<unsigned char>& out, Excep
     return decode_hex(str, out, xsink, "KRB5-TOKEN-ERROR", context);
 }
 
-DLLLOCAL QoreStringNode* encode_hex(const unsigned char* ptr, size_t len) {
+DLLLOCAL QoreStringNode* encode_hex(const unsigned char* ptr, size_t len, ExceptionSink* xsink,
+        const char* context) {
     static const char* digits = "0123456789abcdef";
     SimpleRefHolder<QoreStringNode> str(new QoreStringNode);
     str->allocate(len * 2);
     for (size_t i = 0; i < len; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, context)) {
+            return nullptr;
+        }
+
         str->concat(digits[(ptr[i] >> 4) & 0x0f]);
         str->concat(digits[ptr[i] & 0x0f]);
     }
@@ -865,8 +874,13 @@ QoreHashNode* QoreGssClientContext::step(const char* token_hex, ExceptionSink* x
     rv->setKeyValue("flags", (int64)actual_flags, xsink);
     rv->setKeyValue("lifetime", (int64)lifetime, xsink);
     if (output_token.buf.length) {
-        rv->setKeyValue("token",
-            encode_hex(static_cast<const unsigned char*>(output_token.buf.value), output_token.buf.length), xsink);
+        ReferenceHolder<QoreStringNode> token(
+            encode_hex(static_cast<const unsigned char*>(output_token.buf.value), output_token.buf.length, xsink,
+                "encoding GSSAPI output token"), xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+        rv->setKeyValue("token", token.release(), xsink);
     } else {
         rv->setKeyValue("token", QoreValue(), xsink);
     }
@@ -911,8 +925,13 @@ QoreHashNode* QoreGssClientContext::wrap(const char* message_hex, bool confident
     if (*xsink) {
         return nullptr;
     }
-    rv->setKeyValue("token",
-        encode_hex(static_cast<const unsigned char*>(output.buf.value), output.buf.length), xsink);
+    ReferenceHolder<QoreStringNode> token(
+        encode_hex(static_cast<const unsigned char*>(output.buf.value), output.buf.length, xsink,
+            "encoding GSSAPI wrapped token"), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    rv->setKeyValue("token", token.release(), xsink);
     rv->setKeyValue("confidential", conf_state ? true : false, xsink);
     if (*xsink) {
         return nullptr;
@@ -955,8 +974,13 @@ QoreHashNode* QoreGssClientContext::unwrap(const char* token_hex, ExceptionSink*
     if (*xsink) {
         return nullptr;
     }
-    rv->setKeyValue("message",
-        encode_hex(static_cast<const unsigned char*>(output.buf.value), output.buf.length), xsink);
+    ReferenceHolder<QoreStringNode> message(
+        encode_hex(static_cast<const unsigned char*>(output.buf.value), output.buf.length, xsink,
+            "encoding GSSAPI unwrapped message"), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    rv->setKeyValue("message", message.release(), xsink);
     rv->setKeyValue("confidential", conf_state ? true : false, xsink);
     rv->setKeyValue("qop", (int64)qop_state, xsink);
     if (*xsink) {
@@ -998,8 +1022,13 @@ QoreHashNode* QoreGssClientContext::getMic(const char* message_hex, int qop, Exc
     if (*xsink) {
         return nullptr;
     }
-    rv->setKeyValue("token",
-        encode_hex(static_cast<const unsigned char*>(output.buf.value), output.buf.length), xsink);
+    ReferenceHolder<QoreStringNode> token(
+        encode_hex(static_cast<const unsigned char*>(output.buf.value), output.buf.length, xsink,
+            "encoding GSSAPI MIC token"), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    rv->setKeyValue("token", token.release(), xsink);
     if (*xsink) {
         return nullptr;
     }
@@ -1229,8 +1258,13 @@ QoreHashNode* QoreGssAcceptorContext::step(const char* token_hex, ExceptionSink*
     rv->setKeyValue("flags", (int64)actual_flags, xsink);
     rv->setKeyValue("lifetime", (int64)lifetime, xsink);
     if (output_token.buf.length) {
-        rv->setKeyValue("token",
-            encode_hex(static_cast<const unsigned char*>(output_token.buf.value), output_token.buf.length), xsink);
+        ReferenceHolder<QoreStringNode> token(
+            encode_hex(static_cast<const unsigned char*>(output_token.buf.value), output_token.buf.length, xsink,
+                "encoding GSSAPI acceptor output token"), xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+        rv->setKeyValue("token", token.release(), xsink);
     } else {
         rv->setKeyValue("token", QoreValue(), xsink);
     }
@@ -1276,8 +1310,13 @@ QoreHashNode* QoreGssAcceptorContext::wrap(const char* message_hex, bool confide
     if (*xsink) {
         return nullptr;
     }
-    rv->setKeyValue("token",
-        encode_hex(static_cast<const unsigned char*>(output.buf.value), output.buf.length), xsink);
+    ReferenceHolder<QoreStringNode> token(
+        encode_hex(static_cast<const unsigned char*>(output.buf.value), output.buf.length, xsink,
+            "encoding GSSAPI acceptor wrapped token"), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    rv->setKeyValue("token", token.release(), xsink);
     rv->setKeyValue("confidential", conf_state ? true : false, xsink);
     if (*xsink) {
         return nullptr;
@@ -1320,8 +1359,13 @@ QoreHashNode* QoreGssAcceptorContext::unwrap(const char* token_hex, ExceptionSin
     if (*xsink) {
         return nullptr;
     }
-    rv->setKeyValue("message",
-        encode_hex(static_cast<const unsigned char*>(output.buf.value), output.buf.length), xsink);
+    ReferenceHolder<QoreStringNode> message(
+        encode_hex(static_cast<const unsigned char*>(output.buf.value), output.buf.length, xsink,
+            "encoding GSSAPI acceptor unwrapped message"), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    rv->setKeyValue("message", message.release(), xsink);
     rv->setKeyValue("confidential", conf_state ? true : false, xsink);
     rv->setKeyValue("qop", (int64)qop_state, xsink);
     if (*xsink) {
@@ -1363,8 +1407,13 @@ QoreHashNode* QoreGssAcceptorContext::getMic(const char* message_hex, int qop, E
     if (*xsink) {
         return nullptr;
     }
-    rv->setKeyValue("token",
-        encode_hex(static_cast<const unsigned char*>(output.buf.value), output.buf.length), xsink);
+    ReferenceHolder<QoreStringNode> token(
+        encode_hex(static_cast<const unsigned char*>(output.buf.value), output.buf.length, xsink,
+            "encoding GSSAPI acceptor MIC token"), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    rv->setKeyValue("token", token.release(), xsink);
     if (*xsink) {
         return nullptr;
     }
@@ -2193,6 +2242,10 @@ private:
             }
             enctypes.reserve(l->size());
             for (size_t i = 0; i < l->size(); ++i) {
+                if (i && !(i % 100) && qore_check_cancel(xsink, "parsing krb5 enctypes option")) {
+                    return;
+                }
+
                 int64 etype = l->retrieveEntry(i).getAsBigInt();
                 if (etype <= 0 || etype > INT32_MAX) {
                     xsink->raiseException("KRB5-INIT-CREDS-ERROR",

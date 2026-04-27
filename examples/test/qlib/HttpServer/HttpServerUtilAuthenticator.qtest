@@ -1,6 +1,8 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
 %modern
 
 %requires ../../../../qlib/QUnit.qm

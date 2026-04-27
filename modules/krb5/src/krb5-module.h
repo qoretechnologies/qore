@@ -100,7 +100,8 @@ DLLLOCAL bool decode_hex(const char* str, std::vector<unsigned char>& out, Excep
     const char* context);
 DLLLOCAL bool decode_hex(const char* str, std::vector<unsigned char>& out, ExceptionSink* xsink,
     const char* err, const char* context);
-DLLLOCAL QoreStringNode* encode_hex(const unsigned char* ptr, size_t len);
+DLLLOCAL QoreStringNode* encode_hex(const unsigned char* ptr, size_t len, ExceptionSink* xsink,
+    const char* context);
 DLLLOCAL bool krb5_is_empty_cache_error(krb5_error_code rc);
 DLLLOCAL QoreStringNode* krb5_unparse_principal(krb5_context ctx, krb5_const_principal principal, ExceptionSink* xsink,
     const char* err, const char* context);
