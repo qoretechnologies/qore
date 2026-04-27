@@ -1296,6 +1296,18 @@ cargo install tree-sitter-cli@0.26.5
       - provides AftershipRestConnection for connection management with \c aftership:// URL scheme
     - @ref anthropicdataproviderintro "AnthropicDataProvider" module
       - new module providing a data provider API for <a href="https://www.anthropic.com/">Anthropic</a> Claude AI services
+    - @ref baselinkerrestclientintro "BaseLinkerRestClient" module
+      - new module providing a REST client for <a href="https://baselinker.com/">BaseLinker</a>'s multichannel e-commerce API
+      - supports API token authentication via \c X-BLToken header
+      - wraps BaseLinker's single-endpoint RPC-over-HTTP protocol (form-encoded POST to \c /connector.php)
+      - provides BaseLinkerRestConnection for connection management with \c baselinkerrest:// URL scheme
+    - @ref baselinkerdataproviderintro "BaseLinkerDataProvider" module
+      - new module providing a data provider API for <a href="https://baselinker.com/">BaseLinker</a> multichannel e-commerce integration
+      - order management (create, update, status/payment updates, delete, order line items)
+      - order returns management (create, update, status, refund)
+      - inventory management (catalogs, products with upsert, bulk stock and price updates)
+      - shipping (courier packages, labels, courier and service metadata)
+      - polling-based event triggers for 22 journal event types (order created, paid, packaged, etc.)
     - @ref anthropicrestclientintro "AnthropicRestClient" module
       - new module providing a REST client for <a href="https://www.anthropic.com/">Anthropic</a>'s Claude AI API
       - supports API key authentication via x-api-key header

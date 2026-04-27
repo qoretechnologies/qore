@@ -10,8 +10,10 @@ See also: [data-provider-development-guide.md](data-provider-development-guide.m
 
 ### Connection Setup
 - [ ] Scheme registered in `qlib/ConnectionProvider/ConnectionSchemeCache.qc` -> `SchemeMap`
-- [ ] `auto_url: True` if URL is built from options
-- [ ] `getConfig()` builds URL from domain/region options (not hardcoded)
+- [ ] **Every URL constant in the module uses a scheme that's actually registered.** Grep for every `<scheme>://` literal in the REST client `.qm` (default URLs, examples, `oauth2_*_url`, `ping` defaults) and verify each scheme matches one in the module's `ConnectionScheme.schemes` hash. A typo like `myservices` (extra `s`) when only `myservice` is registered makes every connection an `(InvalidConnection)` with `type: "invalid"` and no `app` — silently filtered out of the action picker. Surfaces as `URL-ARG-ERROR: references unknown scheme` in connection alerts but only after a connection is created.
+- [ ] `auto_url: True` only if URL can be built from connection options (domain/region/host)
+- [ ] **For fixed-endpoint APIs (single global URL, no per-tenant domain), `getConfig()` hard-codes the URL.** Without an override, the framework's auto_url machinery falls back to `<scheme>://localhost` and every connection fails with `SOCKET-CONNECT-ERROR: Connection refused`. Pair with `setUpdateOptionsCode()` to auto-correct any options update.
+- [ ] `getConfig()` builds URL from domain/region options (not hardcoded) **OR** force-overrides with the canonical URL for single-endpoint APIs
 - [ ] Ping path configured correctly (no leading slash if base URL has path)
 - [ ] API version in default URL (e.g., `/v3`, `/books/v3`)
 
@@ -54,6 +56,18 @@ See also: [data-provider-development-guide.md](data-provider-development-guide.m
 
 ## 3. Action Registration
 
+### Action Path Resolution (CRITICAL — silent failure if mis-configured)
+
+Every `registerAction()` `path` must resolve to a child of the root data provider's `ChildMap` (or descend through nested `ChildMap`s). If the path doesn't resolve, the framework leaves the action's data provider as `null` — `ref_data` lookups silently return nothing (empty dropdowns) and `doRequestImpl()` is never reached at runtime (`INVALID-CHILD-PROVIDER`).
+
+- [ ] Choose ONE layout consistently across the module:
+  - **Flat ChildMap** (Aftership convention) — root `ChildMap` contains every action provider as a direct child; action paths are flat (`/create-tracking`)
+  - **Nested ChildMap** — root contains only resource groupings; action paths are nested (`/trackings/create`)
+- [ ] **Verify by listing root's children and grepping every action's path**: `grep -A2 'const ChildMap' qlib/<Module>/<Module>DataProvider.qc` and `grep -nE '"path":' qlib/<Module>/<Module>DataProvider.qm` — every action's first path segment must be in root's `ChildMap`
+- [ ] Action providers that need `getReferenceData()` (i.e., have any option with `ref_data`) inherit from the same base class that implements `getReferenceDataImpl()` — usually `<Module>DataProviderBase`
+
+See [Action Path Resolution](data-provider-development-guide.md#action-path-resolution-critical) for the full discussion.
+
 ### All Actions
 - [ ] Each action has `display_name`, `short_desc`, `desc`
 - [ ] `short_desc` is **plain text** (no markdown)
@@ -83,7 +97,7 @@ See also: [data-provider-development-guide.md](data-provider-development-guide.m
 - [ ] Non-required options that users will most likely use have `{"preselected": True}` so they appear upfront in the form (required options are automatically preselected by the framework)
 - [ ] Single-key hash slices use trailing comma: `Fields{"key",}` (without trailing comma, `Fields{"key"}` returns the value, not a hash — causes `OPTION-ERROR` at module load)
 - [ ] `getRequestTypeWithDataImpl()` validates dynamic fields (if applicable)
-- [ ] ISO timestamp fields use `DateType`, not `SoftStringType`
+- [ ] All date/time fields use `DateType` / `DateOrNothingType` regardless of the API wire format (ISO 8601 string, Unix seconds, Unix milliseconds, local-date string). The data provider converts to the API format inside `doRequestImpl()` immediately before serialization. Surfacing `SoftIntType` for a Unix-timestamp field or `SoftStringType` for an ISO field forces the UI to render a number/text input instead of a date picker — this is wrong even though the type "matches" the API. See the *Timestamp Field Types* subsection of the development guide for the conversion table.
 - [ ] Required fields match API documentation
 
 ### DPAT_EVENT Actions
@@ -204,6 +218,8 @@ The goal: actions should expose enough API functionality to be genuinely useful,
 ## 7. ref_data for ID Fields
 
 - [ ] Options ending in `_id`, `Id`, or `ID` have `ref_data` attribute (exception: `organization_id` which comes from connection)
+- [ ] **Override is named `getSupportedReferenceData()` — NO `Impl` suffix.** The abstract method in `AbstractDataProvider` has no suffix; an override named `getSupportedReferenceDataImpl()` does NOT match and the framework uses the empty default — every `ref_data` lookup fails with `UNSUPPORTED-REFERENCE-DATA` (strict path) or returns nothing silently (lenient path used by the UI). Verify with `grep -n 'getSupportedReferenceData' qlib/<Module>/<Module>DataProviderBase.qc`.
+- [ ] **`getReferenceDataImpl()` signature is exactly `(string type, *hash<auto> action_opts)` — two parameters.** Any extra parameter (e.g., 3-arg `(string kind, *string filter_value, *hash<auto> depends_on_values)`) doesn't match what the framework calls — the override is never invoked, no API request goes out, the dropdown stays empty with no warning. Copy the signature verbatim from `qlib/DataProvider/AbstractDataProvider.qc`.
 - [ ] `getSupportedReferenceData()` returns all `ref_data` types used in actions
 - [ ] `getReferenceDataImpl()` handles each type and returns `list<hash<AllowedValueInfo>>`
 - [ ] **ref_data `value` type matches the option type**: The `"value"` in each `AllowedValueInfo` returned by `getReferenceDataImpl()` MUST match the type of the action option it populates. If the option is `*int` (e.g., `owner_id`), the value must be `int(id)`. If the option is `string` or `*string` (e.g., `contact_id`), the value must be `string(id)`. API responses often return IDs as integers from JSON — always cast explicitly. A type mismatch causes the UI to send the wrong type, leading to silent data corruption or API errors.
@@ -247,6 +263,7 @@ When a ref_data dropdown depends on the value of another field (e.g., applied ta
 - [ ] Event provider constructor options are optional (values come from context)
 - [ ] Request type classes declare `const Fields` in a `public {}` block (enables `ClassName::Fields` in action registration)
 - [ ] Type classes are declared **inside** the `public namespace ModuleName { ... }` block (not outside it — class constants are unresolvable from `.qm` if outside)
+- [ ] **`HashDataType` subclass constructors register fields via `addQoreFields(Fields)` from inside the constructor body, NOT by passing `Fields` as the second positional arg to `HashDataType("Name", Fields)`.** The parent's `(string name, *hash<auto> options, ...)` overload matches first and silently absorbs `Fields` as `options` — the type ends up with the right name but no registered fields. Wire-level data still flows so tests pass, but every typed list/hash in the UI renders as a generic `hash` because the schema is empty. Verify with `grep -nE ': HashDataType\("[^"]+", Fields\)' qlib/<Module>/*.qc` — there should be zero matches; all constructors should look like `: HashDataType("Name") { addQoreFields(Fields); }`.
 - [ ] Data provider classes declare `static ... ResponseType()` and `static ... RequestType()` in `public {}` blocks
 - [ ] **Every `AutoHashType`/`AutoHashOrNothingType` field verified against API spec** — never assume a field is freeform without checking. Fields named `extra`, `options`, `config`, `settings` often have well-defined schemas. Must look up API docs and either create a typed sub-type (if 2+ defined keys) or confirm freeform with evidence.
 

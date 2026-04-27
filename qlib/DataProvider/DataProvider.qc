@@ -87,6 +87,8 @@ public class DataProvider {
             "huggingface": "HuggingFaceDataProvider",
             "awsrestclient": "AwsRestClientDataProvider",
 
+            "baselinker": "BaseLinkerDataProvider",
+
             "bcrest": "CdsRestDataProvider",
             "bigcommerce": "BigCommerceDataProvider",
             "bitly": "BitlyDataProvider",
