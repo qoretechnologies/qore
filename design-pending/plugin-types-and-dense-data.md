@@ -298,8 +298,8 @@ to make the existing built-in machinery explicitly extensible:
   and operation ids; every plugin import is a hard requirement (soft
   fallback is reserved for core QORD format-feature bits, not plugins).
   Do not spend one global feature bit per plugin.
-- Add a module-registration hook through the existing module ABI
-  (`QoreModuleInfo` / `QoreModuleInitContext`) with deterministic ordering.
+- Add an explicit module-registration hook through `QoreModuleInitContext`
+  with deterministic ordering and a runtime-owned plugin module handle.
 - Add a JIT helper symbol resolver and interpreter helper table for registered
   plugin operations.
 - Audit `QoreValue` tag classification before assigning any plugin immediate
@@ -362,10 +362,29 @@ assumptions must be lifted or intentionally bypassed.
 ### 3.3 Plugin-type registration ABI
 
 A C++ module wanting to register one or more plugin types supplies descriptors
-through the existing module ABI. The concrete entry point can be either a new
-field in `QoreModuleInfo` or a method on `QoreModuleInitContext`, but it must be
-part of the normal module initialization path so load ordering, dependency
-resolution, parse-time visibility, and error reporting are deterministic.
+through the existing module ABI. Phase 3 extends `QoreModuleInitContext` with
+an opaque, runtime-owned `plugin_module_handle`, and registration receives the
+calling module's init context explicitly. This keeps the entry point part of the
+normal module initialization path so load ordering, dependency resolution,
+parse-time visibility, helper-symbol lookup, and error reporting are
+deterministic.
+
+The `plugin_module_handle` is valid only for the calling thread's current
+`qore_module_init` invocation. Modules MUST NOT cache it, compare it, serialize
+it, or pass a handle issued for another module. The runtime may use generation
+cookies or another private representation to reject stale handles, but plugins
+must treat reuse outside module init as undefined behaviour.
+
+The corresponding `ModuleManager.h` ABI addition is intentionally narrow:
+
+```cpp
+struct QorePluginModuleHandle;  // opaque, runtime-owned
+
+struct QoreModuleInitContext {
+    std::string path;
+    const QorePluginModuleHandle* plugin_module_handle;
+};
+```
 
 ```cpp
 // header: include/qore/QorePluginType.h (new)
@@ -373,6 +392,9 @@ resolution, parse-time visibility, and error reporting are deterministic.
 // This header is the stable plugin-type ABI and must not include LLVM headers.
 // Optional LLVM lowering lives in include/qore/QorePluginLLVM.h so modules that
 // only use runtime-helper dispatch are not tied to libqore's LLVM version.
+
+struct QoreModuleInitContext;    // from ModuleManager.h
+struct QorePluginModuleHandle;   // opaque, runtime-owned
 
 enum class QorePluginHelperAbi : uint8_t {
     UnaryValue        = 0,  //!< uint64_t(value, xsink); lowers to PluginUnary
@@ -614,16 +636,20 @@ struct QorePluginTypeRegistration {
 };
 
 //! Runtime-side registration hook, called from qore_module_init through
-//! QoreModuleInitContext or an equivalent QoreModuleInfo callback. The _v1
-//! suffix is mandatory: every breaking change to the registration ABI ships
-//! as a new symbol (qore_register_plugin_types_v2, ...) and old binaries keep
-//! resolving the symbol they linked against. See §8.1.
+//! the current QoreModuleInitContext. The _v1 suffix is mandatory: every
+//! breaking change to the registration ABI ships as a new symbol
+//! (qore_register_plugin_types_v2, ...) and old binaries keep resolving the
+//! symbol they linked against. See §8.1.
 //!
 //! Returns 0 on success, -1 on failure with diagnostic in xsink. Registration
 //! is all-or-nothing: if any type, operation, dependency, or extension fails
 //! validation, no part of `reg` is registered and the function returns -1.
-//! Callers must propagate the failure rather than continuing module init.
+//! Callers must propagate the failure rather than continuing module init. A
+//! null init_ctx, an init context not owned by the current module init call, or
+//! an init context without a live plugin_module_handle is rejected before
+//! descriptor validation.
 int qore_register_plugin_types_v1(
+    const QoreModuleInitContext* init_ctx,
     const QorePluginTypeRegistration* reg,
     ExceptionSink* xsink);
 ```
@@ -1038,18 +1064,20 @@ no padding):
 uint16  slot_idx       // index into ctx->plugin_helpers[]
 uint16  import_idx     // index into PLUGIN_IMPORTS
 uint16  op_local_id    // matches QorePluginOperation.local_id in that import
-uint16  reserved       // must be 0; future flags
+uint8   canonical_signature_version
+uint8   reserved       // must be 0
 uint64  signature_hash // xxHash64 of canonical signature form (see below)
 ```
 
 Total entry size 16 bytes. Loader behaviour: resolve `(import_idx,
 op_local_id)` against the live `PLUGIN_IMPORTS` table to a process-global
-operation id, verify the live registration's signature hash matches
-`signature_hash`, and write the resolved helper pointer into
-`ctx->plugin_helpers[slot_idx]`. The signature hash prevents accidentally
-binding an operation whose local id was reused with a different ABI in an
-incompatible module build; mismatch rejects the artifact with a diagnostic
-naming both the recorded and live signature hashes.
+operation id, verify `reserved == 0`, verify that
+`canonical_signature_version` is recognized, verify the live registration's
+signature hash for that canonical version matches `signature_hash`, and write
+the resolved helper pointer into `ctx->plugin_helpers[slot_idx]`. The signature
+hash prevents accidentally binding an operation whose local id was reused with
+a different ABI in an incompatible module build; mismatch rejects the artifact
+with a diagnostic naming both the recorded and live signature hashes.
 
 `signature_hash` is a canonical wire hash, not a hash of the in-memory
 `QorePluginOperationSignature` bytes. The 64 bits in the wire format are
@@ -1080,27 +1108,28 @@ payload
 ```
 
 `kind == 0` means null and has no payload. `kind == 1` means a Qore
-non-plugin type and the payload is `Qore::Reflection::Type::getName()`'s
-output for that type, encoded as a `uint32 byte_count` plus UTF-8 bytes
-without any Unicode normalisation. `Type::getName()` is the canonical name
-spelling for signature hashing — its stability is part of the
-plugin-protocol contract, and any change to its output must bump
-`canonical_signature_version`. `kind == 2` means a plugin type and the
-payload is canonical `module_name` (per the rules below) plus
-`uint16 type_local_id`. Other `kind` values are reserved and invalid in
-canonical signature version 1.
+non-plugin type and the payload is the canonical QORD type path as a
+`uint32 byte_count` plus UTF-8 bytes, using the same spelling returned by
+`QoreTypeInfo::getPath()` / `qore_type_get_path()` and consumed by
+`QoreAOTTypeResolver`. This path form is the canonical spelling for signature
+hashing; display names such as `Qore::Reflection::Type::getName()` are not
+used because class and hashdecl simple names can collide across namespaces.
+`kind == 2` means a plugin type and the payload is canonical `module_name`
+(per the rules below) plus `uint16 type_local_id`. Other `kind` values are
+reserved and invalid in canonical signature version 1.
 
 **Canonical signature version policy.** `canonical_signature_version` bumps
 on **any** byte-layout change to the canonical form, including field
 appends. Trailing-field appends are explicitly not version-stable: the
-writer always emits the version that matches its layout. A loader that
-sees an unrecognised `canonical_signature_version` rejects the entry with
-`QORD-PLUGIN-SIGNATURE-VERSION-UNSUPPORTED` (subreason
-`unsupported_canonical_version`, see §3.12 error-code table) — a
-reproducible, named failure that is loudly distinct from a real ABI
-break. The discipline is intentional: silent quiet-different-hash drift
-on libqore upgrade would be a hard-to-diagnose miscompile; a version
-bump is loud and immediate.
+writer always emits the wire-field version that matches its layout and uses the
+same byte as the first byte of the hash preimage. A loader that sees an
+unrecognised `canonical_signature_version` in a `PLUGIN_HELPER_REFS` entry
+rejects that entry with `QORD-PLUGIN-SIGNATURE-VERSION-UNSUPPORTED`
+(subreason `unsupported_canonical_version`, see §3.12 error-code table) before
+comparing hashes. This is a reproducible, named failure that is loudly distinct
+from a real ABI break. The discipline is intentional: silent
+quiet-different-hash drift on libqore upgrade would be a hard-to-diagnose
+miscompile; a version bump is loud and immediate.
 
 Pointer-valued fields such as `QoreTypeInfo*` are therefore normalized to
 stable identities before hashing. The hash excludes process-local addresses,
@@ -1161,8 +1190,8 @@ Loader behaviour:
 2. Verify each loaded module provides a compatible plugin ABI and
    operation-set version.
 3. Verify every required type id and operation id is present, active in the
-   target Program, and has a compatible canonical signature hash /
-   serialization format version.
+   target Program, has a supported canonical signature version, and has a
+   compatible canonical signature hash / serialization format version.
 4. Verify `header.feature_flags & ~runtime_supported == 0` for core QORD
    format features. (Plugin imports are not encoded in `feature_flags` —
    they have their own section. Unsupported core features may still fall
@@ -1271,7 +1300,7 @@ vs. actual values, and the section number of this design that defines the rule.
 
 | Error code | Raised by | Section |
 |---|---|---|
-| `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` | registration / validation (bad counts, null names/type info, non-contiguous ids, invalid reserved values) | §3.3 |
+| `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` | registration / validation (bad counts, null registration/init context, null names/type info, non-contiguous ids, invalid reserved values, stale module handles) | §3.3 |
 | `PLUGIN-REGISTRATION-NULL-LIFECYCLE` | registration / validation | §3.3 |
 | `PLUGIN-REGISTRATION-NULL-CODEC` | registration / validation (missing serializer/deserializer for a QORD-visible type) | §3.3 / §3.9 |
 | `PLUGIN-REGISTRATION-DUPLICATE-LOCAL-ID` | registration / validation | §3.3 |
@@ -1304,16 +1333,7 @@ struct QorePluginModuleHandle;  // opaque, runtime-owned
 
 enum QorePluginValidationContextFlags : uint32_t {
     QORE_PLUGIN_VALIDATE_NO_FLAGS = 0,
-
-    // Reserved for future versions (none active in v1; listing the names
-    // commits the bit positions so independent additions don't collide):
-    // QORE_PLUGIN_VALIDATE_STRICT_SUBREASON_NAMES = 1u << 0,
-    //   //!< Treat unknown subreason strings as PLUGIN-REGISTRATION-INVALID-
-    //   //!< DESCRIPTOR; useful for catching typos in plugin self-tests.
-    // QORE_PLUGIN_VALIDATE_FAIL_DEFERRED       = 1u << 1,
-    //   //!< Treat deferred-contextual checks as failures rather than
-    //   //!< deferring them; for plugin authors who want every check to
-    //   //!< complete during the dry-run.
+    QORE_PLUGIN_VALIDATE_RESERVED_MASK = 0xFFFFFFFFu,
 };
 
 struct QorePluginValidationContext {
@@ -1336,7 +1356,8 @@ struct QorePluginValidationContext {
     //! Optional runtime-owned module handle used to validate
     //! runtime_helper_symbol lookup against the registering binary. The only
     //! valid non-null value is the opaque handle supplied by
-    //! QoreModuleInitContext for the module currently being initialized.
+    //! QoreModuleInitContext::plugin_module_handle for the module currently
+    //! being initialized.
     //! The handle is valid ONLY during the calling thread's qore_module_init
     //! invocation that received it; using a cached handle outside that scope
     //! is undefined behaviour, and the runtime is permitted (but not
@@ -1374,6 +1395,13 @@ subreason `"validation_context_too_small"` because the runtime cannot read the
 v1 flag word safely. Missing trailing fields at larger but older `struct_size`
 values use their documented default values.
 
+Future validation flags are assigned by clearing bits from
+`QORE_PLUGIN_VALIDATE_RESERVED_MASK` in later headers. v1 defines no nonzero
+flags, so any bit set in `ctx->flags` is unknown and rejected with subreason
+`"unknown_validation_context_flag"`. Candidate future behaviours such as
+"treat deferred contextual checks as failures" are described in prose until
+they become real ABI flags.
+
 When `collect_all` is true, the validator walks the entire descriptor
 and reports every violation it finds as a single chained exception
 whose `arg` is a `list<hash<PluginValidationViolation>>` listing each
@@ -1383,29 +1411,40 @@ plugin author CI scripts and IDE integrations should use; production module
 load uses the fail-fast equivalent (`collect_all == false`) which returns the
 first violation only.
 
-**Reserved subreasons.** `subreason` is a stable identifier (snake_case
-ASCII, no version suffix, append-only namespace), not a free-form
-message. The v1 protocol defines these values; future revisions append
-without renaming or removing:
+**Reserved subreasons.** `subreason` is a stable identifier, not a free-form
+message. Core subreasons are snake_case ASCII with no version suffix; extension
+validation subreasons use the explicit namespaced pattern in the table below.
+The v1 protocol defines these values; future revisions append without renaming
+or removing:
 
 | Subreason | Used by |
 |---|---|
 | `unknown_validation_context_flag` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` |
 | `validation_context_too_small` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` |
 | `non_contiguous_local_id` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` |
+| `invalid_count` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` |
+| `null_registration` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` |
 | `null_type_name` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` |
+| `null_operation_name` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` |
 | `null_type_info` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` |
-| `reserved_field_nonzero` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` |
+| `invalid_signature_shape` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` |
+| `unknown_helper_abi` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` |
+| `unknown_value_access` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` |
+| `unknown_result_alias` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` |
+| `reserved_field_nonzero` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR`, `QORD-PLUGIN-RESERVED-NONZERO` |
 | `over_read` | `QORD-PLUGIN-PAYLOAD-LENGTH-MISMATCH` |
 | `under_consumed` | `QORD-PLUGIN-PAYLOAD-LENGTH-MISMATCH` |
 | `unsupported_canonical_version` | `QORD-PLUGIN-SIGNATURE-VERSION-UNSUPPORTED` |
 | `helper_symbol_not_found` | `PLUGIN-REGISTRATION-HELPER-SYMBOL-MISSING` |
+| `module_handle_missing` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` |
+| `module_handle_stale` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` |
+| `extension.<extension_id>.<reason>` | `PLUGIN-EXTENSION-VALIDATION-FAILED`; extension id and reason are ASCII, byte-exact, and owned by the extension ABI |
 
 Implementations MUST NOT emit subreason strings outside this table for
-the corresponding error codes. New rejection causes either reuse an
-existing subreason (when semantically equivalent) or are added to the
-table in a follow-up to this document; the discipline mirrors IETF
-"assigned numbers" registries.
+the corresponding error codes, except for the explicitly patterned extension
+namespace above. New core rejection causes either reuse an existing subreason
+(when semantically equivalent) or are added to the table in a follow-up to this
+document; the discipline mirrors IETF "assigned numbers" registries.
 
 Validation is split into **descriptor-local** and **contextual** checks.
 Descriptor-local checks (ids, null pointers, signatures, extension payload
@@ -1414,15 +1453,17 @@ checks need live runtime state: resolving `runtime_helper_symbol` from a module
 handle, validating Program activation/import visibility, and checking
 cross-module conflicts against already registered modules. A non-null
 `module_handle` is trusted only if it is a `QorePluginModuleHandle` issued by
-the runtime for the current `QoreModuleInitContext`; arbitrary pointers are
-invalid and fail contextual validation. A dry-run with `ctx == nullptr` cannot
-promise those contextual checks will pass; collect-all mode reports them as
-deferred checks instead of pretending the descriptor is fully registrable.
+the runtime for the current `QoreModuleInitContext::plugin_module_handle`;
+arbitrary pointers are invalid and fail contextual validation. A dry-run with
+`ctx == nullptr` cannot promise those contextual checks will pass; collect-all
+mode reports them as deferred checks instead of pretending the descriptor is
+fully registrable.
 
 `qore_register_plugin_types_v1` itself runs in fail-fast mode and never
 collects — registration is a single transactional commit, not a diagnostic
-walk. It supplies the real module/Program context internally and therefore
-performs all contextual checks before committing global ids.
+walk. It derives the real module context from the supplied `init_ctx` and the
+runtime's current module-init state, and therefore performs all contextual
+checks before committing global ids.
 
 **Diagnostic env-var family.** Matches the existing `QORE_AOT_*_TRACE`
 discipline. Trace variables only log; they never enable additional checks or
@@ -1436,7 +1477,7 @@ against the same binary their users run.
 | `QORE_PLUGIN_VERIFY` | Enables runtime verifier checks that are normally debug-build-only in a release build; intended for production reproductions and plugin-author CI. |
 | `QORE_PLUGIN_VERIFY_TRACE` | Logs every runtime verifier check that is enabled by a debug build or `QORE_PLUGIN_VERIFY`, including the ones that pass. |
 | `QORE_PLUGIN_CROSS_TYPE_TRACE` | Logs cross-module operator resolution decisions per §3.10 (which precedence rule fired, what was synthesised, what was rejected). |
-| `QORE_PLUGIN_QORD_TRACE` | Logs QORD `PLUGIN_IMPORTS` / `PLUGIN_HELPER_REFS` resolution: per-import resolution outcome, signature-hash compare, slot-table population. |
+| `QORE_PLUGIN_QORD_TRACE` | Logs QORD `PLUGIN_IMPORTS` / `PLUGIN_HELPER_REFS` resolution: per-import resolution outcome, canonical-signature-version check, signature-hash compare, slot-table population. |
 | `QORE_PLUGIN_FALLBACK_BUFFER` | Capacity of each Program's rolling plugin-fallback-site buffer. Unset = 1024, `0` disables recording (in which case `getRecentFallbackSites()` returns an empty list and `clearFallbackSites()` is a no-op), invalid values fall back to 1024 with a register-trace warning, and values above 65536 are capped. The 65536 cap is chosen so even verbose entries (source-location string + reason + operand type names ≈ 500 bytes/entry) keep the fallback list under ~32 MiB per Program. |
 
 **Runtime verifier inventory.** A single, normative list of checks that debug
@@ -1984,10 +2025,15 @@ tests and conservative defaults.
 - Ensure `buffer<T>` is reachable through whichever name-based type lookup
   the `reflection` binary module exposes for non-class types, and through
   the `*Type` family in `Qore::Reflection`. Do not route native non-class
-  types through `Class::forName`. The exact reflection-API surface is
-  whatever the reflection module commits to at Phase-1 implementation
-  time; the requirement here is that plugin types not be invisible to
-  Qore-side metaprogramming and QLS.
+  types through `Class::forName`. Phase 1 also adds a Qore-side reflection
+  accessor for the canonical type path (working name
+  `Qore::Reflection::Type::getPathName()`; implementation maps to
+  `qore_type_get_path()` / `QoreTypeInfo::getPath()`). `Type::getName()`
+  remains the display/simple name and is never used for QORD identity or
+  plugin signature hashing. The exact reflection-API name can change at
+  implementation time, but the requirement is that plugin types not be
+  invisible to Qore-side metaprogramming and QLS, and that Qore code can see
+  the same canonical type identity used by AOT.
 - ABI not yet exposed externally — plugin-type registration still internal.
 
 Validates the protocol shape end-to-end through IR interpreter, JIT, AOT.
@@ -2006,13 +2052,18 @@ exposure — reuses Phase 1's `buffer<T>`.
 ### Phase 3 — plugin-type registration C ABI (L)
 
 - Public `QorePluginTypeRegistration` ABI.
-- Registration through `QoreModuleInfo` / `QoreModuleInitContext`.
+- Registration through explicit `qore_register_plugin_types_v1(init_ctx, reg,
+  xsink)` calls from `qore_module_init`, with a runtime-owned
+  `QoreModuleInitContext::plugin_module_handle`.
 - Built-in plugin-dispatch opcodes carrying operation descriptors.
 - IR-interpreter dispatch table for module-registered helpers.
 - JIT helper symbol resolver for module-registered helpers.
 - QORD `PLUGIN_IMPORTS` and `PLUGIN_TYPE_REGISTRY` sections.
 - **Validation and developer experience (§3.12)**, all on the public ABI
   ship boundary:
+  - `QoreModuleInitContext` extended with the runtime-owned opaque
+    `plugin_module_handle`, and `qore_register_plugin_types_v1` rejecting null,
+    stale, or cross-module init contexts before descriptor validation.
   - `qore_validate_plugin_types_v1` dry-run validation entry point with
     `QorePluginValidationContext` (size-prefixed for forward-compatible
     field growth, fixed-width flags, and a runtime-owned opaque module
@@ -2022,9 +2073,10 @@ exposure — reuses Phase 1's `buffer<T>`.
     including `PLUGIN-EXTENSION-VALIDATION-FAILED`,
     `PLUGIN-REGISTRY-PROGRAM-NOT-AVAILABLE`,
     `PLUGIN-REGISTRY-MODULE-NOT-LOADED`, and
-    `QORD-PLUGIN-SIGNATURE-VERSION-UNSUPPORTED`. Subreason strings are drawn
-    from the §3.12 reserved-subreasons table only; emitting an unlisted
-    subreason for a listed error code is a libqore bug.
+    `QORD-PLUGIN-SIGNATURE-VERSION-UNSUPPORTED`. Core subreason strings are
+    drawn from the §3.12 reserved-subreasons table only; extension validators
+    may use only the documented namespaced extension pattern. Emitting an
+    unlisted core subreason for a listed error code is a libqore bug.
   - The `QORE_PLUGIN_*_TRACE` env-var family (`REGISTER`, `DISPATCH`,
     `VERIFY_TRACE`, `CROSS_TYPE`, `QORD`) plus `QORE_PLUGIN_VERIFY`
     for release-build runtime verifier opt-in and
