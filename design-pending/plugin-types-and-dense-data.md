@@ -812,6 +812,40 @@ concurrent registrants waiting on the module's outcome. Descriptors from
 earlier, already-finished module loads are never affected by a later module's
 init failure.
 
+The wakeup primitive is a per-pending-transaction condition variable paired
+with the registry write lock; waiters block on the condvar until the pending
+transaction publishes or discards. There is no polling and no timeout —
+forward progress is guaranteed by deadlock detection (below) rather than by
+bounded waits.
+
+Publish is atomic with respect to all concurrent registrants and all hot-path
+readers. There is no observer-visible state where a module's descriptors are
+partially published: the registry write lock covers the entire transition
+from pending to committed, including provisional-id conversion, conflict
+finalisation against other still-pending registrants, and condvar
+notification.
+
+A module-init transaction supports at most one successful
+`qore_register_plugin_types_v1` call. A second call after a successful first
+within the same transaction fails with
+`PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` and subreason
+`registration_already_pending`. Plugins that need conditional descriptors
+must compose a single descriptor table that covers all conditions and call
+registration once.
+
+**Deadlock detection.** The registry maintains a wait-for graph among
+module-init transactions. When a registrant attempts to wait on a pending
+transaction whose owning thread is itself (transitively) waiting on the
+registrant's own transaction, the cycle is detected: the detecting registrant
+fails immediately with `PLUGIN-REGISTRATION-WAIT-CYCLE` (subreason
+`wait_cycle_with_<other_module>`) instead of waiting. This bounds every wait
+by the depth of the wait-for graph and converts what would otherwise be a
+silent hang into a named, recoverable diagnostic. Plugin authors hitting
+this code in production almost always indicate two modules with mutually
+dependent init paths that would race regardless of plugin registration; the
+wait-cycle diagnostic surfaces the load-order bug at the registration
+boundary.
+
 **Two evolution disciplines, intentionally.** The plugin protocol uses two
 distinct forward-compatibility patterns:
 
@@ -838,7 +872,12 @@ Constraints:
   process-global runtime ids in the pending module-init transaction; when module
   init succeeds, the registry publishes the local→global mapping as committed
   metadata. QORD `PLUGIN_IMPORTS` references are resolved only through the
-  committed table at load time.
+  committed table at load time. If a QORD load races a module's pending
+  `qore_module_init` and the QORD's `PLUGIN_IMPORTS` reference the
+  still-pending module, QORD load fails with `QORD-PLUGIN-IMPORT-MISSING`.
+  The QORD loader does not wait on pending module-init transactions because
+  QORD load and module-init can themselves form wait cycles; callers retry
+  the QORD load after the module's init completes.
 - The first implementation lowers plugin operations to built-in
   descriptor-carrying opcodes, one per `QorePluginHelperAbi`:
   `PluginUnary`, `PluginBinary`, `PluginCall`, `PluginSubscript`,
@@ -1415,6 +1454,15 @@ user writes `tensor + buffer`, who registers `add.tensor_buffer`?
    this registration may proceed. The diagnostic content is independent of
    timing — both module names appear regardless — so test harnesses do not
    depend on serialization order.
+
+   A registrant that conflicts with multiple pending registrations waits on
+   them in registration-order. Each wakeup re-checks the full set of
+   conflicts before either succeeding, failing with a committed-conflict
+   diagnostic, or waiting on the next pending registrant. There is no bound
+   on how many sequential waits a registrant may incur, but each wait is
+   bounded by the depth of the wait-for graph; waits that would create a
+   cycle fail immediately with `PLUGIN-REGISTRATION-WAIT-CYCLE` per §3.3
+   rather than blocking.
 3. **Commutative auto-symmetry.** If a registration for
    `(A, B, op)` declares `is_commutative = true`, the runtime synthesises
    the `(B, A, op)` site automatically — registering both halves
@@ -1518,7 +1566,8 @@ vs. actual values, and the section number of this design that defines the rule.
 | `PLUGIN-EXTENSION-ABI-MISMATCH` | registration / validation (LLVM extension version mismatch) | §3.3 / §3.6 |
 | `PLUGIN-EXTENSION-UNRECOGNIZED-REQUIRED` | registration / validation | §3.3 |
 | `PLUGIN-EXTENSION-VALIDATION-FAILED` | registration / validation (recognized extension whose payload fails its own validation, non-version causes; subreason carries per-extension specifics) | §3.3 |
-| `PLUGIN-CROSS-TYPE-CONFLICT` | registration / contextual validation (cross-module) | §3.10 |
+| `PLUGIN-CROSS-TYPE-CONFLICT` | registration / contextual validation (cross-module); subreason `pending_conflict_with_<module>` when the conflict is with a still-pending registration seen during dry-run validation | §3.10 / §3.12 |
+| `PLUGIN-REGISTRATION-WAIT-CYCLE` | registration wait-for-graph cycle detection; subreason `wait_cycle_with_<other_module>` | §3.3 |
 | `PLUGIN-LOWERING-CLAIM-VIOLATED` | parse-time lowering | §3.7 |
 | `PLUGIN-HELPER-RESULT-TYPE-MISMATCH` | runtime verifier | §3.4 |
 | `PLUGIN-HELPER-ALIAS-CONTRACT-VIOLATED` | runtime verifier | §3.3 (`ReturnsLhs`/`ReturnsRhs`) |
@@ -1688,6 +1737,9 @@ removing:
 | `helper_symbol_not_found` | `PLUGIN-REGISTRATION-HELPER-SYMBOL-MISSING` |
 | `module_handle_missing` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` |
 | `module_handle_stale` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` |
+| `registration_already_pending` | `PLUGIN-REGISTRATION-INVALID-DESCRIPTOR` (second `qore_register_plugin_types_v1` call within one module-init transaction) |
+| `wait_cycle_with_<module>` | `PLUGIN-REGISTRATION-WAIT-CYCLE`; `<module>` is the byte-exact module name of the other transaction completing the wait-for cycle |
+| `pending_conflict_with_<module>` | `PLUGIN-CROSS-TYPE-CONFLICT` from `qore_validate_plugin_types_v1` when a conflict is detected against a still-pending registration; `<module>` is the byte-exact name of the pending module |
 | `extension:<extension_id>:<reason>` | `PLUGIN-EXTENSION-VALIDATION-FAILED`. Format uses colon separators (not dots) because canonical extension ids contain dots — `qore.plugin.llvm.codegen` → `extension:qore.plugin.llvm.codegen:unsupported_target`. Parsers split on the first and last `:`; `extension_id` is byte-exact equal to the registered `QorePluginExtension::extension_id` and therefore cannot itself contain `:`; `reason` is ASCII snake_case owned by the extension ABI. The literal `extension` prefix is reserved and never used as a core subreason. |
 
 Implementations MUST NOT emit subreason strings outside this table for
@@ -1710,6 +1762,19 @@ contextual validation. A dry-run with
 `ctx == nullptr` cannot promise those contextual checks will pass; collect-all
 mode reports them as deferred checks instead of pretending the descriptor is
 fully registrable.
+
+Cross-module-conflict contextual validation considers both committed
+registrations and still-pending ones held by other module-init transactions;
+the validator reads them under the registry read lock. The validator does not
+wait on pending transactions because dry-run validation can be invoked from
+any thread, including ones that would form wait cycles. When a conflict is
+detected against a pending registration, the validator reports
+`PLUGIN-CROSS-TYPE-CONFLICT` with subreason
+`pending_conflict_with_<module>`; against a committed registration the
+subreason is omitted (the diagnostic message names the committed module
+directly). Plugin authors thus see during the dry run whether a conflicting
+pending registration may still resolve in their favour (the other module's
+init might fail) or has already committed and locked them out.
 
 `qore_register_plugin_types_v1` itself runs in fail-fast mode and never
 collects — registration is a single module-init transaction, not a diagnostic
