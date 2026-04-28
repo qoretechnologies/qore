@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
-#! @file FirecrawlMapResponseDataType.qc response type for the Firecrawl map action
+#! @file FirecrawlParseResponseDataType.qc response type for the Firecrawl parse action
 
-/*  FirecrawlMapResponseDataType.qc Copyright (C) 2026 Qore Technologies, s.r.o.
+/*  FirecrawlParseResponseDataType.qc Copyright (C) 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -25,22 +25,29 @@
 #! Contains all public definitions in the FirecrawlDataProvider module
 public namespace FirecrawlDataProvider {
 
-#! Response type for the Firecrawl map action
-public class FirecrawlMapResponseDataType inherits HashDataType {
+#! Response type for the Firecrawl parse action
+public class FirecrawlParseResponseDataType inherits HashDataType {
     public {
         #! Field definitions
         const Fields = {
             "success": {
                 "display_name": "Success",
                 "short_desc": "Whether the request succeeded",
-                "desc": "Whether the map request completed successfully",
+                "desc": "Whether the parse request completed successfully",
                 "type": SoftBoolType,
             },
-            "links": {
-                "display_name": "Links",
-                "short_desc": "Discovered URLs",
-                "desc": "List of discovered URLs from the website map",
-                "type": new ListDataType("links", SoftStringType, True),
+            "data": {
+                "display_name": "Data",
+                "short_desc": "Parsed data",
+                "desc": "The parsed document data, including fields such as `markdown`, "
+                    "`html`, `rawHtml`, `links`, `images`, and `metadata`",
+                "type": new FirecrawlScrapeDataItemDataType(AutoHashOrNothingType),
+            },
+            "warning": {
+                "display_name": "Warning",
+                "short_desc": "Warning message",
+                "desc": "A warning message, if any, from the parse operation",
+                "type": StringOrNothingType,
             },
         };
     }

@@ -30,14 +30,14 @@ public namespace FirecrawlDataProvider {
 
     @par Available action types
     - \c wait — wait for a duration (\c milliseconds) or element (\c selector)
-    - \c click — click an element (\c selector)
+    - \c click — click an element (\c selector, optional \c all)
     - \c write — type text into the focused element (\c text)
     - \c press — press a keyboard key (\c key)
     - \c scroll — scroll the page (\c direction, optional \c selector)
-    - \c screenshot — take a screenshot (\c fullPage)
+    - \c screenshot — take a screenshot (\c fullPage, \c quality, \c viewport)
     - \c scrape — capture the page content at its current state
     - \c executeJavascript — run JavaScript code (\c script)
-    - \c pdf — generate a PDF of the page
+    - \c pdf — generate a PDF (\c format, \c landscape, \c scale)
 */
 public class FirecrawlActionDataType inherits HashDataType {
     public {
@@ -127,6 +127,64 @@ public class FirecrawlActionDataType inherits HashDataType {
                 "desc": "If `True`, captures the full scrollable page. Used by the "
                     "`screenshot` action. Defaults to `False`",
                 "type": SoftBoolOrNothingType,
+            },
+            "quality": {
+                "display_name": "Quality",
+                "short_desc": "Screenshot quality (1-100)",
+                "desc": "Image quality for the screenshot, in the range `1`-`100`. Used by "
+                    "the `screenshot` action",
+                "type": SoftIntOrNothingType,
+                "example_value": 80,
+            },
+            "viewport": {
+                "display_name": "Viewport",
+                "short_desc": "Viewport dimensions for the screenshot",
+                "desc": "Viewport dimensions for the screenshot, with `width` and `height` "
+                    "keys (both integers, in pixels). Used by the `screenshot` action",
+                "type": new FirecrawlViewportDataType(AutoHashOrNothingType),
+                "example_value": {"width": 1280, "height": 720},
+            },
+            "all": {
+                "display_name": "All Matches",
+                "short_desc": "Click all matching elements",
+                "desc": "If `True`, all elements matching the `selector` are clicked instead "
+                    "of just the first match. Used by the `click` action. Defaults to `False`",
+                "type": SoftBoolOrNothingType,
+            },
+            "format": {
+                "display_name": "Format",
+                "short_desc": "PDF page format",
+                "desc": "Page format for the generated PDF. Used by the `pdf` action. "
+                    "Defaults to `Letter`",
+                "type": StringOrNothingType,
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "A0", "display_name": "A0"},
+                    <AllowedValueInfo>{"value": "A1", "display_name": "A1"},
+                    <AllowedValueInfo>{"value": "A2", "display_name": "A2"},
+                    <AllowedValueInfo>{"value": "A3", "display_name": "A3"},
+                    <AllowedValueInfo>{"value": "A4", "display_name": "A4"},
+                    <AllowedValueInfo>{"value": "A5", "display_name": "A5"},
+                    <AllowedValueInfo>{"value": "A6", "display_name": "A6"},
+                    <AllowedValueInfo>{"value": "Letter", "display_name": "Letter"},
+                    <AllowedValueInfo>{"value": "Legal", "display_name": "Legal"},
+                    <AllowedValueInfo>{"value": "Tabloid", "display_name": "Tabloid"},
+                    <AllowedValueInfo>{"value": "Ledger", "display_name": "Ledger"},
+                ),
+            },
+            "landscape": {
+                "display_name": "Landscape",
+                "short_desc": "Use landscape orientation",
+                "desc": "If `True`, the PDF is generated in landscape orientation. Used by "
+                    "the `pdf` action. Defaults to `False`",
+                "type": SoftBoolOrNothingType,
+            },
+            "scale": {
+                "display_name": "Scale",
+                "short_desc": "PDF rendering scale",
+                "desc": "Scale factor for PDF rendering. Used by the `pdf` action. Defaults "
+                    "to `1`",
+                "type": SoftFloatOrNothingType,
+                "example_value": 1.0,
             },
         };
     }

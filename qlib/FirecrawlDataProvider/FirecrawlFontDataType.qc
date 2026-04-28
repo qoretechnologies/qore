@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
-#! @file FirecrawlMapResponseDataType.qc response type for the Firecrawl map action
+#! @file FirecrawlFontDataType.qc font entry sub-type for Firecrawl branding responses
 
-/*  FirecrawlMapResponseDataType.qc Copyright (C) 2026 Qore Technologies, s.r.o.
+/*  FirecrawlFontDataType.qc Copyright (C) 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -25,28 +25,22 @@
 #! Contains all public definitions in the FirecrawlDataProvider module
 public namespace FirecrawlDataProvider {
 
-#! Response type for the Firecrawl map action
-public class FirecrawlMapResponseDataType inherits HashDataType {
+#! Font entry sub-type for Firecrawl branding responses
+public class FirecrawlFontDataType inherits HashDataType {
     public {
         #! Field definitions
         const Fields = {
-            "success": {
-                "display_name": "Success",
-                "short_desc": "Whether the request succeeded",
-                "desc": "Whether the map request completed successfully",
-                "type": SoftBoolType,
-            },
-            "links": {
-                "display_name": "Links",
-                "short_desc": "Discovered URLs",
-                "desc": "List of discovered URLs from the website map",
-                "type": new ListDataType("links", SoftStringType, True),
+            "family": {
+                "display_name": "Family",
+                "short_desc": "Font family name",
+                "desc": "The font family name detected on the page",
+                "type": StringOrNothingType,
             },
         };
     }
 
     #! Creates the type
-    constructor() {
+    constructor(*Type base_type) : HashDataType(base_type ?? AutoHashType) {
         addQoreFields(Fields);
     }
 }

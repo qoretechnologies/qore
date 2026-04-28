@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
-#! @file FirecrawlMapResponseDataType.qc response type for the Firecrawl map action
+#! @file FirecrawlProfileDataType.qc browser profile sub-type for Firecrawl scrape requests
 
-/*  FirecrawlMapResponseDataType.qc Copyright (C) 2026 Qore Technologies, s.r.o.
+/*  FirecrawlProfileDataType.qc Copyright (C) 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -25,28 +25,34 @@
 #! Contains all public definitions in the FirecrawlDataProvider module
 public namespace FirecrawlDataProvider {
 
-#! Response type for the Firecrawl map action
-public class FirecrawlMapResponseDataType inherits HashDataType {
+#! Browser profile configuration for persistent scrape sessions
+/** Identifies a named browser profile so cookies, local storage, and other
+    session state are preserved across scrape requests.
+*/
+public class FirecrawlProfileDataType inherits HashDataType {
     public {
         #! Field definitions
         const Fields = {
-            "success": {
-                "display_name": "Success",
-                "short_desc": "Whether the request succeeded",
-                "desc": "Whether the map request completed successfully",
-                "type": SoftBoolType,
+            "name": {
+                "display_name": "Profile Name",
+                "short_desc": "Name of the browser profile",
+                "desc": "Name of the browser profile to use. The first scrape with a given "
+                    "name creates the profile; subsequent scrapes reuse its session state",
+                "type": StringOrNothingType,
+                "example_value": "default",
             },
-            "links": {
-                "display_name": "Links",
-                "short_desc": "Discovered URLs",
-                "desc": "List of discovered URLs from the website map",
-                "type": new ListDataType("links", SoftStringType, True),
+            "saveChanges": {
+                "display_name": "Save Changes",
+                "short_desc": "Persist changes back to the profile",
+                "desc": "If `True`, changes made during the scrape (cookies, local storage, "
+                    "etc.) are saved back to the named profile. Defaults to `False`",
+                "type": SoftBoolOrNothingType,
             },
         };
     }
 
     #! Creates the type
-    constructor() {
+    constructor(*Type base_type) : HashDataType(base_type ?? AutoHashType) {
         addQoreFields(Fields);
     }
 }

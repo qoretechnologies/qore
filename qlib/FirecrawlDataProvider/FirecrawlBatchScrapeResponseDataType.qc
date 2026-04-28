@@ -63,8 +63,8 @@ public class FirecrawlBatchScrapeResponseDataType inherits HashDataType {
             "expiresAt": {
                 "display_name": "Expires At",
                 "short_desc": "Result expiration time",
-                "desc": "Timestamp when the batch scrape results will expire",
-                "type": StringOrNothingType,
+                "desc": "ISO 8601 timestamp when the batch scrape results will expire",
+                "type": SoftDateOrNothingType,
             },
             "data": {
                 "display_name": "Data",

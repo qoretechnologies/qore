@@ -55,6 +55,7 @@ public class FirecrawlDataProvider inherits FirecrawlDataProviderBase {
             "agent": Class::forName("FirecrawlAgentDataProvider"),
             "get-agent-status": Class::forName("FirecrawlGetAgentStatusDataProvider"),
             "cancel-agent": Class::forName("FirecrawlCancelAgentDataProvider"),
+            "parse": Class::forName("FirecrawlParseDataProvider"),
         };
     }
 
