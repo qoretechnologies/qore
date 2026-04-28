@@ -596,7 +596,7 @@ struct qore_ftp_private {
         QoreStringMaker target("%s:%d", host, port);
         sock_priv->ref();  // ref for connect op
         SocketConnectPollOperation* connect_op = new SocketConnectPollOperation(xsink,
-            false, target.c_str(), sock_priv);
+            false, target.c_str(), sock_priv, true);
         if (*xsink) {
             connect_op->deref(xsink);
             sock_priv->deref(xsink);
@@ -737,7 +737,7 @@ struct qore_ftp_private {
         QoreStringMaker dtarget("%s:%d", data_host, data_port);
         dsock->ref();  // for connect op
         SocketConnectPollOperation* dconnect = new SocketConnectPollOperation(xsink,
-            false, dtarget.c_str(), dsock);
+            false, dtarget.c_str(), dsock, true);
         if (*xsink) {
             dconnect->deref(xsink);
             dsock->deref(xsink);

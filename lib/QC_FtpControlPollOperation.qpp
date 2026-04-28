@@ -697,7 +697,7 @@ FtpControlPollOperation::constructor(string host, int port = 21, bool secure = F
     // Ref for the SocketConnectPollOperation (caller must ref; op stores raw pointer, derefs on destroy)
     sock_priv->ref();
     SocketConnectPollOperation* connect_op = new SocketConnectPollOperation(xsink,
-        false, target.c_str(), sock_priv);
+        false, target.c_str(), sock_priv, true);
     if (*xsink) {
         connect_op->deref(xsink);
         // deref our explicit ref + the original ref

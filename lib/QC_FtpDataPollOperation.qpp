@@ -506,7 +506,7 @@ FtpDataPollOperation::constructor(string host, int port, bool secure_data = Fals
     QoreStringMaker target("%s:%lld", host->c_str(), port);
     sock_priv->ref();  // ref for connect op (caller must ref; op stores raw pointer)
     SocketConnectPollOperation* connect_op = new SocketConnectPollOperation(xsink,
-        false, target.c_str(), sock_priv);
+        false, target.c_str(), sock_priv, true);
     if (*xsink) {
         connect_op->deref(xsink);
         return;
@@ -547,7 +547,7 @@ FtpDataPollOperation::constructor(string host, int port, binary data, bool secur
     QoreStringMaker target("%s:%lld", host->c_str(), port);
     sock_priv->ref();  // ref for connect op (caller must ref; op stores raw pointer)
     SocketConnectPollOperation* connect_op = new SocketConnectPollOperation(xsink,
-        false, target.c_str(), sock_priv);
+        false, target.c_str(), sock_priv, true);
     if (*xsink) {
         connect_op->deref(xsink);
         return;
