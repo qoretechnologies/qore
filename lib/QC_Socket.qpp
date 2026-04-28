@@ -369,7 +369,8 @@ static int socket_exec_send_http_chunked_body_input_stream_poll(QoreObject* self
         InputStream* input_stream, QoreObject* input_stream_obj, size_t max_chunk_size, int timeout_ms,
         bool send_terminal_chunk, ExceptionSink* xsink, bool reassign_after) {
     if (!input_stream->isIoThreadSafe()) {
-        return -2;
+        xsink->raiseException("SOCKET-SEND-ERROR", "InputStream is not I/O thread safe");
+        return -1;
     }
 
     SocketExecInputStreamRefGuard caller_ref(input_stream, xsink, reassign_after);
@@ -422,79 +423,21 @@ static int socket_exec_send_http_chunked_body_input_stream(QoreObject* self, Qor
 
     int rc = socket_exec_send_http_chunked_body_input_stream_poll(self, s, input_stream, input_stream_obj,
         max_chunk_size, timeout_ms, !trailer_callback, xsink, true);
-    if (*xsink) {
+    if (rc) {
         return -1;
     }
-    if (rc != -2) {
-        if (rc) {
-            return -1;
-        }
-        if (!trailer_callback) {
-            return 0;
-        }
-
-        ReferenceHolder<QoreHashNode> trailer(xsink);
-        if (socket_exec_run_http_trailer_callback(trailer_callback, trailer, xsink)) {
-            return -1;
-        }
-        if (trailer) {
-            return socket_exec_send_http_chunked_body_trailer(self, s, *trailer, timeout_ms, xsink);
-        }
-        return socket_exec_send_bytes(self, s, "0\r\n\r\n", 5, timeout_ms, xsink);
+    if (!trailer_callback) {
+        return 0;
     }
 
-    SimpleRefHolder<BinaryNode> buf(new BinaryNode);
-    buf->preallocate(max_chunk_size);
-
-    unsigned cancel_check = 0;
-    while (true) {
-        if (!(cancel_check++ % 100) && qore_check_cancel(xsink, "socket chunked input stream send")) {
-            return -1;
-        }
-
-        int64 r = input_stream->read(const_cast<void*>(buf->getPtr()), max_chunk_size, xsink);
-        if (*xsink) {
-            return -1;
-        }
-
-        QoreString prefix;
-        socket_exec_set_http_chunk_prefix(prefix, static_cast<size_t>(r));
-        if (socket_exec_send_bytes(self, s, prefix.c_str(), prefix.size(), timeout_ms, xsink)) {
-            return -1;
-        }
-
-        bool trailers = false;
-        if (r > 0) {
-            if (socket_exec_send_bytes(self, s, buf->getPtr(), r, timeout_ms, xsink)) {
-                return -1;
-            }
-            my_socket_priv::getPriv(*s)->doDataEvent(QORE_EVENT_HTTP_CHUNKED_DATA_SENT, QORE_SOURCE_SOCKET,
-                buf->getPtr(), r);
-        } else {
-            ReferenceHolder<QoreHashNode> trailer(xsink);
-            if (socket_exec_run_http_trailer_callback(trailer_callback, trailer, xsink)) {
-                return -1;
-            }
-            if (trailer) {
-                QoreString hdr(s->getEncoding());
-                qore_socket_private::do_headers(hdr, *trailer, 0, false);
-                if (socket_exec_send_bytes(self, s, hdr.c_str(), hdr.size(), timeout_ms, xsink)) {
-                    return -1;
-                }
-                my_socket_priv::getPriv(*s)->doHeaderEvent(QORE_EVENT_HTTP_FOOTERS_SENT, QORE_SOURCE_SOCKET,
-                    **trailer);
-                trailers = true;
-            }
-        }
-
-        if (!trailers && socket_exec_send_bytes(self, s, "\r\n", 2, timeout_ms, xsink)) {
-            return -1;
-        }
-
-        if (!r) {
-            return 0;
-        }
+    ReferenceHolder<QoreHashNode> trailer(xsink);
+    if (socket_exec_run_http_trailer_callback(trailer_callback, trailer, xsink)) {
+        return -1;
     }
+    if (trailer) {
+        return socket_exec_send_http_chunked_body_trailer(self, s, *trailer, timeout_ms, xsink);
+    }
+    return socket_exec_send_bytes(self, s, "0\r\n\r\n", 5, timeout_ms, xsink);
 }
 
 static int socket_exec_send_http_chunked_body_callback(QoreObject* self, QoreSocketObject* s,
@@ -606,6 +549,11 @@ static int socket_exec_send_http_response_input_stream(QoreObject* self, QoreSoc
         int code, const char* desc, const char* http_version, const QoreHashNode* headers, InputStream* input_stream,
         QoreObject* input_stream_obj, size_t max_chunk_size, const ResolvedCallReferenceNode* trailer_callback,
         int timeout_ms, ExceptionSink* xsink) {
+    if (!input_stream->isIoThreadSafe()) {
+        xsink->raiseException("SOCKET-SEND-ERROR", "InputStream is not I/O thread safe");
+        return -1;
+    }
+
     my_socket_priv* priv = my_socket_priv::getPriv(*s);
     if (priv->getH2ActiveServerStreamId() > 0) {
         QoreString status_line(s->getEncoding());
@@ -975,7 +923,8 @@ static int socket_exec_write_output_stream_poll(QoreObject* self, QoreSocketObje
         return 0;
     }
     if (!os->isIoThreadSafe()) {
-        return -2;
+        xsink->raiseException("SOCKET-WRITE-ERROR", "OutputStream is not I/O thread safe");
+        return -1;
     }
 
     SocketExecOutputStreamRefGuard caller_ref(os, xsink, reassign_after);
@@ -1028,46 +977,7 @@ static void socket_exec_recv_to_output_stream(QoreObject* self, QoreSocketObject
         return;
     }
 
-    if (os->isIoThreadSafe()) {
-        socket_exec_recv_output_stream_poll(self, s, os, size, timeout_ms, xsink, true, false);
-        return;
-    }
-
-    my_socket_priv* priv = my_socket_priv::getPriv(*s);
-    SocketExecAsyncIoGuard async_guard(*priv, xsink, NB_RECV);
-    if (!async_guard) {
-        return;
-    }
-
-    int64 received = 0;
-    unsigned cancel_check = 0;
-    while (size < 0 || received < size) {
-        if (!(cancel_check++ % 100) && qore_check_cancel(xsink, "socket output stream receive")) {
-            return;
-        }
-        if (size < 0 && received > 0 && !s->isOpen()) {
-            return;
-        }
-        size_t to_read = size < 0
-            ? DEFAULT_SOCKET_BUFSIZE
-            : static_cast<size_t>(QORE_MIN(size - received, (int64)DEFAULT_SOCKET_BUFSIZE));
-        SimpleRefHolder<BinaryNode> bin(socket_exec_recv_some_binary(self, s, to_read, timeout_ms, xsink));
-        if (*xsink) {
-            return;
-        }
-        if (!bin->size()) {
-            if (size >= 0) {
-                xsink->raiseException("SOCKET-RECV-ERROR", "Unexpected end of stream");
-            }
-            return;
-        }
-
-        os->write(bin->getPtr(), bin->size(), xsink);
-        if (*xsink) {
-            return;
-        }
-        received += bin->size();
-    }
+    socket_exec_recv_output_stream_poll(self, s, os, size, timeout_ms, xsink, true, false);
 }
 
 static QoreHashNode* socket_exec_read_http_header(QoreObject* self, QoreSocketObject* s, QoreHashNode* info,
@@ -1501,9 +1411,6 @@ static QoreHashNode* socket_exec_read_http_chunked_body(QoreObject* self, QoreSo
         priv->doDataEvent(QORE_EVENT_HTTP_CHUNKED_DATA_READ, QORE_SOURCE_SOCKET, chunk->getPtr(), chunk->size());
         if (os) {
             int write_rc = socket_exec_write_output_stream_poll(self, s, os, **chunk, timeout_ms, xsink, true);
-            if (write_rc == -2) {
-                os->write(chunk->getPtr(), chunk->size(), xsink);
-            }
             if (write_rc == -1 || *xsink) {
                 return nullptr;
             }
@@ -3948,13 +3855,13 @@ sock.sendFromInputStream(input_stream, -1); # write all data available
     @par Events:
     @ref EVENT_PACKET_SENT
 
-    @param input_stream the @ref InputStream providing the data to send
+    @param input_stream the @ref InputStream providing the data to send; the stream must be I/O-thread-safe
     @param size the amount of data to send in bytes; to send all data available in the InputStream, use -1
     @param timeout_ms the timeout in milliseconds (1/1000 second). If no timeout is passed, then the call will not time out and will not return until all the data has been sent or the remote end closes the connection. Note that like all %Qore functions and methods taking timeout values, a @ref relative_dates "relative date/time value" can be used to make the units clear (i.e. \c 2m = two minutes, etc.)
 
     @throw SOCKET-NOT-OPEN The socket is not connected
     @throw SOCKET-TIMEOUT a single send() operation exceeded the given timeout period
-    @throw SOCKET-SEND-ERROR an error occurred sending the socket data
+    @throw SOCKET-SEND-ERROR an error occurred sending the socket data or the InputStream is not I/O-thread-safe
     @throw SOCKET-SSL-ERROR there was an SSL error while writing data to the socket
 
     @since %Qore 0.8.13
@@ -4236,13 +4143,13 @@ sock.recvToOutputStream(os, -1); # read all data available
     @par Events:
     @ref EVENT_PACKET_READ
 
-    @param os The output stream to write the response body to
+    @param os The output stream to write the response body to; the stream must be I/O-thread-safe
     @param size the amount of data to read in bytes; to read until the remote closes the connection, use -1
     @param timeout_ms the timeout in milliseconds (1/1000 second). If no timeout is passed, then the call will not time out and will not return until all the data has been read or the remote end closes the connection. Note that like all %Qore functions and methods taking timeout values, a @ref relative_dates "relative date/time value" can be used to make the units clear (i.e. \c 2m = two minutes, etc.)
 
     @throw SOCKET-NOT-OPEN the socket is not connected
     @throw SOCKET-CLOSED the remote end has closed the connection.
-    @throw SOCKET-RECV-ERROR there was an error receiving the data.
+    @throw SOCKET-RECV-ERROR there was an error receiving the data or the OutputStream is not I/O-thread-safe
     @throw SOCKET-TIMEOUT the data requested was not received in the timeout period
     @throw SOCKET-SSL-ERROR there was an SSL error while reading data from the socket
 
@@ -4981,7 +4888,7 @@ sock.sendHTTPResponse(200, "OK", "1.1", {"Connection": "Keep-Alive", "Transfer-E
     @param http_version the HTTP protocol version (normally \c "1.0" or \c "1.1", however this method allows any string to be sent)
     @param headers a hash of additional headers to send (key-value pairs); note that the \c "Transfer-Encoding" header
     must be set to \c "chunked" manually with this call
-    @param input_stream The input stream to read data from
+    @param input_stream The input stream to read data from; the stream must be I/O-thread-safe
     @param max_chunk_size the maximum chunk size as the read block size for the @ref InputStream read block size; the
     actual size of the data read will determine the size of each HTTP chunk
     @param info An optional reference to an lvalue that can accept a hash that will be used as an output variable with
@@ -5001,7 +4908,7 @@ sock.sendHTTPResponse(200, "OK", "1.1", {"Connection": "Keep-Alive", "Transfer-E
 
     @throw SOCKET-NOT-OPEN the socket is not connected
     @throw SOCKET-TIMEOUT the data requested was not received in the timeout period
-    @throw SOCKET-SEND-ERROR send failed
+    @throw SOCKET-SEND-ERROR send failed or the InputStream is not I/O-thread-safe
     @throw HTTP-CHUNK-ERROR the chunk size given is not greater than 0
     @throw HTTP-TRAILER-ERROR the trailer callback must return either @ref nothing or @ref hash_type "hash"; this
     exception is thrown is another type is returned
@@ -5367,7 +5274,7 @@ hash<auto> ans = sock.readHTTPChunkedBodyToOutputStream(outputStream, 20s);
     @par Events:
     @ref EVENT_HTTP_CHUNK_SIZE, @ref EVENT_HTTP_FOOTERS_RECEIVED
 
-    @param os The output stream to write the response body to
+    @param os The output stream to write the response body to; the stream must be I/O-thread-safe
     @param timeout_ms The timeout in milliseconds (1/1000 second). If no timeout or if a negative timeout is passed, then the call will not time out and will not return until all the data has been read or the remote end closes the connection.  If a timeout occurs, a \c "SOCKET-TIMEOUT" exception is raised. Note that like all %Qore functions and methods taking timeout values, a @ref relative_dates "relative date/time value" can be used to make the units clear (i.e. \c 2m = two minutes, etc.)
 
     @return a hash of any HTTP footers received (with footer keys converted to lower case)
@@ -5378,6 +5285,7 @@ hash<auto> ans = sock.readHTTPChunkedBodyToOutputStream(outputStream, 20s);
     @throw SOCKET-TIMEOUT The data requested was not received in the timeout period
     @throw SOCKET-SSL-ERROR There was an SSL error while reading data from the socket
     @throw READ-HTTP-CHUNK-ERROR negative value given for chunk size by server
+    @throw SOCKET-WRITE-ERROR the OutputStream is not I/O-thread-safe
 */
 hash<auto> Socket::readHTTPChunkedBodyToOutputStream(Qore::OutputStream[OutputStream] os, timeout timeout_ms = -1) {
     return socket_exec_read_http_chunked_body(self, s, timeout_ms, true, false,

@@ -564,7 +564,8 @@ static int qore_socket_object_exec_send_http_chunked_body_input_stream_poll(Qore
         InputStream* is, QoreObject* is_obj, size_t max_chunk_size, int timeout_ms, bool send_terminal_chunk,
         ExceptionSink* xsink, bool reassign_after) {
     if (!is->isIoThreadSafe()) {
-        return -2;
+        xsink->raiseException("SOCKET-SEND-ERROR", "InputStream is not I/O thread safe");
+        return -1;
     }
 
     SocketObjectInputStreamRefGuard caller_ref(is, xsink, reassign_after);
@@ -658,7 +659,8 @@ static int qore_socket_object_exec_write_output_stream_poll(QoreSocketObject* s,
         return 0;
     }
     if (!os->isIoThreadSafe()) {
-        return -2;
+        xsink->raiseException("SOCKET-WRITE-ERROR", "OutputStream is not I/O thread safe");
+        return -1;
     }
 
     SocketObjectOutputStreamRefGuard caller_ref(os, xsink, reassign_after);
@@ -1123,9 +1125,6 @@ static QoreHashNode* qore_socket_object_exec_read_http_chunked_body(QoreSocketOb
         if (os) {
             int write_rc = qore_socket_object_exec_write_output_stream_poll(s, os, nullptr, **chunk, timeout_ms,
                 xsink, true);
-            if (write_rc == -2) {
-                os->write(chunk->getPtr(), chunk->size(), xsink);
-            }
             if (write_rc == -1 || *xsink) {
                 return nullptr;
             }
@@ -1430,78 +1429,22 @@ static int qore_socket_object_exec_send_http_chunked_body_input_stream(QoreSocke
 
     int rc = qore_socket_object_exec_send_http_chunked_body_input_stream_poll(s, input_stream, nullptr,
         max_chunk_size, timeout_ms, !trailer_callback, xsink, true);
-    if (*xsink) {
+    if (rc) {
         return -1;
     }
-    if (rc != -2) {
-        if (rc) {
-            return -1;
-        }
-        if (!trailer_callback) {
-            return 0;
-        }
-
-        ReferenceHolder<QoreHashNode> trailer(xsink);
-        if (qore_socket_object_exec_run_http_trailer_callback(trailer_callback, trailer, xsink)) {
-            return -1;
-        }
-        if (trailer) {
-            return qore_socket_object_exec_send_http_chunked_body_trailer(s, *trailer, QORE_SOURCE_SOCKET,
-                timeout_ms, xsink);
-        }
-        return qore_socket_object_exec_send_bytes(s, "0\r\n\r\n", 5, timeout_ms, xsink);
+    if (!trailer_callback) {
+        return 0;
     }
 
-    SimpleRefHolder<BinaryNode> buf(new BinaryNode);
-    buf->preallocate(max_chunk_size);
-
-    unsigned cancel_check = 0;
-    while (true) {
-        if (!(cancel_check++ % 100) && qore_check_cancel(xsink, "socket chunked input stream send")) {
-            return -1;
-        }
-
-        int64 r = input_stream->read(const_cast<void*>(buf->getPtr()), max_chunk_size, xsink);
-        if (*xsink) {
-            return -1;
-        }
-
-        QoreString prefix;
-        qore_socket_object_exec_set_http_chunk_prefix(prefix, static_cast<size_t>(r));
-        if (qore_socket_object_exec_send_bytes(s, prefix.c_str(), prefix.size(), timeout_ms, xsink)) {
-            return -1;
-        }
-
-        bool trailers = false;
-        if (r > 0) {
-            if (qore_socket_object_exec_send_bytes(s, buf->getPtr(), r, timeout_ms, xsink)) {
-                return -1;
-            }
-            priv->doDataEvent(QORE_EVENT_HTTP_CHUNKED_DATA_SENT, QORE_SOURCE_SOCKET, buf->getPtr(), r);
-        } else {
-            ReferenceHolder<QoreHashNode> trailer(xsink);
-            if (qore_socket_object_exec_run_http_trailer_callback(trailer_callback, trailer, xsink)) {
-                return -1;
-            }
-            if (trailer) {
-                QoreString hdr(s->getEncoding());
-                qore_socket_private::do_headers(hdr, *trailer, 0, false);
-                if (qore_socket_object_exec_send_bytes(s, hdr.c_str(), hdr.size(), timeout_ms, xsink)) {
-                    return -1;
-                }
-                priv->doHeaderEvent(QORE_EVENT_HTTP_FOOTERS_SENT, QORE_SOURCE_SOCKET, **trailer);
-                trailers = true;
-            }
-        }
-
-        if (!trailers && qore_socket_object_exec_send_bytes(s, "\r\n", 2, timeout_ms, xsink)) {
-            return -1;
-        }
-
-        if (!r) {
-            return 0;
-        }
+    ReferenceHolder<QoreHashNode> trailer(xsink);
+    if (qore_socket_object_exec_run_http_trailer_callback(trailer_callback, trailer, xsink)) {
+        return -1;
     }
+    if (trailer) {
+        return qore_socket_object_exec_send_http_chunked_body_trailer(s, *trailer, QORE_SOURCE_SOCKET,
+            timeout_ms, xsink);
+    }
+    return qore_socket_object_exec_send_bytes(s, "0\r\n\r\n", 5, timeout_ms, xsink);
 }
 
 static bool qore_socket_object_exec_is_data_available(QoreSocketObject* s, int timeout_ms, ExceptionSink* xsink);
@@ -1682,6 +1625,11 @@ static int qore_socket_object_exec_send_http_response_input_stream(QoreSocketObj
         int code, const char* desc, const char* http_version, const QoreHashNode* headers, InputStream* input_stream,
         size_t max_chunk_size, const ResolvedCallReferenceNode* trailer_callback, int source, int timeout_ms,
         ExceptionSink* xsink) {
+    if (!input_stream->isIoThreadSafe()) {
+        xsink->raiseException("SOCKET-SEND-ERROR", "InputStream is not I/O thread safe");
+        return -1;
+    }
+
     my_socket_priv* priv = my_socket_priv::getPriv(*s);
     QoreSocketObjectAsyncIoGuard async_guard(*priv, xsink, NB_SEND);
     if (!async_guard) {
@@ -2119,45 +2067,8 @@ void QoreSocketObject::sendFromInputStream(InputStream *is, int64 size, int64 ti
         return;
     }
 
-    if (is->isIoThreadSafe()) {
-        qore_socket_object_exec_send_input_stream_poll(this, is, nullptr, size, static_cast<int>(timeout_ms), xsink,
-            true);
-        return;
-    }
-
-    my_socket_priv* priv = my_socket_priv::getPriv(*this);
-    QoreSocketObjectAsyncIoGuard async_guard(*priv, xsink, NB_SEND);
-    if (!async_guard) {
-        return;
-    }
-
-    char buf[DEFAULT_SOCKET_BUFSIZE];
-    int64 sent = 0;
-    int timeout = static_cast<int>(timeout_ms);
-    unsigned cancel_check = 0;
-    while (size < 0 || sent < size) {
-        if (!(cancel_check++ % 100) && qore_check_cancel(xsink, "socket object input stream send")) {
-            return;
-        }
-        int64 to_read = size < 0 ? DEFAULT_SOCKET_BUFSIZE : QORE_MIN(size - sent, (int64)DEFAULT_SOCKET_BUFSIZE);
-        int64 read = is->read(buf, to_read, xsink);
-        if (*xsink) {
-            return;
-        }
-        if (read <= 0) {
-            if (size >= 0) {
-                xsink->raiseException("SOCKET-SEND-ERROR", "Unexpected end of stream");
-            }
-            return;
-        }
-
-        qore_socket_object_exec_send_bytes(this, buf, read, timeout, xsink);
-        if (*xsink) {
-            return;
-        }
-        priv->socket->priv->do_data_event(QORE_EVENT_SOCKET_DATA_SENT, QORE_SOURCE_SOCKET, buf, read);
-        sent += read;
-    }
+    qore_socket_object_exec_send_input_stream_poll(this, is, nullptr, size, static_cast<int>(timeout_ms), xsink,
+        true);
 }
 
 // send from a file descriptor
@@ -2253,50 +2164,8 @@ void QoreSocketObject::recvToOutputStream(OutputStream *os, int64 size, int64 ti
         return;
     }
 
-    if (os->isIoThreadSafe()) {
-        qore_socket_object_exec_recv_output_stream_poll(this, os, nullptr, size, static_cast<int>(timeout_ms), xsink,
-            true, true);
-        return;
-    }
-
-    my_socket_priv* priv = my_socket_priv::getPriv(*this);
-    QoreSocketObjectAsyncIoGuard async_guard(*priv, xsink, NB_RECV);
-    if (!async_guard) {
-        return;
-    }
-
-    int64 received = 0;
-    int timeout = static_cast<int>(timeout_ms);
-    unsigned cancel_check = 0;
-    while (size < 0 || received < size) {
-        if (!(cancel_check++ % 100) && qore_check_cancel(xsink, "socket object output stream receive")) {
-            return;
-        }
-        if (size < 0 && received > 0 && !isOpen()) {
-            return;
-        }
-        size_t to_read = size < 0
-            ? DEFAULT_SOCKET_BUFSIZE
-            : static_cast<size_t>(QORE_MIN(size - received, (int64)DEFAULT_SOCKET_BUFSIZE));
-        SimpleRefHolder<BinaryNode> bin(qore_socket_object_exec_recv_some_binary(this, to_read, timeout, xsink));
-        if (*xsink) {
-            return;
-        }
-        if (!bin->size()) {
-            if (size >= 0) {
-                xsink->raiseException("SOCKET-RECV-ERROR", "Unexpected end of stream");
-            }
-            return;
-        }
-
-        priv->socket->priv->do_data_event(QORE_EVENT_SOCKET_DATA_READ, QORE_SOURCE_SOCKET,
-            bin->getPtr(), bin->size());
-        os->write(bin->getPtr(), bin->size(), xsink);
-        if (*xsink) {
-            return;
-        }
-        received += bin->size();
-    }
+    qore_socket_object_exec_recv_output_stream_poll(this, os, nullptr, size, static_cast<int>(timeout_ms), xsink,
+        true, true);
 }
 
 // receive and write data to a file descriptor

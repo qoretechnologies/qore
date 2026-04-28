@@ -108,6 +108,24 @@ P1CvlJwL79QntIvjfC5nRMHwMy2wE6Eqt57sFlUnvD25CbbX/TNDSNqXhXQbYaCZ
 I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
 -----END CERTIFICATE-----";
 
+class UnsafeSocketInputStream inherits InputStream {
+    *binary read(int limit) {
+        return <01>;
+    }
+
+    int peek() {
+        return 1;
+    }
+}
+
+class UnsafeSocketOutputStream inherits OutputStream {
+    write(binary data) {
+    }
+
+    close() {
+    }
+}
+
 class SocketTest inherits QUnit::Test {
     private {
         auto o;
@@ -160,6 +178,7 @@ class SocketTest inherits QUnit::Test {
         addTestCase("Random Port tests", \randomPortSocketTest());
         addTestCase("UNIX socket connect", \unixSocketConnectTest());
         addTestCase("Stream socket transfer", \streamSocketTransferTest());
+        addTestCase("Unsafe stream socket transfer rejection", \unsafeStreamSocketTransferRejectionTest());
         addTestCase("SSL read test", \sslReadTest());
         addTestCase("SSL upgrade test", \sslUpgradeTest());
         addTestCase("SSL poll send partial test", \sslPollSendPartialTest());
@@ -1803,6 +1822,40 @@ class SocketTest inherits QUnit::Test {
         peer.recvToOutputStream(output_stream2, -1, 10s);
         assertEq(payload, output_stream2.getData());
         c.waitForZero();
+    }
+
+    unsafeStreamSocketTransferRejectionTest() {
+        Socket server();
+        server.bindINET("127.0.0.1", 0);
+        server.listen();
+
+        Socket client();
+        client.connectINET("127.0.0.1", server.getSocketInfo().port, 10s);
+        Socket peer = server.accept(10s);
+        on_exit client.close();
+        on_exit peer.close();
+
+        UnsafeSocketInputStream is();
+        UnsafeSocketOutputStream os();
+
+        assertThrows("SOCKET-SEND-ERROR", sub() {
+            client.sendFromInputStream(is, 1, 10s);
+        });
+        assertThrows("SOCKET-RECV-ERROR", sub() {
+            peer.recvToOutputStream(os, 1, 10s);
+        });
+        assertThrows("SOCKET-SEND-ERROR", sub() {
+            client.sendHTTPChunkedBodyFromInputStream(is, 1, 10s);
+        });
+        assertThrows("SOCKET-SEND-ERROR", sub() {
+            client.sendHTTPResponse(200, "OK", "1.1", {"Transfer-Encoding": "chunked"}, is, 1);
+        });
+        assertFalse(peer.isDataAvailable(100ms));
+
+        client.send("1\r\nx\r\n0\r\n\r\n", 10s);
+        assertThrows("SOCKET-WRITE-ERROR", sub() {
+            peer.readHTTPChunkedBodyToOutputStream(os, 10s);
+        });
     }
 
     unconnectedSocketTest() {
