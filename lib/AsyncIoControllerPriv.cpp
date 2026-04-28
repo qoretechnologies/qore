@@ -1976,14 +1976,29 @@ int AsyncIoControllerPriv::cancelBySocketHash(const std::string& sock_hash,
 
     if (on_async_io_thread && inside_continue_poll_batch) {
         // Defer to the next command-processing pass; the current Phase-2
-        // batch owns raw pointers captured from the cache.
-        IoThreadContext& target = getThreadForKey(sock_hash);
-        Command cmd;
-        cmd.cmd = IoCommand::CancelSocket;
-        cmd.sock_hash = sock_hash;
-        target.cmdq.push(std::move(cmd));
-        ++submit_seq;
-        target.notifier->notify();
+        // batch owns raw pointers captured from the cache.  Broadcast to all
+        // live I/O threads: submit() may have routed an operation with a
+        // stable thread_key that is different from the socket hash.
+        std::vector<IoThreadContext*> live_targets;
+        {
+            AutoLocker al(m);
+            if (anyThreadRunning() && !io_exiting) {
+                for (auto& tp : io_threads) {
+                    if (!tp->tid) {
+                        continue;
+                    }
+                    Command cmd;
+                    cmd.cmd = IoCommand::CancelSocket;
+                    cmd.sock_hash = sock_hash;
+                    tp->cmdq.push(std::move(cmd));
+                    ++submit_seq;
+                    live_targets.push_back(tp.get());
+                }
+            }
+        }
+        for (auto* tp : live_targets) {
+            tp->notifier->notify();
+        }
         return 0;
     }
 
@@ -2054,7 +2069,41 @@ int AsyncIoControllerPriv::close(AbstractPollableIoObjectBase* sock, ExceptionSi
 int AsyncIoControllerPriv::closeSocketOnController(AbstractPollableIoObjectBase* sock,
         const std::string& sock_hash, ExceptionSink* xsink) {
     if (on_async_io_thread) {
-        sock->closeIo(xsink);
+        int target_idx = getThreadIndex(sock_hash);
+        if (current_io_thread_idx == target_idx) {
+            sock->closeIo(xsink);
+            return *xsink ? -1 : 0;
+        }
+
+        // We cannot wait on another I/O thread from an I/O callback without
+        // risking a controller deadlock.  Queue the close to the socket's
+        // controller thread and return once the command is published.
+        IoThreadContext* target = nullptr;
+        {
+            AutoLocker al(m);
+            if (shutting_down) {
+                xsink->raiseException("ASYNC-IO-ERROR", "controller is shutting down");
+                return -1;
+            }
+
+            target = &getThreadForKey(sock_hash);
+            if (!target->running.load(std::memory_order_acquire) || io_exiting || !target->tid) {
+                startIntern(xsink);
+                if (*xsink) {
+                    return -1;
+                }
+                target = &getThreadForKey(sock_hash);
+            }
+
+            Command cmd;
+            cmd.cmd = IoCommand::CloseSocket;
+            cmd.sock_hash = sock_hash;
+            sock->ref();
+            cmd.close_sock = sock;
+            target->cmdq.push(std::move(cmd));
+            ++submit_seq;
+        }
+        target->notifier->notify();
         return *xsink ? -1 : 0;
     }
 
