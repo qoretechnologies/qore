@@ -2076,14 +2076,16 @@ int AsyncIoControllerPriv::closeSocketOnController(AbstractPollableIoObjectBase*
 
     if (on_async_io_thread) {
         int target_idx = get_target_idx();
-        if (current_io_thread_idx == target_idx) {
+        if (!inside_continue_poll_batch && current_io_thread_idx == target_idx) {
             sock->closeIo(xsink);
             return *xsink ? -1 : 0;
         }
 
         // We cannot wait on another I/O thread from an I/O callback without
-        // risking a controller deadlock.  Queue the close to the socket's
-        // controller thread and return once the command is published.
+        // risking a controller deadlock.  During a continuePoll batch we also
+        // queue same-thread closes behind the deferred cancel command, so the
+        // current batch does not close fds while it still owns cached raw
+        // operation pointers.
         IoThreadContext* target = nullptr;
         {
             AutoLocker al(m);
