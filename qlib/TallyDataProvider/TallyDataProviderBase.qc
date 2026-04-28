@@ -111,6 +111,9 @@ public class TallyDataProviderBase inherits DataProvider::AbstractDataProvider {
     *hash<string, bool> getSupportedReferenceData() {
         return {
             "forms": True,
+            "workspaces": True,
+            "webhooks": True,
+            "submissions": True,
         };
     }
 
@@ -118,6 +121,9 @@ public class TallyDataProviderBase inherits DataProvider::AbstractDataProvider {
     private *list<hash<AllowedValueInfo>> getReferenceDataImpl(string type, *hash<auto> action_opts) {
         switch (type) {
             case "forms": return getReferenceForms();
+            case "workspaces": return getReferenceWorkspaces();
+            case "webhooks": return getReferenceWebhooks();
+            case "submissions": return getReferenceSubmissions(action_opts.form_id);
         }
     }
 
@@ -134,6 +140,70 @@ public class TallyDataProviderBase inherits DataProvider::AbstractDataProvider {
                     "desc": sprintf("%s (ID: %s, Status: %s)", display_name, form.id,
                         form.status ?? "unknown"),
                     "value": string(form.id),
+                };
+            }
+        }
+        return rv;
+    }
+
+    #! Returns available workspaces for reference data (dropdown selections)
+    private *list<hash<AllowedValueInfo>> getReferenceWorkspaces() {
+        list<hash<AllowedValueInfo>> rv = ();
+        hash<auto> response = doRestCommand("GET", "workspaces");
+        if (response.body.items) {
+            foreach hash<auto> ws in (response.body.items) {
+                string display_name = ws.name ?? sprintf("Workspace %s", ws.id);
+                rv += <AllowedValueInfo>{
+                    "display_name": display_name,
+                    "short_desc": display_name,
+                    "desc": sprintf("%s (ID: %s)", display_name, ws.id),
+                    "value": string(ws.id),
+                };
+            }
+        }
+        return rv;
+    }
+
+    #! Returns available webhooks for reference data (dropdown selections)
+    private *list<hash<AllowedValueInfo>> getReferenceWebhooks() {
+        list<hash<AllowedValueInfo>> rv = ();
+        hash<auto> response = doRestCommand("GET", "webhooks?limit=500");
+        if (response.body.webhooks) {
+            foreach hash<auto> wh in (response.body.webhooks) {
+                string display_name = wh.url ?? sprintf("Webhook %s", wh.id);
+                rv += <AllowedValueInfo>{
+                    "display_name": display_name,
+                    "short_desc": display_name,
+                    "desc": sprintf("%s (ID: %s, Form: %s, Enabled: %y)", display_name, wh.id,
+                        wh.formId ?? "unknown", wh.isEnabled),
+                    "value": string(wh.id),
+                };
+            }
+        }
+        return rv;
+    }
+
+    #! Returns available submissions for the given form (cascading reference data)
+    /** Returns NOTHING when no form_id is set so the dropdown stays empty until the user
+        selects a form.
+    */
+    private *list<hash<AllowedValueInfo>> getReferenceSubmissions(*string form_id) {
+        if (!form_id.val()) {
+            return;
+        }
+        list<hash<AllowedValueInfo>> rv = ();
+        hash<auto> response = doRestCommand("GET", "forms/" + form_id + "/submissions?limit=500");
+        if (response.body.submissions) {
+            foreach hash<auto> submission in (response.body.submissions) {
+                string display_name = submission.submittedAt
+                    ? sprintf("Submission %s (%s)", submission.id, submission.submittedAt)
+                    : sprintf("Submission %s", submission.id);
+                rv += <AllowedValueInfo>{
+                    "display_name": display_name,
+                    "short_desc": display_name,
+                    "desc": sprintf("%s (ID: %s, Completed: %y)", display_name, submission.id,
+                        submission.isCompleted),
+                    "value": string(submission.id),
                 };
             }
         }

@@ -103,6 +103,13 @@ public class TallyDataProviderTest inherits QUnit::Test {
         addTestCase("create webhook", \createWebhookTest());
         addTestCase("update webhook", \updateWebhookTest());
         addTestCase("search webhooks", \searchWebhooksTest());
+        addTestCase("search webhook events", \searchWebhookEventsTest());
+        addTestCase("retry webhook event", \retryWebhookEventTest());
+        addTestCase("create workspace", \createWorkspaceTest());
+        addTestCase("get workspace", \getWorkspaceTest());
+        addTestCase("update workspace", \updateWorkspaceTest());
+        addTestCase("delete workspace", \deleteWorkspaceTest());
+        addTestCase("search workspaces", \searchWorkspacesTest());
         addTestCase("get current user", \getCurrentUserTest());
         addTestCase("example event data", \exampleEventDataTest());
         addTestCase("live connection ping", \liveConnectionPingTest());
@@ -144,6 +151,15 @@ public class TallyDataProviderTest inherits QUnit::Test {
         assertTrue(inlist("delete-webhook", children), "has delete-webhook child");
         assertTrue(inlist("get-current-user", children), "has get-current-user child");
         assertTrue(inlist("events", children), "has events child");
+        # workspaces
+        assertTrue(inlist("workspaces", children), "has workspaces child");
+        assertTrue(inlist("create-workspace", children), "has create-workspace child");
+        assertTrue(inlist("get-workspace", children), "has get-workspace child");
+        assertTrue(inlist("update-workspace", children), "has update-workspace child");
+        assertTrue(inlist("delete-workspace", children), "has delete-workspace child");
+        # webhook events
+        assertTrue(inlist("webhook-events", children), "has webhook-events child");
+        assertTrue(inlist("retry-webhook-event", children), "has retry-webhook-event child");
 %endif
     }
 
@@ -187,6 +203,86 @@ public class TallyDataProviderTest inherits QUnit::Test {
         assertEq("forms", action.options.formId.ref_data);
         assertEq(True, action.options.url.required);
         assertEq(True, action.options.eventTypes.required);
+        # element_allowed_values populated for eventTypes
+        assertTrue(exists action.options.eventTypes.element_allowed_values,
+            "create-webhook eventTypes has element_allowed_values");
+
+        # test update-webhook action: id has webhooks ref_data; body fields are optional
+        action = DataProviderActionCatalog::getAppAction(
+            TallyDataProvider::TallyDataProvider::AppName, "update-webhook"
+        );
+        assertEq("webhooks", action.options.id.ref_data,
+            "update-webhook id uses webhooks ref_data");
+        assertEq(True, action.options.id.required);
+        # PATCH body fields are optional - per Tally API
+        assertFalse(action.options.formId.required, "update-webhook formId is optional");
+        assertFalse(action.options.url.required, "update-webhook url is optional");
+        assertFalse(action.options.eventTypes.required, "update-webhook eventTypes is optional");
+        assertFalse(action.options.isEnabled.required, "update-webhook isEnabled is optional");
+
+        # test delete-webhook action: id has webhooks ref_data
+        action = DataProviderActionCatalog::getAppAction(
+            TallyDataProvider::TallyDataProvider::AppName, "delete-webhook"
+        );
+        assertEq("webhooks", action.options.id.ref_data,
+            "delete-webhook id uses webhooks ref_data");
+
+        # test get-submission action: cascading ref_data
+        action = DataProviderActionCatalog::getAppAction(
+            TallyDataProvider::TallyDataProvider::AppName, "get-submission"
+        );
+        assertEq("forms", action.options.form_id.ref_data);
+        assertEq(True, action.options.form_id.has_dependents,
+            "form_id is the controlling field");
+        assertEq(("refetch",), action.options.form_id.on_change);
+        assertEq("submissions", action.options.submission_id.ref_data,
+            "submission_id uses cascading submissions ref_data");
+        assertEq(("form_id",), action.options.submission_id.depends_on,
+            "submission_id depends on form_id");
+
+        # test create-form action: workspaceId has workspaces ref_data
+        action = DataProviderActionCatalog::getAppAction(
+            TallyDataProvider::TallyDataProvider::AppName, "create-form"
+        );
+        assertEq("workspaces", action.options.workspaceId.ref_data,
+            "create-form workspaceId uses workspaces ref_data");
+
+        # test search-forms action: workspaceIds has workspaces ref_data
+        action = DataProviderActionCatalog::getAppAction(
+            TallyDataProvider::TallyDataProvider::AppName, "search-forms"
+        );
+        assertEq("workspaces", action.options.workspaceIds.ref_data,
+            "search-forms workspaceIds uses workspaces ref_data");
+
+        # test new workspace actions
+        action = DataProviderActionCatalog::getAppAction(
+            TallyDataProvider::TallyDataProvider::AppName, "create-workspace"
+        );
+        assertEq("/create-workspace", action.path);
+        assertEq(DPAT_API, action.action_code);
+        assertEq(("Workspaces",), action.groups);
+        assertEq(True, action.options.name.required);
+        assertTrue(action.output_type instanceof TallyDataProvider::TallyWorkspaceDataType);
+
+        action = DataProviderActionCatalog::getAppAction(
+            TallyDataProvider::TallyDataProvider::AppName, "search-workspaces"
+        );
+        assertEq("/workspaces", action.path);
+        assertEq(DPAT_FIND, action.action_code);
+
+        # test new webhook event actions
+        action = DataProviderActionCatalog::getAppAction(
+            TallyDataProvider::TallyDataProvider::AppName, "search-webhook-events"
+        );
+        assertEq(DPAT_FIND, action.action_code);
+        assertEq("webhooks", action.options.webhook_id.ref_data);
+
+        action = DataProviderActionCatalog::getAppAction(
+            TallyDataProvider::TallyDataProvider::AppName, "retry-webhook-event"
+        );
+        assertEq(DPAT_API, action.action_code);
+        assertEq("webhooks", action.options.webhook_id.ref_data);
+        assertEq(True, action.options.event_id.required);
 
         # test get-current-user action
         action = DataProviderActionCatalog::getAppAction(
@@ -263,6 +359,27 @@ public class TallyDataProviderTest inherits QUnit::Test {
         assertTrue(fields.hasKey("answer"), "response has answer field");
         assertTrue(fields.hasKey("formattedAnswer"), "response has formattedAnswer field");
         assertTrue(fields.hasKey("respondentId"), "response has respondentId field");
+
+        # workspace data type
+        auto ws_type = new TallyDataProvider::TallyWorkspaceDataType();
+        fields = ws_type.getFields();
+        assertTrue(fields.hasKey("id"), "workspace has id field");
+        assertTrue(fields.hasKey("name"), "workspace has name field");
+        assertTrue(fields.hasKey("members"), "workspace has members field");
+        assertTrue(fields.hasKey("invites"), "workspace has invites field");
+        assertTrue(fields.hasKey("createdByUserId"), "workspace has createdByUserId field");
+
+        # webhook event data type
+        auto wh_event_type = new TallyDataProvider::TallyWebhookEventDataType();
+        fields = wh_event_type.getFields();
+        assertTrue(fields.hasKey("id"), "webhook event has id field");
+        assertTrue(fields.hasKey("webhookId"), "webhook event has webhookId field");
+        assertTrue(fields.hasKey("eventType"), "webhook event has eventType field");
+        assertTrue(fields.hasKey("deliveryStatus"), "webhook event has deliveryStatus field");
+        assertTrue(fields.hasKey("payload"), "webhook event has payload field");
+        # verify deliveryStatus allowed values
+        *list<auto> ds_av = fields.deliveryStatus.getAllowedValues();
+        assertEq(4, ds_av.lsize(), "deliveryStatus has 4 allowed values");
     }
 
     getFormTest() {
@@ -565,6 +682,19 @@ public class TallyDataProviderTest inherits QUnit::Test {
         assertEq(False, rest.last_request.isEnabled);
         assertEq("updated", resp.status);
         assertEq("wh1", resp.id);
+
+        # verify partial update works (only id + isEnabled) - body fields are optional
+        rest.response_body = {};
+        resp = dp.doRequest({
+            "id": "wh1",
+            "isEnabled": True,
+        });
+        assertEq("PATCH", rest.last_method);
+        assertEq("webhooks/wh1", rest.last_path);
+        assertFalse(rest.last_request.hasKey("id"), "id stripped from partial PATCH body");
+        assertEq(True, rest.last_request.isEnabled);
+        assertFalse(exists rest.last_request.formId, "formId not in partial PATCH body");
+        assertFalse(exists rest.last_request.url, "url not in partial PATCH body");
 %endif
     }
 
@@ -609,6 +739,173 @@ public class TallyDataProviderTest inherits QUnit::Test {
         assertEq("wh2", recs[1].id);
         assertEq(False, recs[1].isEnabled);
         assertTrue(rest.last_path.regex("webhooks\\?.*limit=25"));
+%endif
+    }
+
+    searchWebhookEventsTest() {
+        checkModule();
+%ifndef NoJson
+        FakeTallyRestClientIo rest();
+        rest.response_body = {
+            "events": (
+                {
+                    "id": "evt1",
+                    "webhookId": "wh1",
+                    "webhookUrl": "https://example.com/hook",
+                    "eventType": "FORM_RESPONSE",
+                    "deliveryStatus": "FAILED",
+                    "statusCode": 500,
+                    "retry": 2,
+                    "payload": {"data": "x"},
+                    "createdAt": "2026-04-07T00:00:00Z",
+                },
+            ),
+            "page": 1,
+            "limit": 25,
+            "hasMore": False,
+        };
+        TallyDataProvider::TallyDataProvider prov(rest);
+        AbstractDataProvider dp = prov.getChildProvider("webhook-events");
+        AbstractDataProviderRecordIterator it = dp.searchRecords(NOTHING, {"webhook_id": "wh1"});
+        list<hash<auto>> recs = ();
+        while (it.next()) recs += it.getValue();
+
+        assertEq(1, recs.lsize());
+        assertEq("evt1", recs[0].id);
+        assertEq("FAILED", recs[0].deliveryStatus);
+        assertTrue(rest.last_path.regex("webhooks/wh1/events"));
+%endif
+    }
+
+    retryWebhookEventTest() {
+        checkModule();
+%ifndef NoJson
+        FakeTallyRestClientIo rest();
+        rest.response_body = {};
+        TallyDataProvider::TallyDataProvider prov(rest);
+        AbstractDataProvider dp = prov.getChildProvider("retry-webhook-event");
+        hash<auto> resp = dp.doRequest({
+            "webhook_id": "wh1",
+            "event_id": "evt1",
+        });
+
+        assertEq("POST", rest.last_method);
+        assertEq("webhooks/wh1/events/evt1/retry", rest.last_path);
+        assertEq("retried", resp.status);
+        assertEq("wh1", resp.webhook_id);
+        assertEq("evt1", resp.event_id);
+%endif
+    }
+
+    createWorkspaceTest() {
+        checkModule();
+%ifndef NoJson
+        FakeTallyRestClientIo rest();
+        rest.response_body = {
+            "id": "ws1",
+            "name": "Marketing",
+            "members": (),
+            "invites": (),
+            "createdByUserId": "user1",
+            "createdAt": "2026-04-07T00:00:00Z",
+            "updatedAt": "2026-04-07T00:00:00Z",
+        };
+        TallyDataProvider::TallyDataProvider prov(rest);
+        AbstractDataProvider dp = prov.getChildProvider("create-workspace");
+        hash<auto> resp = dp.doRequest({"name": "Marketing"});
+
+        assertEq("POST", rest.last_method);
+        assertEq("workspaces", rest.last_path);
+        assertEq("Marketing", rest.last_request.name);
+        assertEq("ws1", resp.id);
+        assertEq("Marketing", resp.name);
+%endif
+    }
+
+    getWorkspaceTest() {
+        checkModule();
+%ifndef NoJson
+        FakeTallyRestClientIo rest();
+        rest.response_body = {
+            "id": "ws1",
+            "name": "Marketing",
+            "members": ({"id": "u1", "fullName": "Test User", "email": "t@example.com"},),
+            "invites": (),
+            "createdByUserId": "u1",
+        };
+        TallyDataProvider::TallyDataProvider prov(rest);
+        AbstractDataProvider dp = prov.getChildProvider("get-workspace");
+        hash<auto> resp = dp.doRequest({"id": "ws1"});
+
+        assertEq("GET", rest.last_method);
+        assertEq("workspaces/ws1", rest.last_path);
+        assertEq("ws1", resp.id);
+        assertEq("Marketing", resp.name);
+        assertEq(1, resp.members.lsize());
+%endif
+    }
+
+    updateWorkspaceTest() {
+        checkModule();
+%ifndef NoJson
+        FakeTallyRestClientIo rest();
+        rest.response_body = {};
+        TallyDataProvider::TallyDataProvider prov(rest);
+        AbstractDataProvider dp = prov.getChildProvider("update-workspace");
+        hash<auto> resp = dp.doRequest({"id": "ws1", "name": "Marketing v2"});
+
+        assertEq("PATCH", rest.last_method);
+        assertEq("workspaces/ws1", rest.last_path);
+        # verify id stripped from body
+        assertFalse(rest.last_request.hasKey("id"), "id stripped from PATCH body");
+        assertEq("Marketing v2", rest.last_request.name);
+        assertEq("updated", resp.status);
+        assertEq("ws1", resp.id);
+%endif
+    }
+
+    deleteWorkspaceTest() {
+        checkModule();
+%ifndef NoJson
+        FakeTallyRestClientIo rest();
+        rest.response_body = {};
+        TallyDataProvider::TallyDataProvider prov(rest);
+        AbstractDataProvider dp = prov.getChildProvider("delete-workspace");
+        hash<auto> resp = dp.doRequest({"id": "ws1"});
+
+        assertEq("DELETE", rest.last_method);
+        assertEq("workspaces/ws1", rest.last_path);
+        assertEq("deleted", resp.status);
+        assertEq("ws1", resp.id);
+%endif
+    }
+
+    searchWorkspacesTest() {
+        checkModule();
+%ifndef NoJson
+        FakeTallyRestClientIo rest();
+        rest.response_body = {
+            "items": (
+                {"id": "ws1", "name": "Marketing", "members": (), "invites": (),
+                    "createdByUserId": "u1"},
+                {"id": "ws2", "name": "Sales", "members": (), "invites": (),
+                    "createdByUserId": "u1"},
+            ),
+            "page": 1,
+            "limit": 50,
+            "total": 2,
+            "hasMore": False,
+        };
+        TallyDataProvider::TallyDataProvider prov(rest);
+        AbstractDataProvider dp = prov.getChildProvider("workspaces");
+        AbstractDataProviderRecordIterator it = dp.searchRecords();
+        list<hash<auto>> recs = ();
+        while (it.next()) recs += it.getValue();
+
+        assertEq(2, recs.lsize());
+        assertEq("ws1", recs[0].id);
+        assertEq("Sales", recs[1].name);
+        assertTrue(rest.last_path.regex("workspaces"));
 %endif
     }
 

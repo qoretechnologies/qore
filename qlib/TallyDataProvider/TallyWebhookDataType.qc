@@ -64,7 +64,10 @@ public class TallyWebhookDataType inherits HashDataType {
                 "short_desc": "Subscribed event types",
                 "desc": "List of event types this webhook is subscribed to; the only valid value "
                     "is `FORM_RESPONSE`",
-                "type": AbstractDataProviderType::get(SoftListOrNothingType),
+                "type": new ListDataType(AbstractDataProviderTypeMap."string", True),
+                "element_allowed_values": (
+                    <AllowedValueInfo>{"value": "FORM_RESPONSE", "display_name": "Form Response"},
+                ),
             },
             "externalSubscriber": {
                 "display_name": "External Subscriber",
