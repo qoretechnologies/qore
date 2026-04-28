@@ -141,6 +141,15 @@ public:
     */
     DLLEXPORT SocketConnectPollOperation(ExceptionSink* xsink, bool ssl, const char* target,
             QoreSocketObject* sock);
+    //! Creates the connect poll operation with optional deferred controller initialization
+    /** @param xsink exception sink
+        @param ssl if true, perform TLS handshake after TCP connect
+        @param target connection target (host:port or path)
+        @param sock the socket (will be ref'd)
+        @param defer_init if true, socket non-blocking setup is deferred until the async controller runs the operation
+    */
+    DLLEXPORT SocketConnectPollOperation(ExceptionSink* xsink, bool ssl, const char* target,
+            QoreSocketObject* sock, bool defer_init);
 
     //! Creates the INET connect poll operation
     /** @param xsink exception sink
@@ -154,6 +163,19 @@ public:
     */
     DLLEXPORT SocketConnectPollOperation(ExceptionSink* xsink, bool ssl, const char* host, const char* service,
             int family, int socktype, int protocol, QoreSocketObject* sock);
+    //! Creates the INET connect poll operation with optional deferred controller initialization
+    /** @param xsink exception sink
+        @param ssl if true, perform TLS handshake after TCP connect
+        @param host host name or address
+        @param service service name or port string
+        @param family address family
+        @param socktype socket type
+        @param protocol protocol number
+        @param sock the socket (will be ref'd)
+        @param defer_init if true, socket non-blocking setup is deferred until the async controller runs the operation
+    */
+    DLLEXPORT SocketConnectPollOperation(ExceptionSink* xsink, bool ssl, const char* host, const char* service,
+            int family, int socktype, int protocol, QoreSocketObject* sock, bool defer_init);
 
     //! Creates the UNIX-domain connect poll operation
     /** @param xsink exception sink
@@ -165,6 +187,17 @@ public:
     */
     DLLEXPORT SocketConnectPollOperation(ExceptionSink* xsink, bool ssl, const char* path, int socktype,
             int protocol, QoreSocketObject* sock);
+    //! Creates the UNIX-domain connect poll operation with optional deferred controller initialization
+    /** @param xsink exception sink
+        @param ssl if true, perform TLS handshake after connect
+        @param path UNIX-domain socket path
+        @param socktype socket type
+        @param protocol protocol number
+        @param sock the socket (will be ref'd)
+        @param defer_init if true, socket non-blocking setup is deferred until the async controller runs the operation
+    */
+    DLLEXPORT SocketConnectPollOperation(ExceptionSink* xsink, bool ssl, const char* path, int socktype,
+            int protocol, QoreSocketObject* sock, bool defer_init);
 
     //! Dereferences the operation; clears non-block and deref's the socket on last ref
     DLLEXPORT void deref(ExceptionSink* xsink);
@@ -198,6 +231,8 @@ private:
     };
 
     DLLEXPORT void init(ExceptionSink* xsink, bool ssl);
+    DLLEXPORT void init(ExceptionSink* xsink, bool ssl, bool defer_init);
+    DLLEXPORT void initLocked(ExceptionSink* xsink);
     DLLEXPORT AbstractPollState* startConnect(ExceptionSink* xsink);
     DLLEXPORT std::string getTraceTarget() const;
 
@@ -208,6 +243,9 @@ private:
     int socktype = Q_SOCK_STREAM;
     int protocol = 0;
     int sgoal = 0;
+    bool initialized = false;
+    bool controller_deferred_init = false;
+    int controller_deferred_tid = -1;
 };
 
 //! Non-blocking send operation (string or binary data)
@@ -223,6 +261,14 @@ public:
         @param sock the socket (will be ref'd)
     */
     DLLEXPORT SocketSendPollOperation(ExceptionSink* xsink, QoreStringNode* data, QoreSocketObject* sock);
+    //! Creates a send operation for string data with optional deferred controller initialization
+    /** @param xsink exception sink
+        @param data the string to send (must be passed already referenced)
+        @param sock the socket (will be ref'd)
+        @param defer_init if true, socket non-blocking setup is deferred until the async controller runs the operation
+    */
+    DLLEXPORT SocketSendPollOperation(ExceptionSink* xsink, QoreStringNode* data, QoreSocketObject* sock,
+            bool defer_init);
 
     //! Creates a send operation for binary data
     /** @param xsink exception sink
@@ -230,6 +276,14 @@ public:
         @param sock the socket (will be ref'd)
     */
     DLLEXPORT SocketSendPollOperation(ExceptionSink* xsink, BinaryNode* data, QoreSocketObject* sock);
+    //! Creates a send operation for binary data with optional deferred controller initialization
+    /** @param xsink exception sink
+        @param data the binary data to send (must be passed already referenced)
+        @param sock the socket (will be ref'd)
+        @param defer_init if true, socket non-blocking setup is deferred until the async controller runs the operation
+    */
+    DLLEXPORT SocketSendPollOperation(ExceptionSink* xsink, BinaryNode* data, QoreSocketObject* sock,
+            bool defer_init);
 
     //! Dereferences the operation; clears non-block send flag and deref's the socket on last ref
     DLLEXPORT void deref(ExceptionSink* xsink);
@@ -245,7 +299,12 @@ private:
     const char* buf;
     size_t size;
     bool sent = false;
+    bool initialized = false;
+    bool controller_deferred_init = false;
+    int controller_deferred_tid = -1;
 
+    DLLEXPORT void init(ExceptionSink* xsink, bool defer_init);
+    DLLEXPORT int initLocked(ExceptionSink* xsink);
     DLLEXPORT virtual bool abortNeedsClose() const override;
 };
 
@@ -288,8 +347,15 @@ protected:
     //! Initializes the non-blocking receive state
     DLLEXPORT int initIntern(ExceptionSink* xsink);
 
+    //! Initializes the concrete receive poll state
+    DLLEXPORT virtual int initPollState(ExceptionSink* xsink);
+
     //! Subclasses must indicate whether abort should close the socket
     DLLEXPORT virtual bool abortNeedsClose() const override = 0;
+
+    bool initialized = false;
+    bool controller_deferred_init = false;
+    int controller_deferred_tid = -1;
 };
 
 //! Receives exactly N bytes non-blockingly
@@ -304,10 +370,21 @@ public:
         @param to_string if true, return a string; otherwise binary
     */
     DLLEXPORT SocketRecvPollOperation(ExceptionSink* xsink, ssize_t size, QoreSocketObject* sock, bool to_string);
+    //! Creates the operation to receive exactly @a size bytes with optional deferred controller initialization
+    /** @param xsink exception sink
+        @param size number of bytes to receive
+        @param sock the socket (will be ref'd)
+        @param to_string if true, return a string; otherwise binary
+        @param defer_init if true, socket non-blocking setup is deferred until the async controller runs the operation
+    */
+    DLLEXPORT SocketRecvPollOperation(ExceptionSink* xsink, ssize_t size, QoreSocketObject* sock, bool to_string,
+            bool defer_init);
 
 private:
     size_t size;
 
+    DLLEXPORT void init(ExceptionSink* xsink, bool defer_init);
+    DLLEXPORT virtual int initPollState(ExceptionSink* xsink) override;
     DLLEXPORT virtual bool abortNeedsClose() const override;
 };
 
@@ -324,10 +401,21 @@ public:
     */
     DLLEXPORT SocketRecvSomePollOperation(ExceptionSink* xsink, ssize_t size, QoreSocketObject* sock,
             bool to_string);
+    //! Creates the operation to receive up to @a size bytes with optional deferred controller initialization
+    /** @param xsink exception sink
+        @param size maximum number of bytes to receive
+        @param sock the socket (will be ref'd)
+        @param to_string if true, return a string; otherwise binary
+        @param defer_init if true, socket non-blocking setup is deferred until the async controller runs the operation
+    */
+    DLLEXPORT SocketRecvSomePollOperation(ExceptionSink* xsink, ssize_t size, QoreSocketObject* sock,
+            bool to_string, bool defer_init);
 
 private:
     size_t size;
 
+    DLLEXPORT void init(ExceptionSink* xsink, bool defer_init);
+    DLLEXPORT virtual int initPollState(ExceptionSink* xsink) override;
     DLLEXPORT virtual bool abortNeedsClose() const override;
 };
 
@@ -342,8 +430,20 @@ public:
         @param to_string if true, return a string; otherwise binary
     */
     DLLEXPORT SocketRecvDataPollOperation(ExceptionSink* xsink, QoreSocketObject* sock, bool to_string);
+    //! Creates the operation to receive available data with optional deferred controller initialization
+    /** @param xsink exception sink
+        @param sock the socket (will be ref'd)
+        @param to_string if true, return a string; otherwise binary
+        @param defer_init if true, socket non-blocking setup is deferred until the async controller runs the operation
+    */
+    DLLEXPORT SocketRecvDataPollOperation(ExceptionSink* xsink, QoreSocketObject* sock, bool to_string,
+            bool defer_init);
 
+    DLLEXPORT virtual int initPollState(ExceptionSink* xsink) override;
     DLLEXPORT virtual bool abortNeedsClose() const override;
+
+private:
+    DLLEXPORT void init(ExceptionSink* xsink, bool defer_init);
 };
 
 //! Receives data until a byte pattern is matched
@@ -359,10 +459,21 @@ public:
     */
     DLLEXPORT SocketRecvUntilBytesPollOperation(ExceptionSink* xsink, const QoreStringNode* pattern,
             QoreSocketObject* sock, bool to_string);
+    //! Creates the operation to receive until the given byte pattern with optional deferred controller initialization
+    /** @param xsink exception sink
+        @param pattern the byte pattern to match (ref'd internally)
+        @param sock the socket (will be ref'd)
+        @param to_string if true, return a string; otherwise binary
+        @param defer_init if true, socket non-blocking setup is deferred until the async controller runs the operation
+    */
+    DLLEXPORT SocketRecvUntilBytesPollOperation(ExceptionSink* xsink, const QoreStringNode* pattern,
+            QoreSocketObject* sock, bool to_string, bool defer_init);
 
 private:
     SimpleRefHolder<QoreStringNode> pattern;
 
+    DLLEXPORT void init(ExceptionSink* xsink, bool defer_init);
+    DLLEXPORT virtual int initPollState(ExceptionSink* xsink) override;
     DLLEXPORT virtual bool abortNeedsClose() const override;
 };
 
@@ -378,6 +489,12 @@ public:
         @param sock the socket (will be ref'd)
     */
     DLLEXPORT SocketUpgradeClientSslPollOperation(ExceptionSink* xsink, QoreSocketObject* sock);
+    //! Creates the TLS upgrade operation with optional deferred controller initialization
+    /** @param xsink exception sink
+        @param sock the socket (will be ref'd)
+        @param defer_init if true, socket non-blocking setup is deferred until the async controller runs the operation
+    */
+    DLLEXPORT SocketUpgradeClientSslPollOperation(ExceptionSink* xsink, QoreSocketObject* sock, bool defer_init);
 
     //! Dereferences the operation; clears non-block and deref's the socket on last ref
     DLLEXPORT void deref(ExceptionSink* xsink);
@@ -389,7 +506,13 @@ public:
     DLLEXPORT virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override;
 
 private:
+    DLLEXPORT void init(ExceptionSink* xsink, bool defer_init);
+    DLLEXPORT void initLocked(ExceptionSink* xsink);
+
     bool done = false;
+    bool initialized = false;
+    bool controller_deferred_init = false;
+    int controller_deferred_tid = -1;
 };
 
 //! Non-blocking HTTP header reader
@@ -405,6 +528,12 @@ public:
         @param sock the socket (will be ref'd)
     */
     DLLEXPORT SocketReadHttpHeaderPollOperation(ExceptionSink* xsink, QoreSocketObject* sock);
+    //! Creates the HTTP header read operation with optional deferred controller initialization
+    /** @param xsink exception sink
+        @param sock the socket (will be ref'd)
+        @param defer_init if true, socket non-blocking setup is deferred until the async controller runs the operation
+    */
+    DLLEXPORT SocketReadHttpHeaderPollOperation(ExceptionSink* xsink, QoreSocketObject* sock, bool defer_init);
 
     DLLEXPORT virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override;
 
@@ -417,6 +546,8 @@ public:
 private:
     mutable ReferenceHolder<QoreHashNode> out;
 
+    DLLEXPORT void init(ExceptionSink* xsink, bool defer_init);
+    DLLEXPORT virtual int initPollState(ExceptionSink* xsink) override;
     DLLEXPORT virtual bool abortNeedsClose() const override;
 };
 

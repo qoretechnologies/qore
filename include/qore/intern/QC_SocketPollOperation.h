@@ -56,6 +56,7 @@ constexpr size_t QUIC_RECV_BUF_SIZE = 2048;
 class SocketUpgradeServerSslPollOperation : public SocketPollSocketOperationBase {
 public:
     DLLLOCAL SocketUpgradeServerSslPollOperation(ExceptionSink* xsink, QoreSocketObject* sock);
+    DLLLOCAL SocketUpgradeServerSslPollOperation(ExceptionSink* xsink, QoreSocketObject* sock, bool defer_init);
 
     DLLLOCAL void deref(ExceptionSink* xsink) {
         if (ROdereference()) {
@@ -78,12 +79,19 @@ public:
     }
 
 private:
+    DLLLOCAL void init(ExceptionSink* xsink, bool defer_init);
+    DLLLOCAL void initLocked(ExceptionSink* xsink);
+
     bool done = false;
+    bool initialized = false;
+    bool controller_deferred_init = false;
+    int controller_deferred_tid = -1;
 };
 
 class SocketShutdownSslPollOperation : public SocketPollSocketOperationBase {
 public:
     DLLLOCAL SocketShutdownSslPollOperation(ExceptionSink* xsink, QoreSocketObject* sock);
+    DLLLOCAL SocketShutdownSslPollOperation(ExceptionSink* xsink, QoreSocketObject* sock, bool defer_init);
 
     DLLLOCAL void deref(ExceptionSink* xsink) {
         if (ROdereference()) {
@@ -106,7 +114,13 @@ public:
     }
 
 private:
+    DLLLOCAL void init(ExceptionSink* xsink, bool defer_init);
+    DLLLOCAL void initLocked(ExceptionSink* xsink);
+
     bool done = false;
+    bool initialized = false;
+    bool controller_deferred_init = false;
+    int controller_deferred_tid = -1;
 };
 
 class SocketShutdownPollOperation : public SocketPollSocketOperationBase {
@@ -199,7 +213,8 @@ public:
     }
 
 private:
-    DLLLOCAL void init(ExceptionSink* xsink);
+    DLLLOCAL void init(ExceptionSink* xsink, bool defer_init);
+    DLLLOCAL int initLocked(ExceptionSink* xsink);
     DLLLOCAL void clearNonBlockLocked();
 
     Action action;
@@ -215,11 +230,14 @@ private:
     int backlog = 0;
     int rc = -1;
     bool done = false;
+    bool initialized = false;
+    int controller_deferred_tid = -1;
 };
 
 class SocketDataAvailablePollOperation : public SocketPollSocketOperationBase {
 public:
     DLLLOCAL SocketDataAvailablePollOperation(ExceptionSink* xsink, QoreSocketObject* sock);
+    DLLLOCAL SocketDataAvailablePollOperation(ExceptionSink* xsink, QoreSocketObject* sock, bool defer_init);
 
     DLLLOCAL void deref(ExceptionSink* xsink);
 
@@ -242,11 +260,16 @@ public:
     }
 
 private:
+    DLLLOCAL void init(ExceptionSink* xsink, bool defer_init);
+    DLLLOCAL int initLocked(ExceptionSink* xsink);
     DLLLOCAL void clearNonBlock();
     DLLLOCAL bool complete(bool value);
 
     bool waiting = false;
     bool ready = false;
+    bool initialized = false;
+    bool controller_deferred_init = false;
+    int controller_deferred_tid = -1;
 };
 
 // goals: accept, accept-ssl
@@ -293,8 +316,11 @@ class SocketAcceptPollOperation : public SocketAcceptPollSocketOperationBase {
 public:
     DLLLOCAL SocketAcceptPollOperation(ExceptionSink* xsink, QoreSocketObject* sock);
     DLLLOCAL SocketAcceptPollOperation(ExceptionSink* xsink, QoreSocketObject* sock, bool ssl);
+    DLLLOCAL SocketAcceptPollOperation(ExceptionSink* xsink, QoreSocketObject* sock, bool ssl, bool defer_init);
     DLLLOCAL SocketAcceptPollOperation(ExceptionSink* xsink, QoreSocketObject* sock, bool ssl,
             SocketSource* source);
+    DLLLOCAL SocketAcceptPollOperation(ExceptionSink* xsink, QoreSocketObject* sock, bool ssl,
+            SocketSource* source, bool defer_init);
 
     DLLLOCAL void deref(ExceptionSink* xsink) {
         if (ROdereference()) {
@@ -375,10 +401,14 @@ protected:
     }
 
 private:
+    DLLLOCAL void init(ExceptionSink* xsink, bool defer_init);
+    DLLLOCAL void initLocked(ExceptionSink* xsink);
+
     std::unique_ptr<AbstractPollState> poll_state;
     std::string target;
 
     int sgoal = 0;
+    bool initialized = false;
 
     DLLLOCAL virtual const char* getStateImpl() const override {
         switch (state) {
@@ -793,6 +823,9 @@ public:
     DLLLOCAL SocketSendInputStreamPollOperation(ExceptionSink* xsink, QoreSocketObject* sock,
         InputStream* input_stream, QoreObject* input_stream_obj, int64 size, int timeout_ms,
         bool emit_data_events = true);
+    DLLLOCAL SocketSendInputStreamPollOperation(ExceptionSink* xsink, QoreSocketObject* sock,
+        InputStream* input_stream, QoreObject* input_stream_obj, int64 size, int timeout_ms,
+        bool emit_data_events, bool defer_init);
 
     DLLLOCAL void deref(ExceptionSink* xsink) {
         if (ROdereference()) {
@@ -843,6 +876,8 @@ public:
 private:
     enum class Phase { ReadChunk, SendChunk, Done, Error };
 
+    DLLLOCAL void init(ExceptionSink* xsink, bool defer_init);
+    DLLLOCAL int initLocked(ExceptionSink* xsink);
     DLLLOCAL QoreHashNode* getPollInfo(ExceptionSink* xsink, int events);
     DLLLOCAL int64 getNextChunkSize() const;
     DLLLOCAL void complete(ExceptionSink* xsink);
@@ -861,6 +896,9 @@ private:
     bool need_reassign = true;
     bool emit_data_events = true;
     bool socket_data_sent = false;
+    bool initialized = false;
+    bool controller_deferred_init = false;
+    int controller_deferred_tid = -1;
     SimpleRefHolder<BinaryNode> current_chunk;
 
     DLLLOCAL virtual bool abortNeedsClose() const override {
@@ -878,6 +916,9 @@ public:
     DLLLOCAL SocketSendHttpChunkedInputStreamPollOperation(ExceptionSink* xsink, QoreSocketObject* sock,
         InputStream* input_stream, QoreObject* input_stream_obj, size_t max_chunk_size, int timeout_ms,
         bool send_terminal_chunk, int source = QORE_SOURCE_SOCKET);
+    DLLLOCAL SocketSendHttpChunkedInputStreamPollOperation(ExceptionSink* xsink, QoreSocketObject* sock,
+        InputStream* input_stream, QoreObject* input_stream_obj, size_t max_chunk_size, int timeout_ms,
+        bool send_terminal_chunk, int source, bool defer_init);
 
     DLLLOCAL void deref(ExceptionSink* xsink) {
         if (ROdereference()) {
@@ -928,6 +969,8 @@ public:
 private:
     enum class Phase { ReadChunk, SendChunk, Done, Error };
 
+    DLLLOCAL void init(ExceptionSink* xsink, bool defer_init);
+    DLLLOCAL int initLocked(ExceptionSink* xsink);
     DLLLOCAL QoreHashNode* getPollInfo(ExceptionSink* xsink, int events);
     DLLLOCAL void complete(ExceptionSink* xsink);
     DLLLOCAL bool checkTimeout(ExceptionSink* xsink);
@@ -944,6 +987,9 @@ private:
     bool need_reassign = true;
     bool send_terminal_chunk = true;
     bool socket_data_sent = false;
+    bool initialized = false;
+    bool controller_deferred_init = false;
+    int controller_deferred_tid = -1;
     int source = QORE_SOURCE_SOCKET;
     SimpleRefHolder<BinaryNode> current_chunk;
     size_t current_data_offset = 0;
@@ -965,6 +1011,9 @@ public:
     DLLLOCAL SocketRecvOutputStreamPollOperation(ExceptionSink* xsink, QoreSocketObject* sock,
         OutputStream* output_stream, QoreObject* output_stream_obj, int64 size, int timeout_ms,
         bool emit_data_events = true);
+    DLLLOCAL SocketRecvOutputStreamPollOperation(ExceptionSink* xsink, QoreSocketObject* sock,
+        OutputStream* output_stream, QoreObject* output_stream_obj, int64 size, int timeout_ms,
+        bool emit_data_events, bool defer_init);
 
     DLLLOCAL void deref(ExceptionSink* xsink) {
         if (ROdereference()) {
@@ -1015,6 +1064,8 @@ public:
 private:
     enum class Phase { RecvChunk, WriteChunk, Done, Error };
 
+    DLLLOCAL void init(ExceptionSink* xsink, bool defer_init);
+    DLLLOCAL int initLocked(ExceptionSink* xsink);
     DLLLOCAL QoreHashNode* getPollInfo(ExceptionSink* xsink, int events, bool output_wait = false);
     DLLLOCAL int64 getNextChunkSize() const;
     DLLLOCAL void complete(ExceptionSink* xsink);
@@ -1032,6 +1083,9 @@ private:
     bool is_pollable = true;
     bool need_reassign = true;
     bool emit_data_events = true;
+    bool initialized = false;
+    bool controller_deferred_init = false;
+    int controller_deferred_tid = -1;
     SimpleRefHolder<BinaryNode> current_chunk;
     size_t write_offset = 0;
 

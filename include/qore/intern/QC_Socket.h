@@ -163,7 +163,14 @@ public:
         // must be called with the lock held
         assert(m.trylock());
 
-        int tid = q_gettid();
+        return checkAsyncSequenceAllowedForTid(xsink, direction, q_gettid());
+    }
+
+    //! Throws an exception if another thread owns a multi-step async sequence for @a direction
+    DLLLOCAL int checkAsyncSequenceAllowedForTid(ExceptionSink* xsink, unsigned direction, int tid) const {
+        // must be called with the lock held
+        assert(m.trylock());
+
         unsigned flags = direction & NB_ALL;
         if ((flags & NB_SEND) && checkAsyncSequenceAllowedIntern(xsink, NB_SEND, tid)) {
             return -1;
@@ -333,6 +340,32 @@ public:
         assert(m.trylock());
 
         if (checkAsyncSequenceAllowed(xsink, direction)) {
+            return -1;
+        }
+        if (checkValid(xsink)) {
+            return -1;
+        }
+        if ((non_block_flags & direction) || non_block_accept_count > 0) {
+            xsink->raiseException("SOCKET-NON-BLOCK-ERROR",
+                "a non-blocking %s operation is currently in progress",
+                getNonBlockDirectionName(direction));
+            return -1;
+        }
+        setNonBlock(direction);
+        return 0;
+    }
+
+    //! Sets specific direction non-block flags for an async-controller operation already authorized by a sync guard
+    DLLLOCAL int setNonBlockFromAsyncController(ExceptionSink* xsink, unsigned direction) {
+        return setNonBlockFromAsyncController(xsink, direction, q_gettid());
+    }
+
+    //! Sets specific direction non-block flags for an async-controller operation authorized by @a tid
+    DLLLOCAL int setNonBlockFromAsyncController(ExceptionSink* xsink, unsigned direction, int tid) {
+        // must be called with the lock held
+        assert(m.trylock());
+
+        if (checkAsyncSequenceAllowedForTid(xsink, direction, tid)) {
             return -1;
         }
         if (checkValid(xsink)) {
