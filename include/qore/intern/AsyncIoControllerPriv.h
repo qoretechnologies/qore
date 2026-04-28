@@ -795,7 +795,8 @@ private:
         int tid = 0;                       //!< Thread ID (0 if not running)
         int thread_idx = 0;                //!< Index in io_threads vector
         int64 autostop_idle_since = 0;     //!< Timestamp when cache first became empty
-        int processed_seq = 0;             //!< Last global submit sequence processed by this I/O thread
+        int submit_seq = 0;                //!< Commands submitted specifically to this I/O thread
+        int processed_seq = 0;             //!< Last thread-local submit sequence processed
 
         QoreEventLoop* loop = nullptr;
         QoreEventNotifier* notifier = nullptr;
