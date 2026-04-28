@@ -52,9 +52,9 @@ module FirecrawlDataProvider {
             "short_desc": "Firecrawl web scraping and crawling platform",
             "desc": "Firecrawl provides APIs for web scraping, crawling, URL mapping, "
                 "web search, structured data extraction, and AI agent tasks.\n\n"
-                "This integration supports 15 actions covering single-page scraping, "
+                "This integration supports 14 actions covering single-page scraping, "
                 "multi-page crawling, batch scraping, URL discovery, web search, "
-                "AI-powered extraction, document parsing, and autonomous agent tasks.",
+                "AI-powered extraction, and autonomous agent tasks.",
             "scheme": "firecrawlrest",
             "logo": FirecrawlDataProvider::FirecrawlLogo,
             "logo_file_name": "firecrawl-logo.svg",
@@ -427,42 +427,6 @@ module FirecrawlDataProvider {
                 return new FirecrawlAgentResponseDataType();
             },
             "groups": ("Agent",),
-        });
-
-        # ============================================================
-        # Parse Action
-        # ============================================================
-
-        # parse
-        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": AppName,
-            "path": "/parse",
-            "action": "parse",
-            "display_name": "Parse a Document",
-            "short_desc": "Upload a document and convert it to LLM-ready data",
-            "desc": "Uploads a local or non-public document (PDF, DOCX, XLSX, HTML, etc.) "
-                "up to 50 MB and converts it to clean, LLM-ready content in the requested "
-                "formats.\n\n"
-                "The request is sent as `multipart/form-data` with the file binary in a "
-                "`file` part and the parse options as a JSON-encoded `options` part. "
-                "Supported file extensions: `.html`, `.htm`, `.pdf`, `.docx`, `.doc`, "
-                "`.odt`, `.rtf`, `.xlsx`, `.xls`.",
-            "action_code": DPAT_API,
-            "options": DataProviderActionCatalog::getActionOptionFromFields(
-                FirecrawlParseRequestDataType::Fields{"file",}, {
-                    "required": True,
-                },
-            ) + DataProviderActionCatalog::getActionOptionFromFields(
-                FirecrawlParseRequestDataType::Fields{"formats",}, {
-                    "preselected": True,
-                },
-            ) + DataProviderActionCatalog::getActionOptionFromFields(
-                FirecrawlParseRequestDataType::Fields - ("file", "formats"),
-            ),
-            "get_output_type": AbstractDataProviderType sub () {
-                return new FirecrawlParseResponseDataType();
-            },
-            "groups": ("Parsing",),
         });
 
     };

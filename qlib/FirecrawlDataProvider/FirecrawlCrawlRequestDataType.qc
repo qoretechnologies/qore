@@ -46,19 +46,16 @@ public class FirecrawlCrawlRequestDataType inherits HashDataType {
             },
             "excludePaths": {
                 "display_name": "Exclude Paths",
-                "short_desc": "URL pathname regex patterns to exclude",
-                "desc": "List of URL pathname regex patterns; matching URLs are excluded "
-                    "from the crawl (e.g., `^/admin/.*`, `\\.pdf$`)",
+                "short_desc": "URL paths to exclude",
+                "desc": "List of URL path patterns to exclude from crawling (glob format)",
                 "type": SoftListOrNothingType,
-                "example_value": ("^/admin/.*", "\\.pdf$"),
             },
             "includePaths": {
                 "display_name": "Include Paths",
-                "short_desc": "URL pathname regex patterns to include",
-                "desc": "List of URL pathname regex patterns; only matching URLs are "
-                    "crawled (e.g., `^/blog/.*`, `^/docs/.*`)",
+                "short_desc": "URL paths to include",
+                "desc": "List of URL path patterns to include in crawling (glob format). "
+                    "Only URLs matching these patterns are crawled",
                 "type": SoftListOrNothingType,
-                "example_value": ("^/blog/.*",),
             },
             "maxDiscoveryDepth": {
                 "display_name": "Max Discovery Depth",
@@ -87,14 +84,6 @@ public class FirecrawlCrawlRequestDataType inherits HashDataType {
                 "display_name": "Ignore Query Parameters",
                 "short_desc": "Ignore URL query parameters",
                 "desc": "If `True`, URLs with different query parameters are treated as the same page",
-                "type": SoftBoolOrNothingType,
-            },
-            "deduplicateSimilarURLs": {
-                "display_name": "Deduplicate Similar URLs",
-                "short_desc": "Treat URL variants as duplicates",
-                "desc": "If `True`, URL variants (`www.`/non-`www.`, `http`/`https`, trailing "
-                    "slashes, `index.html`) are normalized and treated as duplicates. "
-                    "Defaults to `True`",
                 "type": SoftBoolOrNothingType,
             },
             "crawlEntireDomain": {
@@ -147,28 +136,6 @@ public class FirecrawlCrawlRequestDataType inherits HashDataType {
                 "desc": "Options applied when scraping each crawled page, such as `formats`, "
                     "`onlyMainContent`, `includeTags`, `excludeTags`",
                 "type": new FirecrawlScrapeOptionsDataType(AutoHashOrNothingType),
-            },
-            "ignoreRobotsTxt": {
-                "display_name": "Ignore robots.txt",
-                "short_desc": "Bypass robots.txt directives",
-                "desc": "If `True`, the crawl ignores `robots.txt` directives. Enterprise "
-                    "feature — contact Firecrawl support to enable",
-                "type": SoftBoolOrNothingType,
-            },
-            "robotsUserAgent": {
-                "display_name": "robots.txt User Agent",
-                "short_desc": "User-agent for robots.txt evaluation",
-                "desc": "User-agent string used when evaluating `robots.txt` rules. "
-                    "Enterprise feature — contact Firecrawl support to enable",
-                "type": StringOrNothingType,
-            },
-            "zeroDataRetention": {
-                "display_name": "Zero Data Retention",
-                "short_desc": "Disable Firecrawl-side data retention",
-                "desc": "If `True`, Firecrawl does not retain any crawl data on its "
-                    "servers after returning the response. Enterprise feature — contact "
-                    "Firecrawl support to enable",
-                "type": SoftBoolOrNothingType,
             },
         };
     }

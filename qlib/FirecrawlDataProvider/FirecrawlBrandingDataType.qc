@@ -451,8 +451,7 @@ public class FirecrawlBrandingDataType inherits HashDataType {
                 "short_desc": "Font families used",
                 "desc": "List of font families detected on the page. Each entry has a "
                     "`family` field with the font name",
-                "type": new ListDataType("fonts",
-                    new FirecrawlFontDataType(AutoHashOrNothingType), True),
+                "type": SoftListOrNothingType,
             },
             "typography": {
                 "display_name": "Typography",

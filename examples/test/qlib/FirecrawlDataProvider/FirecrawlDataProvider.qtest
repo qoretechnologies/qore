@@ -74,7 +74,6 @@ public class FirecrawlDataProviderTest inherits QUnit::Test {
             "agent",
             "get-agent-status",
             "cancel-agent",
-            "parse",
         );
     }
 
@@ -209,7 +208,7 @@ public class FirecrawlDataProviderTest inherits QUnit::Test {
 
         # Check all expected child providers exist
         list<string> children = prov.getChildProviderNames();
-        assertEq(15, children.size());
+        assertEq(14, children.size());
 
         foreach string childName in (ExpectedChildren) {
             assertTrue(inlist(childName, children),
@@ -510,41 +509,6 @@ public class FirecrawlDataProviderTest inherits QUnit::Test {
         assertTrue(parsersFields.hasKey("type"));
         assertTrue(parsersFields.hasKey("mode"));
         assertTrue(parsersFields.hasKey("maxPages"));
-
-        # Test parse request type
-        FirecrawlDataProvider::FirecrawlParseRequestDataType parseReqType();
-        hash<string, AbstractDataField> parseReqFields = parseReqType.getFields();
-        assertTrue(parseReqFields.hasKey("file"));
-        assertTrue(parseReqFields.hasKey("formats"));
-        assertTrue(parseReqFields.hasKey("onlyMainContent"));
-        assertTrue(parseReqFields.hasKey("parsers"));
-
-        # Test parse response type
-        FirecrawlDataProvider::FirecrawlParseResponseDataType parseRespType();
-        hash<string, AbstractDataField> parseRespFields = parseRespType.getFields();
-        assertTrue(parseRespFields.hasKey("success"));
-        assertTrue(parseRespFields.hasKey("data"));
-        assertTrue(parseRespFields.hasKey("warning"));
-
-        # Test profile sub-type
-        FirecrawlDataProvider::FirecrawlProfileDataType profileType();
-        hash<string, AbstractDataField> profileFields = profileType.getFields();
-        assertTrue(profileFields.hasKey("name"));
-        assertTrue(profileFields.hasKey("saveChanges"));
-
-        # Test viewport sub-type
-        FirecrawlDataProvider::FirecrawlViewportDataType viewportType();
-        hash<string, AbstractDataField> viewportFields = viewportType.getFields();
-        assertTrue(viewportFields.hasKey("width"));
-        assertTrue(viewportFields.hasKey("height"));
-
-        # Test font sub-type
-        FirecrawlDataProvider::FirecrawlFontDataType fontType();
-        hash<string, AbstractDataField> fontFields = fontType.getFields();
-        assertTrue(fontFields.hasKey("family"));
-
-        # Verify deduplicateSimilarURLs added to crawl request type
-        assertTrue(crawlReqFields.hasKey("deduplicateSimilarURLs"));
     }
 
     #! Connection tests - verify connection scheme registration
@@ -573,7 +537,7 @@ public class FirecrawlDataProviderTest inherits QUnit::Test {
         assertEq("Firecrawl", appInfo.name);
         assertEq("firecrawlrest", appInfo.scheme);
 
-        # Verify all 15 actions are registered
+        # Verify all 14 actions are registered
         *list<hash<DataProviderActionInfo>> actions = DataProviderActionCatalog::getActions("Firecrawl");
         hash<string, bool> actionMap;
         map actionMap{$1.action} = True, actions;
@@ -602,11 +566,8 @@ public class FirecrawlDataProviderTest inherits QUnit::Test {
         assertTrue(actionMap{"get-agent-status"} ?? False);
         assertTrue(actionMap{"cancel-agent"} ?? False);
 
-        # Parsing actions
-        assertTrue(actionMap{"parse"} ?? False);
-
         # Verify total count
-        assertEq(15, actions.size());
+        assertEq(14, actions.size());
 
         # Verify all actions have DPAT_API action_code
         foreach hash<DataProviderActionInfo> action in (actions) {
@@ -641,7 +602,6 @@ public class FirecrawlDataProviderTest inherits QUnit::Test {
         assertTrue(groupMap.hasKey("Discovery & Search"));
         assertTrue(groupMap.hasKey("Extraction"));
         assertTrue(groupMap.hasKey("Agent"));
-        assertTrue(groupMap.hasKey("Parsing"));
     }
 
     #! Negative tests - verify error handling

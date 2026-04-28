@@ -67,13 +67,6 @@ public class FirecrawlScrapeRequestDataType inherits HashDataType {
                     "headers, navigation, footers, etc. Defaults to `True`",
                 "type": SoftBoolOrNothingType,
             },
-            "onlyCleanContent": {
-                "display_name": "Only Clean Content",
-                "short_desc": "Apply LLM-based content cleanup",
-                "desc": "If `True`, an LLM-based cleanup pass is applied to remove "
-                    "navigation, ads, and boilerplate. Defaults to `False`",
-                "type": SoftBoolOrNothingType,
-            },
             "includeTags": {
                 "display_name": "Include Tags",
                 "short_desc": "HTML tags to include",
@@ -130,12 +123,12 @@ public class FirecrawlScrapeRequestDataType inherits HashDataType {
                     "a hash with a `type` key and action-specific parameters.\n\n"
                     "**Available actions**:\n"
                     "- `wait` — wait for duration (`milliseconds`) or element (`selector`)\n"
-                    "- `click` — click an element (`selector`, `all`)\n"
+                    "- `click` — click an element (`selector`; set `all` for all matches)\n"
                     "- `write` — type text into the focused element (`text`)\n"
                     "- `press` — press a keyboard key (`key`)\n"
                     "- `scroll` — scroll the page (`direction`: `up`/`down`; optional "
                     "`selector`)\n"
-                    "- `screenshot` — take a screenshot (`fullPage`, `quality`, `viewport`)\n"
+                    "- `screenshot` — take a screenshot (`fullPage`, `quality`)\n"
                     "- `scrape` — capture the page content at its current state\n"
                     "- `executeJavascript` — run JavaScript code (`script`)\n"
                     "- `pdf` — generate a PDF (`format`, `landscape`, `scale`)",
@@ -188,30 +181,6 @@ public class FirecrawlScrapeRequestDataType inherits HashDataType {
                     "specifies a parser type and processing options",
                 "type": new ListDataType("parsers",
                     new FirecrawlParsersDataType(AutoHashOrNothingType), True),
-            },
-            "storeInCache": {
-                "display_name": "Store In Cache",
-                "short_desc": "Cache the scraped content",
-                "desc": "If `True`, the scraped content is stored in the Firecrawl cache so "
-                    "that subsequent scrapes within `maxAge` can reuse it. Defaults to `True`",
-                "type": SoftBoolOrNothingType,
-            },
-            "zeroDataRetention": {
-                "display_name": "Zero Data Retention",
-                "short_desc": "Disable Firecrawl-side data retention",
-                "desc": "If `True`, Firecrawl does not retain any scraped data on its "
-                    "servers after returning the response. Useful for "
-                    "privacy/compliance-sensitive workloads. Enterprise feature — contact "
-                    "Firecrawl support to enable",
-                "type": SoftBoolOrNothingType,
-            },
-            "profile": {
-                "display_name": "Profile",
-                "short_desc": "Persistent browser profile",
-                "desc": "Named browser profile to reuse session state (cookies, local "
-                    "storage) across scrape requests. Set `saveChanges` to `True` to persist "
-                    "changes back to the profile",
-                "type": new FirecrawlProfileDataType(AutoHashOrNothingType),
             },
         };
     }

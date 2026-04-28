@@ -63,8 +63,8 @@ public class FirecrawlCrawlResponseDataType inherits HashDataType {
             "expiresAt": {
                 "display_name": "Expires At",
                 "short_desc": "Result expiration time",
-                "desc": "ISO 8601 timestamp when the crawl results will expire",
-                "type": SoftDateOrNothingType,
+                "desc": "Timestamp when the crawl results will expire",
+                "type": StringOrNothingType,
             },
             "data": {
                 "display_name": "Data",

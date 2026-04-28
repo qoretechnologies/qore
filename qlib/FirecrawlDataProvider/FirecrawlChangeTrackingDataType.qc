@@ -38,7 +38,7 @@ public class FirecrawlChangeTrackingDataType inherits HashDataType {
                 "short_desc": "Timestamp of the previous scrape",
                 "desc": "ISO 8601 timestamp of the previous scrape. `NOTHING` on the first "
                     "scrape of a URL",
-                "type": SoftDateOrNothingType,
+                "type": StringOrNothingType,
             },
             "changeStatus": {
                 "display_name": "Change Status",
