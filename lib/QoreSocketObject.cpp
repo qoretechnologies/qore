@@ -734,6 +734,27 @@ static std::shared_ptr<QuicSession> qore_socket_object_get_first_quic_session(co
     return sp->quic_sessions.begin()->second;
 }
 
+static Http2SessionPtr qore_socket_object_get_h2_session(const QoreSocketObject* s) {
+    my_socket_priv* priv = my_socket_priv::getPriv(*const_cast<QoreSocketObject*>(s));
+    AutoLocker al(priv->m);
+    qore_socket_private* sp = qore_socket_private::get(*priv->socket);
+    return sp->h2_session;
+}
+
+static void qore_socket_object_set_h2_headers(strcase_str_map_t& out, const QoreHashNode* headers) {
+    if (!headers) {
+        return;
+    }
+
+    ConstHashIterator hi(headers);
+    while (hi.next()) {
+        QoreValue val = hi.get();
+        if (val.getType() == NT_STRING) {
+            out[hi.getKey()] = val.get<const QoreStringNode>()->c_str();
+        }
+    }
+}
+
 static QoreObject* qore_socket_object_make_poll_op(QoreObject* sock_obj, SocketPollOperationBase* poller,
         const char* goal, ExceptionSink* xsink) {
     ReferenceHolder<SocketPollOperationBase> poller_holder(poller, xsink);
@@ -3098,39 +3119,118 @@ bool QoreSocketObject::isHttp2() const {
 
 int32_t QoreSocketObject::submitHttp2PushPromise(int32_t stream_id, const char* path,
         const QoreHashNode* headers, ExceptionSink* xsink) {
-    AutoLocker al(priv->m);
-    return priv->socket->submitHttp2PushPromise(stream_id, path, headers, xsink);
+    Http2SessionPtr h2 = qore_socket_object_get_h2_session(this);
+    if (!h2) {
+        xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session active");
+        return -1;
+    }
+
+    strcase_str_map_t h2_headers;
+    qore_socket_object_set_h2_headers(h2_headers, headers);
+    return h2->submitPushPromise(stream_id, path, h2_headers, xsink);
 }
 
 int QoreSocketObject::submitHttp2Response(int32_t stream_id, int status_code,
         const QoreHashNode* headers, const void* body, size_t body_len,
         ExceptionSink* xsink) {
-    AutoLocker al(priv->m);
-    return priv->socket->submitHttp2Response(stream_id, status_code, headers, body, body_len, xsink);
+    Http2SessionPtr h2 = qore_socket_object_get_h2_session(this);
+    if (!h2) {
+        xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session active");
+        return -1;
+    }
+
+    strcase_str_map_t h2_headers;
+    qore_socket_object_set_h2_headers(h2_headers, headers);
+    return h2->submitResponse(stream_id, status_code, h2_headers, body, body_len, xsink);
 }
 
 int QoreSocketObject::submitHttp2ConnectResponse(int32_t stream_id, int status_code,
         const QoreHashNode* headers, ExceptionSink* xsink) {
-    AutoLocker al(priv->m);
-    return priv->socket->submitHttp2ConnectResponse(stream_id, status_code, headers, xsink);
+    Http2SessionPtr h2 = qore_socket_object_get_h2_session(this);
+    if (!h2) {
+        xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session active");
+        return -1;
+    }
+
+    strcase_str_map_t h2_headers;
+    qore_socket_object_set_h2_headers(h2_headers, headers);
+    return h2->submitConnectResponse(stream_id, status_code, h2_headers, xsink);
 }
 
 int32_t QoreSocketObject::submitHttp2Request(const QoreHashNode* headers, const void* body,
         size_t body_len, ExceptionSink* xsink, bool streaming) {
-    AutoLocker al(priv->m);
-    return priv->socket->submitHttp2Request(headers, body, body_len, xsink, streaming);
+    Http2SessionPtr h2 = qore_socket_object_get_h2_session(this);
+    if (!h2) {
+        xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session active");
+        return -1;
+    }
+
+    if (!headers) {
+        xsink->raiseException("HTTP2-ERROR", "HTTP/2 request headers are required");
+        return -1;
+    }
+
+    std::vector<std::pair<std::string, std::string>> h2_headers;
+    h2_headers.reserve(headers->size() + 4);
+    std::string method;
+    std::string path;
+
+    auto append = [&](const std::string& key, const char* sval) {
+        if (key == ":method") {
+            if (sval && *sval) {
+                method = sval;
+            }
+        } else if (key == ":path") {
+            if (sval && *sval) {
+                path = sval;
+            }
+        }
+        h2_headers.emplace_back(key, sval ? sval : "");
+    };
+
+    ConstHashIterator hi(headers);
+    while (hi.next()) {
+        const char* key = hi.getKey();
+        QoreValue val = hi.get();
+        std::string skey(key);
+        if (val.getType() == NT_STRING) {
+            append(skey, val.get<const QoreStringNode>()->c_str());
+        } else if (val.getType() == NT_LIST) {
+            const QoreListNode* l = val.get<const QoreListNode>();
+            for (size_t i = 0; i < l->size(); ++i) {
+                QoreValue elem = l->retrieveEntry(i);
+                if (elem.getType() == NT_STRING) {
+                    append(skey, elem.get<const QoreStringNode>()->c_str());
+                }
+            }
+        }
+    }
+
+    if (method.empty()) {
+        xsink->raiseException("HTTP2-ERROR", "HTTP/2 request ':method' header is missing or empty");
+        return -1;
+    }
+    if (path.empty()) {
+        xsink->raiseException("HTTP2-ERROR", "HTTP/2 request ':path' header is missing or empty");
+        return -1;
+    }
+
+    return h2->submitRequest(method.c_str(), path.c_str(), h2_headers, body, body_len, xsink, streaming);
 }
 
 void QoreSocketObject::cancelHttp2Stream(int32_t stream_id, ExceptionSink* xsink) {
-    AutoLocker al(priv->m);
-    priv->socket->cancelHttp2Stream(stream_id, xsink);
+    Http2SessionPtr h2 = qore_socket_object_get_h2_session(this);
+    if (!h2) {
+        xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session active");
+        return;
+    }
+    h2->submitRstStream(stream_id, NGHTTP2_CANCEL, xsink);
 }
 
 void QoreSocketObject::setHttp2StreamStreaming(int32_t stream_id) {
-    AutoLocker al(priv->m);
-    auto h2s = priv->socket->priv->h2_session;
-    if (h2s) {
-        h2s->setStreamStreaming(stream_id);
+    Http2SessionPtr h2 = qore_socket_object_get_h2_session(this);
+    if (h2) {
+        h2->setStreamStreaming(stream_id);
     }
 }
 
@@ -3141,19 +3241,45 @@ void QoreSocketObject::setHttp2ConnectProtocolEnabled(bool enable) {
 
 int QoreSocketObject::sendHttp2StreamData(int32_t stream_id, const BinaryNode* data,
         bool end_stream, ExceptionSink* xsink) {
-    AutoLocker al(priv->m);
-    return priv->socket->sendHttp2StreamData(stream_id, data, end_stream, xsink);
+    Http2SessionPtr h2 = qore_socket_object_get_h2_session(this);
+    if (!h2) {
+        xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session active");
+        return -1;
+    }
+
+    const void* ptr = data ? data->getPtr() : nullptr;
+    size_t len = data ? data->size() : 0;
+    int rv = h2->sendStreamData(stream_id, ptr, len, end_stream, xsink);
+    if (rv < 0) {
+        return -1;
+    }
+    if (rv > 0) {
+        xsink->raiseException("HTTP2-FLOW-CONTROL", "stream %d buffer full: data dropped", stream_id);
+        return -1;
+    }
+    return 0;
 }
 
 BinaryNode* QoreSocketObject::readHttp2StreamData(int32_t stream_id, size_t max_bytes, ExceptionSink* xsink) {
-    AutoLocker al(priv->m);
-    return priv->socket->readHttp2StreamData(stream_id, max_bytes, xsink);
+    Http2SessionPtr h2 = qore_socket_object_get_h2_session(this);
+    if (!h2) {
+        xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session active");
+        return nullptr;
+    }
+    return h2->takeStreamData(stream_id, max_bytes, xsink);
 }
 
 int QoreSocketObject::sendHttp2Trailers(int32_t stream_id, const QoreHashNode* trailers,
         ExceptionSink* xsink) {
-    AutoLocker al(priv->m);
-    return priv->socket->sendHttp2Trailers(stream_id, trailers, xsink);
+    Http2SessionPtr h2 = qore_socket_object_get_h2_session(this);
+    if (!h2) {
+        xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session active");
+        return -1;
+    }
+
+    strcase_str_map_t trailer_map;
+    qore_socket_object_set_h2_headers(trailer_map, trailers);
+    return h2->submitTrailers(stream_id, trailer_map, xsink);
 }
 
 int QoreSocketObject::flushHttp2PendingData(ExceptionSink* xsink) {
@@ -3182,11 +3308,7 @@ int QoreSocketObject::flushHttp2PendingData(ExceptionSink* xsink) {
 }
 
 int QoreSocketObject::submitHttp2Ping(ExceptionSink* xsink) {
-    Http2SessionPtr h2;
-    {
-        AutoLocker al(priv->m);
-        h2 = priv->socket->priv->h2_session;
-    }
+    Http2SessionPtr h2 = qore_socket_object_get_h2_session(this);
     if (!h2) {
         return 0;
     }
@@ -3209,35 +3331,19 @@ int QoreSocketObject::submitHttp2Ping(ExceptionSink* xsink) {
 // GrpcServer async-migration (see design/grpc-server-async-migration.md).
 int QoreSocketObject::submitHttp2StreamingResponseHeadersAsync(int32_t stream_id, int status_code,
         const QoreHashNode* headers, ExceptionSink* xsink) {
-    Http2SessionPtr h2;
-    {
-        AutoLocker al(priv->m);
-        h2 = priv->socket->priv->h2_session;
-    }
+    Http2SessionPtr h2 = qore_socket_object_get_h2_session(this);
     if (!h2) {
         xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session active");
         return -1;
     }
     strcase_str_map_t header_map;
-    if (headers) {
-        ConstHashIterator hi(headers);
-        while (hi.next()) {
-            QoreValue val = hi.get();
-            if (val.getType() == NT_STRING) {
-                header_map[hi.getKey()] = val.get<const QoreStringNode>()->c_str();
-            }
-        }
-    }
+    qore_socket_object_set_h2_headers(header_map, headers);
     return h2->submitResponseStreaming(stream_id, status_code, header_map, xsink);
 }
 
 int QoreSocketObject::sendHttp2StreamDataAsync(int32_t stream_id, const BinaryNode* data,
         bool end_stream, ExceptionSink* xsink) {
-    Http2SessionPtr h2;
-    {
-        AutoLocker al(priv->m);
-        h2 = priv->socket->priv->h2_session;
-    }
+    Http2SessionPtr h2 = qore_socket_object_get_h2_session(this);
     if (!h2) {
         xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session active");
         return -1;
@@ -3258,45 +3364,25 @@ int QoreSocketObject::sendHttp2StreamDataAsync(int32_t stream_id, const BinaryNo
 
 int QoreSocketObject::sendHttp2TrailersAsync(int32_t stream_id, const QoreHashNode* trailers,
         ExceptionSink* xsink) {
-    Http2SessionPtr h2;
-    {
-        AutoLocker al(priv->m);
-        h2 = priv->socket->priv->h2_session;
-    }
+    Http2SessionPtr h2 = qore_socket_object_get_h2_session(this);
     if (!h2) {
         xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session active");
         return -1;
     }
     strcase_str_map_t trailer_map;
-    if (trailers) {
-        ConstHashIterator hi(trailers);
-        while (hi.next()) {
-            QoreValue val = hi.get();
-            if (val.getType() == NT_STRING) {
-                trailer_map[hi.getKey()] = val.get<const QoreStringNode>()->c_str();
-            }
-        }
-    }
+    qore_socket_object_set_h2_headers(trailer_map, trailers);
     return h2->submitTrailers(stream_id, trailer_map, xsink);
 }
 
 void QoreSocketObject::cleanupHttp2StreamAsync(int32_t stream_id) {
-    Http2SessionPtr h2;
-    {
-        AutoLocker al(priv->m);
-        h2 = priv->socket->priv->h2_session;
-    }
+    Http2SessionPtr h2 = qore_socket_object_get_h2_session(this);
     if (h2) {
         h2->cleanupStream(stream_id);
     }
 }
 
 int QoreSocketObject::resetHttp2StreamAsync(int32_t stream_id, ExceptionSink* xsink) {
-    Http2SessionPtr h2;
-    {
-        AutoLocker al(priv->m);
-        h2 = priv->socket->priv->h2_session;
-    }
+    Http2SessionPtr h2 = qore_socket_object_get_h2_session(this);
     if (!h2) {
         return 0;
     }
@@ -3324,11 +3410,7 @@ int QoreSocketObject::submitHttp2StreamingResponseWithStream(int32_t stream_id, 
     // Http2Session's own recursive mutex.  The handler thread never
     // competes with the I/O thread for priv->m during frame submission
     // or InputStream registration.
-    Http2SessionPtr h2;
-    {
-        AutoLocker al(priv->m);
-        h2 = priv->socket->priv->h2_session;
-    }
+    Http2SessionPtr h2 = qore_socket_object_get_h2_session(this);
     if (!h2) {
         xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session available");
         return -1;
@@ -3336,15 +3418,7 @@ int QoreSocketObject::submitHttp2StreamingResponseWithStream(int32_t stream_id, 
 
     // Submit response headers without END_STREAM
     strcase_str_map_t header_map;
-    if (headers) {
-        ConstHashIterator hi(headers);
-        while (hi.next()) {
-            QoreValue val = hi.get();
-            if (val.getType() == NT_STRING) {
-                header_map[hi.getKey()] = val.get<const QoreStringNode>()->c_str();
-            }
-        }
-    }
+    qore_socket_object_set_h2_headers(header_map, headers);
     int rv = h2->submitResponseStreaming(stream_id, status_code, header_map, xsink);
     if (rv) {
         return rv;
@@ -3388,13 +3462,13 @@ int QoreSocketObject::submitHttp2StreamingResponseWithStream(int32_t stream_id, 
 }
 
 bool QoreSocketObject::isHttp2StreamClosed(int32_t stream_id) const {
-    AutoLocker al(priv->m);
-    return priv->socket->isHttp2StreamClosed(stream_id);
+    Http2SessionPtr h2 = qore_socket_object_get_h2_session(this);
+    return !h2 || h2->isStreamClosed(stream_id);
 }
 
 bool QoreSocketObject::isHttp2StreamRemoteClosed(int32_t stream_id) const {
-    AutoLocker al(priv->m);
-    return priv->socket->isHttp2StreamRemoteClosed(stream_id);
+    Http2SessionPtr h2 = qore_socket_object_get_h2_session(this);
+    return !h2 || h2->isStreamRemoteClosed(stream_id);
 }
 
 int QoreSocketObject::waitForHttp2StreamDrain(int32_t stream_id, int timeout_ms) {
@@ -3414,11 +3488,7 @@ int QoreSocketObject::waitForHttp2StreamDrain(int32_t stream_id, int timeout_ms,
     }
     // Look up the session briefly; the controller-backed wait must not hold
     // priv->m while the I/O thread drives sendPendingData().
-    Http2SessionPtr h2;
-    {
-        AutoLocker al(priv->m);
-        h2 = priv->socket->priv->h2_session;
-    }
+    Http2SessionPtr h2 = qore_socket_object_get_h2_session(this);
     if (!h2) {
         return -1;
     }
