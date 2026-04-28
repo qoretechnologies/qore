@@ -148,14 +148,19 @@ static int qore_socket_close_from_controller(QoreSocket* s) {
 
 class QoreSocketControllerPollable : public AbstractPollableIoObjectBase {
 public:
-    DLLLOCAL QoreSocketControllerPollable(QoreSocket* sock) : sock(sock) {
+    DLLLOCAL QoreSocketControllerPollable(QoreSocket* sock) : priv(qore_socket_private::get(*sock)) {
+        priv->ref();
         QoreString tmp;
-        qore_get_ptr_hash(tmp, qore_socket_private::get(*sock));
+        qore_get_ptr_hash(tmp, priv);
         identity_hash = tmp.c_str();
     }
 
+    DLLLOCAL ~QoreSocketControllerPollable() {
+        priv->deref();
+    }
+
     DLLLOCAL virtual int getPollableDescriptor() const override {
-        return sock->getSocket();
+        return priv->sock;
     }
 
     DLLLOCAL virtual const std::string& getIoIdentityHash() const override {
@@ -163,22 +168,20 @@ public:
     }
 
     DLLLOCAL virtual void closeIo(ExceptionSink*) override {
-        qore_socket_private* priv = qore_socket_private::get(*sock);
         priv->prepareForClose();
-        if (sock->isOpen()) {
-            qore_socket_shutdown_direct(sock);
+        if (priv->isOpen()) {
+            priv->shutdown_direct();
             priv->close();
         }
     }
 
 #ifdef DARWIN
     DLLLOCAL virtual void setPollNotifyFd(int fd) override {
-        qore_socket_private::get(*sock)->poll_notify_fd.store(fd, std::memory_order_release);
+        priv->poll_notify_fd.store(fd, std::memory_order_release);
     }
 #endif
 
     DLLLOCAL virtual bool hasPendingData() const override {
-        qore_socket_private* priv = qore_socket_private::get(*sock);
         if (priv->buflen > priv->bufoffset) {
             return true;
         }
@@ -186,7 +189,7 @@ public:
     }
 
 private:
-    QoreSocket* sock;
+    qore_socket_private* priv;
     std::string identity_hash;
 };
 
@@ -2690,16 +2693,6 @@ static int qore_socket_exec_accept_replace_descriptor(QoreSocket* s, int descrip
 
 static int qore_socket_exec_close(QoreSocket* s) {
     ExceptionSink xsink;
-
-    if (qore_on_async_io_thread()) {
-        qore_socket_private* priv = qore_socket_private::get(*s);
-        priv->prepareForClose();
-        if (s->isOpen()) {
-            qore_socket_shutdown_direct(s);
-            return priv->close();
-        }
-        return 0;
-    }
 
     ReferenceHolder<QoreObject> ctl_obj(qore_get_async_io_controller_obj(&xsink), &xsink);
     if (!ctl_obj) {
@@ -6410,7 +6403,7 @@ QoreSocket::QoreSocket(int n_sock, int n_sfamily, int n_stype, int n_prot, const
 }
 
 QoreSocket::~QoreSocket() {
-    delete priv;
+    priv->deref();
 }
 
 int QoreSocket::setNoDelay(int nodelay) {

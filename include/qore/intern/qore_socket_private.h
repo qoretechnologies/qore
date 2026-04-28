@@ -718,7 +718,7 @@ private:
 };
 
 
-struct qore_socket_private {
+struct qore_socket_private : public QoreReferenceCounter {
     friend class PrivateQoreSocketTimeoutHelper;
     friend class PrivateQoreSocketThroughputHelper;
 
@@ -1066,6 +1066,16 @@ struct qore_socket_private {
         // must be dereferenced and removed before deleting
         assert(!event_queue);
         assert(!warn_queue);
+    }
+
+    DLLLOCAL void ref() const {
+        ROreference();
+    }
+
+    DLLLOCAL void deref() {
+        if (ROdereference()) {
+            delete this;
+        }
     }
 
     DLLLOCAL bool isOpen() {
