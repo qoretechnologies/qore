@@ -723,7 +723,7 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
         LocalVar** arr = closure_locals_vec.empty()
             ? nullptr : closure_locals_vec.data();
         int cnt = static_cast<int>(closure_locals_vec.size());
-        return readOneExpr(rdr, p, e, err, ctx.pgm,
+        return readOneTopLevelIRExpr(rdr, p, e, err, ctx.pgm,
             arr, cnt, ctx.globals, ctx.num_globals);
     };
     auto closure_ir = deserializeIRFunction(ctx.reader, ctx.ptr, ir_end_ptr, ctx.pgm,
@@ -825,13 +825,49 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
 // ============================================================================
 
 static bool write_expr_call_ref(AOTExprWriteCtx& ctx) {
-    // Call references need the full AST context for proper resolution
+    const AbstractQoreNode* node = ctx.expr.getInternalNode();
+    if (auto* mcr = dynamic_cast<const LocalMethodCallReferenceNode*>(node)) {
+        ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::BOUND_METHOD_REF));
+        const QoreMethod* method = mcr->getMethod();
+        const QoreClass* qc = method ? method->getClass() : nullptr;
+        std::string class_path = qc ? qc->getNamespacePath() : std::string();
+        ctx.writer.writeStringRef(class_path.c_str());
+        ctx.writer.writeStringRef(method ? method->getName() : "");
+        return true;
+    }
+    if (auto* scr = dynamic_cast<const LocalStaticMethodCallReferenceNode*>(node)) {
+        ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::STATIC_METHOD_REF));
+        const QoreMethod* method = scr->getMethod();
+        const QoreClass* qc = method ? method->getClass() : nullptr;
+        std::string class_path = qc ? qc->getNamespacePath() : std::string();
+        ctx.writer.writeStringRef(class_path.c_str());
+        ctx.writer.writeStringRef(method ? method->getName() : "");
+        return true;
+    }
+    if (auto* fcr = dynamic_cast<const LocalFunctionCallReferenceNode*>(node)) {
+        ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::FUNC_CALL_REF));
+        QoreFunction* f = fcr->getFunction();
+        ctx.writer.writeStringRef(f ? f->getName() : "");
+        return true;
+    }
     return false;
 }
 
 static QoreValue read_expr_call_ref(AOTExprReadCtx& ctx) {
-    // Unsupported in AOT metadata.
-    return QoreValue();
+    const char* func_name = ctx.reader.readStringRef(ctx.ptr);
+    if (!func_name || !*func_name) {
+        ctx.error = "empty call reference function name";
+        return QoreValue();
+    }
+    qore_program_private* pp = qore_program_private::get(*ctx.pgm);
+    const FunctionEntry* fe = qore_root_ns_private::runtimeFindFunctionEntry(
+        *pp->RootNS, func_name);
+    QoreFunction* f = fe ? fe->getFunction() : nullptr;
+    if (!f) {
+        ctx.error = std::string("cannot resolve function call reference '") + func_name + "'";
+        return QoreValue();
+    }
+    return QoreValue(new LocalFunctionCallReferenceNode(&loc_builtin, f));
 }
 
 // ============================================================================
@@ -839,13 +875,188 @@ static QoreValue read_expr_call_ref(AOTExprReadCtx& ctx) {
 // ============================================================================
 
 static bool write_expr_obj_method_ref(AOTExprWriteCtx& ctx) {
-    // Object method references need the full AST context for proper resolution
+    const AbstractQoreNode* node = ctx.expr.getInternalNode();
+    if (auto* smr = dynamic_cast<const ParseSelfMethodReferenceNode*>(node)) {
+        ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::SELF_METHOD_REF));
+        ctx.writer.writeStringRef(smr->getMethodName().c_str());
+        return true;
+    }
+    if (auto* omr = dynamic_cast<const ParseObjectMethodReferenceNode*>(node)) {
+        ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::OBJ_METHOD_REF_EXPR));
+        ctx.writer.writeStringRef(omr->getMethodName().c_str());
+        return classifyAndWriteExpr(ctx.writer, omr->getExp(), ctx.parent_locals,
+            ctx.parent_globals, ctx.const_reverse_map);
+    }
     return false;
 }
 
 static QoreValue read_expr_obj_method_ref(AOTExprReadCtx& ctx) {
-    // Unsupported in AOT metadata.
-    return QoreValue();
+    const char* method_name = ctx.reader.readStringRef(ctx.ptr);
+    if (!method_name || !*method_name) {
+        ctx.error = "empty object method reference name";
+        return QoreValue();
+    }
+    return QoreValue(new ParseSelfMethodReferenceNode(&loc_builtin, strdup(method_name)));
+}
+
+static QoreValue read_aot_function_call_ref(AOTExprReadCtx& ctx) {
+    const char* func_name = ctx.reader.readStringRef(ctx.ptr);
+    if (!func_name || !*func_name) {
+        ctx.error = "empty function call reference name";
+        return QoreValue();
+    }
+
+    qore_program_private* pp = qore_program_private::get(*ctx.pgm);
+    const FunctionEntry* fe = qore_root_ns_private::runtimeFindFunctionEntry(
+        *pp->RootNS, func_name);
+    QoreFunction* f = fe ? fe->getFunction() : nullptr;
+    if (!f) {
+        ctx.error = std::string("cannot resolve function call reference '") + func_name + "'";
+        return QoreValue();
+    }
+    return QoreValue(new LocalFunctionCallReferenceNode(&loc_builtin, f));
+}
+
+static const QoreMethod* read_aot_method_ref_target(AOTExprReadCtx& ctx, const char* kind,
+        bool prefer_static) {
+    const char* class_path = ctx.reader.readStringRef(ctx.ptr);
+    const char* method_name = ctx.reader.readStringRef(ctx.ptr);
+    if (!class_path || !*class_path || !method_name || !*method_name) {
+        ctx.error = std::string("empty ") + kind + " method reference metadata";
+        return nullptr;
+    }
+
+    const char* resolved_class_path = (class_path[0] == ':' && class_path[1] == ':')
+        ? class_path + 2 : class_path;
+    qore_program_private* pp = qore_program_private::get(*ctx.pgm);
+    const qore_ns_private* found_ns = nullptr;
+    const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
+        *pp->RootNS, resolved_class_path, found_ns);
+    if (!qc) {
+        ctx.error = std::string("cannot resolve class '") + class_path + "' for "
+            + kind + " method reference";
+        return nullptr;
+    }
+
+    const QoreMethod* method = prefer_static
+        ? qc->findStaticMethod(method_name) : qc->findMethod(method_name);
+    if (!method) {
+        method = prefer_static ? qc->findMethod(method_name) : qc->findStaticMethod(method_name);
+    }
+    if (!method) {
+        ctx.error = std::string("cannot resolve ") + kind + " method reference '"
+            + class_path + "::" + method_name + "'";
+    }
+    return method;
+}
+
+static bool write_expr_func_call_ref(AOTExprWriteCtx& ctx) {
+    const AbstractQoreNode* node = ctx.expr.getInternalNode();
+    auto* fcr = dynamic_cast<const LocalFunctionCallReferenceNode*>(node);
+    if (!fcr) {
+        return false;
+    }
+    ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::FUNC_CALL_REF));
+    QoreFunction* f = fcr->getFunction();
+    ctx.writer.writeStringRef(f ? f->getName() : "");
+    return true;
+}
+
+static QoreValue read_expr_func_call_ref(AOTExprReadCtx& ctx) {
+    return read_aot_function_call_ref(ctx);
+}
+
+static bool write_expr_bound_method_ref(AOTExprWriteCtx& ctx) {
+    const AbstractQoreNode* node = ctx.expr.getInternalNode();
+    auto* mcr = dynamic_cast<const LocalMethodCallReferenceNode*>(node);
+    if (!mcr) {
+        return false;
+    }
+    ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::BOUND_METHOD_REF));
+    const QoreMethod* method = mcr->getMethod();
+    const QoreClass* qc = method ? method->getClass() : nullptr;
+    std::string class_path = qc ? qc->getNamespacePath() : std::string();
+    ctx.writer.writeStringRef(class_path.c_str());
+    ctx.writer.writeStringRef(method ? method->getName() : "");
+    return true;
+}
+
+static QoreValue read_expr_bound_method_ref(AOTExprReadCtx& ctx) {
+    const QoreMethod* method = read_aot_method_ref_target(ctx, "bound", false);
+    return method ? QoreValue(new LocalMethodCallReferenceNode(&loc_builtin, method)) : QoreValue();
+}
+
+static bool write_expr_static_method_ref(AOTExprWriteCtx& ctx) {
+    const AbstractQoreNode* node = ctx.expr.getInternalNode();
+    if (dynamic_cast<const LocalMethodCallReferenceNode*>(node)) {
+        return false;
+    }
+    auto* scr = dynamic_cast<const LocalStaticMethodCallReferenceNode*>(node);
+    if (!scr) {
+        return false;
+    }
+    ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::STATIC_METHOD_REF));
+    const QoreMethod* method = scr->getMethod();
+    const QoreClass* qc = method ? method->getClass() : nullptr;
+    std::string class_path = qc ? qc->getNamespacePath() : std::string();
+    ctx.writer.writeStringRef(class_path.c_str());
+    ctx.writer.writeStringRef(method ? method->getName() : "");
+    return true;
+}
+
+static QoreValue read_expr_static_method_ref(AOTExprReadCtx& ctx) {
+    const QoreMethod* method = read_aot_method_ref_target(ctx, "static", true);
+    return method ? QoreValue(new LocalStaticMethodCallReferenceNode(&loc_builtin, method)) : QoreValue();
+}
+
+static bool write_expr_self_method_ref(AOTExprWriteCtx& ctx) {
+    const AbstractQoreNode* node = ctx.expr.getInternalNode();
+    auto* smr = dynamic_cast<const ParseSelfMethodReferenceNode*>(node);
+    if (!smr) {
+        return false;
+    }
+    ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::SELF_METHOD_REF));
+    ctx.writer.writeStringRef(smr->getMethodName().c_str());
+    return true;
+}
+
+static QoreValue read_expr_self_method_ref(AOTExprReadCtx& ctx) {
+    const char* method_name = ctx.reader.readStringRef(ctx.ptr);
+    if (!method_name || !*method_name) {
+        ctx.error = "empty self method reference name";
+        return QoreValue();
+    }
+    return QoreValue(new ParseSelfMethodReferenceNode(&loc_builtin, strdup(method_name)));
+}
+
+static bool write_expr_obj_method_ref_expr(AOTExprWriteCtx& ctx) {
+    const AbstractQoreNode* node = ctx.expr.getInternalNode();
+    auto* omr = dynamic_cast<const ParseObjectMethodReferenceNode*>(node);
+    if (!omr) {
+        return false;
+    }
+    ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::OBJ_METHOD_REF_EXPR));
+    ctx.writer.writeStringRef(omr->getMethodName().c_str());
+    return classifyAndWriteExpr(ctx.writer, omr->getExp(), ctx.parent_locals,
+        ctx.parent_globals, ctx.const_reverse_map);
+}
+
+static QoreValue read_expr_obj_method_ref_expr(AOTExprReadCtx& ctx) {
+    const char* method_name = ctx.reader.readStringRef(ctx.ptr);
+    if (!method_name || !*method_name) {
+        ctx.error = "empty object method reference name";
+        return QoreValue();
+    }
+
+    std::string target_err;
+    QoreValue target = readOneExpr(ctx.reader, ctx.ptr, ctx.end, target_err, ctx.pgm,
+        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
+    if (!target_err.empty()) {
+        ctx.error = target_err;
+        target.discard(nullptr);
+        return QoreValue();
+    }
+    return QoreValue(new ParseObjectMethodReferenceNode(&loc_builtin, target, strdup(method_name)));
 }
 
 // ============================================================================
@@ -1783,6 +1994,24 @@ static QoreValue read_expr_dot_eval_target(AOTExprReadCtx& ctx) {
     mc->resolveParseArgs();
 
     return QoreValue(new QoreDotEvalOperatorNode(&loc_builtin, target, mc));
+}
+
+// ============================================================================
+// CONST_VALUE (41)
+// ============================================================================
+
+static bool write_expr_const_value(AOTExprWriteCtx& ctx) {
+    ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::CONST_VALUE));
+    return ctx.writer.writeValue(ctx.expr);
+}
+
+static QoreValue read_expr_const_value(AOTExprReadCtx& ctx) {
+    std::string value_error;
+    QoreValue rv = ctx.reader.readValue(ctx.ptr, ctx.end, value_error);
+    if (!value_error.empty()) {
+        ctx.error = value_error;
+    }
+    return rv;
 }
 
 // ============================================================================

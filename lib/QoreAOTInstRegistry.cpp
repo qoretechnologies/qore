@@ -34,6 +34,7 @@
 #include "qore/intern/QoreAOTBinary.h"
 #include "qore/intern/CaseNodeRegex.h"
 #include "qore/intern/QorePseudoMethods.h"
+#include "qore/intern/StaticClassVarRefNode.h"
 #include "qore/QoreValue.h"
 
 // Forward declarations for recursive serialization functions
@@ -80,6 +81,33 @@ static std::string instRegistryGetClassPath(const QoreClass* qc, bool pseudo = f
     // getNamespacePath() can be empty. getPath() returns the constructor path
     // used by instRegistryFindPseudoClassByPath() (for example "::Qore::<binary>").
     return pseudo ? qc->getPath() : qc->getNamespacePath();
+}
+
+static StaticClassVarRefNode* instRegistryResolveStaticVarRef(QoreProgram* pgm, const std::string& full_name) {
+    if (!pgm || full_name.empty()) {
+        return nullptr;
+    }
+
+    size_t sep = full_name.rfind("::");
+    if (sep == std::string::npos) {
+        return nullptr;
+    }
+
+    std::string class_path = full_name.substr(0, sep);
+    std::string var_name = full_name.substr(sep + 2);
+    if (class_path.empty() || var_name.empty()) {
+        return nullptr;
+    }
+
+    qore_program_private* pp = qore_program_private::get(*pgm);
+    const qore_ns_private* found_ns = nullptr;
+    const QoreClass* qc = qore_root_ns_private::runtimeFindClass(*pp->RootNS, class_path.c_str(), found_ns);
+    if (!qc) {
+        return nullptr;
+    }
+
+    QoreVarInfo* vi = qore_class_private::get(*qc)->vars.find(var_name.c_str());
+    return vi ? new StaticClassVarRefNode(&loc_builtin, var_name.c_str(), *qc, *vi) : nullptr;
 }
 
 // Error propagation convention for instruction read_fn handlers:
@@ -821,14 +849,11 @@ static std::unique_ptr<QoreIRInstruction> readCallDirect(
 
 static bool writeCallMethodDirect(AOTInstWriteCtx& ctx) {
     auto* ci = static_cast<const QoreIRCallMethodDirectInstruction*>(ctx.inst);
-    if (ci->expr) {
-        ctx.writer.writeU8(1);
-        if (!ctx.writeExpr(ctx.writer, ci->expr)) {
-            return false;
-        }
-    } else {
-        ctx.writer.writeU8(0);
-    }
+    // Direct method calls are fully represented by operand slots plus the
+    // resolved class/method metadata below.  Serializing the original AST here
+    // reintroduces source-tree payloads into closure IR and can force nested
+    // GENERIC_EVAL for constants that native IR already lowered as operands.
+    ctx.writer.writeU8(0);
     ctx.writer.writeStringRef(ci->qc ? ci->qc->getNamespacePath().c_str() : "");
     ctx.writer.writeStringRef(ci->method ? ci->method->getName() : "");
     ctx.writer.writeU8(ci->has_ref_args ? 1 : 0);
@@ -866,6 +891,14 @@ static std::unique_ptr<QoreIRInstruction> readCallMethodDirect(
             }
         }
     }
+    if (!qc || !method) {
+        ctx.error = std::string("cannot resolve direct method call '")
+            + (class_path ? class_path : "") + "::" + (method_name ? method_name : "") + "'";
+        if (has_expr) {
+            expr.discard(nullptr);
+        }
+        return nullptr;
+    }
     auto* ci = new QoreIRCallMethodDirectInstruction(method, qc, nullptr, expr);
     ci->has_ref_args = has_ref_args;
     if (has_expr) {
@@ -883,14 +916,9 @@ static std::unique_ptr<QoreIRInstruction> readCallMethodDirect(
 
 static bool writeInvokeMethodDirect(AOTInstWriteCtx& ctx) {
     auto* ci = static_cast<const QoreIRInvokeMethodDirectInstruction*>(ctx.inst);
-    if (ci->expr) {
-        ctx.writer.writeU8(1);
-        if (!ctx.writeExpr(ctx.writer, ci->expr)) {
-            return false;
-        }
-    } else {
-        ctx.writer.writeU8(0);
-    }
+    // Same representation as CallMethodDirect: exception targets are serialized
+    // separately, and the AST expression is not needed for native dispatch.
+    ctx.writer.writeU8(0);
     ctx.writer.writeStringRef(ci->qc ? ci->qc->getNamespacePath().c_str() : "");
     ctx.writer.writeStringRef(ci->method ? ci->method->getName() : "");
     ctx.writer.writeU8(ci->has_ref_args ? 1 : 0);
@@ -933,6 +961,14 @@ static std::unique_ptr<QoreIRInstruction> readInvokeMethodDirect(
                 method = qc->findStaticMethod(method_name);
             }
         }
+    }
+    if (!qc || !method) {
+        ctx.error = std::string("cannot resolve direct method invoke '")
+            + (class_path ? class_path : "") + "::" + (method_name ? method_name : "") + "'";
+        if (has_expr) {
+            expr.discard(nullptr);
+        }
+        return nullptr;
     }
     auto* ci = new QoreIRInvokeMethodDirectInstruction(method, qc, nullptr,
         ctx.resolveBlock(normal_idx), ctx.resolveBlock(exception_idx), expr);
@@ -1589,6 +1625,15 @@ static std::unique_ptr<QoreIRInstruction> readNewObject(
 
 static bool writeLoadConst(AOTInstWriteCtx& ctx) {
     auto* lci = static_cast<const QoreIRLoadConstantInstruction*>(ctx.inst);
+    // Direct parse-time objects (for example class constants such as
+    // LoggerLevel::LevelInfo) must be resolved through the constant reverse map.
+    // writeValue() cannot serialize arbitrary objects and encodes unsupported
+    // values as NOTHING to preserve container layout.
+    if (!lci->node && !dynamic_cast<const RuntimeConstantRefNode*>(lci->expr.getInternalNode())
+            && lci->expr.getType() != NT_OBJECT) {
+        ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::CONST_VALUE));
+        return ctx.writer.writeValue(lci->expr);
+    }
     if (!ctx.writeExpr(ctx.writer, lci->expr)) {
         return false;
     }
@@ -2659,6 +2704,15 @@ static std::unique_ptr<QoreIRInstruction> readLValuePath(
                     step.ref_ptr = lv_by_name;
                 }
             }
+        } else if (step.kind == LVPathStepKind::StaticVar) {
+            StaticClassVarRefNode* scv = instRegistryResolveStaticVarRef(ctx.pgm, step.name);
+            if (!scv) {
+                ctx.error = "cannot resolve static lvalue path root '" + step.name + "'";
+                delete pi;
+                return nullptr;
+            }
+            step.ref_ptr = scv;
+            pi->owned_static_var_refs.push_back(scv);
         }
         pi->path.push_back(std::move(step));
     }

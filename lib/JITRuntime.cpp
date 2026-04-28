@@ -48,6 +48,7 @@
 } while(0)
 
 #include <cstring>
+#include <atomic>
 #include <functional>
 #include <memory>
 #include <optional>
@@ -1278,6 +1279,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_load_constant_aot(QoreAOTContext* ctx, int
             return qore_rt_load_constant(node, xsink);
         }
     }
+    if (expr.needsEval()) {
+        return toBits(expr.eval(xsink));
+    }
     return qore_rt_load_constant_value(ctx->exprs[idx]);
 }
 
@@ -1335,12 +1339,34 @@ extern "C" DLLEXPORT uint64_t qore_rt_cast_with_inner_aot(QoreAOTContext* ctx, i
     return qore_rt_cast_with_inner(ctx->exprs[slot], inner_bits, xsink);
 }
 
+// Runtime casts evaluate their input expression before type checking.  The
+// type-path cast helper receives a precomputed value, so mirror that evaluation
+// step for weak references here.
+static QoreValue qore_rt_cast_normalize_weak_ref(const QoreValue& val) {
+    switch (val.getType()) {
+        case NT_WEAKREF: {
+            QoreObject* obj = val.get<const WeakReferenceNode>()->get();
+            return obj && obj->isValid() ? QoreValue(obj) : QoreValue();
+        }
+        case NT_WEAKREF_HASH: {
+            QoreHashNode* h = val.get<const WeakHashReferenceNode>()->get();
+            return h ? QoreValue(h) : QoreValue();
+        }
+        case NT_WEAKREF_LIST: {
+            QoreListNode* l = val.get<const WeakListReferenceNode>()->get();
+            return l ? QoreValue(l) : QoreValue();
+        }
+        default:
+            return val;
+    }
+}
+
 // Cast by type path: resolves the cast type at runtime from a string path,
 // then performs the cast on the pre-evaluated inner value.
 // Eliminates the need for EXPR_TREE serialization of cast operator nodes.
 extern "C" DLLEXPORT uint64_t qore_rt_cast_by_type_path(uint64_t inner_bits,
         const char* type_path, int64_t or_nothing, ExceptionSink* xsink) {
-    QoreValue inner = fromBits(inner_bits);
+    QoreValue inner = qore_rt_cast_normalize_weak_ref(fromBits(inner_bits));
 
     if (!type_path || !*type_path) {
         xsink->raiseException("IR-CAST-ERROR", "missing cast type path");
@@ -2449,7 +2475,12 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_find_throwing(
 // --- Specialized access helpers (Phase 5b optimizations) ---
 
 extern "C" DLLEXPORT uint64_t qore_rt_hash_key_access(uint64_t hash_val, const char* key, ExceptionSink* xsink) {
-    QoreValue v = fromBits(hash_val);
+    QoreValue raw_v = fromBits(hash_val);
+    ValueEvalOptimizedRefHolder vh(raw_v, xsink);
+    if (xsink && *xsink) {
+        return toBits(QoreValue());
+    }
+    QoreValue v = *vh;
     // Unwrap weak references: member access on a weak reference target is transparent,
     // mirroring the IR interpreter's QoreIROpcode::HashKeyAccess handling.
     if (v.getType() == NT_WEAKREF) {
@@ -2458,7 +2489,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_hash_key_access(uint64_t hash_val, const c
             return toBits(QoreValue());
         }
         QoreValue rv = o->evalMember(key, xsink);
-        return *xsink ? toBits(QoreValue()) : toBits(rv);
+        if (*xsink) {
+            return toBits(QoreValue());
+        }
+        return toBits(rv);
     }
     if (v.getType() == NT_WEAKREF_HASH) {
         const QoreHashNode* h = v.get<const WeakHashReferenceNode>()->get();
@@ -2466,24 +2500,41 @@ extern "C" DLLEXPORT uint64_t qore_rt_hash_key_access(uint64_t hash_val, const c
             return toBits(QoreValue());
         }
         QoreValue result = h->getKeyValue(key, xsink);
-        return *xsink ? toBits(QoreValue()) : toBits(result.refSelf());
+        if (*xsink) {
+            return toBits(QoreValue());
+        }
+        result.refSelf();
+        return toBits(result);
     }
     if (v.getType() == NT_HASH) {
         const QoreHashNode* h = v.get<const QoreHashNode>();
         QoreValue result = h->getKeyValue(key, xsink);
-        return *xsink ? toBits(QoreValue()) : toBits(result.refSelf());
+        if (*xsink) {
+            return toBits(QoreValue());
+        }
+        result.refSelf();
+        return toBits(result);
     }
     if (v.getType() == NT_OBJECT) {
         QoreObject* o = const_cast<QoreObject*>(v.get<const QoreObject>());
         QoreValue rv = o->evalMember(key, xsink);
-        return *xsink ? toBits(QoreValue()) : toBits(rv);
+        if (*xsink) {
+            return toBits(QoreValue());
+        }
+        return toBits(rv);
     }
     // Not a hash or object (or NOTHING/NULL): return NOTHING
     return toBits(QoreValue());
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_hash_key_access_int(uint64_t hash_val, const char* key) {
-    QoreValue v = fromBits(hash_val);
+    ExceptionSink xsink;
+    QoreValue raw_v = fromBits(hash_val);
+    ValueEvalOptimizedRefHolder vh(raw_v, &xsink);
+    if (xsink) {
+        return toBits(QoreValue());
+    }
+    QoreValue v = *vh;
     if (v.getType() == NT_HASH) {
         const QoreHashNode* h = v.get<const QoreHashNode>();
         bool exists = false;
@@ -2818,7 +2869,12 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow_aot(
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_list_index_access(uint64_t list_val, int64_t index, ExceptionSink* xsink) {
-    QoreValue v = fromBits(list_val);
+    QoreValue raw_v = fromBits(list_val);
+    ValueEvalOptimizedRefHolder vh(raw_v, xsink);
+    if (xsink && *xsink) {
+        return toBits(QoreValue());
+    }
+    QoreValue v = *vh;
     if (v.getType() == NT_LIST) {
         const QoreListNode* l = v.get<const QoreListNode>();
         if (index >= 0 && static_cast<size_t>(index) < l->size()) {
@@ -6521,15 +6577,25 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_assign(
 
     QoreValue val = fromBits(rhs_bits);
     ValueHolder val_holder(val.refSelf(), xsink);
+    QoreValue assign_val = val;
+    ValueHolder eval_holder(xsink);
+    qore_type_t val_type = val.getType();
+    if (!inst->weak && (val_type == NT_WEAKREF || val_type == NT_WEAKREF_HASH || val_type == NT_WEAKREF_LIST)) {
+        eval_holder = val.eval(xsink);
+        if (*xsink) {
+            return toBits(QoreValue());
+        }
+        assign_val = *eval_holder;
+    }
 
     LValueHelper lvh(xsink);
     if (lvh.navigatePath(path_copy.data(), path_copy.size(), false)) {
         return toBits(QoreValue());
     }
-    if (lvh.assign(val.refSelf(), "<lvalue path assign>", true, inst->weak)) {
+    if (lvh.assign(assign_val.refSelf(), "<lvalue path assign>", true, inst->weak)) {
         return toBits(QoreValue());
     }
-    return toBits(val.refSelf());
+    return toBits(assign_val.refSelf());
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_lv_path_compound(

@@ -51,6 +51,7 @@
 #include "qore/intern/QoreIRBuilder.h"
 #include "qore/intern/QoreIRLowering.h"
 #include "qore/intern/QoreIRVerifier.h"
+#include "qore/intern/QoreOpcodeRegistry.h"
 #include "qore/intern/QoreAOTInstRegistry.h"
 #include "qore/intern/QoreAOTExprRegistry.h"
 #include "qore/intern/QoreAOTExprNodeRegistry.h"
@@ -933,6 +934,20 @@ QoreValue readOneExpr(
     return kinfo->read_fn(rctx);
 }
 
+QoreValue readOneTopLevelIRExpr(
+        const QoreAOTBinaryReader& rdr, const uint8_t*& p, const uint8_t* e,
+        std::string& err, QoreProgram* pgm,
+        LocalVar** locals, int num_locals,
+        Var** globals, int num_globals) {
+    const uint8_t* start = p;
+    uint8_t kind_byte = QoreAOTBinaryReader::readU8(p);
+    if (static_cast<AOTExprKind>(kind_byte) == AOTExprKind::GENERIC_EVAL) {
+        return QoreValue();
+    }
+    p = start;
+    return readOneExpr(rdr, p, e, err, pgm, locals, num_locals, globals, num_globals);
+}
+
 // ---- Expression Tree Deserializer ----
 
 //! Deserializes an AOT EXPR_TREE binary blob back into AST nodes
@@ -1134,6 +1149,15 @@ static QoreAOTContext* buildContextFromSlotMap(
     uint8_t has_unsupported = QoreAOTBinaryReader::readU8(ptr);
     uint8_t num_lv_path_insts = QoreAOTBinaryReader::readU8(ptr); // was: padding byte
     printd(5, "AOT buildCtx '%s': num_lv_path=%d (from binary)\n", name, num_lv_path_insts);
+    const bool trace_slot_reg = getenv("QORE_AOT_TRACE_SLOT_REG") != nullptr;
+    if (trace_slot_reg) {
+        fprintf(stderr, "[aot-slot-reg] buildCtx '%s': binary(locals=%u globals=%u exprs=%u stmts=%u "
+            "regex=%u body_locals=%u lvpath=%u unsupported=%u) func(locals=%d globals=%d exprs=%d "
+            "stmts=%d regex=%d)\n", name, num_locals, num_globals, num_exprs, num_stmts,
+            num_regex_cases, num_body_locals, num_lv_path_insts, has_unsupported,
+            aot_func.num_locals, aot_func.num_globals, aot_func.num_exprs, aot_func.num_stmts,
+            aot_func.num_regex_cases);
+    }
 
     if (debug > 1 && has_unsupported) {
         printd(5, "AOT buildCtx: '%s' has_unsupported=1 FROM BINARY (pre-flagged)\n", name);
@@ -1146,6 +1170,9 @@ static QoreAOTContext* buildContextFromSlotMap(
         printd(0, "AOT v2: slot count mismatch for '%s': binary(%d,%d,%d,%d,%d) vs func(%d,%d,%d,%d,%d)\n",
             name, num_locals, num_globals, num_exprs, num_stmts, num_regex_cases,
             aot_func.num_locals, aot_func.num_globals, aot_func.num_exprs, aot_func.num_stmts, aot_func.num_regex_cases);
+        if (trace_slot_reg) {
+            fprintf(stderr, "[aot-slot-reg] slot count mismatch for '%s'\n", name);
+        }
         return nullptr;
     }
 
@@ -1362,6 +1389,10 @@ static QoreAOTContext* buildContextFromSlotMap(
         if (!kind_is_valid) {
             printd(2, "AOT buildCtx '%s': unsupported kind_byte=%d at expr slot %d\n",
                 name, kind_byte, i);
+            if (trace_slot_reg) {
+                fprintf(stderr, "[aot-slot-reg] '%s': unsupported expr kind byte %u at slot %d\n",
+                    name, kind_byte, i);
+            }
             has_unsupported = true;
             break;
         }
@@ -2135,6 +2166,10 @@ static QoreAOTContext* buildContextFromSlotMap(
                 uint8_t has_ir = QoreAOTBinaryReader::readU8(ptr);
                 if (!has_ir) {
                     // No IR: invalid for source-fallback-free AOT.
+                    if (trace_slot_reg) {
+                        fprintf(stderr, "[aot-slot-reg] '%s': closure expr slot %d has no serialized IR\n",
+                            name, i);
+                    }
                     closure_ir_missing = true;
                     continue;
                 }
@@ -2157,6 +2192,10 @@ static QoreAOTContext* buildContextFromSlotMap(
                 ExceptionSink closure_xsink;
                 ProgramRuntimeParseContextHelper closure_pch(&closure_xsink, pgm);
                 if (closure_xsink.isException()) {
+                    if (trace_slot_reg) {
+                        fprintf(stderr, "[aot-slot-reg] '%s': closure expr slot %d parse context setup failed\n",
+                            name, i);
+                    }
                     closure_xsink.clear();
                     ptr = ir_end_ptr;
                     closure_ir_missing = true;
@@ -2251,7 +2290,7 @@ static QoreAOTContext* buildContextFromSlotMap(
                     LocalVar** arr = closure_locals_vec.empty()
                         ? nullptr : closure_locals_vec.data();
                     int cnt = static_cast<int>(closure_locals_vec.size());
-                    return readOneExpr(rdr, p, e, err, pgm,
+                    return readOneTopLevelIRExpr(rdr, p, e, err, pgm,
                         arr, cnt, ctx->globals, num_globals);
                 };
                 auto closure_ir = deserializeIRFunction(reader, ptr, ir_end_ptr, pgm,
@@ -2262,6 +2301,10 @@ static QoreAOTContext* buildContextFromSlotMap(
                 if (!closure_ir) {
                     printd(2, "AOT: closure IR deser failed for expr slot %d: %s\n",
                         i, ir_error.c_str());
+                    if (trace_slot_reg) {
+                        fprintf(stderr, "[aot-slot-reg] '%s': closure expr slot %d IR deser failed: %s\n",
+                            name, i, ir_error.c_str());
+                    }
                     delete ucf;
                     closure_ir_missing = true;
                     continue;
@@ -2440,6 +2483,10 @@ static QoreAOTContext* buildContextFromSlotMap(
         } else if (kind != AOTExprKind::GENERIC_EVAL) {
             printd(2, "AOT buildCtx: '%s' unresolved expr[%d] kind=%d ref1='%s' ref2='%s'\n",
                 name, i, (int)kind, ref1 ? ref1 : "", ref2 ? ref2 : "");
+            if (trace_slot_reg) {
+                fprintf(stderr, "[aot-slot-reg] '%s': unresolved expr[%d] kind=%d ref1='%s' ref2='%s'\n",
+                    name, i, static_cast<int>(kind), ref1 ? ref1 : "", ref2 ? ref2 : "");
+            }
             has_unsupported = true;
         }
 
@@ -2999,6 +3046,9 @@ static QoreAOTContext* buildContextFromSlotMap(
     // registration for this function — it will fall through to JIT at runtime
     if (has_unsupported) {
         printd(2, "AOT buildCtx: SKIP '%s' (unsupported expr slots)\n", name);
+        if (trace_slot_reg) {
+            fprintf(stderr, "[aot-slot-reg] SKIP '%s': unsupported expr slots\n", name);
+        }
         delete ctx;
         return nullptr;
     }
@@ -3006,6 +3056,9 @@ static QoreAOTContext* buildContextFromSlotMap(
     // Closure IR errors are hard failures (Phase 2: no source fallback)
     if (closure_ir_missing) {
         printd(2, "AOT buildCtx: '%s' failed (closure IR missing)\n", name);
+        if (trace_slot_reg) {
+            fprintf(stderr, "[aot-slot-reg] SKIP '%s': closure IR missing\n", name);
+        }
         delete ctx;
         return nullptr;
     }
@@ -3062,6 +3115,11 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
     AOTInstReadCtx rctx{reader, ptr, end, blocks, local_map, readExpr, pgm, error, slot_to_local};
     inst = ginfo->read_fn(opcode_raw, exc_target, operands, result_id, rctx);
     if (!inst) {
+        const OpcodeInfo* oi = getOpcodeInfo(opcode_raw);
+        error = std::string("opcode ") + (oi && oi->name ? oi->name : "<unknown>")
+            + " (" + std::to_string(opcode_raw) + "), group "
+            + (ginfo->name ? ginfo->name : "<unknown>") + " ("
+            + std::to_string(group_byte) + "): " + error;
         return nullptr;
     }
 
@@ -3765,6 +3823,24 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
                         && !step.name.empty()) {
                     step.ref_ptr = qore_root_ns_private::runtimeFindGlobalVar(
                         *pp->RootNS, step.name.c_str());
+                } else if (step.kind == LVPathStepKind::StaticVar && !step.name.empty()) {
+                    std::string full_name = step.name;
+                    size_t sep = full_name.rfind("::");
+                    if (sep != std::string::npos) {
+                        std::string class_path = full_name.substr(0, sep);
+                        std::string var_name = full_name.substr(sep + 2);
+                        const qore_ns_private* found_ns = nullptr;
+                        const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
+                            *pp->RootNS, class_path.c_str(), found_ns);
+                        if (qc) {
+                            QoreVarInfo* vi = qore_class_private::get(*qc)->vars.find(var_name.c_str());
+                            if (vi) {
+                                auto* scv = new StaticClassVarRefNode(&loc_builtin, var_name.c_str(), *qc, *vi);
+                                step.ref_ptr = scv;
+                                pi->owned_static_var_refs.push_back(scv);
+                            }
+                        }
+                    }
                 }
                 pi->path.push_back(std::move(step));
             }
@@ -8238,12 +8314,18 @@ static void executeInitFunctions(
                         mod_name ? mod_name : "<none>", desc.ns_path.c_str(), desc.item_name.c_str(),
                         result.getTypeName(), (void*)target_ce, (void*)shadow_ce);
                 }
-                // Set both val and saved_val so RuntimeConstantRefNode::evalImpl() works.
+                // Populate saved_val; pending AOT constant shells keep val as a
+                // RuntimeConstantRefNode to preserve source-mode parse semantics.
+                // The shadow module program is shared by all target Programs, so
+                // keep its first initialized value canonical.  Re-importing the
+                // same AOT user module into another Program must not rewrite the
+                // shared ConstantEntry that compiled module code resolves against.
                 // refSelf() each time because setRuntimeValue takes ownership.
                 if (target_ce) {
                     target_ce->setRuntimeValue(result.refSelf(), &xsink);
                 }
-                if (shadow_ce && shadow_ce != target_ce) {
+                if (shadow_ce && shadow_ce != target_ce
+                        && (!shadow_ce->hasValue() || shadow_ce->aot_shell_pending)) {
                     shadow_ce->setRuntimeValue(result.refSelf(), &xsink);
                 }
                 if (aotInitTraceEnabled() && xsink.isException()) {
@@ -8297,12 +8379,18 @@ static void executeInitFunctions(
                     ++failed;
                     break;
                 }
-                // Set both val and saved_val so RuntimeConstantRefNode::evalImpl() works.
+                // Populate saved_val; pending AOT constant shells keep val as a
+                // RuntimeConstantRefNode to preserve source-mode parse semantics.
+                // Keep the shared shadow module ConstantEntry canonical across
+                // imports into multiple target Programs; otherwise a nested import
+                // can rewrite values that earlier module-init side effects stored
+                // by identity.
                 // refSelf() each time because setRuntimeValue takes ownership.
                 if (target_ce) {
                     target_ce->setRuntimeValue(result.refSelf(), &xsink);
                 }
-                if (shadow_ce && shadow_ce != target_ce) {
+                if (shadow_ce && shadow_ce != target_ce
+                        && (!shadow_ce->hasValue() || shadow_ce->aot_shell_pending)) {
                     shadow_ce->setRuntimeValue(result.refSelf(), &xsink);
                 }
                 result.discard(&xsink);

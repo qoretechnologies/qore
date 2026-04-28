@@ -608,19 +608,23 @@ public class PgsqlColumn inherits SqlUtil::AbstractColumn {
         switch (native_type) {
             case =~ /^timestamptz/: {
                 string sql = native_type;
-                return splice sql, 11, 0, "(" + string(size) + ")";
+                splice sql, 11, 0, "(" + string(size) + ")";
+                return sql;
             }
             case =~ /^timestamp/: {
                 string sql = native_type;
-                return splice sql, 9, 0, "(" + string(size) + ")";
+                splice sql, 9, 0, "(" + string(size) + ")";
+                return sql;
             }
             case =~ /^timetz/: {
                 string sql = native_type;
-                return splice sql, 6, 0, "(" + string(size) + ")";
+                splice sql, 6, 0, "(" + string(size) + ")";
+                return sql;
             }
             case =~ /^time/: {
                 string sql = native_type;
-                return splice sql, 4, 0, "(" + string(size) + ")";
+                splice sql, 4, 0, "(" + string(size) + ")";
+                return sql;
             }
         }
         return AbstractColumn::getNativeTypeString();

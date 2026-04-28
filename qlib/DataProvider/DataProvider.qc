@@ -460,22 +460,43 @@ public class DataProvider {
         on_exit factory_cache_lock.exit();
 
         string name = factory.getName();
-        if (factory_cache{name}) {
+        *AbstractDataProviderFactory previous_factory = factory_cache{name};
+        *string previous_class_name;
+        *string previous_module_name;
+        if (previous_factory) {
             # check if factory is being re-registered after module injection
             if (!DataProvider::checkInjection(factory, factory_module_map)) {
                 throw "PROVIDER-ERROR", sprintf("provider %y has already been registered", name);
             }
+            previous_class_name = previous_factory.className();
+            previous_module_name = factory_module_map{previous_class_name};
         }
+        string new_class_name = factory.className();
         {
             *string module_name = Class::getClass(factory).getModuleName();
             if (exists module_name) {
-                factory_module_map{factory.className()} = module_name;
+                factory_module_map{new_class_name} = module_name;
             }
         }
         factory_cache{name} = factory;
 
-        # deregister the app automatically if module initialization fails
-        ImplicitModuleTransaction::add(sub () { DataProvider::deregisterFactory(name); });
+        # Roll back exactly this registration if module initialization fails.
+        # Re-registration during module injection must restore the previous factory
+        # rather than deregistering a factory that was already valid before the load.
+        ImplicitModuleTransaction::add(sub () {
+            factory_cache_lock.enter();
+            on_exit factory_cache_lock.exit();
+
+            remove factory_module_map{new_class_name};
+            if (previous_factory) {
+                factory_cache{name} = previous_factory;
+                if (exists previous_module_name) {
+                    factory_module_map{previous_class_name} = previous_module_name;
+                }
+            } else {
+                remove factory_cache{name};
+            }
+        });
     }
 
     #! Returns the given data provider factory or @ref nothing if not present

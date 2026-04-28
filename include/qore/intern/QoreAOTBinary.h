@@ -835,6 +835,7 @@ enum class AOTExprKind : uint8_t {
     STATIC_METHOD_REF  = 38,  //!< Static method reference (\Class::method): ref1=class_path, ref2=method_name
     SELF_METHOD_REF    = 39,  //!< Self method reference (\self.method): ref1=method_name
     OBJ_METHOD_REF_EXPR = 40, //!< Object method reference (\obj.method): ref1=method_name + inline child expr
+    CONST_VALUE        = 41,  //!< Serialized QoreValue constant: QoreAOTValueTag payload
     EXPR_TREE          = 0xFE, //!< Recursive expression tree: binary blob (inline bytes)
     GENERIC_EVAL       = 0xFF //!< Unsupported expression marker; rejected for new AOT objects
 };
@@ -2185,6 +2186,18 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
 //! @param num_globals number of entries in globals
 //! @return reconstructed expression, or NOTHING on failure
 QoreValue readOneExpr(
+        const QoreAOTBinaryReader& rdr, const uint8_t*& p, const uint8_t* e,
+        std::string& err, QoreProgram* pgm,
+        LocalVar** locals, int num_locals,
+        Var** globals, int num_globals);
+
+//! Read one top-level serialized IR instruction expression field.
+//!
+//! GENERIC_EVAL is allowed only at this top level: it is the no-payload
+//! sentinel for opcodes whose native IR operands are sufficient and whose AST
+//! expression field was intentionally omitted.  Nested GENERIC_EVAL markers are
+//! still rejected by readOneExpr().
+QoreValue readOneTopLevelIRExpr(
         const QoreAOTBinaryReader& rdr, const uint8_t*& p, const uint8_t* e,
         std::string& err, QoreProgram* pgm,
         LocalVar** locals, int num_locals,

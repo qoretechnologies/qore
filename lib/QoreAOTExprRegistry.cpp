@@ -178,12 +178,12 @@ const QoreAOTExprKindInfo AOT_EXPR_KIND_REGISTRY[256] = {
 
     // 35: DOT_EVAL_TARGET (classifyAndWriteExpr writes this for inline dot-eval expressions)
     {"DOT_EVAL_TARGET", 35, true, write_expr_dot_eval_target, read_expr_dot_eval_target, "Dot-eval method target (inline)"},
-    {nullptr, 36, false, nullptr, nullptr, nullptr},
-    {nullptr, 37, false, nullptr, nullptr, nullptr},
-    {nullptr, 38, false, nullptr, nullptr, nullptr},
-    {nullptr, 39, false, nullptr, nullptr, nullptr},
-    {nullptr, 40, false, nullptr, nullptr, nullptr},
-    {nullptr, 41, false, nullptr, nullptr, nullptr},
+    {"FUNC_CALL_REF", 36, true, write_expr_func_call_ref, read_expr_func_call_ref, "Function call reference"},
+    {"BOUND_METHOD_REF", 37, true, write_expr_bound_method_ref, read_expr_bound_method_ref, "Bound method reference"},
+    {"STATIC_METHOD_REF", 38, true, write_expr_static_method_ref, read_expr_static_method_ref, "Static method reference"},
+    {"SELF_METHOD_REF", 39, true, write_expr_self_method_ref, read_expr_self_method_ref, "Self method reference"},
+    {"OBJ_METHOD_REF_EXPR", 40, true, write_expr_obj_method_ref_expr, read_expr_obj_method_ref_expr, "Object method reference"},
+    {"CONST_VALUE", 41, true, write_expr_const_value, read_expr_const_value, "Serialized constant value"},
     {nullptr, 42, false, nullptr, nullptr, nullptr},
     {nullptr, 43, false, nullptr, nullptr, nullptr},
     {nullptr, 44, false, nullptr, nullptr, nullptr},

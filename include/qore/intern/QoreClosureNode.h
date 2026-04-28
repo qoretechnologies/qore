@@ -197,6 +197,11 @@ public:
         return cvec;
     }
 
+    //! Returns the parsed closure expression backing this runtime closure
+    DLLLOCAL const QoreClosureParseNode* getClosureParseNode() const {
+        return closure;
+    }
+
     //! Returns the class context for fast closure dispatch
     DLLLOCAL const qore_class_private* getClassCtx() const {
         return class_ctx;

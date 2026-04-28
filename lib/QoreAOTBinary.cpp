@@ -570,6 +570,15 @@ static void aot_add_constant_value_reverse_mappings_impl(AOTConstantReverseMap& 
     }
 }
 
+static const std::string* aotFindConstantReverseMapPath(
+        const AOTConstantReverseMap* crm, const AbstractQoreNode* node) {
+    if (!crm || !node) {
+        return nullptr;
+    }
+    auto it = crm->find(node);
+    return it == crm->end() ? nullptr : &it->second;
+}
+
 void qore_aot_add_constant_value_reverse_mappings(AOTConstantReverseMap& crm,
         const QoreValue& v, const std::string& path) {
     std::unordered_set<const AbstractQoreNode*> seen;
@@ -741,11 +750,10 @@ bool QoreAOTBinaryWriter::writeValue(const QoreValue& v) {
         qore_type_t nt = v.getType();
         if (nt == NT_OBJECT) {
             const AbstractQoreNode* node = v.getInternalNode();
-            auto it = const_reverse_map->find(node);
-            if (it != const_reverse_map->end()) {
+            if (const std::string* path = aotFindConstantReverseMapPath(const_reverse_map, node)) {
                 writeU8(static_cast<uint8_t>(QoreAOTValueTag::VT_CONST_REF));
-                writeU32(static_cast<uint32_t>(it->second.size()));
-                writeStringRef(it->second.c_str(), it->second.size());
+                writeU32(static_cast<uint32_t>(path->size()));
+                writeStringRef(path->c_str(), path->size());
                 return true;
             }
         }
@@ -3446,6 +3454,21 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
         const std::vector<AOTLocalSlotId>& parent_locals,
         const std::vector<AOTGlobalSlotId>& parent_globals,
         const AOTConstantReverseMap* const_reverse_map) {
+    auto trace_generic_eval = [&expr](const char* reason, const AbstractQoreNode* node) {
+        if (!getenv("QORE_AOT_TRACE_GENERIC_EVAL")) {
+            return;
+        }
+        const char* object_class = "";
+        if (auto* obj = dynamic_cast<const QoreObject*>(node)) {
+            object_class = obj->getClassName();
+        }
+        fprintf(stderr, "[aot-generic-eval] %s qtype=%d node=%p node_type=%s needs_eval=%d\n",
+            reason, expr.getType(), static_cast<const void*>(node), node ? node->getTypeName() : "<none>",
+            node ? (node->needs_eval() ? 1 : 0) : (expr.needsEval() ? 1 : 0));
+        if (*object_class) {
+            fprintf(stderr, "[aot-generic-eval] object_class=%s\n", object_class);
+        }
+    };
     if (!expr.hasNode()) {
         if (expr.isEnum()) {
             const QoreEnumMember* member = expr.getEnumMember();
@@ -3481,33 +3504,26 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
             default:
                 break;
         }
+        trace_generic_eval("unsupported inline non-node expression", nullptr);
         writer.writeU8(static_cast<uint8_t>(AOTExprKind::GENERIC_EVAL));
         return true;
     }
 
     const AbstractQoreNode* node = expr.getInternalNode();
     if (!node) {
+        trace_generic_eval("missing inline expression node", nullptr);
         writer.writeU8(static_cast<uint8_t>(AOTExprKind::GENERIC_EVAL));
         return true;
     }
 
-    // Early CRM lookup for container values that came from parse-time folding
-    // of a named constant.  AOT init functions commit runtime-initialised
-    // constants by calling ConstantEntry::setRuntimeValue(), which overwrites
-    // ce->val with the concrete evaluated value (hash/list/object) — the
-    // RuntimeConstantRefNode wrapper is gone.  Downstream parses of other
-    // qmods therefore see the raw pointer instead of a constant reference,
-    // and classifyAndWriteExpr would expand the hash/list in place (leaking
-    // anonymous inner values that later fail as GENERIC_EVAL).  Short-circuit
-    // by emitting RUNTIME_CONST_REF when the pointer matches a known
-    // top-level constant so load-time reader resolves via the live constant.
+    // Preserve named constant identity when the expression node pointer is
+    // already registered in the constant reverse map.
     if (const_reverse_map) {
         qore_type_t qt = node->getType();
         if (qt == NT_HASH || qt == NT_LIST || qt == NT_OBJECT) {
-            auto it = const_reverse_map->find(node);
-            if (it != const_reverse_map->end()) {
+            if (const std::string* path = aotFindConstantReverseMapPath(const_reverse_map, node)) {
                 writer.writeU8(static_cast<uint8_t>(AOTExprKind::RUNTIME_CONST_REF));
-                writer.writeStringRef(it->second.c_str());
+                writer.writeStringRef(path->c_str());
                 return true;
             }
         }
@@ -4102,6 +4118,46 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
         }
     }
 
+    // Call/method references inside container literals must serialize as
+    // reference metadata, not as unevaluated AST constants.  The reader rebuilds
+    // equivalent reference nodes that CreateCallRef/CreateMethodRef can evaluate
+    // to runtime code values.
+    if (auto* mcr = dynamic_cast<const LocalMethodCallReferenceNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::BOUND_METHOD_REF));
+        const QoreMethod* method = mcr->getMethod();
+        const QoreClass* qc = method ? method->getClass() : nullptr;
+        std::string class_path = qc ? qc->getNamespacePath() : std::string();
+        writer.writeStringRef(class_path.c_str());
+        writer.writeStringRef(method ? method->getName() : "");
+        return true;
+    }
+    if (auto* scr = dynamic_cast<const LocalStaticMethodCallReferenceNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::STATIC_METHOD_REF));
+        const QoreMethod* method = scr->getMethod();
+        const QoreClass* qc = method ? method->getClass() : nullptr;
+        std::string class_path = qc ? qc->getNamespacePath() : std::string();
+        writer.writeStringRef(class_path.c_str());
+        writer.writeStringRef(method ? method->getName() : "");
+        return true;
+    }
+    if (auto* fcr = dynamic_cast<const LocalFunctionCallReferenceNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::FUNC_CALL_REF));
+        QoreFunction* f = fcr->getFunction();
+        writer.writeStringRef(f ? f->getName() : "");
+        return true;
+    }
+    if (auto* smr = dynamic_cast<const ParseSelfMethodReferenceNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::SELF_METHOD_REF));
+        writer.writeStringRef(smr->getMethodName().c_str());
+        return true;
+    }
+    if (auto* omr = dynamic_cast<const ParseObjectMethodReferenceNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::OBJ_METHOD_REF_EXPR));
+        writer.writeStringRef(omr->getMethodName().c_str());
+        return classifyAndWriteExpr(writer, omr->getExp(), parent_locals, parent_globals,
+            const_reverse_map);
+    }
+
     // RuntimeConstantRefNode: reference to a compile-time constant
     // Look up the constant's evaluated value node in the reverse map
     if (auto* rcr = dynamic_cast<const RuntimeConstantRefNode*>(node)) {
@@ -4185,10 +4241,9 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
 
     // Try reverse constant lookup for unsupported node types (e.g., QoreObject)
     if (const_reverse_map) {
-        auto it = const_reverse_map->find(node);
-        if (it != const_reverse_map->end()) {
+        if (const std::string* path = aotFindConstantReverseMapPath(const_reverse_map, node)) {
             writer.writeU8(static_cast<uint8_t>(AOTExprKind::RUNTIME_CONST_REF));
-            writer.writeStringRef(it->second.c_str());
+            writer.writeStringRef(path->c_str());
             return true;
         }
     }
@@ -4217,15 +4272,15 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
     // literal).  If the CRM knows the node pointer, emit RUNTIME_CONST_REF
     // so the loader resolves it to the same named constant at load time.
     if (const_reverse_map) {
-        auto it = const_reverse_map->find(node);
-        if (it != const_reverse_map->end()) {
+        if (const std::string* path = aotFindConstantReverseMapPath(const_reverse_map, node)) {
             writer.writeU8(static_cast<uint8_t>(AOTExprKind::RUNTIME_CONST_REF));
-            writer.writeStringRef(it->second.c_str());
+            writer.writeStringRef(path->c_str());
             return true;
         }
     }
 
     // Unsupported — write GENERIC_EVAL placeholder
+    trace_generic_eval("unsupported inline expression node", node);
     printd(3, "AOT: handler IR unsupported expr type '%s' for serialization\n",
         node->getTypeName());
     writer.writeU8(static_cast<uint8_t>(AOTExprKind::GENERIC_EVAL));
@@ -6944,8 +6999,8 @@ bool QoreAOTBinaryDeserializer::deserializeConstants(std::string& error) {
             // Pending init-func: parser-time references to this constant must
             // defer to runtime (when the init-func populates saved_val) instead
             // of folding the NOTHING placeholder.  Swap val for a self-
-            // referential RuntimeConstantRefNode; setRuntimeValue() will replace
-            // it once the init-func runs.
+            // referential RuntimeConstantRefNode; setRuntimeValue() will keep
+            // this shell and populate saved_val once the init-func runs.
             ce->aot_shell_pending = true;
             ce->val.discard(nullptr);
             ce->val = new RuntimeConstantRefNode(&loc_builtin, ce, /*aot_deferred=*/true);

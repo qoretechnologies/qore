@@ -112,6 +112,7 @@
 #include <qore/intern/ContextRowNode.h>
 #include <qore/intern/ConstantList.h>
 #include <qore/intern/ContextrefNode.h>
+#include <qore/intern/QoreClosureNode.h>
 #include <qore/intern/FindNode.h>
 #include <qore/intern/NewComplexTypeNode.h>
 #include <qore/intern/ParseReferenceNode.h>
@@ -3655,6 +3656,41 @@ QoreIRValue QoreIRLowering::lowerExpression(const QoreValue& expr, std::string& 
         }
         return builder.createCreateClosure(closure, expr, closure->loc)->result;
     }
+    if (auto* runtime_closure = dynamic_cast<const QoreClosureBase*>(node)) {
+        cvv_vec_t* cvec = runtime_closure->getCvec();
+        if (cvec && !cvec->empty()) {
+            error = "unsupported runtime closure lowering: captured-variable runtime closures in constant containers "
+                "cannot be reconstructed safely";
+            return QoreIRValue();
+        }
+        if (runtime_closure->getObject()) {
+            error = "unsupported runtime closure lowering: object-bound runtime closures in constant containers "
+                "cannot be reconstructed safely";
+            return QoreIRValue();
+        }
+
+        const QoreClosureParseNode* closure = runtime_closure->getClosureParseNode();
+        QoreValue closure_expr(closure->refSelf());
+        QoreIRValue rv;
+        if (!exception_stack.empty()) {
+            QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
+            if (!normal_block) {
+                closure_expr.discard(nullptr);
+                error = "IR builder failed to create invoke continuation block";
+                return QoreIRValue();
+            }
+            QoreIRBasicBlock* handler = exception_stack.back();
+            auto* inst = builder.createInvoke(closure_expr, {}, normal_block, handler,
+                closure ? closure->loc : nullptr);
+            inst->invoke_opcode = QoreIROpcode::CreateClosure;
+            builder.setBlock(normal_block);
+            rv = inst->result;
+        } else {
+            rv = builder.createCreateClosure(closure, closure_expr, closure ? closure->loc : nullptr)->result;
+        }
+        closure_expr.discard(nullptr);
+        return rv;
+    }
     if (auto* parse_ref = dynamic_cast<const ParseReferenceNode*>(node)) {
         // Try to pre-evaluate the hash key for \member{key} patterns
         // This enables native AOT lowering without EXPR_TREE serialization
@@ -4056,15 +4092,6 @@ static bool isContainerLiteral(const QoreValue& v) {
     const AbstractQoreNode* node = v.getInternalNode();
     return dynamic_cast<const QoreParseHashNode*>(node) || dynamic_cast<const QoreParseListNode*>(node)
         || dynamic_cast<const QoreHashNode*>(node) || dynamic_cast<const QoreListNode*>(node);
-}
-
-static bool shouldPreserveContainerLeafConstant(const QoreValue& v) {
-    if (!v.hasNode()) {
-        return false;
-    }
-    const AbstractQoreNode* node = v.getInternalNode();
-    return dynamic_cast<const AbstractCallReferenceNode*>(node)
-        || dynamic_cast<const AbstractParseObjectMethodReferenceNode*>(node);
 }
 
 QoreIRValue QoreIRLowering::lowerConstant(const QoreValue& expr, std::string& error) {
@@ -8418,18 +8445,7 @@ QoreIRValue QoreIRLowering::lowerContainerElement(const QoreValue& expr, std::st
         return value;
     }
 
-    if (!shouldPreserveContainerLeafConstant(expr)) {
-        return lowerExpression(expr, error);
-    }
-
-    // Keep unsupported non-container leaves as constants instead of lowering
-    // callrefs/method refs as executable IR.  The root bug is loading whole
-    // containers as constants, which preserves unevaluated expression hashes.
-    if (expr.hasNode()) {
-        return builder.createLoadConstant(nullptr, expr, nullptr)->result;
-    }
-
-    return QoreIRValue();
+    return lowerExpression(expr, error);
 }
 
 QoreIRValue QoreIRLowering::lowerParseHash(const QoreValue& expr, std::string& error) {

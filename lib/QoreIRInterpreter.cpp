@@ -4238,7 +4238,14 @@ load_local_done:
             }
             case QoreIROpcode::HashKeyAccess: {
                 auto* hka_inst = static_cast<QoreIRHashKeyAccessInstruction*>(inst);
-                QoreValue base = getIRValue(values, hka_inst->operands[0]);
+                QoreValue raw_base = getIRValue(values, hka_inst->operands[0]);
+                ValueEvalOptimizedRefHolder base_holder(raw_base, xsink);
+                if (xsink && *xsink) {
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupLocalCaches();
+                    return false;
+                }
+                QoreValue base = *base_holder;
                 QoreValue out;
 
                 // Handle weak references by unwrapping them
@@ -4280,7 +4287,14 @@ load_local_done:
             }
             case QoreIROpcode::HashKeyAccessInt: {
                 auto* hka_inst = static_cast<QoreIRHashKeyAccessInstruction*>(inst);
-                QoreValue base = getIRValue(values, hka_inst->operands[0]);
+                QoreValue raw_base = getIRValue(values, hka_inst->operands[0]);
+                ValueEvalOptimizedRefHolder base_holder(raw_base, xsink);
+                if (xsink && *xsink) {
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupLocalCaches();
+                    return false;
+                }
+                QoreValue base = *base_holder;
                 QoreValue out;
                 if (base.getType() == NT_HASH) {
                     const QoreHashNode* h = base.get<const QoreHashNode>();
@@ -4538,7 +4552,14 @@ load_local_done:
                 break;
             }
             case QoreIROpcode::ListIndexAccess: {
-                QoreValue list_val = getIRValue(values, inst->operands[0]);
+                QoreValue raw_list_val = getIRValue(values, inst->operands[0]);
+                ValueEvalOptimizedRefHolder list_holder(raw_list_val, xsink);
+                if (xsink && *xsink) {
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupLocalCaches();
+                    return false;
+                }
+                QoreValue list_val = *list_holder;
                 QoreValue idx_val = getIRValue(values, inst->operands[1]);
                 int64_t index = idx_val.getAsBigInt();
                 QoreValue out;
@@ -5153,7 +5174,9 @@ load_local_done:
                     }
                 } else {
                     // AOT mode: expr holds the resolved constant value directly.
-                    out = lc_inst->expr.refSelf();
+                    out = lc_inst->expr.needsEval()
+                        ? lc_inst->expr.eval(xsink)
+                        : lc_inst->expr.refSelf();
                 }
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
@@ -7311,6 +7334,19 @@ load_local_done:
 
                 QoreValue val = getIRValue(values, path_inst->operands[0]);
                 ValueHolder val_holder(val.refSelf(), xsink);
+                QoreValue assign_val = val;
+                ValueHolder eval_holder(xsink);
+                qore_type_t val_type = val.getType();
+                if (!path_inst->weak
+                        && (val_type == NT_WEAKREF || val_type == NT_WEAKREF_HASH || val_type == NT_WEAKREF_LIST)) {
+                    eval_holder = val.eval(xsink);
+                    if (*xsink) {
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupLocalCaches();
+                        return false;
+                    }
+                    assign_val = *eval_holder;
+                }
 
                 // Scope the LValueHelper so it releases the object lock
                 // BEFORE cache invalidation (which may deref objects and
@@ -7322,7 +7358,7 @@ load_local_done:
                         cleanupLocalCaches();
                         return false;
                     }
-                    if (lvh.assign(val.refSelf(), "<lvalue path assign>", true, path_inst->weak)) {
+                    if (lvh.assign(assign_val.refSelf(), "<lvalue path assign>", true, path_inst->weak)) {
                         cleanupValues(values, cleanup, xsink, true, cleanup_log);
                         cleanupLocalCaches();
                         return false;
@@ -7357,9 +7393,9 @@ load_local_done:
                 markParentLValuePathDirty(path_inst);
 
                 if (path_inst->result.isValid()) {
-                    // Use refSelf() to create an independent reference — val also exists
+                    // Use refSelf() to create an independent reference — assign_val may also exist
                     // in the operand slot, and cleanup would double-deref without this
-                    QoreValue result_val = val.refSelf();
+                    QoreValue result_val = assign_val.refSelf();
                     setValueSlot(values, path_inst->result.id, result_val, xsink);
                     if (result_val.hasNode()) {
                         cleanup.push_back(path_inst->result.id);
@@ -11526,14 +11562,24 @@ QoreValue QoreIRInterpreter::evalLValueStore(const QoreValue& lvalue, const Qore
     if (!helper) {
         return QoreValue();
     }
+    QoreValue assign_value = value;
+    ValueHolder eval_holder(xsink);
+    qore_type_t value_type = value.getType();
+    if (!weak && (value_type == NT_WEAKREF || value_type == NT_WEAKREF_HASH || value_type == NT_WEAKREF_LIST)) {
+        eval_holder = value.eval(xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+        assign_value = *eval_holder;
+    }
     // refSelf() before passing to assign() - assign() takes ownership via
     // assignAssume()/takeNode(), but value is a borrowed reference from the
     // caller's values map; without the extra ref, both the variable and the
     // values map would think they own the same single reference
-    if (helper.assign(value.refSelf(), "<lvalue>", true, weak)) {
+    if (helper.assign(assign_value.refSelf(), "<lvalue>", true, weak)) {
         return QoreValue();
     }
-    return value.refSelf();
+    return assign_value.refSelf();
 }
 
 QoreValue QoreIRInterpreter::evalLValueUnary(QoreIROpcode op, const QoreValue& lvalue, ExceptionSink* xsink) {

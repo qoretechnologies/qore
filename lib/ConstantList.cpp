@@ -141,10 +141,14 @@ void ConstantEntry::setRuntimeValue(QoreValue result, ExceptionSink* xsink) {
             type_xsink.clear();
         }
     }
-    val.discard(xsink);
-    val = result;
     saved_val.discard(xsink);
-    saved_val = result.refSelf();
+    if (val.getType() == NT_RTCONSTREF) {
+        saved_val = result;
+    } else {
+        val.discard(xsink);
+        val = result;
+        saved_val = result.refSelf();
+    }
     init = true;
     aot_shell_pending = false;
     if (getenv("QORE_AOT_INIT_TRACE")) {
