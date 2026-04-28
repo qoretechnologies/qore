@@ -354,6 +354,8 @@ module SendCloudDataProvider {
             "desc": "Retrieve information about the currently authenticated SendCloud user (account owner).",
             "action_code": DPAT_API,
             "data_provider_info": SendCloudGetUserDataProvider::ProviderInfo,
+            # no `options`: SendCloudGetUserRequestDataType.Fields is empty, so
+            # getActionOptionFromFields() would return NOTHING and reject the registration
             "get_output_type": AbstractDataProviderType sub () { return SendCloudGetUserDataProvider::ResponseType; },
         });
 

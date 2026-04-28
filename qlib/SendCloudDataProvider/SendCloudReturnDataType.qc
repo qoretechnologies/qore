@@ -132,10 +132,11 @@ public class SendCloudReturnDataType inherits HashDataType {
                 "desc": "Tracking number of the return shipment",
             },
             "parcel": {
-                "type": AutoHashOrNothingType,
+                "type": new SendCloudParcelRefDataType(AutoHashOrNothingType),
                 "display_name": "Parcel",
-                "short_desc": "Associated parcel data",
-                "desc": "Parcel object associated with the return (subset of parcel fields)",
+                "short_desc": "Associated parcel reference",
+                "desc": "Parcel reference associated with the return: `id`, `tracking_number`, "
+                    "`tracking_url`, and `status`",
             },
             "products": {
                 "type": new ListDataType("ReturnProductList", new SendCloudReturnProductDataType(), True),

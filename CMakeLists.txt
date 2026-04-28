@@ -2213,7 +2213,7 @@ qore_user_module("qlib/PerplexityRestClient.qm" "ConnectionProvider;Mime;RestCli
 qore_user_module("qlib/ServiceNowRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/LemlistRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/ShipStationRestClient.qm" "ConnectionProvider;Mime;RestClient")
-qore_user_module("qlib/SendCloudRestClient.qm" "ConnectionProvider;Mime;RestClient")
+qore_user_module("qlib/SendCloudRestClient.qm" "ConnectionProvider;Mime;RestClient;RestClientIo")
 qore_user_module("qlib/SystemeIoRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/CustomerIoRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/InstantlyRestClient.qm" "ConnectionProvider;Mime;RestClient")

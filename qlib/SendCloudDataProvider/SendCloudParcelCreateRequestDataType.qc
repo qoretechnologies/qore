@@ -127,11 +127,13 @@ public class SendCloudParcelCreateRequestDataType inherits HashDataType {
                 "desc": "Additional reference attached to the parcel",
             },
             "weight": {
-                "type": SoftStringOrNothingType,
+                "type": SoftStringType,
                 "display_name": "Weight (kg)",
                 "short_desc": "Parcel weight in kilograms",
-                "desc": "Total weight of the parcel in kilograms (string-encoded decimal, e.g., '1.500')",
-                "preselected": True,
+                "desc": "Total weight of the parcel as a string-encoded decimal (e.g., `\"1.500\"`).  "
+                    "The unit defaults to kilograms; override via `weight_unit` (`kg`, `g`, `lb`, `oz`).  "
+                    "Required by the SendCloud v3 announce endpoint",
+                "required": True,
                 "example_value": "1.500",
             },
             "length": {
@@ -188,14 +190,18 @@ public class SendCloudParcelCreateRequestDataType inherits HashDataType {
                 "short_desc": "ISO 4217 currency code",
                 "desc": "Currency of the order value (e.g., EUR, USD)",
             },
-            "shipment": {
-                "type": new SendCloudShipmentRefDataType(AutoHashOrNothingType),
+            "shipping_method": {
+                "type": SoftIntType,
                 "display_name": "Shipping Method",
-                "short_desc": "Shipping method to use (id + name)",
-                "desc": "The shipping method to use for the parcel as a hash with `id` (required) and "
-                    "optional `name`. Omit to create an unlabeled parcel. When `request_label` is `True`, "
-                    "this field is mandatory",
-                "preselected": True,
+                "short_desc": "Shipping method ID",
+                "desc": "Numeric ID of the SendCloud shipping method to use for this parcel.  "
+                    "Required by the v3 announce endpoint (translated to a `shipping_option_code` "
+                    "via the SendCloud compatibility endpoint).  Use `list-shipping-methods` to "
+                    "discover available IDs for your account; `8` (*Unstamped letter*) is the "
+                    "no-billing test method",
+                "required": True,
+                "ref_data": "shipping_methods",
+                "example_value": 8,
             },
             "sender_address": {
                 "type": SoftIntOrNothingType,

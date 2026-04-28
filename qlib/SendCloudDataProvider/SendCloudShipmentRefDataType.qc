@@ -76,6 +76,51 @@ public class SendCloudParcelStatusDataType inherits HashDataType {
     constructor() : HashDataType("SendCloudParcelStatusDataType") {
         addQoreFields(Fields);
     }
+
+    constructor(Type base_type) : HashDataType(base_type, "SendCloudParcelStatusDataType") {
+        addQoreFields(Fields);
+    }
+}
+
+#! Parcel reference as embedded on a return record (id + tracking_number)
+public class SendCloudParcelRefDataType inherits HashDataType {
+    public {
+        const Fields = {
+            "id": {
+                "type": SoftIntOrNothingType,
+                "display_name": "Parcel ID",
+                "short_desc": "Numeric parcel ID",
+                "desc": "Numeric ID of the parcel associated with the return",
+                "ref_data": "parcels",
+            },
+            "tracking_number": {
+                "type": SoftStringOrNothingType,
+                "display_name": "Tracking Number",
+                "short_desc": "Carrier tracking number",
+                "desc": "Carrier tracking number of the outgoing parcel",
+            },
+            "tracking_url": {
+                "type": SoftStringOrNothingType,
+                "display_name": "Tracking URL",
+                "short_desc": "Public tracking URL",
+                "desc": "Public-facing URL to the carrier tracking page for the parcel",
+            },
+            "status": {
+                "type": new SendCloudParcelStatusDataType(AutoHashOrNothingType),
+                "display_name": "Status",
+                "short_desc": "Current parcel status",
+                "desc": "Current status object of the parcel (`id` + `message`)",
+            },
+        };
+    }
+
+    constructor() : HashDataType("SendCloudParcelRefDataType") {
+        addQoreFields(Fields);
+    }
+
+    constructor(Type base_type) : HashDataType(base_type, "SendCloudParcelRefDataType") {
+        addQoreFields(Fields);
+    }
 }
 
 #! Parcel document as returned by SendCloud (available label/customs documents)

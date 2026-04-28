@@ -127,35 +127,40 @@ public class SendCloudCreateParcelDataProvider inherits SendCloudDataProviderBas
             parcel.parcel_items = map mapParcelItem($1), r.parcel_items;
         }
 
-        # Shipping option: translate v2 shipping_method id → v3 shipping_option_code
-        hash<auto> ship_with;
+        # Shipping option: required by the v3 announce endpoint.  Prefer the flat
+        # `shipping_method` field (the documented surface); fall back to a legacy
+        # `shipment.id` hash for backward compatibility with earlier callers.
         *softint smid;
-        if (r.shipment.typeCode() == NT_HASH && exists r.shipment.id) {
+        if (exists r.shipping_method) {
+            smid = r.shipping_method;
+        } else if (r.shipment.typeCode() == NT_HASH && exists r.shipment.id) {
             smid = r.shipment.id;
         }
-        if (exists smid) {
-            *string code = translateShippingMethodId(smid);
-            if (!code.val()) {
-                throw "SENDCLOUD-ERROR",
-                    sprintf("could not translate v2 shipping method id %d to a v3 shipping option "
-                        "code; the SendCloud compatibility endpoint returned no mapping", smid);
-            }
-            ship_with = {
-                "type": "shipping_option_code",
-                "properties": {"shipping_option_code": code},
-            };
+        if (!exists smid) {
+            throw "SENDCLOUD-ERROR",
+                "create-parcel requires a `shipping_method` ID — the v3 announce endpoint "
+                "rejects requests without `ship_with`.  Use `list-shipping-methods` to find "
+                "a valid ID for your account (e.g. `8` for *Unstamped letter*)";
         }
+        *string code = translateShippingMethodId(smid);
+        if (!code.val()) {
+            throw "SENDCLOUD-ERROR",
+                sprintf("could not translate v2 shipping method id %d to a v3 shipping option "
+                    "code; the SendCloud compatibility endpoint returned no mapping", smid);
+        }
+        hash<auto> ship_with = {
+            "type": "shipping_option_code",
+            "properties": {"shipping_option_code": code},
+        };
 
         # Top-level shipment body
         hash<auto> body = {
             "to_address": to_address,
             "parcels": (parcel,),
+            "ship_with": ship_with,
         };
         if (from_address) {
             body.from_address = from_address;
-        }
-        if (ship_with) {
-            body.ship_with = ship_with;
         }
         if (exists r.order_number) {
             body.order_number = r.order_number;

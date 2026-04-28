@@ -47,6 +47,7 @@ module SendCloudRestClient {
     license = "MIT";
     init = sub () {
         ConnectionSchemeCache::registerScheme("sendcloudrest", SendCloudRestConnection::ConnectionScheme);
+        ConnectionSchemeCache::registerScheme("sendcloudrests", SendCloudRestConnection::ConnectionScheme);
     };
 }
 
@@ -404,6 +405,12 @@ SendCloudRestClient sendcloud({"public_key": "pub-key", "secret_key": "sec-key"}
     \c setConnectionPath().
 */
 public class SendCloudRestClientIo inherits RestClientIo::RestClientIo, SendCloudRestClientBase {
+    private {
+        #! SendCloud credentials retained so the data provider can recover them
+        #! from this client object for cross-host / cross-prefix synchronous calls.
+        *hash<auto> sc_creds;
+    }
+
     #! Creates the object with the given options
     /** @param opts constructor options, see @ref SendCloudRestClient::constructor() for the
         supported SendCloud-specific options
@@ -411,6 +418,24 @@ public class SendCloudRestClientIo inherits RestClientIo::RestClientIo, SendClou
     */
     constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
             : RestClientIo(SendCloudRestClientBase::getOptions(opts), shared_mgr) {
+        # Retain SendCloud credentials so the data provider can lazily build
+        # synchronous clients for cross-host (servicepoints) and cross-prefix
+        # (api/v3) calls without having to reach back into the connection.
+        # Both shapes are accepted: the user-facing public_key/secret_key pair
+        # and the already-translated username/password pair.
+        *string pk = opts.public_key ?? opts.username;
+        *string sk = opts.secret_key ?? opts.password;
+        if (pk.val() && sk.val()) {
+            sc_creds = {"public_key": pk, "secret_key": sk};
+        }
+    }
+
+    #! Returns the SendCloud credentials used to construct this client (or NOTHING)
+    /** @return a hash with \c public_key and \c secret_key keys, or NOTHING if the
+        client was constructed without recoverable credentials
+    */
+    *hash<auto> getSendCloudCredentials() {
+        return sc_creds;
     }
 }
 
@@ -460,7 +485,7 @@ public class SendCloudRestConnection inherits RestClient::RestConnection {
                     "desc": "The SendCloud **public API key** used as the username for HTTP "
                         "Basic Auth.\n\n"
                         "**To obtain your API credentials:**\n"
-                        "1. Log in to the Sendcloud Panel at https://panel.sendcloud.sc\n"
+                        "1. Log in to the [Sendcloud Panel](https://panel.sendcloud.sc)\n"
                         "2. Navigate to **Settings > Integrations**\n"
                         "3. Click **+ Add Integration** and select **Sendcloud API**\n"
                         "4. After creating the integration, copy the **Public key** and "
@@ -476,7 +501,7 @@ public class SendCloudRestConnection inherits RestClient::RestConnection {
                     "desc": "The SendCloud **secret API key** used as the password for HTTP "
                         "Basic Auth.\n\n"
                         "**To obtain your API credentials:**\n"
-                        "1. Log in to the Sendcloud Panel at https://panel.sendcloud.sc\n"
+                        "1. Log in to the [Sendcloud Panel](https://panel.sendcloud.sc)\n"
                         "2. Navigate to **Settings > Integrations**\n"
                         "3. Click **+ Add Integration** and select **Sendcloud API**\n"
                         "4. After creating the integration, copy the **Public key** and "
@@ -519,7 +544,7 @@ public class SendCloudRestConnection inherits RestClient::RestConnection {
                     "content": "This integration uses the **SendCloud Public API** with HTTP "
                         "Basic Auth.\n\n"
                         "**Steps to generate API credentials:**\n"
-                        "1. Log in to the Sendcloud Panel at https://panel.sendcloud.sc\n"
+                        "1. Log in to the [Sendcloud Panel](https://panel.sendcloud.sc)\n"
                         "2. Navigate to **Settings > Integrations**\n"
                         "3. Click **+ Add Integration** and select **Sendcloud API**\n"
                         "4. Copy the **Public key** and **Secret key** shown on the "

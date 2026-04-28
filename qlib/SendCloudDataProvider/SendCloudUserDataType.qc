@@ -149,6 +149,30 @@ public class SendCloudLabelUrlsDataType inherits HashDataType {
     }
 }
 
+#! Customs declaration URL wrapper (deprecated by SendCloud, populated for international shipments)
+public class SendCloudCustomsDeclarationUrlsDataType inherits HashDataType {
+    public {
+        const Fields = {
+            "normal_printer": {
+                "type": SoftStringOrNothingType,
+                "display_name": "Normal Printer",
+                "short_desc": "Customs declaration PDF URL",
+                "desc": "URL of the A4 PDF customs declaration document.  Note: the SendCloud "
+                    "label endpoint marks the `customs_declaration` field as deprecated; prefer "
+                    "the dedicated customs-document download via `get-parcel-documents`.",
+            },
+        };
+    }
+
+    constructor() : HashDataType("SendCloudCustomsDeclarationUrlsDataType") {
+        addQoreFields(Fields);
+    }
+
+    constructor(Type base_type) : HashDataType(base_type, "SendCloudCustomsDeclarationUrlsDataType") {
+        addQoreFields(Fields);
+    }
+}
+
 #! Response type for the get-parcel-label action
 public class SendCloudGetParcelLabelResponseDataType inherits HashDataType {
     public {
@@ -160,10 +184,11 @@ public class SendCloudGetParcelLabelResponseDataType inherits HashDataType {
                 "desc": "Hash with `normal_printer` (list of A4 PDF URLs) and `label_printer` (single A6 PDF URL)",
             },
             "customs_declaration": {
-                "type": AutoHashOrNothingType,
+                "type": new SendCloudCustomsDeclarationUrlsDataType(AutoHashOrNothingType),
                 "display_name": "Customs Declaration",
                 "short_desc": "Customs declaration document URLs",
-                "desc": "Customs declaration document URLs (only present for international shipments)",
+                "desc": "Customs declaration document URL container (only present for international "
+                    "shipments).  Marked deprecated by SendCloud; prefer `get-parcel-documents`.",
             },
         };
     }

@@ -82,15 +82,21 @@ public class SendCloudDataProviderBase inherits DataProvider::AbstractDataProvid
     #! Creates the object from a RestClientIo client
     constructor(*RestClientIo::RestClientIo rest) {
         self.rest = rest;
+        recoverCredentialsFromRest();
     }
 
     #! Creates the object from a connection
     constructor(SendCloudRestClient::SendCloudRestConnection conn) {
         rest = conn.getAsync();
-        # Pull credentials from the connection so cross-host endpoints can authenticate
-        *hash<auto> copts = conn.getOptions();
-        if (copts.public_key && copts.secret_key) {
-            sc_creds = {"public_key": copts.public_key, "secret_key": copts.secret_key};
+        # Try recovering credentials from the rest client first (preferred path: it
+        # retains the original public_key/secret_key supplied at construction time).
+        recoverCredentialsFromRest();
+        # Fall back to pulling raw connection options.  AbstractConnection.getRealOptions()
+        # returns the original user-supplied option hash before per-request translation,
+        # so it still contains public_key/secret_key.
+        if (!sc_creds) {
+            *hash<auto> ropts = conn.getRealOptions();
+            extractCredentialsFromOptions(ropts);
         }
     }
 
@@ -103,9 +109,36 @@ public class SendCloudDataProviderBase inherits DataProvider::AbstractDataProvid
         if (!rest) {
             hash<auto> opts = copts.restclient_options ?? {};
             rest = new SendCloudRestClient::SendCloudRestClientIo(opts);
-            if (opts.public_key && opts.secret_key) {
-                sc_creds = {"public_key": opts.public_key, "secret_key": opts.secret_key};
+            extractCredentialsFromOptions(opts);
+        }
+        # Always try recovering creds from the rest client (caller may have supplied
+        # a pre-built SendCloudRestClientIo via `restclient`) and from `restclient_options`
+        # if it was provided alongside an explicit `restclient`.
+        if (!sc_creds) {
+            recoverCredentialsFromRest();
+        }
+        if (!sc_creds && copts.restclient_options.typeCode() == NT_HASH) {
+            extractCredentialsFromOptions(copts.restclient_options);
+        }
+    }
+
+    #! Populates sc_creds from the rest client's retained credentials, if available
+    private recoverCredentialsFromRest() {
+        if (rest instanceof SendCloudRestClient::SendCloudRestClientIo) {
+            *hash<auto> creds = (cast<SendCloudRestClient::SendCloudRestClientIo>(rest))
+                .getSendCloudCredentials();
+            if (creds.public_key && creds.secret_key) {
+                sc_creds = creds;
             }
+        }
+    }
+
+    #! Populates sc_creds from a raw options hash (accepts both naming conventions)
+    private extractCredentialsFromOptions(*hash<auto> opts) {
+        *string pk = opts.public_key ?? opts.username;
+        *string sk = opts.secret_key ?? opts.password;
+        if (pk.val() && sk.val()) {
+            sc_creds = {"public_key": pk, "secret_key": sk};
         }
     }
 
@@ -357,13 +390,27 @@ public class SendCloudDataProviderBase inherits DataProvider::AbstractDataProvid
     }
 
     #! Returns an enriched error description that includes the SendCloud API error message if available
-    /** SendCloud returns errors as:
+    /** SendCloud uses two distinct error envelopes:
+
+        v2 (\c /api/v2/...):
         - \c {"error": {"code": 123, "message": "...", "request": "..."}}
         - \c {"error": {"message": "...", "errors": [{"field": "name", "message": "is required"}]}}
+
+        v3 (\c /api/v3/..., e.g. shipments/announce, returns/announce-synchronously) follows
+        a JSON:API-style top-level array:
+        - \c {"errors": [{"status": "400", "code": "validation_error", "detail": "...",
+          "source": {"pointer": "/ship_with"}}, ...]}
     */
     private string getApiErrorDesc(hash<ExceptionInfo> ex) {
         string desc = ex.desc;
-        auto body = ex.arg.body ?? ex.arg.response_body_raw;
+        # Prefer the already-deserialized body when present.  RestClient parses JSON
+        # response bodies into `deserialized_body` even when the underlying error is
+        # raised as `HTTP-CLIENT-RECEIVE-ERROR` (where `ex.arg.body` is the raw JSON
+        # *string*).  Without this we'd fall through to NT_STRING and only append the
+        # raw JSON dump — defeating the structured v2/v3 envelope parsing below.
+        auto body = (ex.arg.deserialized_body.typeCode() == NT_HASH)
+            ? ex.arg.deserialized_body
+            : (ex.arg.body ?? ex.arg.response_body_raw);
         switch (body.typeCode()) {
             case NT_STRING:
                 if (body.val()) {
@@ -373,6 +420,7 @@ public class SendCloudDataProviderBase inherits DataProvider::AbstractDataProvid
             case NT_HASH: {
                 auto err = body.error;
                 if (err.typeCode() == NT_HASH) {
+                    # v2 nested-hash envelope
                     *string msg = err.message;
                     if (msg.val()) {
                         desc += ": " + msg;
@@ -398,6 +446,38 @@ public class SendCloudDataProviderBase inherits DataProvider::AbstractDataProvid
                     }
                 } else if (err.typeCode() == NT_STRING) {
                     desc += ": " + err;
+                } else if (body.errors.typeCode() == NT_LIST && body.errors) {
+                    # v3 JSON:API-style top-level errors array
+                    list<string> parts = ();
+                    foreach auto e in (body.errors) {
+                        if (e.typeCode() == NT_HASH) {
+                            *string detail = e.detail ?? e.title ?? e.message;
+                            *string code = e.code;
+                            *string pointer;
+                            if (e.source.typeCode() == NT_HASH) {
+                                pointer = e.source.pointer ?? e.source.parameter;
+                            }
+                            string part;
+                            if (pointer.val() && detail.val()) {
+                                part = sprintf("%s: %s", pointer, detail);
+                            } else if (detail.val()) {
+                                part = detail;
+                            } else if (code.val()) {
+                                part = code;
+                            }
+                            if (code.val() && part.val() && part != code) {
+                                part += sprintf(" (%s)", code);
+                            }
+                            if (part.val()) {
+                                parts += part;
+                            }
+                        } else if (exists e) {
+                            parts += string(e);
+                        }
+                    }
+                    if (parts) {
+                        desc += ": " + (parts.size() == 1 ? parts[0] : "[" + parts.join("; ") + "]");
+                    }
                 } else if (body.message.val()) {
                     desc += ": " + body.message;
                 } else if (body.detail.val()) {
