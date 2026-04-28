@@ -716,7 +716,7 @@ private:
 class SocketHttp2FlushPollOperation : public SocketPollSocketOperationBase {
 public:
     DLLLOCAL SocketHttp2FlushPollOperation(ExceptionSink* xsink, QoreSocketObject* sock,
-        bool defer_init = false);
+        bool defer_init = false, bool submit_ping = false);
 
     DLLLOCAL void init(ExceptionSink* xsink, bool defer_init);
 
@@ -751,6 +751,8 @@ private:
     FlushState h2f_state = H2F_FLUSHING;
     bool initialized = false;
     bool controller_deferred_init = false;
+    bool submit_ping = false;
+    bool ping_submitted = false;
     int controller_deferred_tid = -1;
 
     DLLLOCAL virtual bool abortNeedsClose() const override { return true; }

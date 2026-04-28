@@ -404,10 +404,11 @@ static int qore_socket_object_exec_shutdown_ssl(QoreSocketObject* s, ExceptionSi
         "shutdownSSL", "shutdown-ssl", xsink);
 }
 
-static int qore_socket_object_exec_http2_flush(QoreSocketObject* s, const char* owner_name, ExceptionSink* xsink) {
+static int qore_socket_object_exec_http2_flush(QoreSocketObject* s, const char* owner_name, ExceptionSink* xsink,
+        bool submit_ping = false) {
     s->ref();
-    return qore_socket_object_exec_poll_no_output(s, new SocketHttp2FlushPollOperation(xsink, s, true), -1,
-        owner_name, "done", xsink);
+    return qore_socket_object_exec_poll_no_output(s, new SocketHttp2FlushPollOperation(xsink, s, true, submit_ping),
+        -1, owner_name, "done", xsink);
 }
 
 static int qore_socket_object_exec_shutdown(QoreSocketObject* s, ExceptionSink* xsink) {
@@ -2690,12 +2691,12 @@ int QoreSocketObject::submitHttp2Ping(ExceptionSink* xsink) {
         return 0;
     }
 
+    if (!qore_on_async_io_thread()) {
+        return qore_socket_object_exec_http2_flush(this, "submitHttp2Ping", xsink, true);
+    }
     int rv = h2->submitPing(nullptr, xsink);
     if (rv < 0 || *xsink) {
         return -1;
-    }
-    if (!qore_on_async_io_thread()) {
-        return qore_socket_object_exec_http2_flush(this, "submitHttp2Ping", xsink);
     }
     return h2->sendPendingData(0, xsink);
 }

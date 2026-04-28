@@ -12403,7 +12403,8 @@ QoreHashNode* SocketHttp2SendStreamingResponsePollOperation::continuePoll(Except
 // HTTP/2 Flush Poll Operation implementation
 
 SocketHttp2FlushPollOperation::SocketHttp2FlushPollOperation(ExceptionSink* xsink,
-        QoreSocketObject* sock, bool defer_init) : SocketPollSocketOperationBase(sock) {
+        QoreSocketObject* sock, bool defer_init, bool submit_ping) : SocketPollSocketOperationBase(sock),
+        submit_ping(submit_ping) {
     init(xsink, defer_init);
 }
 
@@ -12455,6 +12456,14 @@ QoreHashNode* SocketHttp2FlushPollOperation::continuePoll(ExceptionSink* xsink) 
     if (!session) {
         xsink->raiseException("HTTP2-ERROR", "HTTP/2 session no longer available");
         return nullptr;
+    }
+
+    if (submit_ping && !ping_submitted) {
+        int rv = session->submitPing(nullptr, xsink);
+        if (rv < 0 || *xsink) {
+            return nullptr;
+        }
+        ping_submitted = true;
     }
 
     while (true) {
