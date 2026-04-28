@@ -24,17 +24,29 @@
 
 #! contains all public definitions in the ProviderIndex module
 public namespace ProviderIndex {
+#! Options for creating data provider indices
+public hashdecl ProviderIndexCreateOptions {
+    #! Load all modules from DataProvider's built-in factory map
+    bool load_known_factories = True;
+
+    #! Load factories from environment variables such as QORE_DATA_PROVIDERS
+    bool load_environment = True;
+
+    #! Load TypeScriptActionInterface to register TypeScript-backed apps
+    bool load_typescript_actions = True;
+
+    #! Optional list of application names to index; if unset, all registered apps are indexed
+    *list<string> apps;
+}
+
 #! The main API class
 public class ProviderIndex inherits ProviderIndexUtil {
     public {}
 
     #! Create the data provider index
     public static hash<auto> createDataProviderIndex(hash<DataProviderIndexInfo> index = <DataProviderIndexInfo>{},
-            *string dir) {
+            *string dir, hash<ProviderIndexCreateOptions> opts = <ProviderIndexCreateOptions>{}) {
         date start = now_us();
-
-        # setup logger
-        setupLogger();
 
         if (dir.val()) {
             setEnvironmentVariable(dir);
@@ -50,24 +62,28 @@ public class ProviderIndex inherits ProviderIndexUtil {
         # make sure that all data providers are initialized immediately
         DataProvider::setOptions(DPO_DisableOnDemandInitialization | DPO_EnableOnDemandActions);
 
-        # load all known data provider factories
-        DataProvider::registerKnownFactories();
+        if (opts.load_known_factories) {
+            # load all known data provider factories
+            DataProvider::registerKnownFactories();
+        }
 
         # start with the default factory map
         index.factorymap += DataProvider::FactoryMap;
 
-        if (ENV.QORE_DATA_PROVIDERS) {
+        if (opts.load_environment && ENV.QORE_DATA_PROVIDERS) {
             # load all data providers from the QORE_DATA_PROVIDERS environment variable
             DataProvider::loadProvidersFromEnvironment();
 
             addDataProviderFactories(\index);
         }
 
-        # try to load and initialize TypeScriptActionInterface manually
-        tryLoadTypeScriptActionInterface();
+        if (opts.load_typescript_actions) {
+            # try to load and initialize TypeScriptActionInterface manually
+            tryLoadTypeScriptActionInterface();
+        }
 
         # iterate all apps to initialize the app and scheme maps
-        foreach hash<DataProviderAppInfo> app in (DataProviderActionCatalog::getAllApps()) {
+        foreach hash<DataProviderAppInfo> app in (getIndexApps(opts.apps)) {
             *list<string> paths = DataProviderActionCatalog::getModulePathsForApp(app.name);
             if (!paths) {
                 log(LoggerLevel::LevelError, "Data provider app %y has no module path", app.name);
@@ -106,12 +122,31 @@ public class ProviderIndex inherits ProviderIndexUtil {
     #! Get YAML-serializable hash of actions keyed by action name
     private static *hash<string, hash<auto>> getSerializableAppActions(string app) {
         hash<string, hash<auto>> rv;
-        foreach hash<DataProviderActionInfo> action in (DataProviderActionCatalog::getActions(app)) {
+        foreach hash<DataProviderActionInfo> action in (DataProviderActionCatalog::getActions(app, False)) {
             action -= ("get_dynamic_options", "get_output_type", "output_type");
             rv{action.action} = action + {
                 "options": getSerializableActionOptions(action.options),
                 "data_provider_info": getSerializableDataProviderInfo(action.data_provider_info),
             };
+        }
+        return rv;
+    }
+
+    #! Return apps to include in the index
+    private static list<hash<DataProviderAppInfo>> getIndexApps(*list<string> apps) {
+        if (!apps) {
+            return DataProviderActionCatalog::getAllApps();
+        }
+
+        hash<string, bool> app_filter = map {$1: True}, apps.iterator();
+        list<hash<DataProviderAppInfo>> rv;
+        foreach hash<DataProviderAppInfo> app in (DataProviderActionCatalog::getAllApps()) {
+            if (remove app_filter{app.name}) {
+                push rv, app;
+            }
+        }
+        if (app_filter.size()) {
+            throw "APP-ERROR", sprintf("application(s) not registered for provider index: %y", keys app_filter);
         }
         return rv;
     }
@@ -156,20 +191,12 @@ public class ProviderIndex inherits ProviderIndexUtil {
         }}, options.pairIterator();
     }
 
-    #! Setup logger
-    private static setupLogger() {
-        Logger logger("provider index", LoggerLevel::LevelDebug);
-        logger.addAppender(new StdoutAppender());
-        DataProvider::setGlobalLogger(logger);
-        ProviderIndexUtil::setGlobalLogger(logger);
-    }
-
     #! Try to load and initialize TypeScriptActionInterface
     private static tryLoadTypeScriptActionInterface() {
         try {
             load_module("TypeScriptActionInterface");
         } catch (hash<ExceptionInfo> ex) {
-            log(LoggerLevel::LevelError, "Failed to load and initialize TypeScriptActionInterface: %s: %s", ex.err,
+            log(LoggerLevel::LevelDebug, "Failed to load and initialize TypeScriptActionInterface: %s: %s", ex.err,
                 ex.desc);
         }
     }

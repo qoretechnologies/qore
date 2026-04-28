@@ -60,6 +60,8 @@ module ProviderIndex {
 
     @subsection providerindex_v1_0 ProviderIndex v1.0
     - initial release of the module
+    - added @ref ProviderIndex::ProviderIndexCreateOptions "ProviderIndexCreateOptions" to allow callers to
+      create scoped, deterministic indices without loading external provider discovery sources
 */
 
 #! contains all public definitions in the ProviderIndex module

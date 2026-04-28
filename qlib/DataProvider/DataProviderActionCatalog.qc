@@ -1118,14 +1118,18 @@ public class DataProviderActionCatalog {
 
     #! Returns all actions for the given application
     /** @param app the data provider application
+        @param check_index if \c True, check the provider index for an on-demand module before reading registered
+            actions
 
         @return a list of actions for the given application
 
         @see getActionsEx()
     */
-    static *list<hash<DataProviderActionInfo>> getActions(string app) {
+    static *list<hash<DataProviderActionInfo>> getActions(string app, bool check_index = True) {
         # load app on demand
-        ProviderIndexUtil::checkAppModule(app);
+        if (check_index) {
+            ProviderIndexUtil::checkAppModule(app);
+        }
 
         # initialize any pending app
         if (*hash<auto> h = remove initmap{app}) {

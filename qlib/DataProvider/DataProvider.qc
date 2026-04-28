@@ -1471,7 +1471,7 @@ if (errors) {
                 } else {
                     logger.error("%s", err);
                 }
-            } else {
+            } else if (!init) {
                 stderr.print(err + "\n");
             }
         }
