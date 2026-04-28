@@ -8194,7 +8194,8 @@ Queue* QoreSocket::getQueue() {
 }
 
 void QoreSocket::cleanup(ExceptionSink* xsink) {
-    priv->cleanup(xsink);
+    qore_socket_exec_close(this);
+    priv->cleanupQueues(xsink);
 }
 
 int64 QoreSocket::getObjectIDForEvents() const {
