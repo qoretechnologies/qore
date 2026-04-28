@@ -4294,6 +4294,7 @@ int SocketConnectInetHappyEyeballsPollState::continuePoll(ExceptionSink* xsink) 
                 for (auto& a : active_attempts) {
                     if (a.fd != QORE_INVALID_SOCKET) {
                         sock->sock = a.fd;
+                        sock->resetCloseInterrupt();
                         break;
                     }
                 }
@@ -4421,6 +4422,7 @@ int SocketConnectInetHappyEyeballsPollState::startNextConnect(ExceptionSink* xsi
         // Assign first racing fd to sock->sock so isOpen() returns true
         if (sock->sock == QORE_INVALID_SOCKET) {
             sock->sock = fd;
+            sock->resetCloseInterrupt();
         }
 
         return 1; // in progress
@@ -4467,6 +4469,7 @@ void SocketConnectInetHappyEyeballsPollState::assignWinner(ExceptionSink* xsink)
     // Assign winning fd to socket (may already be sock->sock if first attempt won)
     sock->sock = winner.fd;
     winner.fd = QORE_INVALID_SOCKET;
+    sock->resetCloseInterrupt();
     sock->sfamily = wp->ai_family;
     sock->stype = wp->ai_socktype;
     sock->sprot = wp->ai_protocol;
@@ -4526,6 +4529,7 @@ SocketConnectUnixPollState::SocketConnectUnixPollState(ExceptionSink* xsink, qor
         xsink->raiseErrnoException("SOCKET-CONNECT-ERROR", errno, "error connecting to UNIX socket: '%s'", name);
         return;
     }
+    sock->resetCloseInterrupt();
 
     sock->do_connect_event(AF_UNIX, (sockaddr*)&addr, name);
 }
