@@ -2154,21 +2154,24 @@ static QoreHashNode* qore_socket_exec_poll_operation(QoreObject* sock_obj, QoreS
         return nullptr;
     }
 
+    const std::string& socket_hash = pollable->getIoIdentityHash();
+
     std::string owner("QoreSocket::sync:");
     owner += owner_name;
     owner += ':';
-    owner += pollable->getUniqueHash();
+    owner += socket_hash;
 
     std::string key("QoreSocket::sync:");
     key += owner_name;
     key += ':';
-    key += pollable->getUniqueHash();
+    key += socket_hash;
 
     ReferenceHolder<QoreHashNode> info(new QoreHashNode(hashdeclSocketPollOperationInfo, xsink), xsink);
     info->setKeyValue("sock", sock_obj->objectRefSelf(), xsink);
     info->setKeyValue("spop", op_obj->objectRefSelf(), xsink);
     info->setKeyValue("owner", new QoreStringNode(owner), xsink);
     info->setKeyValue("key", new QoreStringNode(key), xsink);
+    info->setKeyValue("thread_key", new QoreStringNode(socket_hash), xsink);
     info->setKeyValue("to", timeout_ms, xsink);
     if (*xsink) {
         return nullptr;
