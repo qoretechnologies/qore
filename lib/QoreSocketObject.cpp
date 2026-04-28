@@ -323,6 +323,134 @@ private:
     int controller_deferred_tid = -1;
 };
 
+class QoreSocketObjectStreamDrainPollOperation : public SocketPollOperationBase {
+public:
+    DLLLOCAL QoreSocketObjectStreamDrainPollOperation(Http2SessionPtr h2, int64_t stream_id)
+            : h2(std::move(h2)), stream_id(stream_id) {
+    }
+
+    DLLLOCAL QoreSocketObjectStreamDrainPollOperation(std::shared_ptr<QuicSession> quic, int64_t stream_id)
+            : quic(std::move(quic)), stream_id(stream_id) {
+    }
+
+    DLLLOCAL ~QoreSocketObjectStreamDrainPollOperation() override {
+        ExceptionSink xsink;
+        cleanup(&xsink);
+        if (xsink) {
+            xsink.clear();
+        }
+    }
+
+    DLLLOCAL virtual bool goalReached() const override {
+        return done;
+    }
+
+    DLLLOCAL virtual void abort(ExceptionSink* xsink) override {
+        output = -1;
+        done = true;
+        cleanup(xsink);
+    }
+
+    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override {
+        if (done) {
+            return nullptr;
+        }
+
+        int rc = checkDrain();
+        if (rc != 1) {
+            output = rc;
+            done = true;
+            cleanup(xsink);
+            return nullptr;
+        }
+
+        if (!registered && registerWaiter(xsink)) {
+            output = -1;
+            done = true;
+            cleanup(xsink);
+            return nullptr;
+        }
+
+        rc = checkDrain();
+        if (rc != 1) {
+            output = rc;
+            done = true;
+            cleanup(xsink);
+            return nullptr;
+        }
+
+        if (!wake_requested) {
+            wake_requested = true;
+            wakeIoThread(xsink);
+            if (*xsink) {
+                output = -1;
+                done = true;
+                cleanup(xsink);
+                return nullptr;
+            }
+        }
+
+        return getSocketPollInfoHash(xsink, SOCK_POLLIN);
+    }
+
+    DLLLOCAL virtual QoreValue getOutput() const override {
+        return output;
+    }
+
+    DLLLOCAL virtual const char* getStateImpl() const override {
+        return done ? "stream-drained" : "waiting-stream-drain";
+    }
+
+private:
+    DLLLOCAL int checkDrain() const {
+        return h2
+            ? h2->waitForStreamDrain(static_cast<int32_t>(stream_id), 0)
+            : quic->waitForStreamDrain(stream_id, 0);
+    }
+
+    DLLLOCAL int registerWaiter(ExceptionSink* xsink) {
+        ReferenceHolder<QoreObject> obj(getReferencedSocketObject(xsink), xsink);
+        if (*xsink) {
+            return -1;
+        }
+        if (h2) {
+            h2->registerStreamDrainWaiter(*obj, xsink);
+        } else {
+            quic->registerStreamDrainWaiter(*obj, xsink);
+        }
+        if (*xsink) {
+            return -1;
+        }
+        waiter_sock_obj = obj.release();
+        registered = true;
+        return 0;
+    }
+
+    DLLLOCAL void cleanup(ExceptionSink* xsink) {
+        if (registered && waiter_sock_obj) {
+            if (h2) {
+                h2->unregisterStreamDrainWaiter(waiter_sock_obj, xsink);
+            } else {
+                quic->unregisterStreamDrainWaiter(waiter_sock_obj, xsink);
+            }
+            registered = false;
+        }
+        if (waiter_sock_obj) {
+            waiter_sock_obj->deref(xsink);
+            waiter_sock_obj = nullptr;
+        }
+    }
+
+    Http2SessionPtr h2;
+    std::shared_ptr<QuicSession> quic;
+    QoreObject* waiter_sock_obj = nullptr;
+    int64_t stream_id;
+    int output = -1;
+    bool done = false;
+    bool registered = false;
+    bool wake_requested = false;
+};
+
 static QoreObject* qore_socket_object_make_pollable_wrapper(QoreSocketObject* s) {
     s->ref();
     return new QoreObject(QC_ABSTRACTPOLLABLEIOOBJECTBASE, getProgram(), s);
@@ -359,6 +487,35 @@ static int qore_socket_object_exec_poll_no_output(QoreSocketObject* s, SocketPol
     ReferenceHolder<QoreHashNode> result(
         qore_socket_object_exec_poll_operation(s, *sock_obj, *op_obj, timeout_ms, owner_name, xsink), xsink);
     return *xsink ? -1 : 0;
+}
+
+static int qore_socket_object_exec_stream_drain(QoreSocketObject* s,
+        QoreSocketObjectStreamDrainPollOperation* stream_drain_poller, int timeout_ms,
+        const char* owner_name, ExceptionSink* xsink) {
+    ReferenceHolder<QoreObject> sock_obj(qore_socket_object_make_pollable_wrapper(s), xsink);
+    ReferenceHolder<QoreObject> op_obj(
+        qore_socket_object_make_poll_op(*sock_obj, stream_drain_poller, "stream-drained", xsink), xsink);
+    if (*xsink) {
+        return -1;
+    }
+
+    QoreHashNode* ex = nullptr;
+    ReferenceHolder<QoreHashNode> result(
+        qore_socket_object_exec_poll_operation(s, *sock_obj, *op_obj, timeout_ms, owner_name, xsink, &ex), xsink);
+    ReferenceHolder<QoreHashNode> ex_holder(ex, xsink);
+    if (*xsink) {
+        return -1;
+    }
+    if (ex_holder) {
+        if (qore_socket_object_exec_exception_is(**ex_holder, "SOCKET-TIMEOUT")) {
+            return 1;
+        }
+        qore_socket_object_raise_poll_result_exception(*ex_holder, xsink);
+        return -1;
+    }
+
+    QoreValue output = stream_drain_poller->getOutput();
+    return output.isNothing() ? -1 : static_cast<int>(output.getAsBigInt());
 }
 
 static int qore_socket_object_exec_connect(QoreSocketObject* s, const char* target, int timeout_ms, bool ssl,
@@ -2670,6 +2827,13 @@ int QoreSocketObject::flushHttp2PendingData(ExceptionSink* xsink) {
             if (!priv->socket->priv->h2_session) {
                 return 0;
             }
+            if (priv->non_block_flags || priv->non_block_accept_count > 0) {
+                // Legacy public poll operations already own the socket's
+                // non-blocking state.  Submitting a nested controller operation
+                // here collides with that ownership; flush inline until these
+                // public poll ops are also controller-native.
+                return priv->socket->priv->h2_session->sendPendingData(0, xsink);
+            }
         }
         return qore_socket_object_exec_http2_flush(this, "flushHttp2PendingData", xsink);
     }
@@ -2898,12 +3062,22 @@ bool QoreSocketObject::isHttp2StreamRemoteClosed(int32_t stream_id) const {
 }
 
 int QoreSocketObject::waitForHttp2StreamDrain(int32_t stream_id, int timeout_ms) {
-    if (qore_on_async_io_thread()) {
+    ExceptionSink xsink;
+    int rc = waitForHttp2StreamDrain(stream_id, timeout_ms, &xsink);
+    if (xsink) {
+        xsink.clear();
         return -1;
     }
-    // Do NOT hold priv->m while waiting — the I/O thread needs priv->m to
-    // call sendPendingData().  The CV wait only uses Http2Session's internal
-    // drain_mtx_ which is independent of the socket lock.
+    return rc;
+}
+
+int QoreSocketObject::waitForHttp2StreamDrain(int32_t stream_id, int timeout_ms, ExceptionSink* xsink) {
+    SocketSyncPoll::assertNotOnIoThread("Socket", "waitForHttp2StreamDrain", xsink);
+    if (*xsink) {
+        return -1;
+    }
+    // Look up the session briefly; the controller-backed wait must not hold
+    // priv->m while the I/O thread drives sendPendingData().
     Http2SessionPtr h2;
     {
         AutoLocker al(priv->m);
@@ -2912,7 +3086,12 @@ int QoreSocketObject::waitForHttp2StreamDrain(int32_t stream_id, int timeout_ms)
     if (!h2) {
         return -1;
     }
-    return h2->waitForStreamDrain(stream_id, timeout_ms);
+    if (timeout_ms == 0) {
+        return h2->waitForStreamDrain(stream_id, 0);
+    }
+    return qore_socket_object_exec_stream_drain(this,
+        new QoreSocketObjectStreamDrainPollOperation(h2, stream_id), timeout_ms, "waitForHttp2StreamDrain",
+        xsink);
 }
 
 long QoreSocketObject::verifyPeerCertificate() {
@@ -3282,7 +3461,7 @@ int QoreSocketObject::waitForQuicClientStreamDrain(int64_t stream_id, int timeou
     if (*xsink) {
         return -1;
     }
-    // Brief lock for session lookup; release before blocking wait
+    // Brief lock for session lookup; release before the controller-backed wait.
     std::shared_ptr<QuicSession> session;
     {
         AutoLocker al(priv->m);
@@ -3296,7 +3475,12 @@ int QoreSocketObject::waitForQuicClientStreamDrain(int64_t stream_id, int timeou
         return -1;
     }
 
-    return session->waitForStreamDrain(stream_id, timeout_ms);
+    if (timeout_ms == 0) {
+        return session->waitForStreamDrain(stream_id, 0);
+    }
+    return qore_socket_object_exec_stream_drain(this,
+        new QoreSocketObjectStreamDrainPollOperation(session, stream_id), timeout_ms,
+        "waitForQuicClientStreamDrain", xsink);
 }
 
 void QoreSocketObject::cancelQuicStream(int64_t session_id, int64_t stream_id, ExceptionSink* xsink) {
@@ -3500,9 +3684,8 @@ int QoreSocketObject::waitForQuicStreamDrain(int64_t session_id, int64_t stream_
     if (*xsink) {
         return -1;
     }
-    // Look up the session with a brief lock, then release it before waiting.
-    // waitForStreamDrain() only acquires QuicSession::mtx_, not the socket lock,
-    // so there is no deadlock risk with I/O threads that hold priv->m.
+    // Look up the session with a brief lock, then release it before the
+    // controller-backed wait.
     std::shared_ptr<QuicSession> session;
     {
         AutoLocker al(priv->m);
@@ -3514,7 +3697,12 @@ int QoreSocketObject::waitForQuicStreamDrain(int64_t session_id, int64_t stream_
             (long long)session_id);
         return -1;
     }
-    return session->waitForStreamDrain(stream_id, timeout_ms);
+    if (timeout_ms == 0) {
+        return session->waitForStreamDrain(stream_id, 0);
+    }
+    return qore_socket_object_exec_stream_drain(this,
+        new QoreSocketObjectStreamDrainPollOperation(session, stream_id), timeout_ms,
+        "waitForQuicStreamDrain", xsink);
 }
 
 int QoreSocketObject::submitQuicConnectResponse(int64_t session_id, int64_t stream_id,

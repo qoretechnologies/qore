@@ -308,6 +308,115 @@ private:
     bool ready = false;
 };
 
+class QoreSocketHttp2StreamDrainPollOperation : public SocketPollOperationBase {
+public:
+    DLLLOCAL QoreSocketHttp2StreamDrainPollOperation(Http2SessionPtr h2, int32_t stream_id)
+            : h2(std::move(h2)), stream_id(stream_id) {
+    }
+
+    DLLLOCAL ~QoreSocketHttp2StreamDrainPollOperation() override {
+        ExceptionSink xsink;
+        cleanup(&xsink);
+        if (xsink) {
+            xsink.clear();
+        }
+    }
+
+    DLLLOCAL virtual bool goalReached() const override {
+        return done;
+    }
+
+    DLLLOCAL virtual void abort(ExceptionSink* xsink) override {
+        output = -1;
+        done = true;
+        cleanup(xsink);
+    }
+
+    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override {
+        if (done) {
+            return nullptr;
+        }
+
+        int rc = h2->waitForStreamDrain(stream_id, 0);
+        if (rc != 1) {
+            output = rc;
+            done = true;
+            cleanup(xsink);
+            return nullptr;
+        }
+
+        if (!registered && registerWaiter(xsink)) {
+            output = -1;
+            done = true;
+            cleanup(xsink);
+            return nullptr;
+        }
+
+        rc = h2->waitForStreamDrain(stream_id, 0);
+        if (rc != 1) {
+            output = rc;
+            done = true;
+            cleanup(xsink);
+            return nullptr;
+        }
+
+        if (!wake_requested) {
+            wake_requested = true;
+            wakeIoThread(xsink);
+            if (*xsink) {
+                output = -1;
+                done = true;
+                cleanup(xsink);
+                return nullptr;
+            }
+        }
+
+        return getSocketPollInfoHash(xsink, SOCK_POLLIN);
+    }
+
+    DLLLOCAL virtual QoreValue getOutput() const override {
+        return output;
+    }
+
+    DLLLOCAL virtual const char* getStateImpl() const override {
+        return done ? "stream-drained" : "waiting-stream-drain";
+    }
+
+private:
+    DLLLOCAL int registerWaiter(ExceptionSink* xsink) {
+        ReferenceHolder<QoreObject> obj(getReferencedSocketObject(xsink), xsink);
+        if (*xsink) {
+            return -1;
+        }
+        h2->registerStreamDrainWaiter(*obj, xsink);
+        if (*xsink) {
+            return -1;
+        }
+        waiter_sock_obj = obj.release();
+        registered = true;
+        return 0;
+    }
+
+    DLLLOCAL void cleanup(ExceptionSink* xsink) {
+        if (registered && waiter_sock_obj) {
+            h2->unregisterStreamDrainWaiter(waiter_sock_obj, xsink);
+            registered = false;
+        }
+        if (waiter_sock_obj) {
+            waiter_sock_obj->deref(xsink);
+            waiter_sock_obj = nullptr;
+        }
+    }
+
+    Http2SessionPtr h2;
+    QoreObject* waiter_sock_obj = nullptr;
+    int32_t stream_id;
+    int output = -1;
+    bool done = false;
+    bool registered = false;
+    bool wake_requested = false;
+};
+
 class QoreSocketControllerSetupPollOperation : public SocketPollOperationBase {
 private:
     enum class Action {
@@ -6411,13 +6520,44 @@ bool QoreSocket::isHttp2StreamRemoteClosed(int32_t stream_id) const {
 }
 
 int QoreSocket::waitForHttp2StreamDrain(int32_t stream_id, int timeout_ms) {
-    if (qore_on_async_io_thread()) {
+    ExceptionSink xsink;
+    int rc = waitForHttp2StreamDrain(stream_id, timeout_ms, &xsink);
+    if (xsink) {
+        xsink.clear();
+        return -1;
+    }
+    return rc;
+}
+
+int QoreSocket::waitForHttp2StreamDrain(int32_t stream_id, int timeout_ms, ExceptionSink* xsink) {
+    SocketSyncPoll::assertNotOnIoThread("Socket", "waitForHttp2StreamDrain", xsink);
+    if (*xsink) {
         return -1;
     }
     if (!priv->h2_session) {
         return -1;
     }
-    return priv->h2_session->waitForStreamDrain(stream_id, timeout_ms);
+    Http2SessionPtr h2 = priv->h2_session;
+    if (timeout_ms == 0) {
+        return h2->waitForStreamDrain(stream_id, 0);
+    }
+
+    QoreHashNode* ex = nullptr;
+    ValueHolder result(qore_socket_exec_poll(this,
+        new QoreSocketHttp2StreamDrainPollOperation(h2, stream_id), timeout_ms,
+        "waitForHttp2StreamDrain", "stream-drained", xsink, &ex), xsink);
+    ReferenceHolder<QoreHashNode> ex_holder(ex, xsink);
+    if (*xsink) {
+        return -1;
+    }
+    if (ex_holder) {
+        if (qore_socket_exec_exception_is(**ex_holder, "SOCKET-TIMEOUT")) {
+            return 1;
+        }
+        qore_socket_raise_poll_result_exception(*ex_holder, xsink);
+        return -1;
+    }
+    return result->isNothing() ? -1 : static_cast<int>(result->getAsBigInt());
 }
 
 long QoreSocket::verifyPeerCertificate() const {

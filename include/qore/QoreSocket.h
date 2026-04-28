@@ -2081,6 +2081,7 @@ public:
         @since %Qore 2.3
     */
     DLLEXPORT int waitForHttp2StreamDrain(int32_t stream_id, int timeout_ms);
+    DLLEXPORT int waitForHttp2StreamDrain(int32_t stream_id, int timeout_ms, ExceptionSink* xsink);
 
     //! returns the peer certificate verification code if an SSL connection is in progress
     DLLEXPORT long verifyPeerCertificate() const;

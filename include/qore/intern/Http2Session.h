@@ -879,6 +879,12 @@ private:
     std::condition_variable drain_cv_;
     std::atomic<unsigned> drain_gen_{0};
 
+    //! Socket objects to wake when stream drain notifications fire
+    std::mutex drain_waiters_mtx_;
+    std::unordered_map<QoreObject*, size_t> drain_waiters_;
+
+    DLLLOCAL void wakeStreamDrainWaiters();
+
 #if defined(__linux__) && defined(HAVE_IO_URING)
     //! Non-owning pointer to io_uring instance (owned by QoreEventLoop)
     QoreIoUring* io_uring = nullptr;
@@ -927,6 +933,16 @@ public:
         @since %Qore 2.3
     */
     DLLLOCAL void notifyStreamDrain();
+
+    //! Register a controller socket operation waiting for stream drain notifications
+    /** @since %Qore 2.3
+    */
+    DLLLOCAL void registerStreamDrainWaiter(QoreObject* sock_obj, ExceptionSink* xsink);
+
+    //! Unregister a controller socket operation waiting for stream drain notifications
+    /** @since %Qore 2.3
+    */
+    DLLLOCAL void unregisterStreamDrainWaiter(QoreObject* sock_obj, ExceptionSink* xsink);
 
 #if defined(__linux__) && defined(HAVE_IO_URING)
     //! Set the io_uring instance for async file reads

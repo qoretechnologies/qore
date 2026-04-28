@@ -1448,6 +1448,12 @@ private:
     std::condition_variable drain_cv_;
     std::atomic<unsigned> drain_gen_{0};
 
+    //! Socket objects to wake when stream drain notifications fire
+    std::mutex drain_waiters_mtx_;
+    std::unordered_map<QoreObject*, size_t> drain_waiters_;
+
+    DLLLOCAL void wakeStreamDrainWaiters();
+
     //! Condition variable for stream data notifications (headers-only body streaming)
     /** Signaled by h3RecvDataCallback and h3EndStreamCallback when data arrives or
         a dispatched stream completes.  Used by readQuicStreamDataBlock() to wait for
@@ -1459,6 +1465,16 @@ private:
     std::mutex stream_data_mtx_;
     std::condition_variable stream_data_cv_;
     std::atomic<unsigned> stream_data_gen_{0};
+
+public:
+    //! Signal stream drain waiters that buffer space has been freed
+    DLLLOCAL void notifyStreamDrain();
+
+    //! Register a controller socket operation waiting for stream drain notifications
+    DLLLOCAL void registerStreamDrainWaiter(QoreObject* sock_obj, ExceptionSink* xsink);
+
+    //! Unregister a controller socket operation waiting for stream drain notifications
+    DLLLOCAL void unregisterStreamDrainWaiter(QoreObject* sock_obj, ExceptionSink* xsink);
 };
 
 #endif // _QORE_INTERN_QUICSESSION_H

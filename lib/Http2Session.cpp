@@ -338,6 +338,21 @@ Http2Session::~Http2Session() {
     // skip delivery for expired sessions.
     // InputStream cleanup (unassignThread) is handled by the I/O thread via
     // processStreamInputStreams() during normal operation.
+    {
+        ExceptionSink xsink;
+        std::unordered_map<QoreObject*, size_t> waiters;
+        {
+            std::lock_guard<std::mutex> lock(drain_waiters_mtx_);
+            waiters.swap(drain_waiters_);
+        }
+        for (auto& [obj, count] : waiters) {
+            (void)count;
+            obj->deref(&xsink);
+        }
+        if (xsink) {
+            xsink.clear();
+        }
+    }
     if (session) {
         nghttp2_session_del(session);
     }
@@ -2627,6 +2642,81 @@ void Http2Session::notifyStreamDrain() {
         drain_gen_.fetch_add(1, std::memory_order_release);
     }
     drain_cv_.notify_all();
+    wakeStreamDrainWaiters();
+}
+
+void Http2Session::registerStreamDrainWaiter(QoreObject* sock_obj, ExceptionSink* xsink) {
+    (void)xsink;
+    assert(sock_obj);
+    std::lock_guard<std::mutex> lock(drain_waiters_mtx_);
+    auto [it, inserted] = drain_waiters_.emplace(sock_obj, 0);
+    if (inserted) {
+        sock_obj->ref();
+    }
+    ++it->second;
+}
+
+void Http2Session::unregisterStreamDrainWaiter(QoreObject* sock_obj, ExceptionSink* xsink) {
+    if (!sock_obj) {
+        return;
+    }
+
+    QoreObject* deref_obj = nullptr;
+    {
+        std::lock_guard<std::mutex> lock(drain_waiters_mtx_);
+        auto it = drain_waiters_.find(sock_obj);
+        if (it == drain_waiters_.end()) {
+            return;
+        }
+        assert(it->second > 0);
+        if (!--it->second) {
+            deref_obj = it->first;
+            drain_waiters_.erase(it);
+        }
+    }
+
+    if (deref_obj) {
+        deref_obj->deref(xsink);
+    }
+}
+
+void Http2Session::wakeStreamDrainWaiters() {
+    std::vector<QoreObject*> waiters;
+    {
+        std::lock_guard<std::mutex> lock(drain_waiters_mtx_);
+        waiters.reserve(drain_waiters_.size());
+        for (auto& [obj, count] : drain_waiters_) {
+            (void)count;
+            obj->ref();
+            waiters.push_back(obj);
+        }
+    }
+    if (waiters.empty()) {
+        return;
+    }
+
+    ExceptionSink xsink;
+    ReferenceHolder<QoreObject> ctl_obj(qore_get_async_io_controller_obj(&xsink), &xsink);
+    ReferenceHolder<AsyncIoControllerPriv> ctrl(
+        ctl_obj
+            ? static_cast<AsyncIoControllerPriv*>(
+                (*ctl_obj)->getReferencedPrivateData(CID_ASYNCIOCONTROLLER, &xsink))
+            : nullptr,
+        &xsink);
+    if (!xsink && ctrl) {
+        for (QoreObject* obj : waiters) {
+            ctrl->wakeSocketByObject(obj, &xsink);
+            if (xsink) {
+                break;
+            }
+        }
+    }
+    for (QoreObject* obj : waiters) {
+        obj->deref(&xsink);
+    }
+    if (xsink) {
+        xsink.clear();
+    }
 }
 
 void Http2Session::processStreamInputStreams(ExceptionSink* xsink) {

@@ -6853,7 +6853,7 @@ int Socket::waitForHttp2StreamDrain(int stream_id, timeout timeout_ms = 5s) {
     if (*xsink) {
         return -1;
     }
-    return s->waitForHttp2StreamDrain((int32_t)stream_id, (int)timeout_ms);
+    return s->waitForHttp2StreamDrain((int32_t)stream_id, (int)timeout_ms, xsink);
 }
 
 //! Submits HTTP/2 streaming response headers without body or END_STREAM

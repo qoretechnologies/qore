@@ -554,6 +554,7 @@ public:
         @since %Qore 2.3
     */
     DLLEXPORT int waitForHttp2StreamDrain(int32_t stream_id, int timeout_ms);
+    DLLEXPORT int waitForHttp2StreamDrain(int32_t stream_id, int timeout_ms, ExceptionSink* xsink);
 
     DLLEXPORT long verifyPeerCertificate();
     DLLEXPORT int getSocket();
