@@ -373,7 +373,7 @@ int NegotiatingHttpClientConnection::buildAndSubmit(const Http1SslConfig& ssl_co
     //    drive TCP connect followed by the TLS handshake.
     sock_priv_raw->ref();
     ReferenceHolder<SocketConnectPollOperation> connect_op(
-        new SocketConnectPollOperation(xsink, true, target_str, sock_priv_raw),
+        new SocketConnectPollOperation(xsink, true, target_str, sock_priv_raw, true),
         xsink);
     if (*xsink) {
         return -1;

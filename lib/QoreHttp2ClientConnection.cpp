@@ -145,7 +145,7 @@ int Http2ClientConnection::buildAndSubmit(ExceptionSink* xsink) {
     //    already-ref'd QoreSocketObject pointer and adopts it.
     sock_priv_raw->ref();
     ReferenceHolder<SocketConnectPollOperation> connect_op(
-        new SocketConnectPollOperation(xsink, false, target_str, sock_priv_raw), xsink);
+        new SocketConnectPollOperation(xsink, false, target_str, sock_priv_raw, true), xsink);
     if (*xsink) {
         return -1;
     }

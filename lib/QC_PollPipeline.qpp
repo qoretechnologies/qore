@@ -1360,7 +1360,7 @@ SocketPollOperationBase* PollPipelinePriv::createInnerOp(const Step& step,
             sock_obj->ref();
             ReferenceHolder<SocketConnectPollOperation> op(
                 new SocketConnectPollOperation(xsink, false, step.target.c_str(),
-                    sock_obj),
+                    sock_obj, true),
                 xsink);
             if (*xsink) {
                 return nullptr;
@@ -1372,7 +1372,7 @@ SocketPollOperationBase* PollPipelinePriv::createInnerOp(const Step& step,
             sock_obj->ref();
             ReferenceHolder<SocketConnectPollOperation> op(
                 new SocketConnectPollOperation(xsink, true, step.target.c_str(),
-                    sock_obj),
+                    sock_obj, true),
                 xsink);
             if (*xsink) {
                 return nullptr;

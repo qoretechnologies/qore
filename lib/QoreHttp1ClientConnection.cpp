@@ -239,8 +239,8 @@ int Http1ClientConnection::buildAndSubmit(ExceptionSink* xsink) {
     sock_priv_raw->ref();
     ReferenceHolder<SocketConnectPollOperation> connect_op(
         use_unix_target
-            ? new SocketConnectPollOperation(xsink, false, target_host.c_str(), SOCK_STREAM, 0, sock_priv_raw)
-            : new SocketConnectPollOperation(xsink, false, target_str, sock_priv_raw),
+            ? new SocketConnectPollOperation(xsink, false, target_host.c_str(), SOCK_STREAM, 0, sock_priv_raw, true)
+            : new SocketConnectPollOperation(xsink, false, target_str, sock_priv_raw, true),
         xsink);
     if (*xsink) {
         return -1;

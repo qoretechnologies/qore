@@ -2281,7 +2281,7 @@ Http1ClientPollOperationBase::constructor(Socket[QoreSocketObject] sock, string 
     // Create initial TCP connect operation
     sock_ptr->ref();
     ReferenceHolder<SocketConnectPollOperation> connect_op(
-        new SocketConnectPollOperation(xsink, false, connect_target->c_str(), sock_ptr),
+        new SocketConnectPollOperation(xsink, false, connect_target->c_str(), sock_ptr, true),
         xsink);
     if (*xsink) {
         return;
