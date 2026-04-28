@@ -795,8 +795,6 @@ private:
         int tid = 0;                       //!< Thread ID (0 if not running)
         int thread_idx = 0;                //!< Index in io_threads vector
         int64 autostop_idle_since = 0;     //!< Timestamp when cache first became empty
-        int submit_seq = 0;                //!< Commands submitted specifically to this I/O thread
-        int processed_seq = 0;             //!< Last thread-local submit sequence processed
 
         QoreEventLoop* loop = nullptr;
         QoreEventNotifier* notifier = nullptr;
@@ -805,6 +803,23 @@ private:
         //! Operation cache — fully owned by this I/O thread
         std::unordered_map<std::string, PollInfo> cache;
         std::atomic<int> cache_size{0};   //!< Atomic cache size for lock-free getCacheSize()
+
+        //! Per-thread submit counter — incremented at every cmdq.push() targeting
+        //! this thread (and at every direct cache insertion done while running on
+        //! this thread).  Used by waitForProcessing() to detect that a worker's
+        //! submit has reached this thread's cmdq, so the corresponding processed
+        //! check is meaningful.  The earlier global submit_seq counter conflates
+        //! submits across threads: thread A snapshotting it after draining its
+        //! own cmdq could observe a value that includes pending submits to
+        //! thread B's cmdq, advance global processed_seq prematurely, and let
+        //! waitForProcessing() return before B's cmd is in cache.
+        std::atomic<int> submit_seq{0};
+        //! Per-thread processed counter — advanced by this thread once its cmdq
+        //! is drained (post-processCommands snapshot at end of iteration; or
+        //! pre-poll catch-up when cmdq is empty).  waitForProcessing() requires
+        //! every thread's processed_seq to reach the snapshot of its submit_seq
+        //! captured at call time.
+        std::atomic<int> processed_seq{0};
         std::unordered_map<std::string, int> socket_refcounts;
 
         //! Socket hashes that need re-polling
@@ -961,9 +976,8 @@ private:
     bool io_waiting;
     bool io_exiting;
     bool ready_flag;
-    std::atomic<int> submit_seq;          //!< Incremented on each submit() call
-    int processed_seq;                    //!< Updated by I/O thread after Phase 1 snapshot
-    QoreCondition processed_cond;         //!< Signaled when processed_seq advances
+    std::atomic<int> submit_seq;          //!< Incremented on each submit() call (global; per-thread tracking lives on IoThreadContext)
+    QoreCondition processed_cond;         //!< Signaled when any thread's processed_seq advances
     QoreLoggerBridge* logger;              //!< Referenced or nullptr
     std::unordered_map<int64_t, TimerInfo> timer_info_map; //!< Timer ID -> user data
     ResolvedCallReferenceNode* timer_callback; //!< Timer callback (referenced, or nullptr)

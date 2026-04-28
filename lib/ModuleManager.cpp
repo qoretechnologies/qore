@@ -2051,6 +2051,14 @@ int ModuleManager::issueRuntimeCmd(const char* mname, QoreProgram* pgm, const Qo
     return QMM.issueRuntimeCmd(mname, pgm, cmd, xsink);
 }
 
+QoreProgram* ModuleManager::findUserModuleProgram(const char* name) {
+    QoreAbstractModule* m = QMM.findModule(name);
+    if (!m || !m->isUser()) {
+        return nullptr;
+    }
+    return static_cast<QoreUserModule*>(m)->getProgram();
+}
+
 QoreHashNode* ModuleManager::getModuleHash() {
    return QMM.getModuleHash();
 }
