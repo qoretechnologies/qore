@@ -1028,15 +1028,6 @@ static int qore_socket_object_exec_shutdown(QoreSocketObject* s, ExceptionSink* 
 static int qore_socket_object_exec_close(QoreSocketObject* s) {
     ExceptionSink xsink;
 
-    if (qore_on_async_io_thread()) {
-        s->closeIo(&xsink);
-        if (xsink) {
-            xsink.clear();
-            return -1;
-        }
-        return 0;
-    }
-
     ReferenceHolder<QoreObject> ctl_obj(qore_get_async_io_controller_obj(&xsink), &xsink);
     if (!ctl_obj) {
         return -1;
