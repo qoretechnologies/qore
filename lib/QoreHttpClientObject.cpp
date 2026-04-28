@@ -6767,16 +6767,19 @@ QoreObject* qore_httpclient_priv::startPollConnectConnMgr(ExceptionSink* xsink, 
     con_info this_connection = connection;
     const char* scheme = this_connection.ssl ? "https" : "http";
 
-    // Acquire connection (may still be CONNECTING)
+    // Acquire connection without waiting.  A fresh connection is returned
+    // in CONNECTING state so the returned poll op can report "connecting"
+    // until the async I/O controller finishes TCP/SSL setup.
     HttpClientConnectionManagerBase& mgr = getConnMgr(xsink);
     if (*xsink) {
         return nullptr;
     }
-    // acquireConnection may fail synchronously if TCP connect is refused
-    // immediately; capture error and return a poll op that defers it to
-    // the continuePoll loop (matching legacy startPollConnect behavior)
+    // acquireConnectionAsync can still fail synchronously before a controller
+    // operation is submitted, for example on invalid setup.  Capture the error
+    // and return a poll op that defers it to the continuePoll loop, matching
+    // legacy startPollConnect behavior.
     ExceptionSink connect_xsink;
-    HttpClientConnectionBase* conn = mgr.acquireConnection(scheme,
+    HttpClientConnectionBase* conn = mgr.acquireConnectionAsync(scheme,
         this_connection.host.c_str(), this_connection.port, &connect_xsink);
     if (!conn || connect_xsink) {
         // Extract error info for deferred raising
