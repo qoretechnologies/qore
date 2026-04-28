@@ -2593,15 +2593,6 @@ static int qore_socket_get_setup_rc(const QoreValue result, ExceptionSink* xsink
 
 static int qore_socket_exec_setup(QoreSocket* s, QoreSocketControllerSetupPollOperation* poller,
         const char* owner_name, ExceptionSink* xsink) {
-    if (qore_on_async_io_thread()) {
-        ReferenceHolder<QoreSocketControllerSetupPollOperation> poller_holder(poller, xsink);
-        if (*xsink) {
-            return -1;
-        }
-        poller->continuePoll(xsink);
-        return *xsink ? -1 : qore_socket_get_setup_rc(poller->getOutput(), xsink);
-    }
-
     ValueHolder result(qore_socket_exec_poll(s, poller, -1, owner_name, "done", xsink), xsink);
     if (*xsink) {
         return -1;
@@ -2665,15 +2656,6 @@ static QoreHashNode* qore_socket_exec_address_info(QoreSocket* s,
         const char* err, ExceptionSink* xsink) {
     QoreSocketControllerAddressInfoPollOperation* poller = new QoreSocketControllerAddressInfoPollOperation(s,
         action);
-    if (qore_on_async_io_thread()) {
-        ReferenceHolder<QoreSocketControllerAddressInfoPollOperation> poller_holder(poller, xsink);
-        poller->continuePoll(xsink);
-        if (*xsink) {
-            return nullptr;
-        }
-        ValueHolder output(poller->getOutput(), xsink);
-        return *xsink ? nullptr : qore_socket_get_addr_info_from_output(*output, host_lookup, err, xsink);
-    }
 
     ValueHolder result(qore_socket_exec_poll(s,
         poller, -1, owner_name, "done", xsink), xsink);
@@ -6773,9 +6755,6 @@ int QoreSocket::waitForHttp2StreamDrain(int32_t stream_id, int timeout_ms, Excep
         return -1;
     }
     Http2SessionPtr h2 = priv->h2_session;
-    if (timeout_ms == 0) {
-        return h2->waitForStreamDrain(stream_id, 0);
-    }
 
     QoreHashNode* ex = nullptr;
     ValueHolder result(qore_socket_exec_poll(this,

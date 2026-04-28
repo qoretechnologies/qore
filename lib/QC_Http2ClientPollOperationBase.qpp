@@ -88,7 +88,10 @@ void Http2ClientPollOperationPriv::initAdoptedMultiplex(ExceptionSink* xsink) {
     // workloads.  The adopted socket inherits from the NEGOTIATE H1
     // connection, which did not set NODELAY, so set it here.
     if (sock_obj) {
-        sock_obj->setNoDelay(1);
+        sock_obj->setNoDelayForAsyncPoll(1, xsink);
+        if (*xsink) {
+            return;
+        }
     }
     startMultiplex(xsink);
 }
@@ -274,7 +277,10 @@ QoreHashNode* Http2ClientPollOperationPriv::handleConnecting(ExceptionSink* xsin
         // TCP_NODELAY, Nagle + delayed-ACK interaction adds ~40ms per
         // request on sequential workloads (see legacy setNoDelay at
         // QoreHttpClientObject::connect_unlocked for context).
-        sock_obj->setNoDelay(1);
+        sock_obj->setNoDelayForAsyncPoll(1, xsink);
+        if (*xsink) {
+            return nullptr;
+        }
         if (proxy_tunnel) {
             startProxyConnect(xsink);
         } else if (ssl_required) {
@@ -718,7 +724,7 @@ QoreHashNode* Http2ClientPollOperationPriv::applyIdleTimeout(QoreHashNode* poll_
         if (last_ping_sent_us == 0 || (now_us - last_ping_sent_us) >= ping_interval_us) {
             if (sock_obj) {
                 ExceptionSink ping_xsink;
-                sock_obj->submitHttp2Ping(&ping_xsink);
+                sock_obj->submitHttp2PingForAsyncPoll(&ping_xsink);
                 ping_xsink.clear();
             }
             last_ping_sent_us = now_us;

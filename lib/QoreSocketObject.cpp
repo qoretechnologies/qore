@@ -1050,16 +1050,6 @@ static int qore_socket_object_exec_close(QoreSocketObject* s) {
 
 static int qore_socket_object_exec_setup(QoreSocketObject* s, SocketSetupPollOperation* setup_poller,
         const char* owner_name, const char* goal, ExceptionSink* xsink) {
-    if (qore_on_async_io_thread()) {
-        s->ref();
-        ReferenceHolder<SocketSetupPollOperation> poller(setup_poller, xsink);
-        if (*xsink) {
-            return -1;
-        }
-        poller->continuePoll(xsink);
-        return *xsink ? -1 : poller->getRc();
-    }
-
     s->ref();
     ReferenceHolder<QoreObject> sock_obj(qore_socket_object_make_pollable_wrapper(s), xsink);
     ReferenceHolder<QoreObject> op_obj(
@@ -1118,15 +1108,6 @@ static QoreHashNode* qore_socket_object_exec_address_info(QoreSocketObject* s,
         const char* err, ExceptionSink* xsink) {
     s->ref();
     QoreSocketObjectAddressInfoPollOperation* poller = new QoreSocketObjectAddressInfoPollOperation(s, action);
-    if (qore_on_async_io_thread()) {
-        ReferenceHolder<QoreSocketObjectAddressInfoPollOperation> poller_holder(poller, xsink);
-        poller->continuePoll(xsink);
-        if (*xsink) {
-            return nullptr;
-        }
-        ValueHolder output(poller->getOutput(), xsink);
-        return *xsink ? nullptr : qore_socket_object_get_addr_info_from_output(*output, host_lookup, err, xsink);
-    }
 
     ReferenceHolder<QoreObject> sock_obj(qore_socket_object_make_pollable_wrapper(s), xsink);
     ReferenceHolder<QoreObject> op_obj(
@@ -3482,35 +3463,54 @@ int QoreSocketObject::sendHttp2Trailers(int32_t stream_id, const QoreHashNode* t
 }
 
 int QoreSocketObject::flushHttp2PendingData(ExceptionSink* xsink) {
-    if (!qore_on_async_io_thread()) {
-        Http2SessionPtr h2;
-        {
-            AutoLocker al(priv->m);
-            qore_socket_private* sp = qore_socket_private::get(*priv->socket);
-            h2 = sp->h2_session;
-        }
-        if (!h2) {
-            return 0;
-        }
-        return qore_socket_object_exec_http2_flush(this, "flushHttp2PendingData", xsink);
+    SocketSyncPoll::assertNotOnIoThread("Socket", "flushHttp2PendingData", xsink);
+    if (*xsink) {
+        return -1;
     }
-
-    Http2SessionPtr h2 = qore_socket_object_get_h2_session(this);
+    Http2SessionPtr h2;
+    {
+        AutoLocker al(priv->m);
+        qore_socket_private* sp = qore_socket_private::get(*priv->socket);
+        h2 = sp->h2_session;
+    }
     if (!h2) {
         return 0;
     }
-    return h2->sendPendingData(0, xsink);
+    return qore_socket_object_exec_http2_flush(this, "flushHttp2PendingData", xsink);
+}
+
+int QoreSocketObject::flushHttp2PendingDataForAsyncPoll(ExceptionSink* xsink) {
+    if (!qore_on_async_io_thread()) {
+        return flushHttp2PendingData(xsink);
+    }
+
+    Http2SessionPtr h2 = qore_socket_object_get_h2_session(this);
+    return h2 ? h2->sendPendingData(0, xsink) : 0;
 }
 
 int QoreSocketObject::submitHttp2Ping(ExceptionSink* xsink) {
+    SocketSyncPoll::assertNotOnIoThread("Socket", "submitHttp2Ping", xsink);
+    if (*xsink) {
+        return -1;
+    }
     Http2SessionPtr h2 = qore_socket_object_get_h2_session(this);
     if (!h2) {
         return 0;
     }
 
+    return qore_socket_object_exec_http2_flush(this, "submitHttp2Ping", xsink, true);
+}
+
+int QoreSocketObject::submitHttp2PingForAsyncPoll(ExceptionSink* xsink) {
     if (!qore_on_async_io_thread()) {
-        return qore_socket_object_exec_http2_flush(this, "submitHttp2Ping", xsink, true);
+        return submitHttp2Ping(xsink);
     }
+
+    Http2SessionPtr h2 = qore_socket_object_get_h2_session(this);
+    if (!h2) {
+        return 0;
+    }
+
     int rv = h2->submitPing(nullptr, xsink);
     if (rv < 0 || *xsink) {
         return -1;
@@ -3687,9 +3687,6 @@ int QoreSocketObject::waitForHttp2StreamDrain(int32_t stream_id, int timeout_ms,
     if (!h2) {
         return -1;
     }
-    if (timeout_ms == 0) {
-        return h2->waitForStreamDrain(stream_id, 0);
-    }
     return qore_socket_object_exec_stream_drain(this,
         new QoreSocketObjectStreamDrainPollOperation(h2, stream_id), timeout_ms, "waitForHttp2StreamDrain",
         xsink);
@@ -3740,6 +3737,22 @@ bool QoreSocketObject::isWriteFinished(ExceptionSink* xsink, int timeout_ms) {
 
 bool QoreSocketObject::isOpen() const {
     return priv->socket->isOpen();
+}
+
+int QoreSocketObject::setNoDelayForAsyncPoll(int nodelay, ExceptionSink* xsink) {
+    if (!qore_on_async_io_thread()) {
+        return setNoDelay(nodelay);
+    }
+
+    this->ref();
+    ReferenceHolder<SocketSetupPollOperation> poller(new SocketSetupPollOperation(xsink, this,
+        SocketSetupPollOperation::ConfigAction::SetNoDelay, nodelay), xsink);
+    if (*xsink) {
+        return -1;
+    }
+
+    poller->continuePoll(xsink);
+    return *xsink ? -1 : poller->getRc();
 }
 
 int QoreSocketObject::connectINETSSL(ExceptionSink* xsink, const char* host, int port, int timeout_ms) {
@@ -4067,9 +4080,6 @@ int QoreSocketObject::waitForQuicClientStreamDrain(int64_t stream_id, int timeou
         return -1;
     }
 
-    if (timeout_ms == 0) {
-        return session->waitForStreamDrain(stream_id, 0);
-    }
     return qore_socket_object_exec_stream_drain(this,
         new QoreSocketObjectStreamDrainPollOperation(session, stream_id), timeout_ms,
         "waitForQuicClientStreamDrain", xsink);
@@ -4240,9 +4250,6 @@ int QoreSocketObject::waitForQuicStreamDrain(int64_t session_id, int64_t stream_
         xsink->raiseException("QUIC-ERROR", "no QUIC session with id %lld on this socket",
             (long long)session_id);
         return -1;
-    }
-    if (timeout_ms == 0) {
-        return session->waitForStreamDrain(stream_id, 0);
     }
     return qore_socket_object_exec_stream_drain(this,
         new QoreSocketObjectStreamDrainPollOperation(session, stream_id), timeout_ms,

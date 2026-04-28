@@ -409,6 +409,20 @@ public:
     */
     DLLLOCAL int checkIdleDataForAsyncPoll(ExceptionSink* xsink);
 
+    //! Internal async-poll helper for TCP_NODELAY setup from poll operation code.
+    /** Public synchronous callers must use @ref setNoDelay(), which delegates
+        through the async I/O controller.  Poll operations use this helper so
+        I/O-thread execution can use the controller-side setup path directly,
+        while non-I/O-thread execution still delegates through the public sync API.
+
+        @param nodelay the TCP_NODELAY value to set
+        @param xsink exception sink
+        @return 0 on success, -1 on error
+
+        @since %Qore 2.3
+    */
+    DLLLOCAL int setNoDelayForAsyncPoll(int nodelay, ExceptionSink* xsink);
+
     //! Sets the ALPN protocols to offer during TLS negotiation
     /** @param protocols A list of protocol names in order of preference (e.g., {"h2", "http/1.1"})
         @param xsink Exception sink for error handling
@@ -486,12 +500,27 @@ public:
     DLLEXPORT int sendHttp2Trailers(int32_t stream_id, const QoreHashNode* trailers,
             ExceptionSink* xsink);
 
-    //! Flushes pending HTTP/2 write data (non-blocking)
+    //! Flushes pending HTTP/2 write data through the async I/O controller
     /** Drains data queued by sendHttp2StreamDataAsync() from the nghttp2 session
-        and sends it on the socket. Returns 0 if all data was sent, 1 if
-        data remains (would block), -1 on error.
+        and sends it on the socket. Returns 0 if all data was sent, -1 on error.
+
+        @param xsink exception sink
+        @return 0 on success, -1 on error
     */
     DLLEXPORT int flushHttp2PendingData(ExceptionSink* xsink);
+
+    //! Internal async-poll helper for HTTP/2 pending data flushes.
+    /** Public synchronous callers must use @ref flushHttp2PendingData(), which
+        delegates through the async I/O controller.  Poll operations use this
+        helper so I/O-thread execution can flush the session directly.
+
+        @param xsink exception sink
+        @return 0 on success, @ref SOCK_POLLIN or @ref SOCK_POLLOUT if another
+        readiness event is needed, -1 on error
+
+        @since %Qore 2.3
+    */
+    DLLLOCAL int flushHttp2PendingDataForAsyncPoll(ExceptionSink* xsink);
 
     //! Submit HTTP/2 streaming response with InputStream body (non-blocking)
     /** Handler thread calls this and returns immediately. The I/O thread reads from
@@ -1028,14 +1057,26 @@ public:
     */
     DLLEXPORT bool isQuicDatagramSupported(int64_t session_id, ExceptionSink* xsink);
 
-    //! Submits an HTTP/2 PING frame and flushes pending data
-    /** Used by the async I/O keepalive timer to probe idle connections.
-        No-op if no HTTP/2 session is active.
+    //! Submits an HTTP/2 PING frame and flushes pending data through the async I/O controller
+    /** No-op if no HTTP/2 session is active.
         @param xsink exception sink
         @return 0 on success, -1 on error
         @since %Qore 2.3
     */
     DLLEXPORT int submitHttp2Ping(ExceptionSink* xsink);
+
+    //! Internal async-poll helper for submitting and flushing an HTTP/2 PING.
+    /** Public synchronous callers must use @ref submitHttp2Ping(), which
+        delegates through the async I/O controller.  Poll operations use this
+        helper so I/O-thread execution can submit and flush directly.
+
+        @param xsink exception sink
+        @return 0 on success, @ref SOCK_POLLIN or @ref SOCK_POLLOUT if another
+        readiness event is needed, -1 on error
+
+        @since %Qore 2.3
+    */
+    DLLLOCAL int submitHttp2PingForAsyncPoll(ExceptionSink* xsink);
 
 private:
     DLLLOCAL QoreSocketObject(QoreSocket* s, QoreSSLCertificate* cert = nullptr, QoreSSLPrivateKey* pk = nullptr);

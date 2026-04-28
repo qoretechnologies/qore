@@ -211,7 +211,11 @@ QoreHashNode* HttpAcceptPollOperationPriv::handleAcceptComplete(ExceptionSink* x
     }
 
     // Set TCP_NODELAY for immediate response sending
-    client_sock->setNoDelay(1);
+    client_sock->setNoDelayForAsyncPoll(1, xsink);
+    if (*xsink) {
+        accept_state = AcceptState::COMPLETE;
+        return nullptr;
+    }
 
     printd(5, "HttpAcceptPollOperationPriv::handleAcceptComplete() client_sock=%p ssl=%d\n",
         client_sock, (int)ssl);

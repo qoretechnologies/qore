@@ -258,21 +258,30 @@ QoreHashNode* Http2PollOperationPriv::continueReadPoll(ExceptionSink* xsink) {
         return nullptr;
     }
 
+    int flush_events = 0;
+
     // Flush pending outgoing data (responses queued by handler threads via
     // sendHttp2StreamData → nghttp2_session_resume_data).  Without this,
     // WebSocket responses sit in the nghttp2 session buffer and never reach
     // the client — the read poll cycle only reads, it doesn't write.
     {
-        int srv = sock->flushHttp2PendingData(xsink);
+        int srv = sock->flushHttp2PendingDataForAsyncPoll(xsink);
         if (*xsink) {
             h2_state = H2ServerState::CLOSED;
             return nullptr;
         }
-        // sendPendingData returns 1 if data remains (would block) —
-        // request POLLOUT so the I/O thread retries when writable
-        if (srv == 1 && poll_info) {
+        if (srv < 0) {
+            xsink->raiseException("HTTP2-FLUSH-ERROR", "error flushing pending HTTP/2 data");
+            h2_state = H2ServerState::CLOSED;
+            return nullptr;
+        }
+        // sendPendingData returns SOCK_POLLIN / SOCK_POLLOUT when the
+        // non-blocking flush needs another readiness event.
+        flush_events = srv & (SOCK_POLLIN | SOCK_POLLOUT);
+        if (flush_events && poll_info) {
             QoreHashNode* pi = poll_info;
-            pi->setKeyValue("events", SOCK_POLLIN | SOCK_POLLOUT, xsink);
+            int events = pi->getKeyValue("events").getAsBigInt();
+            pi->setKeyValue("events", events | flush_events, xsink);
             if (*xsink) {
                 h2_state = H2ServerState::CLOSED;
                 return nullptr;
@@ -318,8 +327,9 @@ QoreHashNode* Http2PollOperationPriv::continueReadPoll(ExceptionSink* xsink) {
         }
         h2_state = H2ServerState::WAIT_READ;
 
-        // Return POLLIN on the socket to wait for new data
-        return getSocketPollInfoHash(xsink, SOCK_POLLIN);
+        // Return POLLIN on the socket to wait for new data, and preserve any
+        // readiness needed by the pending outbound flush.
+        return getSocketPollInfoHash(xsink, SOCK_POLLIN | flush_events);
     }
 
     // Operation failed (goal not reached and returned nullptr — peer closed TCP)
@@ -412,7 +422,7 @@ void Http2PollOperationPriv::registerStreamFrameState(int32_t stream_id, Queue* 
         QoreObject* queue_obj) {
     // Send callback runs on the I/O thread (from frame_state->feedData()
     // inside drainStreamQueues).  nghttp2 queues the DATA frame; the surrounding
-    // continueReadPoll() flushes pending data via flushHttp2PendingData() after
+    // continueReadPoll() flushes pending data via flushHttp2PendingDataForAsyncPoll() after
     // drainStreamQueues returns.  `sock` outlives this priv and the frame_state.
     QoreSocketObject* sock_ptr = sock;
     WebSocketStreamFrameState::SendCallback send_cb =
