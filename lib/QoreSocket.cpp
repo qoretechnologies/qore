@@ -140,6 +140,12 @@ static int qore_socket_set_socket_timeout_direct(QoreSocket* s, int optname, int
 static int qore_socket_get_socket_timeout_direct(QoreSocket* s, int optname);
 static int qore_socket_get_port_direct(QoreSocket* s);
 
+static int qore_socket_close_from_controller(QoreSocket* s) {
+    qore_socket_private* priv = qore_socket_private::get(*s);
+    priv->prepareForClose();
+    return priv->close();
+}
+
 class QoreSocketControllerPollable : public AbstractPollableIoObjectBase {
 public:
     DLLLOCAL QoreSocketControllerPollable(QoreSocket* sock) : sock(sock) {
@@ -1394,7 +1400,7 @@ public:
         current_chunk = nullptr;
         poll_state.reset();
         if (socket_data_sent || bytes_sent > 0) {
-            qore_socket_private::get(*sock)->close();
+            qore_socket_close_from_controller(sock);
         }
         phase = Phase::Error;
     }
@@ -1678,11 +1684,12 @@ public:
         if (output_stream && !need_reassign) {
             output_stream->unassignThread(xsink);
         }
+        bool close_socket = bytes_received > 0 || current_chunk;
         output_stream = nullptr;
         current_chunk = nullptr;
         poll_state.reset();
-        if (bytes_received > 0 || current_chunk) {
-            qore_socket_private::get(*sock)->close();
+        if (close_socket) {
+            qore_socket_close_from_controller(sock);
         }
         phase = Phase::Error;
     }
@@ -8343,7 +8350,7 @@ void SocketPollSocketOperationBase::abort(ExceptionSink* xsink) {
         AutoLocker al(sock->priv->m);
         sock->priv->clearNonBlock(non_block_direction);
         if (abortNeedsClose()) {
-            qore_socket_private::get(*sock->priv->socket)->close();
+            qore_socket_close_from_controller(sock->priv->socket);
         }
         set_non_block = false;
         state = SPS_NONE;
@@ -11499,7 +11506,7 @@ QoreHashNode* SocketSendAndReadHeaderPollOperation::continuePoll(ExceptionSink* 
                     if (peek_rc == 0) {
                         // EOF — remote closed; close socket to prevent CLOSE_WAIT
                         phase = Phase::Closed;
-                        qore_socket_private::get(*sock->priv->socket)->close();
+                        qore_socket_close_from_controller(sock->priv->socket);
                         sock->priv->clearNonBlock();
                         set_non_block = false;
                         return nullptr;
@@ -11507,7 +11514,7 @@ QoreHashNode* SocketSendAndReadHeaderPollOperation::continuePoll(ExceptionSink* 
                     if (peek_rc < 0 && errno != EAGAIN && errno != EWOULDBLOCK
                             && errno != EINTR) {
                         phase = Phase::Closed;
-                        qore_socket_private::get(*sock->priv->socket)->close();
+                        qore_socket_close_from_controller(sock->priv->socket);
                         sock->priv->clearNonBlock();
                         set_non_block = false;
                         return nullptr;
@@ -11909,7 +11916,7 @@ QoreHashNode* SocketSendStreamAndReadHeaderPollOperation::continuePoll(Exception
                         ssize_t peek_rc = ::recv(fd, &peek_buf, 1, MSG_PEEK | MSG_DONTWAIT);
                         if (peek_rc == 0) {
                             phase = Phase::Closed;
-                            qore_socket_private::get(*sock->priv->socket)->close();
+                            qore_socket_close_from_controller(sock->priv->socket);
                             sock->priv->clearNonBlock();
                             set_non_block = false;
                             return nullptr;
@@ -11917,7 +11924,7 @@ QoreHashNode* SocketSendStreamAndReadHeaderPollOperation::continuePoll(Exception
                         if (peek_rc < 0 && errno != EAGAIN && errno != EWOULDBLOCK
                                 && errno != EINTR) {
                             phase = Phase::Closed;
-                            qore_socket_private::get(*sock->priv->socket)->close();
+                            qore_socket_close_from_controller(sock->priv->socket);
                             sock->priv->clearNonBlock();
                             set_non_block = false;
                             return nullptr;
