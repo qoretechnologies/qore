@@ -89,10 +89,17 @@ static bool http2_poll_exception_is(const QoreHashNode& ex, const char* err) {
 class Http2SocketControllerPollable : public AbstractPollableIoObjectBase {
 public:
     DLLLOCAL Http2SocketControllerPollable(qore_socket_private* sock) : sock(sock) {
+        QoreString tmp;
+        qore_get_ptr_hash(tmp, sock);
+        identity_hash = tmp.c_str();
     }
 
     DLLLOCAL virtual int getPollableDescriptor() const override {
         return sock->sock;
+    }
+
+    DLLLOCAL virtual const std::string& getIoIdentityHash() const override {
+        return identity_hash;
     }
 
     DLLLOCAL virtual void closeIo(ExceptionSink*) override {
@@ -116,6 +123,7 @@ public:
 
 private:
     qore_socket_private* sock;
+    std::string identity_hash;
 };
 
 class Http2SocketControllerPollOperation : public SocketPollOperationBase {
@@ -211,6 +219,7 @@ static QoreHashNode* http2_exec_poll_operation(qore_socket_private* sock, QoreOb
     info->setKeyValue("spop", op_obj->objectRefSelf(), xsink);
     info->setKeyValue("owner", new QoreStringNode(owner), xsink);
     info->setKeyValue("key", new QoreStringNode(key), xsink);
+    info->setKeyValue("thread_key", new QoreStringNode(pollable->getIoIdentityHash()), xsink);
     info->setKeyValue("to", timeout_ms, xsink);
     if (*xsink) {
         return nullptr;
