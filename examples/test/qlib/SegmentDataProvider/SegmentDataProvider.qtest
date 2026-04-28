@@ -246,6 +246,13 @@ public class SegmentDataProviderTest inherits QUnit::Test {
         fields = labelItemType.getFields();
         assertEq(True, fields.hasKey("key"));
         assertEq(True, fields.hasKey("value"));
+
+        # Test logos data type (typed sub-hash with default/mark/alt keys)
+        SegmentLogosDataType logosType();
+        fields = logosType.getFields();
+        assertEq(True, fields.hasKey("default"));
+        assertEq(True, fields.hasKey("mark"));
+        assertEq(True, fields.hasKey("alt"));
     }
 
     connectionTests() {

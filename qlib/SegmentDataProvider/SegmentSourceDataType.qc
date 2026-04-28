@@ -67,7 +67,7 @@ public class SegmentSourceDataType inherits HashDataType {
                 "desc": "Whether the source is currently enabled (`True`) or disabled (`False`)",
             },
             "writeKeys": {
-                "type": SoftListOrNothingType,
+                "type": new SoftListDataType(AbstractDataProviderTypeMap."string", True),
                 "display_name": "Write Keys",
                 "short_desc": "Source write keys",
                 "desc": "The write keys associated with this source for sending data",

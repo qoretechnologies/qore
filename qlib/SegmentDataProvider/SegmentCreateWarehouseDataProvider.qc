@@ -36,6 +36,7 @@ public class SegmentCreateWarehouseRequestDataType inherits HashDataType {
                     "(e.g., `catalog/warehouses/bigquery`)",
                 "type": AbstractDataProviderTypeMap."string",
                 "required": True,
+                "ref_data": "catalog_warehouses",
                 "example_value": "catalog/warehouses/bigquery",
             },
             "settings": {
@@ -62,6 +63,13 @@ public class SegmentCreateWarehouseRequestDataType inherits HashDataType {
                 "type": AbstractDataProviderTypeMap."*string",
                 "preselected": True,
                 "example_value": "My BigQuery Warehouse",
+            },
+            "disconnectAllSources": {
+                "display_name": "Disconnect All Sources",
+                "short_desc": "Disconnect all sources on creation",
+                "desc": "Set to `True` to disconnect all currently-connected sources from this "
+                    "warehouse on creation; defaults to `False`",
+                "type": AbstractDataProviderType::get(BoolOrNothingType),
             },
         };
     }
@@ -105,6 +113,9 @@ public class SegmentCreateWarehouseDataProvider inherits SegmentDataProviderBase
         }
         if (exists req.name) {
             body.name = req.name;
+        }
+        if (exists req.disconnectAllSources) {
+            body.disconnectAllSources = req.disconnectAllSources;
         }
         auto response = doPost("warehouses", body);
         return response.data.warehouse ?? response;

@@ -46,6 +46,7 @@ public class SegmentCreateDestinationRequestDataType inherits HashDataType {
                     "(e.g., `catalog/destinations/google-analytics`)",
                 "type": AbstractDataProviderTypeMap."string",
                 "required": True,
+                "ref_data": "catalog_destinations",
                 "example_value": "catalog/destinations/google-analytics",
             },
             "name": {
@@ -59,9 +60,12 @@ public class SegmentCreateDestinationRequestDataType inherits HashDataType {
             "settings": {
                 "display_name": "Settings",
                 "short_desc": "Destination configuration settings",
-                "desc": "Configuration settings required by the destination type, including "
-                    "connection credentials and options; the available keys depend on the "
-                    "selected `metadataId`",
+                "desc": "A key-value object holding configuration settings required by the "
+                    "destination type, including connection credentials and options (for "
+                    "example, a Google Analytics destination may accept "
+                    "`{\"trackingId\": \"UA-...\"}`, while a webhook destination may accept "
+                    "`{\"hooks\": [\"https://example.com/hook\"]}`); consult the destination "
+                    "catalog for the exact schema for the selected `metadataId`",
                 "type": AbstractDataProviderType::get(AutoHashType),
                 "required": True,
                 "preselected": True,

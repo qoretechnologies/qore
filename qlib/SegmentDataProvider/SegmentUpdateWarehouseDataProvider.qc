@@ -43,8 +43,11 @@ public class SegmentUpdateWarehouseRequestDataType inherits HashDataType {
                 "display_name": "Settings",
                 "short_desc": "Updated warehouse settings",
                 "desc": "Updated configuration settings for the warehouse (e.g., `hostname`, "
-                    "`port`, `database`, `schema`)",
-                "type": AbstractDataProviderType::get(AutoHashOrNothingType),
+                    "`port`, `database`, `schema`); the available keys depend on the warehouse "
+                    "type",
+                "type": AbstractDataProviderType::get(AutoHashType),
+                "required": True,
+                "preselected": True,
             },
             "enabled": {
                 "display_name": "Enabled",
@@ -93,10 +96,9 @@ public class SegmentUpdateWarehouseDataProvider inherits SegmentDataProviderBase
 
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
         string warehouseId = remove req.warehouseId;
-        hash<auto> body;
-        if (exists req.settings) {
-            body.settings = req.settings;
-        }
+        hash<auto> body = {
+            "settings": req.settings,
+        };
         if (exists req.enabled) {
             body.enabled = req.enabled;
         }

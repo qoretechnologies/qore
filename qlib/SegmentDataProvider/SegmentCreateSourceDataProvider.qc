@@ -51,15 +51,26 @@ public class SegmentCreateSourceRequestDataType inherits HashDataType {
                     "(e.g., `catalog/sources/javascript`)",
                 "type": AbstractDataProviderTypeMap."string",
                 "required": True,
+                "ref_data": "catalog_sources",
                 "example_value": "catalog/sources/javascript",
             },
             "settings": {
                 "display_name": "Settings",
                 "short_desc": "Source configuration settings",
-                "desc": "Configuration settings specific to the source type; the available keys "
-                    "depend on the selected `metadataId`",
+                "desc": "A key-value object holding configuration settings specific to the source "
+                    "type; the available keys depend on the selected `metadataId` (for example, "
+                    "an HTTP API source may accept `{\"trackUtmTags\": True}` while a JavaScript "
+                    "source may accept `{\"writeKey\": \"...\"}`); consult the source catalog for "
+                    "the exact schema",
                 "type": AbstractDataProviderType::get(AutoHashOrNothingType),
                 "preselected": True,
+            },
+            "disconnectAllWarehouses": {
+                "display_name": "Disconnect All Warehouses",
+                "short_desc": "Disconnect all warehouses on creation",
+                "desc": "Set to `True` to disconnect all currently-connected warehouses from this "
+                    "source on creation; defaults to `False`",
+                "type": AbstractDataProviderType::get(BoolOrNothingType),
             },
         };
     }
@@ -101,6 +112,9 @@ public class SegmentCreateSourceDataProvider inherits SegmentDataProviderBase {
         };
         if (exists req.settings) {
             body.settings = req.settings;
+        }
+        if (exists req.disconnectAllWarehouses) {
+            body.disconnectAllWarehouses = req.disconnectAllWarehouses;
         }
         auto response = doPost("sources", body);
         return response.data.source ?? response;

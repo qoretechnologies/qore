@@ -25,6 +25,38 @@
 #! Contains all public definitions in the SegmentDataProvider module
 public namespace SegmentDataProvider {
 
+#! Segment integration logo URLs (default, mark, alt)
+public class SegmentLogosDataType inherits HashDataType {
+    public {
+        #! Field definitions for Segment logos
+        const Fields = {
+            "default": {
+                "type": StringOrNothingType,
+                "display_name": "Default Logo",
+                "short_desc": "Default logo URL",
+                "desc": "URL of the default logo image",
+            },
+            "mark": {
+                "type": StringOrNothingType,
+                "display_name": "Mark Logo",
+                "short_desc": "Mark logo URL",
+                "desc": "URL of the mark (icon-only) logo image",
+            },
+            "alt": {
+                "type": StringOrNothingType,
+                "display_name": "Alt Logo",
+                "short_desc": "Alternative logo URL",
+                "desc": "URL of the alternative logo image",
+            },
+        };
+    }
+
+    #! Creates the type
+    constructor(*Type base_type) : HashDataType(base_type ?? AutoHashType) {
+        addQoreFields(Fields);
+    }
+}
+
 #! Segment metadata type for sources, destinations, and warehouses
 public class SegmentMetadataDataType inherits HashDataType {
     public {
@@ -49,7 +81,7 @@ public class SegmentMetadataDataType inherits HashDataType {
                 "desc": "The human-readable name of the integration type",
             },
             "categories": {
-                "type": AutoListOrNothingType,
+                "type": new SoftListDataType(AbstractDataProviderTypeMap."string", True),
                 "display_name": "Categories",
                 "short_desc": "Integration categories",
                 "desc": "The categories this integration belongs to (e.g., `Analytics`, `Advertising`)",
@@ -61,7 +93,7 @@ public class SegmentMetadataDataType inherits HashDataType {
                 "desc": "A description of the integration type",
             },
             "logos": {
-                "type": AutoHashOrNothingType,
+                "type": new SegmentLogosDataType(AutoHashOrNothingType),
                 "display_name": "Logos",
                 "short_desc": "Integration logos",
                 "desc": "Logo URLs for the integration (contains `default`, `mark`, and `alt` keys)",

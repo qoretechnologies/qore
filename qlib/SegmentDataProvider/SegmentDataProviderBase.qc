@@ -229,6 +229,9 @@ public class SegmentDataProviderBase inherits DataProvider::AbstractDataProvider
             "destinations": True,
             "warehouses": True,
             "tracking_plans": True,
+            "catalog_sources": True,
+            "catalog_destinations": True,
+            "catalog_warehouses": True,
         };
     }
 
@@ -239,7 +242,31 @@ public class SegmentDataProviderBase inherits DataProvider::AbstractDataProvider
             case "destinations": return getReferenceDestinations();
             case "warehouses": return getReferenceWarehouses();
             case "tracking_plans": return getReferenceTrackingPlans();
+            case "catalog_sources": return getReferenceCatalog("catalog/sources");
+            case "catalog_destinations": return getReferenceCatalog("catalog/destinations");
+            case "catalog_warehouses": return getReferenceCatalog("catalog/warehouses");
         }
+    }
+
+    #! Returns catalog entries (sources, destinations, or warehouses) as reference data
+    /** The catalog records use slug-based IDs of the form `catalog/<kind>/<slug>`, which is the
+        value the create endpoints accept as `metadataId`.
+    */
+    private *list<hash<AllowedValueInfo>> getReferenceCatalog(string path) {
+        list<hash<AllowedValueInfo>> rv = ();
+        try {
+            list<auto> records = doPaginatedGet(path);
+            foreach hash<auto> rec in (records) {
+                rv += <AllowedValueInfo>{
+                    "display_name": rec.name ?? rec.slug ?? sprintf("Catalog entry %s", rec.id),
+                    "short_desc": rec.slug ?? "",
+                    "value": string(rec.id),
+                };
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            # ignore errors fetching reference data
+        }
+        return rv;
     }
 
     #! Returns available sources for reference data
