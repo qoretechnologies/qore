@@ -2585,8 +2585,19 @@ int QoreSocketObject::bindINET(const char* name, const char* service, bool reuse
 
 // get port number for INET sockets
 int QoreSocketObject::getPort() {
-    AutoLocker al(priv->m);
-    return priv->socket->getPort();
+    if (qore_on_async_io_thread()) {
+        AutoLocker al(priv->m);
+        return priv->socket->getPort();
+    }
+
+    ExceptionSink xsink;
+    int rc = qore_socket_object_exec_setup(this, new SocketSetupPollOperation(&xsink, this,
+        SocketSetupPollOperation::ConfigAction::GetPort), "getPort", "done", &xsink);
+    if (xsink) {
+        xsink.clear();
+        return -1;
+    }
+    return rc;
 }
 
 int QoreSocketObject::listen(int backlog) {

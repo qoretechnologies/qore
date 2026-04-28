@@ -138,6 +138,7 @@ static int qore_socket_set_user_timeout_direct(QoreSocket* s, int ms);
 static int qore_socket_get_user_timeout_direct(QoreSocket* s);
 static int qore_socket_set_socket_timeout_direct(QoreSocket* s, int optname, int ms);
 static int qore_socket_get_socket_timeout_direct(QoreSocket* s, int optname);
+static int qore_socket_get_port_direct(QoreSocket* s);
 
 class QoreSocketControllerPollable : public AbstractPollableIoObjectBase {
 public:
@@ -443,6 +444,7 @@ private:
         SetRecvTimeout,
         GetSendTimeout,
         GetRecvTimeout,
+        GetPort,
     };
 
 public:
@@ -455,6 +457,7 @@ public:
         SetRecvTimeout,
         GetSendTimeout,
         GetRecvTimeout,
+        GetPort,
     };
 
     DLLLOCAL QoreSocketControllerSetupPollOperation(QoreSocket* sock, const char* name, bool reuseaddr)
@@ -574,6 +577,9 @@ public:
             case Action::GetRecvTimeout:
                 rc = qore_socket_get_socket_timeout_direct(sock, SO_RCVTIMEO);
                 break;
+            case Action::GetPort:
+                rc = qore_socket_get_port_direct(sock);
+                break;
         }
 
         done = true;
@@ -619,6 +625,8 @@ private:
                 return Action::GetSendTimeout;
             case ConfigAction::GetRecvTimeout:
                 return Action::GetRecvTimeout;
+            case ConfigAction::GetPort:
+                return Action::GetPort;
         }
         assert(false);
         return Action::GetNoDelay;
@@ -632,7 +640,8 @@ private:
             || action == Action::SetSendTimeout
             || action == Action::SetRecvTimeout
             || action == Action::GetSendTimeout
-            || action == Action::GetRecvTimeout;
+            || action == Action::GetRecvTimeout
+            || action == Action::GetPort;
     }
 
     DLLLOCAL void copyAddress(const struct sockaddr* source, int size, ExceptionSink* xsink) {
@@ -7759,6 +7768,10 @@ static int qore_socket_get_socket_timeout_direct(QoreSocket* s, int optname) {
     return optname == SO_SNDTIMEO ? priv->getSendTimeout() : priv->getRecvTimeout();
 }
 
+static int qore_socket_get_port_direct(QoreSocket* s) {
+    return qore_socket_private::get(*s)->getPort();
+}
+
 /* currently hardcoded to SOCK_STREAM (tcp-only)
    if there is no port specifier, opens UNIX domain socket (if necessary)
    and binds to a local UNIX socket file
@@ -7830,7 +7843,13 @@ int QoreSocket::bind(int family, const struct sockaddr *addr, int size, int sock
 
 // find out what port we're connected to
 int QoreSocket::getPort() {
-    return priv->getPort();
+    if (qore_on_async_io_thread()) {
+        return qore_socket_get_port_direct(this);
+    }
+    return qore_socket_exec_setup_no_exception(this,
+        new QoreSocketControllerSetupPollOperation(this,
+            QoreSocketControllerSetupPollOperation::ConfigAction::GetPort),
+        "getPort");
 }
 
 // QoreSocket::accept()
@@ -9208,6 +9227,8 @@ SocketSetupPollOperation::Action SocketSetupPollOperation::getAction(ConfigActio
             return Action::GetSendTimeout;
         case ConfigAction::GetRecvTimeout:
             return Action::GetRecvTimeout;
+        case ConfigAction::GetPort:
+            return Action::GetPort;
     }
     assert(false);
     return Action::GetNoDelay;
@@ -9221,7 +9242,8 @@ bool SocketSetupPollOperation::isConfigAction() const {
         || action == Action::SetSendTimeout
         || action == Action::SetRecvTimeout
         || action == Action::GetSendTimeout
-        || action == Action::GetRecvTimeout;
+        || action == Action::GetRecvTimeout
+        || action == Action::GetPort;
 }
 
 void SocketSetupPollOperation::init(ExceptionSink* xsink, bool defer_init) {
@@ -9313,6 +9335,9 @@ QoreHashNode* SocketSetupPollOperation::continuePoll(ExceptionSink* xsink) {
             break;
         case Action::GetRecvTimeout:
             rc = qore_socket_get_socket_timeout_direct(sock->priv->socket, SO_RCVTIMEO);
+            break;
+        case Action::GetPort:
+            rc = qore_socket_get_port_direct(sock->priv->socket);
             break;
     }
 

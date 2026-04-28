@@ -178,6 +178,7 @@ private:
         SetRecvTimeout,
         GetSendTimeout,
         GetRecvTimeout,
+        GetPort,
     };
 
 public:
@@ -190,6 +191,7 @@ public:
         SetRecvTimeout,
         GetSendTimeout,
         GetRecvTimeout,
+        GetPort,
     };
 
     DLLLOCAL SocketSetupPollOperation(ExceptionSink* xsink, QoreSocketObject* sock, const char* name,
