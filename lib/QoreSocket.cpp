@@ -2571,26 +2571,39 @@ static int qore_socket_exec_wait_readiness(QoreSocket* s, int timeout_ms, int ev
     return result->getAsBool() ? 1 : 0;
 }
 
-static int qore_socket_exec_setup(QoreSocket* s, QoreSocketControllerSetupPollOperation* poller,
-        const char* owner_name, ExceptionSink* xsink) {
-    ValueHolder result(qore_socket_exec_poll(s, poller, -1, owner_name, "done", xsink), xsink);
-    if (*xsink) {
+static int qore_socket_get_setup_rc(const QoreValue result, ExceptionSink* xsink) {
+    if (result.isNothing()) {
         return -1;
     }
-    if (result->isNothing()) {
-        return -1;
-    }
-    if (result->getType() != NT_INT) {
+    if (result.getType() != NT_INT) {
         xsink->raiseException("SOCKET-SETUP-ERROR",
-            "expected integer return code from async setup operation, got '%s'", result->getFullTypeName());
+            "expected integer return code from async setup operation, got '%s'", result.getFullTypeName());
         return -1;
     }
-    int64 rc = result->getAsBigInt();
+    int64 rc = result.getAsBigInt();
     if (rc < std::numeric_limits<int>::min() || rc > std::numeric_limits<int>::max()) {
         xsink->raiseException("SOCKET-SETUP-ERROR", "invalid return code from async setup operation: " QLLD, rc);
         return -1;
     }
     return static_cast<int>(rc);
+}
+
+static int qore_socket_exec_setup(QoreSocket* s, QoreSocketControllerSetupPollOperation* poller,
+        const char* owner_name, ExceptionSink* xsink) {
+    if (qore_on_async_io_thread()) {
+        ReferenceHolder<QoreSocketControllerSetupPollOperation> poller_holder(poller, xsink);
+        if (*xsink) {
+            return -1;
+        }
+        poller->continuePoll(xsink);
+        return *xsink ? -1 : qore_socket_get_setup_rc(poller->getOutput(), xsink);
+    }
+
+    ValueHolder result(qore_socket_exec_poll(s, poller, -1, owner_name, "done", xsink), xsink);
+    if (*xsink) {
+        return -1;
+    }
+    return qore_socket_get_setup_rc(*result, xsink);
 }
 
 static int qore_socket_exec_setup_no_exception(QoreSocket* s, QoreSocketControllerSetupPollOperation* poller,
@@ -2647,15 +2660,20 @@ static QoreHashNode* qore_socket_get_addr_info_from_output(const QoreValue outpu
 static QoreHashNode* qore_socket_exec_address_info(QoreSocket* s,
         QoreSocketControllerAddressInfoPollOperation::Action action, bool host_lookup, const char* owner_name,
         const char* err, ExceptionSink* xsink) {
+    QoreSocketControllerAddressInfoPollOperation* poller = new QoreSocketControllerAddressInfoPollOperation(s,
+        action);
     if (qore_on_async_io_thread()) {
-        qore_socket_private* priv = qore_socket_private::get(*s);
-        return action == QoreSocketControllerAddressInfoPollOperation::Action::Peer
-            ? priv->getPeerInfo(xsink, host_lookup)
-            : priv->getSocketInfo(xsink, host_lookup);
+        ReferenceHolder<QoreSocketControllerAddressInfoPollOperation> poller_holder(poller, xsink);
+        poller->continuePoll(xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+        ValueHolder output(poller->getOutput(), xsink);
+        return *xsink ? nullptr : qore_socket_get_addr_info_from_output(*output, host_lookup, err, xsink);
     }
 
     ValueHolder result(qore_socket_exec_poll(s,
-        new QoreSocketControllerAddressInfoPollOperation(s, action), -1, owner_name, "done", xsink), xsink);
+        poller, -1, owner_name, "done", xsink), xsink);
     if (*xsink) {
         return nullptr;
     }
@@ -6396,9 +6414,6 @@ QoreSocket::~QoreSocket() {
 }
 
 int QoreSocket::setNoDelay(int nodelay) {
-    if (qore_on_async_io_thread()) {
-        return qore_socket_set_no_delay_direct(this, nodelay);
-    }
     return qore_socket_exec_setup_no_exception(this,
         new QoreSocketControllerSetupPollOperation(this,
             QoreSocketControllerSetupPollOperation::ConfigAction::SetNoDelay, nodelay),
@@ -6406,9 +6421,6 @@ int QoreSocket::setNoDelay(int nodelay) {
 }
 
 int QoreSocket::getNoDelay() const {
-    if (qore_on_async_io_thread()) {
-        return qore_socket_get_no_delay_direct(const_cast<QoreSocket*>(this));
-    }
     return qore_socket_exec_setup_no_exception(const_cast<QoreSocket*>(this),
         new QoreSocketControllerSetupPollOperation(const_cast<QoreSocket*>(this),
             QoreSocketControllerSetupPollOperation::ConfigAction::GetNoDelay),
@@ -6416,9 +6428,6 @@ int QoreSocket::getNoDelay() const {
 }
 
 int QoreSocket::setUserTimeout(int ms) {
-    if (qore_on_async_io_thread()) {
-        return qore_socket_set_user_timeout_direct(this, ms);
-    }
     return qore_socket_exec_setup_no_exception(this,
         new QoreSocketControllerSetupPollOperation(this,
             QoreSocketControllerSetupPollOperation::ConfigAction::SetUserTimeout, ms),
@@ -6426,9 +6435,6 @@ int QoreSocket::setUserTimeout(int ms) {
 }
 
 int QoreSocket::getUserTimeout() const {
-    if (qore_on_async_io_thread()) {
-        return qore_socket_get_user_timeout_direct(const_cast<QoreSocket*>(this));
-    }
     return qore_socket_exec_setup_no_exception(const_cast<QoreSocket*>(this),
         new QoreSocketControllerSetupPollOperation(const_cast<QoreSocket*>(this),
             QoreSocketControllerSetupPollOperation::ConfigAction::GetUserTimeout),
@@ -7988,9 +7994,6 @@ int QoreSocket::bind(int family, const struct sockaddr *addr, int size, int sock
 
 // find out what port we're connected to
 int QoreSocket::getPort() {
-    if (qore_on_async_io_thread()) {
-        return qore_socket_get_port_direct(this);
-    }
     return qore_socket_exec_setup_no_exception(this,
         new QoreSocketControllerSetupPollOperation(this,
             QoreSocketControllerSetupPollOperation::ConfigAction::GetPort),
@@ -8142,9 +8145,6 @@ int QoreSocket::send(const BinaryNode* b, int timeout_ms, ExceptionSink* xsink) 
 }
 
 int QoreSocket::setSendTimeout(int ms) {
-    if (qore_on_async_io_thread()) {
-        return qore_socket_set_socket_timeout_direct(this, SO_SNDTIMEO, ms);
-    }
     return qore_socket_exec_setup_no_exception(this,
         new QoreSocketControllerSetupPollOperation(this,
             QoreSocketControllerSetupPollOperation::ConfigAction::SetSendTimeout, ms),
@@ -8152,9 +8152,6 @@ int QoreSocket::setSendTimeout(int ms) {
 }
 
 int QoreSocket::setRecvTimeout(int ms) {
-    if (qore_on_async_io_thread()) {
-        return qore_socket_set_socket_timeout_direct(this, SO_RCVTIMEO, ms);
-    }
     return qore_socket_exec_setup_no_exception(this,
         new QoreSocketControllerSetupPollOperation(this,
             QoreSocketControllerSetupPollOperation::ConfigAction::SetRecvTimeout, ms),
@@ -8162,9 +8159,6 @@ int QoreSocket::setRecvTimeout(int ms) {
 }
 
 int QoreSocket::getSendTimeout() const {
-    if (qore_on_async_io_thread()) {
-        return qore_socket_get_socket_timeout_direct(const_cast<QoreSocket*>(this), SO_SNDTIMEO);
-    }
     return qore_socket_exec_setup_no_exception(const_cast<QoreSocket*>(this),
         new QoreSocketControllerSetupPollOperation(const_cast<QoreSocket*>(this),
             QoreSocketControllerSetupPollOperation::ConfigAction::GetSendTimeout),
@@ -8172,9 +8166,6 @@ int QoreSocket::getSendTimeout() const {
 }
 
 int QoreSocket::getRecvTimeout() const {
-    if (qore_on_async_io_thread()) {
-        return qore_socket_get_socket_timeout_direct(const_cast<QoreSocket*>(this), SO_RCVTIMEO);
-    }
     return qore_socket_exec_setup_no_exception(const_cast<QoreSocket*>(this),
         new QoreSocketControllerSetupPollOperation(const_cast<QoreSocket*>(this),
             QoreSocketControllerSetupPollOperation::ConfigAction::GetRecvTimeout),
