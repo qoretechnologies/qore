@@ -750,10 +750,10 @@ struct qore_socket_private {
         own locks. */
     QoreThreadLock ssl_close_m;
 
-    //! Sticky one-shot flag: first @ref prepareForClose caller wins and
-    //! performs the fd shutdown + H2 session-closed mark; subsequent
-    //! callers (cross-thread races on Socket::close) short-circuit.
-    //! Set only — never cleared.  See @ref prepareForClose.
+    //! One-shot flag for the currently active fd: first @ref prepareForClose
+    //! caller wins and performs the fd shutdown + H2 session-closed mark;
+    //! subsequent callers in the same close race short-circuit.  Reset only
+    //! after a new fd becomes active.
     std::atomic<bool> pre_close_interrupt_fired{false};
     //! ALPN protocols for TLS negotiation (HTTP/2 support)
     std::vector<std::string> alpn_protocols;
@@ -1907,7 +1907,12 @@ struct qore_socket_private {
         return -1;
     }
 
+    DLLLOCAL void resetCloseInterrupt() {
+        pre_close_interrupt_fired.store(false, std::memory_order_release);
+    }
+
     DLLLOCAL void confirmConnected(const char* host) {
+        resetCloseInterrupt();
         do_connected_event();
 
         // issue #3053: save hostname for SNI
@@ -2012,6 +2017,7 @@ struct qore_socket_private {
         if ((sock = socket(AF_UNIX, sock_type, protocol)) == QORE_INVALID_SOCKET) {
             return -1;
         }
+        resetCloseInterrupt();
 
         sfamily = AF_UNIX;
         stype = sock_type;
@@ -2028,6 +2034,7 @@ struct qore_socket_private {
         assert(sock == QORE_INVALID_SOCKET);
         if ((sock = socket(family, sock_type, protocol)) == QORE_INVALID_SOCKET)
             return -1;
+        resetCloseInterrupt();
 
         sfamily = family;
         stype = sock_type;

@@ -780,6 +780,7 @@ public:
         assert(priv->sock == QORE_INVALID_SOCKET);
         priv->sock = accepted_fd;
         accepted_fd = QORE_INVALID_SOCKET;
+        priv->resetCloseInterrupt();
         rc = 0;
         done = true;
         return nullptr;
