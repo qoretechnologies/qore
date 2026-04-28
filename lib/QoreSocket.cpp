@@ -132,6 +132,12 @@ static int qore_socket_bind_family_sockaddr_direct(QoreSocket* s, int family, co
         int size, int sock_type, int protocol, ExceptionSink* xsink);
 static int qore_socket_listen_direct(QoreSocket* s, int backlog);
 static int qore_socket_shutdown_direct(QoreSocket* s);
+static int qore_socket_set_no_delay_direct(QoreSocket* s, int nodelay);
+static int qore_socket_get_no_delay_direct(QoreSocket* s);
+static int qore_socket_set_user_timeout_direct(QoreSocket* s, int ms);
+static int qore_socket_get_user_timeout_direct(QoreSocket* s);
+static int qore_socket_set_socket_timeout_direct(QoreSocket* s, int optname, int ms);
+static int qore_socket_get_socket_timeout_direct(QoreSocket* s, int optname);
 
 class QoreSocketControllerPollable : public AbstractPollableIoObjectBase {
 public:
@@ -429,9 +435,28 @@ private:
         BindFamilySockaddr,
         Listen,
         Shutdown,
+        SetNoDelay,
+        GetNoDelay,
+        SetUserTimeout,
+        GetUserTimeout,
+        SetSendTimeout,
+        SetRecvTimeout,
+        GetSendTimeout,
+        GetRecvTimeout,
     };
 
 public:
+    enum class ConfigAction {
+        SetNoDelay,
+        GetNoDelay,
+        SetUserTimeout,
+        GetUserTimeout,
+        SetSendTimeout,
+        SetRecvTimeout,
+        GetSendTimeout,
+        GetRecvTimeout,
+    };
+
     DLLLOCAL QoreSocketControllerSetupPollOperation(QoreSocket* sock, const char* name, bool reuseaddr)
             : sock(sock), action(Action::BindName), name(name), reuseaddr(reuseaddr) {
     }
@@ -475,6 +500,10 @@ public:
 
     DLLLOCAL QoreSocketControllerSetupPollOperation(QoreSocket* sock)
             : sock(sock), action(Action::Shutdown) {
+    }
+
+    DLLLOCAL QoreSocketControllerSetupPollOperation(QoreSocket* sock, ConfigAction config_action, int value = 0)
+            : sock(sock), action(getAction(config_action)), value(value) {
     }
 
     DLLLOCAL virtual bool goalReached() const override {
@@ -521,6 +550,30 @@ public:
             case Action::Shutdown:
                 rc = qore_socket_shutdown_direct(sock);
                 break;
+            case Action::SetNoDelay:
+                rc = qore_socket_set_no_delay_direct(sock, value);
+                break;
+            case Action::GetNoDelay:
+                rc = qore_socket_get_no_delay_direct(sock);
+                break;
+            case Action::SetUserTimeout:
+                rc = qore_socket_set_user_timeout_direct(sock, value);
+                break;
+            case Action::GetUserTimeout:
+                rc = qore_socket_get_user_timeout_direct(sock);
+                break;
+            case Action::SetSendTimeout:
+                rc = qore_socket_set_socket_timeout_direct(sock, SO_SNDTIMEO, value);
+                break;
+            case Action::SetRecvTimeout:
+                rc = qore_socket_set_socket_timeout_direct(sock, SO_RCVTIMEO, value);
+                break;
+            case Action::GetSendTimeout:
+                rc = qore_socket_get_socket_timeout_direct(sock, SO_SNDTIMEO);
+                break;
+            case Action::GetRecvTimeout:
+                rc = qore_socket_get_socket_timeout_direct(sock, SO_RCVTIMEO);
+                break;
         }
 
         done = true;
@@ -541,10 +594,47 @@ public:
         if (action == Action::Shutdown) {
             return "shutting-down";
         }
+        if (isConfigAction()) {
+            return "configuring";
+        }
         return "binding";
     }
 
 private:
+    DLLLOCAL static Action getAction(ConfigAction config_action) {
+        switch (config_action) {
+            case ConfigAction::SetNoDelay:
+                return Action::SetNoDelay;
+            case ConfigAction::GetNoDelay:
+                return Action::GetNoDelay;
+            case ConfigAction::SetUserTimeout:
+                return Action::SetUserTimeout;
+            case ConfigAction::GetUserTimeout:
+                return Action::GetUserTimeout;
+            case ConfigAction::SetSendTimeout:
+                return Action::SetSendTimeout;
+            case ConfigAction::SetRecvTimeout:
+                return Action::SetRecvTimeout;
+            case ConfigAction::GetSendTimeout:
+                return Action::GetSendTimeout;
+            case ConfigAction::GetRecvTimeout:
+                return Action::GetRecvTimeout;
+        }
+        assert(false);
+        return Action::GetNoDelay;
+    }
+
+    DLLLOCAL bool isConfigAction() const {
+        return action == Action::SetNoDelay
+            || action == Action::GetNoDelay
+            || action == Action::SetUserTimeout
+            || action == Action::GetUserTimeout
+            || action == Action::SetSendTimeout
+            || action == Action::SetRecvTimeout
+            || action == Action::GetSendTimeout
+            || action == Action::GetRecvTimeout;
+    }
+
     DLLLOCAL void copyAddress(const struct sockaddr* source, int size, ExceptionSink* xsink) {
         if (!source || size <= 0) {
             xsink->raiseException("SOCKET-BIND-ERROR", "invalid socket address for Socket::bind()");
@@ -570,6 +660,7 @@ private:
     int socktype = 0;
     int protocol = 0;
     int backlog = 0;
+    int value = 0;
     int addr_size = 0;
     sockaddr_storage addr = {};
     int rc = -1;
@@ -6151,52 +6242,43 @@ QoreSocket::~QoreSocket() {
 }
 
 int QoreSocket::setNoDelay(int nodelay) {
-    return setsockopt(priv->sock, IPPROTO_TCP, TCP_NODELAY, (SETSOCKOPT_ARG_4)&nodelay, sizeof(int));
+    if (qore_on_async_io_thread()) {
+        return qore_socket_set_no_delay_direct(this, nodelay);
+    }
+    return qore_socket_exec_setup_no_exception(this,
+        new QoreSocketControllerSetupPollOperation(this,
+            QoreSocketControllerSetupPollOperation::ConfigAction::SetNoDelay, nodelay),
+        "setNoDelay");
 }
 
 int QoreSocket::getNoDelay() const {
-    int rc;
-    socklen_t optlen = sizeof(int);
-    int sorc = getsockopt(priv->sock, IPPROTO_TCP, TCP_NODELAY, (GETSOCKOPT_ARG_4)&rc, &optlen);
-    //printd(5, "Socket::getNoDelay() sorc: %d rc: %d optlen: %d\n", sorc, rc, optlen);
-    if (sorc)
-        return sorc;
-    return rc;
+    if (qore_on_async_io_thread()) {
+        return qore_socket_get_no_delay_direct(const_cast<QoreSocket*>(this));
+    }
+    return qore_socket_exec_setup_no_exception(const_cast<QoreSocket*>(this),
+        new QoreSocketControllerSetupPollOperation(const_cast<QoreSocket*>(this),
+            QoreSocketControllerSetupPollOperation::ConfigAction::GetNoDelay),
+        "getNoDelay");
 }
 
 int QoreSocket::setUserTimeout(int ms) {
-    if (ms < 0) {
-        ms = 0;
+    if (qore_on_async_io_thread()) {
+        return qore_socket_set_user_timeout_direct(this, ms);
     }
-    priv->tcp_user_timeout_ms = ms;
-#ifdef TCP_USER_TIMEOUT
-    if (priv->sock != QORE_INVALID_SOCKET
-            && (priv->sfamily == AF_INET || priv->sfamily == AF_INET6)
-            && priv->stype == SOCK_STREAM) {
-        unsigned int v = (unsigned int)ms;
-        return setsockopt(priv->sock, IPPROTO_TCP, TCP_USER_TIMEOUT,
-            (SETSOCKOPT_ARG_4)&v, sizeof(v));
-    }
-#endif
-    return 0;
+    return qore_socket_exec_setup_no_exception(this,
+        new QoreSocketControllerSetupPollOperation(this,
+            QoreSocketControllerSetupPollOperation::ConfigAction::SetUserTimeout, ms),
+        "setUserTimeout");
 }
 
 int QoreSocket::getUserTimeout() const {
-#ifdef TCP_USER_TIMEOUT
-    if (priv->sock != QORE_INVALID_SOCKET
-            && (priv->sfamily == AF_INET || priv->sfamily == AF_INET6)
-            && priv->stype == SOCK_STREAM) {
-        unsigned int v = 0;
-        socklen_t optlen = sizeof(v);
-        int sorc = getsockopt(priv->sock, IPPROTO_TCP, TCP_USER_TIMEOUT,
-            (GETSOCKOPT_ARG_4)&v, &optlen);
-        if (sorc == 0) {
-            return (int)v;
-        }
-        // getsockopt failed (e.g., kernel rejected) — fall back to cached
+    if (qore_on_async_io_thread()) {
+        return qore_socket_get_user_timeout_direct(const_cast<QoreSocket*>(this));
     }
-#endif
-    return priv->tcp_user_timeout_ms;
+    return qore_socket_exec_setup_no_exception(const_cast<QoreSocket*>(this),
+        new QoreSocketControllerSetupPollOperation(const_cast<QoreSocket*>(this),
+            QoreSocketControllerSetupPollOperation::ConfigAction::GetUserTimeout),
+        "getUserTimeout");
 }
 
 int QoreSocket::close() {
@@ -7609,6 +7691,74 @@ static int qore_socket_shutdown_direct(QoreSocket* s) {
     return qore_socket_private::get(*s)->shutdown_direct();
 }
 
+static int qore_socket_set_no_delay_direct(QoreSocket* s, int nodelay) {
+    qore_socket_private* priv = qore_socket_private::get(*s);
+    return setsockopt(priv->sock, IPPROTO_TCP, TCP_NODELAY, (SETSOCKOPT_ARG_4)&nodelay, sizeof(int));
+}
+
+static int qore_socket_get_no_delay_direct(QoreSocket* s) {
+    qore_socket_private* priv = qore_socket_private::get(*s);
+    int rc;
+    socklen_t optlen = sizeof(int);
+    int sorc = getsockopt(priv->sock, IPPROTO_TCP, TCP_NODELAY, (GETSOCKOPT_ARG_4)&rc, &optlen);
+    //printd(5, "Socket::getNoDelay() sorc: %d rc: %d optlen: %d\n", sorc, rc, optlen);
+    if (sorc) {
+        return sorc;
+    }
+    return rc;
+}
+
+static int qore_socket_set_user_timeout_direct(QoreSocket* s, int ms) {
+    qore_socket_private* priv = qore_socket_private::get(*s);
+    if (ms < 0) {
+        ms = 0;
+    }
+    priv->tcp_user_timeout_ms = ms;
+#ifdef TCP_USER_TIMEOUT
+    if (priv->sock != QORE_INVALID_SOCKET
+            && (priv->sfamily == AF_INET || priv->sfamily == AF_INET6)
+            && priv->stype == SOCK_STREAM) {
+        unsigned int v = (unsigned int)ms;
+        return setsockopt(priv->sock, IPPROTO_TCP, TCP_USER_TIMEOUT,
+            (SETSOCKOPT_ARG_4)&v, sizeof(v));
+    }
+#endif
+    return 0;
+}
+
+static int qore_socket_get_user_timeout_direct(QoreSocket* s) {
+    qore_socket_private* priv = qore_socket_private::get(*s);
+#ifdef TCP_USER_TIMEOUT
+    if (priv->sock != QORE_INVALID_SOCKET
+            && (priv->sfamily == AF_INET || priv->sfamily == AF_INET6)
+            && priv->stype == SOCK_STREAM) {
+        unsigned int v = 0;
+        socklen_t optlen = sizeof(v);
+        int sorc = getsockopt(priv->sock, IPPROTO_TCP, TCP_USER_TIMEOUT,
+            (GETSOCKOPT_ARG_4)&v, &optlen);
+        if (sorc == 0) {
+            return (int)v;
+        }
+        // getsockopt failed (e.g., kernel rejected) — fall back to cached
+    }
+#endif
+    return priv->tcp_user_timeout_ms;
+}
+
+static int qore_socket_set_socket_timeout_direct(QoreSocket* s, int optname, int ms) {
+    qore_socket_private* priv = qore_socket_private::get(*s);
+    struct timeval tv;
+    tv.tv_sec  = ms / 1000;
+    tv.tv_usec = (ms % 1000) * 1000;
+
+    return setsockopt(priv->sock, SOL_SOCKET, optname, (SETSOCKOPT_ARG_4)&tv, sizeof(struct timeval));
+}
+
+static int qore_socket_get_socket_timeout_direct(QoreSocket* s, int optname) {
+    qore_socket_private* priv = qore_socket_private::get(*s);
+    return optname == SO_SNDTIMEO ? priv->getSendTimeout() : priv->getRecvTimeout();
+}
+
 /* currently hardcoded to SOCK_STREAM (tcp-only)
    if there is no port specifier, opens UNIX domain socket (if necessary)
    and binds to a local UNIX socket file
@@ -7828,27 +7978,43 @@ int QoreSocket::send(const BinaryNode* b, int timeout_ms, ExceptionSink* xsink) 
 }
 
 int QoreSocket::setSendTimeout(int ms) {
-    struct timeval tv;
-    tv.tv_sec  = ms / 1000;
-    tv.tv_usec = (ms % 1000) * 1000;
-
-    return setsockopt(priv->sock, SOL_SOCKET, SO_SNDTIMEO, (SETSOCKOPT_ARG_4)&tv, sizeof(struct timeval));
+    if (qore_on_async_io_thread()) {
+        return qore_socket_set_socket_timeout_direct(this, SO_SNDTIMEO, ms);
+    }
+    return qore_socket_exec_setup_no_exception(this,
+        new QoreSocketControllerSetupPollOperation(this,
+            QoreSocketControllerSetupPollOperation::ConfigAction::SetSendTimeout, ms),
+        "setSendTimeout");
 }
 
 int QoreSocket::setRecvTimeout(int ms) {
-    struct timeval tv;
-    tv.tv_sec  = ms / 1000;
-    tv.tv_usec = (ms % 1000) * 1000;
-
-    return setsockopt(priv->sock, SOL_SOCKET, SO_RCVTIMEO, (SETSOCKOPT_ARG_4)&tv, sizeof(struct timeval));
+    if (qore_on_async_io_thread()) {
+        return qore_socket_set_socket_timeout_direct(this, SO_RCVTIMEO, ms);
+    }
+    return qore_socket_exec_setup_no_exception(this,
+        new QoreSocketControllerSetupPollOperation(this,
+            QoreSocketControllerSetupPollOperation::ConfigAction::SetRecvTimeout, ms),
+        "setRecvTimeout");
 }
 
 int QoreSocket::getSendTimeout() const {
-    return priv->getSendTimeout();
+    if (qore_on_async_io_thread()) {
+        return qore_socket_get_socket_timeout_direct(const_cast<QoreSocket*>(this), SO_SNDTIMEO);
+    }
+    return qore_socket_exec_setup_no_exception(const_cast<QoreSocket*>(this),
+        new QoreSocketControllerSetupPollOperation(const_cast<QoreSocket*>(this),
+            QoreSocketControllerSetupPollOperation::ConfigAction::GetSendTimeout),
+        "getSendTimeout");
 }
 
 int QoreSocket::getRecvTimeout() const {
-    return priv->getRecvTimeout();
+    if (qore_on_async_io_thread()) {
+        return qore_socket_get_socket_timeout_direct(const_cast<QoreSocket*>(this), SO_RCVTIMEO);
+    }
+    return qore_socket_exec_setup_no_exception(const_cast<QoreSocket*>(this),
+        new QoreSocketControllerSetupPollOperation(const_cast<QoreSocket*>(this),
+            QoreSocketControllerSetupPollOperation::ConfigAction::GetRecvTimeout),
+        "getRecvTimeout");
 }
 
 void QoreSocket::setMaxChunkedBodySize(int64 size) {
@@ -9018,6 +9184,46 @@ SocketSetupPollOperation::SocketSetupPollOperation(ExceptionSink* xsink, QoreSoc
     init(xsink, true);
 }
 
+SocketSetupPollOperation::SocketSetupPollOperation(ExceptionSink* xsink, QoreSocketObject* sock,
+        ConfigAction config_action, int value)
+        : SocketPollSocketOperationBase(sock), action(getAction(config_action)), value(value) {
+    init(xsink, true);
+}
+
+SocketSetupPollOperation::Action SocketSetupPollOperation::getAction(ConfigAction config_action) {
+    switch (config_action) {
+        case ConfigAction::SetNoDelay:
+            return Action::SetNoDelay;
+        case ConfigAction::GetNoDelay:
+            return Action::GetNoDelay;
+        case ConfigAction::SetUserTimeout:
+            return Action::SetUserTimeout;
+        case ConfigAction::GetUserTimeout:
+            return Action::GetUserTimeout;
+        case ConfigAction::SetSendTimeout:
+            return Action::SetSendTimeout;
+        case ConfigAction::SetRecvTimeout:
+            return Action::SetRecvTimeout;
+        case ConfigAction::GetSendTimeout:
+            return Action::GetSendTimeout;
+        case ConfigAction::GetRecvTimeout:
+            return Action::GetRecvTimeout;
+    }
+    assert(false);
+    return Action::GetNoDelay;
+}
+
+bool SocketSetupPollOperation::isConfigAction() const {
+    return action == Action::SetNoDelay
+        || action == Action::GetNoDelay
+        || action == Action::SetUserTimeout
+        || action == Action::GetUserTimeout
+        || action == Action::SetSendTimeout
+        || action == Action::SetRecvTimeout
+        || action == Action::GetSendTimeout
+        || action == Action::GetRecvTimeout;
+}
+
 void SocketSetupPollOperation::init(ExceptionSink* xsink, bool defer_init) {
     if (defer_init) {
         controller_deferred_tid = q_gettid();
@@ -9083,6 +9289,30 @@ QoreHashNode* SocketSetupPollOperation::continuePoll(ExceptionSink* xsink) {
             break;
         case Action::Listen:
             rc = qore_socket_listen_direct(sock->priv->socket, backlog);
+            break;
+        case Action::SetNoDelay:
+            rc = qore_socket_set_no_delay_direct(sock->priv->socket, value);
+            break;
+        case Action::GetNoDelay:
+            rc = qore_socket_get_no_delay_direct(sock->priv->socket);
+            break;
+        case Action::SetUserTimeout:
+            rc = qore_socket_set_user_timeout_direct(sock->priv->socket, value);
+            break;
+        case Action::GetUserTimeout:
+            rc = qore_socket_get_user_timeout_direct(sock->priv->socket);
+            break;
+        case Action::SetSendTimeout:
+            rc = qore_socket_set_socket_timeout_direct(sock->priv->socket, SO_SNDTIMEO, value);
+            break;
+        case Action::SetRecvTimeout:
+            rc = qore_socket_set_socket_timeout_direct(sock->priv->socket, SO_RCVTIMEO, value);
+            break;
+        case Action::GetSendTimeout:
+            rc = qore_socket_get_socket_timeout_direct(sock->priv->socket, SO_SNDTIMEO);
+            break;
+        case Action::GetRecvTimeout:
+            rc = qore_socket_get_socket_timeout_direct(sock->priv->socket, SO_RCVTIMEO);
             break;
     }
 

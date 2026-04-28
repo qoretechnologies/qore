@@ -170,9 +170,28 @@ private:
         BindUnix,
         BindInet,
         Listen,
+        SetNoDelay,
+        GetNoDelay,
+        SetUserTimeout,
+        GetUserTimeout,
+        SetSendTimeout,
+        SetRecvTimeout,
+        GetSendTimeout,
+        GetRecvTimeout,
     };
 
 public:
+    enum class ConfigAction {
+        SetNoDelay,
+        GetNoDelay,
+        SetUserTimeout,
+        GetUserTimeout,
+        SetSendTimeout,
+        SetRecvTimeout,
+        GetSendTimeout,
+        GetRecvTimeout,
+    };
+
     DLLLOCAL SocketSetupPollOperation(ExceptionSink* xsink, QoreSocketObject* sock, const char* name,
         bool reuseaddr);
     DLLLOCAL SocketSetupPollOperation(ExceptionSink* xsink, QoreSocketObject* sock, int port, bool reuseaddr);
@@ -183,6 +202,8 @@ public:
     DLLLOCAL SocketSetupPollOperation(ExceptionSink* xsink, QoreSocketObject* sock, const char* name,
         const char* service, bool reuseaddr, int family, int socktype, int protocol);
     DLLLOCAL SocketSetupPollOperation(ExceptionSink* xsink, QoreSocketObject* sock, int backlog);
+    DLLLOCAL SocketSetupPollOperation(ExceptionSink* xsink, QoreSocketObject* sock, ConfigAction config_action,
+        int value = 0);
 
     DLLLOCAL void deref(ExceptionSink* xsink) {
         if (ROdereference()) {
@@ -205,7 +226,7 @@ public:
     }
 
     DLLLOCAL virtual const char* getStateImpl() const override {
-        return done ? "done" : action == Action::Listen ? "listening" : "binding";
+        return done ? "done" : action == Action::Listen ? "listening" : isConfigAction() ? "configuring" : "binding";
     }
 
     DLLLOCAL int getRc() const {
@@ -213,6 +234,8 @@ public:
     }
 
 private:
+    DLLLOCAL static Action getAction(ConfigAction config_action);
+    DLLLOCAL bool isConfigAction() const;
     DLLLOCAL void init(ExceptionSink* xsink, bool defer_init);
     DLLLOCAL int initLocked(ExceptionSink* xsink);
     DLLLOCAL void clearNonBlockLocked();
@@ -228,6 +251,7 @@ private:
     int socktype = 0;
     int protocol = 0;
     int backlog = 0;
+    int value = 0;
     int rc = -1;
     bool done = false;
     bool initialized = false;
