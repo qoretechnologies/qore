@@ -1050,6 +1050,16 @@ static int qore_socket_object_exec_close(QoreSocketObject* s) {
 
 static int qore_socket_object_exec_setup(QoreSocketObject* s, SocketSetupPollOperation* setup_poller,
         const char* owner_name, const char* goal, ExceptionSink* xsink) {
+    if (qore_on_async_io_thread()) {
+        s->ref();
+        ReferenceHolder<SocketSetupPollOperation> poller(setup_poller, xsink);
+        if (*xsink) {
+            return -1;
+        }
+        poller->continuePoll(xsink);
+        return *xsink ? -1 : poller->getRc();
+    }
+
     s->ref();
     ReferenceHolder<QoreObject> sock_obj(qore_socket_object_make_pollable_wrapper(s), xsink);
     ReferenceHolder<QoreObject> op_obj(
@@ -1106,16 +1116,18 @@ static QoreHashNode* qore_socket_object_get_addr_info_from_output(const QoreValu
 static QoreHashNode* qore_socket_object_exec_address_info(QoreSocketObject* s,
         QoreSocketObjectAddressInfoPollOperation::Action action, bool host_lookup, const char* owner_name,
         const char* err, ExceptionSink* xsink) {
-    if (qore_on_async_io_thread()) {
-        my_socket_priv* priv = my_socket_priv::getPriv(*s);
-        AutoLocker al(priv->m);
-        return action == QoreSocketObjectAddressInfoPollOperation::Action::Peer
-            ? priv->socket->getPeerInfo(xsink, host_lookup)
-            : priv->socket->getSocketInfo(xsink, host_lookup);
-    }
-
     s->ref();
     QoreSocketObjectAddressInfoPollOperation* poller = new QoreSocketObjectAddressInfoPollOperation(s, action);
+    if (qore_on_async_io_thread()) {
+        ReferenceHolder<QoreSocketObjectAddressInfoPollOperation> poller_holder(poller, xsink);
+        poller->continuePoll(xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+        ValueHolder output(poller->getOutput(), xsink);
+        return *xsink ? nullptr : qore_socket_object_get_addr_info_from_output(*output, host_lookup, err, xsink);
+    }
+
     ReferenceHolder<QoreObject> sock_obj(qore_socket_object_make_pollable_wrapper(s), xsink);
     ReferenceHolder<QoreObject> op_obj(
         qore_socket_object_make_poll_op(*sock_obj, poller, "done", xsink), xsink);
@@ -2744,11 +2756,6 @@ int QoreSocketObject::bindINET(const char* name, const char* service, bool reuse
 
 // get port number for INET sockets
 int QoreSocketObject::getPort() {
-    if (qore_on_async_io_thread()) {
-        AutoLocker al(priv->m);
-        return priv->socket->getPort();
-    }
-
     ExceptionSink xsink;
     int rc = qore_socket_object_exec_setup(this, new SocketSetupPollOperation(&xsink, this,
         SocketSetupPollOperation::ConfigAction::GetPort), "getPort", "done", &xsink);
@@ -3181,11 +3188,6 @@ QoreHashNode* QoreSocketObject::readServerSentEvent(ExceptionSink* xsink, const 
 }
 
 int QoreSocketObject::setSendTimeout(int ms) {
-    if (qore_on_async_io_thread()) {
-        AutoLocker al(priv->m);
-        return priv->socket->setSendTimeout(ms);
-    }
-
     ExceptionSink xsink;
     int rc = qore_socket_object_exec_setup(this, new SocketSetupPollOperation(&xsink, this,
         SocketSetupPollOperation::ConfigAction::SetSendTimeout, ms), "setSendTimeout", "done", &xsink);
@@ -3197,11 +3199,6 @@ int QoreSocketObject::setSendTimeout(int ms) {
 }
 
 int QoreSocketObject::setRecvTimeout(int ms) {
-    if (qore_on_async_io_thread()) {
-        AutoLocker al(priv->m);
-        return priv->socket->setRecvTimeout(ms);
-    }
-
     ExceptionSink xsink;
     int rc = qore_socket_object_exec_setup(this, new SocketSetupPollOperation(&xsink, this,
         SocketSetupPollOperation::ConfigAction::SetRecvTimeout, ms), "setRecvTimeout", "done", &xsink);
@@ -3213,11 +3210,6 @@ int QoreSocketObject::setRecvTimeout(int ms) {
 }
 
 int QoreSocketObject::getSendTimeout() {
-    if (qore_on_async_io_thread()) {
-        AutoLocker al(priv->m);
-        return priv->socket->getSendTimeout();
-    }
-
     ExceptionSink xsink;
     int rc = qore_socket_object_exec_setup(this, new SocketSetupPollOperation(&xsink, this,
         SocketSetupPollOperation::ConfigAction::GetSendTimeout), "getSendTimeout", "done", &xsink);
@@ -3229,11 +3221,6 @@ int QoreSocketObject::getSendTimeout() {
 }
 
 int QoreSocketObject::getRecvTimeout() {
-    if (qore_on_async_io_thread()) {
-        AutoLocker al(priv->m);
-        return priv->socket->getRecvTimeout();
-    }
-
     ExceptionSink xsink;
     int rc = qore_socket_object_exec_setup(this, new SocketSetupPollOperation(&xsink, this,
         SocketSetupPollOperation::ConfigAction::GetRecvTimeout), "getRecvTimeout", "done", &xsink);
@@ -3844,11 +3831,6 @@ void QoreSocketObject::setEventQueue(Queue* cbq, ExceptionSink* xsink) {
 }
 
 int QoreSocketObject::setNoDelay(int nodelay) {
-    if (qore_on_async_io_thread()) {
-        AutoLocker al(priv->m);
-        return priv->socket->setNoDelay(nodelay);
-    }
-
     ExceptionSink xsink;
     int rc = qore_socket_object_exec_setup(this, new SocketSetupPollOperation(&xsink, this,
         SocketSetupPollOperation::ConfigAction::SetNoDelay, nodelay), "setNoDelay", "done", &xsink);
@@ -3860,11 +3842,6 @@ int QoreSocketObject::setNoDelay(int nodelay) {
 }
 
 int QoreSocketObject::getNoDelay() {
-    if (qore_on_async_io_thread()) {
-        AutoLocker al(priv->m);
-        return priv->socket->getNoDelay();
-    }
-
     ExceptionSink xsink;
     int rc = qore_socket_object_exec_setup(this, new SocketSetupPollOperation(&xsink, this,
         SocketSetupPollOperation::ConfigAction::GetNoDelay), "getNoDelay", "done", &xsink);
@@ -3876,11 +3853,6 @@ int QoreSocketObject::getNoDelay() {
 }
 
 int QoreSocketObject::setUserTimeout(int ms) {
-    if (qore_on_async_io_thread()) {
-        AutoLocker al(priv->m);
-        return priv->socket->setUserTimeout(ms);
-    }
-
     ExceptionSink xsink;
     int rc = qore_socket_object_exec_setup(this, new SocketSetupPollOperation(&xsink, this,
         SocketSetupPollOperation::ConfigAction::SetUserTimeout, ms), "setUserTimeout", "done", &xsink);
@@ -3892,11 +3864,6 @@ int QoreSocketObject::setUserTimeout(int ms) {
 }
 
 int QoreSocketObject::getUserTimeout() {
-    if (qore_on_async_io_thread()) {
-        AutoLocker al(priv->m);
-        return priv->socket->getUserTimeout();
-    }
-
     ExceptionSink xsink;
     int rc = qore_socket_object_exec_setup(this, new SocketSetupPollOperation(&xsink, this,
         SocketSetupPollOperation::ConfigAction::GetUserTimeout), "getUserTimeout", "done", &xsink);
