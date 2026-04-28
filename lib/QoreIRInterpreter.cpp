@@ -8118,6 +8118,7 @@ lvalue_path_unary_done:
                 // Navigate to lvalue; for extract without replacement, avoid vivification
                 bool no_vivify = (path_inst->ternary_op == LVTernaryOp::Extract
                     && replacement_val.isNothing());
+                ReferenceHolder<QoreListNode> removed_list(xsink);
                 LValueHelper lvh(xsink);
                 if (lvh.navigatePath(path_copy.data(), path_copy.size(), no_vivify)) {
                     if (no_vivify && !*xsink) {
@@ -8135,9 +8136,8 @@ lvalue_path_unary_done:
                 QoreValue res;
                 qore_type_t vt = lvh.getType();
                 if (vt == NT_NOTHING) {
-                    // Mirror AST behavior (QoreExtractOperatorNode::evalImpl): if the lvalue
-                    // has a default list/string type, auto-initialize it so extract on a
-                    // declared-but-unassigned `list l` returns an empty list rather than NOTHING.
+                    // Mirror AST behavior: if the lvalue has a default list/string type,
+                    // auto-initialize it before extract/splice.
                     const QoreTypeInfo* ti = lvh.getTypeInfo();
                     if (ti == softListTypeInfo || ti == listTypeInfo || ti == stringTypeInfo
                             || ti == softStringTypeInfo) {
@@ -8147,7 +8147,7 @@ lvalue_path_unary_done:
                     }
                 }
                 if (vt == NT_NOTHING) {
-                    // Nothing to extract — return NOTHING
+                    // Nothing to extract/splice — return NOTHING
                 } else if (vt != NT_LIST && vt != NT_STRING && vt != NT_BINARY) {
                     xsink->raiseException("EXTRACT-ERROR",
                         "first (lvalue) argument to the extract operator is not a list, "
@@ -8155,54 +8155,107 @@ lvalue_path_unary_done:
                 } else {
                     lvh.ensureUnique();
                     size_t offset = static_cast<size_t>(offset_val.getAsBigInt());
-                    if (vt == NT_LIST) {
-                        QoreListNode* vl = lvh.getValue().get<QoreListNode>();
-                        if (length_val.isNothing() && replacement_val.isNothing()) {
-                            res = vl->extract(offset);
-                        } else {
-                            size_t length = static_cast<size_t>(length_val.getAsBigInt());
-                            if (replacement_val.isNothing()) {
-                                res = vl->extract(offset, length);
+                    if (path_inst->ternary_op == LVTernaryOp::Splice) {
+                        if (vt == NT_LIST) {
+                            QoreListNode* vl = lvh.getValue().get<QoreListNode>();
+                            if (length_val.isNothing() && replacement_val.isNothing()) {
+                                removed_list = vl->splice(offset);
                             } else {
-                                res = vl->extract(offset, length, replacement_val, xsink);
-                            }
-                        }
-                    } else if (vt == NT_STRING) {
-                        QoreStringNode* vs = lvh.getValue().get<QoreStringNode>();
-                        if (length_val.isNothing() && replacement_val.isNothing()) {
-                            res = vs->extract(offset, xsink);
-                        } else {
-                            size_t length = static_cast<size_t>(length_val.getAsBigInt());
-                            if (replacement_val.isNothing()) {
-                                res = vs->extract(offset, length, xsink);
-                            } else {
-                                res = vs->extract(offset, length, replacement_val, xsink);
-                            }
-                        }
-                    } else { // NT_BINARY
-                        BinaryNode* b = lvh.getValue().get<BinaryNode>();
-                        BinaryNode* bout = new BinaryNode;
-                        if (length_val.isNothing() && replacement_val.isNothing()) {
-                            b->splice(offset, b->size(), bout);
-                        } else {
-                            size_t length = static_cast<size_t>(length_val.getAsBigInt());
-                            if (replacement_val.isNothing()) {
-                                b->splice(offset, length, bout);
-                            } else {
-                                if (replacement_val.getType() == NT_BINARY) {
-                                    const BinaryNode* b1 = replacement_val.get<const BinaryNode>();
-                                    b->splice(offset, length, b1->getPtr(), b1->size(), bout);
+                                size_t length = static_cast<size_t>(length_val.getAsBigInt());
+                                if (replacement_val.isNothing()) {
+                                    removed_list = vl->splice(offset, length);
                                 } else {
-                                    QoreStringNodeValueHelper sv(replacement_val);
-                                    if (!sv->strlen()) {
-                                        b->splice(offset, length, bout);
+                                    removed_list = vl->splice(offset, length, replacement_val, xsink);
+                                }
+                            }
+                        } else if (vt == NT_STRING) {
+                            QoreStringNode* vs = lvh.getValue().get<QoreStringNode>();
+                            if (length_val.isNothing() && replacement_val.isNothing()) {
+                                vs->splice(offset, xsink);
+                            } else {
+                                size_t length = static_cast<size_t>(length_val.getAsBigInt());
+                                if (replacement_val.isNothing()) {
+                                    vs->splice(offset, length, xsink);
+                                } else {
+                                    vs->splice(offset, length, replacement_val, xsink);
+                                }
+                            }
+                        } else { // NT_BINARY
+                            BinaryNode* b = lvh.getValue().get<BinaryNode>();
+                            if (length_val.isNothing() && replacement_val.isNothing()) {
+                                b->splice(offset, b->size());
+                            } else {
+                                size_t length = static_cast<size_t>(length_val.getAsBigInt());
+                                if (replacement_val.isNothing()) {
+                                    b->splice(offset, length);
+                                } else {
+                                    if (replacement_val.getType() == NT_BINARY) {
+                                        const BinaryNode* b1 = replacement_val.get<const BinaryNode>();
+                                        b->splice(offset, length, b1->getPtr(), b1->size());
                                     } else {
-                                        b->splice(offset, length, sv->getBuffer(), sv->size(), bout);
+                                        QoreStringNodeValueHelper sv(replacement_val);
+                                        if (!sv->strlen()) {
+                                            b->splice(offset, length);
+                                        } else {
+                                            b->splice(offset, length, sv->getBuffer(), sv->size());
+                                        }
                                     }
                                 }
                             }
                         }
-                        res = bout;
+                        if (path_inst->ref_rv && !*xsink) {
+                            res = lvh.getReferencedValue();
+                        }
+                    } else {
+                        if (vt == NT_LIST) {
+                            QoreListNode* vl = lvh.getValue().get<QoreListNode>();
+                            if (length_val.isNothing() && replacement_val.isNothing()) {
+                                res = vl->extract(offset);
+                            } else {
+                                size_t length = static_cast<size_t>(length_val.getAsBigInt());
+                                if (replacement_val.isNothing()) {
+                                    res = vl->extract(offset, length);
+                                } else {
+                                    res = vl->extract(offset, length, replacement_val, xsink);
+                                }
+                            }
+                        } else if (vt == NT_STRING) {
+                            QoreStringNode* vs = lvh.getValue().get<QoreStringNode>();
+                            if (length_val.isNothing() && replacement_val.isNothing()) {
+                                res = vs->extract(offset, xsink);
+                            } else {
+                                size_t length = static_cast<size_t>(length_val.getAsBigInt());
+                                if (replacement_val.isNothing()) {
+                                    res = vs->extract(offset, length, xsink);
+                                } else {
+                                    res = vs->extract(offset, length, replacement_val, xsink);
+                                }
+                            }
+                        } else { // NT_BINARY
+                            BinaryNode* b = lvh.getValue().get<BinaryNode>();
+                            BinaryNode* bout = new BinaryNode;
+                            if (length_val.isNothing() && replacement_val.isNothing()) {
+                                b->splice(offset, b->size(), bout);
+                            } else {
+                                size_t length = static_cast<size_t>(length_val.getAsBigInt());
+                                if (replacement_val.isNothing()) {
+                                    b->splice(offset, length, bout);
+                                } else {
+                                    if (replacement_val.getType() == NT_BINARY) {
+                                        const BinaryNode* b1 = replacement_val.get<const BinaryNode>();
+                                        b->splice(offset, length, b1->getPtr(), b1->size(), bout);
+                                    } else {
+                                        QoreStringNodeValueHelper sv(replacement_val);
+                                        if (!sv->strlen()) {
+                                            b->splice(offset, length, bout);
+                                        } else {
+                                            b->splice(offset, length, sv->getBuffer(), sv->size(), bout);
+                                        }
+                                    }
+                                }
+                            }
+                            res = bout;
+                        }
                     }
                 }
                 if (*xsink) {
@@ -8216,7 +8269,27 @@ lvalue_path_unary_done:
                     res = QoreValue();
                 }
                 invalidateLValuePathClosureCache(path_inst);
+                if (path_inst->hasLocalTarget()) {
+                    bool is_ref = !path_inst->path.empty() && path_inst->path[0].type_info
+                        && QoreTypeInfo::isReference(path_inst->path[0].type_info);
+                    if (is_ref) {
+                        for (size_t j = 0; j < locals_slot_cache.size(); ++j) {
+                            if (j < locals_ir_only.size() && locals_ir_only[j]) {
+                                continue;
+                            }
+                            locals_slot_cache[j].discard(xsink);
+                            locals_slot_cache[j] = QoreValue();
+                        }
+                        cleanupStoredValues(closures, xsink);
+                        cleanupStoredValues(globals, xsink);
+                    } else if (path_inst->lvalue_slot_id < locals_slot_cache.size()) {
+                        locals_slot_cache[path_inst->lvalue_slot_id].discard(xsink);
+                        locals_slot_cache[path_inst->lvalue_slot_id] = QoreValue();
+                        clearLoadSlots(path_inst->lvalue_slot_id);
+                    }
+                }
                 markParentLValuePathDirty(path_inst);
+                cleanupLocalCaches();
                 if (path_inst->result.isValid()) {
                     setValueSlot(values, path_inst->result.id, res, xsink);
                     if (res.hasNode()) {
@@ -8463,7 +8536,7 @@ lvalue_path_unary_done:
                     cleanupLocalCaches();
                     return false;
                 }
-                // Splice returns the removed portion — always invalidate (never repopulate)
+                // Splice returns the mutated lvalue; always invalidate and let the slot refresh from storage.
                 finalizeLValueSlotCache(lval_inst, lval_vrn, res, false);
                 setValueSlot(values, lval_inst->result.id, res, xsink);
                 if (res.hasNode()) {

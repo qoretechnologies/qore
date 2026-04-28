@@ -2117,7 +2117,9 @@ public:
 
 class QoreIRFunction {
 public:
-    explicit QoreIRFunction(std::string n_name) : name(std::move(n_name)) {
+    explicit QoreIRFunction(std::string n_name, std::string n_display_name = {})
+            : name(std::move(n_name)),
+            display_name(n_display_name.empty() ? deriveDisplayName(name) : std::move(n_display_name)) {
     }
 
     ~QoreIRFunction() {
@@ -2151,7 +2153,17 @@ public:
         return QoreIRValue(next_value_id++);
     }
 
+    const std::string& getDisplayName() const {
+        return display_name;
+    }
+
+    static std::string deriveDisplayName(const std::string& n_name) {
+        size_t pos = n_name.find('@');
+        return pos == std::string::npos ? n_name : n_name.substr(0, pos);
+    }
+
     std::string name;
+    std::string display_name;
     //! Source QoreFunction this IR was lowered from — used by
     //! createCallDirect to identify self-recursion by pointer equality
     //! rather than base-name comparison.  Without this, a caller in

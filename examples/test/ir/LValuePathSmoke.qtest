@@ -29,6 +29,7 @@ class LValuePathSmokeTest inherits QUnit::Test {
         addTestCase("compound on local hash key", \testLocalHashKeyCompound());
         addTestCase("trim and chomp", \testTrimChomp());
         addTestCase("chomp on self.member", \testChompMember());
+        addTestCase("splice returns mutated lvalue", \testSpliceReturnValue());
         set_return_value(main());
     }
 
@@ -228,5 +229,18 @@ e.strip();
 printf(\"%s:%d\\n\", e.line, e.line.length());
 ";
         assertSameInAllModes(code, "oops:4\n", "chomp self.member");
+    }
+
+    testSpliceReturnValue() {
+        # Splice mutates the lvalue and returns the mutated value. The native
+        # lvalue-path handler must not use extract semantics here.
+        string code = "
+string s = \"äbcdéf\";
+string r = (splice s, 5);
+list<auto> l = (1, 2, 3, 4);
+list<auto> lr = (splice l, 1, 2);
+printf(\"%s:%s:%d:%d\\n\", s, r, l.size(), lr[1]);
+";
+        assertSameInAllModes(code, "äbcdé:äbcdé:2:4\n", "splice return value");
     }
 }

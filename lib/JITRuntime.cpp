@@ -5146,7 +5146,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_fast(const QoreFunction* func,
         }
         call_name_buf += func->getName();
     }
-    const std::string& call_name = ir ? ir->name : call_name_buf;
+    const std::string& call_name = ir ? ir->getDisplayName() : call_name_buf;
 
     QoreValue val{};
     {
@@ -5323,7 +5323,7 @@ static uint64_t execClosureDirect(const QoreClosureBase* cb, const UserVariantBa
 
     // Get call name from cached IR if available, otherwise use static name
     static const std::string closure_name("<anonymous closure>");
-    const std::string& call_name = ir ? ir->name : closure_name;
+    const std::string& call_name = ir ? ir->getDisplayName() : closure_name;
 
     QoreValue val{};
     {
@@ -5449,7 +5449,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_fast_with_target(uint64_t (*target_fn
 
     // Get call name from cached IR function (always available for JIT-compiled functions)
     const QoreIRFunction* ir = uvb->getCachedIR();
-    const std::string& call_name = ir ? ir->name : jit_empty_call_name;
+    const std::string& call_name = ir ? ir->getDisplayName() : jit_empty_call_name;
 
     QoreValue val{};
     {
@@ -5518,7 +5518,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_self_recursive(const AbstractQoreFunc
             }
         }
         const QoreIRFunction* ir = uvb->getCachedIR();
-        const std::string& call_name = ir ? ir->name : jit_empty_call_name;
+        const std::string& call_name = ir ? ir->getDisplayName() : jit_empty_call_name;
         QoreValue result = uvb->callTieredPublic(call_name.c_str(), arg_list, nullptr, xsink);
         return toBits(result);
     }
@@ -5561,7 +5561,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_self_recursive(const AbstractQoreFunc
 
     // Use cached IR name when available (zero allocation)
     const QoreIRFunction* ir = uvb->getCachedIR();
-    const std::string& call_name = ir ? ir->name : jit_empty_call_name;
+    const std::string& call_name = ir ? ir->getDisplayName() : jit_empty_call_name;
 
     // Call through execJITWithDeopt which handles body locals, stack location, and deopt
     QoreValue val{};
@@ -5741,7 +5741,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_method_fast(const QoreMethod* method,
         }
         call_name_buf += method->getName();
     }
-    const std::string& call_name = ir ? ir->name : call_name_buf;
+    const std::string& call_name = ir ? ir->getDisplayName() : call_name_buf;
 
     QoreValue val{};
     {
@@ -7391,6 +7391,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_ternary(
     QoreValue replacement_val = fromBits(c_bits);
     // For extract without replacement, avoid vivification
     bool no_vivify = (inst->ternary_op == LVTernaryOp::Extract && replacement_val.isNothing());
+    ReferenceHolder<QoreListNode> removed_list(xsink);
     LValueHelper lvh(xsink);
     if (lvh.navigatePath(inst->path.data(), inst->path.size(), no_vivify)) {
         if (no_vivify && !*xsink) {
@@ -7401,7 +7402,16 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_ternary(
     QoreValue res;
     qore_type_t vt = lvh.getType();
     if (vt == NT_NOTHING) {
-        // Nothing to extract — return NOTHING
+        const QoreTypeInfo* ti = lvh.getTypeInfo();
+        if (ti == softListTypeInfo || ti == listTypeInfo || ti == stringTypeInfo
+                || ti == softStringTypeInfo) {
+            if (!lvh.assign(QoreTypeInfo::getDefaultQoreValue(ti))) {
+                vt = lvh.getType();
+            }
+        }
+    }
+    if (vt == NT_NOTHING) {
+        // Nothing to extract/splice — return NOTHING
     } else if (vt != NT_LIST && vt != NT_STRING && vt != NT_BINARY) {
         xsink->raiseException("EXTRACT-ERROR",
             "first (lvalue) argument to the extract operator is not a list, "
@@ -7409,54 +7419,107 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_ternary(
     } else {
         lvh.ensureUnique();
         size_t offset = static_cast<size_t>(offset_val.getAsBigInt());
-        if (vt == NT_LIST) {
-            QoreListNode* vl = lvh.getValue().get<QoreListNode>();
-            if (length_val.isNothing() && replacement_val.isNothing()) {
-                res = vl->extract(offset);
-            } else {
-                size_t length = static_cast<size_t>(length_val.getAsBigInt());
-                if (replacement_val.isNothing()) {
-                    res = vl->extract(offset, length);
+        if (inst->ternary_op == LVTernaryOp::Splice) {
+            if (vt == NT_LIST) {
+                QoreListNode* vl = lvh.getValue().get<QoreListNode>();
+                if (length_val.isNothing() && replacement_val.isNothing()) {
+                    removed_list = vl->splice(offset);
                 } else {
-                    res = vl->extract(offset, length, replacement_val, xsink);
-                }
-            }
-        } else if (vt == NT_STRING) {
-            QoreStringNode* vs = lvh.getValue().get<QoreStringNode>();
-            if (length_val.isNothing() && replacement_val.isNothing()) {
-                res = vs->extract(offset, xsink);
-            } else {
-                size_t length = static_cast<size_t>(length_val.getAsBigInt());
-                if (replacement_val.isNothing()) {
-                    res = vs->extract(offset, length, xsink);
-                } else {
-                    res = vs->extract(offset, length, replacement_val, xsink);
-                }
-            }
-        } else { // NT_BINARY
-            BinaryNode* b = lvh.getValue().get<BinaryNode>();
-            BinaryNode* bout = new BinaryNode;
-            if (length_val.isNothing() && replacement_val.isNothing()) {
-                b->splice(offset, b->size(), bout);
-            } else {
-                size_t length = static_cast<size_t>(length_val.getAsBigInt());
-                if (replacement_val.isNothing()) {
-                    b->splice(offset, length, bout);
-                } else {
-                    if (replacement_val.getType() == NT_BINARY) {
-                        const BinaryNode* b1 = replacement_val.get<const BinaryNode>();
-                        b->splice(offset, length, b1->getPtr(), b1->size(), bout);
+                    size_t length = static_cast<size_t>(length_val.getAsBigInt());
+                    if (replacement_val.isNothing()) {
+                        removed_list = vl->splice(offset, length);
                     } else {
-                        QoreStringNodeValueHelper sv(replacement_val);
-                        if (!sv->strlen()) {
-                            b->splice(offset, length, bout);
+                        removed_list = vl->splice(offset, length, replacement_val, xsink);
+                    }
+                }
+            } else if (vt == NT_STRING) {
+                QoreStringNode* vs = lvh.getValue().get<QoreStringNode>();
+                if (length_val.isNothing() && replacement_val.isNothing()) {
+                    vs->splice(offset, xsink);
+                } else {
+                    size_t length = static_cast<size_t>(length_val.getAsBigInt());
+                    if (replacement_val.isNothing()) {
+                        vs->splice(offset, length, xsink);
+                    } else {
+                        vs->splice(offset, length, replacement_val, xsink);
+                    }
+                }
+            } else { // NT_BINARY
+                BinaryNode* b = lvh.getValue().get<BinaryNode>();
+                if (length_val.isNothing() && replacement_val.isNothing()) {
+                    b->splice(offset, b->size());
+                } else {
+                    size_t length = static_cast<size_t>(length_val.getAsBigInt());
+                    if (replacement_val.isNothing()) {
+                        b->splice(offset, length);
+                    } else {
+                        if (replacement_val.getType() == NT_BINARY) {
+                            const BinaryNode* b1 = replacement_val.get<const BinaryNode>();
+                            b->splice(offset, length, b1->getPtr(), b1->size());
                         } else {
-                            b->splice(offset, length, sv->getBuffer(), sv->size(), bout);
+                            QoreStringNodeValueHelper sv(replacement_val);
+                            if (!sv->strlen()) {
+                                b->splice(offset, length);
+                            } else {
+                                b->splice(offset, length, sv->getBuffer(), sv->size());
+                            }
                         }
                     }
                 }
             }
-            res = bout;
+            if (inst->ref_rv && !*xsink) {
+                res = lvh.getReferencedValue();
+            }
+        } else {
+            if (vt == NT_LIST) {
+                QoreListNode* vl = lvh.getValue().get<QoreListNode>();
+                if (length_val.isNothing() && replacement_val.isNothing()) {
+                    res = vl->extract(offset);
+                } else {
+                    size_t length = static_cast<size_t>(length_val.getAsBigInt());
+                    if (replacement_val.isNothing()) {
+                        res = vl->extract(offset, length);
+                    } else {
+                        res = vl->extract(offset, length, replacement_val, xsink);
+                    }
+                }
+            } else if (vt == NT_STRING) {
+                QoreStringNode* vs = lvh.getValue().get<QoreStringNode>();
+                if (length_val.isNothing() && replacement_val.isNothing()) {
+                    res = vs->extract(offset, xsink);
+                } else {
+                    size_t length = static_cast<size_t>(length_val.getAsBigInt());
+                    if (replacement_val.isNothing()) {
+                        res = vs->extract(offset, length, xsink);
+                    } else {
+                        res = vs->extract(offset, length, replacement_val, xsink);
+                    }
+                }
+            } else { // NT_BINARY
+                BinaryNode* b = lvh.getValue().get<BinaryNode>();
+                BinaryNode* bout = new BinaryNode;
+                if (length_val.isNothing() && replacement_val.isNothing()) {
+                    b->splice(offset, b->size(), bout);
+                } else {
+                    size_t length = static_cast<size_t>(length_val.getAsBigInt());
+                    if (replacement_val.isNothing()) {
+                        b->splice(offset, length, bout);
+                    } else {
+                        if (replacement_val.getType() == NT_BINARY) {
+                            const BinaryNode* b1 = replacement_val.get<const BinaryNode>();
+                            b->splice(offset, length, b1->getPtr(), b1->size(), bout);
+                        } else {
+                            QoreStringNodeValueHelper sv(replacement_val);
+                            if (!sv->strlen()) {
+                                b->splice(offset, length, bout);
+                            } else {
+                                b->splice(offset, length, sv->getBuffer(), sv->size(), bout);
+                            }
+                        }
+                    }
+                }
+                res = bout;
+            }
         }
     }
     if (*xsink) {
@@ -7842,7 +7905,7 @@ static uint64_t qore_rt_call_direct_aot_impl(QoreAOTContext* ctx, int32_t slot,
         }
 
         const QoreIRFunction* ir = uvb->getCachedIR();
-        const std::string& call_name = ir ? ir->name : jit_empty_call_name;
+        const std::string& call_name = ir ? ir->getDisplayName() : jit_empty_call_name;
 
         QoreValue val{};
         {
@@ -8897,7 +8960,7 @@ static bool try_dispatch_method_fast(QoreObject* o, const QoreMethod* method,
     if (!ir) {
         call_name_buf = std::string(method->getClass()->getName()) + "::" + method->getName();
     }
-    const std::string& call_name = ir ? ir->name : call_name_buf;
+    const std::string& call_name = ir ? ir->getDisplayName() : call_name_buf;
 
     QoreValue val{};
     {
@@ -9357,7 +9420,7 @@ static uint64_t qore_rt_call_static_method_direct_impl(const QoreMethod* method,
     if (!ir) {
         call_name_buf = std::string(method->getClass()->getName()) + "::" + method->getName();
     }
-    const std::string& call_name = ir ? ir->name : call_name_buf;
+    const std::string& call_name = ir ? ir->getDisplayName() : call_name_buf;
 
     QoreValue val{};
     {
