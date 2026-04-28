@@ -423,6 +423,7 @@ public:
         @return true if all submitted operations have been processed
     */
     DLLLOCAL bool waitForProcessing(int timeout_ms, ExceptionSink* xsink);
+    DLLLOCAL bool waitForProcessing(const std::string& key, int timeout_ms, ExceptionSink* xsink);
 
     //! Returns true if the I/O thread is running
     DLLLOCAL bool running() const;
@@ -794,6 +795,7 @@ private:
         int tid = 0;                       //!< Thread ID (0 if not running)
         int thread_idx = 0;                //!< Index in io_threads vector
         int64 autostop_idle_since = 0;     //!< Timestamp when cache first became empty
+        int processed_seq = 0;             //!< Last global submit sequence processed by this I/O thread
 
         QoreEventLoop* loop = nullptr;
         QoreEventNotifier* notifier = nullptr;

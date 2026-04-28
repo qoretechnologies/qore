@@ -1467,6 +1467,15 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
         uh = getSocketHash(sock);
     }
 
+    // Route key: normally the operation cache key.  Composite callers can
+    // provide a stable thread_key so several distinct cache keys share one
+    // I/O thread and one processing barrier.
+    v = info->getKeyValue("thread_key");
+    std::string thread_key = uh;
+    if (v.getType() == NT_STRING && v.get<const QoreStringNode>()->size()) {
+        thread_key = v.get<const QoreStringNode>()->c_str();
+    }
+
     // Get timeout
     v = info->getKeyValue("to");
     int64 timeout_us = DEFAULT_IO_TIMEOUT_US;
@@ -1565,7 +1574,7 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
     // the TARGET thread for this op's key has autostopped while thread 0 is
     // still alive.  startIntern() is idempotent per-thread (already-running
     // threads are skipped), so calling it when any thread is down is safe.
-    IoThreadContext& target_t = getThreadForKey(uh);
+    IoThreadContext& target_t = getThreadForKey(thread_key);
     if (!target_t.running.load(std::memory_order_acquire)) {
         AutoLocker al(m);
         if (shutting_down) {
@@ -1582,7 +1591,7 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
 
     // For I/O thread callers (e.g., onComplete re-submissions), access cache directly
     if (on_async_io_thread) {
-        IoThreadContext& t = getThreadForKey(uh);
+        IoThreadContext& t = getThreadForKey(thread_key);
         auto it = t.cache.find(uh);
         if (it != t.cache.end()) {
             if (!replace) {
@@ -1679,7 +1688,7 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
 
         {
             AutoLocker al(m);
-            target = &getThreadForKey(uh);
+            target = &getThreadForKey(thread_key);
             target->cmdq.push(std::move(cmd));
             socket_async_io_guard.release();
             // Bump submit_seq immediately after push, BEFORE notify().  Queue
@@ -2921,6 +2930,37 @@ bool AsyncIoControllerPriv::waitForProcessing(int timeout_ms, ExceptionSink* xsi
     return processed_seq >= target;
 }
 
+bool AsyncIoControllerPriv::waitForProcessing(const std::string& key, int timeout_ms, ExceptionSink* xsink) {
+    IoThreadContext& target_ctx = getThreadForKey(key);
+    AutoLocker al(m);
+    if (!target_ctx.tid) {
+        return false;
+    }
+    int target = submit_seq;
+    if (target_ctx.processed_seq >= target) {
+        return true;
+    }
+    if (timeout_ms > 0) {
+        int64 deadline_us = get_epoch_us() + (int64)timeout_ms * 1000;
+        while (target_ctx.processed_seq < target && target_ctx.tid) {
+            int64 remaining_us = deadline_us - get_epoch_us();
+            if (remaining_us <= 0) {
+                return false;
+            }
+            int remaining_ms = (int)((remaining_us + 999) / 1000);
+            int rc = processed_cond.wait2(m, remaining_ms);
+            if (rc) {
+                return target_ctx.processed_seq >= target;
+            }
+        }
+        return target_ctx.processed_seq >= target;
+    }
+    while (target_ctx.processed_seq < target && target_ctx.tid) {
+        processed_cond.wait(m);
+    }
+    return target_ctx.processed_seq >= target;
+}
+
 bool AsyncIoControllerPriv::running() const {
     for (auto& tp : io_threads) {
         if (tp->running.load(std::memory_order_acquire)) {
@@ -3581,8 +3621,16 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
             // SubmitOp that arrived during Phase 1/2/3 has been processed.
             {
                 AutoLocker al(m);
+                bool advanced = false;
                 if (processed_seq < processed_target_this_iter) {
                     processed_seq = processed_target_this_iter;
+                    advanced = true;
+                }
+                if (t.processed_seq < processed_target_this_iter) {
+                    t.processed_seq = processed_target_this_iter;
+                    advanced = true;
+                }
+                if (advanced) {
                     processed_cond.broadcast();
                 }
             }
@@ -4302,12 +4350,17 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
         {
             AutoLocker al(m);
             int current_submit = submit_seq.load(std::memory_order_acquire);
-            if (processed_seq < current_submit && t.cmdq.empty()) {
+            if ((processed_seq < current_submit || t.processed_seq < current_submit) && t.cmdq.empty()) {
                 ASYNC_IO_TRACE("advance processed_seq: %d -> %d (pre-poll recheck)\n",
                     (int)processed_seq, current_submit);
-                processed_seq = current_submit;
+                if (processed_seq < current_submit) {
+                    processed_seq = current_submit;
+                }
+                if (t.processed_seq < current_submit) {
+                    t.processed_seq = current_submit;
+                }
                 processed_cond.broadcast();
-            } else if (processed_seq < current_submit) {
+            } else if (processed_seq < current_submit || t.processed_seq < current_submit) {
                 ASYNC_IO_TRACE("BLOCKED processed_seq=%d submit_seq=%d cmdq-nonempty\n",
                     (int)processed_seq, current_submit);
             }
@@ -4688,6 +4741,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
         }
 
         if (!restart_preserved_commands) {
+            t.processed_seq = 0;
             processed_seq = 0;
             submit_seq = 0;
         }

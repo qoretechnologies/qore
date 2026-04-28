@@ -93,6 +93,14 @@ hashdecl Qore::SocketPollOperationInfo {
     */
     *string key;
 
+    //! Optional I/O thread affinity key; default: key
+    /** Allows several operations with distinct cache keys to be routed to the same
+        I/O thread for coordinated cancellation and readiness barriers.
+
+        @since %Qore 2.3
+    */
+    *string thread_key;
+
     //! Force onComplete dispatch even if the C++ auto-detection doesn't find an override
     /** Works around C++/Qore multiple inheritance method resolution order issues where
         findMethod("onComplete") returns the base no-op from the wrong parent class.

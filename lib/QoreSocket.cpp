@@ -5707,6 +5707,7 @@ QoreListNode* qore_socket_private::poll(const QoreListNode* poll_list, int timeo
             info->setKeyValue("spop", (*op_obj)->objectRefSelf(), xsink);
             info->setKeyValue("owner", new QoreStringNode(owner.c_str()), xsink);
             info->setKeyValue("key", new QoreStringNode(key.c_str()), xsink);
+            info->setKeyValue("thread_key", new QoreStringNode(owner.c_str()), xsink);
             info->setKeyValue("to", -1, xsink);
             info->setKeyValue("resultQueue", (*queue_obj)->objectRefSelf(), xsink);
             info->setKeyValue("other", other.release(), xsink);
@@ -5724,7 +5725,7 @@ QoreListNode* qore_socket_private::poll(const QoreListNode* poll_list, int timeo
         }
     }
 
-    if (submitted && !ctrl->waitForProcessing(0, xsink)) {
+    if (submitted && !ctrl->waitForProcessing(owner.c_str(), 0, xsink)) {
         cancel_owner();
         xsink->raiseException("SOCKET-POLL-ERROR",
             "async I/O controller stopped before Socket::poll() operations were processed");
