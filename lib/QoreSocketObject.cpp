@@ -3504,23 +3504,14 @@ int QoreSocketObject::sendHttp2Trailers(int32_t stream_id, const QoreHashNode* t
 
 int QoreSocketObject::flushHttp2PendingData(ExceptionSink* xsink) {
     if (!qore_on_async_io_thread()) {
-        bool flush_inline = false;
         Http2SessionPtr h2;
         {
             AutoLocker al(priv->m);
             qore_socket_private* sp = qore_socket_private::get(*priv->socket);
             h2 = sp->h2_session;
-            flush_inline = priv->non_block_flags || priv->non_block_accept_count > 0;
         }
         if (!h2) {
             return 0;
-        }
-        if (flush_inline) {
-            // Legacy public poll operations already own the socket's
-            // non-blocking state.  Submitting a nested controller operation
-            // here collides with that ownership; flush inline until these
-            // public poll ops are also controller-native.
-            return h2->sendPendingData(0, xsink);
         }
         return qore_socket_object_exec_http2_flush(this, "flushHttp2PendingData", xsink);
     }

@@ -12968,6 +12968,13 @@ int SocketHttp2FlushPollOperation::initLocked(ExceptionSink* xsink) {
         return -1;
     }
 
+    if (controller_deferred_init && (sock->priv->non_block_flags || sock->priv->non_block_accept_count > 0)) {
+        // Nested flush while a legacy public poll operation owns non-blocking
+        // mode.  The fd is already non-blocking; do not claim or clear the
+        // parent's non-block flag.
+        return sock->priv->checkAsyncSequenceAllowedForTid(xsink, NB_ALL, controller_deferred_tid);
+    }
+
     int rc = controller_deferred_init
         ? sock->priv->setNonBlockFromAsyncController(xsink, NB_ALL, controller_deferred_tid)
         : sock->priv->setNonBlock(xsink);
