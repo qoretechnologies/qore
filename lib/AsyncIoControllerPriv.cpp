@@ -2068,8 +2068,14 @@ int AsyncIoControllerPriv::close(AbstractPollableIoObjectBase* sock, ExceptionSi
 
 int AsyncIoControllerPriv::closeSocketOnController(AbstractPollableIoObjectBase* sock,
         const std::string& sock_hash, ExceptionSink* xsink) {
+    auto get_target_idx = [&]() {
+        AutoLocker al(sock_route_lock);
+        auto it = sock_to_thread.find(sock_hash);
+        return it != sock_to_thread.end() ? it->second : getThreadIndex(sock_hash);
+    };
+
     if (on_async_io_thread) {
-        int target_idx = getThreadIndex(sock_hash);
+        int target_idx = get_target_idx();
         if (current_io_thread_idx == target_idx) {
             sock->closeIo(xsink);
             return *xsink ? -1 : 0;
@@ -2086,13 +2092,13 @@ int AsyncIoControllerPriv::closeSocketOnController(AbstractPollableIoObjectBase*
                 return -1;
             }
 
-            target = &getThreadForKey(sock_hash);
+            target = io_threads[target_idx].get();
             if (!target->running.load(std::memory_order_acquire) || io_exiting || !target->tid) {
                 startIntern(xsink);
                 if (*xsink) {
                     return -1;
                 }
-                target = &getThreadForKey(sock_hash);
+                target = io_threads[target_idx].get();
             }
 
             Command cmd;
@@ -2107,6 +2113,7 @@ int AsyncIoControllerPriv::closeSocketOnController(AbstractPollableIoObjectBase*
         return *xsink ? -1 : 0;
     }
 
+    int target_idx = get_target_idx();
     IoThreadContext* target = nullptr;
     AsyncOpCompletion* completion = nullptr;
     {
@@ -2116,13 +2123,13 @@ int AsyncIoControllerPriv::closeSocketOnController(AbstractPollableIoObjectBase*
             return -1;
         }
 
-        target = &getThreadForKey(sock_hash);
+        target = io_threads[target_idx].get();
         if (!target->running.load(std::memory_order_acquire) || io_exiting || !target->tid) {
             startIntern(xsink);
             if (*xsink) {
                 return -1;
             }
-            target = &getThreadForKey(sock_hash);
+            target = io_threads[target_idx].get();
         }
 
         completion = new AsyncOpCompletion(1);
