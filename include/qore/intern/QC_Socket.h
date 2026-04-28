@@ -430,9 +430,7 @@ public:
         socket->setAccept(o);
     }
 
-    DLLLOCAL static void setAccept(QoreSocketObject& sock, QoreObject* o) {
-        sock.priv->setAccept(o);
-    }
+    DLLLOCAL static void setAccept(QoreSocketObject& sock, QoreObject* o);
 
     //! Returns the my_socket_priv pointer for a QoreSocketObject (for internal use)
     /** @since %Qore 2.3

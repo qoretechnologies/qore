@@ -8222,7 +8222,16 @@ QoreHashNode* QoreSocket::getSocketInfo(ExceptionSink* xsink, bool host_lookup) 
 }
 
 void QoreSocket::setAccept(QoreObject *o) {
-    priv->setAccept(o);
+    ExceptionSink xsink;
+    ReferenceHolder<QoreHashNode> info(qore_socket_exec_address_info(this,
+        QoreSocketControllerAddressInfoPollOperation::Action::Peer, true, "setAccept",
+        "SOCKET-GETPEERINFO-ERROR", &xsink), &xsink);
+    if (!xsink && info) {
+        qore_socket_private::setAccept(o, **info);
+    }
+    if (xsink) {
+        xsink.clear();
+    }
 }
 
 void QoreSocket::clearWarningQueue(ExceptionSink* xsink) {

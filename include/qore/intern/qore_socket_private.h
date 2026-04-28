@@ -2289,32 +2289,26 @@ struct qore_socket_private {
 
     // set backwards-compatible object members on accept
     // to be (hopefully) deleted in a future version of qore
-    DLLLOCAL void setAccept(QoreObject* o) {
-        struct sockaddr_storage addr;
-
-        socklen_t len = sizeof addr;
-        if (getpeername(sock, (struct sockaddr*)&addr, &len))
+    DLLLOCAL static void setAccept(QoreObject* o, const QoreHashNode& info) {
+        QoreValue family = info.getKeyValue("family");
+        QoreValue address = info.getKeyValue("address");
+        if (address.getType() != NT_STRING) {
             return;
+        }
 
-        if (addr.ss_family == AF_INET || addr.ss_family == AF_INET6) {
-            // get ipv4 or ipv6 address
-            char ifname[INET6_ADDRSTRLEN];
-            if (inet_ntop(addr.ss_family, qore_get_in_addr((struct sockaddr *)&addr), ifname, sizeof(ifname))) {
-                //printd(5, "inet_ntop() '%s' host: '%s'\n", ifname, host);
-                o->setValue("source", new QoreStringNode(ifname), 0);
-            }
+        int64 family_id = family.getType() == NT_INT ? family.getAsBigInt() : -1;
+        if (family_id == AF_INET || family_id == AF_INET6) {
+            o->setValue("source", address.refSelf(), 0);
 
-            char host[NI_MAXHOST + 1];
-            if (!getnameinfo((struct sockaddr *)&addr, qore_get_in_len((struct sockaddr *)&addr), host, sizeof(host),
-                0, 0, 0)) {
-                o->setValue("source_host", new QoreStringNode(host), 0);
+            QoreValue hostname = info.getKeyValue("hostname");
+            if (hostname.getType() == NT_STRING) {
+                o->setValue("source_host", hostname.refSelf(), 0);
             }
         }
 #ifndef _Q_WINDOWS
-        else if (addr.ss_family == AF_UNIX) {
-            QoreStringNode* astr = new QoreStringNode(enc);
-            struct sockaddr_un *addr_un = (struct sockaddr_un *)&addr;
-            astr->sprintf("UNIX socket: %s", addr_un->sun_path);
+        else if (family_id == AF_UNIX) {
+            QoreStringNode* astr = new QoreStringNode;
+            astr->sprintf("UNIX socket: %s", address.get<const QoreStringNode>()->c_str());
             o->setValue("source", astr, 0);
             o->setValue("source_host", new QoreStringNode("localhost"), 0);
         }

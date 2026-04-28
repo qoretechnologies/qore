@@ -1141,6 +1141,19 @@ static QoreHashNode* qore_socket_object_exec_address_info(QoreSocketObject* s,
     return *xsink ? nullptr : qore_socket_object_get_addr_info_from_output(*output, host_lookup, err, xsink);
 }
 
+void my_socket_priv::setAccept(QoreSocketObject& sock, QoreObject* o) {
+    ExceptionSink xsink;
+    ReferenceHolder<QoreHashNode> info(qore_socket_object_exec_address_info(&sock,
+        QoreSocketObjectAddressInfoPollOperation::Action::Peer, true, "setAccept",
+        "SOCKET-GETPEERINFO-ERROR", &xsink), &xsink);
+    if (!xsink && info) {
+        qore_socket_private::setAccept(o, **info);
+    }
+    if (xsink) {
+        xsink.clear();
+    }
+}
+
 static QoreSocketObject* qore_socket_object_exec_accept(QoreSocketObject* s, int timeout_ms, bool ssl,
         ExceptionSink* xsink, SocketSource* source = nullptr) {
     s->ref();
