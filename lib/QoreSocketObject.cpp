@@ -2426,11 +2426,9 @@ bool QoreSocketObject::hasPendingData() const {
     // causes a tight polling loop on every idle H2 connection.  Actual
     // inbound data waiting to be processed shows up in SSL_pending() /
     // buflen (checked above) — not in nghttp2's internal state.
-    if (priv->socket->priv->h2_session) {
-        Http2Session* h2 = priv->socket->priv->h2_session.get();
-        if (h2->hasStreamData() || h2->wantWrite()) {
-            return true;
-        }
+    Http2SessionPtr h2 = qore_socket_object_get_h2_session(this);
+    if (h2 && (h2->hasStreamData() || h2->wantWrite())) {
+        return true;
     }
     return false;
 }
@@ -3284,27 +3282,32 @@ int QoreSocketObject::sendHttp2Trailers(int32_t stream_id, const QoreHashNode* t
 
 int QoreSocketObject::flushHttp2PendingData(ExceptionSink* xsink) {
     if (!qore_on_async_io_thread()) {
+        bool flush_inline = false;
+        Http2SessionPtr h2;
         {
             AutoLocker al(priv->m);
-            if (!priv->socket->priv->h2_session) {
-                return 0;
-            }
-            if (priv->non_block_flags || priv->non_block_accept_count > 0) {
-                // Legacy public poll operations already own the socket's
-                // non-blocking state.  Submitting a nested controller operation
-                // here collides with that ownership; flush inline until these
-                // public poll ops are also controller-native.
-                return priv->socket->priv->h2_session->sendPendingData(0, xsink);
-            }
+            qore_socket_private* sp = qore_socket_private::get(*priv->socket);
+            h2 = sp->h2_session;
+            flush_inline = priv->non_block_flags || priv->non_block_accept_count > 0;
+        }
+        if (!h2) {
+            return 0;
+        }
+        if (flush_inline) {
+            // Legacy public poll operations already own the socket's
+            // non-blocking state.  Submitting a nested controller operation
+            // here collides with that ownership; flush inline until these
+            // public poll ops are also controller-native.
+            return h2->sendPendingData(0, xsink);
         }
         return qore_socket_object_exec_http2_flush(this, "flushHttp2PendingData", xsink);
     }
 
-    AutoLocker al(priv->m);
-    if (!priv->socket->priv->h2_session) {
+    Http2SessionPtr h2 = qore_socket_object_get_h2_session(this);
+    if (!h2) {
         return 0;
     }
-    return priv->socket->priv->h2_session->sendPendingData(0, xsink);
+    return h2->sendPendingData(0, xsink);
 }
 
 int QoreSocketObject::submitHttp2Ping(ExceptionSink* xsink) {
