@@ -1,0 +1,729 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file SendCloudRestClient.qm Qore user module for calling SendCloud REST API services
+
+/*  SendCloudRestClient.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum qore version
+%requires qore >= 2.0
+
+# require type definitions everywhere
+
+# enable all warnings
+
+# don't use "$" for vars, members, and methods, assume local variable scope
+%modern
+
+# do not ignore argument errors
+
+%requires(reexport) Mime >= 1.3
+%requires(reexport) RestClient >= 1.3.1
+%requires(reexport) RestClientIo
+%requires(reexport) ConnectionProvider >= 1.4
+
+module SendCloudRestClient {
+    version = "1.0";
+    desc = "SendCloud REST client module";
+    author = "David Nichols <david@qore.org>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        ConnectionSchemeCache::registerScheme("sendcloudrest", SendCloudRestConnection::ConnectionScheme);
+        ConnectionSchemeCache::registerScheme("sendcloudrests", SendCloudRestConnection::ConnectionScheme);
+    };
+}
+
+/** @mainpage SendCloudRestClient Module
+
+    @tableofcontents
+
+    @section sendcloudrestclientintro SendCloudRestClient Introduction
+
+    The %SendCloudRestClient module provides an API for calling SendCloud's REST API services.
+
+    SendCloud is a shipping automation platform used by e-commerce merchants across Europe to
+    manage parcels, carriers, labels, returns and tracking.  The SendCloud Public API is
+    authenticated with HTTP Basic Auth, where the username is the integration's
+    <em>public_key</em> and the password is the corresponding <em>secret_key</em>.
+
+    To use this module, use \c "%requires SendCloudRestClient" in your code.
+
+    All the public symbols in the module are defined in the \c SendCloudRestClient namespace.
+
+    The main classes are:
+    - @ref SendCloudRestClient::SendCloudRestClient "SendCloudRestClient":
+      provides the synchronous REST client API for communication with the SendCloud API;
+      authentication is performed via HTTP Basic Auth
+    - @ref SendCloudRestClient::SendCloudRestClientIo "SendCloudRestClientIo":
+      provides a non-blocking (async I/O) REST client for the SendCloud API
+    - @ref SendCloudRestClient::SendCloudRestConnection "SendCloudRestConnection":
+      provides a connection object to SendCloud services (based on the
+      @ref connectionproviderintro "ConnectionProvider" module)
+
+    @section sendcloudrestclientconnect Example Connection
+
+    @par Example connection URL
+    @verbatim
+sendcloudrest://panel.sendcloud.sc/api/v2
+    @endverbatim
+
+    @par Example:
+    @code{.py}
+#!/usr/bin/env qore
+
+%requires SendCloudRestClient
+
+SendCloudRestClient sendcloud({
+    "public_key": ENV.SENDCLOUD_PUBLIC_KEY,
+    "secret_key": ENV.SENDCLOUD_SECRET_KEY,
+});
+hash<auto> result = sendcloud.get("/user");
+printf("User: %Y\n", result.body);
+    @endcode
+
+    @note SendCloud does not provide a sandbox environment.  When testing, use shipment
+    method ID \c 8 (\c "Unstamped letter") because it does not result in a real parcel being
+    produced or billed.
+
+    @section sendcloudrestclientrelnotes Release Notes
+
+    @subsection sendcloudrestclientv1_0 SendCloudRestClient v1.0
+    - the initial version of the %SendCloudRestClient module
+*/
+
+#! the SendCloudRestClient namespace contains all the objects in the SendCloudRestClient module
+public namespace SendCloudRestClient {
+
+#! Common base class for SendCloudRestClient functionality
+/** All constants and shared helpers for SendCloud REST client communication live here.  Both
+    @ref SendCloudRestClient::SendCloudRestClient "SendCloudRestClient" (sync) and
+    @ref SendCloudRestClient::SendCloudRestClientIo "SendCloudRestClientIo" (async) inherit
+    from this class so that they share option defaults, ping configuration, retry constants
+    and the @ref SendCloudRestClientBase::getOptions() "getOptions()" helper.
+*/
+public class SendCloudRestClientBase {
+    public {
+        #! SendCloud default host
+        const DefaultHost = "panel.sendcloud.sc";
+
+        #! Default SendCloud API version
+        const DefaultApiVersion = "v2";
+
+        #! SendCloud API base URL (sync client)
+        const DefaultApiUrl = "https://" + DefaultHost + "/api/" + DefaultApiVersion;
+
+        #! Default connection URL (uses the sendcloudrest scheme)
+        const DefaultConnectionUrl = "sendcloudrest://" + DefaultHost + "/api/" + DefaultApiVersion;
+
+        #! Default "data" option value
+        const DefaultData = "json";
+
+        #! Default SendCloud ping method
+        const DefaultPingMethod = "GET";
+
+        #! Default SendCloud ping path
+        /** No leading slash: the base URL already contains \c /api/v2/, so the ping request
+            hits \c /api/v2/user which is a lightweight authenticated endpoint.
+        */
+        const DefaultPingPath = "user";
+
+        #! Default SendCloud ping headers
+        const DefaultPingHeaders = {
+            "Accept": MimeTypeJson,
+        };
+
+        #! Maximum total retry time for 429 errors (75 seconds = 1 minute 15 seconds)
+        const MaxRetryTime = 75s;
+
+        #! Initial retry delay for exponential backoff
+        const InitialRetryDelay = 1s;
+
+        #! Maximum single retry delay
+        const MaxRetryDelay = 30s;
+
+        #! Allowed API versions (display values keyed by option value)
+        const AllowedVersions = (
+            <AllowedValueInfo>{
+                "value": "v2",
+                "desc": "v2 (stable)",
+            },
+            <AllowedValueInfo>{
+                "value": "v3",
+                "desc": "v3 (future — not yet implemented)",
+            },
+        );
+
+        #! Default constructor options
+        const DefaultOptions = {
+            "data": DefaultData,
+            "ping_headers": DefaultPingHeaders,
+            "ping_method": DefaultPingMethod,
+            "ping_path": DefaultPingPath,
+        };
+    }
+
+    #! Builds an API URL (plain https) for the given API version
+    /** @param version the API version component (e.g. \c "v2"); if missing or empty, the
+        default version is used
+
+        @return the full \c https:// URL for the given version
+    */
+    static string buildApiUrl(*string version) {
+        if (!version.val()) {
+            version = DefaultApiVersion;
+        }
+        return sprintf("https://%s/api/%s", DefaultHost, version);
+    }
+
+    #! Validates the API version; SendCloud currently only supports \c "v2"
+    /** @param version the requested API version
+
+        @throw SENDCLOUD-UNSUPPORTED-VERSION only \c "v2" is currently wired in
+    */
+    static validateVersion(*string version) {
+        if (version.val() && version != DefaultApiVersion) {
+            throw "SENDCLOUD-UNSUPPORTED-VERSION",
+                sprintf("requested SendCloud API version %y is not supported: only %y is wired in "
+                    "this release; v3 is reserved for a future update", version, DefaultApiVersion);
+        }
+    }
+
+    #! returns options for @ref SendCloudRestClient::SendCloudRestClient::constructor()
+    /** Translates SendCloud-specific options into RestClient options:
+        - \c public_key becomes the HTTP Basic Auth username
+        - \c secret_key becomes the HTTP Basic Auth password
+        - \c version controls the base URL and is consumed here (not passed through)
+
+        @param opts raw constructor options
+
+        @return the option hash as expected by the
+        @ref RestClient::RestClient::constructor() "RestClient constructor"
+
+        @throw SENDCLOUD-ERROR missing required option \c public_key or \c secret_key
+        @throw SENDCLOUD-UNSUPPORTED-VERSION the \c version option is set to a value other
+        than \c "v2"
+    */
+    static hash<auto> getOptions(hash<auto> opts) {
+        hash<auto> rv = DefaultOptions + opts;
+
+        # Accept either the SendCloud-style public_key/secret_key pair or the already-
+        # translated username/password pair.  The connection class performs the
+        # translation in getConnectionOptions() before instantiating the client, so both
+        # shapes must work here.
+        if (opts.public_key) {
+            rv.username = opts.public_key;
+        }
+        if (opts.secret_key) {
+            rv.password = opts.secret_key;
+        }
+
+        if (!rv.username) {
+            throw "SENDCLOUD-ERROR", "missing required option 'public_key' (SendCloud public API key)";
+        }
+        if (!rv.password) {
+            throw "SENDCLOUD-ERROR", "missing required option 'secret_key' (SendCloud secret API key)";
+        }
+
+        # Validate and apply version (only if a version was explicitly requested)
+        validateVersion(opts.version);
+        if (!rv.url) {
+            rv.url = buildApiUrl(opts.version);
+        }
+
+        # Strip SendCloud-specific options so RestClient does not reject them
+        remove rv.public_key;
+        remove rv.secret_key;
+        remove rv.version;
+
+        return rv;
+    }
+
+    #! Computes the retry delay for a 429 response based on headers or a default
+    /** @param info the response info hash returned by @ref RestClient::doRequest()
+        @param default_delay the default delay to fall back on when no header is supplied
+
+        @return the delay before the next retry attempt
+    */
+    static date getRetryDelay(hash<auto> info, date default_delay) {
+        # Prefer the standard Retry-After header (seconds)
+        if (info.headers."retry-after") {
+            int secs = info.headers."retry-after".toInt();
+            if (secs > 0) {
+                return seconds(secs);
+            }
+        }
+
+        # Some SendCloud responses expose X-RateLimit-Reset (seconds until reset)
+        if (info.headers."x-ratelimit-reset") {
+            int secs = info.headers."x-ratelimit-reset".toInt();
+            if (secs > 0) {
+                return seconds(secs);
+            }
+        }
+
+        return default_delay;
+    }
+
+    #! Returns the next backoff delay, doubling up to the max with a small jitter
+    /** @param current_delay the current delay
+
+        @return the next delay, capped at @ref MaxRetryDelay, with a small random jitter to
+        avoid lock-step retries between multiple clients
+    */
+    static date nextBackoff(date current_delay) {
+        date next = current_delay * 2;
+        if (next > MaxRetryDelay) {
+            next = MaxRetryDelay;
+        }
+        # Add up to 250ms of jitter to avoid thundering herd / lock-step retries
+        int jitter_ms = rand() % 250;
+        return next + milliseconds(jitter_ms);
+    }
+}
+
+#! This class provides the REST client API for communication with SendCloud servers
+/** SendCloud exposes a REST API authenticated with HTTP Basic Auth where:
+    - Username = \c public_key
+    - Password = \c secret_key
+
+    @par API Information:
+    - Base URL: https://panel.sendcloud.sc/api/v2
+    - Authentication: HTTP Basic Auth (public/secret key pair)
+    - No sandbox: use shipment method ID \c 8 (\c "Unstamped letter") for safe end-to-end
+      integration tests.
+
+    @par Rate Limit Handling:
+    This client automatically handles HTTP 429 (Too Many Requests) errors with:
+    - Honoring of the \c Retry-After header when present
+    - Exponential backoff otherwise: 1s, 2s, 4s, 8s, 16s, 30s, 30s… with jitter
+    - Maximum single retry delay: 30 seconds
+    - Maximum total retry time: 75 seconds
+*/
+public class SendCloudRestClient inherits RestClient::RestClient, SendCloudRestClientBase {
+    #! creates the object with the given options
+    /**
+        @par Example:
+        @code{.py}
+SendCloudRestClient sendcloud({"public_key": "pub-key", "secret_key": "sec-key"});
+        @endcode
+
+        @param opts valid options are all the options for the @ref RestClient::RestClient "RestClient" class
+        plus:
+        - \c public_key: the SendCloud public API key (required)
+        - \c secret_key: the SendCloud secret API key (required)
+        - \c version: API version (optional, default \c "v2"); only \c "v2" is currently
+          supported
+
+        @param do_not_connect if \c False (the default), then a connection will be immediately established to the
+        remote server
+
+        @throw RESTCLIENT-ERROR invalid option passed to constructor, unsupported data serialization, etc
+        @throw SENDCLOUD-ERROR missing required option \c public_key or \c secret_key
+        @throw SENDCLOUD-UNSUPPORTED-VERSION the \c version option is set to a value other
+        than \c "v2"
+    */
+    constructor(hash<auto> opts, *softbool do_not_connect)
+            : RestClient(SendCloudRestClientBase::getOptions(opts), do_not_connect) {
+        setAssumedEncoding("UTF-8");
+    }
+
+    #! Makes a REST request with automatic retry on 429 (Too Many Requests) errors
+    /** @param m the HTTP method to use
+        @param path the URI path to use
+        @param body the request body to send (if any)
+        @param info an optional reference to a hash that will be used as an output variable giving the response info
+        @param decode_errors if @ref True, decode error responses
+        @param hdr any headers to use with the request
+
+        @return the response from the server
+
+        The method honors the \c Retry-After header when present and otherwise backs off
+        exponentially (1s, 2s, 4s, …, capped at 30s per attempt) with a small jitter,
+        for up to 75 seconds total before giving up and returning the 429 response.
+    */
+    hash<auto> doRequest(string m, string path, auto body, *reference<hash<auto>> info, softbool decode_errors = True,
+            *hash<auto> hdr) {
+        date start_time = now_us();
+        date current_delay = InitialRetryDelay;
+
+        while (True) {
+            hash<auto> response = RestClient::doRequest(m, path, body, \info, decode_errors, hdr);
+
+            if (info.response_code != 429) {
+                return response;
+            }
+
+            date elapsed = now_us() - start_time;
+            if (elapsed >= MaxRetryTime) {
+                # Max retry time exceeded, return the 429 error
+                return response;
+            }
+
+            date retry_delay = SendCloudRestClientBase::getRetryDelay(info, current_delay);
+
+            # Cap the wait so we do not exceed the total retry budget
+            if (elapsed + retry_delay > MaxRetryTime) {
+                retry_delay = MaxRetryTime - elapsed;
+                if (retry_delay <= 0s) {
+                    return response;
+                }
+            }
+
+            sleep(retry_delay);
+
+            current_delay = SendCloudRestClientBase::nextBackoff(current_delay);
+        }
+    }
+}
+
+#! SendCloud REST client for non-blocking I/O
+/** Async counterpart of @ref SendCloudRestClient::SendCloudRestClient "SendCloudRestClient".
+    Inherits all default options, ping configuration and retry constants from
+    @ref SendCloudRestClient::SendCloudRestClientBase "SendCloudRestClientBase".
+
+    @note \c setAssumedEncoding() is not available on \c RestClientIo and must not be called
+    here; encoding is handled automatically.  The API version is carried through the base
+    URL (built by @ref SendCloudRestClientBase::getOptions() "getOptions()") rather than via
+    \c setConnectionPath().
+*/
+public class SendCloudRestClientIo inherits RestClientIo::RestClientIo, SendCloudRestClientBase {
+    private {
+        #! SendCloud credentials retained so the data provider can recover them
+        #! from this client object for cross-host / cross-prefix synchronous calls.
+        *hash<auto> sc_creds;
+    }
+
+    #! Creates the object with the given options
+    /** @param opts constructor options, see @ref SendCloudRestClient::constructor() for the
+        supported SendCloud-specific options
+        @param shared_mgr optional shared connection manager
+    */
+    constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
+            : RestClientIo(SendCloudRestClientBase::getOptions(opts), shared_mgr) {
+        # Retain SendCloud credentials so the data provider can lazily build
+        # synchronous clients for cross-host (servicepoints) and cross-prefix
+        # (api/v3) calls without having to reach back into the connection.
+        # Both shapes are accepted: the user-facing public_key/secret_key pair
+        # and the already-translated username/password pair.
+        *string pk = opts.public_key ?? opts.username;
+        *string sk = opts.secret_key ?? opts.password;
+        if (pk.val() && sk.val()) {
+            sc_creds = {"public_key": pk, "secret_key": sk};
+        }
+    }
+
+    #! Returns the SendCloud credentials used to construct this client (or NOTHING)
+    /** @return a hash with \c public_key and \c secret_key keys, or NOTHING if the
+        client was constructed without recoverable credentials
+    */
+    *hash<auto> getSendCloudCredentials() {
+        return sc_creds;
+    }
+}
+
+#! Class for SendCloud REST connections; returns @ref SendCloudRestClient objects
+/** This class implements all options of @ref RestClient::RestConnection "RestConnection"; in
+    addition, this class provides the following options:
+    - \c public_key: the SendCloud public API key (used as username for Basic Auth)
+    - \c secret_key: the SendCloud secret API key (used as password for Basic Auth)
+    - \c version: API version; only \c "v2" is currently supported
+
+    @see @ref SendCloudRestClient::SendCloudRestClient::constructor() for more information
+    on the above options
+*/
+public class SendCloudRestConnection inherits RestClient::RestConnection {
+    public {
+        #! Connection entry info
+        const ConnectionScheme = <ConnectionSchemeInfo>{
+            "display_name": "SendCloud REST Connection",
+            "short_desc": "Connect to SendCloud shipping automation API using HTTP Basic Auth "
+                "(public_key + secret_key)",
+            "desc": "A connection to the SendCloud REST API for shipping automation.\n\n"
+                "SendCloud is a shipping platform used by European e-commerce merchants to "
+                "manage parcels, carriers, shipping labels, returns and tracking.  The "
+                "SendCloud Public API is authenticated with **HTTP Basic Auth**, where the "
+                "username is your integration's **public_key** and the password is the "
+                "associated **secret_key**.\n\n"
+                "**Important:** SendCloud does **not** provide a sandbox environment.  When "
+                "writing integration tests, use shipment method ID `8` (*Unstamped letter*) "
+                "so that no real parcel is produced or billed.",
+            "cls": Class::forName("SendCloudRestConnection"),
+            "auto_url": True,
+            "schemes": {
+                "sendcloudrest": True,
+            },
+            "base_scheme_map": {
+                "https": "sendcloudrest",
+            },
+            "options": RestConnection::ConnectionScheme.options + {
+                "data": RestConnection::ConnectionScheme.options."data"
+                + <ConnectionOptionInfo>{
+                    "default_value": SendCloudRestClientBase::DefaultData,
+                },
+                "public_key": <ConnectionOptionInfo>{
+                    "display_name": "Public Key",
+                    "short_desc": "SendCloud public API key (Basic Auth username)",
+                    "type": "string",
+                    "desc": "The SendCloud **public API key** used as the username for HTTP "
+                        "Basic Auth.\n\n"
+                        "**To obtain your API credentials:**\n"
+                        "1. Log in to the [Sendcloud Panel](https://panel.sendcloud.sc)\n"
+                        "2. Navigate to **Settings > Integrations**\n"
+                        "3. Click **+ Add Integration** and select **Sendcloud API**\n"
+                        "4. After creating the integration, copy the **Public key** and "
+                        "**Secret key** shown on the integration detail page\n\n"
+                        "Both the public key and the secret key are required to authenticate "
+                        "every request.",
+                    "sensitive": True,
+                },
+                "secret_key": <ConnectionOptionInfo>{
+                    "display_name": "Secret Key",
+                    "short_desc": "SendCloud secret API key (Basic Auth password)",
+                    "type": "string",
+                    "desc": "The SendCloud **secret API key** used as the password for HTTP "
+                        "Basic Auth.\n\n"
+                        "**To obtain your API credentials:**\n"
+                        "1. Log in to the [Sendcloud Panel](https://panel.sendcloud.sc)\n"
+                        "2. Navigate to **Settings > Integrations**\n"
+                        "3. Click **+ Add Integration** and select **Sendcloud API**\n"
+                        "4. After creating the integration, copy the **Public key** and "
+                        "**Secret key** shown on the integration detail page\n\n"
+                        "Store this value securely; it is only visible on the integration "
+                        "detail page.",
+                    "sensitive": True,
+                },
+                "version": <ConnectionOptionInfo>{
+                    "display_name": "API Version",
+                    "short_desc": "SendCloud API version",
+                    "type": "string",
+                    "desc": "The SendCloud API version used in the base URL.\n\n"
+                        "- `v2` — **stable**; this is the only version currently wired "
+                        "in this integration.\n"
+                        "- `v3` — reserved for a future update and **not yet "
+                        "implemented**; selecting it will cause requests to fail with a "
+                        "`SENDCLOUD-UNSUPPORTED-VERSION` error.",
+                    "default_value": SendCloudRestClientBase::DefaultApiVersion,
+                    "allowed_values": SendCloudRestClientBase::AllowedVersions,
+                },
+                "ping_headers": RestConnection::ConnectionScheme.options."ping_headers"
+                + <ConnectionOptionInfo>{
+                    "default_value": SendCloudRestClientBase::DefaultPingHeaders,
+                },
+                "ping_method": RestConnection::ConnectionScheme.options."ping_method"
+                + <ConnectionOptionInfo>{
+                    "default_value": SendCloudRestClientBase::DefaultPingMethod,
+                },
+                "ping_path": RestConnection::ConnectionScheme.options."ping_path"
+                + <ConnectionOptionInfo>{
+                    "default_value": SendCloudRestClientBase::DefaultPingPath,
+                },
+            },
+            "required_options": "public_key,secret_key",
+            "messages": (
+                <UiMessageInfo>{
+                    "title": "How to Obtain Your SendCloud API Credentials",
+                    "intent": "info",
+                    "content": "This integration uses the **SendCloud Public API** with HTTP "
+                        "Basic Auth.\n\n"
+                        "**Steps to generate API credentials:**\n"
+                        "1. Log in to the [Sendcloud Panel](https://panel.sendcloud.sc)\n"
+                        "2. Navigate to **Settings > Integrations**\n"
+                        "3. Click **+ Add Integration** and select **Sendcloud API**\n"
+                        "4. Copy the **Public key** and **Secret key** shown on the "
+                        "integration detail page\n\n"
+                        "Both keys are required: the public key is sent as the Basic Auth "
+                        "username and the secret key as the password.\n\n"
+                        "**No sandbox:** SendCloud does not offer a test environment, so all "
+                        "API calls run against live data.  When writing integration tests, "
+                        "use shipment method ID `8` (*Unstamped letter*) — it is the "
+                        "safe test method because it does not produce a real parcel or "
+                        "generate billing.",
+                },
+            ),
+        };
+    }
+
+    #! creates the SendCloudRestConnection object
+    /** @param name the name of the connection
+        @param description connection description
+        @param url connection URL (potentially with password info)
+        @param attributes various attributes. See below
+        @param options connection options
+
+        See @ref ConnectionProvider::AbstractConnection::constructor() for \c attributes and \c options reference.
+
+        @throw CONNECTION-OPTION-ERROR missing or invalid connection option
+    */
+    constructor(string name, string description,
+            string url = SendCloudRestClientBase::DefaultConnectionUrl,
+            hash<auto> attributes = {}, hash<auto> options = {})
+            : RestConnection(name, description, url, attributes, options) {
+    }
+
+    #! creates the SendCloudRestConnection object
+    /** @param config with the following keys:
+        - name (required string): the connection name
+        - display_name (optional string): the display name
+        - short_desc (optional string): a short description in plain text
+        - desc (optional string): a long description with markdown formatting
+        - url (required string): the connection URL
+        - opts (optional hash): connection options
+        - logger (optional LoggerInterface object): logger for the connection
+        @param attr optional connection attributes
+        - monitor (optional bool): should the connection be monitored? Default: True
+        - enabled (optional bool): is the connection enabled? Default: True
+        - locked (optional bool): is the connection locked? Default: False
+        - debug_data (optional bool): debug data? Default: False
+        - tags (optional hash): tags for the connection; no default value
+
+        @throw CONNECTION-OPTION-ERROR missing or invalid connection option or attribute
+    */
+    constructor(hash<auto> config, *hash<auto> attr)
+            : RestConnection(SendCloudRestConnection::getConfig(config), attr) {
+    }
+
+    #! returns config for @ref SendCloudRestConnection::constructor()
+    /** Builds the connection URL from the \c version option (defaulting to \c "v2").
+    */
+    private static hash<auto> getConfig(hash<auto> config) {
+        *string version = config.opts.version;
+        if (!version.val()) {
+            version = SendCloudRestClientBase::DefaultApiVersion;
+        }
+        return config + {
+            "url": sprintf("sendcloudrest://%s/api/%s", SendCloudRestClientBase::DefaultHost, version),
+        };
+    }
+
+    #! returns \c "sendcloudrest"
+    string getType() {
+        return "sendcloudrest";
+    }
+
+    #! Returns connection options, translating SendCloud keys into RestClient keys
+    /** Translates:
+        - \c public_key → \c username
+        - \c secret_key → \c password
+        - strips the \c version option (consumed when building the URL)
+
+        @param rtopts optional runtime options
+
+        @return the option hash to pass to the underlying REST client constructor
+    */
+    *hash<auto> getConnectionOptions(*hash<auto> rtopts) {
+        hash<auto> rv = RestConnection::getConnectionOptions(rtopts);
+        if (rv.public_key) {
+            rv.username = rv.public_key;
+        }
+        if (rv.secret_key) {
+            rv.password = rv.secret_key;
+        }
+        remove rv.public_key;
+        remove rv.secret_key;
+        remove rv.version;
+        return rv;
+    }
+
+    #! returns @ref True as this connection returns a data provider with the @ref getDataProvider() method
+    /** @return @ref True as this connection returns a data provider with the @ref getDataProvider() method
+
+        @see @ref getDataProvider()
+    */
+    bool hasDataProvider() {
+        return True;
+    }
+
+    #! Returns the data provider application name this connection serves, if any
+    /** @return the data provider application name this connection serves, if any
+    */
+    *string getAppName() {
+        return "SendCloud";
+    }
+
+    #! returns a data provider object for this connection
+    /** @param constructor_options any additional constructor options for the data provider
+
+        @return a data provider object for this connection
+    */
+    DataProvider::AbstractDataProvider getDataProvider(*hash<auto> constructor_options) {
+        # to avoid circular dependencies, this object loads the SendCloudDataProvider and creates the data provider
+        # object dynamically; the async (RestClientIo) client is used to drive the provider
+        load_module("SendCloudDataProvider");
+        return create_object("SendCloudDataProvider", getAsync());
+    }
+
+    #! Sets child data provider capabilities
+    private setChildCapabilities() {
+        children_can_support_records = True;
+        children_can_support_apis = True;
+    }
+
+    #! Sets the update options code for the connection
+    /** The closure or call reference must have the following signature:
+        <tt>update_options(hash<auto> options)</tt>
+
+        If the user changes the \c version option, the base URL is rebuilt immediately so
+        that subsequent requests go to the correct API version.
+    */
+    setUpdateOptionsCode(*code update_options) {
+        UpdateOptionsInterface::setUpdateOptionsCode(update_options);
+        if (update_options) {
+            *string version = opts.version;
+            if (!version.val()) {
+                version = SendCloudRestClientBase::DefaultApiVersion;
+            }
+            string expected_url = sprintf("sendcloudrest://%s/api/%s",
+                SendCloudRestClientBase::DefaultHost, version);
+            if (url != expected_url) {
+                # NOTE: do not update the URL or real URL values here, or the external update will fail, because it
+                # will believe that no changes are necessary
+                doUpdateOptions(self, {
+                    "url": expected_url,
+                });
+            }
+        }
+    }
+
+    #! returns a @ref SendCloudRestClient object
+    /** @param connect if @ref True "True", then the connection is returned already connected
+        @param rtopts this connection type does not accept any runtime options, so this parameter is ignored
+
+        @return a @ref SendCloudRestClient object
+    */
+    private SendCloudRestClient getImpl(bool connect = True, *hash<auto> rtopts) {
+        return new SendCloudRestClient(getConnectionOptions(rtopts), !connect);
+    }
+
+    #! Returns an async-I/O-capable connection object
+    /** @return a @ref SendCloudRestClientIo object
+
+        @since SendCloudRestClient 1.0
+    */
+    private object getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
+        return new SendCloudRestClientIo(getConnectionOptions(rtopts));
+    }
+
+    #! Returns the ConnectionSchemeInfo hash for this object
+    private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
+        return ConnectionScheme;
+    }
+}
+}
