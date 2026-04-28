@@ -825,7 +825,7 @@ int QoreModuleManager::registerAOTStaticModuleIntern(ExceptionSink& xsink, QoreP
         // restore info hash for the descriptor handoff
         mod_info.info = info_holder.release();
         mi = loadBinaryModuleFromDesc(xsink, nullptr, mod_info, path, feature, false,
-            nullptr, nullptr, QMLO_NONE);
+            nullptr, tpgm, QMLO_NONE);
         if (!mi || xsink) {
             return -1;
         }
@@ -1194,8 +1194,8 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
                 return nullptr;
             }
 
-            mi = loadBinaryModuleFromPath(xsink, raw_path, name, reexport, pholder.release(),
-                load_opt & QMLO_REINJECT ? mpgm : nullptr, load_opt, mod_desc_func);
+            mi = loadBinaryModuleFromPath(xsink, raw_path, name, reexport, pholder.release(), p,
+                load_opt, mod_desc_func);
         } else if (QoreDir::folder_exists(modulePath, xsink)) {
             if (!has_separated_module_main(raw_path, name)) {
                 xsink.raiseException("LOAD-MODULE-ERROR", "cannot load separated user module '%s' from directory "
@@ -1278,7 +1278,7 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
                     break;
                 }
                 mi = loadBinaryModuleFromPath(xsink, str.c_str(), name, reexport, pholder.release(),
-                    load_opt & QMLO_REINJECT ? mpgm : nullptr, load_opt, mod_desc_func);
+                    pgm, load_opt, mod_desc_func);
                 return qore_check_load_module_intern(mi, op, version, pgm, xsink) ? nullptr : mi;
             }
         }
@@ -1308,7 +1308,7 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
                     break;
                 }
                 mi = loadBinaryModuleFromPath(xsink, str.c_str(), name, reexport, pholder.release(),
-                    load_opt & QMLO_REINJECT ? mpgm : nullptr, load_opt, mod_desc_func);
+                    pgm, load_opt, mod_desc_func);
                 return qore_check_load_module_intern(mi, op, version, pgm, xsink) ? nullptr : mi;
             }
         }
@@ -2115,11 +2115,14 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromDesc(ExceptionSink& x
     // we do for user modules
     assert(!mpgm);
 
-    // load dependencies BEFORE adding this module to the load map
-    // to prevent cross-thread circular dependency deadlocks (AB-BA deadlocks)
+    // Load dependencies BEFORE adding this module to the load map to prevent
+    // cross-thread circular dependency deadlocks (AB-BA deadlocks). Use
+    // path_pgm for search-path layering: AOT qmods expose source %requires as
+    // binary-module dependencies, and those must honor the importing Program's
+    // %prepend-module-path / %append-module-path lists.
     if (!mod_info.dependencies.empty()) {
         for (std::string& dep : mod_info.dependencies) {
-            loadModuleIntern(xsink, xsink, dep.c_str(), mpgm);
+            loadModuleIntern(xsink, xsink, dep.c_str(), path_pgm);
             if (xsink) {
                 return nullptr;
             }

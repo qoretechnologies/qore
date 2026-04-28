@@ -6578,6 +6578,50 @@ static std::string aot_module_path;
 static const QoreAOTFunc* aot_module_funcs = nullptr;
 static int aot_module_num_funcs = 0;
 
+static void append_unique_module_paths(std::vector<std::string>& target, const std::vector<std::string>& source) {
+    for (const std::string& path : source) {
+        bool seen = false;
+        for (const std::string& existing : target) {
+            if (existing == path) {
+                seen = true;
+                break;
+            }
+        }
+        if (!seen) {
+            target.push_back(path);
+        }
+    }
+}
+
+static void inheritAOTModulePathLists(QoreProgram* local_pgm, QoreProgram* parent_pgm,
+        const std::vector<std::string>& module_prepended = {},
+        const std::vector<std::string>& module_appended = {}) {
+    if (!local_pgm) {
+        return;
+    }
+
+    qore_program_private* local_priv = qore_program_private::get(*local_pgm);
+    if (!local_priv) {
+        return;
+    }
+
+    const qore_program_private* parent_priv = nullptr;
+    if (parent_pgm && parent_pgm != local_pgm) {
+        parent_priv = qore_program_private::get(*parent_pgm);
+    }
+
+    // Source modules inherit the importing Program's path lists, then apply
+    // their own directives while parsing. Recreate the equivalent qmod search
+    // order: module prepends, inherited prepends, global module path,
+    // inherited appends, module appends.
+    append_unique_module_paths(local_priv->prepended_module_paths, module_prepended);
+    if (parent_priv) {
+        append_unique_module_paths(local_priv->prepended_module_paths, parent_priv->prepended_module_paths);
+        append_unique_module_paths(local_priv->appended_module_paths, parent_priv->appended_module_paths);
+    }
+    append_unique_module_paths(local_priv->appended_module_paths, module_appended);
+}
+
 static bool aotInitTraceEnabled() {
     static const bool enabled = getenv("QORE_AOT_INIT_TRACE") != nullptr;
     return enabled;
@@ -7180,6 +7224,8 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init(
     ExceptionSink xsink;
     ExceptionSink wsink;
 
+    QoreProgram* parent_pgm = getProgram();
+
     // Use a local variable for the program being created.  Loading dependencies
     // via runTimeLoadModule() can trigger nested calls to qore_aot_module_init()
     // for other AOT modules, which would overwrite the global aot_module_pgm.
@@ -7200,6 +7246,8 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init(
     if (label) {
         local_pgm->setScriptPath(label);
     }
+
+    inheritAOTModulePathLists(local_pgm, parent_pgm);
 
     // Extract dependencies from source and load/import their namespaces
     // Note: The init function is now called with the module manager lock unlocked
@@ -7667,6 +7715,8 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v2(
 ) {
     ExceptionSink xsink;
 
+    QoreProgram* parent_pgm = getProgram();
+
     // Use a local variable for the program being created (see qore_aot_module_init
     // for explanation of nested init overwrite issue)
     QoreProgram* local_pgm = new QoreProgram(parse_options);
@@ -7691,15 +7741,17 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v2(
         local_pgm->setScriptPath(label);
     }
 
-    // Re-apply the module's compiled-in %prepend-module-path / %append-module-path
-    // lists to the local Program BEFORE loading dependencies — otherwise AOT
-    // modules that rely on vendored dep paths would miss them at runtime.
+    // Apply inherited plus compiled-in module path lists BEFORE loading
+    // dependencies; source modules inherit the requiring Program's search
+    // surface before their own directives are applied.
     {
         std::vector<std::string> prepended, appended;
         std::string mp_error;
         if (readModulePathLists(metadata, static_cast<uint32_t>(metadata_len),
                 prepended, appended, mp_error)) {
-            applyModulePathListsToProgram(local_pgm, prepended, appended);
+            inheritAOTModulePathLists(local_pgm, parent_pgm, prepended, appended);
+        } else {
+            inheritAOTModulePathLists(local_pgm, parent_pgm);
         }
     }
 
@@ -8409,6 +8461,8 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
 
     ExceptionSink xsink;
 
+    QoreProgram* parent_pgm = getProgram();
+
     // Use a local variable for the program being created (see qore_aot_module_init
     // for explanation of nested init overwrite issue)
     QoreProgram* local_pgm = new QoreProgram(parse_options);
@@ -8436,15 +8490,17 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
         local_pgm->setScriptPath(label);
     }
 
-    // Re-apply the module's compiled-in %prepend-module-path / %append-module-path
-    // lists to the local Program BEFORE loading dependencies — otherwise AOT
-    // modules that rely on vendored dep paths would miss them at runtime.
+    // Apply inherited plus compiled-in module path lists BEFORE loading
+    // dependencies; source modules inherit the requiring Program's search
+    // surface before their own directives are applied.
     {
         std::vector<std::string> prepended, appended;
         std::string mp_error;
         if (readModulePathLists(metadata, static_cast<uint32_t>(metadata_len),
                 prepended, appended, mp_error)) {
-            applyModulePathListsToProgram(local_pgm, prepended, appended);
+            inheritAOTModulePathLists(local_pgm, parent_pgm, prepended, appended);
+        } else {
+            inheritAOTModulePathLists(local_pgm, parent_pgm);
         }
     }
 

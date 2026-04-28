@@ -66,6 +66,8 @@ class AOTSmokeTest inherits QUnit::Test {
             \testHandlerRecursionGuard());
         addTestCase("AOT cross-module same-name dispatch",
             \testCrossModuleSameName());
+        addTestCase("AOT qmod dependency honors prepend module path",
+            \testAOTModuleDependencyPrependPath());
         addTestCase("AOT ref foreach ParseNode pointer",
             \testRefForeachParseNode());
         addTestCase("AOT ref foreach narrowed element type",
@@ -1621,6 +1623,95 @@ printf(\"%s\\n\", ModB::shared_fn(\"y\"));
             libqore_dir, tmp_dir, qore_bin, paths.src));
         assertEq("A:x\nA:y:B\n", out,
             "cross-module same-name dispatch produces correct results: " + out);
+    }
+
+    testAOTModuleDependencyPrependPath() {
+        string suffix = sprintf("%d_%d", getpid(), rand());
+        string dep_name = "AOTDepPath" + suffix;
+        string consumer_name = "AOTConsumerPath" + suffix;
+        string tmp_dir = sprintf("/tmp/aot_mod_path_%s", suffix);
+        string preferred_dir = tmp_dir + "/preferred";
+        string fallback_dir = tmp_dir + "/fallback";
+        mkdir(tmp_dir);
+        mkdir(preferred_dir);
+        mkdir(fallback_dir);
+        on_exit {
+            backquote(sprintf("rm -rf %s", tmp_dir));
+        }
+
+        string dep_template = "%modern
+module %s { version = \"1.0\"; desc = \"dependency\"; author = \"t\"; license = \"MIT\"; }
+public namespace %s {
+    public string sub value() {
+        return \"%s\";
+    }
+}
+";
+        string preferred_dep_qm = preferred_dir + "/" + dep_name + ".qm";
+        string fallback_dep_qm = fallback_dir + "/" + dep_name + ".qm";
+        {
+            File f();
+            f.open2(preferred_dep_qm, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write(sprintf(dep_template, dep_name, dep_name, "preferred"));
+            f.close();
+        }
+        {
+            File f();
+            f.open2(fallback_dep_qm, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write(sprintf(dep_template, dep_name, dep_name, "fallback"));
+            f.close();
+        }
+
+        string preferred_dep_qmod = preferred_dir + "/" + dep_name + ".qmod";
+        string fallback_dep_qmod = fallback_dir + "/" + dep_name + ".qmod";
+        string preferred_dep_out = backquote(sprintf(
+            "QORE_LIBDIR=%s QORE_MODULE_DIR=%s %s -b --compile-module --output %s %s 2>&1",
+            libqore_dir, preferred_dir, qore_bin, preferred_dep_qmod, preferred_dep_qm));
+        string fallback_dep_out = backquote(sprintf(
+            "QORE_LIBDIR=%s QORE_MODULE_DIR=%s %s -b --compile-module --output %s %s 2>&1",
+            libqore_dir, fallback_dir, qore_bin, fallback_dep_qmod, fallback_dep_qm));
+        assertTrue(is_file(preferred_dep_qmod), "preferred dependency compiled: " + preferred_dep_out);
+        assertTrue(is_file(fallback_dep_qmod), "fallback dependency compiled: " + fallback_dep_out);
+
+        string consumer_qm = preferred_dir + "/" + consumer_name + ".qm";
+        string consumer_qmod = preferred_dir + "/" + consumer_name + ".qmod";
+        string consumer_code = sprintf("%modern
+%%requires %s
+module %s { version = \"1.0\"; desc = \"consumer\"; author = \"t\"; license = \"MIT\"; }
+public namespace %s {
+    public string sub value() {
+        return %s::value();
+    }
+}
+", dep_name, consumer_name, consumer_name, dep_name);
+        {
+            File f();
+            f.open2(consumer_qm, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write(consumer_code);
+            f.close();
+        }
+
+        string consumer_out = backquote(sprintf(
+            "QORE_LIBDIR=%s QORE_MODULE_DIR=%s %s -b --compile-module --output %s %s 2>&1",
+            libqore_dir, preferred_dir, qore_bin, consumer_qmod, consumer_qm));
+        assertTrue(is_file(consumer_qmod), "consumer module compiled: " + consumer_out);
+
+        string test_code = sprintf("%modern
+%%prepend-module-path \"%s\"
+%%requires %s
+hash<auto> mh = get_module_hash();
+printf(\"value=%%s\\n\", %s::value());
+printf(\"dep=%%s\\n\", mh.%s.filename);
+", preferred_dir, consumer_name, consumer_name, dep_name);
+        hash<auto> paths = writeTempScript(test_code);
+        on_exit {
+            unlink(paths.src);
+        }
+
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, fallback_dir, qore_bin, paths.src));
+        assertEq(sprintf("value=preferred\ndep=%s\n", preferred_dep_qmod), out,
+            "AOT qmod dependency resolution honors importing Program prepends: " + out);
     }
 
     testAOTModuleCompile() {
