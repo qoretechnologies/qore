@@ -98,6 +98,8 @@ class AOTSmokeTest inherits QUnit::Test {
         addTestCase("AOT module compile error", \testAOTModuleCompileError());
         # Split module tests
         addTestCase("AOT split module basic", \testAOTSplitModuleBasic());
+        addTestCase("AOT split module nested hash constant init",
+            \testAOTSplitModuleNestedHashConstantInit());
         addTestCase("AOT split module qm only", \testAOTSplitModuleQmOnly());
         addTestCase("AOT split module missing qm", \testAOTSplitModuleMissingQm());
         addTestCase("AOT split module auto detect", \testAOTSplitModuleAutoDetect());
@@ -2692,6 +2694,104 @@ printf(\"%d\\n\", h.addTo(50));
 
         assertEq(interp_out, aot_out, "compiled split module output matches interpreted");
         assertEq("42\n30\nHello, World!\n100\n150\n", aot_out, "split module functions produce correct results");
+    }
+
+    testAOTSplitModuleNestedHashConstantInit() {
+        # Regression: when a class constant hash needed an init function, sibling nested
+        # hash literals that were parse-time constants were embedded as unevaluated
+        # expression hashes in the stored AOT constant.
+        string mod_name = "AOTNestedHashConst";
+        string qm_code = "%modern
+%requires reflection
+
+module AOTNestedHashConst {
+    version = \"1.0\";
+    desc = \"AOT nested hash constant init regression\";
+    author = \"Test\";
+    license = \"MIT\";
+}
+";
+
+        string qc_code = "%modern
+
+public namespace AOTNestedHashConst {
+hashdecl AllowedValue {
+    string value;
+    string display_name;
+}
+
+public class ConstHolder {
+    public {
+        const Fields = {
+            \"id\": {
+                \"type\": StringType,
+                \"display_name\": \"ID\",
+            },
+            \"name\": {
+                \"type\": StringType,
+                \"display_name\": \"Name\",
+            },
+            \"url\": {
+                \"type\": \"string\",
+                \"display_name\": \"URL\",
+            },
+            \"kind\": {
+                \"type\": \"string\",
+                \"display_name\": \"Kind\",
+                \"allowed_values\": (
+                    <AllowedValue>{\"value\": \"a\", \"display_name\": \"A\"},
+                    <AllowedValue>{\"value\": \"b\", \"display_name\": \"B\"},
+                ),
+            },
+            \"op\": {
+                \"display_name\": \"Closure\",
+                \"impl\": auto sub (hash<auto> rec) {
+                    return rec.value;
+                },
+            },
+        };
+    }
+}
+}
+";
+
+        hash<auto> mod_info = createSplitModuleDir(mod_name, qm_code, {
+            "ConstHolder.qc": qc_code,
+        });
+        on_exit {
+            backquote(sprintf("rm -rf %s", mod_info.parent_dir));
+        }
+
+        string qmod_path = mod_info.dir + "/" + mod_name + ".qmod";
+        hash<auto> result = compileSplitModule(mod_info.dir, qmod_path);
+        assertTrue(result.compiled, "nested hash const split module compiled: " + result.compile_out);
+
+        string test_code = "%modern
+%requires reflection
+%requires AOTNestedHashConst
+
+hash<auto> fields = AOTNestedHashConst::ConstHolder::Fields;
+printf(\"id=%s/%s\\n\", fields.id.type.getName(), fields.id.display_name);
+printf(\"name=%s/%s\\n\", fields.name.type.getName(), fields.name.display_name);
+printf(\"kind=%s/%s/%s\\n\", fields.kind.type, fields.kind.allowed_values[0].value,
+    fields.kind.allowed_values[1].display_name);
+printf(\"op=%y\\n\", fields.op.impl({\"value\": 17}));
+";
+        hash<auto> paths = writeTempScript(test_code);
+        on_exit {
+            unlink(paths.src);
+        }
+
+        string aot_out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, mod_info.parent_dir, qore_bin, paths.src));
+
+        unlink(qmod_path);
+        string interp_out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, mod_info.parent_dir, qore_bin, paths.src));
+
+        assertEq(interp_out, aot_out, "AOT nested hash constant output matches interpreted module");
+        assertEq("id=string/ID\nname=string/Name\nkind=string/a/B\nop=17\n", aot_out,
+            "nested hash constant entries are materialized");
     }
 
     testAOTSplitModuleQmOnly() {

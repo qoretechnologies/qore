@@ -4049,6 +4049,24 @@ QoreIRBasicBlock* QoreIRLowering::createBlock(const std::string& prefix) {
     return func->createBlock(name);
 }
 
+static bool isContainerLiteral(const QoreValue& v) {
+    if (!v.hasNode()) {
+        return false;
+    }
+    const AbstractQoreNode* node = v.getInternalNode();
+    return dynamic_cast<const QoreParseHashNode*>(node) || dynamic_cast<const QoreParseListNode*>(node)
+        || dynamic_cast<const QoreHashNode*>(node) || dynamic_cast<const QoreListNode*>(node);
+}
+
+static bool shouldPreserveContainerLeafConstant(const QoreValue& v) {
+    if (!v.hasNode()) {
+        return false;
+    }
+    const AbstractQoreNode* node = v.getInternalNode();
+    return dynamic_cast<const AbstractCallReferenceNode*>(node)
+        || dynamic_cast<const AbstractParseObjectMethodReferenceNode*>(node);
+}
+
 QoreIRValue QoreIRLowering::lowerConstant(const QoreValue& expr, std::string& error) {
     // TAG_ENUM must be checked first: getType() returns the base type (e.g., NT_INT),
     // so base-type-specific paths below would strip enum identity
@@ -4082,7 +4100,9 @@ QoreIRValue QoreIRLowering::lowerConstant(const QoreValue& expr, std::string& er
             values.reserve(list->size());
             for (size_t i = 0; i < list->size(); ++i) {
                 QoreValue entry = list->retrieveEntry(i);
-                QoreIRValue lowered = lowerConstant(entry, error);
+                QoreIRValue lowered = isContainerLiteral(entry)
+                    ? lowerContainerLiteral(entry, error)
+                    : lowerConstant(entry, error);
                 if (!lowered.isValid()) {
                     return QoreIRValue();
                 }
@@ -4105,7 +4125,9 @@ QoreIRValue QoreIRLowering::lowerConstant(const QoreValue& expr, std::string& er
                 const char* key = it.getKey();
                 values.push_back(builder.createConstString(key ? key : "")->result);
                 QoreValue entry = it.get();
-                QoreIRValue lowered = lowerConstant(entry, error);
+                QoreIRValue lowered = isContainerLiteral(entry)
+                    ? lowerContainerLiteral(entry, error)
+                    : lowerConstant(entry, error);
                 if (!lowered.isValid()) {
                     return QoreIRValue();
                 }
@@ -8324,6 +8346,92 @@ QoreIRValue QoreIRLowering::lowerRegexSubst(const QoreValue& expr, std::string& 
     return lowerExprOpOrInvoke(opcode, expr, operands, op->loc, error);
 }
 
+QoreIRValue QoreIRLowering::lowerContainerLiteral(const QoreValue& expr, std::string& error) {
+    if (!expr.hasNode()) {
+        return QoreIRValue();
+    }
+
+    const AbstractQoreNode* node = expr.getInternalNode();
+    if (dynamic_cast<const QoreParseHashNode*>(node)) {
+        return lowerParseHash(expr, error);
+    }
+    if (dynamic_cast<const QoreParseListNode*>(node)) {
+        return lowerParseList(expr, error);
+    }
+
+    if (auto* hash = dynamic_cast<const QoreHashNode*>(node)) {
+        if (hash->getHashDecl()) {
+            return builder.createLoadConstant(nullptr, expr, nullptr)->result;
+        }
+
+        std::vector<std::string> keys;
+        std::vector<QoreIRValue> values;
+        keys.reserve(hash->size());
+        values.reserve(hash->size());
+        ConstHashIterator it(hash);
+        while (it.next()) {
+            const char* key = it.getKey();
+            keys.push_back(key ? key : "");
+            QoreIRValue value = lowerContainerElement(it.get(), error);
+            if (!value.isValid()) {
+                return QoreIRValue();
+            }
+            values.push_back(value);
+        }
+
+        const QoreTypeInfo* cti = qore_hash_private::get(*hash)->complexTypeInfo;
+        if (cti == autoHashTypeInfo) {
+            cti = nullptr;
+        }
+        return builder.createMakeHashConstKeys(std::move(keys), values, nullptr, cti)->result;
+    }
+
+    if (auto* list = dynamic_cast<const QoreListNode*>(node)) {
+        std::vector<QoreIRValue> values;
+        values.reserve(list->size());
+        for (size_t i = 0; i < list->size(); ++i) {
+            QoreIRValue value = lowerContainerElement(list->retrieveEntry(i), error);
+            if (!value.isValid()) {
+                return QoreIRValue();
+            }
+            values.push_back(value);
+        }
+
+        const QoreTypeInfo* cti = qore_list_private::get(*list)->complexTypeInfo;
+        if (cti == autoListTypeInfo) {
+            cti = nullptr;
+        }
+        return builder.createMakeList(values, nullptr, cti)->result;
+    }
+
+    return QoreIRValue();
+}
+
+QoreIRValue QoreIRLowering::lowerContainerElement(const QoreValue& expr, std::string& error) {
+    QoreIRValue value = lowerContainerLiteral(expr, error);
+    if (value.isValid() || !error.empty()) {
+        return value;
+    }
+
+    value = lowerConstant(expr, error);
+    if (value.isValid() || !error.empty()) {
+        return value;
+    }
+
+    if (!shouldPreserveContainerLeafConstant(expr)) {
+        return lowerExpression(expr, error);
+    }
+
+    // Keep unsupported non-container leaves as constants instead of lowering
+    // callrefs/method refs as executable IR.  The root bug is loading whole
+    // containers as constants, which preserves unevaluated expression hashes.
+    if (expr.hasNode()) {
+        return builder.createLoadConstant(nullptr, expr, nullptr)->result;
+    }
+
+    return QoreIRValue();
+}
+
 QoreIRValue QoreIRLowering::lowerParseHash(const QoreValue& expr, std::string& error) {
     const AbstractQoreNode* node = expr.getInternalNode();
     auto* hash = dynamic_cast<const QoreParseHashNode*>(node);
@@ -8363,7 +8471,7 @@ QoreIRValue QoreIRLowering::lowerParseHash(const QoreValue& expr, std::string& e
         std::vector<QoreIRValue> value_operands;
         value_operands.reserve(keys.size());
         for (size_t i = 0; i < values_vec.size(); ++i) {
-            QoreIRValue value = lowerExpression(values_vec[i], error);
+            QoreIRValue value = lowerContainerElement(values_vec[i], error);
             if (!value.isValid()) {
                 return QoreIRValue();
             }
@@ -8380,7 +8488,7 @@ QoreIRValue QoreIRLowering::lowerParseHash(const QoreValue& expr, std::string& e
         if (!key.isValid()) {
             return QoreIRValue();
         }
-        QoreIRValue value = lowerExpression(values_vec[i], error);
+        QoreIRValue value = lowerContainerElement(values_vec[i], error);
         if (!value.isValid()) {
             return QoreIRValue();
         }
@@ -8408,7 +8516,7 @@ QoreIRValue QoreIRLowering::lowerParseList(const QoreValue& expr, std::string& e
     std::vector<QoreIRValue> values;
     values.reserve(list->size());
     for (size_t i = 0; i < list->size(); ++i) {
-        QoreIRValue value = lowerExpression(list->get(i), error);
+        QoreIRValue value = lowerContainerElement(list->get(i), error);
         if (!value.isValid()) {
             return QoreIRValue();
         }

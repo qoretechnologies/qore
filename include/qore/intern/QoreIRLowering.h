@@ -168,6 +168,8 @@ public:
     QoreIRValue lowerTransliteration(const QoreValue& expr, std::string& error);
     QoreIRValue lowerBackground(const QoreValue& expr, std::string& error);
     QoreIRValue lowerListAssignment(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerContainerLiteral(const QoreValue& expr, std::string& error);
+    QoreIRValue lowerContainerElement(const QoreValue& expr, std::string& error);
     QoreIRValue lowerParseHash(const QoreValue& expr, std::string& error);
     QoreIRValue lowerParseList(const QoreValue& expr, std::string& error);
     QoreIRValue lowerExists(const QoreValue& expr, std::string& error);
